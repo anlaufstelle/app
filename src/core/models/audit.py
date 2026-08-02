@@ -116,6 +116,14 @@ class AuditLog(models.Model):
         # fluten; die DSGVO-Rechenschaftsspur ("wer exportierte wann eine
         # Offline-Notiz") bleibt als distinkte Aktion erhalten.
         OFFLINE_NOTE_EXPORT = "offline_note_export", _("Offline-Notiz exportiert")
+        # Refs #1056 (M0): Mutationen an der Formular-Konfiguration
+        # (DocumentType/FieldTemplate/FieldGroup/DocumentTypeField) über den
+        # Config-Service. CONFIG_REORDER buendelt Umsortierungen (Gruppen,
+        # Felder, Feld-Verschiebung) in genau EINEM Audit-Eintrag je Batch.
+        CONFIG_CREATE = "config_create", _("Konfiguration angelegt")
+        CONFIG_UPDATE = "config_update", _("Konfiguration geändert")
+        CONFIG_DELETE = "config_delete", _("Konfiguration gelöscht")
+        CONFIG_REORDER = "config_reorder", _("Konfiguration umsortiert")
 
     objects = FacilityScopedManager()
 
