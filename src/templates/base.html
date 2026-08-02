@@ -48,6 +48,8 @@
     <script src="{% static 'js/alpine/forms.js' %}" defer></script>
     <script src="{% static 'js/alpine/dashboards.js' %}" defer></script>
     <script src="{% static 'js/alpine/config.js' %}" defer></script>
+    {# Refs #1057: reaktive Feld-Sichtbarkeit (bedingte Feldlogik) — nach den Alpine-Komponenten-Bundles, zwingend VOR alpine-csp.min.js (alpine:init-Registrierung). #}
+    <script src="{% static 'js/alpine/conditions.js' %}" defer></script>
     <script src="{% static 'js/date-input-i18n.js' %}" defer></script>
     <script src="{% static 'js/alpine-csp.min.js' %}" defer></script>
     {# Umami-Web-Analytics (Refs #1602/#1604) — rendert nur bei gesetzter Website-ID (devlive/demo). #}

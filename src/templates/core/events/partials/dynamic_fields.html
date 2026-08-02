@@ -14,8 +14,19 @@ Gemeinsame Feld-Renderfläche für Create-Flow (create.html + EventFieldsPartial
 und Edit-Flow (edit.html). Der Edit-Kontext liefert zusätzlich ``event`` und
 ``existing_attachments`` für die Datei-Ersetzen-/Soft-Delete-Steuerung (#622);
 im Create-Kontext fehlen sie und der Attachment-Block bleibt leer.
+
+Bedingte Feldlogik (M1/P5, Refs #1057): Der Wurzel-``<div x-data="conditionEvaluator">``
+liegt IM HTMX-Swap-Ziel ``#dynamic-fields`` (create.html), trägt das E12-Payload als
+``json_script`` (nur wenn Bedingungen existieren) und die delegierten input/change-
+Listener. Jedes Feld sitzt in einem ``conditionalField``-Wrapper (``x-show="visible"``,
+liest den globalen ``fieldConditions``-Store). Beim DocType-Wechsel ersetzt HTMX den
+Wurzelknoten samt Payload — ohne Payload leert der Evaluator den Store (alles sichtbar),
+sodass ein neuer DocType nie Sichtbarkeiten des vorherigen erbt. CSP-strikt: nur die
+Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
 {% endcomment %}
 
+<div x-data="conditionEvaluator">
+{% if data_form.conditions_payload %}{{ data_form.conditions_payload|json_script:"field-conditions" }}{% endif %}
 {% if data_form and data_form.fields %}
 {% with grouped=data_form.grouped_fields %}
 {% for group, fields in grouped %}
@@ -36,6 +47,8 @@ im Create-Kontext fehlen sie und der Attachment-Block bleibt leer.
     {% endif %}
     <div class="space-y-4"{% if group.is_collapsible %} x-show="open"{% endif %}>
         {% for field in fields %}
+        {# M1/P5 (Refs #1057): conditionalField-Wrapper je Feld; x-show liest den Store, x-cloak gegen Erst-Render-Flackern. #}
+        <div x-data="conditionalField" data-field-slug="{{ field.name }}" x-show="visible" x-cloak>
         {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
         {# Refs #1143: gezielt auf den Datei-Widget-Typ prüfen — allow_multiple_selected ist auch bei CheckboxSelectMultiple True. #}
         {% if field.field.widget.input_type == "file" %}
@@ -89,9 +102,11 @@ im Create-Kontext fehlen sie und der Attachment-Block bleibt leer.
         {% else %}
         {% include "components/_form_field.html" with field=field %}
         {% endif %}
+        </div>
         {% endfor %}
     </div>
 </div>
 {% endfor %}
 {% endwith %}
 {% endif %}
+</div>{# x-data="conditionEvaluator" #}
