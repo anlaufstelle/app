@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Konfigurations-UI & Feldgruppen (Roadmap-Meilenstein M0)** (#1056; Original [anlaufstelle/app#33](https://github.com/anlaufstelle/app/issues/33), Programm #1063) — Neue, ausschließlich der Rolle facility_admin zugängliche Konfigurationsoberfläche unter `/config/…` für Dokumentationstypen, Feldvorlagen und das neue Modell **`FieldGroup`** (Migrationen `0110`–`0112`, eigene RLS-Policy inkl. Superadmin-Bypass, Slug auto-generiert und nach Erstellung unveränderbar). Sie **ergänzt** das Django-Admin (`/admin-mgmt/` bleibt unverändert die Ops-Oberfläche). Umfang: CRUD für Dokumentationstypen (`system_type` nur beim Anlegen wählbar, danach read-only; `category` bleibt editierbar — Abwägung in [ADR-034](docs/adr/034-config-ui-category-system-type.md)) und Feldvorlagen (Löschschutz mit gesammelten Blocker-Begründungen aus Feld-Zuordnungen, Anhängen und Ereignis-Daten; primäre Alternative „Stattdessen deaktivieren"; der Lösch-Dialog von Dokumentationstypen weist mitkaskadierende Schnellvorlagen aus), ein interaktives **Feld-Board** im Typ-Detail (Felder zuordnen/entziehen, Feldgruppen anlegen/umbenennen/löschen — gelöschte Gruppen lassen Felder als „Ohne Gruppe" zurück) sowie **Zwei-Ebenen-Sortierung per Drag-and-Drop** (Gruppen-Reihenfolge, Feld-Reihenfolge je Gruppe, Feld-Verschieben zwischen Gruppen) über Batch-Reorder-Endpunkte mit strikter ID-Set-Validierung. Dafür wird SortableJS 1.15.7 (MIT) vendored — die neue `src/static/js/vendor/`-Konvention samt Abschnitt „Vendored JavaScript" in `THIRDPARTY-LICENSES.md` etabliert; die strikte CSP gilt auf allen `/config/`-Seiten ohne Ausnahme (kein Inline-JS, benannte Alpine-Komponenten, E2E-Konsolen-Check). **Ereignis-Formulare** rendern ihre Felder jetzt in benannten, optional einklappbaren Feldgruppen (Seed liefert Beispiel-Gruppen für Kontakt und Krisengespräch; ungruppierte Felder stehen garantiert zuletzt unter „Ohne Gruppe"), und eine **Live-Vorschau** im Typ-Detail zeigt nach jeder Board-Änderung das echte Ereignis-Formular-Partial. Alle Config-Mutationen schreiben Audit-Einträge über die neuen `AuditLog`-Actions `CONFIG_CREATE`/`CONFIG_UPDATE`/`CONFIG_DELETE`/`CONFIG_REORDER`; alle 18 neuen Endpunkte sind in der AuthZ-Matrix deklariert (facility_admin-only, IDOR-Probes, kein Sudo, kein super_admin-Zugriff). EN-Übersetzungen vollständig.
+
 ## [0.23.0] - 2026-08-01
 
 ### Added
