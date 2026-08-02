@@ -11,7 +11,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-2xl">
+{# [overflow-anchor:none]: Board- und Vorschau-Swaps (HTMX) lassen das Browser- #}
+{# Scroll-Anchoring sonst neue Anker suchen — der Viewport springt bei jeder   #}
+{# Board-Mutation (P9/P11-Befund, Refs #1056).                                 #}
+<div class="max-w-2xl [overflow-anchor:none]">
     <div class="flex items-center justify-between mb-6">
         <div>
             <a href="{% url 'core:config_doctype_list' %}" class="text-[13px] text-ink-muted hover:text-ink hover:underline">← {% trans "Dokumentationstypen" %}</a>
