@@ -8,8 +8,10 @@ Konventionen für den ``detail``-Payload (kein PII):
 
 * create/update/delete → ``{"name": <objektname>, "changed_fields": [...]}``
   (``changed_fields`` nur bei create/update; bei delete entfällt es).
-* reorder → ``{"operation": "group_order" | "field_order" | "move_field"}`` —
-  genau **ein** ``CONFIG_REORDER``-Eintrag je Batch.
+* reorder → ``{"operation": "block_order" | "field_order" | "move_field"}`` —
+  genau **ein** ``CONFIG_REORDER``-Eintrag je Batch. ``block_order`` sortiert
+  die globale Block-Sequenz (Gruppen + ungruppierte Felder, #1713), ``field_order``
+  die Felder innerhalb einer Gruppe.
 
 Lösch-Blocker melden **alle** zutreffenden Gründe (nicht nur den ersten) über
 :class:`ConfigDeleteBlocked`, damit die UI eine vollständige, verständliche
@@ -20,6 +22,8 @@ DB bleibt unverändert (der View macht daraus später ein HTTP 400).
 """
 
 from __future__ import annotations
+
+from collections import defaultdict
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -234,13 +238,36 @@ def save_field_group(request, form, *, doc_type: DocumentType, creating: bool) -
 
 
 def delete_field_group(request, group: FieldGroup) -> None:
-    """Löscht eine FieldGroup — zugeordnete Felder werden gruppenlos (SET_NULL).
+    """Löscht eine FieldGroup — ihre Felder werden freie Blöcke **an ihrer Stelle**.
 
-    ``DocumentTypeField.field_group`` ist ``SET_NULL``: die Felder bleiben
-    erhalten und rutschen in den „Ohne Gruppe"-Bereich.
+    ``DocumentTypeField.field_group`` ist ``SET_NULL``; die Felder bleiben also
+    erhalten. Unter der globalen Block-Sequenz (#1713) genügt SET_NULL aber
+    NICHT: die freigewordenen Felder trügen ihre Innen-``sort_order`` als
+    (falsche) Globalpositionen. Daher explizit umnummerieren: der Gruppenblock
+    wird an seiner bisherigen Position durch seine Innen-Felder (in Innen-
+    Reihenfolge) ersetzt, die übrigen Blöcke rücken kompakt nach — das Layout
+    bleibt visuell erhalten.
     """
+    doc_type = group.document_type
+    inner_fields = list(DocumentTypeField.objects.filter(field_group=group).order_by("sort_order", "pk"))
     name, target_type, target_id = group.name, group.__class__.__name__, str(group.pk)
-    group.delete()
+    with transaction.atomic():
+        # Blockliste VOR dem Delete erfassen und den Gruppenblock durch seine
+        # Innen-Felder (als freie Blöcke) an gleicher Stelle ersetzen.
+        new_order = []
+        for block in iter_blocks_in_order(doc_type):
+            if block["kind"] == "group" and block["group"].pk == group.pk:
+                new_order.extend(("field", dtf.pk) for dtf in inner_fields)
+            elif block["kind"] == "group":
+                new_order.append(("group", block["group"].pk))
+            else:
+                new_order.append(("field", block["field"].pk))
+        group.delete()  # SET_NULL → die Innen-Felder werden freie Blöcke
+        for position, (kind, block_id) in enumerate(new_order):
+            if kind == "group":
+                FieldGroup.objects.filter(pk=block_id).update(sort_order=position)
+            else:
+                DocumentTypeField.objects.filter(pk=block_id).update(sort_order=position)
     log_audit_event(
         request,
         AuditLog.Action.CONFIG_DELETE,
@@ -264,10 +291,11 @@ def add_field_to_doctype(
 ) -> DocumentTypeField:
     """Ordnet eine FieldTemplate einem DocumentType zu (CONFIG_CREATE).
 
-    Der ``sort_order`` wird als ``max+1`` im Scope der Ziel-Gruppe vergeben
-    (``field_group=None`` = die „Ohne Gruppe"-Menge). Eine Doppelzuordnung
-    (UniqueConstraint ``document_type`` + ``field_template``) wird als
-    :class:`~django.core.exceptions.ValidationError` hochgereicht.
+    ``sort_order`` wird als ``max+1`` vergeben — mit Gruppe innerhalb der Gruppe,
+    ohne Gruppe (``field_group=None``) ans **Ende der globalen Block-Sequenz**
+    (Maximum über ALLE Blockpositionen: Gruppen + ungruppierte Felder, #1713).
+    Eine Doppelzuordnung (UniqueConstraint ``document_type`` + ``field_template``)
+    wird als :class:`~django.core.exceptions.ValidationError` hochgereicht.
 
     Eine ``field_group`` aus einem fremden ``DocumentType`` wird — analog zu
     :func:`move_field` — mit ``ValueError`` abgewiesen (View → HTTP 400):
@@ -283,11 +311,20 @@ def add_field_to_doctype(
     if DocumentTypeField.objects.filter(document_type=doc_type, field_template=field_template).exists():
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."))
 
-    current_max = DocumentTypeField.objects.filter(
-        document_type=doc_type,
-        field_group=field_group,
-    ).aggregate(m=Max("sort_order"))["m"]
-    next_order = 0 if current_max is None else current_max + 1
+    if field_group is None:
+        # Ende der globalen Block-Sequenz = max(Gruppen-Position, freie-Feld-Position) + 1.
+        group_max = FieldGroup.objects.filter(document_type=doc_type).aggregate(m=Max("sort_order"))["m"]
+        free_max = DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).aggregate(
+            m=Max("sort_order")
+        )["m"]
+        candidates = [value for value in (group_max, free_max) if value is not None]
+        next_order = 0 if not candidates else max(candidates) + 1
+    else:
+        current_max = DocumentTypeField.objects.filter(
+            document_type=doc_type,
+            field_group=field_group,
+        ).aggregate(m=Max("sort_order"))["m"]
+        next_order = 0 if current_max is None else current_max + 1
 
     # Befund B (Refs #1056): Der exists()-Vorabtreffer ist check-then-create und
     # gegen einen Race (paralleles Add desselben Paars) nicht dicht. Das create()
@@ -315,10 +352,20 @@ def add_field_to_doctype(
 
 
 def remove_field_from_doctype(request, dtf: DocumentTypeField) -> None:
-    """Entfernt eine Feld-Zuordnung von einem DocumentType (CONFIG_DELETE)."""
+    """Entfernt eine Feld-Zuordnung von einem DocumentType (CONFIG_DELETE).
+
+    War das Feld ein freier Top-Level-Block, wird die globale Block-Sequenz
+    anschließend kompaktiert (#1713), damit kein Loch in den Blockpositionen
+    zurückbleibt.
+    """
     name = dtf.field_template.name
     target_type, target_id = dtf.__class__.__name__, str(dtf.pk)
-    dtf.delete()
+    was_ungrouped = dtf.field_group_id is None
+    doc_type = dtf.document_type
+    with transaction.atomic():
+        dtf.delete()
+        if was_ungrouped:
+            _compact_block_positions(doc_type)
     log_audit_event(
         request,
         AuditLog.Action.CONFIG_DELETE,
@@ -461,20 +508,120 @@ def _validate_id_set(ordered_ids, existing_ids) -> None:
         )
 
 
-def reorder_groups(request, doc_type: DocumentType, ordered_ids) -> None:
-    """Setzt die Reihenfolge der FieldGroups eines DocumentType neu (0..n-1)."""
-    existing_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
-    _validate_id_set(ordered_ids, existing_ids)
+# ---------------------------------------------------------------------------
+# Globale Block-Sequenz (#1713) — Gruppen und ungruppierte Felder teilen sich
+# EINE Sortier-Sequenz je DocumentType. Ein „Block" ist entweder eine
+# ``FieldGroup`` (Position = ``FieldGroup.sort_order``) oder ein ungruppiertes
+# ``DocumentTypeField`` (Position = dessen ``sort_order``). Gruppierte Felder
+# tragen dagegen weiterhin ihren Innen-``sort_order`` (0..n-1 je Gruppe). Diese
+# Helfer liefern die kanonische Blockreihenfolge, die Board/Formular/Offline/
+# Feed gemeinsam nutzen (statt die Ordnungslogik mehrfach zu duplizieren).
+# ---------------------------------------------------------------------------
+
+
+def _block_sort_key(block: dict) -> tuple:
+    """Sortierschlüssel eines Blocks: ``(Position, Gruppe-vor-Feld, Name, pk)``.
+
+    Deterministischer Tie-Break bei gleicher Position (nur bei Alt-Daten/Races
+    relevant — die Endpunkte renumerieren immer kompakt 0..n-1): Gruppe vor
+    freiem Feld, dann Name (Gruppe) bzw. Feldvorlagenname/pk (Feld).
+    """
+    if block["kind"] == "group":
+        group = block["group"]
+        return (group.sort_order, 0, group.name, "")
+    dtf = block["field"]
+    return (dtf.sort_order, 1, dtf.field_template.name, str(dtf.pk))
+
+
+def iter_blocks_in_order(doc_type: DocumentType) -> list[dict]:
+    """Top-Level-Blöcke eines DocumentType in globaler Sequenz-Reihenfolge.
+
+    Liefert eine sortierte Liste aus Dicts — ``{"kind": "group", "group":
+    FieldGroup, "fields": [DocumentTypeField, ...]}`` (inkl. **leerer** Gruppen)
+    bzw. ``{"kind": "field", "field": DocumentTypeField}`` (ungruppiertes Feld).
+    Felder innerhalb einer Gruppe folgen ihrem Innen-``sort_order``.
+    """
+    groups = list(FieldGroup.objects.filter(document_type=doc_type))
+    all_fields = list(DocumentTypeField.objects.filter(document_type=doc_type).select_related("field_template"))
+
+    inner: dict = defaultdict(list)
+    free: list = []
+    for dtf in all_fields:
+        if dtf.field_group_id is None:
+            free.append(dtf)
+        else:
+            inner[dtf.field_group_id].append(dtf)
+    for members in inner.values():
+        members.sort(key=lambda d: (d.sort_order, str(d.pk)))
+
+    blocks: list[dict] = [{"kind": "group", "group": group, "fields": inner.get(group.pk, [])} for group in groups]
+    blocks += [{"kind": "field", "field": dtf} for dtf in free]
+    blocks.sort(key=_block_sort_key)
+    return blocks
+
+
+def iter_fields_in_block_order(doc_type: DocumentType) -> list[DocumentTypeField]:
+    """Flache ``DocumentTypeField``-Reihenfolge gemäß globaler Block-Sequenz.
+
+    Gruppenblöcke werden zu ihren inneren Feldern expandiert, freie Feldblöcke
+    bleiben einzelne Felder. Die Ergebnisreihenfolge entspricht der Formular-
+    Reihenfolge (:meth:`DynamicEventDataForm.grouped_fields` flach ausgerollt)
+    — gemeinsame Wahrheitsquelle für Offline-Serialisierung und Feed-Vorschau.
+    """
+    result: list[DocumentTypeField] = []
+    for block in iter_blocks_in_order(doc_type):
+        if block["kind"] == "group":
+            result.extend(block["fields"])
+        else:
+            result.append(block["field"])
+    return result
+
+
+def _compact_block_positions(doc_type: DocumentType) -> None:
+    """Renummeriert die Top-Level-Blöcke kompakt 0..n-1 in ihrer aktuellen Ordnung.
+
+    Schließt Lücken, die beim Verschieben/Entfernen eines freien Blocks
+    entstehen. Muss innerhalb einer offenen Transaktion aufgerufen werden.
+    """
+    for position, block in enumerate(iter_blocks_in_order(doc_type)):
+        if block["kind"] == "group":
+            FieldGroup.objects.filter(pk=block["group"].pk).update(sort_order=position)
+        else:
+            DocumentTypeField.objects.filter(pk=block["field"].pk).update(sort_order=position)
+
+
+def reorder_blocks(request, doc_type: DocumentType, ordered_blocks) -> None:
+    """Setzt die globale Block-Sequenz eines DocumentType neu (0..n-1).
+
+    ``ordered_blocks`` ist die DOM-Reihenfolge der Top-Level-Blöcke als
+    ``list[tuple[Literal["group", "field"], id]]``. Validiert strikt gegen ALLE
+    Gruppen UND ALLE ungruppierten Felder des Typs (je Sorte exakte Mengen-
+    Gleichheit), schreibt danach atomar ``sort_order = Position`` und genau
+    einen ``CONFIG_REORDER``-Eintrag ``{"operation": "block_order"}``.
+    """
+    group_ids = [block_id for kind, block_id in ordered_blocks if kind == "group"]
+    field_ids = [block_id for kind, block_id in ordered_blocks if kind == "field"]
+    existing_group_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
+    existing_field_ids = DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).values_list(
+        "id", flat=True
+    )
+    _validate_id_set(group_ids, existing_group_ids)
+    _validate_id_set(field_ids, existing_field_ids)
 
     with transaction.atomic():
-        for position, group_id in enumerate(ordered_ids):
-            FieldGroup.objects.filter(pk=group_id, document_type=doc_type).update(sort_order=position)
+        for position, (kind, block_id) in enumerate(ordered_blocks):
+            if kind == "group":
+                FieldGroup.objects.filter(pk=block_id, document_type=doc_type).update(sort_order=position)
+            else:
+                DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type, field_group__isnull=True).update(
+                    sort_order=position
+                )
 
     log_audit_event(
         request,
         AuditLog.Action.CONFIG_REORDER,
         target_obj=doc_type,
-        detail={"operation": "group_order"},
+        detail={"operation": "block_order"},
     )
 
 
@@ -501,30 +648,55 @@ def reorder_fields(request, doc_type: DocumentType, group_id, ordered_dtf_ids) -
     )
 
 
-def move_field(request, doc_type: DocumentType, dtf_id, target_group_id, ordered_dtf_ids) -> None:
-    """Verschiebt ein Feld in eine (andere) Gruppe und ordnet die Zielgruppe neu.
+def move_field(
+    request,
+    doc_type: DocumentType,
+    dtf_id,
+    target_group_id,
+    ordered_dtf_ids=None,
+    ordered_blocks=None,
+) -> None:
+    """Verschiebt ein Feld in eine Gruppe ODER an eine Top-Level-Block-Position.
 
-    Setzt den ``field_group``-FK des verschobenen Felds und vergibt in der
-    Zielgruppe die ``sort_order`` gemäß ``ordered_dtf_ids`` (0..n-1).
-    ``target_group_id=None`` = „Ohne Gruppe". Fremde ``dtf_id`` oder eine
-    ``target_group_id`` aus einem anderen DocumentType → ``ValueError``.
+    * Ziel = **Gruppe** (``target_group_id`` gesetzt): ``ordered_dtf_ids`` gibt
+      die Innen-Reihenfolge der Zielgruppe vor (0..n-1, inkl. des bewegten
+      Felds); anschließend wird die globale Block-Sequenz kompaktiert (ein ggf.
+      verschwundener freier Block hinterlässt keine Lücke — server-seitig, kein
+      Client-Input nötig).
+    * Ziel = **Top-Level** (``target_group_id`` ist ``None``): ``ordered_blocks``
+      ist die gemischte Top-Level-Reihenfolge inkl. des bewegten (nun freien)
+      Felds; die Positionen werden wie bei :func:`reorder_blocks` geschrieben.
+
+    Fremde ``dtf_id`` oder Zielgruppe → ``ValueError`` (View → HTTP 400).
     """
     dtf = DocumentTypeField.objects.filter(pk=dtf_id, document_type=doc_type).first()
     if dtf is None:
         raise ValueError(_("Das zu verschiebende Feld gehört nicht zu diesem Dokumentationstyp."))
 
-    if (
-        target_group_id is not None
-        and not FieldGroup.objects.filter(pk=target_group_id, document_type=doc_type).exists()
-    ):
+    if target_group_id is not None:
+        _move_field_into_group(doc_type, dtf, target_group_id, ordered_dtf_ids)
+    else:
+        _move_field_to_top_level(doc_type, dtf, ordered_blocks)
+
+    log_audit_event(
+        request,
+        AuditLog.Action.CONFIG_REORDER,
+        target_obj=doc_type,
+        detail={"operation": "move_field"},
+    )
+
+
+def _move_field_into_group(doc_type: DocumentType, dtf: DocumentTypeField, target_group_id, ordered_dtf_ids) -> None:
+    if not FieldGroup.objects.filter(pk=target_group_id, document_type=doc_type).exists():
         raise ValueError(_("Die Zielgruppe gehört nicht zu diesem Dokumentationstyp."))
 
+    ordered_dtf_ids = list(ordered_dtf_ids or [])
     # Erwartete Zielmenge = aktuelle Felder der Zielgruppe + das verschobene Feld.
     target_member_ids = DocumentTypeField.objects.filter(
         document_type=doc_type,
         field_group=target_group_id,
     ).values_list("id", flat=True)
-    expected = {str(i) for i in target_member_ids} | {str(dtf_id)}
+    expected = {str(i) for i in target_member_ids} | {str(dtf.pk)}
     requested = [str(i) for i in ordered_dtf_ids]
     if len(requested) != len(expected) or set(requested) != expected:
         raise ValueError(
@@ -534,15 +706,41 @@ def move_field(request, doc_type: DocumentType, dtf_id, target_group_id, ordered
             )
         )
 
+    was_ungrouped = dtf.field_group_id is None
     with transaction.atomic():
         dtf.field_group_id = target_group_id
         dtf.save(update_fields=["field_group"])
         for position, member_id in enumerate(ordered_dtf_ids):
             DocumentTypeField.objects.filter(pk=member_id, document_type=doc_type).update(sort_order=position)
+        # War das Feld ein freier Top-Level-Block, dessen Slot ist jetzt leer.
+        if was_ungrouped:
+            _compact_block_positions(doc_type)
 
-    log_audit_event(
-        request,
-        AuditLog.Action.CONFIG_REORDER,
-        target_obj=doc_type,
-        detail={"operation": "move_field"},
-    )
+
+def _move_field_to_top_level(doc_type: DocumentType, dtf: DocumentTypeField, ordered_blocks) -> None:
+    ordered_blocks = list(ordered_blocks or [])
+    group_ids = [block_id for kind, block_id in ordered_blocks if kind == "group"]
+    field_ids = [block_id for kind, block_id in ordered_blocks if kind == "field"]
+
+    existing_group_ids = FieldGroup.objects.filter(document_type=doc_type).values_list("id", flat=True)
+    # Erwartete freie Felder NACH dem Move = aktuelle freie Felder ∪ {bewegtes}.
+    existing_field_ids = {
+        str(i)
+        for i in DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).values_list(
+            "id", flat=True
+        )
+    }
+    existing_field_ids.add(str(dtf.pk))
+    _validate_id_set(group_ids, existing_group_ids)
+    _validate_id_set(field_ids, existing_field_ids)
+
+    with transaction.atomic():
+        dtf.field_group_id = None
+        dtf.save(update_fields=["field_group"])
+        for position, (kind, block_id) in enumerate(ordered_blocks):
+            if kind == "group":
+                FieldGroup.objects.filter(pk=block_id, document_type=doc_type).update(sort_order=position)
+            else:
+                DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type, field_group__isnull=True).update(
+                    sort_order=position
+                )

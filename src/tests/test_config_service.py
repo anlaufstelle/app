@@ -33,10 +33,12 @@ from core.services.config import (
     delete_document_type,
     delete_field_group,
     delete_field_template,
+    iter_blocks_in_order,
+    iter_fields_in_block_order,
     move_field,
     remove_field_from_doctype,
+    reorder_blocks,
     reorder_fields,
-    reorder_groups,
     save_document_type,
     save_field_group,
     save_field_template,
@@ -300,40 +302,53 @@ class TestAddRemoveField:
 
 
 # ---------------------------------------------------------------------------
-# Reorder — groups / fields / move (atomar, strikte ID-Set-Validierung)
+# Globale Block-Sequenz (#1713) — Block-Reorder / Feld-Reorder / Move / Helfer
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-class TestReorderGroups:
-    def test_reorder_renumbers_and_audits_once(self, req, doc_type_contact):
-        g1 = FieldGroup.objects.create(document_type=doc_type_contact, name="G1", sort_order=0)
-        g2 = FieldGroup.objects.create(document_type=doc_type_contact, name="G2", sort_order=1)
+class TestReorderBlocks:
+    def test_reorder_mixed_blocks_renumbers_and_audits_once(self, req, doc_type_contact):
+        # doc_type_contact: 2 freie Felder (Blockpos 0,1) + 1 Gruppe (Blockpos 2).
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="G", sort_order=2)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
         before = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER).count()
-        reorder_groups(req, doc_type_contact, [g2.id, g1.id])
-        g1.refresh_from_db()
-        g2.refresh_from_db()
-        assert g2.sort_order == 0
-        assert g1.sort_order == 1
+        # Neue Reihenfolge: Gruppe zuerst, dann freies Feld 1, dann freies Feld 0.
+        reorder_blocks(
+            req,
+            doc_type_contact,
+            [("group", grp.id), ("field", free[1].id), ("field", free[0].id)],
+        )
+        grp.refresh_from_db()
+        free[0].refresh_from_db()
+        free[1].refresh_from_db()
+        assert grp.sort_order == 0
+        assert free[1].sort_order == 1
+        assert free[0].sort_order == 2
         after = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER).count()
         assert after == before + 1
         entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER).latest("timestamp")
-        assert entry.detail["operation"] == "group_order"
+        assert entry.detail["operation"] == "block_order"
 
-    def test_incomplete_id_set_raises_and_leaves_db_unchanged(self, req, doc_type_contact):
-        g1 = FieldGroup.objects.create(document_type=doc_type_contact, name="G1", sort_order=0)
-        g2 = FieldGroup.objects.create(document_type=doc_type_contact, name="G2", sort_order=1)
+    def test_incomplete_field_set_raises_and_leaves_db_unchanged(self, req, doc_type_contact):
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="G", sort_order=2)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
         with pytest.raises(ValueError):
-            reorder_groups(req, doc_type_contact, [g1.id])
-        g1.refresh_from_db()
-        g2.refresh_from_db()
-        assert (g1.sort_order, g2.sort_order) == (0, 1)
+            # Ein freies Feld fehlt in der Blockliste → 400.
+            reorder_blocks(req, doc_type_contact, [("group", grp.id), ("field", free[0].id)])
+        grp.refresh_from_db()
+        free[0].refresh_from_db()
+        free[1].refresh_from_db()
+        assert (free[0].sort_order, free[1].sort_order, grp.sort_order) == (0, 1, 2)
 
-    def test_foreign_id_raises(self, req, doc_type_contact):
-        g1 = FieldGroup.objects.create(document_type=doc_type_contact, name="G1", sort_order=0)
-        g2 = FieldGroup.objects.create(document_type=doc_type_contact, name="G2", sort_order=1)
+    def test_foreign_group_id_raises(self, req, doc_type_contact):
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
         with pytest.raises(ValueError):
-            reorder_groups(req, doc_type_contact, [g1.id, g2.id, uuid4()])
+            reorder_blocks(
+                req,
+                doc_type_contact,
+                [("group", uuid4()), ("field", free[0].id), ("field", free[1].id)],
+            )
 
 
 @pytest.mark.django_db
@@ -352,30 +367,30 @@ class TestReorderFields:
         entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER).latest("timestamp")
         assert entry.detail["operation"] == "field_order"
 
-    def test_reorder_ungrouped_scope(self, req, doc_type_contact):
-        dtfs = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
-        assert len(dtfs) == 2
-        reorder_fields(req, doc_type_contact, None, [dtfs[1].id, dtfs[0].id])
-        dtfs[0].refresh_from_db()
-        dtfs[1].refresh_from_db()
-        assert dtfs[1].sort_order == 0
-        assert dtfs[0].sort_order == 1
-
-    def test_foreign_dtf_id_raises(self, req, doc_type_contact):
-        dtfs = list(doc_type_contact.fields.filter(field_group__isnull=True))
+    def test_foreign_dtf_id_raises(self, req, facility, doc_type_contact):
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="RF")
+        ft1 = FieldTemplate.objects.create(facility=facility, name="RF-1", field_type="text")
+        d1 = add_field_to_doctype(req, doc_type_contact, ft1, field_group=grp)
         with pytest.raises(ValueError):
-            reorder_fields(req, doc_type_contact, None, [dtfs[0].id, uuid4()])
+            reorder_fields(req, doc_type_contact, grp.id, [d1.id, uuid4()])
 
 
 @pytest.mark.django_db
 class TestMoveField:
-    def test_move_sets_fk_and_position(self, req, doc_type_contact):
-        grp_dst = FieldGroup.objects.create(document_type=doc_type_contact, name="Dst")
-        dtf = doc_type_contact.fields.filter(field_group__isnull=True).first()
-        move_field(req, doc_type_contact, dtf.id, grp_dst.id, [dtf.id])
-        dtf.refresh_from_db()
-        assert dtf.field_group_id == grp_dst.id
-        assert dtf.sort_order == 0
+    def test_move_into_group_sets_fk_and_compacts_sequence(self, req, doc_type_contact):
+        # Ein freies Feld (Blockpos 0) wandert in eine Gruppe (Blockpos 2) →
+        # Sequenz kompaktiert: die Lücke des Ex-Blocks verschwindet.
+        grp_dst = FieldGroup.objects.create(document_type=doc_type_contact, name="Dst", sort_order=2)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        moved, stays = free[0], free[1]
+        move_field(req, doc_type_contact, moved.id, grp_dst.id, ordered_dtf_ids=[moved.id])
+        moved.refresh_from_db()
+        stays.refresh_from_db()
+        grp_dst.refresh_from_db()
+        assert moved.field_group_id == grp_dst.id
+        assert moved.sort_order == 0  # Innen-Position der Zielgruppe
+        # Kompaktierte Top-Level-Blöcke: das verbliebene freie Feld + die Gruppe.
+        assert (stays.sort_order, grp_dst.sort_order) == (0, 1)
         entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER).latest("timestamp")
         assert entry.detail["operation"] == "move_field"
 
@@ -384,27 +399,120 @@ class TestMoveField:
         ft_x = FieldTemplate.objects.create(facility=facility, name="X", field_type="text")
         dtf_x = add_field_to_doctype(req, doc_type_contact, ft_x, field_group=grp_dst)
         dtf_move = doc_type_contact.fields.filter(field_group__isnull=True).first()
-        move_field(req, doc_type_contact, dtf_move.id, grp_dst.id, [dtf_x.id, dtf_move.id])
+        move_field(req, doc_type_contact, dtf_move.id, grp_dst.id, ordered_dtf_ids=[dtf_x.id, dtf_move.id])
         dtf_x.refresh_from_db()
         dtf_move.refresh_from_db()
         assert dtf_x.sort_order == 0
         assert dtf_move.sort_order == 1
         assert dtf_move.field_group_id == grp_dst.id
 
-    def test_move_to_ungrouped(self, req, doc_type_contact):
-        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Src")
-        dtf = doc_type_contact.fields.first()
-        dtf.field_group = grp
-        dtf.save(update_fields=["field_group"])
-        # Zielmenge „Ohne Gruppe" = die verbliebenen ungruppierten Felder + das verschobene.
-        ungrouped_now = list(doc_type_contact.fields.filter(field_group__isnull=True).values_list("id", flat=True))
-        move_field(req, doc_type_contact, dtf.id, None, [*ungrouped_now, dtf.id])
-        dtf.refresh_from_db()
-        assert dtf.field_group_id is None
+    def test_move_to_top_level_position_persists(self, req, doc_type_contact):
+        # Feld sitzt in einer Gruppe; es wird per Blockliste ZWISCHEN Gruppe und
+        # freies Feld an Top-Level gezogen.
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Src", sort_order=0)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        moved = free[0]
+        moved.field_group = grp
+        moved.sort_order = 0
+        moved.save(update_fields=["field_group", "sort_order"])
+        # Restliche Top-Level-Blöcke jetzt: Gruppe (0), freies Feld free[1] (1).
+        other_free = free[1]
+        # Zielreihenfolge: Gruppe, moved (frei), other_free.
+        move_field(
+            req,
+            doc_type_contact,
+            moved.id,
+            None,
+            ordered_blocks=[("group", grp.id), ("field", moved.id), ("field", other_free.id)],
+        )
+        moved.refresh_from_db()
+        grp.refresh_from_db()
+        other_free.refresh_from_db()
+        assert moved.field_group_id is None
+        assert (grp.sort_order, moved.sort_order, other_free.sort_order) == (0, 1, 2)
 
     def test_cross_doctype_group_raises(self, req, facility, doc_type_contact):
         other_dt = DocumentType.objects.create(facility=facility, name="Anderer", category="contact")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremd")
         dtf = doc_type_contact.fields.first()
         with pytest.raises(ValueError):
-            move_field(req, doc_type_contact, dtf.id, foreign_grp.id, [dtf.id])
+            move_field(req, doc_type_contact, dtf.id, foreign_grp.id, ordered_dtf_ids=[dtf.id])
+
+
+@pytest.mark.django_db
+class TestAddRemoveBlockSequence:
+    def test_add_ungrouped_goes_to_end_of_global_sequence(self, req, facility, doc_type_contact):
+        # Vorlage: 2 freie Felder (0,1) + eine Gruppe an Blockposition 2.
+        FieldGroup.objects.create(document_type=doc_type_contact, name="G", sort_order=2)
+        ft = FieldTemplate.objects.create(facility=facility, name="Neu", field_type="text")
+        dtf = add_field_to_doctype(req, doc_type_contact, ft)
+        assert dtf.field_group_id is None
+        # Ans Ende der GLOBALEN Sequenz (max Blockposition 2) + 1 = 3.
+        assert dtf.sort_order == 3
+
+    def test_remove_ungrouped_compacts_sequence(self, req, doc_type_contact):
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="G", sort_order=2)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        # Das erste freie Feld (Blockpos 0) entfernen → Sequenz kompaktiert.
+        remove_field_from_doctype(req, free[0])
+        free[1].refresh_from_db()
+        grp.refresh_from_db()
+        assert (free[1].sort_order, grp.sort_order) == (0, 1)
+
+
+@pytest.mark.django_db
+class TestDeleteFieldGroupBlockSequence:
+    def test_delete_group_places_inner_fields_at_group_position(self, req, facility, doc_type_contact):
+        from core.services.config import delete_field_group
+
+        # Layout: freies Feld A (Blockpos 0), Gruppe G (Blockpos 1) mit zwei
+        # Innen-Feldern, freies Feld B (Blockpos 2).
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        a, b = free[0], free[1]
+        a.sort_order = 0
+        a.save(update_fields=["sort_order"])
+        b.sort_order = 2
+        b.save(update_fields=["sort_order"])
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="G", sort_order=1)
+        ft1 = FieldTemplate.objects.create(facility=facility, name="Innen 1", field_type="text")
+        ft2 = FieldTemplate.objects.create(facility=facility, name="Innen 2", field_type="text")
+        inner1 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft1, field_group=grp, sort_order=0
+        )
+        inner2 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft2, field_group=grp, sort_order=1
+        )
+
+        delete_field_group(req, grp)
+
+        for obj in (a, b, inner1, inner2):
+            obj.refresh_from_db()
+        # Die Ex-Gruppen-Felder stehen jetzt an der Gruppenposition (Blockpos 1,2),
+        # das nachfolgende freie Feld B rutscht auf 3.
+        assert a.field_group_id is None and a.sort_order == 0
+        assert inner1.field_group_id is None and inner1.sort_order == 1
+        assert inner2.field_group_id is None and inner2.sort_order == 2
+        assert b.field_group_id is None and b.sort_order == 3
+
+
+@pytest.mark.django_db
+class TestBlockOrderHelpers:
+    def test_iter_fields_in_block_order_interleaves(self, req, facility, doc_type_contact):
+        # freies Feld (Blockpos 0), Gruppe (Blockpos 1) mit einem Feld, freies Feld (Blockpos 2).
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        a, b = free[0], free[1]
+        a.sort_order = 0
+        a.save(update_fields=["sort_order"])
+        b.sort_order = 2
+        b.save(update_fields=["sort_order"])
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="G", sort_order=1)
+        ft = FieldTemplate.objects.create(facility=facility, name="Innen", field_type="text")
+        inner = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft, field_group=grp, sort_order=0
+        )
+        ordered = iter_fields_in_block_order(doc_type_contact)
+        assert [d.pk for d in ordered] == [a.pk, inner.pk, b.pk]
+        # iter_blocks_in_order spiegelt dieselbe Reihenfolge (Gruppe dazwischen).
+        blocks = iter_blocks_in_order(doc_type_contact)
+        kinds = [(blk["kind"], blk.get("group").pk if blk["kind"] == "group" else blk["field"].pk) for blk in blocks]
+        assert kinds == [("field", a.pk), ("group", grp.pk), ("field", b.pk)]
