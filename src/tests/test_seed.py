@@ -1,5 +1,7 @@
 """Tests for the seed management command."""
 
+import copy
+
 import pytest
 from django.core.management import call_command
 
@@ -31,6 +33,7 @@ from core.models import (  # noqa: E402
     User,
     WorkItem,
 )
+from core.seed import doc_types  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Idempotency (existing tests)
@@ -539,3 +542,182 @@ def test_seed_field_groups_idempotent_no_duplicates():
     assert kontakt_assignment_second == kontakt_assignment_first
     assert krise_assignment_second == krise_assignment_first
     assert total_dtf_second == total_dtf_first
+
+
+# ---------------------------------------------------------------------------
+# Field groups über stabilen Slug-Key + Cleanup + Normalisierung (Refs #1710)
+# ---------------------------------------------------------------------------
+
+
+def _renamed_catalog(*, doc_type_name: str, group_slug: str, new_group_name: str) -> list[dict]:
+    """Katalog-Kopie mit einer Gruppen-Umbenennung (per Slug adressiert)."""
+    defs = copy.deepcopy(doc_types.get_document_type_definitions())
+    for dt_def in defs:
+        if dt_def["name"] != doc_type_name:
+            continue
+        for group_def in dt_def.get("groups", []):
+            if group_def["slug"] == group_slug:
+                group_def["name"] = new_group_name
+    return defs
+
+
+def _catalog_without_group(*, doc_type_name: str, group_slug: str) -> list[dict]:
+    """Katalog-Kopie, aus der eine Gruppe (per Slug) entfernt wurde."""
+    defs = copy.deepcopy(doc_types.get_document_type_definitions())
+    for dt_def in defs:
+        if dt_def["name"] != doc_type_name:
+            continue
+        dt_def["groups"] = [g for g in dt_def.get("groups", []) if g["slug"] != group_slug]
+    return defs
+
+
+@pytest.mark.django_db
+def test_reseed_after_catalog_rename_keeps_same_fieldgroup_row(monkeypatch):
+    """Refs #1710: Katalog-Umbenennung adressiert die Gruppe über den stabilen
+    Slug — die FieldGroup-Row bleibt (gleiche pk), nur der Name ändert sich.
+    Kein Orphan/Duplikat entsteht.
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    basis = FieldGroup.objects.get(document_type=kontakt, slug="basisdaten")
+    basis_pk = basis.pk
+
+    renamed = _renamed_catalog(doc_type_name="Kontakt", group_slug="basisdaten", new_group_name="Stammdaten")
+    monkeypatch.setattr(doc_types, "get_document_type_definitions", lambda: renamed)
+
+    call_command("seed")
+
+    basis.refresh_from_db()
+    assert basis.pk == basis_pk
+    assert basis.name == "Stammdaten"
+    assert FieldGroup.objects.filter(document_type=kontakt, slug="basisdaten").count() == 1
+
+
+@pytest.mark.django_db
+def test_reseed_after_catalog_group_removal_deletes_row_and_ungroups_fields(monkeypatch):
+    """Refs #1710: Entfernt der Katalog eine Gruppe, verschwindet die Row und
+    ihre Felder werden ungruppiert (statt verwaist mit totem FK)."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    removed = FieldGroup.objects.get(document_type=kontakt, slug="leistungen-notizen")
+    removed_pk = removed.pk
+
+    reduced = _catalog_without_group(doc_type_name="Kontakt", group_slug="leistungen-notizen")
+    monkeypatch.setattr(doc_types, "get_document_type_definitions", lambda: reduced)
+
+    call_command("seed")
+
+    assert not FieldGroup.objects.filter(pk=removed_pk).exists()
+    for slug in ("leistungen", "notiz", "anhang"):
+        dtf = DocumentTypeField.objects.get(document_type=kontakt, field_template__slug=slug)
+        assert dtf.field_group is None
+
+
+@pytest.mark.django_db
+def test_reseed_transition_from_legacy_autoslug_is_idempotent():
+    """Refs #1710: Übergangs-Szenario — eine Bestands-FieldGroup mit einem vom
+    Katalog-Slug abweichenden Slug (z.B. Kollisionshistorie eines alten
+    Auto-Slugs) wird im ersten Lauf durch Cleanup + Neuanlage in EINEM Lauf
+    ersetzt; ein zweiter Lauf darf daran nichts mehr ändern.
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+
+    # Simuliert eine Bestands-Gruppe mit abweichendem Legacy-Slug.
+    FieldGroup.objects.filter(document_type=kontakt, slug="basisdaten").delete()
+    legacy = FieldGroup.objects.create(
+        document_type=kontakt, name="Basisdaten", slug="basisdaten-legacy", sort_order=0
+    )
+    dtf_dauer = DocumentTypeField.objects.get(document_type=kontakt, field_template__slug="dauer")
+    dtf_dauer.field_group = legacy
+    dtf_dauer.save(update_fields=["field_group"])
+
+    call_command("seed")
+
+    assert not FieldGroup.objects.filter(pk=legacy.pk).exists()
+    basis = FieldGroup.objects.get(document_type=kontakt, slug="basisdaten")
+    dtf_dauer.refresh_from_db()
+    assert dtf_dauer.field_group_id == basis.id
+
+    def _state():
+        return {
+            "group_ids": set(FieldGroup.objects.filter(document_type=kontakt).values_list("id", flat=True)),
+            "assignment": {
+                dtf.field_template.slug: dtf.field_group_id
+                for dtf in DocumentTypeField.objects.filter(document_type=kontakt).select_related("field_template")
+            },
+            "sort_orders": {
+                dtf.field_template.slug: dtf.sort_order
+                for dtf in DocumentTypeField.objects.filter(document_type=kontakt).select_related("field_template")
+            },
+        }
+
+    state_after_first = _state()
+    call_command("seed")
+    assert _state() == state_after_first
+
+
+@pytest.mark.django_db
+def test_seed_normalizes_group_and_field_sort_order():
+    """Refs #1710: Nach dem Seed-Lauf sind Gruppen 0..k-1 kompakt (Katalog-
+    Reihenfolge), gruppierte Felder tragen den Innen-Index (Katalog-
+    Feldreihenfolge je Gruppe), ungruppierte Felder folgen ab Position k in
+    Katalog-Feldreihenfolge."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+
+    basis = FieldGroup.objects.get(document_type=kontakt, slug="basisdaten")
+    leistungen_gruppe = FieldGroup.objects.get(document_type=kontakt, slug="leistungen-notizen")
+    assert basis.sort_order == 0
+    assert leistungen_gruppe.sort_order == 1
+
+    dtf_by_slug = {
+        dtf.field_template.slug: dtf
+        for dtf in DocumentTypeField.objects.filter(document_type=kontakt).select_related("field_template")
+    }
+    assert dtf_by_slug["dauer"].sort_order == 0
+    assert dtf_by_slug["alterscluster"].sort_order == 1
+    assert dtf_by_slug["leistungen"].sort_order == 0
+    assert dtf_by_slug["notiz"].sort_order == 1
+    assert dtf_by_slug["anhang"].sort_order == 2
+    assert dtf_by_slug["strassenkontakt"].sort_order == 2  # k=2 Gruppen -> Position 2
+
+    krise = DocumentType.objects.get(facility=facility, name="Krisengespräch")
+    krisendetails = FieldGroup.objects.get(document_type=krise, slug="krisendetails")
+    assert krisendetails.sort_order == 0
+
+    krise_dtf_by_slug = {
+        dtf.field_template.slug: dtf
+        for dtf in DocumentTypeField.objects.filter(document_type=krise).select_related("field_template")
+    }
+    assert krise_dtf_by_slug["art-der-krise"].sort_order == 0
+    assert krise_dtf_by_slug["dauer"].sort_order == 1
+    assert krise_dtf_by_slug["notiz-krise"].sort_order == 2
+    assert krise_dtf_by_slug["weitervermittlung"].sort_order == 3
+
+
+@pytest.mark.django_db
+def test_reseed_does_not_touch_field_groups_of_doctype_without_groups_key():
+    """Refs #1710: Ein DocType ohne 'groups'-Key im Katalog (z.B. Spritzentausch)
+    bekommt beim Re-Seed KEINEN Cleanup — eine manuell (Admin/Config-UI)
+    angelegte FieldGroup übersteht mehrfaches Re-Seeden unangetastet."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    spritzentausch = DocumentType.objects.get(facility=facility, name="Spritzentausch")
+    manual_group = FieldGroup.objects.create(document_type=spritzentausch, name="Manuell angelegt", slug="manuell")
+
+    call_command("seed")
+    call_command("seed")
+
+    manual_group.refresh_from_db()
+    assert FieldGroup.objects.filter(pk=manual_group.pk).exists()
+    assert manual_group.name == "Manuell angelegt"

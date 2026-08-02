@@ -58,9 +58,10 @@ def get_document_type_definitions() -> list[dict]:
             # bewusst in keiner Gruppe gelistet — demonstriert "Ohne Gruppe"
             # im UI. Slugs müssen zu "fields" oben passen.
             "groups": [
-                {"name": "Basisdaten", "sort_order": 0, "fields": ["dauer", "alterscluster"]},
+                {"name": "Basisdaten", "slug": "basisdaten", "sort_order": 0, "fields": ["dauer", "alterscluster"]},
                 {
                     "name": "Leistungen & Notizen",
+                    "slug": "leistungen-notizen",
                     "sort_order": 1,
                     "is_collapsible": True,
                     "fields": ["leistungen", "notiz", "anhang"],
@@ -96,6 +97,7 @@ def get_document_type_definitions() -> list[dict]:
             "groups": [
                 {
                     "name": "Krisendetails",
+                    "slug": "krisendetails",
                     "sort_order": 0,
                     "fields": ["art-der-krise", "dauer", "notiz-krise", "weitervermittlung"],
                 },
@@ -255,19 +257,43 @@ def seed_document_types(facility: Facility) -> None:
                 defaults={"sort_order": idx},
             )
 
-        _seed_field_groups(dt, dt_def.get("groups", []))
+        field_order = [field_def["slug"] for field_def in dt_def.get("fields", [])]
+        _seed_field_groups(dt, dt_def.get("groups"), field_order)
 
 
-def _seed_field_groups(dt: DocumentType, groups_def: list[dict]) -> None:
+def _seed_field_groups(dt: DocumentType, groups_def: list[dict] | None, field_order: list[str]) -> None:
     """Create/refresh a DocumentType's FieldGroups and field assignment.
 
-    Refs #1056 (M0). ``update_or_create`` looks the group up via
-    ``(document_type, name)`` — never via ``slug``: FieldGroup.slug is
-    auto-generated on creation and immutable afterwards (raises on change),
-    so passing it as a lookup value would risk trying to overwrite it.
-    ``name`` is the stable, human-authored key in the seed catalog above and
-    is itself unique per document_type, so it doubles as the idempotency key
-    without ever touching ``slug``.
+    Refs #1056 (M0), reworked Refs #1710. ``update_or_create`` looks the
+    group up via ``(document_type, slug)`` — each group definition in the
+    catalog above carries an explicit, stable ``"slug"``, chosen to match
+    what ``FieldGroup._generate_unique_slug()`` would have produced for the
+    existing (pre-#1710) auto-slugged rows (``slugify(name)``, no umlauts in
+    these names). This is what lets a facility that already ran the seed
+    before #1710 find and reuse its existing FieldGroup row on re-seed
+    instead of creating a duplicate: the slug in the catalog IS the row's
+    current slug, so the lookup hits and only ``name``/``sort_order``/
+    ``is_collapsible`` are updated in place — the slug itself is never
+    written by this lookup, so the model's immutability guard never fires.
+    A catalog rename (name-only change, same slug) is therefore a safe,
+    idempotent in-place update; changing the *slug* is not supported here
+    (nor needed — see the catalog comment on each group).
+
+    ``groups_def is None`` means the catalog has no "groups" key at all for
+    this DocumentType — FieldGroups for it (if any exist, e.g. created
+    manually via Admin/Config-UI) are left completely untouched: no cleanup,
+    no assignment pass. Only DocumentTypes that opt in with an explicit
+    "groups" key (even an empty list) participate in the cleanup below.
+
+    Cleanup: any existing FieldGroup for this DocumentType whose slug is not
+    in the catalog's group slugs is deleted (its fields fall back to
+    ungrouped via SET_NULL, corrected explicitly below in case the removed
+    group's fields need reassigning to a different target instead of NULL).
+    This also transparently handles the legacy-slug transition: an existing
+    row from before #1710 that happens to carry a slug the catalog does NOT
+    use (e.g. a collision-suffixed "-2" auto-slug) gets deleted, and the
+    catalog-slug row gets created fresh in the same run — a second run is
+    then a true no-op.
 
     Field assignment is re-applied on every run via an explicit ``.save()``
     when it differs from the target (not get_or_create-defaults, which only
@@ -276,25 +302,85 @@ def _seed_field_groups(dt: DocumentType, groups_def: list[dict]) -> None:
     "fields" list (e.g. "strassenkontakt" for Kontakt) are explicitly reset
     to ungrouped, so removing a slug from a group in this file also
     un-groups it on the next seed run.
+
+    Finally, a normalization pass rewrites ``sort_order`` to a canonical
+    form (see :func:`_normalize_block_order`) so that re-seeding always
+    yields the same deterministic layout, independent of creation-order
+    history.
     """
-    if not groups_def:
+    if groups_def is None:
         return
 
+    katalog_slugs = {group_def["slug"] for group_def in groups_def}
+    FieldGroup.objects.filter(document_type=dt).exclude(slug__in=katalog_slugs).delete()
+
+    group_by_slug: dict[str, FieldGroup] = {}
     slug_to_group: dict[str, FieldGroup] = {}
     for group_def in groups_def:
         fg, _ = FieldGroup.objects.update_or_create(
             document_type=dt,
-            name=group_def["name"],
+            slug=group_def["slug"],
             defaults={
+                "name": group_def["name"],
                 "sort_order": group_def.get("sort_order", 0),
                 "is_collapsible": group_def.get("is_collapsible", False),
             },
         )
+        group_by_slug[group_def["slug"]] = fg
         for slug in group_def.get("fields", []):
             slug_to_group[slug] = fg
 
-    for dtf in DocumentTypeField.objects.filter(document_type=dt).select_related("field_template"):
+    dtfs = list(DocumentTypeField.objects.filter(document_type=dt).select_related("field_template"))
+    for dtf in dtfs:
         target = slug_to_group.get(dtf.field_template.slug)
         if dtf.field_group_id != (target.id if target else None):
             dtf.field_group = target
             dtf.save(update_fields=["field_group"])
+
+    _normalize_block_order(groups_def, field_order, group_by_slug, dtfs)
+
+
+def _normalize_block_order(
+    groups_def: list[dict],
+    field_order: list[str],
+    group_by_slug: dict[str, FieldGroup],
+    dtfs: list[DocumentTypeField],
+) -> None:
+    """Bring group/field ``sort_order`` into canonical form after each seed run.
+
+    Refs #1710. Vorgriff auf die globale Block-Sequenz (#1713), aber unter der
+    heutigen (Gruppen-innere Sortierung) Semantik ebenso korrekt:
+
+    (a) Gruppen behalten die Katalog-Reihenfolge, kompakt als ``0..k-1``.
+    (b) Gruppierte Felder bekommen den Innen-Index ``0..n-1`` je Gruppe, in
+        der Reihenfolge von deren "fields"-Liste im Katalog.
+    (c) Ungruppierte Felder bekommen ``k, k+1, …`` (nach den Gruppen), in der
+        Reihenfolge von ``field_order`` (der top-level "fields"-Liste im
+        Katalog) — erhält das heutige Layout "Ohne Gruppe zuletzt" exakt.
+    """
+    dtf_by_slug = {dtf.field_template.slug: dtf for dtf in dtfs}
+
+    for idx, group_def in enumerate(groups_def):
+        fg = group_by_slug[group_def["slug"]]
+        if fg.sort_order != idx:
+            fg.sort_order = idx
+            fg.save(update_fields=["sort_order"])
+
+        for inner_idx, slug in enumerate(group_def.get("fields", [])):
+            dtf = dtf_by_slug.get(slug)
+            if dtf is not None and dtf.sort_order != inner_idx:
+                dtf.sort_order = inner_idx
+                dtf.save(update_fields=["sort_order"])
+
+    grouped_slugs = {slug for group_def in groups_def for slug in group_def.get("fields", [])}
+    position = len(groups_def)
+    for slug in field_order:
+        if slug in grouped_slugs:
+            continue
+        dtf = dtf_by_slug.get(slug)
+        if dtf is None:
+            continue
+        if dtf.sort_order != position:
+            dtf.sort_order = position
+            dtf.save(update_fields=["sort_order"])
+        position += 1
