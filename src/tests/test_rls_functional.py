@@ -25,7 +25,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Client, DocumentType, Event
+from core.models import Activity, AuditLog, Client, DocumentType, Event, FieldGroup
 from tests.conftest import xdist_role_suffix
 
 # Unter mutmut überspringen (Refs #1388/#930). Die ``rls_test_role``-Fixture ist
@@ -263,6 +263,27 @@ class TestRLSCrossTenantIsolation:
             )
             count = cur.fetchone()[0]
         assert count == 0, "Cross-Tenant-Read auf core_activity hat B-Activities geliefert."
+
+    def test_cross_tenant_fieldgroup_returns_zero_rows(self, rls_test_role, facility_a_with_data, facility_b_with_data):
+        """FieldGroup (M0, Refs #1056) ist transitiv facility-gescopt
+        (``fieldgroup.document_type.facility_id``, Migration 0111). Unter
+        facility_a-Setting darf keine Gruppe aus Facility B sichtbar sein,
+        die eigene aber schon.
+        """
+        dt_a = DocumentType.objects.get(facility=facility_a_with_data, name="A-Doc")
+        dt_b = DocumentType.objects.get(facility=facility_b_with_data, name="B-Doc")
+        FieldGroup.objects.create(document_type=dt_a, name="A-Group")
+        FieldGroup.objects.create(document_type=dt_b, name="B-Group")
+
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            cur.execute("SELECT name FROM core_fieldgroup WHERE name = 'B-Group'")
+            leaked = cur.fetchall()
+            cur.execute("SELECT name FROM core_fieldgroup WHERE name = 'A-Group'")
+            own = cur.fetchall()
+        assert leaked == [], "Cross-Tenant-Read auf core_fieldgroup hat B's Gruppe geliefert."
+        assert own == [("A-Group",)], (
+            f"Eigene FieldGroup unter facility_a-Setting nicht sichtbar (false negative). Rows: {own}"
+        )
 
     def test_own_tenant_client_visible(self, rls_test_role, facility_a_with_data):
         """Smoke: A-Client ist unter facility_a-Setting sichtbar — sonst

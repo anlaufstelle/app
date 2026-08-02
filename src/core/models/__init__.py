@@ -3,7 +3,7 @@ from .attachment import EventAttachment
 from .audit import AuditLog
 from .case import Case
 from .client import Client
-from .document_type import DocumentType, DocumentTypeField, FieldTemplate
+from .document_type import DocumentType, DocumentTypeField, FieldGroup, FieldTemplate
 from .episode import Episode
 from .event import Event
 from .event_history import EventHistory
@@ -32,6 +32,7 @@ __all__ = [
     "DocumentTypeField",
     "Event",
     "EventHistory",
+    "FieldGroup",
     "FieldTemplate",
     "Milestone",
     "Organization",

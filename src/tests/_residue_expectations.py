@@ -95,6 +95,9 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_fieldtemplate", "options_json", reason="Select/Multi-Select-Optionsdefinitionen (Schema-Konfig)."),
     non_pii("core_fieldtemplate", "statistics_category", reason="Statistik-Zuordnungs-Label (Konfiguration)."),
     non_pii("core_fieldtemplate", "help_text", reason="Admin-Hilfetext fuers Formular (Konfig-Label)."),
+    # ---- core_fieldgroup (M0, Refs #1056: Konfiguration: Feldgruppen-Schema) -
+    non_pii("core_fieldgroup", "name", reason="Admin-konfigurierter Gruppen-Name (Label)."),
+    non_pii("core_fieldgroup", "slug", reason="Stabiler Gruppen-Identifier (M2-Paketformat-Key), kein Freitext."),
     # ---- core_auditlog ---------------------------------------------------
     # Refs #1093: Klienten-PII (Pseudonym/reason) wird write-time minimiert —
     # gar nicht erst ins detail geschrieben, statt im append-only-Log

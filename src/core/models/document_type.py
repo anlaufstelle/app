@@ -338,6 +338,96 @@ class FieldTemplate(models.Model):
         return f"{self.facility.name} — {self.name} ({self.get_field_type_display()})"
 
 
+class FieldGroup(models.Model):
+    """Visuelle Gruppierung von Feldern innerhalb eines Dokumentationstyps.
+
+    M0 (Refs #1056): erlaubt es, die Felder eines DocumentType im Admin-UI und
+    im Formular in benannte, optional einklappbare Abschnitte zu gliedern. Kein
+    eigener ``facility``-FK — der Scope ergibt sich transitiv aus
+    ``document_type.facility`` (wie bei :class:`DocumentTypeField`), RLS via
+    JOIN-Policy (Migration 0111).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    document_type = models.ForeignKey(
+        DocumentType,
+        on_delete=models.CASCADE,
+        related_name="field_groups",
+        verbose_name=_("Dokumentationstyp"),
+    )
+    name = models.CharField(max_length=200, verbose_name=_("Name"))
+    slug = models.SlugField(
+        max_length=120,
+        verbose_name=_("Slug"),
+        help_text=_("Stabiler Identifier — wird im M2-Paketformat referenziert. Nach Erstellung unveränderbar."),
+    )
+    sort_order = models.IntegerField(default=0, verbose_name=_("Sortierung"))
+    is_collapsible = models.BooleanField(default=False, verbose_name=_("Einklappbar"))
+
+    class Meta:
+        verbose_name = _("Feldgruppe")
+        verbose_name_plural = _("Feldgruppen")
+        ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document_type", "slug"],
+                name="unique_documenttype_fieldgroup_slug",
+            ),
+            models.UniqueConstraint(
+                fields=["document_type", "name"],
+                name="unique_documenttype_fieldgroup_name",
+            ),
+        ]
+
+    def _generate_unique_slug(self):
+        """Generate a unique slug within the document type."""
+        base = slugify(self.name.lower().translate(_UMLAUT_MAP))
+        if not base:
+            raise ValidationError(_("Name ergibt keinen gültigen Slug."))
+        slug = base
+        counter = 2
+        while FieldGroup.objects.filter(document_type=self.document_type, slug=slug).exclude(pk=self.pk).exists():
+            slug = f"{base}-{counter}"
+            counter += 1
+        return slug
+
+    def clean(self):
+        super().clean()
+        if self.slug and not _SLUG_RE.fullmatch(self.slug):
+            raise ValidationError({"slug": _("Nur a-z, 0-9 und Bindestriche erlaubt.")})
+
+    _SLUG_RETRY_LIMIT = 3
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            auto_slug = not self.slug
+            if auto_slug:
+                self.slug = self._generate_unique_slug()
+            elif not _SLUG_RE.fullmatch(self.slug):
+                raise ValidationError(_("Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."))
+            if auto_slug:
+                for attempt in range(self._SLUG_RETRY_LIMIT):
+                    try:
+                        with transaction.atomic():
+                            super().save(*args, **kwargs)
+                        return
+                    except IntegrityError:
+                        if attempt >= self._SLUG_RETRY_LIMIT - 1:
+                            raise
+                        self.slug = self._generate_unique_slug()
+            else:
+                super().save(*args, **kwargs)
+                return
+        else:
+            orig = FieldGroup.objects.filter(pk=self.pk).first()
+            if orig and orig.slug and orig.slug != self.slug:
+                raise ValidationError(_("Slug kann nach Erstellung nicht geändert werden."))
+            super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.document_type.name} → {self.name}"
+
+
 class DocumentTypeField(models.Model):
     """Association of a field template with a document type."""
 
@@ -354,6 +444,14 @@ class DocumentTypeField(models.Model):
         related_name="document_type_fields",
         verbose_name=_("Feldvorlage"),
     )
+    field_group = models.ForeignKey(
+        FieldGroup,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="fields",
+        verbose_name=_("Feldgruppe"),
+    )
     sort_order = models.IntegerField(default=0, verbose_name=_("Sortierung"))
 
     class Meta:
@@ -366,6 +464,14 @@ class DocumentTypeField(models.Model):
                 name="unique_doctype_field",
             ),
         ]
+
+    def clean(self):
+        super().clean()
+        # M0 (Refs #1056): Eine zugeordnete Feldgruppe muss zum selben
+        # Dokumentationstyp gehoeren — sonst wuerde ein Feld unter einer Gruppe
+        # eines fremden DocumentType (ggf. sogar fremder Facility) einsortiert.
+        if self.field_group_id and self.field_group.document_type_id != self.document_type_id:
+            raise ValidationError({"field_group": _("Die Feldgruppe muss zum selben Dokumentationstyp gehören.")})
 
     def __str__(self):
         return f"{self.document_type.name} → {self.field_template.name}"
