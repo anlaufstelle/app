@@ -125,6 +125,32 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
+    /**
+     * Einklappbare Feldgruppe im Event-Formular (M0/P4, Refs #1056).
+     *
+     * Standardzustand ist offen; der Ausgangszustand kommt CSP-konform aus
+     * dem ``data-start-open``-Attribut des Wurzelelements (kein Inline-
+     * Argument). Nur benannte Property-/Methoden-Pfade — kompatibel mit dem
+     * @alpinejs/csp-Build (keine Inline-Expressions).
+     */
+    Alpine.data("collapsibleGroup", () => ({
+        open: true,
+        init() {
+            // data-start-open="false" startet eingeklappt; alles andere (inkl.
+            // fehlendem Attribut) bleibt offen.
+            this.open = this.$el.dataset.startOpen !== "false";
+        },
+        toggle() {
+            this.open = !this.open;
+        },
+        get ariaExpanded() {
+            return this.open ? "true" : "false";
+        },
+        get rotateClass() {
+            return this.open ? "rotate-180" : "";
+        },
+    }));
+
     /** History-Entry-Detail-Toggle (events/detail.html unten). */
     Alpine.data("historyEntryDetails", () => ({
         open: false,

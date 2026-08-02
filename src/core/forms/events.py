@@ -5,12 +5,13 @@ from typing import Any
 from django import forms
 from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
+from django.forms.boundfield import BoundField
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, Client, DocumentType, DocumentTypeField
+from core.models import Case, Client, DocumentType, DocumentTypeField, FieldGroup
 from core.models.settings import Settings
 
 
@@ -276,6 +277,11 @@ class DynamicEventDataForm(forms.Form):
 
     def __init__(self, *args, document_type=None, initial_data=None, facility=None, **kwargs):
         self.facility = facility
+        self.document_type = document_type
+        # M0/P4 (Refs #1056): slug -> FieldGroup | None. Aus dem select_related
+        # unten (kein Extra-Query). ``grouped_fields`` liest daraus die Gruppe je
+        # Feld — auch nachdem ``remove_restricted_fields`` (#774) Felder entfernt.
+        self._field_group_of: dict[str, FieldGroup | None] = {}
         super().__init__(*args, **kwargs)
         if not document_type:
             return
@@ -284,13 +290,45 @@ class DynamicEventDataForm(forms.Form):
             DocumentTypeField.objects.filter(
                 document_type=document_type,
             )
-            .select_related("field_template")
+            .select_related("field_template", "field_group")
             .order_by("sort_order")
         )
 
         for dtf in dtf_qs:
             ft = dtf.field_template
             self.fields[ft.slug] = _build_dynamic_field(ft, initial_data)
+            self._field_group_of[ft.slug] = dtf.field_group
+
+    def grouped_fields(self) -> list[tuple[FieldGroup | None, list[BoundField]]]:
+        """Gebundene Felder nach :class:`FieldGroup` gruppiert (M0/P4, Refs #1056).
+
+        Liefert ``[(gruppe_oder_None, [BoundField, ...]), ...]``:
+
+        - benannte Gruppen zuerst, sortiert nach ``(sort_order, name)``;
+        - die ``None``-Sektion („Ohne Gruppe") steht **garantiert zuletzt**;
+        - **leere Gruppen entfallen** — iteriert wird ausschliesslich ueber die
+          im Formular tatsaechlich vorhandenen Felder, sodass eine Gruppe, deren
+          Felder z.B. von ``remove_restricted_fields`` (#774) entfernt wurden,
+          automatisch verschwindet;
+        - Feld-Reihenfolge innerhalb einer Gruppe folgt der ``DocumentTypeField.
+          sort_order`` (Einfuegereihenfolge aus ``__init__``).
+
+        Gruppiert wird in Python — bewusst **kein** SQL-``NULLS LAST`` (DB-fragil).
+        """
+        buckets: dict[Any, tuple[FieldGroup | None, list[BoundField]]] = {}
+        for name in self.fields:
+            group = self._field_group_of.get(name)
+            key = group.pk if group is not None else None
+            if key not in buckets:
+                buckets[key] = (group, [])
+            buckets[key][1].append(self[name])
+
+        named = [(group, bound) for group, bound in buckets.values() if group is not None]
+        named.sort(key=lambda entry: (entry[0].sort_order, entry[0].name))
+        result: list[tuple[FieldGroup | None, list[BoundField]]] = list(named)
+        if None in buckets:
+            result.append(buckets[None])
+        return result
 
     def clean(self):
         cleaned = super().clean() or {}

@@ -34,66 +34,12 @@
         <input type="hidden" name="expected_updated_at" value="{{ event.updated_at.isoformat }}">
 
         {% if data_form.fields %}
-        <div class="card p-4 space-y-4">
-            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Felder" %}</h2>
-            {% for field in data_form %}
-            <div>
-                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink-soft mb-1">
-                    {{ field.label }}{% if field.field.required %} *{% endif %}
-                </label>
-
-                {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
-                {# Refs #1143: gezielt auf den Datei-Widget-Typ prüfen — allow_multiple_selected ist auch bei CheckboxSelectMultiple True. #}
-                {% if field.field.widget.input_type == "file" %}
-                {% with entries=existing_attachments|get_item:field.name %}
-                {% if entries %}
-                <ul class="mb-2 space-y-2" data-testid="attachment-entries-{{ field.name }}">
-                    {% for entry in entries %}
-                    <li class="flex flex-wrap items-center gap-2 p-2 bg-canvas border border-subtle rounded-[10px]"
-                        data-entry-id="{{ entry.entry_id }}">
-                        <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
-                           class="text-accent hover:underline text-sm">
-                            {{ entry.filename }}
-                        </a>
-                        <span class="text-xs text-ink-muted">({{ entry.size }})</span>
-                        <label class="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted">
-                            <span>{% trans "Ersetzen" %}:</span>
-                            <input type="file" name="{{ field.name }}__replace__{{ entry.entry_id }}"
-                                   class="text-xs" data-testid="attachment-replace-{{ entry.entry_id }}">
-                        </label>
-                        <label class="inline-flex items-center gap-1 text-xs text-red-600">
-                            <input type="checkbox"
-                                   name="__remove_checkbox__{{ field.name }}"
-                                   value="{{ entry.entry_id }}"
-                                   data-testid="attachment-remove-{{ entry.entry_id }}"
-                                   data-attachment-remove
-                                   data-remove-target="{{ field.name }}__remove">
-                            {% trans "Entfernen" %}
-                        </label>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
-                <p class="text-xs text-ink-muted mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
-                {% aria_field field %}
-                {% endwith %}
-                {% else %}
-                {% aria_field field %}
-                {% endif %}
-
-                {% if field.help_text %}
-                <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
-                {% endif %}
-                {% if field.errors %}
-                <ul id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in field.errors %}
-                    <li>{{ error }}</li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
+        {% comment %}
+        M0/P4 (Refs #1056): Felder werden über das gemeinsame Partial gerendert —
+        gruppiert nach FieldGroup, einklappbar. ``event``/``existing_attachments``
+        aus dem View-Kontext werden vom Include mitgereicht (Datei-Steuerung #622).
+        {% endcomment %}
+        {% include "core/events/partials/dynamic_fields.html" %}
 
         <div class="flex flex-col sm:flex-row gap-3">
             <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent">

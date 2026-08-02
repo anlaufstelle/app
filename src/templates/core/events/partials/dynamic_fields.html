@@ -1,25 +1,97 @@
-{% load i18n %}
+{% load i18n core_tags %}
+
+{% comment %}
+Dynamische Event-Felder, gruppiert nach FieldGroup (M0/P4, Refs #1056).
+
+Rendert je Gruppe eine Sektion via ``data_form.grouped_fields``. Gruppen-Header
+erscheinen nur, wenn benannte Gruppen existieren — ohne Gruppen bleibt die
+Darstellung flach (eine „Felder"-Sektion, wie zuvor). Einklappbare Gruppen
+(``is_collapsible``) tragen die CSP-kompatible Alpine-Komponente
+``collapsibleGroup`` (nur benannte Property-/Methoden-Pfade, keine Inline-
+Expressions/Argumente; Startzustand via ``data-start-open``).
+
+Gemeinsame Feld-Renderfläche für Create-Flow (create.html + EventFieldsPartialView)
+und Edit-Flow (edit.html). Der Edit-Kontext liefert zusätzlich ``event`` und
+``existing_attachments`` für die Datei-Ersetzen-/Soft-Delete-Steuerung (#622);
+im Create-Kontext fehlen sie und der Attachment-Block bleibt leer.
+{% endcomment %}
 
 {% if data_form and data_form.fields %}
-<div class="card p-5 space-y-4">
-    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Felder" %}</h2>
-    {% for field in data_form %}
-    <div>
-        <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
-            {{ field.label }}{% if field.field.required %} *{% endif %}
-        </label>
-        {{ field }}
-        {% if field.errors %}
-        <ul class="mt-1 text-sm text-red-600">
-            {% for error in field.errors %}
-            <li>{{ error }}</li>
-            {% endfor %}
-        </ul>
+{% with grouped=data_form.grouped_fields %}
+{% for group, fields in grouped %}
+<div class="card p-4 space-y-4"{% if group.is_collapsible %} x-data="collapsibleGroup" data-start-open="true"{% endif %}>
+    {% if group.is_collapsible %}
+    <button type="button" @click="toggle" aria-expanded="true" :aria-expanded="ariaExpanded"
+            class="w-full flex items-center justify-between gap-2 text-left">
+        <span class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{{ group.name }}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+             class="w-4 h-4 shrink-0 text-ink-muted transition-transform" :class="rotateClass">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+        </svg>
+    </button>
+    {% else %}
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">
+        {% if group %}{{ group.name }}{% elif grouped|length > 1 %}{% trans "Ohne Gruppe" %}{% else %}{% trans "Felder" %}{% endif %}
+    </h2>
+    {% endif %}
+    <div class="space-y-4"{% if group.is_collapsible %} x-show="open"{% endif %}>
+        {% for field in fields %}
+        {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
+        {# Refs #1143: gezielt auf den Datei-Widget-Typ prüfen — allow_multiple_selected ist auch bei CheckboxSelectMultiple True. #}
+        {% if field.field.widget.input_type == "file" %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
+                {{ field.label }}{% if field.field.required %} *{% endif %}
+            </label>
+            {% with entries=existing_attachments|get_item:field.name %}
+            {% if entries %}
+            <ul class="mb-2 space-y-2" data-testid="attachment-entries-{{ field.name }}">
+                {% for entry in entries %}
+                <li class="flex flex-wrap items-center gap-2 p-2 bg-canvas border border-subtle rounded-[10px]"
+                    data-entry-id="{{ entry.entry_id }}">
+                    <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
+                       class="text-accent hover:underline text-sm">
+                        {{ entry.filename }}
+                    </a>
+                    <span class="text-xs text-ink-muted">({{ entry.size }})</span>
+                    <label class="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted">
+                        <span>{% trans "Ersetzen" %}:</span>
+                        <input type="file" name="{{ field.name }}__replace__{{ entry.entry_id }}"
+                               class="text-xs" data-testid="attachment-replace-{{ entry.entry_id }}">
+                    </label>
+                    <label class="inline-flex items-center gap-1 text-xs text-red-600">
+                        <input type="checkbox"
+                               name="__remove_checkbox__{{ field.name }}"
+                               value="{{ entry.entry_id }}"
+                               data-testid="attachment-remove-{{ entry.entry_id }}"
+                               data-attachment-remove
+                               data-remove-target="{{ field.name }}__remove">
+                        {% trans "Entfernen" %}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            <p class="text-xs text-ink-muted mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
+            {% aria_field field %}
+            {% endwith %}
+            {% if field.help_text %}
+            <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+            <ul id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
+                {% for error in field.errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% else %}
+        {% include "components/_form_field.html" with field=field %}
         {% endif %}
-        {% if field.help_text %}
-        <p class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
-        {% endif %}
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
+{% endfor %}
+{% endwith %}
 {% endif %}
