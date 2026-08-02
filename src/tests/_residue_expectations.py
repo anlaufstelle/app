@@ -98,6 +98,13 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # ---- core_fieldgroup (M0, Refs #1056: Konfiguration: Feldgruppen-Schema) -
     non_pii("core_fieldgroup", "name", reason="Admin-konfigurierter Gruppen-Name (Label)."),
     non_pii("core_fieldgroup", "slug", reason="Stabiler Gruppen-Identifier (M2-Paketformat-Key), kein Freitext."),
+    # ---- core_fieldcondition (M1, Refs #1057: Konfiguration: Sichtbarkeitsregeln) -
+    non_pii("core_fieldcondition", "operator", reason="Enum (equals/not_equals/contains/...), kein Freitext."),
+    non_pii(
+        "core_fieldcondition",
+        "value",
+        reason="Admin-Vergleichswert der Sichtbarkeitsregel (Konfig, analog default_value), keine Klientendaten.",
+    ),
     # ---- core_auditlog ---------------------------------------------------
     # Refs #1093: Klienten-PII (Pseudonym/reason) wird write-time minimiert —
     # gar nicht erst ins detail geschrieben, statt im append-only-Log
