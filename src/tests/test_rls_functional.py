@@ -285,6 +285,34 @@ class TestRLSCrossTenantIsolation:
             f"Eigene FieldGroup unter facility_a-Setting nicht sichtbar (false negative). Rows: {own}"
         )
 
+    def test_cross_facility_fieldgroup_insert_violates_policy(
+        self, rls_test_role, facility_a_with_data, facility_b_with_data
+    ):
+        """INSERT-Seite der USING-only-Policy (Migration 0111): Postgres nutzt
+        das ``USING``-Praedikat implizit als ``WITH CHECK``. Unter
+        facility_a-Setting darf keine FieldGroup fuer einen facility_b-
+        DocumentType eingefuegt werden — der INSERT muss an der RLS-Policy
+        scheitern (``new row violates row-level security policy``), sonst
+        koennte ein Tenant Konfiguration in einen fremden Scope schreiben.
+        """
+        import uuid as _uuid
+
+        from django.db import Error as _DjangoDBError
+
+        dt_b = DocumentType.objects.get(facility=facility_b_with_data, name="B-Doc")
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            with pytest.raises(_DjangoDBError) as exc:
+                cur.execute(
+                    "INSERT INTO core_fieldgroup "
+                    "(id, document_type_id, name, slug, sort_order, is_collapsible) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    [str(_uuid.uuid4()), str(dt_b.pk), "Injected-B-Group", "injected-b-group", 0, False],
+                )
+        assert "row-level security" in str(exc.value).lower(), (
+            f"Cross-Facility-INSERT auf core_fieldgroup wurde nicht durch die RLS-Policy "
+            f"abgelehnt (USING-only greift nicht als WITH CHECK?). Fehler: {exc.value!r}"
+        )
+
     def test_own_tenant_client_visible(self, rls_test_role, facility_a_with_data):
         """Smoke: A-Client ist unter facility_a-Setting sichtbar — sonst
         koennten die Cross-Tenant-Tests false negatives sein."""
