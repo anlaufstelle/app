@@ -13,7 +13,6 @@ zur Detailseite.
 
 import logging
 
-from django.contrib import messages
 from django.shortcuts import get_object_or_404, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -45,11 +44,13 @@ class ConfigFieldGroupCreateView(FacilityAdminRequiredMixin, View):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         form = FieldGroupForm(request.POST, doc_type=doc_type)
         if not form.is_valid():
-            messages.error(request, _("Die Feldgruppe konnte nicht angelegt werden."))
-            return board_response(request, doc_type, group_form=form)
+            return board_response(
+                request, doc_type, group_form=form, error=_("Die Feldgruppe konnte nicht angelegt werden.")
+            )
         group = config_service.save_field_group(request, form, doc_type=doc_type, creating=True)
-        messages.success(request, _("Feldgruppe „%(name)s“ wurde angelegt.") % {"name": group.name})
-        return board_response(request, doc_type)
+        return board_response(
+            request, doc_type, message=_("Feldgruppe „%(name)s“ wurde angelegt.") % {"name": group.name}
+        )
 
 
 class ConfigFieldGroupUpdateView(FacilityAdminRequiredMixin, View):
@@ -70,19 +71,24 @@ class ConfigFieldGroupUpdateView(FacilityAdminRequiredMixin, View):
         group = get_object_or_404(FieldGroup, pk=group_pk, document_type=doc_type)
         form = FieldGroupForm(request.POST, instance=group, doc_type=doc_type)
         if not form.is_valid():
-            messages.error(request, _("Die Feldgruppe konnte nicht gespeichert werden."))
             if request.headers.get("HX-Request") == "true":
+                # Fehler ersetzen das Inline-Formular an Ort und Stelle (Fehlertext
+                # im group_form); keine Flash-Meldung — sie stünde im Store.
                 return render(
                     request,
                     GROUP_FORM_TEMPLATE,
                     {"form": form, "doc_type": doc_type, "group": group, "is_edit": True},
                 )
-            return board_response(request, doc_type)
+            return board_response(request, doc_type, error=_("Die Feldgruppe konnte nicht gespeichert werden."))
         config_service.save_field_group(request, form, doc_type=doc_type, creating=False)
-        messages.success(request, _("Feldgruppe „%(name)s“ wurde gespeichert.") % {"name": group.name})
         # Das Editier-Formular postet per hx-target="this"; bei Erfolg soll das
         # ganze Board ersetzt werden → HX-Retarget auf #field-board.
-        return board_response(request, doc_type, retarget=True)
+        return board_response(
+            request,
+            doc_type,
+            retarget=True,
+            message=_("Feldgruppe „%(name)s“ wurde gespeichert.") % {"name": group.name},
+        )
 
 
 class ConfigFieldGroupDeleteView(FacilityAdminRequiredMixin, View):
@@ -93,5 +99,4 @@ class ConfigFieldGroupDeleteView(FacilityAdminRequiredMixin, View):
         group = get_object_or_404(FieldGroup, pk=group_pk, document_type=doc_type)
         name = group.name
         config_service.delete_field_group(request, group)
-        messages.success(request, _("Feldgruppe „%(name)s“ wurde gelöscht.") % {"name": name})
-        return board_response(request, doc_type)
+        return board_response(request, doc_type, message=_("Feldgruppe „%(name)s“ wurde gelöscht.") % {"name": name})

@@ -306,6 +306,89 @@ class TestHTMXBranch:
 
 
 # ---------------------------------------------------------------------------
+# Flash-Messages — nur im Nicht-HX-Zweig. Bei HX-Request rendert board_response
+# nur field_board.html (ohne Messages-Region) → eine hier gesetzte Meldung
+# strandet im Store und poppt verspätet beim nächsten Vollseiten-Load auf
+# (Konvention: workitem_actions.py — Messages nur vor dem Redirect).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestBoardMutationMessages:
+    def test_field_add_htmx_leaves_message_store_empty(self, client, admin_user, doc_type_contact, field_template):
+        client.force_login(admin_user)
+        url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"field_template": str(field_template.pk)}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert list(get_messages(response.wsgi_request)) == []
+
+    def test_field_add_non_htmx_redirects_with_message(self, client, admin_user, doc_type_contact, field_template):
+        client.force_login(admin_user)
+        url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"field_template": str(field_template.pk)})
+        assert response.status_code == 302
+        assert any("zugeordnet" in m for m in _messages(response))
+
+    def test_field_add_htmx_form_error_leaves_message_store_empty(self, client, admin_user, facility, doc_type_contact):
+        client.force_login(admin_user)
+        ft_dauer = FieldTemplate.objects.get(facility=facility, name="Dauer")  # bereits zugeordnet → Formfehler
+        url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"field_template": str(ft_dauer.pk)}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert list(get_messages(response.wsgi_request)) == []
+
+    def test_field_remove_htmx_leaves_message_store_empty(self, client, admin_user, doc_type_contact, doc_type_field):
+        client.force_login(admin_user)
+        url = reverse(
+            "core:config_doctype_field_remove",
+            kwargs={"pk": doc_type_contact.pk, "dtf_pk": doc_type_field.pk},
+        )
+        response = client.post(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert list(get_messages(response.wsgi_request)) == []
+
+    def test_field_remove_non_htmx_redirects_with_message(self, client, admin_user, doc_type_contact, doc_type_field):
+        client.force_login(admin_user)
+        url = reverse(
+            "core:config_doctype_field_remove",
+            kwargs={"pk": doc_type_contact.pk, "dtf_pk": doc_type_field.pk},
+        )
+        response = client.post(url)
+        assert response.status_code == 302
+        assert any("entfernt" in m for m in _messages(response))
+
+    def test_group_create_htmx_leaves_message_store_empty(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"name": "Store-Test"}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert list(get_messages(response.wsgi_request)) == []
+
+    def test_group_create_non_htmx_redirects_with_message(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"name": "Store-Test-Redir"})
+        assert response.status_code == 302
+        assert any("angelegt" in m for m in _messages(response))
+
+    def test_group_update_htmx_success_leaves_message_store_empty(
+        self, client, admin_user, doc_type_contact, field_group
+    ):
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
+        response = client.post(url, {"name": "Umbenannt"}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert list(get_messages(response.wsgi_request)) == []
+
+    def test_group_delete_htmx_leaves_message_store_empty(self, client, admin_user, doc_type_contact, field_group):
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_delete", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
+        response = client.post(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert list(get_messages(response.wsgi_request)) == []
+
+
+# ---------------------------------------------------------------------------
 # IDOR — fremder doc_type → 404 VOR jeder weiteren Prüfung; gemischt → 404
 # ---------------------------------------------------------------------------
 

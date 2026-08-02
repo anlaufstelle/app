@@ -75,13 +75,19 @@ def board_context(doc_type, *, add_form=None, group_form=None):
     }
 
 
-def board_response(request, doc_type, *, add_form=None, group_form=None, retarget=False):
+def board_response(request, doc_type, *, add_form=None, group_form=None, retarget=False, message=None, error=None):
     """HX-Request → frisch gerendertes ``field_board.html``, sonst Redirect zum Detail.
 
     ``retarget=True`` setzt ``HX-Retarget``/``HX-Reswap`` auf ``#field-board`` —
     genutzt vom Inline-Editier-Formular einer Gruppe, das per ``hx-target="this"``
     postet: bei Erfolg soll trotzdem das ganze Board (nicht nur das Formular)
     ersetzt werden.
+
+    ``message``/``error`` werden **nur** im Nicht-HX-Zweig (vor dem Redirect) als
+    Flash-Meldung gesetzt. Bei ``HX-Request`` rendert der Helper nur
+    ``field_board.html`` (ohne Messages-Region) — eine hier gesetzte Meldung
+    stünde im Store und poppte verspätet beim nächsten Vollseiten-Load auf.
+    Konvention: ``workitem_actions.py`` (Messages nur im Redirect-Zweig).
     """
     if request.headers.get("HX-Request") == "true":
         context = board_context(doc_type, add_form=add_form, group_form=group_form)
@@ -90,6 +96,10 @@ def board_response(request, doc_type, *, add_form=None, group_form=None, retarge
             response["HX-Retarget"] = "#field-board"
             response["HX-Reswap"] = "outerHTML"
         return response
+    if message is not None:
+        messages.success(request, message)
+    if error is not None:
+        messages.error(request, error)
     return redirect("core:config_doctype_detail", pk=doc_type.pk)
 
 
@@ -236,8 +246,9 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
 
         form = DocumentTypeFieldAddForm(request.POST, doc_type=doc_type)
         if not form.is_valid():
-            messages.error(request, _("Die Feldvorlage konnte nicht zugeordnet werden."))
-            return board_response(request, doc_type, add_form=form)
+            return board_response(
+                request, doc_type, add_form=form, error=_("Die Feldvorlage konnte nicht zugeordnet werden.")
+            )
 
         field_template = form.cleaned_data["field_template"]
         field_group = form.cleaned_data.get("field_group")
@@ -247,11 +258,13 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
             return HttpResponseBadRequest(str(exc))
         except ValidationError as exc:
             form.add_error("field_template", exc)
-            messages.error(request, _("Die Feldvorlage konnte nicht zugeordnet werden."))
-            return board_response(request, doc_type, add_form=form)
+            return board_response(
+                request, doc_type, add_form=form, error=_("Die Feldvorlage konnte nicht zugeordnet werden.")
+            )
 
-        messages.success(request, _("Feld „%(name)s“ wurde zugeordnet.") % {"name": field_template.name})
-        return board_response(request, doc_type)
+        return board_response(
+            request, doc_type, message=_("Feld „%(name)s“ wurde zugeordnet.") % {"name": field_template.name}
+        )
 
 
 class ConfigDocTypeFieldRemoveView(FacilityAdminRequiredMixin, View):
@@ -262,5 +275,4 @@ class ConfigDocTypeFieldRemoveView(FacilityAdminRequiredMixin, View):
         dtf = get_object_or_404(DocumentTypeField, pk=dtf_pk, document_type=doc_type)
         name = dtf.field_template.name
         config_service.remove_field_from_doctype(request, dtf)
-        messages.success(request, _("Feld „%(name)s“ wurde entfernt.") % {"name": name})
-        return board_response(request, doc_type)
+        return board_response(request, doc_type, message=_("Feld „%(name)s“ wurde entfernt.") % {"name": name})
