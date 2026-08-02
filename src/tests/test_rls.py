@@ -429,6 +429,67 @@ class TestAppendOnlyTriggerOwnership:
 
 
 @pytest.mark.django_db(transaction=True)
+class TestSlugImmutableTriggerOwnership:
+    """Refs #1709: analog ``TestAppendOnlyTriggerOwnership`` — die Slug-
+    Immutable-Trigger (Migration 0116) sind bewusst NICHT in
+    ``_APPEND_ONLY_TRIGGERS``/``bypass_replication_triggers`` aufgenommen (die
+    Slug-Immutabilitaet soll auch fuer Wartungspfade gelten). Damit bleibt
+    ``ENABLE ALWAYS`` + Owner-DDL die EINZIGE Verteidigungslinie gegen ein
+    Abschalten der Trigger — dieser Test pinnt, dass die Runtime-App-Rolle
+    (NOSUPERUSER/NOBYPASSRLS, kein Table-Owner) sie nicht deaktivieren kann.
+    """
+
+    _SLUG_IMMUTABLE_TRIGGERS = (
+        ("core_fieldgroup", "fieldgroup_slug_immutable"),
+        ("core_fieldtemplate", "fieldtemplate_slug_immutable"),
+    )
+
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("Trigger-/Owner-Test benoetigt PostgreSQL")
+
+    @property
+    def _runtime_role(self):
+        return f"m2_slug_runtime{xdist_role_suffix()}"
+
+    def _drop_role(self):
+        with connection.cursor() as cur:
+            cur.execute("RESET ROLE")
+            cur.execute(
+                "DO $$ BEGIN "
+                f"IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{self._runtime_role}') THEN "
+                f"  EXECUTE format('DROP OWNED BY %I', '{self._runtime_role}'); "
+                f"  EXECUTE format('DROP ROLE %I', '{self._runtime_role}'); "
+                "END IF; END $$;"
+            )
+
+    def test_non_owner_runtime_role_cannot_disable_slug_immutable_triggers(self):
+        from django.db import Error as DjangoDBError
+        from django.db import transaction
+
+        role = self._runtime_role
+        self._drop_role()
+        try:
+            with connection.cursor() as cur:
+                cur.execute(f"CREATE ROLE {role} NOSUPERUSER NOBYPASSRLS")
+                cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_fieldgroup TO {role}")
+                cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_fieldtemplate TO {role}")
+
+            for table, trigger in self._SLUG_IMMUTABLE_TRIGGERS:
+                with pytest.raises(DjangoDBError) as exc, transaction.atomic():
+                    with connection.cursor() as cur:
+                        cur.execute(f"SET ROLE {role}")
+                        cur.execute(f"ALTER TABLE {table} DISABLE TRIGGER {trigger}")
+                assert "must be owner" in str(exc.value).lower(), (
+                    f"Nicht-Owner-Rolle konnte {trigger} auf {table} abschalten — Slug-Immutabilitaet umgehbar!"
+                )
+                with connection.cursor() as cur:
+                    cur.execute("RESET ROLE")
+        finally:
+            self._drop_role()
+
+
+@pytest.mark.django_db(transaction=True)
 class TestSuperAdminRLSBypass:
     """Refs #867: ``app.is_super_admin='true'`` bypasst die facility_isolation-
     Policy ueber alle facility-gescopten Tabellen.
