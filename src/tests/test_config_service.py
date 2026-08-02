@@ -258,6 +258,39 @@ class TestAddRemoveField:
         with pytest.raises(ValidationError):
             add_field_to_doctype(req, doc_type_contact, existing_ft)
 
+    def test_add_with_foreign_group_raises_and_creates_nothing(self, req, facility, doc_type_contact):
+        # Befund A (Refs #1056): eine FieldGroup aus einem FREMDEN DocumentType
+        # darf nicht durchrutschen — .create() ruft full_clean() nie auf, der
+        # DocumentTypeField.clean()-Guard greift also nicht. Der Service muss die
+        # Zugehörigkeit selbst prüfen (Fehlerklasse konsistent zu move_field →
+        # ValueError für HTTP 400) und darf keinen DTF anlegen.
+        other_dt = DocumentType.objects.create(facility=facility, name="Fremd-Typ", category="contact")
+        foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremde Gruppe")
+        ft = FieldTemplate.objects.create(facility=facility, name="Neu-Fremd", field_type="text")
+        before = DocumentTypeField.objects.filter(document_type=doc_type_contact).count()
+        with pytest.raises(ValueError):
+            add_field_to_doctype(req, doc_type_contact, ft, field_group=foreign_grp)
+        assert DocumentTypeField.objects.filter(document_type=doc_type_contact).count() == before
+        assert not DocumentTypeField.objects.filter(document_type=doc_type_contact, field_template=ft).exists()
+
+    def test_add_duplicate_translates_integrity_error(self, req, facility, doc_type_contact, monkeypatch):
+        # Befund B (Refs #1056): die Doppelprüfung ist check-then-create. Fällt der
+        # exists()-Vorabtreffer aus (paralleles Add desselben Paars), schlägt die
+        # UniqueConstraint beim create() zu. Ohne Übersetzung wäre das eine
+        # unbehandelte IntegrityError (HTTP 500) statt der im Docstring
+        # versprochenen ValidationError. Wir erzwingen den Race, indem wir den
+        # exists()-Vorabtreffer auf False zwingen (QuerySet.exists am Modell
+        # gestubbt, kein Proxy) — dann muss das create() die IntegrityError in
+        # eine ValidationError übersetzen (transaction-sicher, sonst vergiftet der
+        # Fehler die umgebende Test-Transaktion).
+        existing_ft = FieldTemplate.objects.get(facility=facility, name="Dauer")
+        assert DocumentTypeField.objects.filter(document_type=doc_type_contact, field_template=existing_ft).exists()
+        from django.db.models.query import QuerySet
+
+        monkeypatch.setattr(QuerySet, "exists", lambda self: False)
+        with pytest.raises(ValidationError):
+            add_field_to_doctype(req, doc_type_contact, existing_ft)
+
     def test_remove_field_audits_config_delete(self, req, doc_type_contact):
         dtf = doc_type_contact.fields.first()
         pk = dtf.pk

@@ -22,7 +22,7 @@ DB bleibt unverändert (der View macht daraus später ein HTTP 400).
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max, ProtectedError
 from django.utils.translation import gettext as _
 
@@ -256,7 +256,18 @@ def add_field_to_doctype(
     (``field_group=None`` = die „Ohne Gruppe"-Menge). Eine Doppelzuordnung
     (UniqueConstraint ``document_type`` + ``field_template``) wird als
     :class:`~django.core.exceptions.ValidationError` hochgereicht.
+
+    Eine ``field_group`` aus einem fremden ``DocumentType`` wird — analog zu
+    :func:`move_field` — mit ``ValueError`` abgewiesen (View → HTTP 400):
+    ``DocumentTypeField.objects.create()`` ruft ``full_clean()`` nie auf, der
+    ``DocumentTypeField.clean()``-Guard greift also nicht.
     """
+    # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
+    # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu
+    # move_field (ValueError → HTTP 400).
+    if field_group is not None and field_group.document_type_id != doc_type.id:
+        raise ValueError(_("Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."))
+
     if DocumentTypeField.objects.filter(document_type=doc_type, field_template=field_template).exists():
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."))
 
@@ -266,13 +277,22 @@ def add_field_to_doctype(
     ).aggregate(m=Max("sort_order"))["m"]
     next_order = 0 if current_max is None else current_max + 1
 
-    dtf = DocumentTypeField.objects.create(
-        document_type=doc_type,
-        field_template=field_template,
-        field_group=field_group,
-        sort_order=next_order,
-        **kwargs,
-    )
+    # Befund B (Refs #1056): Der exists()-Vorabtreffer ist check-then-create und
+    # gegen einen Race (paralleles Add desselben Paars) nicht dicht. Das create()
+    # in einen inneren atomaren Block wickeln, damit eine dabei ausgelöste
+    # IntegrityError nur den Savepoint zurückrollt (die umgebende Transaktion
+    # bleibt nutzbar) und in die dokumentierte ValidationError übersetzt wird.
+    try:
+        with transaction.atomic():
+            dtf = DocumentTypeField.objects.create(
+                document_type=doc_type,
+                field_template=field_template,
+                field_group=field_group,
+                sort_order=next_order,
+                **kwargs,
+            )
+    except IntegrityError as exc:
+        raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet.")) from exc
     log_audit_event(
         request,
         AuditLog.Action.CONFIG_CREATE,
