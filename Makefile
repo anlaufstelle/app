@@ -219,7 +219,7 @@ verify-css-fresh:
 	npx @tailwindcss/cli -i src/static/css/input.css -o "$$tmp" --minify >/dev/null 2>&1; \
 	if [ ! -f src/static/css/styles.css ] || ! cmp -s "$$tmp" src/static/css/styles.css; then \
 		rm -f "$$tmp"; \
-		echo "src/static/css/styles.css ist stale — make tailwind-build ausfuehren" >&2; \
+		echo "src/static/css/styles.css ist stale — make tailwind-build ausführen" >&2; \
 		exit 1; \
 	fi; \
 	rm -f "$$tmp"; \
