@@ -1,0 +1,38 @@
+{% load i18n %}
+{% comment %}
+Typabhängiger Operator-Slot für den Regel-Editor (M2-Vorarbeit, #1715).
+
+Wird per HTMX-GET (config_condition_operator_input) geladen, sobald sich das
+Quellfeld ändert — und rendert die für den Quelltyp ZULÄSSIGEN Operatoren
+(OPERATORS_BY_FIELD_TYPE, in der Reihenfolge von FieldCondition.Operator.choices).
+Immer mit name="operator" (Server-Validierung über FieldConditionForm.clean +
+Modell-Defense bleibt Wahrheit).
+
+Idempotenz-Vertrag wie .condition-value-slot: dieses Partial rendert seinen
+EIGENEN Wurzel-Wrapper `<div class="condition-operator-slot">`. Der auslösende
+Quell-Select erbt vom <form> nichts (trägt hx-swap="outerHTML" selbst) und zielt
+auf `next .condition-operator-slot` — mit Wrapper-als-Wurzel bleibt der Swap über
+beliebig viele Quellwechsel idempotent (Wrapper ersetzt Wrapper).
+
+#1715-Kette: Der Operator-Select trägt selbst die Value-Slot-Verkabelung
+(config_condition_value_input, `next .condition-value-slot`). Beim PARTIAL-Render
+(Quellwechsel-Swap) `hx-trigger="change, load"` → nach dem Swap zieht `load`
+automatisch den Value-Slot nach (DOM-Reihenfolge Operator vor Value bleibt). Beim
+INITIALEN Formular-Render nur `change` (kein Extra-GET beim Seitenaufbau).
+
+Kontext: operator_choices [(value, label)], selected_operator, doc_type,
+operator_autoload (bool).
+{% endcomment %}
+<div class="condition-operator-slot" data-testid="condition-operator-slot">
+    <select name="operator" data-testid="condition-operator"
+            class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
+            hx-get="{% url 'core:config_condition_value_input' doc_type.pk %}"
+            hx-trigger="{% if operator_autoload %}change, load{% else %}change{% endif %}"
+            hx-target="next .condition-value-slot"
+            hx-swap="outerHTML"
+            hx-include="closest form">
+        {% for value, label in operator_choices %}
+        <option value="{{ value }}"{% if value == selected_operator %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+</div>

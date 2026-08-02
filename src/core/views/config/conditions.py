@@ -27,7 +27,7 @@ from django.views import View
 from core.forms.config import FieldConditionForm
 from core.models import DocumentType, DocumentTypeField, FieldCondition
 from core.services import config as config_service
-from core.services.conditions import VALUELESS_OPERATORS
+from core.services.conditions import OPERATORS_BY_FIELD_TYPE, VALUELESS_OPERATORS
 from core.views.mixins import FacilityAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 BOARD_TEMPLATE = "core/config/document_types/partials/condition_board.html"
 FORM_TEMPLATE = "core/config/document_types/partials/condition_form.html"
 VALUE_INPUT_TEMPLATE = "core/config/document_types/partials/condition_value_input.html"
+OPERATOR_INPUT_TEMPLATE = "core/config/document_types/partials/condition_operator_input.html"
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +123,9 @@ def condition_board_context(doc_type, *, form=None):
         "condition_form": form,
         "condition_next_group_index": next_group_index,
         "condition_field_count": DocumentTypeField.objects.filter(document_type=doc_type).count(),
+        # #1715: Operator-Slot des eingebetteten Neu-Formulars (typgefiltert, falls
+        # die Quelle im Formularzustand bereits bekannt ist — sonst volle Liste).
+        **operator_input_context_for_form(form, doc_type),
     }
 
 
@@ -213,7 +217,16 @@ class ConditionCreateView(FacilityAdminRequiredMixin, View):
             with contextlib.suppress(ValueError, TypeError):
                 initial["target_field"] = uuid.UUID(raw_target)
         form = FieldConditionForm(document_type=doc_type, initial=initial)
-        return render(request, FORM_TEMPLATE, {"condition_form": form, "doc_type": doc_type, "is_edit": False})
+        return render(
+            request,
+            FORM_TEMPLATE,
+            {
+                "condition_form": form,
+                "doc_type": doc_type,
+                "is_edit": False,
+                **operator_input_context_for_form(form, doc_type),
+            },
+        )
 
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
@@ -265,6 +278,8 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
             "condition": condition,
             "is_edit": True,
             **_value_input_context(condition.depends_on_field.field_template, condition.operator, current_value),
+            # #1715: Operator-Slot typgefiltert vorbefüllt (Quelle aus dem Prefill bekannt).
+            **operator_input_context_for_form(form, doc_type),
         }
         return render(request, FORM_TEMPLATE, context)
 
@@ -296,7 +311,13 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
             return render(
                 request,
                 FORM_TEMPLATE,
-                {"condition_form": form, "doc_type": doc_type, "condition": condition, "is_edit": True},
+                {
+                    "condition_form": form,
+                    "doc_type": doc_type,
+                    "condition": condition,
+                    "is_edit": True,
+                    **operator_input_context_for_form(form, doc_type),
+                },
             )
         return condition_board_response(request, doc_type, error=_("Die Bedingung konnte nicht gespeichert werden."))
 
@@ -339,6 +360,34 @@ class ConditionValueInputView(FacilityAdminRequiredMixin, View):
         )
 
 
+class ConditionOperatorInputView(FacilityAdminRequiredMixin, View):
+    """Liefert das typabhängige Operator-Slot-Partial (#1715) — HTMX-GET.
+
+    Analog ``ConditionValueInputView`` (``source``-Alias, 400 bei fehlender/
+    ungültiger Quelle). Parameter: ``depends_on_field`` (Quell-DTF-pk) und
+    ``operator`` (aktuelle Auswahl). Rendert nur die für den Quelltyp zulässigen
+    Operatoren; das Partial trägt ``operator_autoload=True`` → nach dem Swap zieht
+    ``load`` automatisch den Value-Slot nach (Kette Quelle→Operator→Value).
+    """
+
+    def get(self, request, pk):
+        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
+        source_raw = request.GET.get("depends_on_field") or request.GET.get("source") or ""
+        operator = request.GET.get("operator", "")
+        if not source_raw:
+            return HttpResponseBadRequest(_("Kein Quellfeld angegeben."))
+        try:
+            source_uuid = uuid.UUID(source_raw)
+        except (ValueError, TypeError):
+            return HttpResponseBadRequest(_("Ungültige Quellfeld-ID."))
+        dtf = get_object_or_404(DocumentTypeField, pk=source_uuid, document_type=doc_type)
+        return render(
+            request,
+            OPERATOR_INPUT_TEMPLATE,
+            _operator_input_context(dtf.field_template, operator, doc_type, autoload=True),
+        )
+
+
 def _value_input_context(field_template, operator, current_value) -> dict:
     """Kontext für ``condition_value_input.html`` — je Quelltyp+Operator (E19).
 
@@ -364,3 +413,77 @@ def _value_for_input(value):
     if value is False:
         return "false"
     return str(value)
+
+
+def _operator_choices_for(field_template):
+    """``(value, label)``-Operatoren gefiltert auf den Quelltyp (#1715).
+
+    In der Reihenfolge von ``FieldCondition.Operator.choices`` (stabile UI-Ordnung).
+    ``field_template is None`` (keine Quelle bekannt) → volle Liste (Progressive
+    Enhancement; das Non-HTMX-Formular bleibt funktionsfähig, ``clean()``-Matrix
+    bleibt Server-Wahrheit).
+    """
+    if field_template is None:
+        return list(FieldCondition.Operator.choices)
+    allowed = OPERATORS_BY_FIELD_TYPE.get(field_template.field_type, frozenset())
+    return [(value, label) for value, label in FieldCondition.Operator.choices if value in allowed]
+
+
+def _operator_input_context(field_template, current_operator, doc_type, *, autoload) -> dict:
+    """Kontext für ``condition_operator_input.html`` — je Quelltyp (#1715).
+
+    Gemeinsam genutzt vom HTMX-Swap-Endpoint (``ConditionOperatorInputView``,
+    ``autoload=True``) und vom initialen Formular-Render (``autoload=False``). Die
+    aktuelle Auswahl bleibt erhalten, wenn sie im zulässigen Set liegt, sonst die
+    erste zulässige Option.
+    """
+    choices = _operator_choices_for(field_template)
+    allowed_values = {value for value, _label in choices}
+    if current_operator and current_operator in allowed_values:
+        selected = current_operator
+    else:
+        selected = choices[0][0] if choices else ""
+    return {
+        "operator_choices": choices,
+        "selected_operator": selected,
+        "doc_type": doc_type,
+        "operator_autoload": autoload,
+    }
+
+
+def _form_source_field_template(form):
+    """Ermittelt die (ggf.) bereits gewählte Quelle einer ``FieldConditionForm`` (#1715).
+
+    Reihenfolge: gebundene ``data`` (POST/Fehler-Rerender) → ``initial``
+    (Edit-Prefill) → ``None``. Die pk wird über das bereits gescopte
+    ``depends_on_field``-Queryset aufgelöst (Sicherheit); unauflösbar → ``None``
+    (volle Operatorliste als Fallback).
+    """
+    raw = None
+    if form.is_bound:
+        raw = form.data.get("depends_on_field")
+    if not raw:
+        raw = form.initial.get("depends_on_field")
+    if not raw:
+        return None
+    try:
+        dtf = form.fields["depends_on_field"].queryset.get(pk=raw)
+    except (DocumentTypeField.DoesNotExist, ValidationError, ValueError, TypeError):
+        return None
+    return dtf.field_template
+
+
+def operator_input_context_for_form(form, doc_type, *, autoload=False) -> dict:
+    """Baut den Operator-Slot-Kontext aus dem Formularzustand (#1715).
+
+    Zentral genutzt an allen Formular-Render-Pfaden (Board, Create-GET, Edit-GET,
+    Edit-Fehler-Rerender), damit ``condition_operator_input.html`` überall den
+    passenden — bei bekannter Quelle typgefilterten — Operator-Slot rendert.
+    """
+    field_template = _form_source_field_template(form)
+    current = ""
+    if form.is_bound:
+        current = form.data.get("operator", "") or ""
+    if not current:
+        current = form.initial.get("operator", "") or ""
+    return _operator_input_context(field_template, current, doc_type, autoload=autoload)

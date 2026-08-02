@@ -612,6 +612,15 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "doc_type_contact.pk"),),
         idor=(("pk", "foreign_doc_type.pk"),),
     ),
+    # #1715: typabhängiger Operator-Slot (HTMX-GET). facility_admin only; IDOR
+    # (fremder doc_type → 404) vor Rendern; fehlende Quelle → 400 (kein 403/404/5xx).
+    E(
+        "core:config_condition_operator_input",
+        "config",
+        get=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",

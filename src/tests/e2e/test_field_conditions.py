@@ -39,7 +39,6 @@ from ._helpers import track_console_errors
 # M0-Muster wiederverwenden (test_config_ui.py bleibt unangetastet): DocType-CRUD
 # und Feld-Board-Zuordnung sind dort stabil etabliert.
 from .test_config_ui import (
-    DOCTYPE_LIST,
     FIELDTEMPLATE_LIST,
     FORM_SUBMIT,
     _add_group,
@@ -164,10 +163,11 @@ class TestFieldConditionsEndToEnd:
             _assign_field(page, target_name, group)
             _assign_field(page, file_name, group)
 
-            # Das Condition-Board rendert die „Neue Bedingung"-Karte erst ab
-            # field_count >= 2 — der Feld-Board-Swap aktualisiert es nicht, daher
-            # die Detailseite frisch laden.
-            page.goto(f"{base_url}{DOCTYPE_LIST}{doctype_pk}/", wait_until="domcontentloaded")
+            # #1718-Regression: Das Condition-Board rendert die „Neue Bedingung"-
+            # Karte erst ab field_count >= 2. Der Feld-Board-Swap feuert jetzt
+            # `refresh-conditions` (HX-Trigger) → das Bedingungs-Board lädt sich
+            # OHNE Reload nach und die Karte erscheint. (Früher stand hier ein
+            # `page.goto`-Workaround; sein Wegfall IST der Regressionstest.)
             add_card = page.locator('[data-testid="condition-add-card"]')
             expect(add_card).to_be_visible(timeout=10000)
 
@@ -181,11 +181,17 @@ class TestFieldConditionsEndToEnd:
 
             # (a) Regel anlegen: „Wenn <dauer> greater_than 10 → zeige <notiz>".
             target_select.select_option(value=_option_value_by_text(target_select, target_name))
-            # Quell- und Operator-Wechsel laden je das typisierte Wert-Input per HTMX nach.
+            # Quellwechsel lädt den typabhängigen Operator-Slot (#1715) nach, dessen
+            # `load`-Trigger anschließend das typisierte Wert-Input (#E19) nachzieht.
             with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
                 source_select.select_option(value=_option_value_by_text(source_select, source_name))
+            # #1715: Der Operator-Slot ist jetzt typgefiltert — number bietet
+            # `greater_than`, aber NICHT `contains`.
+            operator_select = add_card.locator('[data-testid="condition-operator"]')
+            expect(operator_select.locator("option[value='greater_than']")).to_have_count(1, timeout=10000)
+            expect(operator_select.locator("option[value='contains']")).to_have_count(0)
             with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
-                add_card.locator('[data-testid="condition-operator"]').select_option(value="greater_than")
+                operator_select.select_option(value="greater_than")
             _wait_value_input(add_card, "number").fill("10")
             add_card.locator('[data-testid="condition-submit"]').click()
 

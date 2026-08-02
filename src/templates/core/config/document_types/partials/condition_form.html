@@ -44,8 +44,12 @@ generische Textfeld, kein separates Feld der Form selbst.
         {{ condition_form.depends_on_field }}
     </div>
     <div>
-        <label for="{{ condition_form.operator.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Operator" %}</label>
-        {{ condition_form.operator }}
+        <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Operator" %}</label>
+        {% comment %}#1715: Operator-Feld als eigenständiges Partial (Wurzel = .condition-operator-slot):
+        identische Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Quellwechsel.
+        Ohne bekannte Quelle rendert der View die volle Operatorliste (Progressive Enhancement),
+        bei bekannter Quelle (Edit/Fehler-Rerender) bereits typgefiltert.{% endcomment %}
+        {% include "core/config/document_types/partials/condition_operator_input.html" %}
     </div>
     <div>
         <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>

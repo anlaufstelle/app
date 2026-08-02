@@ -313,22 +313,26 @@ class FieldConditionForm(forms.Form):
                 .select_related("field_template")
                 .order_by("sort_order")
             )
-            # Wert-Eingabe typisiert nachladen (E19): Quellfeld/Operator-Wechsel
-            # holt das passende Input-Partial in den nächsten Value-Slot. Relatives
-            # ``next``-Ziel funktioniert für Neu- UND Edit-Formular gleichermaßen.
-            # ``hx-swap="outerHTML"`` explizit (statt Erbe vom <form>): der Value-Slot-
-            # Wrapper ersetzt sich als Ganzes durch den neuen Wrapper des Partials —
-            # idempotent über beliebig viele Swaps (Bug-Fix Runde 2).
-            value_url = reverse("core:config_condition_value_input", kwargs={"pk": document_type.pk})
-            hx_attrs = {
-                "hx-get": value_url,
-                "hx-trigger": "change",
-                "hx-target": "next .condition-value-slot",
-                "hx-swap": "outerHTML",
-                "hx-include": "closest form",
-            }
-            self.fields["depends_on_field"].widget.attrs.update(hx_attrs)
-            self.fields["operator"].widget.attrs.update(hx_attrs)
+            # #1715: Die Verkabelung ist aufgespalten (NICHT ergänzt — sonst
+            # doppelter Value-Fetch/Race beim Quellwechsel). Die QUELLE holt jetzt
+            # AUSSCHLIESSLICH den typabhängigen Operator-Slot; die Kette
+            # Quelle→Operator→Value läuft danach über das ``load`` des frisch
+            # geswappten Operator-Selects (condition_operator_input.html). Der
+            # Operator-Slot selbst wird als Partial gerendert (nicht das
+            # Form-Widget) und trägt die Value-Endpoint-Attribute dort.
+            # ``hx-swap="outerHTML"`` explizit (statt Erbe vom <form>): der
+            # Operator-Slot-Wrapper ersetzt sich als Ganzes durch den neuen Wrapper —
+            # idempotent über beliebig viele Quellwechsel.
+            operator_url = reverse("core:config_condition_operator_input", kwargs={"pk": document_type.pk})
+            self.fields["depends_on_field"].widget.attrs.update(
+                {
+                    "hx-get": operator_url,
+                    "hx-trigger": "change",
+                    "hx-target": "next .condition-operator-slot",
+                    "hx-swap": "outerHTML",
+                    "hx-include": "closest form",
+                }
+            )
 
     def clean(self) -> dict[str, Any]:
         # ``forms.Form.clean`` ist ``dict | None`` — ``or {}`` hält den strikten

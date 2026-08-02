@@ -48,6 +48,7 @@ from core.views.config.conditions import (
     ConditionBoardView,
     ConditionCreateView,
     ConditionDeleteView,
+    ConditionOperatorInputView,
     ConditionUpdateView,
     ConditionValueInputView,
 )
@@ -337,6 +338,11 @@ urlpatterns = [
         "config/document-types/<uuid:pk>/conditions/board/",
         ConditionBoardView.as_view(),
         name="config_condition_board",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/conditions/operator-input/",
+        ConditionOperatorInputView.as_view(),
+        name="config_condition_operator_input",
     ),
     path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
     path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),

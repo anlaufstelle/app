@@ -435,9 +435,7 @@ class TestConditionBoardRefresh:
 
     def test_empty_state_toggle_after_field_board_mutations(self, client, admin_user, facility, field_template):
         """Empty-State ↔ Regel-Editor-Karte kippt in BEIDE Richtungen über den Refresh-Endpoint."""
-        dt = DocumentType.objects.create(
-            facility=facility, category=DocumentType.Category.CONTACT, name="Kipp-Typ"
-        )
+        dt = DocumentType.objects.create(facility=facility, category=DocumentType.Category.CONTACT, name="Kipp-Typ")
         ft_a = FieldTemplate.objects.create(facility=facility, name="Feld A", field_type=FieldTemplate.FieldType.TEXT)
         first = DocumentTypeField.objects.create(document_type=dt, field_template=ft_a, sort_order=0)
         client.force_login(admin_user)
@@ -555,6 +553,165 @@ class TestBoardDisplayValue:
         body = self._board(client, doc_type_contact)
         assert "&lt;b&gt;Fett&lt;/b&gt;" in body
         assert "<b>Fett</b>" not in body
+
+
+# ---------------------------------------------------------------------------
+# #1715 — Operator-Dropdown typabhängig (HTMX-Slot)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestOperatorInputPartial:
+    """Der Operator-Slot rendert nur die für den Quelltyp zulässigen Operatoren."""
+
+    def _operator_input(self, client, doc_type, source, operator="", *, param="depends_on_field"):
+        url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type.pk})
+        return client.get(url, {param: str(source.pk), "operator": operator})
+
+    def test_boolean_source_has_exactly_two_operators(self, client, admin_user, doc_type_contact, facility):
+        client.force_login(admin_user)
+        bool_dtf = _make_dtf(doc_type_contact, facility, "Flag", FieldTemplate.FieldType.BOOLEAN, sort_order=6)
+        response = self._operator_input(client, doc_type_contact, bool_dtf, "equals")
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert body.count("<option") == 2
+        assert 'value="equals"' in body and 'value="not_equals"' in body
+        assert 'value="contains"' not in body and 'value="greater_than"' not in body
+
+    def test_multi_select_source_operators(self, client, admin_user, doc_type_contact, facility):
+        client.force_login(admin_user)
+        ms_dtf = _make_dtf(
+            doc_type_contact,
+            facility,
+            "Tags",
+            FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[{"slug": "a", "label": "A"}],
+            sort_order=6,
+        )
+        body = self._operator_input(client, doc_type_contact, ms_dtf, "contains").content.decode()
+        assert body.count("<option") == 3
+        for expected in ("contains", "is_empty", "is_not_empty"):
+            assert f'value="{expected}"' in body
+        assert 'value="equals"' not in body
+
+    def test_operators_ordered_like_operator_choices(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")  # number
+        body = self._operator_input(client, doc_type_contact, dauer, "equals").content.decode()
+        # Reihenfolge = FieldCondition.Operator.choices (equals < not_equals < greater_than < less_than < ...).
+        assert body.index('value="equals"') < body.index('value="not_equals"')
+        assert body.index('value="not_equals"') < body.index('value="greater_than"')
+        assert body.index('value="greater_than"') < body.index('value="less_than"')
+
+    def test_keeps_valid_current_operator_selected(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")  # number
+        body = self._operator_input(client, doc_type_contact, dauer, "less_than").content.decode()
+        assert 'value="less_than" selected' in body
+
+    def test_resets_invalid_current_operator_to_first(self, client, admin_user, doc_type_contact, facility):
+        client.force_login(admin_user)
+        bool_dtf = _make_dtf(doc_type_contact, facility, "Flag", FieldTemplate.FieldType.BOOLEAN, sort_order=6)
+        # greater_than ist für boolean unzulässig → erste zulässige Option (equals) selektiert.
+        body = self._operator_input(client, doc_type_contact, bool_dtf, "greater_than").content.decode()
+        assert 'value="equals" selected' in body
+        assert 'value="not_equals" selected' not in body
+
+    def test_missing_source_is_bad_request(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type_contact.pk})
+        assert client.get(url).status_code == 400
+
+    def test_garbage_source_is_bad_request(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type_contact.pk})
+        assert client.get(url, {"depends_on_field": "keine-uuid", "operator": "equals"}).status_code == 400
+
+    def test_source_alias_supported(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")
+        response = self._operator_input(client, doc_type_contact, dauer, "equals", param="source")
+        assert response.status_code == 200
+        assert 'value="greater_than"' in response.content.decode()
+
+    def test_root_is_operator_slot_wrapper(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")
+        body = self._operator_input(client, doc_type_contact, dauer, "equals").content.decode().strip()
+        assert body.startswith('<div class="condition-operator-slot"')
+        assert body.endswith("</div>")
+
+    def test_two_consecutive_swaps_keep_single_slot(self, client, admin_user, doc_type_contact, facility):
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")  # number
+        bool_dtf = _make_dtf(doc_type_contact, facility, "Flag", FieldTemplate.FieldType.BOOLEAN, sort_order=6)
+        first = self._operator_input(client, doc_type_contact, dauer, "greater_than")
+        second = self._operator_input(client, doc_type_contact, bool_dtf, "equals")
+        for response in (first, second):
+            assert response.status_code == 200
+            assert response.content.decode().count('class="condition-operator-slot"') == 1
+
+    def test_swap_operator_select_autoloads_value(self, client, admin_user, doc_type_contact):
+        """Das PARTIAL-gerenderte Operator-Select zieht per ``load`` den Value-Slot nach."""
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")
+        body = self._operator_input(client, doc_type_contact, dauer, "equals").content.decode()
+        assert 'hx-trigger="change, load"' in body
+        # Der Operator zielt auf den Value-Slot-Endpoint.
+        assert reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk}) in body
+        assert 'hx-target="next .condition-value-slot"' in body
+
+
+@pytest.mark.django_db
+class TestOperatorFormWiring:
+    """Formular-Verkabelung: Quelle → Operator-Slot; Operator-Slot → Value-Slot."""
+
+    def test_source_select_targets_operator_slot_not_value(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_create", kwargs={"pk": doc_type_contact.pk})
+        body = client.get(url).content.decode()
+        operator_url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type_contact.pk})
+        value_url = reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk})
+        # Die Quelle holt jetzt AUSSCHLIESSLICH den Operator-Slot (kein direkter Value-Fetch mehr).
+        source_attrs = body[body.index('data-testid="condition-source"') :]
+        source_attrs = source_attrs[: source_attrs.index(">")]
+        assert f'hx-get="{operator_url}"' in source_attrs
+        assert 'hx-target="next .condition-operator-slot"' in source_attrs
+        assert value_url not in source_attrs
+
+    def test_initial_operator_select_has_no_load_trigger(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_create", kwargs={"pk": doc_type_contact.pk})
+        body = client.get(url).content.decode()
+        # Initialer Operator-Slot: nur change (kein Extra-GET beim Seitenaufbau).
+        operator_slot = body[body.index('class="condition-operator-slot"') :]
+        operator_slot = operator_slot[: operator_slot.index("</select>")]
+        assert 'hx-trigger="change"' in operator_slot
+        assert "load" not in operator_slot
+
+    def test_create_form_without_source_shows_full_operator_list(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_create", kwargs={"pk": doc_type_contact.pk})
+        body = client.get(url).content.decode()
+        operator_slot = body[body.index('class="condition-operator-slot"') :]
+        operator_slot = operator_slot[: operator_slot.index("</select>")]
+        # Ohne bekannte Quelle: volle Liste (Progressive Enhancement / Non-HTMX-Fallback).
+        for value in ("equals", "not_equals", "contains", "greater_than", "less_than", "is_empty", "is_not_empty"):
+            assert f'value="{value}"' in operator_slot
+
+    def test_edit_form_prefills_type_filtered_operator(self, client, admin_user, doc_type_contact, field_condition):
+        # field_condition: source dauer (number), operator greater_than.
+        client.force_login(admin_user)
+        url = reverse(
+            "core:config_condition_update",
+            kwargs={"pk": doc_type_contact.pk, "condition_pk": field_condition.pk},
+        )
+        body = client.get(url).content.decode()
+        operator_slot = body[body.index('class="condition-operator-slot"') :]
+        operator_slot = operator_slot[: operator_slot.index("</select>")]
+        assert 'value="greater_than" selected' in operator_slot
+        # number verbietet contains → nicht im Prefill.
+        assert 'value="contains"' not in operator_slot
 
 
 # ---------------------------------------------------------------------------
