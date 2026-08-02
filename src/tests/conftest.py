@@ -22,6 +22,7 @@ from core.models import (
     Episode,
     Event,
     Facility,
+    FieldCondition,
     FieldGroup,
     FieldTemplate,
     LegalHold,
@@ -648,4 +649,57 @@ def foreign_doc_type_field(foreign_doc_type, foreign_field_template):
         document_type=foreign_doc_type,
         field_template=foreign_field_template,
         sort_order=0,
+    )
+
+
+# ---- FieldCondition-Fixtures (M1 P6, Refs #1057) --------------------------
+# Referenz-Bedingungen für die AuthZ-/IDOR-Matrix (config_condition_update/
+# _delete). Die Haupt-facility-Variante hängt sich an die beiden Bestandsfelder
+# von ``doc_type_contact`` (dauer/number, notiz/textarea); die foreign-Variante
+# legt eigenständig zwei Felder+DTFs an ``foreign_doc_type`` an, weil
+# ``foreign_doc_type`` selbst keine Felder trägt und ``foreign_doc_type_field``
+# nur EIN DTF liefert (eine Bedingung braucht zwei).
+
+
+@pytest.fixture
+def field_condition(doc_type_contact):
+    dauer = doc_type_contact.fields.get(field_template__slug="dauer")
+    notiz = doc_type_contact.fields.get(field_template__slug="notiz")
+    return FieldCondition.objects.create(
+        target_field=notiz,
+        depends_on_field=dauer,
+        operator=FieldCondition.Operator.GREATER_THAN,
+        value=10,
+        group_index=0,
+    )
+
+
+@pytest.fixture
+def foreign_field_condition(foreign_doc_type, second_facility):
+    ft_source = FieldTemplate.objects.create(
+        facility=second_facility,
+        name="Fremd-Quelle",
+        field_type=FieldTemplate.FieldType.NUMBER,
+    )
+    ft_target = FieldTemplate.objects.create(
+        facility=second_facility,
+        name="Fremd-Ziel",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+    )
+    source = DocumentTypeField.objects.create(
+        document_type=foreign_doc_type,
+        field_template=ft_source,
+        sort_order=0,
+    )
+    target = DocumentTypeField.objects.create(
+        document_type=foreign_doc_type,
+        field_template=ft_target,
+        sort_order=1,
+    )
+    return FieldCondition.objects.create(
+        target_field=target,
+        depends_on_field=source,
+        operator=FieldCondition.Operator.GREATER_THAN,
+        value=5,
+        group_index=0,
     )

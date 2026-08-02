@@ -7,12 +7,23 @@ aus dem Request-Scope (``request.current_facility``) und wird beim Speichern
 UI-Validierung (Widget-CSS, freundliche Unique-Fehler, Immutabilitäten).
 """
 
+from __future__ import annotations
+
+import datetime
+from typing import Any
+
 from django import forms
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.widgets import INPUT_CSS
-from core.models import DocumentType, FieldGroup, FieldTemplate
+from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
+from core.services.conditions import (
+    ALLOWED_SOURCE_FIELD_TYPES,
+    OPERATORS_BY_FIELD_TYPE,
+    VALUELESS_OPERATORS,
+)
 
 
 class DocumentTypeForm(forms.ModelForm):
@@ -235,3 +246,158 @@ class DocumentTypeFieldAddForm(forms.Form):
             self.fields["field_group"].queryset = FieldGroup.objects.filter(  # type: ignore[attr-defined]
                 document_type=doc_type
             ).order_by("sort_order", "name")
+
+
+class FieldConditionForm(forms.Form):
+    """Regel-Editor-Formular für eine Feldbedingung (M1 P6, Refs #1057).
+
+    Kein ``ModelForm`` — das Anlegen/Ändern läuft über
+    :mod:`core.services.config` (Audit + ``full_clean``). Das Formular kapselt
+
+    * die **doc-type-gescopte** Feldauswahl: ``target_field`` über alle Felder,
+      ``depends_on_field`` gefiltert auf zulässige Quelltypen
+      (``field_type in ALLOWED_SOURCE_FIELD_TYPES``) und **nicht** verschlüsselt
+      — verbotene Quellen sind so gar nicht wählbar (E19, #774); das
+      Modell-``clean()`` bleibt als zweite Verteidigung;
+    * die Operator×Typ-Matrix (E9) und die **typabhängige Konvertierung** des
+      generischen String-Felds ``value`` nach JSON (``cleaned_data["value_json"]``):
+      number→int/float, boolean→bool, date/time→ISO-validiert (time normalisiert
+      auf ``"HH:MM:SS"``), select/multi_select→Slug aus ``options_json``;
+      ``VALUELESS_OPERATORS`` (``is_empty``/``is_not_empty``) ⇒ ``value_json=None``.
+    """
+
+    target_field = forms.ModelChoiceField(
+        queryset=DocumentTypeField.objects.none(),
+        label=_("Zielfeld"),
+        widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-target"}),
+    )
+    depends_on_field = forms.ModelChoiceField(
+        queryset=DocumentTypeField.objects.none(),
+        label=_("Quellfeld"),
+        widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-source"}),
+    )
+    operator = forms.ChoiceField(
+        choices=FieldCondition.Operator.choices,
+        label=_("Operator"),
+        widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-operator"}),
+    )
+    value = forms.CharField(
+        required=False,
+        label=_("Vergleichswert"),
+        widget=forms.TextInput(attrs={"class": INPUT_CSS, "data-testid": "condition-value"}),
+    )
+    group_index = forms.IntegerField(
+        min_value=0,
+        required=False,
+        label=_("ODER-Gruppe"),
+        help_text=_("Gleiche Nummer = UND-Verknüpfung, neue Nummer = ODER-Gruppe."),
+        widget=forms.NumberInput(attrs={"class": INPUT_CSS, "min": 0, "data-testid": "condition-group-index"}),
+    )
+
+    def __init__(self, *args: Any, document_type: DocumentType | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.document_type = document_type
+        if document_type is not None:
+            self.fields["target_field"].queryset = (  # type: ignore[attr-defined]
+                DocumentTypeField.objects.filter(document_type=document_type)
+                .select_related("field_template")
+                .order_by("sort_order")
+            )
+            self.fields["depends_on_field"].queryset = (  # type: ignore[attr-defined]
+                DocumentTypeField.objects.filter(
+                    document_type=document_type,
+                    field_template__field_type__in=ALLOWED_SOURCE_FIELD_TYPES,
+                    field_template__is_encrypted=False,
+                )
+                .select_related("field_template")
+                .order_by("sort_order")
+            )
+            # Wert-Eingabe typisiert nachladen (E19): Quellfeld/Operator-Wechsel
+            # holt das passende Input-Partial in den nächsten Value-Slot. Relatives
+            # ``next``-Ziel funktioniert für Neu- UND Edit-Formular gleichermaßen.
+            value_url = reverse("core:config_condition_value_input", kwargs={"pk": document_type.pk})
+            hx_attrs = {
+                "hx-get": value_url,
+                "hx-trigger": "change",
+                "hx-target": "next .condition-value-slot",
+                "hx-include": "closest form",
+            }
+            self.fields["depends_on_field"].widget.attrs.update(hx_attrs)
+            self.fields["operator"].widget.attrs.update(hx_attrs)
+
+    def clean(self) -> dict[str, Any]:
+        # ``forms.Form.clean`` ist ``dict | None`` — ``or {}`` hält den strikten
+        # forms-mypy-Scope grün (Muster DocumentTypeForm.clean).
+        cleaned: dict[str, Any] = super().clean() or {}
+        if cleaned.get("group_index") is None:
+            cleaned["group_index"] = 0
+
+        source: DocumentTypeField | None = cleaned.get("depends_on_field")
+        operator: str = cleaned.get("operator") or ""
+        # Feld-Level-Fehler (Pflichtfeld leer) sind bereits gesetzt — dann keine
+        # Wertkonvertierung; ``value_json`` bleibt ungesetzt.
+        if source is None or not operator:
+            return cleaned
+
+        field_type = source.field_template.field_type
+        allowed = OPERATORS_BY_FIELD_TYPE.get(field_type, frozenset())
+        if operator not in allowed:
+            self.add_error("operator", _("Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig."))
+            return cleaned
+
+        if operator in VALUELESS_OPERATORS:
+            # is_empty/is_not_empty tragen nie einen Vergleichswert.
+            cleaned["value_json"] = None
+            return cleaned
+
+        raw = (cleaned.get("value") or "").strip()
+        if raw == "":
+            self.add_error("value", _("Für diesen Operator ist ein Vergleichswert erforderlich."))
+            return cleaned
+
+        try:
+            cleaned["value_json"] = self._convert_value(field_type, source.field_template, raw)
+        except ValidationError as exc:
+            self.add_error("value", exc)
+        return cleaned
+
+    @staticmethod
+    def _convert_value(field_type: str, template: FieldTemplate, raw: str) -> Any:
+        """Konvertiert den generischen String-``value`` typabhängig nach JSON (E19)."""
+        types = FieldTemplate.FieldType
+        if field_type == types.NUMBER:
+            try:
+                return int(raw)
+            except ValueError:
+                try:
+                    return float(raw)
+                except ValueError:
+                    raise ValidationError(_("Bitte eine gültige Zahl eingeben.")) from None
+        if field_type == types.BOOLEAN:
+            low = raw.lower()
+            if low in ("true", "1", "ja"):
+                return True
+            if low in ("false", "0", "nein"):
+                return False
+            raise ValidationError(_("Bitte „wahr“ oder „falsch“ auswählen."))
+        if field_type == types.DATE:
+            try:
+                datetime.date.fromisoformat(raw)
+            except ValueError:
+                raise ValidationError(_("Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben.")) from None
+            return raw
+        if field_type == types.TIME:
+            try:
+                parsed = datetime.time.fromisoformat(raw)
+            except ValueError:
+                raise ValidationError(_("Bitte eine gültige Uhrzeit eingeben.")) from None
+            # E11-Normalisierung: Editor speichert time als „HH:MM:SS" (JS hängt
+            # an „HH:MM" ein „:00" an) — sonst schlagen equals-Vergleiche fehl.
+            return parsed.isoformat(timespec="seconds")
+        if field_type in (types.SELECT, types.MULTI_SELECT):
+            known = {option.get("slug") for option in (template.options_json or [])}
+            if raw not in known:
+                raise ValidationError(_("Bitte eine gültige Option auswählen."))
+            return raw
+        # text/textarea (und Defensive): String übernehmen (Vergleich exakt, ADR-035).
+        return raw

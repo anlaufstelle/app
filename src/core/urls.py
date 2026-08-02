@@ -44,6 +44,12 @@ from core.views.clients import (
     ClientListView,
     ClientUpdateView,
 )
+from core.views.config.conditions import (
+    ConditionCreateView,
+    ConditionDeleteView,
+    ConditionUpdateView,
+    ConditionValueInputView,
+)
 from core.views.config.document_types import (
     ConfigDocTypeFieldAddView,
     ConfigDocTypeFieldRemoveView,
@@ -302,6 +308,28 @@ urlpatterns = [
         "config/document-types/<uuid:pk>/reorder/move-field/",
         ConfigMoveFieldView.as_view(),
         name="config_move_field",
+    ),
+    # M1 P6 (Refs #1057): Regel-Editor für bedingte Feldsichtbarkeit im
+    # DocumentType-Detail (HTMX-Board). facility_admin only.
+    path(
+        "config/document-types/<uuid:pk>/conditions/new/",
+        ConditionCreateView.as_view(),
+        name="config_condition_create",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/conditions/<uuid:condition_pk>/edit/",
+        ConditionUpdateView.as_view(),
+        name="config_condition_update",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/conditions/<uuid:condition_pk>/delete/",
+        ConditionDeleteView.as_view(),
+        name="config_condition_delete",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/conditions/value-input/",
+        ConditionValueInputView.as_view(),
+        name="config_condition_value_input",
     ),
     path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
     path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),

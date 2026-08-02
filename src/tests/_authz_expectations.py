@@ -569,6 +569,39 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "doc_type_contact.pk"),),
         idor=(("pk", "foreign_doc_type.pk"),),
     ),
+    # M1 P6 (Refs #1057): Regel-Editor für bedingte Feldsichtbarkeit. facility_admin
+    # only; IDOR (fremder doc_type/condition → 404) läuft VOR jeder Payload-Prüfung.
+    # Ein leerer/ungültiger Matrix-POST liefert für berechtigte Rollen 400 (Form
+    # ungültig) bzw. der value-input-GET 400 (kein Quellfeld) — kein 403/404/5xx.
+    E(
+        "core:config_condition_create",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_condition_update",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"), ("condition_pk", "field_condition.pk")),
+        idor=(("pk", "foreign_doc_type.pk"), ("condition_pk", "foreign_field_condition.pk")),
+    ),
+    E(
+        "core:config_condition_delete",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"), ("condition_pk", "field_condition.pk")),
+        idor=(("pk", "foreign_doc_type.pk"), ("condition_pk", "foreign_field_condition.pk")),
+    ),
+    E(
+        "core:config_condition_value_input",
+        "config",
+        get=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",

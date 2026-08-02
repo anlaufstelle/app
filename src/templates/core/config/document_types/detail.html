@@ -69,6 +69,12 @@
         {% include "core/config/document_types/partials/field_board.html" %}
     </div>
 
+    {# Regel-Editor (M1 P6, Refs #1057): bedingte Feldsichtbarkeit #}
+    <div class="mb-2 mt-6">
+        <h2 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Bedingte Sichtbarkeit" %}</h2>
+        {% include "core/config/document_types/partials/condition_board.html" %}
+    </div>
+
     {% comment %}
     Live-Formularvorschau (P11, Refs #1056): einklappbare Sektion, die das ECHTE
     Event-Formular-Partial für diesen Typ per HTMX lädt (kein JS-Duplikat der

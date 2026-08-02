@@ -170,9 +170,18 @@ class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
     """Stammdaten + interaktives Feld-Board (Feld-Zuordnung + FieldGroup-Verwaltung)."""
 
     def get(self, request, pk):
+        # Lokaler Import (Muster board_context → FieldGroupForm): hält das
+        # config-Views-Package importzyklenfrei (conditions.py importiert nicht
+        # zurück auf dieses Modul).
+        from core.views.config.conditions import condition_board_context
+
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         event_count = Event.objects.filter(document_type=doc_type).count()
-        context = {**board_context(doc_type), "event_count": event_count}
+        context = {
+            **board_context(doc_type),
+            **condition_board_context(doc_type),
+            "event_count": event_count,
+        }
         return render(request, "core/config/document_types/detail.html", context)
 
 

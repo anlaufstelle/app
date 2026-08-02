@@ -1,0 +1,66 @@
+{% load i18n %}
+{% comment %}
+Bedingungs-Board (M1 P6, Refs #1057) — DAS HTMX-Swap-Ziel `#condition-board`.
+Jede Mutation (Bedingung anlegen/ändern/löschen) ersetzt diesen Container per
+outerHTML. Gruppierung/Sortierung (je Zielfeld → OR-Gruppen → AND-Zeilen) ist im
+View vorbereitet (condition_board_context), NICHT hier.
+
+Kontext: doc_type, condition_targets [{target, groups:[{index, rows}]}],
+condition_form (FieldConditionForm), condition_next_group_index, condition_field_count.
+{% endcomment %}
+<div id="condition-board" class="space-y-4">
+    <p class="text-[12px] text-ink-muted">
+        {% trans "Blende ein Feld nur ein, wenn ein anderes Feld eine Bedingung erfüllt. UND innerhalb einer Gruppe, ODER über Gruppen hinweg." %}
+    </p>
+
+    {% if condition_field_count < 2 %}
+    <div class="card p-4" data-testid="condition-board-empty">
+        <p class="text-[13px] text-ink-muted">{% trans "Dieser Dokumentationstyp braucht mindestens zwei Felder, bevor Bedingungen möglich sind." %}</p>
+    </div>
+    {% else %}
+
+    {# --- Bestehende Bedingungen je Zielfeld ------------------------------- #}
+    {% for entry in condition_targets %}
+    <div class="card p-4" data-testid="condition-target-block">
+        <h3 class="text-[14px] font-semibold text-ink mb-3">
+            {% blocktrans with name=entry.target.field_template.name %}Zeige „{{ name }}"{% endblocktrans %}
+        </h3>
+        {% for group in entry.groups %}
+        <div class="mb-3" data-testid="condition-group">
+            {% if not forloop.first %}<p class="text-[11px] font-bold uppercase tracking-wider text-ink-muted my-1">{% trans "ODER" %}</p>{% endif %}
+            <ul class="space-y-1">
+                {% for row in group.rows %}
+                <li class="flex items-center justify-between gap-3 text-[13px]" data-testid="condition-row">
+                    <span class="text-ink">
+                        {% if not forloop.first %}<span class="text-ink-muted">{% trans "UND" %}</span> {% endif %}
+                        {% blocktrans with source=row.depends_on_field.field_template.name op=row.get_operator_display %}Wenn „{{ source }}" {{ op }}{% endblocktrans %}{% if row.value is not None %} <span class="font-medium">{{ row.value }}</span>{% endif %}
+                    </span>
+                    <span class="flex items-center gap-2 flex-shrink-0">
+                        <button type="button"
+                                hx-get="{% url 'core:config_condition_update' doc_type.pk row.pk %}"
+                                hx-target="#condition-edit-{{ row.pk }}" hx-swap="innerHTML"
+                                class="px-2 py-1 btn-secondary text-[12px]"
+                                data-testid="condition-edit-btn">{% trans "Bearbeiten" %}</button>
+                        <form method="post" action="{% url 'core:config_condition_delete' doc_type.pk row.pk %}"
+                              hx-post="{% url 'core:config_condition_delete' doc_type.pk row.pk %}"
+                              hx-target="#condition-board" hx-swap="outerHTML">
+                            {% csrf_token %}
+                            <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="condition-delete-btn">{% trans "Löschen" %}</button>
+                        </form>
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% for row in group.rows %}<div id="condition-edit-{{ row.pk }}" class="mt-2 empty:hidden"></div>{% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    {# --- Neue Bedingung --------------------------------------------------- #}
+    <div class="card p-4" data-testid="condition-add-card">
+        <h3 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Neue Bedingung" %}</h3>
+        {% include "core/config/document_types/partials/condition_form.html" with condition_form=condition_form doc_type=doc_type is_edit=False %}
+    </div>
+    {% endif %}
+</div>
