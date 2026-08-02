@@ -98,6 +98,12 @@ def board_response(request, doc_type, *, add_form=None, group_form=None, retarge
         if retarget:
             response["HX-Retarget"] = "#field-board"
             response["HX-Reswap"] = "outerHTML"
+        # P11 (Refs #1056): Jede Board-Mutation stößt die Live-Formularvorschau an.
+        # Der Header feuert clientseitig ``refresh-preview`` am auslösenden Element;
+        # das Event bubbelt zum Body, wo die Vorschau (``hx-trigger="load,
+        # refresh-preview from:body"``) es aufnimmt und sich CSP-konform ohne
+        # Inline-JS neu lädt. Rein additiv — Body/Status/übrige Header unverändert.
+        response["HX-Trigger"] = "refresh-preview"
         return response
     if message is not None:
         messages.success(request, message)
