@@ -456,6 +456,56 @@ def test_seed_doctypes_without_groups_key_have_no_field_groups():
 
 
 @pytest.mark.django_db
+def test_reseed_regroups_manually_moved_field():
+    """Refs #1056: Ein manuell in eine ANDERE Gruppe gehängtes Kontakt-Feld
+    wird beim Re-Seed auf die Katalog-Gruppe zurückgesetzt.
+
+    Deckt den Abgleich-Branch in ``_seed_field_groups`` ab (dtf.field_group_id
+    weicht vom Ziel ab → explizites ``.save()``), Richtung „Umgruppierung".
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    basis = FieldGroup.objects.get(document_type=kontakt, name="Basisdaten")
+    other = FieldGroup.objects.get(document_type=kontakt, name="Leistungen & Notizen")
+    dtf = DocumentTypeField.objects.get(document_type=kontakt, field_template__slug="dauer")
+    assert dtf.field_group_id == basis.id  # Ausgangslage aus dem Katalog
+
+    # Manuell in die falsche Gruppe hängen und erneut seeden.
+    dtf.field_group = other
+    dtf.save(update_fields=["field_group"])
+    call_command("seed")
+
+    dtf.refresh_from_db()
+    assert dtf.field_group_id == basis.id, "Re-Seed hat das umgehängte Feld nicht auf die Katalog-Gruppe zurückgesetzt."
+
+
+@pytest.mark.django_db
+def test_reseed_resets_catalog_ungrouped_field_to_none():
+    """Refs #1056: 'strassenkontakt' ist im Katalog in keiner Gruppe gelistet.
+
+    Ein manuell gesetzter ``field_group`` wird beim Re-Seed auf ``None``
+    zurückgesetzt (Reset-Richtung des Abgleich-Branch).
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    basis = FieldGroup.objects.get(document_type=kontakt, name="Basisdaten")
+    dtf = DocumentTypeField.objects.get(document_type=kontakt, field_template__slug="strassenkontakt")
+    assert dtf.field_group_id is None  # Ausgangslage: bewusst ohne Gruppe
+
+    # Manuell in eine Gruppe hängen und erneut seeden.
+    dtf.field_group = basis
+    dtf.save(update_fields=["field_group"])
+    call_command("seed")
+
+    dtf.refresh_from_db()
+    assert dtf.field_group_id is None, "Re-Seed hat das katalog-gruppenlose Feld nicht auf None zurückgesetzt."
+
+
+@pytest.mark.django_db
 def test_seed_field_groups_idempotent_no_duplicates():
     """Zweiter Seed-Lauf erzeugt keine neuen FieldGroup-/Zuordnungs-Rows."""
     call_command("seed")
