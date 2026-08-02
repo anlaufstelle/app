@@ -209,6 +209,8 @@ class TestFieldConditionsEndToEnd:
             add_card.locator('[data-testid="condition-submit"]').click()
 
             expect(page.locator('[data-testid="condition-form-errors"]')).to_be_visible(timeout=10000)
+            # Inhaltlich die Zyklus-Meldung (nicht bloß irgendein Formfehler).
+            expect(page.locator('[data-testid="condition-form-errors"]')).to_contain_text("Zyklus")
             # Die Zyklus-Bedingung wurde NICHT gespeichert: weiterhin genau eine Zeile.
             expect(page.locator('[data-testid="condition-row"]')).to_have_count(1, timeout=10000)
 
