@@ -123,6 +123,7 @@ Status-Symbole gelten gleichermassen im Run-Log:
 | WI | WorkItems | COMP | Betriebs-/Compliance-Dashboard |
 | DEL | Lösch-Anträge | PRIV | Datenschutz-Review (Freitext) |
 | I18N | Sprachen (DE/EN) | REPORT | Datenschutzfreundliche externe Berichte |
+| CONFIG | Formular-Konfiguration (DocumentTypes/FieldTemplates/FieldGroups) | | |
 
 **Forward-looking Bereiche (Refs #908):** `SETUP`, `COMP`, `PRIV`, `REPORT` und `A11Y` sind aufgenommen, damit die jeweiligen Feature-Issues (#917 Einrichtungsassistent, #919 Compliance-Dashboard, #918 Freitext-Review, #921 Externe Berichte) ihre Cases unter einheitlichem Schema ablegen können, sobald das Feature implementiert ist. A11Y (Refs #912) bekommt einen eigenen Cases-Block.
 

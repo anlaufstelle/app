@@ -9,7 +9,7 @@
 > **Zielgruppe:** Tobias als Entwickler/Tester. Systematisches Durchgehen aller Bereiche vor jedem Major-Release.
 >
 > **Format:** Pro Bereich ein `<details open>`-Block mit Header (Routen, View-Klassen, E2E-Coverage, Spezial-Setup) und allen Cases. Bereiche in dieser Reihenfolge:
-> AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS.
+> AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS → CONFIG.
 
 <details open>
 <summary><strong>🔐 AUTH — Authentifizierung (10 Cases)</strong></summary>
@@ -5989,6 +5989,542 @@
 
 **Erwartetes Ergebnis:**
 - Datums-/Zeitformat folgt dem aktiven Locale (`L10N`); keine gemischten Formate.
+
+**Status:** ☐ Offen
+
+</details>
+
+<details open>
+<summary><strong>🧩 CONFIG — Formular-Konfiguration (24 Cases)</strong></summary>
+
+**Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/groups/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/` 
+**Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin` 
+**Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers`, `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`) 
+**Models:** `DocumentType` (`system_type`, `category`), `FieldTemplate` (`slug`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`) 
+**E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py` 
+**Spezial-Setup:**
+- Rolle **facility_admin** (`admin`) ist Voraussetzung für alle CRUD-Cases — das Rollen-Gate selbst wird negativ mit `emma` (lead), `miriam` (staff), `lena` (assistant) und `superadmin` getestet.
+- Für die Cross-Facility-/RLS-Cases zusätzlich `admin_2` (Facility 2) — `make seed FACILITIES=2` bzw. `--scale medium`.
+- Der Feld-Board-Bereich (`/config/document-types/<uuid>/`) braucht mindestens einen DocumentType mit zugeordneten Feldern — der Seed-Typ „Kontakt" eignet sich direkt (Gruppen „Basisdaten"/„Leistungen & Notizen" + ungruppiertes „Straßenkontakt").
+
+---
+
+### TC-ID: ENT-CONFIG-01 — Navigations-Eintrag „Konfiguration" nur für facility_admin sichtbar
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin (facility_admin) | C/F | ⚪ | `test_navigation_config.py` |
+
+**Vorbereitung:**
+- Mit `admin` einloggen.
+
+**Schritte:**
+1. Dashboard `/` aufrufen, Desktop-Sidebar auf den Eintrag „Konfiguration" prüfen.
+2. Viewport auf Mobile (iPhone 15) umschalten, mobiles „Mehr"-Menü öffnen.
+3. Nacheinander mit `emma` (lead), `miriam` (staff), `lena` (assistant) und `superadmin` einloggen, jeweils Sidebar/Mehr-Menü prüfen.
+
+**Erwartetes Ergebnis:**
+- `admin` sieht den Eintrag „Konfiguration" (Link auf `/config/document-types/`) sowohl in der Desktop-Sidebar als auch im mobilen Menü.
+- Keine der anderen vier Rollen sieht den Eintrag — weder Desktop noch Mobile.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-02 — Direktzugriff `/config/document-types/` ohne facility_admin → 403
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | lead/staff/assistant/super_admin | C || `test_config_document_types.py`, `test_authz_idor.py` |
+
+**Vorbereitung:**
+- Mit `emma` (lead) eingeloggt.
+
+**Schritte:**
+1. URL `/config/document-types/` direkt in die Adresszeile eingeben (nicht über Navigation).
+2. Wiederholen mit `miriam` (staff), `lena` (assistant), `superadmin`.
+
+**Erwartetes Ergebnis:**
+- Alle vier Rollen erhalten HTTP 403 (Forbidden-Seite) — kein Redirect zum Login (bereits authentifiziert), keine Konfigurationsdaten sichtbar.
+- `admin` (facility_admin) erhält auf derselben URL HTTP 200 (Kontrollprobe).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-03 — DocumentType anlegen (system_type wählbar)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_document_types.py` |
+
+**Vorbereitung:**
+- Mit `admin` eingeloggt, `/config/document-types/` geöffnet.
+
+**Schritte:**
+1. „Neuer Dokumenttyp" öffnen.
+2. Name „Manuell-TC03", Kategorie, Sensitivität und einen `system_type` (z.B. „Bann" oder „Krise") wählen, absenden.
+3. Detail-Seite des neu angelegten Typs prüfen.
+
+**Erwartetes Ergebnis:**
+- Neuer DocumentType erscheint in der Liste, mit dem gewählten `system_type`.
+- Nach dem Anlegen Redirect auf die Detail-Seite (`/config/document-types/<uuid>/`).
+- AuditLog erhält einen `config_create`-Eintrag mit `target_id` des neuen Typs.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-04 — DocumentType bearbeiten: system_type read-only, category editierbar
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_document_types.py` |
+
+**Vorbereitung:**
+- DocumentType mit gesetztem `system_type` existiert (z.B. aus ENT-CONFIG-03).
+
+**Schritte:**
+1. Bearbeiten-Formular öffnen.
+2. Prüfen, dass `system_type` im Formular nicht editierbar ist (deaktiviert/nur Anzeige).
+3. `category` auf einen anderen Wert ändern, speichern.
+
+**Erwartetes Ergebnis:**
+- `category` wird übernommen.
+- `system_type` bleibt unverändert — auch wenn versucht wird, ihn per manipuliertem POST-Body zu ändern (server-seitig immutable).
+- `config_update`-Audit-Eintrag mit `changed_fields` enthält `category`, nicht `system_type`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-05 — DocumentType löschen mit Referenz-Blocker (Events vorhanden)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_document_types.py` |
+
+**Vorbereitung:**
+- DocumentType mit mindestens einem existierenden Event (z.B. Seed-Typ „Kontakt").
+
+**Schritte:**
+1. Löschen-Bestätigungsseite öffnen (`/config/document-types/<uuid>/delete/`).
+2. Blocker-Hinweis lesen (Anzahl referenzierender Events).
+3. Löschen trotzdem bestätigen (POST).
+
+**Erwartetes Ergebnis:**
+- GET zeigt einen Blocker-Hinweis mit Event-Anzahl, nicht nur „geht nicht".
+- POST wird abgelehnt: Redirect zurück zur Detail-Seite, Toast/Message mit Hinweis auf referenzierende Ereignisse, DocumentType bleibt bestehen.
+- Kein `config_delete`-Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-06 — DocumentType löschen ohne Referenzen (Hard-Delete)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_document_types.py` |
+
+**Vorbereitung:**
+- Frisch angelegter DocumentType ohne Events (z.B. Rest von ENT-CONFIG-03, falls noch nicht gelöscht — sonst neu anlegen).
+
+**Schritte:**
+1. Löschen-Bestätigung öffnen — kein Blocker sichtbar.
+2. Löschen bestätigen.
+
+**Erwartetes Ergebnis:**
+- DocumentType ist danach weder in der Liste noch abrufbar (404 auf die alte Detail-URL).
+- Redirect auf die Liste `/config/document-types/`.
+- `config_delete`-Audit-Eintrag vorhanden.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-07 — FieldTemplate anlegen mit Slug-Autogenerierung
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_templates.py` |
+
+**Vorbereitung:**
+- Mit `admin` eingeloggt, `/config/field-templates/` geöffnet.
+
+**Schritte:**
+1. „Neues Feld" mit Name „Mein Test Feld", Typ „Text" anlegen (kein Slug-Eingabefeld im Formular).
+2. Liste/Detail prüfen.
+
+**Erwartetes Ergebnis:**
+- Slug wird automatisch aus dem Namen generiert (`mein-test-feld`).
+- `config_create`-Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-08 — FieldTemplate bearbeiten: Slug bleibt fix
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_templates.py` |
+
+**Vorbereitung:**
+- FieldTemplate aus ENT-CONFIG-07 (Slug `mein-test-feld`) existiert.
+
+**Schritte:**
+1. Bearbeiten öffnen, Namen auf „Ganz anderer Name" ändern, speichern.
+
+**Erwartetes Ergebnis:**
+- Name wird übernommen, Slug bleibt exakt `mein-test-feld` — obwohl der neue Name einen anderen Slug ergeben würde.
+- Kein Slug-Eingabefeld im Bearbeiten-Formular sichtbar/editierbar.
+- `config_update`-Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-09 — FieldTemplate-Löschschutz mit Blocker-Meldung + „Stattdessen deaktivieren"
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_templates.py` |
+
+**Vorbereitung:**
+- FieldTemplate, das einem DocumentType zugeordnet ist UND/ODER in einem Event-Anhang verwendet wird UND/ODER im `data_json` eines Events vorkommt (z.B. Seed-Feld „Dauer" oder „Notiz" von „Kontakt").
+
+**Schritte:**
+1. Löschen-Bestätigung für das zugeordnete Feld öffnen.
+2. Blocker-Meldung(en) lesen.
+3. Auf „Stattdessen deaktivieren" klicken.
+4. Erneut versuchen, das (jetzt inaktive) Feld zu löschen.
+
+**Erwartetes Ergebnis:**
+- GET zeigt für jede zutreffende Referenz-Art (Typ-Zuordnung, Anhang, Event-Daten) eine eigene Blocker-Zeile mit Klartext-Grund und dem Hinweis „Stattdessen deaktivieren".
+- „Stattdessen deaktivieren" setzt `is_active=False` (Toggle), FieldTemplate bleibt bestehen, `config_update`-Audit mit `changed_fields=["is_active"]`.
+- Der erneute Löschversuch bleibt blockiert, obwohl das Feld inaktiv ist — kein `config_delete`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-10 — FieldTemplate Toggle aktiv/inaktiv
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_templates.py` |
+
+**Vorbereitung:**
+- Unreferenziertes, aktives FieldTemplate.
+
+**Schritte:**
+1. In der Liste auf „Deaktivieren" klicken.
+2. Listenfilter nach „inaktiv" prüfen.
+3. Erneut auf „Aktivieren" klicken.
+
+**Erwartetes Ergebnis:**
+- Status wechselt sichtbar zwischen aktiv/inaktiv, Listenfilter `is_active` greift korrekt.
+- Jeder Toggle erzeugt einen eigenen `config_update`-Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-11 — Feld im Feld-Board einer Gruppe zuordnen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F/S | ⚪ | `test_config_field_groups.py` |
+
+**Vorbereitung:**
+- DocumentType-Detail mit mindestens einer Gruppe (z.B. „Kontakt"/„Basisdaten"), freies (noch nicht zugeordnetes) FieldTemplate.
+
+**Schritte:**
+1. Detail-Seite `/config/document-types/<uuid>/` öffnen.
+2. Im „Feld hinzufügen"-Formular ein Feld + Ziel-Gruppe auswählen, absenden.
+
+**Erwartetes Ergebnis:**
+- Feld erscheint im Board unter der gewählten Gruppe, ans Ende einsortiert.
+- Board wird per HTMX-Partial aktualisiert (kein Full-Page-Reload).
+- Erneuter Versuch, dasselbe Feld nochmal zuzuordnen, ergibt einen Formfehler im Board-Partial statt 500.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-12 — Feld im Feld-Board ohne Gruppe zuordnen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_groups.py` |
+
+**Vorbereitung:**
+- DocumentType-Detail, freies FieldTemplate.
+
+**Schritte:**
+1. „Feld hinzufügen" ohne Gruppen-Auswahl absenden.
+
+**Erwartetes Ergebnis:**
+- Feld erscheint in der Sektion „Ohne Gruppe", ans Ende einsortiert.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-13 — Feld aus DocumentType entfernen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_groups.py` |
+
+**Vorbereitung:**
+- Ein zugeordnetes Feld im Board.
+
+**Schritte:**
+1. Im Board bei einem Feld „Entfernen" klicken.
+
+**Erwartetes Ergebnis:**
+- Feld verschwindet aus dem Board (Board-Partial); das FieldTemplate selbst bleibt in `/config/field-templates/` bestehen — nur die Zuordnung wird gelöscht.
+- `config_delete`-Audit-Eintrag für die Zuordnung (nicht für das FieldTemplate).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-14 — Feldgruppe anlegen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_groups.py` |
+
+**Vorbereitung:**
+- DocumentType-Detail geöffnet.
+
+**Schritte:**
+1. „Gruppe hinzufügen", Name „Manuell-Gruppe" eingeben (optional „einklappbar" aktivieren), absenden.
+2. Denselben Namen ein zweites Mal versuchen.
+
+**Erwartetes Ergebnis:**
+- Neue Gruppe erscheint leer im Board.
+- Der doppelte Gruppenname (innerhalb desselben DocumentType) ergibt einen Formfehler statt 500.
+- `config_create`-Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-15 — Feldgruppe umbenennen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_groups.py` |
+
+**Vorbereitung:**
+- Bestehende Gruppe (z.B. aus ENT-CONFIG-14).
+
+**Schritte:**
+1. Gruppe bearbeiten, Namen ändern, speichern.
+
+**Erwartetes Ergebnis:**
+- Neuer Name im Board sichtbar, interner Slug bleibt stabil (keine Brüche in Zuordnungen).
+- `config_update`-Audit-Eintrag.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-16 — Feldgruppe löschen — Felder fallen in „Ohne Gruppe"
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_field_groups.py` |
+
+**Vorbereitung:**
+- Gruppe mit mindestens einem zugeordneten Feld.
+
+**Schritte:**
+1. Gruppe löschen.
+
+**Erwartetes Ergebnis:**
+- Gruppe verschwindet aus dem Board.
+- Zuvor zugeordnete Felder werden NICHT gelöscht, sondern erscheinen danach unter „Ohne Gruppe".
+- `config_delete`-Audit-Eintrag für die Gruppe.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-17 — Drag-and-Drop: Gruppen-Reihenfolge ändern
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_reorder.py` |
+
+**Vorbereitung:**
+- DocumentType mit ≥2 Gruppen (Seed-Typ „Kontakt": „Basisdaten" + „Leistungen & Notizen").
+
+**Schritte:**
+1. Zweite Gruppe per Drag-Handle (⠿) vor die erste ziehen.
+
+**Erwartetes Ergebnis:**
+- Reihenfolge im Board wechselt sofort (Board-Partial).
+- `config_reorder`-Audit-Eintrag mit `detail.operation="group_order"`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-18 — Drag-and-Drop: Feld-Reihenfolge innerhalb einer Gruppe
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_reorder.py` |
+
+**Vorbereitung:**
+- Gruppe mit ≥2 Feldern (z.B. „Leistungen & Notizen" von „Kontakt").
+
+**Schritte:**
+1. Zweites Feld innerhalb derselben Gruppe per Drag-Handle vor das erste ziehen.
+
+**Erwartetes Ergebnis:**
+- Reihenfolge innerhalb der Gruppe wechselt, Feld bleibt in derselben Gruppe.
+- `config_reorder`-Audit-Eintrag mit `detail.operation="field_order"`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-19 — Drag-and-Drop: Feld zwischen Gruppen/nach „Ohne Gruppe" verschieben
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_reorder.py` |
+
+**Vorbereitung:**
+- Mindestens zwei Gruppen bzw. eine Gruppe + „Ohne Gruppe"-Sektion mit Feldern.
+
+**Schritte:**
+1. Feld aus Gruppe A per Drag in Gruppe B ziehen.
+2. Ein weiteres Feld aus einer Gruppe in die Sektion „Ohne Gruppe" ziehen.
+
+**Erwartetes Ergebnis:**
+- Feld gehört danach zur Ziel-Gruppe (bzw. keiner Gruppe mehr), Position im Ziel korrekt einsortiert.
+- `config_reorder`-Audit-Eintrag mit `detail.operation="move_field"`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-20 — Drag-and-Drop-Reihenfolge bleibt nach Reload erhalten
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration | admin | C/F | ⚪ | `test_config_reorder.py` |
+
+**Vorbereitung:**
+- ENT-CONFIG-17 bis ENT-CONFIG-19 durchgeführt (oder eine Drag-Operation frisch reproduziert).
+
+**Schritte:**
+1. Nach einer Drag-and-Drop-Operation die Seite per Browser-Reload (F5) neu laden.
+
+**Erwartetes Ergebnis:**
+- Reihenfolge/Gruppenzugehörigkeit entspricht weiterhin dem Stand nach dem Drag — serverseitig persistiert, nicht nur clientseitiges DOM-Artefakt.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-21 — Config-Änderungen erzeugen CONFIG_*-AuditLog-Einträge
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Audit | admin | C || `test_config_service.py`, `test_config_document_types.py` |
+
+**Vorbereitung:**
+- Mit `admin` eingeloggt, Zugriff auf `/audit/`.
+
+**Schritte:**
+1. Nacheinander: DocumentType anlegen, bearbeiten, löschen; FieldTemplate anlegen, Toggle; Gruppe anlegen; eine Reorder-Operation ausführen.
+2. `/audit/` aufrufen, nach `action` filtern.
+
+**Erwartetes Ergebnis:**
+- Für jede Aktion ein passender Eintrag — `config_create`, `config_update`, `config_delete`, `config_reorder` — mit korrektem `target_id`, `user=admin`, gesetzter `facility`.
+- Blockierte Löschversuche (siehe ENT-CONFIG-05/ENT-CONFIG-09) erzeugen KEINEN `config_delete`-Eintrag.
+
+**DSGVO/Security-Note:**
+- Konfigurationsänderungen an Formularen/Feldern sind selbst auditpflichtig (Art. 32 TOMs) — Verwaltungsentscheidungen über Datenerhebung müssen nachvollziehbar sein.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-22 — Cross-Facility-Verbot: fremde Facility sieht/ändert Config-Objekte nicht (404)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / RLS | admin (F1) + admin_2 (F2) | C || `test_authz_idor.py`, `test_rls_functional.py` |
+
+**Voraussetzung:** `make seed FACILITIES=2` (zwei Facilities mit je eigenem admin).
+
+**Vorbereitung:**
+- Browser-Profil 1: `admin` (Facility 1), legt DocumentType „F1-Only" samt FieldTemplate und FieldGroup an, notiert die UUIDs.
+- Browser-Profil 2 (Inkognito): `admin_2` (Facility 2).
+
+**Schritte:**
+1. Mit `admin_2` die UUIDs der F1-Objekte direkt aufrufen: `/config/document-types/<uuid>/`, `.../edit/`, `.../delete/`.
+2. Gleiches für die FieldTemplate- und FieldGroup-Detail-/Edit-/Delete-Routen sowie die drei Reorder-Endpunkte.
+3. In der eigenen Liste `/config/document-types/` von `admin_2` prüfen, dass „F1-Only" nicht auftaucht.
+
+**Erwartetes Ergebnis:**
+- Alle Zugriffe auf fremde Objekt-IDs liefern **404** (nicht 403 — kein Existenz-Leak).
+- Liste von `admin_2` zeigt ausschließlich Facility-2-Objekte.
+- Kein POST verändert das fremde Objekt (in DB unverändert).
+
+**DSGVO/Security-Note:**
+- RLS greift transitiv auch für `FieldGroup` (kein direkter `facility`-FK, sondern über `document_type.facility`, Migration 0111).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-23 — Event-Formular zeigt einklappbare Feldgruppe „Leistungen & Notizen"
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Events | fachkraft (`miriam`) | C/F | ✓ | `test_event_form_groups.py`, `test_seed.py` |
+
+**Vorbereitung:**
+- Standard-Seed vorhanden (Typ „Kontakt" mit Gruppen „Basisdaten"/„Leistungen & Notizen").
+- Mit `miriam` eingeloggt.
+
+**Schritte:**
+1. Neues Event mit Dokumenttyp „Kontakt" anlegen.
+2. Gruppen-Header „Basisdaten" und „Leistungen & Notizen" im Formular betrachten.
+3. Auf den Header „Leistungen & Notizen" klicken (Ein-/Ausklappen).
+
+**Erwartetes Ergebnis:**
+- Beide Gruppen erscheinen mit eigenem Header; „Basisdaten" ist nicht einklappbar, „Leistungen & Notizen" ist einklappbar und reagiert auf den Klick.
+- Felder „Leistungen", „Notiz", „Anhang" liegen unter „Leistungen & Notizen"; „Dauer"/„Altersgruppen-Cluster" unter „Basisdaten".
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-24 — Event-Formular: „Straßenkontakt" erscheint unter „Ohne Gruppe"
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Events | fachkraft (`miriam`) | C/F | ✓ | `test_event_form_groups.py`, `test_seed.py` |
+
+**Vorbereitung:**
+- Wie ENT-CONFIG-23.
+
+**Schritte:**
+1. Im selben Event-Formular für „Kontakt" zur Sektion „Ohne Gruppe" scrollen.
+
+**Erwartetes Ergebnis:**
+- Sektion „Ohne Gruppe" ist sichtbar und enthält das Feld „Straßenkontakt" — bewusst ungruppiert demonstriert (Refs #1056).
 
 **Status:** ☐ Offen
 
