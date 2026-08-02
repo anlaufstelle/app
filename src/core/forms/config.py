@@ -65,7 +65,7 @@ class DocumentTypeForm(forms.ModelForm):
             self.fields["system_type"].disabled = True
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = super().clean() or {}
         name = cleaned.get("name")
         category = cleaned.get("category")
         if name and category and self.facility is not None:
