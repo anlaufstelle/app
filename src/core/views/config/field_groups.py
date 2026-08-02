@@ -33,7 +33,7 @@ class ConfigFieldGroupCreateView(FacilityAdminRequiredMixin, View):
 
     def get(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
-        form = FieldGroupForm(doc_type=doc_type)
+        form = FieldGroupForm(doc_type=doc_type, prefix="group-new")
         return render(
             request,
             GROUP_FORM_TEMPLATE,
@@ -42,7 +42,9 @@ class ConfigFieldGroupCreateView(FacilityAdminRequiredMixin, View):
 
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
-        form = FieldGroupForm(request.POST, doc_type=doc_type)
+        # Prefix "group-new" konsistent zu GET/Board-Render: das Neu-Formular
+        # trägt eindeutige Feld-IDs, kein Kollisions-`id_name` neben Edit-Form.
+        form = FieldGroupForm(request.POST, doc_type=doc_type, prefix="group-new")
         if not form.is_valid():
             return board_response(
                 request, doc_type, group_form=form, error=_("Die Feldgruppe konnte nicht angelegt werden.")
@@ -59,7 +61,7 @@ class ConfigFieldGroupUpdateView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk, group_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         group = get_object_or_404(FieldGroup, pk=group_pk, document_type=doc_type)
-        form = FieldGroupForm(instance=group, doc_type=doc_type)
+        form = FieldGroupForm(instance=group, doc_type=doc_type, prefix=f"group-{group.pk}")
         return render(
             request,
             GROUP_FORM_TEMPLATE,
@@ -69,7 +71,9 @@ class ConfigFieldGroupUpdateView(FacilityAdminRequiredMixin, View):
     def post(self, request, pk, group_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         group = get_object_or_404(FieldGroup, pk=group_pk, document_type=doc_type)
-        form = FieldGroupForm(request.POST, instance=group, doc_type=doc_type)
+        # Prefix group-<pk> konsistent zu GET: eindeutige Feld-IDs je Edit-Form,
+        # keine Kollision mit dem Neu-Formular (Prefix group-new).
+        form = FieldGroupForm(request.POST, instance=group, doc_type=doc_type, prefix=f"group-{group.pk}")
         if not form.is_valid():
             if request.headers.get("HX-Request") == "true":
                 # Fehler ersetzen das Inline-Formular an Ort und Stelle (Fehlertext

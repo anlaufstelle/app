@@ -177,7 +177,7 @@ class TestGroupCreate:
     def test_create_writes_audit_and_renders_board(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        response = client.post(url, {"name": "Abschnitt A"}, HTTP_HX_REQUEST="true")
+        response = client.post(url, {"group-new-name": "Abschnitt A"}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert BOARD_PARTIAL in _template_names(response)
         grp = FieldGroup.objects.get(document_type=doc_type_contact, name="Abschnitt A")
@@ -187,7 +187,7 @@ class TestGroupCreate:
     def test_create_is_collapsible_flag(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        client.post(url, {"name": "Klappbar", "is_collapsible": "on"})
+        client.post(url, {"group-new-name": "Klappbar", "group-new-is_collapsible": "on"})
         grp = FieldGroup.objects.get(document_type=doc_type_contact, name="Klappbar")
         assert grp.is_collapsible is True
 
@@ -195,7 +195,7 @@ class TestGroupCreate:
         FieldGroup.objects.create(document_type=doc_type_contact, name="Doppelt")
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        response = client.post(url, {"name": "Doppelt"}, HTTP_HX_REQUEST="true")
+        response = client.post(url, {"group-new-name": "Doppelt"}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert FieldGroup.objects.filter(document_type=doc_type_contact, name="Doppelt").count() == 1
         assert b"bereits" in response.content
@@ -203,7 +203,7 @@ class TestGroupCreate:
     def test_create_non_htmx_redirects(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        response = client.post(url, {"name": "Redir"})
+        response = client.post(url, {"group-new-name": "Redir"})
         assert response.status_code == 302
         assert response.url == reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk})
 
@@ -220,7 +220,7 @@ class TestGroupUpdate:
     def test_update_renames_and_audits(self, client, admin_user, doc_type_contact, field_group):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
-        response = client.post(url, {"name": "Neuer Name"}, HTTP_HX_REQUEST="true")
+        response = client.post(url, {f"group-{field_group.pk}-name": "Neuer Name"}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         field_group.refresh_from_db()
         assert field_group.name == "Neuer Name"
@@ -230,7 +230,7 @@ class TestGroupUpdate:
         original_slug = field_group.slug
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
-        client.post(url, {"name": "Ganz Anders"})
+        client.post(url, {f"group-{field_group.pk}-name": "Ganz Anders"})
         field_group.refresh_from_db()
         assert field_group.name == "Ganz Anders"
         assert field_group.slug == original_slug
@@ -288,6 +288,32 @@ class TestBoardRendering:
 
 
 # ---------------------------------------------------------------------------
+# Eindeutige Formular-IDs — das stets vorhandene „Neue Gruppe"-Formular und ein
+# gleichzeitig offenes Edit-Formular dürfen keine kollidierende id (id_name /
+# id_is_collapsible) rendern → Prefix je Instanz.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestGroupFormIds:
+    def test_new_group_form_has_prefixed_field_id_no_collision(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        assert b'id="id_group-new-name"' in response.content
+        # Kein ungeprefixtes id_name — sonst kollidiert das Neu-Formular mit
+        # einem injizierten Edit-Formular (invalides HTML, Label-Fehlfokus).
+        assert b'id="id_name"' not in response.content
+
+    def test_edit_group_form_has_group_scoped_field_id(self, client, admin_user, doc_type_contact, field_group):
+        client.force_login(admin_user)
+        response = client.get(
+            reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
+        )
+        assert f'id="id_group-{field_group.pk}-name"'.encode() in response.content
+        assert b'id="id_name"' not in response.content
+
+
+# ---------------------------------------------------------------------------
 # HTMX-Branch — HX-Request → Board-Partial, normal → Redirect
 # ---------------------------------------------------------------------------
 
@@ -297,10 +323,10 @@ class TestHTMXBranch:
     def test_group_create_htmx_partial_vs_redirect(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        hx = client.post(url, {"name": "HX-Gruppe"}, HTTP_HX_REQUEST="true")
+        hx = client.post(url, {"group-new-name": "HX-Gruppe"}, HTTP_HX_REQUEST="true")
         assert hx.status_code == 200
         assert BOARD_PARTIAL in _template_names(hx)
-        plain = client.post(url, {"name": "Plain-Gruppe"})
+        plain = client.post(url, {"group-new-name": "Plain-Gruppe"})
         assert plain.status_code == 302
         assert plain.url == reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk})
 
@@ -360,14 +386,14 @@ class TestBoardMutationMessages:
     def test_group_create_htmx_leaves_message_store_empty(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        response = client.post(url, {"name": "Store-Test"}, HTTP_HX_REQUEST="true")
+        response = client.post(url, {"group-new-name": "Store-Test"}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert list(get_messages(response.wsgi_request)) == []
 
     def test_group_create_non_htmx_redirects_with_message(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
-        response = client.post(url, {"name": "Store-Test-Redir"})
+        response = client.post(url, {"group-new-name": "Store-Test-Redir"})
         assert response.status_code == 302
         assert any("angelegt" in m for m in _messages(response))
 
@@ -376,7 +402,7 @@ class TestBoardMutationMessages:
     ):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
-        response = client.post(url, {"name": "Umbenannt"}, HTTP_HX_REQUEST="true")
+        response = client.post(url, {f"group-{field_group.pk}-name": "Umbenannt"}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert list(get_messages(response.wsgi_request)) == []
 

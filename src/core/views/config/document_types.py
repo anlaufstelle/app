@@ -71,7 +71,10 @@ def board_context(doc_type, *, add_form=None, group_form=None):
         "groups": groups,
         "ungrouped_fields": ungrouped_fields,
         "add_form": add_form if add_form is not None else DocumentTypeFieldAddForm(doc_type=doc_type),
-        "group_form": group_form if group_form is not None else FieldGroupForm(doc_type=doc_type),
+        # Prefix "group-new": das stets vorhandene Neu-Formular bekommt eindeutige
+        # Feld-IDs (id_group-new-name), damit es nicht mit einem gleichzeitig
+        # offenen Edit-Formular (Prefix group-<pk>) kollidiert.
+        "group_form": group_form if group_form is not None else FieldGroupForm(doc_type=doc_type, prefix="group-new"),
     }
 
 
