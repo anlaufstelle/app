@@ -9,6 +9,7 @@ Integration laufen lassen (E2E-Port 8844).
 """
 
 import re
+from datetime import datetime
 
 import pytest
 from playwright.sync_api import expect
@@ -20,12 +21,14 @@ TOGGLE = "[data-testid='zeitstrom-collapse-toggle']"
 EVENT_CARD_BUTTON = "#feed-list button[aria-controls^='event-detail-']"
 
 
-def _create_kontakt_event(page, base_url):
-    """Legt einen anonymen Kontakt (occurred_at=jetzt) an → erscheint im Feed."""
+def _create_kontakt_event(page, base_url, occurred_at=None):
+    """Legt einen anonymen Kontakt an → erscheint im Feed (Default: occurred_at=jetzt)."""
     page.goto(f"{base_url}/events/new/")
     page.wait_for_load_state("domcontentloaded")
     with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
         page.select_option("select[name='document_type']", label="Kontakt")
+    if occurred_at is not None:
+        page.fill("input[name='occurred_at']", occurred_at)
     dauer = page.locator("input[name='dauer']")
     dauer.wait_for(state="visible", timeout=10_000)
     dauer.fill("5")
@@ -136,7 +139,26 @@ class TestZeitstromCollapseToggle:
     def test_htmx_reloaded_cards_adopt_global_state(self, authenticated_page, base_url):
         """Nach 'Alle aufklappen' übernehmen HTMX-nachgeladene Cards den Zustand."""
         page = authenticated_page
-        _create_kontakt_event(page, base_url)
+
+        # Mitternachts-Falle (Refs #1719): Im Nachtschicht-Fenster zeigt der
+        # Zeitstrom target_date=GESTERN (Midnight-Overlap der Auto-Schichtwahl),
+        # und der „Alle"-Tab übernimmt dieses Datum in seine hx-get-URL. Ein
+        # Event mit occurred_at=jetzt (HEUTE, 0–6 Uhr) läge außerhalb dieser
+        # Tagesansicht. Daher: Ziel-Datum aus dem Tab lesen und das Event in
+        # DESSEN Tag legen (spätestens 23:59, nie in der Zukunft).
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+        all_tab_url = (
+            page.locator("[data-testid='time-filter-tabs']")
+            .get_by_role("tab", name="Alle", exact=True)
+            .get_attribute("hx-get")
+        ) or ""
+        occurred = now = datetime.now()
+        date_match = re.search(r"date=(\d{4}-\d{2}-\d{2})", all_tab_url)
+        if date_match:
+            day_end = datetime.strptime(date_match.group(1), "%Y-%m-%d").replace(hour=23, minute=59)
+            occurred = min(now, day_end)
+        _create_kontakt_event(page, base_url, occurred_at=occurred.strftime("%Y-%m-%dT%H:%M"))
 
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
