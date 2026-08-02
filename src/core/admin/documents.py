@@ -5,13 +5,33 @@ from unfold.admin import ModelAdmin, TabularInline
 
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
-from core.models import DocumentType, DocumentTypeField, FieldTemplate, QuickTemplate, TimeFilter
+from core.models import DocumentType, DocumentTypeField, FieldGroup, FieldTemplate, QuickTemplate, TimeFilter
 
 
 class DocumentTypeFieldInline(TabularInline):
     model = DocumentTypeField
     extra = 1
     autocomplete_fields = ("field_template",)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """``field_group``-Dropdown auf den Parent-DocumentType scopen (Refs #1711).
+
+        Ohne dieses Scoping listet der Django-Admin ALLE FieldGroups (auch
+        fremder Facilities/DocumentTypes) — irrefuehrende UX (das Modell-
+        ``clean()`` verhindert das Speichern zwar serverseitig, s. dort).
+        Pflege der Gruppen laeuft primaer ueber die Config-UI; der Admin
+        bleibt Super-Admin-Fallback. ``DocumentTypeAdmin.get_form`` legt das
+        Parent-Objekt vorher auf ``request._doctype_parent_obj`` ab — im
+        Add-View (neuer, noch ungespeicherter DocumentType) ist das ``None``
+        und das Dropdown bleibt entsprechend leer (es gibt noch keine
+        Gruppen).
+        """
+        if db_field.name == "field_group":
+            parent = getattr(request, "_doctype_parent_obj", None)
+            kwargs["queryset"] = (
+                FieldGroup.objects.filter(document_type=parent) if parent else FieldGroup.objects.none()
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 @admin.register(DocumentType, site=anlaufstelle_admin_site)
@@ -25,6 +45,18 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
         if obj and obj.system_type:
             return (*self.readonly_fields, "system_type")
         return self.readonly_fields
+
+    def get_form(self, request, obj=None, **kwargs):
+        """Parent-DocumentType fuer den Inline-Scope auf dem Request merken.
+
+        Refs #1711: ``DocumentTypeFieldInline.formfield_for_foreignkey`` liest
+        ``request._doctype_parent_obj``, um das ``field_group``-Dropdown auf
+        die Gruppen dieses DocumentType zu beschraenken. Django ruft
+        ``get_form`` (Haupt-Formular) vor den Inline-Formsets auf — der Wert
+        steht rechtzeitig zur Verfuegung.
+        """
+        request._doctype_parent_obj = obj
+        return super().get_form(request, obj, **kwargs)
 
 
 @admin.register(FieldTemplate, site=anlaufstelle_admin_site)
