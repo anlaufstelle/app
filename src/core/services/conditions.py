@@ -157,7 +157,7 @@ def evaluate_condition(operator: str, field_type: str, actual: Any, expected: An
     (bereits typisierte) Vergleichswert der Bedingung. Ein leerer Ist-Wert
     erfuellt **keinen** Wert-Operator (auch ``not_equals`` nicht) — nur
     ``is_empty`` schlaegt dann an. String-Vergleiche sind exakt (kein
-    Trim/Casefold, KISS — ADR-035, Abschnitt 9).
+    Trim/Casefold, KISS — ADR-035 § 2).
     """
     if operator == IS_EMPTY:
         return is_empty(actual)

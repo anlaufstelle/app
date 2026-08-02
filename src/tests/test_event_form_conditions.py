@@ -221,6 +221,53 @@ class TestConditionsPayload:
         assert not form.is_valid()
         assert "notiz" in form.errors
 
+    def test_partial_drop_target_required_enforced_with_remaining_payload(self, facility, assistant_user):
+        """Teil-Drop: zwei Bedingungen auf zwei Ziele, nur eine Quelle ist restricted.
+
+        Das Ziel der gedroppten Bedingung (``notiz-a``) wird unbedingt sichtbar
+        und pflichtig (kein stiller Opt-out, analog dem #774-Einzelfall), das
+        Ziel der verbleibenden Bedingung (``notiz-b``) folgt weiter seiner
+        eigenen Bedingung, und das Payload enthält die gedroppte Bedingung
+        nicht mehr.
+        """
+        dt = DocumentType.objects.create(
+            facility=facility, name="Teil-Drop", sensitivity=DocumentType.Sensitivity.NORMAL
+        )
+        # Bedingung A: ELEVATED-Quelle → für Assistant restricted → wird gedroppt.
+        _assign(dt, _ft(facility, "Dauer A", FieldType.NUMBER, sensitivity=DocumentType.Sensitivity.ELEVATED), 0)
+        _assign(dt, _ft(facility, "Notiz A", FieldType.TEXTAREA, required=True), 1)
+        _condition(dt, target="notiz-a", source="dauer-a", operator=Operator.GREATER_THAN, value=10)
+        # Bedingung B: normale Quelle → bleibt für Assistant erhalten.
+        _assign(dt, _ft(facility, "Dauer B", FieldType.NUMBER), 2)
+        _assign(dt, _ft(facility, "Notiz B", FieldType.TEXTAREA, required=True), 3)
+        _condition(dt, target="notiz-b", source="dauer-b", operator=Operator.GREATER_THAN, value=10)
+
+        form = DynamicEventDataForm({"notiz-a": "", "dauer-b": "5", "notiz-b": ""}, document_type=dt, facility=facility)
+        removed = remove_restricted_fields(assistant_user, dt, form)
+        assert "dauer-a" in removed
+
+        # Kein Leak: nur die verbleibende Bedingung (B) taucht im Payload auf.
+        payload = form.conditions_payload()
+        assert payload is not None
+        assert {c["target"] for c in payload["conditions"]} == {"notiz-b"}
+        assert {c["source"] for c in payload["conditions"]} == {"dauer-b"}
+
+        # notiz-a: Bedingung gedroppt → unbedingt sichtbar+pflichtig → leer → Fehler.
+        # notiz-b: dauer-b=5 → 5>10 False → weiterhin versteckt → leer bleibt zulässig.
+        assert not form.is_valid()
+        assert "notiz-a" in form.errors
+        assert "notiz-b" not in form.errors
+
+        # Gegenprobe: dauer-b>10 → notiz-b wird sichtbar+pflichtig → jetzt dort ein Fehler,
+        # notiz-a bleibt (unverändert unbedingt pflichtig, diesmal gefüllt) fehlerfrei.
+        form_visible = DynamicEventDataForm(
+            {"notiz-a": "x", "dauer-b": "15", "notiz-b": ""}, document_type=dt, facility=facility
+        )
+        remove_restricted_fields(assistant_user, dt, form_visible)
+        assert not form_visible.is_valid()
+        assert "notiz-b" in form_visible.errors
+        assert "notiz-a" not in form_visible.errors
+
     def test_payload_read_after_remove_restricted_fields(self, facility, staff_user):
         """Timing: der Payload liest ``self.fields`` NACH ``remove_restricted_fields``.
 

@@ -86,6 +86,48 @@
       "expected_visible": ["q"]
     },
     {
+      "name": "textarea_not_equals_true",
+      "fields": {"q": "textarea", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "anders", "group": 0}],
+      "values": {"q": "beispieltext"},
+      "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "textarea_not_equals_false",
+      "fields": {"q": "textarea", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "beispieltext", "group": 0}],
+      "values": {"q": "beispieltext"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "textarea_is_empty_true",
+      "fields": {"q": "textarea", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
+      "values": {"q": ""},
+      "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "textarea_is_empty_false",
+      "fields": {"q": "textarea", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
+      "values": {"q": "beispieltext"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "textarea_is_not_empty_true",
+      "fields": {"q": "textarea", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {"q": "beispieltext"},
+      "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "textarea_is_not_empty_false",
+      "fields": {"q": "textarea", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {"q": ""},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "number_equals_true",
       "fields": {"q": "number", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "equals", "value": 5, "group": 0}],
@@ -163,6 +205,13 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "number_is_not_empty_false_missing",
+      "fields": {"q": "number", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "number_is_empty_zero_false",
       "fields": {"q": "number", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
@@ -177,6 +226,13 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "date_equals_false",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "equals", "value": "2026-01-01", "group": 0}],
+      "values": {"q": "2026-02-01"},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "date_not_equals_true",
       "fields": {"q": "date", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "2026-01-01", "group": 0}],
@@ -184,11 +240,25 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "date_not_equals_false",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "2026-02-01", "group": 0}],
+      "values": {"q": "2026-02-01"},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "date_greater_than_true",
       "fields": {"q": "date", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "greater_than", "value": "2026-01-01", "group": 0}],
       "values": {"q": "2026-06-15"},
       "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "date_greater_than_false",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "greater_than", "value": "2026-01-01", "group": 0}],
+      "values": {"q": "2025-01-01"},
+      "expected_visible": ["q"]
     },
     {
       "name": "date_less_than_true",
@@ -212,11 +282,53 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "date_is_empty_false",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
+      "values": {"q": "2026-01-01"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "date_is_not_empty_true",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {"q": "2026-01-01"},
+      "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "date_is_not_empty_false_missing",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "time_equals_true",
       "fields": {"q": "time", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "equals", "value": "14:30:00", "group": 0}],
       "values": {"q": "14:30:00"},
       "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "time_equals_false",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "equals", "value": "14:30:00", "group": 0}],
+      "values": {"q": "09:00:00"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "time_not_equals_true",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "09:00:00", "group": 0}],
+      "values": {"q": "14:30:00"},
+      "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "time_not_equals_false",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "14:30:00", "group": 0}],
+      "values": {"q": "14:30:00"},
+      "expected_visible": ["q"]
     },
     {
       "name": "time_greater_than_true",
@@ -226,6 +338,13 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "time_greater_than_false",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "greater_than", "value": "09:00:00", "group": 0}],
+      "values": {"q": "08:00:00"},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "time_less_than_true",
       "fields": {"q": "time", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "less_than", "value": "09:00:00", "group": 0}],
@@ -233,11 +352,39 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "time_less_than_false",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "less_than", "value": "09:00:00", "group": 0}],
+      "values": {"q": "14:30:00"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "time_is_empty_true_missing",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
+      "values": {},
+      "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "time_is_empty_false",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
+      "values": {"q": "14:30:00"},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "time_is_not_empty_midnight_true",
       "fields": {"q": "time", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
       "values": {"q": "00:00:00"},
       "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "time_is_not_empty_false_missing",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {},
+      "expected_visible": ["q"]
     },
     {
       "name": "boolean_equals_true_true",
@@ -296,6 +443,13 @@
       "expected_visible": ["q", "ziel"]
     },
     {
+      "name": "select_not_equals_false",
+      "fields": {"q": "select", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "opt_a", "group": 0}],
+      "values": {"q": "opt_a"},
+      "expected_visible": ["q"]
+    },
+    {
       "name": "select_is_empty_true",
       "fields": {"q": "select", "ziel": "text"},
       "conditions": [{"target": "ziel", "source": "q", "operator": "is_empty", "value": null, "group": 0}],
@@ -343,6 +497,13 @@
       "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
       "values": {"q": ["opt_a"]},
       "expected_visible": ["q", "ziel"]
+    },
+    {
+      "name": "multi_select_is_not_empty_false",
+      "fields": {"q": "multi_select", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "is_not_empty", "value": null, "group": 0}],
+      "values": {"q": []},
+      "expected_visible": ["q"]
     },
     {
       "name": "empty_missing_value_is_empty",

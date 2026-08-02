@@ -324,6 +324,29 @@ class TestBoard:
         full = client.post(url, payload)
         assert full.status_code == 302
 
+    def test_get_with_garbage_group_index_and_target_falls_back_to_defaults(self, client, admin_user, doc_type_contact):
+        """Müll-Query-Params dürfen den Neu-Formular-GET nicht crashen (Defense-in-Depth).
+
+        ``?group_index=abc`` (kein Int) und ``?target=keine-uuid`` (kein UUID)
+        werden beide von ``contextlib.suppress`` in ``ConditionCreateView.get``
+        abgefangen — das Formular fällt auf seine Defaults zurück statt eines
+        500ers: kein vorbelegter ``group_index`` (wird beim späteren Anlegen zu
+        0, ``form.cleaned_data.get("group_index") or 0``) und kein vorausgewähltes
+        Zielfeld.
+        """
+        client.force_login(admin_user)
+        dauer, notiz = _dtf(doc_type_contact, "dauer"), _dtf(doc_type_contact, "notiz")
+        url = reverse("core:config_condition_create", kwargs={"pk": doc_type_contact.pk})
+        response = client.get(url, {"group_index": "abc", "target": "keine-uuid"})
+        assert response.status_code == 200
+        form = response.context["condition_form"]
+        assert form.initial.get("group_index") in (None, 0)
+        assert "target_field" not in form.initial
+        body = response.content.decode()
+        assert 'value="abc"' not in body
+        assert f'value="{dauer.pk}" selected' not in body
+        assert f'value="{notiz.pk}" selected' not in body
+
 
 # ---------------------------------------------------------------------------
 # AuthZ / IDOR

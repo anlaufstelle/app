@@ -342,6 +342,49 @@ class TestRLSCrossTenantIsolation:
             leaked = cur.fetchall()
         assert leaked == [], "Cross-Tenant-Read auf core_fieldcondition hat B's Bedingung geliefert."
 
+        with as_rls_role(rls_test_role, facility_id=facility_b_with_data.pk) as cur:
+            cur.execute("SELECT operator FROM core_fieldcondition WHERE id = %s", [str(condition.pk)])
+            own = cur.fetchall()
+        assert own == [("greater_than",)], (
+            f"Eigene FieldCondition unter facility_b-Setting nicht sichtbar (false negative). Rows: {own}"
+        )
+
+    def test_cross_facility_fieldcondition_insert_violates_policy(
+        self, rls_test_role, facility_a_with_data, facility_b_with_data
+    ):
+        """INSERT-Seite der USING-only-Policy (Migration 0114), analog
+        ``test_cross_facility_fieldgroup_insert_violates_policy``: Postgres nutzt
+        das ``USING``-Praedikat implizit als ``WITH CHECK``. Unter
+        facility_a-Setting darf keine FieldCondition fuer facility_b-Zielfelder
+        eingefuegt werden.
+        """
+        import uuid as _uuid
+
+        from django.db import Error as _DjangoDBError
+
+        dt_b = DocumentType.objects.get(facility=facility_b_with_data, name="B-Doc")
+        ft_source = FieldTemplate.objects.create(
+            facility=facility_b_with_data, name="B-Quelle-Insert", field_type=FieldTemplate.FieldType.NUMBER
+        )
+        ft_target = FieldTemplate.objects.create(
+            facility=facility_b_with_data, name="B-Ziel-Insert", field_type=FieldTemplate.FieldType.TEXTAREA
+        )
+        dtf_source = DocumentTypeField.objects.create(document_type=dt_b, field_template=ft_source, sort_order=2)
+        dtf_target = DocumentTypeField.objects.create(document_type=dt_b, field_template=ft_target, sort_order=3)
+
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            with pytest.raises(_DjangoDBError) as exc:
+                cur.execute(
+                    "INSERT INTO core_fieldcondition "
+                    "(id, target_field_id, depends_on_field_id, operator, value, group_index) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    [str(_uuid.uuid4()), str(dtf_target.pk), str(dtf_source.pk), "greater_than", "10", 0],
+                )
+        assert "row-level security" in str(exc.value).lower(), (
+            f"Cross-Facility-INSERT auf core_fieldcondition wurde nicht durch die RLS-Policy "
+            f"abgelehnt (USING-only greift nicht als WITH CHECK?). Fehler: {exc.value!r}"
+        )
+
     def test_own_tenant_client_visible(self, rls_test_role, facility_a_with_data):
         """Smoke: A-Client ist unter facility_a-Setting sichtbar — sonst
         koennten die Cross-Tenant-Tests false negatives sein."""
