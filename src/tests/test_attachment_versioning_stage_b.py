@@ -293,6 +293,47 @@ class TestUpdateFlowAddReplaceRemove:
 
 
 @pytest.mark.django_db
+class TestInvalidPostKeepsExistingAttachments:
+    """Refs #1056 (P4): der invalid-POST-Re-Render der Edit-View muss
+    ``existing_attachments`` genauso setzen wie der GET-Pfad — sonst
+    verschwinden bestehende Anhang-Zeilen bei einem Validierungsfehler aus dem
+    Formular (der Nutzer sieht sie nicht mehr, obwohl sie noch existieren).
+    """
+
+    def test_invalid_post_still_lists_existing_attachments(self, client, staff_user, facility, doc_type_with_file):
+        dt, ft_file = doc_type_with_file
+        # Ein Pflicht-Textfeld ergänzen, damit ein leerer POST das Formular
+        # ungültig macht (und damit den Re-Render-Zweig erzwingt).
+        ft_req = FieldTemplate.objects.create(facility=facility, name="Pflicht", field_type="text", is_required=True)
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_req, sort_order=1)
+
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            created_by=staff_user,
+            data_json={"pflicht": "wert"},
+        )
+        att = store_encrypted_file(facility, _upload(b"keep"), ft_file, event, staff_user)
+        # Datei-Marker in data_json, damit build_attachment_context den Anhang findet.
+        event.data_json["anhang"] = {"__files__": True, "entries": [{"id": str(att.pk), "sort": 0}]}
+        event.save(update_fields=["data_json"])
+
+        client.force_login(staff_user)
+        resp = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {"pflicht": ""},  # Pflichtfeld leer → Formular ungültig → Re-Render (kein Redirect)
+        )
+        assert resp.status_code == 200, "invalid POST sollte das Formular re-rendern (200), nicht redirecten."
+        content = resp.content.decode()
+        assert f"attachment-entries-{ft_file.slug}" in content, (
+            "Bestehende Anhang-Zeilen fehlen im invalid-POST-Re-Render — "
+            "existing_attachments wurde nicht in den Kontext gesetzt."
+        )
+        assert str(att.entry_id) in content
+
+
+@pytest.mark.django_db
 class TestBackwardCompatibility:
     """Ein Event mit altem __file__-Marker bleibt lesbar und wird beim Edit migriert."""
 

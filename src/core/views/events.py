@@ -642,6 +642,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         context = {
             "event": event,
             "data_form": data_form,
+            # Refs #1056 (P4): wie im GET-Pfad — sonst verschwinden bestehende
+            # Anhang-Zeilen beim invalid-POST-Re-Render aus dem Formular.
+            "existing_attachments": build_attachment_context(event),
         }
         return render(request, "core/events/edit.html", context)
 
