@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -135,7 +135,11 @@ test:
 # zum Haenger. Gilt seriell wie parallel — der Hang haengt an der CPU-Knappheit,
 # nicht an xdist (Passkey-Roundtrip #1606 hing seriell nur nicht, weil der
 # Release-Host 8 Kerne hat).
-test-e2e:
+# Prerequisite ``tailwind-build`` (Refs #1712): E2E lief bisher gegen ein
+# ggf. veraltetes styles.css, wenn seit der letzten Template-Klassenaenderung
+# nicht manuell neu gebaut wurde (Assertions gegen sichtbare Klassen/Layout
+# faellig-still). Beseitigt die Falle an der Wurzel statt sie zu dokumentieren.
+test-e2e: tailwind-build
 	$(PYTHON) -m pytest -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
 test-focus:
@@ -166,7 +170,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck test-parallel
+ci: lint check deps-check verify-matrix-drift verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
 
 # Schneller Gate: statische Prüfung + Unit-Ebene, ohne E2E/Browser.
 # Enge Feedback-Schleife + Pre-Commit. Beziehung: ci ⊇ verify-fast
@@ -204,6 +208,22 @@ verify-release-test-guard:
 # src/static/js/*.min.js. Reiner String-Vergleich — kein node/npm noetig.
 verify-vendor-js-sync:
 	$(PYTHON) scripts/verify_vendor_js_sync.py
+
+# Frische-Guard fuer das untrackte Build-Artefakt src/static/css/styles.css
+# (Refs #1712): baut Tailwind minifiziert in eine Temp-Datei und byte-
+# vergleicht (cmp) gegen das ausgecheckte styles.css. Faengt den Fall, dass
+# Template-Klassen geaendert wurden, aber 'make tailwind-build' vor dem Commit
+# vergessen wurde — sonst laeuft CI/E2E lokal grau gegen ein stale Stylesheet.
+verify-css-fresh:
+	@tmp=$$(mktemp --suffix=.css) && \
+	npx @tailwindcss/cli -i src/static/css/input.css -o "$$tmp" --minify >/dev/null 2>&1; \
+	if [ ! -f src/static/css/styles.css ] || ! cmp -s "$$tmp" src/static/css/styles.css; then \
+		rm -f "$$tmp"; \
+		echo "src/static/css/styles.css ist stale — make tailwind-build ausfuehren" >&2; \
+		exit 1; \
+	fi; \
+	rm -f "$$tmp"; \
+	echo "✓ styles.css ist frisch"
 
 # Drift-Guard (Refs #1403): AGENTS.md ist die tool-neutrale SSOT der Agent-
 # Konventionen; CLAUDE.md verweist darauf und dupliziert sie nicht (12.11).
