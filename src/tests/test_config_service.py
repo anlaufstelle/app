@@ -440,6 +440,21 @@ class TestMoveField:
 
 
 @pytest.mark.django_db
+class TestSaveFieldGroupBlockSequence:
+    def test_new_group_appends_to_end_of_global_sequence(self, req, doc_type_contact):
+        from django.forms import modelform_factory
+
+        from core.models import FieldGroup as FieldGroupModel
+
+        # doc_type_contact: 2 freie Felder (Blockpos 0,1). Neue Gruppe → Blockpos 2.
+        GroupForm = modelform_factory(FieldGroupModel, fields=["name"])
+        form = GroupForm(data={"name": "Neu"})
+        assert form.is_valid(), form.errors
+        group = save_field_group(req, form, doc_type=doc_type_contact, creating=True)
+        assert group.sort_order == 2
+
+
+@pytest.mark.django_db
 class TestAddRemoveBlockSequence:
     def test_add_ungrouped_goes_to_end_of_global_sequence(self, req, facility, doc_type_contact):
         # Vorlage: 2 freie Felder (0,1) + eine Gruppe an Blockposition 2.

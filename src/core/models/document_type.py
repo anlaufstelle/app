@@ -346,6 +346,14 @@ class FieldGroup(models.Model):
     eigener ``facility``-FK — der Scope ergibt sich transitiv aus
     ``document_type.facility`` (wie bei :class:`DocumentTypeField`), RLS via
     JOIN-Policy (Migration 0111).
+
+    M2/#1713 (globale Block-Sequenz): ``sort_order`` ist die Position des
+    **Gruppen-Blocks** in EINER globalen Sequenz je DocumentType, die sich
+    Gruppen und ungruppierte Felder teilen — ein ungruppiertes
+    :class:`DocumentTypeField` (``field_group IS NULL``) trägt in derselben
+    Sequenz seine eigene Position (siehe dort). Es gibt keinen fixen „Ohne
+    Gruppe"-Block mehr; freie Felder können zwischen Gruppen liegen. Die
+    kanonische Reihenfolge liefert ``core.services.config.iter_blocks_in_order``.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -429,7 +437,21 @@ class FieldGroup(models.Model):
 
 
 class DocumentTypeField(models.Model):
-    """Association of a field template with a document type."""
+    """Association of a field template with a document type.
+
+    M2/#1713 (globale Block-Sequenz): ``sort_order`` hat zwei Bedeutungen je nach
+    ``field_group``:
+
+    * ``field_group IS NULL`` (freies Feld) → Position des **Feld-Blocks** in der
+      globalen Block-Sequenz des DocumentType (dieselbe Sequenz wie
+      :attr:`FieldGroup.sort_order`);
+    * ``field_group`` gesetzt → Position **innerhalb** der Gruppe (0..n-1).
+
+    Die kanonische, interleavte Reihenfolge liefert
+    ``core.services.config.iter_blocks_in_order`` /
+    ``iter_fields_in_block_order``; Board, Event-Formular, Offline-Bundle und
+    Feed-Vorschau nutzen sie gemeinsam.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     document_type = models.ForeignKey(

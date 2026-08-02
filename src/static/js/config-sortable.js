@@ -13,17 +13,24 @@
  *                              Felder-Reorder-URL in data-reorder-url, Move-URL
  *                              in data-move-url; group:"fields").
  *
- * onEnd ist QUELL-getrieben (feuert am Quell-Sortable). Beide Handler
- * verzweigen daher über evt.to.getAttribute("data-sortable"):
+ * onEnd ist QUELL-getrieben (feuert am Quell-Sortable):
  *
- *   Blocks-onEnd, to=blocks → POST reorder/blocks (blocks = kind:uuid-Liste).
- *   Blocks-onEnd, to=fields → freies Feld in eine Gruppe → POST move-field
- *                             (group = Ziel, order = DTF-IDs der Zielliste).
+ *   Blocks-onEnd: freies Feld auf eine Gruppe fallen gelassen → POST move-field
+ *                 (group = Ziel, order = DTF-IDs + moved); sonst → POST
+ *                 reorder/blocks (blocks = kind:uuid-Liste).
  *   Fields-onEnd, to=blocks → Feld aus Gruppe an Top-Level → POST move-field
  *                             (group = "", blocks = kind:uuid-Liste der Blocks).
  *   Fields-onEnd, from===to → POST reorder/fields (group, order = DTF-IDs).
  *   Fields-onEnd, from!==to → Feld in ANDERE Gruppe → POST move-field
  *                             (group = Ziel, order = DTF-IDs der Zielliste).
+ *
+ * WICHTIG (empirisch verifiziert): SortableJS routet einen Drop NICHT aus dem
+ * umschließenden Blocks-Sortable in eine verschachtelte Gruppen-Feldliste
+ * (Vorfahr→Nachfahr). Ein freies Feld, das auf eine Gruppe gezogen wird, bleibt
+ * daher SortableJS-seitig im Blocks-Container; die Zuordnung zur Gruppe wird in
+ * Blocks-onEnd per elementFromPoint an der Loslass-Position erkannt und über
+ * denselben move_field-Endpunkt persistiert. Der umgekehrte Weg (Gruppe→Top-
+ * Level, Nachfahr→Vorfahr) funktioniert regulär über Fields-onEnd.
  *
  * Handle: EIN gemeinsamer Selektor `.drag-handle` deckt Gruppen-, freie-Feld-
  * und Gruppen-Feld-Handles ab. Dass ein Griff an einem inneren Feld-Handle
@@ -127,6 +134,51 @@
     return values;
   }
 
+  // Drop-Koordinaten (clientX/Y) aus dem SortableJS-onEnd-Event.
+  function dropPoint(evt) {
+    var oe = evt.originalEvent;
+    if (!oe) {
+      return null;
+    }
+    if (oe.changedTouches && oe.changedTouches.length) {
+      oe = oe.changedTouches[0];
+    }
+    if (typeof oe.clientX !== "number" || typeof oe.clientY !== "number") {
+      return null;
+    }
+    return { x: oe.clientX, y: oe.clientY };
+  }
+
+  // Ermittelt, ob ein freies Feld beim Loslassen ÜBER einer Gruppen-Feldliste
+  // landete (dann: in die Gruppe aufnehmen). SortableJS kann ein Feld NICHT aus
+  // dem umschließenden Blocks-Sortable in eine verschachtelte Gruppen-Feldliste
+  // routen (Vorfahr→Nachfahr-Drop wird verweigert), daher wird das Ziel hier per
+  // elementFromPoint an der Loslass-Position bestimmt. Rückgabe: die Ziel-
+  // Feldliste (``ul[data-sortable="fields"]``) oder ``null`` (Top-Level-Drop).
+  function groupFieldListAtDrop(evt) {
+    var point = dropPoint(evt);
+    if (!point) {
+      return null;
+    }
+    var el = document.elementFromPoint(point.x, point.y);
+    while (el && el !== document.body) {
+      if (el === evt.item) {
+        return null; // auf dem gezogenen Element selbst losgelassen → Top-Level
+      }
+      if (el.getAttribute && el.getAttribute("data-sortable") === "fields") {
+        return el;
+      }
+      if (el.getAttribute && el.getAttribute("data-group-id") && el.hasAttribute("data-block")) {
+        return el.querySelector('[data-sortable="fields"]');
+      }
+      if (el.getAttribute && el.getAttribute("data-sortable") === "blocks") {
+        return null; // in einer Lücke zwischen Blöcken → reiner Block-Reorder
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
   function initBlocks(root) {
     var container = root.querySelector('[data-sortable="blocks"]');
     if (!container) {
@@ -145,17 +197,24 @@
         handle: HANDLE,
         animation: ANIMATION_MS,
         onEnd: function (evt) {
-          if (evt.to.getAttribute("data-sortable") === "blocks") {
-            // Block-Reorder (Gruppen + freie Felder gemischt).
-            postBatch(reorderUrl, { blocks: collectBlocks(container) });
-          } else {
-            // Freies Feld in eine Gruppen-Feldliste gezogen → move_field.
-            postBatch(evt.to.getAttribute("data-move-url"), {
-              moved: evt.item.getAttribute("data-dtf-id"),
-              group: evt.to.getAttribute("data-group-id") || "",
-              order: directAttrValues(evt.to, "data-dtf-id"),
-            });
+          // Freies Feld auf eine Gruppe fallen gelassen → in die Gruppe aufnehmen.
+          // (SortableJS routet den Vorfahr→Nachfahr-Drop nicht; Zielerkennung per
+          // elementFromPoint, Versand über denselben move_field-Endpunkt.)
+          if (evt.item.hasAttribute("data-dtf-id")) {
+            var targetList = groupFieldListAtDrop(evt);
+            if (targetList && targetList.getAttribute("data-move-url")) {
+              var order = directAttrValues(targetList, "data-dtf-id");
+              order.push(evt.item.getAttribute("data-dtf-id"));
+              postBatch(targetList.getAttribute("data-move-url"), {
+                moved: evt.item.getAttribute("data-dtf-id"),
+                group: targetList.getAttribute("data-group-id") || "",
+                order: order,
+              });
+              return;
+            }
           }
+          // Sonst: reiner Block-Reorder (Gruppen + freie Felder gemischt).
+          postBatch(reorderUrl, { blocks: collectBlocks(container) });
         },
       })
     );

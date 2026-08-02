@@ -106,9 +106,38 @@ def _assign_field(page, template_text, group_text) -> str:
     return row.get_attribute("data-dtf-id")
 
 
+def _assign_free_field(page, template_text) -> str:
+    """Ordnet eine Feldvorlage OHNE Gruppe zu (freier Top-Level-Block, #1713).
+
+    Wählt die Leeroption „– Ohne Gruppe –" (value="") im Feldgruppen-Dropdown und
+    gibt die ``data-dtf-id`` der neuen Top-Level-Zeile zurück.
+    """
+    form = page.locator('[data-testid="field-add-form"]')
+    ft_val = form.locator('select[name="field_template"] option', has_text=template_text).first.get_attribute("value")
+    assert ft_val, f"Feldvorlage-Option „{template_text}“ nicht gefunden"
+    form.locator('select[name="field_template"]').select_option(value=ft_val)
+    form.locator('select[name="field_group"]').select_option(value="")
+    form.locator("button[type='submit']").click()
+    row = page.locator(f'[data-testid="free-field-row"]:has-text("{template_text}")')
+    expect(row).to_be_visible(timeout=10000)
+    return row.get_attribute("data-dtf-id")
+
+
+def _block_order(page) -> list[str]:
+    """DOM-Reihenfolge der Top-Level-Block-Kennungen (#1713): Gruppen-pk bzw.
+    ``dtf:<pk>`` für freie Felder — die persistierte Ansicht der Block-Sequenz."""
+    blocks = page.locator('[data-sortable="blocks"] > [data-block]')
+    order = []
+    for i in range(blocks.count()):
+        block = blocks.nth(i)
+        gid = block.get_attribute("data-group-id")
+        order.append(gid if gid else f"dtf:{block.get_attribute('data-dtf-id')}")
+    return order
+
+
 def _group_order(page) -> list[str]:
-    """DOM-Reihenfolge der Gruppen-pks im Sortable-Container (persistierte Ansicht)."""
-    cards = page.locator('[data-sortable="groups"] > [data-group-id]')
+    """DOM-Reihenfolge NUR der Gruppen-pks im Blocks-Container (persistierte Ansicht)."""
+    cards = page.locator('[data-sortable="blocks"] > [data-block][data-group-id]')
     return [cards.nth(i).get_attribute("data-group-id") for i in range(cards.count())]
 
 
@@ -371,12 +400,12 @@ class TestFieldBoardDragAndDrop:
         """(b) Feld per Maus-Sequenz in die andere Gruppe → nach Reload persistiert.
 
         Cross-Container-Move über die native Maus-Sequenz (mouse.down auf dem
-        ``.field-drag-handle`` → mehrstufiges ``mouse.move`` auf die leere
-        Ziel-``ul`` → Pause → ``mouse.up``), da Playwrights ``drag_to`` den
+        ``.field-drag-handle`` → mehrstufiges ``mouse.move`` auf eine Feldzeile der
+        Zielgruppe → Pause → ``mouse.up``), da Playwrights ``drag_to`` den
         Container-Wechsel bei SortableJS nicht zuverlässig auslöst (Plan-Risiko 1,
-        Refs #1056/P9). Der native Weg lief in der Verifikation stabil; die
-        Fallback-Variante über den ``move-field``-Endpunkt (``page.request.post``)
-        wurde nicht benötigt.
+        Refs #1056/P9). Ziel ist bewusst eine bestehende Feldzeile der Zielgruppe
+        (tief in deren Feld-Liste) — ein eindeutiges Drop-Ziel, unabhängig davon,
+        ob die Zielgruppe ober- oder unterhalb der Quelle liegt.
         """
         page = authenticated_page
         pk = _create_doctype(page, base_url, _cfg_name("DT-DND-M"))
@@ -385,17 +414,79 @@ class TestFieldBoardDragAndDrop:
             dst = _cfg_name("DST")
             _add_group(page, src)
             dst_pk = _add_group(page, dst)
-            # Zwei Felder in die Quellgruppe, Zielgruppe bleibt leer.
+            # Zwei Felder in die Quellgruppe; die Zielgruppe bekommt eine Ankerzeile.
             _assign_field(page, "Dauer", src)
             moved = _assign_field(page, "Straßenkontakt", src)
+            anchor = _assign_field(page, "Notiz", dst)
 
-            self._native_move(page, moved, dst_pk)
+            handle = page.locator(f'[data-dtf-id="{moved}"] .field-drag-handle')
+            target = page.locator(f'ul[data-sortable="fields"][data-group-id="{dst_pk}"] li[data-dtf-id="{anchor}"]')
+            self._native_drag(page, handle, target)
 
-            # Persistenz gegen einen frischen Full-Load prüfen.
+            # Persistenz gegen einen frischen Full-Load prüfen: das verschobene Feld
+            # sitzt jetzt in der Zielgruppe (neben der Ankerzeile).
             page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
-            dst_rows = page.locator(f'ul[data-sortable="fields"][data-group-id="{dst_pk}"] [data-dtf-id]')
-            expect(dst_rows).to_have_count(1, timeout=10000)
-            assert dst_rows.first.get_attribute("data-dtf-id") == moved, "Feld nicht in Zielgruppe persistiert"
+            moved_in_dst = page.locator(f'ul[data-sortable="fields"][data-group-id="{dst_pk}"] [data-dtf-id="{moved}"]')
+            expect(moved_in_dst).to_have_count(1, timeout=10000)
+            # Und nicht mehr als freie Top-Level-Zeile.
+            expect(page.locator(f'[data-testid="free-field-row"][data-dtf-id="{moved}"]')).to_have_count(0)
+        finally:
+            _delete_doctype(page, base_url, pk)
+
+    def test_move_free_field_into_group_persists(self, authenticated_page, base_url):
+        """(c) Freies Top-Level-Feld per Maus-Sequenz in eine Gruppe → persistiert (#1713)."""
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-DND-FG"))
+        try:
+            dst = _cfg_name("DST")
+            dst_pk = _add_group(page, dst)
+            # Die Gruppe bekommt bereits ein Feld → auf dessen Zeile (tief in der
+            # Feld-Liste) wird gedroppt, damit das nested fields-Sortable eindeutig
+            # gewinnt (die umgebende Blocks-Liste würde bei einem Karten-Treffer
+            # nur reordern).
+            anchor_id = _assign_field(page, "Notiz", dst)
+            # „Dauer" als freien Top-Level-Block zuordnen, dann in die Gruppe ziehen.
+            free_id = _assign_free_field(page, "Dauer")
+            handle = page.locator(f'[data-dtf-id="{free_id}"] .field-drag-handle')
+            target = page.locator(f'ul[data-sortable="fields"][data-group-id="{dst_pk}"] li[data-dtf-id="{anchor_id}"]')
+            self._native_drag(page, handle, target)
+
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
+            in_group = page.locator(f'ul[data-sortable="fields"][data-group-id="{dst_pk}"] [data-dtf-id="{free_id}"]')
+            expect(in_group).to_have_count(1, timeout=10000)
+            # Keine freie Top-Level-Zeile mehr für dieses Feld.
+            expect(page.locator(f'[data-testid="free-field-row"][data-dtf-id="{free_id}"]')).to_have_count(0)
+        finally:
+            _delete_doctype(page, base_url, pk)
+
+    def test_move_grouped_field_to_top_level_between_groups(self, authenticated_page, base_url):
+        """(b) Feld aus Gruppe an Top-Level-Position ZWISCHEN zwei Gruppen (#1713).
+
+        Der frühere „Lücken-Drop landet in der Nachbargruppe"-Effekt ist damit ein
+        Feature: das Feld wird ein eigenständiger freier Block zwischen A und B.
+        """
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-DND-TL"))
+        try:
+            a = _cfg_name("A")
+            b = _cfg_name("B")
+            ga = _add_group(page, a)
+            gb = _add_group(page, b)
+            moved = _assign_field(page, "Dauer", a)
+
+            # Handle des Feldes in Gruppe A auf den OBEREN Rand der B-Karte ziehen
+            # (y_frac klein → Insert VOR B im Blocks-Container, nicht in B hinein).
+            handle = page.locator(f'[data-dtf-id="{moved}"] .field-drag-handle')
+            target = page.locator(f'[data-testid="field-group"][data-group-id="{gb}"]')
+            self._native_drag(page, handle, target, y_frac=0.12)
+
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
+            expect(page.locator(f'[data-testid="free-field-row"][data-dtf-id="{moved}"]')).to_have_count(
+                1, timeout=10000
+            )
+            assert _block_order(page) == [ga, f"dtf:{moved}", gb], (
+                f"Feld nicht als freier Block zwischen den Gruppen: {_block_order(page)}"
+            )
         finally:
             _delete_doctype(page, base_url, pk)
 
@@ -427,13 +518,16 @@ class TestFieldBoardDragAndDrop:
         return hb, tb
 
     @classmethod
-    def _native_move(cls, page, dtf_id, target_group_pk):
-        """Feld-Zeile per nativer Maus-Sequenz in die Ziel-Gruppenliste ziehen."""
-        handle = page.locator(f'li[data-dtf-id="{dtf_id}"] .field-drag-handle')
-        target = page.locator(f'ul[data-sortable="fields"][data-group-id="{target_group_pk}"]')
-        # Zentrieren statt minimal scrollen: die Ziel-Liste kann OBERHALB der
-        # Quellzeile liegen (Gruppen mit gleichem sort_order ordnen nach Name) —
-        # mit der Quellzeile in der Viewport-Mitte sind beide Karten sichtbar.
+    def _native_drag(cls, page, handle, target, *, y_frac=0.5):
+        """Zieht ``handle`` per nativer Maus-Sequenz auf ``target`` (SortableJS-tauglich).
+
+        ``y_frac`` steuert die vertikale Auftreffhöhe im Ziel: 0.5 = Mitte
+        (Standard, z. B. für leere Feld-Listen), ein kleiner Wert (~0.15) zielt
+        auf den oberen Rand einer Ziel-Karte, um bei einem Block-Ziel ein Insert
+        VOR der Karte zu erzwingen (statt dahinter/hinein).
+        """
+        # Zentrieren statt minimal scrollen: das Ziel kann OBERHALB der Quellzeile
+        # liegen — mit der Quellzeile in der Viewport-Mitte sind beide sichtbar.
         # Robust gegen den asynchronen Fokus-Scroll der Live-Vorschau (Details in
         # ``_center_for_drag``): wiederholt zentrieren, bis beide Boxen stabil im
         # Viewport liegen, DANN Koordinaten nehmen.
@@ -446,12 +540,64 @@ class TestFieldBoardDragAndDrop:
         page.mouse.down()
         # Mehrstufige Bewegung, damit SortableJS die dragover-Events sieht.
         # Ziel-Offset mit Untergrenze: eine leere Ziel-Liste ist nur
-        # min-h-[1.5rem] hoch — der Mittelpunkt darf nicht auf der Kante liegen.
-        page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] / 2, 10), steps=25)
+        # min-h-[1.5rem] hoch — der Auftreffpunkt darf nicht auf der Kante liegen.
+        page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10), steps=25)
         page.wait_for_timeout(300)
         page.mouse.up()
-        # Board-Swap nach dem move-field-POST abwarten.
+        # Board-Swap nach dem move-field-/reorder-POST abwarten.
         page.wait_for_timeout(900)
+
+    @classmethod
+    def _native_move(cls, page, dtf_id, target_group_pk):
+        """Feld-Zeile per nativer Maus-Sequenz in die Ziel-Gruppenliste ziehen.
+
+        Der Handle-Selektor ``[data-dtf-id] .field-drag-handle`` matcht sowohl
+        eine gruppierte ``li``-Feldzeile als auch eine freie Top-Level-Zeile
+        (``div[data-testid="free-field-row"]``).
+        """
+        handle = page.locator(f'[data-dtf-id="{dtf_id}"] .field-drag-handle')
+        target = page.locator(f'ul[data-sortable="fields"][data-group-id="{target_group_pk}"]')
+        cls._native_drag(page, handle, target)
+
+
+# ---------------------------------------------------------------------------
+# Interleaving im Event-Formular (globale Block-Sequenz, #1713)
+# ---------------------------------------------------------------------------
+
+
+class TestEventFormInterleaving:
+    """Ein Typ mit freiem Feld → Gruppe → freiem Feld rendert im Event-Formular
+    interleaved (Gruppe ZWISCHEN den beiden freien Feldern)."""
+
+    def test_event_form_renders_interleaved_blocks(self, authenticated_page, base_url):
+        page = authenticated_page
+        name = _cfg_name("DT-IL")
+        pk = _create_doctype(page, base_url, name)
+        try:
+            # Blockpos 0: freies Feld „Dauer"; Blockpos 1: Gruppe mit „Notiz";
+            # Blockpos 2: freies Feld „Straßenkontakt".
+            _assign_free_field(page, "Dauer")
+            mid = _cfg_name("MID")
+            _add_group(page, mid)
+            _assign_field(page, "Notiz", mid)
+            _assign_free_field(page, "Straßenkontakt")
+
+            # Event-Formular öffnen und den Wegwerf-Typ wählen. Auf die MID-Gruppe
+            # warten (nur dieser Typ hat sie) — der HTMX-Swap ist damit fertig und
+            # wir messen nicht versehentlich den vorgerenderten Seed-Typ.
+            page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+            page.select_option("select[name='document_type']", label=name)
+            page.locator(f'#dynamic-fields h2:has-text("{mid}")').wait_for(state="visible", timeout=10000)
+
+            # Vertikale Reihenfolge: Dauer (frei) < Gruppen-Header < Straßenkontakt (frei).
+            dauer_y = page.locator('#dynamic-fields [name="dauer"]').bounding_box()["y"]
+            header_y = page.locator(f'#dynamic-fields h2:has-text("{mid}")').bounding_box()["y"]
+            strasse_y = page.locator('#dynamic-fields [name="strassenkontakt"]').bounding_box()["y"]
+            assert dauer_y < header_y < strasse_y, (
+                f"Event-Formular nicht interleaved: dauer={dauer_y}, header={header_y}, strasse={strasse_y}"
+            )
+        finally:
+            _delete_doctype(page, base_url, pk)
 
 
 # ---------------------------------------------------------------------------

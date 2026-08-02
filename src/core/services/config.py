@@ -226,6 +226,10 @@ def save_field_group(request, form, *, doc_type: DocumentType, creating: bool) -
     obj = form.save(commit=False)
     if creating:
         obj.document_type = doc_type
+        # #1713: neue Gruppe ans ENDE der globalen Block-Sequenz — konsistent zu
+        # add_field_to_doctype. Ohne das bekäme sie den Modell-Default sort_order=0
+        # und spränge vor bestehende freie Felder/Gruppen an den Anfang.
+        obj.sort_order = _next_block_position(doc_type)
     obj.save()
     action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
     log_audit_event(
@@ -312,13 +316,8 @@ def add_field_to_doctype(
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."))
 
     if field_group is None:
-        # Ende der globalen Block-Sequenz = max(Gruppen-Position, freie-Feld-Position) + 1.
-        group_max = FieldGroup.objects.filter(document_type=doc_type).aggregate(m=Max("sort_order"))["m"]
-        free_max = DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).aggregate(
-            m=Max("sort_order")
-        )["m"]
-        candidates = [value for value in (group_max, free_max) if value is not None]
-        next_order = 0 if not candidates else max(candidates) + 1
+        # Ende der globalen Block-Sequenz (max Blockposition + 1).
+        next_order = _next_block_position(doc_type)
     else:
         current_max = DocumentTypeField.objects.filter(
             document_type=doc_type,
@@ -517,6 +516,21 @@ def _validate_id_set(ordered_ids, existing_ids) -> None:
 # Helfer liefern die kanonische Blockreihenfolge, die Board/Formular/Offline/
 # Feed gemeinsam nutzen (statt die Ordnungslogik mehrfach zu duplizieren).
 # ---------------------------------------------------------------------------
+
+
+def _next_block_position(doc_type: DocumentType) -> int:
+    """Nächste freie Position am Ende der globalen Block-Sequenz (#1713).
+
+    Maximum über ALLE Top-Level-Blockpositionen (Gruppen **und** ungruppierte
+    Felder) + 1; ``0`` wenn der Typ noch keine Blöcke hat. Gemeinsam genutzt von
+    :func:`add_field_to_doctype` (ungruppiert) und :func:`save_field_group` (neu).
+    """
+    group_max = FieldGroup.objects.filter(document_type=doc_type).aggregate(m=Max("sort_order"))["m"]
+    free_max = DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True).aggregate(
+        m=Max("sort_order")
+    )["m"]
+    candidates = [value for value in (group_max, free_max) if value is not None]
+    return 0 if not candidates else max(candidates) + 1
 
 
 def _block_sort_key(block: dict) -> tuple:
