@@ -16,7 +16,9 @@ Abgedeckt:
   encrypted-Slug wird nachverschluesselt (nur mit ``document_type``).
 * **document_type=None** — ``data_json`` bleibt unangetastet, kein Crash.
 * **E17** — ein soft-deleted Client wird MIT rotiert (``FacilityScopedManager``
-  filtert ``is_deleted`` nicht, anders als bei Events).
+  filtert ``is_deleted`` nicht) — und seit #1724 auch ein soft-deleted Event
+  (der bisherige ``is_deleted=False``-Filter in ``_reencrypt_events`` ist
+  entfernt).
 * **--dry-run** — zaehlt, schreibt nichts.
 * **Ausgabezeile** — neue Zaehler ("X clients, Y cases").
 """
@@ -28,8 +30,9 @@ import pytest
 from django.core.management import CommandError, call_command
 from django.db import connection
 from django.test import override_settings
+from django.utils import timezone
 
-from core.models import Case, Client
+from core.models import Case, Client, Event
 from core.services.file_vault import generate_key, is_encrypted_value, safe_decrypt
 
 
@@ -45,6 +48,14 @@ def raw_case_data_json(case) -> dict:
     """``core_case.data_json`` direkt aus der DB-Zeile (ohne ORM-Cache)."""
     with connection.cursor() as cur:
         cur.execute("SELECT data_json FROM core_case WHERE id = %s", [str(case.pk)])
+        raw = cur.fetchone()[0]
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def raw_event_data_json(event) -> dict:
+    """``core_event.data_json`` direkt aus der DB-Zeile (ohne ORM-Cache)."""
+    with connection.cursor() as cur:
+        cur.execute("SELECT data_json FROM core_event WHERE id = %s", [str(event.pk)])
         raw = cur.fetchone()[0]
     return json.loads(raw) if isinstance(raw, str) else raw
 
@@ -183,6 +194,48 @@ def test_reencrypt_soft_deleted_client_is_rotated(facility, doc_type_client_prof
     client.refresh_from_db()
     assert client.is_deleted is True, "Soft-Delete darf durch die Rotation nicht rueckgaengig gemacht werden"
     stored = raw_client_data_json(client)["diagnose"]
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+        assert safe_decrypt(stored) == "Geloescht aber rotiert"
+
+
+@pytest.mark.django_db
+def test_reencrypt_soft_deleted_event_is_rotated(facility, client_identified, doc_type_crisis, staff_user):
+    """E17 (Refs #1724): ein soft-deleted Event mit noch vorhandenem ``data_json``
+    (Altbestand von vor der Retention-Leerung, oder direkt in der DB soft-deleted)
+    wird von ``reencrypt_fields`` MIT rotiert.
+
+    Der reguläre Soft-Delete-Pfad (``soft_delete_event``) leert ``data_json``
+    heute mit — hier stellen wir den Altbestands-Zustand direkt her
+    (``is_deleted=True`` UND unveraendertes ``data_json``), den der reguläre
+    Pfad so nicht mehr erzeugt, der aber in der DB liegen bleiben kann
+    (bereits soft-deleted VOR Einfuehrung dieser Leerung, oder Restore-Faelle).
+    """
+    old_key = generate_key()
+    new_key = generate_key()
+
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={"notiz-krise": "Geloescht aber rotiert"},
+            created_by=staff_user,
+        )
+        # Altbestand simulieren: soft-deleted, aber ``data_json`` bleibt (anders
+        # als der heutige ``soft_delete_event``, der es leert) — genau die
+        # Konstellation, die die E17-Luecke betrifft.
+        Event.objects.filter(pk=event.pk).update(is_deleted=True)
+
+    assert Event.objects.get(pk=event.pk).is_deleted is True
+
+    keys = f"{new_key},{old_key}"
+    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+        call_command("reencrypt_fields", stdout=StringIO())
+
+    event.refresh_from_db()
+    assert event.is_deleted is True, "Soft-Delete darf durch die Rotation nicht rueckgaengig gemacht werden"
+    stored = raw_event_data_json(event)["notiz-krise"]
     with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
         assert safe_decrypt(stored) == "Geloescht aber rotiert"
 

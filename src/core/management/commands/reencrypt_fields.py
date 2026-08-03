@@ -6,6 +6,11 @@ A4.4 (Refs #1024): Für ``Event.data_json`` werden zusätzlich Plaintext-PII-Fel
 vor Einführung der Feldverschlüsselung. M2/P6 (Refs #1058): dasselbe Heal-Muster
 gilt fuer ``Client.data_json``/``Case.data_json`` (``DynamicDataEncryptionMixin``,
 P4a/P4b/P5) — sonst entstuende eine Rotationsluecke fuer die neuen Modellgruppen.
+
+E17-Nachzug (Refs #1724): Event/Client/Case rotieren ALLE Rows inkl.
+soft-deleted (kein ``is_deleted``-Filter) — der fruehere ``is_deleted=False``-
+Filter bei Events liess soft-deleted Events mit noch vorhandenem ``data_json``
+dauerhaft unter einem ausrangierten Schluessel liegen.
 """
 
 from django.core.management.base import BaseCommand, CommandError
@@ -86,8 +91,21 @@ class Command(BaseCommand):
         )
 
     def _reencrypt_events(self, dry_run: bool) -> int:
+        """M2/P6-Nachzug (Refs #1724, Entscheid E17): rotiert ALLE ``Event``-Rows
+        inkl. soft-deleted.
+
+        Der bisherige ``is_deleted=False``-Filter war eine bewusst offen gelassene
+        Rotations-Luecke (dokumentiert als "bekannte Luecke" in
+        ``docs/admin-guide.md``): ein soft-deleted Event mit noch vorhandenem
+        ``data_json`` (z.B. Altbestand von vor Einfuehrung der ``data_json``-
+        Leerung in ``soft_delete_event``, oder Restore-Faelle) blieb dauerhaft
+        unter einem ausrangierten Schluessel liegen. ``EventManager``/
+        ``FacilityScopedManager`` filtert ``is_deleted`` nicht, ``Event.objects``
+        deckt damit ohne Extra-Filter bereits den vollen Bestand ab — analog
+        :meth:`_reencrypt_clients`/:meth:`_reencrypt_cases`.
+        """
         updated = 0
-        for event in Event.objects.filter(is_deleted=False).iterator(chunk_size=500):
+        for event in Event.objects.iterator(chunk_size=500):
             new_data, changed = _reencrypt_data_json(event.data_json)
             # A4.4 (Refs #1024): zusätzlich Plaintext-PII-Felder (laut
             # document_type ``is_encrypted=True``) nachverschlüsseln — heilt
@@ -108,10 +126,10 @@ class Command(BaseCommand):
 
         ``FacilityScopedManager`` filtert ``is_deleted`` nicht (anders als eine
         ``SoftDeletableFacilityScopedManager``-Variante) — ``Client.objects``
-        deckt damit ohne Extra-Filter bereits den vollen Bestand ab. Anders als
-        bei Events (bewusst ``is_deleted=False``, bekannte Lücke, hier nicht
-        angefasst) sollen Personen-Altbestände nicht dauerhaft unter einem
-        ausrangierten Schlüssel liegen bleiben, nur weil sie gelöscht sind.
+        deckt damit ohne Extra-Filter bereits den vollen Bestand ab. Personen-
+        Altbestände sollen nicht dauerhaft unter einem ausrangierten Schlüssel
+        liegen bleiben, nur weil sie gelöscht sind (seit #1724 gilt dasselbe
+        fuer Events, siehe :meth:`_reencrypt_events`).
         """
         updated = 0
         for client in Client.objects.iterator(chunk_size=500):
