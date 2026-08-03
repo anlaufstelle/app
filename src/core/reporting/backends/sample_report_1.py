@@ -23,6 +23,7 @@ from collections import OrderedDict
 from typing import Literal
 
 from django.db.models import Count, Q
+from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
@@ -38,6 +39,14 @@ from core.services.dashboard.external_report import _get_threshold, suppress_sam
 # ``ban``/``note``/NULL fehlen bewusst — sie gehoeren nicht in den Bericht.
 # Zweitschlüssel ``DocumentType.slug`` (seit M2 vorhanden) folgt als eigenes
 # Folge-Issue — Integrationspunkt.
+#
+# Die Kategoriennamen bleiben bewusst **deutscher Klartext** und werden NICHT
+# ``gettext_lazy`` (Refs #1744): sie landen als Schluessel in
+# ``summary["by_category"]`` und damit im persistierten Snapshot-Payload
+# (``StatisticsSnapshot.backend_data``) sowie im monatsuebergreifenden Merge
+# (``_merge_sample_report_1_stats``). Ein locale-abhaengiger Wert machte den
+# gespeicherten Bestand von der Sprache des schreibenden Prozesses abhaengig —
+# zwei Monate, zwei Kategoriennamen, kein Merge.
 CATEGORY_MAP = {
     "contact": "Kontakte",
     "crisis": "Beratung",
@@ -71,9 +80,15 @@ _UNMAPPED_Q = Q(document_type__system_type__isnull=True) | ~Q(document_type__sys
 # ``validate_completeness`` duerfen beides nennen (Snapshot-/Rohpfad hat keinen
 # externen Konsumenten) — im Export waere die Bezugsgroesse dagegen der Hebel
 # fuer die komplementaere Rueckrechnung (siehe ``prepare_export``).
+#
+# Die Vorlagen sind ``gettext_lazy`` (Refs #1744) und werden mit ``format_lazy``
+# gefuellt — nicht mit ``.format()``: auf einem Lazy-Proxy waere ``.format()``
+# eine **eager** Auswertung, die die Uebersetzung schon in
+# ``prepare_export`` festschriebe statt erst beim Rendern. Der Platzhalter
+# ``{count}`` ist Teil der msgid und muss in jeder Uebersetzung stehen bleiben.
 _EXPORT_MESSAGES = {
-    "unmapped_system_types": "{count} Ereignisse ohne Berichtszuordnung im Zeitraum",
-    "events_without_client": (
+    "unmapped_system_types": _("{count} Ereignisse ohne Berichtszuordnung im Zeitraum"),
+    "events_without_client": _(
         "{count} Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten"
     ),
 }
@@ -88,9 +103,15 @@ _EXPORT_MESSAGES = {
 # fuer einen Wert eingesetzt wird, den es gar nicht gibt (``_hide_term``).
 # Waeren beide Faelle unterscheidbar, verriete der Wortlaut selbst, ob die
 # Luecke > 0 ist — und damit genau das, was unterdrueckt werden soll.
+#
+# **Uebersetzungshinweis (Refs #1744):** Die Ununterscheidbarkeit gilt je
+# ``code`` und muss in **jeder** Sprache halten. Weil Platzhalter- und
+# Degradations-Fassung dieselbe Konstante benutzen, ist das strukturell
+# gesichert — eine Uebersetzung kann sie nicht auseinanderziehen, solange sie
+# keine Ziffer und keine Bezugsgroesse ergaenzt.
 _SUPPRESSED_MESSAGES = {
-    "unmapped_system_types": "Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-Anonymität)",
-    "events_without_client": (
+    "unmapped_system_types": _("Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-Anonymität)"),
+    "events_without_client": _(
         "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-Anonymität) "
         "— nicht in Altersgruppen/Personenzahl enthalten"
     ),
@@ -109,7 +130,7 @@ _IDENTITY_CODES = ("events_without_client", "unmapped_system_types")
 
 # Fail-safe fuer kuenftige Checks ohne eigenen Ersatztext: lieber unspezifisch
 # als eine Kleinstfallzahl im Export.
-_SUPPRESSED_FALLBACK = "Angabe unterdrückt (k-Anonymität)"
+_SUPPRESSED_FALLBACK = _("Angabe unterdrückt (k-Anonymität)")
 
 
 def _prepare_issue(issue: CompletenessIssue, threshold: int, complements: dict[str, int]) -> CompletenessIssue:
@@ -134,7 +155,7 @@ def _prepare_issue(issue: CompletenessIssue, threshold: int, complements: dict[s
             message=_SUPPRESSED_MESSAGES.get(issue.code, _SUPPRESSED_FALLBACK),
             count=None,
         )
-    return dataclasses.replace(issue, message=template.format(count=issue.count))
+    return dataclasses.replace(issue, message=format_lazy(template, count=issue.count))
 
 
 def _term_status(issues: list[CompletenessIssue], code: str) -> str:
@@ -236,8 +257,8 @@ class SampleReport1Backend(DatasetBackend):
     def get_field_specs(self) -> list[FieldSpec]:
         """Spalten der tabellarischen Projektion (eine Zeile je Kategorie)."""
         return [
-            FieldSpec("category", "Kategorie"),
-            FieldSpec("count", "Anzahl"),
+            FieldSpec("category", _("Kategorie")),
+            FieldSpec("count", _("Anzahl")),
         ]
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
@@ -319,12 +340,20 @@ class SampleReport1Backend(DatasetBackend):
         issues: list[CompletenessIssue] = []
 
         # (a) Dokumenttypen ohne Berichtszuordnung (inkl. system_type NULL/leer).
+        #
+        # ``format_lazy`` statt f-String (Refs #1744): der Text erscheint in
+        # Panel und JSON-/XML-Export und muss der Sprache des Empfaengers
+        # folgen. Die Platzhalter sind benannt — eine Uebersetzung darf sie
+        # umstellen, aber nicht weglassen.
         if counts["unmapped_events"]:
             issues.append(
                 CompletenessIssue(
                     "unmapped_system_types",
-                    f"{counts['unmapped_events']} Ereignisse in {counts['unmapped_types']} "
-                    "Dokumenttypen ohne Berichtszuordnung im Zeitraum",
+                    format_lazy(
+                        _("{events} Ereignisse in {types} Dokumenttypen ohne Berichtszuordnung im Zeitraum"),
+                        events=counts["unmapped_events"],
+                        types=counts["unmapped_types"],
+                    ),
                     "warning",
                     count=counts["unmapped_events"],
                 )
@@ -337,8 +366,15 @@ class SampleReport1Backend(DatasetBackend):
             issues.append(
                 CompletenessIssue(
                     "events_without_client",
-                    f"{counts['without_client']} von {counts['events_in_period']} Ereignissen im Zeitraum "
-                    f"ohne Personenbezug ({share} %) — nicht in Altersgruppen/Personenzahl enthalten",
+                    format_lazy(
+                        _(
+                            "{without_client} von {events_in_period} Ereignissen im Zeitraum ohne "
+                            "Personenbezug ({share} %) — nicht in Altersgruppen/Personenzahl enthalten"
+                        ),
+                        without_client=counts["without_client"],
+                        events_in_period=counts["events_in_period"],
+                        share=share,
+                    ),
                     "info",
                     count=counts["without_client"],
                 )

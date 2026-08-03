@@ -118,7 +118,13 @@ class FieldSpec:
 
 `key` ist der Dict-Schlüssel in `records` **und** der XML-Elementname eines Feldes. Schlüssel, die kein gültiger XML-Elementname sind, werden vom XML-Renderer als `<entry key="…">` ausgegeben statt als eigenes Element — das Format bleibt wohlgeformt, wird aber unhandlicher. Halte dich an `^[a-z0-9_]+$` **und beginne nicht mit einer Ziffer**, dann tritt der Fall nicht ein: Der Renderer prüft gegen `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../src/core/reporting/export.py)), ein Schlüssel wie `2026_total` fiele also trotz gültigem Slug-Format in den `entry`-Fallback.
 
-`label` ist die CSV-Kopfzeile und die Tabellenüberschrift im Panel. Zulässig ist **deutscher Klartext oder `gettext_lazy`** — anders als bei `name` fordert der Vertrag hier nichts. Beide ausgelieferten Backends verwenden heute Klartext; die Tabellenköpfe („Kategorie", „Anzahl", …) bleiben in der englischen Oberfläche deshalb deutsch. Die vollständige i18n der Backend-Strings — Labels **und** Completeness-Meldungen — ist Folgearbeit (#1744).
+`label` ist die CSV-Kopfzeile, die Tabellenüberschrift im Panel und das `label` in `field_specs` des JSON-Exports. **Deklariere es als `gettext_lazy`** (#1744) — genau wie `name`. Deutscher Klartext stünde in der englischen Oberfläche mitten in übersetztem Text; beide ausgelieferten Backends sind entsprechend umgestellt. Die Renderer casten selbst nach `str` (CSV über `_sanitize_csv_cell`, JSON explizit an der Payload-Grenze, XML über `_xml_safe`), du musst also nirgends selbst casten.
+
+**Übersetzbare Strings im Backend — die drei Regeln:**
+
+1. **Labels und Meldungen:** `gettext_lazy`. Bezifferte Meldungen baust du mit [`django.utils.text.format_lazy`](https://docs.djangoproject.com/en/stable/ref/utils/#django.utils.text.format_lazy) und **benannten** Platzhaltern, nicht mit f-Strings und nicht mit `.format()` auf dem Proxy — `.format()` wertet den Proxy **eager** aus und schreibt die Sprache fest, bevor gerendert wird.
+2. **Was nicht übersetzt wird: Daten.** Werte, die in `summary`/`records` landen und (bei `snapshot_enabled`) persistiert oder monatsübergreifend gemerged werden, bleiben sprachunabhängig. Im Sachbericht sind das die Kategoriennamen aus `CATEGORY_MAP`: Ein locale-abhängiger Schlüssel machte den gespeicherten Snapshot-Bestand von der Sprache des schreibenden Prozesses abhängig — zwei Monate, zwei Kategoriennamen, kein Merge. Dieselbe Regel gilt für maschinenlesbare Codes (`CompletenessIssue.code`, `data_source`).
+3. **K-Anon-Meldungen bleiben ununterscheidbar — auch übersetzt.** Platzhalter- und Degradations-Fassung eines `code` müssen wortgleich bleiben (siehe [§ 6](#6-k-anonymität--der-prepare_export-hook)). Das ist strukturell gesichert, weil beide Pfade dieselbe Konstante benutzen; eine Übersetzung darf ihr aber keine Ziffer und keine Bezugsgröße hinzufügen.
 
 ### 2.4 `CompletenessIssue`
 
@@ -175,14 +181,14 @@ Das ist der **vollständige** Import-Kopf von `example.py` — die Auszüge in S
 ```python
     def get_field_specs(self) -> list[FieldSpec]:
         return [
-            FieldSpec("document_type", "Dokumenttyp"),
-            FieldSpec("category", "Kategorie"),
-            FieldSpec("system_type", "System-Typ"),
-            FieldSpec("count", "Anzahl"),
+            FieldSpec("document_type", _("Dokumenttyp")),
+            FieldSpec("category", _("Kategorie")),
+            FieldSpec("system_type", _("System-Typ")),
+            FieldSpec("count", _("Anzahl")),
         ]
 ```
 
-Die Reihenfolge ist die Spaltenreihenfolge im CSV und im Panel.
+Die Reihenfolge ist die Spaltenreihenfolge im CSV und im Panel. Die Labels sind `gettext_lazy` — siehe die drei i18n-Regeln in [§ 2.3](#23-fieldspec).
 
 ### Schritt 3 — Datensatz bauen
 
@@ -383,7 +389,7 @@ Alle drei Formate laufen über `safe_download_response` (RFC-5987-Dateiname, `X-
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> [| k-Anonymität: Zellen < k unterdrückt]
+# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
 Kategorie,Anzahl
 Kontakte,42
 ```
@@ -403,6 +409,8 @@ Kontakte,42
   "date_to": "2026-01-31",
   "generated_at": "2026-02-01T09:00:00+01:00",
   "mode": "rows",
+  "data_source": "live",
+  "data_source_note": "Live-Abfrage zum Erstellungszeitpunkt",
   "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
   "records": [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "contact", "count": 42}],
@@ -415,7 +423,8 @@ Serialisiert mit `DjangoJSONEncoder`, `ensure_ascii=False`, `indent=2`. `complet
 ### XML
 
 ```xml
-<dataset backend="example" date_from="2026-01-01" date_to="2026-01-31" generated_at="…" mode="rows">
+<dataset backend="example" date_from="2026-01-01" date_to="2026-01-31" generated_at="…" mode="rows"
+         data_source="live" data_source_note="Live-Abfrage zum Erstellungszeitpunkt">
   <completeness><issue code="…" severity="warning">…</issue></completeness>
   <summary><total>42</total></summary>
   <records><record><document_type>Kontakt</document_type><count>42</count></record></records>
@@ -447,6 +456,7 @@ Beispiele aus dem Sachbericht:
 - Eine bezifferte Meldung trägt ihre Zahl **zusätzlich** in `count`, sonst kann `prepare_export` sie nicht transformieren und muss sie im Zweifel komplett unterdrücken.
 - Alle Kennzahlen einer Prüfung möglichst in **einer** Aggregation ziehen. `build_dataset` ruft `validate_completeness` mit, und der hybride Snapshot-Pfad ruft `build_dataset` je Monatssegment einmal auf — Einzel-`count()`s vervielfachen sich dort.
 - Für die Export-Fassung eine **ziffernarme** Formulierung vorsehen (ohne Bezugsgröße, ohne Prozentanteil) sowie einen **ziffernfreien** Ersatztext für den Suppressionsfall. Fehlt beides, fällt die Zahl im Export vorsichtshalber ganz weg.
+- Meldungstexte sind **übersetzbar** (`gettext_lazy` bzw. `format_lazy` mit benannten Platzhaltern) — die Regeln stehen in [§ 2.3](#23-fieldspec).
 
 ---
 

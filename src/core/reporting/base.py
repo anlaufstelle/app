@@ -32,11 +32,12 @@ class FieldSpec:
     """Eine Spalten-/Record-Definition fuer die tabellarische Projektion."""
 
     key: str  # stabiler Spalten-/Record-Schlüssel, ^[a-z0-9_]+$
-    # Anzeigename: deutscher Klartext **oder** ``gettext_lazy`` — anders als bei
-    # ``DatasetBackend.name`` fordert der Vertrag hier nichts. Beide
-    # ausgelieferten Backends nutzen heute Klartext, die Tabellenköpfe bleiben
-    # in der EN-Oberfläche also deutsch; die vollständige i18n der
-    # Backend-Strings (Labels, Completeness-Texte) ist Folgearbeit.
+    # Anzeigename: als ``gettext_lazy`` deklarieren (Refs #1744). Der Wert ist
+    # CSV-Kopfzeile, Panel-Tabellenüberschrift und JSON-``field_specs``-Label —
+    # deutscher Klartext stünde in der englischen Oberfläche mitten in
+    # übersetztem Text ("Locale-Leak"). Die Serialisierer casten selbst nach
+    # ``str``; der Typ bleibt ``str``, weil ein ``gettext_lazy``-Proxy sich an
+    # jeder Verwendungsstelle wie ein ``str`` verhält.
     label: str
 
 
@@ -54,7 +55,10 @@ class CompletenessIssue:
     """
 
     code: str  # maschinenlesbar, z. B. "unmapped_system_types"
-    message: str  # menschenlesbar (deutsch)
+    # Menschenlesbar und übersetzbar: ``gettext_lazy`` bzw. ``format_lazy`` für
+    # bezifferte Fassungen (Refs #1744). ``.format()`` auf einem Lazy-Proxy wäre
+    # eine eager Auswertung und schriebe die Sprache zu früh fest.
+    message: str
     severity: Literal["info", "warning"] = "warning"
     count: int | None = None  # Rohwert hinter ``message``; nie serialisiert
 

@@ -150,11 +150,12 @@ def _render_json(
 ) -> bytes:
     """JSON-Aggregat-Payload — kein Streaming, kein CSV-Sanitizing (kein Excel-Kontext).
 
-    ``name`` wird trotzdem explizit ``str()``-gecastet: ``DjangoJSONEncoder``
-    KANN ``gettext_lazy``-Proxys selbst serialisieren (sein ``default()``
-    behandelt ``Promise`` wie ``Decimal``/``UUID`` per ``str(o)``) — der Cast
-    hier ist reine Explizitheit an der Payload-Grenze, keine technische
-    Notwendigkeit.
+    ``name`` und die FieldSpec-Labels werden trotzdem explizit ``str()``-gecastet:
+    ``DjangoJSONEncoder`` KANN ``gettext_lazy``-Proxys selbst serialisieren (sein
+    ``default()`` behandelt ``Promise`` wie ``Decimal``/``UUID`` per ``str(o)``)
+    — der Cast hier ist reine Explizitheit an der Payload-Grenze, keine
+    technische Notwendigkeit. Fuer die (seit #1744 ebenfalls lazyen)
+    Completeness-Meldungen greift genau dieser Encoder-Pfad.
     """
     payload = {
         "backend": backend.slug,
@@ -168,7 +169,9 @@ def _render_json(
         # uebersetzte Kurzform fuer Menschen, die den Payload lesen.
         "data_source": LIVE,
         "data_source_note": str(DATA_SOURCE_NOTES[LIVE]),
-        "field_specs": [{"key": spec.key, "label": spec.label} for spec in backend.get_field_specs()],
+        # ``label`` ist seit #1744 ``gettext_lazy``; der Cast ist — wie bei
+        # ``name`` — Explizitheit an der Payload-Grenze, nicht Notwendigkeit.
+        "field_specs": [{"key": spec.key, "label": str(spec.label)} for spec in backend.get_field_specs()],
         "summary": result.summary,
         "records": result.records,
         "completeness": [
@@ -263,8 +266,15 @@ def _fill_xml_value(element: ET.Element, value: Any) -> None:
         element.text = "" if value is None else _xml_safe(str(value))
 
 
-def _xml_safe(text: str) -> str:
+def _xml_safe(text: Any) -> str:
     """Entfernt in XML 1.0 unzulaessige Codepoints aus ``text``.
+
+    Nimmt bewusst ``Any`` und castet selbst: Backend-Strings sind seit
+    [#1744] ``gettext_lazy``-Proxys, und ``re.sub`` weist die mit
+    ``TypeError: expected string or bytes-like object`` ab. Der Fehler traefe
+    ausgerechnet **nur** den XML-Pfad — CSV (``_sanitize_csv_cell`` castet)
+    und JSON (``DjangoJSONEncoder`` kann ``Promise``) blieben unauffaellig,
+    derselbe Bericht waere in einem Format ein 500er.
 
     ``ElementTree`` escaped beim Serialisieren nur ``&``/``<``/``>`` (bzw.
     zusaetzlich ``"``/``\\t``/``\\n``/``\\r`` in Attributwerten) und schreibt
@@ -279,4 +289,4 @@ def _xml_safe(text: str) -> str:
     ``_sanitize_csv_cell`` im CSV-Pfad greift der Schutz zentral im Renderer,
     nicht in den einzelnen Backends.
     """
-    return _XML_ILLEGAL_RE.sub("", text)
+    return _XML_ILLEGAL_RE.sub("", str(text))

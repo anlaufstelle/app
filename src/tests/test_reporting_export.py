@@ -622,3 +622,71 @@ class TestQuellenausweis:
 
         assert root.attrib["data_source"] == "live"
         assert root.attrib["data_source_note"] == "Live-Abfrage zum Erstellungszeitpunkt"
+
+
+class _LazyBackend(DatasetBackend):
+    """Backend, dessen FieldSpec-Labels UND Completeness-Meldung lazy sind.
+
+    Genau die Bauform, die #1744
+    fuer die ausgelieferten Backends vorschreibt — hier als Dummy, damit die
+    Renderer unabhaengig von den echten Backends gegen Lazy-Strings laufen.
+    """
+
+    slug = "dummy_lazy"
+    name = _("Dummy Lazybericht")
+
+    def get_field_specs(self) -> list[FieldSpec]:
+        return [FieldSpec(key="kategorie", label=_("Kategorie")), FieldSpec(key="anzahl", label=_("Anzahl"))]
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(
+            mode="aggregate",
+            records=[{"kategorie": "Kontakte", "anzahl": 7}],
+            summary={"total": 7},
+            completeness=[CompletenessIssue(code="lazy", message=_("Lücke im Zeitraum"), severity="warning")],
+        )
+
+
+class TestLazyStringsInDenRenderern:
+    """Refs #1744: Backend-Strings werden ``gettext_lazy``. Die Renderer muessen
+    das aushalten — der XML-Pfad ist der scharfe Fall: ``_xml_safe`` arbeitet
+    mit einem kompilierten ``re``-Muster, und ``re.sub`` weist einen
+    Lazy-Proxy mit ``TypeError: expected string or bytes-like object`` ab.
+    Ein Bericht waere damit in CSV und JSON unauffaellig und in XML ein 500er.
+    """
+
+    def test_xml_safe_akzeptiert_lazy_strings(self):
+        from core.reporting.export import _xml_safe
+
+        assert _xml_safe(_("Kategorie")) == "Kategorie"
+
+    def test_xml_export_mit_lazy_labels_und_meldung(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_LazyBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        assert root.find("completeness").find("issue").text == "Lücke im Zeitraum"
+        assert root.find("records").find("record").find("kategorie").text == "Kontakte"
+
+    def test_json_field_spec_labels_sind_gerenderte_strings(self, facility, date_range):
+        """Kein Proxy-Repr im Payload: der Cast muss VOR dem Encoder greifen."""
+        date_from, date_to = date_range
+        response = export_dataset(_LazyBackend(), facility, date_from, date_to, format="json")
+
+        raw = response.content.decode("utf-8")
+        assert '"label": "Kategorie"' in raw
+        payload = json.loads(raw)
+        assert payload["field_specs"] == [
+            {"key": "kategorie", "label": "Kategorie"},
+            {"key": "anzahl", "label": "Anzahl"},
+        ]
+        assert payload["completeness"][0]["message"] == "Lücke im Zeitraum"
+
+    def test_csv_header_rendert_lazy_labels(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_LazyBackend(), facility, date_from, date_to, format="csv")
+        lines = b"".join(response.streaming_content).decode("utf-8").splitlines()
+
+        assert list(csv.reader(lines[1:]))[0] == ["Kategorie", "Anzahl"]

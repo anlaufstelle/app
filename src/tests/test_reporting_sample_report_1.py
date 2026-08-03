@@ -16,6 +16,7 @@ from datetime import date, datetime
 
 import pytest
 from django.utils import timezone
+from django.utils.functional import Promise
 
 from core.models import Client, DocumentType, Event, Facility, Organization, User
 from core.reporting import registry
@@ -1223,3 +1224,73 @@ class TestDiscovery:
         monkeypatch.setattr(registry, "_discovered", False)
 
         assert [b.slug for b in registry.get_backends()] == ["example", "sample-report-1"]
+
+
+class TestBackendStringsSindUebersetzbar:
+    """Refs #1744: FieldSpec-Labels und Vollstaendigkeits-Meldungen sind
+    ``gettext_lazy`` — sonst stehen deutsche Spaltenkoepfe und Meldungstexte
+    mitten in einer englischen Oberflaeche (Leak-Klasse „Locale-Leak").
+
+    Geprueft wird die **Lazyness**, nicht die Uebersetzung: die Kataloge zieht
+    #1745 zentral nach.
+    Ein eager ausgewerteter String waere hier nicht zu unterscheiden von einem
+    deutschen Klartext-Literal — genau deshalb ist der Promise-Typ der Test.
+    """
+
+    def test_field_spec_labels_sind_lazy(self, backend):
+        for spec in backend.get_field_specs():
+            assert isinstance(spec.label, Promise), f"FieldSpec {spec.key!r} traegt Klartext statt gettext_lazy"
+
+    def test_field_spec_labels_bleiben_im_deutschen_wortgleich(self, backend):
+        """Verhaltensparitaet: die Lazyness aendert die deutschen Koepfe nicht."""
+        assert [str(spec.label) for spec in backend.get_field_specs()] == ["Kategorie", "Anzahl"]
+
+    def test_bezifferte_meldungen_sind_lazy(self, backend, parity_daten):
+        issues = backend.validate_completeness(parity_daten, DATE_FROM, DATE_TO)
+
+        assert issues, "Testdaten muessen beide Luecken erzeugen"
+        for issue in issues:
+            assert isinstance(issue.message, Promise), f"Meldung {issue.code!r} ist ein eager f-String"
+
+    def test_export_und_unterdrueckungsfassung_sind_lazy(self, backend, parity_daten):
+        """Beide Transformationsfassungen aus ``prepare_export`` ebenfalls."""
+        result = backend.build_dataset(parity_daten, DATE_FROM, DATE_TO)
+        beziffert = _prepare_issue(result.completeness[0], threshold=1, complements={})
+        unterdrueckt = _prepare_issue(result.completeness[0], threshold=1000, complements={})
+
+        assert isinstance(beziffert.message, Promise)
+        assert isinstance(unterdrueckt.message, Promise)
+
+    def test_category_map_bleibt_bewusst_unuebersetzt(self):
+        """Gegenprobe: die Berichtskategorien duerfen NICHT lazy werden.
+
+        Sie landen als Schluessel in ``summary["by_category"]`` und damit im
+        persistierten Snapshot-Payload (``StatisticsSnapshot.backend_data``)
+        sowie im monatsuebergreifenden Merge. Ein locale-abhaengiger Wert
+        machte den gespeicherten Bestand von der Sprache des schreibenden
+        Prozesses abhaengig — zwei Monate, zwei Kategoriennamen, kein Merge.
+        """
+        for kategorie in CATEGORY_MAP.values():
+            assert isinstance(kategorie, str) and not isinstance(kategorie, Promise)
+
+
+class TestGuardUnterscheidbarkeitUnterLazyStrings:
+    """Refs #1744 + #1743-Vorarbeit: die Ununterscheidbarkeits-Invariante
+    (Platzhalter-Meldung ≡ degradierte Meldung, siehe
+    ``TestGuardPlatzhalterUndDegradierteMeldungGleich``) muss auch **nach dem
+    Rendern** halten. Der bestehende Guard vergleicht Promise-Objekte; deren
+    ``__eq__`` castet zwar, aber der Vergleich der gerenderten Zeichenketten
+    ist die Aussage, auf die es ankommt: Was ein Empfaenger liest, darf nicht
+    verraten, ob die Luecke > 0 ist.
+    """
+
+    @pytest.mark.parametrize("code", list(_IDENTITY_CODES))
+    def test_gerenderte_texte_sind_wortgleich(self, code):
+        platzhalter = _hide_term([], code)[0]
+        rohfassung = CompletenessIssue(code, "Beliebiger Rohtext mit 3 Ereignissen", _ISSUE_SEVERITIES[code], count=3)
+        degradiert = _prepare_issue(rohfassung, threshold=100, complements={})
+
+        assert str(platzhalter.message) == str(degradiert.message)
+        # Und weiterhin ohne jede Ziffer — sonst liesse sich die unterdrueckte
+        # Zahl aus dem Wortlaut zurueckrechnen.
+        assert not any(char.isdigit() for char in str(platzhalter.message))

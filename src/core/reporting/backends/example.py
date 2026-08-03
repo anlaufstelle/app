@@ -37,11 +37,14 @@ class ExampleBackend(DatasetBackend):
     snapshot_enabled = False
 
     def get_field_specs(self) -> list[FieldSpec]:
+        # Labels als ``gettext_lazy`` (Refs #1744) — die Copy-Vorlage macht
+        # vor, was der Vertrag will: sonst uebernimmt jedes abgeleitete
+        # Backend deutschen Klartext in seine Spaltenkoepfe.
         return [
-            FieldSpec("document_type", "Dokumenttyp"),
-            FieldSpec("category", "Kategorie"),
-            FieldSpec("system_type", "System-Typ"),
-            FieldSpec("count", "Anzahl"),
+            FieldSpec("document_type", _("Dokumenttyp")),
+            FieldSpec("category", _("Kategorie")),
+            FieldSpec("system_type", _("System-Typ")),
+            FieldSpec("count", _("Anzahl")),
         ]
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:

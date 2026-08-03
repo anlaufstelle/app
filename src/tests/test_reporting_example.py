@@ -15,6 +15,7 @@ from datetime import timedelta
 import pytest
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.functional import Promise
 
 from core.models import DocumentType, Event
 from core.reporting import registry
@@ -74,6 +75,13 @@ class TestBackendMetadaten:
             FieldSpec("system_type", "System-Typ"),
             FieldSpec("count", "Anzahl"),
         ]
+
+    def test_field_spec_labels_sind_lazy(self, backend):
+        """Refs #1744: die Copy-Vorlage muss vormachen, was der Vertrag will —
+        wer sie kopiert, uebernimmt sonst deutschen Klartext in die Spaltenkoepfe.
+        """
+        for spec in backend.get_field_specs():
+            assert isinstance(spec.label, Promise), f"FieldSpec {spec.key!r} traegt Klartext statt gettext_lazy"
 
 
 class TestBuildDataset:

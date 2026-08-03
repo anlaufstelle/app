@@ -121,7 +121,13 @@ class FieldSpec:
 
 `key` is the dict key inside `records` **and** the XML element name of a field. Keys that are not valid XML element names are emitted by the XML renderer as `<entry key="…">` instead of as an element of their own — the format stays well-formed but becomes more awkward to consume. Stick to `^[a-z0-9_]+$` **and do not start with a digit**, then the case never arises: the renderer validates against `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../../src/core/reporting/export.py)), so a key such as `2026_total` would fall back to `entry` despite being a valid slug.
 
-`label` is the CSV header cell and the table heading in the panel. **German plain text or `gettext_lazy`** are both allowed — unlike for `name`, the contract demands nothing here. Both shipped backends currently use plain text, so the table headings ("Kategorie", "Anzahl", …) stay German in the English interface as well. Full i18n of the backend strings — labels **and** completeness messages — is follow-up work (#1744).
+`label` is the CSV header cell, the table heading in the panel and the `label` inside `field_specs` of the JSON export. **Declare it as `gettext_lazy`** (#1744) — exactly like `name`. German plain text would sit in the middle of translated text in the English interface; both shipped backends have been converted accordingly. The renderers cast to `str` themselves (CSV via `_sanitize_csv_cell`, JSON explicitly at the payload boundary, XML via `_xml_safe`), so you never need to cast.
+
+**Translatable strings in a backend — the three rules:**
+
+1. **Labels and messages:** `gettext_lazy`. Build numbered messages with [`django.utils.text.format_lazy`](https://docs.djangoproject.com/en/stable/ref/utils/#django.utils.text.format_lazy) and **named** placeholders, not with f-strings and not with `.format()` on the proxy — `.format()` evaluates the proxy **eagerly** and pins the language before rendering.
+2. **What is not translated: data.** Values that end up in `summary`/`records` and are persisted or merged across months (for `snapshot_enabled` backends) stay language-independent. In the activity report those are the category names in `CATEGORY_MAP`: a locale-dependent key would make the stored snapshot depend on the language of the writing process — two months, two category names, no merge. The same rule applies to machine-readable codes (`CompletenessIssue.code`, `data_source`).
+3. **K-anonymity messages stay indistinguishable — in translation too.** The placeholder and the degraded variant of a `code` must remain word-identical (see [§ 6](#6-k-anonymity--the-prepare_export-hook)). That is structurally guaranteed because both paths use the same constant; a translation must not add a digit or a reference quantity to it.
 
 ### 2.4 `CompletenessIssue`
 
@@ -178,14 +184,14 @@ This is the **complete** import header of `example.py` — the excerpts in steps
 ```python
     def get_field_specs(self) -> list[FieldSpec]:
         return [
-            FieldSpec("document_type", "Dokumenttyp"),
-            FieldSpec("category", "Kategorie"),
-            FieldSpec("system_type", "System-Typ"),
-            FieldSpec("count", "Anzahl"),
+            FieldSpec("document_type", _("Dokumenttyp")),
+            FieldSpec("category", _("Kategorie")),
+            FieldSpec("system_type", _("System-Typ")),
+            FieldSpec("count", _("Anzahl")),
         ]
 ```
 
-The order is the column order in the CSV and in the panel.
+The order is the column order in the CSV and in the panel. The labels are `gettext_lazy` — see the three i18n rules in [§ 2.3](#23-fieldspec).
 
 ### Step 3 — Build the dataset
 
@@ -386,7 +392,7 @@ All three formats go through `safe_download_response` (RFC 5987 file name, `X-Co
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> [| k-Anonymität: Zellen < k unterdrückt]
+# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
 Kategorie,Anzahl
 Kontakte,42
 ```
@@ -406,6 +412,8 @@ Kontakte,42
   "date_to": "2026-01-31",
   "generated_at": "2026-02-01T09:00:00+01:00",
   "mode": "rows",
+  "data_source": "live",
+  "data_source_note": "Live-Abfrage zum Erstellungszeitpunkt",
   "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
   "records": [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "contact", "count": 42}],
@@ -418,7 +426,8 @@ Serialized with `DjangoJSONEncoder`, `ensure_ascii=False`, `indent=2`. `complete
 ### XML
 
 ```xml
-<dataset backend="example" date_from="2026-01-01" date_to="2026-01-31" generated_at="…" mode="rows">
+<dataset backend="example" date_from="2026-01-01" date_to="2026-01-31" generated_at="…" mode="rows"
+         data_source="live" data_source_note="Live-Abfrage zum Erstellungszeitpunkt">
   <completeness><issue code="…" severity="warning">…</issue></completeness>
   <summary><total>42</total></summary>
   <records><record><document_type>Kontakt</document_type><count>42</count></record></records>
@@ -450,6 +459,7 @@ Examples from the activity report:
 - A quantified notice carries its number **additionally** in `count`; otherwise `prepare_export` cannot transform it and has to suppress it entirely when in doubt.
 - Pull all metrics of a check in **one** aggregation if possible. `build_dataset` calls `validate_completeness` along with it, and the hybrid snapshot path calls `build_dataset` once per monthly segment — individual `count()` calls multiply there.
 - Provide a **low-digit** wording for the export version (without reference quantity, without percentage) as well as a **digit-free** replacement text for the suppression case. If both are missing, the number is dropped from the export as a precaution.
+- Message texts are **translatable** (`gettext_lazy`, or `format_lazy` with named placeholders for numbered variants) — the rules are in [§ 2.3](#23-fieldspec).
 
 ---
 
@@ -518,4 +528,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 2c9f5acfc4c61ddb8f065fda0653b38b42e40553 -->
+<!-- source-hash: 42d71a193d6e20539dce871025b8bcc33672cd79 -->
