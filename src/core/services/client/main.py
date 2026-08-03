@@ -281,6 +281,65 @@ def _redact_client_deletion_request(client) -> None:
     ).update(reason="[Anonymisiert]")
 
 
+def _redact_retention_proposals(event_ids: list) -> None:
+    """Redigiere das Klartext-Pseudonym in ``RetentionProposal.details`` (Refs #1751, Punkt 3).
+
+    ``build_proposal_details`` schreibt Pseudonym und Kontaktstufe des
+    Klienten in das JSON-Feld ``details``. ``cleanup_stale_proposals`` raeumt
+    nur Vorschlaege **geloeschter** Events ab — ein Klient kann aber mit noch
+    lebenden Events anonymisiert werden (Papierkorb-Ablauf), dessen
+    Vorschlaege behielten dann das Original-Pseudonym.
+
+    Nur der Freitext geht raus: ``occurred_at``, ``document_type`` und
+    ``contact_stage`` bleiben, weil sie der Nachweis-Trail des
+    Loeschvorschlags braucht — ``contact_stage`` ist ein Enum-Bucket ohne
+    Personenbezug und bleibt aus demselben Grund stehen, aus dem
+    ``k_anonymize_client`` ihn an der Client-Zeile behaelt.
+    """
+    from core.models.retention import RetentionProposal
+
+    if not event_ids:
+        return
+    proposals = RetentionProposal.objects.filter(
+        target_type=RetentionProposal.TargetType.EVENT,
+        target_id__in=event_ids,
+    )
+    for proposal in proposals.iterator():
+        details = proposal.details or {}
+        if "pseudonym" not in details:
+            continue
+        proposal.details = {**details, "pseudonym": "[Anonymisiert]"}
+        proposal.save(update_fields=["details"])
+
+
+def _redact_legal_holds(client, event_ids: list) -> None:
+    """Redigiere ``LegalHold.reason`` fuer Client- und Event-Ziele (Refs #1751, Punkt 4).
+
+    ``reason`` ist bestimmungsgemaess Freitext mit Fall-/Klientenkontext und
+    kannte bisher **keinen** Redaktions- oder Pruning-Pfad: abgelaufene und
+    aufgehobene Holds blieben als Zeilen fuer immer stehen.
+
+    Redigiert wird nur der Freitext — Ziel, Fristen, Ersteller und
+    Aufhebungs-Metadaten bleiben fuer den Nachweis-Trail erhalten (die Zeile
+    belegt weiterhin, DASS eine Aufbewahrungspflicht bestand).
+
+    Hinweis zur Reichweite: ein **aktiver** Hold blockiert die Anonymisierung
+    ueber ``anonymize_eligible_soft_deleted_clients`` (Refs #1066), sodass in
+    der Praxis nur aufgehobene/abgelaufene Holds hier ankommen. Der Filter
+    unterscheidet trotzdem nicht nach Aktivitaet: waere ein aktiver Hold
+    vorhanden, waere bereits die Anonymisierung selbst der Fehler — nicht
+    diese Redaktion.
+    """
+    from django.db.models import Q
+
+    from core.models.retention import LegalHold
+
+    targets = Q(target_type="Client", target_id=client.pk)
+    if event_ids:
+        targets |= Q(target_type="Event", target_id__in=event_ids)
+    LegalHold.objects.filter(facility=client.facility).filter(targets).update(reason="[Anonymisiert]")
+
+
 def _redact_activities(client, event_ids: list) -> None:
     """Redigiere ``Activity.summary`` fuer Client-, Event-, WorkItem- und Case-Targets.
 
@@ -366,6 +425,9 @@ def anonymize_client(client, user=None):
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
+    - ``RetentionProposal.details["pseudonym"]`` der Löschvorschläge dieser
+      Events und ``LegalHold.reason`` für Client-/Event-Ziele (Refs #1751) —
+      auch hier bleibt die Nachweis-Metadatenspur unangetastet.
     - ``Activity.summary`` für Client-, Event-, WorkItem- und Case-Targets —
       der Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067),
       die WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090) und
@@ -383,6 +445,8 @@ def anonymize_client(client, user=None):
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
     _redact_client_deletion_request(client)
+    _redact_retention_proposals(event_ids)
+    _redact_legal_holds(client, event_ids)
     _redact_activities(client, event_ids)
 
     logger.info(

@@ -188,7 +188,10 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         Episode,
         EventHistory,
         FieldTemplate,
+        LegalHold,
+        RetentionProposal,
     )
+    from core.retention.proposals import build_proposal_details, create_proposal
     from core.services.case import close_case, create_case, create_goal, create_milestone, create_workitem
     from core.services.client import (
         approve_client_deletion,
@@ -355,6 +358,35 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     )
     upload = SimpleUploadedFile("RESIDUEPROBE-Anhang.pdf", PDF_MINIMAL, content_type="application/pdf")
     attachment = store_encrypted_file(facility, upload, ft_anhang, event, admin_user)
+
+    # 5c) Loeschvorschlag zum Event (core_retentionproposal.details). Ueber den
+    #     echten Builder, damit das Pseudonym so im JSON landet wie im Betrieb
+    #     (Refs #1751, Punkt 3). Die Tabelle war als ``pii`` klassifiziert,
+    #     wurde von der Fixture aber nie befuellt.
+    create_proposal(
+        facility,
+        RetentionProposal.TargetType.EVENT,
+        event.pk,
+        timezone.localdate(),
+        build_proposal_details(event),
+        "identified",
+    )
+
+    # 5d) Aufgehobener Legal Hold auf dem Event (core_legalhold.reason). Bewusst
+    #     ein **dismisster** Hold: ein aktiver Hold wuerde die Anonymisierung
+    #     korrekterweise blockieren (Refs #1066) und die Sweeps damit entwerten.
+    #     Genau diese Alt-Zeilen sind der Befund aus #1751 (Punkt 4) — sie
+    #     bleiben sonst fuer immer mit Klartext-Begruendung stehen.
+    hold = LegalHold.objects.create(
+        facility=facility,
+        target_type="Event",
+        target_id=event.pk,
+        reason="RESIDUEPROBE-Hold-Begruendung",
+        created_by=admin_user,
+    )
+    hold.dismissed_at = timezone.now()
+    hold.dismissed_by = lead_user
+    hold.save(update_fields=["dismissed_at", "dismissed_by"])
 
     # 6) Vier-Augen-Loeschung: Antrag (reason -> core_deletionrequest.reason),
     #    Genehmigung (pseudonym + reason -> core_auditlog.detail). Reviewer

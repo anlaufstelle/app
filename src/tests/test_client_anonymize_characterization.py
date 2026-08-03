@@ -582,3 +582,116 @@ class TestAnonymizeClientHelpers:
         _redact_activities(client_identified, [])
 
         assert Activity.objects.filter(facility=facility, summary__contains="Fremd-Fall-Titel").exists()
+
+    def test_redact_retention_proposals_keeps_evidence_metadata(self, facility, staff_user, doc_type_contact):
+        """Refs #1751 (Punkt 3): nur das Pseudonym geht raus, der Nachweis bleibt.
+
+        ``cleanup_stale_proposals`` fasst nur Vorschläge gelöschter Events an —
+        ein über den Papierkorb-Ablauf anonymisierter Klient mit noch lebenden
+        Events behielt sein Original-Pseudonym im ``details``-JSON.
+        """
+        from core.models import Client, RetentionProposal
+        from core.retention.proposals import build_proposal_details, create_proposal
+        from core.services.client import _redact_retention_proposals
+
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="Vorschlag-PII-1",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            created_by=staff_user,
+        )
+        proposal, _created = create_proposal(
+            facility,
+            RetentionProposal.TargetType.EVENT,
+            event.pk,
+            timezone.localdate(),
+            build_proposal_details(event),
+            "identified",
+        )
+        assert proposal.details["pseudonym"] == "Vorschlag-PII-1"  # Positiv-Kontrolle
+
+        _redact_retention_proposals([event.pk])
+
+        proposal.refresh_from_db()
+        assert proposal.details["pseudonym"] == "[Anonymisiert]"
+        # Nachweis-Metadaten unangetastet.
+        assert proposal.details["occurred_at"]
+        assert proposal.details["contact_stage"] == Client.ContactStage.IDENTIFIED
+        assert proposal.status == RetentionProposal.Status.PENDING
+        assert proposal.retention_category == "identified"
+
+    def test_redact_retention_proposals_is_no_op_without_event_ids(self):
+        from core.services.client import _redact_retention_proposals
+
+        assert _redact_retention_proposals([]) is None
+
+    def test_redact_legal_holds_clears_reason_but_keeps_trail(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        """Refs #1751 (Punkt 4): Begründung raus, Nachweis-Metadaten bleiben.
+
+        ``LegalHold`` kannte bisher weder Redaktions- noch Pruning-Pfad —
+        aufgehobene Holds trugen ihre Klartext-Begründung für immer weiter.
+        """
+        from core.models import LegalHold
+        from core.services.client import _redact_legal_holds
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            created_by=staff_user,
+        )
+        event_hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event.pk,
+            reason="Ermittlungsverfahren Klartext-Person",
+            created_by=staff_user,
+        )
+        client_hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=client_identified.pk,
+            reason="Aufbewahrungspflicht Klartext-Person",
+            created_by=staff_user,
+        )
+
+        _redact_legal_holds(client_identified, [event.pk])
+
+        event_hold.refresh_from_db()
+        client_hold.refresh_from_db()
+        assert event_hold.reason == "[Anonymisiert]"
+        assert client_hold.reason == "[Anonymisiert]"
+        # Nachweis-Trail unangetastet: Ziel, Ersteller, Zeitstempel.
+        assert event_hold.target_id == event.pk
+        assert event_hold.created_by_id == staff_user.pk
+        assert event_hold.created_at is not None
+
+    def test_redact_legal_holds_leaves_foreign_targets(self, facility, staff_user, client_identified):
+        """Gegenprobe: Holds fremder Ziele derselben Einrichtung bleiben stehen."""
+        from core.models import Client, LegalHold
+        from core.services.client import _redact_legal_holds
+
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-Hold-1")
+        foreign_hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=other.pk,
+            reason="Fremde Begruendung",
+            created_by=staff_user,
+        )
+
+        _redact_legal_holds(client_identified, [])
+
+        foreign_hold.refresh_from_db()
+        assert foreign_hold.reason == "Fremde Begruendung"
