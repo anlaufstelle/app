@@ -125,6 +125,50 @@ class _ThresholdBackend(_RowsBackend):
         return dataclasses.replace(result, summary={**result.summary, "k_anonymity_threshold": 7})
 
 
+class _LeereRecordsBackend(_RowsBackend):
+    """Dummy-Backend ohne Records — Randfall leerer Datensatz."""
+
+    slug = "dummy_leer"
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(mode="rows", records=[], summary={"total": 0}, completeness=[])
+
+
+class _RandfallZellenBackend(_RowsBackend):
+    """Dummy-Backend fuer zwei Zellen-Randfaelle: fehlender FieldSpec-Key im
+    Record (``record.get``-Pfad) und ein expliziter ``None``-Zellwert.
+    """
+
+    slug = "dummy_randfall"
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(
+            mode="rows",
+            records=[
+                {"datum": "2026-01-10"},  # "formel" fehlt komplett
+                {"datum": "2026-01-11", "formel": None},  # "formel" ist explizit None
+            ],
+            summary={"total": 2},
+            completeness=[],
+        )
+
+
+class _NichtIdentifierKeyBackend(DatasetBackend):
+    """Dummy-Backend mit einem FieldSpec-Key, der kein gueltiger XML-Elementname
+    ist (Ziffern-initial) — muss im XML als ``<entry key="…">`` erscheinen statt
+    als still unparsbares ``<1monat>``.
+    """
+
+    slug = "dummy_ziffernkey"
+    name = "Dummy Ziffernkey"
+
+    def get_field_specs(self) -> list[FieldSpec]:
+        return [FieldSpec(key="1monat", label="1. Monat")]
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(mode="rows", records=[{"1monat": 5}], summary={}, completeness=[])
+
+
 @pytest.fixture
 def facility():
     return _Facility()
@@ -201,10 +245,17 @@ class TestJsonExport:
         assert isinstance(response, HttpResponse)
         assert not isinstance(response, StreamingHttpResponse)
 
+        # VOR dem Roundtrip pruefen: der rohe JSON-Text traegt den gerenderten
+        # gettext_lazy-Namen als String-Literal, nicht als Proxy-Repr. Nach
+        # ``json.loads`` waere ein ``isinstance(..., str)``-Check tautologisch
+        # — jeder JSON-String wird zu ``str``, unabhaengig davon, ob der Cast
+        # im Renderer noetig war.
+        raw = response.content.decode("utf-8")
+        assert '"name": "Dummy Zeilenbericht"' in raw
+
         payload = json.loads(response.content)
         assert payload["backend"] == "dummy_rows"
         assert payload["name"] == "Dummy Zeilenbericht"
-        assert isinstance(payload["name"], str)
         assert payload["date_from"] == "2026-01-01"
         assert payload["date_to"] == "2026-01-31"
         assert "generated_at" in payload
@@ -371,9 +422,77 @@ class TestPrepareExportHook:
         assert payload["records"] == raw.records
 
 
+class TestRandfaelle:
+    """Punkt 5 (Welle-A-Polish): leere ``records``, fehlender FieldSpec-Key im
+    Record (``record.get``-Pfad) und expliziter ``None``-Zellwert.
+    """
+
+    def test_csv_leere_records_nur_metadaten_und_header(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_LeereRecordsBackend(), facility, date_from, date_to, format="csv")
+        lines = b"".join(response.streaming_content).decode("utf-8").splitlines()
+
+        assert len(lines) == 2  # Metadatenzeile + Header, keine Datenzeile
+        assert lines[1] == "Datum,Formel-Feld"
+
+    def test_xml_leere_records_selbstschliessendes_element(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_LeereRecordsBackend(), facility, date_from, date_to, format="xml")
+
+        assert b"<records />" in response.content
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+        assert root.find("records").findall("record") == []
+
+    def test_csv_fehlender_key_und_none_werden_leere_zelle(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_RandfallZellenBackend(), facility, date_from, date_to, format="csv")
+        content = b"".join(response.streaming_content).decode("utf-8")
+        rows = list(csv.reader(content.splitlines()[1:]))
+
+        assert rows[1] == ["2026-01-10", ""]  # "formel" fehlt im Record
+        assert rows[2] == ["2026-01-11", ""]  # "formel" ist explizit None
+        assert "None" not in content
+
+    def test_xml_fehlender_key_und_none_werden_leeres_element(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_RandfallZellenBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        records = root.find("records").findall("record")
+        assert not records[0].find("formel").text  # fehlender Key -> record.get() -> None
+        assert not records[1].find("formel").text  # expliziter None-Wert
+        assert b"None" not in response.content
+
+    def test_xml_ziffern_initial_key_wird_als_entry_gerendert(self, facility, date_range):
+        """Punkt 4: ein FieldSpec-Key wie ``1monat`` ist kein gueltiger XML-
+        Elementname — der Renderer muss auf ``<entry key="…">`` ausweichen
+        (derselbe Fallback wie im summary-Renderer), sonst entstuende still
+        unparsbares XML.
+        """
+        date_from, date_to = date_range
+        response = export_dataset(_NichtIdentifierKeyBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        record = root.find("records").find("record")
+        assert record.find("1monat") is None  # kein gueltiger Elementname
+        entry = record.find("entry")
+        assert entry is not None
+        assert entry.get("key") == "1monat"
+        assert entry.text == "5"
+
+
 class TestRfc5987Dateiname:
     def test_unicode_dateiname_setzt_rfc5987_header(self, date_range):
         date_from, date_to = date_range
+        # Der Facility-Name fliesst NICHT in den Dateinamen ein (nur Slug/Datum/Format,
+        # siehe ``export_dataset``) — der Unicode-Anteil hier kommt ausschliesslich aus
+        # ``_UnicodeSlugBackend.slug``, nicht aus diesem Namen.
         facility = _Facility(name="Fördeinrichtung Süd")
         response = export_dataset(_UnicodeSlugBackend(), facility, date_from, date_to, format="csv")
         assert "filename*=" in response["Content-Disposition"]

@@ -179,3 +179,29 @@ class TestDiscovery:
         assert registry._discovered is False
         with pytest.raises(ImproperlyConfigured):
             registry.get_backends()
+
+    def test_registrierungsfehler_wird_nicht_als_importfehler_verschleift(self, monkeypatch):
+        """Punkt 7 (Welle-A-Polish): ``register_backend`` wirft bei ungueltigem
+        Slug/Doppelregistrierung bereits ein aussagekraeftiges
+        ``ImproperlyConfigured`` — ``_discover()`` darf das nicht in die
+        generische „nicht importierbar"-Meldung wickeln, sonst geht die
+        eigentliche Ursache im Import-Vokabular unter.
+        """
+        monkeypatch.setattr(registry, "_discovered", False)
+
+        ursache = ImproperlyConfigured("Ungültiger Reporting-Backend-Slug 'Foo-Bar' — erwartet ^[a-z0-9_]+$.")
+
+        def _fake_import_module(name):
+            raise ursache
+
+        monkeypatch.setattr(registry.importlib, "import_module", _fake_import_module)
+        monkeypatch.setattr(registry.pkgutil, "iter_modules", lambda path: [(None, "kaputt", False)])
+
+        with pytest.raises(ImproperlyConfigured) as excinfo:
+            registry.get_backends()
+
+        # Unveraendert durchgereicht: dieselbe Exception-Instanz, nicht neu
+        # gewickelt — und ohne das Wrapper-Vokabular der Import-Meldung.
+        assert excinfo.value is ursache
+        assert "nicht importierbar" not in str(excinfo.value)
+        assert registry._discovered is False

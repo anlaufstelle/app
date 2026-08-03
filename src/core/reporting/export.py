@@ -138,9 +138,11 @@ def _render_json(
 ) -> bytes:
     """JSON-Aggregat-Payload — kein Streaming, kein CSV-Sanitizing (kein Excel-Kontext).
 
-    ``name`` wird explizit ``str()``-gecastet: Backends tragen typischerweise
-    ``gettext_lazy``-Proxys, die ``json.dumps`` (auch mit ``DjangoJSONEncoder``)
-    nicht direkt serialisieren kann.
+    ``name`` wird trotzdem explizit ``str()``-gecastet: ``DjangoJSONEncoder``
+    KANN ``gettext_lazy``-Proxys selbst serialisieren (sein ``default()``
+    behandelt ``Promise`` wie ``Decimal``/``UUID`` per ``str(o)``) — der Cast
+    hier ist reine Explizitheit an der Payload-Grenze, keine technische
+    Notwendigkeit.
     """
     payload = {
         "backend": backend.slug,
@@ -194,12 +196,22 @@ def _render_xml(
     _fill_xml_value(summary_el, result.summary)
 
     records_el = ET.SubElement(root, "records")
+    # Vor die Schleife gehoisted statt pro Record neu berechnet — die
+    # FieldSpec-Liste ist fuer den gesamten Export identisch.
+    field_specs = backend.get_field_specs()
     for record in result.records:
         record_el = ET.SubElement(records_el, "record")
-        for spec in backend.get_field_specs():
-            field_el = ET.SubElement(record_el, spec.key)
+        for spec in field_specs:
             value = record.get(spec.key)
-            field_el.text = "" if value is None else str(value)
+            text = "" if value is None else str(value)
+            # Gleicher Fallback wie im summary-Renderer (``_fill_xml_value``):
+            # ein FieldSpec-Key, der kein gueltiger XML-Elementname ist (z. B.
+            # Ziffern-initial), wuerde sonst still unparsbares XML erzeugen.
+            if _XML_IDENTIFIER_RE.match(spec.key):
+                field_el = ET.SubElement(record_el, spec.key)
+            else:
+                field_el = ET.SubElement(record_el, "entry", {"key": spec.key})
+            field_el.text = text
 
     return ET.tostring(root, xml_declaration=True, encoding="utf-8")
 

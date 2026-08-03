@@ -19,7 +19,14 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, Organization, User
 from core.reporting import registry
-from core.reporting.backends.jugendamt import CATEGORY_MAP, JugendamtBackend
+from core.reporting.backends.jugendamt import (
+    _IDENTITY_CODES,
+    _ISSUE_SEVERITIES,
+    CATEGORY_MAP,
+    JugendamtBackend,
+    _prepare_issue,
+    _verberge_term,
+)
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
 
@@ -1155,6 +1162,35 @@ class TestVierTermIdentitaet:
         assert terme["altersgruppen"] is None
         assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
         assert sum(1 for wert in terme.values() if wert is None) == 2
+
+
+class TestGuardPlatzhalterUndDegradierteMeldungGleich:
+    """Fable-Re-Review (Punkt 8, Welle-A-Polish): die eingefuegte Platzhalter-
+    Meldung fuer eine *fehlende* Meldung (``_verberge_term``) und die
+    degradierte Fassung einer tatsaechlich *vorhandenen* Meldung
+    (``_prepare_issue``) muessen wortgleich und severity-gleich sein — heute
+    nur ueber die gemeinsamen Konstanten ``_SUPPRESSED_MESSAGES``/
+    ``_ISSUE_SEVERITIES`` sichergestellt, nicht durch einen eigenen Test
+    eingefroren. Driftet eine der beiden Konstanten unbemerkt auseinander,
+    unterscheiden sich Platzhalter- und degradierte Meldung fuer denselben
+    Code — genau das faengt dieser Test.
+    """
+
+    @pytest.mark.parametrize("code", list(_IDENTITY_CODES))
+    def test_platzhalter_und_degradierte_meldung_sind_identisch(self, code):
+        # (a) Platzhalter: die Meldung fehlt komplett (deterministisch 0) —
+        # ``_verberge_term`` FUEGT einen Unterdrueckungs-Hinweis EIN.
+        platzhalter = _verberge_term([], code)[0]
+
+        # (b) Degradation: dieselbe Meldung existiert bereits (bezifferte
+        # Rohfassung, Zahl unter der Schwelle) — ``_prepare_issue`` degradiert sie.
+        rohfassung = CompletenessIssue(code, "Beliebiger Rohtext mit 3 Ereignissen", _ISSUE_SEVERITIES[code], count=3)
+        degradiert = _prepare_issue(rohfassung, threshold=100, komplemente={})
+
+        assert platzhalter.message == degradiert.message
+        assert platzhalter.severity == degradiert.severity
+        assert platzhalter.count is None
+        assert degradiert.count is None
 
 
 class TestDiscovery:

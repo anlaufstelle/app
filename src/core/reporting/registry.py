@@ -71,6 +71,12 @@ def _discover() -> None:
     ``_discovered`` zurueckgesetzt**: sonst gaelte die Discovery als
     erledigt und jeder weitere ``get_backends()``-Aufruf lieferte still
     eine unvollstaendige Registry (fehlendes Backend statt lauter Fehler).
+
+    Ein :class:`ImproperlyConfigured` **aus dem Modul selbst** (z. B.
+    ``register_backend`` bei ungueltigem Slug oder Doppelregistrierung) wird
+    unveraendert durchgereicht statt in die generische „nicht importierbar"-
+    Meldung gewickelt zu werden — sonst verschleift die Wrapper-Meldung die
+    eigentliche Registrierungsursache hinter Import-Vokabular.
     """
     global _discovered
     if _discovered:
@@ -83,6 +89,9 @@ def _discover() -> None:
         dotted_name = f"{backends.__name__}.{module_name}"
         try:
             importlib.import_module(dotted_name)
+        except ImproperlyConfigured:
+            _discovered = False
+            raise
         except Exception as exc:
             _discovered = False
             msg = f"Reporting-Backend-Modul {dotted_name!r} ist nicht importierbar: {exc}"
