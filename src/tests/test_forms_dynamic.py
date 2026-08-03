@@ -27,6 +27,7 @@ import logging
 
 import pytest
 from django import forms
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from core.forms.dynamic import DynamicDataForm
 from core.forms.events import DynamicEventDataForm, MultipleFileField
@@ -392,3 +393,46 @@ class TestMergeDynamicData:
         )
 
         assert merged == {"zusatz": "neu", "notiz": "geheim"}
+
+
+# ---------------------------------------------------------------------------
+# clean() ohne facility — fail-loud statt stiller Early-Return (P7 C-2, #1730)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCleanWithoutFacilityFailsLoud:
+    """``clean()`` sprang bislang VOR ``_enforce_conditional_required`` aus
+    Mangel an ``facility`` komplett ab — die Conditional-Required-Pruefung lief
+    dann gar nicht erst an (P7-Befund C-2). Ziel: die Pflichtpruefung laeuft
+    IMMER (braucht kein facility); nur die Upload-Validierung braucht facility
+    und muss bei einem tatsaechlich gebundenen Upload ohne facility laut
+    scheitern (Programmierfehler des Aufrufers) statt still durchzuwinken.
+    """
+
+    def test_conditional_required_enforced_even_without_facility(self, cond_doctype):
+        """Sichtbares Pflichtfeld (``notiz``, da ``dauer=15 > 10``) bleibt leer
+        — ohne facility darf das NICHT durchgehen."""
+        form = DynamicDataForm({"dauer": "15", "notiz": ""}, document_type=cond_doctype, facility=None)
+
+        assert not form.is_valid()
+        assert "notiz" in form.errors
+
+    def test_bound_file_upload_without_facility_raises(self, all_types_doctype):
+        """Ein gebundener Upload auf dem FILE-Feld ``anhang`` ohne facility darf
+        NICHT still durchgewunken werden — ``_resolve_upload_constraints``
+        braucht facility, ihr Fehlen ist ein Programmierfehler des Aufrufers."""
+        upload = SimpleUploadedFile("scan.pdf", b"%PDF-1.4", content_type="application/pdf")
+        form = DynamicDataForm({}, {"anhang": upload}, document_type=all_types_doctype, facility=None)
+
+        with pytest.raises(ValueError):
+            form.is_valid()
+
+    def test_no_upload_and_no_facility_still_valid(self, all_types_doctype):
+        """Gegenprobe: OHNE hochgeladene Datei und OHNE facility bleibt der
+        Upload-Block einfach unausgefuehrt — kein Fehler (haelt die 7
+        facility-losen Bestandsinstanzierungen in test_option_deactivation.py
+        gruen, dort ausschliesslich SELECT/MULTI_SELECT)."""
+        form = DynamicDataForm({}, document_type=all_types_doctype, facility=None)
+
+        assert form.is_valid(), form.errors

@@ -499,22 +499,44 @@ class DynamicDataForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean() or {}
-        if not self.facility:
-            return cleaned
-        allowed, max_mb, max_bytes = _resolve_upload_constraints(self.facility)
-        for field_name, field_obj in self.fields.items():
-            if not isinstance(field_obj, forms.FileField):
-                continue
-            value = cleaned.get(field_name)
-            if not value:
-                continue
-            # MultipleFileField → Liste; klassisches FileField → Einzelobjekt.
-            uploads = value if isinstance(value, list) else [value]
-            for uploaded in uploads:
-                if not uploaded:
+        # P7 C-2 (Refs #1730): die Conditional-Required-Pruefung braucht KEIN
+        # facility (nur Feld-/Bedingungs-Metadaten) und darf daher nie an einem
+        # fehlenden facility scheitern — sonst wird eine Pflichtfeld-Verletzung
+        # (sichtbares Ziel bleibt leer) still durchgewunken. Frueher stand hier
+        # ein frueher ``if not self.facility: return cleaned``-Ausstieg VOR
+        # diesem Aufruf.
+        file_fields = {
+            field_name: field_obj
+            for field_name, field_obj in self.fields.items()
+            if isinstance(field_obj, forms.FileField)
+        }
+        has_bound_upload = any(cleaned.get(field_name) for field_name in file_fields)
+        if has_bound_upload:
+            # Nur die Upload-Validierung braucht facility
+            # (``_resolve_upload_constraints`` liest die Facility-``Settings``).
+            # Liegt trotzdem ein gebundener Upload vor, ist ein fehlendes
+            # facility ein Programmierfehler des Aufrufers (alle View-Aufrufer
+            # uebergeben facility) — fail-loud statt den Upload klaglos
+            # durchzuwinken.
+            if not self.facility:
+                raise ValueError(
+                    "DynamicDataForm.clean(): Datei-Upload gebunden, aber kein facility uebergeben — "
+                    "Upload-Validierung (_resolve_upload_constraints) kann ohne facility nicht laufen. "
+                    "Programmierfehler des Aufrufers: facility muss beim Konstruieren der Form gesetzt sein."
+                )
+            allowed, max_mb, max_bytes = _resolve_upload_constraints(self.facility)
+            for field_name in file_fields:
+                value = cleaned.get(field_name)
+                if not value:
                     continue
-                for error in _file_upload_errors(uploaded, allowed, max_mb, max_bytes):
-                    self.add_error(field_name, error)
-        # M1/P4 (Refs #1057): Hidden-Required im Anschluss an die File-Checks.
+                # MultipleFileField → Liste; klassisches FileField → Einzelobjekt.
+                uploads = value if isinstance(value, list) else [value]
+                for uploaded in uploads:
+                    if not uploaded:
+                        continue
+                    for error in _file_upload_errors(uploaded, allowed, max_mb, max_bytes):
+                        self.add_error(field_name, error)
+        # M1/P4 (Refs #1057): Hidden-Required im Anschluss an die File-Checks —
+        # laeuft jetzt IMMER, unabhaengig von facility.
         self._enforce_conditional_required(cleaned)
         return cleaned
