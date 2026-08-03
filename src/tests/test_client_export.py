@@ -1093,3 +1093,63 @@ class TestClientExportPdfCoverage:
         """Die Auskunft muss ihre bewussten Ausschluesse benennen statt Vollstaendigkeit zu behaupten."""
         html = _render_export_html(fully_populated_client, facility, admin_user)
         assert "Dateianhänge" in html
+
+
+@pytest.mark.django_db
+class TestClientExportCompleteness:
+    """Refs #1752 — Vollstaendigkeits-Pin ueber die Kategorienliste des Issues.
+
+    Faellt eine Kategorie kuenftig aus ``export_client_data`` heraus, bricht
+    dieser Test — unabhaengig davon, ob ein Detail-Test sie noch abdeckt.
+    """
+
+    # Kategorie -> Pfad im Export-Dict (Top-Level-Key bzw. client-Unterfeld).
+    REQUIRED_LIST_CATEGORIES = [
+        "events",
+        "deleted_events",
+        "cases",
+        "episodes",
+        "outcome_goals",
+        "event_history",
+        "deletion_requests",
+        "legal_holds",
+        "retention_proposals",
+        "work_items",
+        "activities",
+        "recent_visits",
+        "audit_trail",
+    ]
+    REQUIRED_CLIENT_FIELDS = [
+        "notes",
+        "is_deleted",
+        "deleted_at",
+        "deleted_by",
+        "k_anonymized",
+        "updated_at",
+    ]
+
+    def test_every_category_is_populated(self, fully_populated_client, facility, admin_user):
+        data = export_client_data(fully_populated_client, facility, admin_user)
+        empty = [key for key in self.REQUIRED_LIST_CATEGORIES if not data.get(key)]
+        assert empty == [], f"Kategorien ohne Daten in der Auskunft: {empty}"
+
+    def test_client_master_data_covers_required_fields(self, fully_populated_client, facility, admin_user):
+        data = export_client_data(fully_populated_client, facility, admin_user)
+        missing = [key for key in self.REQUIRED_CLIENT_FIELDS if key not in data["client"]]
+        assert missing == [], f"Fehlende Stammdaten-Felder: {missing}"
+
+    def test_history_entries_carry_contents(self, fully_populated_client, facility, admin_user):
+        data = export_client_data(fully_populated_client, facility, admin_user)
+        assert any(entry["data_after"] or entry["data_before"] for entry in data["event_history"])
+
+    def test_json_view_serializes_every_category(self, fully_populated_client, facility, admin_user):
+        """Die neuen Kategorien muessen den ``json.dumps``-Pfad des Views ueberstehen."""
+        import json
+
+        client = DjangoClient()
+        client.force_login(admin_user)
+        response = client.get(f"/clients/{fully_populated_client.pk}/export/json/")
+        assert response.status_code == 200
+        payload = json.loads(response.content.decode("utf-8"))
+        empty = [key for key in self.REQUIRED_LIST_CATEGORIES if not payload.get(key)]
+        assert empty == [], f"Kategorien ohne Daten im JSON-Download: {empty}"
