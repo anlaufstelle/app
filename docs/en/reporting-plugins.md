@@ -73,7 +73,7 @@ class DatasetBackend(ABC):
 
 | Element | Required | Meaning |
 |---|---|---|
-| `slug` || Set by the decorator. Do **not** assign it yourself. Format `^[a-z0-9_]+$`. It appears in query parameters, file names and `backend_data` keys, which makes it effectively immutable. |
+| `slug` || Set by the decorator. Do **not** assign it yourself. Format `^[a-z0-9]+(?:[-_][a-z0-9]+)*$` (lowercase letters/digits, single `-`/`_` as separators, never at the edges). It appears in query parameters, file names and `backend_data` keys, which makes it effectively immutable — changing it afterwards requires a data migration (pattern: [`0123`](../../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py)). |
 | `name` | **yes** | Visible name in the reports dropdown and in the JSON payload. Declare it as `gettext_lazy`; the export pipeline casts to `str` at the payload boundary itself. |
 | `snapshot_enabled` | no | Defaults to `False`. Set it to `True` only if `summary` is **purely aggregated** — see [§ 5](#5-snapshot-integration). |
 | `is_available(facility)` | no | Defaults to `True`. Hook for facility-dependent reports. `False` — like any other falsy return value, for instance the `None` of a nullable `BooleanField` — hides the backend from the dropdown **and** makes panel and export respond with HTTP 404. The dropdown filter and the access guard check the same truthiness. |
@@ -288,13 +288,13 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 >
 > `mode="rows"` backends are therefore usually **not** snapshot-capable: row-level data is intended for permanent storage neither in terms of size nor in terms of data protection.
 
-**Transition phase (dual write).** The legacy field `StatisticsSnapshot.jugendamt_data` continues to be written in sync; read paths prefer `backend_data["jugendamt"]` and fall back to the legacy field only for snapshots predating the backfill. Migration [`0122`](../../src/core/migrations/0122_backfill_backend_data.py) migrated existing snapshots additively. Ending the dual write and removing the legacy field is follow-up work (#1061) — this does **not** concern new backends; they write to `backend_data` only.
+**`backend_data` is the only source.** Until M5 the sample activity report's aggregate lived in a dedicated model field that was written in parallel during a transition period (dual write). That phase is over: migration [`0122`](../../src/core/migrations/0122_backfill_backend_data.py) moved existing snapshots over additively, [`0123`](../../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py) renamed the key to today's slug and [`0124`](../../src/core/migrations/0124_drop_jugendamt_residue.py) dropped the dedicated field (#1740). Write and read paths only know `backend_data` — which was always the case for **new** backends anyway.
 
-**Merge boundary.** The hybrid read path assembles periods from monthly snapshots and therefore has to merge the monthly aggregates. That merge is **specific to the activity report** (`_merge_jugendamt_stats`) and knows exactly its structure. For a second snapshot-capable backend there is **no** generic merge today: without per-field merge semantics (sum? maximum? set union?) it cannot be defined. Anyone who wants to make a second aggregate backend snapshot-capable must plan the merge as work of its own — until then it reads live via `build_dataset`.
+**Merge boundary.** The hybrid read path assembles periods from monthly snapshots and therefore has to merge the monthly aggregates. That merge is **specific to the activity report** (`_merge_sample_report_1_stats`) and knows exactly its structure. For a second snapshot-capable backend there is **no** generic merge today: without per-field merge semantics (sum? maximum? set union?) it cannot be defined. Anyone who wants to make a second aggregate backend snapshot-capable must plan the merge as work of its own — until then it reads live via `build_dataset`.
 
 **Fail loud.** The snapshot run iterates over the backends without error isolation: if a backend raises, the **entire** snapshot run for that facility fails. This is intentional — a silently incomplete snapshot would be a quiet data hole that only surfaces months later.
 
-**Live read path vs. hybrid read path.** The panel preview and the generic export **always** call `build_dataset(facility, date_from, date_to)` — the live query against the events. The activity report **PDF**, by contrast, reads the same report as a hybrid via the monthly snapshots (`get_jugendamt_statistics_hybrid`). Two artifacts of the same report over the same period can therefore differ systematically:
+**Live read path vs. hybrid read path.** The panel preview and the generic export **always** call `build_dataset(facility, date_from, date_to)` — the live query against the events. The activity report **PDF**, by contrast, reads the same report as a hybrid via the monthly snapshots (`get_sample_report_1_statistics_hybrid`). Two artifacts of the same report over the same period can therefore differ systematically:
 
 - **`unique_clients` across several months.** The hybrid path sums the monthly values (a documented approximation: anyone appearing in two months is counted twice); the live query performs a true DISTINCT count over the whole period.
 - **Periods beyond the retention deadlines.** Snapshots deliberately outlive event retention; the live query filters out soft-deleted events (`is_deleted=False`). For a period whose events have already been deleted, the PDF returns the snapshot figures whereas the panel and CSV/JSON/XML return (close to) zero, or suppression markers.
@@ -320,7 +320,7 @@ The "View" column says nothing about the **source**: panel and download read liv
 
 **Yes, as soon as your backend produces numbers that leave the building** — and they do as soon as the backend is registered, because download and panel then become available automatically. The default (`return result`) is only defensible for backends whose cells cannot be small counts by construction.
 
-The threshold *k* comes per facility from `Settings.k_anonymity_threshold` (default 5) and is read via `_get_threshold(facility)` from [`core.services.dashboard.external_report`](../../src/core/services/dashboard/external_report.py) — the same module that provides `_suppress_small` and `suppress_jugendamt_stats` for the PDF path and the external report. Set `summary["k_anonymity_threshold"] = threshold` if your backend suppresses: the CSV renderer then appends a note to the metadata line, and the panel shows the suppression notice.
+The threshold *k* comes per facility from `Settings.k_anonymity_threshold` (default 5) and is read via `_get_threshold(facility)` from [`core.services.dashboard.external_report`](../../src/core/services/dashboard/external_report.py) — the same module that provides `_suppress_small` and `suppress_sample_report_1_stats` for the PDF path and the external report. Set `summary["k_anonymity_threshold"] = threshold` if your backend suppresses: the CSV renderer then appends a note to the metadata line, and the panel shows the suppression notice.
 
 ### Minimal example — `ExampleBackend`
 
@@ -329,11 +329,11 @@ One metric per row plus a marginal total. Exactly one back-calculation risk has 
 - `_suppress_small(rows, threshold, count_key="count")` sets cells `< k` to `count=None`/`suppressed=True` and performs **secondary suppression per A6.1** (#1024/#1016) in the same step: if exactly **one** cell remains suppressed afterwards, the next-smallest visible cell is suppressed as well, so that at least two unknowns remain.
 - `total` is dropped if it is **itself** below the threshold (R14) **or** if any row is suppressed at all. The latter is the conservative choice: secondary suppression only protects the case of *exactly one* suppressed cell; if several stay suppressed, `total` would remain a lever for back-calculation.
 
-### Full example — `JugendamtBackend`
+### Full example — `SampleReport1Backend`
 
 Several interrelated metrics plus completeness notices. Cell suppression alone is not enough here:
 
-1. **Report body:** the same machinery as in the PDF (`suppress_jugendamt_stats`) — category and age-group cells `< k` are dropped including secondary suppression, `unique_clients` and the marginal total `total < k` become `None`. `records` is re-projected from the **already suppressed** rows; without that step the CSV would have kept showing the raw numbers.
+1. **Report body:** the same machinery as in the PDF (`suppress_sample_report_1_stats`) — category and age-group cells `< k` are dropped including secondary suppression, `unique_clients` and the marginal total `total < k` become `None`. `records` is re-projected from the **already suppressed** rows; without that step the CSV would have kept showing the raw numbers.
 2. **Completeness notices** are **always** reworded for the export: without the reference quantity and without a percentage (the reference quantity would be the lever for complementary back-calculation). The number is dropped entirely if it is itself `< k`, if its **complement** is `< k`, or if there is no vetted low-digit wording for that `code` (fail-safe for future checks). The notice about the gap always remains — a report that conceals gaps would be misleadingly complete.
 3. **Four-term identity.** By construction,
 
@@ -343,11 +343,11 @@ Several interrelated metrics plus completeness notices. Cell suppression alone i
 
  — both sides are "all visible events in the period". If **three** terms are known and the fourth is hidden, the fourth is exactly determined and the suppression would run empty. `_close_identity_leak` then degrades one further term, and always via the *notices*: preferably the number of a quantified notice is dropped; only when none is quantified any more is a **missing** notice replaced by a suppression hint — because `validate_completeness` only reports gaps > 0, so a missing notice deterministically means zero and is itself a known term. The placeholder text and the degradation text are **word-for-word identical**; if the wording were distinguishable, it would reveal whether the gap is > 0.
 
-**Remember:** a `rows` backend with *one* metric per row has no such identity — the pattern from `example.py` is sufficient there. Anyone emitting several interrelated metrics or quantified notices should follow `JugendamtBackend.prepare_export` and examine the relationships between them **as a whole**, not pairwise.
+**Remember:** a `rows` backend with *one* metric per row has no such identity — the pattern from `example.py` is sufficient there. Anyone emitting several interrelated metrics or quantified notices should follow `SampleReport1Backend.prepare_export` and examine the relationships between them **as a whole**, not pairwise.
 
 ### Boundary behaviour you need to know
 
-- **`prepare_export` is not idempotent.** The hook expects the **raw** `build_dataset` result (`JugendamtBackend`, for instance, converts `by_category` from tuples into dict rows). Calling it twice is not a meaningful call; transform exactly once.
+- **`prepare_export` is not idempotent.** The hook expects the **raw** `build_dataset` result (`SampleReport1Backend`, for instance, converts `by_category` from tuples into dict rows). Calling it twice is not a meaningful call; transform exactly once.
 - **An empty period looks like suppression.** `0 < k`, so an honest zero is suppressed as well. That is the behaviour of the shared suppression function and the safe direction, but it can confuse recipients.
 - **Over-suppression at the edges.** With empty age-group lists or a very small *k*, closing the identity can degrade more than strictly necessary. The direction is safe, the loss of informative value is real.
 - **Suppression never belongs in `build_dataset`.** Otherwise snapshots would be trimmed too — and with them the basis of every later analysis and of the unchanged PDF path.
@@ -451,7 +451,7 @@ Examples from the activity report:
 
 ## 10. Test Checklist for New Backends
 
-Test files follow the pattern `src/tests/test_reporting_<slug>.py`. The existing suites (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_jugendamt.py`, `test_reporting_example.py`, `test_reporting_views.py`) serve as templates.
+Test files follow the pattern `src/tests/test_reporting_<slug>.py`. The existing suites (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_sample_report_1.py`, `test_reporting_example.py`, `test_reporting_views.py`) serve as templates.
 
 **Registry isolation (mandatory — otherwise you get order-dependent failures).** Ad-hoc test backends must not leak into subsequent tests on the same worker. Patch the module directly, no proxy:
 
@@ -503,4 +503,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 01215dc3f450e5fd699fa5acd0d08baf219fac16 -->
+<!-- source-hash: f2e7e86a079e2415ed45be45cae47f45882d78a2 -->

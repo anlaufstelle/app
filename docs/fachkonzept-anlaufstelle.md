@@ -97,7 +97,7 @@ Niedrigschwellige Einrichtungen der Sucht- und Wohnungslosenhilfe — Kontaktcaf
 
 - **Handschriftliche Besucherlisten** an der Tür, die am Dienstende in Excel übertragen werden.
 - **A4-Kladden** als Informationsbuch zwischen Diensten, in denen wichtige Informationen über Klientel, aktive Hausverbote und offene Aufgaben festgehalten werden. Diese Kladden sind nicht durchsuchbar, nicht auswertbar und nur vor Ort einsehbar.
-- **Excel-Tabellen** für die Kontaktstatistik, die händisch aus den Listen und Kladden zusammengetragen werden. Der Halbjahresbericht an das Jugendamt — die zentrale Nachweispflicht — kostet die Einrichtungsleitung regelmäßig zwei bis drei Wochen Arbeit.
+- **Excel-Tabellen** für die Kontaktstatistik, die händisch aus den Listen und Kladden zusammengetragen werden. Der Halbjahresbericht an den öffentlichen Fördermittelgeber — die zentrale Nachweispflicht — kostet die Einrichtungsleitung regelmäßig zwei bis drei Wochen Arbeit.
 - **Selbstgebaute Access-Datenbanken**, erstellt von Sozialarbeiter:innen mit VHS-Kurs-Niveau-Wissen in Datenbankentwicklung, ohne Datenschutzkonzept, ohne Backup, ohne Wartung.
 
 Diese Dokumentationsrealität ist kein Versagen der Einrichtungen. Sie ist eine rationale Antwort auf das Fehlen passender Werkzeuge.
@@ -241,9 +241,9 @@ Deniz ist 26, Streetworker in einem Team, das im Bahnhofsviertel unterwegs ist. 
 
 #### Heike — Einrichtungsleitung
 
-Heike ist 48, leitet eine niedrigschwellige Einrichtung eines freien Trägers. Ihr Team umfasst 11 Personen (Haupt- und Nebenamt). Sie koordiniert die Wochenplanung, führt die Teamsitzung, vergibt Pseudonyme und erstellt halbjährlich den Bericht ans Jugendamt. Der Bericht ist ihre größte Zeitfresser-Aufgabe: Daten aus Kladden, Zählblättern und Excel-Tabellen zusammentragen, anonymisieren, aggregieren. Das dauert zwei bis drei Wochen.
+Heike ist 48, leitet eine niedrigschwellige Einrichtung eines freien Trägers. Ihr Team umfasst 11 Personen (Haupt- und Nebenamt). Sie koordiniert die Wochenplanung, führt die Teamsitzung, vergibt Pseudonyme und erstellt halbjährlich den Bericht an den Fördermittelgeber. Der Bericht ist ihre größte Zeitfresser-Aufgabe: Daten aus Kladden, Zählblättern und Excel-Tabellen zusammentragen, anonymisieren, aggregieren. Das dauert zwei bis drei Wochen.
 
-**Was sie braucht:** Auf Knopfdruck wissen, wie viele Kontakte es im letzten Halbjahr gab, aufgeschlüsselt nach Leistungsart und Alterscluster. Einen druckfertigen Bericht für das Jugendamt. Überblick über den Verlauf einzelner Klientel. DSGVO-Sicherheit.
+**Was sie braucht:** Auf Knopfdruck wissen, wie viele Kontakte es im letzten Halbjahr gab, aufgeschlüsselt nach Leistungsart und Alterscluster. Einen druckfertigen Bericht für den Fördermittelgeber. Überblick über den Verlauf einzelner Klientel. DSGVO-Sicherheit.
 
 #### Jonas — Systemadministration (`super_admin`)
 
@@ -312,7 +312,7 @@ Heike öffnet den Statistikbereich und wählt den Zeitraum „Januar–Juni 2026
 - Nach Leistungsart: Aufenthalt (2.341), Verpflegung (1.998), Spritzentausch (876), Krisengespräch (134), Begleitung (67), Vermittlung (43)
 - Nach Alterscluster: U18 (28), 18–26 (412), 27+ (2.175), unbekannt (232)
 
-Ein Klick auf „PDF-Export" erzeugt einen anonymisierten, aggregierten Bericht — als anpassbare Vorlage (Beispiel-Sachbericht) für die Weitergabe an externe Stellen wie das Jugendamt. Die Vorlage ist ein anpassbares Beispiel, kein verbindlicher oder aktueller Behördennachweis.
+Ein Klick auf „PDF-Export" erzeugt einen anonymisierten, aggregierten Bericht — als anpassbare Vorlage (Beispiel-Sachbericht) für die Weitergabe an externe Stellen wie Fördermittelgeber oder Behörden. Die Vorlage ist ein anpassbares Beispiel, kein verbindlicher oder aktueller Behördennachweis.
 
 ### Einstiegshürde: Erlernbar in 2–3 Stunden
 
@@ -931,7 +931,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 ### Was Anlaufstelle nicht ist
 
-**Kein Jugendamt- oder Großträger-System.** Anlaufstelle richtet sich an niedrigschwellige Einrichtungen mit 5–30 Mitarbeitenden, nicht an Jugendämter mit Hunderten von Mitarbeitenden und komplexen Verwaltungsprozessen. Wer Hilfeplanung nach § 36 SGB VIII, Kostenträger-Abrechnung und Clearing-Prozesse braucht, ist mit etablierten Enterprise-Systemen für Großträger und Jugendämter besser bedient.
+**Kein Behörden- oder Großträger-System.** Anlaufstelle richtet sich an niedrigschwellige Einrichtungen mit 5–30 Mitarbeitenden, nicht an Verwaltungen mit Hunderten von Mitarbeitenden und komplexen Verwaltungsprozessen. Wer Hilfeplanung nach § 36 SGB VIII, Kostenträger-Abrechnung und Clearing-Prozesse braucht, ist mit etablierten Enterprise-Systemen für Großträger und Behörden besser bedient.
 
 **Kein allgemeines CRM.** Anlaufstelle verwaltet keine Kontaktdaten im klassischen Sinn — keine E-Mail-Adressen, keine Telefonnummern als Pflichtfelder, keine Kampagnen oder Fundraising-Funktionen. Es ist ein Fachsystem für die Dokumentation sozialer Arbeit, kein Customer-Relationship-Management-Tool.
 

@@ -70,7 +70,7 @@ class DatasetBackend(ABC):
 
 | Element | Pflicht | Bedeutung |
 |---|---|---|
-| `slug` || Wird vom Decorator gesetzt. **Nicht** selbst zuweisen. Format `^[a-z0-9_]+$`. Er steckt in Query-Parametern, Dateinamen und `backend_data`-Schlüsseln und ist damit faktisch unveränderlich. |
+| `slug` || Wird vom Decorator gesetzt. **Nicht** selbst zuweisen. Format `^[a-z0-9]+(?:[-_][a-z0-9]+)*$` (Kleinbuchstaben/Ziffern, einzelne `-`/`_` als Trennzeichen, nicht am Rand). Er steckt in Query-Parametern, Dateinamen und `backend_data`-Schlüsseln und ist damit faktisch unveränderlich — ein nachträglicher Wechsel braucht eine Datenmigration (Muster: [`0123`](../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py)). |
 | `name` | **ja** | Sichtbarer Name im Berichte-Dropdown und im JSON-Payload. Als `gettext_lazy` deklarieren; die Export-Pipeline castet an der Payload-Grenze selbst nach `str`. |
 | `snapshot_enabled` | nein | Default `False`. `True` nur bei **aggregatreinem** `summary` — siehe [§ 5](#5-snapshot-integration). |
 | `is_available(facility)` | nein | Default `True`. Hook für einrichtungsabhängige Berichte. `False` — wie jeder andere falsy Rückgabewert, etwa das `None` eines nullable `BooleanField` — blendet das Backend aus dem Dropdown aus **und** lässt Panel/Export mit HTTP 404 antworten. Dropdown-Filter und Zugriffs-Guard prüfen dieselbe Truthiness. |
@@ -285,13 +285,13 @@ Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backe
 >
 > `mode="rows"`-Backends sind daher im Regelfall **nicht** snapshot-fähig: Zeilendaten sind weder größen- noch datenschutzseitig für eine dauerhafte Ablage gedacht.
 
-**Übergangsphase (Dual-Write).** Das Altfeld `StatisticsSnapshot.jugendamt_data` wird weiterhin synchron mitgeschrieben; Lesepfade bevorzugen `backend_data["jugendamt"]` und fallen nur für Snapshots vor dem Backfill auf das Altfeld zurück. Migration [`0122`](../src/core/migrations/0122_backfill_backend_data.py) hat Bestandssnapshots additiv nachgezogen. Das Abschalten von Dual-Write und Altfeld ist Folgearbeit (#1061) — **neue** Backends betrifft das nicht, sie schreiben ausschließlich in `backend_data`.
+**`backend_data` ist die einzige Quelle.** Bis M5 lag das Aggregat des Beispiel-Sachberichts in einem eigenen Modellfeld, das übergangsweise parallel weitergeschrieben wurde (Dual-Write). Diese Phase ist beendet: Migration [`0122`](../src/core/migrations/0122_backfill_backend_data.py) hat Bestandssnapshots additiv nachgezogen, [`0123`](../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py) den Schlüssel auf den heutigen Slug umgezogen und [`0124`](../src/core/migrations/0124_drop_jugendamt_residue.py) das Sonderfeld entfernt (#1740). Schreib- und Lesepfad kennen nur noch `backend_data` — für **neue** Backends war das ohnehin immer so.
 
-**Merge-Grenze.** Der hybride Lesepfad setzt Zeiträume aus Monats-Snapshots zusammen und muss die Monatsaggregate dafür verschmelzen. Dieser Merge ist **sachberichtspezifisch** (`_merge_jugendamt_stats`) und kennt genau dessen Struktur. Für ein zweites snapshot-fähiges Backend gibt es heute **keinen** generischen Merge: Ohne Merge-Semantik je Feld (summieren? Maximum? Mengenvereinigung?) ist er nicht definierbar. Wer ein zweites Aggregat-Backend snapshot-fähig machen will, plant den Merge als eigene Arbeit ein — bis dahin liest es über `build_dataset` live.
+**Merge-Grenze.** Der hybride Lesepfad setzt Zeiträume aus Monats-Snapshots zusammen und muss die Monatsaggregate dafür verschmelzen. Dieser Merge ist **sachberichtspezifisch** (`_merge_sample_report_1_stats`) und kennt genau dessen Struktur. Für ein zweites snapshot-fähiges Backend gibt es heute **keinen** generischen Merge: Ohne Merge-Semantik je Feld (summieren? Maximum? Mengenvereinigung?) ist er nicht definierbar. Wer ein zweites Aggregat-Backend snapshot-fähig machen will, plant den Merge als eigene Arbeit ein — bis dahin liest es über `build_dataset` live.
 
 **Fail-loud.** Der Snapshot-Lauf iteriert ohne Fehlerisolation über die Backends: Wirft ein Backend, scheitert der **gesamte** Snapshot-Lauf dieser Einrichtung. Das ist Absicht — ein still unvollständiger Snapshot wäre ein leises Datenloch, das erst Monate später auffällt.
 
-**Live-Lesepfad vs. hybrider Lesepfad.** Panel-Vorschau und generischer Export rufen **immer** `build_dataset(facility, date_from, date_to)` — also die Live-Abfrage gegen die Ereignisse. Das Sachbericht-**PDF** liest denselben Bericht dagegen hybrid über die Monats-Snapshots (`get_jugendamt_statistics_hybrid`). Zwei Artefakte desselben Berichts über denselben Zeitraum können deshalb systematisch abweichen:
+**Live-Lesepfad vs. hybrider Lesepfad.** Panel-Vorschau und generischer Export rufen **immer** `build_dataset(facility, date_from, date_to)` — also die Live-Abfrage gegen die Ereignisse. Das Sachbericht-**PDF** liest denselben Bericht dagegen hybrid über die Monats-Snapshots (`get_sample_report_1_statistics_hybrid`). Zwei Artefakte desselben Berichts über denselben Zeitraum können deshalb systematisch abweichen:
 
 - **`unique_clients` über mehrere Monate.** Der hybride Pfad summiert die Monatswerte (dokumentierte Näherung: wer in zwei Monaten erscheint, zählt zweimal); die Live-Abfrage macht einen echten DISTINCT-Count über den Gesamtzeitraum.
 - **Zeiträume jenseits der Aufbewahrungsfristen.** Snapshots überdauern die Event-Retention bewusst; die Live-Abfrage filtert soft-gelöschte Ereignisse (`is_deleted=False`) heraus. Für einen Zeitraum, dessen Ereignisse bereits gelöscht sind, liefert das PDF die Snapshot-Zahlen, Panel und CSV/JSON/XML dagegen (nahe) null bzw. Unterdrückungs-Marker.
@@ -317,7 +317,7 @@ Die Spalte „Sicht" sagt nichts über die **Quelle**: Panel und Download lesen 
 
 **Ja, sobald dein Backend Zahlen liefert, die das Haus verlassen** — und das tun sie, sobald das Backend registriert ist, denn Download und Panel stehen dann automatisch zur Verfügung. Der Default (`return result`) ist nur für Backends vertretbar, deren Zellen konstruktionsbedingt keine Kleinstfallzahlen sein können.
 
-Die Schwelle *k* kommt je Einrichtung aus `Settings.k_anonymity_threshold` (Default 5) und wird über `_get_threshold(facility)` aus [`core.services.dashboard.external_report`](../src/core/services/dashboard/external_report.py) gelesen — demselben Modul, das auch `_suppress_small` und `suppress_jugendamt_stats` für den PDF- und den externen Berichtspfad bereitstellt. Setze `summary["k_anonymity_threshold"] = threshold`, wenn dein Backend suppressiert: Der CSV-Renderer hängt daraufhin einen Hinweis an die Metadatenzeile, und das Panel blendet den Suppressions-Hinweis ein.
+Die Schwelle *k* kommt je Einrichtung aus `Settings.k_anonymity_threshold` (Default 5) und wird über `_get_threshold(facility)` aus [`core.services.dashboard.external_report`](../src/core/services/dashboard/external_report.py) gelesen — demselben Modul, das auch `_suppress_small` und `suppress_sample_report_1_stats` für den PDF- und den externen Berichtspfad bereitstellt. Setze `summary["k_anonymity_threshold"] = threshold`, wenn dein Backend suppressiert: Der CSV-Renderer hängt daraufhin einen Hinweis an die Metadatenzeile, und das Panel blendet den Suppressions-Hinweis ein.
 
 ### Minimalbeispiel — `ExampleBackend`
 
@@ -326,11 +326,11 @@ Eine Kennzahl je Zeile plus eine Randsumme. Zu lösen ist genau eine Rückrechnu
 - `_suppress_small(rows, threshold, count_key="count")` setzt Zellen `< k` auf `count=None`/`suppressed=True` und führt die **Sekundär-Suppression nach A6.1** (#1024/#1016) gleich mit aus: Bleibt danach genau **eine** Zelle unterdrückt, fällt zusätzlich die nächstkleinere sichtbare Zelle, damit mindestens zwei Unbekannte übrig bleiben.
 - `total` fällt, wenn es **selbst** unter der Schwelle liegt (R14) **oder** wenn überhaupt eine Zeile unterdrückt ist. Letzteres ist die konservative Wahl: Die Sekundär-Suppression schützt nur den Fall *genau einer* unterdrückten Zelle; bleiben mehrere unterdrückt, wäre `total` weiterhin ein Rückrechnungs-Hebel.
 
-### Vollbeispiel — `JugendamtBackend`
+### Vollbeispiel — `SampleReport1Backend`
 
 Mehrere zusammenhängende Kennzahlen plus Vollständigkeits-Meldungen. Hier reicht Zellen-Suppression nicht:
 
-1. **Report-Körper:** dieselbe Maschinerie wie im PDF (`suppress_jugendamt_stats`) — Kategorien- und Altersgruppen-Zellen `< k` fallen inklusive Sekundär-Suppression, `unique_clients` und die Randsumme `total < k` werden `None`. `records` wird aus den **bereits suppressierten** Zeilen neu projiziert; ohne diesen Schritt hätte das CSV die Rohzahlen weiter gezeigt.
+1. **Report-Körper:** dieselbe Maschinerie wie im PDF (`suppress_sample_report_1_stats`) — Kategorien- und Altersgruppen-Zellen `< k` fallen inklusive Sekundär-Suppression, `unique_clients` und die Randsumme `total < k` werden `None`. `records` wird aus den **bereits suppressierten** Zeilen neu projiziert; ohne diesen Schritt hätte das CSV die Rohzahlen weiter gezeigt.
 2. **Vollständigkeits-Meldungen** werden für den Export **immer** neu formuliert: ohne Bezugsgröße und ohne Prozentanteil (die Bezugsgröße wäre der Hebel für die komplementäre Rückrechnung). Die Zahl fällt ganz, wenn sie selbst `< k` ist, wenn ihr **Komplement** `< k` ist, oder wenn es für den `code` keine geprüft ziffernarme Formulierung gibt (Fail-safe für künftige Checks). Der Hinweis auf die Lücke bleibt in jedem Fall stehen — ein Bericht, der Lücken verschweigt, wäre irreführend vollständig.
 3. **Vier-Term-Identität.** Konstruktionsbedingt gilt
 
@@ -340,11 +340,11 @@ Mehrere zusammenhängende Kennzahlen plus Vollständigkeits-Meldungen. Hier reic
 
  — beide Seiten sind „alle sichtbaren Ereignisse im Zeitraum". Sind **drei** Terme bekannt und der vierte verborgen, ist der vierte exakt bestimmt und die Suppression liefe leer. `_close_identity_leak` degradiert dann einen weiteren Term, und zwar immer über die *Meldungen*: bevorzugt fällt die Zahl einer bezifferten Meldung; erst wenn keine mehr beziffert ist, wird eine **fehlende** Meldung durch einen Unterdrückungs-Hinweis ersetzt — denn `validate_completeness` meldet nur Lücken > 0, eine fehlende Meldung ist also deterministisch die Zahl 0 und damit selbst ein bekannter Term. Platzhalter- und Degradations-Text sind **wortgleich**; wäre der Wortlaut unterscheidbar, verriete er, ob die Lücke > 0 ist.
 
-**Merke:** Ein `rows`-Backend mit *einer* Kennzahl je Zeile hat keine solche Identität — dort genügt das Muster aus `example.py`. Wer mehrere zusammenhängende Kennzahlen oder bezifferte Meldungen ausgibt, orientiert sich an `JugendamtBackend.prepare_export` und prüft die Beziehungen zwischen ihnen **als Ganzes**, nicht paarweise.
+**Merke:** Ein `rows`-Backend mit *einer* Kennzahl je Zeile hat keine solche Identität — dort genügt das Muster aus `example.py`. Wer mehrere zusammenhängende Kennzahlen oder bezifferte Meldungen ausgibt, orientiert sich an `SampleReport1Backend.prepare_export` und prüft die Beziehungen zwischen ihnen **als Ganzes**, nicht paarweise.
 
 ### Grenzverhalten, das man kennen muss
 
-- **`prepare_export` ist nicht idempotent.** Der Hook erwartet das **rohe** `build_dataset`-Ergebnis (`JugendamtBackend` wandelt `by_category` z. B. von Tupeln in Dict-Zeilen). Zweimal aufrufen ist kein sinnvoller Aufruf; genau einmal transformieren.
+- **`prepare_export` ist nicht idempotent.** Der Hook erwartet das **rohe** `build_dataset`-Ergebnis (`SampleReport1Backend` wandelt `by_category` z. B. von Tupeln in Dict-Zeilen). Zweimal aufrufen ist kein sinnvoller Aufruf; genau einmal transformieren.
 - **Ein leerer Zeitraum sieht aus wie eine Suppression.** `0 < k`, also wird auch die ehrliche Null unterdrückt. Das ist Verhalten der geteilten Suppressions-Funktion und die sichere Richtung, aber es kann Empfänger verwirren.
 - **Übersuppression an den Rändern.** Bei leeren Altersgruppen-Listen oder sehr kleinem *k* kann die Identitäts-Schließung mehr degradieren als nötig. Die Richtung ist sicher, der Aussagekraftverlust real.
 - **Suppression gehört nie in `build_dataset`.** Sonst wären auch Snapshots beschnitten — und damit die Grundlage jeder späteren Auswertung und des unveränderten PDF-Pfads.
@@ -448,7 +448,7 @@ Beispiele aus dem Sachbericht:
 
 ## 10. Test-Checkliste für neue Backends
 
-Testdateien folgen dem Muster `src/tests/test_reporting_<slug>.py`. Die bestehenden Suiten (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_jugendamt.py`, `test_reporting_example.py`, `test_reporting_views.py`) sind Vorlagen.
+Testdateien folgen dem Muster `src/tests/test_reporting_<slug>.py`. Die bestehenden Suiten (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_sample_report_1.py`, `test_reporting_example.py`, `test_reporting_views.py`) sind Vorlagen.
 
 **Registry-Isolation (Pflicht, sonst ordnungsabhängige Fehlschläge).** Ad-hoc registrierte Test-Backends dürfen nicht in Folgetests desselben Workers leaken. Direkt am Modul patchen, kein Proxy:
 

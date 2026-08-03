@@ -3553,7 +3553,7 @@
 
 **Schritte:**
 1. 3 Einträge markieren.
-2. „Bulk-Defer" klicken, Begründung eingeben („Klärung mit Jugendamt offen").
+2. „Bulk-Defer" klicken, Begründung eingeben („Klärung mit der Fachbehörde offen").
 3. Defer-Dauer (z.B. 30 Tage) wählen, bestätigen.
 4. Eintrag-Detail prüfen → Defer-Counter sehen.
 
@@ -4074,7 +4074,7 @@
 <details open>
 <summary><strong>📊 STAT — Statistik (15 Cases)</strong></summary>
 
-**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/jugendamt/`, `/statistics/reports/panel/`, `/statistics/reports/export/` 
+**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/sample-report-1/`, `/statistics/reports/panel/`, `/statistics/reports/export/` 
 **Views:** `src/core/views/statistics.py` 
 **Services:** `src/core/services/statistics.py`, `src/core/services/export.py`, `src/core/reporting/` (Registry + Backends) 
 **Management-Commands:** `create_statistics_snapshots` 
@@ -4200,7 +4200,7 @@
 
 ---
 
-### TC-ID: ENT-STAT-06 — Jugendamt-Export (strukturierter Bericht)
+### TC-ID: ENT-STAT-06 — Beispiel-Sachbericht-Export (strukturierter Bericht)
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -4212,7 +4212,7 @@
 - `/statistics/` offen.
 
 **Schritte:**
-1. „Jugendamt-Export" wählen.
+1. „Beispiel-Sachbericht" wählen.
 2. Berichtsperiode auswählen.
 3. Format (CSV/PDF) wählen.
 4. Download.
@@ -4348,9 +4348,9 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_jugendamt.py::TestValidateCompleteness` |
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_sample_report_1.py::TestValidateCompleteness` |
 
-**Voraussetzung:** ENT-STAT-10; Zeitraum mit Ereignissen ohne Personenbezug bzw. ohne Jugendamt-Zuordnung (Seed liefert beides).
+**Voraussetzung:** ENT-STAT-10; Zeitraum mit Ereignissen ohne Personenbezug bzw. ohne Berichtszuordnung (Seed liefert beides).
 
 **Vorbereitung:**
 - Panel „Beispiel-Sachbericht" offen.
@@ -4389,7 +4389,7 @@
 4. Dateien öffnen und mit der Panel-Vorschau vergleichen.
 
 **Erwartetes Ergebnis:**
-- Drei Downloads mit Dateinamen `jugendamt_<von>_<bis>.csv` / `.json` / `.xml` (Slug des Backends, Zeitraum aus dem Panel).
+- Drei Downloads mit Dateinamen `sample-report-1_<von>_<bis>.csv` / `.json` / `.xml` (Slug des Backends, Zeitraum aus dem Panel).
 - Inhalt deckungsgleich mit der Vorschau (gleiche Zeilen, gleiche Suppressionen).
 - `assistenz`/`fachkraft` erhalten beim Direktaufruf von `/statistics/reports/export/` 403 (LEAD+, vgl. ENT-STAT-08).
 
@@ -4489,7 +4489,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `src/tests/test_reporting_jugendamt.py::TestPrepareExport`, `test_reporting_backends.py` |
+| Statistik | leitung | C | ⚪ | `src/tests/test_reporting_sample_report_1.py::TestPrepareExport`, `test_reporting_backends.py` |
 
 **Voraussetzung:** Kleinstfallzahl-Schwelle der Einrichtung gesetzt (Standard); Zeitraum mit Kategorien unterhalb der Schwelle.
 
@@ -4937,7 +4937,7 @@
 - Klartext, betroffenenfreundliche Sprache.
 
 **DSGVO/Security-Note:**
-- **Art. 13 = Datenerhebung beim Betroffenen, Art. 14 = bei Dritten** (z.B. Jugendamt meldet Klient an Anlaufstelle).
+- **Art. 13 = Datenerhebung beim Betroffenen, Art. 14 = bei Dritten** (z.B. eine Behörde meldet Klientel an die Anlaufstelle).
 - Information muss zum Zeitpunkt der Erhebung gegeben werden.
 
 **Status:** ☐ Offen

@@ -543,7 +543,7 @@ The example activity report generates a structured report based on a fixed examp
 
 1. Select the time period in the statistics dashboard.
 2. Click **Example Activity Report**.
-3. The PDF file is downloaded (filename: `jugendamt_YYYY-MM-DD_YYYY-MM-DD.pdf`).
+3. The PDF file is downloaded (filename: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
 
@@ -870,5 +870,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 5bd77f4102c54a5430694a9ed9c813ca829d873b -->
+<!-- source-hash: 14d9f4e819827dd4c623c9c8c1dd0ec2b0e7ed42 -->
 

@@ -6,7 +6,7 @@
 
 ## What is Anlaufstelle?
 
-Low-threshold social services -- drop-in centers, emergency shelters, street work teams, and day centers serving people experiencing homelessness or addiction -- document their work almost entirely on paper: handwritten visitor lists, A4 logbooks passed between shifts, and self-built Excel sheets. The semi-annual report to the youth welfare office regularly takes facility managers two to three weeks of manual data aggregation. This is not a failure of the facilities; it is a rational response to the absence of suitable tools.
+Low-threshold social services -- drop-in centers, emergency shelters, street work teams, and day centers serving people experiencing homelessness or addiction -- document their work almost entirely on paper: handwritten visitor lists, A4 logbooks passed between shifts, and self-built Excel sheets. The semi-annual report to the public funding body regularly takes facility managers two to three weeks of manual data aggregation. This is not a failure of the facilities; it is a rational response to the absence of suitable tools.
 
 Established commercial social-sector software targets large providers with hundreds of staff. Licenses are expensive, rollouts require weeks of consulting, and every system assumes that each person is registered with a real name and address. In reality, most contacts at low-threshold facilities are anonymous. Clients have the right not to disclose their identity. A system that asks for a name first has not understood the working reality.
 
@@ -208,5 +208,5 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-07-14 -->
-<!-- source-hash: b9be8bb -->
+<!-- translation-date: 2026-08-03 -->
+<!-- source-hash: 63306f8f8999ee7c5c93d7ee775529588daa6270 -->

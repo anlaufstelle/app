@@ -540,7 +540,7 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 
 1. Wählen Sie im Statistik-Dashboard den Zeitraum.
 2. Klicken Sie auf **Beispiel-Sachbericht**.
-3. Die PDF-Datei wird heruntergeladen (Dateiname: `jugendamt_YYYY-MM-DD_YYYY-MM-DD.pdf`).
+3. Die PDF-Datei wird heruntergeladen (Dateiname: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.
 

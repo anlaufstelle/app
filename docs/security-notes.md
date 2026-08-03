@@ -391,13 +391,13 @@ Row-Level-Zugriff auf die Rohdaten haben.
 **Suppression aktiv (verdrahtet + getestet):**
 
 - On-Screen-**External-Report** `/statistics/external/` (HTML **und** `?format=json`) — [`build_external_report`](../src/core/services/dashboard/external_report.py), Refs #921.
-- **Beispiel-Sachbericht / Jugendamt-PDF** (`generate_jugendamt_pdf` → `suppress_jugendamt_stats`) — das am ehesten extern zirkulierende Artefakt, Refs #1278.
+- **Beispiel-Sachbericht-PDF** (`generate_sample_report_1_pdf` → `suppress_sample_report_1_stats`) — das am ehesten extern zirkulierende Artefakt, Refs #1278.
 - **Halbjahres-Sachbericht-PDF** im Standard-(externen-)Modus (`generate_report_pdf` → `suppress_report_stats`); `?internal=1` mit INTERN-Banner (Lead/Admin) bleibt roh — Security-Review R4.
 - **Randsummen** (`total_contacts`/`total`) unterhalb der Schwelle sind selbst Kleinstfallzahlen und werden ebenfalls unterdrückt — Security-Review R14.
 
 Gemeinsame Logik (Single Source of Truth): `_suppress_small` / `_suppress_stage_dict` /
 `_apply_secondary_suppression` in [`external_report.py`](../src/core/services/dashboard/external_report.py);
-die drei Public-Wrapper (`build_external_report`, `suppress_jugendamt_stats`,
+die drei Public-Wrapper (`build_external_report`, `suppress_sample_report_1_stats`,
 `suppress_report_stats`) normalisieren nur die jeweilige Datenform — kein Copy-Paste
 der Suppression selbst.
 

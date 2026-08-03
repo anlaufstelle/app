@@ -148,6 +148,31 @@ Zwei URL-Patterns decken **alle** Backends ab, Auswahl über `?backend=<slug>`: 
 - **Generischer Monats-Merge im Vertrag.** Verworfen: ohne Merge-Semantik je Feld (summierbar, Maximum, Mengenvereinigung) nicht definierbar; bei genau einem snapshot-fähigen Backend YAGNI.
 - **`defusedxml` für den XML-Renderer.** Verworfen: `defusedxml` härtet Parsing. Hier wird ausschließlich serialisiert — eine Abhängigkeit ohne Wirkung.
 
+## Update 2026-08-03: Slug `sample-report-1`, Übergangsphase beendet (Refs #1739, #1740)
+
+Zwei bewusst offen gelassene Punkte dieses ADR sind eingelöst. **Konsequenz 6 („Dual-Write bis auf Weiteres") und Konsequenz 9 („Interne Bezeichner bleiben ‚jugendamt'") sind damit erledigt**; die Abschnitte oben beschreiben den M5-Stand und bleiben als Historie stehen.
+
+**1. Traegerneutrale Bezeichner (#1739).** Der Beispiel-Sachbericht heißt intern jetzt durchgängig `sample-report-1`:
+
+| Bis M5 | Seit #1739 |
+|---|---|
+| Registry-Slug `jugendamt` | `sample-report-1` |
+| Modul `backends/jugendamt.py`, Klasse `JugendamtBackend` | [`backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py), `SampleReport1Backend` |
+| URL `statistics/export/jugendamt/` | `statistics/export/sample-report-1/` (**harter Umzug ohne Redirect** — interne App, keine externen Deep-Links) |
+| PDF-Dateiname `jugendamt_<von>_<bis>.pdf` | `sample-report-1_<von>_<bis>.pdf` (gleiches Muster wie die generische CSV/JSON/XML-Pipeline) |
+| Services `suppress_jugendamt_stats`, `get_jugendamt_statistics_hybrid`, `generate_jugendamt_pdf` | `…_sample_report_1_…` |
+
+Das **Slug-Format** ist dafür um Bindestriche erweitert worden: `^[a-z0-9]+(?:[-_][a-z0-9]+)*$` statt `^[a-z0-9_]+$` (Trennzeichen am Rand oder doppelt bleiben ungültig — der Slug wird als Dateinamen-Präfix, XML-Attribut und `backend_data`-Schlüssel weitergereicht). Der im ADR beschriebene Bruch der Bestands-`backend_data`-Schlüssel ist per Datenmigration [`0123`](../../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py) aufgelöst (Schlüsselwechsel, idempotent, reversibel).
+
+Der **Anzeigename bleibt „Beispiel-Sachbericht"** (#1279); zusätzlich sind die Vollständigkeits-Meldungen des Backends neutral formuliert („ohne Berichtszuordnung" statt des Behördennamens) — sie erscheinen in Panel-Vorschau und JSON-/XML-Export.
+
+**2. Ende der Übergangsphase (#1740).** Der Dual-Write ins Altfeld `StatisticsSnapshot.jugendamt_data` ist beendet, der Read-Fallback abgebaut und die Spalte mit Migration [`0124`](../../src/core/migrations/0124_drop_jugendamt_residue.py) entfernt. `backend_data` ist damit die **einzige** Snapshot-Quelle. Zwei Folgen, die Betreiber kennen müssen:
+
+- **Der Rückweg ist ab `0124` datenverlustbehaftet.** `RemoveField` legt die Spalte beim Rückwärtsmigrieren zwar wieder an, aber leer. Wer zurück muss, migriert auf `0123` (das den Schlüssel dabei zurückbenennt) und füllt das Feld aus `backend_data["jugendamt"]` neu — oder spielt ein Backup ein.
+- **`0123` prüft die Roll-Forward-Kante fail-loud.** Weicht ein befülltes Altfeld vom `backend_data`-Eintrag ab (Symptom: zwischenzeitlich lief Alt-Code, der nur das Altfeld fortschrieb), bricht die Migration mit Fundstellen und Behebungshinweis ab, statt den veralteten Stand festzuschreiben. Welcher Stand gilt, entscheidet der Betrieb — Behebung: betroffene Monate mit `manage.py create_statistics_snapshots` neu berechnen.
+
+Unberührt bleiben die übrigen Entscheide, insbesondere der sachberichtspezifische Monats-Merge (Konsequenz 5/Entscheid 8), die Live-vs-Hybrid-Divergenz (Konsequenz 8, #1743) und der `DocumentType.slug`-Zweitschlüssel als offene Folgearbeit (#1741).
+
 ## References
 
 - [`src/core/reporting/base.py`](../../src/core/reporting/base.py) — Vertrag (`DatasetBackend`, `DatasetResult`, `FieldSpec`, `CompletenessIssue`, `snapshot_enabled`-Zusage)
