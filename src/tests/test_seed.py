@@ -463,8 +463,8 @@ def test_reseed_regroups_manually_moved_field():
     """Refs #1056: Ein manuell in eine ANDERE Gruppe gehängtes Kontakt-Feld
     wird beim Re-Seed auf die Katalog-Gruppe zurückgesetzt.
 
-    Deckt den Abgleich-Branch in ``_seed_field_groups`` ab (dtf.field_group_id
-    weicht vom Ziel ab → explizites ``.save()``), Richtung „Umgruppierung".
+    Deckt den Abgleich-Zweig des Loaders ab (``field_group`` der Zuordnung
+    weicht vom Paketwert ab → ``updated``), Richtung „Umgruppierung".
     """
     call_command("seed")
 
@@ -973,3 +973,34 @@ def test_seed_is_atomic_when_the_package_cannot_be_applied(facility):
 
     assert not FieldTemplate.objects.filter(facility=facility).exists()
     assert DocumentType.objects.filter(facility=facility).count() == 1
+
+
+@pytest.mark.django_db
+def test_seed_aborts_on_conflicting_facility_owned_field_template(facility):
+    """Eigene Feldvorlage auf einem Katalog-Slug mit abweichendem Feldtyp bricht ALLES ab.
+
+    ``field_type``/``is_encrypted`` sind nach dem Anlegen unveränderlich (E13).
+    Eine Einrichtung, die z. B. ``dauer`` selbst als Textfeld angelegt hat,
+    bekommt daher keinen stillen Typwechsel, sondern einen fail-loud
+    Seed-Abbruch — und zwar für den **gesamten** Lauf, nicht nur für diese
+    eine Vorlage (Alles-oder-nichts).
+    """
+    from core.packages.loader import PackageLoadError
+
+    FieldTemplate.objects.create(
+        facility=facility,
+        name="Eigene Dauer",
+        slug="dauer",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+
+    with pytest.raises(PackageLoadError) as excinfo:
+        doc_types.seed_document_types(facility)
+
+    assert any(identifier == "dauer" for identifier, _message in excinfo.value.report.errors)
+    # Nichts wurde angewendet — weder Typen noch die 24 anderen Vorlagen.
+    assert not DocumentType.objects.filter(facility=facility).exists()
+    assert FieldTemplate.objects.filter(facility=facility).count() == 1
+    conflicting = FieldTemplate.objects.get(facility=facility, slug="dauer")
+    assert conflicting.name == "Eigene Dauer"
+    assert conflicting.field_type == FieldTemplate.FieldType.TEXT

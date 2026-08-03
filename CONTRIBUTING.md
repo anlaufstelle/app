@@ -139,7 +139,38 @@ und ein zweiter Lauf meldet alles als `unverändert`.
 > ein geänderter Slug legt in jeder Bestands-Einrichtung ein Duplikat an statt zu
 > aktualisieren. `system_type` immer mitführen, bei `select`/`multi_select` immer den
 > `options`-Schlüssel; **keinen** `conditions`-Schlüssel ergänzen (auch nicht `[]`
-> das würde per UI gepflegte Feldbedingungen löschen).
+> das würde per UI gepflegte Feldbedingungen löschen). Die **letzte** Gruppe eines
+> Dokumentationstyps nie aus dem Katalog entfernen: der Seed räumt verwaiste Gruppen
+> nur bei Typen auf, für die das Paket noch mindestens eine Gruppe deklariert — erst
+> die Felder aus der Gruppe herausnehmen (`group_slug` streichen), die leere Gruppe
+> aber stehen lassen.
+
+#### Was der Loader-Seed einer Bestands-Einrichtung antut
+
+Der Seed ist ab M2 kein reines „anlegen, falls nicht vorhanden" mehr, sondern ein
+Rücksync gegen `default.yaml`. Was das im Betrieb bedeutet:
+
+| Betroffen | Wirkung beim nächsten Seed-Lauf |
+|---|---|
+| `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` eines Katalog-Typs | wird auf den Katalogwert **zurückgesetzt** (früher nur beim Anlegen gesetzt) |
+| `sort_order` von Gruppen **und** Feldzuordnungen — auch bei Typen ohne Gruppen | wird auf die Katalogposition zurückgesetzt (früher blieb eine per UI umsortierte, gruppenlose Feldliste stehen) |
+| `default_value` einer Katalog-Feldvorlage | wird auf den Paketwert (im Katalog durchgehend leer) **zurückgesetzt** — ein per Config-UI gepflegter Vorbelegungswert überlebt den Seed **nicht**. Paketformat v1 kann „nicht anfassen" für dieses Feld nicht ausdrücken (anders als `conditions`). |
+| Felder, die eine Einrichtung einem Katalog-Typ **zusätzlich** zugeordnet hat | bleiben unangetastet (der Loader fasst nur an, was im Paket steht) |
+| `retention_days`, `description`, `is_active` (Typ) bzw. `statistics_category`, `is_active` (Vorlage) | nicht Teil von Schema v1 — werden weder gesetzt noch zurückgesetzt |
+
+Zwei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder-nichts
+es wird nichts angewendet, auch nicht für die übrigen Typen):
+
+* **Eigene Feldvorlage auf einem Katalog-Slug.** Hat eine Einrichtung z. B. `dauer` selbst
+ als Textfeld angelegt, kollidiert das mit `field_type`/`is_encrypted` aus dem Paket
+ beide sind nach dem Anlegen unveränderlich. Auflösung: die eigene Vorlage auf einen
+ anderen Slug bringen (neu anlegen + Daten migrieren) oder den Katalog-Slug ändern.
+* **Namens-Kollision nach einer Umbenennung.** Wurde „Kontakt" per UI in „Erstkontakt"
+ umbenannt und danach ein *neuer* Typ „Kontakt" angelegt (der bekommt den Slug
+ `kontakt-2`), will der Seed den Typ mit dem Slug `kontakt` wieder in „Kontakt"
+ zurückbenennen — das verletzt `UniqueConstraint(facility, name, category)`. Ab da
+ scheitert **jeder** weitere Seed-Lauf, bis manuell aufgeräumt ist. Auflösung: den
+ betreiber-eigenen Typ umbenennen oder den Namen im Katalog anpassen.
 
 **Scale-Profile im Überblick:**
 

@@ -683,4 +683,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-01 -->
-<!-- source-hash: 7e5889015591836ae1553f5d3a66afdcdeee4d21 -->
+<!-- source-hash: 4b8851d97e1a421c9660c546605984b7cf27c3a3 -->
