@@ -24,8 +24,8 @@ from core.reporting.backends.jugendamt import (
     _ISSUE_SEVERITIES,
     CATEGORY_MAP,
     JugendamtBackend,
+    _hide_term,
     _prepare_issue,
-    _verberge_term,
 )
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
@@ -1166,7 +1166,7 @@ class TestVierTermIdentitaet:
 
 class TestGuardPlatzhalterUndDegradierteMeldungGleich:
     """Fable-Re-Review (Punkt 8, Welle-A-Polish): die eingefuegte Platzhalter-
-    Meldung fuer eine *fehlende* Meldung (``_verberge_term``) und die
+    Meldung fuer eine *fehlende* Meldung (``_hide_term``) und die
     degradierte Fassung einer tatsaechlich *vorhandenen* Meldung
     (``_prepare_issue``) muessen wortgleich und severity-gleich sein — heute
     nur ueber die gemeinsamen Konstanten ``_SUPPRESSED_MESSAGES``/
@@ -1179,13 +1179,13 @@ class TestGuardPlatzhalterUndDegradierteMeldungGleich:
     @pytest.mark.parametrize("code", list(_IDENTITY_CODES))
     def test_platzhalter_und_degradierte_meldung_sind_identisch(self, code):
         # (a) Platzhalter: die Meldung fehlt komplett (deterministisch 0) —
-        # ``_verberge_term`` FUEGT einen Unterdrueckungs-Hinweis EIN.
-        platzhalter = _verberge_term([], code)[0]
+        # ``_hide_term`` FUEGT einen Unterdrueckungs-Hinweis EIN.
+        platzhalter = _hide_term([], code)[0]
 
         # (b) Degradation: dieselbe Meldung existiert bereits (bezifferte
         # Rohfassung, Zahl unter der Schwelle) — ``_prepare_issue`` degradiert sie.
         rohfassung = CompletenessIssue(code, "Beliebiger Rohtext mit 3 Ereignissen", _ISSUE_SEVERITIES[code], count=3)
-        degradiert = _prepare_issue(rohfassung, threshold=100, komplemente={})
+        degradiert = _prepare_issue(rohfassung, threshold=100, complements={})
 
         assert platzhalter.message == degradiert.message
         assert platzhalter.severity == degradiert.severity

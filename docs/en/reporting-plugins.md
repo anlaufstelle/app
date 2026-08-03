@@ -239,10 +239,10 @@ As soon as the report can be downloaded, `prepare_export` is **required reading*
 
         total = result.summary["total"]
         any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
-        total_faellt = total < threshold or any_row_suppressed
+        drop_total = total < threshold or any_row_suppressed
 
         summary = dict(result.summary)
-        summary["total"] = None if total_faellt else total
+        summary["total"] = None if drop_total else total
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)
 ```
@@ -328,7 +328,7 @@ Several interrelated metrics plus completeness notices. Cell suppression alone i
    total + unmapped_events  =  Σ by_age_cluster + events_without_client
    ```
 
- — both sides are "all visible events in the period". If **three** terms are known and the fourth is hidden, the fourth is exactly determined and the suppression would run empty. `_schliesse_identitaets_leak` then degrades one further term, and always via the *notices*: preferably the number of a quantified notice is dropped; only when none is quantified any more is a **missing** notice replaced by a suppression hint — because `validate_completeness` only reports gaps > 0, so a missing notice deterministically means zero and is itself a known term. The placeholder text and the degradation text are **word-for-word identical**; if the wording were distinguishable, it would reveal whether the gap is > 0.
+ — both sides are "all visible events in the period". If **three** terms are known and the fourth is hidden, the fourth is exactly determined and the suppression would run empty. `_close_identity_leak` then degrades one further term, and always via the *notices*: preferably the number of a quantified notice is dropped; only when none is quantified any more is a **missing** notice replaced by a suppression hint — because `validate_completeness` only reports gaps > 0, so a missing notice deterministically means zero and is itself a known term. The placeholder text and the degradation text are **word-for-word identical**; if the wording were distinguishable, it would reveal whether the gap is > 0.
 
 **Remember:** a `rows` backend with *one* metric per row has no such identity — the pattern from `example.py` is sufficient there. Anyone emitting several interrelated metrics or quantified notices should follow `JugendamtBackend.prepare_export` and examine the relationships between them **as a whole**, not pairwise.
 
@@ -490,4 +490,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: fb275d0d4390323882ebe564af38578840fc17a5 -->
+<!-- source-hash: bcc9368fd33a30441e317344e0a7f7df564f95ae -->

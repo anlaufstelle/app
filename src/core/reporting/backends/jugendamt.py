@@ -85,7 +85,7 @@ _EXPORT_MESSAGES = {
 #
 # Die Formulierung sagt bewusst **nicht**, dass es solche Ereignisse gibt: der
 # gleiche Text steht auch dann, wenn die Meldung nur als Unterdrueckungs-Hinweis
-# fuer einen Wert eingesetzt wird, den es gar nicht gibt (``_verberge_term``).
+# fuer einen Wert eingesetzt wird, den es gar nicht gibt (``_hide_term``).
 # Waeren beide Faelle unterscheidbar, verriete der Wortlaut selbst, ob die
 # Luecke > 0 ist — und damit genau das, was unterdrueckt werden soll.
 _SUPPRESSED_MESSAGES = {
@@ -104,7 +104,7 @@ _ISSUE_SEVERITIES: dict[str, Literal["info", "warning"]] = {
 }
 
 # Meldungs-Terme der Vier-Term-Identitaet, in Degradations-Reihenfolge:
-# ``events_without_client`` faellt zuerst (siehe ``_schliesse_identitaets_leak``).
+# ``events_without_client`` faellt zuerst (siehe ``_close_identity_leak``).
 _IDENTITY_CODES = ("events_without_client", "unmapped_system_types")
 
 # Fail-safe fuer kuenftige Checks ohne eigenen Ersatztext: lieber unspezifisch
@@ -112,7 +112,7 @@ _IDENTITY_CODES = ("events_without_client", "unmapped_system_types")
 _SUPPRESSED_FALLBACK = "Angabe unterdrückt (k-Anonymität)"
 
 
-def _prepare_issue(issue: CompletenessIssue, threshold: int, komplemente: dict[str, int]) -> CompletenessIssue:
+def _prepare_issue(issue: CompletenessIssue, threshold: int, complements: dict[str, int]) -> CompletenessIssue:
     """Export-Fassung einer Vollstaendigkeits-Meldung (K-Anon).
 
     Die Zahl faellt, wenn sie selbst unter der Schwelle liegt, wenn ihr
@@ -125,63 +125,63 @@ def _prepare_issue(issue: CompletenessIssue, threshold: int, komplemente: dict[s
     if issue.count is None:
         return issue
 
-    vorlage = _EXPORT_MESSAGES.get(issue.code)
-    komplement = komplemente.get(issue.code)
-    zahl_faellt = vorlage is None or issue.count < threshold or (komplement is not None and komplement < threshold)
-    if zahl_faellt:
+    template = _EXPORT_MESSAGES.get(issue.code)
+    complement = complements.get(issue.code)
+    drop_number = template is None or issue.count < threshold or (complement is not None and complement < threshold)
+    if drop_number:
         return dataclasses.replace(
             issue,
             message=_SUPPRESSED_MESSAGES.get(issue.code, _SUPPRESSED_FALLBACK),
             count=None,
         )
-    return dataclasses.replace(issue, message=vorlage.format(count=issue.count))
+    return dataclasses.replace(issue, message=template.format(count=issue.count))
 
 
 def _term_status(issues: list[CompletenessIssue], code: str) -> str:
-    """``"beziffert"`` | ``"verborgen"`` | ``"fehlt"`` fuer einen Meldungs-Term.
+    """``"quantified"`` | ``"hidden"`` | ``"missing"`` fuer einen Meldungs-Term.
 
-    ``"fehlt"`` heisst **bekannt**: ``validate_completeness`` meldet nur Luecken
+    ``"missing"`` heisst **bekannt**: ``validate_completeness`` meldet nur Luecken
     > 0, eine fehlende Meldung ist also deterministisch die Zahl 0.
     """
     for issue in issues:
         if issue.code == code:
-            return "beziffert" if issue.count is not None else "verborgen"
-    return "fehlt"
+            return "quantified" if issue.count is not None else "hidden"
+    return "missing"
 
 
-def _bekannte_terme(summary: dict, issues: list[CompletenessIssue]) -> int:
+def _known_terms(summary: dict, issues: list[CompletenessIssue]) -> int:
     """Wie viele der vier Identitaets-Terme ein Empfaenger bestimmen kann."""
-    bekannt = 0
+    known = 0
     if summary.get("total") is not None:
-        bekannt += 1
+        known += 1
     # Σ der Altersgruppen ist nur ohne unterdrueckte Zelle bestimmbar; die leere
     # Liste ist bestimmbar (= 0).
-    if not any(zeile.get("suppressed") for zeile in summary.get("by_age_cluster", [])):
-        bekannt += 1
-    bekannt += sum(1 for code in _IDENTITY_CODES if _term_status(issues, code) != "verborgen")
-    return bekannt
+    if not any(row.get("suppressed") for row in summary.get("by_age_cluster", [])):
+        known += 1
+    known += sum(1 for code in _IDENTITY_CODES if _term_status(issues, code) != "hidden")
+    return known
 
 
-def _verberge_term(issues: list[CompletenessIssue], code: str) -> list[CompletenessIssue]:
+def _hide_term(issues: list[CompletenessIssue], code: str) -> list[CompletenessIssue]:
     """Nimmt einem Meldungs-Term seine Aussagekraft fuer die Identitaet.
 
     Bei bezifferter Meldung faellt die Zahl. Fehlt die Meldung, wird ein
     Unterdrueckungs-Hinweis **eingefuegt** — sonst bliebe die Abwesenheit selbst
     die Information „dieser Term ist 0".
     """
-    ersatz_text = _SUPPRESSED_MESSAGES[code]
+    replacement_text = _SUPPRESSED_MESSAGES[code]
     for index, issue in enumerate(issues):
         if issue.code == code:
-            ersetzt = dataclasses.replace(issue, message=ersatz_text, count=None)
-            return [*issues[:index], ersetzt, *issues[index + 1 :]]
+            replaced = dataclasses.replace(issue, message=replacement_text, count=None)
+            return [*issues[:index], replaced, *issues[index + 1 :]]
 
-    platzhalter = CompletenessIssue(code, ersatz_text, _ISSUE_SEVERITIES[code], count=None)
+    placeholder = CompletenessIssue(code, replacement_text, _ISSUE_SEVERITIES[code], count=None)
     # Kanonische Reihenfolge der Meldungen beibehalten (unmapped zuerst).
     position = 0 if code == "unmapped_system_types" else len(issues)
-    return [*issues[:position], platzhalter, *issues[position:]]
+    return [*issues[:position], placeholder, *issues[position:]]
 
 
-def _schliesse_identitaets_leak(summary: dict, issues: list[CompletenessIssue]) -> list[CompletenessIssue]:
+def _close_identity_leak(summary: dict, issues: list[CompletenessIssue]) -> list[CompletenessIssue]:
     """Schliesst die Rueckrechnung ueber die Vier-Term-Identitaet.
 
     Konstruktionsbedingt gilt ``total + unmapped_events = Σ by_age_cluster +
@@ -198,19 +198,19 @@ def _schliesse_identitaets_leak(summary: dict, issues: list[CompletenessIssue]) 
     einen bekannten Term in einen verborgenen, die Schleife terminiert also
     spaetestens nach zwei Runden (mehr Meldungs-Terme gibt es nicht).
     """
-    ergebnis = list(issues)
+    updated = list(issues)
     # Bewusst durch die Zahl der Meldungs-Terme begrenzt statt ``while``: jede
     # Runde verbirgt einen Term, mehr als zwei kann es nicht geben.
-    for _runde in _IDENTITY_CODES:
-        if _bekannte_terme(summary, ergebnis) != 3:
+    for _round in _IDENTITY_CODES:
+        if _known_terms(summary, updated) != 3:
             break
-        kandidat = next(
-            (code for code in _IDENTITY_CODES if _term_status(ergebnis, code) == "beziffert"), None
-        ) or next((code for code in _IDENTITY_CODES if _term_status(ergebnis, code) == "fehlt"), None)
-        if kandidat is None:  # pragma: no cover - bei drei bekannten Termen unerreichbar
+        candidate = next(
+            (code for code in _IDENTITY_CODES if _term_status(updated, code) == "quantified"), None
+        ) or next((code for code in _IDENTITY_CODES if _term_status(updated, code) == "missing"), None)
+        if candidate is None:  # pragma: no cover - bei drei bekannten Termen unerreichbar
             break
-        ergebnis = _verberge_term(ergebnis, kandidat)
-    return ergebnis
+        updated = _hide_term(updated, candidate)
+    return updated
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -360,7 +360,7 @@ class JugendamtBackend(DatasetBackend):
         formuliert (``_prepare_issue``): ohne Bezugsgroesse und Prozentanteil,
         und ganz ohne Zahl, sobald die Zahl selbst oder ihr Komplement unter
         der Schwelle liegt. Anschliessend prueft
-        ``_schliesse_identitaets_leak`` die Vier-Term-Identitaet als Ganzes.
+        ``_close_identity_leak`` die Vier-Term-Identitaet als Ganzes.
         Der Hinweis auf die Luecke bleibt in jedem Fall stehen.
         ``build_dataset`` bleibt roh (Snapshot-Payload).
 
@@ -389,13 +389,13 @@ class JugendamtBackend(DatasetBackend):
         # deshalb faellt die Zahl auch dann, wenn *das Komplement* klein ist.
         # Die Komplemente **vor** der Suppression aus dem rohen Aggregat ziehen:
         # in ``summary`` sind die Zellen an dieser Stelle ggf. schon ``None``.
-        komplemente = {
+        complements = {
             "events_without_client": sum(row.get("count") or 0 for row in result.summary.get("by_age_cluster", [])),
             "unmapped_system_types": result.summary.get("total") or 0,
         }
-        completeness = [_prepare_issue(issue, threshold, komplemente) for issue in result.completeness]
+        completeness = [_prepare_issue(issue, threshold, complements) for issue in result.completeness]
         # Zweiter Durchgang gegen die Rueckrechnung ueber die Identitaet als
         # Ganzes — die paarweise Komplementregel oben deckt nur eine Richtung ab.
-        completeness = _schliesse_identitaets_leak(summary, completeness)
+        completeness = _close_identity_leak(summary, completeness)
 
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

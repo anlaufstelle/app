@@ -106,9 +106,9 @@ class ExampleBackend(DatasetBackend):
 
         total = result.summary["total"]
         any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
-        total_faellt = total < threshold or any_row_suppressed
+        drop_total = total < threshold or any_row_suppressed
 
         summary = dict(result.summary)
-        summary["total"] = None if total_faellt else total
+        summary["total"] = None if drop_total else total
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)

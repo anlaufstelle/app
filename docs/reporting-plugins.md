@@ -236,10 +236,10 @@ Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtle
 
         total = result.summary["total"]
         any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
-        total_faellt = total < threshold or any_row_suppressed
+        drop_total = total < threshold or any_row_suppressed
 
         summary = dict(result.summary)
-        summary["total"] = None if total_faellt else total
+        summary["total"] = None if drop_total else total
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)
 ```
@@ -325,7 +325,7 @@ Mehrere zusammenhängende Kennzahlen plus Vollständigkeits-Meldungen. Hier reic
    total + unmapped_events  =  Σ by_age_cluster + events_without_client
    ```
 
- — beide Seiten sind „alle sichtbaren Ereignisse im Zeitraum". Sind **drei** Terme bekannt und der vierte verborgen, ist der vierte exakt bestimmt und die Suppression liefe leer. `_schliesse_identitaets_leak` degradiert dann einen weiteren Term, und zwar immer über die *Meldungen*: bevorzugt fällt die Zahl einer bezifferten Meldung; erst wenn keine mehr beziffert ist, wird eine **fehlende** Meldung durch einen Unterdrückungs-Hinweis ersetzt — denn `validate_completeness` meldet nur Lücken > 0, eine fehlende Meldung ist also deterministisch die Zahl 0 und damit selbst ein bekannter Term. Platzhalter- und Degradations-Text sind **wortgleich**; wäre der Wortlaut unterscheidbar, verriete er, ob die Lücke > 0 ist.
+ — beide Seiten sind „alle sichtbaren Ereignisse im Zeitraum". Sind **drei** Terme bekannt und der vierte verborgen, ist der vierte exakt bestimmt und die Suppression liefe leer. `_close_identity_leak` degradiert dann einen weiteren Term, und zwar immer über die *Meldungen*: bevorzugt fällt die Zahl einer bezifferten Meldung; erst wenn keine mehr beziffert ist, wird eine **fehlende** Meldung durch einen Unterdrückungs-Hinweis ersetzt — denn `validate_completeness` meldet nur Lücken > 0, eine fehlende Meldung ist also deterministisch die Zahl 0 und damit selbst ein bekannter Term. Platzhalter- und Degradations-Text sind **wortgleich**; wäre der Wortlaut unterscheidbar, verriete er, ob die Lücke > 0 ist.
 
 **Merke:** Ein `rows`-Backend mit *einer* Kennzahl je Zeile hat keine solche Identität — dort genügt das Muster aus `example.py`. Wer mehrere zusammenhängende Kennzahlen oder bezifferte Meldungen ausgibt, orientiert sich an `JugendamtBackend.prepare_export` und prüft die Beziehungen zwischen ihnen **als Ganzes**, nicht paarweise.
 

@@ -92,7 +92,7 @@ Der Sachbericht braucht darüber hinaus eine **ganzheitliche Prüfung der Vier-T
 total + unmapped_events  =  Σ by_age_cluster + events_without_client
 ```
 
-— beide Seiten sind „alle sichtbaren Ereignisse im Zeitraum". Sind **drei** Terme bekannt und der vierte verborgen, ist der vierte exakt bestimmt und die Suppression liefe leer. `_schliesse_identitaets_leak` degradiert dann einen weiteren Term, und zwar immer über die *Meldungen* (der Report-Körper gehört der geteilten PDF-Funktion): bevorzugt fällt die Zahl einer bezifferten Meldung; erst wenn keine mehr beziffert ist, wird eine **fehlende** Meldung durch einen Unterdrückungs-Hinweis ersetzt — denn eine fehlende Meldung ist deterministisch die Zahl 0 und damit selbst ein bekannter Term. Platzhalter- und Degradations-Text sind **wortgleich**; wäre der Wortlaut unterscheidbar, verriete er, ob die Lücke > 0 ist.
+— beide Seiten sind „alle sichtbaren Ereignisse im Zeitraum". Sind **drei** Terme bekannt und der vierte verborgen, ist der vierte exakt bestimmt und die Suppression liefe leer. `_close_identity_leak` degradiert dann einen weiteren Term, und zwar immer über die *Meldungen* (der Report-Körper gehört der geteilten PDF-Funktion): bevorzugt fällt die Zahl einer bezifferten Meldung; erst wenn keine mehr beziffert ist, wird eine **fehlende** Meldung durch einen Unterdrückungs-Hinweis ersetzt — denn eine fehlende Meldung ist deterministisch die Zahl 0 und damit selbst ein bekannter Term. Platzhalter- und Degradations-Text sind **wortgleich**; wäre der Wortlaut unterscheidbar, verriete er, ob die Lücke > 0 ist.
 
 ### 6. Export-Pipeline: ein Einstieg, drei Renderer
 
