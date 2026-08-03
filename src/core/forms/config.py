@@ -90,12 +90,18 @@ class DocumentTypeForm(forms.ModelForm):
 
     class Meta:
         model = DocumentType
+        # Refs #1731: ``entity_type`` steht bewusst direkt hinter ``name``. Das
+        # Template rendert generisch (``{% for field in form %}``), diese Liste
+        # IST also die Anzeigereihenfolge — und der Entitätstyp ist die
+        # folgenreichste, nach dem Anlegen unveränderbare Entscheidung: er
+        # bestimmt, ob ``system_type``/``min_contact_stage``/``retention_days``
+        # überhaupt wirken. Er darf nicht hinter den Feldern stehen, die er regiert.
         fields = [
             "name",
+            "entity_type",
             "category",
             "sensitivity",
             "system_type",
-            "entity_type",
             "min_contact_stage",
             "retention_days",
             "description",
@@ -103,10 +109,10 @@ class DocumentTypeForm(forms.ModelForm):
         ]
         widgets = {
             "name": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "entity_type": forms.Select(attrs={"class": INPUT_CSS}),
             "category": forms.Select(attrs={"class": INPUT_CSS}),
             "sensitivity": forms.Select(attrs={"class": INPUT_CSS}),
             "system_type": forms.Select(attrs={"class": INPUT_CSS}),
-            "entity_type": forms.Select(attrs={"class": INPUT_CSS}),
             "min_contact_stage": forms.Select(attrs={"class": INPUT_CSS}),
             "retention_days": forms.NumberInput(attrs={"class": INPUT_CSS, "min": 1}),
             "description": forms.Textarea(attrs={"class": INPUT_CSS, "rows": 3}),
@@ -139,10 +145,21 @@ class DocumentTypeForm(forms.ModelForm):
         # das Formular sie fuer alle Entitaetstypen anbietet.
         entity_hint = _("Wirkt nur bei Dokumentationstypen für Ereignisse.")
         for field_name in ("retention_days", "min_contact_stage"):
-            existing_help = self.fields[field_name].help_text
-            self.fields[field_name].help_text = (
-                f"{existing_help} {entity_hint}".strip() if existing_help else entity_hint
-            )
+            self._append_help_text(field_name, entity_hint)
+        # Refs #1731: ``system_type`` ist der schaerfere Fall — das Select
+        # bietet alle Werte an, ``clean()`` weist jeden gesetzten Wert bei
+        # ``entity_type != event`` als Formfehler ab. Ohne diesen Hinweis
+        # erfaehrt man die Regel erst beim Absenden. Wortlaut deckungsgleich
+        # mit der Fehlermeldung in ``clean()``.
+        self._append_help_text(
+            "system_type",
+            _("Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."),
+        )
+
+    def _append_help_text(self, field_name: str, hint) -> None:
+        """Haengt ``hint`` an den (Modell-)``help_text`` des Feldes an."""
+        existing = self.fields[field_name].help_text
+        self.fields[field_name].help_text = f"{existing} {hint}".strip() if existing else hint
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]

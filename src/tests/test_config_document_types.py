@@ -315,6 +315,41 @@ class TestNonSlugifiableName:
 
 
 @pytest.mark.django_db
+class TestFormFieldOrderAndHints:
+    """Refs #1731: ``entity_type`` steuert, welche der übrigen Felder überhaupt
+    wirken, und ist nach dem Anlegen unveränderbar — es muss deshalb ganz vorne
+    abgefragt werden (das Template rendert generisch ``{% for field in form %}``,
+    die Formularreihenfolge IST die Anzeigereihenfolge). ``system_type`` erklärt
+    seine Entitätstyp-Bindung vorab statt erst als Absende-Fehler."""
+
+    def test_entity_type_is_rendered_directly_after_name(self, facility):
+        order = list(DocumentTypeForm(facility=facility).fields)
+        assert order[:2] == ["name", "entity_type"], f"Feldreihenfolge: {order}"
+
+    def test_entity_type_precedes_every_field_it_governs(self, facility):
+        order = list(DocumentTypeForm(facility=facility).fields)
+        entity_pos = order.index("entity_type")
+        for governed in ("system_type", "min_contact_stage", "retention_days"):
+            assert entity_pos < order.index(governed), f"{governed} steht vor entity_type: {order}"
+
+    def test_system_type_help_text_names_the_entity_restriction(self, facility):
+        help_text = str(DocumentTypeForm(facility=facility).fields["system_type"].help_text)
+        assert "Ereignis" in help_text
+        # Der Modell-Hinweis (Zweck + Unveränderbarkeit) bleibt erhalten.
+        assert "unveränderbar" in help_text
+
+    def test_form_page_shows_the_system_type_hint(self, client, admin_user, facility):
+        """Der Hinweis muss auch wirklich gerendert werden (generischer Feld-Loop)."""
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_create"))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Entitätstyp" in content
+        # Das Entitätstyp-Select steht im Markup vor dem Systemtyp-Select.
+        assert content.index('name="entity_type"') < content.index('name="system_type"')
+
+
+@pytest.mark.django_db
 class TestSystemTypeOnlyForEventTypes:
     """Final-Review E (Refs #1058): das Paketschema verbietet ``system_type`` an
     ``client``/``case``-Typen hart. Beide Felder sind nach dem Anlegen
