@@ -210,6 +210,11 @@ class TestBackfillFunction:
         slugs = {dt.name: dt.slug for dt in DocumentType.objects.filter(facility=facility)}
         assert slugs == {"Alpha": "alpha", "Beta": "beta"}
         assert DocumentType.objects.get(facility=other_facility, name="Alpha").slug == "alpha"
+        # B-5 (Fix-Runde 1): entity_type="event" ist der AddField-Default aus
+        # Migration 0117 — hier ueber Zeilen belegt, die (wie echter Bestand
+        # vor 0117) ohne explizites entity_type angelegt wurden.
+        for dt in DocumentType.objects.filter(facility=facility):
+            assert dt.entity_type == "event"
 
     @pytest.mark.django_db
     def test_backfill_collision_gets_counter_per_facility(self, facility):
@@ -225,6 +230,31 @@ class TestBackfillFunction:
 
         slugs = sorted(DocumentType.objects.filter(facility=facility).values_list("slug", flat=True))
         assert slugs == ["test-typ", "test-typ-2"]
+
+    @pytest.mark.django_db
+    def test_backfill_orders_by_name_category_not_physical_insert_order(self, facility):
+        """B-2 (Fix-Runde 1): pinnt, WELCHE Zeile bei einer Kollision den
+        Basis-Slug bekommt — waere ``order_by("facility_id","name","category",
+        "id")`` im Backfill entfernt/veraendert, wuerde dieser Test kippen.
+        Bewusst in der zur order_by-Zielreihenfolge UMGEKEHRTEN physischen
+        Einfuege-Reihenfolge angelegt (SERVICE zuerst, ADMIN zweitens) —
+        "admin" < "service" alphabetisch, die ADMIN-Zeile muss trotz spaeterer
+        Einfuegung den Basis-Slug bekommen, nicht die zuerst eingefuegte
+        SERVICE-Zeile."""
+        self._drop_constraint_and_disable_trigger()
+        DocumentType.objects.bulk_create(
+            [
+                DocumentType(facility=facility, name="Zeta", slug="", category=DocumentType.Category.SERVICE),
+                DocumentType(facility=facility, name="Zeta", slug="", category=DocumentType.Category.ADMIN),
+            ]
+        )
+
+        self._run_backfill()
+
+        admin_row = DocumentType.objects.get(facility=facility, name="Zeta", category=DocumentType.Category.ADMIN)
+        service_row = DocumentType.objects.get(facility=facility, name="Zeta", category=DocumentType.Category.SERVICE)
+        assert admin_row.slug == "zeta"
+        assert service_row.slug == "zeta-2"
 
     @pytest.mark.django_db
     def test_backfill_empty_name_gets_typ_fallback(self, facility):

@@ -33,6 +33,41 @@ class TestSlugGeneration:
 
 
 @pytest.mark.django_db
+class TestSlugTruncation:
+    """Fix-Runde 1 (Refs #1058, B-3): der modulweite ``generate_unique_slug``-
+    Helfer (extrahiert aus dem vormaligen ``FieldTemplate._generate_unique_slug``
+    im Rahmen von M2/DocumentType.slug) truncatiert jetzt auf 120 Zeichen VOR
+    dem Counter-Suffix. Vorher hatte ``_generate_unique_slug`` KEINE
+    Truncation — ein Name, dessen ``slugify()``-Ergebnis > 120 Zeichen lang
+    ist, ließ ``FieldTemplate.save()`` mit einem ``DataError`` am
+    DB-Spaltenlimit (``SlugField(max_length=120)``) crashen (Zeile passte
+    nicht in die Spalte). Das ist eine bewusste Verhaltens-Heilung, nicht nur
+    eine Extraktion — hier explizit gepinnt."""
+
+    def test_long_name_slug_truncated_to_120(self, facility):
+        # name-Feld selbst ist auf 200 Zeichen begrenzt (CharField(max_length=200))
+        # — 150 reicht, um die 120er-Slug-Truncation zu ueberschreiten.
+        long_name = "A" * 150
+        ft = FieldTemplate.objects.create(facility=facility, name=long_name, field_type="text")
+        assert len(ft.slug) == 120
+        assert ft.slug == "a" * 120
+
+    def test_long_name_collision_suffix_stays_within_120(self, facility):
+        # Zwei verschiedene Rohnamen (Unique-Constraint auf (facility, name)
+        # bleibt erfuellt — die Namen unterscheiden sich an Position 150,
+        # WEIT hinter der 120er-Truncation-Grenze), aber identisches
+        # slugify()-Ergebnis NACH Truncation -> Kollision, Suffix darf die
+        # 120 Zeichen nicht sprengen.
+        name1 = "A" * 150
+        name2 = "A" * 149 + "Z"
+        ft1 = FieldTemplate.objects.create(facility=facility, name=name1, field_type="text")
+        ft2 = FieldTemplate.objects.create(facility=facility, name=name2, field_type="number")
+        assert len(ft2.slug) <= 120
+        assert ft2.slug != ft1.slug
+        assert ft2.slug.endswith("-2")
+
+
+@pytest.mark.django_db
 class TestSlugImmutability:
     def test_slug_immutable_after_creation(self, facility):
         ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number")

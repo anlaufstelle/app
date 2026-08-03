@@ -580,18 +580,20 @@ def _guarded_core_python_files(scan_dir: Path) -> list[Path]:
 
 def find_slug_mutating_bulk_calls(source: str) -> list[str]:
     """Findet ``.update(slug=...)`` / ``bulk_update(..., ["slug", ...])`` auf
-    ``FieldGroup``/``FieldTemplate``.
+    ``FieldGroup``/``FieldTemplate``/``DocumentType`` (siehe
+    ``_SLUG_IMMUTABLE_MODELS``).
 
     AST-basiert (Muster ``find_unscoped_tenant_access``): Kommentare/Docstrings/
     Strings ausserhalb echter Call-Argumente koennen nicht faelschlich matchen.
 
     (a) ``<chain>.update(slug=…)``: die volle Call-Kette muss den Modellnamen
-        ``FieldGroup``/``FieldTemplate`` als Token enthalten (z.B.
-        ``FieldGroup.objects.filter(pk=x)``) — ein Update auf einem anderen
-        Modell mit zufaellig gleichnamigem ``slug=``-Kwarg wird NICHT geflaggt.
+        ``FieldGroup``/``FieldTemplate``/``DocumentType`` als Token enthalten
+        (z.B. ``FieldGroup.objects.filter(pk=x)``) — ein Update auf einem
+        anderen Modell mit zufaellig gleichnamigem ``slug=``-Kwarg wird NICHT
+        geflaggt.
     (b) ``<chain>.bulk_update(objs, [...])``: die Feldliste (2. Positions-
         argument) enthaelt das String-Literal ``"slug"`` UND die Call-Kette
-        nennt eines der beiden Modelle.
+        nennt eines der drei Modelle.
     """
     tree = ast.parse(source)
     parents = _parent_map(tree)

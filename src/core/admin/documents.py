@@ -42,9 +42,19 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
     inlines = [DocumentTypeFieldInline]
 
     def get_readonly_fields(self, request, obj=None):
+        readonly = self.readonly_fields
         if obj and obj.system_type:
-            return (*self.readonly_fields, "system_type")
-        return self.readonly_fields
+            readonly = (*readonly, "system_type")
+        if obj:
+            # Fix-Runde 1 (Refs #1058, B-1): slug/entity_type sind nach dem
+            # Anlegen unveraenderlich (Guard in DocumentType.save()). Ohne
+            # readonly waeren beide im Change-ModelForm editierbar — Django
+            # schliesst readonly_fields dagegen von modelform_factory aus
+            # (dieselbe Mechanik wie system_type oben), also kann eine
+            # Aenderung ueber die Admin-UI den Guard gar nicht mehr erreichen
+            # und den vormals unabgefangenen ValidationError->HTTP-500 ausloesen.
+            readonly = (*readonly, "slug", "entity_type")
+        return readonly
 
     def get_form(self, request, obj=None, **kwargs):
         """Parent-DocumentType fuer den Inline-Scope auf dem Request merken.
@@ -56,7 +66,17 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
         steht rechtzeitig zur Verfuegung.
         """
         request._doctype_parent_obj = obj
-        return super().get_form(request, obj, **kwargs)
+        form = super().get_form(request, obj, **kwargs)
+        if obj is None:
+            # Fix-Runde 1 (Refs #1058, B-1, Zweitwirkung): slug ist beim
+            # Anlegen kein readonly-Feld (es existiert ja noch kein Wert), war
+            # aber als normales (Pflicht-)Feld im Add-ModelForm vorhanden — ein
+            # Admin haette ihn von Hand tippen muessen statt die Model-
+            # Auto-Generierung (``DocumentType.save()``) greifen zu lassen.
+            # Ganz aus dem Add-Formular nehmen: kein POST-Wert -> ``save()``
+            # generiert ihn automatisch aus dem Namen (Muster FieldTemplate).
+            form.base_fields.pop("slug", None)
+        return form
 
 
 @admin.register(FieldTemplate, site=anlaufstelle_admin_site)
