@@ -742,10 +742,21 @@ Der `/health/`-Endpoint prüft in Produktion zusätzlich zur Datenbank die Errei
 MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 1. **Neuen Schlüssel generieren** und als **ersten** Eintrag in `ENCRYPTION_KEYS` einfügen: `ENCRYPTION_KEYS=neu,alt`. Neu geschriebene Daten werden mit `neu` verschlüsselt, vorhandene mit `alt` lassen sich weiterhin lesen.
-2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Felder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). Ein `--dry-run` zeigt vorab, wie viele Datensätze betroffen wären, ohne zu schreiben.
+2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Felder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). Ein `--dry-run` zeigt vorab, wie viele Datensätze betroffen wären, ohne zu schreiben. **Der Lauf muss mit der Admin-/Owner-Rolle erfolgen** — siehe Kasten unten.
 3. Nach erfolgreichem Umschlüsseln den alten Schlüssel aus der Liste entfernen.
 
 > **Wichtig:** Niemals den alten Key **ersetzen** statt **ergänzen** — sonst werden alle noch nicht umgeschlüsselten Bestandsdateien unlesbar.
+
+> ⚠️ **Rollen-Voraussetzung (Refs #1058).** `reencrypt_fields` liest und schreibt Tabellen mit Row-Level-Security. Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ein Aufruf ohne Rollen-Override sähe **0 Zeilen**. Deshalb immer mit der Admin-Rolle aufrufen ([Ops-Runbook § 9.5](ops-runbook.md)):
+>
+> ```bash
+> docker compose exec \
+>   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+>   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+>   web python manage.py reencrypt_fields --dry-run
+> ```
+>
+> Der Command bricht seit #1058 mit einer klaren Fehlermeldung ab, wenn der Bypass-Kontext fehlt (fail-loud statt „0 rotiert, Erfolg gemeldet"). Bei älteren Ständen ohne diesen Guard gilt: **Schritt 3 niemals nach einem Lauf ausführen, der überall `0` meldet** — sonst steht der Alt-Schlüssel nicht mehr in der Liste, obwohl nichts rotiert wurde.
 
 **Was `reencrypt_fields` abdeckt** (Refs #1058):
 

@@ -34,8 +34,11 @@ Semantik-Entscheide (verbindlich, E13–E15):
 * **Dry-Run** nimmt exakt denselben Code-Pfad und rollt am Ende zurück.
 
 Bewusst NICHT enthalten: Audit-Logging (konsistent mit dem Seed — der Loader
-ist ein Betriebswerkzeug ohne Request-Kontext) und RLS-Kontext (er läuft wie
-Seed/Commands auf der Superuser-Verbindung).
+ist ein Betriebswerkzeug ohne Request-Kontext) und das Setzen eines
+RLS-Kontexts. Der Aufrufer MUSS eine Rolle mitbringen, die RLS umgehen darf
+(``POSTGRES_ADMIN_USER``/BYPASSRLS, siehe ``docs/ops-runbook.md`` § 9.5);
+:class:`core.management.commands.load_package.Command` prüft das vorab
+fail-loud (Final-Review A, Refs #1058).
 """
 
 from __future__ import annotations

@@ -7,8 +7,14 @@ M2 P11 (Refs #1058) — CLI-Fassade um das P10-Paar
 bewusst **nur hier** importiert — Schema und Loader bleiben dict-basiert
 (siehe deren Docstrings).
 
-Läuft wie ``seed``/``reencrypt_fields`` auf der Superuser-Verbindung — kein
-RLS-Kontext nötig.
+Rollen-Voraussetzung (Final-Review A, Refs #1058): der Command schreibt in
+fünf FORCE-RLS-Tabellen und MUSS deshalb mit einer Rolle laufen, die RLS
+umgehen darf (``POSTGRES_ADMIN_USER``/BYPASSRLS — siehe
+``docs/ops-runbook.md`` § 9.5). Als reine App-Rolle (NOBYPASSRLS, kein
+``app.current_facility_id``) sähe der Loader 0 Bestandszeilen und stürbe beim
+ersten INSERT an einer ``ProgrammingError``. :func:`has_rls_bypass_context`
+prüft das vorab und bricht fail-loud ab — Muster der Schwester-Commands
+(``enforce_retention`` Refs #1016, ``detect_breaches`` Refs #1512).
 
 Report-Ausgabe: Bezeichner sind **nicht** als eindeutige Schlüssel zu
 behandeln. Bei Teiländerungen an Bedingungen (Wholesale-Replace, siehe
@@ -30,6 +36,10 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from core.models.organization import Facility
 from core.packages.loader import PackageLoadError, PackageReport, load_package
 from core.packages.schema import PackageV1, PackageValidationError, parse_package
+
+# Refs #1016/#1070/#1512: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
+# als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 # Anwendungsreihenfolge wie ``PackageReport.sections()`` — deutsche Labels
 # macht laut P10-Report-Vertrag bewusst die CLI, nicht der Loader.
@@ -59,6 +69,23 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
+        # Final-Review A (Refs #1058): fail-loud, statt RLS-blind gegen 0
+        # Bestandszeilen zu laufen und beim ersten INSERT mit einem rohen
+        # ProgrammingError-Traceback zu sterben (die Policies auf
+        # core_documenttype/-fieldtemplate/-documenttypefield/-fieldgroup/
+        # -fieldcondition haben kein eigenes WITH CHECK, die USING-Klausel
+        # greift also auch beim INSERT). Gilt auch im Dry-Run: der liest
+        # denselben Bestand und meldete sonst jedes Objekt als „angelegt".
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "Paket-Import läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
+                "sonst blieben alle Bestands-Lookups leer und der erste Schreibzugriff "
+                "scheiterte an der Row-Level-Security. Command mit der Admin-Rolle "
+                "aufrufen: docker compose exec -e POSTGRES_USER=$POSTGRES_ADMIN_USER "
+                "-e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py load_package … "
+                "(siehe docs/ops-runbook.md § 9.5)."
+            )
         facility = self._resolve_facility(options["facility"])
         raw = self._read_package_file(options["file"])
         package = self._parse_package(raw)

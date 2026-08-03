@@ -8,13 +8,17 @@ gilt fuer ``Client.data_json``/``Case.data_json`` (``DynamicDataEncryptionMixin`
 P4a/P4b/P5) — sonst entstuende eine Rotationsluecke fuer die neuen Modellgruppen.
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from core.models import Case, Client, Event, EventHistory
 from core.models.attachment import EventAttachment
 from core.services.file_vault import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import bypass_replication_triggers
+
+# Refs #1016/#1070/#1512: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
+# als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 
 def _reencrypt_data_json(payload):
@@ -49,6 +53,21 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true", help="Show what would be re-encrypted without saving.")
 
     def handle(self, *args, **options):
+        # Final-Review A/Split (Refs #1058): Event/EventHistory/EventAttachment/
+        # Client/Case stehen unter FORCE RLS. Als App-Rolle ohne Bypass-Kontext
+        # liefen alle Schleifen ueber 0 Zeilen und der Command meldete trotzdem
+        # Erfolg — die Rotations-Prozedur (docs/admin-guide.md § Schluessel-
+        # Rotation) entfernte danach den Alt-Schluessel, obwohl nichts rotiert
+        # wurde. Muster: enforce_retention (Refs #1016).
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "Re-Verschlüsselung läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
+                "sonst würden 0 Zeilen rotiert und trotzdem Erfolg gemeldet. Command mit der "
+                "Admin-Rolle aufrufen: docker compose exec -e POSTGRES_USER=$POSTGRES_ADMIN_USER "
+                "-e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py reencrypt_fields "
+                "(siehe docs/ops-runbook.md § 9.5)."
+            )
         dry_run = options["dry_run"]
         events_updated = self._reencrypt_events(dry_run)
         history_updated = self._reencrypt_event_history(dry_run)

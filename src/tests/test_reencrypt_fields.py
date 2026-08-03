@@ -25,7 +25,7 @@ import json
 from io import StringIO
 
 import pytest
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import connection
 from django.test import override_settings
 
@@ -245,3 +245,28 @@ def test_reencrypt_output_line_includes_client_and_case_counts(
     output = out.getvalue()
     assert "1 clients" in output
     assert "1 cases" in output
+
+
+@pytest.mark.django_db
+class TestReencryptFieldsRlsBypassGuard:
+    """Final-Review A/Split (Refs #1058): ``reencrypt_fields`` iteriert
+    ``Event``/``EventHistory``/``EventAttachment``/``Client``/``Case`` — alles
+    FORCE-RLS-Tabellen. Als App-Rolle (NOBYPASSRLS, kein
+    ``app.current_facility_id``) sähe der Lauf 0 Zeilen, meldete aber Erfolg;
+    die Rotations-Prozedur im Admin-Guide würde daraufhin den Alt-Schlüssel
+    entfernen. Fail-loud wie bei den Schwester-Commands."""
+
+    def test_aborts_loud_without_bypass_context(self, monkeypatch):
+        from core.management.commands import reencrypt_fields as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
+        with pytest.raises(CommandError, match="RLS"):
+            call_command("reencrypt_fields", stdout=StringIO())
+
+    def test_runs_through_with_bypass_context(self, monkeypatch):
+        from core.management.commands import reencrypt_fields as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: True)
+        out = StringIO()
+        call_command("reencrypt_fields", stdout=out)
+        assert "Re-encrypted" in out.getvalue()

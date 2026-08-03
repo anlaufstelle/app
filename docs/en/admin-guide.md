@@ -739,10 +739,21 @@ In production the `/health/` endpoint checks ClamAV daemon reachability in addit
 MultiFernet accepts a list of keys. To rotate:
 
 1. **Generate a new key** and add it as the **first** entry in `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=new,old`. Newly written data is encrypted with `new`; existing data stays readable via `old`.
-2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything.
+2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything. **The run must use the admin/owner role** -- see the box below.
 3. After successful re-encryption, remove the old key from the list.
 
 > **Important:** Never **replace** the old key instead of **appending** the new one -- any still-unrotated data would become unreadable.
+
+> ⚠️ **Role prerequisite (Refs #1058).** `reencrypt_fields` reads and writes tables protected by row-level security. The runtime role of the `web` container is `NOBYPASSRLS` and has no facility context outside a request -- a call without a role override would see **0 rows**. Always invoke it with the admin role ([ops runbook § 9.5](../ops-runbook.md)):
+>
+> ```bash
+> docker compose exec \
+>   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+>   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+>   web python manage.py reencrypt_fields --dry-run
+> ```
+>
+> Since #1058 the command aborts with a clear error message when the bypass context is missing (fail-loud instead of "0 rotated, success reported"). On older builds without that guard: **never run step 3 after a run that reports `0` everywhere** -- the old key would leave the list although nothing was rotated.
 
 **What `reencrypt_fields` covers** (Refs #1058):
 
@@ -1454,4 +1465,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 2de615f84cfbd045d8ff7d9ba5a1fbf77295f1f1 -->
+<!-- source-hash: a5299da1dc9a13176962d9959915bc98cb854a35 -->

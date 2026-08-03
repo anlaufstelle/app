@@ -212,3 +212,48 @@ class TestReportRobustness:
         assert FieldCondition.objects.count() == 2
         assert output.count("kontakt/notiz<-dauer") == 2
         assert "angelegt (2)" in output
+
+
+@pytest.mark.django_db
+class TestRlsBypassGuard:
+    """Final-Review A (Refs #1058): ``load_package`` schreibt in fünf
+    FORCE-RLS-Tabellen (``core_documenttype``, ``core_fieldtemplate``,
+    ``core_documenttypefield``, ``core_fieldgroup``, ``core_fieldcondition``).
+    Ohne Bypass-Kontext läuft der Loader RLS-blind: Bestands-Lookups liefern 0
+    Zeilen, der erste INSERT stirbt an einer ``ProgrammingError`` (SQLSTATE
+    42501), die weder ``_save()`` noch die CLI fängt — roher Traceback statt
+    Report. Fail-loud wie bei den Schwester-Commands (``enforce_retention``
+    Refs #1016, ``detect_breaches`` Refs #1512)."""
+
+    def test_aborts_loud_without_bypass_context(self, monkeypatch, tmp_path, facility):
+        from core.management.commands import load_package as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
+        path = _write_yaml(tmp_path, _MINI_PACKAGE)
+
+        with pytest.raises(CommandError, match="RLS"):
+            _run(file=path, facility=facility.id)
+
+        assert not DocumentType.objects.filter(facility=facility, slug="kontakt").exists()
+
+    def test_dry_run_also_aborts_without_bypass_context(self, monkeypatch, tmp_path, facility):
+        """Auch der Dry-Run liest Bestand — ein RLS-blinder Lauf meldete sonst
+        jedes Objekt fälschlich als „angelegt“."""
+        from core.management.commands import load_package as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
+        path = _write_yaml(tmp_path, _MINI_PACKAGE)
+
+        with pytest.raises(CommandError, match="RLS"):
+            _run(file=path, facility=facility.id, dry_run=True)
+
+    def test_runs_through_with_bypass_context(self, monkeypatch, tmp_path, facility):
+        from core.management.commands import load_package as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: True)
+        path = _write_yaml(tmp_path, _MINI_PACKAGE)
+
+        output = _run(file=path, facility=facility.id)
+
+        assert "Import abgeschlossen" in output
+        assert DocumentType.objects.filter(facility=facility, slug="kontakt").exists()

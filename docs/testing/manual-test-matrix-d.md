@@ -1186,7 +1186,7 @@
 |---------|-------|---------|--------|-----|
 | Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_loader.py` |
 
-**Voraussetzung:** Geseedete Einrichtung (`make seed`), Arbeitskopie `/tmp/paket.yaml`.
+**Voraussetzung:** Geseedete Einrichtung (`make seed`), Arbeitskopie `/tmp/paket.yaml`. **Rolle:** lokal genügt die Entwicklungs-Rolle (Superuser); im Container-Stack braucht der Aufruf den Admin-Rollen-Override (`-e POSTGRES_USER=$POSTGRES_ADMIN_USER …`, siehe [`docs/packages.md` § 4](../packages.md)) — sonst bricht der Command mit der RLS-Meldung ab.
 
 **Code-Referenz:**
 - `src/core/management/commands/load_package.py` — CLI-Fassade, Report-Ausgabe, `CommandError`-Übersetzung.

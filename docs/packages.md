@@ -246,7 +246,16 @@ python src/manage.py load_package --file <pfad/zur/paket.yaml> --facility <uuid>
 | `--facility` | ja | UUID der Ziel-Einrichtung (`Facility.id`) |
 | `--dry-run` | nein | Simuliert den Lauf und rollt am Ende zurück — **identischer Code-Pfad**, der Report zeigt exakt, was ein Echtlauf getan hätte |
 
-Im Container: `docker compose exec web python manage.py load_package --file /tmp/paket.yaml --facility <uuid> --dry-run`.
+Im Container **immer mit der Admin-Rolle** (siehe Kasten):
+
+```bash
+docker compose exec \
+  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+  web python manage.py load_package --file /tmp/paket.yaml --facility <uuid> --dry-run
+```
+
+> ⚠️ **Rollen-Voraussetzung.** Der Loader schreibt in fünf Tabellen mit Row-Level-Security (`core_documenttype`, `core_fieldtemplate`, `core_documenttypefield`, `core_fieldgroup`, `core_fieldcondition`). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ohne den ENV-Override sähe der Lauf 0 Bestandszeilen und scheiterte am ersten Schreibzugriff. Der Command prüft das vorab und bricht mit einer klaren Meldung ab. Hintergrund: [Ops-Runbook § 9.5](ops-runbook.md), [ADR-033](adr/033-runtime-owner-role-separation.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Override überflüssig.
 
 **Exit-Verhalten:** `0` bei Erfolg. Ein Abbruch mit `CommandError` (Exit ≠ 0) bei unlesbarer Datei, YAML-Syntaxfehler, fehlender/unbekannter Facility-UUID, Schema-Verstoß oder Loader-Fehler. Bei Loader-Fehlern wird der (verworfene) Report **trotzdem** ausgegeben — er zeigt, was ohne die Fehler passiert wäre.
 
