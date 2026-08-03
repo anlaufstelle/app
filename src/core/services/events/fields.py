@@ -5,20 +5,53 @@ und ``context.py`` gemeinsam genutzt; um Zirkular-Imports zu vermeiden
 liegen sie in einem eigenen Modul.
 
 Aufgeteilt aus dem alten ``services/event.py`` (#777).
+
+M2 (Refs #1058): Die entity-agnostischen Helfer (``remove_restricted_fields``,
+``build_field_template_lookup``, ``validate_data_json`` — vormals
+``_validate_data_json``) leben jetzt in :mod:`core.services.dynamic_data`, weil
+Client/Case dieselbe Feldmechanik bekommen. Sie werden hier unveraendert
+**re-exportiert**, damit alle Bestands-Importe und -Monkeypatches
+(``from core.services.events.fields import ...``) stabil bleiben. Event-
+spezifisches (Suchindex, File-Marker-Parsing, Delete-History, Form-Splitting)
+bleibt in diesem Modul.
 """
 
 from __future__ import annotations
 
-import logging
 from datetime import date, time
 
 from django.core.files.uploadedfile import UploadedFile
 
 from core.models import Client
-from core.services.compliance import user_can_see_field
-from core.services.config import block_ordered_dtf_queryset
+from core.services.dynamic_data import (
+    build_field_template_lookup,
+    remove_restricted_fields,
+    validate_data_json,
+)
 
-logger = logging.getLogger(__name__)
+# M2 (Refs #1058): Alt-Alias auf den jetzt oeffentlichen Namen. ``crud.py`` und
+# ``services/events/__init__.py`` importieren weiterhin ``_validate_data_json``;
+# der Alias haelt diese Pfade (und Test-Monkeypatches) unveraendert gueltig.
+_validate_data_json = validate_data_json
+
+__all__ = [
+    "CONTACT_STAGE_ORDER",
+    "_is_file_marker",
+    "_serialize_json_value",
+    "_snapshot_field_metadata",
+    "_validate_data_json",
+    "build_field_template_lookup",
+    "build_redacted_delete_history",
+    "compute_event_search_text",
+    "file_marker_slugs",
+    "is_multi_file_marker",
+    "is_singleton_file_marker",
+    "normalize_file_marker",
+    "remove_restricted_fields",
+    "split_file_and_text_data",
+    "stage_index",
+    "validate_data_json",
+]
 
 
 # Ordered contact stages (lowest -> highest).
@@ -80,37 +113,6 @@ def stage_index(stage):
         return CONTACT_STAGE_ORDER.index(stage)
     except ValueError:
         return -1
-
-
-def build_field_template_lookup(document_type, *, ordered=False):
-    """Return ``{slug: FieldTemplate}`` for a :class:`DocumentType`.
-
-    Prefetches ``field_template`` with ``select_related`` so callers can
-    iterate over the lookup without triggering N+1 queries. Pass
-    ``ordered=True`` when the caller relies on ``sort_order``.
-    """
-    # #1713-Folge: geordnete Lookups folgen der globalen Block-Reihenfolge
-    # (Dict-Insertion-Order == Anzeige-Reihenfolge, z. B. Event-Detail).
-    qs = block_ordered_dtf_queryset(document_type) if ordered else document_type.fields.select_related("field_template")
-    return {dtf.field_template.slug: dtf.field_template for dtf in qs}
-
-
-def remove_restricted_fields(user, document_type, data_form):
-    """Remove fields from *data_form* that *user* may not see.
-
-    Returns a list of removed field names so callers can re-inject the
-    original values on update.
-    """
-    doc_sensitivity = document_type.sensitivity
-    field_templates = build_field_template_lookup(document_type)
-    restricted = []
-    for name in list(data_form.fields.keys()):
-        ft = field_templates.get(name)
-        field_sensitivity = ft.sensitivity if ft else ""
-        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
-            del data_form.fields[name]
-            restricted.append(name)
-    return restricted
 
 
 def _is_file_marker(value):
@@ -175,42 +177,6 @@ def _serialize_json_value(value):
     if isinstance(value, (date, time)):
         return value.isoformat()
     return value
-
-
-def _validate_data_json(document_type, data_json):
-    """Only accept fields defined in the DocumentType's field templates.
-
-    FILE-typed fields use marker dicts — entweder das Stufe-A-Singleton
-    (``{"__file__": True, "attachment_id": "..."}``) oder das Stufe-B-List-
-    Format (``{"__files__": True, "entries": [...]}``). Beide werden
-    unmodifiziert durchgereicht. Datums-/Zeitwerte werden auf ISO-Strings
-    normalisiert (Refs #1073).
-    """
-    if not data_json:
-        return {}
-    allowed_slugs = set(document_type.fields.values_list("field_template__slug", flat=True))
-    # Refs #819: Choice-Konstante statt Magic-String.
-    from core.models import FieldTemplate
-
-    file_slugs = set(
-        document_type.fields.filter(
-            field_template__field_type=FieldTemplate.FieldType.FILE,
-        ).values_list("field_template__slug", flat=True)
-    )
-    unknown = set(data_json.keys()) - allowed_slugs
-    if unknown:
-        logger.warning("Unknown fields in data_json removed: %s", unknown)
-    cleaned = {}
-    for k, v in data_json.items():
-        if k not in allowed_slugs:
-            continue
-        if k in file_slugs and _is_file_marker(v):
-            cleaned[k] = v
-        elif k in file_slugs:
-            continue
-        else:
-            cleaned[k] = _serialize_json_value(v)
-    return cleaned
 
 
 def _snapshot_field_metadata(document_type):
