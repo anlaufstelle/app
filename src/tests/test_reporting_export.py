@@ -116,6 +116,15 @@ class _PreparingBackend(_RowsBackend):
         )
 
 
+class _ThresholdBackend(_RowsBackend):
+    """Backend, dessen ``prepare_export`` die K-Anon-Schwelle im summary ausweist."""
+
+    slug = "dummy_threshold"
+
+    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+        return dataclasses.replace(result, summary={**result.summary, "k_anonymity_threshold": 7})
+
+
 @pytest.fixture
 def facility():
     return _Facility()
@@ -166,6 +175,22 @@ class TestCsvExport:
         date_from, date_to = date_range
         response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
         assert response["Content-Type"] == "text/csv; charset=utf-8"
+
+    def test_metadatenzeile_ohne_schwelle_ohne_hinweis(self, facility, date_range):
+        """Ohne ``k_anonymity_threshold`` im summary bleibt die Zeile wie bisher."""
+        date_from, date_to = date_range
+        response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
+        erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert "k-Anonymität" not in erste_zeile
+
+    def test_metadatenzeile_mit_schwelle_weist_suppression_aus(self, facility, date_range):
+        """Sonst sieht der Empfaenger nur leere Zellen ohne Erklaerung."""
+        date_from, date_to = date_range
+        response = export_dataset(_ThresholdBackend(), facility, date_from, date_to, format="csv")
+        erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert erste_zeile.endswith(" | k-Anonymität: Zellen < 7 unterdrückt")
 
 
 class TestJsonExport:

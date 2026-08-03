@@ -110,6 +110,12 @@ def _render_csv(
         return chunk
 
     metadata = f"# Bericht: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
+    # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
+    # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
+    # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
+    threshold = result.summary.get("k_anonymity_threshold")
+    if threshold is not None:
+        metadata += f" | k-Anonymität: Zellen < {threshold} unterdrückt"
     yield _flush([_sanitize_csv_cell(metadata)])
     yield _flush([_sanitize_csv_cell(spec.label) for spec in field_specs])
     for record in result.records:

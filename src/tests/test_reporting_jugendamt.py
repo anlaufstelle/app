@@ -7,8 +7,10 @@ muss diesen Wegfall ueberleben.
 """
 
 import csv
+import itertools
 import json
 import sys
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 
 import pytest
@@ -27,6 +29,24 @@ DATE_TO = date(2025, 5, 31)
 
 # Aggregat-Geruest fuer Tests, die nur die Completeness-Transformation pruefen.
 _LEERES_SUMMARY = {"total": 0, "by_category": [], "by_age_cluster": [], "unique_clients": 0}
+
+
+def _veroeffentlichte_zahlen(value):
+    """Alle datentragenden Ganzzahlen eines JSON-Payloads.
+
+    ``k_anonymity_threshold`` ist Metadatum (die Schwelle selbst ist kein
+    Datenwert) und bleibt aussen vor; Bools zaehlen nicht als Zahl.
+    """
+    if isinstance(value, dict):
+        return [
+            zahl
+            for key, val in value.items()
+            if key != "k_anonymity_threshold"
+            for zahl in _veroeffentlichte_zahlen(val)
+        ]
+    if isinstance(value, list):
+        return [zahl for item in value for zahl in _veroeffentlichte_zahlen(item)]
+    return [value] if isinstance(value, int) and not isinstance(value, bool) else []
 
 
 @pytest.fixture(autouse=True)
@@ -197,6 +217,64 @@ def grosse_daten(facility, make_doc_type, make_client, make_event):
         make_event(kontakt, person)
         make_event(beratung, person)
     make_event(kontakt, personen[0])
+
+    return facility
+
+
+@pytest.fixture
+def sekundaer_daten(facility, make_doc_type, make_client, make_event):
+    """Genau **eine** Kategorie-Zelle < k — loest die Sekundaer-Suppression aus.
+
+    Kontakte 6 (>= k), Beratung 2 (< k): waere nur Beratung unterdrueckt, liesse
+    sie sich aus der Randsumme zurueckrechnen, also faellt auch Kontakte.
+    """
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    personen = [make_client(f"JA-7{index}", Client.AgeCluster.AGE_18_26) for index in range(5)]
+
+    for person in personen:
+        make_event(kontakt, person)
+    make_event(kontakt, personen[0])
+    make_event(beratung, personen[0])
+    make_event(beratung, personen[1])
+
+    return facility
+
+
+@pytest.fixture
+def rueckrechnungs_daten(facility, make_doc_type, make_client, make_event):
+    """Review C1: 9 Ereignisse, 5 ohne Personenbezug, 4 zu **einer** U18-Person.
+
+    Die u18-Zelle (4) wird unterdrueckt — die Meldung „5 von 9 … (56 %)" gaebe
+    sie ueber ``9 − 5`` exakt zurueck. Sekundaer-Suppression greift bei nur
+    einer Cluster-Zeile nicht.
+    """
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    person = make_client("JA-80", Client.AgeCluster.U18)
+
+    for _index in range(4):
+        make_event(kontakt, person)
+    for _index in range(5):
+        make_event(kontakt, None)
+
+    return facility
+
+
+@pytest.fixture
+def unterdrueckte_randsumme_daten(facility, make_doc_type, make_client, make_event):
+    """Review C1: Randsumme ``total`` = 3 (< k), Unmapped-Meldung = 5 (>= k).
+
+    Bliebe die Unmapped-Zahl stehen, waere die unterdrueckte Randsumme als
+    ``events_in_period − 5`` ablesbar.
+    """
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+    person = make_client("JA-90", Client.AgeCluster.AGE_18_26)
+
+    for _index in range(3):
+        make_event(kontakt, person)
+    for _index in range(5):
+        make_event(notiz, person)
 
     return facility
 
@@ -535,30 +613,141 @@ class TestPrepareExport:
         assert [issue.severity for issue in issues] == ["warning", "info"]
 
     def test_werte_ab_der_schwelle_bleiben_exakt_erhalten(self, backend, grosse_daten):
-        summary = self._prepared(backend, grosse_daten).summary
+        result = self._prepared(backend, grosse_daten)
 
-        assert summary["by_category"] == [
+        assert result.summary["by_category"] == [
             {"name": "Kontakte", "count": 6, "suppressed": False},
             {"name": "Beratung", "count": 5, "suppressed": False},
         ]
-        assert summary["by_age_cluster"] == [{"cluster": "18_26", "label": "18–26", "count": 11, "suppressed": False}]
-        assert summary["total"] == 11
-        assert summary["unique_clients"] == 5
-        assert self._prepared(backend, grosse_daten).records == [
+        assert result.summary["by_age_cluster"] == [
+            {"cluster": "18_26", "label": "18–26", "count": 11, "suppressed": False}
+        ]
+        assert result.summary["total"] == 11
+        assert result.summary["unique_clients"] == 5
+        assert result.records == [
             {"category": "Kontakte", "count": 6},
             {"category": "Beratung", "count": 5},
         ]
 
-    def test_completeness_ab_der_schwelle_bleibt_unveraendert(self, backend, facility):
+    def test_sekundaersuppression_schlaegt_auf_die_records_durch(self, backend, sekundaer_daten):
+        """Genau eine Zelle < k: die Randsumme gaebe sie preis, also faellt auch
+        die kleinste sichtbare Zelle (``_apply_secondary_suppression``) — und die
+        ``records``-Projektion muss diese *nachtraegliche* Nullung mittragen.
+        """
+        result = self._prepared(backend, sekundaer_daten)
+
+        assert result.summary["by_category"] == [
+            {"name": "Kontakte", "count": None, "suppressed": True},
+            {"name": "Beratung", "count": None, "suppressed": True},
+        ]
+        assert result.records == [
+            {"category": "Kontakte", "count": None},
+            {"category": "Beratung", "count": None},
+        ]
+        # Die Randsumme selbst liegt ueber der Schwelle und bleibt sichtbar.
+        assert result.summary["total"] == 8
+
+    def test_summary_key_satz_ist_eingefroren(self, backend, parity_daten):
+        """Fail-open-Guard (Review I1): ``suppress_jugendamt_stats`` reicht
+        unbekannte Keys via ``{**stats, …}`` **roh** durch. Ein neuer
+        Summary-Key wuerde also ungefiltert im Export landen — dieser Test
+        bricht, bis die Suppression ihn explizit mitdenkt.
+        """
+        raw = backend.build_dataset(parity_daten, DATE_FROM, DATE_TO).summary
+        assert set(raw) == {"total", "by_category", "by_age_cluster", "unique_clients"}
+
+        exportiert = self._prepared(backend, parity_daten).summary
+        assert set(exportiert) == set(raw) | {"k_anonymity_threshold"}
+
+    def test_export_meldung_verliert_bezugsgroesse_und_prozent(self, backend, facility):
+        """Review C1: die Bezugsgroesse ``events_in_period`` erlaubt zusammen mit
+        der Meldungszahl die exakte Rueckrechnung der unterdrueckten Gegenmenge
+        (Σ by_age_cluster = events_in_period − without_client). Die exportierte
+        Fassung nennt deshalb nur noch die eigene Zahl der Meldung.
+        """
+        issue = CompletenessIssue(
+            "events_without_client",
+            "6 von 16 Ereignissen im Zeitraum ohne Personenbezug (38 %) — nicht in "
+            "Altersgruppen/Personenzahl enthalten",
+            "info",
+            count=6,
+        )
+        summary = {
+            "total": 10,
+            "by_category": [],
+            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 10}],
+            "unique_clients": 5,
+        }
+        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
+
+        assert backend.prepare_export(facility, result).completeness == [
+            CompletenessIssue(
+                "events_without_client",
+                "6 Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten",
+                "info",
+                count=6,
+            )
+        ]
+
+    def test_export_meldung_unmapped_nennt_nur_die_eigene_zahl(self, backend, facility):
         issue = CompletenessIssue(
             "unmapped_system_types",
             "7 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
             "warning",
             count=7,
         )
-        result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
+        summary = {
+            "total": 10,
+            "by_category": [],
+            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 10}],
+            "unique_clients": 5,
+        }
+        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
 
-        assert backend.prepare_export(facility, result).completeness == [issue]
+        assert backend.prepare_export(facility, result).completeness == [
+            CompletenessIssue(
+                "unmapped_system_types",
+                "7 Ereignisse ohne Jugendamt-Zuordnung im Zeitraum",
+                "warning",
+                count=7,
+            )
+        ]
+
+    def test_meldung_faellt_wenn_die_komplementmenge_klein_ist(self, backend, facility):
+        """Review C1: ``count`` (5) liegt ueber der Schwelle, die Gegenmenge
+        (4 personenbezogene Ereignisse) darunter — bliebe die Zahl stehen, waere
+        die unterdrueckte Altersgruppen-Zelle als Differenz ablesbar.
+        """
+        issue = CompletenessIssue("events_without_client", "5 von 9 …", "info", count=5)
+        summary = {
+            "total": 9,
+            "by_category": [],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4}],
+            "unique_clients": 1,
+        }
+        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
+
+        transformiert = backend.prepare_export(facility, result).completeness[0]
+        assert transformiert.count is None
+        assert not any(char.isdigit() for char in transformiert.message)
+
+    def test_unmapped_meldung_faellt_wenn_die_randsumme_unterdrueckt_ist(self, backend, facility):
+        """Review C1: ``total`` < k wird zu ``None`` — bliebe die Unmapped-Zahl
+        stehen, waere die Randsumme als ``events_in_period − unmapped`` ablesbar,
+        sobald die Gesamtzahl anderweitig bekannt wird.
+        """
+        issue = CompletenessIssue("unmapped_system_types", "6 Ereignisse in 2 …", "warning", count=6)
+        summary = {
+            "total": 3,
+            "by_category": [("Kontakte", 3)],
+            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 9}],
+            "unique_clients": 6,
+        }
+        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
+
+        transformiert = backend.prepare_export(facility, result).completeness[0]
+        assert transformiert.count is None
+        assert not any(char.isdigit() for char in transformiert.message)
 
     def test_completeness_ohne_rohzahl_bleibt_unveraendert(self, backend, facility):
         """Ohne ``count`` fehlt die Transformationsgrundlage — Meldung bleibt stehen."""
@@ -567,9 +756,13 @@ class TestPrepareExport:
 
         assert backend.prepare_export(facility, result).completeness == [issue]
 
-    def test_unbekannter_code_faellt_auf_generische_meldung_zurueck(self, backend, facility):
-        """Fail-safe: ein kuenftiger Check ohne eigene Ersatzmeldung leakt keine Zahl."""
-        issue = CompletenessIssue("kuenftiger_check", "2 Ereignisse mit Luecke", "warning", count=2)
+    @pytest.mark.parametrize("count", [2, 40])
+    def test_unbekannter_code_faellt_auf_generische_meldung_zurueck(self, backend, facility, count):
+        """Fail-safe: fuer einen kuenftigen Check gibt es keine geprueft
+        ziffernarme Export-Formulierung — dann faellt die Zahl, egal wie gross
+        sie ist (auch ohne bekannte Komplementbeziehung).
+        """
+        issue = CompletenessIssue("kuenftiger_check", f"{count} Ereignisse mit Luecke", "warning", count=count)
         result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
 
         transformiert = backend.prepare_export(facility, result).completeness[0]
@@ -589,8 +782,22 @@ class TestPrepareExport:
             {"name": "Beratung", "count": 1, "suppressed": False},
         ]
         assert summary["total"] == 4
-        # Bei k=1 bleiben auch die Vollstaendigkeits-Meldungen beziffert.
-        assert [issue.count for issue in self._prepared(backend, kleine_daten).completeness] == [1, 1]
+        # Bei k=1 bleiben die Vollstaendigkeits-Meldungen beziffert — aber
+        # weiterhin ohne Bezugsgroesse/Prozentanteil (Review C1).
+        assert self._prepared(backend, kleine_daten).completeness == [
+            CompletenessIssue(
+                "unmapped_system_types",
+                "1 Ereignisse ohne Jugendamt-Zuordnung im Zeitraum",
+                "warning",
+                count=1,
+            ),
+            CompletenessIssue(
+                "events_without_client",
+                "1 Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten",
+                "info",
+                count=1,
+            ),
+        ]
 
     def test_build_dataset_bleibt_roh(self, backend, kleine_daten):
         """Snapshot-Paritaet: die Suppression darf nicht in den Roh-Pfad lecken."""
@@ -638,6 +845,83 @@ class TestExportDatasetIntegration:
         assert rows[0] == ["Kategorie", "Anzahl"]
         assert rows[1:] == [["Kontakte", ""], ["Beratung", ""]]
         assert "None" not in content
+
+    def test_csv_metadatenzeile_weist_die_suppression_aus(self, backend, kleine_daten):
+        """Der Empfaenger einer CSV sieht sonst nur leere Zellen ohne Erklaerung."""
+        response = export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="csv")
+        content = b"".join(response.streaming_content).decode("utf-8")
+
+        assert content.splitlines()[0].endswith(" | k-Anonymität: Zellen < 5 unterdrückt")
+
+    def test_xml_rendert_dict_zeilen_mit_suppressed_flag(self, backend, kleine_daten):
+        """Die suppressierten Kategorie-Zeilen sind Dicts — ``_fill_xml_value``
+        macht daraus ``<item>`` mit ``name``/``count``/``suppressed``.
+        """
+        response = export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+        summary = root.find("summary")
+
+        kategorien = [{child.tag: child.text for child in item} for item in summary.find("by_category")]
+        assert kategorien == [
+            {"name": "Kontakte", "count": None, "suppressed": "True"},
+            {"name": "Beratung", "count": None, "suppressed": "True"},
+        ]
+        assert summary.find("k_anonymity_threshold").text == "5"
+        assert not summary.find("total").text
+        assert not summary.find("unique_clients").text
+
+        records = root.find("records").findall("record")
+        assert [record.find("category").text for record in records] == ["Kontakte", "Beratung"]
+        assert all(not record.find("count").text for record in records)
+        assert b"None" not in response.content
+
+    def test_rueckrechnung_ueber_meldungszahlen_ausgeschlossen(self, backend, rueckrechnungs_daten):
+        """Review C1: die u18-Zelle (4) darf weder direkt noch als Differenz
+        zweier veroeffentlichter Zahlen ablesbar sein.
+        """
+        payload = json.loads(export_dataset(backend, rueckrechnungs_daten, DATE_FROM, DATE_TO, format="json").content)
+
+        assert payload["summary"]["by_age_cluster"] == [
+            {"cluster": "u18", "label": "Unter 18", "count": None, "suppressed": True}
+        ]
+        assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
+        for issue in payload["completeness"]:
+            assert not any(char.isdigit() for char in issue["message"])
+
+        zahlen = _veroeffentlichte_zahlen({key: payload[key] for key in ("summary", "records", "completeness")})
+        assert 4 not in zahlen
+        assert all(abs(links - rechts) != 4 for links, rechts in itertools.combinations(zahlen, 2))
+
+    def test_rueckrechnung_auch_im_xml_ausgeschlossen(self, backend, rueckrechnungs_daten):
+        response = export_dataset(backend, rueckrechnungs_daten, DATE_FROM, DATE_TO, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        age_item = root.find("summary").find("by_age_cluster").find("item")
+        assert not age_item.find("count").text
+        assert age_item.find("suppressed").text == "True"
+        assert not root.find("summary").find("unique_clients").text
+        for issue in root.find("completeness").findall("issue"):
+            assert not any(char.isdigit() for char in issue.text)
+
+    def test_unterdrueckte_randsumme_ohne_ablesbare_unmapped_zahl(self, backend, unterdrueckte_randsumme_daten):
+        """Review C1: ``total`` ist unterdrueckt — die erhaltene Unmapped-Meldung
+        darf ihre Zahl dann nicht mehr nennen (sonst Differenz-Rueckrechnung).
+        """
+        payload = json.loads(
+            export_dataset(backend, unterdrueckte_randsumme_daten, DATE_FROM, DATE_TO, format="json").content
+        )
+
+        assert payload["summary"]["total"] is None
+        # Der Hinweis auf die Luecke bleibt erhalten — nur seine Zahl faellt.
+        assert [issue["code"] for issue in payload["completeness"]] == ["unmapped_system_types"]
+        assert not any(char.isdigit() for char in payload["completeness"][0]["message"])
+
+        zahlen = _veroeffentlichte_zahlen({key: payload[key] for key in ("summary", "records", "completeness")})
+        assert zahlen == [8]  # nur die Altersgruppen-Zelle (>= k) bleibt sichtbar
 
     def test_p4_serialisierer_feldsatz_unveraendert(self, backend, kleine_daten):
         """``count`` ist rein intern — die Completeness-JSON-Felder bleiben bei drei."""

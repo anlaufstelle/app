@@ -65,10 +65,22 @@ _AGE_LABELS = {
 # haelt die Absicht unabhaengig von diesem ORM-Detail fest.
 _UNMAPPED_Q = Q(document_type__system_type__isnull=True) | ~Q(document_type__system_type__in=tuple(CATEGORY_MAP))
 
-# Ersatztexte fuer Vollstaendigkeits-Meldungen, deren Rohzahl unter der
-# K-Anon-Schwelle liegt: die Luecke bleibt sichtbar (sonst waere der Bericht
-# irrefuehrend vollstaendig), die Zahl verschwindet. Bewusst ohne jede Ziffer
-# — auch Anteile/Bezugsgroessen lassen die unterdrueckte Zahl zurueckrechnen.
+# Export-Fassung der Vollstaendigkeits-Meldungen: **nur** die eigene Zahl der
+# Meldung, ohne Bezugsgroesse und ohne Prozentanteil. Die internen Fassungen in
+# ``validate_completeness`` duerfen beides nennen (Snapshot-/Rohpfad hat keinen
+# externen Konsumenten) — im Export waere die Bezugsgroesse dagegen der Hebel
+# fuer die komplementaere Rueckrechnung (siehe ``prepare_export``).
+_EXPORT_MESSAGES = {
+    "unmapped_system_types": "{count} Ereignisse ohne Jugendamt-Zuordnung im Zeitraum",
+    "events_without_client": (
+        "{count} Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten"
+    ),
+}
+
+# Ersatztexte fuer Vollstaendigkeits-Meldungen, deren Zahl faellt: die Luecke
+# bleibt sichtbar (sonst waere der Bericht irrefuehrend vollstaendig), die Zahl
+# verschwindet. Bewusst ohne jede Ziffer — auch Anteile/Bezugsgroessen lassen
+# die unterdrueckte Zahl zurueckrechnen.
 _SUPPRESSED_MESSAGES = {
     "unmapped_system_types": (
         "Ereignisse ohne Jugendamt-Zuordnung im Zeitraum vorhanden (Anzahl unterdrückt, k-Anonymität)"
@@ -82,6 +94,31 @@ _SUPPRESSED_MESSAGES = {
 # Fail-safe fuer kuenftige Checks ohne eigenen Ersatztext: lieber unspezifisch
 # als eine Kleinstfallzahl im Export.
 _SUPPRESSED_FALLBACK = "Hinweis vorhanden (Anzahl unterdrückt, k-Anonymität)"
+
+
+def _prepare_issue(issue: CompletenessIssue, threshold: int, komplemente: dict[str, int]) -> CompletenessIssue:
+    """Export-Fassung einer Vollstaendigkeits-Meldung (K-Anon).
+
+    Die Zahl faellt, wenn sie selbst unter der Schwelle liegt, wenn ihr
+    Komplement unter der Schwelle liegt (Differenz-Rueckrechnung) oder wenn es
+    fuer den Code keine geprueft ziffernarme Export-Formulierung gibt
+    (Fail-safe fuer kuenftige Checks). Sonst wird die Meldung ohne
+    Bezugsgroesse/Prozentanteil neu formuliert. Meldungen ohne ``count``
+    bleiben unangetastet — ihnen fehlt die Transformationsgrundlage.
+    """
+    if issue.count is None:
+        return issue
+
+    vorlage = _EXPORT_MESSAGES.get(issue.code)
+    komplement = komplemente.get(issue.code)
+    zahl_faellt = vorlage is None or issue.count < threshold or (komplement is not None and komplement < threshold)
+    if zahl_faellt:
+        return dataclasses.replace(
+            issue,
+            message=_SUPPRESSED_MESSAGES.get(issue.code, _SUPPRESSED_FALLBACK),
+            count=None,
+        )
+    return dataclasses.replace(issue, message=vorlage.format(count=issue.count))
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -225,9 +262,13 @@ class JugendamtBackend(DatasetBackend):
         ``unique_clients`` und die Randsumme ``total`` < Schwelle werden
         ``None`` (Security R14). ``records`` wird aus den bereits
         suppressierten Kategorie-Zeilen neu projiziert — sonst haette der
-        CSV-Export die Rohzahlen weiterhin gezeigt. Vollstaendigkeits-
-        Meldungen mit Rohzahl < Schwelle verlieren die Zahl, nicht den
-        Hinweis. ``build_dataset`` bleibt roh (Snapshot-Payload).
+        CSV-Export die Rohzahlen weiterhin gezeigt.
+
+        Vollstaendigkeits-Meldungen werden fuer den Export **immer** neu
+        formuliert (``_prepare_issue``): ohne Bezugsgroesse und Prozentanteil,
+        und ganz ohne Zahl, sobald die Zahl selbst oder ihr Komplement unter
+        der Schwelle liegt. Der Hinweis auf die Luecke bleibt in jedem Fall
+        stehen. ``build_dataset`` bleibt roh (Snapshot-Payload).
 
         Erwartet das **rohe** ``build_dataset``-Ergebnis: ``by_category``
         kommt als ``(name, count)``-Tupel herein und geht als Dict-Zeilen
@@ -243,15 +284,21 @@ class JugendamtBackend(DatasetBackend):
 
         records = [{"category": row["name"], "count": row["count"]} for row in summary["by_category"]]
 
-        completeness = [
-            dataclasses.replace(
-                issue,
-                message=_SUPPRESSED_MESSAGES.get(issue.code, _SUPPRESSED_FALLBACK),
-                count=None,
-            )
-            if issue.count is not None and issue.count < threshold
-            else issue
-            for issue in result.completeness
-        ]
+        # Konstruktionsbedingte Komplementbeziehungen zwischen Meldungszahl und
+        # Aggregat (``events_in_period`` = alle sichtbaren Ereignisse im Zeitraum):
+        #
+        #   Σ by_age_cluster = events_in_period − without_client
+        #   summary["total"] = events_in_period − unmapped_events
+        #
+        # Bleibt eine Meldungszahl stehen, waehrend ihre Gegenmenge unterdrueckt
+        # ist, laesst sich die Gegenmenge als Differenz exakt zurueckrechnen —
+        # deshalb faellt die Zahl auch dann, wenn *das Komplement* klein ist.
+        # Die Komplemente **vor** der Suppression aus dem rohen Aggregat ziehen:
+        # in ``summary`` sind die Zellen an dieser Stelle ggf. schon ``None``.
+        komplemente = {
+            "events_without_client": sum(row.get("count") or 0 for row in result.summary.get("by_age_cluster", [])),
+            "unmapped_system_types": result.summary.get("total") or 0,
+        }
+        completeness = [_prepare_issue(issue, threshold, komplemente) for issue in result.completeness]
 
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
