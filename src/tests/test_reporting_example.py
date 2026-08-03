@@ -8,12 +8,14 @@ ableitet, und die K-Anon-Lehrbeispiel-Suppression in ``prepare_export`` greift.
 """
 
 import csv
+import re
 from datetime import timedelta
 
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from core.models import DocumentType, Event
 from core.reporting import registry
 from core.reporting.backends.example import ExampleBackend
 from core.reporting.base import DatasetResult, FieldSpec
@@ -95,6 +97,44 @@ class TestBuildDataset:
         assert result.records == []
         assert result.summary == {"total": 0}
 
+    def test_mehrere_dokumenttypen_sortiert_nach_name(self, backend, facility, admin_user, date_range):
+        """M5: mehrere Dokumenttypen (einer mit ``system_type``) — Sortierung
+        nach ``document_type__name`` (nicht nach Anlage- oder Kategorie-Reihenfolge).
+        """
+        date_from, date_to = date_range
+        zeta = DocumentType.objects.create(facility=facility, name="Zeta-Typ", category=DocumentType.Category.SERVICE)
+        ambulanz = DocumentType.objects.create(
+            facility=facility,
+            name="Ambulanz",
+            category=DocumentType.Category.CONTACT,
+            system_type=DocumentType.SystemType.CONTACT,
+        )
+        for _index in range(3):
+            Event.objects.create(
+                facility=facility, document_type=zeta, occurred_at=timezone.now(), data_json={}, created_by=admin_user
+            )
+        Event.objects.create(
+            facility=facility, document_type=ambulanz, occurred_at=timezone.now(), data_json={}, created_by=admin_user
+        )
+
+        result = backend.build_dataset(facility, date_from, date_to)
+
+        # order_by("document_type__name"): "Ambulanz" vor "Zeta-Typ".
+        assert result.records == [
+            {"document_type": "Ambulanz", "category": "Kontakt", "system_type": "contact", "count": 1},
+            {"document_type": "Zeta-Typ", "category": "Leistung", "system_type": "", "count": 3},
+        ]
+        assert result.summary == {"total": 4}
+
+    def test_genau_eine_query(
+        self, backend, facility, doc_type_contact, sample_event, date_range, django_assert_num_queries
+    ):
+        """M5: eine Aggregation, kein N+1 je Dokumenttyp — Anzahl eingefroren."""
+        date_from, date_to = date_range
+
+        with django_assert_num_queries(1):
+            backend.build_dataset(facility, date_from, date_to)
+
 
 class TestCsvExport:
     """Pflichtfall 3: CSV-Export ueber ``export_dataset`` liefert 4 Spalten."""
@@ -114,10 +154,23 @@ class TestCsvExport:
         assert lines[0].endswith(" | k-Anonymität: Zellen < 5 unterdrückt")
 
 
+_SELECT_BACKEND_RE = re.compile(r'<select name="backend".*?</select>', re.DOTALL)
+_BEISPIEL_OPTION = '<option value="example">Beispiel: Ereignisse je Dokumenttyp</option>'
+
+
 class TestStatisticsPanelDropdown:
     """Pflichtfall 4: Panel-Dropdown der StatisticsView enthaelt das Beispiel-Backend
     (erfuellt die Issue-Verifikation "~50 Zeilen -> automatisch angeboten").
+
+    M4: die Option muss innerhalb des ``<select name="backend">``-Blocks
+    stehen, nicht nur irgendwo auf der Seite (der Backend-Name koennte sonst
+    zufaellig auch anderswo im HTML auftauchen).
     """
+
+    def _dropdown_html(self, content: str) -> str:
+        match = _SELECT_BACKEND_RE.search(content)
+        assert match is not None, 'kein <select name="backend">-Block im HTML gefunden'
+        return match.group(0)
 
     def test_beispiel_backend_im_dropdown(self, client, lead_user):
         client.force_login(lead_user)
@@ -125,7 +178,8 @@ class TestStatisticsPanelDropdown:
         response = client.get(reverse("core:statistics"))
 
         assert response.status_code == 200
-        assert "Beispiel: Ereignisse je Dokumenttyp" in response.content.decode()
+        dropdown = self._dropdown_html(response.content.decode())
+        assert _BEISPIEL_OPTION in dropdown
 
     def test_beispiel_backend_im_dropdown_admin(self, client, admin_user):
         client.force_login(admin_user)
@@ -133,13 +187,16 @@ class TestStatisticsPanelDropdown:
         response = client.get(reverse("core:statistics"))
 
         assert response.status_code == 200
-        assert "Beispiel: Ereignisse je Dokumenttyp" in response.content.decode()
+        dropdown = self._dropdown_html(response.content.decode())
+        assert _BEISPIEL_OPTION in dropdown
 
 
 class TestPrepareExport:
     """Pflichtfall 5: count < k -> None + k_anonymity_threshold gesetzt; >= k unveraendert."""
 
-    def test_zelle_unter_schwelle_wird_none_und_schwelle_gesetzt(self, backend, facility):
+    def test_zelle_unter_schwelle_wird_none_und_total_faellt_mit(self, backend, facility):
+        """A6.1 (Refs #1024/#1016): faellt eine Zelle, faellt auch die Randsumme —
+        sonst waere die unterdrueckte 2 als 9-... rueckrechenbar (I1-Regression)."""
         result = DatasetResult(
             mode="rows",
             records=[{"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2}],
@@ -150,7 +207,7 @@ class TestPrepareExport:
         prepared = backend.prepare_export(facility, result)
 
         assert prepared.records[0]["count"] is None
-        assert prepared.summary["total"] == 9
+        assert prepared.summary["total"] is None
         assert prepared.summary["k_anonymity_threshold"] == 5
 
     def test_zelle_ab_schwelle_bleibt_unveraendert(self, backend, facility):

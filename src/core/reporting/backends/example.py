@@ -7,11 +7,15 @@ K-Anon-Invariante (Refs #1278). Keine View-/Template-/Migrations-Aenderung
 noetig — die Lazy-Discovery in :mod:`core.reporting.registry` findet dieses
 Modul von selbst.
 
-``prepare_export`` zeigt hier nur die Minimalfassung (Zellen-/Randsummen-
-Schwelle): ein ``rows``-Backend mit einer einzigen Kennzahl je Zeile hat keine
-Vier-Term-Identitaet wie ``JugendamtBackend`` — wer mehrere zusammenhaengende
-Kennzahlen aggregiert, orientiert sich an ``JugendamtBackend.prepare_export``
-statt an dieser Vorlage.
+``prepare_export`` loest hier die einzige Rueckrechnungs-Gefahr dieses
+Backends: ``summary["total"]`` ist die Summe aller Zeilen-``count``s
+(``total = Σ counts``) — bliebe ``total`` nach einer Zeilen-Suppression roh
+stehen, waere eine unterdrueckte Zelle exakt als Differenz zu den sichtbaren
+Zeilen rueckrechenbar (A6.1, Refs #1024/#1016). Ein ``rows``-Backend mit einer
+einzigen Kennzahl je Zeile hat dagegen KEINE Vier-Term-Identitaet wie
+``JugendamtBackend`` (mehrere zusammenhaengende Kennzahlen/Meldungen) — wer so
+etwas aggregiert, orientiert sich an ``JugendamtBackend.prepare_export`` statt
+an dieser Vorlage.
 """
 
 import dataclasses
@@ -22,7 +26,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import DocumentType, Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import _get_threshold
+from core.services.dashboard.external_report import _get_threshold, _suppress_small
 
 
 @register_backend("example")
@@ -42,9 +46,6 @@ class ExampleBackend(DatasetBackend):
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Eine Zeile je Dokumenttyp mit Ereignissen im Zeitraum, Gesamtzahl im Summary."""
-        # (facility, name, category) ist DB-eindeutig
-        # (unique_facility_documenttype_name_category) -> eine Aggregation
-        # ergibt garantiert eine Zeile je DocumentType, kein N+1.
         rows = (
             Event.objects.filter(
                 facility=facility,
@@ -52,10 +53,13 @@ class ExampleBackend(DatasetBackend):
                 occurred_at__date__gte=date_from,
                 occurred_at__date__lte=date_to,
             )
-            .values("document_type__name", "document_type__category", "document_type__system_type")
+            # document_type_id in der Gruppierung: eine Aggregation liefert
+            # damit robust genau eine Zeile je DocumentType, kein N+1.
+            .values("document_type_id", "document_type__name", "document_type__category", "document_type__system_type")
             .annotate(count=Count("id"))
             .order_by("document_type__name")
         )
+
         records = [
             {
                 "document_type": row["document_type__name"],
@@ -65,6 +69,7 @@ class ExampleBackend(DatasetBackend):
             }
             for row in rows
         ]
+
         return DatasetResult(
             mode="rows",
             records=records,
@@ -73,13 +78,37 @@ class ExampleBackend(DatasetBackend):
         )
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """K-Anon-Lehrbeispiel (Refs #1278): Zellen/Randsumme < Schwelle -> ``None``.
+        """K-Anon-Lehrbeispiel (Refs #1278): Zeilen-Suppression inkl. A6.1-Schutz.
 
-        Siehe Modul-Docstring zur Grenze dieser Minimalfassung gegenueber
-        ``JugendamtBackend.prepare_export``.
+        Nutzt ``_suppress_small`` — dieselbe Primaer-/Sekundaer-Suppression wie
+        ``JugendamtBackend``/``build_external_report`` (A6.1, Refs #1024/#1016):
+        eine Zelle < Schwelle wird ``count=None``; bleibt danach genau EINE
+        Zelle unterdrueckt, faellt zusaetzlich die naechstkleinere sichtbare
+        Zelle (``_apply_secondary_suppression``) — sonst waere sie aus den
+        sichtbaren Zellen und ``total`` rueckrechenbar.
+
+        ``total`` (= Σ aller Zeilen-``count``) faellt, wenn es selbst unter der
+        Schwelle liegt (R14) ODER wenn ueberhaupt eine Zeile unterdrueckt ist:
+        die Sekundaer-Suppression schuetzt nur GENAU EINE unterdrueckte Zelle
+        gegen Rueckrechnung ueber die sichtbaren Zellen — bleiben mehrere
+        unterdrueckt, waere ``total`` weiterhin ein Rueckrechnungs-Hebel.
+        Konservativ fuers Lehrbeispiel: faellt eine Zelle, faellt auch ``total``.
+
+        ``records`` wird auf die deklarierten FieldSpec-Keys zurueckprojiziert
+        (wie ``JugendamtBackend.prepare_export``) — das interne
+        ``suppressed``-Flag aus ``_suppress_small`` ist keine eigene Spalte und
+        wuerde sonst ungefiltert in CSV/JSON/XML landen.
         """
         threshold = _get_threshold(facility)
-        records = [{**row, "count": None} if row["count"] < threshold else row for row in result.records]
+        suppressed_rows = _suppress_small(result.records, threshold, count_key="count")
+        field_keys = [spec.key for spec in self.get_field_specs()]
+        records = [{key: row[key] for key in field_keys} for row in suppressed_rows]
+
         total = result.summary["total"]
-        summary = {**result.summary, "total": None if total < threshold else total, "k_anonymity_threshold": threshold}
+        any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
+        total_faellt = total < threshold or any_row_suppressed
+
+        summary = dict(result.summary)
+        summary["total"] = None if total_faellt else total
+        summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)
