@@ -68,9 +68,21 @@ class TestRegisterBackend:
         assert cls.slug == "dummy_eins"
         assert isinstance(registry._REGISTRY["dummy_eins"], cls)
 
+    def test_registriert_backend_mit_bindestrich_slug(self):
+        """Refs #1739: Slugs duerfen Bindestriche tragen (``sample-report-1``)."""
+        cls = registry.register_backend("sample-report-1")(_make_backend_cls())
+        assert cls.slug == "sample-report-1"
+        assert isinstance(registry._REGISTRY["sample-report-1"], cls)
+
     def test_ungueltiger_slug_wirft_improperly_configured(self):
         with pytest.raises(ImproperlyConfigured):
             registry.register_backend("Foo-Bar")(_make_backend_cls())
+
+    @pytest.mark.parametrize("slug", ["-vorn", "hinten-", "doppel--strich", "_vorn", "misch_-strich"])
+    def test_trennzeichen_am_rand_oder_doppelt_wirft_improperly_configured(self, slug):
+        """Der Slug landet in Dateinamen und XML-Attributen — Randtrennzeichen sind kein gueltiger Bezeichner."""
+        with pytest.raises(ImproperlyConfigured):
+            registry.register_backend(slug)(_make_backend_cls())
 
     def test_doppelregistrierung_wirft_improperly_configured(self):
         registry.register_backend("dupe")(_make_backend_cls())
@@ -189,7 +201,7 @@ class TestDiscovery:
         """
         monkeypatch.setattr(registry, "_discovered", False)
 
-        ursache = ImproperlyConfigured("Ungültiger Reporting-Backend-Slug 'Foo-Bar' — erwartet ^[a-z0-9_]+$.")
+        ursache = ImproperlyConfigured("Ungültiger Reporting-Backend-Slug 'Foo-Bar'.")
 
         def _fake_import_module(name):
             raise ursache

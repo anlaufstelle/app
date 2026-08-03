@@ -27,7 +27,11 @@ from django.core.exceptions import ImproperlyConfigured
 
 from core.reporting.base import DatasetBackend
 
-_SLUG_RE = re.compile(r"^[a-z0-9_]+$")
+# Kleinbuchstaben/Ziffern, getrennt durch einzelne ``-``/``_`` (Refs #1739:
+# ``sample-report-1`` braucht den Bindestrich). Trennzeichen am Rand oder
+# doppelt sind bewusst ungueltig — der Slug landet als Dateinamen-Praefix
+# (``export_dataset``), als XML-Attribut und als ``backend_data``-Schluessel.
+_SLUG_RE = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
 
 # Singleton-Instanzen je Slug. Direkt am Modul gepflegt (kein Proxy), damit
 # Tests per ``monkeypatch.setattr(registry, "_REGISTRY", ...)`` isolieren
@@ -49,7 +53,7 @@ def register_backend(slug: str) -> Callable[[type[DatasetBackend]], type[Dataset
 
     def decorator(cls: type[DatasetBackend]) -> type[DatasetBackend]:
         if not _SLUG_RE.fullmatch(slug):
-            raise ImproperlyConfigured(f"Ungültiger Reporting-Backend-Slug {slug!r} — erwartet ^[a-z0-9_]+$.")
+            raise ImproperlyConfigured(f"Ungültiger Reporting-Backend-Slug {slug!r} — erwartet {_SLUG_RE.pattern}.")
         if slug in _REGISTRY:
             raise ImproperlyConfigured(f"Reporting-Backend-Slug {slug!r} ist bereits registriert.")
         cls.slug = slug
