@@ -1172,6 +1172,105 @@
 
 ---
 
+### D.PKG
+
+> Refs #1058 (M2): Konfigurationspakete (YAML, Schema v1) werden über `manage.py load_package` eingespielt — ein reiner LOKAL/SSH-Pfad ohne UI. Format, Loader-Semantik und Pflegeregeln: [`docs/packages.md`](../packages.md), Begründung: [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md).
+>
+> **Gemeinsame Voraussetzung für D.PKG:** Facility-UUID zur Hand (`python src/manage.py shell -c "from core.models import Facility; print(*Facility.objects.values_list('id', 'name'), sep='\n')"`) und eine Kopie von `src/core/packages/default.yaml` als Arbeitsdatei (z. B. `/tmp/paket.yaml`). Die produktive `default.yaml` dabei **nicht** verändern.
+
+#### DEV-PKG-01 — `load_package --dry-run` schreibt nichts und meldet die geplanten Änderungen
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_loader.py` |
+
+**Voraussetzung:** Geseedete Einrichtung (`make seed`), Arbeitskopie `/tmp/paket.yaml`.
+
+**Code-Referenz:**
+- `src/core/management/commands/load_package.py` — CLI-Fassade, Report-Ausgabe, `CommandError`-Übersetzung.
+- `src/core/packages/loader.py` — Dry-Run über internen Rollback-Sentinel (identischer Code-Pfad).
+
+**Schritte:**
+1. In `/tmp/paket.yaml` einen sichtbaren Wert ändern, z. B. `icon` des Typs `kontakt` auf `star` und `help_text` der Vorlage `dauer` auf „Dauer in Minuten (Test)".
+2. `python src/manage.py load_package --file /tmp/paket.yaml --facility <uuid> --dry-run` ausführen; Ausgabe und Exit-Code (`echo $?`) notieren.
+3. In der Shell prüfen, ob der Wert in der Datenbank tatsächlich unverändert ist (`DocumentType.objects.get(facility_id=…, slug="kontakt").icon`).
+
+**Erwartetes Ergebnis:**
+- Die Ausgabe beginnt mit „Dry-Run — es wird nichts geschrieben." und listet je Abschnitt (Feldvorlagen, Dokumentationstypen, Feldgruppen, Feldzuordnungen, Bedingungen) `angelegt` / `aktualisiert` / `unverändert` mit Anzahl und Bezeichnern.
+- `aktualisiert` nennt genau die beiden geänderten Objekte (`kontakt`, `dauer`); alles andere steht unter `unverändert`.
+- Exit-Code `0`, Abschlusszeile „Dry-Run abgeschlossen."
+- Schritt 3: der Datenbankwert ist **unverändert** — der Dry-Run hat nichts geschrieben.
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-PKG-02 — Zweiter Lauf ist vollständig `unverändert` (Idempotenz)
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_loader.py`, `test_seed.py` |
+
+**Voraussetzung:** DEV-PKG-01 durchgeführt (Arbeitskopie mit den beiden geänderten Werten liegt bereit).
+
+**Code-Referenz:**
+- `src/core/packages/loader.py` — Diff vor dem Schreiben, `created`/`updated`/`unchanged` je Objektart.
+- `src/core/seed/doc_types.py` — derselbe Loader-Pfad wird vom Seed benutzt.
+
+**Schritte:**
+1. `python src/manage.py load_package --file /tmp/paket.yaml --facility <uuid>` (ohne `--dry-run`) ausführen.
+2. **Denselben** Befehl unverändert ein zweites Mal ausführen.
+3. `python src/manage.py seed` erneut laufen lassen (spielt `default.yaml` ein) und die Ausgabe auf Fehler prüfen.
+4. Stichprobe in der UI: `/config/document-types/` zeigt den Typ `kontakt` mit dem in Schritt 1 gesetzten Icon.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: `aktualisiert (2)`, Abschlusszeile „Import abgeschlossen.", Exit-Code `0`.
+- Schritt 2: **jeder** Abschnitt meldet `angelegt (0)` und `aktualisiert (0)` — alles steht unter `unverändert`. Das ist der Kernbeweis der Idempotenz.
+- Schritt 3: der Seed läuft fehlerfrei durch und setzt `icon`/`help_text` wieder auf die Katalogwerte zurück (Rücksync — dokumentiert in `CONTRIBUTING.md` und [`docs/packages.md`](../packages.md)).
+- Keine Duplikate: die Anzahl der Dokumentationstypen und Feldvorlagen der Einrichtung ist über alle Läufe konstant (9 bzw. 25 im Standardkatalog).
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-PKG-03 — Fehlerfall: Paket wird komplett abgewiesen, nichts wird übernommen
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_schema.py`, `test_packages_loader.py` |
+
+**Voraussetzung:** DEV-PKG-02 durchgeführt; Anzahl der Dokumentationstypen und Feldvorlagen der Einrichtung vorher notiert.
+
+**Code-Referenz:**
+- `src/core/packages/schema.py` — Sammel-Validierung mit pfadgenauen Bezeichnern, Cross-Checks, Fach-Invarianten.
+- `src/core/packages/loader.py` — Alles-oder-nichts (äußeres `atomic` + Savepoint je Objekt), Immutabilitäts-Prüfungen.
+
+**Schritte:**
+1. **Schema-Fehler:** in der Arbeitskopie einen Tippfehler einbauen (`sort_oder: 0` statt `sort_order: 0`), zusätzlich bei einem `field_ref` eine Feldvorlage referenzieren, die es nicht gibt, und bei einem `entity_type: client`-Typ ein `file`-Feld zuordnen. Befehl ohne `--dry-run` ausführen.
+2. Fehler beheben, stattdessen einen **Immutabilitäts-Konflikt** einbauen: `field_type` der Vorlage `dauer` von `number` auf `text` ändern **und** in derselben Datei ein neues, gültiges Feld ergänzen. Befehl erneut ausführen.
+3. Anzahl der Dokumentationstypen/Feldvorlagen erneut zählen; prüfen, ob das in Schritt 2 ergänzte neue Feld angelegt wurde.
+4. `schema_version` auf `2` setzen und den Befehl erneut ausführen.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Abbruch mit „Paket ungültig:" und **allen** Verstößen in einem Lauf, jeder mit YAML-Pfad (z. B. `document_types[0].sort_oder: Unbekannter Schlüssel.`, `document_types[0].field_refs[3].template_slug: Unbekannte Feldvorlage …`, „Datei-Felder sind nur für Dokumentationstypen mit entity_type 'event' zulässig."). Exit-Code ≠ 0, es wird **nichts** geschrieben.
+- Schritt 2: Abbruch mit „Import fehlgeschlagen — N Fehler, nichts wurde übernommen."; die Fehlerzeile nennt den Bezeichner `dauer` und „Feldtyp ist nach dem Anlegen unveränderlich (Bestand: 'number', Paket: 'text')". Der Report wird trotzdem ausgegeben.
+- Schritt 3: die Zählungen sind **unverändert** — insbesondere wurde das neue, für sich gültige Feld **nicht** angelegt (Alles-oder-nichts, kein Teilstand).
+- Schritt 4: Abbruch mit „Nicht unterstützte Schemaversion 2 — erwartet: 1."
+- Gegenprobe: nach Zurücksetzen der Arbeitskopie läuft der Import wieder sauber durch und meldet alles als `unverändert`.
+
+**DSGVO/Security-Note:**
+- Ein Paket ist unvertrauenswürdiger Fremd-Input, der Feld-Sensibilität und Verschlüsselungs-Flags setzt. Die strikte Validierung (unbekannte Schlüssel = Fehler) und die Unveränderlichkeit von `field_type`/`is_encrypted`/`entity_type`/`system_type` verhindern, dass ein Import ein sensibles Feld still in ein unverschlüsseltes umdeutet.
+
+**Status:** ☐ Offen
+
+---
+
 Übersicht: pro Bereich, in welchen Browsern und auf Mobile getestet werden muss. `✓` = Pflicht, `⚪` = Stichprobe, `—` = nicht relevant.
 
 | Bereich | Chromium | Firefox | Safari/WebKit | Mobile (iPhone) |

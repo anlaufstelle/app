@@ -124,6 +124,54 @@ python src/manage.py seed --flush          # flush existing data first
 > `CommandError` — demo logins and `--flush` are forbidden there; initial setup
 > runs via `manage.py create_super_admin` (Refs #1040).
 
+**Document types come from a package:** The catalogue (9 document types, 25 field
+templates, field groups and assignments) lives declaratively in
+[`src/core/packages/default.yaml`](src/core/packages/default.yaml) and is applied by
+the seed through the package loader (`core.packages`) — the same path as
+`manage.py load_package --file … --facility …`. Applying it is **idempotent**:
+objects are looked up by `slug` (not by name), properties are re-synced on every
+run (previously `get_or_create` — defaults only took effect on creation), and a
+second run reports everything as unchanged.
+
+> **Changing the catalogue:** edit the values in `default.yaml`, not in
+> `core/seed/doc_types.py`. Existing `slug` values are **immutable** (migration
+> 0117/#1710 plus a DB trigger) — a changed slug creates a duplicate in every
+> existing facility instead of updating it. Always carry `system_type`, and always
+> carry the `options` key for `select`/`multi_select`; **never** add a `conditions`
+> key (not even `[]` — that would delete field conditions maintained through the
+> UI). Never remove the **last** group of a document type from the catalogue: the
+> seed only cleans up orphaned groups for types for which the package still
+> declares at least one group — first take the fields out of the group (drop
+> `group_slug`), but leave the empty group in place.
+
+#### What the loader-based seed does to an existing facility
+
+Since M2 the seed is no longer a plain "create if missing" but a re-sync against
+`default.yaml`. What that means in operation:
+
+| Affected | Effect on the next seed run |
+|---|---|
+| `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` of a catalogue type | **reset** to the catalogue value (previously only set on creation) |
+| `sort_order` of groups **and** field assignments — including types without groups | reset to the catalogue position (previously a manually reordered, group-less field list survived) |
+| `default_value` of a catalogue field template | **reset** to the package value (empty throughout the catalogue) — a default maintained through the config UI does **not** survive the seed. Package format v1 cannot express "do not touch" for this field (unlike `conditions`). |
+| Fields a facility has **additionally** assigned to a catalogue type | left untouched (the loader only touches what the package declares) |
+| `retention_days`, `description`, `is_active` (type) and `statistics_category`, `is_active` (template) | not part of schema v1 — neither set nor reset |
+
+Two conflicts abort the **entire** seed run (fail-loud, all-or-nothing — nothing is
+applied, not even for the remaining types):
+
+* **A facility-owned field template on a catalogue slug.** If a facility created
+ e.g. `dauer` itself as a text field, that collides with `field_type`/`is_encrypted`
+ from the package — both are immutable after creation. Resolution: move the
+ facility's own template to a different slug (create anew + migrate data) or change
+ the catalogue slug.
+* **A name collision after a rename.** If "Kontakt" was renamed to "Erstkontakt"
+ through the UI and a *new* type "Kontakt" was created afterwards (which gets the
+ slug `kontakt-2`), the seed wants to rename the type with slug `kontakt` back to
+ "Kontakt" — violating `UniqueConstraint(facility, name, category)`. From then on
+ **every** further seed run fails until this is cleaned up manually. Resolution:
+ rename the facility's own type or adjust the name in the catalogue.
+
 **Scale profiles overview:**
 
 | Data | `small` (default) | `medium` | `large` |
@@ -682,5 +730,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-01 -->
+<!-- translation-date: 2026-08-03 -->
 <!-- source-hash: 4b8851d97e1a421c9660c546605984b7cf27c3a3 -->

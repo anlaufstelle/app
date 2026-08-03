@@ -123,7 +123,8 @@ Status-Symbole gelten gleichermassen im Run-Log:
 | WI | WorkItems | COMP | Betriebs-/Compliance-Dashboard |
 | DEL | Lösch-Anträge | PRIV | Datenschutz-Review (Freitext) |
 | I18N | Sprachen (DE/EN) | REPORT | Datenschutzfreundliche externe Berichte |
-| CONFIG | Formular-Konfiguration (DocumentTypes/FieldTemplates/FieldGroups) | | |
+| CONFIG | Formular-Konfiguration (DocumentTypes/FieldTemplates/FieldGroups) | COND | Bedingte Feldlogik (Regel-Editor + Live-Auswertung) |
+| CLIENT-DYN | Dynamische Zusatzfelder an der Person | CASE-DYN | Dynamische Zusatzfelder am Fall |
 
 **Forward-looking Bereiche (Refs #908):** `SETUP`, `COMP`, `PRIV`, `REPORT` und `A11Y` sind aufgenommen, damit die jeweiligen Feature-Issues (#917 Einrichtungsassistent, #919 Compliance-Dashboard, #918 Freitext-Review, #921 Externe Berichte) ihre Cases unter einheitlichem Schema ablegen können, sobald das Feature implementiert ist. A11Y (Refs #912) bekommt einen eigenen Cases-Block.
 
@@ -275,13 +276,22 @@ Methodik:
 | B | DeletionRequests | 5 | 5 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
-| B | Events | 10 | 9 | 1 | 90 % |
+| B | Events | 12 | 11 | 1 | 92 % |
 | B | Fälle | 9 | 9 | 0 | 100 % |
 | B | Fälle / API | 1 | 1 | 0 | 100 % |
 | B | Fälle / Events | 2 | 2 | 0 | 100 % |
+| B | Fälle / Zusatzfelder | 1 | 0 | 1 | 0 % |
 | B | I18N | 5 | 1 | 4 | 20 % |
 | B | Klient:innen | 13 | 13 | 0 | 100 % |
 | B | Klient:innen / RLS | 1 | 0 | 1 | 0 % |
+| B | Klient:innen / Zusatzfelder | 3 | 0 | 3 | 0 % |
+| B | Konfiguration | 20 | 0 | 20 | 0 % |
+| B | Konfiguration / Audit | 1 | 0 | 1 | 0 % |
+| B | Konfiguration / Bedingte Feldlogik | 3 | 3 | 0 | 100 % |
+| B | Konfiguration / Events | 3 | 0 | 3 | 0 % |
+| B | Konfiguration / Fälle | 1 | 0 | 1 | 0 % |
+| B | Konfiguration / Klient:innen | 1 | 0 | 1 | 0 % |
+| B | Konfiguration / RLS | 1 | 0 | 1 | 0 % |
 | B | MFA | 9 | 9 | 0 | 100 % |
 | B | Meilensteine | 3 | 3 | 0 | 100 % |
 | B | Offline | 18 | 13 | 5 | 72 % |
@@ -303,6 +313,7 @@ Methodik:
 | D | DeletionRequests | 1 | 0 | 1 | 0 % |
 | D | Fälle / Kaskade | 2 | 0 | 2 | 0 % |
 | D | Klient:innen / Kaskade | 1 | 0 | 1 | 0 % |
+| D | Konfigurationspakete | 3 | 0 | 3 | 0 % |
 | D | Ops | 8 | 0 | 8 | 0 % |
 | D | Security | 7 | 0 | 7 | 0 % |
 | D | Statistik | 2 | 2 | 0 | 100 % |
@@ -312,12 +323,12 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 187 | 159 | 28 | 85 % |
+| B | 223 | 164 | 59 | 74 % |
 | C | 34 | 8 | 26 | 24 % |
-| D | 39 | 13 | 26 | 33 % |
-| **Gesamt** | **272** | **192** | **80** | **71 %** |
+| D | 42 | 13 | 29 | 31 % |
+| **Gesamt** | **311** | **197** | **114** | **63 %** |
 
-> Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
+> Auto-generiert per `python scripts/build_test_matrix_index.py` ([#909](https://github.com/anlaufstelle/app/issues/909)).
 <!-- ANHANG-C:END -->
 
 ---

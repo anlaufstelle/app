@@ -739,10 +739,29 @@ In production the `/health/` endpoint checks ClamAV daemon reachability in addit
 MultiFernet accepts a list of keys. To rotate:
 
 1. **Generate a new key** and add it as the **first** entry in `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=new,old`. Newly written data is encrypted with `new`; existing data stays readable via `old`.
-2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)).
+2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). A `--dry-run` reports how many records would be affected without writing anything.
 3. After successful re-encryption, remove the old key from the list.
 
 > **Important:** Never **replace** the old key instead of **appending** the new one -- any still-unrotated data would become unreadable.
+
+**What `reencrypt_fields` covers** (Refs #1058):
+
+| Data | Scope |
+|---|---|
+| `Event.data_json` | only events that are **not** soft-deleted (`is_deleted=False`) -- see the gap below |
+| `EventHistory.data_before` / `data_after` | complete (append-only, updated through the replication bypass) |
+| `EventAttachment.original_filename_encrypted` | complete |
+| TOTP secrets (`otp_totp_totpdevice.key`) | complete, per device with a row lock and compare-and-swap |
+| **`Client.data_json`** | **complete -- including soft-deleted persons** |
+| **`Case.data_json`** | **complete -- including soft-deleted cases** |
+
+Since dynamic fields became entity-wide (ADR-037), **persons** and **cases** also carry encrypted extra fields in `data_json`. The run rotates them as well and additionally heals plaintext leftovers in fields that the document type declares as encrypted.
+
+For persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion.
+
+> ⚠️ **Known gap -- soft-deleted events.** `Event` is still iterated with `is_deleted=False`. Events in the trash therefore keep their old key until they are hard-deleted by the regular retention run. **Before you really remove an old key from `ENCRYPTION_KEYS`, check whether soft-deleted events exist** (`Event.objects.filter(is_deleted=True).count()`) -- then either wait for the retention run or keep the old key as a read-only entry in the list. Extending the event path is still open and tracked in #1058.
+
+> **Operational note:** The run takes **no** row lock for events, persons, cases and attachments (unlike the TOTP rewrap). With concurrent editing during rotation a lost update is theoretically possible -- run the rotation in a maintenance window, not during regular operation.
 
 #### Upload Limit
 
@@ -1434,5 +1453,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-01 -->
-<!-- source-hash: 48069a924cff5743f4d1e607b7715113e40957c5 -->
+<!-- translation-date: 2026-08-03 -->
+<!-- source-hash: 2de615f84cfbd045d8ff7d9ba5a1fbf77295f1f1 -->

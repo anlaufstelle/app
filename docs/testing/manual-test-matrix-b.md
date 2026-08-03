@@ -9,7 +9,7 @@
 > **Zielgruppe:** Tobias als Entwickler/Tester. Systematisches Durchgehen aller Bereiche vor jedem Major-Release.
 >
 > **Format:** Pro Bereich ein `<details open>`-Block mit Header (Routen, View-Klassen, E2E-Coverage, Spezial-Setup) und allen Cases. Bereiche in dieser Reihenfolge:
-> AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS → CONFIG.
+> AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS → CONFIG → COND → CLIENT-DYN/CASE-DYN.
 
 <details open>
 <summary><strong>🔐 AUTH — Authentifizierung (10 Cases)</strong></summary>
@@ -6678,6 +6678,181 @@
 **Erwartetes Ergebnis:**
 - Das Quellfeld-Dropdown enthält weder das `file`-Feld noch das verschlüsselte Feld (das Zielfeld-Dropdown enthält beide weiterhin).
 - Ein erzwungener POST mit `file`-/verschlüsseltem Feld als Quelle wird serverseitig abgewiesen — Modell-`clean()`-Defense mit „Dieser Feldtyp kann nicht als Quelle für Bedingungen verwendet werden." bzw. „Verschlüsselte Felder sind als Quelle nicht zulässig.".
+
+**Status:** ☐ Offen
+
+</details>
+
+<details open>
+<summary><strong>🧩 CLIENT-DYN / CASE-DYN — Dynamische Zusatzfelder an Person und Fall (6 Cases)</strong></summary>
+
+**Routen:** `/clients/new/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/` (Abschnitt „Zusatzfelder"), `/partials/clients/fields/`; `/cases/new/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/`, `/partials/cases/fields/`; Konfiguration unter `/config/document-types/` (Typ mit `entity_type` Person/Fall anlegen) 
+**Views:** `src/core/views/clients.py` (`ClientCreateView`, `ClientUpdateView`, `ClientDetailView`, `ClientFieldsPartialView`); `src/core/views/cases.py` (`CaseCreateView`, `CaseUpdateView`, `CaseDetailView`, `CaseFieldsPartialView`) 
+**Forms:** `src/core/forms/dynamic.py` (`DynamicDataForm` — entity-neutrale Basis, `exclude_file_fields`, `grouped_fields()`); `src/core/forms/clients.py` (`DynamicClientDataForm`, `ClientForm` mit hx-get-Typ-Select); `src/core/forms/cases.py` (Fall-Pendant) 
+**Services:** `src/core/services/dynamic_data.py` (`merge_dynamic_data` — E11-Typwechsel-Policy, `validate_data_json`, `remove_restricted_fields`, `decrypt_dynamic_text_data`); `src/core/services/client/main.py` (`_check_client_document_type`), `src/core/services/case/cases.py` (`_check_case_document_type`) 
+**Models:** `Client.document_type`/`Client.data_json`, `Case.document_type`/`Case.data_json` (Migrationen `0118`/`0119`, `on_delete=PROTECT`); Verschlüsselung über `DynamicDataEncryptionMixin` (Cache an `document_type_id` gebunden) 
+**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über Unit-/View-Suiten `test_clients_dynamic_ui.py`, `test_cases_dynamic_ui.py`, `test_client_dynamic_data.py`, `test_case_dynamic_data.py`, `test_forms_dynamic.py`, `test_client_export.py` 
+**Hintergrund:** [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) (entity_type, E11-Typwechsel, dreischichtiger FILE-Ausschluss), [`docs/packages.md`](../packages.md) 
+**Spezial-Setup:**
+- Rolle **facility_admin** (`admin`) legt die Wegwerf-Typen an, die eigentlichen Fälle laufen als **fachkraft** (`miriam`); für die Sensitivitäts-Probe zusätzlich **assistenz** (`lena`).
+- Wegwerf-Typen nach Konvention `E2E-ClientDyn-<uuid4>` (`entity_type` = Person) und `E2E-CaseDyn-<uuid4>` (`entity_type` = Fall) mit mindestens: einem normalen Textfeld, einem Feld mit Sensibilität **hoch** (verschlüsselt) und — nur für CLIENT-DYN-04 — einem zweiten Person-Typ mit **anderem** Feldset.
+- Der Seed bringt **keine** Person-/Fall-Typen mit (`default.yaml` ist durchgehend `entity_type: event`) — die Typen müssen für diese Cases angelegt werden.
+
+---
+
+### TC-ID: ENT-CLIENT-DYN-01 — Typ-Auswahl an der Person zeigt nur Person-Typen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Klient:innen / Zusatzfelder | admin + fachkraft (`miriam`) | C/F | ⚪ | `test_clients_dynamic_ui.py`, `test_client_dynamic_data.py` |
+
+**Vorbereitung:**
+- Als `admin` je einen Wegwerf-Typ mit `entity_type` **Person** und einen mit `entity_type` **Fall** angelegt; die Seed-Ereignistypen (Kontakt, Krisengespräch, …) existieren ohnehin.
+- Danach als `miriam` eingeloggt.
+
+**Schritte:**
+1. `/clients/new/` aufrufen und das Dropdown „Dokumentationstyp" öffnen.
+2. Den Person-Wegwerf-Typ auswählen — die Zusatzfelder laden per HTMX in `#dynamic-fields` nach, **ohne** Seiten-Reload.
+3. Felder ausfüllen und die Person speichern.
+4. Detailseite der Person öffnen.
+
+**Erwartetes Ergebnis:**
+- Das Dropdown enthält **ausschließlich** Typen mit `entity_type` Person — weder Ereignis- noch Fall-Typen tauchen auf.
+- Nach Schritt 2 stehen die Zusatzfelder in der konfigurierten Block-Reihenfolge (Gruppen und freie Felder ineinander verschachtelt, [ADR-036](../adr/036-globale-block-sequenz-feldordnung.md)).
+- Nach dem Speichern zeigt die Detailseite einen Abschnitt „Zusatzfelder" mit Label und Wert je Feld.
+- Keine CSP-Violations/JS-Fehler in der Konsole.
+
+**DSGVO/Security-Note:**
+- Die Entitätsgrenze wird nicht nur im Dropdown, sondern zusätzlich im Service (`_check_client_document_type`) durchgesetzt — ein manipuliertes POST mit einem Ereignis-Typ wird abgewiesen.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CLIENT-DYN-02 — Sensible Zusatzfelder: verschlüsselt gespeichert, für Assistenz unsichtbar
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Klient:innen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C || `test_clients_dynamic_ui.py`, `test_client_dynamic_data.py` |
+
+**Vorbereitung:**
+- ENT-CLIENT-DYN-01 durchgeführt; die Person trägt einen Wert im Feld mit Sensibilität **hoch**.
+
+**Schritte:**
+1. Als `miriam` die Person bearbeiten — das sensible Feld ist mit seinem **Klartext-Wert** vorbelegt.
+2. Ein anderes (nicht sensibles) Feld ändern und speichern.
+3. Als `lena` (Assistenz) dieselbe Person öffnen und anschließend bearbeiten.
+4. Als `lena` ein sichtbares Feld ändern und speichern.
+5. Als `miriam` die Person erneut öffnen.
+
+**Erwartetes Ergebnis:**
+- Schritt 2: der sensible Wert bleibt unverändert erhalten und liegt in der Datenbank weiterhin als Chiffretext (Fernet) in `data_json`.
+- Schritt 3: `lena` sieht das sensible Feld **nicht** — weder im Detail (dort steht „[Eingeschränkt]") noch im Formular.
+- Schritt 5: der von `lena` nie gesehene sensible Wert ist **immer noch da** — er wurde nicht durch das Speichern der Assistenz gelöscht (Restricted-Merge).
+
+**DSGVO/Security-Note:**
+- Art. 32: Zusatzfelder mit Sensibilität `high` werden at rest verschlüsselt; Art. 5 Abs. 1 lit. f: der Wert verlässt den Server nicht in Richtung einer Rolle, die ihn nicht sehen darf.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CLIENT-DYN-03 — Datei-Felder erscheinen an der Person nicht
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Klient:innen | admin (facility_admin) | C || `test_clients_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
+
+**Vorbereitung:**
+- Eine Feldvorlage vom Typ **Datei** existiert (der Seed liefert `Anhang` mit).
+
+**Schritte:**
+1. Im Feld-Board des Person-Wegwerf-Typs versuchen, die Datei-Feldvorlage zuzuordnen.
+2. Gegenprobe (falls die Zuordnung auf einem anderen Weg doch entstanden ist, z. B. per Admin/Shell): `/clients/new/` mit diesem Typ öffnen.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: die Zuordnung wird mit einer deutschen Fehlermeldung abgewiesen — Datei-Felder sind nur an Ereignis-Typen zulässig.
+- Schritt 2: das Formular lädt **ohne 500er**; das Datei-Feld wird stillschweigend ausgelassen und im Server-Log als Warnung vermerkt.
+- Ein Paket, das dieselbe Zuordnung deklariert, wird bereits beim Import als Schema-Fehler mit Pfad abgewiesen (`manage.py load_package --dry-run`, siehe DEV-PKG-03).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CLIENT-DYN-04 — Typwechsel verwirft die Werte des alten Typs (E11)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Klient:innen / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_clients_dynamic_ui.py`, `test_forms_dynamic.py` |
+
+**Vorbereitung:**
+- Zwei Person-Typen mit **unterschiedlichen** Feldsets; die Person trägt aktuell Typ A mit ausgefüllten Feldern.
+
+**Schritte:**
+1. Person bearbeiten, im Typ-Dropdown von Typ A auf Typ B wechseln — die Zusatzfelder werden per HTMX ausgetauscht.
+2. Den Warnhinweis im Formular lesen, Felder von Typ B ausfüllen und speichern.
+3. Detailseite prüfen.
+4. Person erneut bearbeiten, den Typ auf „— Kein Typ —" setzen und speichern.
+
+**Erwartetes Ergebnis:**
+- Vor dem Speichern weist das Formular sichtbar darauf hin, dass die Zusatzfeld-Werte beim Typwechsel verworfen werden.
+- Nach Schritt 2 enthält `data_json` **ausschließlich** Slugs von Typ B — kein Rest von Typ A bleibt als unsichtbarer Ballast liegen.
+- Schritt 4 läuft ohne Fehler durch: Typ **und** Zusatzfelder sind danach leer, die Detailseite zeigt keinen Abschnitt „Zusatzfelder" mehr.
+- Ein optimistischer Sperr-Konflikt (Datensatz wurde parallel geändert) wird weiterhin als Konfliktmeldung angezeigt, nicht überschrieben.
+
+**DSGVO/Security-Note:**
+- Art. 5 Abs. 1 lit. c/e: Werte, die im neuen Feldset keine Bedeutung mehr haben, werden nicht „vorsichtshalber" aufbewahrt.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CASE-DYN-01 — Fall mit Zusatzfeldern anlegen, bearbeiten und ansehen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Fälle / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_cases_dynamic_ui.py`, `test_case_dynamic_data.py` |
+
+**Vorbereitung:**
+- Fall-Wegwerf-Typ (`entity_type` = Fall) mit mindestens einem normalen und einem sensiblen Feld angelegt.
+- Eine Person mit mindestens einem Fall existiert.
+
+**Schritte:**
+1. `/cases/new/` aufrufen, im Typ-Dropdown den Fall-Wegwerf-Typ wählen — Zusatzfelder laden per HTMX nach.
+2. Felder ausfüllen, Fall speichern, Detailseite öffnen.
+3. Fall erneut bearbeiten: die vorhandenen Werte sind im Klartext vorbelegt; einen Wert ändern und speichern.
+4. Audit-Log (`/audit/`) auf den Update-Eintrag prüfen.
+
+**Erwartetes Ergebnis:**
+- Das Dropdown enthält **ausschließlich** Fall-Typen (keine Ereignis-, keine Person-Typen).
+- Die Detailseite zeigt einen Abschnitt „Zusatzfelder" in Block-Reihenfolge; sensible Felder werden für berechtigte Rollen im Klartext, für andere als „[Eingeschränkt]" angezeigt.
+- Der Audit-Eintrag nennt `data_json` unter den geänderten Feldern — **ohne** die Werte selbst.
+- Das Speichern über ein zwischenzeitlich veraltetes Formular führt weiterhin zur Konfliktmeldung (`expected_updated_at`), nicht zum stillen Überschreiben.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CASE-DYN-02 — Typ in Benutzung lässt sich nicht löschen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Fälle | admin (facility_admin) | C || `test_cases_dynamic_ui.py`, `test_config_document_types.py` |
+
+**Vorbereitung:**
+- ENT-CASE-DYN-01 durchgeführt (mindestens ein Fall trägt den Wegwerf-Typ); analog eine Person mit Person-Typ aus ENT-CLIENT-DYN-01.
+
+**Schritte:**
+1. Als `admin` `/config/document-types/` öffnen — die Liste zeigt je Typ ein Badge mit dem Entitätstyp („Ereignis" / „Person" / „Fall").
+2. Den Fall-Wegwerf-Typ löschen wollen.
+3. Dasselbe für den Person-Wegwerf-Typ.
+4. Den Fall aus Schritt 1 löschen (bzw. seinen Typ entfernen) und den Löschversuch wiederholen.
+
+**Erwartetes Ergebnis:**
+- Der Löschversuch wird mit einer deutschen Blocker-Meldung abgewiesen, die die **Anzahl** der verweisenden Fälle bzw. Personen nennt.
+- Es erscheint **kein** 500er — der `PROTECT`-Constraint wird als Fachmeldung übersetzt.
+- Nach Schritt 4 ist der Typ löschbar (oder die Blocker-Liste nennt nur noch die verbleibenden Gründe).
+- Der Entitätstyp ist beim Bearbeiten eines bestehenden Typs **nicht** änderbar; ein manipulierter POST ändert den Wert nicht und erzeugt keinen 500er.
 
 **Status:** ☐ Offen
 

@@ -742,10 +742,29 @@ Der `/health/`-Endpoint prüft in Produktion zusätzlich zur Datenbank die Errei
 MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 1. **Neuen Schlüssel generieren** und als **ersten** Eintrag in `ENCRYPTION_KEYS` einfügen: `ENCRYPTION_KEYS=neu,alt`. Neu geschriebene Daten werden mit `neu` verschlüsselt, vorhandene mit `alt` lassen sich weiterhin lesen.
-2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Felder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)).
+2. Optional: `python manage.py reencrypt_fields` laufen lassen, damit bestehende Felder auf den neuen Key umgeschlüsselt werden (siehe [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)). Ein `--dry-run` zeigt vorab, wie viele Datensätze betroffen wären, ohne zu schreiben.
 3. Nach erfolgreichem Umschlüsseln den alten Schlüssel aus der Liste entfernen.
 
 > **Wichtig:** Niemals den alten Key **ersetzen** statt **ergänzen** — sonst werden alle noch nicht umgeschlüsselten Bestandsdateien unlesbar.
+
+**Was `reencrypt_fields` abdeckt** (Refs #1058):
+
+| Datenbestand | Umfang |
+|---|---|
+| `Event.data_json` | nur **nicht** soft-gelöschte Ereignisse (`is_deleted=False`) — siehe Lücke unten |
+| `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass) |
+| `EventAttachment.original_filename_encrypted` | vollständig |
+| TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
+| **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen** |
+| **`Case.data_json`** | **vollständig — inklusive soft-gelöschter Fälle** |
+
+Seit den entitätsübergreifenden dynamischen Feldern ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)) tragen auch **Personen** und **Fälle** verschlüsselte Zusatzfelder in `data_json`. Der Lauf rotiert sie mit und heilt dabei zusätzlich Klartext-Reste in Feldern, die laut Dokumentationstyp verschlüsselt sein müssen.
+
+Bei Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet.
+
+> ⚠️ **Bekannte Lücke — soft-gelöschte Ereignisse.** `Event` wird weiterhin mit `is_deleted=False` iteriert. Ereignisse im Papierkorb behalten also ihren alten Schlüssel, bis sie regulär hart gelöscht werden. **Wer einen alten Schlüssel wirklich aus `ENCRYPTION_KEYS` entfernen will, prüft vorher, ob soft-gelöschte Ereignisse existieren** (`Event.objects.filter(is_deleted=True).count()`) — und wartet den Retention-Lauf ab oder behält den Alt-Schlüssel als Read-Only-Eintrag in der Liste. Der Nachzug des Event-Pfads ist offen und wird an #1058 getrackt.
+
+> **Betriebshinweis:** Der Lauf nimmt für Ereignisse, Personen, Fälle und Anhänge **keinen** Row-Lock (anders als beim TOTP-Rewrap). Bei paralleler Bearbeitung während der Rotation ist ein verlorenes Update theoretisch möglich — die Rotation deshalb im Wartungsfenster fahren, nicht im laufenden Betrieb.
 
 #### Upload-Limit
 

@@ -45,6 +45,7 @@ Templates included:
 
 | Document | Description |
 |----------|-------------|
+| [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
 | [ops-runbook.md](../ops-runbook.md) | Operations runbook: monitoring, alerts, cron jobs, RLS, backup/restore, restore drill |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
@@ -66,5 +67,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-07-14 -->
-<!-- source-hash: 799604b -->
+<!-- translation-date: 2026-08-03 -->
+<!-- source-hash: 57cb03bbba2ce4943e92edc084aa739fb655276c -->
