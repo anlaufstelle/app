@@ -49,6 +49,19 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     pii("core_client", "notes"),
     non_pii("core_client", "contact_stage", reason="Enum (identified/qualified), kein Freitext."),
     non_pii("core_client", "age_cluster", reason="Generalisierte Altersgruppe (Enum-Bucket), kein Identifikator."),
+    # M2 P4b (Refs #1058): dynamische Personen-Felder — exakt dieselbe Form wie
+    # ``core_event.data_json`` (freie Feldwerte je DocumentType-Slug), daher
+    # dieselbe Einordnung. Residue-Erwartung nach Anonymisierung: ``{}`` (siehe
+    # ``_redact_client_identity`` und ``k_anonymize_client``).
+    pii("core_client", "data_json"),
+    # ``core_client.document_type_id`` ist eine UUID-Spalte und faellt damit
+    # NICHT unter das Completeness-Gate (``TEXTY_TYPES`` in
+    # test_pii_residue_sweep.py deckt nur Text-/JSON-Spalten ab) — ein Eintrag
+    # hier wuerde ``test_classification_targets_real_columns`` als „veraltet"
+    # reissen. Gleiche Lage wie ``core_event.document_type_id``, das aus
+    # demselben Grund unklassifiziert ist. Fachlich: reiner Konfig-FK ohne
+    # Klientenbezug; er wird bei der Anonymisierung trotzdem auf NULL gesetzt,
+    # damit der PROTECT-Verweis den Typ nicht dauerhaft blockiert.
     # ---- core_event ------------------------------------------------------
     pii("core_event", "data_json"),
     pii("core_event", "search_text"),

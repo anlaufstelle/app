@@ -7,13 +7,14 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AuditLog, Client
+from core.models import AuditLog, Client, DocumentType
 from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
 from core.retention.legal_holds import get_active_hold_target_ids
 from core.services.audit import audit_client_event, audit_event
 from core.services.dashboard import log_activity
+from core.services.dynamic_data import validate_data_json
 from core.services.security import check_version_conflict
 from core.services.system import bypass_replication_triggers
 
@@ -23,13 +24,73 @@ logger = logging.getLogger(__name__)
 _REDACTED_HISTORY_MARKER = {"_redacted": True, "anonymized": True}
 
 
+def _check_client_document_type(facility, document_type):
+    """Prueft den Personen-``DocumentType`` (M2 P4b, Refs #1058).
+
+    Zwei Bedingungen, beide als deutsche ``ValidationError`` (der Aufrufer ist
+    ein Formular):
+
+    (a) **Facility-Scope** — ein Typ einer fremden Einrichtung waere ein
+        Cross-Tenant-Leck (der Slug-Satz stammte aus fremder Konfiguration).
+    (b) **Entitaetstyp** — nur ``entity_type=client``. Ein Ereignis-Typ traegt
+        Feldsemantik, die an einem Personen-Datensatz keine Bedeutung hat.
+
+    ``None`` (kein Typ) ist zulaessig und wird unveraendert durchgereicht.
+    """
+    if document_type is None:
+        return None
+    if document_type.facility_id != facility.pk:
+        raise ValidationError(_("Der Dokumentationstyp gehört nicht zu dieser Einrichtung."))
+    if document_type.entity_type != DocumentType.EntityType.CLIENT:
+        raise ValidationError(_("Der Dokumentationstyp ist nicht für Personen vorgesehen."))
+    return document_type
+
+
+def _clean_client_dynamic_data(facility, document_type, data_json) -> dict:
+    """Guard + Whitelist fuer die Dynamikdaten einer Person (M2 P4b, Refs #1058).
+
+    Prueft erst den Typ (:func:`_check_client_document_type`) und filtert dann
+    ``data_json`` mit :func:`~core.services.dynamic_data.validate_data_json`
+    gegen dessen Feld-Slugs. **Der Rueckgabewert ist verbindlich** — die
+    Whitelist verwirft fremde Keys, und nur wer das Ergebnis speichert,
+    verhindert Mass-Assignment ins JSONB.
+
+    Ohne Typ gibt es keine Whitelist: dann duerfen auch keine Dynamikdaten
+    gesetzt werden (statt sie still zu verschlucken).
+    """
+    document_type = _check_client_document_type(facility, document_type)
+    if document_type is None:
+        if data_json:
+            raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
+        return {}
+    return validate_data_json(document_type, data_json)
+
+
 def _redact_client_identity(client) -> None:
-    """Ersetze Klartext-Felder am Client durch anonyme Marker."""
+    """Ersetze Klartext-Felder am Client durch anonyme Marker.
+
+    M2 P4b (Refs #1058, Entscheid E7): ``data_json`` traegt seit P4b freie
+    Feldwerte (auch verschluesselte) und wird mit geleert; ``document_type``
+    faellt auf ``NULL`` zurueck, damit der ``PROTECT``-Verweis anonymisierte
+    Bestaende nicht dauerhaft an einen Konfigurationstyp kettet (der Typ waere
+    sonst nie loeschbar, obwohl die Daten weg sind).
+    """
     client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
     client.notes = ""
     client.age_cluster = client.AgeCluster.UNKNOWN
     client.is_active = False
-    client.save(update_fields=["pseudonym", "notes", "age_cluster", "is_active"])
+    client.data_json = {}
+    client.document_type = None
+    client.save(
+        update_fields=[
+            "pseudonym",
+            "notes",
+            "age_cluster",
+            "is_active",
+            "data_json",
+            "document_type",
+        ]
+    )
 
 
 def _redact_cases_and_episodes(client) -> list:
@@ -235,7 +296,13 @@ def anonymize_client(client, user=None):
 
 @transaction.atomic
 def create_client(facility, user, **data):
-    """Create a client with activity and audit logging."""
+    """Create a client with activity and audit logging.
+
+    M2 P4b (Refs #1058): ``document_type``/``data_json`` laufen durch
+    :func:`_clean_client_dynamic_data` — Facility-Scope, ``entity_type=client``
+    und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
+    """
+    data["data_json"] = _clean_client_dynamic_data(facility, data.get("document_type"), data.get("data_json"))
     client = Client(facility=facility, created_by=user, **data)
     client.save()
     log_activity(
@@ -267,8 +334,9 @@ def update_client_stage(client, old_stage, new_stage, facility, user):
 def update_client(client, user, *, old_stage=None, expected_updated_at=None, **fields):
     """Update a client with activity logging and stage-change auditing.
 
-    Accepts a dict of allowed fields (pseudonym, contact_stage, age_cluster, notes).
-    Handles AuditLog for stage changes and Activity for qualification transitions.
+    Accepts a dict of allowed fields (pseudonym, contact_stage, age_cluster, notes,
+    document_type, data_json). Handles AuditLog for stage changes and Activity for
+    qualification transitions.
 
     old_stage: If provided, used as the previous contact_stage for stage-change
     detection.  When called from a ModelForm view, the form's _post_clean may
@@ -302,10 +370,22 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     # durchgereichte Felder (z.B. ``facility``, ``id``, ``created_at``). Liste
     # spiegelt die Felder von ``ClientForm`` wider. Läuft ZUERST — die
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
-    allowed = {"pseudonym", "contact_stage", "age_cluster", "notes"}
+    allowed = {"pseudonym", "contact_stage", "age_cluster", "notes", "document_type", "data_json"}
     for key in fields:
         if key not in allowed:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+
+    # M2 P4b (Refs #1058): Dynamikdaten gegen den *effektiven* Typ pruefen —
+    # also gegen den neu uebergebenen, sonst gegen den bestehenden. Wird nur der
+    # Typ gewechselt, laeuft das bestehende ``data_json`` erneut durch die
+    # Whitelist des NEUEN Typs: Slugs des alten Typs fallen weg (E11-Merge-
+    # Policy), statt als unsichtbarer Ballast im JSONB liegenzubleiben.
+    if "document_type" in fields or "data_json" in fields:
+        # ``.get(key, default)`` liefert bei vorhandenem Key auch ein explizites
+        # ``None`` zurueck — ein bewusstes Leeren des Typs bleibt also erhalten.
+        effective_type = fields.get("document_type", client.document_type)
+        raw_data = fields.get("data_json", client.data_json)
+        fields["data_json"] = _clean_client_dynamic_data(client.facility, effective_type, raw_data)
 
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``ClientForm(instance=client)`` hat die Instanz in ``_post_clean()``

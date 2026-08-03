@@ -41,13 +41,21 @@ def normal_doc_type(facility):
 
 
 @pytest.fixture
-def client_with_full_history(facility, normal_doc_type, admin_user):
-    """Klient mit Event + EventHistory + DeletionRequest + WorkItem + Case + Episode."""
+def client_with_full_history(facility, normal_doc_type, doc_type_client_profile, admin_user):
+    """Klient mit Event + EventHistory + DeletionRequest + WorkItem + Case + Episode.
+
+    M2 P4b (Refs #1058): zusaetzlich mit Personen-``document_type`` +
+    ``data_json``-Probe. Der Needle liegt bewusst im **unverschluesselten**
+    Slug (``wohnsituation``) — nur so ist er ueberhaupt als Klartext-Residue
+    beobachtbar; der encrypted-Slug wuerde die Probe hinter Fernet verstecken.
+    """
     cli = Client.objects.create(
         facility=facility,
         pseudonym="Maria-eindeutig",
         notes="Klient hat psychische Krise, Hausarzt Dr. Mueller",
         contact_stage=Client.ContactStage.IDENTIFIED,
+        document_type=doc_type_client_profile,
+        data_json={"wohnsituation": "Wohnt bei Dr. Mueller, Hauptstraße 5"},
     )
     case = Case.objects.create(
         facility=facility,
@@ -123,6 +131,20 @@ class TestAnonymizeResidueMatrix:
         assert cli.pseudonym.startswith("Gelöscht-")
         assert cli.notes == ""
         assert cli.is_active is False
+
+    def test_client_dynamic_data_redacted(self, client_with_full_history):
+        """M2 P4b (Refs #1058): ``data_json`` leer, ``document_type`` geloest.
+
+        Der PROTECT-Verweis muss fallen — sonst kettet ein anonymisierter
+        Bestand den Konfigurationstyp dauerhaft fest, obwohl seine Daten weg
+        sind.
+        """
+        cli, _, _ = client_with_full_history
+        assert cli.data_json, "Positiv-Kontrolle: die Probe muss vorher befuellt sein"
+        cli.anonymize()
+        cli.refresh_from_db()
+        assert cli.data_json == {}
+        assert cli.document_type_id is None
 
     def test_case_and_episode_redacted(self, client_with_full_history):
         cli, case, _ = client_with_full_history

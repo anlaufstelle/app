@@ -189,6 +189,41 @@ def doc_type_contact(facility):
 
 
 @pytest.fixture
+def doc_type_client_profile(facility):
+    """Personen-Dokumentationstyp (M2 P4b, Refs #1058) mit je einem normalen und
+    einem verschlüsselten Feld.
+
+    Pendant zu ``doc_type_contact`` für ``entity_type=client``: ``Client.data_json``
+    wird gegen genau diese Feldmenge whitelistet, ``wohnsituation`` bleibt Klartext
+    (Residue-Proben), ``diagnose`` ist ``is_encrypted=True`` und muss nach
+    ``Client.save()`` als Fernet-Token in der DB liegen.
+    """
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Personenprofil",
+    )
+
+    ft_wohnsituation = FieldTemplate.objects.create(
+        facility=facility,
+        name="Wohnsituation",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    ft_diagnose = FieldTemplate.objects.create(
+        facility=facility,
+        name="Diagnose",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+        is_encrypted=True,
+    )
+
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_wohnsituation, sort_order=0)
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_diagnose, sort_order=1)
+
+    return doc_type
+
+
+@pytest.fixture
 def doc_type_crisis(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
@@ -478,6 +513,22 @@ def foreign_doc_type(second_facility):
         facility=second_facility,
         category=DocumentType.Category.CONTACT,
         name="Kontakt (fremd)",
+    )
+
+
+@pytest.fixture
+def foreign_doc_type_client(second_facility):
+    """Personen-Dokumentationstyp auf ``second_facility`` (M2 P4b, Refs #1058).
+
+    Spiegel zu ``doc_type_client_profile`` für die Cross-Facility-Probe: der Typ
+    ist inhaltlich gültig (``entity_type=client``), gehört aber zur falschen
+    Einrichtung — der Service-Guard muss ihn ablehnen.
+    """
+    return DocumentType.objects.create(
+        facility=second_facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Personenprofil (fremd)",
     )
 
 

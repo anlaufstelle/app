@@ -37,6 +37,8 @@ def k_anonymize_client(client, k: int = 5):
 
     * ``pseudonym`` → ``anon-<sha256[:12]>`` (non-reversible hash bucket)
     * ``notes`` → ``""`` (free text can leak identity)
+    * ``data_json`` → ``{}`` (M2 P4b, Refs #1058)
+    * ``document_type`` → ``None`` (M2 P4b, Refs #1058)
     * ``age_cluster`` stays as-is (already bucketed)
     * ``contact_stage`` stays as-is (low-cardinality category)
     * ``is_active`` → ``False``
@@ -45,17 +47,30 @@ def k_anonymize_client(client, k: int = 5):
     Linked cases / episodes / workitems are *not* modified — use
     :meth:`Client.anonymize` for the cascading case, or combine both modes.
 
+    M2 P4b (Refs #1058): Diese Primitive redigiert die Client-Zeile
+    **eigenstaendig** (nicht ueber ``anonymize_client``), muss die seit P4b dort
+    liegenden Dynamikdaten also selbst mit abraeumen — sonst bliebe der freie
+    Feldinhalt aus ``data_json`` in einem als „anonymisiert" markierten
+    Datensatz stehen. Der ``document_type``-Verweis faellt aus demselben Grund
+    wie im Hard-Pfad auf ``NULL``: mit leerem ``data_json`` hat er keine
+    Bedeutung mehr, wuerde den Typ aber per ``PROTECT`` dauerhaft blockieren.
+    Die Nicht-Kaskade auf Cases/Episoden/Workitems bleibt davon unberuehrt.
+
     The ``k`` parameter is passed through for call-site logging and can be
     checked with :func:`is_k_anonymous` after generalization.
     """
     client.pseudonym = _pseudonym_hash(client)
     client.notes = ""
+    client.data_json = {}
+    client.document_type = None
     client.is_active = False
     client.k_anonymized = True
     client.save(
         update_fields=[
             "pseudonym",
             "notes",
+            "data_json",
+            "document_type",
             "is_active",
             "k_anonymized",
         ]

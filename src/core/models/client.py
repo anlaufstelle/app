@@ -8,10 +8,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
-from core.models.mixins import SoftDeletableModel
+from core.models.mixins import DynamicDataEncryptionMixin, SoftDeletableModel
 
 
-class Client(SoftDeletableModel):
+class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
     """Pseudonymized client of a facility."""
 
     class ContactStage(models.TextChoices):
@@ -62,6 +62,22 @@ class Client(SoftDeletableModel):
             "Sensible Inhalte gehören in ein FieldTemplate mit Sensitivity=HOCH."
         ),
     )
+    # M2/P4b (Refs #1058, Entscheid E4): Personen bekommen dieselbe dynamische
+    # Feldmechanik wie Ereignisse. ``null=True`` weil der Bestand (und jede
+    # Person ohne Profil-Typ) typlos bleibt; ``PROTECT`` schuetzt befuellte
+    # ``data_json``-Werte davor, dass ein Loeschen des Typs ihre Feld-Semantik
+    # (Slug -> Label/Sensitivity/Verschluesselung) unbemerkt entwertet — der
+    # Anonymisierungs-Pfad loest den Verweis daher aktiv auf, statt
+    # anonymisierte Bestaende dauerhaft an den Typ zu ketten.
+    document_type = models.ForeignKey(
+        "core.DocumentType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clients",
+        verbose_name=_("Dokumentationstyp"),
+    )
+    data_json = models.JSONField(default=dict, blank=True, verbose_name=_("Daten (JSON)"))
     is_active = models.BooleanField(default=True, verbose_name=_("Aktiv"))
     k_anonymized = models.BooleanField(
         default=False,
@@ -102,6 +118,13 @@ class Client(SoftDeletableModel):
 
     def __str__(self):
         return self.pseudonym
+
+    def save(self, *args, **kwargs):
+        # E5: Der Mixin ueberschreibt ``save()`` bewusst NICHT (MRO-Kollision mit
+        # ``SoftDeletableModel``) — jedes Modell ruft die Verschluesselung explizit
+        # auf, direkt vor dem Persistieren. Muster: ``Event.save()``.
+        self._encrypt_sensitive_fields()
+        super().save(*args, **kwargs)
 
     def anonymize(self, user=None):
         """DSGVO Art. 17 Aggregat-Anonymisierung — Wrapper auf Service.

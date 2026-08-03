@@ -199,13 +199,33 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     from core.services.events import create_event
     from core.services.file_vault import store_encrypted_file
 
-    # 1) Person anlegen (Service schreibt Activity "Person … angelegt").
+    # 0) Personen-Dokumentationstyp mit einem unverschluesselten Feld (M2 P4b,
+    #    Refs #1058). Unverschluesselt ist Pflicht: ein encrypted-Slug landet als
+    #    Fernet-Token in der Zeile und traegt den Sentinel nicht mehr — die
+    #    ``core_client.data_json``-Klassifizierung waere dann unbelegt.
+    dt_person = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Residue-Personenprofil",
+    )
+    ft_wohnsituation = FieldTemplate.objects.create(
+        facility=facility,
+        name="Residue-Wohnsituation",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    DocumentTypeField.objects.create(document_type=dt_person, field_template=ft_wohnsituation, sort_order=0)
+
+    # 1) Person anlegen (Service schreibt Activity "Person … angelegt") — inkl.
+    #    Dynamikdaten-Sentinel in ``core_client.data_json``.
     client = create_client(
         facility,
         admin_user,
         pseudonym="RESIDUEPROBE-Pseudonym",
         notes="RESIDUEPROBE-Notiz Hausarzt",
         contact_stage=Client.ContactStage.IDENTIFIED,
+        document_type=dt_person,
+        data_json={ft_wohnsituation.slug: "RESIDUEPROBE-Wohnsituation Hauptstrasse"},
     )
 
     # 2) Stufenwechsel IDENTIFIED -> QUALIFIED (Service schreibt Activity
