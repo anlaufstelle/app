@@ -1,6 +1,6 @@
 """Tests for the seed management command."""
 
-import copy
+import importlib.resources
 
 import pytest
 from django.core.management import call_command
@@ -549,26 +549,34 @@ def test_seed_field_groups_idempotent_no_duplicates():
 # ---------------------------------------------------------------------------
 
 
-def _renamed_catalog(*, doc_type_name: str, group_slug: str, new_group_name: str) -> list[dict]:
-    """Katalog-Kopie mit einer Gruppen-Umbenennung (per Slug adressiert)."""
-    defs = copy.deepcopy(doc_types.get_document_type_definitions())
-    for dt_def in defs:
-        if dt_def["name"] != doc_type_name:
+def _renamed_catalog(*, doc_type_slug: str, group_slug: str, new_group_name: str) -> dict:
+    """Paket-Kopie mit einer Gruppen-Umbenennung (per Slug adressiert)."""
+    data = doc_types.load_default_package_data()
+    for dt_def in data["document_types"]:
+        if dt_def["slug"] != doc_type_slug:
             continue
         for group_def in dt_def.get("groups", []):
             if group_def["slug"] == group_slug:
                 group_def["name"] = new_group_name
-    return defs
+    return data
 
 
-def _catalog_without_group(*, doc_type_name: str, group_slug: str) -> list[dict]:
-    """Katalog-Kopie, aus der eine Gruppe (per Slug) entfernt wurde."""
-    defs = copy.deepcopy(doc_types.get_document_type_definitions())
-    for dt_def in defs:
-        if dt_def["name"] != doc_type_name:
+def _catalog_without_group(*, doc_type_slug: str, group_slug: str) -> dict:
+    """Paket-Kopie ohne eine Gruppe — inkl. der Zuordnungen, die sie referenzieren.
+
+    Die betroffenen ``field_refs`` verlieren ihren ``group_slug`` (sonst
+    verweisen sie ins Leere und das Paket wäre schema-ungültig) — genau die
+    Situation "Katalog listet die Felder nicht mehr in einer Gruppe".
+    """
+    data = doc_types.load_default_package_data()
+    for dt_def in data["document_types"]:
+        if dt_def["slug"] != doc_type_slug:
             continue
         dt_def["groups"] = [g for g in dt_def.get("groups", []) if g["slug"] != group_slug]
-    return defs
+        for ref in dt_def.get("field_refs", []):
+            if ref.get("group_slug") == group_slug:
+                del ref["group_slug"]
+    return data
 
 
 @pytest.mark.django_db
@@ -584,8 +592,8 @@ def test_reseed_after_catalog_rename_keeps_same_fieldgroup_row(monkeypatch):
     basis = FieldGroup.objects.get(document_type=kontakt, slug="basisdaten")
     basis_pk = basis.pk
 
-    renamed = _renamed_catalog(doc_type_name="Kontakt", group_slug="basisdaten", new_group_name="Stammdaten")
-    monkeypatch.setattr(doc_types, "get_document_type_definitions", lambda: renamed)
+    renamed = _renamed_catalog(doc_type_slug="kontakt", group_slug="basisdaten", new_group_name="Stammdaten")
+    monkeypatch.setattr(doc_types, "load_default_package_data", lambda: renamed)
 
     call_command("seed")
 
@@ -606,8 +614,8 @@ def test_reseed_after_catalog_group_removal_deletes_row_and_ungroups_fields(monk
     removed = FieldGroup.objects.get(document_type=kontakt, slug="leistungen-notizen")
     removed_pk = removed.pk
 
-    reduced = _catalog_without_group(doc_type_name="Kontakt", group_slug="leistungen-notizen")
-    monkeypatch.setattr(doc_types, "get_document_type_definitions", lambda: reduced)
+    reduced = _catalog_without_group(doc_type_slug="kontakt", group_slug="leistungen-notizen")
+    monkeypatch.setattr(doc_types, "load_default_package_data", lambda: reduced)
 
     call_command("seed")
 
@@ -719,3 +727,249 @@ def test_reseed_does_not_touch_field_groups_of_doctype_without_groups_key():
     manual_group.refresh_from_db()
     assert FieldGroup.objects.filter(pk=manual_group.pk).exists()
     assert manual_group.name == "Manuell angelegt"
+
+
+# ---------------------------------------------------------------------------
+# Seed über den Paket-Loader (M2 P12, Refs #1058)
+# ---------------------------------------------------------------------------
+
+# Slug → (Name, Kategorie, Systemtyp, Sensibilität, Icon, Farbe, sort_order,
+# Mindest-Kontaktstufe). Werte 1:1 aus dem vor-M2-Python-Katalog; die Slugs
+# sind exakt das Ergebnis des 0117-Backfills (E16) — eine Abweichung würde in
+# jeder Bestands-Einrichtung einen Duplikat-Typ erzeugen.
+EXPECTED_DOCUMENT_TYPES = {
+    "kontakt": ("Kontakt", "contact", "contact", "normal", "users", "indigo", 0, None),
+    "krisengespraech": ("Krisengespräch", "service", "crisis", "elevated", "alert-triangle", "amber", 1, None),
+    "medizinische-versorgung": ("Medizinische Versorgung", "service", "medical", "high", "heart", "rose", 2, None),
+    "spritzentausch": ("Spritzentausch", "service", "needle_exchange", "normal", "repeat", "teal", 3, None),
+    "begleitung": ("Begleitung", "service", "accompaniment", "normal", "map-pin", "green", 4, None),
+    "beratungsgespraech": (
+        "Beratungsgespräch",
+        "service",
+        "counseling",
+        "elevated",
+        "message-circle",
+        "purple",
+        5,
+        "qualified",
+    ),
+    "vermittlung": ("Vermittlung", "service", "referral", "normal", "share-2", "blue", 6, None),
+    "notiz": ("Notiz", "note", "note", "normal", "file-text", "gray", 7, None),
+    "hausverbot": ("Hausverbot", "admin", "ban", "elevated", "slash", "red", 8, None),
+}
+
+
+def test_default_package_ships_next_to_the_loader():
+    """Refs #1058: Der Seed liest sein Paket real aus ``core/packages/default.yaml``.
+
+    Kein Test-Fixture-Bypass — genau dieser Pfad muss auch im Container
+    (``COPY src/ ./``) und im Release-Snapshot vorhanden sein.
+    """
+    resource = importlib.resources.files("core.packages").joinpath("default.yaml")
+    assert resource.is_file(), "core/packages/default.yaml fehlt im ausgelieferten Paket."
+
+    data = doc_types.load_default_package_data()
+    assert data["schema_version"] == 1
+    assert [dt["slug"] for dt in data["document_types"]] == list(EXPECTED_DOCUMENT_TYPES)
+
+
+def test_default_package_data_is_returned_as_a_copy():
+    """Der Modul-Cache darf von Aufrufern nicht verändert werden können."""
+    first = doc_types.load_default_package_data()
+    first["document_types"].clear()
+
+    assert len(doc_types.load_default_package_data()["document_types"]) == len(EXPECTED_DOCUMENT_TYPES)
+
+
+def test_default_package_declares_no_conditions():
+    """M1-E20: Der Seed bringt keine Bedingungen mit — und darf gepflegte nicht leeren.
+
+    Ein ``conditions``-Schlüssel (auch ``[]``) würde per UI angelegte
+    Feldbedingungen beim nächsten Seed-Lauf löschen.
+    """
+    data = doc_types.load_default_package_data()
+
+    assert all("conditions" not in dt_def for dt_def in data["document_types"])
+
+
+@pytest.mark.django_db
+def test_seed_document_type_catalog_matches_expected():
+    """Der geseedete Katalog trägt exakt die Werte des vor-M2-Katalogs."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    actual = {
+        dt.slug: (
+            dt.name,
+            dt.category,
+            dt.system_type,
+            dt.sensitivity,
+            dt.icon,
+            dt.color,
+            dt.sort_order,
+            dt.min_contact_stage,
+        )
+        for dt in DocumentType.objects.filter(facility=facility)
+    }
+
+    assert actual == EXPECTED_DOCUMENT_TYPES
+    assert all(dt.entity_type == "event" for dt in DocumentType.objects.filter(facility=facility))
+
+
+@pytest.mark.django_db
+def test_seed_shares_deduplicated_field_templates():
+    """``dauer``/``notiz`` sind je EINE Vorlage, mehrfach zugeordnet.
+
+    Im alten Katalog waren sie inline dupliziert (3× bzw. 2×) und wurden per
+    ``update_or_create`` übereinander geschrieben; im Paket stehen sie genau
+    einmal unter ``field_templates`` und werden mehrfach referenziert.
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    assert FieldTemplate.objects.filter(facility=facility, slug="dauer").count() == 1
+    assert FieldTemplate.objects.filter(facility=facility, slug="notiz").count() == 1
+    assert FieldTemplate.objects.filter(facility=facility).count() == 25
+
+    dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+    assert dauer.field_type == "number"
+    assert dauer.help_text == "Dauer in Minuten"
+    assert set(
+        DocumentTypeField.objects.filter(field_template=dauer).values_list("document_type__slug", flat=True)
+    ) == {"kontakt", "krisengespraech", "beratungsgespraech"}
+
+    notiz = FieldTemplate.objects.get(facility=facility, slug="notiz")
+    assert set(
+        DocumentTypeField.objects.filter(field_template=notiz).values_list("document_type__slug", flat=True)
+    ) == {"kontakt", "notiz"}
+
+
+@pytest.mark.django_db
+def test_seed_block_sequence_matches_package_order():
+    """ADR-036/#1713: die ``sort_order``-Werte im Paket ergeben die Katalog-Blockfolge.
+
+    Prüft die globale Block-Sequenz über ``iter_blocks_in_order`` statt über
+    rohe Zahlen — die Werte im YAML sind genau das, was der frühere
+    Normalisierungs-Pass (``_normalize_block_order``) berechnet hat.
+    """
+    from core.services.config import iter_blocks_in_order
+
+    call_command("seed")
+    facility = Facility.objects.get(name="Hauptstelle")
+
+    def _sequence(slug):
+        blocks = []
+        for block in iter_blocks_in_order(DocumentType.objects.get(facility=facility, slug=slug)):
+            if block["kind"] == "group":
+                blocks.append((block["group"].slug, [f.field_template.slug for f in block["fields"]]))
+            else:
+                blocks.append(block["field"].field_template.slug)
+        return blocks
+
+    assert _sequence("kontakt") == [
+        ("basisdaten", ["dauer", "alterscluster"]),
+        ("leistungen-notizen", ["leistungen", "notiz", "anhang"]),
+        "strassenkontakt",
+    ]
+    assert _sequence("krisengespraech") == [
+        ("krisendetails", ["art-der-krise", "dauer", "notiz-krise", "weitervermittlung"]),
+    ]
+    assert _sequence("beratungsgespraech") == ["thema", "dauer", "vereinbarungen", "naechster-termin", "scan-bescheid"]
+    assert _sequence("vermittlung") == []
+
+
+@pytest.mark.django_db
+def test_seed_updates_document_type_properties():
+    """Refs #1058: DocumentType-Properties sind update-sicher.
+
+    Vor der Externalisierung lief der Katalog über ``get_or_create`` — die
+    Defaults griffen nur beim Anlegen, ein verstelltes Icon/Sortierung blieb
+    für immer stehen. Der Loader synchronisiert sie jetzt.
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, slug="kontakt")
+    assert kontakt.icon == "users"
+
+    DocumentType.objects.filter(pk=kontakt.pk).update(icon="wrench", color="lime", sort_order=99)
+
+    call_command("seed")
+
+    kontakt.refresh_from_db()
+    assert kontakt.icon == "users"
+    assert kontakt.color == "indigo"
+    assert kontakt.sort_order == 0
+
+
+@pytest.mark.django_db
+def test_second_seed_run_reports_everything_unchanged(facility):
+    """Kern-Invariante: der zweite Lauf legt nichts an und ändert nichts.
+
+    Beweis über den Loader-Report selbst (nicht nur über Zeilenzahlen) —
+    jedes ``created``/``updated`` im zweiten Lauf wäre ein Idempotenz-Bruch.
+    """
+    first = doc_types.seed_document_types(facility)
+    assert first.errors == []
+    assert first.document_types.created == list(EXPECTED_DOCUMENT_TYPES)
+
+    second = doc_types.seed_document_types(facility)
+
+    assert second.errors == []
+    changed = {
+        name: {"created": section.created, "updated": section.updated}
+        for name, section in second.sections()
+        if section.created or section.updated
+    }
+    assert changed == {}, f"Zweiter Seed-Lauf war nicht idempotent: {changed}"
+    assert second.field_templates.unchanged
+    assert second.document_types.unchanged == list(EXPECTED_DOCUMENT_TYPES)
+
+
+@pytest.mark.django_db
+def test_seed_adopts_existing_document_type_without_system_type(facility):
+    """E16-Kompatibilität: Bestands-Typ ``Kontakt`` wird übernommen, nicht dupliziert.
+
+    Szenario einer Bestands-Installation: der Typ existiert mit dem Namen
+    „Kontakt", hat über das 0117-Backfill den Slug ``kontakt`` bekommen und
+    trägt (noch) keinen ``system_type``. Der Seed muss genau diese Zeile
+    aktualisieren — ein zweiter „Kontakt"-Typ wäre der Top-Fehlerfall.
+    """
+    existing = DocumentType.objects.create(
+        facility=facility,
+        name="Kontakt",
+        category=DocumentType.Category.CONTACT,
+    )
+    assert existing.slug == "kontakt"
+    assert existing.system_type is None
+
+    doc_types.seed_document_types(facility)
+
+    assert DocumentType.objects.filter(facility=facility, name="Kontakt").count() == 1
+    assert DocumentType.objects.filter(facility=facility, slug="kontakt").count() == 1
+    existing.refresh_from_db()
+    assert existing.system_type == "contact"
+    assert existing.icon == "users"
+    assert existing.entity_type == "event"
+
+
+@pytest.mark.django_db
+def test_seed_is_atomic_when_the_package_cannot_be_applied(facility):
+    """Fail-loud: ein Loader-Fehler schlägt durch und hinterlässt keinen Teilstand."""
+    from core.packages.loader import PackageLoadError
+
+    # Bestandszeile auf dem Slug ``kontakt`` mit abweichendem Entitätstyp ⇒
+    # E13-Immutabilitätskonflikt beim Anwenden des Pakets.
+    DocumentType.objects.create(
+        facility=facility,
+        name="Alt-Kontakt",
+        slug="kontakt",
+        category=DocumentType.Category.CONTACT,
+        entity_type=DocumentType.EntityType.CLIENT,
+    )
+
+    with pytest.raises(PackageLoadError):
+        doc_types.seed_document_types(facility)
+
+    assert not FieldTemplate.objects.filter(facility=facility).exists()
+    assert DocumentType.objects.filter(facility=facility).count() == 1

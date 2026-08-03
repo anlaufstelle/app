@@ -1,0 +1,379 @@
+# Standard-Dokumentationspaket (Schema v1) — M2, Refs #1058.
+#
+# Dies ist die Quelle der Wahrheit fuer den Dokumentationstyp-Katalog, den
+# ``core.seed.doc_types.seed_document_types`` in jede Einrichtung einspielt.
+# Frueher standen dieselben Werte als Python-Dict-Katalog in ``doc_types.py``
+# (``get_document_type_definitions``); die Werte hier sind 1:1 daraus
+# uebernommen.
+#
+# WICHTIG — Kompatibilitaet mit Bestands-Einrichtungen:
+#
+# * ``document_types[].slug`` ist der Lookup-Key des Loaders und muss EXAKT
+#   dem Ergebnis des Slug-Backfills aus Migration ``0117`` entsprechen
+#   (slugify + Umlaut-Map ueber den ``name``). Ein abweichender Slug legt in
+#   jeder Bestands-Einrichtung einen DUPLIKAT-Typ an, statt den vorhandenen
+#   zu aktualisieren. Dasselbe gilt fuer ``groups[].slug`` (stabile Slugs
+#   seit #1710) und ``field_templates[].slug``.
+# * ``system_type`` muss bei allen Typen mitgefuehrt werden, die einen haben:
+#   der Loader erlaubt ``None`` -> Wert (Bestand ohne Systemtyp), aber weder
+#   Wechsel noch Entfernen (E13). Ein fehlender Schluessel waere beim
+#   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler.
+# * Bei ``select``/``multi_select`` ist der ``options``-Schluessel PFLICHT —
+#   Weglassen leert ``options_json`` mit blosser Warnung.
+# * KEINE ``conditions``-Schluessel: der Seed bringt keine Feldbedingungen
+#   mit, und ein fehlender Schluessel laesst per UI gepflegte Bedingungen
+#   unangetastet (E14/M1-E20). ``conditions: []`` wuerde sie LOESCHEN.
+#
+# ``sort_order`` folgt der globalen Block-Sequenz (ADR-036/#1713): Gruppen
+# und ungruppierte Felder teilen sich EINE Sequenz je Dokumentationstyp;
+# ein Feld INNERHALB einer Gruppe traegt seinen Innen-Index 0..n-1.
+
+schema_version: 1
+
+field_templates:
+  # --- mehrfach verwendete Vorlagen ---------------------------------------
+  # ``dauer`` haengt an Kontakt, Krisengespraech und Beratungsgespraech,
+  # ``notiz`` an Kontakt und Notiz. Im alten Python-Katalog waren sie je
+  # Dokumentationstyp inline dupliziert (3x bzw. 2x) und wurden per
+  # ``update_or_create`` uebereinander geschrieben (Last-Write-Wins). Alle
+  # Kopien waren wertgleich — hier stehen sie deshalb genau einmal.
+  - slug: dauer
+    name: Dauer
+    field_type: number
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Dauer in Minuten
+
+  - slug: notiz
+    name: Notiz
+    field_type: textarea
+    is_encrypted: false
+    sensitivity: ""
+
+  # --- Kontakt -------------------------------------------------------------
+  - slug: leistungen
+    name: Leistungen
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: beratung, label: Beratung, is_active: true}
+      - {slug: essen, label: Essen, is_active: true}
+      - {slug: kleidung, label: Kleidung, is_active: true}
+      - {slug: duschen, label: Duschen, is_active: true}
+      - {slug: waesche, label: Wäsche, is_active: true}
+      - {slug: telefon, label: Telefon, is_active: true}
+      - {slug: post, label: Post, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+      # Bewusst inaktiv: Bestandswerte behalten ihr Label, neue Eintraege
+      # koennen die Option nicht mehr waehlen (Soft-Delete-Muster).
+      - {slug: sachspenden, label: Sachspenden, is_active: false}
+
+  - slug: alterscluster
+    name: Alterscluster
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Geschätztes Alter
+    options:
+      - {slug: u18, label: "U18", is_active: true}
+      - {slug: "18-26", label: "18-26", is_active: true}
+      - {slug: "27-plus", label: "27+", is_active: true}
+      - {slug: unbekannt, label: Unbekannt, is_active: true}
+
+  - slug: strassenkontakt
+    name: Straßenkontakt
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+  # Refs #1142: erreichbarer Datei-Upload im Default-Flow. ``sensitivity``
+  # bleibt bewusst leer (= NORMAL, erbt vom Typ) — damit ist das Feld fuer
+  # Fachkraft/Assistenz sichtbar (``remove_restricted_fields``). ``high``
+  # wuerde es wieder ausblenden. At-rest verschluesselt wird die Datei
+  # trotzdem: ``is_encrypted`` ist bei FILE modellseitig erzwungen
+  # (``FieldTemplate.save()``), ``store_encrypted_file`` verschluesselt
+  # zusaetzlich den Blob.
+  - slug: anhang
+    name: Anhang
+    field_type: file
+    is_required: false
+    is_encrypted: true
+    sensitivity: ""
+
+  # --- Krisengespraech -----------------------------------------------------
+  - slug: art-der-krise
+    name: Art der Krise
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: suizidal, label: Suizidal, is_active: true}
+      - {slug: psychische-krise, label: Psychische Krise, is_active: true}
+      - {slug: substanzkrise, label: Substanzkrise, is_active: true}
+      - {slug: gewalt, label: Gewalt, is_active: true}
+      - {slug: obdachlosigkeit, label: Obdachlosigkeit, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: notiz-krise
+    name: Notiz (Krise)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: weitervermittlung
+    name: Weitervermittlung
+    field_type: text
+    is_encrypted: false
+    sensitivity: ""
+
+  # --- Medizinische Versorgung --------------------------------------------
+  - slug: art-der-versorgung
+    name: Art der Versorgung
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: wundversorgung, label: Wundversorgung, is_active: true}
+      - {slug: medikamentenausgabe, label: Medikamentenausgabe, is_active: true}
+      - {slug: beratung, label: Beratung, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: notiz-medizin
+    name: Notiz (Medizin)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: krankenhaus
+    name: Krankenhaus
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+  # --- Spritzentausch ------------------------------------------------------
+  - slug: ausgabe
+    name: Ausgabe
+    field_type: number
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: rueckgabe
+    name: Rückgabe
+    field_type: number
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  # --- Begleitung ----------------------------------------------------------
+  - slug: ziel
+    name: Ziel
+    field_type: text
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: datum
+    name: Datum
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: uhrzeit
+    name: Uhrzeit
+    field_type: time
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: notiz-begleitung
+    name: Notiz (Begleitung)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  # --- Beratungsgespraech --------------------------------------------------
+  - slug: thema
+    name: Thema
+    field_type: text
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: vereinbarungen
+    name: Vereinbarungen
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: naechster-termin
+    name: Nächster Termin
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: scan-bescheid
+    name: Scan/Bescheid
+    field_type: file
+    is_required: false
+    is_encrypted: true
+    sensitivity: high
+
+  # --- Hausverbot ----------------------------------------------------------
+  - slug: grund
+    name: Grund
+    field_type: textarea
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: bis
+    name: Bis
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: aktiv
+    name: Aktiv
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+document_types:
+  - slug: kontakt
+    name: Kontakt
+    entity_type: event
+    category: contact
+    system_type: contact
+    sensitivity: normal
+    icon: users
+    color: indigo
+    sort_order: 0
+    # Beispiel-Feldgruppen (M0, Refs #1056): ``strassenkontakt`` bleibt
+    # bewusst in keiner Gruppe — demonstriert „Ohne Gruppe" im UI und
+    # traegt als freier Block die Position 2 der globalen Block-Sequenz
+    # (nach den beiden Gruppen-Bloecken 0 und 1).
+    groups:
+      - {slug: basisdaten, name: Basisdaten, sort_order: 0, is_collapsible: false}
+      - {slug: leistungen-notizen, name: "Leistungen & Notizen", sort_order: 1, is_collapsible: true}
+    field_refs:
+      - {template_slug: dauer, group_slug: basisdaten, sort_order: 0}
+      - {template_slug: alterscluster, group_slug: basisdaten, sort_order: 1}
+      - {template_slug: leistungen, group_slug: leistungen-notizen, sort_order: 0}
+      - {template_slug: notiz, group_slug: leistungen-notizen, sort_order: 1}
+      - {template_slug: anhang, group_slug: leistungen-notizen, sort_order: 2}
+      - {template_slug: strassenkontakt, sort_order: 2}
+
+  - slug: krisengespraech
+    name: Krisengespräch
+    entity_type: event
+    category: service
+    system_type: crisis
+    sensitivity: elevated
+    icon: alert-triangle
+    color: amber
+    sort_order: 1
+    groups:
+      - {slug: krisendetails, name: Krisendetails, sort_order: 0, is_collapsible: false}
+    field_refs:
+      - {template_slug: art-der-krise, group_slug: krisendetails, sort_order: 0}
+      - {template_slug: dauer, group_slug: krisendetails, sort_order: 1}
+      - {template_slug: notiz-krise, group_slug: krisendetails, sort_order: 2}
+      - {template_slug: weitervermittlung, group_slug: krisendetails, sort_order: 3}
+
+  # Ab hier ohne ``groups``: alle Felder sind freie Bloecke und tragen ihre
+  # Position in der globalen Block-Sequenz direkt.
+  - slug: medizinische-versorgung
+    name: Medizinische Versorgung
+    entity_type: event
+    category: service
+    system_type: medical
+    sensitivity: high
+    icon: heart
+    color: rose
+    sort_order: 2
+    field_refs:
+      - {template_slug: art-der-versorgung, sort_order: 0}
+      - {template_slug: notiz-medizin, sort_order: 1}
+      - {template_slug: krankenhaus, sort_order: 2}
+
+  - slug: spritzentausch
+    name: Spritzentausch
+    entity_type: event
+    category: service
+    system_type: needle_exchange
+    sensitivity: normal
+    icon: repeat
+    color: teal
+    sort_order: 3
+    field_refs:
+      - {template_slug: ausgabe, sort_order: 0}
+      - {template_slug: rueckgabe, sort_order: 1}
+
+  - slug: begleitung
+    name: Begleitung
+    entity_type: event
+    category: service
+    system_type: accompaniment
+    sensitivity: normal
+    icon: map-pin
+    color: green
+    sort_order: 4
+    field_refs:
+      - {template_slug: ziel, sort_order: 0}
+      - {template_slug: datum, sort_order: 1}
+      - {template_slug: uhrzeit, sort_order: 2}
+      - {template_slug: notiz-begleitung, sort_order: 3}
+
+  - slug: beratungsgespraech
+    name: Beratungsgespräch
+    entity_type: event
+    category: service
+    system_type: counseling
+    sensitivity: elevated
+    min_contact_stage: qualified
+    icon: message-circle
+    color: purple
+    sort_order: 5
+    field_refs:
+      - {template_slug: thema, sort_order: 0}
+      - {template_slug: dauer, sort_order: 1}
+      - {template_slug: vereinbarungen, sort_order: 2}
+      - {template_slug: naechster-termin, sort_order: 3}
+      - {template_slug: scan-bescheid, sort_order: 4}
+
+  # Bewusst ohne Felder — der Typ dokumentiert die reine Vermittlung.
+  - slug: vermittlung
+    name: Vermittlung
+    entity_type: event
+    category: service
+    system_type: referral
+    sensitivity: normal
+    icon: share-2
+    color: blue
+    sort_order: 6
+
+  - slug: notiz
+    name: Notiz
+    entity_type: event
+    category: note
+    system_type: note
+    sensitivity: normal
+    icon: file-text
+    color: gray
+    sort_order: 7
+    field_refs:
+      - {template_slug: notiz, sort_order: 0}
+
+  - slug: hausverbot
+    name: Hausverbot
+    entity_type: event
+    category: admin
+    system_type: ban
+    sensitivity: elevated
+    icon: slash
+    color: red
+    sort_order: 8
+    field_refs:
+      - {template_slug: grund, sort_order: 0}
+      - {template_slug: bis, sort_order: 1}
+      - {template_slug: aktiv, sort_order: 2}
