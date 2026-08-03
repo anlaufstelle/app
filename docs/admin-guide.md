@@ -514,9 +514,15 @@ Neben der Sensibilität des Dokumenttyps kann jedes einzelne Feld einer Feldvorl
 
 #### Löschschutz bei bestehenden Daten
 
-Felder, zu denen bereits Werte in Ereignissen existieren, können **nicht ohne Weiteres gelöscht** werden. Beim Versuch, ein Feld im Admin zu entfernen, greift ein Schutzmechanismus, der auf gespeicherte Werte prüft. Wird das Feld dennoch benötigt zu entfernen, muss vorher eine Daten-Migration laufen, die die Werte aufräumt oder in ein anderes Feld überführt.
+Felder, zu denen bereits Werte in Ereignissen, Personen oder Fällen existieren, können **nicht ohne Weiteres gelöscht** werden. Beim Versuch, eine Feldvorlage zu entfernen, greift ein Schutzmechanismus, der auf gespeicherte Werte prüft. Wird das Feld dennoch benötigt zu entfernen, muss vorher eine Daten-Migration laufen, die die Werte aufräumt oder in ein anderes Feld überführt.
 
-> **Pragmatische Alternative:** Statt zu löschen, das Feld im Dokumenttyp-Mapping deaktivieren — bestehende Daten bleiben erhalten, neue Ereignisse bekommen das Feld nicht mehr angeboten.
+> **Pragmatische Alternative:** Statt zu löschen, das Feld im Dokumenttyp-Mapping deaktivieren — bestehende Daten bleiben erhalten, neue Ereignisse/Personen/Fälle bekommen das Feld nicht mehr angeboten.
+
+##### Verwaiste Feldwerte („Nicht mehr zugeordnet")
+
+Wird lediglich die **Zuordnung** einer Feldvorlage zu einem Dokumentationstyp entfernt (nicht die Feldvorlage selbst gelöscht), bleiben die bereits erfassten Werte unter ihrem Slug in den Datensätzen (`data_json`) gespeichert. Solche Werte gelten als **verwaist**: Sie werden bei Personen, Fällen und Ereignissen in der Detailansicht in einer abgesetzten Sektion **„Nicht mehr zugeordnete Felder"** angezeigt und im DSGVO-Auskunfts-Export (Art. 15) unter einem eigenen Abschnitt ausgewiesen — sie verschwinden also nicht unbemerkt. Sichtbarkeit und Verschlüsselung eines verwaisten Werts richten sich weiterhin nach der zugehörigen Feldvorlage (die durch den Löschschutz erhalten bleibt, solange Daten unter ihrem Slug existieren): Ein einst als „hoch"/„erhöht" eingestuftes Feld bleibt auch verwaist entsprechend eingeschränkt sichtbar.
+
+Sollen verwaiste Werte endgültig **entfernt** werden (Datenminimierung, sobald sie fachlich nicht mehr gebraucht werden), dient der Wartungsbefehl **`purge_orphan_field_data`**. Er entfernt bei Personen, Fällen und Ereignissen genau die `data_json`-Schlüssel, die nicht (mehr) zur aktuellen Feldzuordnung ihres Typs gehören; zugeordnete Werte (auch verschlüsselte) bleiben unangetastet, Datensätze ohne Dokumentationstyp werden nur gezählt. `--dry-run` zeigt die Wirkung ohne zu schreiben. Wie die übrigen Wartungskommandos (z. B. `reencrypt_fields`, § 2.9) muss er mit der **Admin-DB-Rolle** laufen und bricht sonst mit einer klaren Meldung ab (Row-Level-Security). Ausführung: siehe `docs/ops-runbook.md` § 3.5.
 
 ### 2.6 Auswahloptionen verwalten (Feldvorlagen)
 

@@ -511,9 +511,15 @@ In addition to the document type's sensitivity, each individual field of a field
 
 #### Deletion Protection for Existing Data
 
-Fields that already have values stored in events **cannot simply be deleted**. Attempting to remove a field in the admin triggers a protection mechanism that checks for stored values. If the field really has to go, a data migration must run first to clean up the values or move them into another field.
+Fields that already have values stored in events, clients or cases **cannot simply be deleted**. Attempting to remove a field template triggers a protection mechanism that checks for stored values. If the field really has to go, a data migration must run first to clean up the values or move them into another field.
 
-> **Pragmatic alternative:** Rather than deleting, disable the field in the document type mapping -- existing data is preserved, new events will no longer be offered the field.
+> **Pragmatic alternative:** Rather than deleting, disable the field in the document type mapping -- existing data is preserved, new events/clients/cases will no longer be offered the field.
+
+##### Orphaned Field Values ("No longer assigned")
+
+If only the **assignment** of a field template to a document type is removed (rather than the field template itself being deleted), the values already captured remain stored under their slug in the records (`data_json`). Such values are considered **orphaned**: for clients, cases and events they are shown in a separate **"No longer assigned fields"** section in the detail view and are listed in a dedicated section of the GDPR data access export (Art. 15) -- so they do not disappear unnoticed. The visibility and encryption of an orphaned value still follow its field template (which is kept alive by the deletion protection as long as data exists under its slug): a field once classified as "high"/"elevated" remains restricted in visibility even when orphaned.
+
+To finally **remove** orphaned values (data minimisation, once they are no longer needed), use the maintenance command **`purge_orphan_field_data`**. It removes, from clients, cases and events, exactly those `data_json` keys whose slug no longer belongs to the current field assignment of their type; assigned values (including encrypted ones) are left untouched, and records without a document type are only counted. `--dry-run` shows the effect without writing. Like the other maintenance commands (e.g. `reencrypt_fields`, § 2.9), it must run with the **admin DB role** and otherwise aborts with a clear message (Row Level Security). Execution: see `docs/ops-runbook.md` § 3.5.
 
 ### 2.6 Manage Selection Options (Field Templates)
 
@@ -1465,4 +1471,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 9effcf7d8c506b5a1cbc9b82ff0a927aa13b6fa1 -->
+<!-- source-hash: d628ab142a80c085f70b146e5a0954c23c461389 -->

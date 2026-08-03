@@ -1,0 +1,131 @@
+"""Management command: verwaiste ``data_json``-Keys aus Client/Case/Event entfernen.
+
+Refs #1725(a): Wird eine Feldzuordnung von einem ``DocumentType`` entfernt,
+bleiben bereits erfasste Werte unter ihrem Slug in ``data_json`` gespeichert —
+der Slug faellt erst beim naechsten Speichern der Entitaet durch
+``validate_data_json``. Bis dahin sind sie „verwaist": in der Detailansicht in
+der Sektion „Nicht mehr zugeordnete Felder" sichtbar (Refs #1725), aber aus
+Sicht der Datenminimierung (Art. 5 Abs. 1 lit. c/e DSGVO) Reste, die entfernt
+werden sollen, sobald sie fachlich nicht mehr gebraucht werden.
+
+Dieser Command entfernt bei Personen, Faellen und Ereignissen jene
+``data_json``-Schluessel, die **nicht (mehr)** zur aktuellen Feldzuordnung ihres
+Typs gehoeren. Zugeordnete Werte — auch verschluesselte — bleiben unangetastet:
+es werden nur Keys entfernt, keine Werte umgeschrieben.
+
+    python manage.py purge_orphan_field_data --dry-run
+    python manage.py purge_orphan_field_data
+
+Wie die uebrigen Wartungskommandos MUSS der Lauf mit der Admin-DB-Rolle
+(BYPASSRLS) erfolgen — siehe docs/ops-runbook.md § 3.5 / § 9.
+"""
+
+from django.core.management.base import BaseCommand, CommandError
+
+from core.models import Case, Client, Event
+
+# Refs #1016/#1554: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
+# als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
+
+
+def _purge_entity_data_json(entity):
+    """Berechne die bereinigte ``data_json`` einer Entitaet.
+
+    Rueckgabe ``(new_data_or_None, removed_keys)``. ``new_data`` ist ``None``,
+    wenn nichts zu tun ist:
+
+    * **kein ``document_type``** — ohne Typ gibt es keine massgebliche
+      Feld-Whitelist; welche Keys „richtig" waeren, ist nicht entscheidbar.
+      Solche Datensaetze werden nur gezaehlt, NICHT angefasst (kein Raten).
+    * **keine Waisen** — alle Keys gehoeren zum Typ.
+
+    Sonst enthaelt ``new_data`` genau die Keys, deren Slug am Typ zugeordnet ist
+    (Whitelist analog ``validate_data_json``) — Werte bleiben unveraendert, es
+    werden nur die verwaisten Keys weggelassen.
+    """
+    if entity.document_type_id is None:
+        return None, []
+    data = entity.data_json or {}
+    if not data:
+        return None, []
+    allowed = set(entity.document_type.fields.values_list("field_template__slug", flat=True))
+    removed = sorted(k for k in data if k not in allowed)
+    if not removed:
+        return None, []
+    new_data = {k: v for k, v in data.items() if k in allowed}
+    return new_data, removed
+
+
+class Command(BaseCommand):
+    help = (
+        "Entferne verwaiste data_json-Keys (nicht mehr am Dokumentationstyp) aus "
+        "Personen/Faellen/Ereignissen (Refs #1725). Zugeordnete (auch verschluesselte) "
+        "Werte bleiben unangetastet."
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Zeige nur, was bereinigt wuerde — ohne zu schreiben.",
+        )
+
+    def handle(self, *args, **options):
+        # Orphan-Cleanup-RLS-Falle (Refs #1554 / #1016 A1.1): Client/Case/Event
+        # stehen unter FORCE RLS. Als App-Rolle (NOBYPASSRLS, kein
+        # app.current_facility_id-GUC) saehe der Lauf 0 Zeilen und meldete
+        # trotzdem Erfolg — die verwaisten Reste blieben liegen, obwohl der
+        # Operator ein Aufraeumen protokolliert glaubt. Fail-loud wie
+        # reencrypt_fields / cleanup_orphan_storage_files.
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "Orphan-Purge laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
+                "sonst saehe der Lauf 0 Zeilen und meldete faelschlich Erfolg, waehrend die "
+                "verwaisten Daten liegen blieben. Command mit der Admin-Rolle aufrufen "
+                "(docs/ops-runbook.md § 3.5 / § 9 DB-Rollenmodell)."
+            )
+        dry_run = options["dry_run"]
+        results = {
+            "Personen": self._purge_model(Client, dry_run),
+            "Faelle": self._purge_model(Case, dry_run),
+            "Ereignisse": self._purge_model(Event, dry_run),
+        }
+
+        verb = "Wuerde bereinigen" if dry_run else "Bereinigt"
+        parts = [
+            f"{label}: {cleaned}/{checked} bereinigt, {keys} Key(s) entfernt"
+            for label, (checked, cleaned, keys) in results.items()
+        ]
+        self.stdout.write(self.style.SUCCESS(f"{verb} — " + "; ".join(parts) + "."))
+
+    def _purge_model(self, model, dry_run: bool):
+        """Iteriere ``model`` und bereinige verwaiste Keys.
+
+        Rueckgabe ``(checked, cleaned, keys_removed)``. ``model.objects`` deckt
+        auch soft-geloeschte Zeilen ab (``FacilityScopedManager``/``EventManager``
+        filtern ``is_deleted`` nicht) — anders als reencrypt_fields (Event:
+        ``is_deleted=False`` als bekannte Krypto-Luecke) raeumt der Purge bewusst
+        auch dort, damit keine verwaisten Reste im Papierkorb ueberdauern.
+        """
+        checked = cleaned = keys_removed = 0
+        for entity in model.objects.iterator(chunk_size=500):
+            checked += 1
+            new_data, removed = _purge_entity_data_json(entity)
+            if not removed:
+                continue
+            cleaned += 1
+            keys_removed += len(removed)
+            if dry_run:
+                continue
+            entity.data_json = new_data
+            # ``update_fields`` bewusst nur ``data_json``/``updated_at`` (Muster
+            # reencrypt_fields): Fuer Event pflegt das pre_save-Signal
+            # ``search_text`` im Speicher nach, persistiert es hier aber nicht —
+            # verwaiste Werte standen ohnehin nie im Suchindex
+            # (``compute_event_search_text`` nimmt nur Slugs des aktuellen Typs),
+            # ein Resync waere ein unerwuenschter Seiteneffekt auf sonst
+            # unberuehrte Ereignisse.
+            entity.save(update_fields=["data_json", "updated_at"])
+        return checked, cleaned, keys_removed

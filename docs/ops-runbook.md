@@ -450,6 +450,18 @@ docker compose -f docker-compose.prod.yml exec web \
 # Snapshot fuer bestimmten Monat
 docker compose -f docker-compose.prod.yml exec web \
  python manage.py create_statistics_snapshots --year 2026 --month 3
+
+# Verwaiste dynamische Feldwerte bereinigen (Refs #1725)
+# Entfernt data_json-Keys, deren Slug nicht (mehr) am Dokumentationstyp haengt,
+# bei Personen/Faellen/Ereignissen. Zugeordnete (auch verschluesselte) Werte
+# bleiben unangetastet; Datensaetze ohne Typ werden nur gezaehlt. MUSS mit der
+# Admin-DB-Rolle laufen (BYPASSRLS) — sonst fail-loud (§ 9 DB-Rollenmodell).
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py purge_orphan_field_data --dry-run # Vorschau
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py purge_orphan_field_data # ausfuehren
 ```
 
 ---
