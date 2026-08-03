@@ -63,8 +63,16 @@
                 <dd>{% if doc_type.is_active %}{% include "components/_badge.html" with text=_("Aktiv") color="green" %}{% else %}{% include "components/_badge.html" with text=_("Inaktiv") color="gray" %}{% endif %}</dd>
             </div>
             <div>
+                {# #1728: Label folgt der entity_type-Weiche (Muster Badge oben) — #}
+                {# usage_count zählt je nach Typ Client-/Case-/Event-Referenzen.     #}
+                {% if doc_type.entity_type == "client" %}
+                <dt class="text-ink-muted">{% trans "Personen" %}</dt>
+                {% elif doc_type.entity_type == "case" %}
+                <dt class="text-ink-muted">{% trans "Fälle" %}</dt>
+                {% else %}
                 <dt class="text-ink-muted">{% trans "Ereignisse" %}</dt>
-                <dd class="text-ink font-medium">{{ event_count }}</dd>
+                {% endif %}
+                <dd class="text-ink font-medium">{{ usage_count }}</dd>
             </div>
         </dl>
         {% if doc_type.description %}

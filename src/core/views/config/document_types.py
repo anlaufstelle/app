@@ -168,11 +168,19 @@ class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
         from core.views.config.conditions import condition_board_context
 
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
-        event_count = Event.objects.filter(document_type=doc_type).count()
+        # #1728: Nutzungszähler folgt der entity_type-Weiche (Muster
+        # ConfigDocumentTypeDeleteView) statt fest auf Event zu zählen — sonst
+        # zeigt ein Client-/Case-Typ hier immer „Ereignisse: 0".
+        if doc_type.entity_type == DocumentType.EntityType.CLIENT:
+            usage_count = Client.objects.filter(document_type=doc_type).count()
+        elif doc_type.entity_type == DocumentType.EntityType.CASE:
+            usage_count = Case.objects.filter(document_type=doc_type).count()
+        else:
+            usage_count = Event.objects.filter(document_type=doc_type).count()
         context = {
             **board_context(doc_type),
             **condition_board_context(doc_type),
-            "event_count": event_count,
+            "usage_count": usage_count,
         }
         return render(request, "core/config/document_types/detail.html", context)
 

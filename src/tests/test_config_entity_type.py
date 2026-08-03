@@ -527,3 +527,69 @@ class TestDeleteConfirmClientCaseCounters:
         assert response.context["case_count"] == 0
         assert response.context["event_count"] == 0
         assert 'disabled aria-disabled="true"' not in response.content.decode()
+
+
+# ---------------------------------------------------------------------------
+# #1728 — Nutzungszähler der Detailseite folgt dem entity_type
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestDetailUsageCounterFollowsEntityType:
+    """Die Stammdaten-Kachel der Detailseite zeigte bislang immer fest
+    ``event_count`` unter dem Label „Ereignisse“ — für Client-/Case-Typen war
+    der Zähler dadurch immer 0, unabhängig von tatsächlichen Referenzen. Der
+    Zähler muss stattdessen der ``entity_type``-Weiche folgen (Muster
+    ``ConfigDocumentTypeDeleteView``: Client-/Case-/Event-Query je nach Typ)."""
+
+    def test_client_type_shows_client_count_with_personen_label(
+        self, client, admin_user, facility, doc_type_client_profile, staff_user
+    ):
+        Client.objects.create(
+            facility=facility, pseudonym="Zaehler-01", document_type=doc_type_client_profile, created_by=staff_user
+        )
+        Client.objects.create(
+            facility=facility, pseudonym="Zaehler-02", document_type=doc_type_client_profile, created_by=staff_user
+        )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_client_profile.pk}))
+        assert response.status_code == 200
+        assert response.context["usage_count"] == 2
+        body = response.content.decode()
+        assert "Personen" in body
+        assert "Ereignisse" not in body
+
+    def test_case_type_shows_case_count_with_faelle_label(
+        self, client, admin_user, facility, doc_type_case_form, client_identified, staff_user
+    ):
+        Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_case_form,
+            title="Zaehler-Fall",
+            created_by=staff_user,
+        )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_case_form.pk}))
+        assert response.status_code == 200
+        assert response.context["usage_count"] == 1
+        body = response.content.decode()
+        assert "Fälle" in body
+        assert "Ereignisse" not in body
+
+    def test_event_type_still_shows_event_count_with_ereignisse_label(
+        self, client, admin_user, facility, doc_type_contact, client_identified, staff_user
+    ):
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        assert response.status_code == 200
+        assert response.context["usage_count"] == 1
+        assert "Ereignisse" in response.content.decode()
