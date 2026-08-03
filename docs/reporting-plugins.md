@@ -468,6 +468,7 @@ Beispiele aus dem Sachbericht:
 - **Keine generische PDF-Pipeline.** Die Formate der Pipeline sind CSV, JSON und XML; der Sachbericht-PDF bleibt ein eigener, unveränderter Pfad.
 - **`core/reporting` liegt außerhalb der mypy-strict-Zone und der mutmut-Pfade.** Der Code ist strict-kompatibel annotiert; die Aufnahme in die Gates ändert Build-Konfiguration und ist ein offener Maintainer-Entscheid.
 - **Mapping v1 über `system_type`.** `DocumentType.slug` ist der dokumentierte Zweitschlüssel und Folgearbeit ([ADR-038](adr/038-reporting-plugin-backends.md)); `DocumentType.category` wird fürs Reporting nie verwendet.
+- **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). **Keine neuen Werte ohne echte App-Logik** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; solche Zuordnungen gehören ins Backend-Mapping deines Berichts. Von den neun Werten tragen nur `ban` und `crisis` App-Logik; die sechs Werte in `CATEGORY_MAP` sind reine Bericht-Opt-ins (und zugleich der einzige Weg, einen einrichtungseigenen Dokumentationstyp in den Sachbericht zu bekommen), `note` ist exportseitig identisch mit `NULL`. Ein Freeze-Guard pinnt die Liste und diese Rollenaufteilung (`src/tests/test_system_type.py`). Eine Reduktion auf `ban`/`crisis` ist geprüft und **nicht** geplant — sie hinge am offenen Slug-Produktentscheid (#1741).
 
 ---
 

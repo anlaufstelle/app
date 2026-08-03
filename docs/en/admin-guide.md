@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748).
 
 # Anlaufstelle -- Admin Guide
 
@@ -468,6 +468,8 @@ The sensitivity level controls which roles can access entries of this type:
 
 The system type links a documentation type to internal application logic. It is set at creation and **cannot be changed afterwards**.
 
+> **The nine values fill three different roles** -- this is the most common misunderstanding. Only **two** values trigger application logic (Ban, Crisis). **Six** more are pure mappings into the example activity report with no other effect; at the same time they are your only way to get a self-created documentation type into that report (example: your own type "Social counseling" with system type "Counseling"). **Note** is an exclusion marker and behaves in the export exactly like *no* system type -- the only difference is that a "Note" once set is permanently fixed, whereas an empty system type may still be filled in later.
+
 Currently, the system type serves two purposes:
 
 **1. UI logic** (only Ban and Crisis):
@@ -490,9 +492,16 @@ The example activity report is a customizable example or template -- not a bindi
 | **Needle Exchange** | Care |
 | **Accompaniment** | Referral |
 | **Referral** | Referral |
+| **Ban** | *(excluded)* |
 | **Note** | *(excluded)* |
 
 > **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and are excluded from the example activity report export, but work normally for documentation.
+>
+> System types such as `contact`, `counseling` or `medical` have **no visible UI logic** (unlike `ban` and `crisis`). They serve solely as a whitelist for the example activity report export -- the category alone does not decide whether an entry is exported. **`note` is explicitly *not* part of that whitelist**: events of that type stay out, just like `ban` and like types with no system type at all.
+>
+> **Events without a report mapping produce a completeness notice.** Under "Reports" the report states how many events it does *not* show. Deliberately excluded ones (`ban`, `note`) are counted there as well -- so a facility with many entry bans permanently sees that notice without anything being misconfigured. Separating "deliberately excluded" from "unmapped" is tracked as a question of its own (#1748).
+
+> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added without real application logic** -- an additional report category is no reason to extend the core data model; such mappings go through the report backend. For your configuration work this means: what is listed here stays. Reducing the list has been evaluated and is **not** planned -- the six mapping values carry weight today because they are the only opt-in for custom types into the report.
 
 #### Minimum Contact Stage
 
@@ -1548,4 +1557,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 9031e6d2392b7fa618e9696c9207d6690c166aff -->
+<!-- source-hash: 754a8404de72ecd6de56372965310a08864781fe -->

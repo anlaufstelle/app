@@ -469,6 +469,8 @@ Die Sensibilitätsstufe steuert, welche Rollen auf Einträge dieses Typs zugreif
 
 Der Systemtyp verknüpft einen Dokumentationstyp mit interner Anwendungslogik. Er wird bei der Erstellung gesetzt und ist danach **nicht mehr änderbar**.
 
+> **Die neun Werte füllen drei verschiedene Rollen** — das ist die häufigste Verwechslung. Nur **zwei** Werte lösen Anwendungslogik aus (Hausverbot, Krisengespräch). **Sechs** weitere sind reine Zuordnungen zum Beispiel-Sachbericht ohne jede sonstige Wirkung; sie sind zugleich Ihr einziger Weg, einen selbst angelegten Dokumentationstyp in diesen Bericht zu bekommen (Beispiel: eigener Typ „Sozialberatung" mit Systemtyp „Beratungsgespräch"). **Notiz** ist ein Ausschluss-Marker und wirkt exportseitig genauso wie *kein* Systemtyp — der Unterschied ist allein, dass ein einmal gesetztes „Notiz" dauerhaft festgeschrieben ist, während ein leerer Systemtyp später noch belegt werden darf.
+
 Aktuell hat der Systemtyp zwei Funktionen:
 
 **1. UI-Logik** (nur Hausverbot und Krisengespräch):
@@ -491,11 +493,16 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 | **Spritzentausch** | Versorgung |
 | **Begleitung** | Vermittlung |
 | **Vermittlung** | Vermittlung |
+| **Hausverbot** | *(wird ausgeschlossen)* |
 | **Notiz** | *(wird ausgeschlossen)* |
 
 > **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Typen ohne Systemtyp haben keine spezielle interne Logik und werden vom Beispiel-Sachbericht-Export ausgeschlossen, funktionieren aber ganz normal für die Dokumentation.
 >
-> Systemtypen wie `note`, `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Beispiel-Sachbericht-Export — die Kategorie alleine entscheidet nicht, ob ein Eintrag exportiert wird.
+> Systemtypen wie `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Beispiel-Sachbericht-Export — die Kategorie alleine entscheidet nicht, ob ein Eintrag exportiert wird. **`note` gehört ausdrücklich *nicht* zu dieser Whitelist**: Ereignisse dieses Typs bleiben — wie `ban` und wie Typen ganz ohne Systemtyp — außen vor.
+>
+> **Ereignisse ohne Berichtszuordnung erzeugen einen Vollständigkeitshinweis.** Der Bericht weist unter „Berichte" aus, wie viele Ereignisse er *nicht* zeigt. Darin zählen auch die bewusst ausgeschlossenen (`ban`, `note`) mit — eine Einrichtung mit vielen Hausverboten sieht diesen Hinweis also dauerhaft, ohne dass etwas falsch konfiguriert wäre. Die Trennung von „bewusst ausgeschlossen" und „nicht zugeordnet" ist als eigene Frage erfasst (#1748).
+
+> **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen ohne echte Anwendungslogik** hinzu — eine zusätzliche Berichtskategorie wäre kein Grund, das Kern-Datenmodell zu erweitern; solche Zuordnungen laufen über das Berichts-Backend. Für Ihre Konfigurationsarbeit heißt das: Was hier steht, bleibt. Eine Reduktion der Liste ist geprüft und **nicht** geplant — die sechs Mapping-Werte sind heute tragend, weil sie das einzige Opt-in eigener Typen in den Bericht sind.
 
 #### Mindest-Kontaktstufe
 

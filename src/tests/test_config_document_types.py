@@ -338,6 +338,19 @@ class TestFormFieldOrderAndHints:
         # Der Modell-Hinweis (Zweck + Unveränderbarkeit) bleibt erhalten.
         assert "unveränderbar" in help_text
 
+    def test_system_type_help_text_trennt_app_logik_von_berichts_zuordnung(self, facility):
+        """Refs #1748
+        (RFC, Option O1): Der Hilfetext muss sagen, was die Auswahl
+        wirklich bewirkt — sonst liest sich das Dropdown wie neun gleichwertige
+        Verhaltensschalter, obwohl nur zwei Werte App-Logik tragen, sechs reine
+        Bericht-Opt-ins sind und „Notiz" exportseitig wie „kein Systemtyp"
+        wirkt. Genau diese Fehlvorstellung ist der Anlass des RFC.
+        """
+        help_text = str(DocumentTypeForm(facility=facility).fields["system_type"].help_text)
+        assert "Hausverbot" in help_text and "Krisengespräch" in help_text
+        assert "Beispiel-Sachbericht" in help_text
+        assert "Notiz" in help_text
+
     def test_form_page_shows_the_system_type_hint(self, client, admin_user, facility):
         """Der Hinweis muss auch wirklich gerendert werden (generischer Feld-Loop)."""
         client.force_login(admin_user)

@@ -144,3 +144,104 @@ class TestSystemTypeNone:
         today = date.today()
         stats = get_sample_report_1_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
         assert stats["total"] == 0
+
+
+class TestSystemTypeWertelisteEingefroren:
+    """Freeze-Guard fuer die SystemType-Werteliste.
+
+    RFC #1748,
+    Option **O1**, Maintainer-Entscheid 2026-08-03.
+
+    **Redaktionsregel: keine neuen Werte ohne App-Logik — Erweiterung nur mit
+    RFC-Entscheid (#1748).**
+    Neue Berichts-Zuordnungen laufen ueber das Backend-Mapping, nicht ueber
+    dieses Kern-Datenmodell-Enum.
+
+    Hintergrund: Die neun Werte entstanden auf einen Schlag als Abbild der
+    damaligen Seed-Dokumentationstypen ([ADR-024](../../docs/adr/024-slug-based-identifiers.md)),
+    weil ``system_type`` vor M2 der einzige rename-sichere Schluessel war und
+    deshalb auch die reine Berichts-Zuordnung tragen musste. Sie fuellen
+    seitdem **drei** Rollen, und genau diese Aufteilung friert der Test ein:
+
+    1. **Verhaltens-Schluessel** (``ban``, ``crisis``) — echte App-Logik
+       (Hausverbot-Banner/Feed/Uebergabe bzw. Krisen-Highlight).
+    2. **Berichts-Zuordnung** (die sechs Werte in ``CATEGORY_MAP``) — keine
+       App-Logik; sie sind das einzige Opt-in, mit dem eine Einrichtung einen
+       eigenen Dokumentationstyp in den Beispiel-Sachbericht bekommt.
+    3. **Ausschluss-Marker** (``note``) — exportseitig identisch mit ``NULL``.
+
+    Ein zusaetzlicher Wert wuerde die Partition unten sprengen und muesste sich
+    hier einer Rolle zuordnen lassen — das ist der Moment, in dem der
+    RFC-Entscheid faellig wird. Eine Reduktion (Option O2) haengt am offenen
+    Produktentscheid #1741
+    und wird bis dahin nicht verfolgt.
+    """
+
+    EINGEFROREN = (
+        "ban",
+        "contact",
+        "crisis",
+        "medical",
+        "needle_exchange",
+        "accompaniment",
+        "counseling",
+        "referral",
+        "note",
+    )
+    MIT_APP_LOGIK = frozenset({"ban", "crisis"})
+    AUSSCHLUSS_MARKER = frozenset({"note"})
+
+    def test_werteliste_ist_exakt_und_in_reihenfolge_gepinnt(self):
+        assert tuple(DocumentType.SystemType.values) == self.EINGEFROREN
+
+    def test_jeder_wert_hat_genau_eine_rolle(self):
+        """Partition ueber die drei Rollen — keine Luecke, keine Ueberlappung."""
+        from core.reporting.backends.sample_report_1 import CATEGORY_MAP
+
+        berichts_zuordnung = set(CATEGORY_MAP)
+        alle = set(self.EINGEFROREN)
+
+        # ``crisis`` traegt App-Logik UND eine Berichts-Zuordnung — die einzige
+        # bewusste Doppelrolle. Ansonsten ist die Aufteilung disjunkt.
+        assert berichts_zuordnung <= alle, "CATEGORY_MAP mappt einen unbekannten system_type"
+        assert self.MIT_APP_LOGIK & berichts_zuordnung == {"crisis"}
+        assert self.AUSSCHLUSS_MARKER & berichts_zuordnung == set()
+        assert self.MIT_APP_LOGIK | berichts_zuordnung | self.AUSSCHLUSS_MARKER == alle
+
+    def test_note_ist_exportseitig_identisch_mit_keinem_systemtyp(self, facility, staff_user):
+        """Der Hilfetext behauptet „wie ohne Systemtyp" — hier ist der Beleg.
+
+        Beide Typen liefern denselben Beitrag zum Bericht (naemlich keinen) und
+        schlagen gleichermassen in der Vollstaendigkeits-Warnung auf. Der reale
+        Unterschied liegt ausserhalb des Exports: ein gesetztes ``note`` ist
+        unveraenderbar dokumentiert, ``NULL`` darf ein Paketlauf spaeter noch
+        belegen.
+        """
+        from core.reporting.registry import get_backend
+
+        for name, system_type in (("Notiz-Typ", DocumentType.SystemType.NOTE), ("Ohne Systemtyp", None)):
+            doc_type = DocumentType.objects.create(
+                facility=facility,
+                name=name,
+                category=DocumentType.Category.NOTE,
+                system_type=system_type,
+            )
+            Event.objects.create(
+                facility=facility,
+                document_type=doc_type,
+                occurred_at=timezone.now(),
+                data_json={},
+                is_anonymous=True,
+                created_by=staff_user,
+            )
+
+        today = date.today()
+        backend = get_backend("sample-report-1")
+        result = backend.build_dataset(facility, today - timedelta(days=1), today + timedelta(days=1))
+
+        assert result.summary["total"] == 0
+        assert result.summary["by_category"] == []
+        # Beide Ereignisse zaehlen gemeinsam in die eine Warnung — kein
+        # Sonderweg fuer den Marker.
+        (issue,) = [i for i in result.completeness if i.code == "unmapped_system_types"]
+        assert issue.count == 2

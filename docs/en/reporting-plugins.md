@@ -471,6 +471,7 @@ Examples from the activity report:
 - **No generic PDF pipeline.** The pipeline formats are CSV, JSON and XML; the activity report PDF remains a separate, unchanged path.
 - **`core/reporting` lies outside the mypy strict zone and outside the mutmut paths.** The code is annotated strict-compatibly; adding it to those gates changes build configuration and is an open maintainer decision.
 - **Mapping v1 uses `system_type`.** `DocumentType.slug` is the documented secondary key and follow-up work ([ADR-038](../adr/038-reporting-plugin-backends.md)); `DocumentType.category` is never used for reporting.
+- **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new values without real application logic** — an additional report category is no reason to extend a core data-model enum; such mappings belong in your report's backend mapping. Of the nine values only `ban` and `crisis` carry application logic; the six values in `CATEGORY_MAP` are pure report opt-ins (and at the same time the only way to get a facility's own documentation type into the activity report), and `note` is identical to `NULL` as far as the export is concerned. A freeze guard pins the list and that role split (`src/tests/test_system_type.py`). Reducing it to `ban`/`crisis` has been evaluated and is **not** planned — it would depend on the open slug product decision (#1741).
 
 ---
 
@@ -528,4 +529,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 42d71a193d6e20539dce871025b8bcc33672cd79 -->
+<!-- source-hash: 735ea6dd0cea775aee9d04b16cd3f8fa00d48ce6 -->

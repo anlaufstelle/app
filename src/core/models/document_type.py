@@ -200,8 +200,15 @@ class DocumentType(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Systemtyp"),
+        # Refs #1748 (RFC, Option O1): Der zweite Satz trennt die drei Rollen
+        # der Werteliste. Ohne ihn liest sich das Dropdown wie neun
+        # gleichwertige Verhaltensschalter — tatsaechlich tragen nur „ban" und
+        # „crisis" App-Logik, sechs Werte sind reine Bericht-Opt-ins und „note"
+        # wirkt exportseitig wie „kein Systemtyp".
         help_text=_(
-            "Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. Nach Erstellung unveränderbar."
+            "Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. Nach Erstellung unveränderbar. "
+            "Nur „Hausverbot“ und „Krisengespräch“ steuern App-Logik; die übrigen Werte ordnen den Typ ausschließlich "
+            "dem Beispiel-Sachbericht zu, „Notiz“ schließt ihn davon aus (wie ohne Systemtyp)."
         ),
     )
     entity_type = models.CharField(

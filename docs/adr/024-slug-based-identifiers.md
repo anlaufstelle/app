@@ -36,6 +36,18 @@ Slugs werden bei Erstellung aus dem Namen generiert (`slugify` + Umlaut-Map, Kol
 - **Rename-Sperre.** Verworfen — verschiebt das Problem; Einrichtungen müssen Labels anpassen dürfen.
 - **Zusätzlicher `system_key` neben dem Slug.** Verworfen (YAGNI) — nur ein System-Typ (Hausverbot) hat harte Logik; `slug + category` reicht und ist nachrüstbar.
 
+## Update 2026-08-03: `SystemType`-Werteliste eingefroren (RFC #1748)
+
+Dieses ADR hat den Enum eingeführt, seine **Werteliste** aber nie begründet. Sie entstand auf einen Schlag als 1:1-Abbild der damaligen neun Seed-Dokumentationstypen — nicht, weil neun Typen Anwendungslogik brauchten, sondern weil `system_type` vor M2 der einzige rename-sichere Schlüssel war und deshalb auch die reine Berichts-Zuordnung tragen musste (`DocumentType.slug` gibt es erst seit [ADR-037](037-konfigurationspakete-dynamische-felder.md)).
+
+[RFC #1748](https://github.com/anlaufstelle/app/issues/1748) hat das nachgeholt: Die neun Werte füllen **drei Rollen** — Verhaltens-Schlüssel (`ban`, `crisis`), Berichts-Zuordnung (die sechs Werte in `CATEGORY_MAP`, ohne jede App-Logik) und Ausschluss-Marker (`note`, exportseitig identisch mit `NULL`). Entscheid (Maintainer, 2026-08-03), **Option O1**:
+
+- **Redaktionsregel: keine neuen `SystemType`-Werte ohne echte App-Logik.** Neue Berichts-Zuordnungen laufen über das Backend-Mapping, nicht über dieses Enum. Ein Freeze-Guard pinnt Werteliste und Rollenaufteilung (`src/tests/test_system_type.py`); eine Erweiterung braucht einen neuen RFC-Entscheid.
+- **Keine Reduktion.** Der naheliegende Rückbau auf `ban`/`crisis` (Bericht mappt dann über `slug`) ist **nicht** geplant: Das `system_type`-Dropdown ist heute der einzige Weg, mit dem eine Einrichtung einen eigenen Dokumentationstyp in den Sachbericht bekommt. Ein hartkodiertes Slug-Dict im Backend könnte das nicht ersetzen — die Option wird erst wieder bewertet, wenn der offene Produktentscheid zum Slug-Zweitschlüssel (#1741) auf ein **konfigurierbares** Mapping fällt. Sie wäre zudem eine kenntlich zu machende Abweichung von [ADR-038](038-reporting-plugin-backends.md) („Slug als *Ersatz* verworfen").
+- **Capability-Flags** (`ban`/`crisis` als Fähigkeitsschalter) bleiben verworfen — wie schon unter „Alternatives considered": Die Bann-Logik hängt zusätzlich am Feld-Kontrakt (Aktiv/Bis/Grund), ein Flag allein reicht nicht.
+
+Der `help_text` des Feldes benennt die Rollentrennung jetzt selbst (Migration [`0125`](../../src/core/migrations/0125_systemtype_help_text_rollen.py)), der [Admin-Guide § Systemtyp](../admin-guide.md) ebenso.
+
 ## References
 
 - [`src/core/models/document_type.py`](../../src/core/models/document_type.py) — `DocumentType.system_type` (immutabler Enum), `FieldTemplate.slug`, `_generate_unique_slug`, `save()`-Immutabilität, `choices`-Property (`{slug, label}`)
