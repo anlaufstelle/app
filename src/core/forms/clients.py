@@ -4,12 +4,26 @@ from typing import ClassVar
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.dynamic import DynamicDataForm
 from core.forms.widgets import INPUT_CSS
 from core.models import Client, DocumentType
+
+
+def _document_type_label(document_type: DocumentType) -> str:
+    """Dropdown-Label eines Dokumentationstyps; deaktivierte werden markiert.
+
+    Muster :func:`core.forms.dynamic._select_choices` (Refs #1160): ein
+    deaktivierter Wert des BEARBEITETEN Datensatzes bleibt waehlbar, wird aber
+    sichtbar als solcher gekennzeichnet — sonst sieht die Leitung nicht, dass
+    dieser Typ fuer Neuanlagen nicht mehr angeboten wird.
+    """
+    if document_type.is_active:
+        return document_type.name
+    return f"{document_type.name} ({_('deaktiviert')})"
 
 
 class DynamicClientDataForm(DynamicDataForm):
@@ -66,14 +80,28 @@ class ClientForm(forms.ModelForm):
         doc_type_field = self.fields["document_type"]
         doc_type_field.required = False
         doc_type_field.empty_label = _("— Kein Typ —")  # type: ignore[attr-defined]
+        doc_type_field.label_from_instance = _document_type_label  # type: ignore[attr-defined]
         if facility:
-            qs = DocumentType.objects.for_facility(facility).filter(
-                is_active=True, entity_type=DocumentType.EntityType.CLIENT
-            )
+            qs = DocumentType.objects.for_facility(facility).filter(entity_type=DocumentType.EntityType.CLIENT)
+            # Sensitivity-Filter laeuft VOR der Inaktiv-Ausnahme unten: ein
+            # zugewiesener, aber fuer diese Rolle unsichtbarer Typ darf auch
+            # dann nicht in die Auswahl geraten, wenn er inaktiv ist. Fuer
+            # diesen Fall entfernt die View das Feld ganz
+            # (``_lock_invisible_document_type``).
             if user is not None:
                 from core.services.compliance import allowed_sensitivities_for_user
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
+            # Refs #1058 (P7-Fix-Runde): Der AKTUELL zugewiesene Typ bleibt
+            # waehlbar, auch wenn er zwischenzeitlich deaktiviert wurde. Ohne
+            # diese Ausnahme faellt er aus dem Queryset, das Select zeigt
+            # „— Kein Typ —" vorausgewaehlt, und ein ganz normaler Submit
+            # loescht Typ UND alle (potenziell Art.-9-nahen) Zusatzfeld-Werte,
+            # ohne dass die Bearbeiterin etwas davon merkt. Muster #1160
+            # (``_select_choices``): der deaktivierte Wert des BEARBEITETEN
+            # Datensatzes bleibt erhalten — Neuanlagen bekommen ihn nicht.
+            assigned_pk = self.instance.document_type_id if self.instance and self.instance.pk else None
+            qs = qs.filter(Q(is_active=True) | Q(pk=assigned_pk)) if assigned_pk else qs.filter(is_active=True)
         else:
             qs = DocumentType.objects.none()
         doc_type_field.queryset = qs  # type: ignore[attr-defined]

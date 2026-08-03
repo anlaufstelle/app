@@ -101,6 +101,34 @@ def doc_type_client_mixed(facility):
 
 
 @pytest.fixture
+def doc_type_client_select(facility):
+    """Personen-Typ mit SELECT + BOOLEAN — fuer die Anzeige-/Export-Formatierung."""
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Personen-Auswahl",
+    )
+    ft_wohnform = FieldTemplate.objects.create(
+        facility=facility,
+        name="Wohnform",
+        field_type=FieldTemplate.FieldType.SELECT,
+        options_json=[
+            {"slug": "wohnungslos", "label": "Wohnungslos", "is_active": True},
+            {"slug": "eigene-wohnung", "label": "Eigene Wohnung", "is_active": True},
+        ],
+    )
+    ft_einwilligung = FieldTemplate.objects.create(
+        facility=facility,
+        name="Einwilligung",
+        field_type=FieldTemplate.FieldType.BOOLEAN,
+    )
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_wohnform, sort_order=0)
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_einwilligung, sort_order=1)
+    return doc_type
+
+
+@pytest.fixture
 def doc_type_client_conditional(facility):
     """Personen-Typ mit Bedingung TEXT->TEXTAREA (Payload-Smoke-Test)."""
     doc_type = DocumentType.objects.create(
@@ -442,6 +470,235 @@ class TestClientUpdateWithDynamicData:
 
 
 # ---------------------------------------------------------------------------
+# Deaktivierter, aber zugewiesener Dokumentationstyp (P7-Fix-Runde)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestInactiveAssignedDocumentType:
+    """Ein zwischenzeitlich deaktivierter Typ darf beim Update nicht still wegfallen.
+
+    Ohne die Queryset-Ausnahme (Muster #1160, ``_select_choices``) faellt der
+    zugewiesene Typ aus der Auswahl, das Select zeigt „— Kein Typ —"
+    vorausgewaehlt, und ein voellig normaler Submit loescht Typ UND alle
+    (potenziell Art.-9-nahen) Zusatzfeld-Werte, ohne dass die Bearbeiterin es
+    bemerkt.
+    """
+
+    @staticmethod
+    def _deactivate(doc_type):
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
+        return doc_type
+
+    def test_update_get_preselects_inactive_assigned_type(self, client, staff_user, facility, doc_type_client_profile):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Inaktiv-01",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        self._deactivate(doc_type_client_profile)
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+
+        assert f'<option value="{doc_type_client_profile.pk}" selected>' in content
+        assert "(deaktiviert)" in content
+        # Die Zusatzfelder des inaktiven Typs bleiben bearbeitbar.
+        assert 'name="wohnsituation"' in content
+        assert "WG" in content
+
+    def test_unchanged_submit_keeps_inactive_type_and_values(
+        self, client, staff_user, facility, doc_type_client_profile
+    ):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Inaktiv-02",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        self._deactivate(doc_type_client_profile)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                "P7-Inaktiv-02",
+                document_type=str(doc_type_client_profile.pk),
+                wohnsituation="WG",
+            ),
+        )
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.document_type_id == doc_type_client_profile.pk
+        assert target.data_json["wohnsituation"] == "WG"
+
+    def test_create_still_hides_inactive_types(self, client, staff_user, doc_type_client_profile):
+        """Die Ausnahme gilt NUR fuer den bearbeiteten Datensatz — Neuanlagen nicht."""
+        self._deactivate(doc_type_client_profile)
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert f'value="{doc_type_client_profile.pk}"' not in content
+
+        # Und ein untergeschobener POST wird abgelehnt (Queryset-Validierung).
+        response = client.post(
+            reverse("core:client_create"),
+            _client_post_data(
+                "P7-Inaktiv-03",
+                document_type=str(doc_type_client_profile.pk),
+                wohnsituation="WG",
+            ),
+        )
+        assert response.status_code == 200
+        assert not Client.objects.filter(pseudonym="P7-Inaktiv-03").exists()
+
+    def test_deliberate_removal_still_works(self, client, staff_user, facility, doc_type_client_profile):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Inaktiv-04",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        self._deactivate(doc_type_client_profile)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data("P7-Inaktiv-04", document_type=""),
+        )
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.document_type_id is None
+        assert target.data_json == {}
+
+    def test_invalid_rerender_keeps_inactive_type_fields(
+        self, client, staff_user, facility, client_identified, doc_type_client_profile
+    ):
+        """Auch der Re-Render eines ungueltigen Formulars behaelt die Feldwerte."""
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Inaktiv-05",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        self._deactivate(doc_type_client_profile)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                client_identified.pseudonym,  # Pseudonym-Kollision -> ungueltig
+                document_type=str(doc_type_client_profile.pk),
+                wohnsituation="Eigene Wohnung",
+            ),
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'name="wohnsituation"' in content
+        assert "Eigene Wohnung" in content
+
+    def test_invisible_type_lock_beats_inactive_exception(self, client, staff_user, facility, doc_type_client_high):
+        """Inaktiv UND unsichtbar: die Lock-Logik hat Vorrang, das Feld faellt ganz weg."""
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Inaktiv-06",
+            created_by=staff_user,
+            document_type=doc_type_client_high,
+            data_json={"schutzkonzept": "streng vertraulich"},
+        )
+        self._deactivate(doc_type_client_high)
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        assert 'name="document_type"' not in content
+        assert doc_type_client_high.name not in content
+        assert "streng vertraulich" not in content
+
+
+# ---------------------------------------------------------------------------
+# Sperre bei unsichtbarem Dokumentationstyp (P7-Fix-Runde)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestInvisibleDocumentTypeLock:
+    """``_lock_invisible_document_type`` — vier Richtungen, alle fixiert.
+
+    Darf die Rolle den Typ der Person nicht sehen, faellt das Typ-Select ganz
+    aus dem Formular. Sonst wuerde (a) der Typname geleakt und (b) ein Submit
+    mit leerem Feld Typ und alle unsichtbaren Werte still loeschen.
+    """
+
+    @pytest.fixture
+    def locked_client(self, facility, staff_user, doc_type_client_high):
+        return Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Lock-01",
+            created_by=staff_user,
+            document_type=doc_type_client_high,
+            data_json={"schutzkonzept": "streng vertraulich"},
+        )
+
+    def test_get_leaks_nothing(self, client, staff_user, locked_client, doc_type_client_high):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_update", args=[locked_client.pk])).content.decode()
+        assert 'name="document_type"' not in content
+        assert doc_type_client_high.name not in content
+        assert "Schutzkonzept" not in content
+        assert "streng vertraulich" not in content
+
+    def test_normal_post_keeps_type_and_hidden_values(self, client, staff_user, locked_client, doc_type_client_high):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[locked_client.pk]),
+            _client_post_data("P7-Lock-01", notes="Neue Notiz"),
+        )
+        assert response.status_code == 302
+        locked_client.refresh_from_db()
+        assert locked_client.notes == "Neue Notiz"
+        assert locked_client.document_type_id == doc_type_client_high.pk
+        assert safe_decrypt(locked_client.data_json["schutzkonzept"]) == "streng vertraulich"
+
+    def test_smuggled_visible_type_is_ignored(
+        self, client, staff_user, locked_client, doc_type_client_high, doc_type_client_profile
+    ):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[locked_client.pk]),
+            _client_post_data(
+                "P7-Lock-01",
+                document_type=str(doc_type_client_profile.pk),
+                wohnsituation="untergeschoben",
+            ),
+        )
+        assert response.status_code == 302
+        locked_client.refresh_from_db()
+        assert locked_client.document_type_id == doc_type_client_high.pk
+        assert "wohnsituation" not in locked_client.data_json
+        assert safe_decrypt(locked_client.data_json["schutzkonzept"]) == "streng vertraulich"
+
+    def test_authorized_role_is_unaffected(self, client, lead_user, locked_client, doc_type_client_high):
+        client.force_login(lead_user)
+        content = client.get(reverse("core:client_update", args=[locked_client.pk])).content.decode()
+        assert 'name="document_type"' in content
+        assert doc_type_client_high.name in content
+        assert "Schutzkonzept" in content
+        assert "streng vertraulich" in content
+
+        response = client.post(
+            reverse("core:client_update", args=[locked_client.pk]),
+            _client_post_data(
+                "P7-Lock-01",
+                document_type=str(doc_type_client_high.pk),
+                schutzkonzept="von der Leitung geaendert",
+            ),
+        )
+        assert response.status_code == 302
+        locked_client.refresh_from_db()
+        assert safe_decrypt(locked_client.data_json["schutzkonzept"]) == "von der Leitung geaendert"
+
+
+# ---------------------------------------------------------------------------
 # HTMX-Partial
 # ---------------------------------------------------------------------------
 
@@ -674,10 +931,40 @@ class TestClientExportDynamicData:
             "created_by",
         }
 
+    def test_export_formats_select_and_boolean_values(self, facility, staff_user, doc_type_client_select):
+        """Slugs/Booleans sind fuer die betroffene Person nicht lesbar — Labels ausweisen."""
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Export-03",
+            created_by=staff_user,
+            document_type=doc_type_client_select,
+            data_json={"wohnform": "wohnungslos", "einwilligung": True},
+        )
+        entries = _gather_client_fields(target)["dynamic_data"]
+        by_label = {entry["label"]: str(entry["value"]) for entry in entries}
+        assert by_label["Wohnform"] == "Wohnungslos"
+        assert by_label["Einwilligung"] == "Ja"
+
     def test_pdf_export_renders_dynamic_data(
         self, facility, staff_user, lead_user, doc_type_client_profile, fernet_key
     ):
+        """Label UND Klartext-Wert muessen wirklich im gerenderten Dokument stehen.
+
+        Statt nur die ``%PDF``-Magic zu pruefen (die auch ein leeres Dokument
+        traegt), wird das HTML abgefangen, das WeasyPrint zu sehen bekommt.
+        """
+        from unittest.mock import patch
+
+        import weasyprint
+
         from core.services.client import export_client_data_pdf
+
+        captured: dict[str, str] = {}
+        real_html = weasyprint.HTML
+
+        def capturing_html(*args, **kwargs):
+            captured["string"] = kwargs.get("string", "")
+            return real_html(*args, **kwargs)
 
         with override_settings(ENCRYPTION_KEY=fernet_key):
             target = Client.objects.create(
@@ -685,7 +972,15 @@ class TestClientExportDynamicData:
                 pseudonym="P7-Export-02",
                 created_by=staff_user,
                 document_type=doc_type_client_profile,
-                data_json={"wohnsituation": "WG"},
+                data_json={"wohnsituation": "WG", "diagnose": "PDF-Klartext"},
             )
-            pdf_bytes = export_client_data_pdf(target, facility, lead_user)
+            with patch("core.services.client.export.weasyprint.HTML", side_effect=capturing_html):
+                pdf_bytes = export_client_data_pdf(target, facility, lead_user)
+
         assert pdf_bytes[:4] == b"%PDF"
+        html = captured["string"]
+        assert doc_type_client_profile.name in html
+        assert "Wohnsituation" in html
+        assert "WG" in html
+        assert "Diagnose" in html
+        assert "PDF-Klartext" in html

@@ -217,7 +217,7 @@ def build_dynamic_fields_display(
     :func:`core.services.events.context.build_event_detail_context` — **ohne**
     jede Attachment-Logik (FILE ist event-gebunden, E8). Je Feld:
 
-    * ``label``     — Name des ``FieldTemplate`` (Fallback: aufbereiteter Slug),
+    * ``label``     — Name des ``FieldTemplate``,
     * ``value``     — entschlüsselt (:func:`~core.services.file_vault.safe_decrypt`)
       und über :func:`format_dynamic_display_value` lesbar gemacht,
     * ``restricted``/``is_sensitive``/``is_encrypted`` — Flags für die Anzeige.

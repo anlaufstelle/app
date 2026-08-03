@@ -77,7 +77,7 @@ def _client_data_form(request, document_type, *, data=None, initial_data=None):
     return data_form, remove_restricted_fields(request.user, document_type, data_form)
 
 
-def _rerender_data_form(request, doc_type_id):
+def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None):
     """Dynamik-Formular fuer den POST-Re-Render eines ungueltigen Formulars.
 
     Refs #774 (Spiegel aus ``EventCreateView.post``): ohne den Sensitivity-Check
@@ -86,6 +86,13 @@ def _rerender_data_form(request, doc_type_id):
     Re-Render-Antwort sichtbar machen. Unbekannter, facility-fremder,
     inaktiver, ereignis-/fall-gebundener oder nicht sichtbarer Typ ⇒ leeres
     Formular (kein Leak, kein Fehler).
+
+    ``allow_inactive_pk`` (P7-Fix-Runde): der AKTUELL zugewiesene Typ der
+    bearbeiteten Person darf inaktiv sein und bleibt trotzdem waehlbar
+    (``ClientForm``-Queryset). Damit der Re-Render eines ungueltigen Formulars
+    dessen Eingaben nicht verschluckt, ist genau diese eine PK von der
+    ``is_active``-Bedingung ausgenommen — Sensitivity-, Facility- und
+    ``entity_type``-Grenze bleiben unveraendert hart.
     """
     data_form = DynamicClientDataForm()
     if not doc_type_id:
@@ -94,12 +101,13 @@ def _rerender_data_form(request, doc_type_id):
         doc_type = DocumentType.objects.get(
             pk=doc_type_id,
             facility=request.current_facility,
-            is_active=True,
             entity_type=DocumentType.EntityType.CLIENT,
         )
     except (DocumentType.DoesNotExist, ValidationError, ValueError):
         # Django wirft bei syntaktisch ungueltigen UUIDs ValidationError,
         # nicht ValueError (gleiche Falle wie in ``get_client_or_none``).
+        return data_form
+    if not doc_type.is_active and str(doc_type.pk) != str(allow_inactive_pk):
         return data_form
     if not user_can_see_document_type(request.user, doc_type):
         return data_form
@@ -169,7 +177,9 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         facility = request.current_facility
         # Soft-deletete Personen werden in der Detail-View nicht ausgespielt;
         # Admins kommen ueber die Papierkorb-Ansicht (#626) an den Datensatz.
-        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        # ``select_related("document_type")``: die Zusatzfelder-Sektion greift
+        # auf Name und Sensitivitaet des Typs zu (M2 P7, Refs #1058).
+        client = get_scoped_object(Client.objects.select_related("document_type"), request, pk=pk, is_deleted=False)
         track_client_visit(request.user, client, facility)
 
         events = (
@@ -311,7 +321,11 @@ class ClientUpdateView(StaffRequiredMixin, View):
         old_stage = client.contact_stage
         # VOR ``is_valid()`` sichern: ``ModelForm._post_clean`` mutiert die
         # Instanz bereits (Refs #1613 — dieselbe Falle wie beim Stage-Diff).
+        # Das gilt auch fuer ``document_type``: ist NUR das Pseudonym ungueltig,
+        # traegt ``client.document_type_id`` im Re-Render-Zweig schon den neuen
+        # Wert — die Inaktiv-Ausnahme braucht aber den DB-Stand.
         old_data = dict(client.data_json or {})
+        old_doc_type_id = client.document_type_id
 
         form = ClientForm(request.POST, instance=client, facility=request.current_facility, user=request.user)
         type_locked = _lock_invisible_document_type(request, client, form)
@@ -320,7 +334,11 @@ class ClientUpdateView(StaffRequiredMixin, View):
             data_form = (
                 DynamicClientDataForm()
                 if type_locked
-                else _rerender_data_form(request, request.POST.get("document_type"))
+                else _rerender_data_form(
+                    request,
+                    request.POST.get("document_type"),
+                    allow_inactive_pk=old_doc_type_id,
+                )
             )
             context = {"form": form, "data_form": data_form, "client": client, "is_edit": True}
             return render(request, "core/clients/form.html", context)

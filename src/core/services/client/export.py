@@ -21,8 +21,14 @@ def _gather_client_dynamic_data(client):
     Werte werden **entschluesselt** ausgegeben: der Art.-15-Auskunftsanspruch
     zielt auf den Inhalt, ein Fernet-Token waere keine Auskunft. Das Label kommt
     aus dem ``FieldTemplate`` — der nackte Slug ist fuer die betroffene Person
-    nicht lesbar. Sortiert wird nach der konfigurierten Feldreihenfolge des
-    Typs (``jsonb`` speichert Schluessel normalisiert, nicht in Eingabefolge).
+    nicht lesbar. Aus demselben Grund laeuft der Wert durch
+    :func:`~core.services.dynamic_data.format_dynamic_display_value`:
+    ``SELECT``-/``MULTI_SELECT``-Slugs werden zu ihren Labels, Booleans zu
+    ``Ja``/``Nein`` — ein Auskunftsdokument, das ``["wohnungslos"]`` statt
+    „Wohnungslos" ausweist, ist fuer die betroffene Person genauso wenig lesbar
+    wie der Slug im Schluessel. Sortiert wird nach der konfigurierten
+    Feldreihenfolge des Typs (``jsonb`` speichert Schluessel normalisiert, nicht
+    in Eingabefolge).
 
     Keine Datei-Marker-Behandlung noetig: FILE-Felder sind fuer Personen-Typen
     dreischichtig ausgeschlossen (Config-UI, Service-Guard,
@@ -33,21 +39,20 @@ def _gather_client_dynamic_data(client):
     sehen (``ROLE_MAX_SENSITIVITY``). Eine Filterung waere hier eine
     Scheinsicherheit, die eine unvollstaendige Auskunft erzeugen koennte.
     """
-    from core.services.dynamic_data import build_field_template_lookup
+    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
 
     if client.document_type_id is None:
         return None
     values = client.data_json or {}
     field_templates = build_field_template_lookup(client.document_type, ordered=True)
-    return [
-        {
-            "slug": slug,
-            "label": ft.name,
-            "value": safe_decrypt(values[slug]) if isinstance(values[slug], dict) else values[slug],
-        }
-        for slug, ft in field_templates.items()
-        if slug in values
-    ]
+    entries = []
+    for slug, ft in field_templates.items():
+        if slug not in values:
+            continue
+        raw = values[slug]
+        decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
+        entries.append({"slug": slug, "label": ft.name, "value": format_dynamic_display_value(decrypted, ft)})
+    return entries
 
 
 def _gather_client_fields(client):
