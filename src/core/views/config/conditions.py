@@ -94,9 +94,7 @@ def condition_board_context(doc_type, *, form=None):
     """
     conditions = list(
         FieldCondition.objects.filter(target_field__document_type=doc_type)
-        .select_related(
-            "target_field__field_template", "target_field__field_group", "depends_on_field__field_template"
-        )
+        .select_related("target_field__field_template", "target_field__field_group", "depends_on_field__field_template")
         .order_by("group_index", "id")
     )
 

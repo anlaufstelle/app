@@ -614,9 +614,7 @@ def block_ordered_dtf_queryset(doc_type: DocumentType):
         .select_related("field_template", "field_group")
         .annotate(
             block_pos=Coalesce("field_group__sort_order", "sort_order"),
-            block_is_free=Case(
-                When(field_group__isnull=True, then=1), default=0, output_field=IntegerField()
-            ),
+            block_is_free=Case(When(field_group__isnull=True, then=1), default=0, output_field=IntegerField()),
         )
         .order_by("block_pos", "block_is_free", "sort_order", "pk")
     )
