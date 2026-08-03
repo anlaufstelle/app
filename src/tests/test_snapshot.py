@@ -227,6 +227,25 @@ class TestBackendDataDualWrite:
         assert snap.backend_data["mit_snapshot"] == {"wert": 1}
 
 
+class TestSnapshotEnabledAllowlist:
+    """Die Menge der snapshot-faehigen Backends ist eingefroren (Refs #1061).
+
+    ``core_statisticssnapshot.backend_data`` ist im PII-Residue-Sweep
+    **pauschal** als non-PII klassifiziert (``src/tests/_residue_expectations.py``)
+    — der Sweep prueft den Inhalt nie je Backend nach. Die Klassifikation traegt
+    ausschliesslich, solange jedes Backend mit ``snapshot_enabled = True`` ein
+    aggregatreines ``summary`` liefert (Vertrag in ``core/reporting/base.py``,
+    ADR-038 Konsequenz 1). Diese Zusage stand bisher nur in Prosa; hier wird sie
+    zum CI-Gate: Wer ein Backend snapshot-faehig macht, muss diesen Test
+    bewusst erweitern — und dabei die Aggregatreinheit pruefen.
+    """
+
+    def test_nur_jugendamt_ist_snapshot_faehig(self):
+        snapshot_faehig = {backend.slug for backend in registry.get_backends() if backend.snapshot_enabled}
+
+        assert snapshot_faehig == {"jugendamt"}
+
+
 @pytest.mark.django_db
 class TestTopClientsExcluded:
     """top_clients darf NICHT im Snapshot gespeichert werden."""
