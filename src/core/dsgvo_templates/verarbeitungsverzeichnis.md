@@ -12,7 +12,7 @@
 ### 1.1 Zweck der Verarbeitung
 - Dokumentation von Kontakten mit Klientel
 - Nachverfolgung von Beratungsgesprächen und Leistungen
-- Statistische Auswertung für Fördergeber (Jugendamt)
+- Statistische Auswertung für Fördergeber (öffentliche Fördermittelgeber/Behörden)
 - Qualitätssicherung der sozialen Arbeit
 
 ### 1.2 Kategorien betroffener Personen
@@ -35,7 +35,7 @@
 
 ### 1.5 Empfänger
 - Mitarbeitende der Einrichtung (je nach Rolle)
-- Jugendamt (anonymisierte Statistik)
+- Öffentliche Fördermittelgeber/Behörden (anonymisierte Statistik)
 - IT-Dienstleister (Auftragsverarbeitung, siehe AVV)
 
 ### 1.6 Übermittlung in Drittländer

@@ -54,7 +54,7 @@ Wir verarbeiten Ihre Daten zu folgenden Zwecken:
 ## 6. Empfänger
 
 - Mitarbeitende der Einrichtung (je nach Rolle und Berechtigung)
-- Jugendamt (nur anonymisierte Statistik)
+- Öffentliche Fördermittelgeber/Behörden (nur anonymisierte Statistik)
 - IT-Dienstleister (im Rahmen der Auftragsverarbeitung)
 
 Eine Übermittlung in Drittländer findet nicht statt.

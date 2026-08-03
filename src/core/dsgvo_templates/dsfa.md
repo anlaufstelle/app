@@ -19,7 +19,7 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 ### 1.3 Kontext der Verarbeitung
 - Soziale Arbeit mit vulnerablen Gruppen
 - Niedrigschwellige Anlaufstelle (kein Zwang zur Identifikation)
-- Kooperation mit Jugendamt
+- Kooperation mit öffentlichen Fördermittelgebern/Behörden
 
 ### 1.4 Zweck der Verarbeitung
 - Qualitätssicherung der sozialen Arbeit

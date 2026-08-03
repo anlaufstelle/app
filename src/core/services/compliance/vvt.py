@@ -102,7 +102,10 @@ PROCESSING_ACTIVITIES = [
         ],
         "recipients": [
             _("Intern: Mitarbeiter:innen der Einrichtung mit passender Rolle und Sensitivitaetsfreigabe"),
-            _("Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an Foerdermittelgeber (Jugendamt-Export)"),
+            _(
+                "Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an "
+                "Foerdermittelgeber/Behoerden (Sachbericht-Export)"
+            ),
         ],
         "retention_period": _(
             "Pro DocumentType konfigurierbar; Default an Kontaktstufe "

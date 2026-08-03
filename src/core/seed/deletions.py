@@ -136,7 +136,7 @@ def seed_retention_proposals(facility: Facility, users: list[User], cfg: dict) -
                         reason=random.choice(
                             [
                                 "Laufendes Gerichtsverfahren.",
-                                "Jugendamt-Überprüfung noch nicht abgeschlossen.",
+                                "Überprüfung durch die Fachbehörde noch nicht abgeschlossen.",
                                 "Klientel hat Widerspruch eingelegt.",
                                 "Anfrage der Aufsichtsbehörde.",
                             ]
