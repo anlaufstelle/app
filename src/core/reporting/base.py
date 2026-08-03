@@ -32,7 +32,12 @@ class FieldSpec:
     """Eine Spalten-/Record-Definition fuer die tabellarische Projektion."""
 
     key: str  # stabiler Spalten-/Record-Schlüssel, ^[a-z0-9_]+$
-    label: str  # Anzeigename (deutsch; via str(gettext_lazy) beim Rendern)
+    # Anzeigename: deutscher Klartext **oder** ``gettext_lazy`` — anders als bei
+    # ``DatasetBackend.name`` fordert der Vertrag hier nichts. Beide
+    # ausgelieferten Backends nutzen heute Klartext, die Tabellenköpfe bleiben
+    # in der EN-Oberfläche also deutsch; die vollständige i18n der
+    # Backend-Strings (Labels, Completeness-Texte) ist Folgearbeit.
+    label: str
 
 
 @dataclass(frozen=True)
@@ -68,7 +73,17 @@ class DatasetResult:
 
 
 class DatasetBackend(ABC):
-    """Basisklasse aller Reporting-Backends — via ``@register_backend`` einzubinden."""
+    """Basisklasse aller Reporting-Backends — via ``@register_backend`` einzubinden.
+
+    **Kein Instanz-Zustand.** ``@register_backend`` legt genau EINE Instanz je
+    Slug fuer die gesamte Prozesslebensdauer an (``registry._REGISTRY``); sie
+    wird von allen Requests **und allen Einrichtungen** geteilt. Ein auf
+    ``self`` gecachtes Zwischenergebnis (naheliegend, weil Panel und Export
+    denselben Datensatz bauen) laege im naechsten Request einer anderen
+    Einrichtung noch dort — in einer mandantenfaehigen Anwendung ein
+    einrichtungsuebergreifender Datenleak. Alles, was ein Aufruf braucht, kommt
+    als Argument herein (``facility``, Zeitraum).
+    """
 
     slug: str = ""  # wird von @register_backend gesetzt/validiert
     name: str = ""  # Anzeigename im UI-Dropdown (gettext_lazy-fähig)

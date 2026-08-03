@@ -76,11 +76,15 @@ class DatasetBackend(ABC):
 | `slug` || Set by the decorator. Do **not** assign it yourself. Format `^[a-z0-9_]+$`. It appears in query parameters, file names and `backend_data` keys, which makes it effectively immutable. |
 | `name` | **yes** | Visible name in the reports dropdown and in the JSON payload. Declare it as `gettext_lazy`; the export pipeline casts to `str` at the payload boundary itself. |
 | `snapshot_enabled` | no | Defaults to `False`. Set it to `True` only if `summary` is **purely aggregated** — see [§ 5](#5-snapshot-integration). |
-| `is_available(facility)` | no | Defaults to `True`. Hook for facility-dependent reports. `False` hides the backend from the dropdown **and** makes panel and export respond with HTTP 404. |
+| `is_available(facility)` | no | Defaults to `True`. Hook for facility-dependent reports. `False` — like any other falsy return value, for instance the `None` of a nullable `BooleanField` — hides the backend from the dropdown **and** makes panel and export respond with HTTP 404. The dropdown filter and the access guard check the same truthiness. |
 | `get_field_specs()` | **yes** | Column definition of the tabular projection. The order is the column order in the CSV. |
 | `build_dataset(facility, date_from, date_to)` | **yes** | Builds the dataset for the **inclusive** period `[date_from, date_to]`. The result is **raw** (unsuppressed). |
 | `validate_completeness(facility, date_from, date_to)` | no | Defaults to `[]`. Data-quality checks — see [§ 8](#8-completeness--what-the-report-does-not-show). |
 | `prepare_export(facility, result)` | no | Defaults to returning the result unchanged. Transformation applied before export **and** before the panel display — see [§ 6](#6-k-anonymity--the-prepare_export-hook). |
+
+> **Backends are process-wide singletons — no instance state.**
+>
+> `@register_backend` creates exactly **one** instance per slug, and it lives as long as the process. All requests and **all facilities** share it. An intermediate result cached on `self` (a tempting optimisation, because panel and download build the same dataset) would still be there in the next request of a different facility — in a multi-tenant application that is a cross-facility data leak. Everything a call needs is passed in as an argument: `facility` and the period.
 
 `validate_completeness` deliberately receives **facility plus period rather than the finished `DatasetResult`**: the meaningful checks concern exactly what does *not* end up in the dataset (filtered-out documentation types, events without a person reference). A finished result can no longer see them. `build_dataset()` usually calls the method itself and embeds the outcome in `DatasetResult.completeness`.
 
@@ -117,7 +121,7 @@ class FieldSpec:
 
 `key` is the dict key inside `records` **and** the XML element name of a field. Keys that are not valid XML element names are emitted by the XML renderer as `<entry key="…">` instead of as an element of their own — the format stays well-formed but becomes more awkward to consume. Stick to `^[a-z0-9_]+$` **and do not start with a digit**, then the case never arises: the renderer validates against `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../../src/core/reporting/export.py)), so a key such as `2026_total` would fall back to `entry` despite being a valid slug.
 
-`label` is the CSV header cell and the table heading in the panel.
+`label` is the CSV header cell and the table heading in the panel. **German plain text or `gettext_lazy`** are both allowed — unlike for `name`, the contract demands nothing here. Both shipped backends currently use plain text, so the table headings ("Kategorie", "Anzahl", …) stay German in the English interface as well. Full i18n of the backend strings — labels **and** completeness messages — is follow-up work (see the closing comment on #1061).
 
 ### 2.4 `CompletenessIssue`
 
@@ -290,6 +294,13 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 
 **Fail loud.** The snapshot run iterates over the backends without error isolation: if a backend raises, the **entire** snapshot run for that facility fails. This is intentional — a silently incomplete snapshot would be a quiet data hole that only surfaces months later.
 
+**Live read path vs. hybrid read path.** The panel preview and the generic export **always** call `build_dataset(facility, date_from, date_to)` — the live query against the events. The activity report **PDF**, by contrast, reads the same report as a hybrid via the monthly snapshots (`get_jugendamt_statistics_hybrid`). Two artifacts of the same report over the same period can therefore differ systematically:
+
+- **`unique_clients` across several months.** The hybrid path sums the monthly values (a documented approximation: anyone appearing in two months is counted twice); the live query performs a true DISTINCT count over the whole period.
+- **Periods beyond the retention deadlines.** Snapshots deliberately outlive event retention; the live query filters out soft-deleted events (`is_deleted=False`). For a period whose events have already been deleted, the PDF returns the snapshot figures whereas the panel and CSV/JSON/XML return (close to) zero, or suppression markers.
+
+This is not a peculiarity of the plugin system: the same class of divergence has always existed between the live external report and the hybrid PDF — M5 adds a third instance of the same pattern. Unifying them is follow-up work covering **all three** live-reading artifacts (see the closing comment on #1061); it would additionally require `completeness` in the snapshot, which is not stored there today — otherwise a hybrid-fed export would silently report "no gaps".
+
 ---
 
 ## 6. K-Anonymity — the `prepare_export` Hook
@@ -302,6 +313,8 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 | Reports panel (HTMX preview) | **yes** — the view calls `prepare_export(facility, build_dataset(...))` | suppressed (parity with the download) |
 | Snapshot | no — `build_dataset` directly | raw |
 | Activity report PDF | no — separate path, suppressed in its own right since #1278 | suppressed |
+
+The "View" column says nothing about the **source**: panel and download read live via `build_dataset`, the activity report PDF reads a hybrid of monthly snapshots. Suppression applies on every path, yet the underlying figures can still differ — see [§ 5](#5-snapshot-integration).
 
 ### Do I need my own override?
 
@@ -490,4 +503,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: bcc9368fd33a30441e317344e0a7f7df564f95ae -->
+<!-- source-hash: 5d62a52389ed9eacbd2e631a1c75ee1529fce91c -->

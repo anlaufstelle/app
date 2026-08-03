@@ -73,11 +73,15 @@ class DatasetBackend(ABC):
 | `slug` || Wird vom Decorator gesetzt. **Nicht** selbst zuweisen. Format `^[a-z0-9_]+$`. Er steckt in Query-Parametern, Dateinamen und `backend_data`-Schlüsseln und ist damit faktisch unveränderlich. |
 | `name` | **ja** | Sichtbarer Name im Berichte-Dropdown und im JSON-Payload. Als `gettext_lazy` deklarieren; die Export-Pipeline castet an der Payload-Grenze selbst nach `str`. |
 | `snapshot_enabled` | nein | Default `False`. `True` nur bei **aggregatreinem** `summary` — siehe [§ 5](#5-snapshot-integration). |
-| `is_available(facility)` | nein | Default `True`. Hook für einrichtungsabhängige Berichte. `False` blendet das Backend aus dem Dropdown aus **und** lässt Panel/Export mit HTTP 404 antworten. |
+| `is_available(facility)` | nein | Default `True`. Hook für einrichtungsabhängige Berichte. `False` — wie jeder andere falsy Rückgabewert, etwa das `None` eines nullable `BooleanField` — blendet das Backend aus dem Dropdown aus **und** lässt Panel/Export mit HTTP 404 antworten. Dropdown-Filter und Zugriffs-Guard prüfen dieselbe Truthiness. |
 | `get_field_specs()` | **ja** | Spaltendefinition der tabellarischen Projektion. Reihenfolge = Spaltenreihenfolge im CSV. |
 | `build_dataset(facility, date_from, date_to)` | **ja** | Baut den Datensatz für den **inklusiven** Zeitraum `[date_from, date_to]`. Ergebnis ist **roh** (unsuppressiert). |
 | `validate_completeness(facility, date_from, date_to)` | nein | Default `[]`. Datenqualitäts-Checks — siehe [§ 8](#8-completeness--was-der-bericht-nicht-zeigt). |
 | `prepare_export(facility, result)` | nein | Default: unverändert. Transformation vor Export **und** Panel-Anzeige — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook). |
+
+> **Backends sind prozessweite Singletons — kein Instanz-Zustand.**
+>
+> `@register_backend` legt genau **eine** Instanz je Slug an, und die lebt so lange wie der Prozess. Alle Requests und **alle Einrichtungen** teilen sie sich. Ein auf `self` gecachtes Zwischenergebnis (naheliegend, weil Panel und Download denselben Datensatz bauen) läge im nächsten Request einer anderen Einrichtung noch dort — in einer mandantenfähigen Anwendung ein einrichtungsübergreifender Datenleak. Alles, was ein Aufruf braucht, kommt als Argument herein: `facility` und Zeitraum.
 
 `validate_completeness` bekommt bewusst **Facility + Zeitraum statt des fertigen `DatasetResult`**: Die aussagekräftigen Checks betreffen genau das, was *nicht* im Datensatz landet (ausgefilterte Dokumentationstypen, Ereignisse ohne Personenbezug). Ein fertiges Ergebnis kann sie nicht mehr sehen. `build_dataset()` ruft die Methode üblicherweise selbst und bettet das Ergebnis in `DatasetResult.completeness` ein.
 
@@ -114,7 +118,7 @@ class FieldSpec:
 
 `key` ist der Dict-Schlüssel in `records` **und** der XML-Elementname eines Feldes. Schlüssel, die kein gültiger XML-Elementname sind, werden vom XML-Renderer als `<entry key="…">` ausgegeben statt als eigenes Element — das Format bleibt wohlgeformt, wird aber unhandlicher. Halte dich an `^[a-z0-9_]+$` **und beginne nicht mit einer Ziffer**, dann tritt der Fall nicht ein: Der Renderer prüft gegen `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../src/core/reporting/export.py)), ein Schlüssel wie `2026_total` fiele also trotz gültigem Slug-Format in den `entry`-Fallback.
 
-`label` ist die CSV-Kopfzeile und die Tabellenüberschrift im Panel.
+`label` ist die CSV-Kopfzeile und die Tabellenüberschrift im Panel. Zulässig ist **deutscher Klartext oder `gettext_lazy`** — anders als bei `name` fordert der Vertrag hier nichts. Beide ausgelieferten Backends verwenden heute Klartext; die Tabellenköpfe („Kategorie", „Anzahl", …) bleiben in der englischen Oberfläche deshalb deutsch. Die vollständige i18n der Backend-Strings — Labels **und** Completeness-Meldungen — ist Folgearbeit (siehe Abschluss-Kommentar zu #1061).
 
 ### 2.4 `CompletenessIssue`
 
@@ -287,6 +291,13 @@ Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backe
 
 **Fail-loud.** Der Snapshot-Lauf iteriert ohne Fehlerisolation über die Backends: Wirft ein Backend, scheitert der **gesamte** Snapshot-Lauf dieser Einrichtung. Das ist Absicht — ein still unvollständiger Snapshot wäre ein leises Datenloch, das erst Monate später auffällt.
 
+**Live-Lesepfad vs. hybrider Lesepfad.** Panel-Vorschau und generischer Export rufen **immer** `build_dataset(facility, date_from, date_to)` — also die Live-Abfrage gegen die Ereignisse. Das Sachbericht-**PDF** liest denselben Bericht dagegen hybrid über die Monats-Snapshots (`get_jugendamt_statistics_hybrid`). Zwei Artefakte desselben Berichts über denselben Zeitraum können deshalb systematisch abweichen:
+
+- **`unique_clients` über mehrere Monate.** Der hybride Pfad summiert die Monatswerte (dokumentierte Näherung: wer in zwei Monaten erscheint, zählt zweimal); die Live-Abfrage macht einen echten DISTINCT-Count über den Gesamtzeitraum.
+- **Zeiträume jenseits der Aufbewahrungsfristen.** Snapshots überdauern die Event-Retention bewusst; die Live-Abfrage filtert soft-gelöschte Ereignisse (`is_deleted=False`) heraus. Für einen Zeitraum, dessen Ereignisse bereits gelöscht sind, liefert das PDF die Snapshot-Zahlen, Panel und CSV/JSON/XML dagegen (nahe) null bzw. Unterdrückungs-Marker.
+
+Das ist keine Eigenheit des Plugin-Systems: dieselbe Divergenzklasse besteht seit jeher zwischen dem live gelesenen Externen Bericht und dem hybrid gelesenen PDF — M5 fügt eine dritte Instanz desselben Musters hinzu. Eine Vereinheitlichung ist Folgearbeit über **alle drei** live lesenden Artefakte (siehe Abschluss-Kommentar zu #1061); sie bräuchte zusätzlich `completeness` im Snapshot, das dort heute nicht gespeichert wird — ein hybrid gespeister Export meldete sonst still „keine Lücken".
+
 ---
 
 ## 6. K-Anonymität — der `prepare_export`-Hook
@@ -299,6 +310,8 @@ Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backe
 | Berichts-Panel (HTMX-Vorschau) | **ja** — die View ruft `prepare_export(facility, build_dataset(...))` | suppressiert (Parität zum Download) |
 | Snapshot | nein — `build_dataset` direkt | roh |
 | Sachbericht-PDF | nein — eigener Pfad, suppressiert seit #1278 selbst | suppressiert |
+
+Die Spalte „Sicht" sagt nichts über die **Quelle**: Panel und Download lesen live über `build_dataset`, das Sachbericht-PDF hybrid über Monats-Snapshots. Die Suppression greift auf allen Pfaden, die Zahlenbasis kann trotzdem abweichen — siehe [§ 5](#5-snapshot-integration).
 
 ### Brauche ich einen eigenen Override?
 
