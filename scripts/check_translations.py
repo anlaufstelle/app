@@ -54,8 +54,18 @@ ROOT = Path(__file__).resolve().parent.parent
 # frischem makemessages-Lauf alle 35 fuzzy + 46 untranslated Eintraege
 # (Sync-Konflikt-UI, Demo-Modus, Upload-/Bild-Validierung, Retention/
 # Audit, Locking, Idempotenz) uebersetzt. en-Baseline auf 0/0 gesenkt.
+#
+# 2026-08-03 (#1745): de.po lief seit 2026-05-10 nicht mehr durch
+# makemessages (drei Monate M0-M5-Drift). Frischer Lauf + mechanische
+# Auflösung — DE ist Quellsprache (ADR-027), jede msgstr ist eine
+# Identitaets-Uebersetzung (msgattrib --clear-fuzzy --empty
+# --clear-previous | msgen). Damit steht auch de auf 0/0; der Rest der
+# EN-Drift desselben Tages ist im selben Zug uebersetzt. Beide Werte
+# duerfen ab hier nur noch bestaetigt werden — eine Erhoehung macht den
+# naechsten Drift unsichtbar (Pflege-Rhythmus: CONTRIBUTING.md
+# § Uebersetzungen (i18n)).
 BASELINES: dict[str, tuple[int, int]] = {
-    "src/locale/de/LC_MESSAGES/django.po": (208, 406),
+    "src/locale/de/LC_MESSAGES/django.po": (0, 0),
     "src/locale/en/LC_MESSAGES/django.po": (0, 0),
 }
 

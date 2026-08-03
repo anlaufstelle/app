@@ -413,6 +413,16 @@ New endpoints belong in one of these two path groups. URL names stay short and f
 - **Stamp as backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) requires a `translation-version` header == current minor for the EN docs (pre-commit hook + `make release-gates`, hard gate since #1078). The stamp catches drift at release; the "same commit" rule prevents drift from arising.
 - **Stamp convention (Refs #1552):** Every EN document carries the markers `translation-source` (path of the DE source), `translation-version`, `translation-date`, and `source-hash` at the end of the file. When you sync EN, set `source-hash` to `git hash-object <DE source>` (the blob hash of the corresponding German file) and update `translation-date` to the sync date. The guard runs `git hash-object` on the source itself and **fails hard** as soon as the stamped `source-hash` diverges (DE source changed since the last EN sync) — no warn mode. Short hashes (≥ 7 hex chars) are accepted as a prefix; a missing `source-hash` marker counts as an error.
 
+#### Maintenance rhythm of the `.po` catalogs (Refs #1745)
+
+Both catalogs — [`src/locale/de/LC_MESSAGES/django.po`](src/locale/de/LC_MESSAGES/django.po) and [`src/locale/en/LC_MESSAGES/django.po`](src/locale/en/LC_MESSAGES/django.po) — are maintained **together**, in one `chore(i18n):` commit:
+
+- **When to regenerate:** `python src/manage.py makemessages -l de -l en --no-obsolete`, run from the **repository root** (that is where the catalog expects its `src/…` reference paths; `LOCALE_PATHS` points at `src/locale/`). At the latest at the end of a milestone or batch run, and before every release cut — not once the backlog has grown to months. Individual new strings may still be added as a catalog entry by hand; that does not replace the run, but it prevents a German fallback in the meantime.
+- **DE is the source language ([ADR-027](docs/adr/027-i18n-strategy.md)).** Every entry is an identity translation (`msgstr == msgid`), so resolving a run is mechanical: `msgattrib --clear-fuzzy --empty --clear-previous <po> | msgen`. A German `msgstr` that differs from its `msgid` is a bug (usually a msgmerge fuzzy mismatch) — exactly what the duplicate guard in [`scripts/check_translations.py`](scripts/check_translations.py) targets (Refs #1348).
+- **EN gets translated, not left fuzzy.** `msgfmt` discards fuzzy entries when compiling — the English interface falls back to German there. [`src/tests/test_i18n_catalog.py`](src/tests/test_i18n_catalog.py) forbids both `#, fuzzy` and empty `msgstr`. Take terminology from [`docs/en/glossary.md`](docs/en/glossary.md) and from what the catalog already uses.
+- **Commit the compiled files:** run `python src/manage.py compilemessages` after every run; the `.mo` files live in the repository (deployment does not build them).
+- **Baselines only go down.** Since #1745 the thresholds in `scripts/check_translations.py` are 0 fuzzy / 0 untranslated for **both** languages. Raising them hides the next drift; the way past the threshold is translating, not re-tuning.
+
 ### Conventional Commits
 
 Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) standard:
@@ -756,4 +766,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: ee07ce80ec20073a5d23548ee02822ef772e744e -->
+<!-- source-hash: 44665ab4762fa2638688ecd598fd3a6405d1ae6a -->

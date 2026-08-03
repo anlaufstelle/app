@@ -413,6 +413,16 @@ Neue Endpunkte gehören entsprechend in eine der beiden Pfad-Gruppen. URL-Namen 
 - **Stempel als Backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) erzwingt für die EN-Dokumente einen `translation-version`-Header == aktuelle Minor-Version (Pre-Commit-Hook + `make release-gates`, hartes Gate seit #1078). Der Stempel fängt Drift zum Release ab; die „im selben Commit"-Regel verhindert, dass Drift überhaupt entsteht.
 - **Stempel-Konvention (Refs #1552):** Jedes EN-Dokument trägt am Dateiende die Marker `translation-source` (Pfad der DE-Quelle), `translation-version`, `translation-date` und `source-hash`. Beim EN-Sync setzt du `source-hash` auf `git hash-object <DE-Quelle>` (Blob-Hash der zugehörigen deutschen Datei) und aktualisierst `translation-date` auf das Sync-Datum. Der Guard ruft selbst `git hash-object` der Quelle auf und **failt hart**, sobald der gestempelte `source-hash` abweicht (DE-Quelle seit dem letzten EN-Sync geändert) — kein Warn-Modus. Kurz-Hashes (≥ 7 Hex-Zeichen) werden als Präfix akzeptiert; ein fehlender `source-hash`-Marker gilt als Fehler.
 
+#### Pflege-Rhythmus der `.po`-Kataloge (Refs #1745)
+
+Beide Kataloge — [`src/locale/de/LC_MESSAGES/django.po`](src/locale/de/LC_MESSAGES/django.po) und [`src/locale/en/LC_MESSAGES/django.po`](src/locale/en/LC_MESSAGES/django.po) — werden **gemeinsam** gepflegt, in einem `chore(i18n):`-Commit:
+
+- **Wann regenerieren:** `python src/manage.py makemessages -l de -l en --no-obsolete`, ausgeführt im **Repo-Root** (dort erwartet der Katalog seine `src/…`-Referenzpfade; `LOCALE_PATHS` zeigt auf `src/locale/`). Spätestens am Ende eines Meilenstein- oder Sammel-Laufs und vor jedem Release-Cut — nicht erst, wenn der Rückstand Monate beträgt. Einzelne neue Strings dürfen weiterhin von Hand als Eintrag ergänzt werden; das ersetzt den Lauf nicht, verhindert aber deutschen Fallback in der Zwischenzeit.
+- **DE ist Quellsprache ([ADR-027](docs/adr/027-i18n-strategy.md)).** Jeder Eintrag ist eine Identitäts-Übersetzung (`msgstr == msgid`); die Auflösung nach einem Lauf ist deshalb mechanisch: `msgattrib --clear-fuzzy --empty --clear-previous <po> | msgen`. Eine deutsche `msgstr`, die von ihrer `msgid` abweicht, ist ein Bug (meist ein msgmerge-Fuzzy-Fehlmatch) — genau darauf zielt der Duplikat-Guard in [`scripts/check_translations.py`](scripts/check_translations.py) (Refs #1348).
+- **EN wird übersetzt, nicht fuzzy gelassen.** `msgfmt` verwirft fuzzy-Einträge beim Kompilieren — die englische Oberfläche fällt dort auf Deutsch zurück. [`src/tests/test_i18n_catalog.py`](src/tests/test_i18n_catalog.py) verbietet sowohl `#, fuzzy` als auch leere `msgstr`. Terminologie aus [`docs/en/glossary.md`](docs/en/glossary.md) und dem Bestand des Katalogs übernehmen.
+- **Kompilate committen:** nach jedem Lauf `python src/manage.py compilemessages`; die `.mo`-Dateien liegen im Repo (das Deployment baut sie nicht).
+- **Baselines nur senken.** Die Schwellen in `scripts/check_translations.py` stehen seit #1745 für **beide** Sprachen auf 0 fuzzy / 0 unübersetzt. Wer sie anhebt, macht den nächsten Drift unsichtbar; der Weg über die Schwelle ist übersetzen, nicht nachjustieren.
+
 ### Conventional Commits
 
 Commit-Messages folgen dem [Conventional Commits](https://www.conventionalcommits.org/)-Standard:
