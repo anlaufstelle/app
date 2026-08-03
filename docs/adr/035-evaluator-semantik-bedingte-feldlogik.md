@@ -5,6 +5,8 @@
 - **Deciders:** Tobias Nix
 - **Refs:** #1057 (M1, Planung), [anlaufstelle/app#34](https://github.com/anlaufstelle/app/issues/34) (M1-Feature), #774 (Sensitivitäts-Leak), [ADR-024](024-slug-based-identifiers.md) (Slug-basierte Identifikatoren), [ADR-003](003-htmx-alpine-tailwind.md) (HTMX + Alpine + CSP)
 
+> **Nachtrag (2026-08-03, #1058, M2):** Der unter „Context" genannte Ort der Feld-Logik ist seit M2 präziser [`src/core/forms/dynamic.py`](../../src/core/forms/dynamic.py) — der Form-Builder ist dort entity-neutral als `DynamicDataForm` gebündelt; [`forms/events.py`](../../src/core/forms/events.py) hält nur noch die Ereignis-Ausprägung `DynamicEventDataForm` (plus Re-Export für Importpfad-Stabilität). An der hier festgeschriebenen **Semantik** ändert das nichts; die Person- und Fall-Ausprägungen (`DynamicClientDataForm` in [`forms/clients.py`](../../src/core/forms/clients.py), das Fall-Pendant in [`forms/cases.py`](../../src/core/forms/cases.py)) werten dieselben Regeln über dieselbe Basisklasse aus. Siehe [ADR-037](037-konfigurationspakete-dynamische-felder.md).
+
 ## Context
 
 M1 („Bedingte Feldlogik") führt Feld-zu-Feld-Bedingungen innerhalb **eines** `DocumentType` ein — „zeige Feld X, wenn Feld Y = Z". Die Sichtbarkeit wird rein clientseitig ohne Backend-Roundtrip ausgewertet (Alpine.js), damit ein Feld unmittelbar beim Tippen erscheint oder verschwindet. Dasselbe Regelwerk muss aber **serverseitig** in `DynamicEventDataForm.clean()` erneut ausgewertet werden, denn ob ein versteckter Pflichtwert erzwungen wird, darf nie am manipulierbaren Frontend hängen.

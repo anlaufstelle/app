@@ -5,6 +5,8 @@
 - **Deciders:** Tobias Nix
 - **Refs:** #1713 (Produktentscheid), #1058 (M2-Vorarbeiten), #1056 (M0, abgelöste Zwei-Ebenen-Sortierung), #1709/#1710 (Slug-Stabilität), [ADR-024](024-slug-based-identifiers.md) (Slug-basierte Identifikatoren)
 
+> **Nachtrag (2026-08-03, #1058, M2):** Die unter „Konsequente Anwendung auf allen Rendering-Flächen" genannte Implementierung `DynamicEventDataForm.grouped_fields()` liegt seit M2 auf der **Basisklasse** [`DynamicDataForm`](../../src/core/forms/dynamic.py) — `DynamicEventDataForm` erbt sie unverändert, ebenso die Person- und Fall-Ausprägungen. Die Block-Semantik und ihre Testfixierung bleiben identisch; es gibt sie jetzt einmal statt einmal je Entität. Das M2-Paketformat serialisiert genau diese Dual-Semantik von `sort_order` — siehe [ADR-037](037-konfigurationspakete-dynamische-felder.md).
+
 ## Context
 
 M0 (#1056) führte eine **Zwei-Ebenen-Sortierung** ein: `FieldGroup.sort_order` ordnete die Gruppen eines Dokumentationstyps, `DocumentTypeField.sort_order` die Felder **innerhalb** ihrer Gruppe; ungruppierte Felder erschienen gesammelt in einem festen Abschnitt „Ohne Gruppe" **nach** allen Gruppen. Ein ungruppiertes Feld hatte damit keine Position relativ zu den Gruppen.
