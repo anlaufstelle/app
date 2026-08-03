@@ -437,7 +437,7 @@ class TestMobileDetailOverflowMenu:
         assert overflow_btn.is_visible(), "Overflow-Menü-Button sollte sichtbar sein"
 
     def test_client_detail_overflow_menu_has_actions(self, mobile_page, base_url):
-        """Klienteldetail: Overflow-Menü enthält Neue Aufgabe, Neuer Kontakt."""
+        """Klienteldetail: Overflow-Menü enthält Neue Aufgabe, Neuer Kontakt, Neuer Fall."""
         page = mobile_page
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
@@ -459,6 +459,9 @@ class TestMobileDetailOverflowMenu:
         menu.locator("a:has-text('Neue Aufgabe')").wait_for(state="visible", timeout=10000)
         assert menu.locator("a:has-text('Neue Aufgabe')").is_visible()
         assert menu.locator("a:has-text('Neuer Kontakt')").is_visible()
+        # Refs #1734: die Fall-Anlage war auf Mobil praktisch unauffindbar
+        # (Textlink unterhalb der kompletten Kontakt-Chronik).
+        assert menu.locator("[data-testid='mobile-client-new-case-btn']").is_visible()
 
 
 class TestMobileNoHorizontalScroll:

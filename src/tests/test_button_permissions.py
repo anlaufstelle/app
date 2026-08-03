@@ -242,6 +242,25 @@ class TestClientDetailButtonVisibility:
         client_edit_url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
         assert client_edit_url in content
 
+    def test_staff_sees_new_case_in_action_bar_and_mobile_menu(self, client, staff_user, client_identified):
+        """Refs #1734: „Neuer Fall" ist ein Einstieg wie „Neue Aufgabe" — Desktop-
+        Aktionsleiste UND mobiles Overflow-Menü, nicht nur der Fuß-Textlink."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
+        content = response.content.decode()
+        for testid in ("client-new-case-btn", "mobile-client-new-case-btn", "client-new-case-link"):
+            assert f'data-testid="{testid}"' in content, f"{testid} fehlt"
+        assert f"{reverse('core:case_create')}?client={client_identified.pk}" in content
+
+    def test_assistant_sees_no_new_case_entry_point(self, client, assistant_user, client_identified):
+        """Refs #1734/#1735: jede neue Fläche trägt denselben Rollen-Guard."""
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
+        content = response.content.decode()
+        for testid in ("client-new-case-btn", "mobile-client-new-case-btn", "client-new-case-link"):
+            assert f'data-testid="{testid}"' not in content, f"{testid} für Assistenz sichtbar"
+        assert reverse("core:case_create") not in content
+
 
 # ===========================================================================
 # 5. Event Edit -- No save when all fields restricted (Punkt 6)

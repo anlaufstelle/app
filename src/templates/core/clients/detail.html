@@ -65,6 +65,11 @@
                     <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     {% trans "Neue Aufgabe" %}
                 </a>
+                {# Refs #1734: Fall-Anlage war nur ein 12px-Textlink am Fuß der rechten Spalte — als Sekundär-Button neben „Neue Aufgabe" (gleicher Guard, gleiches Muster). #}
+                <a href="{% url 'core:case_create' %}?client={{ client.pk }}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="client-new-case-btn">
+                    <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    {% trans "Neuer Fall" %}
+                </a>
                 {% endif %}
                 <a href="{% url 'core:event_create' %}?client={{ client.pk }}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
                     <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -112,6 +117,11 @@
                     <a href="{% url 'core:workitem_create' %}?client={{ client.pk }}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
                         <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         {% trans "Neue Aufgabe" %}
+                    </a>
+                    {# Refs #1734: auf Mobil war die Fall-Anlage praktisch unauffindbar — der Textlink liegt unter der kompletten Kontakt-Chronik. #}
+                    <a href="{% url 'core:case_create' %}?client={{ client.pk }}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-client-new-case-btn">
+                        <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        {% trans "Neuer Fall" %}
                     </a>
                     {% endif %}
                     <a href="{% url 'core:event_create' %}?client={{ client.pk }}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
@@ -264,7 +274,7 @@
         {% endif %}
         {% if user.is_staff_or_above %}
         <div class="mt-2">
-            <a href="{% url 'core:case_create' %}?client={{ client.pk }}" class="inline-flex items-center text-[12px] text-accent hover:underline font-semibold">
+            <a href="{% url 'core:case_create' %}?client={{ client.pk }}" class="inline-flex items-center text-[12px] text-accent hover:underline font-semibold" data-testid="client-new-case-link">
                 <svg aria-hidden="true" class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                 {% trans "Neuer Fall" %}
             </a>

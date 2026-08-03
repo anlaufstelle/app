@@ -211,7 +211,25 @@ class TestClientDetailPermissions:
         expect(desktop_area.locator("a:has-text('Neue Aufgabe')")).not_to_be_visible()
 
         # "Neuer Fall" link below the cases section should NOT be visible (staff_or_above only)
-        expect(page.locator("a:has-text('Neuer Fall')")).not_to_be_visible()
+        expect(page.locator("a:has-text('Neuer Fall')")).to_have_count(0)
+
+        # Refs #1734: auch die beiden neuen Flächen (Aktionsleiste, Overflow-Menü)
+        # tragen denselben Guard — keine davon darf für die Assistenz existieren.
+        for testid in ("client-new-case-btn", "mobile-client-new-case-btn", "client-new-case-link"):
+            expect(page.locator(f"[data-testid='{testid}']")).to_have_count(0)
+
+    def test_staff_sees_new_case_button_in_action_bar(self, staff_page, base_url):
+        """Refs #1734: „Neuer Fall" steht als Sekundär-Button in der Desktop-
+        Aktionsleiste (neben „Neue Aufgabe"), nicht nur als Fuß-Textlink."""
+        page = staff_page
+        _navigate_to_first_client_detail(page, base_url)
+
+        button = page.locator(".hidden.md\\:flex [data-testid='client-new-case-btn']")
+        expect(button).to_be_visible()
+        button.click()
+        page.wait_for_url(re.compile(r"/cases/new/\?client=[0-9a-f-]+"))
+        # Person ist im Zielformular vorbelegt (``?client=<pk>``).
+        expect(page.locator("input[name='client']")).not_to_have_value("")
 
 
 # ---------------------------------------------------------------------------
