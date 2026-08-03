@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import ProtectedError
 from django.utils import timezone
 
-from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate
 
 
 @pytest.mark.django_db
@@ -195,3 +195,58 @@ class TestFieldTemplateDeleteProtection:
 
         # Sollte nicht werfen (kein direkter FieldTemplate-Delete).
         pre_delete.send(sender=FieldTemplate, instance=ft, origin=doc_type_contact, using="default")
+
+
+@pytest.mark.django_db
+class TestFieldTemplateDeleteProtectionClientCase:
+    """M2/Final-Review B (Refs #1058): Personen und Fälle tragen seit den
+    entitätsübergreifenden dynamischen Feldern dieselben (auch verschlüsselten)
+    Werte unter dem Slug wie Ereignisse. Der Löschschutz kannte nur
+    ``Event.data_json`` — Client-/Case-Werte wären verwaist zurückgeblieben."""
+
+    def test_delete_with_client_data_raises_protected_error(self, facility, staff_user):
+        ft = FieldTemplate.objects.create(facility=facility, name="Diagnose", field_type=FieldTemplate.FieldType.TEXT)
+        Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Schutz-P-01",
+            data_json={ft.slug: "wert"},
+            created_by=staff_user,
+        )
+
+        with pytest.raises(ProtectedError) as excinfo, transaction.atomic():
+            ft.delete()
+
+        assert ft.slug in str(excinfo.value.args[0])
+        assert FieldTemplate.objects.filter(pk=ft.pk).exists()
+
+    def test_delete_with_case_data_raises_protected_error(self, facility, staff_user, client_identified):
+        ft = FieldTemplate.objects.create(facility=facility, name="Verlauf", field_type=FieldTemplate.FieldType.TEXT)
+        Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Schutz-Fall",
+            status=Case.Status.OPEN,
+            data_json={ft.slug: "wert"},
+            created_by=staff_user,
+        )
+
+        with pytest.raises(ProtectedError) as excinfo, transaction.atomic():
+            ft.delete()
+
+        assert ft.slug in str(excinfo.value.args[0])
+        assert FieldTemplate.objects.filter(pk=ft.pk).exists()
+
+    def test_client_data_in_other_facility_does_not_block(self, facility, other_facility, staff_user):
+        ft = FieldTemplate.objects.create(facility=facility, name="Nur hier", field_type=FieldTemplate.FieldType.TEXT)
+        Client.objects.create(
+            facility=other_facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Fremd-P-01",
+            data_json={ft.slug: "wert"},
+            created_by=staff_user,
+        )
+
+        ft.delete()
+
+        assert not FieldTemplate.objects.filter(pk=ft.pk).exists()

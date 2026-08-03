@@ -24,6 +24,7 @@ Abgedeckt:
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from cryptography.fernet import Fernet
@@ -193,6 +194,20 @@ def doc_type_client_file_condition(facility):
         group_index=0,
     )
     return doc_type
+
+
+def _selected_option(html: str, field_name: str) -> str:
+    """Wert der im ``<select name=field_name>`` vorausgewaehlten Option.
+
+    Simuliert, was ein Browser aus dem re-gerenderten Formular posten wuerde:
+    ohne vorausgewaehlte Option (weil sie aus den Choices gefallen ist) sendet
+    er die leere Auswahl.
+    """
+    block = re.search(rf'<select[^>]*name="{re.escape(field_name)}"(.*?)</select>', html, re.S)
+    if block is None:
+        return ""
+    selected = re.search(r'<option value="([^"]*)"[^>]*\bselected\b', block.group(1))
+    return selected.group(1) if selected else ""
 
 
 def _client_post_data(pseudonym, **extra):
@@ -1134,3 +1149,91 @@ class TestClientExportDynamicData:
         assert "WG" in html
         assert "Diagnose" in html
         assert "PDF-Klartext" in html
+
+
+@pytest.mark.django_db
+class TestRerenderKeepsInactiveSelectOption:
+    """Final-Review C (Refs #1058): Der Re-Render nach einem ungueltigen
+    ``ClientForm`` baute das Dynamik-Formular ohne ``initial_data`` — eine
+    deaktivierte SELECT-Option, die der Datensatz weiterhin traegt, fiel damit
+    aus den Choices. Folge: Scheinfehler „Waehlen Sie eine gueltige Option" an
+    einem unberuehrten Feld und, nach Korrektur des eigentlichen Fehlers,
+    stiller Verlust des Bestandswerts (``merge_dynamic_data`` baut das Ergebnis
+    komplett aus ``cleaned_data``)."""
+
+    @staticmethod
+    def _deactivate_option(doc_type, slug="wohnungslos"):
+        ft = FieldTemplate.objects.get(facility=doc_type.facility, name="Wohnform")
+        ft.options_json = [{**option, "is_active": option["slug"] != slug} for option in ft.options_json]
+        ft.save(update_fields=["options_json"])
+        return ft
+
+    def test_rerender_keeps_deactivated_option_and_no_phantom_error(
+        self, client, staff_user, facility, client_identified, doc_type_client_select
+    ):
+        ft = self._deactivate_option(doc_type_client_select)
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Option-01",
+            created_by=staff_user,
+            document_type=doc_type_client_select,
+            data_json={ft.slug: "wohnungslos"},
+        )
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                client_identified.pseudonym,  # Pseudonym-Kollision -> ungueltig
+                document_type=str(doc_type_client_select.pk),
+                **{ft.slug: "wohnungslos"},
+            ),
+        )
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'value="wohnungslos"' in content, "Deaktivierte Bestands-Option fehlt im Re-Render-Select"
+        assert "gültige Option" not in content and "gueltige Option" not in content
+
+    def test_repeated_submit_after_rerender_keeps_value(
+        self, client, staff_user, facility, client_identified, doc_type_client_select
+    ):
+        """Zweiter Submit (nur das Pseudonym korrigiert) darf den Bestandswert
+        nicht stillschweigend leeren.
+
+        Der zweite POST postet exakt das, was ein Browser aus dem re-gerenderten
+        Formular schicken wuerde (= die im Select vorausgewaehlte Option) — ohne
+        die Option im Select ist das die leere Auswahl, und
+        ``merge_dynamic_data`` schreibt den Bestandswert auf ``""``."""
+        ft = self._deactivate_option(doc_type_client_select)
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Option-02",
+            created_by=staff_user,
+            document_type=doc_type_client_select,
+            data_json={ft.slug: "wohnungslos"},
+        )
+        client.force_login(staff_user)
+
+        rerender = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                client_identified.pseudonym,
+                document_type=str(doc_type_client_select.pk),
+                **{ft.slug: "wohnungslos"},
+            ),
+        )
+        resubmitted = _selected_option(rerender.content.decode(), ft.slug)
+
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                "P7-Option-02b",
+                document_type=str(doc_type_client_select.pk),
+                **{ft.slug: resubmitted},
+            ),
+        )
+
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.data_json[ft.slug] == "wohnungslos"

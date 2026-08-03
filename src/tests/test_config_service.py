@@ -20,10 +20,13 @@ from django.utils import timezone
 
 from core.models import (
     AuditLog,
+    Case,
+    Client,
     DocumentType,
     DocumentTypeField,
     Event,
     EventAttachment,
+    Facility,
     FieldGroup,
     FieldTemplate,
 )
@@ -62,6 +65,29 @@ def _make_event(facility, client, doc_type, staff_user, data_json=None):
         document_type=doc_type,
         occurred_at=timezone.now(),
         data_json=data_json or {},
+        created_by=staff_user,
+    )
+
+
+def _make_client_with_data(facility, staff_user, data_json):
+    """Person mit ``data_json``-Spur, aber ohne ``document_type`` — isoliert den
+    Datenspur-Blocker von der Zuordnungs-Prüfung (Muster ``_make_event``)."""
+    return Client.objects.create(
+        facility=facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym=f"Blocker-{uuid4().hex[:8]}",
+        data_json=data_json,
+        created_by=staff_user,
+    )
+
+
+def _make_case_with_data(facility, client, staff_user, data_json):
+    return Case.objects.create(
+        facility=facility,
+        client=client,
+        title="Blocker-Fall",
+        status=Case.Status.OPEN,
+        data_json=data_json,
         created_by=staff_user,
     )
 
@@ -200,6 +226,49 @@ class TestDeleteFieldTemplate:
         delete_field_template(req, ft)
         assert not FieldTemplate.objects.filter(pk=pk).exists()
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=pk).exists()
+
+    def test_blocked_by_client_data(self, req, facility, staff_user):
+        """Final-Review B (Refs #1058): seit P4b tragen auch Personen Werte unter
+        dem Slug — der Blocker kannte nur ``Event.data_json``, die (auch
+        verschlüsselten) Personenwerte wären verwaist zurückgeblieben."""
+        ft = FieldTemplate.objects.create(facility=facility, name="Feld Person", field_type="text")
+        _make_client_with_data(facility, staff_user, {ft.slug: "wert"})
+        with pytest.raises(ConfigDeleteBlocked) as exc:
+            delete_field_template(req, ft)
+        assert len(exc.value.reasons) == 1
+        assert "Person" in exc.value.reasons[0]
+        assert FieldTemplate.objects.filter(pk=ft.pk).exists()
+
+    def test_blocked_by_case_data(self, req, facility, client_identified, staff_user):
+        ft = FieldTemplate.objects.create(facility=facility, name="Feld Fall", field_type="text")
+        _make_case_with_data(facility, client_identified, staff_user, {ft.slug: "wert"})
+        with pytest.raises(ConfigDeleteBlocked) as exc:
+            delete_field_template(req, ft)
+        assert len(exc.value.reasons) == 1
+        assert "Fall" in exc.value.reasons[0] or "Fälle" in exc.value.reasons[0]
+        assert FieldTemplate.objects.filter(pk=ft.pk).exists()
+
+    def test_blocked_by_event_client_and_case_data_combined(
+        self, req, facility, client_identified, doc_type_contact, staff_user
+    ):
+        """Alle drei Datenspuren werden gemeinsam gemeldet (Muster
+        ``test_blocked_by_all_three_reasons_combined``), nicht nur die erste."""
+        ft = FieldTemplate.objects.create(facility=facility, name="Feld Ueberall", field_type="text")
+        _make_event(facility, client_identified, doc_type_contact, staff_user, data_json={ft.slug: "wert"})
+        _make_client_with_data(facility, staff_user, {ft.slug: "wert"})
+        _make_case_with_data(facility, client_identified, staff_user, {ft.slug: "wert"})
+        with pytest.raises(ConfigDeleteBlocked) as exc:
+            delete_field_template(req, ft)
+        assert len(exc.value.reasons) == 3
+
+    def test_client_data_in_other_facility_does_not_block(self, req, facility, organization, staff_user):
+        """Der Blocker ist facility-scoped (wie die Event-Zählung)."""
+        other = Facility.objects.create(organization=organization, name="Fremde Stelle")
+        ft = FieldTemplate.objects.create(facility=facility, name="Feld Fremd", field_type="text")
+        _make_client_with_data(other, staff_user, {ft.slug: "wert"})
+        pk = str(ft.pk)
+        delete_field_template(req, ft)
+        assert not FieldTemplate.objects.filter(pk=pk).exists()
 
 
 # ---------------------------------------------------------------------------

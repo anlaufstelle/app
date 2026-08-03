@@ -76,7 +76,7 @@ def _case_data_form(request, document_type, *, data=None, initial_data=None):
     return data_form, remove_restricted_fields(request.user, document_type, data_form)
 
 
-def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None):
+def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial_data=None):
     """Dynamik-Formular fuer den POST-Re-Render eines ungueltigen Formulars.
 
     Refs #774 (Spiegel aus ``EventCreateView.post``/``ClientCreateView.post``):
@@ -92,6 +92,14 @@ def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None):
     dessen Eingaben nicht verschluckt, ist genau diese eine PK von der
     ``is_active``-Bedingung ausgenommen — Sensitivity-, Facility- und
     ``entity_type``-Grenze bleiben unveraendert hart.
+
+    ``initial_data`` (Final-Review C, Refs #1058): der Bestand des bearbeiteten
+    Falls (entschluesselt). Nur damit haelt ``_select_choices`` eine
+    DEAKTIVIERTE Option in den Choices, die der Datensatz noch traegt (#1160).
+    Ohne sie erzeugte der Re-Render einen Scheinfehler „Waehlen Sie eine
+    gueltige Option" an einem unberuehrten Feld — und der naechste Submit
+    leerte den Bestandswert still. Beim Anlegen gibt es keinen Bestand
+    (``None``).
     """
     data_form = DynamicCaseDataForm()
     if not doc_type_id:
@@ -110,7 +118,7 @@ def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None):
         return data_form
     if not user_can_see_document_type(request.user, doc_type):
         return data_form
-    data_form, _restricted = _case_data_form(request, doc_type, data=request.POST)
+    data_form, _restricted = _case_data_form(request, doc_type, data=request.POST, initial_data=initial_data)
     return data_form
 
 
@@ -360,6 +368,9 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     request,
                     request.POST.get("document_type"),
                     allow_inactive_pk=old_doc_type_id,
+                    # Wie im Valid-Pfad (und im Event-Pfad): bestehende, auch
+                    # deaktivierte SELECT-Werte bleiben waehlbar (Refs #1058).
+                    initial_data=decrypt_dynamic_text_data(old_data),
                 )
             )
             context = {

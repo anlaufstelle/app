@@ -31,6 +31,7 @@ Abgedeckt:
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from cryptography.fernet import Fernet
@@ -201,6 +202,20 @@ def doc_type_case_file_condition(facility):
         group_index=0,
     )
     return doc_type
+
+
+def _selected_option(html: str, field_name: str) -> str:
+    """Wert der im ``<select name=field_name>`` vorausgewaehlten Option.
+
+    Simuliert, was ein Browser aus dem re-gerenderten Formular posten wuerde:
+    ohne vorausgewaehlte Option (weil sie aus den Choices gefallen ist) sendet
+    er die leere Auswahl.
+    """
+    block = re.search(rf'<select[^>]*name="{re.escape(field_name)}"(.*?)</select>', html, re.S)
+    if block is None:
+        return ""
+    selected = re.search(r'<option value="([^"]*)"[^>]*\bselected\b', block.group(1))
+    return selected.group(1) if selected else ""
 
 
 def _case_post_data(title, client_obj, **extra):
@@ -1300,3 +1315,85 @@ class TestCaseExportDynamicData:
         assert "Mietschulden" in html
         assert "Verlauf" in html
         assert "PDF-Klartext" in html
+
+
+@pytest.mark.django_db
+class TestCaseRerenderKeepsInactiveSelectOption:
+    """Final-Review C (Refs #1058) — Spiegel zu
+    ``TestRerenderKeepsInactiveSelectOption`` (Personen): der Re-Render nach
+    einem ungueltigen ``CaseForm`` verlor die deaktivierte Bestands-Option."""
+
+    @staticmethod
+    def _deactivate_option(doc_type, slug="ambulant"):
+        ft = FieldTemplate.objects.get(facility=doc_type.facility, name="Hilfeform")
+        ft.options_json = [{**option, "is_active": option["slug"] != slug} for option in ft.options_json]
+        ft.save(update_fields=["options_json"])
+        return ft
+
+    def test_rerender_keeps_deactivated_option_and_no_phantom_error(
+        self, client, staff_user, facility, client_identified, doc_type_case_select
+    ):
+        ft = self._deactivate_option(doc_type_case_select)
+        target = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="P8-Option-01",
+            created_by=staff_user,
+            document_type=doc_type_case_select,
+            data_json={ft.slug: "ambulant"},
+        )
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:case_update", args=[target.pk]),
+            _case_post_data(
+                "",  # leerer Titel -> ungueltig
+                client_identified,
+                document_type=str(doc_type_case_select.pk),
+                **{ft.slug: "ambulant"},
+            ),
+        )
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'value="ambulant"' in content, "Deaktivierte Bestands-Option fehlt im Re-Render-Select"
+        assert "gültige Option" not in content and "gueltige Option" not in content
+
+    def test_repeated_submit_after_rerender_keeps_value(
+        self, client, staff_user, facility, client_identified, doc_type_case_select
+    ):
+        ft = self._deactivate_option(doc_type_case_select)
+        target = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="P8-Option-02",
+            created_by=staff_user,
+            document_type=doc_type_case_select,
+            data_json={ft.slug: "ambulant"},
+        )
+        client.force_login(staff_user)
+
+        rerender = client.post(
+            reverse("core:case_update", args=[target.pk]),
+            _case_post_data(
+                "",
+                client_identified,
+                document_type=str(doc_type_case_select.pk),
+                **{ft.slug: "ambulant"},
+            ),
+        )
+        resubmitted = _selected_option(rerender.content.decode(), ft.slug)
+
+        response = client.post(
+            reverse("core:case_update", args=[target.pk]),
+            _case_post_data(
+                "P8-Option-02b",
+                client_identified,
+                document_type=str(doc_type_case_select.pk),
+                **{ft.slug: resubmitted},
+            ),
+        )
+
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.data_json[ft.slug] == "ambulant"

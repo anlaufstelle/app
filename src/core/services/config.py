@@ -181,8 +181,11 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
     a) **DocumentTypeField-Zuordnungen** (``CASCADE``) — würden beim Delete
        still mitgelöscht, daher **vor** dem Delete prüfen.
     b) **EventAttachment-Referenzen** (``PROTECT``).
-    c) **Event-Daten** unter dem Slug — das ``pre_delete``-Signal (#356) würfe
-       sonst eine ``ProtectedError``.
+    c) **Daten unter dem Slug** in ``Event``, ``Client`` **und** ``Case`` — das
+       ``pre_delete``-Signal (#356) würfe sonst eine ``ProtectedError``.
+       Personen/Fälle tragen seit M2 (Refs #1058) dieselben — auch
+       verschlüsselten — Werte unter demselben Slug; ohne diese Prüfung würden
+       Art.-9-nahe Restdaten verwaisen (Final-Review B).
     """
     reasons: list[str] = []
 
@@ -206,6 +209,34 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
             reasons.append(
                 _("%(n)d Ereignis(se) enthalten Daten unter dem Slug „%(slug)s“.")
                 % {"n": data_event_count, "slug": field_template.slug}
+            )
+
+        data_client_count = Client.objects.filter(
+            facility_id=field_template.facility_id,
+            data_json__has_key=field_template.slug,
+        ).count()
+        if data_client_count:
+            reasons.append(
+                ngettext(
+                    "%(n)d Person enthält Daten unter dem Slug „%(slug)s“.",
+                    "%(n)d Personen enthalten Daten unter dem Slug „%(slug)s“.",
+                    data_client_count,
+                )
+                % {"n": data_client_count, "slug": field_template.slug}
+            )
+
+        data_case_count = Case.objects.filter(
+            facility_id=field_template.facility_id,
+            data_json__has_key=field_template.slug,
+        ).count()
+        if data_case_count:
+            reasons.append(
+                ngettext(
+                    "%(n)d Fall enthält Daten unter dem Slug „%(slug)s“.",
+                    "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“.",
+                    data_case_count,
+                )
+                % {"n": data_case_count, "slug": field_template.slug}
             )
 
     return reasons
