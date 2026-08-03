@@ -38,6 +38,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
 
+from core.utils.migration_guards import connection_bypasses_rls
+
 
 @dataclass(frozen=True)
 class RoleCheck:
@@ -97,13 +99,13 @@ def current_connection_bypasses_rls() -> bool:
 
     "Umgeht RLS" = Superuser ODER ``rolbypassrls`` — ein Superuser umgeht RLS
     per Definition, auch wenn das ``rolbypassrls``-Attribut im Katalog false ist.
+
+    Die eigentliche Abfrage liegt seit Refs #1746 in
+    :func:`core.utils.migration_guards.connection_bypasses_rls` — dieselbe Quelle
+    nutzt der In-Migration-Guard ``assert_migration_role_bypasses_rls``, damit
+    Deploy-Gate und Migrations-Guard nicht auseinanderlaufen.
     """
-    with connection.cursor() as cur:
-        cur.execute("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
-        row = cur.fetchone()
-    if not row:
-        return False
-    return bool(row[0]) or bool(row[1])
+    return connection_bypasses_rls(connection)
 
 
 # A1.4 (Refs #1026): Append-Only-Tabellen, deren Ownership NICHT bei der

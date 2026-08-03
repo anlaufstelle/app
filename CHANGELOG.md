@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Verwaiste sensible Feldwerte in Offline-Bundle und Konflikt-Ansicht abgeschirmt** (#1725) — Ein einst als „erhöht"/„hoch" eingestufter, nun verwaister dynamischer Feldwert (Slug mit Daten in `data_json`, aber nicht mehr am Dokumentationstyp zugeordnet) fiel im Offline-Bundle und im 409-Konflikt-Vergleich bislang auf die Sensibilität NORMAL zurück und wurde damit entschlüsselt an unterberechtigte Rollen ausgeliefert; beide Flächen lösen Sensibilität und Verschlüsselung solcher Werte jetzt — wie die Detailansicht seit #1725 — facility-weit über die Feldvorlage auf und gaten ein fehlendes Template konservativ als „hoch".
+- **Datenmigrationen brechen fail-loud ab, wenn ihre DB-Rolle RLS nicht umgeht** (#1746) — Ein neuer Guard `assert_migration_role_bypasses_rls(schema_editor)` verhindert, dass ein `RunPython`-Backfill auf einer RLS-Tabelle unter der NOBYPASSRLS-App-Rolle **still 0 Zeilen** trifft und die Migration trotzdem als erfolgreich gilt; er ergänzt das nur im Container-Deploy greifende Vorab-Gate aus `docker-migrate.sh` (#1375) um eine Prüfung **in** der Migration und schützt damit auch manuelles `manage.py migrate`, Restore-Drills und Self-Hosting-Setups ohne das Skript. Bestandsmigrationen bleiben unverändert (Inventur der betroffenen Läufe im Modul-Docstring), die Konvention steht in `CONTRIBUTING.md` § Facility-Scoping & Row Level Security.
 
 ## [0.23.0] - 2026-08-01
 
