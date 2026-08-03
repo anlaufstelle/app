@@ -10,6 +10,7 @@ import uuid
 
 from django.utils.translation import gettext_lazy as _
 
+from core.models import DocumentType
 from core.services.compliance import user_can_see_field
 from core.services.events.fields import (
     _is_file_marker,
@@ -164,6 +165,11 @@ def resolve_default_document_type(facility):
         return None, initial
     default_doc_type = settings.default_document_type
     if not default_doc_type.is_active or default_doc_type.facility != facility:
+        return None, initial
+    # M2 (Refs #1058, Entscheid E21): ein auf einen client-/case-Typ zeigender
+    # Default macht die Facility-Konfiguration wirkungslos statt ihn in den
+    # Event-Pfad durchzureichen — Fallback-Verhalten wie ohne Default.
+    if default_doc_type.entity_type != DocumentType.EntityType.EVENT:
         return None, initial
     initial["document_type"] = default_doc_type.pk
     return default_doc_type, initial

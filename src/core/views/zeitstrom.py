@@ -73,6 +73,9 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             DocumentType.objects.for_facility(facility)
             .filter(
                 is_active=True,
+                # M2 (Refs #1058): nur event-Typen — client-/case-Typen gehoeren
+                # nicht in den Event-Filter-Dropdown (Entscheid E21).
+                entity_type=DocumentType.EntityType.EVENT,
                 sensitivity__in=allowed_sensitivities_for_user(self.request.user),
             )
             .order_by("name")

@@ -51,6 +51,9 @@ def tally_document_types(facility, user):
         .filter(
             Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
             is_active=True,
+            # M2 (Refs #1058): die Strichliste legt Events an — nur event-Typen
+            # gehoeren ins Panel (Entscheid E21, Muster EventMetaForm).
+            entity_type=DocumentType.EntityType.EVENT,
             sensitivity__in=allowed_sensitivities_for_user(user),
         )
         .order_by("name")

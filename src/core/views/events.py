@@ -140,7 +140,12 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         doc_type_param = request.GET.get("document_type")
         if doc_type_param and applied_template is None:
             try:
-                prefill_doc_type = DocumentType.objects.get(pk=doc_type_param, facility=facility, is_active=True)
+                prefill_doc_type = DocumentType.objects.get(
+                    pk=doc_type_param,
+                    facility=facility,
+                    is_active=True,
+                    entity_type=DocumentType.EntityType.EVENT,
+                )
             except (DocumentType.DoesNotExist, ValidationError, ValueError):
                 raise Http404(_("Dokumentationstyp nicht gefunden.")) from None
             if user_can_see_document_type(request.user, prefill_doc_type):
@@ -262,7 +267,12 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             data_form = DynamicEventDataForm()
             if doc_type_id:
                 try:
-                    doc_type = DocumentType.objects.get(pk=doc_type_id, facility=facility, is_active=True)
+                    doc_type = DocumentType.objects.get(
+                        pk=doc_type_id,
+                        facility=facility,
+                        is_active=True,
+                        entity_type=DocumentType.EntityType.EVENT,
+                    )
                 except (DocumentType.DoesNotExist, ValueError):
                     doc_type = None
                 if doc_type is not None and user_can_see_document_type(request.user, doc_type):
@@ -441,6 +451,7 @@ class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
             request,
             pk=doc_type_id,
             is_active=True,
+            entity_type=DocumentType.EntityType.EVENT,
         )
         if not user_can_see_document_type(request.user, doc_type):
             raise PermissionDenied
@@ -464,8 +475,16 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         facility = request.current_facility
 
         # Facility-Scope: unbekannter/fremder Typ → 404 (verrät keine Existenz
-        # in anderer Einrichtung).
-        doc_type = get_scoped_object(DocumentType, request, pk=request.POST.get("document_type"), is_active=True)
+        # in anderer Einrichtung). M2 (Refs #1058): entity_type=event zusaetzlich
+        # — die Strichliste legt Events an, ein client-/case-Typ darf hier
+        # nicht per manipuliertem POST unterschoben werden.
+        doc_type = get_scoped_object(
+            DocumentType,
+            request,
+            pk=request.POST.get("document_type"),
+            is_active=True,
+            entity_type=DocumentType.EntityType.EVENT,
+        )
 
         # Sensitivity-Guard (Muster EventFieldsPartialView): ein Assistant darf
         # per manipuliertem POST keinen HIGH-/ELEVATED-Typ erfassen, den seine

@@ -105,8 +105,12 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
                 }
             )
 
-        # Document types for filter dropdown
-        doc_types = DocumentType.objects.for_facility(facility).filter(is_active=True)
+        # Document types for filter dropdown. M2 (Refs #1058): nur event-Typen
+        # — Attachments haengen immer an einem Event, client-/case-Typen
+        # gehoeren nicht in den Filter (Entscheid E21).
+        doc_types = DocumentType.objects.for_facility(facility).filter(
+            is_active=True, entity_type=DocumentType.EntityType.EVENT
+        )
 
         context = {
             "attachments": visible,

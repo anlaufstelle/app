@@ -62,7 +62,11 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             "can_export": True,
             "selected_year": period_state.selected_year,
             "current_year": today.year,
-            "document_types": DocumentType.objects.filter(facility=facility).order_by("name"),
+            # M2 (Refs #1058): nur event-Typen — Statistiken werten Events aus,
+            # client-/case-Typen gehoeren nicht in den Filter (Entscheid E21).
+            "document_types": DocumentType.objects.filter(
+                facility=facility, entity_type=DocumentType.EntityType.EVENT
+            ).order_by("name"),
             # #533: unique_clients is summed across monthly snapshots, so it
             # double-counts clients seen in multiple months. Surface that fact
             # to the template so it can render a "ca." prefix + tooltip.

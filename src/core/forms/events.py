@@ -81,7 +81,11 @@ class EventMetaForm(forms.Form):
         self._facility = facility
         self._user = user
         if facility:
-            qs = DocumentType.objects.for_facility(facility).filter(is_active=True)
+            # M2 (Refs #1058): nur event-Typen anbieten — client-/case-Typen
+            # gehoeren nicht in den Event-Pfad (Entscheid E21).
+            qs = DocumentType.objects.for_facility(facility).filter(
+                is_active=True, entity_type=DocumentType.EntityType.EVENT
+            )
             if user is not None:
                 from core.services.compliance import allowed_sensitivities_for_user
 
