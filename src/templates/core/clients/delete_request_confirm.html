@@ -10,6 +10,17 @@
         {% blocktrans with pseudonym=client.pseudonym %}Vier-Augen-Prinzip — Ihr Antrag geht zur Genehmigung an die Leitung. Nach Genehmigung wird <strong>{{ pseudonym }}</strong> in den Papierkorb verschoben und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert.{% endblocktrans %}
     </p>
 
+    {# Refs #1736 (A): laufender Antrag → kein zweites, wirkungsloses Formular. #}
+    {% if pending_deletion_request %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="status" data-testid="delete-request-already-pending">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}Für diese Person läuft bereits ein Löschantrag vom {{ datum }} (gestellt von {{ person }}). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    <a href="{% url 'core:client_detail' pk=client.pk %}" class="inline-flex items-center px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+        {% trans "Zurück zur Person" %}
+    </a>
+    {% else %}
     <form method="post" class="space-y-4">
         {% csrf_token %}
         <div>
@@ -34,5 +45,6 @@
             </a>
         </div>
     </form>
+    {% endif %}
 </div>
 {% endblock %}

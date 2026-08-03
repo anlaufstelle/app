@@ -19,7 +19,11 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client
-from core.services.client import request_client_deletion, restore_client
+from core.services.client import (
+    get_pending_deletion_request,
+    request_client_deletion,
+    restore_client,
+)
 from core.services.scoping import get_scoped_object
 from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
 
@@ -38,11 +42,31 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         return render(
             request,
             "core/clients/delete_request_confirm.html",
-            {"client": client},
+            {
+                "client": client,
+                # Refs #1736 (A): laeuft schon ein Antrag, gibt es hier nichts
+                # mehr zu beantragen — statt eines wirkungslosen Formulars
+                # zeigt die Seite den Wartezustand.
+                "pending_deletion_request": get_pending_deletion_request(client),
+            },
         )
 
     def post(self, request, pk):
         client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        # Refs #1736 (A): der Service ist idempotent — ein zweiter Antrag legt
+        # nichts an und verwirft die neu eingegebene Begruendung. Vorher
+        # meldete die View trotzdem Erfolg (stiller Fake-Erfolg); jetzt sagt
+        # sie, was tatsaechlich gilt.
+        pending = get_pending_deletion_request(client)
+        if pending is not None:
+            messages.info(
+                request,
+                _(
+                    "Für diese Person läuft bereits ein Löschantrag — er wartet auf Bestätigung. "
+                    "Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
+                ),
+            )
+            return redirect("core:client_detail", pk=pk)
         reason = (request.POST.get("reason") or "").strip()
         if not reason:
             messages.error(request, _("Bitte eine Begruendung angeben."))
@@ -50,7 +74,10 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         request_client_deletion(client, request.user, reason)
         messages.success(
             request,
-            _("Löschantrag gestellt — Leitung wird benachrichtigt."),
+            _(
+                "Löschantrag gestellt. Er erscheint in der Löschanträge-Liste und muss von einer "
+                "zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden."
+            ),
         )
         return redirect("core:client_detail", pk=pk)
 

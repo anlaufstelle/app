@@ -22,6 +22,8 @@ from core.services.client import (
     create_client,
     export_client_data,
     export_client_data_pdf,
+    get_pending_deletion_request,
+    pending_deletion_client_ids,
     track_client_visit,
     update_client,
 )
@@ -167,6 +169,9 @@ class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, 
 
         context = {
             "clients": clients,
+            # Refs #1736 (A): Badge „Löschung beantragt" in der Liste — eine
+            # Query fuer die gerade sichtbare Seite, nicht je Zeile.
+            "pending_deletion_client_ids": pending_deletion_client_ids(facility, clients),
             "q": self.get_search_term(request),
             "selected_stage": request.GET.get("stage"),
             "selected_age": request.GET.get("age"),
@@ -237,6 +242,10 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
             "active_bans": active_bans,
             "open_cases": open_cases,
             "hide_qualified_details": not request.user.is_staff_or_above,
+            # Refs #1736 (A): ein laufender Vier-Augen-Löschantrag war am
+            # Datensatz bisher unsichtbar — Banner, Badge und die
+            # umbeschriftete Aktion haengen an diesem einen Objekt.
+            "pending_deletion_request": get_pending_deletion_request(client),
         }
         # M2 P7 (Refs #1058, E18): Sektion „Zusatzfelder". Die Aufbereitung
         # (entschluesseln, Labels, ``[Eingeschraenkt]``, Sensitivity-Gate auf

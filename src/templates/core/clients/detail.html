@@ -32,6 +32,11 @@
                 {% if active_bans %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-ban text-white">{% trans "Hausverbot" %}</span>
                 {% endif %}
+                {# Refs #1736 (A): laufender Vier-Augen-Löschantrag am Datensatz. #}
+                {% if pending_deletion_request %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                      data-testid="client-deletion-pending-badge">{% trans "Löschung beantragt" %}</span>
+                {% endif %}
                 <span x-show="isOffline" x-cloak
                       class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-800"
                       data-testid="offline-available-badge">
@@ -69,9 +74,7 @@
                 <a href="{% url 'core:client_update' client.pk %}" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
                     {% trans "Bearbeiten" %}
                 </a>
-                <a href="{% url 'core:client_delete_request' client.pk %}" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="client-delete-request-btn">
-                    {% trans "Löschen beantragen" %}
-                </a>
+                {% include "core/clients/partials/delete_request_action.html" with action_class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" %}
                 {% endif %}
                 {% if user.is_lead_or_admin %}
                 <div x-data="simpleDropdown" class="relative">
@@ -126,9 +129,7 @@
                     </button>
                     {% if user.is_staff_or_above %}
                     <div class="border-t border-subtle my-1"></div>
-                    <a href="{% url 'core:client_delete_request' client.pk %}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
-                        {% trans "Löschen beantragen" %}
-                    </a>
+                    {% include "core/clients/partials/delete_request_action.html" with action_class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas" %}
                     {% endif %}
                     {% if user.is_lead_or_admin %}
                     <div class="border-t border-subtle my-1"></div>
@@ -169,6 +170,20 @@
         {% if ban.bis_datum %}<span class="ml-auto text-[12px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
     </div>
     {% endfor %}
+</div>
+{% endif %}
+
+{# Löschantrag-Banner (Refs #1736, A): der Wartezustand war bisher nur in der #}
+{# entscheidenden Rolle sichtbar, nie am betroffenen Datensatz. #}
+{% if pending_deletion_request %}
+<div class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-[10px] text-[13px] text-amber-800"
+     role="status"
+     data-testid="client-deletion-pending-banner">
+    <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <span class="font-semibold">{% trans "Löschung beantragt" %}</span>
+    <span>
+        {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}am {{ datum }} durch {{ person }} — wartet auf Bestätigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip).{% endblocktrans %}
+    </span>
 </div>
 {% endif %}
 

@@ -524,6 +524,44 @@ def track_client_visit(user, client, facility):
 # --- Vier-Augen-Lösch-Workflow für Personen (Refs #626) ---
 
 
+def get_pending_deletion_request(client):
+    """Der laufende (PENDING) Löschantrag einer Person — sonst ``None``.
+
+    Refs #1736 (A): eine Quelle für alle Anzeigeflächen (Detail-Banner/-Badge,
+    Antragsseite, Idempotenz-Zweig der Antrags-View). ``requested_by`` wird
+    mitgeladen, weil jede dieser Flächen die antragstellende Person nennt.
+    """
+    return (
+        DeletionRequest.objects.filter(
+            facility_id=client.facility_id,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=client.pk,
+            status=DeletionRequest.Status.PENDING,
+        )
+        .select_related("requested_by")
+        .first()
+    )
+
+
+def pending_deletion_client_ids(facility, clients) -> set:
+    """PKs derjenigen ``clients``, für die ein PENDING-Löschantrag läuft.
+
+    Refs #1736 (A): Badge in der Personenliste. Bewusst nur für die bereits
+    paginierte Seite — eine Query je Seite statt einer je Zeile.
+    """
+    ids = [c.pk for c in clients]
+    if not ids:
+        return set()
+    return set(
+        DeletionRequest.objects.filter(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id__in=ids,
+            status=DeletionRequest.Status.PENDING,
+        ).values_list("target_id", flat=True)
+    )
+
+
 def request_client_deletion(client, user, reason):
     """Stellt einen Vier-Augen-Löschantrag für eine Person.
 
@@ -536,12 +574,7 @@ def request_client_deletion(client, user, reason):
     Aufruf: Fachkraft+ aus dem UI. Genehmigung erfolgt durch Leitung
     via :func:`approve_client_deletion`.
     """
-    existing = DeletionRequest.objects.filter(
-        facility=client.facility,
-        target_type=DeletionRequest.TargetType.CLIENT,
-        target_id=client.pk,
-        status=DeletionRequest.Status.PENDING,
-    ).first()
+    existing = get_pending_deletion_request(client)
     if existing is not None:
         return existing
     dr = DeletionRequest.objects.create(

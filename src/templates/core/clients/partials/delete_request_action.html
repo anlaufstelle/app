@@ -1,0 +1,24 @@
+{% load i18n %}
+{% comment %}
+    Aktion „Löschen beantragen" am Personen-Detail (Refs #1736, A).
+
+    Laeuft bereits ein Vier-Augen-Antrag, ist ein zweiter Antrag
+    wirkungslos (der Service ist idempotent) — die Aktion wird deshalb
+    nicht mehr als Link angeboten, sondern als deaktivierter Zustand
+    ausgewiesen. Parameter: ``client``, ``pending_deletion_request``,
+    ``action_class`` (Layout-Klassen der jeweiligen Leiste).
+{% endcomment %}
+{% if pending_deletion_request %}
+<span class="{{ action_class }} opacity-60 cursor-not-allowed"
+      aria-disabled="true"
+      title="{% trans 'Ein Löschantrag wartet bereits auf Bestätigung.' %}"
+      data-testid="client-delete-request-pending">
+    {% trans "Löschantrag läuft" %}
+</span>
+{% else %}
+<a href="{% url 'core:client_delete_request' client.pk %}"
+   class="{{ action_class }}"
+   data-testid="client-delete-request-btn">
+    {% trans "Löschen beantragen" %}
+</a>
+{% endif %}
