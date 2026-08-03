@@ -3,7 +3,8 @@
 import os
 
 import pytest
-from django.utils import timezone
+from django.conf import settings as django_settings
+from django.utils import timezone, translation
 
 # E2E-Tests nur collecten wenn playwright + requests installiert sind
 try:
@@ -34,6 +35,21 @@ from core.models import (
     User,
     WorkItem,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_active_language():
+    """Deterministische Startsprache je Test (Refs #1058, P14).
+
+    Sobald deutsche UI-Strings EN-Übersetzungen tragen (z. B. "Ja" → "Yes"),
+    macht eine von Nachbartests geleakte aktive Sprache (``translation.activate``
+    ohne Rückbau, LocaleMiddleware-Threadlocal) locale-sensitive Assertions
+    ordnungsabhängig flaky — unter xdist zuerst als ``"Yes" != "Ja"`` in
+    Direktaufruf-Tests sichtbar. Jeder Test startet mit der Default-Sprache;
+    Sprachtests aktivieren selbst, was sie brauchen.
+    """
+    translation.activate(django_settings.LANGUAGE_CODE)
+    yield
 
 
 def xdist_role_suffix() -> str:
