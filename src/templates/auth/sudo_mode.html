@@ -46,7 +46,10 @@
     </form>
 
     <p class="mt-4 text-xs text-ink-muted text-center">
-        {% trans "Brechen Sie ab und kehren Sie zurück:" %} <a href="{% url 'core:zeitstrom' %}" class="text-accent hover:underline">{% trans "Zur Startseite" %}</a>
+        {% comment %}Refs #1735: Der Sudo-Modus wird vor allem im Systembereich verlangt —
+        die Systemrolle hat keine Facility, für sie endete „Zur Startseite" (Zeitstrom,
+        assistant+) im 403. Rollenweiche wie im Nav-Kopf (_navigation_desktop.html).{% endcomment %}
+        {% trans "Brechen Sie ab und kehren Sie zurück:" %} <a href="{% if user.is_super_admin %}{% url 'core:system_dashboard' %}{% else %}{% url 'core:zeitstrom' %}{% endif %}" class="text-accent hover:underline">{% trans "Zur Startseite" %}</a>
     </p>
 </div>
 {% endblock %}

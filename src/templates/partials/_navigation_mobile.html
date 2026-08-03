@@ -107,6 +107,9 @@
                 </form>
             </div>
             {# Mobile Search Overlay (eigenständig, getriggert aus Mehr-Dropdown) #}
+            {# Refs #1735: derselbe Guard wie am Auslöser oben — global_search ist #}
+            {# assistant+; für die Systemrolle war das Overlay-Markup unerreichbar. #}
+            {% if user.is_assistant_or_above %}
             <div x-show="searchOpen" x-cloak x-transition
                  class="fixed inset-x-0 top-0 z-[60] bg-surface shadow-lg border-b border-subtle p-4"
                  @click.away="closeSearch" @keydown.escape.window="closeSearch"
@@ -129,6 +132,7 @@
                 </div>
                 <div id="mobile-search-results" class="mt-2 max-h-[60vh] overflow-y-auto"></div>
             </div>
+            {% endif %}
         </div>
     </div>
 </nav>

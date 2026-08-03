@@ -85,9 +85,13 @@
             {# (core:client_list, /clients/) — rendert offline in-place die lokal    #}
             {# gecachten Personen (SI-3/SI-4) statt der generischen offline_fallback- #}
             {# Seite (/offline/). #}
+            {% comment %}Refs #1735: nur fuer Facility-Rollen — die Personenliste ist
+            assistant+, die Systemrolle hat keine Facility (und nie gecachte Personen).{% endcomment %}
+            {% if user.is_assistant_or_above %}
             <a href="{% url 'core:client_list' %}" aria-label="{% trans 'Zur Personenliste' %}" x-show="hasCachedClients" x-cloak class="ml-2 text-xs underline" data-testid="offline-cached-count">
                 (<span x-text="cachedClients"></span><span x-show="isSingleCachedClient" x-cloak> {% trans "Person lokal verfügbar" %}</span><span x-show="hasMultipleCachedClients" x-cloak> {% trans "Personen lokal verfügbar" %}</span>)
             </a>
+            {% endif %}
             <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
                 · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
             </span>
