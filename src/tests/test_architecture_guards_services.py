@@ -1,5 +1,6 @@
 """Architecture-Guards — Service-Layer-Direction- und Encryption-Bypass-Guards (Refs #929)."""
 
+import ast
 import re
 from pathlib import Path
 
@@ -221,4 +222,113 @@ class TestServiceLayerDirectionGuard:
             "umgekehrt). Imports in Methoden verschieben oder Logik in den "
             "Service-Layer ziehen.\n"
             f"Betroffen: {violations}"
+        )
+
+
+class TestKAnonBridgeRedactionParity:
+    """Der K-Anon-Retention-Pfad muss dieselbe Redaktionskaskade fahren wie der Hard-Pfad.
+
+    Root Cause von #1750 war **Parity-Drift**: [#1094] holte die Case-/Episoden-/
+    WorkItem-Kaskade in die Bridge (``core/retention/anonymization.py``), die
+    danach in ``anonymize_client`` aufgenommenen Helfer ([#1067], [#1089],
+    [#1090], [#1091]) wurden dort aber nie nachgezogen. Ein per K-Anonymisierung
+    „anonymisierter" Klient (``k_anonymized=True``) trug deshalb weiter Klartext
+    in ``EventHistory``/``DeletionRequest``/``Activity`` — Art.-17-relevant, weil
+    die Anwendung die Tilgung selbst zusichert.
+
+    Dieser Guard ist bewusst **ableitungsbasiert** statt einer gepflegten Liste:
+    er liest die Helfer-Menge direkt aus ``anonymize_client`` (Single Source of
+    Truth) und verlangt, dass die Bridge jeden davon aufruft. Ein NEUER Helfer im
+    Hard-Pfad reisst den Test, bis er entweder in der Bridge landet oder hier mit
+    einer am Code verifizierbaren Begruendung ausgenommen wird — genau die
+    Drift, die #1750 verursacht hat, kann so nicht unbemerkt wiederkehren.
+    """
+
+    _HARD_PATH_MODULE = Path("src/core/services/client/main.py")
+    _HARD_PATH_FUNC = "anonymize_client"
+    _BRIDGE_MODULE = Path("src/core/retention/anonymization.py")
+
+    # Helfer des Hard-Pfads, die in der Bridge BEWUSST fehlen. Jeder Eintrag
+    # traegt eine Begruendung, die an der Eintrittsbedingung der Bridge haengt
+    # (``total_events > 0`` UND ``active_events == 0``) — aendert sich die,
+    # muessen diese Ausnahmen neu bewertet werden.
+    _BRIDGE_EXEMPT = {
+        "_redact_client_identity": (
+            "``k_anonymize_client`` redigiert die Client-Zeile selbst "
+            "(pseudonym/notes/data_json/document_type/is_active). "
+            "``_redact_client_identity`` wuerde zusaetzlich ``age_cluster`` auf "
+            "UNKNOWN setzen und damit den Quasi-Identifikator zerstoeren, auf dem "
+            "die k-Anonymitaets-Zusicherung beruht."
+        ),
+        "_redact_live_events": (
+            "Die Bridge verarbeitet nur Klienten mit ``active_events == 0`` — es "
+            "gibt per Eintrittsbedingung keine Live-Events; der Event-Soft-Delete "
+            "hat ``data_json``/``search_text`` bereits geleert."
+        ),
+        "_delete_event_attachments_for_client": (
+            "Anhaenge sind zum Bridge-Zeitpunkt bereits geloescht: beide "
+            "Soft-Delete-Pfade (``soft_delete_event`` und ``retention.enforcement``) "
+            "rufen ``delete_event_attachments``. Die Invariante ist in "
+            "``test_pii_residue_sweep.py`` "
+            "(``test_attachments_gone_after_retention_k_anonymization``) gepinnt, "
+            "damit eine geaenderte Eintrittsbedingung nicht still zur Luecke wird."
+        ),
+    }
+
+    @staticmethod
+    def _private_calls(node: ast.AST) -> set[str]:
+        """Namen aller aufgerufenen Modul-privaten Helfer (``_foo(...)``) unter *node*."""
+        return {
+            child.func.id
+            for child in ast.walk(node)
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name) and child.func.id.startswith("_")
+        }
+
+    @classmethod
+    def _hard_path_helpers(cls) -> set[str]:
+        tree = ast.parse(cls._HARD_PATH_MODULE.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == cls._HARD_PATH_FUNC:
+                return cls._private_calls(node)
+        raise AssertionError(f"{cls._HARD_PATH_FUNC} nicht in {cls._HARD_PATH_MODULE} gefunden")
+
+    @classmethod
+    def _bridge_helpers(cls) -> set[str]:
+        # Ganzes Modul statt nur ``anonymize_clients``: ein spaeterer Refactor
+        # darf die Kaskade in einen eigenen Bridge-Helfer ziehen, ohne dass der
+        # Guard falsch rot wird.
+        return cls._private_calls(ast.parse(cls._BRIDGE_MODULE.read_text(encoding="utf-8")))
+
+    def test_extraction_finds_the_hard_path_cascade(self):
+        """Positiv-Kontrolle: die AST-Ableitung liefert die bekannten Helfer.
+
+        Ohne diesen Anker waere der Paritaets-Test still gruen, sobald die
+        Extraktion (z.B. nach einem Refactor der Aufrufform) leer zurueckkaeme.
+        """
+        helpers = self._hard_path_helpers()
+        assert {
+            "_redact_client_identity",
+            "_redact_cases_and_episodes",
+            "_redact_workitems",
+            "_redact_event_history",
+            "_redact_deletion_requests",
+            "_redact_client_deletion_request",
+            "_redact_activities",
+        } <= helpers, f"AST-Ableitung unvollstaendig: {sorted(helpers)}"
+
+    def test_bridge_calls_every_hard_path_redactor(self):
+        missing = self._hard_path_helpers() - self._bridge_helpers() - set(self._BRIDGE_EXEMPT)
+        assert not missing, (
+            "Der K-Anon-Retention-Pfad (core/retention/anonymization.py) ruft diese "
+            "Redaktions-Helfer des Hard-Pfads NICHT auf — ein als anonymisiert "
+            "markierter Klient behaelt damit Klartext-PII (Art. 17, Refs #1750):\n"
+            f"{sorted(missing)}\n"
+            "Entweder in der Bridge ergaenzen oder in _BRIDGE_EXEMPT mit "
+            "nachpruefbarer Begruendung eintragen."
+        )
+
+    def test_no_stale_exemptions(self):
+        stale = set(self._BRIDGE_EXEMPT) - self._hard_path_helpers()
+        assert not stale, (
+            f"_BRIDGE_EXEMPT nennt Helfer, die ``{self._HARD_PATH_FUNC}`` gar nicht (mehr) aufruft: {sorted(stale)}"
         )

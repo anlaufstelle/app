@@ -15,18 +15,70 @@ contact_stage)``; unterbesetzte Buckets (< k) fallen fail-safe auf den
 Hard-Pfad zurueck, statt faelschlich als ``k_anonymized=True`` markiert zu
 werden.
 
-Beide Pfade tilgen die Freitext-Kaskade auf Faelle/Episoden/Aufgaben: der
-Hard-Pfad inline in ``anonymize_client``, der K-Anon-Pfad hier im Bridge-Layer
-(Refs #1094) — die ``k_anonymize_client``-Primitive selbst bleibt client-only.
+Beide Pfade tilgen dieselbe PII-Kaskade: der Hard-Pfad inline in
+``anonymize_client``, der K-Anon-Pfad hier im Bridge-Layer (Refs #1094,
+#1750) — die ``k_anonymize_client``-Primitive selbst bleibt client-only.
+Die Paritaet beider Helfer-Mengen ist ableitungsbasiert abgesichert
+(``tests/test_architecture_guards_services.py``:
+``TestKAnonBridgeRedactionParity``), damit ein neuer Helfer im Hard-Pfad
+nicht erneut unbemerkt fehlt.
 """
 
+from django.db import transaction
 from django.db.models import Count, Q
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
-from core.models import AuditLog, Client, Settings
+from core.models import AuditLog, Client, Event, Settings
 from core.services.audit import audit_retention_decision
-from core.services.client import _redact_cases_and_episodes, _redact_workitems
+from core.services.client import (
+    _redact_activities,
+    _redact_cases_and_episodes,
+    _redact_client_deletion_request,
+    _redact_deletion_requests,
+    _redact_event_history,
+    _redact_workitems,
+)
 from core.services.compliance import is_k_anonymous, k_anonymize_client
+
+
+def _k_anonymize_with_cascade(client, k):
+    """K-anonymisiert *client* und tilgt dieselbe PII-Kaskade wie der Hard-Pfad.
+
+    ``k_anonymize_client`` ist bewusst client-only (Vertrag der Primitive);
+    die Kaskade liegt daher hier. Refs #1750: bis dahin lief nur die
+    Fall-/Episoden-/Aufgaben-Kaskade aus #1094 mit — ``EventHistory``,
+    ``DeletionRequest.reason`` und ``Activity.summary`` blieben Klartext,
+    obwohl der Datensatz als ``k_anonymized=True`` gilt (Art. 17).
+
+    ``event_ids`` werden hier selbst gesammelt: im Hard-Pfad fallen sie als
+    Nebenprodukt von ``_delete_event_attachments_for_client`` an, das in der
+    Bridge nicht laeuft (die Anhaenge sind zum Bridge-Zeitpunkt bereits vom
+    Event-Soft-Delete entfernt — Invariante gepinnt in
+    ``tests/test_pii_residue_sweep.py``).
+
+    Bewusst NICHT aufgerufen — beide Ausnahmen haengen an der
+    Eintrittsbedingung ``active_events == 0`` bzw. am k-Anon-Vertrag:
+
+    * ``_redact_live_events`` — es gibt keine Live-Events; deren
+      ``data_json``/``search_text`` hat der Soft-Delete schon geleert.
+    * ``_redact_client_identity`` — die Client-Zeile redigiert
+      ``k_anonymize_client`` selbst; ``_redact_client_identity`` wuerde
+      zusaetzlich ``age_cluster`` auf UNKNOWN setzen und damit den
+      Quasi-Identifikator zerstoeren, auf dem die k-Anonymitaet beruht.
+
+    Die Klammer ``transaction.atomic`` spiegelt ``anonymize_client``: der
+    Datensatz darf nicht als anonymisiert markiert sein, waehrend Teile der
+    Kaskade fehlschlugen.
+    """
+    with transaction.atomic():
+        event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
+        k_anonymize_client(client, k=k)
+        _redact_cases_and_episodes(client)
+        _redact_workitems(client)
+        _redact_event_history(event_ids)
+        _redact_deletion_requests(event_ids)
+        _redact_client_deletion_request(client)
+        _redact_activities(client, event_ids)
 
 
 def anonymize_clients(facility, dry_run):
@@ -37,8 +89,9 @@ def anonymize_clients(facility, dry_run):
     ``Gelöscht-`` or ``k_anonymized=True``) are skipped.
 
     Honors ``Settings.retention_use_k_anonymization`` (Refs #780): when active
-    on the facility, a client is k-anonymized via :func:`k_anonymize_client`
-    with ``k=settings.k_anonymity_threshold`` **only if** its equivalence class
+    on the facility, a client is k-anonymized via
+    :func:`_k_anonymize_with_cascade` with ``k=settings.k_anonymity_threshold``
+    **only if** its equivalence class
     is already ``is_k_anonymous`` (bucket >= k). Under-populated buckets — and
     the default (setting off) — take the classical ``Client.anonymize()`` hard
     path (Security-Review N5). Mixed runs audit both categories separately
@@ -74,15 +127,10 @@ def anonymize_clients(facility, dry_run):
             # Buckets fallen fail-safe auf Hard-Anonymize zurueck — die
             # Retention-Zusage (PII weg) gilt in beiden Faellen.
             if use_k_anon and is_k_anonymous(client, k=k):
-                # ``k_anonymize_client`` ist bewusst client-only (Vertrag der
-                # Primitive). Der Retention-Bridge-Layer ergaenzt die Freitext-
-                # Kaskade auf Faelle/Episoden/Aufgaben, damit der K-Anon-Modus
-                # dieselbe PII-Tilgung leistet wie der Hard-Pfad — sonst bliebe
-                # Klienten-PII in core_case/core_episode/core_workitem stehen
-                # (Refs #1094). Die Primitive bleibt unangetastet.
-                k_anonymize_client(client, k=k)
-                _redact_cases_and_episodes(client)
-                _redact_workitems(client)
+                # Die Primitive bleibt unangetastet — die Kaskade, die den
+                # K-Anon-Modus auf dieselbe PII-Tilgung wie den Hard-Pfad hebt,
+                # liegt im Bridge-Layer (Refs #1094, #1750).
+                _k_anonymize_with_cascade(client, k)
                 k_count += 1
             else:
                 client.anonymize()

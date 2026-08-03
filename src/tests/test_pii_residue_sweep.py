@@ -712,3 +712,96 @@ def test_retention_k_anonymization_cascades_to_cases(maximal_pii_graph):
             f"PII-Residue in {table} nach Retention-K-Anonymisierung:\n"
             f"{_fmt([h for h in undeclared_hits(g.facility.id) if h.table == table])}"
         )
+
+
+# --------------------------------------------------------------------------
+# Pfad-Sweep: Retention-K-Anon-Bridge — PARITAET zum Hard-Pfad (Refs #1750)
+# --------------------------------------------------------------------------
+# ``test_retention_k_anonymization_cascades_to_cases`` (oben) prueft nur die
+# drei Kaskaden-Tabellen aus #1094. Der Befund #1750 lag ausserhalb davon:
+# ``EventHistory``/``DeletionRequest``/``Activity`` blieben Klartext, weil die
+# Bridge nur 2 der 9 Redaktions-Helfer des Hard-Pfads aufrief. Dieser Sweep
+# laeuft daher — wie ``test_no_residue_after_anonymize`` — ueber ALLE
+# scoped Tabellen: die Zusicherung „k-anonymisiert" muss dieselbe Tilgung
+# leisten wie „hart anonymisiert", sonst ist ``k_anonymized=True`` eine
+# unwahre Behauptung (Art. 17).
+
+
+def _arm_retention_k_anonymization(graph, requester, reviewer):
+    """Bringt den Fixture-Klienten in den Kandidaten-Zustand der Bridge.
+
+    ``anonymize_clients`` verlangt ``total_events > 0`` UND
+    ``active_events == 0`` — der Fixture-Event wird deshalb ueber den echten
+    Vier-Augen-Pfad soft-geloescht (nicht per Raw-``update``), damit die
+    Ausgangslage der Bridge realistisch ist: ``data_json`` geleert, Anhaenge
+    geloescht, DELETE-Historienzeile redigiert. Zusaetzlich fuellen 4 Genossen
+    die Aequivalenzklasse auf ``k=5`` auf, sonst faellt die Bridge fail-safe
+    auf den Hard-Pfad zurueck (Security-Review N5) und der Test pruefte den
+    falschen Zweig.
+    """
+    from core.models import Client, Settings
+    from core.services.events import approve_deletion, request_deletion
+
+    Settings.objects.update_or_create(
+        facility=graph.facility,
+        defaults={"retention_use_k_anonymization": True, "k_anonymity_threshold": 5},
+    )
+    for i in range(4):
+        Client.objects.create(
+            facility=graph.facility,
+            pseudonym=f"K-Peer-{i}",
+            age_cluster=Client.AgeCluster.UNKNOWN,
+            contact_stage=Client.ContactStage.QUALIFIED,
+        )
+    dr = request_deletion(graph.event, requester, reason="RESIDUEPROBE-EvDelKAnon")
+    approve_deletion(dr, reviewer)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("table", ANONYMIZE_TABLES)
+def test_no_residue_after_retention_k_anonymization(maximal_pii_graph, admin_user, lead_user, table):
+    """Paritaet Hard-Pfad ↔ K-Anon-Bridge ueber alle scoped Tabellen (Refs #1750).
+
+    Bewusst dieselbe Tabellenliste (``ANONYMIZE_TABLES``) wie der Hard-Pfad-
+    Sweep: Abweichungen zwischen beiden Listen waeren genau die Asymmetrie,
+    die dieser Test ausschliessen soll.
+    """
+    from core.retention.anonymization import anonymize_clients
+
+    g = maximal_pii_graph
+    _arm_retention_k_anonymization(g, admin_user, lead_user)
+
+    anonymize_clients(g.facility, dry_run=False)
+
+    g.client.refresh_from_db()
+    assert g.client.k_anonymized is True, "K-Anon-Pfad muss gegriffen haben (sonst prueft der Sweep den Hard-Pfad)"
+
+    hits = [h for h in undeclared_hits(g.facility.id) if h.table == table]
+    assert not hits, f"PII-Residue nach Retention-K-Anonymisierung in {table}:\n{_fmt(hits)}"
+
+
+@pytest.mark.django_db
+def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, admin_user, lead_user):
+    """Invariante: nach dem K-Anon-Retention-Lauf existiert kein Anhang mehr (Refs #1750).
+
+    Die Bridge loescht Anhaenge NICHT selbst — sie verlaesst sich darauf, dass
+    ihre Eintrittsbedingung (``active_events == 0``) nur Klienten erfasst, deren
+    Events der Soft-Delete-Pfad bereits entladen hat. Diese implizite Kopplung
+    wird hier explizit gepinnt: aendert jemand die Eintrittsbedingung (oder
+    haengen Anhaenge nach dem Attachment-Umbau [#1738] nicht mehr am Event),
+    reisst dieser Test, statt dass verschluesselte Klientendateien still
+    ueberleben.
+    """
+    from core.models import EventAttachment
+
+    g = maximal_pii_graph
+    assert EventAttachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
+
+    _arm_retention_k_anonymization(g, admin_user, lead_user)
+    from core.retention.anonymization import anonymize_clients
+
+    anonymize_clients(g.facility, dry_run=False)
+
+    g.client.refresh_from_db()
+    assert g.client.k_anonymized is True
+    assert EventAttachment.objects.filter(event=g.event).count() == 0
