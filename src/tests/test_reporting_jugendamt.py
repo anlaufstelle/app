@@ -1062,10 +1062,23 @@ class TestExportDatasetIntegration:
         assert 5 not in ableitbar  # unterdrueckte Unmapped-Zahl
 
     def test_p4_serialisierer_feldsatz_unveraendert(self, backend, kleine_daten):
-        """``count`` ist rein intern — die Completeness-JSON-Felder bleiben bei drei."""
+        """``count`` ist rein intern — die Completeness-Felder bleiben bei dreien.
+
+        Fuer BEIDE strukturierten Formate eingefroren: waere ``count`` nur im
+        JSON-Pfad gepinnt, brauchte ein XML-``count``-Attribut die gerade
+        unterdrueckte Zahl zurueck ins Artefakt, ohne dass ein Test anschlaegt
+        (der Ziffern-Check unten sieht nur ``issue.text``, keine Attribute).
+        """
         payload = json.loads(export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="json").content)
 
         assert all(set(issue) == {"code", "message", "severity"} for issue in payload["completeness"])
+
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="xml").content)  # noqa: S314
+        issues = root.find("completeness").findall("issue")
+        assert issues  # sonst waere die Attribut-Zusicherung leer wahr
+        assert all(set(issue.attrib) == {"code", "severity"} for issue in issues)
 
 
 class TestVierTermIdentitaet:
