@@ -54,8 +54,14 @@
 </div>
 
 {# Charts #}
+{% comment %}
+Kein @htmx:after-swap.window-Listener (Refs #1747): jeder Swap, der die Charts
+betrifft, ersetzt #statistics-content und damit diesen x-data-Container komplett
+— x-init der neuen Komponenteninstanz laedt die Chart-Daten also ohnehin neu.
+Der frueher hier gebundene Listener (Refs #672) war ein toter Doppel-Guertel und
+warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
+{% endcomment %}
 <div x-data="statisticsCharts" x-init="fetchAndRender"
-     @htmx:after-swap.window="if ($event.detail.target && $event.detail.target.id === 'statistics-content') fetchAndRender()"
      class="mb-8 no-print" x-cloak>
 
     {# Chart-Filter #}

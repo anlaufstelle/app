@@ -1,5 +1,6 @@
 """Tests für den Statistik-Service."""
 
+import re
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -248,6 +249,63 @@ class TestStatisticsViewHTMX:
         assert response.status_code == 200
         content = response.content.decode()
         assert "PDF-Export" in content
+
+
+# Alpine-Direktive samt Wert: ``@event.modifier="…"`` und ``x-foo="…"``.
+_ALPINE_DIRECTIVE_RE = re.compile(r'(?:^|\s)(?P<name>@[a-zA-Z][\w:.-]*|x-[a-zA-Z][\w:.-]*)\s*=\s*"(?P<value>[^"]*)"')
+
+# JS-*Statements* (im Gegensatz zu Ausdruecken). Der CSP-Build von Alpine
+# (``@alpinejs/csp``) hat einen eigenen, bewusst winzigen Parser ohne ``eval``;
+# er kennt nur Ausdruecke. Ein Statement bricht ihn mit
+# ``CSP Parser Error: Unexpected token: …`` ab — der Handler laeuft nie.
+_JS_STATEMENT_RE = re.compile(
+    r"(?:^|[^\w$])(?:if|for|while|switch|return|function|var|let|const|new|typeof|await|throw)\s*[({ ]|=>|;"
+)
+
+
+@pytest.mark.django_db
+class TestStatisticsAlpineCspCompatibility:
+    """Regression #1747.
+
+    ``dashboard_content.html`` trug seit #672
+    einen ``@htmx:after-swap.window``-Listener mit einem Inline-``if``. Unter dem
+    CSP-Build von Alpine ist das ein Parser-Fehler, der bei **jedem** HTMX-Swap
+    der Statistik-Seite in der Konsole landete (auch beim reinen
+    Zeitraumwechsel). Funktional war der Listener ein toter Doppel-Guertel: die
+    Charts re-initialisieren ueber ``x-init`` der neuen Komponenteninstanz, weil
+    der Swap-Zielknoten ``#statistics-content`` den ``x-data``-Container
+    einschliesst.
+
+    Der Scan laeuft ueber die **gerenderte** Seite (Dashboard + Berichte-Sektion),
+    nicht ueber einzelne Template-Dateien — so faellt auch ein per ``include``
+    nachgezogenes Partial auf.
+
+    Abgrenzung: ``TestAlpineCspCompatibilityGuard`` in
+    ``test_architecture_guards_templates.py`` prueft repo-weit Ternaries,
+    ``||``/``&&`` und Method-Calls, aber nur in *wertbindenden* Direktiven
+    (``x-text``, ``:class`` …) — Event-Handler und ``x-init`` sind dort nicht
+    erfasst, weshalb dieser Fehler durchrutschte.
+    """
+
+    def test_statistics_page_has_no_statement_level_alpine_expressions(self, client, admin_user):
+        """Keine Alpine-Direktive der Statistik-Seite enthaelt ein JS-Statement."""
+        client.force_login(admin_user)
+        response = client.get(reverse("core:statistics"))
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        violations = [
+            f"{match.group('name')}={match.group('value')!r}"
+            for match in _ALPINE_DIRECTIVE_RE.finditer(content)
+            if _JS_STATEMENT_RE.search(match.group("value"))
+        ]
+
+        assert violations == [], (
+            "Alpine-Direktive mit JS-Statement auf /statistics/ — der CSP-Build "
+            "wirft dafuer bei jedem Swap 'CSP Parser Error' und fuehrt den "
+            "Handler nie aus. Logik in eine benannte Alpine-Methode auslagern "
+            f"(Refs #1747).\nBetroffen: {violations}"
+        )
         assert "Halbjahresbericht" not in content
 
 

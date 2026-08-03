@@ -27,18 +27,6 @@ pytestmark = pytest.mark.e2e
 # HTMX-Endpunkt des Vorschau-Panels (``core:statistics_report_panel``).
 PANEL_URL_FRAGMENT = "/statistics/reports/panel/"
 
-# Vorbestehender Alpine-Fehler der Statistik-Seite (NICHT von M5 verursacht):
-# ``dashboard_content.html`` bindet ``@htmx:after-swap.window="if (...)
-# fetchAndRender()"`` — der CSP-Build von Alpine (Refs #672, Commit fb970d2b,
-# 2026-04-26) kann ``if``-Statements nicht parsen und wirft beim ersten
-# htmx:after-swap-Event ``CSP Parser Error: Unexpected token: fetchAndRender``.
-# Der Fehler feuert bei JEDEM Swap auf dieser Seite, auch beim Zeitraum-Wechsel
-# ohne jede Berichts-Interaktion (manuell verifiziert, P8). Er wird hier
-# namentlich ausgefiltert statt die Assertion aufzuweichen: eine echte
-# CSP-Violation ("Refused to ...") oder ein neuer JS-Fehler aus dem Panel
-# laesst den Test weiterhin fallen.
-KNOWN_PREEXISTING_CONSOLE_ERROR = "CSP Parser Error: Unexpected token: fetchAndRender"
-
 
 def _open_statistics(page, base_url):
     """Statistik-Seite oeffnen und das Backend-Dropdown der Berichte-Sektion liefern."""
@@ -248,12 +236,14 @@ class TestReportPeriodPassthrough:
 class TestReportPanelConsoleHygiene:
     """Keine CSP-Violations / neuen JS-Fehler durch die Berichts-Interaktion."""
 
-    def test_no_new_console_errors_during_report_flow(self, authenticated_page, base_url):
-        """Panel-Swap + Backend-Wechsel erzeugen keinen neuen Konsolen-Fehler.
+    def test_no_console_errors_during_report_flow(self, authenticated_page, base_url):
+        """Panel-Swap + Backend-Wechsel erzeugen ueberhaupt keinen Konsolen-Fehler.
 
-        Der einzige geduldete Eintrag ist der vorbestehende Alpine-CSP-Parserfehler
-        der Statistik-Seite (siehe ``KNOWN_PREEXISTING_CONSOLE_ERROR``), der auch
-        ohne Berichts-Interaktion bei jedem HTMX-Swap dieser Seite feuert.
+        Bis #1747 duldete
+        dieser Test namentlich den vorbestehenden Alpine-CSP-Parserfehler der
+        Statistik-Seite. Der ist mit dem Entfernen des toten
+        ``@htmx:after-swap.window``-Listeners weg — die Assertion ist jetzt
+        strikt und schlaegt bei jeder CSP-Violation und jedem JS-Fehler an.
         """
         page = authenticated_page
         errors = track_console_errors(page)
@@ -262,5 +252,4 @@ class TestReportPanelConsoleHygiene:
         _select_backend(page, "jugendamt")
         _select_backend(page, "example")
 
-        unexpected = [err for err in errors if KNOWN_PREEXISTING_CONSOLE_ERROR not in err]
-        assert unexpected == [], f"Neue Konsolen-Fehler in der Berichte-Sektion: {unexpected}"
+        assert errors == [], f"Konsolen-Fehler in der Berichte-Sektion: {errors}"
