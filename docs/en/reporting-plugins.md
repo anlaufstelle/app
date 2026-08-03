@@ -121,7 +121,7 @@ class FieldSpec:
 
 `key` is the dict key inside `records` **and** the XML element name of a field. Keys that are not valid XML element names are emitted by the XML renderer as `<entry key="…">` instead of as an element of their own — the format stays well-formed but becomes more awkward to consume. Stick to `^[a-z0-9_]+$` **and do not start with a digit**, then the case never arises: the renderer validates against `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../../src/core/reporting/export.py)), so a key such as `2026_total` would fall back to `entry` despite being a valid slug.
 
-`label` is the CSV header cell and the table heading in the panel. **German plain text or `gettext_lazy`** are both allowed — unlike for `name`, the contract demands nothing here. Both shipped backends currently use plain text, so the table headings ("Kategorie", "Anzahl", …) stay German in the English interface as well. Full i18n of the backend strings — labels **and** completeness messages — is follow-up work (see the closing comment on #1061).
+`label` is the CSV header cell and the table heading in the panel. **German plain text or `gettext_lazy`** are both allowed — unlike for `name`, the contract demands nothing here. Both shipped backends currently use plain text, so the table headings ("Kategorie", "Anzahl", …) stay German in the English interface as well. Full i18n of the backend strings — labels **and** completeness messages — is follow-up work (#1744).
 
 ### 2.4 `CompletenessIssue`
 
@@ -299,7 +299,7 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 - **`unique_clients` across several months.** The hybrid path sums the monthly values (a documented approximation: anyone appearing in two months is counted twice); the live query performs a true DISTINCT count over the whole period.
 - **Periods beyond the retention deadlines.** Snapshots deliberately outlive event retention; the live query filters out soft-deleted events (`is_deleted=False`). For a period whose events have already been deleted, the PDF returns the snapshot figures whereas the panel and CSV/JSON/XML return (close to) zero, or suppression markers.
 
-This is not a peculiarity of the plugin system: the same class of divergence has always existed between the live external report and the hybrid PDF — M5 adds a third instance of the same pattern. Unifying them is follow-up work covering **all three** live-reading artifacts (see the closing comment on #1061); it would additionally require `completeness` in the snapshot, which is not stored there today — otherwise a hybrid-fed export would silently report "no gaps".
+This is not a peculiarity of the plugin system: the same class of divergence has always existed between the live external report and the hybrid PDF — M5 adds a third instance of the same pattern. Unifying them is follow-up work covering **all three** live-reading artifacts (#1743); it would additionally require `completeness` in the snapshot, which is not stored there today — otherwise a hybrid-fed export would silently report "no gaps".
 
 ---
 
@@ -503,4 +503,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 5d62a52389ed9eacbd2e631a1c75ee1529fce91c -->
+<!-- source-hash: 01215dc3f450e5fd699fa5acd0d08baf219fac16 -->

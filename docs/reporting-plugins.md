@@ -118,7 +118,7 @@ class FieldSpec:
 
 `key` ist der Dict-Schlüssel in `records` **und** der XML-Elementname eines Feldes. Schlüssel, die kein gültiger XML-Elementname sind, werden vom XML-Renderer als `<entry key="…">` ausgegeben statt als eigenes Element — das Format bleibt wohlgeformt, wird aber unhandlicher. Halte dich an `^[a-z0-9_]+$` **und beginne nicht mit einer Ziffer**, dann tritt der Fall nicht ein: Der Renderer prüft gegen `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../src/core/reporting/export.py)), ein Schlüssel wie `2026_total` fiele also trotz gültigem Slug-Format in den `entry`-Fallback.
 
-`label` ist die CSV-Kopfzeile und die Tabellenüberschrift im Panel. Zulässig ist **deutscher Klartext oder `gettext_lazy`** — anders als bei `name` fordert der Vertrag hier nichts. Beide ausgelieferten Backends verwenden heute Klartext; die Tabellenköpfe („Kategorie", „Anzahl", …) bleiben in der englischen Oberfläche deshalb deutsch. Die vollständige i18n der Backend-Strings — Labels **und** Completeness-Meldungen — ist Folgearbeit (siehe Abschluss-Kommentar zu #1061).
+`label` ist die CSV-Kopfzeile und die Tabellenüberschrift im Panel. Zulässig ist **deutscher Klartext oder `gettext_lazy`** — anders als bei `name` fordert der Vertrag hier nichts. Beide ausgelieferten Backends verwenden heute Klartext; die Tabellenköpfe („Kategorie", „Anzahl", …) bleiben in der englischen Oberfläche deshalb deutsch. Die vollständige i18n der Backend-Strings — Labels **und** Completeness-Meldungen — ist Folgearbeit (#1744).
 
 ### 2.4 `CompletenessIssue`
 
@@ -296,7 +296,7 @@ Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backe
 - **`unique_clients` über mehrere Monate.** Der hybride Pfad summiert die Monatswerte (dokumentierte Näherung: wer in zwei Monaten erscheint, zählt zweimal); die Live-Abfrage macht einen echten DISTINCT-Count über den Gesamtzeitraum.
 - **Zeiträume jenseits der Aufbewahrungsfristen.** Snapshots überdauern die Event-Retention bewusst; die Live-Abfrage filtert soft-gelöschte Ereignisse (`is_deleted=False`) heraus. Für einen Zeitraum, dessen Ereignisse bereits gelöscht sind, liefert das PDF die Snapshot-Zahlen, Panel und CSV/JSON/XML dagegen (nahe) null bzw. Unterdrückungs-Marker.
 
-Das ist keine Eigenheit des Plugin-Systems: dieselbe Divergenzklasse besteht seit jeher zwischen dem live gelesenen Externen Bericht und dem hybrid gelesenen PDF — M5 fügt eine dritte Instanz desselben Musters hinzu. Eine Vereinheitlichung ist Folgearbeit über **alle drei** live lesenden Artefakte (siehe Abschluss-Kommentar zu #1061); sie bräuchte zusätzlich `completeness` im Snapshot, das dort heute nicht gespeichert wird — ein hybrid gespeister Export meldete sonst still „keine Lücken".
+Das ist keine Eigenheit des Plugin-Systems: dieselbe Divergenzklasse besteht seit jeher zwischen dem live gelesenen Externen Bericht und dem hybrid gelesenen PDF — M5 fügt eine dritte Instanz desselben Musters hinzu. Eine Vereinheitlichung ist Folgearbeit über **alle drei** live lesenden Artefakte (#1743); sie bräuchte zusätzlich `completeness` im Snapshot, das dort heute nicht gespeichert wird — ein hybrid gespeister Export meldete sonst still „keine Lücken".
 
 ---
 
