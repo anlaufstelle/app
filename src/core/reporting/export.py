@@ -39,6 +39,13 @@ _CONTENT_TYPES = {
     "xml": "application/xml; charset=utf-8",
 }
 
+# Oeffentliche Formatmenge (Refs #1061, M5 P5 Review M1): Single Source of
+# Truth fuer Aufrufer, die VOR ``export_dataset()`` selbst pruefen wollen (z. B.
+# Views, die ein unbekanntes Format als eigenes HTTP 400 beantworten statt den
+# internen ``ValueError`` blind abzufangen — ein zu breiter ``except ValueError``
+# um den ganzen Aufruf wuerde sonst auch Renderer-Fehler als 400 maskieren).
+SUPPORTED_FORMATS = frozenset(_CONTENT_TYPES)
+
 # Gueltiger XML-Elementname (vereinfachtes NCName-Subset: Python-Identifier-
 # artig). Summary-Keys, die nicht darauf passen (z. B. Monatsschluessel wie
 # "2026-01"), werden als ``<entry key="…">`` statt als eigenes Element

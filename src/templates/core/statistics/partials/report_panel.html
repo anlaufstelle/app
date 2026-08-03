@@ -1,8 +1,10 @@
 {% load i18n %}
 
-{# Berichts-Panel (M5 P5, Refs #1061): export-paritätische (k-anon-suppressierte)
-   Vorschau eines Reporting-Backends. Rendert das Ergebnis von
-   ``backend.prepare_export(...)`` — nie den rohen Datensatz. #}
+{% comment %}
+Berichts-Panel (M5 P5, Refs #1061): export-paritätische (k-anon-suppressierte)
+Vorschau eines Reporting-Backends. Rendert das Ergebnis von
+``backend.prepare_export(...)`` — nie den rohen Datensatz.
+{% endcomment %}
 
 <h3 class="text-[15px] font-bold text-ink mb-1">{{ backend.name }}</h3>
 <p class="text-[13px] text-ink-muted mb-4">

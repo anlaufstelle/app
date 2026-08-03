@@ -6,6 +6,7 @@ sowie die Berichte-Sektion in ``StatisticsView``. AuthZ-Zellen und der 5xx-Guard
 laufen ueber ``test_authz_matrix.py`` (Eintraege in ``_authz_expectations.py``).
 """
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -61,7 +62,16 @@ class TestDatasetReportPanelView:
         assert "k-Anonymität" in content
 
     def test_completeness_warnung_bei_luecken(self, client, lead_user, doc_type_contact, sample_event):
-        """Pflichtfall 2: DocType ohne system_type + Event im Zeitraum -> Warnung."""
+        """Pflichtfall 2: DocType ohne system_type + Event im Zeitraum -> Warnung.
+
+        Harte Assertion (Review I3): der Warnungstext "ohne Jugendamt-Zuordnung"
+        steckt sowohl in der bezifferten als auch in der k-anon-unterdrückten
+        Formulierung (``_EXPORT_MESSAGES``/``_SUPPRESSED_MESSAGES`` in
+        ``jugendamt.py``) — die Zusatzprüfung auf das Amber-Badge (CSS-Klasse
+        der ``severity == "warning"``-Darstellung) macht die Assertion
+        zusätzlich formunabhängig robust, statt sich auf einen "oder"-Fallback
+        zu verlassen, der wegen der unbedingten K-Anon-Fußnote immer wahr wäre.
+        """
         # doc_type_contact hat bewusst KEIN system_type (Fixture-Default) -> unmapped.
         client.force_login(lead_user)
 
@@ -69,7 +79,8 @@ class TestDatasetReportPanelView:
 
         assert response.status_code == 200
         content = response.content.decode()
-        assert "ohne Jugendamt-Zuordnung" in content or "unterdrückt (k-Anonymität)" in content
+        assert "ohne Jugendamt-Zuordnung" in content
+        assert "bg-amber-100 text-amber-800" in content
 
     def test_completeness_ohne_luecken_zeigt_gruenen_hinweis(self, client, lead_user, doc_type_contact, sample_event):
         """Gegenprobe: keine Luecken -> gruener Hinweis, keine Warnung."""
@@ -181,6 +192,64 @@ class TestDatasetReportPanelView:
         content = response.content.decode()
         assert "—" in content
         assert "None" not in content
+
+
+_HIDDEN_INPUT_RE = re.compile(r'<input type="hidden" name="([^"]+)" value="([^"]*)">')
+
+
+def _extract_report_section(html: str) -> str:
+    start = html.index('id="report-section"')
+    end = html.index("</section>", start)
+    return html[start:end]
+
+
+class TestBerichteFormZeitraumDurchreichung:
+    """Review I2: Die Berichte-Form muss ``period=custom`` mitschicken.
+
+    ``parse_statistics_period`` (services/dashboard/statistics.py) liest
+    ``date_from``/``date_to`` NUR aus, wenn ``period == "custom"`` — sonst
+    verwirft sie beide Werte und rechnet ihr eigenes Default-Fenster
+    (``today - 30 Tage`` .. ``today``). Ohne ein hidden ``period=custom``-Feld
+    in der Berichte-Form würde ``hx-include="closest form"`` beim Absenden nur
+    ``date_from``/``date_to``/``backend`` einsammeln — die aufgelösten Werte
+    kämen zwar korrekt im Formular an, würden vom Panel aber stillschweigend
+    ignoriert.
+
+    Der Test parst das ``#report-section``-Formular dynamisch (statt die
+    Felder hart zu kodieren) und speist exakt das Ergebnis in die
+    Panel-Request ein — genau das, was ``hx-include`` real einsammeln würde.
+    Vor dem Fix schlägt bereits die erste Assertion fehl (kein ``period``-Feld
+    im Formular); nach dem Fix propagieren die im Dashboard gewählten Daten
+    unverändert bis in den Panel-Header und die drei Export-Link-Query-Strings.
+    """
+
+    def test_extrahierte_form_felder_liefern_den_gewaehlten_zeitraum_im_panel(self, client, lead_user):
+        client.force_login(lead_user)
+
+        dashboard = client.get(
+            reverse("core:statistics"),
+            {"period": "custom", "date_from": "2020-01-01", "date_to": "2020-01-31"},
+        )
+        section_html = _extract_report_section(dashboard.content.decode())
+        hidden_fields = dict(_HIDDEN_INPUT_RE.findall(section_html))
+
+        # Sanity: die Sektion traegt ueberhaupt die aufgeloesten Daten.
+        assert hidden_fields.get("date_from") == "2020-01-01"
+        assert hidden_fields.get("date_to") == "2020-01-31"
+        # Der eigentliche Fix: ohne dieses Feld verwirft parse_statistics_period
+        # die beiden Werte oben komplett (Default period="month").
+        assert hidden_fields.get("period") == "custom"
+
+        # Simuliert exakt, was ``hx-include="closest form"`` beim Absenden
+        # zusammensammelt (alle Formularfelder + der gewaehlte Select-Wert).
+        query = {**hidden_fields, "backend": "jugendamt"}
+        panel = client.get(reverse("core:statistics_report_panel"), query)
+        panel_html = panel.content.decode()
+
+        assert "2020-01-01" in panel_html
+        assert "2020-01-31" in panel_html
+        assert panel_html.count("date_from=2020-01-01") == 3
+        assert panel_html.count("date_to=2020-01-31") == 3
 
 
 class TestDatasetExportView:
@@ -312,6 +381,76 @@ class TestDatasetExportView:
         assert entry.detail["format"] == "json"
         assert entry.detail["date_from"] == str(date_from)
         assert entry.detail["date_to"] == str(today)
+
+
+class TestPrepareExportRuftGenauEinmalAuf:
+    """Review M4: Guard gegen doppelte ``prepare_export``-Transformation.
+
+    Sicherheitskritisch (K-Anon, Refs #1278/T1): ``prepare_export`` ist NICHT
+    idempotent — ein zweiter Aufruf auf demselben Ergebnis würde z. B. eine
+    bereits suppressierte Zelle nicht "zurückholen", aber je nach Backend
+    beliebige andere kumulative Effekte haben können. Panel-Request und
+    Export-Request dürfen den Hook deshalb je genau einmal auslösen.
+    """
+
+    def test_panel_ruft_prepare_export_genau_einmal(self, client, lead_user):
+        class _ZaehlBackend(DatasetBackend):
+            name = "Zaehl-Backend"
+
+            def __init__(self):
+                self.calls = 0
+
+            def get_field_specs(self):
+                return [FieldSpec(key="wert", label="Wert")]
+
+            def build_dataset(self, facility, date_from, date_to):
+                return DatasetResult(mode="rows", records=[{"wert": 1}], summary={}, completeness=[])
+
+            def prepare_export(self, facility, result):
+                self.calls += 1
+                return result
+
+        register_backend("zaehler_panel")(_ZaehlBackend)
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "zaehler_panel"})
+
+        assert response.status_code == 200
+        assert registry.get_backend("zaehler_panel").calls == 1
+
+    def test_export_ruft_prepare_export_genau_einmal(self, client, admin_user):
+        class _ZaehlBackend(DatasetBackend):
+            name = "Zaehl-Backend"
+
+            def __init__(self):
+                self.calls = 0
+
+            def get_field_specs(self):
+                return [FieldSpec(key="wert", label="Wert")]
+
+            def build_dataset(self, facility, date_from, date_to):
+                return DatasetResult(mode="rows", records=[{"wert": 1}], summary={}, completeness=[])
+
+            def prepare_export(self, facility, result):
+                self.calls += 1
+                return result
+
+        register_backend("zaehler_export")(_ZaehlBackend)
+        client.force_login(admin_user)
+        today = timezone.localdate()
+
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {
+                "backend": "zaehler_export",
+                "format": "json",
+                "date_from": str(today - timedelta(days=1)),
+                "date_to": str(today),
+            },
+        )
+
+        assert response.status_code == 200
+        assert registry.get_backend("zaehler_export").calls == 1
 
 
 class TestStatisticsViewBerichteSektion:

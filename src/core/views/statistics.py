@@ -12,7 +12,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
-from core.reporting.export import export_dataset
+from core.reporting.export import SUPPORTED_FORMATS, export_dataset
 from core.reporting.registry import get_available_backends, get_backend
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
@@ -333,7 +333,7 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
     Audit-Log (interne Vorschau, Parität zum Dashboard — der Export auditiert).
     """
 
-    partial_template_name = "core/statistics/partials/report_panel.html"
+    template_name = "core/statistics/partials/report_panel.html"
 
     # Refs #1589/#1061: dieselbe Frequenz wie StatisticsView/ChartDataView
     # (RATELIMIT_FREQUENT, 120/h) — das Panel wird wie das Dashboard bei jedem
@@ -385,7 +385,7 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             "preview_total": len(result.records),
             "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
         }
-        return render(request, self.partial_template_name, context)
+        return render(request, self.template_name, context)
 
 
 class DatasetExportView(LeadOrAdminRequiredMixin, View):
@@ -418,10 +418,10 @@ class DatasetExportView(LeadOrAdminRequiredMixin, View):
             raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
 
         fmt = request.GET.get("format", "")
-        try:
-            response = export_dataset(backend, facility, date_from, date_to, format=fmt)
-        except ValueError:
+        if fmt not in SUPPORTED_FORMATS:
             return HttpResponse(_("Unbekanntes Export-Format."), status=400)
+
+        response = export_dataset(backend, facility, date_from, date_to, format=fmt)
 
         log_audit_event(
             request,
