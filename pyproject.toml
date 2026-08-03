@@ -281,6 +281,16 @@ strict_optional = true
 check_untyped_defs = true
 warn_unused_ignores = true
 
+# Refs #1730: Management-Commands laufen privilegiert (Reencrypt, Purge,
+# Package-Import) direkt gegen die DB — dieselbe Kosten-Rechnung wie bei
+# ``core.services.*``. Dieselben Flags wie ``core.packages.*`` (auch hier
+# treffen Aufrufer-Argumente/geladene Dateien auf ungepruefte Aussenwelt).
+[[tool.mypy.overrides]]
+module = "core.management.commands.*"
+strict_optional = true
+check_untyped_defs = true
+warn_unused_ignores = true
+
 # Migrations + tests sind grundsaetzlich ausgenommen — Migration-Dateien
 # sind Django-generiert, Tests duerfen mit Fixtures locker umgehen.
 [[tool.mypy.overrides]]

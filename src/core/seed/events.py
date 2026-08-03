@@ -23,8 +23,11 @@ def random_time_of_day(max_hour: int | None = None, max_minute: int | None = Non
         filtered = [(h, w) for h, w in zip(hours, weights, strict=True) if h <= max_hour]
         if not filtered:
             return 8, 0
-        hours, weights = zip(*filtered, strict=True)
-        hours, weights = list(hours), list(weights)
+        # Refs #1730: ueber Zwischenvariablen entpacken statt ``hours``/``weights``
+        # (mypy-inferiert als ``list[int]`` aus der Deklaration oben) direkt mit
+        # dem Tupel-Ergebnis von ``zip()`` zu ueberschreiben.
+        filtered_hours, filtered_weights = zip(*filtered, strict=True)
+        hours, weights = list(filtered_hours), list(filtered_weights)
     hour = random.choices(hours, weights=weights, k=1)[0]
     if max_hour is not None and hour == max_hour and max_minute is not None:
         minute = random.randint(0, max(0, max_minute // 5)) * 5
@@ -224,7 +227,11 @@ def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client
         "note": 6,
         "ban": 0.2,
     }
-    weights = [dt_weights.get(dt.system_type, 5) for dt in doc_types]
+    # Refs #1730: ``dt.system_type`` ist nullable (``str | None``); ``dict.get``
+    # verlangt einen ``str``-Key. ``"" `` matcht ebenfalls keinen Eintrag im
+    # Pool und faellt damit — wie ``None`` es taete — verhaltensgleich auf den
+    # Default-Weight 5 zurueck.
+    weights = [dt_weights.get(dt.system_type or "", 5) for dt in doc_types]
     today = timezone.localdate()
 
     now = timezone.now()

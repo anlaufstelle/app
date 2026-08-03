@@ -445,11 +445,17 @@ def count_field_removal_impact(dtf: DocumentTypeField) -> int:
     genau dieses Typs weg — deren Werte werden zu „Nicht mehr zugeordnet"
     (Refs #1725(a)). Der Zähler speist die Entfern-Bestätigung im Feld-Board.
     """
-    model = {
+    # Refs #1730: explizit als Union von KONKRETEN Modellklassen annotieren —
+    # ohne die Annotation zieht mypy aus dem Dict-Literal den gemeinsamen
+    # Basistyp ``type[DynamicDataEncryptionMixin]`` (abstrakt, ohne ``objects``-
+    # Manager). Der Key kommt aus einem CharField (django-stubs typisiert ihn
+    # als ``str``), daher der explizite ``EntityType(...)``-Narrowing-Schritt.
+    model_by_entity_type: dict[DocumentType.EntityType, type[Event] | type[Client] | type[Case]] = {
         DocumentType.EntityType.EVENT: Event,
         DocumentType.EntityType.CLIENT: Client,
         DocumentType.EntityType.CASE: Case,
-    }[dtf.document_type.entity_type]
+    }
+    model = model_by_entity_type[DocumentType.EntityType(dtf.document_type.entity_type)]
     return model.objects.filter(
         document_type=dtf.document_type,
         data_json__has_key=dtf.field_template.slug,

@@ -1,5 +1,7 @@
 """Textual data pools and templates used when seeding demo data."""
 
+from typing import Any
+
 from core.models import Client, User
 
 # User templates (reused per facility).
@@ -228,7 +230,12 @@ MILESTONE_TITLES = [
 ]
 
 # Typ-spezifische Event-Daten-Pools für Bulk-Generierung.
-EVENT_DATA_POOLS = {
+# Refs #1730: explizit annotiert — die Pools je Typ haben unterschiedliche
+# Value-Shapes (str/int/bool/list je Key); ohne Annotation joint mypy die
+# Werttypen ueber alle Top-Level-Keys hinweg bis zu ``object`` zusammen, was
+# transitiv (ueber den seed-Command) in core.seed.events zu Folgefehlern beim
+# Konsum (``random.choice``/``deepcopy``) führt.
+EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
     "contact": [
         {
             "dauer": 15,

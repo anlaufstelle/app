@@ -134,7 +134,13 @@ class Command(BaseCommand):
         updated = 0
         for client in Client.objects.iterator(chunk_size=500):
             new_data, changed = _reencrypt_data_json(client.data_json)
-            healed = encrypt_dynamic_data(client.document_type, new_data) if client.document_type_id else new_data
+            # Refs #1730: ``Client.document_type`` ist nullable — ueber die lokale
+            # Variable auf ``is not None`` narrowen (statt auf ``document_type_id``
+            # zu prüfen), damit mypy den ``DocumentType | None``-Typ real
+            # ausschliesst. Verhaltensgleich: der FK-Dereferenz passiert weiterhin
+            # nur, wenn eine Zuordnung existiert (Kurzschluss dank ``if``-Ausdruck).
+            document_type = client.document_type if client.document_type_id else None
+            healed = encrypt_dynamic_data(document_type, new_data) if document_type is not None else new_data
             if changed or healed != client.data_json:
                 updated += 1
                 if not dry_run:
@@ -149,7 +155,10 @@ class Command(BaseCommand):
         updated = 0
         for case in Case.objects.iterator(chunk_size=500):
             new_data, changed = _reencrypt_data_json(case.data_json)
-            healed = encrypt_dynamic_data(case.document_type, new_data) if case.document_type_id else new_data
+            # Refs #1730: analog ``_reencrypt_clients`` — ``Case.document_type``
+            # ist nullable, echtes Narrowing statt ``document_type_id``-Check.
+            document_type = case.document_type if case.document_type_id else None
+            healed = encrypt_dynamic_data(document_type, new_data) if document_type is not None else new_data
             if changed or healed != case.data_json:
                 updated += 1
                 if not dry_run:

@@ -65,7 +65,11 @@ class Command(BaseCommand):
         org = seed_organization()
         seed_super_admin()
 
-        for idx in range(cfg["facilities"]):
+        # Refs #1730: ``SCALE_CONFIG``-Werte joinen ueber "small"/"medium"/"large"
+        # (mit z.B. ``attachment_ratio`` als float) zu ``int | float`` — "facilities"
+        # ist immer ein int, ``int()`` ist daher verhaltensgleich und macht das
+        # fuer ``range()`` explizit.
+        for idx in range(int(cfg["facilities"])):
             facility_name = FACILITY_NAMES[idx]
             facility = seed_facility(org, facility_name)
             seed_document_types(facility)

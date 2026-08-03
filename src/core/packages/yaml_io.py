@@ -16,7 +16,7 @@ fremden Paket.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -44,7 +44,10 @@ def _construct_mapping(loader: _UniqueKeySafeLoader, node: yaml.MappingNode, dee
             mark = key_node.start_mark
             raise DuplicateKeyError(f"Doppelter Schlüssel {key!r} in Zeile {mark.line + 1}, Spalte {mark.column + 1}.")
         seen.add(key)
-    return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+    # Paket-Keys sind ausnahmslos Skalare (Strings, s. Docstring) — der
+    # Stub von ``construct_mapping`` liefert das generischere
+    # ``dict[Hashable, Any]``, das die Signatur hier nicht widerspiegelt.
+    return cast("dict[str, Any]", yaml.SafeLoader.construct_mapping(loader, node, deep=deep))
 
 
 _UniqueKeySafeLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)

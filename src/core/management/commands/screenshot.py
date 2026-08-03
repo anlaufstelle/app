@@ -26,6 +26,13 @@ import io
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+# Refs #1730: nur fuer mypy — playwright ist eine optionale Dev/E2E-Abhaengigkeit
+# und wird unten in ``handle()`` lazy importiert (Guard gegen ``ImportError`` in
+# Umgebungen ohne playwright). Der ``TYPE_CHECKING``-Import laedt zur Laufzeit nie.
+if TYPE_CHECKING:
+    from playwright.sync_api import ViewportSize
 
 # Playwright's sync API runs an event loop; Django's ORM then refuses to run in
 # that "async" context. This is a local dev/e2e screenshot tool, so we opt out of
@@ -44,8 +51,8 @@ SEED_PASSWORD = "anlaufstelle2026"  # noqa: S105 — seed-only credential (dev/e
 # laeuft und sonst auch im EN-Durchlauf deutsch rendert.
 LANG_SWITCH_USERNAMES = ("emma", "superadmin", "admin")
 
-DESKTOP = {"width": 1280, "height": 800}
-MOBILE = {"width": 375, "height": 812}
+DESKTOP: ViewportSize = {"width": 1280, "height": 800}
+MOBILE: ViewportSize = {"width": 375, "height": 812}
 
 
 @dataclass

@@ -86,4 +86,4 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: pip install "mypy>=1.20" "django-stubs[compatible-mypy]>=6.0"
-      - run: mypy src/core/services src/core/forms src/core/packages
+      - run: mypy src/core/services src/core/forms src/core/packages src/core/management/commands
