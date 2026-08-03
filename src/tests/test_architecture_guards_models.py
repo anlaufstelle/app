@@ -548,14 +548,34 @@ class TestTenantModelScopeGuard:
         )
 
 
-# --- Slug-Bulk-Mutation-Guard (Refs #1709) -----------------------------------
+# --- Slug-Bulk-Mutation-Guard (Refs #1709, #1058) ----------------------------
 #
-# FieldGroup/FieldTemplate.slug ist der M2-Paketformat-Identifier und seit
-# Migration 0116 per DB-Trigger unveraenderlich (ENABLE ALWAYS). Der Trigger
-# ist die Wahrheit — dieser Guard verhindert nur, dass ein ORM-Bulk-Pfad, der
-# ihn zwangslaeufig zum Scheitern bringen wuerde (statt frueh und lesbar im
-# Code aufzufallen), ueberhaupt erst geschrieben wird.
-_SLUG_IMMUTABLE_MODELS = frozenset({"FieldGroup", "FieldTemplate"})
+# FieldGroup/FieldTemplate/DocumentType.slug ist der M2-Paketformat-Identifier
+# und seit Migration 0116 (FieldGroup/FieldTemplate) bzw. 0117 (DocumentType)
+# per DB-Trigger unveraenderlich (ENABLE ALWAYS). Der Trigger ist die
+# Wahrheit — dieser Guard verhindert nur, dass ein ORM-Bulk-Pfad, der ihn
+# zwangslaeufig zum Scheitern bringen wuerde (statt frueh und lesbar im Code
+# aufzufallen), ueberhaupt erst geschrieben wird.
+_SLUG_IMMUTABLE_MODELS = frozenset({"FieldGroup", "FieldTemplate", "DocumentType"})
+
+
+def _guarded_core_python_files(scan_dir: Path) -> list[Path]:
+    """Core-``.py``-Dateien fuer den Slug-Bulk-Mutation-Guard.
+
+    Migrationen sind bewusst ausgenommen: Backfill-``RunPython``-Schritte
+    operieren auf eingefrorenen historischen Modellen (``apps.get_model``)
+    und laufen kontrolliert VOR dem Anlegen des jeweiligen Slug-Immutable-
+    Triggers fuer die betroffene Tabelle (z. B. Migration 0117 backfuellt
+    ``DocumentType.slug`` per ``bulk_update`` und legt den Trigger erst
+    danach an) — ein manuell reviewter Einzelfall pro Migration, kein
+    Laufzeit-ORM-Bypass-Risiko wie im App-Code, gegen das dieser Guard
+    schuetzt.
+    """
+    return [
+        f
+        for f in sorted(scan_dir.rglob("*.py"))
+        if f.name != "__init__.py" and "migrations" not in f.relative_to(scan_dir).parts
+    ]
 
 
 def find_slug_mutating_bulk_calls(source: str) -> list[str]:
@@ -603,10 +623,11 @@ def find_slug_mutating_bulk_calls(source: str) -> list[str]:
 
 class TestSlugMutationGuard:
     """Kein ``.update(slug=…)``/``bulk_update(…, ["slug"])`` auf FieldGroup/
-    FieldTemplate (Refs #1709) — der DB-Trigger aus Migration 0116 wuerde
-    jeden solchen Aufruf ohnehin mit ``DatabaseError`` scheitern lassen; der
-    Guard macht das strukturell unmoeglich statt es dem Trigger zur Laufzeit
-    zu ueberlassen.
+    FieldTemplate/DocumentType (Refs #1709, #1058) — der DB-Trigger aus
+    Migration 0116 (FieldGroup/FieldTemplate) bzw. 0117 (DocumentType)
+    wuerde jeden solchen Aufruf ohnehin mit ``DatabaseError`` scheitern
+    lassen; der Guard macht das strukturell unmoeglich statt es dem Trigger
+    zur Laufzeit zu ueberlassen.
     """
 
     def test_synthetic_update_call_is_detected(self) -> None:
@@ -627,6 +648,18 @@ class TestSlugMutationGuard:
         )
         assert find_slug_mutating_bulk_calls(source)
 
+    def test_documenttype_update_call_is_detected(self) -> None:
+        """M2 (Refs #1058): DocumentType.slug ist seit Migration 0117 ebenso
+        per DB-Trigger unveraenderlich wie FieldGroup/FieldTemplate.slug."""
+        source = (
+            "from core.models import DocumentType\n\n"
+            "def rename(pk, value):\n"
+            "    DocumentType.objects.filter(pk=pk).update(slug=value)\n"
+        )
+        violations = find_slug_mutating_bulk_calls(source)
+        assert violations
+        assert "DocumentType" in violations[0]
+
     def test_sort_order_update_is_not_flagged(self) -> None:
         source = (
             "from core.models import FieldGroup\n\n"
@@ -636,10 +669,15 @@ class TestSlugMutationGuard:
         assert not find_slug_mutating_bulk_calls(source)
 
     def test_unrelated_model_with_slug_kwarg_is_not_flagged(self) -> None:
+        # DocumentType war hier vor M2/#1058 das Beispiel fuer ein
+        # "unbeteiligtes" Modell — seit Migration 0117 gehoert es selbst zu
+        # ``_SLUG_IMMUTABLE_MODELS`` (siehe
+        # ``test_documenttype_update_call_is_detected`` oben), daher hier ein
+        # echt unbeteiligtes Modell.
         source = (
-            "from core.models import DocumentType\n\n"
+            "from core.models import Client\n\n"
             "def rename(pk, value):\n"
-            "    DocumentType.objects.filter(pk=pk).update(slug=value)\n"
+            "    Client.objects.filter(pk=pk).update(slug=value)\n"
         )
         assert not find_slug_mutating_bulk_calls(source)
 
@@ -659,16 +697,24 @@ class TestSlugMutationGuard:
         )
         assert not find_slug_mutating_bulk_calls(source)
 
+    def test_migrations_directory_is_excluded_from_scan(self) -> None:
+        # Refs #1058: Migration 0117 backfuellt DocumentType.slug per
+        # ``bulk_update`` innerhalb ihres eigenen RunPython-Schritts, bevor
+        # ihr eigener Slug-Immutable-Trigger existiert — ein legitimer,
+        # manuell reviewter Fall, den dieser Guard nicht als Verstoss werten
+        # darf (sonst waere die Migration selbst nicht schreibbar).
+        files = _guarded_core_python_files(Path("src/core"))
+        assert not any("migrations" in f.parts for f in files)
+        assert any(f.name == "document_type.py" for f in files), "Sanity-Check: Modelle bleiben im Scan"
+
     def test_no_slug_mutating_bulk_calls_in_core(self) -> None:
         scan_dir = Path("src/core")
         violations = []
-        for py_file in sorted(scan_dir.rglob("*.py")):
-            if py_file.name == "__init__.py":
-                continue
+        for py_file in _guarded_core_python_files(scan_dir):
             rel = py_file.relative_to(scan_dir).as_posix()
             for hit in find_slug_mutating_bulk_calls(py_file.read_text()):
                 violations.append(f"{rel}: {hit}")
         assert not violations, (
-            "Bulk-Update auf FieldGroup/FieldTemplate.slug gefunden — verletzt den DB-Trigger "
-            f"aus Migration 0116 (Refs #1709). Betroffen: {violations}"
+            "Bulk-Update auf FieldGroup/FieldTemplate/DocumentType.slug gefunden — verletzt den DB-Trigger "
+            f"aus Migration 0116/0117 (Refs #1709, #1058). Betroffen: {violations}"
         )

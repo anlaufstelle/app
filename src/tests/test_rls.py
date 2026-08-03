@@ -430,18 +430,20 @@ class TestAppendOnlyTriggerOwnership:
 
 @pytest.mark.django_db(transaction=True)
 class TestSlugImmutableTriggerOwnership:
-    """Refs #1709: analog ``TestAppendOnlyTriggerOwnership`` — die Slug-
-    Immutable-Trigger (Migration 0116) sind bewusst NICHT in
-    ``_APPEND_ONLY_TRIGGERS``/``bypass_replication_triggers`` aufgenommen (die
-    Slug-Immutabilitaet soll auch fuer Wartungspfade gelten). Damit bleibt
-    ``ENABLE ALWAYS`` + Owner-DDL die EINZIGE Verteidigungslinie gegen ein
-    Abschalten der Trigger — dieser Test pinnt, dass die Runtime-App-Rolle
+    """Refs #1709, #1058: analog ``TestAppendOnlyTriggerOwnership`` — die Slug-
+    Immutable-Trigger (Migration 0116 FieldGroup/FieldTemplate, Migration 0117
+    DocumentType) sind bewusst NICHT in ``_APPEND_ONLY_TRIGGERS``/
+    ``bypass_replication_triggers`` aufgenommen (die Slug-Immutabilitaet soll
+    auch fuer Wartungspfade gelten). Damit bleibt ``ENABLE ALWAYS`` +
+    Owner-DDL die EINZIGE Verteidigungslinie gegen ein Abschalten der
+    Trigger — dieser Test pinnt, dass die Runtime-App-Rolle
     (NOSUPERUSER/NOBYPASSRLS, kein Table-Owner) sie nicht deaktivieren kann.
     """
 
     _SLUG_IMMUTABLE_TRIGGERS = (
         ("core_fieldgroup", "fieldgroup_slug_immutable"),
         ("core_fieldtemplate", "fieldtemplate_slug_immutable"),
+        ("core_documenttype", "documenttype_slug_immutable"),
     )
 
     def setup_method(self):
@@ -474,6 +476,7 @@ class TestSlugImmutableTriggerOwnership:
                 cur.execute(f"CREATE ROLE {role} NOSUPERUSER NOBYPASSRLS")
                 cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_fieldgroup TO {role}")
                 cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_fieldtemplate TO {role}")
+                cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_documenttype TO {role}")
 
             for table, trigger in self._SLUG_IMMUTABLE_TRIGGERS:
                 with pytest.raises(DjangoDBError) as exc, transaction.atomic():
