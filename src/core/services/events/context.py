@@ -267,23 +267,44 @@ def build_event_detail_context(event, user):
     """
     field_templates = build_field_template_lookup(event.document_type, ordered=True)
     doc_sensitivity = event.document_type.sensitivity
+    data = event.data_json or {}
 
     all_attachments = list(event.attachments.all())
     attachments_by_pk = {att.pk: att for att in all_attachments}
     predecessor_index = {att.superseded_by_id: att for att in all_attachments if att.superseded_by_id is not None}
 
+    # Refs #1729: erst über die konfigurierte Blockreihenfolge iterieren (die
+    # ``jsonb``-Schlüsselreihenfolge ist für Benutzer willkürlich — PostgreSQL
+    # normalisiert sie). Nur vorhandene Slugs rendern; Muster
+    # ``build_dynamic_fields_display``.
     fields_display = [
         _build_field_display_entry(
             key,
-            value,
-            field_templates.get(key),
+            data[key],
+            ft,
             user,
             doc_sensitivity,
             attachments_by_pk,
             predecessor_index,
         )
-        for key, value in (event.data_json or {}).items()
+        for key, ft in field_templates.items()
+        if key in data
     ]
+    # Danach die verwaisten Keys (in ``data_json``, aber nicht (mehr) am Typ) in
+    # stabiler, sortierter Reihenfolge anhängen — sie dürfen NICHT verschwinden
+    # (Refs #1729). Ihre korrekte Sensitivity/Kennzeichnung setzt Schritt 3.
+    for key in sorted(k for k in data if k not in field_templates):
+        fields_display.append(
+            _build_field_display_entry(
+                key,
+                data[key],
+                None,
+                user,
+                doc_sensitivity,
+                attachments_by_pk,
+                predecessor_index,
+            )
+        )
 
     return {
         "event": event,

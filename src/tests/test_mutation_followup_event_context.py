@@ -636,13 +636,18 @@ class TestBuildEventDetailContext:
         ctx = build_event_detail_context(event, staff_user)
         assert ctx["fields_display"][0]["value"] == "Beratung"
 
-    def test_field_order_follows_sort_order(self, facility, client_identified, staff_user):
-        """``build_field_template_lookup(ordered=True)`` — Reihenfolge folgt
-        ``data_json`` (Python-Dict-Reihenfolge bleibt insertion-order).
+    def test_field_order_follows_configured_block_order_not_jsonb(self, facility, client_identified, staff_user):
+        """Refs #1729: die Anzeige folgt der **konfigurierten** Blockreihenfolge
+        (``sort_order``), nicht der ``data_json``-Schlüsselreihenfolge.
 
-        Wir prüfen, dass beide Templates verfügbar sind und Label-Resolution
-        klappt — nicht Sort-Reihenfolge per se, denn die Iteration läuft über
-        ``data_json.items()``.
+        Anforderungsänderung (#1729): Bis hierher iterierte
+        ``build_event_detail_context`` über ``data_json.items()`` — die
+        ``jsonb``-Reihenfolge ist für Benutzer willkürlich (PostgreSQL
+        normalisiert Schlüssel). Wir bauen ``data_json`` mit gegenüber
+        ``sort_order`` **vertauschter** Insertion-Reihenfolge (``Zweites`` zuerst)
+        und beweisen, dass jetzt trotzdem die konfigurierte Reihenfolge gewinnt
+        (``Erstes`` vor ``Zweites``). Vorher schlug diese Assertion fehl (der
+        alte Test pinnte bewusst die Insertion-Order).
         """
         doc_type = _make_doc_type(facility)
         ft_a = _make_field_template(facility, name="Erstes")
@@ -654,7 +659,9 @@ class TestBuildEventDetailContext:
             client_identified,
             doc_type,
             staff_user,
-            data_json={ft_a.slug: "1", ft_b.slug: "2"},
+            # Insertion-Reihenfolge bewusst VERTAUSCHT (b vor a) — die Anzeige
+            # muss sie ignorieren und der sort_order folgen.
+            data_json={ft_b.slug: "2", ft_a.slug: "1"},
         )
         ctx = build_event_detail_context(event, staff_user)
         labels = [e["label"] for e in ctx["fields_display"]]
