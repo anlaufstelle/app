@@ -208,6 +208,27 @@ class TestStructure:
         raw["field_templates"] = {"dauer": {}}
         assert "field_templates" in _paths(raw)
 
+    def test_field_templates_null_is_rejected(self) -> None:
+        """(b) Haertung Refs #1058: explizites ``null`` ist ein Typfehler
+        (Muster ``conditions``) — nur der FEHLENDE Schluessel bleibt erlaubt."""
+        raw = _valid_raw()
+        raw["field_templates"] = None
+        assert "field_templates" in _paths(raw)
+
+    def test_document_types_null_is_rejected(self) -> None:
+        raw = _valid_raw()
+        raw["document_types"] = None
+        assert "document_types" in _paths(raw)
+
+    def test_missing_field_templates_key_is_fine(self) -> None:
+        """Gegenprobe: der fehlende Schluessel ist (anders als ``null``) gueltig."""
+        raw = {"schema_version": 1, "document_types": [{"slug": "kontakt", "name": "Kontakt"}]}
+        assert parse_package(raw).field_templates == ()
+
+    def test_missing_document_types_key_is_fine(self) -> None:
+        raw = {"schema_version": 1, "field_templates": [{"slug": "dauer", "name": "Dauer"}]}
+        assert parse_package(raw).document_types == ()
+
     def test_field_template_entry_must_be_a_mapping(self) -> None:
         raw = _valid_raw()
         raw["field_templates"][1] = "notiz"
@@ -383,6 +404,25 @@ class TestCrossReferences:
         raw["document_types"][0]["field_refs"].append({"template_slug": "dauer"})
         assert "document_types[0].field_refs[2].template_slug" in _paths(raw)
 
+    def test_duplicate_field_template_name(self) -> None:
+        """(c) Haertung Refs #1058: gleicher ``name`` bei zwei Feldvorlagen ist
+        ein Namensdublett (unabhaengig vom Slug) und wird pfadgenau abgewiesen."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "dauer-2", "name": "Dauer", "field_type": "text"})
+        assert "field_templates[2].name" in _paths(raw)
+
+    def test_duplicate_document_type_name_and_category(self) -> None:
+        """(c) gleicher ``name`` + gleiche ``category`` bei zwei Dokumentationstypen."""
+        raw = _valid_raw()
+        raw["document_types"].append({"slug": "kontakt-2", "name": "Kontakt", "category": "contact"})
+        assert "document_types[1].name" in _paths(raw)
+
+    def test_same_document_type_name_in_different_category_is_allowed(self) -> None:
+        """Gegenprobe: der Name allein ist nicht eindeutig — erst Name+Kategorie."""
+        raw = _valid_raw()
+        raw["document_types"].append({"slug": "kontakt-2", "name": "Kontakt", "category": "service"})
+        parse_package(raw)
+
 
 class TestSemanticRules:
     def test_file_field_on_client_entity_is_rejected(self) -> None:
@@ -442,3 +482,20 @@ class TestSemanticRules:
         raw["field_templates"][0]["field_type"] = "select"
         raw["field_templates"][0]["options"] = [{"slug": "a"}]
         assert "field_templates[0].options[0].label" in _paths(raw)
+
+    def test_file_field_with_explicit_is_encrypted_false_is_rejected(self) -> None:
+        """(a) Haertung Refs #1058: explizites ``is_encrypted: false`` an einem
+        FILE-Feld ist ein Widerspruch (FILE ist immer verschluesselt) und wird
+        pfadgenau abgewiesen — analog zur HIGH-Sensitivity-Regel. Die
+        Loader-Aufwaerts-Normalisierung bleibt fuer den FEHLENDEN Key."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "anhang", "name": "Anhang", "field_type": "file", "is_encrypted": False})
+        assert "field_templates[2].is_encrypted" in _paths(raw)
+
+    def test_file_field_without_is_encrypted_key_stays_valid_at_schema_level(self) -> None:
+        """Gegenprobe: der fehlende Key bleibt hier unauffaellig — die
+        Aufwaerts-Normalisierung auf ``True`` passiert erst im Loader."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "anhang", "name": "Anhang", "field_type": "file"})
+        template = parse_package(raw).field_templates[2]
+        assert template.is_encrypted is False

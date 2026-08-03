@@ -85,13 +85,23 @@ class DynamicDataEncryptionMixin(models.Model):
         if not self.document_type_id or not self.data_json:
             return
 
-        if not hasattr(self, "_cached_encrypted_slugs"):
-            self._cached_encrypted_slugs = set(
-                self.document_type.fields.filter(
-                    field_template__is_encrypted=True,
-                ).values_list("field_template__slug", flat=True)
+        # Refs #1058 (Review-Haertung): Cache als ``(document_type_id, slugs)``-
+        # Tupel statt nacktem Slug-Set. Ohne den Typ im Cache-Schluessel
+        # verschluesselte ein zweiter save() derselben In-Memory-Instanz nach
+        # einem document_type-Wechsel weiter nach der Feldliste des ALTEN Typs
+        # (latenter Bug, betrifft Event/Client/Case).
+        cached = getattr(self, "_cached_encrypted_slugs", None)
+        if cached is None or cached[0] != self.document_type_id:
+            cached = (
+                self.document_type_id,
+                set(
+                    self.document_type.fields.filter(
+                        field_template__is_encrypted=True,
+                    ).values_list("field_template__slug", flat=True)
+                ),
             )
-        encrypted_field_names = self._cached_encrypted_slugs
+            self._cached_encrypted_slugs = cached
+        encrypted_field_names = cached[1]
         for key in encrypted_field_names:
             value = self.data_json.get(key)
             if value and not is_encrypted_value(value):

@@ -15,7 +15,7 @@ pytestmark = pytest.mark.architecture
 #
 #   Event  — Refs #736 / #713
 #   Client — M2 P4b (Refs #1058)
-#   Case   — folgt in M2 P5 (Refs #1058), dann hier ergaenzen
+#   Case   — M2 P5 (Refs #1058)
 ENCRYPTED_DATA_JSON_MODELS = ("Event", "Client", "Case")
 
 
@@ -75,18 +75,17 @@ def find_bypasses(source: str, origin: str = "<inline>") -> list[str]:
 
 
 class TestDynamicDataEncryptionBypassGuard:
-    """Refs #736 / #713 (Event), M2 P4b Refs #1058 (Client): Verhindert, dass
-    irgendein Code-Pfad die Feldverschluesselungs-Pipeline umgeht.
+    """Refs #736 / #713 (Event), M2 P4b Refs #1058 (Client), M2 P5 (Case):
+    Verhindert, dass irgendein Code-Pfad die Feldverschluesselungs-Pipeline
+    umgeht.
 
     Die Verschluesselung haengt an ``Model.save()``
     (``DynamicDataEncryptionMixin._encrypt_sensitive_fields``) — jeder
     Schreibpfad, der ``save()`` umgeht, schreibt Klartext direkt ins JSONB.
-    Seit P4b ist ``Client`` der zweite solche Store; die Modellliste
-    (:data:`ENCRYPTED_DATA_JSON_MODELS`) ist der einzige Ort, an dem ein
-    weiteres Modell (P5: ``Case``) eingetragen werden muss.
+    Die Modellliste (:data:`ENCRYPTED_DATA_JSON_MODELS`) ist der einzige Ort,
+    an dem ein weiteres Modell eingetragen werden muss.
 
     Allowlist (legitime Bypaesse):
-    - ``src/core/services/encryption.py`` — die Encryption-Pipeline selbst
     - ``src/core/seed/`` — Seed-Daten sind deterministische Test-Fixtures
       ohne reale Art-9-Inhalte (nutzen ``encrypt_dynamic_data`` vor dem Bulk)
     - ``src/core/migrations/`` — Schema-Migrationen
@@ -97,7 +96,6 @@ class TestDynamicDataEncryptionBypassGuard:
 
     _CORE_DIR = Path("src/core")
     _ALLOWLIST = (
-        Path("src/core/services/encryption.py"),
         Path("src/core/seed"),
         Path("src/core/migrations"),
     )

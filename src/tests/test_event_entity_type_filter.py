@@ -13,10 +13,13 @@ im P2-Brief vorgegeben.
 from __future__ import annotations
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 
 from core.forms.events import EventMetaForm
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.services.events import create_event
 from core.services.events.context import resolve_default_document_type
 from core.services.events.tally import tally_document_types
 
@@ -207,3 +210,46 @@ class TestTallyIncrementEntityTypeFilter:
         )
         assert response.status_code == 404
         assert not Event.objects.filter(document_type=doc_type_client).exists()
+
+
+# ---------------------------------------------------------------------------
+# Haertung (Refs #1058, Review-Punkt 2): ``create_event``-Service-Guard.
+#
+# Alle View-Pfade oben filtern bereits auf entity_type=event, bevor sie
+# ``create_event`` erreichen — der Service selbst hatte bisher KEINEN eigenen
+# Guard (anders als ``create_client``/``create_case``, die ``entity_type``
+# jeweils direkt pruefen). Defense-in-depth fuer kuenftige Direkt-Aufrufer
+# (Offline-Replay, Management-Commands, ...), die den View-Filter umgehen.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCreateEventServiceEntityTypeGuard:
+    """``create_event`` weist einen Nicht-Event-``DocumentType`` fachlich ab."""
+
+    def test_client_entity_type_rejected(self, facility, staff_user, doc_type_client):
+        with pytest.raises(ValidationError, match="Ereignisse"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_client,
+                occurred_at=timezone.now(),
+                data_json={},
+            )
+        assert not Event.objects.filter(document_type=doc_type_client).exists()
+
+    def test_case_entity_type_rejected(self, facility, staff_user):
+        doc_type_case = DocumentType.objects.create(
+            facility=facility,
+            name="Falldaten",
+            entity_type=DocumentType.EntityType.CASE,
+        )
+        with pytest.raises(ValidationError, match="Ereignisse"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_case,
+                occurred_at=timezone.now(),
+                data_json={},
+            )
+        assert not Event.objects.filter(document_type=doc_type_case).exists()

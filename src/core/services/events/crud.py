@@ -14,7 +14,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Activity, AuditLog, Event, EventHistory, FieldTemplate
+from core.models import Activity, AuditLog, DocumentType, Event, EventHistory, FieldTemplate
 from core.services.audit import audit_event
 from core.services.compliance import user_can_see_document_type
 from core.services.dashboard import log_activity
@@ -249,6 +249,13 @@ def create_event(
     """
     if document_type.facility_id != facility.pk:
         raise ValueError("DocumentType gehört nicht zur Facility")
+    # Refs #1058 (Review-Haertung, Defense-in-Depth): analog zum Guard in
+    # ``create_client``/``create_case`` (core.services.client.main /
+    # core.services.case.cases). Alle heutigen Aufrufer (Views/Offline-Replay)
+    # filtern bereits auf entity_type=event; dieser Guard schuetzt kuenftige
+    # Direkt-Aufrufer, die den View-Filter umgehen wuerden.
+    if document_type.entity_type != DocumentType.EntityType.EVENT:
+        raise ValidationError(_("Der Dokumentationstyp ist nicht für Ereignisse vorgesehen."))
     if client and client.facility_id != facility.pk:
         raise ValueError("Client gehört nicht zur Facility")
     _validate_case_assignment(facility, case, client, is_anonymous)

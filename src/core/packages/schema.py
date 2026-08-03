@@ -424,6 +424,17 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
     if sensitivity == DocumentType.Sensitivity.HIGH.value and not is_encrypted:
         errors.append((_join(path, "is_encrypted"), "Felder mit Sensibilität 'high' müssen verschlüsselt sein."))
 
+    # (a) Haertung Refs #1058: FILE-Felder sind immer verschluesselt
+    # (``FieldTemplate.save()`` erzwingt das). Ein FEHLENDER Key wird vom
+    # Loader stillschweigend nach oben normalisiert (Kompatibilitaet), aber
+    # ein EXPLIZITES ``is_encrypted: false`` ist ein Widerspruch im Paket
+    # selbst und soll hier pfadgenau auffallen statt erst beim zweiten Lauf
+    # als Immutable-Konflikt gegen die eigene erste Anwendung.
+    if field_type == FieldTemplate.FieldType.FILE.value and data.get("is_encrypted") is False:
+        errors.append(
+            (_join(path, "is_encrypted"), "Felder vom Typ 'file' sind immer verschlüsselt — 'false' ist unzulässig.")
+        )
+
     if slug is None:
         return None
     return FieldTemplateDef(
@@ -618,6 +629,10 @@ def _cross_check(
     Fehlerpfade die Original-Indizes des Pakets tragen.
     """
     types_by_slug: dict[str, FieldTemplateDef] = {}
+    # (c) Haertung Refs #1058: Namensdubletten sind ein eigener Fehler, unabhaengig
+    # vom (per Definition eindeutigen) Slug — zwei Feldvorlagen mit demselben
+    # ``name`` waeren in der UI (Dropdown/Config-Liste) nicht unterscheidbar.
+    names_by_template: set[str] = set()
     for index, template in enumerate(templates):
         if template is None:
             continue
@@ -625,8 +640,16 @@ def _cross_check(
             errors.append((f"field_templates[{index}].slug", f"Doppelter Slug {template.slug!r}."))
             continue
         types_by_slug[template.slug] = template
+        if template.name in names_by_template:
+            errors.append((f"field_templates[{index}].name", f"Doppelter Name {template.name!r}."))
+        else:
+            names_by_template.add(template.name)
 
     seen_doc_types: set[str] = set()
+    # (c) Dokumentationstypen sind ueber (name, category) eindeutig — dieselbe
+    # Paarung waere in der Typ-Auswahl (nach Kategorie gruppiert) nicht
+    # unterscheidbar, derselbe Name in unterschiedlichen Kategorien ist ok.
+    seen_name_category: set[tuple[str, str]] = set()
     for index, doc_type in enumerate(doc_types):
         if doc_type is None:
             continue
@@ -635,6 +658,11 @@ def _cross_check(
             errors.append((f"{path}.slug", f"Doppelter Slug {doc_type.slug!r}."))
             continue
         seen_doc_types.add(doc_type.slug)
+        name_category = (doc_type.name, doc_type.category)
+        if name_category in seen_name_category:
+            errors.append((f"{path}.name", f"Doppelter Name {doc_type.name!r} in Kategorie {doc_type.category!r}."))
+        else:
+            seen_name_category.add(name_category)
         _cross_check_document_type(doc_type, path, types_by_slug, errors)
 
 
@@ -705,17 +733,19 @@ def parse_package(raw: dict[str, Any]) -> PackageV1:
     if "schema_version" in raw and version != SCHEMA_VERSION:
         errors.append(("schema_version", f"Nicht unterstützte Schemaversion {version!r} — erwartet: {SCHEMA_VERSION}."))
 
+    # (b) Haertung Refs #1058: FEHLENDER Schluessel bleibt "kein Eintrag"
+    # (Default), aber ein explizites ``null`` ist ein Typfehler — Muster
+    # ``_parse_condition_list``: nur "Key fehlt" heisst "nicht anfassen",
+    # "Key da, aber kein Wert" ist ein Verstoss gegen "Erwartet wird eine Liste".
     templates: list[FieldTemplateDef | None] = []
-    raw_templates = raw.get("field_templates")
-    if raw_templates is not None:
-        entries = _sequence(raw_templates, "field_templates", errors)
+    if "field_templates" in raw:
+        entries = _sequence(raw["field_templates"], "field_templates", errors)
         for index, raw_template in enumerate(entries or []):
             templates.append(_parse_field_template(raw_template, f"field_templates[{index}]", errors))
 
     doc_types: list[DocumentTypeDef | None] = []
-    raw_doc_types = raw.get("document_types")
-    if raw_doc_types is not None:
-        entries = _sequence(raw_doc_types, "document_types", errors)
+    if "document_types" in raw:
+        entries = _sequence(raw["document_types"], "document_types", errors)
         for index, raw_doc_type in enumerate(entries or []):
             doc_types.append(_parse_document_type(raw_doc_type, f"document_types[{index}]", errors))
 

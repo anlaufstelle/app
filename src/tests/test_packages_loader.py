@@ -294,6 +294,30 @@ class TestImmutables:
         assert not FieldTemplate.objects.filter(slug="extra").exists()
         assert not DocumentType.objects.filter(slug="notizen").exists()
 
+    def test_field_ref_of_conflicting_template_is_not_falsely_reported_as_created(self, facility):
+        """Haertung (Refs #1058, Review-Punkt 3): eine bestehende Feldvorlage mit
+        Immutable-Konflikt darf nicht in die Erfolgs-Map wandern — sonst meldet
+        der Report eine davon abhaengige (neue) Feldzuordnung faelschlich als
+        'created', obwohl sie wegen des Fehlers nie entsteht (Alles rollt
+        zurueck). Spiegelt das DocumentType-Muster (Konflikt ⇒ None ⇒ Kinder
+        werden nicht mehr verarbeitet)."""
+        self._seed(facility)
+        raw = _raw()
+        raw["field_templates"][0]["field_type"] = "text"  # dauer: number -> text (Immutable-Konflikt)
+        raw["document_types"].append({"slug": "notizen", "name": "Notizen", "field_refs": [{"template_slug": "dauer"}]})
+
+        with pytest.raises(PackageLoadError) as excinfo:
+            _load(facility, raw)
+
+        report = excinfo.value.report
+        assert "notizen/dauer" not in report.field_refs.created, (
+            "Feldzuordnung darf nicht als 'created' gemeldet werden, wenn ihre "
+            "Feldvorlage wegen eines Immutable-Konflikts gescheitert ist"
+        )
+        identifiers = [identifier for identifier, _message in report.errors]
+        assert "dauer" in identifiers
+        assert "notizen/dauer" in identifiers
+
 
 @pytest.mark.django_db
 class TestErrors:

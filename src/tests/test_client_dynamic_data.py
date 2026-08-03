@@ -107,6 +107,53 @@ class TestClientDataJsonEncryption:
 
             assert safe_decrypt(raw_data_json(client)["diagnose"]) == "Einmal"
 
+    def test_type_switch_between_saves_encrypts_by_new_types_slugs(
+        self, facility, doc_type_client_profile, staff_user, fernet_key
+    ):
+        """Mixin-Cache-Bug (Refs #1058): ``_cached_encrypted_slugs`` haengt am
+        Python-Objekt, nicht am ``document_type``. Wechselt derselbe In-Memory-
+        Client zwischen zwei ``save()``-Aufrufen den Typ, darf der zweite Save
+        nicht mehr die encrypted-Slug-Menge des ALTEN Typs verwenden — sonst
+        bleibt ein encrypted-Feld des NEUEN Typs im Klartext stehen.
+        """
+        from core.models import DocumentTypeField, FieldTemplate
+
+        other_type = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CLIENT,
+            name="Personenprofil (B)",
+        )
+        ft_b = FieldTemplate.objects.create(
+            facility=facility,
+            name="Vertraulich B",
+            field_type=FieldTemplate.FieldType.TEXT,
+            is_encrypted=True,
+        )
+        DocumentTypeField.objects.create(document_type=other_type, field_template=ft_b, sort_order=0)
+
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            client = Client.objects.create(
+                facility=facility,
+                pseudonym="P4b-Krypto-TypSwitch",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"diagnose": "Typ A"},
+            )
+
+            # Dieselbe In-Memory-Instanz: Typ wechseln + Daten mit dem
+            # encrypted-Slug des NEUEN Typs setzen, dann erneut speichern.
+            client.document_type = other_type
+            client.data_json = {"vertraulich-b": "Typ B"}
+            client.save()
+
+            row = raw_data_json(client)
+            assert is_encrypted_value(row["vertraulich-b"]), (
+                "Nach dem Typwechsel muss nach der Feldliste des NEUEN Typs "
+                "verschluesselt werden, nicht nach der gecachten Liste des alten Typs"
+            )
+            assert safe_decrypt(row["vertraulich-b"]) == "Typ B"
+
     def test_create_client_service_encrypts_too(self, facility, doc_type_client_profile, staff_user, fernet_key):
         """Der Service-Pfad haengt am selben ``save()`` — kein zweiter Krypto-Ort."""
         with override_settings(ENCRYPTION_KEY=fernet_key):

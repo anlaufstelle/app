@@ -42,16 +42,23 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models.document_type import DocumentType, DocumentTypeField, FieldGroup, FieldTemplate
 from core.models.field_condition import FieldCondition
 from core.models.organization import Facility
 from core.packages.schema import ConditionDef, DocumentTypeDef, FieldTemplateDef, PackageV1
+
+if TYPE_CHECKING:
+    # Refs #1058 (Review-Haertung, mypy-Schaerfe): nur fuer Typannotationen —
+    # ``_StrOrPromise`` existiert zur Laufzeit nicht in ``django.utils.functional``
+    # (Stub-only-Alias), ``from __future__ import annotations`` macht den Import
+    # ohnehin lazy.
+    from django.utils.functional import _StrOrPromise
 
 # ---------------------------------------------------------------------------
 # Report
@@ -188,12 +195,18 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
                 templates[template_def.slug] = template
             continue
 
-        templates[template_def.slug] = existing
         _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
         conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
         if conflicts:
+            # Haertung (Refs #1058, Review-Punkt 3): NICHT in die Erfolgs-Map
+            # eintragen — DocumentType-Muster (None + Kinder-Skip) gespiegelt.
+            # Abhaengige field_refs sehen ``templates.get(slug) is None`` und
+            # melden sich selbst als uebersprungen, statt faelschlich als
+            # "created" in den Report zu wandern (das rollt ohnehin zurueck,
+            # aber der Report soll nur zeigen, was ein Re-Lauf wirklich taete).
             report.errors.extend((identifier, message) for message in conflicts)
             continue
+        templates[template_def.slug] = existing
         _apply_diff(existing, desired, report.field_templates, report, identifier)
     return templates
 
@@ -384,8 +397,8 @@ def _apply_conditions(
 
 # E13: nach dem Anlegen unveränderlich. ``slug`` fehlt hier bewusst — er ist
 # der Lookup-Key und kann per Definition nicht abweichen.
-_TEMPLATE_IMMUTABLES: dict[str, Any] = {"field_type": _("Feldtyp"), "is_encrypted": _("Verschlüsselung")}
-_DOCUMENT_TYPE_IMMUTABLES: dict[str, Any] = {"entity_type": _("Entitätstyp")}
+_TEMPLATE_IMMUTABLES: dict[str, _StrOrPromise] = {"field_type": _("Feldtyp"), "is_encrypted": _("Verschlüsselung")}
+_DOCUMENT_TYPE_IMMUTABLES: dict[str, _StrOrPromise] = {"entity_type": _("Entitätstyp")}
 
 
 def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
@@ -414,7 +427,9 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
     }
 
 
-def _immutable_conflicts(instance: Any, desired: dict[str, Any], immutables: dict[str, Any]) -> list[str]:
+def _immutable_conflicts(
+    instance: models.Model, desired: dict[str, Any], immutables: dict[str, _StrOrPromise]
+) -> list[str]:
     """Meldungen für alle unveränderlichen Felder, die abweichen würden."""
     conflicts: list[str] = []
     for attribute, label in immutables.items():
@@ -433,7 +448,7 @@ def _immutable_message(label: Any, current: Any, wanted: Any) -> str:
 
 
 def _apply_diff(
-    instance: Any,
+    instance: models.Model,
     desired: dict[str, Any],
     section: ObjectReport,
     report: PackageReport,
@@ -450,7 +465,7 @@ def _apply_diff(
         section.updated.append(identifier)
 
 
-def _save(instance: Any, report: PackageReport, identifier: str) -> bool:
+def _save(instance: models.Model, report: PackageReport, identifier: str) -> bool:
     """``full_clean()`` + ``save()`` in einem eigenen Savepoint.
 
     Der Savepoint ist Pflicht: ein ``IntegrityError`` würde die umgebende
