@@ -42,6 +42,8 @@ def test_lead_can_view_external_report_html(page: Page, base_url: str) -> None:
     heading.wait_for(timeout=30_000)
     assert "Externer Bericht" in page.title()
     assert heading.is_visible()
+    # Refs #1743: sichtbarer Quellenausweis im Datenschutzprofil-Kopf.
+    assert "Live-Abfrage zum Erstellungszeitpunkt" in page.content()
 
 
 def test_external_report_json_endpoint(page: Page, base_url: str) -> None:
@@ -56,6 +58,8 @@ def test_external_report_json_endpoint(page: Page, base_url: str) -> None:
     assert "metadata" in body_text
     assert "privacy_profile" in body_text
     assert "k_anonymity_threshold" in body_text
+    # Refs #1743: Quellenausweis als stabiler Code, nicht als Fliesstext.
+    assert '"data_source": "live"' in body_text
     # Pseudonym-Ranking darf NICHT drin sein:
     assert "top_clients" not in body_text
 
