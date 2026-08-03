@@ -365,7 +365,9 @@ def _gather_deletion_requests(facility, client, event_ids):
 
     Facility-gescopt ueber den ``FacilityScopedManager`` (Defense-in-Depth
     zusaetzlich zu RLS) — ``target_id`` allein ist zwar UUID-eindeutig, das
-    Scoping haelt den Zugriff aber konsistent zu den uebrigen Quertabellen.
+    explizite Scoping macht die Absicht aber lesbar. (Andere Quertabellen wie
+    Episoden/Ziele/Merklisten scopen stattdessen ueber den Client-/Case-Join
+    plus RLS.)
     """
     deletion_requests = (
         DeletionRequest.objects.for_facility(facility)
@@ -490,9 +492,9 @@ def _gather_activities(facility, client, event_ids):
     """Serialize the activity feed entries about the client (Refs #1752).
 
     Der Zeitstrom traegt Freitext-``summary`` zur Person („… für <pseudonym>",
-    „Aufgabe: <titel>"). Die Ziel-Menge folgt exakt der Redaktions-Logik in
-    :func:`core.services.client.main._redact_activities` (Client-, Event- und
-    WorkItem-Targets), erweitert um Fall-Targets aus dem Case-Lifecycle.
+    „Aufgabe: <titel>"). Die Ziel-Menge deckt sich mit der Redaktions-Logik in
+    :func:`core.services.client.main._redact_activities` (Client-, Event-,
+    WorkItem- und seit #1751 auch Case-Targets).
 
     ``actor`` bleibt hier **enthalten** — anders als beim Audit-Auszug
     (:func:`_gather_audit_trail`). Der Zeitstrom dokumentiert eine einzelne
