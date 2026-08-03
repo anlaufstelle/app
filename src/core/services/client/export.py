@@ -721,19 +721,16 @@ def export_client_data(client, facility, user):
 
 
 def export_client_data_pdf(client, facility, user):
-    """Generate PDF from client data. Returns bytes."""
+    """Generate PDF from client data. Returns bytes.
+
+    Refs #1752: Der Kontext wird aus :func:`export_client_data` **abgeleitet**
+    statt Key fuer Key aufgezaehlt. Vorher konnte eine neue JSON-Kategorie
+    still am PDF vorbeilaufen — JSON und PDF muessen denselben Umfang abdecken
+    (das PDF darf zusammenfassen, aber keine Kategorie auslassen).
+    """
     data = export_client_data(client, facility, user)
-    html = render_to_string(
-        "core/export/client_data_pdf.html",
-        {
-            "facility_name": data["export_meta"]["facility_name"],
-            "client": data["client"],
-            "events": data["events"],
-            "cases": data["cases"],
-            "event_history": data["event_history"],
-            "deletion_requests": data["deletion_requests"],
-            "work_items": data["work_items"],
-            "generated_at": timezone.now(),
-        },
-    )
+    context = {key: value for key, value in data.items() if key != "export_meta"}
+    context["facility_name"] = data["export_meta"]["facility_name"]
+    context["generated_at"] = timezone.now()
+    html = render_to_string("core/export/client_data_pdf.html", context)
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

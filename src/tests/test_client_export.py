@@ -922,3 +922,174 @@ class TestClientExportAuditTrail:
         )
         data = export_client_data(sample_client, facility, admin_user)
         assert [e["action"] for e in data["audit_trail"]] == ["Löschung"]
+
+
+@pytest.fixture
+def fully_populated_client(facility, doc_type, sample_client, admin_user, confirmer_user, lead_user):
+    """Eine Person mit je einem Datensatz aus jeder Auskunfts-Kategorie (Refs #1752)."""
+    sample_client.notes = "Notiz-Freitext-PDF"
+    sample_client.k_anonymized = True
+    sample_client.save(update_fields=["notes", "k_anonymized"])
+
+    case = CaseModel.objects.create(
+        facility=facility,
+        client=sample_client,
+        title="PDF-Fall",
+        description="Fall-Beschreibung",
+        created_by=admin_user,
+    )
+    episode = Episode.objects.create(
+        case=case,
+        title="PDF-Episode",
+        description="Episoden-Text",
+        started_at=timezone.now().date(),
+        created_by=admin_user,
+    )
+    goal = OutcomeGoal.objects.create(case=case, title="PDF-Ziel", description="Ziel-Text", created_by=admin_user)
+    Milestone.objects.create(goal=goal, title="PDF-Meilenstein", sort_order=0)
+    event = Event.objects.create(
+        facility=facility,
+        client=sample_client,
+        document_type=doc_type,
+        case=case,
+        episode=episode,
+        occurred_at=timezone.now(),
+        data_json={"notiz": "Ereignis-Klartext"},
+        created_by=admin_user,
+    )
+    deleted_event = Event.objects.create(
+        facility=facility,
+        client=sample_client,
+        document_type=doc_type,
+        occurred_at=timezone.now() - timedelta(days=2),
+        data_json={},
+        is_deleted=True,
+        created_by=admin_user,
+    )
+    EventHistory.objects.create(
+        event=event,
+        changed_by=admin_user,
+        action=EventHistory.Action.CREATE,
+        data_after={"notiz": "Historien-Klartext"},
+        field_metadata={"notiz": {"name": "Notiz", "sensitivity": "", "is_encrypted": False}},
+    )
+    DeletionRequest.objects.create(
+        facility=facility,
+        target_type=DeletionRequest.TargetType.CLIENT,
+        target_id=sample_client.pk,
+        reason="PDF-Loeschgrund",
+        requested_by=admin_user,
+        reviewed_by=confirmer_user,
+    )
+    LegalHold.objects.create(
+        facility=facility,
+        target_type="Event",
+        target_id=deleted_event.pk,
+        reason="PDF-Hold-Grund",
+        created_by=admin_user,
+    )
+    RetentionProposal.objects.create(
+        facility=facility,
+        target_type=RetentionProposal.TargetType.EVENT,
+        target_id=event.pk,
+        deletion_due_at=timezone.now().date() + timedelta(days=5),
+        retention_category="pdf-kategorie",
+    )
+    workitem = WorkItem.objects.create(
+        facility=facility,
+        client=sample_client,
+        created_by=admin_user,
+        assigned_to=lead_user,
+        title="PDF-Aufgabe",
+        description="Aufgaben-Text",
+    )
+    Activity.objects.create(
+        facility=facility,
+        actor=admin_user,
+        verb=Activity.Verb.CREATED,
+        target=workitem,
+        summary="PDF-Aktivitaet",
+    )
+    RecentClientVisit.objects.create(user=admin_user, client=sample_client, facility=facility, is_favorite=True)
+    AuditLog.objects.create(
+        facility=facility,
+        user=admin_user,
+        action=AuditLog.Action.VIEW_QUALIFIED,
+        target_type="Client",
+        target_id=str(sample_client.pk),
+    )
+    return sample_client
+
+
+def _render_export_html(client_obj, facility, user):
+    """PDF erzeugen und das HTML abfangen, das WeasyPrint zu sehen bekommt."""
+    from unittest.mock import patch
+
+    import weasyprint
+
+    from core.services.client import export_client_data_pdf
+
+    captured = {}
+    real_html = weasyprint.HTML
+
+    def capturing_html(*args, **kwargs):
+        captured["string"] = kwargs.get("string", "")
+        return real_html(*args, **kwargs)
+
+    with patch("core.services.client.export.weasyprint.HTML", side_effect=capturing_html):
+        pdf_bytes = export_client_data_pdf(client_obj, facility, user)
+    assert pdf_bytes[:4] == b"%PDF"
+    return captured["string"]
+
+
+@pytest.mark.django_db
+class TestClientExportPdfCoverage:
+    """Refs #1752 — JSON und PDF decken denselben Umfang ab.
+
+    Das PDF darf zusammenfassen, muss aber jede Kategorie enthalten.
+    """
+
+    @pytest.mark.parametrize(
+        "needle",
+        [
+            "Notiz-Freitext-PDF",  # Client.notes
+            "K-anonymisiert",  # Anonymisierungs-Metadaten
+            "PDF-Fall",  # Fall
+            "PDF-Episode",  # Episode
+            "PDF-Ziel",  # Wirkungsziel
+            "PDF-Meilenstein",  # Meilenstein
+            "Ereignis-Klartext",  # Ereignis-Daten
+            "Historien-Klartext",  # Historien-Inhalte
+            "PDF-Loeschgrund",  # Loeschantrag mit Client-Target
+            "PDF-Hold-Grund",  # Legal Hold
+            "pdf-kategorie",  # Loeschvorschlag
+            "PDF-Aufgabe",  # Aufgabe
+            "PDF-Aktivitaet",  # Zeitstrom
+            "Qualifizierte Daten eingesehen",  # Audit-Auszug
+        ],
+    )
+    def test_pdf_contains_every_category(self, fully_populated_client, facility, admin_user, needle):
+        html = _render_export_html(fully_populated_client, facility, admin_user)
+        assert needle in html
+
+    def test_pdf_lists_deleted_events_section(self, fully_populated_client, facility, admin_user):
+        html = _render_export_html(fully_populated_client, facility, admin_user)
+        assert "Gelöschte Ereignisse" in html
+
+    def test_pdf_lists_recent_visits_section(self, fully_populated_client, facility, admin_user):
+        html = _render_export_html(fully_populated_client, facility, admin_user)
+        assert "Merkliste" in html
+
+    def test_pdf_audit_section_omits_employee_identity(self, fully_populated_client, facility, admin_user):
+        """Der Audit-Abschnitt darf keine Beschaeftigten-Identitaet zeigen."""
+        html = _render_export_html(fully_populated_client, facility, admin_user)
+        # Letztes Vorkommen = die Abschnitts-Ueberschrift (das erste steht im
+        # Hinweis-Kasten oben); danach folgen nur noch Tabelle und Footer.
+        audit_section = html.rsplit("Zugriffsprotokoll", 1)[1]
+        assert "Qualifizierte Daten eingesehen" in audit_section
+        assert "ce_admin" not in audit_section
+
+    def test_pdf_names_the_deliberate_exclusions(self, fully_populated_client, facility, admin_user):
+        """Die Auskunft muss ihre bewussten Ausschluesse benennen statt Vollstaendigkeit zu behaupten."""
+        html = _render_export_html(fully_populated_client, facility, admin_user)
+        assert "Dateianhänge" in html
