@@ -320,6 +320,31 @@ Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abges
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe `docs/dev/dev-deployment.md` (dev-only), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 
+#### Datenmigrationen auf RLS-Tabellen (Refs #1746)
+
+Jede `RunPython`-Datenmigration, die eine RLS-Tabelle liest oder schreibt, ruft als **erste Zeile** den Guard `assert_migration_role_bypasses_rls(schema_editor)` aus [`src/core/utils/migration_guards.py`](src/core/utils/migration_guards.py):
+
+```python
+from django.db import migrations
+
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
+
+def backfill(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
+    Client = apps.get_model("core", "Client")
+    ...
+
+
+class Migration(migrations.Migration):
+    dependencies = [("core", "0122_backfill_backend_data")]
+    operations = [migrations.RunPython(backfill, migrations.RunPython.noop)]
+```
+
+**Warum:** Migrationen laufen laut [ADR-020](docs/adr/020-three-role-postgres-model.md) als Admin-Rolle (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS`) — dort greift die `facility_isolation`-Policy nicht. Läuft eine Migration wegen einer Fehlkonfiguration unter der NOBYPASSRLS-App-Rolle, trifft sie ohne gesetztes `app.current_facility_id` **still 0 Zeilen**: die Migration gilt als erfolgreich, der Backfill fehlt. Der Guard macht daraus einen harten Abbruch (`MigrationRoleError`) samt Rollennamen und Fix-Hinweis. Kein `SET ROLE`/GUC-Turnen in der Migration — die Session-GUC `app.is_super_admin` ist **kein** akzeptierter Ersatz (bewusste Abgrenzung zu `has_rls_bypass_context`, das sie für Wartungs-/Cron-Pfade zulässt).
+
+Der Guard ergänzt das Deploy-Gate `current_connection_bypasses_rls` aus [`docker-migrate.sh`](docker-migrate.sh) (#1375): jenes prüft den Migrate-**Job** einmal vorab und greift nur im Container-Deploy, dieser sitzt **in** der Migration und schützt jeden Aufrufweg (manuelles `manage.py migrate`, Restore-Drill, Self-Hosting ohne das Skript). Bestandsmigrationen werden **nicht** nachgerüstet — die Inventur, welche betroffen gewesen wären, steht im Modul-Docstring von `migration_guards.py`. Tests: [`src/tests/test_migration_rls_guard.py`](src/tests/test_migration_rls_guard.py).
+
 ### Linting und Formatierung
 
 Das Projekt verwendet [Ruff](https://docs.astral.sh/ruff/) für Linting und Formatierung:
