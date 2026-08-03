@@ -505,6 +505,15 @@ class TestBuildClientOfflineBundleService:
         sicheren Marker minimiert werden — keine internen Attachment-IDs,
         keine Sortier-Indizes im Offline-Bundle.
         """
+        # ``anhang`` als reguläres FILE-Feld am Typ zuordnen (Refs #1725): ein
+        # FILE-Marker existiert real nur unter einem einst zugeordneten Slug, und
+        # seit dem Waisen-Gating würde ein Slug OHNE auffindbare Feldvorlage
+        # konservativ als HIGH verborgen — dann testete dieser Fall nicht mehr die
+        # Marker-Minimierung, sondern das Waisen-Gating.
+        ft_anhang = FieldTemplate.objects.create(
+            facility=facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE
+        )
+        DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft_anhang, sort_order=2)
         Event.objects.create(
             facility=facility,
             client=client_identified,

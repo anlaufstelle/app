@@ -26,6 +26,7 @@ from core.models import Case as CaseModel
 from core.models import Client, DocumentType, Event, User, WorkItem
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
 from core.services.config import iter_fields_in_block_order
+from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
 from core.services.file_vault import safe_decrypt
 
 # Include at most this many events per client, or all events within the
@@ -114,10 +115,20 @@ def _visible_data_fields(user, event) -> dict[str, Any]:
     field_templates = {
         dtf.field_template.slug: dtf.field_template for dtf in doc_type.fields.select_related("field_template")
     }
+    # SICHERHEITSBEFUND (Refs #1725): verwaiste Slugs (Wert in ``data_json``, aber
+    # nicht mehr am Typ) facility-weit auflösen und bei fehlendem Template
+    # konservativ HIGH gaten, BEVOR ein Wert entschlüsselt ins Offline-Bundle
+    # geschrieben wird — sonst fiele ihre Sensitivity auf ``""`` (=NORMAL) und ein
+    # einst als elevated/high eingestufter Wert landete lesbar in IndexedDB.
+    # Gleiche Auflösung wie ``build_event_detail_context`` und der Konflikt-Diff.
+    orphan_slugs = [slug for slug in event.data_json if slug not in field_templates]
+    orphan_templates = resolve_orphan_field_templates(doc_type, orphan_slugs)
     result: dict[str, Any] = {}
     for slug, value in event.data_json.items():
         ft = field_templates.get(slug)
-        field_sensitivity = ft.sensitivity if ft else ""
+        field_sensitivity = (
+            (ft.sensitivity or "") if ft is not None else orphan_gating_sensitivity(orphan_templates.get(slug))
+        )
         if not user_can_see_field(user, doc_type.sensitivity, field_sensitivity):
             continue
         # Attachment markers are metadata (filename, content-type) — keep them

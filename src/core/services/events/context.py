@@ -10,7 +10,7 @@ import uuid
 
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, FieldTemplate
+from core.models import DocumentType
 from core.services.compliance import user_can_see_field
 
 # M2 (Refs #1058, P7): die Wert-Formatierung ist entity-neutral und lebt jetzt in
@@ -18,6 +18,7 @@ from core.services.compliance import user_can_see_field
 # ``services/events/__init__.py`` und die Mutation-Followup-Tests importieren ihn
 # unveraendert von hier (Muster P3: Umzug + Alias-Re-Export).
 from core.services.dynamic_data import format_dynamic_display_value as _format_field_display_value
+from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
 from core.services.events.fields import (
     _is_file_marker,
     build_field_template_lookup,
@@ -39,10 +40,20 @@ def filtered_server_data_json(user, event):
         return {}
     doc_sensitivity = event.document_type.sensitivity
     field_templates = build_field_template_lookup(event.document_type)
+    # SICHERHEITSBEFUND (Refs #1725): verwaiste Slugs (Wert in ``data_json``, aber
+    # nicht mehr am Typ) facility-weit auflösen und bei fehlendem Template
+    # konservativ HIGH gaten — sonst fiele ihre Sensitivity auf ``""`` (=NORMAL)
+    # und ein einst als elevated/high eingestufter Wert leckte entschlüsselt in
+    # den Konflikt-Diff (server_state) an unterberechtigte Rollen. Gleiche
+    # Auflösung wie ``build_event_detail_context`` und das Offline-Bundle.
+    orphan_slugs = [slug for slug in event.data_json if slug not in field_templates]
+    orphan_templates = resolve_orphan_field_templates(event.document_type, orphan_slugs)
     result = {}
     for slug, value in event.data_json.items():
         ft = field_templates.get(slug)
-        field_sensitivity = ft.sensitivity if ft else ""
+        field_sensitivity = (
+            (ft.sensitivity or "") if ft is not None else orphan_gating_sensitivity(orphan_templates.get(slug))
+        )
         if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
             continue
         if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
@@ -319,14 +330,9 @@ def build_event_detail_context(event, user):
         # Sensitivity eines verwaisten Felds auf ``""`` (=NORMAL) — einst als
         # elevated/high eingestufte Werte würden allen sichtbar. ``FieldTemplate``
         # ist unique je (facility, slug) und bleibt durch den Löschschutz am
-        # Leben, solange Daten unter dem Slug existieren.
-        orphan_templates = {
-            ft.slug: ft
-            for ft in FieldTemplate.objects.filter(
-                facility_id=event.document_type.facility_id,
-                slug__in=orphan_slugs,
-            )
-        }
+        # Leben, solange Daten unter dem Slug existieren (gemeinsamer Helfer, den
+        # auch Konflikt-Diff und Offline-Bundle nutzen).
+        orphan_templates = resolve_orphan_field_templates(event.document_type, orphan_slugs)
         for key in sorted(orphan_slugs):
             fields_display.append(
                 _build_field_display_entry(

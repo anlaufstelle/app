@@ -215,6 +215,50 @@ class TestFilteredServerDataJson:
         result = filtered_server_data_json(assistant_user, event)
         assert "ghost-slug" not in result
 
+    def test_orphan_high_field_gated_facility_wide(
+        self, facility, client_identified, staff_user, assistant_user, lead_user
+    ):
+        """Refs #1725 (SICHERHEITSBEFUND): Ein einst HIGH-eingestuftes, nun
+        verwaistes Feld (Slug in ``data_json``, nicht mehr am Typ) darf im
+        Konflikt-Diff seine Sensitivity NICHT auf ``""`` (=NORMAL) fallen lassen.
+
+        Vor dem Fix fiel ``ft=None`` → Sensitivity ``""`` → der HIGH-Klartext
+        landete für ALLE Rollen im ``server_state``. Jetzt wird der Slug
+        facility-weit über das ``FieldTemplate`` aufgelöst — Assistant (rank 0)
+        und Fachkraft (rank 1) dürfen den Wert nicht sehen, Leitung (rank 2) schon.
+        """
+        doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft_high = _make_field_template(
+            facility,
+            name="Diagnose",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=True,
+        )
+        # ft_high NICHT attachen → sofort verwaist.
+        event = _make_event(
+            facility, client_identified, doc_type, staff_user, data_json={ft_high.slug: "streng geheim"}
+        )
+        assert ft_high.slug not in filtered_server_data_json(assistant_user, event), (
+            "Assistant darf ein einst-HIGH Waisenfeld nicht im Konflikt-Diff sehen"
+        )
+        assert ft_high.slug not in filtered_server_data_json(staff_user, event), (
+            "Fachkraft darf ein einst-HIGH Waisenfeld nicht im Konflikt-Diff sehen"
+        )
+        assert filtered_server_data_json(lead_user, event).get(ft_high.slug) == "streng geheim", (
+            "Leitung sieht den Waisenwert weiterhin"
+        )
+
+    def test_orphan_without_template_gated_high_conservatively(
+        self, facility, client_identified, staff_user, lead_user
+    ):
+        """Refs #1725: Findet sich für einen verwaisten Slug ausnahmsweise gar
+        kein ``FieldTemplate`` (Löschschutz sollte das verhindern), wird er
+        konservativ als HIGH gegatet — Fachkraft verbergen, Leitung zeigen."""
+        doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.NORMAL)
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={"ghost-orphan": "rest"})
+        assert "ghost-orphan" not in filtered_server_data_json(staff_user, event)
+        assert filtered_server_data_json(lead_user, event).get("ghost-orphan") == "rest"
+
     def test_single_file_marker_preserved(self, facility, client_identified, staff_user):
         """``__file__``-Branch: nur ``__file__`` + ``name`` bleiben übrig."""
         doc_type = _make_doc_type(facility)

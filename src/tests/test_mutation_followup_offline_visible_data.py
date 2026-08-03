@@ -73,6 +73,41 @@ class TestVisibleDataFields:
         # Assistant sieht weder HIGH doc noch HIGH field — Strip greift.
         assert ft.slug not in result
 
+    def test_orphan_high_field_gated_facility_wide(
+        self, facility, client_identified, staff_user, assistant_user, lead_user
+    ):
+        """Refs #1725 (SICHERHEITSBEFUND): Ein einst HIGH-eingestuftes, nun
+        verwaistes Feld darf im Offline-Bundle seine Sensitivity NICHT auf ``""``
+        (=NORMAL) fallen lassen und entschlüsselt an unterberechtigte Rollen
+        ausgeliefert werden.
+
+        Vor dem Fix fiel ``ft=None`` → Sensitivity ``""`` → der HIGH-Klartext
+        landete im Offline-Bundle (persistiert in IndexedDB) auch für Assistenz.
+        Jetzt wird der Slug facility-weit aufgelöst — Assistant sieht ihn nicht,
+        Leitung schon.
+        """
+        dt = _make_doc_type(facility, name="Waise", sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft_high = _make_field_template(facility, name="Diagnose", sensitivity="high", is_encrypted=True)
+        # ft_high NICHT attachen → sofort verwaist.
+        event = _make_event(facility, client_identified, dt, staff_user, data_json={ft_high.slug: "streng geheim"})
+        assert ft_high.slug not in _visible_data_fields(assistant_user, event), (
+            "Assistant darf ein einst-HIGH Waisenfeld nicht im Offline-Bundle sehen"
+        )
+        assert _visible_data_fields(lead_user, event).get(ft_high.slug) == "streng geheim", (
+            "Leitung sieht den Waisenwert weiterhin"
+        )
+
+    def test_orphan_without_template_gated_high_conservatively(
+        self, facility, client_identified, doc_type_contact, staff_user, lead_user
+    ):
+        """Refs #1725: Ein verwaister Slug ohne auffindbares ``FieldTemplate``
+        wird konservativ als HIGH gegatet — Fachkraft verbergen, Leitung zeigen."""
+        event = _make_event(
+            facility, client_identified, doc_type_contact, staff_user, data_json={"ghost-orphan": "rest"}
+        )
+        assert "ghost-orphan" not in _visible_data_fields(staff_user, event)
+        assert _visible_data_fields(lead_user, event).get("ghost-orphan") == "rest"
+
     def test_single_file_marker_keeps_name_only(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``"name": value.get("name", "")`` → ``"id"`` wuerde id leaken."""
         event = _make_event(

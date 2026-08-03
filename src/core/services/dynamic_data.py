@@ -45,6 +45,53 @@ def build_field_template_lookup(document_type: DocumentType, *, ordered: bool = 
     return {dtf.field_template.slug: dtf.field_template for dtf in qs}
 
 
+def resolve_orphan_field_templates(
+    document_type: DocumentType, orphan_slugs: Iterable[str]
+) -> dict[str, FieldTemplate]:
+    """Facility-weites ``{slug: FieldTemplate}`` für verwaiste Slugs (Refs #1725).
+
+    Verwaist = Slug mit Daten in ``data_json``, aber ohne Zuordnung am aktuellen
+    ``document_type`` (z. B. nachdem eine Feldzuordnung entfernt wurde). Ein
+    solcher Wert darf seine Sensitivity/Verschlüsselung NICHT verlieren:
+    ``FieldTemplate`` ist unique je (facility, slug) und bleibt durch den
+    Löschschutz am Leben, solange Daten unter dem Slug existieren.
+
+    Gemeinsame Auflösungs-Quelle für alle vier Anzeige-/Ausliefer-Flächen —
+    Ereignis-Detail (:func:`~core.services.events.context.build_event_detail_context`),
+    Waisen-Sektion (:func:`build_orphan_fields_display`), Konflikt-Diff
+    (:func:`~core.services.events.context.filtered_server_data_json`) und
+    Offline-Bundle (:func:`~core.services.system.offline._visible_data_fields`).
+    Ein Slug fehlt im Ergebnis, wenn (ausnahmsweise) kein Template existiert; der
+    Aufrufer MUSS ihn dann konservativ als HIGH gaten
+    (:func:`orphan_gating_sensitivity`), nie auf NORMAL (``""``) zurückfallen.
+    """
+    from core.models import FieldTemplate
+
+    orphan_slugs = list(orphan_slugs)
+    if not orphan_slugs:
+        return {}
+    return {
+        ft.slug: ft
+        for ft in FieldTemplate.objects.filter(
+            facility_id=document_type.facility_id,
+            slug__in=orphan_slugs,
+        )
+    }
+
+
+def orphan_gating_sensitivity(field_template: FieldTemplate | None) -> str:
+    """Gating-Sensitivity eines verwaisten Feldes (Refs #1725).
+
+    Aufgelöstes Template → dessen Sensitivity (``""`` = erbt vom Typ/NORMAL).
+    Fehlt das Template, wird der Wert **konservativ als HIGH** gegatet — ein Slug
+    mit Daten, aber ohne auffindbare Vorlage, darf nie versehentlich offengelegt
+    werden.
+    """
+    from core.models import DocumentType
+
+    return (field_template.sensitivity or "") if field_template is not None else DocumentType.Sensitivity.HIGH
+
+
 def remove_restricted_fields(user: Any, document_type: DocumentType, data_form: forms.Form) -> list[str]:
     """Remove fields from *data_form* that *user* may not see.
 
@@ -294,8 +341,6 @@ def build_orphan_fields_display(
     Reihenfolge: nach Slug sortiert (stabil, Refs #1729). Entry-Form identisch zu
     :func:`build_dynamic_fields_display` plus ``orphaned=True``.
     """
-    from core.models import DocumentType as DocumentTypeModel
-    from core.models import FieldTemplate
     from core.services.file_vault import safe_decrypt
 
     values = data_json or {}
@@ -305,20 +350,14 @@ def build_orphan_fields_display(
         return []
 
     doc_sensitivity = document_type.sensitivity
-    resolved = {
-        ft.slug: ft
-        for ft in FieldTemplate.objects.filter(
-            facility_id=document_type.facility_id,
-            slug__in=orphan_slugs,
-        )
-    }
+    resolved = resolve_orphan_field_templates(document_type, orphan_slugs)
 
     entries: list[dict[str, Any]] = []
     for slug in orphan_slugs:
         ft = resolved.get(slug)
         # Ohne auffindbares Template konservativ als HIGH gaten (Löschschutz
         # sollte das verhindern) — lieber verbergen als versehentlich offenlegen.
-        field_sensitivity = (ft.sensitivity or "") if ft is not None else DocumentTypeModel.Sensitivity.HIGH
+        field_sensitivity = orphan_gating_sensitivity(ft)
         label = ft.name if ft is not None else slug
         is_encrypted = ft.is_encrypted if ft is not None else False
         if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
