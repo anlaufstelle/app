@@ -20,6 +20,7 @@ roh, damit die Snapshot-Payload unveraendert bleibt.
 
 import dataclasses
 from collections import OrderedDict
+from typing import Literal
 
 from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy as _
@@ -81,19 +82,34 @@ _EXPORT_MESSAGES = {
 # bleibt sichtbar (sonst waere der Bericht irrefuehrend vollstaendig), die Zahl
 # verschwindet. Bewusst ohne jede Ziffer — auch Anteile/Bezugsgroessen lassen
 # die unterdrueckte Zahl zurueckrechnen.
+#
+# Die Formulierung sagt bewusst **nicht**, dass es solche Ereignisse gibt: der
+# gleiche Text steht auch dann, wenn die Meldung nur als Unterdrueckungs-Hinweis
+# fuer einen Wert eingesetzt wird, den es gar nicht gibt (``_verberge_term``).
+# Waeren beide Faelle unterscheidbar, verriete der Wortlaut selbst, ob die
+# Luecke > 0 ist — und damit genau das, was unterdrueckt werden soll.
 _SUPPRESSED_MESSAGES = {
-    "unmapped_system_types": (
-        "Ereignisse ohne Jugendamt-Zuordnung im Zeitraum vorhanden (Anzahl unterdrückt, k-Anonymität)"
-    ),
+    "unmapped_system_types": "Angabe zu Ereignissen ohne Jugendamt-Zuordnung im Zeitraum unterdrückt (k-Anonymität)",
     "events_without_client": (
-        "Ereignisse ohne Personenbezug im Zeitraum vorhanden (Anzahl unterdrückt, k-Anonymität) "
+        "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-Anonymität) "
         "— nicht in Altersgruppen/Personenzahl enthalten"
     ),
 }
 
+# Severity der beiden Identitaets-Terme — noetig, wenn ein Unterdrueckungs-
+# Hinweis fuer eine *fehlende* Meldung erzeugt wird (dann gibt es kein Original).
+_ISSUE_SEVERITIES: dict[str, Literal["info", "warning"]] = {
+    "unmapped_system_types": "warning",
+    "events_without_client": "info",
+}
+
+# Meldungs-Terme der Vier-Term-Identitaet, in Degradations-Reihenfolge:
+# ``events_without_client`` faellt zuerst (siehe ``_schliesse_identitaets_leak``).
+_IDENTITY_CODES = ("events_without_client", "unmapped_system_types")
+
 # Fail-safe fuer kuenftige Checks ohne eigenen Ersatztext: lieber unspezifisch
 # als eine Kleinstfallzahl im Export.
-_SUPPRESSED_FALLBACK = "Hinweis vorhanden (Anzahl unterdrückt, k-Anonymität)"
+_SUPPRESSED_FALLBACK = "Angabe unterdrückt (k-Anonymität)"
 
 
 def _prepare_issue(issue: CompletenessIssue, threshold: int, komplemente: dict[str, int]) -> CompletenessIssue:
@@ -119,6 +135,82 @@ def _prepare_issue(issue: CompletenessIssue, threshold: int, komplemente: dict[s
             count=None,
         )
     return dataclasses.replace(issue, message=vorlage.format(count=issue.count))
+
+
+def _term_status(issues: list[CompletenessIssue], code: str) -> str:
+    """``"beziffert"`` | ``"verborgen"`` | ``"fehlt"`` fuer einen Meldungs-Term.
+
+    ``"fehlt"`` heisst **bekannt**: ``validate_completeness`` meldet nur Luecken
+    > 0, eine fehlende Meldung ist also deterministisch die Zahl 0.
+    """
+    for issue in issues:
+        if issue.code == code:
+            return "beziffert" if issue.count is not None else "verborgen"
+    return "fehlt"
+
+
+def _bekannte_terme(summary: dict, issues: list[CompletenessIssue]) -> int:
+    """Wie viele der vier Identitaets-Terme ein Empfaenger bestimmen kann."""
+    bekannt = 0
+    if summary.get("total") is not None:
+        bekannt += 1
+    # Σ der Altersgruppen ist nur ohne unterdrueckte Zelle bestimmbar; die leere
+    # Liste ist bestimmbar (= 0).
+    if not any(zeile.get("suppressed") for zeile in summary.get("by_age_cluster", [])):
+        bekannt += 1
+    bekannt += sum(1 for code in _IDENTITY_CODES if _term_status(issues, code) != "verborgen")
+    return bekannt
+
+
+def _verberge_term(issues: list[CompletenessIssue], code: str) -> list[CompletenessIssue]:
+    """Nimmt einem Meldungs-Term seine Aussagekraft fuer die Identitaet.
+
+    Bei bezifferter Meldung faellt die Zahl. Fehlt die Meldung, wird ein
+    Unterdrueckungs-Hinweis **eingefuegt** — sonst bliebe die Abwesenheit selbst
+    die Information „dieser Term ist 0".
+    """
+    ersatz_text = _SUPPRESSED_MESSAGES[code]
+    for index, issue in enumerate(issues):
+        if issue.code == code:
+            ersetzt = dataclasses.replace(issue, message=ersatz_text, count=None)
+            return [*issues[:index], ersetzt, *issues[index + 1 :]]
+
+    platzhalter = CompletenessIssue(code, ersatz_text, _ISSUE_SEVERITIES[code], count=None)
+    # Kanonische Reihenfolge der Meldungen beibehalten (unmapped zuerst).
+    position = 0 if code == "unmapped_system_types" else len(issues)
+    return [*issues[:position], platzhalter, *issues[position:]]
+
+
+def _schliesse_identitaets_leak(summary: dict, issues: list[CompletenessIssue]) -> list[CompletenessIssue]:
+    """Schliesst die Rueckrechnung ueber die Vier-Term-Identitaet.
+
+    Konstruktionsbedingt gilt ``total + unmapped_events = Σ by_age_cluster +
+    without_client`` (beide Seiten = alle sichtbaren Ereignisse im Zeitraum).
+    Sind drei Terme bekannt und der vierte verborgen, ist der vierte exakt
+    bestimmt — die Suppression liefe leer. Dann faellt ein weiterer Term, und
+    zwar **immer** ueber die Meldungen: ``total`` und die Altersgruppen-Zellen
+    gehoeren dem Report-Koerper (``suppress_jugendamt_stats``), an dem hier
+    nicht nachgebessert wird.
+
+    Bevorzugt faellt eine bezifferte Meldung (sichtbarer Informationsverlust,
+    aber kein neuer Hinweis); erst wenn keine beziffert ist, wird eine fehlende
+    Meldung durch einen Unterdrueckungs-Hinweis ersetzt. Jede Runde verwandelt
+    einen bekannten Term in einen verborgenen, die Schleife terminiert also
+    spaetestens nach zwei Runden (mehr Meldungs-Terme gibt es nicht).
+    """
+    ergebnis = list(issues)
+    # Bewusst durch die Zahl der Meldungs-Terme begrenzt statt ``while``: jede
+    # Runde verbirgt einen Term, mehr als zwei kann es nicht geben.
+    for _runde in _IDENTITY_CODES:
+        if _bekannte_terme(summary, ergebnis) != 3:
+            break
+        kandidat = next(
+            (code for code in _IDENTITY_CODES if _term_status(ergebnis, code) == "beziffert"), None
+        ) or next((code for code in _IDENTITY_CODES if _term_status(ergebnis, code) == "fehlt"), None)
+        if kandidat is None:  # pragma: no cover - bei drei bekannten Termen unerreichbar
+            break
+        ergebnis = _verberge_term(ergebnis, kandidat)
+    return ergebnis
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -267,8 +359,10 @@ class JugendamtBackend(DatasetBackend):
         Vollstaendigkeits-Meldungen werden fuer den Export **immer** neu
         formuliert (``_prepare_issue``): ohne Bezugsgroesse und Prozentanteil,
         und ganz ohne Zahl, sobald die Zahl selbst oder ihr Komplement unter
-        der Schwelle liegt. Der Hinweis auf die Luecke bleibt in jedem Fall
-        stehen. ``build_dataset`` bleibt roh (Snapshot-Payload).
+        der Schwelle liegt. Anschliessend prueft
+        ``_schliesse_identitaets_leak`` die Vier-Term-Identitaet als Ganzes.
+        Der Hinweis auf die Luecke bleibt in jedem Fall stehen.
+        ``build_dataset`` bleibt roh (Snapshot-Payload).
 
         Erwartet das **rohe** ``build_dataset``-Ergebnis: ``by_category``
         kommt als ``(name, count)``-Tupel herein und geht als Dict-Zeilen
@@ -300,5 +394,8 @@ class JugendamtBackend(DatasetBackend):
             "unmapped_system_types": result.summary.get("total") or 0,
         }
         completeness = [_prepare_issue(issue, threshold, komplemente) for issue in result.completeness]
+        # Zweiter Durchgang gegen die Rueckrechnung ueber die Identitaet als
+        # Ganzes — die paarweise Komplementregel oben deckt nur eine Richtung ab.
+        completeness = _schliesse_identitaets_leak(summary, completeness)
 
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

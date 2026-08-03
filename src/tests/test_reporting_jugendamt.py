@@ -9,6 +9,7 @@ muss diesen Wegfall ueberleben.
 import csv
 import itertools
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
@@ -28,7 +29,16 @@ DATE_FROM = date(2025, 5, 1)
 DATE_TO = date(2025, 5, 31)
 
 # Aggregat-Geruest fuer Tests, die nur die Completeness-Transformation pruefen.
-_LEERES_SUMMARY = {"total": 0, "by_category": [], "by_age_cluster": [], "unique_clients": 0}
+# Bewusst so gewaehlt, dass **alle vier** Terme der Identitaet bekannt sind
+# (total 10, Σ Altersgruppen 10, beide Meldungen fehlen = 0): dann ist kein Term
+# verborgen und die Identitaets-Absicherung degradiert nichts zusaetzlich — die
+# Tests bleiben auf die Meldungs-Transformation fokussiert.
+_NEUTRALES_SUMMARY = {
+    "total": 10,
+    "by_category": [("Kontakte", 10)],
+    "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 10}],
+    "unique_clients": 5,
+}
 
 
 def _veroeffentlichte_zahlen(value):
@@ -47,6 +57,60 @@ def _veroeffentlichte_zahlen(value):
     if isinstance(value, list):
         return [zahl for item in value for zahl in _veroeffentlichte_zahlen(item)]
     return [value] if isinstance(value, int) and not isinstance(value, bool) else []
+
+
+def _alle_veroeffentlichten_zahlen(payload):
+    """Zahlen aus Aggregat, Records **und** den Completeness-Meldungstexten."""
+    zahlen = _veroeffentlichte_zahlen({key: payload[key] for key in ("summary", "records")})
+    for issue in payload["completeness"]:
+        zahlen.extend(int(treffer) for treffer in re.findall(r"\d+", issue["message"]))
+    return zahlen
+
+
+def _ableitbare_werte(zahlen, max_terme=3):
+    """Alle Werte, die eine ±-Kombination aus bis zu ``max_terme`` Zahlen ergibt.
+
+    Grobes Sicherheitsnetz gegen Teilmengen-Summen/-Differenzen. Es kann die
+    Vier-Term-Identitaet nicht abbilden (Σ Altersgruppen ist keine
+    veroeffentlichte *Einzel*zahl) — dafuer gibt es
+    :func:`_identitaets_terme`. Umgekehrt trifft es auch harmlose Zufalls-
+    kollisionen, deshalb sind die Fixture-Zahlen kollisionsfrei gewaehlt.
+    """
+    werte = set()
+    for groesse in range(1, max_terme + 1):
+        for kombination in itertools.combinations(zahlen, groesse):
+            for vorzeichen in itertools.product((1, -1), repeat=groesse):
+                werte.add(sum(v * z for v, z in zip(vorzeichen, kombination, strict=True)))
+    return werte
+
+
+def _identitaets_terme(payload):
+    """Die vier Terme von ``total + unmapped = Σ Altersgruppen + ohne Person``.
+
+    Genau so, wie ein Empfaenger sie aus dem Artefakt liest: ``None`` = verborgen.
+    Eine **fehlende** Meldung ist nicht verborgen, sondern deterministisch 0.
+    """
+    summary = payload["summary"]
+    zeilen = summary["by_age_cluster"]
+    meldungen = {issue["code"]: issue["message"] for issue in payload["completeness"]}
+
+    def meldungszahl(code):
+        if code not in meldungen:
+            return 0
+        treffer = re.findall(r"\d+", meldungen[code])
+        return int(treffer[0]) if treffer else None
+
+    return {
+        "total": summary["total"],
+        "altersgruppen": None if any(zeile["suppressed"] for zeile in zeilen) else sum(z["count"] for z in zeilen),
+        "unmapped": meldungszahl("unmapped_system_types"),
+        "ohne_person": meldungszahl("events_without_client"),
+    }
+
+
+def _exakt_rueckrechenbar(terme):
+    """Genau ein verborgener Term ⇒ die Identitaet bestimmt ihn exakt."""
+    return sum(1 for wert in terme.values() if wert is None) == 1
 
 
 @pytest.fixture(autouse=True)
@@ -275,6 +339,71 @@ def unterdrueckte_randsumme_daten(facility, make_doc_type, make_client, make_eve
         make_event(kontakt, person)
     for _index in range(5):
         make_event(notiz, person)
+
+    return facility
+
+
+@pytest.fixture
+def identitaet_a_daten(facility, make_doc_type, make_client, make_event):
+    """Review N1, Szenario (a): ``total``=25 und Σ Altersgruppen=27 veroeffentlicht,
+    **keine** Meldung „ohne Personenbezug" (also deterministisch 0) — damit ist die
+    unterdrueckte Unmapped-Zahl 2 als ``27 − 25`` exakt bestimmt.
+
+    Zahlen kollisionsfrei gewaehlt: keine ±-Kombination aus bis zu drei
+    veroeffentlichten Zahlen (25, 20, 5, 11, 10, 6 + Records) ergibt 2. Drei
+    Personen ⇒ ``unique_clients`` < k bleibt unterdrueckt und faellt als
+    Rechengroesse weg.
+    """
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+
+    jung = make_client("JA-A1", Client.AgeCluster.U18)
+    mittel = make_client("JA-A2", Client.AgeCluster.AGE_18_26)
+    alt = make_client("JA-A3", Client.AgeCluster.AGE_27_PLUS)
+
+    for _index in range(11):  # u18: 11
+        make_event(kontakt, jung)
+    for _index in range(9):  # 18_26: 9 + 1 = 10
+        make_event(kontakt, mittel)
+    make_event(notiz, mittel)
+    for _index in range(5):  # 27_plus: 5 + 1 = 6
+        make_event(beratung, alt)
+    make_event(notiz, alt)
+
+    return facility
+
+
+@pytest.fixture
+def identitaet_b_daten(facility, make_doc_type, make_client, make_event):
+    """Review N1, Szenario (b): ``total``=23, Σ Altersgruppen=24 und eine
+    bezifferte Unmapped-Meldung (5) — ``23 + 5 − 24`` ergibt exakt die
+    unterdrueckte Zahl der Ereignisse ohne Personenbezug (4).
+
+    Zahlen kollisionsfrei: keine ±-Kombination aus bis zu drei veroeffentlichten
+    Zahlen (23, 15, 8, 9, 8, 7 + Records) ergibt 4 oder 5.
+    """
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+
+    jung = make_client("JA-B1", Client.AgeCluster.U18)
+    mittel = make_client("JA-B2", Client.AgeCluster.AGE_18_26)
+    alt = make_client("JA-B3", Client.AgeCluster.AGE_27_PLUS)
+
+    for _index in range(6):  # u18: 6 + 3 = 9
+        make_event(kontakt, jung)
+    for _index in range(3):
+        make_event(notiz, jung)
+    for _index in range(6):  # 18_26: 6 + 2 = 8
+        make_event(kontakt, mittel)
+    for _index in range(2):
+        make_event(notiz, mittel)
+    for _index in range(7):  # 27_plus: 7
+        make_event(beratung, alt)
+    for _index in range(3):  # ohne Personenbezug: 3 + 1 = 4
+        make_event(kontakt, None)
+    make_event(beratung, None)
 
     return facility
 
@@ -752,7 +881,7 @@ class TestPrepareExport:
     def test_completeness_ohne_rohzahl_bleibt_unveraendert(self, backend, facility):
         """Ohne ``count`` fehlt die Transformationsgrundlage — Meldung bleibt stehen."""
         issue = CompletenessIssue("strukturhinweis", "Keine Zahl in dieser Meldung.", "info")
-        result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
+        result = DatasetResult(mode="aggregate", records=[], summary=_NEUTRALES_SUMMARY, completeness=[issue])
 
         assert backend.prepare_export(facility, result).completeness == [issue]
 
@@ -763,7 +892,7 @@ class TestPrepareExport:
         sie ist (auch ohne bekannte Komplementbeziehung).
         """
         issue = CompletenessIssue("kuenftiger_check", f"{count} Ereignisse mit Luecke", "warning", count=count)
-        result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
+        result = DatasetResult(mode="aggregate", records=[], summary=_NEUTRALES_SUMMARY, completeness=[issue])
 
         transformiert = backend.prepare_export(facility, result).completeness[0]
         assert transformiert.count is None
@@ -890,9 +1019,8 @@ class TestExportDatasetIntegration:
         for issue in payload["completeness"]:
             assert not any(char.isdigit() for char in issue["message"])
 
-        zahlen = _veroeffentlichte_zahlen({key: payload[key] for key in ("summary", "records", "completeness")})
-        assert 4 not in zahlen
-        assert all(abs(links - rechts) != 4 for links, rechts in itertools.combinations(zahlen, 2))
+        zahlen = _alle_veroeffentlichten_zahlen(payload)
+        assert 4 not in _ableitbare_werte(zahlen)
 
     def test_rueckrechnung_auch_im_xml_ausgeschlossen(self, backend, rueckrechnungs_daten):
         response = export_dataset(backend, rueckrechnungs_daten, DATE_FROM, DATE_TO, format="xml")
@@ -920,14 +1048,113 @@ class TestExportDatasetIntegration:
         assert [issue["code"] for issue in payload["completeness"]] == ["unmapped_system_types"]
         assert not any(char.isdigit() for char in payload["completeness"][0]["message"])
 
-        zahlen = _veroeffentlichte_zahlen({key: payload[key] for key in ("summary", "records", "completeness")})
+        zahlen = _alle_veroeffentlichten_zahlen(payload)
         assert zahlen == [8]  # nur die Altersgruppen-Zelle (>= k) bleibt sichtbar
+        ableitbar = _ableitbare_werte(zahlen)
+        assert 3 not in ableitbar  # unterdrueckte Randsumme
+        assert 5 not in ableitbar  # unterdrueckte Unmapped-Zahl
 
     def test_p4_serialisierer_feldsatz_unveraendert(self, backend, kleine_daten):
         """``count`` ist rein intern — die Completeness-JSON-Felder bleiben bei drei."""
         payload = json.loads(export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="json").content)
 
         assert all(set(issue) == {"code", "message", "severity"} for issue in payload["completeness"])
+
+
+class TestVierTermIdentitaet:
+    """Review N1: ``total + unmapped = Σ Altersgruppen + ohne Person``.
+
+    Sind drei der vier Terme bekannt — veroeffentlicht **oder** deterministisch
+    (fehlende Meldung = 0) — bestimmt die Identitaet den vierten exakt, auch
+    wenn er gerade unterdrueckt wurde. Der Export muss deshalb einen weiteren
+    Term verbergen, und zwar ueber die Meldungszahlen: ``total`` und die
+    Altersgruppen-Zellen gehoeren dem Report-Koerper (``suppress_jugendamt_stats``).
+    """
+
+    def _payload(self, backend, facility):
+        return json.loads(export_dataset(backend, facility, DATE_FROM, DATE_TO, format="json").content)
+
+    def test_szenario_a_ohne_meldung_ist_nicht_aufloesbar(self, backend, identitaet_a_daten):
+        """(a) 27 − 25 = 2 waere die unterdrueckte Unmapped-Zahl.
+
+        Die fehlende Meldung „ohne Personenbezug" ist der dritte bekannte Term
+        (deterministisch 0) — sie wird durch einen ausdruecklichen
+        Unterdrueckungs-Hinweis ersetzt, damit sie nicht mehr 0 bedeutet.
+        """
+        payload = self._payload(backend, identitaet_a_daten)
+        terme = _identitaets_terme(payload)
+
+        assert terme["total"] == 25
+        assert terme["altersgruppen"] == 27
+        assert not _exakt_rueckrechenbar(terme)
+        assert terme["unmapped"] is None
+        assert terme["ohne_person"] is None
+        assert 2 not in _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
+
+    def test_szenario_b_bezifferte_meldung_wird_degradiert(self, backend, identitaet_b_daten):
+        """(b) 23 + 5 − 24 = 4 waere die unterdrueckte Zahl ohne Personenbezug."""
+        payload = self._payload(backend, identitaet_b_daten)
+        terme = _identitaets_terme(payload)
+
+        assert terme["total"] == 23
+        assert terme["altersgruppen"] == 24
+        assert not _exakt_rueckrechenbar(terme)
+        # Die bezifferte Meldung wird bevorzugt degradiert (Report-Koerper bleibt).
+        assert terme["unmapped"] is None
+        assert terme["ohne_person"] is None
+        ableitbar = _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
+        assert 4 not in ableitbar
+        assert 5 not in ableitbar
+
+    @pytest.mark.parametrize("fixture_name", ["identitaet_a_daten", "identitaet_b_daten"])
+    def test_meldungstexte_im_xml_sind_ziffernfrei(self, backend, request, fixture_name):
+        einrichtung = request.getfixturevalue(fixture_name)
+        response = export_dataset(backend, einrichtung, DATE_FROM, DATE_TO, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        issues = root.find("completeness").findall("issue")
+        assert {issue.get("code") for issue in issues} == {"unmapped_system_types", "events_without_client"}
+        for issue in issues:
+            assert not any(char.isdigit() for char in issue.text)
+
+    def test_ohne_verborgenen_term_keine_zusatzmeldung(self, backend, grosse_daten):
+        """Alle vier Terme bekannt (beide Meldungen fehlen) ⇒ nichts zu verbergen."""
+        payload = self._payload(backend, grosse_daten)
+
+        assert payload["completeness"] == []
+        assert _identitaets_terme(payload) == {
+            "total": 11,
+            "altersgruppen": 11,
+            "unmapped": 0,
+            "ohne_person": 0,
+        }
+
+    def test_leerer_zeitraum_degradiert_genau_einmal(self, backend, parity_daten):
+        """Terminierung: ``total``=0 wird unterdrueckt, beide Meldungen fehlen —
+        ein einziger Unterdrueckungs-Hinweis bringt die Zahl bekannter Terme
+        von drei auf zwei, danach greift die Regel nicht mehr.
+        """
+        payload = json.loads(
+            export_dataset(backend, parity_daten, date(2025, 1, 1), date(2025, 1, 31), format="json").content
+        )
+
+        assert payload["summary"]["total"] is None
+        assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
+        assert not any(char.isdigit() for char in payload["completeness"][0]["message"])
+        assert not _exakt_rueckrechenbar(_identitaets_terme(payload))
+
+    def test_unbekannte_altersgruppen_summe_braucht_keine_degradation(self, backend, rueckrechnungs_daten):
+        """Ist eine Altersgruppen-Zelle unterdrueckt, ist Σ unbekannt — dann sind
+        hoechstens zwei Terme bekannt und es muss nichts zusaetzlich fallen.
+        """
+        payload = self._payload(backend, rueckrechnungs_daten)
+        terme = _identitaets_terme(payload)
+
+        assert terme["altersgruppen"] is None
+        assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
+        assert sum(1 for wert in terme.values() if wert is None) == 2
 
 
 class TestDiscovery:
