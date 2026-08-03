@@ -125,6 +125,22 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 > `CommandError` ab — Demo-Logins und `--flush` sind dort tabu; die
 > Ersteinrichtung läuft über `manage.py create_super_admin` (Refs #1040).
 
+**Dokumentationstypen kommen aus einem Paket:** Der Katalog (9 Dokumentationstypen,
+25 Feldvorlagen, Feldgruppen und Zuordnungen) steht deklarativ in
+[`src/core/packages/default.yaml`](src/core/packages/default.yaml) und wird vom Seed
+über den Paket-Loader (`core.packages`) eingespielt — derselbe Weg wie
+`manage.py load_package --file … --facility …`. Das Einspielen ist **idempotent**:
+gefunden wird über den `slug` (nicht den Namen), Properties werden bei jedem Lauf
+zurücksynchronisiert (früher `get_or_create` — Defaults griffen nur beim Anlegen),
+und ein zweiter Lauf meldet alles als `unverändert`.
+
+> **Katalog ändern:** Werte in `default.yaml` anpassen, nicht in `core/seed/doc_types.py`.
+> Bestehende `slug`-Werte sind **unveränderbar** (Migration 0117/#1710 + DB-Trigger)
+> ein geänderter Slug legt in jeder Bestands-Einrichtung ein Duplikat an statt zu
+> aktualisieren. `system_type` immer mitführen, bei `select`/`multi_select` immer den
+> `options`-Schlüssel; **keinen** `conditions`-Schlüssel ergänzen (auch nicht `[]`
+> das würde per UI gepflegte Feldbedingungen löschen).
+
 **Scale-Profile im Überblick:**
 
 | Daten | `small` (Default) | `medium` | `large` |
