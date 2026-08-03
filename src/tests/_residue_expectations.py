@@ -81,6 +81,12 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_documenttype", "system_type", reason="Stabile System-Kennung (Enum) fuer Bann/Export."),
     non_pii("core_documenttype", "icon", reason="UI-Icon-Name (Konfiguration)."),
     non_pii("core_documenttype", "color", reason="UI-Farbwert (Konfiguration)."),
+    non_pii(
+        "core_documenttype",
+        "slug",
+        reason="Aus dem Typ-Namen abgeleiteter stabiler Identifier (M2-Paket-Lookup-Key), keine Klientendaten.",
+    ),
+    non_pii("core_documenttype", "entity_type", reason="Enum (event/client/case)."),
     non_pii("core_documenttype", "description", reason="Admin-Beschreibung des Typs (Konfig-Label)."),
     # ---- core_fieldtemplate (Konfiguration: Feldvorlagen-Schema) ---------
     non_pii("core_fieldtemplate", "name", reason="Admin-konfigurierter Feld-Name (Label)."),
