@@ -1,0 +1,42 @@
+{% load i18n %}
+
+{% comment %}
+Read-only-Anzeige dynamischer ``data_json``-Felder (M2/P7, Refs #1058, E18).
+
+Gemeinsames Partial fuer Personen- (P7) und Fall-Detail (P8). Bewusst OHNE
+Attachment-/Datei-Logik: FILE-Felder sind event-gebunden (Entscheid E8), das
+Event-Detail rendert seine Felder deshalb weiterhin selbst
+(``core/events/detail.html`` mit ``fields_display``).
+
+Kontext-Keys (gebaut von
+``core.services.dynamic_data.build_dynamic_data_context``):
+- ``dynamic_document_type`` — PFLICHT; ``DocumentType`` oder ``None``. ``None``
+  heisst „kein Typ ODER Rolle darf den Typ nicht sehen" — dann rendert dieses
+  Partial GAR NICHTS (weder Typname noch Feldlabels, #774).
+- ``dynamic_fields`` — PFLICHT; Liste aus ``build_dynamic_fields_display`` mit
+  je ``label``, ``value``, ``restricted``, ``is_sensitive``, ``is_encrypted``.
+
+Im Template wird nicht gerechnet: Entschluesselung, Label-Aufloesung,
+Feld-Sensitivity und der ``[Eingeschraenkt]``-Platzhalter kommen fertig aus dem
+Service.
+{% endcomment %}
+
+{% if dynamic_document_type %}
+<div class="bg-surface border border-subtle rounded-[10px] px-4 py-3.5 mb-5" data-testid="dynamic-data-section">
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2">
+        {% trans "Zusatzfelder" %} <span class="font-normal normal-case tracking-normal">({{ dynamic_document_type.name }})</span>
+    </h2>
+    {% if dynamic_fields %}
+    <dl class="space-y-2.5">
+        {% for field in dynamic_fields %}
+        <div>
+            <dt class="text-[12px] text-ink-muted">{{ field.label }}</dt>
+            <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value }}</dd>
+        </div>
+        {% endfor %}
+    </dl>
+    {% else %}
+    <p class="text-[13px] text-ink-muted">{% trans "Keine Angaben erfasst." %}</p>
+    {% endif %}
+</div>
+{% endif %}

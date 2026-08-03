@@ -41,6 +41,7 @@ from core.views.clients import (
     ClientDataExportJSONView,
     ClientDataExportPDFView,
     ClientDetailView,
+    ClientFieldsPartialView,
     ClientListView,
     ClientUpdateView,
 )
@@ -397,6 +398,7 @@ urlpatterns = [
     # HTMX-Fragmente unter /partials/<feature>/, JSON-APIs unter /api/v1/<feature>/ (Refs #848)
     path("partials/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
     path("partials/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),
+    path("partials/clients/fields/", ClientFieldsPartialView.as_view(), name="client_fields_partial"),
     path("partials/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
     path("partials/tally/increment/", TallyIncrementView.as_view(), name="tally_increment"),
     path("partials/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),

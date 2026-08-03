@@ -1,0 +1,691 @@
+"""Client-UI fuer dynamische Felder: Anlage, Bearbeitung, Detail (M2 P7, Refs #1058).
+
+P4b hat dem ``Client``-Aggregat ``document_type`` + ``data_json`` gegeben, P3 die
+entity-neutrale :class:`~core.forms.dynamic.DynamicDataForm` samt
+``services/dynamic_data``. P7 verdrahtet beides in die Personen-Oberflaeche —
+nach dem erprobten Event-Muster (``views/events.py`` + ``EventFieldsPartialView``).
+
+Abgedeckt:
+
+* **Typ-Picker** — nur ``entity_type=client``-Typen der eigenen Einrichtung, und
+  nur solche, deren Sensitivitaet die Rolle sehen darf.
+* **Anlage/Bearbeitung** — Werte landen (verschluesselt) in ``data_json``,
+  Update-GET zeigt Klartext, restricted-Felder ueberleben den Merge, ein
+  Typwechsel verwirft Alt-Keys (E11).
+* **Typ-Entfernen** — View sendet ``document_type=None`` + ``data_json={}``
+  **gemeinsam**, sonst greift der fail-closed-Service-Vertrag (P4b-Review).
+* **Partial** — AuthZ (STAFF_PLUS), Sensitivity-Gate (#774), Facility-Scope und
+  ``entity_type``-Scope; Bedingungs-Payload landet im HTML.
+* **Detail** — Werte sichtbar, ``[Eingeschraenkt]`` je Rolle, Sektion nur bei
+  sichtbarem Typ.
+* **Art. 15** — dynamische Felder entschluesselt + mit Label im Auskunftsexport.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+from cryptography.fernet import Fernet
+from django.db import connection
+from django.test import override_settings
+from django.urls import reverse
+
+from core.models import (
+    Client,
+    DocumentType,
+    DocumentTypeField,
+    FieldCondition,
+    FieldTemplate,
+)
+from core.services.client import _gather_client_fields, export_client_data
+from core.services.file_vault import is_encrypted_value, safe_decrypt
+
+
+def raw_data_json(client_obj) -> dict:
+    """``core_client.data_json`` direkt aus der DB-Zeile (Muster P4b)."""
+    with connection.cursor() as cur:
+        cur.execute("SELECT data_json FROM core_client WHERE id = %s", [str(client_obj.pk)])
+        raw = cur.fetchone()[0]
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+@pytest.fixture
+def fernet_key():
+    """Frischer Fernet-Key fuer die Verschluesselungs-Proben (Muster P4b)."""
+    return Fernet.generate_key().decode()
+
+
+@pytest.fixture
+def doc_type_client_high(facility):
+    """Personen-Typ mit HIGH-Sensitivitaet — fuer Staff unsichtbar (Rolle max ELEVATED)."""
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        sensitivity=DocumentType.Sensitivity.HIGH,
+        name="Personen-Hochsensibel",
+    )
+    ft = FieldTemplate.objects.create(
+        facility=facility,
+        name="Schutzkonzept",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+    )
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+    return doc_type
+
+
+@pytest.fixture
+def doc_type_client_mixed(facility):
+    """Personen-Typ (NORMAL) mit einem HIGH-Feld — Staff darf genau dieses Feld nicht sehen."""
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Personenakte",
+    )
+    ft_offen = FieldTemplate.objects.create(
+        facility=facility,
+        name="Sprache",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    ft_geheim = FieldTemplate.objects.create(
+        facility=facility,
+        name="Gefaehrdung",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+        sensitivity="high",
+    )
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_offen, sort_order=0)
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_geheim, sort_order=1)
+    return doc_type
+
+
+@pytest.fixture
+def doc_type_client_conditional(facility):
+    """Personen-Typ mit Bedingung TEXT->TEXTAREA (Payload-Smoke-Test)."""
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Personen-Bedingt",
+    )
+    ft_quelle = FieldTemplate.objects.create(
+        facility=facility,
+        name="Betreuung",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    ft_ziel = FieldTemplate.objects.create(
+        facility=facility,
+        name="Betreuungsdetails",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+    )
+    quelle = DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_quelle, sort_order=0)
+    ziel = DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_ziel, sort_order=1)
+    FieldCondition.objects.create(
+        target_field=ziel,
+        depends_on_field=quelle,
+        operator=FieldCondition.Operator.IS_NOT_EMPTY,
+        group_index=0,
+    )
+    return doc_type
+
+
+@pytest.fixture
+def doc_type_client_file_condition(facility):
+    """Personen-Typ, dessen Bedingungs-QUELLE ein FILE-Feld ist (P3-Review-Nachzug).
+
+    FILE ist fuer Personen-Typen dreifach ausgeschlossen (Config-UI, Service,
+    ``exclude_file_fields``) — diese Konfiguration kann nur als Bestandsrest
+    entstehen. Der Fixture stellt sie kuenstlich her, damit das dokumentierte
+    Verhalten (Drop-Regel) fixiert ist.
+    """
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CLIENT,
+        name="Personen-Dateibedingt",
+    )
+    ft_datei = FieldTemplate.objects.create(
+        facility=facility,
+        name="Nachweis",
+        field_type=FieldTemplate.FieldType.FILE,
+    )
+    ft_ziel = FieldTemplate.objects.create(
+        facility=facility,
+        name="Nachweis-Erlaeuterung",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+        is_required=True,
+    )
+    quelle = DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_datei, sort_order=0)
+    ziel = DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_ziel, sort_order=1)
+    FieldCondition.objects.create(
+        target_field=ziel,
+        depends_on_field=quelle,
+        operator=FieldCondition.Operator.IS_NOT_EMPTY,
+        group_index=0,
+    )
+    return doc_type
+
+
+def _client_post_data(pseudonym, **extra):
+    """Basis-POST-Body fuer ``ClientForm`` (Pflichtfelder + Ueberschreibungen)."""
+    data = {
+        "pseudonym": pseudonym,
+        "contact_stage": Client.ContactStage.IDENTIFIED,
+        "age_cluster": Client.AgeCluster.UNKNOWN,
+        "notes": "",
+    }
+    data.update(extra)
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Typ-Picker
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientTypePicker:
+    def test_only_client_types_of_own_facility(
+        self,
+        client,
+        staff_user,
+        doc_type_client_profile,
+        doc_type_contact,
+        foreign_doc_type_client,
+    ):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_create"))
+        assert response.status_code == 200
+        content = response.content.decode()
+        # Auf die Option-PKs pruefen: der Name „Kontakt" von ``doc_type_contact``
+        # ist ein Teilstring der ContactStage-Labels und waere kein Beweis.
+        assert f'value="{doc_type_client_profile.pk}"' in content
+        assert doc_type_client_profile.name in content
+        assert f'value="{doc_type_contact.pk}"' not in content
+        assert f'value="{foreign_doc_type_client.pk}"' not in content
+        assert foreign_doc_type_client.name not in content
+
+    def test_high_sensitivity_type_hidden_for_staff(
+        self, client, staff_user, doc_type_client_profile, doc_type_client_high
+    ):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert doc_type_client_profile.name in content
+        assert doc_type_client_high.name not in content
+
+    def test_high_sensitivity_type_visible_for_lead(self, client, lead_user, doc_type_client_high):
+        client.force_login(lead_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert doc_type_client_high.name in content
+
+    def test_inactive_type_hidden(self, client, staff_user, doc_type_client_profile):
+        doc_type_client_profile.is_active = False
+        doc_type_client_profile.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert doc_type_client_profile.name not in content
+
+    def test_form_shows_type_switch_warning(self, client, staff_user, doc_type_client_profile):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert "Zusatzfeld-Werte verworfen" in content
+
+
+# ---------------------------------------------------------------------------
+# Anlage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientCreateWithDynamicData:
+    def test_create_persists_dynamic_values_encrypted(
+        self, client, staff_user, facility, doc_type_client_profile, fernet_key
+    ):
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.post(
+                reverse("core:client_create"),
+                _client_post_data(
+                    "P7-Create-01",
+                    document_type=str(doc_type_client_profile.pk),
+                    wohnsituation="WG",
+                    diagnose="Sehr sensibel",
+                ),
+            )
+            assert response.status_code == 302
+            created = Client.objects.get(pseudonym="P7-Create-01")
+            assert created.document_type_id == doc_type_client_profile.pk
+            row = raw_data_json(created)
+            assert row["wohnsituation"] == "WG"
+            assert is_encrypted_value(row["diagnose"])
+            assert safe_decrypt(row["diagnose"]) == "Sehr sensibel"
+
+    def test_create_without_type_keeps_data_json_empty(self, client, staff_user, doc_type_client_profile):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_create"),
+            _client_post_data("P7-Create-02", wohnsituation="wird verworfen"),
+        )
+        assert response.status_code == 302
+        created = Client.objects.get(pseudonym="P7-Create-02")
+        assert created.document_type_id is None
+        assert created.data_json == {}
+
+    def test_create_rerender_on_invalid_meta_keeps_dynamic_fields(
+        self, client, staff_user, client_identified, doc_type_client_profile
+    ):
+        """Pseudonym-Kollision -> Re-Render; die dynamischen Felder bleiben befuellt."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_create"),
+            _client_post_data(
+                client_identified.pseudonym,
+                document_type=str(doc_type_client_profile.pk),
+                wohnsituation="WG-Wert",
+            ),
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Wohnsituation" in content
+        assert "WG-Wert" in content
+
+    def test_post_rerender_does_not_leak_restricted_doctype_labels(
+        self, client, staff_user, client_identified, doc_type_client_high
+    ):
+        """#774-Spiegel: ein HIGH-Typ im POST darf keine Feldlabels ausspielen."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_create"),
+            _client_post_data(
+                client_identified.pseudonym,
+                document_type=str(doc_type_client_high.pk),
+                schutzkonzept="geheim",
+            ),
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Schutzkonzept" not in content
+        assert doc_type_client_high.name not in content
+
+
+# ---------------------------------------------------------------------------
+# Bearbeitung
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientUpdateWithDynamicData:
+    def test_update_get_prefills_decrypted_values(
+        self, client, staff_user, facility, doc_type_client_profile, fernet_key
+    ):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = Client.objects.create(
+                facility=facility,
+                pseudonym="P7-Update-01",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "WG", "diagnose": "Klartext-Probe"},
+            )
+            client.force_login(staff_user)
+            content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        assert "Klartext-Probe" in content
+        assert "WG" in content
+
+    def test_update_saves_changed_values(self, client, staff_user, facility, doc_type_client_profile, fernet_key):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = Client.objects.create(
+                facility=facility,
+                pseudonym="P7-Update-02",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "WG"},
+            )
+            client.force_login(staff_user)
+            response = client.post(
+                reverse("core:client_update", args=[target.pk]),
+                _client_post_data(
+                    "P7-Update-02",
+                    document_type=str(doc_type_client_profile.pk),
+                    wohnsituation="Eigene Wohnung",
+                    diagnose="Neu",
+                ),
+            )
+            assert response.status_code == 302
+            target.refresh_from_db()
+            assert target.data_json["wohnsituation"] == "Eigene Wohnung"
+            assert safe_decrypt(target.data_json["diagnose"]) == "Neu"
+
+    def test_restricted_field_hidden_and_preserved(self, client, staff_user, facility, doc_type_client_mixed):
+        """Ein HIGH-Feld ist fuer Staff unsichtbar — und ueberlebt dessen Update.
+
+        ``FieldTemplate.save()`` erzwingt bei ``sensitivity=high`` zusaetzlich
+        ``is_encrypted=True`` (Refs #733/#1270) — der Alt-Wert liegt also als
+        Fernet-Token im JSONB und wird von ``merge_dynamic_data`` als solcher
+        nachgezogen (keine Doppelverschluesselung).
+        """
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Update-03",
+            created_by=staff_user,
+            document_type=doc_type_client_mixed,
+            data_json={"sprache": "DE", "gefaehrdung": "nur fuer Leitung"},
+        )
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        assert "Sprache" in content
+        assert "Gefaehrdung" not in content
+        assert 'name="gefaehrdung"' not in content
+        assert "nur fuer Leitung" not in content
+
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                "P7-Update-03",
+                document_type=str(doc_type_client_mixed.pk),
+                sprache="EN",
+            ),
+        )
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.data_json["sprache"] == "EN"
+        assert safe_decrypt(target.data_json["gefaehrdung"]) == "nur fuer Leitung"
+
+    def test_type_switch_drops_old_keys(
+        self, client, staff_user, facility, doc_type_client_profile, doc_type_client_mixed
+    ):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Update-04",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                "P7-Update-04",
+                document_type=str(doc_type_client_mixed.pk),
+                sprache="DE",
+            ),
+        )
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.document_type_id == doc_type_client_mixed.pk
+        assert "wohnsituation" not in target.data_json
+        assert target.data_json["sprache"] == "DE"
+
+    def test_removing_type_clears_data_json_without_error(self, client, staff_user, facility, doc_type_client_profile):
+        """P4b-Review: ``document_type=None`` + befuelltes ``data_json`` ist fail-closed.
+
+        Die View MUSS das Paar gemeinsam senden — sonst wirft der Service
+        ``ValidationError`` und der Benutzer bekaeme einen Fehler statt eines
+        geleerten Datensatzes.
+        """
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Update-05",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data("P7-Update-05", document_type=""),
+        )
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.document_type_id is None
+        assert target.data_json == {}
+
+
+# ---------------------------------------------------------------------------
+# HTMX-Partial
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientFieldsPartial:
+    def test_staff_gets_fields(self, client, staff_user, doc_type_client_profile):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk)},
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Wohnsituation" in content
+        assert "Diagnose" in content
+
+    def test_assistant_is_denied(self, client, assistant_user, doc_type_client_profile):
+        client.force_login(assistant_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk)},
+        )
+        assert response.status_code in (403, 302)
+        if response.status_code == 302:
+            assert "/login" in response["Location"]
+
+    def test_without_param_renders_empty(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_fields_partial"))
+        assert response.status_code == 200
+
+    def test_restricted_sensitivity_blocked(self, client, staff_user, doc_type_client_high):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_high.pk)},
+        )
+        assert response.status_code == 403
+
+    def test_foreign_facility_type_is_404(self, client, staff_user, foreign_doc_type_client):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(foreign_doc_type_client.pk)},
+        )
+        assert response.status_code == 404
+
+    def test_event_type_is_404(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_contact.pk)},
+        )
+        assert response.status_code == 404
+
+    def test_inactive_type_is_404(self, client, staff_user, doc_type_client_profile):
+        doc_type_client_profile.is_active = False
+        doc_type_client_profile.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk)},
+        )
+        assert response.status_code == 404
+
+    def test_malformed_pk_is_404(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_fields_partial"), {"document_type": "keine-uuid"})
+        assert response.status_code == 404
+
+    def test_conditions_payload_lands_in_html(self, client, staff_user, doc_type_client_conditional):
+        """M1-Bedingungen greifen auf der Personen-Seite ohne Zusatzarbeit."""
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_conditional.pk)},
+        )
+        content = response.content.decode()
+        assert 'id="field-conditions"' in content
+        assert "betreuungsdetails" in content
+        assert "is_not_empty" in content
+
+    def test_file_source_condition_target_is_unconditional_and_required(
+        self, client, staff_user, facility, doc_type_client_file_condition
+    ):
+        """P3-Review-Nachzug: Quelle ist ein per ``exclude_file_fields`` geskipptes FILE-Feld.
+
+        Dokumentiertes (akzeptiertes) Verhalten: die Bedingung faellt der
+        Drop-Regel (E8/#774) zum Opfer, weil ihre Quelle nicht mehr im Feldset
+        liegt. Das Ziel wird damit **still unbedingt sichtbar** und behaelt
+        seine Pflicht (``_enforce_conditional_required`` setzt ohne Payload
+        ``visible = alle Felder``). Akzeptiert, weil FILE fuer Personen-Typen
+        dreischichtig ausgeschlossen ist (Config-UI, Service-Guard,
+        ``exclude_file_fields``) — der Fall entsteht nur aus Bestands-
+        Konfigurationsresten, und "sichtbar + pflichtig" ist die
+        fail-closed-Richtung (kein stiller Pflicht-Opt-out).
+        """
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_file_condition.pk)},
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        # FILE-Feld ist gar nicht erst gebaut worden ...
+        assert 'name="nachweis"' not in content
+        # ... die Bedingung faellt damit weg (kein Payload) ...
+        assert 'id="field-conditions"' not in content
+        # ... und das Ziel ist unbedingt sichtbar.
+        assert 'name="nachweis-erlaeuterung"' in content
+
+        form = response.context["data_form"]
+        assert "nachweis" not in form.fields
+        assert form.fields["nachweis-erlaeuterung"].required is False
+        assert form.condition_target_slugs == set()
+        # ``facility`` ist Pflicht: ``DynamicDataForm.clean()`` steigt ohne sie
+        # frueh aus und liesse die konditionale Pflichtpruefung aus.
+        bound = form.__class__(
+            {"nachweis-erlaeuterung": ""},
+            document_type=doc_type_client_file_condition,
+            facility=facility,
+        )
+        assert not bound.is_valid()
+        assert "nachweis-erlaeuterung" in bound.errors
+
+
+# ---------------------------------------------------------------------------
+# Detailansicht
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientDetailDynamicSection:
+    def test_values_are_visible(self, client, staff_user, facility, doc_type_client_profile, fernet_key):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = Client.objects.create(
+                facility=facility,
+                pseudonym="P7-Detail-01",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "WG", "diagnose": "Detail-Klartext"},
+            )
+            client.force_login(staff_user)
+            content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
+        assert "Zusatzfelder" in content
+        assert "Wohnsituation" in content
+        assert "WG" in content
+        assert "Detail-Klartext" in content
+
+    def test_restricted_field_shows_placeholder(self, client, staff_user, facility, doc_type_client_mixed):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Detail-02",
+            created_by=staff_user,
+            document_type=doc_type_client_mixed,
+            data_json={"sprache": "DE", "gefaehrdung": "nur fuer Leitung"},
+        )
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
+        assert "Eingeschränkt" in content
+        assert "nur fuer Leitung" not in content
+
+    def test_lead_sees_restricted_field(self, client, lead_user, facility, staff_user, doc_type_client_mixed):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Detail-03",
+            created_by=staff_user,
+            document_type=doc_type_client_mixed,
+            data_json={"sprache": "DE", "gefaehrdung": "nur fuer Leitung"},
+        )
+        client.force_login(lead_user)
+        content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
+        assert "nur fuer Leitung" in content
+
+    def test_section_absent_without_type(self, client, staff_user, client_identified):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
+        assert "Zusatzfelder" not in content
+
+    def test_section_absent_when_doctype_not_visible(self, client, staff_user, facility, doc_type_client_high):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Detail-04",
+            created_by=staff_user,
+            document_type=doc_type_client_high,
+            data_json={"schutzkonzept": "streng vertraulich"},
+        )
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
+        assert "Zusatzfelder" not in content
+        assert "streng vertraulich" not in content
+        assert doc_type_client_high.name not in content
+
+
+# ---------------------------------------------------------------------------
+# Art.-15-Auskunftsexport
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientExportDynamicData:
+    def test_export_contains_label_and_plaintext(
+        self, facility, staff_user, lead_user, doc_type_client_profile, fernet_key
+    ):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = Client.objects.create(
+                facility=facility,
+                pseudonym="P7-Export-01",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "WG", "diagnose": "Export-Klartext"},
+            )
+            data = export_client_data(target, facility, lead_user)
+
+        assert data["client"]["document_type"] == doc_type_client_profile.name
+        entries = data["client"]["dynamic_data"]
+        by_label = {entry["label"]: entry["value"] for entry in entries}
+        assert by_label["Wohnsituation"] == "WG"
+        assert by_label["Diagnose"] == "Export-Klartext"
+
+    def test_export_without_type_is_unchanged(self, client_identified):
+        result = _gather_client_fields(client_identified)
+        assert set(result.keys()) == {
+            "pseudonym",
+            "contact_stage",
+            "age_cluster",
+            "is_active",
+            "created_at",
+            "created_by",
+        }
+
+    def test_pdf_export_renders_dynamic_data(
+        self, facility, staff_user, lead_user, doc_type_client_profile, fernet_key
+    ):
+        from core.services.client import export_client_data_pdf
+
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = Client.objects.create(
+                facility=facility,
+                pseudonym="P7-Export-02",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "WG"},
+            )
+            pdf_bytes = export_client_data_pdf(target, facility, lead_user)
+        assert pdf_bytes[:4] == b"%PDF"

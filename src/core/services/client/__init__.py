@@ -28,6 +28,7 @@ from core.services.client.dsgvo_package import (
 from core.services.client.export import (
     _build_export_meta,
     _gather_cases,
+    _gather_client_dynamic_data,
     _gather_client_fields,
     _gather_deletion_requests,
     _gather_event_history,
@@ -66,6 +67,7 @@ __all__ = [
     "_build_footer",
     "_delete_event_attachments_for_client",
     "_gather_cases",
+    "_gather_client_dynamic_data",
     "_gather_client_fields",
     "_gather_deletion_requests",
     "_gather_event_history",

@@ -12,6 +12,12 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType
 from core.services.compliance import user_can_see_field
+
+# M2 (Refs #1058, P7): die Wert-Formatierung ist entity-neutral und lebt jetzt in
+# ``services/dynamic_data``. Der private Alt-Name bleibt hier als Alias bestehen —
+# ``services/events/__init__.py`` und die Mutation-Followup-Tests importieren ihn
+# unveraendert von hier (Muster P3: Umzug + Alias-Re-Export).
+from core.services.dynamic_data import format_dynamic_display_value as _format_field_display_value
 from core.services.events.fields import (
     _is_file_marker,
     build_field_template_lookup,
@@ -50,29 +56,6 @@ def filtered_server_data_json(user, event):
             continue
         result[slug] = safe_decrypt(value, default="") if isinstance(value, dict) else value
     return result
-
-
-def _format_field_display_value(value, ft):
-    """Format a ``data_json`` value for human-readable detail display.
-
-    Wandelt SELECT/MULTI_SELECT-Slugs in Labels (``['beratung']`` ->
-    ``Beratung``) und BOOLEAN-Werte in ``Ja``/``Nein`` um. Refs #749.
-    """
-    if ft is None:
-        return value
-
-    if ft.field_type == ft.FieldType.BOOLEAN:
-        return _("Ja") if value else _("Nein")
-
-    if ft.field_type == ft.FieldType.SELECT and ft.options_json:
-        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
-        return label_map.get(value, value)
-
-    if ft.field_type == ft.FieldType.MULTI_SELECT and ft.options_json and isinstance(value, list):
-        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
-        return ", ".join(label_map.get(v, str(v)) for v in value)
-
-    return value
 
 
 def _build_prior_versions(attachment, predecessor_index):

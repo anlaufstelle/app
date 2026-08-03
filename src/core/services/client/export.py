@@ -11,9 +11,48 @@ from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
 
 
+def _gather_client_dynamic_data(client):
+    """Dynamische Personen-Felder als ``[{slug, label, value}, ...]`` (M2 P7, Refs #1058).
+
+    Ohne ``document_type`` gibt es keine Feld-Definitionen und damit nichts zu
+    exportieren -> ``None`` (der Aufrufer laesst die Keys dann ganz weg, der
+    Export bleibt bitgleich zum Stand vor M2).
+
+    Werte werden **entschluesselt** ausgegeben: der Art.-15-Auskunftsanspruch
+    zielt auf den Inhalt, ein Fernet-Token waere keine Auskunft. Das Label kommt
+    aus dem ``FieldTemplate`` — der nackte Slug ist fuer die betroffene Person
+    nicht lesbar. Sortiert wird nach der konfigurierten Feldreihenfolge des
+    Typs (``jsonb`` speichert Schluessel normalisiert, nicht in Eingabefolge).
+
+    Keine Datei-Marker-Behandlung noetig: FILE-Felder sind fuer Personen-Typen
+    dreischichtig ausgeschlossen (Config-UI, Service-Guard,
+    ``exclude_file_fields``) — Entscheid E8.
+
+    Keine Sensitivity-Filterung: der Export haengt an ``LeadOrAdminRequiredMixin``
+    + SudoMode, und Leitung/Admin duerfen ohnehin jede Sensitivitaetsstufe
+    sehen (``ROLE_MAX_SENSITIVITY``). Eine Filterung waere hier eine
+    Scheinsicherheit, die eine unvollstaendige Auskunft erzeugen koennte.
+    """
+    from core.services.dynamic_data import build_field_template_lookup
+
+    if client.document_type_id is None:
+        return None
+    values = client.data_json or {}
+    field_templates = build_field_template_lookup(client.document_type, ordered=True)
+    return [
+        {
+            "slug": slug,
+            "label": ft.name,
+            "value": safe_decrypt(values[slug]) if isinstance(values[slug], dict) else values[slug],
+        }
+        for slug, ft in field_templates.items()
+        if slug in values
+    ]
+
+
 def _gather_client_fields(client):
     """Serialize the client's master data."""
-    return {
+    fields = {
         "pseudonym": client.pseudonym,
         "contact_stage": client.get_contact_stage_display(),
         "age_cluster": client.get_age_cluster_display(),
@@ -21,6 +60,14 @@ def _gather_client_fields(client):
         "created_at": client.created_at.isoformat(),
         "created_by": client.created_by.username if client.created_by else None,
     }
+    # M2 P7 (Refs #1058): dynamische Felder gehoeren in die Auskunft, sobald der
+    # Datensatz einen Typ traegt (P4b-Befund). Ohne Typ bleibt das Dict exakt so
+    # wie vor M2 — Bestandstests pinnen genau diesen Schluesselsatz.
+    dynamic_data = _gather_client_dynamic_data(client)
+    if dynamic_data is not None:
+        fields["document_type"] = client.document_type.name
+        fields["dynamic_data"] = dynamic_data
+    return fields
 
 
 def _serialize_event(event):

@@ -182,6 +182,9 @@
 {% endif %}
 {% endif %}
 
+{# Zusatzfelder (M2/P7, Refs #1058, E18) — gemeinsames Read-only-Partial mit dem Fall-Detail. #}
+{% include "core/partials/dynamic_data_display.html" %}
+
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6 items-start">
     {# Event-Timeline (Design: Kontakt-Chronik) #}
     <div>

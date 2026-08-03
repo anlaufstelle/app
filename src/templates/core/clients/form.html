@@ -17,7 +17,25 @@
         <div class="card p-5 space-y-4">
             {% for field in form %}
             {% include "components/_form_field.html" %}
+            {% comment %}M2/P7 (Refs #1058, E11): Der Typwechsel baut die Zusatzfelder neu
+            auf — die Werte des alten Typs haben im neuen Feldset keine Bedeutung und
+            werden von ``merge_dynamic_data`` verworfen. Statischer Hinweis (kein
+            Inline-Handler, CSP-strikt).{% endcomment %}
+            {% if field.name == "document_type" %}
+            <p class="-mt-2 text-[12px] text-ink-muted" data-testid="doc-type-switch-hint">
+                {% trans "Beim Wechsel des Typs werden die Zusatzfeld-Werte verworfen." %}
+            </p>
+            {% endif %}
             {% endfor %}
+        </div>
+
+        {% comment %}M2/P7 (Refs #1058): HTMX-Swap-Ziel des Typ-Selects. Der Wurzel-
+        ``<div x-data="conditionEvaluator">`` des Partials liegt IM Ziel — beim Wechsel
+        ersetzt HTMX ihn samt json_script-Payload (M1-Bedingungen). Attachment-Keys
+        (``existing_attachments``/``event``) werden bewusst NICHT gesetzt: der
+        FILE-Renderpfad ist bei ``exclude_file_fields = True`` nie erreichbar.{% endcomment %}
+        <div id="dynamic-fields" class="space-y-4">
+            {% include "core/partials/dynamic_fields.html" %}
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">

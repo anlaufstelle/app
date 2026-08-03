@@ -19,7 +19,9 @@ import logging
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from core.services.compliance import user_can_see_field
+from django.utils.translation import gettext_lazy as _
+
+from core.services.compliance import user_can_see_document_type, user_can_see_field
 from core.services.config import block_ordered_dtf_queryset
 
 if TYPE_CHECKING:  # pragma: no cover — nur für Typprüfung, kein Laufzeit-Import
@@ -149,3 +151,143 @@ def merge_dynamic_data(
         if slug in existing:
             merged[slug] = existing[slug]
     return validate_data_json(document_type, merged)
+
+
+def decrypt_dynamic_text_data(data_json: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Klartext-``data_json`` für die Formular-Vorbelegung (M2 P7, Refs #1058).
+
+    Entity-neutrales Pendant zu
+    :func:`core.services.events.crud.decrypt_event_text_data`: File-Marker
+    (legacy ``__file__`` und Stufe-B ``__files__``) werden übersprungen, alle
+    übrigen Werte via :func:`~core.services.file_vault.safe_decrypt` (Default
+    ``""``) entschlüsselt.
+
+    Für Client/Case kann der Marker-Zweig praktisch nicht auftreten (FILE ist
+    dort dreischichtig ausgeschlossen, E8) — er bleibt trotzdem drin, damit die
+    Funktion auf JEDEM ``data_json`` sicher läuft, auch auf einem Bestandsrest.
+    """
+    # Funktionslokal wie im Event-Pendant: ``file_vault`` zieht Modelle und
+    # Storage-Helfer nach, die dieses Modul zur Importzeit nicht braucht.
+    from core.services.file_vault import safe_decrypt
+
+    result: dict[str, Any] = {}
+    for key, value in (data_json or {}).items():
+        if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+            continue
+        result[key] = safe_decrypt(value, default="")
+    return result
+
+
+def format_dynamic_display_value(value: Any, ft: FieldTemplate | None) -> Any:
+    """Formatiere einen ``data_json``-Wert für die lesbare Detail-Anzeige.
+
+    Wandelt SELECT/MULTI_SELECT-Slugs in Labels (``['beratung']`` ->
+    ``Beratung``) und BOOLEAN-Werte in ``Ja``/``Nein`` um. Refs #749.
+
+    M2 (Refs #1058): aus ``services/events/context.py`` hierher gezogen — die
+    Formatierung war nie event-spezifisch und wird ab P7 auch vom Personen-
+    (und ab P8 vom Fall-)Detail gebraucht. ``events/context.py`` behält den
+    Alt-Namen ``_format_field_display_value`` als Alias.
+    """
+    if ft is None:
+        return value
+
+    if ft.field_type == ft.FieldType.BOOLEAN:
+        return _("Ja") if value else _("Nein")
+
+    if ft.field_type == ft.FieldType.SELECT and ft.options_json:
+        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
+        return label_map.get(value, value)
+
+    if ft.field_type == ft.FieldType.MULTI_SELECT and ft.options_json and isinstance(value, list):
+        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
+        return ", ".join(label_map.get(v, str(v)) for v in value)
+
+    return value
+
+
+def build_dynamic_fields_display(
+    document_type: DocumentType,
+    data_json: Mapping[str, Any] | None,
+    user: Any,
+) -> list[dict[str, Any]]:
+    """Read-only Anzeige-Dicts der dynamischen Felder (M2 P7, Refs #1058).
+
+    Entity-neutrales Pendant zu
+    :func:`core.services.events.context.build_event_detail_context` — **ohne**
+    jede Attachment-Logik (FILE ist event-gebunden, E8). Je Feld:
+
+    * ``label``     — Name des ``FieldTemplate`` (Fallback: aufbereiteter Slug),
+    * ``value``     — entschlüsselt (:func:`~core.services.file_vault.safe_decrypt`)
+      und über :func:`format_dynamic_display_value` lesbar gemacht,
+    * ``restricted``/``is_sensitive``/``is_encrypted`` — Flags für die Anzeige.
+
+    Felder, die *user* wegen seiner Rolle nicht sehen darf, erscheinen mit dem
+    Platzhalter ``[Eingeschränkt]`` — der Wert wird gar nicht erst
+    entschlüsselt.
+
+    **Reihenfolge:** iteriert wird über die konfigurierte Feldreihenfolge des
+    ``DocumentType`` (nicht über die ``data_json``-Schlüssel). PostgreSQL
+    speichert ``jsonb`` normalisiert (Sortierung nach Schlüssellänge/Bytes) —
+    eine Iteration über das Dict ergäbe eine für Benutzer willkürliche
+    Reihenfolge. Slugs ohne Feld am aktuellen Typ (Bestandsreste vor der
+    Whitelist) werden dabei nicht angezeigt.
+    """
+    from core.services.file_vault import safe_decrypt
+
+    values = data_json or {}
+    doc_sensitivity = document_type.sensitivity
+    field_templates = build_field_template_lookup(document_type, ordered=True)
+
+    entries: list[dict[str, Any]] = []
+    for slug, ft in field_templates.items():
+        if slug not in values:
+            continue
+        field_sensitivity = ft.sensitivity or ""
+        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+            entries.append(
+                {
+                    "label": ft.name,
+                    "value": _("[Eingeschränkt]"),
+                    "is_sensitive": bool(field_sensitivity),
+                    "is_encrypted": ft.is_encrypted,
+                    "restricted": True,
+                }
+            )
+            continue
+        decrypted = safe_decrypt(values[slug], default=_("[verschlüsselt]"))
+        entries.append(
+            {
+                "label": ft.name,
+                "value": format_dynamic_display_value(decrypted, ft),
+                "is_sensitive": bool(field_sensitivity),
+                "is_encrypted": ft.is_encrypted,
+                "restricted": False,
+            }
+        )
+    return entries
+
+
+def build_dynamic_data_context(
+    document_type: DocumentType | None,
+    data_json: Mapping[str, Any] | None,
+    user: Any,
+) -> dict[str, Any]:
+    """Kontext für ``core/partials/dynamic_data_display.html`` (E18, Refs #1058).
+
+    Die Sensitivität des ``DocumentType`` gated die **ganze** Sektion: darf
+    *user* den Typ nicht sehen, liefert der Helfer ``dynamic_document_type =
+    None`` und eine leere Feldliste — das Partial rendert dann gar nichts, und
+    weder Typname noch Feldlabels gelangen ins HTML (#774-Muster).
+
+    Rückgabe-Keys (Vertrag des Partials):
+
+    * ``dynamic_document_type`` — ``DocumentType`` oder ``None`` (Gate),
+    * ``dynamic_fields`` — Liste aus :func:`build_dynamic_fields_display`.
+    """
+    if document_type is None or not user_can_see_document_type(user, document_type):
+        return {"dynamic_document_type": None, "dynamic_fields": []}
+    return {
+        "dynamic_document_type": document_type,
+        "dynamic_fields": build_dynamic_fields_display(document_type, data_json, user),
+    }
