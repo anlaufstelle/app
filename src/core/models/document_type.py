@@ -16,6 +16,30 @@ _UMLAUT_MAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 _SLUG_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
+def generate_unique_slug(name: str, siblings_qs: models.QuerySet, max_length: int = 120) -> str:
+    """Generiert einen Slug aus ``name``, eindeutig innerhalb ``siblings_qs``.
+
+    Modulweiter Helfer (M2, Refs #1058) — extrahiert aus den vormals fast
+    identischen Kopien ``FieldTemplate._generate_unique_slug``/
+    ``FieldGroup._generate_unique_slug``. ``siblings_qs`` muss bereits auf den
+    Kollisions-Scope gefiltert sein (z. B. ``facility=…`` bzw.
+    ``document_type=…``) und das eigene Objekt per ``.exclude(pk=…)``
+    ausschließen — dieser Helfer filtert hier nur noch auf ``slug=``.
+    Truncation auf ``max_length`` VOR dem Counter-Suffix, damit der
+    Suffix das Limit des Ziel-``SlugField`` nie sprengt.
+    """
+    base = slugify(name.lower().translate(_UMLAUT_MAP))[:max_length]
+    if not base:
+        raise ValidationError(_("Name ergibt keinen gültigen Slug."))
+    slug = base
+    counter = 2
+    while siblings_qs.filter(slug=slug).exists():
+        suffix = f"-{counter}"
+        slug = f"{base[: max_length - len(suffix)]}{suffix}"
+        counter += 1
+    return slug
+
+
 class DocumentType(models.Model):
     """Configurable document type (e.g. contact, crisis intervention)."""
 
@@ -41,6 +65,13 @@ class DocumentType(models.Model):
         REFERRAL = "referral", _("Vermittlung")
         NOTE = "note", _("Notiz")
 
+    class EntityType(models.TextChoices):
+        # M2 (Refs #1058): auf welche Entität sich Dokumente dieses Typs
+        # beziehen. Bestand + Default = EVENT (heutiges, event-only Verhalten).
+        EVENT = "event", _("Ereignis")
+        CLIENT = "client", _("Person")
+        CASE = "case", _("Fall")
+
     objects = FacilityScopedManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -51,6 +82,13 @@ class DocumentType(models.Model):
         verbose_name=_("Einrichtung"),
     )
     name = models.CharField(max_length=200, verbose_name=_("Name"))
+    slug = models.SlugField(
+        max_length=120,
+        verbose_name=_("Slug"),
+        help_text=_(
+            "Stabiler Identifier — wird als Lookup-Key im M2-Paketformat verwendet. Nach Erstellung unveränderbar."
+        ),
+    )
     category = models.CharField(
         max_length=20,
         choices=Category.choices,
@@ -101,6 +139,13 @@ class DocumentType(models.Model):
             "Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach Erstellung unveränderbar."
         ),
     )
+    entity_type = models.CharField(
+        max_length=20,
+        choices=EntityType.choices,
+        default=EntityType.EVENT,
+        verbose_name=_("Entitätstyp"),
+        help_text=_("Auf welche Entität sich Dokumente dieses Typs beziehen. Nach Erstellung unveränderbar."),
+    )
 
     class Meta:
         verbose_name = _("Dokumentationstyp")
@@ -116,6 +161,13 @@ class DocumentType(models.Model):
                 fields=["facility", "name", "category"],
                 name="unique_facility_documenttype_name_category",
             ),
+            # M2 (Refs #1058): slug ist der M2-Paketformat-Lookup-Key —
+            # DocumentType ist nicht soft-deletable, daher ohne Condition
+            # (anders als z. B. Client/Case-Uniques auf aktive Zeilen).
+            models.UniqueConstraint(
+                fields=["facility", "slug"],
+                name="unique_facility_documenttype_slug",
+            ),
             # Security N8 (Refs #1445): gesetzte retention_days muessen >= 1 sein
             # (None = keine Frist bleibt erlaubt).
             models.CheckConstraint(
@@ -124,12 +176,42 @@ class DocumentType(models.Model):
             ),
         ]
 
+    _SLUG_RETRY_LIMIT = 3
+
+    def _generate_unique_slug(self):
+        """Slug innerhalb der Facility eindeutig generieren (Muster FieldTemplate)."""
+        return generate_unique_slug(self.name, DocumentType.objects.filter(facility=self.facility).exclude(pk=self.pk))
+
     def save(self, *args, **kwargs):
-        if not self._state.adding:
+        if self._state.adding:
+            auto_slug = not self.slug
+            if auto_slug:
+                self.slug = self._generate_unique_slug()
+            elif not _SLUG_RE.fullmatch(self.slug):
+                raise ValidationError(_("Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."))
+            if auto_slug:
+                for attempt in range(self._SLUG_RETRY_LIMIT):
+                    try:
+                        with transaction.atomic():
+                            super().save(*args, **kwargs)
+                        return
+                    except IntegrityError:
+                        if attempt >= self._SLUG_RETRY_LIMIT - 1:
+                            raise
+                        self.slug = self._generate_unique_slug()
+            else:
+                super().save(*args, **kwargs)
+                return
+        else:
             orig = DocumentType.objects.filter(pk=self.pk).first()
-            if orig and orig.system_type and orig.system_type != self.system_type:
-                raise ValidationError(_("system_type kann nach Erstellung nicht geändert werden."))
-        super().save(*args, **kwargs)
+            if orig:
+                if orig.system_type and orig.system_type != self.system_type:
+                    raise ValidationError(_("system_type kann nach Erstellung nicht geändert werden."))
+                if orig.entity_type != self.entity_type:
+                    raise ValidationError(_("entity_type kann nach Erstellung nicht geändert werden."))
+                if orig.slug and orig.slug != self.slug:
+                    raise ValidationError(_("Slug kann nach Erstellung nicht geändert werden."))
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.facility.name} — {self.name}"
@@ -231,15 +313,7 @@ class FieldTemplate(models.Model):
 
     def _generate_unique_slug(self):
         """Generate a unique slug within the facility."""
-        base = slugify(self.name.lower().translate(_UMLAUT_MAP))
-        if not base:
-            raise ValidationError(_("Name ergibt keinen gültigen Slug."))
-        slug = base
-        counter = 2
-        while FieldTemplate.objects.filter(facility=self.facility, slug=slug).exclude(pk=self.pk).exists():
-            slug = f"{base}-{counter}"
-            counter += 1
-        return slug
+        return generate_unique_slug(self.name, FieldTemplate.objects.filter(facility=self.facility).exclude(pk=self.pk))
 
     def clean(self):
         super().clean()
@@ -389,15 +463,9 @@ class FieldGroup(models.Model):
 
     def _generate_unique_slug(self):
         """Generate a unique slug within the document type."""
-        base = slugify(self.name.lower().translate(_UMLAUT_MAP))
-        if not base:
-            raise ValidationError(_("Name ergibt keinen gültigen Slug."))
-        slug = base
-        counter = 2
-        while FieldGroup.objects.filter(document_type=self.document_type, slug=slug).exclude(pk=self.pk).exists():
-            slug = f"{base}-{counter}"
-            counter += 1
-        return slug
+        return generate_unique_slug(
+            self.name, FieldGroup.objects.filter(document_type=self.document_type).exclude(pk=self.pk)
+        )
 
     def clean(self):
         super().clean()
