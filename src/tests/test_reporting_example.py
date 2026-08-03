@@ -8,6 +8,7 @@ ableitet, und die K-Anon-Lehrbeispiel-Suppression in ``prepare_export`` greift.
 """
 
 import csv
+import json
 import re
 from datetime import timedelta
 
@@ -154,6 +155,24 @@ class TestCsvExport:
         assert lines[0].endswith(" | k-Anonymität: Zellen < 5 unterdrückt")
 
 
+class TestJsonExport:
+    """Die Reprojektion auf die FieldSpec-Keys am serialisierten Artefakt."""
+
+    def test_records_tragen_kein_suppressed_flag(self, backend, facility, doc_type_contact, sample_event, date_range):
+        """``_suppress_small`` haengt jeder Zeile ein internes ``suppressed``-Flag
+        an. CSV und XML projizieren ueber die FieldSpecs und wuerden es nie
+        zeigen — JSON serialisiert die Records dagegen unveraendert. Faellt die
+        Rueckprojektion in ``prepare_export`` weg, steht das Flag im Payload.
+        """
+        date_from, date_to = date_range
+
+        payload = json.loads(export_dataset(backend, facility, date_from, date_to, format="json").content)
+
+        assert payload["records"] == [
+            {"document_type": "Kontakt", "category": "Kontakt", "system_type": "", "count": None}
+        ]
+
+
 _SELECT_BACKEND_RE = re.compile(r'<select name="backend".*?</select>', re.DOTALL)
 _BEISPIEL_OPTION = '<option value="example">Beispiel: Ereignisse je Dokumenttyp</option>'
 
@@ -206,9 +225,41 @@ class TestPrepareExport:
 
         prepared = backend.prepare_export(facility, result)
 
-        assert prepared.records[0]["count"] is None
+        # Dict-Gleichheit statt Einzelschluessel (Pendant zu
+        # ``test_records_spiegeln_die_suppressierten_zellen`` beim Jugendamt-
+        # Backend): pinnt zugleich die Rueckprojektion auf die FieldSpec-Keys —
+        # das interne ``suppressed``-Flag aus ``_suppress_small`` darf nicht in
+        # den Records ueberleben.
+        assert prepared.records == [{"document_type": "A", "category": "Kontakt", "system_type": "", "count": None}]
         assert prepared.summary["total"] is None
         assert prepared.summary["k_anonymity_threshold"] == 5
+
+    def test_mehrzeilig_sekundaere_suppression_laesst_beide_zellen_fallen(self, backend, facility):
+        """A6.1 mehrzeilig: eine Zelle < k, eine >= k — nach der primaeren
+        Suppression bliebe genau EINE Zelle unterdrueckt und waere aus
+        ``total`` und der sichtbaren Zeile exakt rueckrechenbar. Die
+        Sekundaer-Suppression in ``_suppress_small`` laesst deshalb die
+        naechstkleinere sichtbare Zelle mitfallen; die Records spiegeln das.
+        """
+        result = DatasetResult(
+            mode="rows",
+            records=[
+                {"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2},
+                {"document_type": "B", "category": "Kontakt", "system_type": "", "count": 9},
+            ],
+            summary={"total": 11},
+            completeness=[],
+        )
+
+        prepared = backend.prepare_export(facility, result)
+
+        assert prepared.records == [
+            {"document_type": "A", "category": "Kontakt", "system_type": "", "count": None},
+            {"document_type": "B", "category": "Kontakt", "system_type": "", "count": None},
+        ]
+        # Mit zwei unterdrueckten Zellen bleibt ``total`` ein Rueckrechnungs-
+        # Hebel — es faellt mit (konservative Regel des Lehrbeispiels).
+        assert prepared.summary["total"] is None
 
     def test_zelle_ab_schwelle_bleibt_unveraendert(self, backend, facility):
         result = DatasetResult(
