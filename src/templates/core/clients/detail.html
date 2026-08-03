@@ -184,6 +184,12 @@
     <span>
         {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}am {{ datum }} durch {{ person }} — wartet auf Bestätigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip).{% endblocktrans %}
     </span>
+    {# Refs #1736 (B): Rückkanal — wer die Liste sehen darf, kommt von hier hin. #}
+    {% if user.can_access_deletion_requests %}
+    <a href="{% url 'core:deletion_request_list' %}" class="font-semibold underline hover:no-underline" data-testid="client-deletion-pending-link">
+        {% trans "Zu den Löschanträgen" %}
+    </a>
+    {% endif %}
 </div>
 {% endif %}
 

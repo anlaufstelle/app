@@ -42,11 +42,16 @@ class DeletionConfirmerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
 
 class DeletionRequestListAccessMixin(LoginRequiredMixin, UserPassesTestMixin):
     """Liste der Löschanträge: Leitung/Admin (Transparenz über eigene
-    Anträge) sowie Träger des Rechts „Löschbestätigung" (Refs #1053)."""
+    Anträge), Träger des Rechts „Löschbestätigung" (Refs #1053) sowie —
+    beschränkt auf die eigenen Anträge — wer selbst einen offenen Antrag
+    gestellt hat (Refs #1736 B).
+
+    Das Gate lebt als ``User.can_access_deletion_requests`` am Modell, damit
+    Navigation und View garantiert dieselbe Bedingung auswerten.
+    """
 
     def test_func(self):
-        user = self.request.user
-        return user.is_lead_or_admin or user.can_confirm_deletion
+        return self.request.user.can_access_deletion_requests
 
 
 class FacilityAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):

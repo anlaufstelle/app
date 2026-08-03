@@ -6,8 +6,10 @@
 {% block content %}
 <div class="max-w-3xl">
     <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Papierkorb — Personen" %}</h1>
-    <p class="text-sm text-ink-muted mb-6">
-        {% trans "Soft-deletete Personen. Nach Ablauf der Aufbewahrungsfrist (Settings.client_trash_days) anonymisiert enforce_retention diese automatisch." %}
+    {# Refs #1736 (F): Der Papierkorb wirkte „kaputt", weil ein gestellter Antrag #}
+    {# hier noch nichts zeigt — die Semantik steht jetzt auf der Seite selbst. #}
+    <p class="text-sm text-ink-muted mb-6" data-testid="client-trash-semantics-hint">
+        {% trans "Hier erscheinen Personen erst nach bestätigter Löschung (Vier-Augen-Prinzip) — ein laufender Löschantrag allein genügt nicht. Nach Ablauf der Papierkorb-Frist werden die Datensätze automatisch anonymisiert; bis dahin lassen sie sich wiederherstellen." %}
     </p>
 
     {% if clients %}

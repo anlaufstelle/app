@@ -74,7 +74,12 @@
                 {% endif %}
                 {% if user.is_lead_or_admin %}
                 <a href="{% url 'core:statistics' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Statistik" %}</a>
-                <a href="{% url 'core:deletion_request_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Löschanträge" %}</a>
+                {% endif %}
+                {# Refs #1736 (B): identisches Gate wie Desktop-Nav und View. #}
+                {% if user.can_access_deletion_requests %}
+                <a href="{% url 'core:deletion_request_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-deletion-requests">{% trans "Löschanträge" %}</a>
+                {% endif %}
+                {% if user.is_lead_or_admin %}
                 <a href="{% url 'core:retention_dashboard' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Löschfristen" %}</a>
                 {% endif %}
                 {% if user.is_facility_admin %}

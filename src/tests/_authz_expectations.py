@@ -380,6 +380,13 @@ EXPECTATIONS = (
     E("core:statistics_external_report", "lead-admin", get=LEAD_PLUS),
     E("core:statistics_report_panel", "lead-admin", get=LEAD_PLUS),
     # ---- deletion (Vier-Augen-Löschworkflow, Refs #1053) -------------------
+    # Rollen-Soll = LEAD_PLUS (Seed-Zustand ``CONFIRMER`` ist eine Teilmenge).
+    # Refs #1736 (B): das View-Gate (``User.can_access_deletion_requests``) ist
+    # zusätzlich zustandsabhängig — wer selbst einen offenen Löschantrag
+    # gestellt hat, darf die Liste öffnen und sieht dann NUR die eigenen
+    # Anträge. Diese Zeile beschreibt bewusst weiterhin den rollenbasierten
+    # Grundzustand (Akteure ohne eigenen Antrag); die Navigation trägt exakt
+    # dasselbe Gate.
     E("core:deletion_request_list", "deletion", get=LEAD_PLUS),
     E(
         "core:deletion_review",

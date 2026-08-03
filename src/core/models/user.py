@@ -129,6 +129,49 @@ class User(AbstractUser):
         return self.role in (self.Role.FACILITY_ADMIN, self.Role.LEAD, self.Role.STAFF, self.Role.ASSISTANT)
 
     @property
+    def has_open_deletion_requests(self):
+        """True, wenn diese Person einen noch offenen Löschantrag gestellt hat.
+
+        Refs #1736 (B): Rückkanal für die Antragstellerin. Ohne ihn verschwand
+        ein gestellter Antrag für sie spurlos — die Löschanträge-Liste war auf
+        Leitung/Admin bzw. Genehmiger:innen gegated.
+        """
+        from core.models.workitem import DeletionRequest
+
+        if self.facility_id is None:
+            return False
+        return DeletionRequest.objects.filter(
+            facility_id=self.facility_id,
+            requested_by=self,
+            status=DeletionRequest.Status.PENDING,
+        ).exists()
+
+    @property
+    def can_access_deletion_requests(self):
+        """Gate für die Löschanträge-Liste — Navigation UND View teilen es.
+
+        Refs #1053 (Genehmiger-Pool), #1736 (B): Vorher gateten Navigation
+        (``is_lead_or_admin``) und View (``DeletionRequestListAccessMixin``)
+        unterschiedlich; Träger:innen des Rechts „Löschbestätigung" ohne
+        Leitungsrolle fanden den Einstieg nur per Direkt-URL. Die
+        Reihenfolge der Prüfungen ist bewusst: die beiden Feld-/Rollen-
+        Bedingungen kosten keine Query, der Antragsteller-Zweig eine.
+        """
+        if self.is_lead_or_admin or self.can_confirm_deletion:
+            return True
+        return self.has_open_deletion_requests
+
+    @property
+    def sees_all_deletion_requests(self):
+        """True, wenn die Löschanträge-Liste ALLE Anträge zeigen darf.
+
+        Refs #1736 (B): Wer nur wegen eines eigenen offenen Antrags Zugang
+        hat, sieht ausschließlich die eigenen Anträge — die Liste ist sonst
+        eine Fremd-PII-Fläche (Begründungen, Ziel-Pseudonyme).
+        """
+        return self.is_lead_or_admin or self.can_confirm_deletion
+
+    @property
     def has_confirmed_totp_device(self):
         """True when the user has at least one confirmed TOTP device."""
         # App-weit laeuft der TOTP-Zugriff ueber das Proxy-Modell mit at-rest

@@ -24,6 +24,7 @@ from core.services.client import (
     request_client_deletion,
     restore_client,
 )
+from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
 from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
 
@@ -39,6 +40,12 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
 
     def get(self, request, pk):
         client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        # Refs #1736 (D): Der Antragstext sprach von „der Leitung", tatsaechlich
+        # entscheidet der ueber ``can_confirm_deletion`` kuratierte Pool. Die
+        # Seite nennt ihn beim Namen und spiegelt den Setup-Guard der
+        # Loeschantragsliste — ein Antrag ohne moeglichen Genehmiger darf nicht
+        # erst nach dem Absenden auffallen.
+        confirmers = list(eligible_deletion_confirmers(request.current_facility, exclude_user=request.user))
         return render(
             request,
             "core/clients/delete_request_confirm.html",
@@ -48,6 +55,8 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
                 # mehr zu beantragen — statt eines wirkungslosen Formulars
                 # zeigt die Seite den Wartezustand.
                 "pending_deletion_request": get_pending_deletion_request(client),
+                "confirmers": confirmers,
+                "no_eligible_confirmer": not confirmers,
             },
         )
 

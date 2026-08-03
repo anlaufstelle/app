@@ -17,8 +17,9 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.models import Client, DeletionRequest, Event, User
+from core.models import Client, DeletionRequest, Event
 from core.services.client import approve_client_deletion, reject_client_deletion
+from core.services.deletion import eligible_deletion_confirmers
 from core.services.events import approve_deletion, reject_deletion
 from core.services.scoping import get_scoped_object
 from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
@@ -34,6 +35,13 @@ class DeletionRequestListView(DeletionRequestListAccessMixin, View):
         facility = request.current_facility
         all_requests = DeletionRequest.objects.for_facility(facility).select_related("requested_by", "reviewed_by")
 
+        # Refs #1736 (B): Wer nur wegen eines eigenen offenen Antrags Zugang
+        # hat (Rückkanal für die Antragstellerin), sieht ausschließlich die
+        # eigenen Anträge — fremde Begründungen und Ziel-Pseudonyme bleiben
+        # der Leitung bzw. dem Genehmiger-Pool vorbehalten.
+        if not request.user.sees_all_deletion_requests:
+            all_requests = all_requests.filter(requested_by=request.user)
+
         # Querysets zu Listen evaluieren, damit das Template |length ohne
         # zusätzliche COUNT-Queries aufrufen kann (Refs #640). Jede Liste
         # ist per status gefiltert und hat typisch < 100 Einträge — keine
@@ -45,11 +53,7 @@ class DeletionRequestListView(DeletionRequestListAccessMixin, View):
         # Setup-Guard (Refs #1053): ein Antrag ohne möglichen Genehmiger
         # (kein aktiver Träger des Rechts „Löschbestätigung" außer der
         # Antragsteller:in) darf nicht still blocken — Warnung rendern.
-        confirmer_ids = set(
-            User.objects.filter(facility=facility, is_active=True, can_confirm_deletion=True).values_list(
-                "pk", flat=True
-            )
-        )
+        confirmer_ids = set(eligible_deletion_confirmers(facility).values_list("pk", flat=True))
         for dr in pending:
             dr.no_eligible_reviewer = not (confirmer_ids - {dr.requested_by_id})
 

@@ -6,9 +6,30 @@
 {% block content %}
 <div class="max-w-lg">
     <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Person löschen beantragen" %}</h1>
-    <p class="text-sm text-ink-muted mb-6">
-        {% blocktrans with pseudonym=client.pseudonym %}Vier-Augen-Prinzip — Ihr Antrag geht zur Genehmigung an die Leitung. Nach Genehmigung wird <strong>{{ pseudonym }}</strong> in den Papierkorb verschoben und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert.{% endblocktrans %}
+    {# Refs #1736 (D): Zuständig ist der Pool „Löschbestätigung", nicht „die Leitung". #}
+    <p class="text-sm text-ink-muted mb-3">
+        {% blocktrans with pseudonym=client.pseudonym %}Vier-Augen-Prinzip — Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden. Nach der Bestätigung wird <strong>{{ pseudonym }}</strong> in den Papierkorb verschoben und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert.{% endblocktrans %}
     </p>
+
+    {# Refs #1736 (F): Papierkorb-Semantik erklären — bis zur Bestätigung passiert nichts. #}
+    <p class="text-[13px] text-ink-muted mb-5" data-testid="delete-request-trash-hint">
+        {% trans "Solange der Antrag läuft, bleibt die Person unverändert nutzbar; im Papierkorb erscheint sie erst nach bestätigter Löschung." %}
+    </p>
+
+    {% if no_eligible_confirmer %}
+    <div class="bg-red-50 border border-red-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="delete-request-no-confirmer">
+        <p class="text-[13px] text-red-700 font-medium">
+            {% trans "Kein möglicher Genehmiger: Außer Ihnen trägt derzeit niemand das Recht „Löschbestätigung“. Ein Antrag bliebe liegen — die Anwendungsbetreuung kann das Recht in der Benutzerverwaltung vergeben." %}
+        </p>
+    </div>
+    {% else %}
+    <div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-5" data-testid="delete-request-confirmers">
+        <p class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bestätigen können" %}</p>
+        <p class="text-[13px] text-ink-soft">
+            {% for confirmer in confirmers %}{{ confirmer.display_name|default:confirmer.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+    </div>
+    {% endif %}
 
     {# Refs #1736 (A): laufender Antrag → kein zweites, wirkungsloses Formular. #}
     {% if pending_deletion_request %}
