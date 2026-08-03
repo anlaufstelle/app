@@ -29,6 +29,7 @@ from core.services.client import (
     _gather_client_fields,
     _gather_deletion_requests,
     _gather_entity_dynamic_data,
+    _gather_entity_orphan_data,
     _gather_event_history,
     _gather_events,
     _gather_workitems,
@@ -205,6 +206,103 @@ class TestGatherEntityDynamicData:
             entries = _gather_entity_dynamic_data(client)
         by_slug = {e["slug"]: e for e in entries}
         assert by_slug["diagnose"]["value"] == "Sehr sensibel"
+
+
+# ---------------------------------------------------------------------------
+# _gather_entity_orphan_data — Waisen im Art.-15-Export (Refs #1725(a))
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestGatherEntityOrphanData:
+    """Refs #1725(a): verwaiste ``data_json``-Keys (Slug nicht mehr am Typ)
+    gehören separat in den Auskunfts-Export, damit ``dynamic_data`` stabil bleibt.
+
+    Wie ``_gather_entity_dynamic_data`` **ohne** Feld-Gating (der Export hängt an
+    ``LeadOrAdminRequiredMixin`` + SudoMode und entschlüsselt alles — eine
+    Filterung wäre Scheinsicherheit mit unvollständiger Auskunft).
+    """
+
+    def _orphan_ft(self, facility, *, name="Ehemals-Feld"):
+        from core.models import FieldTemplate
+
+        return FieldTemplate.objects.create(
+            facility=facility,
+            name=name,
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+
+    def test_returns_none_without_document_type(self, client_identified):
+        assert _gather_entity_orphan_data(client_identified) is None
+
+    def test_returns_empty_when_no_orphans(self, facility, doc_type_client_profile, staff_user):
+        from core.models import Client
+
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="orphan-export-empty",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        assert _gather_entity_orphan_data(client) == []
+
+    def test_orphan_entry_uses_facility_label_and_decrypted_value(self, facility, doc_type_client_profile, staff_user):
+        from core.models import Client
+
+        orphan_ft = self._orphan_ft(facility)
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="orphan-export-01",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG", orphan_ft.slug: "Altwert"},
+        )
+        entries = _gather_entity_orphan_data(client)
+        assert entries == [{"slug": orphan_ft.slug, "label": "Ehemals-Feld", "value": "Altwert"}]
+
+    def test_client_fields_include_orphaned_key_only_when_present(self, facility, doc_type_client_profile, staff_user):
+        from core.models import Client
+
+        # Ohne Waisen: der Key fehlt (Bestandsformat bleibt stabil).
+        clean = Client.objects.create(
+            facility=facility,
+            pseudonym="orphan-agg-clean",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        assert "dynamic_data_orphaned" not in _gather_client_fields(clean)
+
+        # Mit Waise: separater Key neben dem stabilen ``dynamic_data``.
+        orphan_ft = self._orphan_ft(facility, name="Alt")
+        dirty = Client.objects.create(
+            facility=facility,
+            pseudonym="orphan-agg-dirty",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG", orphan_ft.slug: "Rest"},
+        )
+        result = _gather_client_fields(dirty)
+        assert result["dynamic_data"] == [{"slug": "wohnsituation", "label": "Wohnsituation", "value": "WG"}]
+        assert result["dynamic_data_orphaned"] == [{"slug": orphan_ft.slug, "label": "Alt", "value": "Rest"}]
+
+    def test_cases_include_orphaned_key_only_when_present(
+        self, facility, client_identified, doc_type_case_form, staff_user
+    ):
+        from core.models import Case
+
+        orphan_ft = self._orphan_ft(facility, name="Alt-Fall")
+        Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="orphan-case",
+            created_by=staff_user,
+            document_type=doc_type_case_form,
+            data_json={"anlass": "Miete", orphan_ft.slug: "Rest"},
+        )
+        entry = _gather_cases(client_identified)[0]
+        assert entry["dynamic_data_orphaned"] == [{"slug": orphan_ft.slug, "label": "Alt-Fall", "value": "Rest"}]
 
 
 # ---------------------------------------------------------------------------

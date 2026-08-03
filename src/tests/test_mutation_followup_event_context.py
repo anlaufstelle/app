@@ -667,6 +667,56 @@ class TestBuildEventDetailContext:
         labels = [e["label"] for e in ctx["fields_display"]]
         assert labels == ["Erstes", "Zweites"]
 
+    def test_orphan_field_appended_after_mapped_and_flagged(self, facility, client_identified, staff_user):
+        """Refs #1725: ein verwaistes Feld (Slug in ``data_json``, nicht am Typ)
+        bleibt sichtbar, wird ans Ende gehängt und mit ``orphaned=True``
+        gekennzeichnet."""
+        doc_type = _make_doc_type(facility)
+        ft_mapped = _make_field_template(facility, name="Zugeordnet")
+        ft_orphan = _make_field_template(facility, name="Verwaist")
+        _attach(doc_type, ft_mapped, sort_order=0)
+        # ft_orphan NICHT attachen → Slug ist verwaist.
+        event = _make_event(
+            facility,
+            client_identified,
+            doc_type,
+            staff_user,
+            data_json={ft_orphan.slug: "alt", ft_mapped.slug: "neu"},
+        )
+        ctx = build_event_detail_context(event, staff_user)
+        labels = [e["label"] for e in ctx["fields_display"]]
+        assert labels == ["Zugeordnet", "Verwaist"]
+        assert ctx["fields_display"][0].get("orphaned") is not True
+        assert ctx["fields_display"][1]["orphaned"] is True
+
+    def test_orphan_field_sensitivity_resolved_facility_wide(self, facility, client_identified, staff_user, lead_user):
+        """Refs #1725 (SICHERHEITSBEFUND): Ein einst als HIGH eingestuftes Feld,
+        das nicht mehr am Typ hängt, darf seine Sensitivity NICHT auf ``""``
+        (=NORMAL) fallen lassen. Sie wird facility-weit über das ``FieldTemplate``
+        aufgelöst (unique je (facility, slug), am Leben durch den Löschschutz) —
+        eine Fachkraft (rank 1) darf den Wert nicht sehen, Leitung (rank 2) schon.
+        Vor dem Fix fiel ``ft=None`` → Sensitivity ``""`` → für alle sichtbar.
+        """
+        doc_type = _make_doc_type(facility)
+        ft_high = _make_field_template(
+            facility,
+            name="Ehemals-Hoch",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=True,
+        )
+        # ft_high NICHT attachen → sofort verwaist.
+        event = _make_event(
+            facility, client_identified, doc_type, staff_user, data_json={ft_high.slug: "streng geheim"}
+        )
+
+        entry_staff = build_event_detail_context(event, staff_user)["fields_display"][0]
+        assert entry_staff["orphaned"] is True
+        assert entry_staff["restricted"] is True, "STAFF darf ein einst-HIGH Waisenfeld nicht sehen"
+        assert "streng geheim" not in str(entry_staff["value"])
+
+        entry_lead = build_event_detail_context(event, lead_user)["fields_display"][0]
+        assert entry_lead.get("restricted") is not True, "LEAD sieht auch das Waisenfeld"
+
     def test_history_sorted_descending_by_changed_at(self, facility, client_identified, staff_user):
         """Mutation ``order_by("-changed_at")`` → ``order_by("changed_at")``
         oder Negation würde die History-Reihenfolge kippen."""

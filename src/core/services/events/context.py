@@ -10,7 +10,7 @@ import uuid
 
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType
+from core.models import DocumentType, FieldTemplate
 from core.services.compliance import user_can_see_field
 
 # M2 (Refs #1058, P7): die Wert-Formatierung ist entity-neutral und lebt jetzt in
@@ -191,15 +191,32 @@ def _resolve_file_entries(value, attachments_by_pk, predecessor_index):
     return file_entries
 
 
-def _build_field_display_entry(key, value, ft, user, doc_sensitivity, attachments_by_pk, predecessor_index):
+def _build_field_display_entry(
+    key, value, ft, user, doc_sensitivity, attachments_by_pk, predecessor_index, *, orphaned=False
+):
     """Refs #1160: Ein einzelnes ``fields_display``-Dict bauen.
 
     Kapselt die drei Faelle aus :func:`build_event_detail_context`:
     restringiert (``[Eingeschränkt]``), FILE-Marker mit aktiven Anhaengen,
     und der entschluesselte Default. Wirkungs-identisch — gibt genau das
-    Dict zurueck, das vorher inline an ``fields_display`` angehaengt wurde.
+    Dict zurueck, das vorher inline an ``fields_display`` angehaengt wurde,
+    ergaenzt um das (fuer regulaere Felder ``False``) ``orphaned``-Flag.
+
+    ``orphaned=True`` markiert ein verwaistes Feld (Slug in ``data_json``, aber
+    nicht mehr am aktuellen Typ, Refs #1725). Der Aufrufer loest sein
+    ``FieldTemplate`` facility-weit auf und reicht es als ``ft`` durch — so
+    behaelt der Wert seine echte Sensitivity/Verschluesselung. Findet der
+    Aufrufer ausnahmsweise kein Template (``ft=None`` trotz ``orphaned=True`` —
+    der Loeschschutz sollte das verhindern, solange Daten unter dem Slug
+    liegen), wird das Feld **konservativ als HIGH** behandelt: nur Leitung/Admin
+    sehen den Wert, statt ihn versehentlich offenzulegen.
     """
-    field_sensitivity = ft.sensitivity if ft else ""
+    if ft is not None:
+        field_sensitivity = ft.sensitivity or ""
+    elif orphaned:
+        field_sensitivity = DocumentType.Sensitivity.HIGH
+    else:
+        field_sensitivity = ""
     is_encrypted = ft.is_encrypted if ft else False
 
     if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
@@ -208,6 +225,7 @@ def _build_field_display_entry(key, value, ft, user, doc_sensitivity, attachment
             "value": _("[Eingeschränkt]"),
             "is_sensitive": bool(field_sensitivity),
             "restricted": True,
+            "orphaned": orphaned,
         }
 
     if _is_file_marker(value):
@@ -223,6 +241,7 @@ def _build_field_display_entry(key, value, ft, user, doc_sensitivity, attachment
                 "prior_versions": first["prior_versions"],
                 "entries": file_entries,
                 "is_sensitive": bool(field_sensitivity),
+                "orphaned": orphaned,
             }
 
     decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
@@ -231,6 +250,7 @@ def _build_field_display_entry(key, value, ft, user, doc_sensitivity, attachment
         "value": _format_field_display_value(decrypted, ft),
         "is_encrypted": is_encrypted,
         "is_sensitive": bool(field_sensitivity),
+        "orphaned": orphaned,
     }
 
 
@@ -292,19 +312,34 @@ def build_event_detail_context(event, user):
     ]
     # Danach die verwaisten Keys (in ``data_json``, aber nicht (mehr) am Typ) in
     # stabiler, sortierter Reihenfolge anhängen — sie dürfen NICHT verschwinden
-    # (Refs #1729). Ihre korrekte Sensitivity/Kennzeichnung setzt Schritt 3.
-    for key in sorted(k for k in data if k not in field_templates):
-        fields_display.append(
-            _build_field_display_entry(
-                key,
-                data[key],
-                None,
-                user,
-                doc_sensitivity,
-                attachments_by_pk,
-                predecessor_index,
+    # (Refs #1729/#1725).
+    orphan_slugs = [k for k in data if k not in field_templates]
+    if orphan_slugs:
+        # SICHERHEITSBEFUND (Refs #1725): Ohne facility-weite Auflösung fiele die
+        # Sensitivity eines verwaisten Felds auf ``""`` (=NORMAL) — einst als
+        # elevated/high eingestufte Werte würden allen sichtbar. ``FieldTemplate``
+        # ist unique je (facility, slug) und bleibt durch den Löschschutz am
+        # Leben, solange Daten unter dem Slug existieren.
+        orphan_templates = {
+            ft.slug: ft
+            for ft in FieldTemplate.objects.filter(
+                facility_id=event.document_type.facility_id,
+                slug__in=orphan_slugs,
             )
-        )
+        }
+        for key in sorted(orphan_slugs):
+            fields_display.append(
+                _build_field_display_entry(
+                    key,
+                    data[key],
+                    orphan_templates.get(key),
+                    user,
+                    doc_sensitivity,
+                    attachments_by_pk,
+                    predecessor_index,
+                    orphaned=True,
+                )
+            )
 
     return {
         "event": event,

@@ -446,6 +446,105 @@ class TestClientDynamicDataAudit:
 
 
 @pytest.mark.django_db
+class TestClientOrphanFieldsDisplay:
+    """Refs #1725(a): verwaiste ``data_json``-Keys (Slug nicht mehr am Typ)
+    erscheinen in einer eigenen „Nicht mehr zugeordnet"-Sektion — statt still zu
+    verschwinden (``build_dynamic_fields_display`` überspringt sie).
+
+    Die Sensitivity kommt facility-weit aus dem ``FieldTemplate`` (unique je
+    (facility, slug), am Leben durch den Löschschutz), nicht aus einem
+    NORMAL-Fallback: die Waisen-Einträge durchlaufen dieselbe Gating-Logik wie
+    zugeordnete Felder.
+    """
+
+    def _orphan_ft(self, facility, *, name, sensitivity="", is_encrypted=False):
+        from core.models import FieldTemplate
+
+        return FieldTemplate.objects.create(
+            facility=facility,
+            name=name,
+            field_type=FieldTemplate.FieldType.TEXT,
+            sensitivity=sensitivity,
+            is_encrypted=is_encrypted,
+        )
+
+    def test_orphan_appears_separately_from_mapped(self, facility, doc_type_client_profile, staff_user):
+        from core.services.dynamic_data import build_dynamic_data_context
+
+        orphan_ft = self._orphan_ft(facility, name="Ehemals-Feld")
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="Waise-01",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG", orphan_ft.slug: "Altwert"},
+        )
+        ctx = build_dynamic_data_context(client.document_type, client.data_json, staff_user)
+        mapped_labels = [f["label"] for f in ctx["dynamic_fields"]]
+        orphan_labels = [f["label"] for f in ctx["dynamic_orphan_fields"]]
+        assert "Wohnsituation" in mapped_labels
+        assert "Ehemals-Feld" not in mapped_labels
+        assert orphan_labels == ["Ehemals-Feld"]
+        assert ctx["dynamic_orphan_fields"][0]["orphaned"] is True
+        assert ctx["dynamic_orphan_fields"][0]["value"] == "Altwert"
+
+    def test_orphan_high_sensitivity_is_restricted_for_staff(
+        self, facility, doc_type_client_profile, staff_user, lead_user
+    ):
+        from core.services.dynamic_data import build_orphan_fields_display
+
+        orphan_ft = self._orphan_ft(
+            facility, name="Ehemals-Hoch", sensitivity=DocumentType.Sensitivity.HIGH, is_encrypted=True
+        )
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="Waise-02",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={orphan_ft.slug: "geheim"},
+        )
+        staff_entry = build_orphan_fields_display(client.document_type, client.data_json, staff_user)[0]
+        assert staff_entry["restricted"] is True
+        assert "geheim" not in str(staff_entry["value"])
+        lead_entry = build_orphan_fields_display(client.document_type, client.data_json, lead_user)[0]
+        assert lead_entry["restricted"] is False
+
+    def test_orphan_without_template_is_conservatively_restricted(
+        self, facility, doc_type_client_profile, staff_user, lead_user
+    ):
+        """Defensive: fehlt für einen Waisen-Slug jedes ``FieldTemplate`` (der
+        Löschschutz sollte das verhindern), wird der Eintrag als restricted für
+        Nicht-Leitung/Admin behandelt — Label = Slug."""
+        from core.services.dynamic_data import build_orphan_fields_display
+
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="Waise-03",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"verschollener-slug": "Rest"},
+        )
+        staff_entry = build_orphan_fields_display(client.document_type, client.data_json, staff_user)[0]
+        assert staff_entry["restricted"] is True
+        assert staff_entry["label"] == "verschollener-slug"
+        lead_entry = build_orphan_fields_display(client.document_type, client.data_json, lead_user)[0]
+        assert lead_entry["restricted"] is False
+        assert lead_entry["value"] == "Rest"
+
+    def test_no_orphans_yields_empty_list(self, facility, doc_type_client_profile, staff_user):
+        from core.services.dynamic_data import build_orphan_fields_display
+
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="Waise-04",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        assert build_orphan_fields_display(client.document_type, client.data_json, staff_user) == []
+
+
+@pytest.mark.django_db
 class TestClientDocumentTypeProtect:
     """``on_delete=PROTECT``: ein benutzter Typ ist nicht loeschbar (UI-Block: P9)."""
 

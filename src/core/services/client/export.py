@@ -66,6 +66,51 @@ def _gather_entity_dynamic_data(entity):
     return entries
 
 
+def _gather_entity_orphan_data(entity):
+    """Verwaiste dynamische Felder als ``[{slug, label, value}, ...]`` (Refs #1725(a)).
+
+    Verwaist = Slug in ``data_json``, aber nicht (mehr) am aktuellen Typ. Diese
+    Werte gehören zur Art.-15-Auskunft (sie liegen weiter gespeichert), dürfen
+    aber das stabile ``dynamic_data``-Bestandsformat nicht aufweichen — daher ein
+    **separater** Export-Key ``dynamic_data_orphaned``.
+
+    ``None`` ohne ``document_type`` (der Aufrufer lässt den Key dann ganz weg),
+    sonst die nach Slug sortierten Waisen — facility-weit über das
+    ``FieldTemplate`` (unique je (facility, slug)) mit Label + lesbarer
+    Formatierung aufgelöst; fehlt ein Template, ist das Label der Slug.
+
+    **Ohne Feld-Gating**, konsistent zu :func:`_gather_entity_dynamic_data`: der
+    Export hängt an ``LeadOrAdminRequiredMixin`` + SudoMode, Leitung/Admin dürfen
+    ohnehin jede Sensitivitätsstufe sehen — eine Filterung wäre hier eine
+    Scheinsicherheit, die eine unvollständige Auskunft erzeugen könnte.
+    """
+    from core.models import FieldTemplate
+    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
+
+    if entity.document_type_id is None:
+        return None
+    values = entity.data_json or {}
+    field_templates = build_field_template_lookup(entity.document_type)
+    orphan_slugs = sorted(set(values.keys()) - set(field_templates.keys()))
+    if not orphan_slugs:
+        return []
+    resolved = {
+        ft.slug: ft
+        for ft in FieldTemplate.objects.filter(
+            facility_id=entity.document_type.facility_id,
+            slug__in=orphan_slugs,
+        )
+    }
+    entries = []
+    for slug in orphan_slugs:
+        ft = resolved.get(slug)
+        raw = values[slug]
+        decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
+        label = ft.name if ft is not None else slug
+        entries.append({"slug": slug, "label": label, "value": format_dynamic_display_value(decrypted, ft)})
+    return entries
+
+
 def _gather_client_fields(client):
     """Serialize the client's master data."""
     fields = {
@@ -83,6 +128,11 @@ def _gather_client_fields(client):
     if dynamic_data is not None:
         fields["document_type"] = client.document_type.name
         fields["dynamic_data"] = dynamic_data
+    # Refs #1725(a): verwaiste Werte separat, nur wenn vorhanden — so bleibt das
+    # ``dynamic_data``-Bestandsformat bitgleich, wenn es keine Waisen gibt.
+    orphaned = _gather_entity_orphan_data(client)
+    if orphaned:
+        fields["dynamic_data_orphaned"] = orphaned
     return fields
 
 
@@ -151,6 +201,10 @@ def _gather_cases(client):
         if dynamic_data is not None:
             entry["document_type"] = case.document_type.name
             entry["dynamic_data"] = dynamic_data
+        # Refs #1725(a): verwaiste Fall-Werte separat, nur wenn vorhanden.
+        orphaned = _gather_entity_orphan_data(case)
+        if orphaned:
+            entry["dynamic_data_orphaned"] = orphaned
         entries.append(entry)
     return entries
 

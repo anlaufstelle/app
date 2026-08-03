@@ -40,6 +40,11 @@
         {% for entry in client.dynamic_data %}
         <tr><th>{{ entry.label }}</th><td>{{ entry.value }}</td></tr>
         {% endfor %}
+        {% comment %}Refs #1725(a): verwaiste Felder (Slug nicht mehr am Typ) gehoeren
+        zur Auskunft; separater Unterabschnitt aus ``client.dynamic_data_orphaned``.{% endcomment %}
+        {% for entry in client.dynamic_data_orphaned %}
+        <tr><th>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em></th><td>{{ entry.value }}</td></tr>
+        {% endfor %}
         {% endif %}
     </table>
 
@@ -74,6 +79,10 @@
                     <strong>{{ case.document_type }}</strong>
                     {% for entry in case.dynamic_data %}
                         <br>{{ entry.label }}: {{ entry.value }}
+                    {% endfor %}
+                    {% comment %}Refs #1725(a): verwaiste Fall-Felder separat.{% endcomment %}
+                    {% for entry in case.dynamic_data_orphaned %}
+                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value }}
                     {% endfor %}
                     {% else %}-{% endif %}
                 </td>

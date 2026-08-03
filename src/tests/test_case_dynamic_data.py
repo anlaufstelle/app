@@ -364,6 +364,46 @@ class TestCaseDynamicDataOptimisticLocking:
 
 
 @pytest.mark.django_db
+class TestCaseOrphanFieldsDisplay:
+    """Refs #1725(a): verwaiste ``data_json``-Keys erscheinen auch im Fall-Detail
+    in der eigenen „Nicht mehr zugeordnet"-Sektion (gemeinsames Partial mit dem
+    Personen-Detail)."""
+
+    def test_orphan_appears_separately_with_facility_sensitivity(
+        self, facility, client_identified, doc_type_case_form, staff_user, lead_user
+    ):
+        from core.models import FieldTemplate
+        from core.services.dynamic_data import build_dynamic_data_context
+
+        orphan_ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Ehemals-Fallfeld",
+            field_type=FieldTemplate.FieldType.TEXTAREA,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=True,
+        )
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Waisen-Fall",
+            created_by=staff_user,
+            document_type=doc_type_case_form,
+            data_json={"anlass": "Mietschulden", orphan_ft.slug: "geheim"},
+        )
+        # STAFF: verwaistes HIGH-Feld restricted, zugeordnetes Feld sichtbar.
+        ctx_staff = build_dynamic_data_context(case.document_type, case.data_json, staff_user)
+        assert [f["label"] for f in ctx_staff["dynamic_fields"]] == ["Anlass"]
+        assert len(ctx_staff["dynamic_orphan_fields"]) == 1
+        orphan = ctx_staff["dynamic_orphan_fields"][0]
+        assert orphan["orphaned"] is True
+        assert orphan["restricted"] is True
+        assert "geheim" not in str(orphan["value"])
+        # LEAD sieht den Waisenwert.
+        ctx_lead = build_dynamic_data_context(case.document_type, case.data_json, lead_user)
+        assert ctx_lead["dynamic_orphan_fields"][0]["restricted"] is False
+
+
+@pytest.mark.django_db
 class TestCaseDocumentTypeProtect:
     """``on_delete=PROTECT``: ein benutzter Typ ist nicht loeschbar (UI-Block: P8)."""
 

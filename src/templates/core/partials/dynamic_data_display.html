@@ -15,6 +15,10 @@ Kontext-Keys (gebaut von
   Partial GAR NICHTS (weder Typname noch Feldlabels, #774).
 - ``dynamic_fields`` — PFLICHT; Liste aus ``build_dynamic_fields_display`` mit
   je ``label``, ``value``, ``restricted``, ``is_sensitive``, ``is_encrypted``.
+- ``dynamic_orphan_fields`` — Liste aus ``build_orphan_fields_display`` (Refs
+  #1725(a)): Slugs, die (noch) in ``data_json`` liegen, aber nicht mehr zum Typ
+  gehoeren. Nur gerendert, wenn nicht leer — als visuell abgesetzte
+  „Nicht mehr zugeordnet"-Sektion (amber, analog Loeschschutz-Blockerbox).
 
 Im Template wird nicht gerechnet: Entschluesselung, Label-Aufloesung,
 Feld-Sensitivity und der ``[Eingeschraenkt]``-Platzhalter kommen fertig aus dem
@@ -37,6 +41,22 @@ Service.
     </dl>
     {% else %}
     <p class="text-[13px] text-ink-muted">{% trans "Keine Angaben erfasst." %}</p>
+    {% endif %}
+
+    {% if dynamic_orphan_fields %}
+    {# Refs #1725(a): verwaiste Felder — Slug nicht mehr am Typ, Wert bleibt gespeichert. #}
+    <div class="mt-3 bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2.5" data-testid="dynamic-orphan-section">
+        <h3 class="text-[12px] font-bold text-amber-800 uppercase tracking-wider mb-1">{% trans "Nicht mehr zugeordnete Felder" %}</h3>
+        <p class="text-[12px] text-amber-800 mb-2">{% trans "Diese Felder sind dem Dokumentationstyp nicht mehr zugeordnet; die gespeicherten Werte bleiben erhalten." %}</p>
+        <dl class="space-y-2.5">
+            {% for field in dynamic_orphan_fields %}
+            <div>
+                <dt class="text-[12px] text-amber-800">{{ field.label }}</dt>
+                <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value }}</dd>
+            </div>
+            {% endfor %}
+        </dl>
+    </div>
     {% endif %}
 </div>
 {% endif %}

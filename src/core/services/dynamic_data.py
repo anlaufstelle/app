@@ -268,6 +268,85 @@ def build_dynamic_fields_display(
     return entries
 
 
+def build_orphan_fields_display(
+    document_type: DocumentType,
+    data_json: Mapping[str, Any] | None,
+    user: Any,
+) -> list[dict[str, Any]]:
+    """Anzeige-Dicts der **verwaisten** dynamischen Felder (Refs #1725(a)).
+
+    Verwaist = Slug in ``data_json``, aber nicht (mehr) am aktuellen
+    ``document_type`` zugeordnet — z. B. nachdem eine Feldzuordnung entfernt
+    wurde. :func:`build_dynamic_fields_display` überspringt solche Slugs still;
+    dieser Helfer macht sie sichtbar, damit die betroffenen Werte nicht
+    unbemerkt und unauskunftsfähig im ``data_json`` liegen bleiben.
+
+    **Sensitivity/Verschlüsselung** werden facility-weit über das
+    ``FieldTemplate`` aufgelöst (unique je (facility, slug), am Leben durch den
+    Löschschutz, solange Daten unter dem Slug existieren). Die Waisen-Einträge
+    durchlaufen dieselbe Gating-Logik (:func:`user_can_see_field`) wie
+    zugeordnete Felder — ein einst als elevated/high eingestuftes Feld bleibt
+    also restricted (``[Eingeschränkt]``). **Defensiv:** findet sich für einen
+    Slug ausnahmsweise kein ``FieldTemplate``, wird der Eintrag konservativ als
+    HIGH behandelt (nur Leitung/Admin sehen den Wert) und mit dem Slug als Label
+    ausgewiesen.
+
+    Reihenfolge: nach Slug sortiert (stabil, Refs #1729). Entry-Form identisch zu
+    :func:`build_dynamic_fields_display` plus ``orphaned=True``.
+    """
+    from core.models import DocumentType as DocumentTypeModel
+    from core.models import FieldTemplate
+    from core.services.file_vault import safe_decrypt
+
+    values = data_json or {}
+    field_templates = build_field_template_lookup(document_type)
+    orphan_slugs = sorted(set(values.keys()) - set(field_templates.keys()))
+    if not orphan_slugs:
+        return []
+
+    doc_sensitivity = document_type.sensitivity
+    resolved = {
+        ft.slug: ft
+        for ft in FieldTemplate.objects.filter(
+            facility_id=document_type.facility_id,
+            slug__in=orphan_slugs,
+        )
+    }
+
+    entries: list[dict[str, Any]] = []
+    for slug in orphan_slugs:
+        ft = resolved.get(slug)
+        # Ohne auffindbares Template konservativ als HIGH gaten (Löschschutz
+        # sollte das verhindern) — lieber verbergen als versehentlich offenlegen.
+        field_sensitivity = (ft.sensitivity or "") if ft is not None else DocumentTypeModel.Sensitivity.HIGH
+        label = ft.name if ft is not None else slug
+        is_encrypted = ft.is_encrypted if ft is not None else False
+        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+            entries.append(
+                {
+                    "label": label,
+                    "value": _("[Eingeschränkt]"),
+                    "is_sensitive": bool(field_sensitivity),
+                    "is_encrypted": is_encrypted,
+                    "restricted": True,
+                    "orphaned": True,
+                }
+            )
+            continue
+        decrypted = safe_decrypt(values[slug], default=_("[verschlüsselt]"))
+        entries.append(
+            {
+                "label": label,
+                "value": format_dynamic_display_value(decrypted, ft),
+                "is_sensitive": bool(field_sensitivity),
+                "is_encrypted": is_encrypted,
+                "restricted": False,
+                "orphaned": True,
+            }
+        )
+    return entries
+
+
 def build_dynamic_data_context(
     document_type: DocumentType | None,
     data_json: Mapping[str, Any] | None,
@@ -277,17 +356,20 @@ def build_dynamic_data_context(
 
     Die Sensitivität des ``DocumentType`` gated die **ganze** Sektion: darf
     *user* den Typ nicht sehen, liefert der Helfer ``dynamic_document_type =
-    None`` und eine leere Feldliste — das Partial rendert dann gar nichts, und
+    None`` und leere Feldlisten — das Partial rendert dann gar nichts, und
     weder Typname noch Feldlabels gelangen ins HTML (#774-Muster).
 
     Rückgabe-Keys (Vertrag des Partials):
 
     * ``dynamic_document_type`` — ``DocumentType`` oder ``None`` (Gate),
-    * ``dynamic_fields`` — Liste aus :func:`build_dynamic_fields_display`.
+    * ``dynamic_fields`` — Liste aus :func:`build_dynamic_fields_display`,
+    * ``dynamic_orphan_fields`` — Liste aus :func:`build_orphan_fields_display`
+      (verwaiste Slugs, Refs #1725(a); leer, wenn keine existieren).
     """
     if document_type is None or not user_can_see_document_type(user, document_type):
-        return {"dynamic_document_type": None, "dynamic_fields": []}
+        return {"dynamic_document_type": None, "dynamic_fields": [], "dynamic_orphan_fields": []}
     return {
         "dynamic_document_type": document_type,
         "dynamic_fields": build_dynamic_fields_display(document_type, data_json, user),
+        "dynamic_orphan_fields": build_orphan_fields_display(document_type, data_json, user),
     }

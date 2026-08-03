@@ -96,7 +96,10 @@
         <dl class="space-y-3">
             {% for field in fields_display %}
             <div>
-                <dt class="text-sm text-ink-muted">{{ field.label }}</dt>
+                <dt class="text-sm text-ink-muted">
+                    {{ field.label }}
+                    {% if field.orphaned %}<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-800" title="{% trans 'Dieses Feld ist dem Dokumentationstyp nicht mehr zugeordnet; der Wert bleibt gespeichert.' %}">{% trans "Nicht mehr zugeordnet" %}</span>{% endif %}
+                </dt>
                 {% if field.is_file %}
                 <dd class="text-sm font-medium {% if field.is_sensitive %}text-amber-700{% endif %}">
                     {# Stufe B (#622): Liste aller aktiven Entries pro Feld; Stufe-A-Einträge liefern ein Einzel-Entry. #}
