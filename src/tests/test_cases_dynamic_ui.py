@@ -1250,16 +1250,27 @@ class TestCaseExportDynamicData:
         assert by_label["Anlass"] == "Mietschulden"
         assert by_label["Verlauf"] == "Export-Klartext"
 
-    def test_export_without_type_is_unchanged(self, case_open, client_identified):
+    def test_export_without_type_carries_no_dynamic_keys(self, case_open, client_identified):
+        """Ohne ``document_type`` erscheinen keine Dynamik-Keys im Fall-Dict.
+
+        Refs #1752: Der Basis-Schluesselsatz ist per Produktentscheid vom
+        2026-08-03 um ``updated_at`` und die Papierkorb-Metadaten gewachsen.
+        Die urspruengliche Aussage — ``dynamic_data``/``dynamic_data_orphaned``
+        bleiben ohne Typ fern — bleibt unveraendert gepinnt.
+        """
         result = _gather_cases(client_identified)[0]
         assert set(result.keys()) == {
             "title",
             "description",
             "status",
             "created_at",
+            "updated_at",
             "closed_at",
             "lead_user",
             "created_by",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
         }
 
     def test_export_formats_select_and_boolean_values(

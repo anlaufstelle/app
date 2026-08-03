@@ -1085,15 +1085,29 @@ class TestClientExportDynamicData:
         assert by_label["Wohnsituation"] == "WG"
         assert by_label["Diagnose"] == "Export-Klartext"
 
-    def test_export_without_type_is_unchanged(self, client_identified):
+    def test_export_without_type_carries_no_dynamic_keys(self, client_identified):
+        """Ohne ``document_type`` erscheinen keine Dynamik-Keys im Stammdaten-Dict.
+
+        Refs #1752: Der Basis-Schluesselsatz ist per Produktentscheid vom
+        2026-08-03 um ``notes``, die Papierkorb-/Anonymisierungs-Metadaten und
+        ``updated_at`` gewachsen. Die urspruengliche Aussage des Tests —
+        ``dynamic_data``/``dynamic_data_orphaned`` bleiben ohne Typ fern —
+        bleibt unveraendert gepinnt.
+        """
         result = _gather_client_fields(client_identified)
         assert set(result.keys()) == {
             "pseudonym",
             "contact_stage",
             "age_cluster",
+            "notes",
             "is_active",
+            "k_anonymized",
             "created_at",
+            "updated_at",
             "created_by",
+            "is_deleted",
+            "deleted_at",
+            "deleted_by",
         }
 
     def test_export_formats_select_and_boolean_values(self, facility, staff_user, doc_type_client_select):

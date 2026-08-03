@@ -1,6 +1,7 @@
 """Client data export for DSGVO Art. 15 (right of access) and Art. 20 (data portability)."""
 
 import weasyprint
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -9,6 +10,31 @@ from core.models import DeletionRequest, Event, EventHistory, WorkItem
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
+
+
+def _username(user):
+    """Username eines optionalen User-FKs (``None`` bei ``SET_NULL``-Waisen)."""
+    return user.username if user else None
+
+
+def _isoformat(value):
+    """ISO-8601 eines optionalen Datums-/Zeitstempels."""
+    return value.isoformat() if value else None
+
+
+def _soft_delete_meta(obj):
+    """Papierkorb-Metadaten eines :class:`SoftDeletableModel` (Refs #1752).
+
+    ``is_deleted``/``deleted_at``/``deleted_by`` sind selbst gespeicherte
+    personenbezogene Daten: sie beantworten, ob und seit wann ein Datensatz im
+    Papierkorb liegt — bis zum Hard-Purge existiert er weiter. Die Auskunft
+    muss das ausweisen, sonst wirkt ein Datensatz „geloescht", der es nicht ist.
+    """
+    return {
+        "is_deleted": obj.is_deleted,
+        "deleted_at": _isoformat(obj.deleted_at),
+        "deleted_by": _username(obj.deleted_by),
+    }
 
 
 def _gather_entity_dynamic_data(entity):
@@ -117,9 +143,18 @@ def _gather_client_fields(client):
         "pseudonym": client.pseudonym,
         "contact_stage": client.get_contact_stage_display(),
         "age_cluster": client.get_age_cluster_display(),
+        # Refs #1752: ``notes`` ist der gewichtigste bislang fehlende Freitext
+        # (docs/security-notes.md stuft ihn selbst als „hoch (Klarname-Risiko)"
+        # ein) — ohne ihn war die Auskunft substanziell unvollstaendig.
+        "notes": client.notes,
         "is_active": client.is_active,
+        # Refs #1752: Anonymisierungs-Status gehoert zur Auskunft — er erklaert,
+        # warum Felder generalisiert erscheinen.
+        "k_anonymized": client.k_anonymized,
         "created_at": client.created_at.isoformat(),
-        "created_by": client.created_by.username if client.created_by else None,
+        "updated_at": client.updated_at.isoformat(),
+        "created_by": _username(client.created_by),
+        **_soft_delete_meta(client),
     }
     # M2 P7 (Refs #1058): dynamische Felder gehoeren in die Auskunft, sobald der
     # Datensatz einen Typ traegt (P4b-Befund). Ohne Typ bleibt das Dict exakt so
@@ -148,8 +183,17 @@ def _serialize_event(event):
     return {
         "document_type": event.document_type.name,
         "occurred_at": event.occurred_at.isoformat(),
-        "created_by": event.created_by.username if event.created_by else None,
+        "created_by": _username(event.created_by),
         "data": decrypted_data,
+        # Refs #1752: Kleinfelder, die bisher fehlten. ``case``/``episode``
+        # ordnen das Ereignis fuer die betroffene Person nachvollziehbar ein,
+        # ``is_deleted`` unterscheidet Live-Datensatz von Papierkorb-Eintrag.
+        "case": event.case.title if event.case else None,
+        "episode": event.episode.title if event.episode else None,
+        "is_anonymous": event.is_anonymous,
+        "is_deleted": event.is_deleted,
+        "created_at": event.created_at.isoformat(),
+        "updated_at": event.updated_at.isoformat(),
     }
 
 
@@ -165,8 +209,8 @@ def _gather_events(client, user):
     events = (
         Event.objects.visible_to(user)
         .filter(client=client, is_deleted=False)
-        .select_related("document_type", "created_by")
-        .order_by("-occurred_at")
+        .select_related("document_type", "created_by", "case", "episode")
+        .order_by("-occurred_at", "pk")
     )
     events_data = []
     event_ids = []
@@ -180,8 +224,8 @@ def _gather_cases(client):
     """Serialize all cases linked to the client."""
     cases = (
         CaseModel.objects.filter(client=client)
-        .select_related("created_by", "lead_user", "document_type")
-        .order_by("-created_at")
+        .select_related("created_by", "lead_user", "document_type", "deleted_by")
+        .order_by("-created_at", "pk")
     )
     entries = []
     for case in cases:
@@ -190,9 +234,12 @@ def _gather_cases(client):
             "description": case.description,
             "status": case.get_status_display(),
             "created_at": case.created_at.isoformat(),
-            "closed_at": case.closed_at.isoformat() if case.closed_at else None,
-            "lead_user": case.lead_user.username if case.lead_user else None,
-            "created_by": case.created_by.username if case.created_by else None,
+            # Refs #1752: ``updated_at`` + Papierkorb-Metadaten fehlten.
+            "updated_at": case.updated_at.isoformat(),
+            "closed_at": _isoformat(case.closed_at),
+            "lead_user": _username(case.lead_user),
+            "created_by": _username(case.created_by),
+            **_soft_delete_meta(case),
         }
         # M2 P8 (Refs #1058): dynamische Fall-Felder gehoeren in die Auskunft,
         # sobald der Fall einen Typ traegt. Ohne Typ bleibt das Dict exakt so
@@ -224,21 +271,37 @@ def _gather_event_history(event_ids):
     ]
 
 
-def _gather_deletion_requests(event_ids):
-    """Serialize DeletionRequest entries for the given event IDs."""
+def _gather_deletion_requests(facility, client, event_ids):
+    """Serialize DeletionRequest entries for the client and the given event IDs.
+
+    Refs #1752: der Filter war hart auf ``target_type="Event"`` verdrahtet,
+    obwohl ``request_client_deletion`` (``core.services.client.main``) Antraege
+    mit ``target_type="Client"`` schreibt. Der Vier-Augen-Antrag auf Loeschung
+    der eigenen Person fehlte damit ausgerechnet in der Auskunft, waehrend der
+    PDF-Abschnitt „Loeschantraege" Vollstaendigkeit suggerierte.
+
+    Facility-gescopt ueber den ``FacilityScopedManager`` (Defense-in-Depth
+    zusaetzlich zu RLS) — ``target_id`` allein ist zwar UUID-eindeutig, das
+    Scoping haelt den Zugriff aber konsistent zu den uebrigen Quertabellen.
+    """
     deletion_requests = (
-        DeletionRequest.objects.filter(target_id__in=event_ids, target_type="Event")
+        DeletionRequest.objects.for_facility(facility)
+        .filter(
+            Q(target_type=DeletionRequest.TargetType.EVENT, target_id__in=event_ids)
+            | Q(target_type=DeletionRequest.TargetType.CLIENT, target_id=client.pk)
+        )
         .select_related("requested_by", "reviewed_by")
-        .order_by("-created_at")
+        .order_by("-created_at", "pk")
     )
     return [
         {
+            "target_type": dr.get_target_type_display(),
             "status": dr.get_status_display(),
             "reason": dr.reason,
-            "requested_by": dr.requested_by.username if dr.requested_by else None,
-            "reviewed_by": dr.reviewed_by.username if dr.reviewed_by else None,
+            "requested_by": _username(dr.requested_by),
+            "reviewed_by": _username(dr.reviewed_by),
             "created_at": dr.created_at.isoformat(),
-            "reviewed_at": dr.reviewed_at.isoformat() if dr.reviewed_at else None,
+            "reviewed_at": _isoformat(dr.reviewed_at),
         }
         for dr in deletion_requests
     ]
@@ -246,15 +309,29 @@ def _gather_deletion_requests(event_ids):
 
 def _gather_workitems(client):
     """Serialize all work items linked to the client."""
-    workitems = WorkItem.objects.filter(client=client).order_by("-created_at")
+    workitems = (
+        WorkItem.objects.filter(client=client)
+        .select_related("created_by", "assigned_to", "deleted_by")
+        .order_by("-created_at", "pk")
+    )
     return [
         {
             "title": wi.title,
             "description": wi.description,
+            # Refs #1752: bisher fehlende Kleinfelder — Typ, handelnde
+            # Personen, Fristen und Papierkorb-Status.
+            "item_type": wi.get_item_type_display(),
             "status": wi.get_status_display(),
             "priority": wi.get_priority_display(),
+            "created_by": _username(wi.created_by),
+            "assigned_to": _username(wi.assigned_to),
             "created_at": wi.created_at.isoformat(),
-            "due_date": wi.due_date.isoformat() if wi.due_date else None,
+            "updated_at": wi.updated_at.isoformat(),
+            "completed_at": _isoformat(wi.completed_at),
+            "due_date": _isoformat(wi.due_date),
+            "remind_at": _isoformat(wi.remind_at),
+            "recurrence": wi.get_recurrence_display(),
+            **_soft_delete_meta(wi),
         }
         for wi in workitems
     ]
@@ -282,7 +359,7 @@ def export_client_data(client, facility, user):
         "events": events_data,
         "cases": _gather_cases(client),
         "event_history": _gather_event_history(event_ids),
-        "deletion_requests": _gather_deletion_requests(event_ids),
+        "deletion_requests": _gather_deletion_requests(facility, client, event_ids),
         "work_items": _gather_workitems(client),
         "export_meta": _build_export_meta(facility),
     }
