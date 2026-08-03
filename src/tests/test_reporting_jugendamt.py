@@ -1194,15 +1194,19 @@ class TestGuardPlatzhalterUndDegradierteMeldungGleich:
 
 
 class TestDiscovery:
-    def test_echte_discovery_findet_das_backend(self, monkeypatch):
-        """Ohne Vorab-Registrierung: das Modul wird ueber ``backends/`` gefunden.
+    def test_echte_discovery_findet_beide_backends(self, monkeypatch):
+        """Ohne Vorab-Registrierung: BEIDE Module werden ueber ``backends/`` gefunden.
 
-        ``sys.modules``-Eintrag entfernen, damit der Decorator wirklich noch
-        einmal laeuft — sonst haette der Test nur bewiesen, dass ein frueherer
-        Import die Registry gefuellt hat (monkeypatch stellt beides zurueck).
+        ``sys.modules``-Eintraege BEIDER Backend-Module entfernen, damit die
+        Decorators wirklich noch einmal laufen — sonst haette der Test nur
+        bewiesen, dass ein frueherer Import die Registry gefuellt hat
+        (monkeypatch stellt beides zurueck). Seit M5 P6 (Refs #1061) gehoert
+        ``example`` (Referenz-Plugin) zu den real registrierten Backends — die
+        Discovery-Assertion pinnt jetzt beide.
         """
         monkeypatch.delitem(sys.modules, "core.reporting.backends.jugendamt", raising=False)
+        monkeypatch.delitem(sys.modules, "core.reporting.backends.example", raising=False)
         monkeypatch.setattr(registry, "_REGISTRY", {})
         monkeypatch.setattr(registry, "_discovered", False)
 
-        assert [b.slug for b in registry.get_backends()] == ["jugendamt"]
+        assert [b.slug for b in registry.get_backends()] == ["example", "jugendamt"]
