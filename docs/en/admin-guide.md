@@ -761,7 +761,7 @@ MultiFernet accepts a list of keys. To rotate:
 
 | Data | Scope |
 |---|---|
-| `Event.data_json` | only events that are **not** soft-deleted (`is_deleted=False`) -- see the gap below |
+| **`Event.data_json`** | **complete -- including soft-deleted events** (#1724) |
 | `EventHistory.data_before` / `data_after` | complete (append-only, updated through the replication bypass) |
 | `EventAttachment.original_filename_encrypted` | complete |
 | TOTP secrets (`otp_totp_totpdevice.key`) | complete, per device with a row lock and compare-and-swap |
@@ -770,9 +770,7 @@ MultiFernet accepts a list of keys. To rotate:
 
 Since dynamic fields became entity-wide (ADR-037), **persons** and **cases** also carry encrypted extra fields in `data_json`. The run rotates them as well and additionally heals plaintext leftovers in fields that the document type declares as encrypted.
 
-For persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion.
-
-> ⚠️ **Known gap -- soft-deleted events.** `Event` is still iterated with `is_deleted=False`. Events in the trash therefore keep their old key until they are hard-deleted by the regular retention run. **Before you really remove an old key from `ENCRYPTION_KEYS`, check whether soft-deleted events exist** (`Event.objects.filter(is_deleted=True).count()`) -- then either wait for the retention run or keep the old key as a read-only entry in the list. Extending the event path is still open and tracked in #1058.
+For events, persons and cases, **soft-deleted records are rotated too**. That is deliberate: a record waiting in the trash must not stay behind under a retired key just because it is pending deletion. The former gap for soft-deleted events (the `is_deleted=False` filter) has been closed since #1724.
 
 > **Operational note:** The run takes **no** row lock for events, persons, cases and attachments (unlike the TOTP rewrap). With concurrent editing during rotation a lost update is theoretically possible -- run the rotation in a maintenance window, not during regular operation.
 
@@ -1467,4 +1465,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 2b231ef6a77ae66cd9090e2e04381ad683062e18 -->
+<!-- source-hash: 9effcf7d8c506b5a1cbc9b82ff0a927aa13b6fa1 -->

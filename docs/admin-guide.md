@@ -764,7 +764,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 | Datenbestand | Umfang |
 |---|---|
-| `Event.data_json` | nur **nicht** soft-gelöschte Ereignisse (`is_deleted=False`) — siehe Lücke unten |
+| **`Event.data_json`** | **vollständig — inklusive soft-gelöschter Ereignisse** (#1724) |
 | `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass) |
 | `EventAttachment.original_filename_encrypted` | vollständig |
 | TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
@@ -773,9 +773,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 Seit den entitätsübergreifenden dynamischen Feldern ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)) tragen auch **Personen** und **Fälle** verschlüsselte Zusatzfelder in `data_json`. Der Lauf rotiert sie mit und heilt dabei zusätzlich Klartext-Reste in Feldern, die laut Dokumentationstyp verschlüsselt sein müssen.
 
-Bei Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet.
-
-> ⚠️ **Bekannte Lücke — soft-gelöschte Ereignisse.** `Event` wird weiterhin mit `is_deleted=False` iteriert. Ereignisse im Papierkorb behalten also ihren alten Schlüssel, bis sie regulär hart gelöscht werden. **Wer einen alten Schlüssel wirklich aus `ENCRYPTION_KEYS` entfernen will, prüft vorher, ob soft-gelöschte Ereignisse existieren** (`Event.objects.filter(is_deleted=True).count()`) — und wartet den Retention-Lauf ab oder behält den Alt-Schlüssel als Read-Only-Eintrag in der Liste. Der Nachzug des Event-Pfads ist offen und wird an #1058 getrackt.
+Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet. Die frühere Lücke bei soft-gelöschten Ereignissen (`is_deleted=False`-Filter) ist seit #1724 geschlossen.
 
 > **Betriebshinweis:** Der Lauf nimmt für Ereignisse, Personen, Fälle und Anhänge **keinen** Row-Lock (anders als beim TOTP-Rewrap). Bei paralleler Bearbeitung während der Rotation ist ein verlorenes Update theoretisch möglich — die Rotation deshalb im Wartungsfenster fahren, nicht im laufenden Betrieb.
 

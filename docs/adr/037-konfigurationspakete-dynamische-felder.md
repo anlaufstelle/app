@@ -142,6 +142,8 @@ Schicht 3 ist die letzte Verteidigungslinie und bewusst **kein** Fehler: der Dat
 
 **Client und Case werden inklusive soft-deleted Zeilen rotiert** (Entscheid E17). `FacilityScopedManager` filtert `is_deleted` nicht, `Client.objects`/`Case.objects` decken den vollen Bestand also ohne Zusatzfilter ab. Bewusst anders als bei **Events**, die weiterhin mit `is_deleted=False` iteriert werden — das ist eine **bekannte, hier nicht angefasste Bestandslücke**: soft-deleted Ereignisse bleiben unter dem alten Schlüssel liegen, bis sie regulär hart gelöscht werden. Wer einen Schlüssel wirklich ausmustern will, muss das wissen. Nachzuziehen ist der Event-Pfad separat (getrackt an #1058, Folge-Issue offen) — als Teil von M2 wäre es eine unbegründete Verhaltensänderung an einem Bestandspfad gewesen.
 
+**Update 2026-08-03:** Event-Pfad nachgezogen, Lücke geschlossen (#1724) — `_reencrypt_events` iteriert seither ebenfalls ohne `is_deleted`-Filter.
+
 ### 11. CLI-Fassade
 
 [`manage.py load_package --file <pfad> --facility <uuid> [--dry-run]`](../../src/core/management/commands/load_package.py) ist die einzige Stelle, die `yaml` importiert; Schema und Loader bleiben dict-basiert und damit unabhängig vom Serialisierungsformat. Fehler aus beiden Stufen werden als `CommandError` (Exit ≠ 0) gemeldet, der Report wird auch im Fehlerfall ausgegeben — er zeigt, was ohne die Fehler passiert wäre. Format-Referenz und Bedienung: [`docs/packages.md`](../packages.md).
