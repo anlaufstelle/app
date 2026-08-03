@@ -19,7 +19,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.widgets import INPUT_CSS
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
-from core.models.document_type import slug_base
+from core.models.document_type import _RESERVED_SLUGS, slug_base
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
@@ -42,6 +42,22 @@ def validate_slugifiable_name(name: str) -> str:
                 "Aus diesem Namen lässt sich kein gültiger Slug bilden — bitte mindestens "
                 "einen Buchstaben (a–z) oder eine Ziffer verwenden."
             )
+        )
+    # Reserved-Slug-Guard (Refs #1726): der aus dem Namen gebildete Slug darf
+    # keinen festen Formularfeld-Namen treffen — dynamische Felder werden nackt
+    # unter ihrem Slug im selben ``<form>`` gerendert, eine Kollision würde beim
+    # Absenden das feste Feld überschreiben. Gilt über den gemeinsamen Helfer für
+    # FieldTemplateForm.clean_name, FieldGroupForm.clean_name UND
+    # DocumentTypeForm.clean_name (Konsistenz — nur FieldTemplate-Slugs werden
+    # tatsächlich als Feldname gerendert, aber ein reservierter Gruppen-/Typ-Slug
+    # ist ohnehin nie sinnvoll; dieselbe ``_RESERVED_SLUGS`` an allen Schichten).
+    if name and slug_base(name) in _RESERVED_SLUGS:
+        raise ValidationError(
+            _(
+                "Der Name „%(name)s“ ergibt den Slug „%(slug)s“, der mit einem festen "
+                "Formularfeld kollidiert — bitte einen anderen Namen wählen."
+            )
+            % {"name": name, "slug": slug_base(name)}
         )
     return name
 

@@ -477,6 +477,32 @@ class TestSemanticRules:
         ]
         assert "field_templates[0].options[1].slug" in _paths(raw)
 
+    def test_reserved_field_template_slug_is_rejected(self) -> None:
+        """#1726: Ein Feldvorlagen-Slug, der einen festen Formularfeld-Namen
+        trifft (hier ``title``), ist ein Schema-Fehler — dieselbe Reserved-Liste
+        wie Form (``validate_slugifiable_name``) und Modell
+        (``FieldTemplate.clean``/``save``)."""
+        raw = _valid_raw()
+        raw["field_templates"][1]["slug"] = "title"
+        # Querverweise konsistent halten, damit NUR der Reserved-Slug-Fehler bleibt.
+        raw["document_types"][0]["field_refs"][1]["template_slug"] = "title"
+        raw["document_types"][0]["conditions"][0]["target"] = "title"
+        assert _paths(raw) == ["field_templates[1].slug"]
+
+    @pytest.mark.parametrize("reserved", ["notes", "client", "case", "pseudonym", "document-type"])
+    def test_reserved_slug_variants(self, reserved: str) -> None:
+        # ``document-type`` (Bindestrich) ist NICHT reserviert (die feste Feld-
+        # kennung ist ``document_type`` mit Unterstrich) → muss gültig bleiben.
+        raw = _valid_raw()
+        raw["field_templates"][1]["slug"] = reserved
+        raw["document_types"][0]["field_refs"][1]["template_slug"] = reserved
+        raw["document_types"][0]["conditions"][0]["target"] = reserved
+        paths = [] if reserved == "document-type" else ["field_templates[1].slug"]
+        if reserved == "document-type":
+            parse_package(raw)  # gültig, wirft nicht
+        else:
+            assert _paths(raw) == paths
+
     def test_option_requires_label(self) -> None:
         raw = _valid_raw()
         raw["field_templates"][0]["field_type"] = "select"

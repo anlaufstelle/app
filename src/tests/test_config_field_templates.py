@@ -340,6 +340,31 @@ class TestNonSlugifiableName:
 
 
 @pytest.mark.django_db
+class TestReservedSlug:
+    """#1726: Dynamische Felder werden NACKT unter ihrem FieldTemplate-Slug im
+    selben ``<form>`` wie die festen Felder gerendert. Ein Name, dessen Slug
+    einen festen Formularfeld-Namen trifft (z. B. „Notes"→``notes``,
+    „Title"→``title``, „Client"→``client``), würde beim Absenden das feste Feld
+    überschreiben — die Config-UI weist ihn deshalb als Formularfehler auf
+    ``name`` ab, statt später einen 500er/Datenverlust zu riskieren."""
+
+    @pytest.mark.parametrize("name", ["Notes", "Title", "Client", "Case", "Description", "Pseudonym"])
+    def test_create_with_reserved_slug_is_form_error(self, client, admin_user, name):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:config_fieldtemplate_create"), _valid_post(name=name))
+        assert response.status_code == 200
+        assert "name" in response.context["form"].errors
+        assert "festen Formularfeld" in response.content.decode()
+        assert not FieldTemplate.objects.filter(name=name).exists()
+
+    def test_create_with_non_reserved_name_succeeds(self, client, admin_user):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:config_fieldtemplate_create"), _valid_post(name="Freitext Notiz"))
+        assert response.status_code == 302
+        assert FieldTemplate.objects.filter(slug="freitext-notiz").exists()
+
+
+@pytest.mark.django_db
 class TestFieldTypeSwitchToFile:
     """Final-Review F (Refs #1058): der E8-Guard („Datei-Felder nur an
     Ereignis-Typen") sitzt nur an der ZUORDNUNG. ``field_type`` blieb danach

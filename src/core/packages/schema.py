@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.constants import CONTACT_STAGE_CHOICES
-from core.models.document_type import _SLUG_RE, DocumentType, FieldTemplate
+from core.models.document_type import _RESERVED_SLUGS, _SLUG_RE, DocumentType, FieldTemplate
 from core.models.field_condition import FieldCondition
 
 SCHEMA_VERSION = 1
@@ -385,6 +385,14 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
         return None
     _check_keys(data, path, _FIELD_TEMPLATE_KEYS, frozenset({"slug", "name"}), errors)
     slug = _slug_value(data, "slug", path, errors)
+    # Reserved-Slug-Guard (Refs #1726): dynamische Felder werden nackt unter
+    # ihrem Slug im Formular gerendert — ein Slug, der einen festen
+    # Formularfeld-Namen trifft, ist ein Schema-Fehler (dieselbe importierte
+    # ``_RESERVED_SLUGS`` wie Form und Modell).
+    if slug is not None and slug in _RESERVED_SLUGS:
+        errors.append(
+            (_join(path, "slug"), f"Reservierter Slug {slug!r} — er kollidiert mit einem festen Formularfeld.")
+        )
     name = _required_name(data, "name", path, errors)
     field_type = _enum_value(data, "field_type", path, errors, _FIELD_TYPES, default=FieldTemplate.FieldType.TEXT.value)
     is_required = _bool_value(data, "is_required", path, errors)

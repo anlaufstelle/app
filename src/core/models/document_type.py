@@ -34,6 +34,46 @@ def slug_base(name: str, max_length: int = 120) -> str:
     return base[:max_length].strip("-")
 
 
+# Feste Formularfeld-Namen, unter denen dynamische Felder eines Dokumentationstyps
+# NACKT im selben ``<form>`` gerendert werden (M2, Refs #1726). Ein
+# FieldTemplate-Slug, der einen dieser Namen trifft, überschriebe beim Absenden
+# das gleichnamige feste Feld (POST-Kollision/Datenverlust) — die Reserved-Liste
+# blockt das an ALLEN Schichten: Config-Form (``validate_slugifiable_name``),
+# Modell (``FieldTemplate.clean``/``save``) und Paket-Schema
+# (``_parse_field_template``). Bewusst hier neben ``slug_base``, damit alle
+# Schichten dieselbe Liste importieren (DRY).
+#
+# Unterstrich-Namen (``contact_stage``, ``document_type``, …) sind über
+# ``slug_base``/``_SLUG_RE`` heute als NEUE Slugs unerreichbar (``_`` → ``-``):
+# sie stehen hier TROTZDEM defensiv drin — für Bestandsdaten (direkt gesetzte
+# Slugs) und Zukunftssicherheit (falls sich das Slug-Format ändert). Gegen eine
+# ``slug_base``-Ausgabe matchen sie schlicht nie, schaden aber auch nicht; der
+# Modell-Backstop und die Migrations-Inventur (Refs #1730) vergleichen dagegen
+# den ROHEN Slug und profitieren von den Unterstrich-Einträgen.
+_RESERVED_SLUGS: frozenset[str] = frozenset(
+    {
+        # ClientForm (core/forms/clients.py)
+        "pseudonym",
+        "contact_stage",
+        "age_cluster",
+        "notes",
+        "document_type",
+        # CaseForm (core/forms/cases.py) — ``document_type`` bereits oben
+        "client",
+        "title",
+        "description",
+        "lead_user",
+        # EventMetaForm (core/forms/events.py) — ``document_type``/``client`` oben
+        "occurred_at",
+        "case",
+        # Generische POST-Schlüssel in denselben ``<form>``s
+        "csrfmiddlewaretoken",
+        "expected_updated_at",
+        "_save_and_new",
+    }
+)
+
+
 def generate_unique_slug(name: str, siblings_qs: models.QuerySet, max_length: int = 120) -> str:
     """Generiert einen Slug aus ``name``, eindeutig innerhalb ``siblings_qs``.
 
@@ -344,6 +384,14 @@ class FieldTemplate(models.Model):
         super().clean()
         if self.slug and not _SLUG_RE.fullmatch(self.slug):
             raise ValidationError({"slug": _("Nur a-z, 0-9 und Bindestriche erlaubt.")})
+        # Refs #1726: reservierter Slug (fester Formularfeld-Name) — nur beim
+        # Anlegen, damit hypothetische Bestands-Vorlagen mit reserviertem Slug
+        # (Migrations-Inventur meldet sie, benennt aber nicht um) weiter
+        # bearbeitbar bleiben; save() ist der Backstop für ``.create()``.
+        if self._state.adding and self.slug in _RESERVED_SLUGS:
+            raise ValidationError(
+                {"slug": _("Der Slug „%(slug)s“ kollidiert mit einem festen Formularfeld.") % {"slug": self.slug}}
+            )
         self._validate_default_value()
         self._validate_high_sensitivity_requires_encryption()
 
@@ -393,6 +441,14 @@ class FieldTemplate(models.Model):
                 self.slug = self._generate_unique_slug()
             elif not _SLUG_RE.fullmatch(self.slug):
                 raise ValidationError(_("Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."))
+            # Refs #1726: Backstop für Nicht-Form-Pfade (``.create()``/Seed/Bulk,
+            # die clean() umgehen) — greift für explizite UND auto-generierte
+            # Slugs, damit kein dynamisches Feld einen festen Formularfeld-Namen
+            # belegt.
+            if self.slug in _RESERVED_SLUGS:
+                raise ValidationError(
+                    _("Der Slug „%(slug)s“ kollidiert mit einem festen Formularfeld.") % {"slug": self.slug}
+                )
             if auto_slug:
                 for attempt in range(self._SLUG_RETRY_LIMIT):
                     try:

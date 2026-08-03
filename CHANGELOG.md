@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Feldvorlagen-Verwaltung ist über die Navigation erreichbar** (#1717) — Desktop-Navigation und mobiles „Mehr"-Menü verlinken jetzt `/config/field-templates/`; die seit M0 vollständige CRUD-Oberfläche war bisher nur per Direkt-URL erreichbar. Der Entry-Point-Guard verlangt den Link nun dauerhaft.
 - **Regel-Editor erscheint ohne Seiten-Reload, sobald das zweite Feld hinzukommt** (#1718) — Feld-Board-Mutationen aktualisieren das Bedingungs-Board jetzt automatisch (neues `refresh-conditions`-Event samt GET-Endpoint, Muster der Live-Vorschau); vorher blieb der Hinweis „braucht mindestens zwei Felder" bis zum Reload stehen — in beide Richtungen korrekt (unter zwei Felder erscheint der Hinweis wieder).
 - **Nutzungszähler der Dokumentationstyp-Detailseite folgt dem Entitätstyp** (#1728) — die Stammdaten-Kachel zeigte für Personen-/Fall-Typen fest „Ereignisse: 0" statt der tatsächlichen Client-/Case-Referenzen; der Zähler wählt jetzt Label und Query passend zum `entity_type`.
+- **Reservierte Feldvorlagen-Slugs werden abgewiesen** (#1726) — Eine Feldvorlage, deren Slug einen festen Formularfeld-Namen (z. B. `notes`, `title`, `client`, `document_type`) getroffen hätte, wird jetzt an allen drei Schichten (Config-Formular, Modell `FieldTemplate.clean`/`save`, Paket-Schema) blockiert, weil das dynamische Feld sonst im selben `<form>` das gleichnamige feste Feld überschrieben und stillen Datenverlust verursacht hätte.
 
 ## [0.23.0] - 2026-08-01
 
