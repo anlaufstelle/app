@@ -98,20 +98,28 @@ class TestBuildExportMeta:
 class TestExportClientDataAggregate:
     """Refs ``export_client_data`` (Line 141).
 
-    Sicherstellen, dass das Top-Level-Dict alle sieben Aggregat-Keys
-    enthält UND dass Visibility-Filter den ``_gather_events``-Pfad
-    hochgereicht wird (Defense in Depth).
+    Sicherstellen, dass das Top-Level-Dict alle Aggregat-Keys enthält UND dass
+    der Visibility-Filter den ``_gather_events``-Pfad hochgereicht wird
+    (Defense in Depth). Der Schlüsselsatz ist mit
+    #1752 um die
+    Quertabellen-Kategorien gewachsen (Produktentscheid 2026-08-03).
     """
 
-    def test_top_level_dict_contains_all_seven_keys(self, client_identified, facility, staff_user):
+    def test_top_level_dict_contains_all_aggregate_keys(self, client_identified, facility, staff_user):
         result = export_client_data(client_identified, facility, staff_user)
         assert set(result.keys()) == {
             "client",
             "events",
             "cases",
+            "episodes",
+            "outcome_goals",
             "event_history",
             "deletion_requests",
+            "legal_holds",
+            "retention_proposals",
             "work_items",
+            "activities",
+            "recent_visits",
             "export_meta",
         }
 

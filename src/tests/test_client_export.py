@@ -7,6 +7,7 @@ from django.test import Client as DjangoClient
 from django.utils import timezone
 
 from core.models import (
+    Activity,
     AuditLog,
     Client,
     DeletionRequest,
@@ -14,7 +15,12 @@ from core.models import (
     Episode,
     Event,
     Facility,
+    LegalHold,
+    Milestone,
     Organization,
+    OutcomeGoal,
+    RecentClientVisit,
+    RetentionProposal,
     Settings,
     User,
     WorkItem,
@@ -382,3 +388,191 @@ class TestClientExportCoreCategories:
         )
         data = export_client_data(sample_client, facility, admin_user)
         assert data["deletion_requests"] == []
+
+
+@pytest.mark.django_db
+class TestClientExportCrossTableCategories:
+    """Refs #1752 — Quertabellen, die bislang komplett fehlten.
+
+    Episoden, Wirkungsziele/Meilensteine, Aktivitaeten, Personen-Besuche
+    sowie die Art.-18-relevanten Aufbewahrungs-Objekte (Legal Hold,
+    Loeschvorschlag).
+    """
+
+    def test_episodes_included(self, sample_client, facility, sample_case, admin_user):
+        Episode.objects.create(
+            case=sample_case,
+            title="Clearing",
+            description="Erstklaerung",
+            started_at=timezone.now().date() - timedelta(days=10),
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["episodes"]) == 1
+        episode = data["episodes"][0]
+        assert episode["title"] == "Clearing"
+        assert episode["description"] == "Erstklaerung"
+        assert episode["case"] == "Testfall"
+        assert episode["created_by"] == "ce_admin"
+        assert episode["ended_at"] is None
+        assert episode["is_deleted"] is False
+
+    def test_episodes_of_other_client_excluded(self, sample_client, facility, admin_user):
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-E", created_by=admin_user)
+        other_case = CaseModel.objects.create(facility=facility, client=other, title="Fremdfall", created_by=admin_user)
+        Episode.objects.create(
+            case=other_case,
+            title="Fremd-Episode",
+            started_at=timezone.now().date(),
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["episodes"] == []
+
+    def test_outcome_goals_with_milestones_included(self, sample_client, facility, sample_case, admin_user):
+        goal = OutcomeGoal.objects.create(
+            case=sample_case,
+            title="Eigene Wohnung",
+            description="Wohnraum sichern",
+            created_by=admin_user,
+        )
+        Milestone.objects.create(goal=goal, title="Antrag gestellt", sort_order=1)
+        Milestone.objects.create(goal=goal, title="Termin Amt", sort_order=0, is_completed=True)
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["outcome_goals"]) == 1
+        entry = data["outcome_goals"][0]
+        assert entry["title"] == "Eigene Wohnung"
+        assert entry["description"] == "Wohnraum sichern"
+        assert entry["case"] == "Testfall"
+        assert entry["is_achieved"] is False
+        assert [m["title"] for m in entry["milestones"]] == ["Termin Amt", "Antrag gestellt"]
+        assert entry["milestones"][0]["is_completed"] is True
+
+    def test_activities_included(self, sample_client, facility, admin_user):
+        from core.services.dashboard import log_activity
+
+        log_activity(
+            facility=facility,
+            actor=admin_user,
+            verb=Activity.Verb.CREATED,
+            target=sample_client,
+            summary="Person angelegt",
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["activities"]) == 1
+        entry = data["activities"][0]
+        assert entry["summary"] == "Person angelegt"
+        assert entry["verb"] == "erstellt"
+        assert entry["target"] == "Person"
+        assert entry["actor"] == "ce_admin"
+
+    def test_activities_cover_event_and_workitem_targets(
+        self, sample_client, facility, sample_event, sample_workitem, admin_user
+    ):
+        from core.services.dashboard import log_activity
+
+        log_activity(
+            facility=facility, actor=admin_user, verb=Activity.Verb.CREATED, target=sample_event, summary="Kontakt"
+        )
+        log_activity(
+            facility=facility, actor=admin_user, verb=Activity.Verb.COMPLETED, target=sample_workitem, summary="Aufgabe"
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert {e["summary"] for e in data["activities"]} == {"Kontakt", "Aufgabe"}
+
+    def test_activities_of_other_client_excluded(self, sample_client, facility, admin_user):
+        from core.services.dashboard import log_activity
+
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-A", created_by=admin_user)
+        log_activity(
+            facility=facility, actor=admin_user, verb=Activity.Verb.CREATED, target=other, summary="Fremd-Aktivitaet"
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["activities"] == []
+
+    def test_recent_visits_included_without_employee_identity(self, sample_client, facility, admin_user):
+        RecentClientVisit.objects.create(user=admin_user, client=sample_client, facility=facility, is_favorite=True)
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["recent_visits"]) == 1
+        entry = data["recent_visits"][0]
+        assert entry["is_favorite"] is True
+        assert entry["visited_at"] is not None
+        # Beschaeftigten-Identitaet bleibt draussen (Zugriffs-Protokoll).
+        assert "user" not in entry
+        assert "ce_admin" not in str(entry)
+
+    def test_legal_hold_on_client_included(self, sample_client, facility, admin_user):
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=sample_client.pk,
+            reason="Laufendes Verfahren",
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["legal_holds"]) == 1
+        entry = data["legal_holds"][0]
+        assert entry["target_type"] == "Client"
+        assert entry["reason"] == "Laufendes Verfahren"
+        assert entry["is_active"] is True
+        assert entry["created_by"] == "ce_admin"
+
+    def test_legal_hold_on_event_included(self, sample_client, facility, sample_event, admin_user):
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=sample_event.pk,
+            reason="Pruefverfahren",
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["reason"] for e in data["legal_holds"]] == ["Pruefverfahren"]
+
+    def test_legal_hold_of_other_target_excluded(self, sample_client, facility, admin_user):
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-L", created_by=admin_user)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=other.pk,
+            reason="Fremd-Hold",
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["legal_holds"] == []
+
+    def test_retention_proposal_included(self, sample_client, facility, sample_event, admin_user):
+        RetentionProposal.objects.create(
+            facility=facility,
+            target_type=RetentionProposal.TargetType.EVENT,
+            target_id=sample_event.pk,
+            deletion_due_at=timezone.now().date() + timedelta(days=30),
+            retention_category="identified",
+            details={"document_type": "Kontakt"},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["retention_proposals"]) == 1
+        entry = data["retention_proposals"][0]
+        assert entry["status"] == "Ausstehend"
+        assert entry["retention_category"] == "identified"
+        assert entry["deletion_due_at"] is not None
+        assert entry["details"] == {"document_type": "Kontakt"}
+
+    def test_retention_proposal_of_other_event_excluded(self, sample_client, facility, doc_type, admin_user):
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-R", created_by=admin_user)
+        other_event = Event.objects.create(
+            facility=facility,
+            client=other,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+        RetentionProposal.objects.create(
+            facility=facility,
+            target_type=RetentionProposal.TargetType.EVENT,
+            target_id=other_event.pk,
+            deletion_due_at=timezone.now().date(),
+            retention_category="identified",
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["retention_proposals"] == []

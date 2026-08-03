@@ -1,12 +1,25 @@
 """Client data export for DSGVO Art. 15 (right of access) and Art. 20 (data portability)."""
 
 import weasyprint
-from django.db.models import Q
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Prefetch, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from core.models import (
+    Activity,
+    DeletionRequest,
+    Episode,
+    Event,
+    EventHistory,
+    LegalHold,
+    Milestone,
+    OutcomeGoal,
+    RecentClientVisit,
+    RetentionProposal,
+    WorkItem,
+)
 from core.models import Case as CaseModel
-from core.models import DeletionRequest, Event, EventHistory, WorkItem
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -337,6 +350,197 @@ def _gather_workitems(client):
     ]
 
 
+def _gather_episodes(client):
+    """Serialize all episodes of the client's cases (Refs #1752).
+
+    Episoden waren komplett aus der Auskunft gefallen, obwohl sie Freitext
+    (``title``/``description``) zur Person tragen. Der Zugriff laeuft ueber den
+    ``case``-Join — ``Episode`` haengt nicht direkt an der Facility, RLS greift
+    hier als JOIN-Policy.
+    """
+    episodes = (
+        Episode.objects.filter(case__client=client)
+        .select_related("case", "created_by", "deleted_by")
+        .order_by("-started_at", "pk")
+    )
+    return [
+        {
+            "case": episode.case.title,
+            "title": episode.title,
+            "description": episode.description,
+            "started_at": episode.started_at.isoformat(),
+            "ended_at": _isoformat(episode.ended_at),
+            "created_at": episode.created_at.isoformat(),
+            "created_by": _username(episode.created_by),
+            **_soft_delete_meta(episode),
+        }
+        for episode in episodes
+    ]
+
+
+def _gather_outcome_goals(client):
+    """Serialize outcome goals + milestones of the client's cases (Refs #1752).
+
+    Wirkungsziele beschreiben die Arbeit *an* der Person und tragen Freitext;
+    die Meilensteine haengen daran und werden mitgeliefert (ein Ziel ohne
+    seine Schritte waere eine halbe Auskunft). ``Prefetch`` mit explizitem
+    ``order_by`` haelt die Reihenfolge deterministisch und vermeidet N+1.
+    """
+    goals = (
+        OutcomeGoal.objects.filter(case__client=client)
+        .select_related("case", "created_by")
+        .prefetch_related(Prefetch("milestones", queryset=Milestone.objects.order_by("sort_order", "pk")))
+        .order_by("-created_at", "pk")
+    )
+    return [
+        {
+            "case": goal.case.title,
+            "title": goal.title,
+            "description": goal.description,
+            "is_achieved": goal.is_achieved,
+            "achieved_at": _isoformat(goal.achieved_at),
+            "created_at": goal.created_at.isoformat(),
+            "created_by": _username(goal.created_by),
+            "milestones": [
+                {
+                    "title": milestone.title,
+                    "is_completed": milestone.is_completed,
+                    "completed_at": _isoformat(milestone.completed_at),
+                    "sort_order": milestone.sort_order,
+                    "created_at": milestone.created_at.isoformat(),
+                }
+                for milestone in goal.milestones.all()
+            ],
+        }
+        for goal in goals
+    ]
+
+
+def _gather_activities(facility, client, event_ids):
+    """Serialize the activity feed entries about the client (Refs #1752).
+
+    Der Zeitstrom traegt Freitext-``summary`` zur Person („… für <pseudonym>",
+    „Aufgabe: <titel>"). Die Ziel-Menge folgt exakt der Redaktions-Logik in
+    :func:`core.services.client.main._redact_activities` (Client-, Event- und
+    WorkItem-Targets), erweitert um Fall-Targets aus dem Case-Lifecycle.
+
+    ``actor`` bleibt hier **enthalten** — anders als beim Audit-Auszug
+    (:func:`_gather_audit_trail`). Der Zeitstrom dokumentiert eine einzelne
+    fachliche Handlung am Datensatz, genau wie das bereits exportierte
+    ``created_by``/``changed_by``; erst das vollstaendige Zugriffsprotokoll
+    kippt in ein Bewegungsprofil der Beschaeftigten.
+    """
+    targets = Q(target_type=ContentType.objects.get_for_model(client.__class__), target_id=client.pk)
+    case_ids = list(client.cases.values_list("pk", flat=True))
+    if case_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(CaseModel), target_id__in=case_ids)
+    if event_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(Event), target_id__in=event_ids)
+    workitem_ids = list(client.work_items.values_list("pk", flat=True))
+    if workitem_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(WorkItem), target_id__in=workitem_ids)
+
+    activities = (
+        Activity.objects.for_facility(facility)
+        .filter(targets)
+        .select_related("actor", "target_type")
+        .order_by("-occurred_at", "pk")
+    )
+    return [
+        {
+            "verb": activity.get_verb_display(),
+            "summary": activity.summary,
+            "target": activity.target_type.name,
+            "actor": _username(activity.actor),
+            "occurred_at": activity.occurred_at.isoformat(),
+        }
+        for activity in activities
+    ]
+
+
+def _gather_recent_visits(client):
+    """Serialize recent-visit markers for the client (Refs #1752).
+
+    ``RecentClientVisit`` ist gespeicherte Information *ueber die Person* („ihre
+    Akte steht auf N Merklisten, zuletzt am …") und gehoert deshalb in die
+    Auskunft.
+
+    **Ohne ``user``** — bewusster Produktentscheid vom 2026-08-03: die Zeile
+    beantwortet „wer hat die Personenakte aufgerufen" und ist damit zugleich
+    ein Zugriffsprotokoll ueber Beschaeftigte. Dieselbe Abwaegung wie beim
+    Audit-Auszug (:func:`_gather_audit_trail`); Zeitpunkt und Merkliste-Flag
+    bleiben, die Beschaeftigten-Identitaet nicht.
+    """
+    visits = RecentClientVisit.objects.filter(client=client).order_by("-visited_at", "pk")
+    return [
+        {
+            "visited_at": visit.visited_at.isoformat(),
+            "is_favorite": visit.is_favorite,
+        }
+        for visit in visits
+    ]
+
+
+def _gather_legal_holds(facility, client, event_ids):
+    """Serialize legal holds on the client or her events (Refs #1752).
+
+    Art.-18-Relevanz: ein Legal Hold erklaert der betroffenen Person, warum ihre
+    Daten trotz abgelaufener Aufbewahrungsfrist noch existieren. Ohne diese
+    Kategorie wirkt die Aufbewahrung willkuerlich.
+    """
+    holds = (
+        LegalHold.objects.for_facility(facility)
+        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
+        .select_related("created_by", "dismissed_by")
+        .order_by("-created_at", "pk")
+    )
+    return [
+        {
+            "target_type": hold.target_type,
+            "reason": hold.reason,
+            "is_active": hold.is_active,
+            "expires_at": _isoformat(hold.expires_at),
+            "created_at": hold.created_at.isoformat(),
+            "created_by": _username(hold.created_by),
+            "dismissed_at": _isoformat(hold.dismissed_at),
+            "dismissed_by": _username(hold.dismissed_by),
+        }
+        for hold in holds
+    ]
+
+
+def _gather_retention_proposals(facility, client, event_ids):
+    """Serialize pending retention proposals for the client's records (Refs #1752).
+
+    Gegenstueck zum Legal Hold: der Loeschvorschlag benennt die anstehende
+    Loeschung samt Frist und Kategorie. ``details`` traegt ausschliesslich Daten
+    der betroffenen Person selbst (Pseudonym, Kontaktstufe, Dokumentationstyp,
+    Zeitpunkt) und wird deshalb unveraendert ausgewiesen.
+
+    ``RetentionProposal.TargetType`` kennt heute nur ``Event``; der
+    ``Client``-Zweig ist mitgefiltert, damit eine spaetere Erweiterung der
+    Werteliste die Auskunft nicht erneut stillschweigend unvollstaendig macht.
+    """
+    proposals = (
+        RetentionProposal.objects.for_facility(facility)
+        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
+        .order_by("deletion_due_at", "pk")
+    )
+    return [
+        {
+            "target_type": proposal.target_type,
+            "status": proposal.get_status_display(),
+            "retention_category": proposal.retention_category,
+            "proposed_at": proposal.proposed_at.isoformat(),
+            "deletion_due_at": proposal.deletion_due_at.isoformat(),
+            "deferred_until": _isoformat(proposal.deferred_until),
+            "defer_count": proposal.defer_count,
+            "details": proposal.details,
+        }
+        for proposal in proposals
+    ]
+
+
 def _build_export_meta(facility):
     """Return export metadata (timestamp + resolved facility name)."""
     return {
@@ -358,9 +562,15 @@ def export_client_data(client, facility, user):
         "client": _gather_client_fields(client),
         "events": events_data,
         "cases": _gather_cases(client),
+        "episodes": _gather_episodes(client),
+        "outcome_goals": _gather_outcome_goals(client),
         "event_history": _gather_event_history(event_ids),
         "deletion_requests": _gather_deletion_requests(facility, client, event_ids),
+        "legal_holds": _gather_legal_holds(facility, client, event_ids),
+        "retention_proposals": _gather_retention_proposals(facility, client, event_ids),
         "work_items": _gather_workitems(client),
+        "activities": _gather_activities(facility, client, event_ids),
+        "recent_visits": _gather_recent_visits(client),
         "export_meta": _build_export_meta(facility),
     }
 
