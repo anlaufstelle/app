@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 12:41+0200\n"
+"POT-Creation-Date: 2026-08-03 19:09+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -30,7 +30,7 @@ msgstr "Qualified"
 #: src/core/models/case.py:34 src/core/models/client.py:102
 #: src/core/models/document_type.py:132 src/core/models/event.py:31
 #: src/core/models/workitem.py:53 src/core/models/workitem.py:190
-#: src/core/services/system/export.py:109
+#: src/core/services/system/export.py:107
 #: src/templates/core/attachments/partials/attachment_table.html:13
 #: src/templates/core/cases/form.html:26
 #: src/templates/core/cases/partials/table.html:10
@@ -213,7 +213,7 @@ msgstr "End"
 #: src/core/models/client.py:78 src/core/models/document_type.py:216
 #: src/core/models/document_type.py:519 src/core/models/document_type.py:612
 #: src/core/models/event.py:37 src/core/models/quick_template.py:41
-#: src/core/services/system/export.py:108
+#: src/core/services/system/export.py:106
 #: src/templates/core/attachments/partials/attachment_table.html:12
 #: src/templates/core/clients/offline_detail.html:124
 #: src/templates/core/config/document_types/detail.html:4
@@ -1020,26 +1020,26 @@ msgstr "Cases"
 msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episodes can only be created for open cases."
 
-#: src/core/models/client.py:22 src/core/services/dashboard/statistics.py:158
-#: src/core/services/system/export.py:306
+#: src/core/models/client.py:22 src/core/reporting/backends/jugendamt.py:54
+#: src/core/services/dashboard/statistics.py:158
 #: src/templates/core/clients/offline_list.html:53
 msgid "Unter 18"
 msgstr "Under 18"
 
-#: src/core/models/client.py:23 src/core/services/dashboard/statistics.py:159
-#: src/core/services/system/export.py:307
+#: src/core/models/client.py:23 src/core/reporting/backends/jugendamt.py:55
+#: src/core/services/dashboard/statistics.py:159
 #: src/templates/core/clients/offline_list.html:54
 msgid "18–26"
 msgstr "18–26"
 
-#: src/core/models/client.py:24 src/core/services/dashboard/statistics.py:160
-#: src/core/services/system/export.py:308
+#: src/core/models/client.py:24 src/core/reporting/backends/jugendamt.py:56
+#: src/core/services/dashboard/statistics.py:160
 #: src/templates/core/clients/offline_list.html:55
 msgid "27+"
 msgstr "27+"
 
-#: src/core/models/client.py:25 src/core/services/dashboard/statistics.py:161
-#: src/core/services/system/export.py:309
+#: src/core/models/client.py:25 src/core/reporting/backends/jugendamt.py:57
+#: src/core/services/dashboard/statistics.py:161
 #: src/templates/core/clients/offline_list.html:56
 #: src/templates/core/system/compliance.html:37
 #: src/templates/core/system/compliance.html:57
@@ -1059,7 +1059,7 @@ msgstr "Unknown"
 msgid "Pseudonym"
 msgstr "Pseudonym"
 
-#: src/core/models/client.py:45 src/core/services/system/export.py:110
+#: src/core/models/client.py:45 src/core/services/system/export.py:108
 #: src/templates/core/clients/deletion_review.html:37
 #: src/templates/core/export/client_data_pdf.html:30
 msgid "Kontaktstufe"
@@ -1071,7 +1071,7 @@ msgid ""
 "bekannt"
 msgstr "Identified = pseudonym known, Qualified = full identity known"
 
-#: src/core/models/client.py:52 src/core/services/system/export.py:111
+#: src/core/models/client.py:52 src/core/services/system/export.py:109
 #: src/templates/core/export/client_data_pdf.html:31
 #: src/templates/core/export/jugendamt_pdf.html:76
 #: src/templates/core/export/report_pdf.html:88
@@ -1360,12 +1360,12 @@ msgstr "Text area"
 msgid "Zahl"
 msgstr "Number"
 
-#: src/core/models/document_type.py:292 src/core/services/system/export.py:106
+#: src/core/models/document_type.py:292 src/core/services/system/export.py:104
 #: src/templates/core/attachments/partials/attachment_table.html:14
 msgid "Datum"
 msgstr "Date"
 
-#: src/core/models/document_type.py:293 src/core/services/system/export.py:107
+#: src/core/models/document_type.py:293 src/core/services/system/export.py:105
 msgid "Uhrzeit"
 msgstr "Time"
 
@@ -1538,7 +1538,7 @@ msgid "Suchindex"
 msgstr "Search index"
 
 #: src/core/models/event.py:82 src/core/retention/proposals.py:27
-#: src/core/services/system/export.py:168
+#: src/core/services/system/export.py:166
 #: src/templates/components/_ban_feed_card.html:12
 #: src/templates/components/_event_card.html:22
 #: src/templates/core/events/delete_confirm.html:34
@@ -2029,11 +2029,15 @@ msgstr ""
 msgid "Einstellungen"
 msgstr "Settings"
 
-#: src/core/models/statistics_snapshot.py:33
+#: src/core/models/statistics_snapshot.py:36
+msgid "Map Backend-Slug → Roh-Aggregat des jeweiligen Reporting-Backends."
+msgstr "Map backend slug → raw aggregate of the respective reporting backend."
+
+#: src/core/models/statistics_snapshot.py:44
 msgid "Statistik-Snapshot"
 msgstr "Statistics snapshot"
 
-#: src/core/models/statistics_snapshot.py:34
+#: src/core/models/statistics_snapshot.py:45
 msgid "Statistik-Snapshots"
 msgstr "Statistics snapshots"
 
@@ -2168,6 +2172,7 @@ msgstr ""
 #: src/core/models/workitem.py:17
 #: src/templates/core/clients/_offline_workitem_fields.html:14
 #: src/templates/core/clients/offline_detail.html:14
+#: src/templates/core/statistics/partials/report_panel.html:20
 #: src/templates/core/workitems/offline_workitem_list.html:60
 msgid "Hinweis"
 msgstr "Note"
@@ -2433,6 +2438,17 @@ msgstr ""
 "Access barrier lowered: sensitivity drops from \"%(current)s\" to "
 "\"%(desired)s\". Values already recorded therefore become visible to "
 "additional roles."
+
+#: src/core/reporting/backends/example.py:36
+msgid "Beispiel: Ereignisse je Dokumenttyp"
+msgstr "Example: events per document type"
+
+#: src/core/reporting/backends/jugendamt.py:232
+#: src/templates/core/export/jugendamt_pdf.html:6
+#: src/templates/core/export/jugendamt_pdf.html:28
+#: src/templates/core/statistics/partials/dashboard_content.html:223
+msgid "Beispiel-Sachbericht"
+msgstr "Example Activity Report"
 
 #: src/core/retention/proposals.py:30
 msgid "Dokumenttyp"
@@ -3201,7 +3217,7 @@ msgstr "No"
 
 #: src/core/services/dynamic_data.py:298 src/core/services/dynamic_data.py:367
 #: src/core/services/events/context.py:236
-#: src/core/services/system/export.py:191
+#: src/core/services/system/export.py:189
 msgid "[Eingeschränkt]"
 msgstr "[Restricted]"
 
@@ -3795,10 +3811,26 @@ msgstr "No event selected."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No entries found."
 
-#: src/core/views/statistics.py:165 src/core/views/statistics.py:198
-#: src/core/views/statistics.py:239
+#: src/core/views/statistics.py:170 src/core/views/statistics.py:203
+#: src/core/views/statistics.py:244 src/core/views/statistics.py:405
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
+
+#: src/core/views/statistics.py:354
+msgid "backend erforderlich"
+msgstr "backend required"
+
+#: src/core/views/statistics.py:358 src/core/views/statistics.py:416
+msgid "Unbekanntes Berichts-Backend."
+msgstr "Unknown report backend."
+
+#: src/core/views/statistics.py:360 src/core/views/statistics.py:418
+msgid "Bericht für diese Einrichtung nicht verfügbar."
+msgstr "Report is not available for this facility."
+
+#: src/core/views/statistics.py:422
+msgid "Unbekanntes Export-Format."
+msgstr "Unknown export format."
 
 #: src/core/views/sudo_mode.py:67
 msgid "Passwort ist nicht korrekt."
@@ -6629,12 +6661,6 @@ msgstr "No tasks available."
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Generated on %(date)s · Anlaufstelle"
 
-#: src/templates/core/export/jugendamt_pdf.html:6
-#: src/templates/core/export/jugendamt_pdf.html:28
-#: src/templates/core/statistics/partials/dashboard_content.html:223
-msgid "Beispiel-Sachbericht"
-msgstr "Example Activity Report"
-
 #: src/templates/core/export/jugendamt_pdf.html:30
 msgid "Vorlage – frei anpassbar"
 msgstr "Template – freely customizable"
@@ -6734,6 +6760,7 @@ msgstr "Contacts by Document Type"
 #: src/templates/core/export/report_pdf.html:102
 #: src/templates/core/statistics/partials/dashboard_content.html:165
 #: src/templates/core/statistics/partials/dashboard_content.html:202
+#: src/templates/core/statistics/partials/report_panel.html:53
 msgid "Keine Daten im gewählten Zeitraum."
 msgstr "No data in the selected period."
 
@@ -7005,6 +7032,7 @@ msgstr "My Profile"
 
 #: src/templates/core/statistics/external_report.html:23
 #: src/templates/core/statistics/partials/dashboard_content.html:5
+#: src/templates/core/statistics/partials/report_panel.html:11
 msgid "Zeitraum"
 msgstr "Period"
 
@@ -7116,6 +7144,7 @@ msgid "Altersgruppen"
 msgstr "Age group"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:212
+#: src/templates/core/statistics/partials/report_panel.html:77
 #: src/templates/core/system/auditlog_list.html:16
 msgid "CSV-Export"
 msgstr "CSV export"
@@ -7158,6 +7187,47 @@ msgstr "Previous year"
 #: src/templates/core/statistics/partials/full_content.html:71
 msgid "Nächstes Jahr"
 msgstr "Next year"
+
+#: src/templates/core/statistics/partials/full_content.html:91
+msgid "Berichte"
+msgstr "Reports"
+
+#: src/templates/core/statistics/partials/full_content.html:97
+msgid "Bericht"
+msgstr "Report"
+
+#: src/templates/core/statistics/partials/full_content.html:104
+msgid "Bericht wählen …"
+msgstr "Select report …"
+
+#: src/templates/core/statistics/partials/report_panel.html:22
+#: src/templates/core/system/dashboard.html:129
+msgid "Info"
+msgstr "Info"
+
+#: src/templates/core/statistics/partials/report_panel.html:29
+msgid "Keine Vollständigkeitsprobleme erkannt"
+msgstr "No completeness issues detected"
+
+#: src/templates/core/statistics/partials/report_panel.html:62
+#, python-format
+msgid "Zeigt %(shown)s von %(total)s Zeilen"
+msgstr "Showing %(shown)s of %(total)s rows"
+
+#: src/templates/core/statistics/partials/report_panel.html:68
+msgid ""
+"Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)."
+msgstr ""
+"Values below the minimum case-count threshold are suppressed (k-anonymity)."
+
+#: src/templates/core/statistics/partials/report_panel.html:82
+#: src/templates/core/system/auditlog_list.html:21
+msgid "JSON-Export"
+msgstr "JSON export"
+
+#: src/templates/core/statistics/partials/report_panel.html:87
+msgid "XML-Export"
+msgstr "XML export"
 
 #: src/templates/core/system/_banner.html:12
 msgid ""
@@ -7210,10 +7280,6 @@ msgstr "(System / no facility)"
 #: src/templates/core/system/auditlog_list.html:10
 msgid "Audit-Log (alle Einrichtungen)"
 msgstr "Audit log (all facilities)"
-
-#: src/templates/core/system/auditlog_list.html:21
-msgid "JSON-Export"
-msgstr "JSON export"
 
 #: src/templates/core/system/auditlog_list.html:65
 #: src/templates/core/system/legal_holds.html:29
@@ -7363,10 +7429,6 @@ msgstr "Versions"
 #, python-format
 msgid "App %(app)s · Python %(py)s · Django %(dj)s"
 msgstr "App %(app)s · Python %(py)s · Django %(dj)s"
-
-#: src/templates/core/system/dashboard.html:129
-msgid "Info"
-msgstr "Info"
 
 #: src/templates/core/system/dashboard.html:137
 msgid "Hintergrundjobs"
@@ -8286,3 +8348,7 @@ msgstr "No person taken offline."
 #, python-brace-format
 msgid "{used} / {quota} ({percent}% belegt)"
 msgstr "{used} / {quota} ({percent}% used)"
+
+#: src/tests/test_reporting_export.py:41
+msgid "Dummy Zeilenbericht"
+msgstr "Dummy row report"
