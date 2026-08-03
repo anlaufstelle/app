@@ -2869,7 +2869,7 @@
 **Erwartetes Ergebnis:**
 - Form rendert mit ValidationError „Datei wurde von Virenscanner abgewiesen: Eicar-Test-Signature".
 - KEIN `EventAttachment` angelegt, KEINE `.enc`-Datei auf Disk (rollback durch fehlgeschlagene Validation, bevor `encrypt_file` läuft).
-- AuditLog `security_violation` mit `detail={reason: "virus_detected", filename: "eicar.txt", signature: "Eicar-Test-Signature"}`.
+- AuditLog `security_violation` mit `detail={reason: "virus_detected", filename_hash: "<64-stelliger HMAC>", filename_ext: "txt", signature: "Eicar-Test-Signature"}` — der Original-Dateiname steht **nicht** im Detail (Refs #1751; das Audit-Log ist append-only und `SECURITY_VIOLATION` von der Aufbewahrungsfrist ausgenommen).
 - Atomare Transaktion: Auch das Event wird NICHT angelegt (Rollback durch `transaction.atomic` in `EventCreateView.post`, Refs #584).
 
 **DSGVO/Security-Note:**

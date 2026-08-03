@@ -706,7 +706,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 3. `detail`-Feld prüfen: nur `{"changed_fields": ["notes"]}`, **kein** Wert.
 4. Settings ändern: Stadtname in `facility_full_name` auf einen „echten" Namen setzen.
 5. SETTINGS_CHANGE-Eintrag prüfen: keine Werte im Detail.
-6. Stichprobe in `SECURITY_VIOLATION` (Virus-Treffer, Extension-Block): nur `reason`, `filename`, keine User-Klartext-Daten.
+6. Stichprobe in `SECURITY_VIOLATION` (Virus-Treffer, Extension-Block): nur `reason`, `filename_hash` (HMAC, kein Klartext) und `filename_ext` — **kein** Original-Dateiname, keine User-Klartext-Daten (Refs #1751).
 
 **Erwartetes Ergebnis:**
 - AuditLog-`detail`-JSON enthält Feldnamen, Kategorien, technische Werte — niemals PII (Namen, Adressen, Notizen, Telefonnummern).
