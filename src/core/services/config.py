@@ -432,6 +432,30 @@ def add_field_to_doctype(
     return dtf
 
 
+def count_field_removal_impact(dtf: DocumentTypeField) -> int:
+    """Wie viele Datensätze behalten einen gespeicherten Wert unter dem Slug,
+    wenn diese eine Feldzuordnung entfernt wird (Refs #1725(b)).
+
+    Gescoped auf ``document_type=dtf.document_type`` **und**
+    ``data_json__has_key=<slug>`` — und nur auf dem Entity-Model, das dem
+    ``entity_type`` des Typs entspricht (``event`` → ``Event``, ``client`` →
+    ``Client``, ``case`` → ``Case``). Bewusst **enger** als
+    :func:`field_template_delete_blockers` (facility-weit, alle Modelle): beim
+    Entfernen dieser einen Zuordnung fällt nur die Feld-Semantik für Datensätze
+    genau dieses Typs weg — deren Werte werden zu „Nicht mehr zugeordnet"
+    (Refs #1725(a)). Der Zähler speist die Entfern-Bestätigung im Feld-Board.
+    """
+    model = {
+        DocumentType.EntityType.EVENT: Event,
+        DocumentType.EntityType.CLIENT: Client,
+        DocumentType.EntityType.CASE: Case,
+    }[dtf.document_type.entity_type]
+    return model.objects.filter(
+        document_type=dtf.document_type,
+        data_json__has_key=dtf.field_template.slug,
+    ).count()
+
+
 def remove_field_from_doctype(request, dtf: DocumentTypeField) -> None:
     """Entfernt eine Feld-Zuordnung von einem DocumentType (CONFIG_DELETE).
 

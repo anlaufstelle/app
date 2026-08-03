@@ -369,3 +369,44 @@ class TestSystemTypeOnlyForEventTypes:
             _valid_post(name="Alt-Inkonsistent", category=DocumentType.Category.ADMIN),
         )
         assert response.status_code == 302
+
+
+# ---------------------------------------------------------------------------
+# Entfern-Bestätigung mit Datenzähler (Refs #1725(b))
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestFieldRemovalConfirm:
+    """Refs #1725(b): Das Feld-Board hängt an jedes „Entfernen" ein ``hx-confirm``.
+    Existieren Werte unter dem Slug, warnt der Text mit Zähler, dass sie als
+    „Nicht mehr zugeordnet" erhalten bleiben; bei 0 Einträgen schlichter Text."""
+
+    def test_confirm_shows_count_and_orphan_warning(
+        self, client, admin_user, facility, doc_type_contact, client_identified
+    ):
+        # Zwei Ereignisse mit einem Wert unter „dauer".
+        for _ in range(2):
+            Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={"dauer": 15},
+                created_by=admin_user,
+            )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        body = response.content.decode()
+        assert "hx-confirm" in body
+        assert "2 Einträge" in body
+        assert "Nicht mehr zugeordnet" in body
+
+    def test_confirm_is_plain_without_data(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        body = response.content.decode()
+        assert "hx-confirm" in body
+        # 0-Fall: schlichter Text ohne Warnton — kein „behalten"/Zähler.
+        assert "entfernen?" in body
+        assert "behalten" not in body

@@ -75,7 +75,8 @@ Kontext: doc_type, blocks (Liste aus {"kind":"group","group":g,"fields":[...]} |
                     <span class="text-[12px] text-ink-muted">{{ f.field_template.get_field_type_display }}</span>
                     <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
                           hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
-                          hx-target="#field-board" hx-swap="outerHTML">
+                          hx-target="#field-board" hx-swap="outerHTML"
+                          hx-confirm="{% if f.removal_impact %}{% blocktrans count n=f.removal_impact with name=f.field_template.name %}Feld „{{ name }}“ entfernen? {{ n }} Eintrag behält seinen gespeicherten Wert, der dann als „Nicht mehr zugeordnet“ erscheint.{% plural %}Feld „{{ name }}“ entfernen? {{ n }} Einträge behalten ihre gespeicherten Werte, die dann als „Nicht mehr zugeordnet“ erscheinen.{% endblocktrans %}{% else %}{% blocktrans with name=f.field_template.name %}Feld „{{ name }}“ entfernen?{% endblocktrans %}{% endif %}">
                         {% csrf_token %}
                         <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="field-remove-btn">{% trans "Entfernen" %}</button>
                     </form>
@@ -100,7 +101,8 @@ Kontext: doc_type, blocks (Liste aus {"kind":"group","group":g,"fields":[...]} |
             <span class="text-[12px] text-ink-muted">{{ block.field.field_template.get_field_type_display }}</span>
             <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk block.field.pk %}"
                   hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk block.field.pk %}"
-                  hx-target="#field-board" hx-swap="outerHTML">
+                  hx-target="#field-board" hx-swap="outerHTML"
+                  hx-confirm="{% if block.field.removal_impact %}{% blocktrans count n=block.field.removal_impact with name=block.field.field_template.name %}Feld „{{ name }}“ entfernen? {{ n }} Eintrag behält seinen gespeicherten Wert, der dann als „Nicht mehr zugeordnet“ erscheint.{% plural %}Feld „{{ name }}“ entfernen? {{ n }} Einträge behalten ihre gespeicherten Werte, die dann als „Nicht mehr zugeordnet“ erscheinen.{% endblocktrans %}{% else %}{% blocktrans with name=block.field.field_template.name %}Feld „{{ name }}“ entfernen?{% endblocktrans %}{% endif %}">
                 {% csrf_token %}
                 <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="field-remove-btn">{% trans "Entfernen" %}</button>
             </form>

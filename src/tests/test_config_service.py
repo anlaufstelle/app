@@ -33,6 +33,7 @@ from core.models import (
 from core.services.config import (
     ConfigDeleteBlocked,
     add_field_to_doctype,
+    count_field_removal_impact,
     delete_document_type,
     delete_field_group,
     delete_field_template,
@@ -368,6 +369,89 @@ class TestAddRemoveField:
         remove_field_from_doctype(req, dtf)
         assert not DocumentTypeField.objects.filter(pk=pk).exists()
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=str(pk)).exists()
+
+
+# ---------------------------------------------------------------------------
+# count_field_removal_impact — Zähler für die Entfern-Bestätigung (Refs #1725(b))
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCountFieldRemovalImpact:
+    """Refs #1725(b): Wie viele Datensätze behalten beim Entfernen einer
+    Feldzuordnung einen gespeicherten Wert unter dem Slug? Gescoped auf genau
+    dieses Entity-Model (entity_type) UND diesen Dokumentationstyp — enger als
+    der facility-weite ``field_template_delete_blockers``, weil nur diese eine
+    Zuordnung wegfällt."""
+
+    def _dtf(self, doc_type, field_name):
+        return doc_type.fields.select_related("field_template").get(field_template__name=field_name)
+
+    def test_event_scope_counts_only_records_with_the_key(
+        self, facility, doc_type_contact, client_identified, staff_user
+    ):
+        dtf = self._dtf(doc_type_contact, "Dauer")
+        _make_event(facility, client_identified, doc_type_contact, staff_user, data_json={"dauer": 15, "notiz": "x"})
+        _make_event(facility, client_identified, doc_type_contact, staff_user, data_json={"dauer": 20})
+        _make_event(facility, client_identified, doc_type_contact, staff_user, data_json={"notiz": "y"})
+        assert count_field_removal_impact(dtf) == 2
+
+    def test_client_scope(self, facility, doc_type_client_profile, staff_user):
+        dtf = self._dtf(doc_type_client_profile, "Wohnsituation")
+        Client.objects.create(
+            facility=facility,
+            pseudonym="impact-c1",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        Client.objects.create(
+            facility=facility,
+            pseudonym="impact-c2",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={},
+        )
+        assert count_field_removal_impact(dtf) == 1
+
+    def test_case_scope(self, facility, client_identified, doc_type_case_form, staff_user):
+        dtf = self._dtf(doc_type_case_form, "Anlass")
+        Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="impact-case",
+            created_by=staff_user,
+            document_type=doc_type_case_form,
+            data_json={"anlass": "Miete"},
+        )
+        assert count_field_removal_impact(dtf) == 1
+
+    def test_scoped_to_this_doctype_not_facility_wide(self, facility, doc_type_client_profile, staff_user):
+        """Dieselbe Feldvorlage kann an einem zweiten Typ hängen; Datensätze des
+        anderen Typs dürfen NICHT mitgezählt werden."""
+        wohn_ft = doc_type_client_profile.fields.select_related("field_template").get(
+            field_template__name="Wohnsituation"
+        )
+        other_type = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CLIENT,
+            name="Zweit-Profil",
+        )
+        DocumentTypeField.objects.create(document_type=other_type, field_template=wohn_ft.field_template, sort_order=0)
+        # Client des ANDEREN Typs mit demselben Slug — zählt nicht für den ersten.
+        Client.objects.create(
+            facility=facility,
+            pseudonym="impact-other",
+            created_by=staff_user,
+            document_type=other_type,
+            data_json={"wohnsituation": "WG"},
+        )
+        assert count_field_removal_impact(wohn_ft) == 0
+
+    def test_zero_when_no_records(self, doc_type_contact):
+        dtf = self._dtf(doc_type_contact, "Dauer")
+        assert count_field_removal_impact(dtf) == 0
 
 
 # ---------------------------------------------------------------------------

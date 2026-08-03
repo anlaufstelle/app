@@ -56,6 +56,13 @@ def board_context(doc_type, *, add_form=None, group_form=None):
     # sortiert nach globaler Blockposition — gemeinsame Wahrheitsquelle mit
     # Formular/Offline/Feed.
     blocks = config_service.iter_blocks_in_order(doc_type)
+    # Refs #1725(b): je Feld die Zahl der Datensätze, die beim Entfernen einen
+    # „Nicht mehr zugeordnet"-Wert behielten — speist die hx-confirm-Warnung. Ein
+    # Count pro dtf; das Board ist klein.
+    for block in blocks:
+        fields = block["fields"] if block["kind"] == "group" else [block["field"]]
+        for dtf in fields:
+            dtf.removal_impact = config_service.count_field_removal_impact(dtf)
     return {
         "doc_type": doc_type,
         "blocks": blocks,
