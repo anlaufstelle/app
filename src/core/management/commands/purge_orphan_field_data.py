@@ -13,6 +13,15 @@ Dieser Command entfernt bei Personen, Faellen und Ereignissen jene
 Typs gehoeren. Zugeordnete Werte — auch verschluesselte — bleiben unangetastet:
 es werden nur Keys entfernt, keine Werte umgeschrieben.
 
+**Verwaiste FILE-Marker werden bewusst UEBERSPRUNGEN** (nur bei Ereignissen
+moeglich) und separat gezaehlt/gemeldet, statt geloescht: der ``data_json``-
+Marker ist die einzige Bruecke zur verschluesselten ``EventAttachment``-Zeile.
+Loeschte man ihn hier, verschonte ``cleanup_orphan_storage_files`` die Datei (die
+Attachment-Zeile existiert weiter) und sie waere danach UI-unsichtbar und nur
+noch ueber die Klient-Hardloeschung erreichbar — schlechter minimiert statt
+besser. Die eigentliche Datei-Bereinigung laeuft ueber die Attachment-
+Loeschpfade / ``cleanup_orphan_storage_files``, nicht ueber diesen Command.
+
     python manage.py purge_orphan_field_data --dry-run
     python manage.py purge_orphan_field_data
 
@@ -24,6 +33,10 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Case, Client, Event
 
+# Refs #1725: FILE-Marker-Erkennung (Stufe A/B) — verwaiste Datei-Marker werden
+# uebersprungen, nicht geloescht (s. Modul-Docstring).
+from core.services.events.fields import _is_file_marker
+
 # Refs #1016/#1554: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
 from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
@@ -32,29 +45,37 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 def _purge_entity_data_json(entity):
     """Berechne die bereinigte ``data_json`` einer Entitaet.
 
-    Rueckgabe ``(new_data_or_None, removed_keys)``. ``new_data`` ist ``None``,
-    wenn nichts zu tun ist:
+    Rueckgabe ``(new_data_or_None, removed_keys, skipped_file_keys)``.
+    ``new_data`` ist ``None``, wenn nichts zu SCHREIBEN ist:
 
     * **kein ``document_type``** — ohne Typ gibt es keine massgebliche
       Feld-Whitelist; welche Keys „richtig" waeren, ist nicht entscheidbar.
       Solche Datensaetze werden nur gezaehlt, NICHT angefasst (kein Raten).
-    * **keine Waisen** — alle Keys gehoeren zum Typ.
+    * **keine loeschbaren Waisen** — alle Keys gehoeren zum Typ (oder sind
+      uebersprungene FILE-Waisen, die erhalten bleiben).
 
-    Sonst enthaelt ``new_data`` genau die Keys, deren Slug am Typ zugeordnet ist
-    (Whitelist analog ``validate_data_json``) — Werte bleiben unveraendert, es
-    werden nur die verwaisten Keys weggelassen.
+    ``skipped_file_keys`` sind verwaiste FILE-Marker (Refs #1725): sie werden
+    bewusst NICHT entfernt (der Marker ist die einzige Bruecke zur
+    verschluesselten ``EventAttachment``-Zeile — s. Modul-Docstring) und bleiben
+    daher in ``new_data`` erhalten; sie werden nur gezaehlt/gemeldet. ``new_data``
+    enthaelt also genau die zugeordneten Keys **plus** die uebersprungenen
+    FILE-Waisen — es fallen nur die verwaisten Nicht-Datei-Keys weg.
     """
     if entity.document_type_id is None:
-        return None, []
+        return None, [], []
     data = entity.data_json or {}
     if not data:
-        return None, []
+        return None, [], []
     allowed = set(entity.document_type.fields.values_list("field_template__slug", flat=True))
-    removed = sorted(k for k in data if k not in allowed)
+    orphans = [k for k in data if k not in allowed]
+    # FILE-Waisen bewusst behalten (Refs #1725) — s. Modul-Docstring.
+    skipped_files = sorted(k for k in orphans if _is_file_marker(data[k]))
+    removed = sorted(k for k in orphans if k not in set(skipped_files))
     if not removed:
-        return None, []
-    new_data = {k: v for k, v in data.items() if k in allowed}
-    return new_data, removed
+        # Nichts zu schreiben; uebersprungene FILE-Waisen trotzdem melden.
+        return None, [], skipped_files
+    new_data = {k: v for k, v in data.items() if k not in set(removed)}
+    return new_data, removed, skipped_files
 
 
 class Command(BaseCommand):
@@ -95,24 +116,29 @@ class Command(BaseCommand):
 
         verb = "Wuerde bereinigen" if dry_run else "Bereinigt"
         parts = [
-            f"{label}: {cleaned}/{checked} bereinigt, {keys} Key(s) entfernt"
-            for label, (checked, cleaned, keys) in results.items()
+            f"{label}: {cleaned}/{checked} bereinigt, {keys} Key(s) entfernt, {files} Datei-Waise(n) uebersprungen"
+            for label, (checked, cleaned, keys, files) in results.items()
         ]
         self.stdout.write(self.style.SUCCESS(f"{verb} — " + "; ".join(parts) + "."))
 
     def _purge_model(self, model, dry_run: bool):
         """Iteriere ``model`` und bereinige verwaiste Keys.
 
-        Rueckgabe ``(checked, cleaned, keys_removed)``. ``model.objects`` deckt
-        auch soft-geloeschte Zeilen ab (``FacilityScopedManager``/``EventManager``
-        filtern ``is_deleted`` nicht) — anders als reencrypt_fields (Event:
-        ``is_deleted=False`` als bekannte Krypto-Luecke) raeumt der Purge bewusst
-        auch dort, damit keine verwaisten Reste im Papierkorb ueberdauern.
+        Rueckgabe ``(checked, cleaned, keys_removed, files_skipped)``.
+        ``model.objects`` deckt auch soft-geloeschte Zeilen ab
+        (``FacilityScopedManager``/``EventManager`` filtern ``is_deleted`` nicht)
+        — anders als reencrypt_fields (Event: ``is_deleted=False`` als bekannte
+        Krypto-Luecke) raeumt der Purge bewusst auch dort, damit keine verwaisten
+        Reste im Papierkorb ueberdauern. ``files_skipped`` zaehlt verwaiste
+        FILE-Marker, die bewusst NICHT geloescht werden (Refs #1725, s. Modul-
+        Docstring) — auch bei Datensaetzen, bei denen sonst nichts zu bereinigen
+        ist.
         """
-        checked = cleaned = keys_removed = 0
+        checked = cleaned = keys_removed = files_skipped = 0
         for entity in model.objects.iterator(chunk_size=500):
             checked += 1
-            new_data, removed = _purge_entity_data_json(entity)
+            new_data, removed, skipped_files = _purge_entity_data_json(entity)
+            files_skipped += len(skipped_files)
             if not removed:
                 continue
             cleaned += 1
@@ -128,4 +154,4 @@ class Command(BaseCommand):
             # ein Resync waere ein unerwuenschter Seiteneffekt auf sonst
             # unberuehrte Ereignisse.
             entity.save(update_fields=["data_json", "updated_at"])
-        return checked, cleaned, keys_removed
+        return checked, cleaned, keys_removed, files_skipped

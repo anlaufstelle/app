@@ -113,6 +113,70 @@ class TestPurgeOrphanFieldData:
         client.refresh_from_db()
         assert client.data_json == {"irgendwas": "bleibt"}
 
+    def test_file_orphan_marker_is_skipped_not_purged(self, facility, client_identified, doc_type_contact, staff_user):
+        """Refs #1725: Verwaiste FILE-Marker werden NICHT geloescht, sondern
+        uebersprungen und separat gezaehlt.
+
+        Der Marker ist die einzige Bruecke zur verschluesselten
+        EventAttachment-Zeile: entfernte man ihn, verschonte
+        cleanup_orphan_storage_files die Datei (die Attachment-Zeile existiert
+        weiter) und sie waere UI-unsichtbar/unloeschbar — schlechter minimiert
+        statt besser. Ein verwaister Klartext-Key faellt weiterhin.
+        """
+        from django.utils import timezone
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            created_by=staff_user,
+            data_json={
+                "dauer": 15,
+                "alt-datei": {
+                    "__file__": True,
+                    "attachment_id": "11111111-1111-1111-1111-111111111111",
+                    "name": "akte.pdf",
+                },
+                "alt-text": "Rest",
+            },
+        )
+        out = StringIO()
+        call_command("purge_orphan_field_data", stdout=out)
+        event.refresh_from_db()
+        # FILE-Waise bleibt erhalten (uebersprungen), Text-Waise faellt,
+        # zugeordnetes Feld bleibt.
+        assert "alt-datei" in event.data_json, "FILE-Waise darf nicht geloescht werden"
+        assert event.data_json["alt-datei"]["__file__"] is True
+        assert "alt-text" not in event.data_json
+        assert event.data_json["dauer"] == 15
+        # Report weist die uebersprungene Datei-Waise aus.
+        assert "uebersprungen" in out.getvalue()
+
+    def test_soft_deleted_entity_orphan_is_purged(self, facility, doc_type_client_profile, staff_user):
+        """Refs #1725: Der Purge raeumt bewusst AUCH soft-geloeschte Datensaetze
+        (anders als reencrypt_fields' is_deleted=False-Luecke) — sonst
+        ueberdauern verwaiste Reste im Papierkorb. Bislang nur im Docstring
+        behauptet, hier gegen eine kuenftige is_deleted=False-Regression
+        abgesichert (Schwester zu test_reencrypt_soft_deleted_event_is_rotated).
+        """
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="purge-soft",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG", "alt-feld": "Verwaist"},
+        )
+        # Soft-Delete NACH dem Anlegen (update umgeht die save()-Encryption-Kette).
+        Client.objects.filter(pk=client.pk).update(is_deleted=True)
+
+        call_command("purge_orphan_field_data", stdout=StringIO())
+
+        client.refresh_from_db()
+        assert "alt-feld" not in client.data_json, "verwaister Key auch im Papierkorb bereinigt"
+        assert client.data_json["wohnsituation"] == "WG"
+        assert client.is_deleted is True, "Soft-Delete-Status bleibt unangetastet"
+
     def test_case_and_event_orphans_are_purged_too(
         self, facility, client_identified, doc_type_case_form, doc_type_contact, staff_user
     ):

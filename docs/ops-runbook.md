@@ -456,6 +456,14 @@ docker compose -f docker-compose.prod.yml exec web \
 # bei Personen/Faellen/Ereignissen. Zugeordnete (auch verschluesselte) Werte
 # bleiben unangetastet; Datensaetze ohne Typ werden nur gezaehlt. MUSS mit der
 # Admin-DB-Rolle laufen (BYPASSRLS) — sonst fail-loud (§ 9 DB-Rollenmodell).
+#
+# Verwaiste FILE-Marker (nur bei Ereignissen) werden bewusst UEBERSPRUNGEN und
+# separat als "Datei-Waise(n) uebersprungen" gemeldet, NICHT geloescht: der
+# data_json-Marker ist die einzige Bruecke zur verschluesselten EventAttachment-
+# Zeile. Diese Datei-Bereinigung laeuft ueber die Attachment-Loeschpfade bzw.
+# cleanup_orphan_storage_files (nach dem Loeschen der Attachment-Zeile), nicht
+# ueber diesen Command — die uebersprungene Zaehlung gilt also nicht als
+# erledigte Datei-Minimierung.
 docker compose -f docker-compose.prod.yml exec \
  -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
  web python manage.py purge_orphan_field_data --dry-run # Vorschau
