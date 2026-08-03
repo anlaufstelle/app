@@ -210,18 +210,25 @@ def _serialize_event(event):
     }
 
 
-def _gather_events(client, user):
-    """Return (events_data, event_ids) for non-deleted events visible to ``user``.
+def _gather_events(client, user, *, is_deleted=False):
+    """Return (events_data, event_ids) for events visible to ``user``.
 
     Refs #734: ``user`` ist Pflicht, damit ``visible_to(user)`` greift.
     Ohne den Filter wuerden HIGH-Sensitivity-Events auch bei einem
     Staff-Triggered-Export landen (heute durch Lead/Admin-Mixin auf der
     View entschaerft, aber Service-Layer muss sich nicht auf den Caller
     verlassen).
+
+    ``is_deleted`` waehlt zwischen Live-Bestand und Papierkorb (Refs #1752).
+    Soft-deletete Ereignisse sind bis zum Hard-Purge weiterhin gespeicherte
+    Daten und gehoeren in die Auskunft — nur eben als eigener Abschnitt, damit
+    die betroffene Person Live-Datensatz und Papierkorb unterscheiden kann. Ihr
+    ``data_json`` ist beim Soft-Delete geleert; die Auskunft weist deshalb die
+    Existenz plus die (redigierte) Historie aus, nicht die Inhalte.
     """
     events = (
         Event.objects.visible_to(user)
-        .filter(client=client, is_deleted=False)
+        .filter(client=client, is_deleted=is_deleted)
         .select_related("document_type", "created_by", "case", "episode")
         .order_by("-occurred_at", "pk")
     )
@@ -269,16 +276,78 @@ def _gather_cases(client):
     return entries
 
 
+# Refs #1752: Anhang-Marker (``__file__``/``__files__``) sind Metadaten der
+# Datei-Ablage, keine Feldwerte. Attachment-Metadaten bleiben bis #1738 (AP3)
+# bewusst aus der Auskunft; in der Historie steht daher nur der Platzhalter —
+# sonst wanderten Attachment-IDs ueber den Umweg des Snapshots doch hinein.
+HISTORY_ATTACHMENT_PLACEHOLDER = "[Anhang]"
+
+
+def _history_value(raw):
+    """Klartext-Wert eines Historien-Snapshot-Felds (Refs #1752).
+
+    Verschluesselte Werte werden entschluesselt — dieselbe Begruendung wie bei
+    :func:`_gather_entity_dynamic_data`: ein Fernet-Token waere keine Auskunft.
+    Der Marker-Check laeuft **vor** :func:`safe_decrypt`, weil Datei-Marker
+    ebenfalls ``dict`` sind, aber keine Krypto-Huelle.
+    """
+    if isinstance(raw, dict):
+        if raw.get("__file__") or raw.get("__files__"):
+            return HISTORY_ATTACHMENT_PLACEHOLDER
+        return safe_decrypt(raw)
+    return raw
+
+
+def _serialize_history_payload(payload, field_metadata):
+    """``data_before``/``data_after`` als ``[{slug, label, value}, ...]``.
+
+    ``field_metadata`` ist der beim Schreiben eingefrorene Label-Snapshot
+    (revisionsfeste Darstellung, Refs #824); fehlt ein Slug darin, bleibt der
+    Slug selbst das Label. Sortiert nach Slug, weil ``jsonb`` die Schluessel
+    normalisiert speichert und die Auskunft reproduzierbar sein soll.
+
+    Redigierte Loeschungen (``build_redacted_delete_history``) speichern nur die
+    Feldnamen — dann steht ``value=None``: das Feld existierte, sein Wert wurde
+    bereits geloescht.
+    """
+    if not payload:
+        return []
+
+    def label(slug):
+        return (field_metadata or {}).get(slug, {}).get("name") or slug
+
+    if payload.get("_redacted"):
+        return [{"slug": slug, "label": label(slug), "value": None} for slug in sorted(payload.get("fields", []))]
+    return [{"slug": slug, "label": label(slug), "value": _history_value(payload[slug])} for slug in sorted(payload)]
+
+
 def _gather_event_history(event_ids):
-    """Serialize EventHistory entries for the given event IDs."""
+    """Serialize EventHistory entries for the given event IDs.
+
+    Refs #1752: bisher standen hier nur Aktion/Zeitpunkt/User — die eigentlich
+    auskunftspflichtigen **Inhalte** (``data_before``/``data_after``) fehlten,
+    obwohl sie gespeichert sind und aelteren Stand der eigenen Daten belegen.
+    Zusaetzlich benennt jeder Eintrag jetzt sein Ereignis, sonst laesst sich
+    eine Aenderung bei mehreren Ereignissen nicht zuordnen.
+    """
     history_entries = (
-        EventHistory.objects.filter(event_id__in=event_ids).select_related("changed_by").order_by("-changed_at")
+        EventHistory.objects.filter(event_id__in=event_ids)
+        .select_related("changed_by", "event", "event__document_type")
+        .order_by("-changed_at", "pk")
     )
     return [
         {
             "action": entry.get_action_display(),
             "changed_at": entry.changed_at.isoformat(),
-            "changed_by": entry.changed_by.username if entry.changed_by else None,
+            "changed_by": _username(entry.changed_by),
+            "event": {
+                "document_type": entry.event.document_type.name,
+                "occurred_at": entry.event.occurred_at.isoformat(),
+                "is_deleted": entry.event.is_deleted,
+            },
+            "redacted": bool((entry.data_before or {}).get("_redacted")),
+            "data_before": _serialize_history_payload(entry.data_before, entry.field_metadata),
+            "data_after": _serialize_history_payload(entry.data_after, entry.field_metadata),
         }
         for entry in history_entries
     ]
@@ -556,20 +625,29 @@ def export_client_data(client, facility, user):
     Filterung greift via ``Event.objects.visible_to(user)`` in
     ``_gather_events``. Lead/Admin sehen alles, Staff sieht
     NORMAL+ELEVATED, Assistant nur NORMAL.
+
+    Refs #1752: Ereignisse im Papierkorb kommen als eigener Abschnitt dazu;
+    alle ereignisbezogenen Kategorien (Historie, Loeschantraege, Legal Holds,
+    Loeschvorschlaege, Zeitstrom) arbeiten anschliessend auf **beiden** Mengen
+    — sonst fiele die Historie eines geloeschten Ereignisses stillschweigend
+    weg, obwohl sie bis zum Hard-Purge gespeichert bleibt.
     """
     events_data, event_ids = _gather_events(client, user)
+    deleted_events_data, deleted_event_ids = _gather_events(client, user, is_deleted=True)
+    all_event_ids = [*event_ids, *deleted_event_ids]
     return {
         "client": _gather_client_fields(client),
         "events": events_data,
+        "deleted_events": deleted_events_data,
         "cases": _gather_cases(client),
         "episodes": _gather_episodes(client),
         "outcome_goals": _gather_outcome_goals(client),
-        "event_history": _gather_event_history(event_ids),
-        "deletion_requests": _gather_deletion_requests(facility, client, event_ids),
-        "legal_holds": _gather_legal_holds(facility, client, event_ids),
-        "retention_proposals": _gather_retention_proposals(facility, client, event_ids),
+        "event_history": _gather_event_history(all_event_ids),
+        "deletion_requests": _gather_deletion_requests(facility, client, all_event_ids),
+        "legal_holds": _gather_legal_holds(facility, client, all_event_ids),
+        "retention_proposals": _gather_retention_proposals(facility, client, all_event_ids),
         "work_items": _gather_workitems(client),
-        "activities": _gather_activities(facility, client, event_ids),
+        "activities": _gather_activities(facility, client, all_event_ids),
         "recent_visits": _gather_recent_visits(client),
         "export_meta": _build_export_meta(facility),
     }

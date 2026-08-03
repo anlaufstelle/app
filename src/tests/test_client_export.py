@@ -14,6 +14,7 @@ from core.models import (
     DocumentType,
     Episode,
     Event,
+    EventHistory,
     Facility,
     LegalHold,
     Milestone,
@@ -160,7 +161,13 @@ class TestClientExportService:
         assert len(data["work_items"]) == 1
         assert data["work_items"][0]["title"] == "Test-Aufgabe"
 
-    def test_deleted_events_excluded(self, sample_client, facility, doc_type, admin_user):
+    def test_deleted_events_are_not_in_the_live_events_section(self, sample_client, facility, doc_type, admin_user):
+        """Geloeschte Ereignisse bleiben aus ``events`` heraus — aber nicht aus der Auskunft.
+
+        Anforderung geaendert per Produktentscheid 2026-08-03 (Refs #1755/#1752):
+        sie erscheinen jetzt unter ``deleted_events``. Siehe
+        ``TestClientExportDeletedEvents``.
+        """
         Event.objects.create(
             facility=facility,
             client=sample_client,
@@ -172,6 +179,7 @@ class TestClientExportService:
         )
         data = export_client_data(sample_client, facility, admin_user)
         assert len(data["events"]) == 0
+        assert len(data["deleted_events"]) == 1
 
     def test_export_meta_contains_facility_name(self, sample_client, facility, admin_user):
         data = export_client_data(sample_client, facility, admin_user)
@@ -576,3 +584,197 @@ class TestClientExportCrossTableCategories:
         )
         data = export_client_data(sample_client, facility, admin_user)
         assert data["retention_proposals"] == []
+
+
+@pytest.mark.django_db
+class TestClientExportHistoryContents:
+    """Refs #1752 — Aenderungshistorie mit Inhalten statt nur Metadaten."""
+
+    @staticmethod
+    def _metadata(**slugs):
+        return {
+            slug: {"name": name, "sensitivity": "", "is_encrypted": encrypted}
+            for slug, (name, encrypted) in slugs.items()
+        }
+
+    def test_history_carries_create_values_with_labels(self, sample_client, facility, sample_event, admin_user):
+        EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.CREATE,
+            data_after={"dauer": 15, "notiz": "Erstkontakt"},
+            field_metadata=self._metadata(dauer=("Dauer", False), notiz=("Notiz", False)),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["event_history"][0]
+        assert entry["action"] == "Erstellt"
+        assert entry["redacted"] is False
+        by_label = {field["label"]: field["value"] for field in entry["data_after"]}
+        assert by_label == {"Dauer": 15, "Notiz": "Erstkontakt"}
+        assert entry["data_before"] == []
+
+    def test_history_carries_update_before_and_after(self, sample_client, facility, sample_event, admin_user):
+        EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.UPDATE,
+            data_before={"notiz": "alt"},
+            data_after={"notiz": "neu"},
+            field_metadata=self._metadata(notiz=("Notiz", False)),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["event_history"][0]
+        assert [f["value"] for f in entry["data_before"]] == ["alt"]
+        assert [f["value"] for f in entry["data_after"]] == ["neu"]
+
+    def test_history_identifies_its_event(self, sample_client, facility, sample_event, admin_user):
+        EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.CREATE,
+            data_after={},
+            field_metadata={},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["event_history"][0]
+        assert entry["event"]["document_type"] == "Kontakt"
+        assert entry["event"]["is_deleted"] is False
+        assert entry["event"]["occurred_at"] is not None
+
+    def test_history_decrypts_encrypted_values(self, sample_client, facility, sample_event, admin_user):
+        from cryptography.fernet import Fernet
+        from django.test import override_settings
+
+        from core.services.file_vault import encrypt_field
+
+        key = Fernet.generate_key().decode()
+        with override_settings(ENCRYPTION_KEY=key):
+            EventHistory.objects.create(
+                event=sample_event,
+                changed_by=admin_user,
+                action=EventHistory.Action.CREATE,
+                data_after={"diagnose": encrypt_field("Klartext-Befund")},
+                field_metadata=self._metadata(diagnose=("Diagnose", True)),
+            )
+            data = export_client_data(sample_client, facility, admin_user)
+        entry = data["event_history"][0]
+        assert [f["value"] for f in entry["data_after"]] == ["Klartext-Befund"]
+
+    def test_history_falls_back_to_slug_without_metadata(self, sample_client, facility, sample_event, admin_user):
+        EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.CREATE,
+            data_after={"unbekannt": "Wert"},
+            field_metadata={},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["event_history"][0]["data_after"] == [{"slug": "unbekannt", "label": "unbekannt", "value": "Wert"}]
+
+    def test_history_masks_attachment_markers(self, sample_client, facility, sample_event, admin_user):
+        """Anhang-Metadaten bleiben bis #1738 ausgeschlossen — nur der Platzhalter."""
+        EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.CREATE,
+            data_after={"datei": {"__files__": True, "entries": [{"id": "abc", "sort": 0}]}},
+            field_metadata=self._metadata(datei=("Datei", False)),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        value = data["event_history"][0]["data_after"][0]["value"]
+        assert value == "[Anhang]"
+        assert "abc" not in str(data["event_history"][0])
+
+    def test_history_of_redacted_delete_lists_fields_only(self, sample_client, facility, sample_event, admin_user):
+        EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.DELETE,
+            data_before={"_redacted": True, "fields": ["notiz"]},
+            field_metadata=self._metadata(notiz=("Notiz", False)),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["event_history"][0]
+        assert entry["redacted"] is True
+        assert entry["data_before"] == [{"slug": "notiz", "label": "Notiz", "value": None}]
+
+
+@pytest.mark.django_db
+class TestClientExportDeletedEvents:
+    """Refs #1752 — geloeschte Ereignisse gehoeren bis zum Hard-Purge in die Auskunft.
+
+    Anforderung geaendert per Produktentscheid 2026-08-03
+    (#1755); vorher pinnte
+    ``test_deleted_events_excluded`` deren vollstaendige Abwesenheit.
+    """
+
+    @pytest.fixture
+    def deleted_event(self, facility, doc_type, sample_client, admin_user):
+        return Event.objects.create(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            created_by=admin_user,
+        )
+
+    def test_deleted_events_exported_in_own_section(self, sample_client, facility, deleted_event, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["deleted_events"]) == 1
+        entry = data["deleted_events"][0]
+        assert entry["document_type"] == "Kontakt"
+        assert entry["is_deleted"] is True
+
+    def test_deleted_events_stay_out_of_live_section(
+        self, sample_client, facility, deleted_event, sample_event, admin_user
+    ):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["is_deleted"] for e in data["events"]] == [False]
+
+    def test_history_of_deleted_event_included(self, sample_client, facility, deleted_event, admin_user):
+        EventHistory.objects.create(
+            event=deleted_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.DELETE,
+            data_before={"_redacted": True, "fields": ["notiz"]},
+            field_metadata={"notiz": {"name": "Notiz", "sensitivity": "", "is_encrypted": False}},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["event_history"]) == 1
+        assert data["event_history"][0]["event"]["is_deleted"] is True
+
+    def test_deletion_request_of_deleted_event_included(
+        self, sample_client, facility, deleted_event, admin_user, confirmer_user
+    ):
+        DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.EVENT,
+            target_id=deleted_event.pk,
+            reason="Auf Wunsch geloescht",
+            requested_by=admin_user,
+            reviewed_by=confirmer_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["reason"] for e in data["deletion_requests"]] == ["Auf Wunsch geloescht"]
+
+    def test_deleted_events_respect_sensitivity_filter(self, sample_client, facility, staff_user, admin_user):
+        high_type = DocumentType.objects.create(
+            facility=facility,
+            name="Krise",
+            category=DocumentType.Category.CONTACT,
+            system_type=DocumentType.SystemType.CRISIS,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=sample_client,
+            document_type=high_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, staff_user)
+        assert data["deleted_events"] == []

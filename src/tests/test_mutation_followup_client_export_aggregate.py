@@ -110,6 +110,7 @@ class TestExportClientDataAggregate:
         assert set(result.keys()) == {
             "client",
             "events",
+            "deleted_events",
             "cases",
             "episodes",
             "outcome_goals",
