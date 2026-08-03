@@ -189,7 +189,7 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         EventHistory,
         FieldTemplate,
     )
-    from core.services.case import create_case, create_workitem
+    from core.services.case import close_case, create_case, create_goal, create_milestone, create_workitem
     from core.services.client import (
         approve_client_deletion,
         create_client,
@@ -285,6 +285,24 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         title="RESIDUEPROBE-Aufgabe",
         description="RESIDUEPROBE-Aufgabenbeschreibung",
     )
+
+    # 3c) Wirkungsziel + Meilenstein am Fall (core_outcomegoal.{title,
+    #     description}, core_milestone.title). Beide Tabellen waren als ``pii``
+    #     klassifiziert, wurden von der Fixture aber nie befuellt — der Sweep
+    #     konnte die Kaskade dorthin also gar nicht pruefen (Refs #1751, Punkt 1).
+    goal = create_goal(
+        case,
+        admin_user,
+        title="RESIDUEPROBE-Wirkungsziel",
+        description="RESIDUEPROBE-Zielbeschreibung",
+    )
+    create_milestone(goal, admin_user, title="RESIDUEPROBE-Meilenstein")
+
+    # 3d) Fall schliessen — schreibt eine Activity mit Target = **Case** und dem
+    #     Falltitel im ``summary``. ``_redact_activities`` filterte bis #1751
+    #     nur Client-/Event-/WorkItem-Targets, sodass genau diese Zeile die
+    #     Anonymisierung ueberlebte (Refs #1751, Punkt 2).
+    close_case(case, admin_user)
 
     # 4) DocumentType + unverschluesseltes NORMAL-Textfeld, verknuepft wie
     #    conftest.doc_type_contact. NORMAL + unverschluesselt ist Pflicht,

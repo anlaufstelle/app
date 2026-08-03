@@ -32,6 +32,7 @@ from core.models import AuditLog, Client, Event, Settings
 from core.services.audit import audit_retention_decision
 from core.services.client import (
     _redact_activities,
+    _redact_case_goals,
     _redact_cases_and_episodes,
     _redact_client_deletion_request,
     _redact_deletion_requests,
@@ -73,7 +74,8 @@ def _k_anonymize_with_cascade(client, k):
     with transaction.atomic():
         event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
         k_anonymize_client(client, k=k)
-        _redact_cases_and_episodes(client)
+        case_ids = _redact_cases_and_episodes(client)
+        _redact_case_goals(case_ids)
         _redact_workitems(client)
         _redact_event_history(event_ids)
         _redact_deletion_requests(event_ids)

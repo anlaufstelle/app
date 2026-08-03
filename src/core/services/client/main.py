@@ -160,6 +160,31 @@ def _redact_cases_and_episodes(client) -> list:
     return case_ids
 
 
+def _redact_case_goals(case_ids: list) -> None:
+    """Anonymisiere Wirkungsziele + Meilensteine der Faelle (Refs #1751, Punkt 1).
+
+    ``OutcomeGoal.title``/``description`` und ``Milestone.title`` sind
+    Freitexte am Fall („Wohnung finden fuer …"), die die Anonymisierung
+    bisher ueberlebten: ``_redact_cases_and_episodes`` kaskadiert nur auf
+    ``Episode``, und kein anderer Pfad fasste die Ziel-Hierarchie an. Sie
+    haengen am selben Aggregat wie die Episoden und werden daher nach
+    demselben Muster geleert; die Fortschritts-Marker (``is_achieved``,
+    ``is_completed``, Datumsfelder) bleiben als anonyme Kennzahl erhalten.
+    """
+    from core.models.outcome import Milestone, OutcomeGoal
+
+    if not case_ids:
+        return
+    goal_ids = list(OutcomeGoal.objects.filter(case_id__in=case_ids).values_list("pk", flat=True))
+    if not goal_ids:
+        return
+    OutcomeGoal.objects.filter(pk__in=goal_ids).update(
+        title="Wirkungsziel (anonymisiert)",
+        description="",
+    )
+    Milestone.objects.filter(goal_id__in=goal_ids).update(title="Meilenstein (anonymisiert)")
+
+
 def _redact_workitems(client) -> None:
     """Anonymisiere alle WorkItems des Klienten (auch DONE/DISMISSED)."""
     client.work_items.all().update(
@@ -257,7 +282,7 @@ def _redact_client_deletion_request(client) -> None:
 
 
 def _redact_activities(client, event_ids: list) -> None:
-    """Redigiere ``Activity.summary`` fuer Client-, Event- und WorkItem-Targets.
+    """Redigiere ``Activity.summary`` fuer Client-, Event-, WorkItem- und Case-Targets.
 
     Mehrere Pfade schreiben das Klartext-Pseudonym in den Zeitstrom:
     ``create_client``/``update_client``/``approve_client_deletion``
@@ -269,11 +294,24 @@ def _redact_activities(client, event_ids: list) -> None:
     Zeitpunkt bleiben fuer den Feed erhalten, nur der Freitext wird
     ersetzt.
 
+    Refs #1751 (Punkt 2): ``close_case``/``reopen_case`` („Fall
+    ‚<titel>' geschlossen") und ``delete_milestone`` („Meilenstein
+    ‚<titel>' gelöscht") schreiben mit Target = **Case**. Diese Zeilen
+    fielen durch den bisherigen Drei-Typen-Filter und blieben bis zur
+    ``retention_activities_days``-Frist (Default 365 Tage) stehen —
+    deutlich laenger als die Papierkorb-Frist (Default 30 Tage), nach
+    der die Anonymisierung greift.
+
+    Die ``case_ids`` werden hier selbst aufgeloest (wie die
+    ``workitem_ids``), damit die Signatur stabil bleibt und **beide**
+    Anonymisierungspfade ohne zusaetzliche Verdrahtung profitieren.
+
     Refs #1067.
     """
     from django.contrib.contenttypes.models import ContentType
     from django.db.models import Q
 
+    from core.models.case import Case
     from core.models.event import Event
     from core.models.workitem import WorkItem
 
@@ -292,6 +330,12 @@ def _redact_activities(client, event_ids: list) -> None:
             target_type=ContentType.objects.get_for_model(WorkItem),
             target_id__in=workitem_ids,
         )
+    case_ids = list(Case.objects.filter(client=client).values_list("pk", flat=True))
+    if case_ids:
+        targets |= Q(
+            target_type=ContentType.objects.get_for_model(Case),
+            target_id__in=case_ids,
+        )
     Activity.objects.filter(facility=client.facility).filter(targets).update(summary="[Anonymisiert]")
 
 
@@ -308,6 +352,8 @@ def anonymize_client(client, user=None):
     - ``Case.title`` / ``Case.description`` / ``Case.data_json`` /
       ``Case.document_type`` (M2 P5, Refs #1058) aller verknüpften Fälle
     - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
+    - ``OutcomeGoal.title`` / ``OutcomeGoal.description`` / ``Milestone.title``
+      aller Wirkungsziele dieser Fälle (Refs #1751)
     - alle Workitems (auch DONE/DISMISSED): title, description
     - ``Event.data_json``/``search_text`` aller noch nicht soft-deleteten
       Events des Klienten (Refs #1089) — die Live-Zeile bliebe sonst mit
@@ -320,15 +366,17 @@ def anonymize_client(client, user=None):
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
-    - ``Activity.summary`` für Client-, Event- und WorkItem-Targets — der
-      Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067), die
-      WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090).
+    - ``Activity.summary`` für Client-, Event-, WorkItem- und Case-Targets —
+      der Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067),
+      die WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090) und
+      die Case-Target-Activity den Fall-/Meilenstein-Titel (Refs #1751).
 
     Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
     """
     _redact_client_identity(client)
-    _redact_cases_and_episodes(client)
+    case_ids = _redact_cases_and_episodes(client)
+    _redact_case_goals(case_ids)
     _redact_workitems(client)
     event_ids = _delete_event_attachments_for_client(client)
     _redact_live_events(client)

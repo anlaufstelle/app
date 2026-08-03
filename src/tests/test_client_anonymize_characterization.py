@@ -461,3 +461,124 @@ class TestAnonymizeClientHelpers:
             verb=Activity.Verb.CREATED,
             summary="[Anonymisiert]",
         ).exists()
+
+    def test_redact_case_goals_clears_titles_but_keeps_progress(self, facility, staff_user, client_identified):
+        """Refs #1751 (Punkt 1): Wirkungsziel-/Meilenstein-Freitext wird getilgt.
+
+        Erhalten bleiben die Fortschritts-Marker (``is_achieved``,
+        ``is_completed`` samt Datum) — sie sind anonyme Kennzahlen und tragen
+        keinen Personenbezug, waehrend Titel/Beschreibung genau das tun.
+        """
+        from core.models.case import Case
+        from core.models.outcome import Milestone, OutcomeGoal
+        from core.services.client import _redact_case_goals, _redact_cases_and_episodes
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Klartext-Fall",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        goal = OutcomeGoal.objects.create(
+            case=case,
+            title="Wohnung fuer Klartext-Person",
+            description="Klartext-Zielbeschreibung",
+            is_achieved=True,
+            achieved_at=timezone.now().date(),
+            created_by=staff_user,
+        )
+        milestone = Milestone.objects.create(
+            goal=goal,
+            title="Termin bei Klartext-Amt",
+            is_completed=True,
+            completed_at=timezone.now().date(),
+        )
+
+        _redact_case_goals(_redact_cases_and_episodes(client_identified))
+
+        goal.refresh_from_db()
+        milestone.refresh_from_db()
+        assert goal.title == "Wirkungsziel (anonymisiert)"
+        assert goal.description == ""
+        assert milestone.title == "Meilenstein (anonymisiert)"
+        # Fortschritt bleibt als anonyme Kennzahl erhalten.
+        assert goal.is_achieved is True
+        assert goal.achieved_at is not None
+        assert milestone.is_completed is True
+        assert milestone.completed_at is not None
+
+    def test_redact_case_goals_is_no_op_without_cases(self):
+        from core.services.client import _redact_case_goals
+
+        assert _redact_case_goals([]) is None
+
+    def test_redact_case_goals_leaves_other_clients_goals(self, facility, staff_user, client_identified):
+        """Fremde Wirkungsziele derselben Einrichtung bleiben unangetastet."""
+        from core.models.case import Case
+        from core.models.outcome import OutcomeGoal
+        from core.services.client import _redact_case_goals, _redact_cases_and_episodes, create_client
+
+        other = create_client(facility, staff_user, pseudonym="Fremd-Ziel-1")
+        other_case = Case.objects.create(
+            facility=facility,
+            client=other,
+            title="Fremd-Fall",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        other_goal = OutcomeGoal.objects.create(case=other_case, title="Fremd-Ziel", created_by=staff_user)
+
+        _redact_case_goals(_redact_cases_and_episodes(client_identified))
+
+        other_goal.refresh_from_db()
+        assert other_goal.title == "Fremd-Ziel"
+
+    def test_redact_activities_clears_case_target_summary(self, facility, staff_user, client_identified):
+        """Refs #1751 (Punkt 2): Activities mit Target = Case werden mitredigiert.
+
+        ``close_case`` schreibt „Fall ‚<titel>' geschlossen" mit Target = Case.
+        Diese Zeilen fielen durch den alten Client-/Event-/WorkItem-Filter und
+        ueberlebten die Anonymisierung bis zur ``retention_activities_days``-Frist.
+        """
+        from core.models.activity import Activity
+        from core.models.case import Case
+        from core.services.case import close_case
+        from core.services.client import _redact_activities
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Fall-PII-Titel",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        close_case(case, staff_user)
+
+        # Positiv-Kontrolle: die Case-Target-Activity traegt den Falltitel.
+        assert Activity.objects.filter(facility=facility, summary__contains="Fall-PII-Titel").exists()
+
+        _redact_activities(client_identified, [])
+
+        assert not Activity.objects.filter(facility=facility, summary__contains="Fall-PII-Titel").exists()
+
+    def test_redact_activities_leaves_foreign_case_activities(self, facility, staff_user, client_identified):
+        """Gegenprobe: der Case-Zweig bleibt auf die Faelle DIESES Klienten begrenzt."""
+        from core.models.activity import Activity
+        from core.models.case import Case
+        from core.services.case import close_case
+        from core.services.client import _redact_activities, create_client
+
+        other = create_client(facility, staff_user, pseudonym="Fremd-Fall-1")
+        other_case = Case.objects.create(
+            facility=facility,
+            client=other,
+            title="Fremd-Fall-Titel",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        close_case(other_case, staff_user)
+
+        _redact_activities(client_identified, [])
+
+        assert Activity.objects.filter(facility=facility, summary__contains="Fremd-Fall-Titel").exists()

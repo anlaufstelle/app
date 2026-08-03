@@ -42,6 +42,7 @@ from core.services.client.export import (
 from core.services.client.main import (
     _delete_event_attachments_for_client,
     _redact_activities,
+    _redact_case_goals,
     _redact_cases_and_episodes,
     _redact_client_deletion_request,
     _redact_client_identity,
@@ -79,6 +80,7 @@ __all__ = [
     "_gather_events",
     "_gather_workitems",
     "_redact_activities",
+    "_redact_case_goals",
     "_redact_cases_and_episodes",
     "_redact_client_deletion_request",
     "_redact_client_identity",
