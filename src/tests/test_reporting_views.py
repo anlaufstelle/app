@@ -178,8 +178,10 @@ class TestDatasetReportPanelView:
         assert ">9<" in content
         assert ">10<" not in content
         assert ">14<" not in content
-        # Gesamtzahl (15) irgendwo im Vorschau-Hinweis genannt.
-        assert "15" in content
+        # Der Vorschau-Hinweis nennt beide Zahlen. Bewusst der ganze Satz statt
+        # nur "15": die nackte Zahl steht ohnehin in jedem Panel (Tailwind-Klasse
+        # ``text-[15px]`` in der Ueberschrift) und pinnt ``preview_total`` nicht.
+        assert "Zeigt 10 von 15 Zeilen" in content
 
     def test_none_zelle_rendert_gedankenstrich(self, client, lead_user, doc_type_contact, sample_event):
         """``None``-Zellen (K-Anon-Suppression) rendern als ``—``, nie als ``None``."""
