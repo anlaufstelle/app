@@ -130,8 +130,8 @@ from core.views.statistics import (
     DatasetExportView,
     DatasetReportPanelView,
     ExternalReportView,
-    JugendamtExportView,
     PDFExportView,
+    SampleReport1ExportView,
     StatisticsView,
 )
 from core.views.system import (
@@ -371,7 +371,11 @@ urlpatterns = [
     path("statistics/", StatisticsView.as_view(), name="statistics"),
     path("statistics/export/csv/", CSVExportView.as_view(), name="statistics_csv_export"),
     path("statistics/export/pdf/", PDFExportView.as_view(), name="statistics_pdf_export"),
-    path("statistics/export/jugendamt/", JugendamtExportView.as_view(), name="statistics_jugendamt_export"),
+    path(
+        "statistics/export/sample-report-1/",
+        SampleReport1ExportView.as_view(),
+        name="statistics_sample_report_1_export",
+    ),
     path("statistics/chart-data/", ChartDataView.as_view(), name="statistics_chart_data"),
     path("statistics/external/", ExternalReportView.as_view(), name="statistics_external_report"),
     # M5 P5 (Refs #1061): Berichts-Plugin-Panel + generischer Export.

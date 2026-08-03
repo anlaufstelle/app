@@ -15,8 +15,8 @@ from core.models import (
     Organization,
     User,
 )
-from core.reporting.backends.jugendamt import CATEGORY_MAP as JUGENDAMT_CATEGORY_MAP
-from tests._reporting_helpers import get_jugendamt_statistics
+from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
+from tests._reporting_helpers import get_sample_report_1_statistics
 
 
 @pytest.fixture
@@ -353,19 +353,19 @@ class TestPDFTopPseudonymsToggle:
 
 
 @pytest.mark.django_db
-class TestJugendamtExport:
-    """Jugendamt-Export: Kategorien-Mapping, ausgeschlossene Typen."""
+class TestSampleReport1Export:
+    """Sachbericht-Export: Kategorien-Mapping, ausgeschlossene Typen."""
 
     def test_category_mapping_excludes_notiz_and_hausverbot(self):
-        assert "note" not in JUGENDAMT_CATEGORY_MAP
-        assert "ban" not in JUGENDAMT_CATEGORY_MAP
+        assert "note" not in SAMPLE_REPORT_1_CATEGORY_MAP
+        assert "ban" not in SAMPLE_REPORT_1_CATEGORY_MAP
 
     def test_category_mapping_includes_services(self):
-        assert JUGENDAMT_CATEGORY_MAP["contact"] == "Kontakte"
-        assert JUGENDAMT_CATEGORY_MAP["crisis"] == "Beratung"
-        assert JUGENDAMT_CATEGORY_MAP["medical"] == "Versorgung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["contact"] == "Kontakte"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["crisis"] == "Beratung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["medical"] == "Versorgung"
 
-    def test_jugendamt_statistics_excludes_notiz(
+    def test_sample_report_1_statistics_excludes_notiz(
         self, facility, admin_user, doc_type_kontakt, doc_type_notiz, sample_client
     ):
         Event.objects.create(
@@ -385,30 +385,32 @@ class TestJugendamtExport:
             created_by=admin_user,
         )
         today = date.today()
-        stats = get_jugendamt_statistics(facility, today - timedelta(days=1), today)
+        stats = get_sample_report_1_statistics(facility, today - timedelta(days=1), today)
         # Notiz should be excluded from total
         assert stats["total"] == 1
         category_names = [name for name, _ in stats["by_category"]]
         assert "Kontakte" in category_names
 
-    def test_jugendamt_pdf_download(self, admin_user, facility, sample_events):
+    def test_sample_report_1_pdf_download(self, admin_user, facility, sample_events):
         client = DjangoClient()
         client.force_login(admin_user)
         today = date.today()
-        response = client.get(f"/statistics/export/jugendamt/?date_from={today - timedelta(days=30)}&date_to={today}")
+        response = client.get(
+            f"/statistics/export/sample-report-1/?date_from={today - timedelta(days=30)}&date_to={today}"
+        )
         assert response.status_code == 200
         assert response["Content-Type"] == "application/pdf"
 
-    def test_jugendamt_creates_audit_log(self, admin_user, facility, sample_events):
+    def test_sample_report_1_creates_audit_log(self, admin_user, facility, sample_events):
         client = DjangoClient()
         client.force_login(admin_user)
         today = date.today()
-        client.get(f"/statistics/export/jugendamt/?date_from={today - timedelta(days=30)}&date_to={today}")
+        client.get(f"/statistics/export/sample-report-1/?date_from={today - timedelta(days=30)}&date_to={today}")
         assert AuditLog.objects.filter(
             facility=facility,
             user=admin_user,
             action=AuditLog.Action.EXPORT,
-            target_type="Jugendamt-PDF",
+            target_type="Sachbericht-PDF",
         ).exists()
 
 
@@ -425,8 +427,8 @@ class _CaptureHTML:
 
 
 @pytest.mark.django_db
-class TestJugendamtPdfKAnonSuppression:
-    """Refs #1278 (T1): Kleinstfallzahlen (< k) muessen im Jugendamt-PDF
+class TestSampleReport1PdfKAnonSuppression:
+    """Refs #1278 (T1): Kleinstfallzahlen (< k) muessen im Sachbericht-PDF
     unterdrueckt werden — bisher gab das am ehesten externe Artefakt
     Roh-Fallzahlen aus, waehrend die Suppression nur im On-Screen-Bericht lief.
     """
@@ -450,7 +452,7 @@ class TestJugendamtPdfKAnonSuppression:
                 created_by=user,
             )
 
-    def test_generate_jugendamt_pdf_routes_figures_through_suppression(self, facility, admin_user, monkeypatch):
+    def test_generate_sample_report_1_pdf_routes_figures_through_suppression(self, facility, admin_user, monkeypatch):
         from core.models import DocumentType
         from core.services.system import export as sys_export
 
@@ -468,7 +470,7 @@ class TestJugendamtPdfKAnonSuppression:
         monkeypatch.setattr(sys_export.weasyprint, "HTML", _CaptureHTML)
 
         today = date.today()
-        out = sys_export.generate_jugendamt_pdf(facility, today - timedelta(days=2), today)
+        out = sys_export.generate_sample_report_1_pdf(facility, today - timedelta(days=2), today)
         assert out == b"%PDF-1.7 fake"
 
         cats = {r["name"]: r for r in captured["stats"]["by_category"]}
@@ -476,7 +478,7 @@ class TestJugendamtPdfKAnonSuppression:
         assert cats["Versorgung"]["suppressed"] is True and cats["Versorgung"]["count"] is None
         assert cats["Kontakte"]["suppressed"] is False and cats["Kontakte"]["count"] == 10
 
-    def test_jugendamt_template_renders_marker_not_raw_count(self):
+    def test_sample_report_1_template_renders_marker_not_raw_count(self):
         from datetime import datetime
 
         from django.template.loader import render_to_string
@@ -494,7 +496,7 @@ class TestJugendamtPdfKAnonSuppression:
             ],
         }
         html = render_to_string(
-            "core/export/jugendamt_pdf.html",
+            "core/export/sample_report_1_pdf.html",
             {
                 "facility_name": "Teststelle",
                 "date_from": date(2025, 8, 1),
@@ -515,7 +517,7 @@ class TestJugendamtPdfKAnonSuppression:
 @pytest.mark.django_db
 class TestReportPdfKAnonSuppression:
     """Security R4: Der Halbjahres-Sachbericht (externes Artefakt fuer
-    Traeger/Foerderer) lieferte rohe Kleinstfallzahlen, waehrend Jugendamt-PDF
+    Traeger/Foerderer) lieferte rohe Kleinstfallzahlen, waehrend Sachbericht-PDF
     (#1278) und On-Screen-Bericht laengst unterdruecken."""
 
     def _mk_events(self, facility, user, doc_name, n):
@@ -543,7 +545,7 @@ class TestReportPdfKAnonSuppression:
         # Zweite Kleinstfallzahl-Zelle: verhindert, dass die sekundaere
         # Suppression (_apply_secondary_suppression, A6.1) bei genau EINER
         # unterdrueckten Zelle zusaetzlich die groesste sichtbare Zelle
-        # (Haeufig) unterdrueckt — vgl. Jugendamt-Test (zwei Kleinstzellen).
+        # (Haeufig) unterdrueckt — vgl. Sachbericht-Test (zwei Kleinstzellen).
         self._mk_events(facility, admin_user, "Selten2", 3)
 
         captured = {}

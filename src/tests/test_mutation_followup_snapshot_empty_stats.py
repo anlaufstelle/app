@@ -1,9 +1,9 @@
 """Mutation-Followup-Tests für ``core.services.snapshot`` — Empty-Defaults.
 
 Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
-enthält ``TestEmptyStats`` und ``TestEmptyJugendamtStats`` — also die
+enthält ``TestEmptyStats`` und ``TestEmptySampleReport1Stats`` — also die
 Felder-für-Felder-Sentinels für ``_empty_stats`` und
-``_empty_jugendamt_stats``.
+``_empty_sample_report_1_stats``.
 
 Constraint: Tests gegen Verify-DB (``POSTGRES_DB=anlaufstelle_verify``).
 """
@@ -11,12 +11,12 @@ Constraint: Tests gegen Verify-DB (``POSTGRES_DB=anlaufstelle_verify``).
 from __future__ import annotations
 
 from core.services.dashboard import (
-    _empty_jugendamt_stats,
+    _empty_sample_report_1_stats,
     _empty_stats,
 )
 
 # ---------------------------------------------------------------------------
-# _empty_stats / _empty_jugendamt_stats — Field-by-Field
+# _empty_stats / _empty_sample_report_1_stats — Field-by-Field
 # ---------------------------------------------------------------------------
 
 
@@ -62,23 +62,23 @@ class TestEmptyStats:
         }
 
 
-class TestEmptyJugendamtStats:
-    """Refs ``_empty_jugendamt_stats`` (Line 198)."""
+class TestEmptySampleReport1Stats:
+    """Refs ``_empty_sample_report_1_stats`` (Line 198)."""
 
     def test_total_zero(self):
-        assert _empty_jugendamt_stats()["total"] == 0
+        assert _empty_sample_report_1_stats()["total"] == 0
 
     def test_unique_clients_zero(self):
-        assert _empty_jugendamt_stats()["unique_clients"] == 0
+        assert _empty_sample_report_1_stats()["unique_clients"] == 0
 
     def test_by_category_empty_list(self):
-        assert _empty_jugendamt_stats()["by_category"] == []
-        assert isinstance(_empty_jugendamt_stats()["by_category"], list)
+        assert _empty_sample_report_1_stats()["by_category"] == []
+        assert isinstance(_empty_sample_report_1_stats()["by_category"], list)
 
     def test_by_age_cluster_empty_list(self):
-        assert _empty_jugendamt_stats()["by_age_cluster"] == []
-        assert isinstance(_empty_jugendamt_stats()["by_age_cluster"], list)
+        assert _empty_sample_report_1_stats()["by_age_cluster"] == []
+        assert isinstance(_empty_sample_report_1_stats()["by_age_cluster"], list)
 
     def test_returns_dict_with_exactly_four_top_level_keys(self):
-        keys = set(_empty_jugendamt_stats().keys())
+        keys = set(_empty_sample_report_1_stats().keys())
         assert keys == {"total", "by_category", "by_age_cluster", "unique_clients"}

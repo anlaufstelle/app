@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.system import get_active_bans
-from tests._reporting_helpers import get_jugendamt_statistics
+from tests._reporting_helpers import get_sample_report_1_statistics
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ class TestRenameSafety:
         assert len(bans) == 1
 
     def test_rename_doctype_export_still_works(self, facility, staff_user, doc_type_contact):
-        """DocumentType.name ändern → Jugendamt-Export funktioniert weiterhin über system_type."""
+        """DocumentType.name ändern → Sachbericht-Export funktioniert weiterhin über system_type."""
         # Kontakt-Event erstellen
         Event.objects.create(
             facility=facility,
@@ -112,7 +112,7 @@ class TestRenameSafety:
 
         # Export mappt weiterhin über system_type
         today = date.today()
-        stats = get_jugendamt_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
+        stats = get_sample_report_1_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
         assert stats["total"] == 1
         assert any(name == "Kontakte" for name, _ in stats["by_category"])
 
@@ -125,7 +125,7 @@ class TestSystemTypeNone:
         assert bans == []
 
     def test_none_system_type_excluded_from_export(self, facility, staff_user):
-        """DocumentType ohne system_type wird vom Jugendamt-Export ausgeschlossen."""
+        """DocumentType ohne system_type wird vom Sachbericht-Export ausgeschlossen."""
         dt_custom = DocumentType.objects.create(
             facility=facility,
             name="Custom",
@@ -142,5 +142,5 @@ class TestSystemTypeNone:
         )
 
         today = date.today()
-        stats = get_jugendamt_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
+        stats = get_sample_report_1_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
         assert stats["total"] == 0

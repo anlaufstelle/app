@@ -23,7 +23,7 @@ from core.services.dashboard import (
     get_statistics_trend,
     validate_statistics_range,
 )
-from core.services.system import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
+from core.services.system import export_events_csv, generate_report_pdf, generate_sample_report_1_pdf
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
 from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
@@ -232,8 +232,8 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
         return response
 
 
-class JugendamtExportView(LeadOrAdminRequiredMixin, View):
-    """Youth welfare office report as PDF download."""
+class SampleReport1ExportView(LeadOrAdminRequiredMixin, View):
+    """Beispiel-Sachbericht als PDF-Download."""
 
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
@@ -249,10 +249,10 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
-        pdf_bytes = generate_jugendamt_pdf(facility, date_from, date_to)
+        pdf_bytes = generate_sample_report_1_pdf(facility, date_from, date_to)
 
         response = safe_download_response(
-            f"jugendamt_{date_from}_{date_to}.pdf",
+            f"sample-report-1_{date_from}_{date_to}.pdf",
             "application/pdf",
             pdf_bytes,
         )
@@ -260,8 +260,8 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
         log_audit_event(
             request,
             AuditLog.Action.EXPORT,
-            target_type="Jugendamt-PDF",
-            detail={"format": "Jugendamt-PDF", "date_from": str(date_from), "date_to": str(date_to)},
+            target_type="Sachbericht-PDF",
+            detail={"format": "Sachbericht-PDF", "date_from": str(date_from), "date_to": str(date_to)},
         )
 
         return response

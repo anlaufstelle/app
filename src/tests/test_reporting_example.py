@@ -29,7 +29,7 @@ pytestmark = pytest.mark.django_db
 def _isolated_registry(monkeypatch):
     """Registry je Test isolieren, echte Backends bleiben verfuegbar.
 
-    Muster aus ``test_reporting_jugendamt.py``/``test_reporting_views.py``:
+    Muster aus ``test_reporting_sample_report_1.py``/``test_reporting_views.py``:
     erst die echte Discovery ausloesen (``@register_backend`` ist ein
     Import-Seiteneffekt, laeuft je Modul nur beim *ersten* Import), dann mit
     einer Kopie isolieren.
@@ -54,9 +54,9 @@ def date_range():
 class TestDiscovery:
     def test_echte_discovery_findet_beide_backends(self):
         """Pflichtfall 1: das ~50-Zeilen-Backend wird automatisch gefunden —
-        neben ``jugendamt`` jetzt auch ``example`` (Sortierung nach Slug).
+        neben ``sample-report-1`` jetzt auch ``example`` (Sortierung nach Slug).
         """
-        assert [b.slug for b in registry.get_backends()] == ["example", "jugendamt"]
+        assert [b.slug for b in registry.get_backends()] == ["example", "sample-report-1"]
 
 
 class TestBackendMetadaten:
@@ -226,7 +226,7 @@ class TestPrepareExport:
         prepared = backend.prepare_export(facility, result)
 
         # Dict-Gleichheit statt Einzelschluessel (Pendant zu
-        # ``test_records_spiegeln_die_suppressierten_zellen`` beim Jugendamt-
+        # ``test_records_spiegeln_die_suppressierten_zellen`` beim Sachbericht-
         # Backend): pinnt zugleich die Rueckprojektion auf die FieldSpec-Keys —
         # das interne ``suppressed``-Flag aus ``_suppress_small`` darf nicht in
         # den Records ueberleben.

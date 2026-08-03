@@ -23,9 +23,9 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture(autouse=True)
 def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren, echte Backends (``jugendamt``) bleiben verfuegbar.
+    """Registry je Test isolieren, echte Backends (``sample-report-1``) bleiben verfuegbar.
 
-    Muster aus ``test_reporting_jugendamt.py``: erst die echte Discovery ausloesen
+    Muster aus ``test_reporting_sample_report_1.py``: erst die echte Discovery ausloesen
     (``@register_backend`` ist ein Import-Seiteneffekt, laeuft je Modul nur beim
     *ersten* Import), dann mit einer Kopie isolieren, damit ad-hoc registrierte
     Test-Backends (Zeilen-Modus, Pflichtfall 8) nicht in andere Tests leaken.
@@ -37,7 +37,7 @@ def _isolated_registry(monkeypatch):
 
 
 def _mapped(doc_type):
-    """Ordnet ``doc_type_contact`` einer Jugendamt-Kategorie zu (Default: kein system_type)."""
+    """Ordnet ``doc_type_contact`` einer Berichtskategorie zu (Default: kein system_type)."""
     doc_type.system_type = DocumentType.SystemType.CONTACT
     doc_type.save()
     return doc_type
@@ -47,11 +47,11 @@ class TestDatasetReportPanelView:
     """Pflichtfaelle 1-3: 200 + Inhalt, Completeness-Warnung, 404/400."""
 
     def test_ok_zeigt_backend_name_und_kategorien_tabelle(self, client, lead_user, doc_type_contact, sample_event):
-        """Pflichtfall 1: aggregate-Modus zeigt die Kategorien-Tabelle (JugendamtBackend)."""
+        """Pflichtfall 1: aggregate-Modus zeigt die Kategorien-Tabelle (SampleReport1Backend)."""
         _mapped(doc_type_contact)
         client.force_login(lead_user)
 
-        response = client.get(reverse("core:statistics_report_panel"), {"backend": "jugendamt"})
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
 
         assert response.status_code == 200
         content = response.content.decode()
@@ -64,10 +64,10 @@ class TestDatasetReportPanelView:
     def test_completeness_warnung_bei_luecken(self, client, lead_user, doc_type_contact, sample_event):
         """Pflichtfall 2: DocType ohne system_type + Event im Zeitraum -> Warnung.
 
-        Harte Assertion (Review I3): der Warnungstext "ohne Jugendamt-Zuordnung"
+        Harte Assertion (Review I3): der Warnungstext "ohne Berichtszuordnung"
         steckt sowohl in der bezifferten als auch in der k-anon-unterdrückten
         Formulierung (``_EXPORT_MESSAGES``/``_SUPPRESSED_MESSAGES`` in
-        ``jugendamt.py``) — die Zusatzprüfung auf das Amber-Badge (CSS-Klasse
+        ``sample_report_1.py``) — die Zusatzprüfung auf das Amber-Badge (CSS-Klasse
         der ``severity == "warning"``-Darstellung) macht die Assertion
         zusätzlich formunabhängig robust, statt sich auf einen "oder"-Fallback
         zu verlassen, der wegen der unbedingten K-Anon-Fußnote immer wahr wäre.
@@ -75,11 +75,11 @@ class TestDatasetReportPanelView:
         # doc_type_contact hat bewusst KEIN system_type (Fixture-Default) -> unmapped.
         client.force_login(lead_user)
 
-        response = client.get(reverse("core:statistics_report_panel"), {"backend": "jugendamt"})
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
 
         assert response.status_code == 200
         content = response.content.decode()
-        assert "ohne Jugendamt-Zuordnung" in content
+        assert "ohne Berichtszuordnung" in content
         assert "bg-amber-100 text-amber-800" in content
 
     def test_completeness_ohne_luecken_zeigt_gruenen_hinweis(self, client, lead_user, doc_type_contact, sample_event):
@@ -105,7 +105,7 @@ class TestDatasetReportPanelView:
             )
         client.force_login(lead_user)
 
-        response = client.get(reverse("core:statistics_report_panel"), {"backend": "jugendamt"})
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
 
         assert response.status_code == 200
         assert "Keine Vollständigkeitsprobleme erkannt" in response.content.decode()
@@ -189,7 +189,7 @@ class TestDatasetReportPanelView:
         client.force_login(lead_user)
 
         # Ein einzelnes Event liegt unter der Default-Schwelle (5) -> suppressiert.
-        response = client.get(reverse("core:statistics_report_panel"), {"backend": "jugendamt"})
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
 
         content = response.content.decode()
         assert "—" in content
@@ -244,7 +244,7 @@ class TestBerichteFormZeitraumDurchreichung:
 
         # Simuliert exakt, was ``hx-include="closest form"`` beim Absenden
         # zusammensammelt (alle Formularfelder + der gewaehlte Select-Wert).
-        query = {**hidden_fields, "backend": "jugendamt"}
+        query = {**hidden_fields, "backend": "sample-report-1"}
         panel = client.get(reverse("core:statistics_report_panel"), query)
         panel_html = panel.content.decode()
 
@@ -274,7 +274,7 @@ class TestDatasetExportView:
         response = client.get(
             reverse("core:statistics_report_export"),
             {
-                "backend": "jugendamt",
+                "backend": "sample-report-1",
                 "format": fmt,
                 "date_from": str(today - timedelta(days=30)),
                 "date_to": str(today),
@@ -283,13 +283,13 @@ class TestDatasetExportView:
 
         assert response.status_code == 200
         assert response["Content-Type"] == content_type
-        assert "jugendamt_" in response["Content-Disposition"]
+        assert "sample-report-1_" in response["Content-Disposition"]
 
     def test_fehlende_daten_400(self, client, admin_user):
         """Pflichtfall 5a."""
         client.force_login(admin_user)
 
-        response = client.get(reverse("core:statistics_report_export"), {"backend": "jugendamt", "format": "csv"})
+        response = client.get(reverse("core:statistics_report_export"), {"backend": "sample-report-1", "format": "csv"})
 
         assert response.status_code == 400
 
@@ -301,7 +301,7 @@ class TestDatasetExportView:
         response = client.get(
             reverse("core:statistics_report_export"),
             {
-                "backend": "jugendamt",
+                "backend": "sample-report-1",
                 "format": "pdf",
                 "date_from": str(today - timedelta(days=30)),
                 "date_to": str(today),
@@ -366,7 +366,7 @@ class TestDatasetExportView:
         client.get(
             reverse("core:statistics_report_export"),
             {
-                "backend": "jugendamt",
+                "backend": "sample-report-1",
                 "format": "json",
                 "date_from": str(date_from),
                 "date_to": str(today),
@@ -379,7 +379,7 @@ class TestDatasetExportView:
             action=AuditLog.Action.EXPORT,
             target_type="DatasetExport",
         )
-        assert entry.detail["backend"] == "jugendamt"
+        assert entry.detail["backend"] == "sample-report-1"
         assert entry.detail["format"] == "json"
         assert entry.detail["date_from"] == str(date_from)
         assert entry.detail["date_to"] == str(today)

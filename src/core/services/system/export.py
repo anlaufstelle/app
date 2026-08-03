@@ -1,4 +1,4 @@
-"""Export services: CSV, PDF, youth welfare office report."""
+"""Export services: CSV, PDF, sample activity report."""
 
 import csv
 import io
@@ -239,7 +239,7 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     markiert.
     """
     # Security R4: Standard-Modus ist das externe Artefakt (Traeger/Foerderer)
-    # — Kleinstfallzahlen unterdruecken wie Jugendamt-PDF/On-Screen-Bericht.
+    # — Kleinstfallzahlen unterdruecken wie Sachbericht-PDF/On-Screen-Bericht.
     # Der Internal-Mode (Lead/Admin, INTERN-Banner, Refs #792) bleibt roh.
     if not internal_mode:
         from core.services.dashboard import suppress_report_stats
@@ -260,19 +260,19 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()
 
 
-def generate_jugendamt_pdf(facility, date_from, date_to):
-    """Generate the youth welfare office report as PDF.
+def generate_sample_report_1_pdf(facility, date_from, date_to):
+    """Generate the sample activity report as PDF.
 
-    Refs #1278 (T1): Das Jugendamt-PDF ist das am ehesten externe Artefakt und
+    Refs #1278 (T1): Das Sachbericht-PDF ist das am ehesten externe Artefakt und
     wird daher durch dieselbe k-Anon-Kleinstfallzahl-Suppression geleitet wie
     der externe On-Screen-Bericht — Zellen < Schwelle werden unterdrueckt.
     """
-    from core.services.dashboard import get_jugendamt_statistics_hybrid, suppress_jugendamt_stats
+    from core.services.dashboard import get_sample_report_1_statistics_hybrid, suppress_sample_report_1_stats
 
-    stats = get_jugendamt_statistics_hybrid(facility, date_from, date_to)
-    stats = suppress_jugendamt_stats(facility, stats)
+    stats = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
+    stats = suppress_sample_report_1_stats(facility, stats)
     html = render_to_string(
-        "core/export/jugendamt_pdf.html",
+        "core/export/sample_report_1_pdf.html",
         {
             "facility_name": resolve_facility_display_name(facility),
             "date_from": date_from,

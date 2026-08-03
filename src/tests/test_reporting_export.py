@@ -2,7 +2,7 @@
 
 Deckt den Format-Dispatch (``export_dataset``) sowie die CSV-/JSON-/XML-
 Renderer ab. Ausschliesslich selbstgebaute Dummy-Backends — die Registry
-und echte Backends (z. B. JugendamtBackend aus P2) sind nicht Teil dieses
+und echte Backends (z. B. SampleReport1Backend aus P2) sind nicht Teil dieses
 Moduls und werden hier bewusst nicht beruehrt.
 """
 
@@ -96,7 +96,7 @@ class _AggregateBackend(DatasetBackend):
 class _PreparingBackend(_RowsBackend):
     """Dummy-Backend mit ``prepare_export``-Override — protokolliert den Aufruf.
 
-    Steht stellvertretend fuer die K-Anon-Suppression des JugendamtBackends:
+    Steht stellvertretend fuer die K-Anon-Suppression des SampleReport1Backends:
     ``export_dataset`` muss den Hook anwenden und **das transformierte**
     Ergebnis rendern (Refs #1278).
     """

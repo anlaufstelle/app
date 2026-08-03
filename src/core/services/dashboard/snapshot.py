@@ -43,7 +43,7 @@ def create_or_update_snapshot(facility, year, month):
     stats = get_statistics(facility, date_from, date_to)
 
     # M5 P3 (Refs #1061): Roh-Aggregate aller Snapshot-Backends aus der Registry
-    # statt eines hart verdrahteten Jugendamt-Aufrufs. Bewusst ``build_dataset``
+    # statt eines hart verdrahteten Sachbericht-Aufrufs. Bewusst ``build_dataset``
     # und NICHT ``prepare_export``: der Snapshot ist der interne Rohbestand, die
     # k-Anon-Suppression gehoert allein in den Export-/Panel-Pfad.
     payloads = {
@@ -88,7 +88,7 @@ def create_or_update_snapshot(facility, year, month):
         defaults={
             "data": stats,
             "backend_data": payloads,
-            "jugendamt_data": payloads.get("jugendamt", {}),
+            "jugendamt_data": payloads.get("sample-report-1", {}),
         },
     )
     logger.info(
@@ -215,8 +215,8 @@ def _merge_stats(stats_list):
     return merged
 
 
-def _empty_jugendamt_stats():
-    """Return an empty Jugendamt statistics dict."""
+def _empty_sample_report_1_stats():
+    """Return an empty sample report statistics dict."""
     return {
         "total": 0,
         "by_category": [],
@@ -225,8 +225,8 @@ def _empty_jugendamt_stats():
     }
 
 
-def _merge_jugendamt_stats(stats_list):
-    """Merge multiple Jugendamt statistics dicts.
+def _merge_sample_report_1_stats(stats_list):
+    """Merge multiple sample report statistics dicts.
 
     Merge logic:
     - ``total`` – sum
@@ -236,9 +236,9 @@ def _merge_jugendamt_stats(stats_list):
     - ``unique_clients`` – sum (approximation)
     """
     if not stats_list:
-        return _empty_jugendamt_stats()
+        return _empty_sample_report_1_stats()
 
-    merged = _empty_jugendamt_stats()
+    merged = _empty_sample_report_1_stats()
     category_map = {}  # name → count
     age_cluster_map = {}  # cluster → {label, count}
 
@@ -331,11 +331,11 @@ def get_statistics_trend(facility, date_from, date_to):
     return result
 
 
-def get_jugendamt_statistics_hybrid(facility, date_from, date_to):
-    """Return Jugendamt statistics for a date range, using snapshots where possible.
+def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
+    """Return sample report statistics for a date range, using snapshots where possible.
 
-    Same hybrid pattern as :func:`get_statistics_hybrid` but for Jugendamt
-    report data.
+    Same hybrid pattern as :func:`get_statistics_hybrid` but for the
+    ``sample-report-1`` backend data.
     """
     segments = _split_into_segments(date_from, date_to)
     segment_stats = []
@@ -353,9 +353,9 @@ def get_jugendamt_statistics_hybrid(facility, date_from, date_to):
                 # ``jugendamt_data`` bleibt Rueckfallebene fuer Snapshots vor der
                 # Backfill-Migration 0122. ``or None`` normalisiert das leere
                 # Dict, damit der Live-Zweig unten wirklich greift.
-                stats = snap.backend_data.get("jugendamt") or snap.jugendamt_data or None
+                stats = snap.backend_data.get("sample-report-1") or snap.jugendamt_data or None
         if stats is None:
-            stats = get_backend("jugendamt").build_dataset(facility, seg_from, seg_to).summary
+            stats = get_backend("sample-report-1").build_dataset(facility, seg_from, seg_to).summary
         segment_stats.append(stats)
 
-    return _merge_jugendamt_stats(segment_stats)
+    return _merge_sample_report_1_stats(segment_stats)

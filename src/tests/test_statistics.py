@@ -612,9 +612,9 @@ class TestStatisticsRangeGuardViews:
         resp = client.get(reverse("core:statistics_pdf_export"), self._huge_range())
         assert resp.status_code == 400
 
-    def test_jugendamt_export_rejects_huge_range(self, client, admin_user):
+    def test_sample_report_1_export_rejects_huge_range(self, client, admin_user):
         client.force_login(admin_user)
-        resp = client.get(reverse("core:statistics_jugendamt_export"), self._huge_range())
+        resp = client.get(reverse("core:statistics_sample_report_1_export"), self._huge_range())
         assert resp.status_code == 400
 
     def test_report_panel_rejects_huge_range(self, client, admin_user):
@@ -624,7 +624,7 @@ class TestStatisticsRangeGuardViews:
         AuthZ-Matrix), deshalb braucht der Aufruf einen gueltigen ``backend``.
         """
         client.force_login(admin_user)
-        resp = client.get(reverse("core:statistics_report_panel"), {**self._huge_range(), "backend": "jugendamt"})
+        resp = client.get(reverse("core:statistics_report_panel"), {**self._huge_range(), "backend": "sample-report-1"})
         assert resp.status_code == 400
 
     def test_report_export_rejects_huge_range(self, client, admin_user):
@@ -633,7 +633,7 @@ class TestStatisticsRangeGuardViews:
         client.force_login(admin_user)
         resp = client.get(
             reverse("core:statistics_report_export"),
-            {**self._huge_range(), "backend": "jugendamt", "format": "csv"},
+            {**self._huge_range(), "backend": "sample-report-1", "format": "csv"},
         )
         assert resp.status_code == 400
 

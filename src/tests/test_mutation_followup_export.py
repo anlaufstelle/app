@@ -12,8 +12,8 @@ Sicht-Grenzen der drei Top-Survivor-Funktionen killen:
   Felder), Visibility-Filter pro Feld (Sensitivity), Masking-Branch
   ``[Eingeschränkt]`` statt Skip, CSV-Escape-Wege (``_sanitize_csv_cell``)
   und Pseudonym-vs-Anonym-vs-Dash-Fallback bei ``event.client``.
-- ``get_jugendamt_statistics`` (30 Survivors; seit M5 P3 der Testhelfer aus
-  ``tests._reporting_helpers`` auf ``JugendamtBackend.build_dataset``):
+- ``get_sample_report_1_statistics`` (30 Survivors; seit M5 P3 der Testhelfer aus
+  ``tests._reporting_helpers`` auf ``SampleReport1Backend.build_dataset``):
   Datumsbereiche-Boundaries
   (``occurred_at__date__gte`` / ``__lte`` an Anfang/Ende), Aggregat-Counts
   pro Kategorie (``Kontakte``/``Beratung``/``Versorgung``/``Vermittlung``),
@@ -45,12 +45,12 @@ from core.models import (
     Event,
     FieldTemplate,
 )
-from core.reporting.backends.jugendamt import CATEGORY_MAP as JUGENDAMT_CATEGORY_MAP
+from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
 from core.services.system import (
     _build_event_row,
     _resolve_field_value,
 )
-from tests._reporting_helpers import get_jugendamt_statistics
+from tests._reporting_helpers import get_sample_report_1_statistics
 
 # ---------------------------------------------------------------------------
 # Helper / Factories
@@ -600,13 +600,13 @@ class TestBuildEventRowVisibility:
 
 
 # ---------------------------------------------------------------------------
-# get_jugendamt_statistics — Boundaries, Kategorien, Age-Cluster, unique_clients
+# get_sample_report_1_statistics — Boundaries, Kategorien, Age-Cluster, unique_clients
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-class TestJugendamtStatisticsCategoryAggregation:
-    """``JUGENDAMT_CATEGORY_MAP`` faltet system_types auf Kategorien.
+class TestSampleReport1StatisticsCategoryAggregation:
+    """``SAMPLE_REPORT_1_CATEGORY_MAP`` faltet system_types auf Kategorien.
 
     Erwartetes Mapping (siehe Source):
     - contact → Kontakte
@@ -639,7 +639,7 @@ class TestJugendamtStatisticsCategoryAggregation:
         self._make_event(facility, client_identified, when, DocumentType.SystemType.NOTE, staff_user)
         self._make_event(facility, client_identified, when, DocumentType.SystemType.BAN, staff_user)
 
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         assert stats["total"] == 1, "Nur CONTACT zaehlt, NOTE+BAN sind im MAP nicht gelistet"
 
     def test_categories_collapse_multiple_system_types_into_one_label(self, facility, client_identified, staff_user):
@@ -649,13 +649,13 @@ class TestJugendamtStatisticsCategoryAggregation:
         self._make_event(facility, client_identified, when, DocumentType.SystemType.MEDICAL, staff_user)
         self._make_event(facility, client_identified, when, DocumentType.SystemType.NEEDLE_EXCHANGE, staff_user)
 
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         cats = dict(stats["by_category"])
         assert cats.get("Versorgung") == 2, "Versorgung MUSS medical+needle_exchange aggregieren"
         assert stats["total"] == 2
 
     def test_each_mapped_category_appears_with_correct_label(self, facility, client_identified, staff_user):
-        """Mutation an JUGENDAMT_CATEGORY_MAP (z.B. ``contact: "Beratung"``)
+        """Mutation an SAMPLE_REPORT_1_CATEGORY_MAP (z.B. ``contact: "Beratung"``)
         würde hier auffallen."""
         today = date.today()
         when = _aware(today, 11)
@@ -670,7 +670,7 @@ class TestJugendamtStatisticsCategoryAggregation:
         ]:
             self._make_event(facility, client_identified, when, st, staff_user)
 
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         cats = dict(stats["by_category"])
         # Kontakte = 1 (nur contact)
         assert cats["Kontakte"] == 1
@@ -685,14 +685,14 @@ class TestJugendamtStatisticsCategoryAggregation:
     def test_empty_period_yields_zero_total_and_empty_categories(self, facility, client_identified, staff_user):
         """Mutation ``total = 0`` → ``total = 1`` würde diesen Test failen."""
         today = date.today()
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         assert stats["total"] == 0
         assert stats["by_category"] == []
         assert stats["unique_clients"] == 0
 
 
 @pytest.mark.django_db
-class TestJugendamtStatisticsDateBoundaries:
+class TestSampleReport1StatisticsDateBoundaries:
     """``occurred_at__date__gte=date_from`` / ``__lte=date_to``.
 
     Mutmut mutiert beide einzeln (``__gte`` → ``__gt``, ``__lte`` → ``__lt``).
@@ -718,31 +718,31 @@ class TestJugendamtStatisticsDateBoundaries:
     def test_event_exactly_at_date_from_included(self, facility, client_identified, staff_user):
         target = date(2026, 4, 15)
         self._contact_event(facility, client_identified, _aware(target, 0, 0), staff_user)
-        stats = get_jugendamt_statistics(facility, target, target + timedelta(days=5))
+        stats = get_sample_report_1_statistics(facility, target, target + timedelta(days=5))
         assert stats["total"] == 1, "Event am Start-Tag muss enthalten sein (__gte)"
 
     def test_event_exactly_at_date_to_included(self, facility, client_identified, staff_user):
         target = date(2026, 4, 15)
         end = date(2026, 4, 20)
         self._contact_event(facility, client_identified, _aware(end, 23, 59), staff_user)
-        stats = get_jugendamt_statistics(facility, target, end)
+        stats = get_sample_report_1_statistics(facility, target, end)
         assert stats["total"] == 1, "Event am End-Tag muss enthalten sein (__lte)"
 
     def test_event_one_day_before_from_excluded(self, facility, client_identified, staff_user):
         target = date(2026, 4, 15)
         self._contact_event(facility, client_identified, _aware(target - timedelta(days=1), 12), staff_user)
-        stats = get_jugendamt_statistics(facility, target, target + timedelta(days=5))
+        stats = get_sample_report_1_statistics(facility, target, target + timedelta(days=5))
         assert stats["total"] == 0, "Event einen Tag vor date_from darf NICHT enthalten sein"
 
     def test_event_one_day_after_to_excluded(self, facility, client_identified, staff_user):
         end = date(2026, 4, 20)
         self._contact_event(facility, client_identified, _aware(end + timedelta(days=1), 12), staff_user)
-        stats = get_jugendamt_statistics(facility, end - timedelta(days=5), end)
+        stats = get_sample_report_1_statistics(facility, end - timedelta(days=5), end)
         assert stats["total"] == 0, "Event einen Tag nach date_to darf NICHT enthalten sein"
 
 
 @pytest.mark.django_db
-class TestJugendamtStatisticsAgeClusters:
+class TestSampleReport1StatisticsAgeClusters:
     """``by_age_cluster`` listet pro Cluster Anzahl + i18n-Label.
 
     Branches:
@@ -764,7 +764,7 @@ class TestJugendamtStatisticsAgeClusters:
             is_anonymous=True,
             created_by=staff_user,
         )
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         # Total zählt anonyme Events (count('id') ohne Client-Filter), aber
         # by_age_cluster muss leer sein.
         assert stats["by_age_cluster"] == []
@@ -798,7 +798,7 @@ class TestJugendamtStatisticsAgeClusters:
                     created_by=staff_user,
                 )
 
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         rows = {row["cluster"]: row for row in stats["by_age_cluster"]}
         assert rows["u18"]["count"] == 2
         assert rows["18_26"]["count"] == 1
@@ -838,7 +838,7 @@ class TestJugendamtStatisticsAgeClusters:
                     created_by=staff_user,
                 )
 
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         counts = [row["count"] for row in stats["by_age_cluster"]]
         assert counts == sorted(counts, reverse=True), (
             f"by_age_cluster muss DESC nach count sortiert sein, bekam {counts}"
@@ -847,7 +847,7 @@ class TestJugendamtStatisticsAgeClusters:
 
 
 @pytest.mark.django_db
-class TestJugendamtStatisticsUniqueClients:
+class TestSampleReport1StatisticsUniqueClients:
     """``unique_clients`` zählt distinct, anonyme Events fallen raus."""
 
     def test_unique_clients_deduplicates_repeat_visits(self, facility, client_identified, staff_user):
@@ -867,7 +867,7 @@ class TestJugendamtStatisticsUniqueClients:
                 data_json={},
                 created_by=staff_user,
             )
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         assert stats["unique_clients"] == 1
 
     def test_unique_clients_excludes_anonymous_events(self, facility, client_identified, staff_user):
@@ -895,7 +895,7 @@ class TestJugendamtStatisticsUniqueClients:
             is_anonymous=True,
             created_by=staff_user,
         )
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         assert stats["unique_clients"] == 1
 
     def test_unique_clients_counts_distinct_clients(self, facility, staff_user):
@@ -922,25 +922,25 @@ class TestJugendamtStatisticsUniqueClients:
                 data_json={},
                 created_by=staff_user,
             )
-        stats = get_jugendamt_statistics(facility, today, today)
+        stats = get_sample_report_1_statistics(facility, today, today)
         assert stats["unique_clients"] == 2
 
 
 # ---------------------------------------------------------------------------
-# JUGENDAMT_CATEGORY_MAP — Konstanten-Sanity (verteidigt Map-Edits)
+# SAMPLE_REPORT_1_CATEGORY_MAP — Konstanten-Sanity (verteidigt Map-Edits)
 # ---------------------------------------------------------------------------
 
 
-class TestJugendamtCategoryMapConstant:
+class TestSampleReport1CategoryMapConstant:
     """Verteidigt die statische Kategorien-Map.
 
-    Diese Map ist Teil des Reporting-Vertrags mit dem Jugendamt — eine
+    Diese Map ist Teil des Reporting-Vertrags des Beispiel-Sachberichts — eine
     versehentliche Umverteilung (z.B. ``crisis`` → ``Versorgung``) wäre
     fachlich falsch und würde silently rausgehen.
     """
 
     def test_map_includes_expected_keys(self):
-        assert set(JUGENDAMT_CATEGORY_MAP.keys()) == {
+        assert set(SAMPLE_REPORT_1_CATEGORY_MAP.keys()) == {
             "contact",
             "crisis",
             "medical",
@@ -951,14 +951,14 @@ class TestJugendamtCategoryMapConstant:
         }
 
     def test_map_excludes_note_and_ban(self):
-        assert "note" not in JUGENDAMT_CATEGORY_MAP
-        assert "ban" not in JUGENDAMT_CATEGORY_MAP
+        assert "note" not in SAMPLE_REPORT_1_CATEGORY_MAP
+        assert "ban" not in SAMPLE_REPORT_1_CATEGORY_MAP
 
     def test_categories_are_german_labels(self):
-        assert JUGENDAMT_CATEGORY_MAP["contact"] == "Kontakte"
-        assert JUGENDAMT_CATEGORY_MAP["crisis"] == "Beratung"
-        assert JUGENDAMT_CATEGORY_MAP["counseling"] == "Beratung"
-        assert JUGENDAMT_CATEGORY_MAP["medical"] == "Versorgung"
-        assert JUGENDAMT_CATEGORY_MAP["needle_exchange"] == "Versorgung"
-        assert JUGENDAMT_CATEGORY_MAP["accompaniment"] == "Vermittlung"
-        assert JUGENDAMT_CATEGORY_MAP["referral"] == "Vermittlung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["contact"] == "Kontakte"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["crisis"] == "Beratung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["counseling"] == "Beratung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["medical"] == "Versorgung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["needle_exchange"] == "Versorgung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["accompaniment"] == "Vermittlung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["referral"] == "Vermittlung"

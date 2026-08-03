@@ -1,19 +1,19 @@
-"""Jugendamt-Sachbericht als ``DatasetBackend`` (M5 P2, Refs #1061).
+"""Beispiel-Sachbericht als ``DatasetBackend`` (M5 P2, Refs #1061).
 
 Migration der bisher hart kodierten Statistik aus
 ``core/services/system/export.py`` in das Plugin-System. Die Aggregation ist
 **unveraendert** uebernommen (Verhaltensparitaet): ``summary`` traegt exakt das
 bisherige Dict-Format — inklusive ``by_category`` als Liste von Tupeln, ueber
-die ``core/export/jugendamt_pdf.html`` iteriert und die
-``_merge_jugendamt_stats`` nach dem JSON-Roundtrip (Snapshots) wieder
+die ``core/export/sample_report_1_pdf.html`` iteriert und die
+``_merge_sample_report_1_stats`` nach dem JSON-Roundtrip (Snapshots) wieder
 normalisiert.
 
-Neu ist allein :meth:`JugendamtBackend.validate_completeness`: die Checks
+Neu ist allein :meth:`SampleReport1Backend.validate_completeness`: die Checks
 brauchen die Rohdaten, die nicht im Datensatz landen (nicht zugeordnete
 Dokumenttypen, Ereignisse ohne Personenbezug).
 
-:meth:`JugendamtBackend.prepare_export` legt die K-Anon-Suppression des
-PDF-Pfads (:func:`~core.services.dashboard.external_report.suppress_jugendamt_stats`,
+:meth:`SampleReport1Backend.prepare_export` legt die K-Anon-Suppression des
+PDF-Pfads (:func:`~core.services.dashboard.external_report.suppress_sample_report_1_stats`,
 Refs #1278) auf Export und Panel-Vorschau — ``build_dataset`` selbst bleibt
 roh, damit die Snapshot-Payload unveraendert bleibt.
 """
@@ -32,9 +32,9 @@ from core.reporting.registry import register_backend
 # Modul-Ebenen-Import ist zyklusfrei: ``core.services.dashboard`` verweist
 # nirgends zur Importzeit auf ``core.reporting`` — der einzige Rueckverweis
 # (``core.services.system.export``) ist ein lokaler Import in der Funktion.
-from core.services.dashboard.external_report import _get_threshold, suppress_jugendamt_stats
+from core.services.dashboard.external_report import _get_threshold, suppress_sample_report_1_stats
 
-# Mapping: DocumentType.system_type -> Jugendamt-Kategorie (fehlend = ausgeschlossen).
+# Mapping: DocumentType.system_type -> Berichtskategorie (fehlend = ausgeschlossen).
 # ``ban``/``note``/NULL fehlen bewusst — sie gehoeren nicht in den Bericht.
 # Zweitschlüssel ``DocumentType.slug`` (seit M2 vorhanden) folgt als eigenes
 # Folge-Issue — Integrationspunkt.
@@ -58,7 +58,7 @@ _AGE_LABELS = {
 }
 
 
-# Ereignisse, deren Dokumenttyp keiner Jugendamt-Kategorie zugeordnet ist —
+# Ereignisse, deren Dokumenttyp keiner Berichtskategorie zugeordnet ist —
 # ``system_type`` NULL/leer eingeschlossen. Das ``isnull``-ODER ist bewusst
 # redundant: Django rendert ``~Q(...__in=[...])`` auf einer NULL-baren Spalte
 # als ``NOT (x IN (...) AND x IS NOT NULL)`` und faengt NULL-Zeilen damit
@@ -72,7 +72,7 @@ _UNMAPPED_Q = Q(document_type__system_type__isnull=True) | ~Q(document_type__sys
 # externen Konsumenten) — im Export waere die Bezugsgroesse dagegen der Hebel
 # fuer die komplementaere Rueckrechnung (siehe ``prepare_export``).
 _EXPORT_MESSAGES = {
-    "unmapped_system_types": "{count} Ereignisse ohne Jugendamt-Zuordnung im Zeitraum",
+    "unmapped_system_types": "{count} Ereignisse ohne Berichtszuordnung im Zeitraum",
     "events_without_client": (
         "{count} Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten"
     ),
@@ -89,7 +89,7 @@ _EXPORT_MESSAGES = {
 # Waeren beide Faelle unterscheidbar, verriete der Wortlaut selbst, ob die
 # Luecke > 0 ist — und damit genau das, was unterdrueckt werden soll.
 _SUPPRESSED_MESSAGES = {
-    "unmapped_system_types": "Angabe zu Ereignissen ohne Jugendamt-Zuordnung im Zeitraum unterdrückt (k-Anonymität)",
+    "unmapped_system_types": "Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-Anonymität)",
     "events_without_client": (
         "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-Anonymität) "
         "— nicht in Altersgruppen/Personenzahl enthalten"
@@ -189,7 +189,7 @@ def _close_identity_leak(summary: dict, issues: list[CompletenessIssue]) -> list
     Sind drei Terme bekannt und der vierte verborgen, ist der vierte exakt
     bestimmt — die Suppression liefe leer. Dann faellt ein weiterer Term, und
     zwar **immer** ueber die Meldungen: ``total`` und die Altersgruppen-Zellen
-    gehoeren dem Report-Koerper (``suppress_jugendamt_stats``), an dem hier
+    gehoeren dem Report-Koerper (``suppress_sample_report_1_stats``), an dem hier
     nicht nachgebessert wird.
 
     Bevorzugt faellt eine bezifferte Meldung (sichtbarer Informationsverlust,
@@ -223,12 +223,13 @@ def _base_queryset(facility, date_from, date_to):
     )
 
 
-@register_backend("jugendamt")
-class JugendamtBackend(DatasetBackend):
+@register_backend("sample-report-1")
+class SampleReport1Backend(DatasetBackend):
     """Kontakte/Beratung/Versorgung/Vermittlung je Zeitraum, plus Altersgruppen."""
 
-    # Refs #1279: das sichtbare Label wurde bewusst umbenannt; interne
-    # Bezeichner (Slug, Modul, Kategorien-Map) bleiben "jugendamt".
+    # Refs #1279 (sichtbares Label) und #1739 (interne Bezeichner): Modul, Slug
+    # und Anzeigename sind bewusst traegerneutral — der Bericht ist eine frei
+    # anpassbare Beispielvorlage, kein Formular einer bestimmten Behoerde.
     name = _("Beispiel-Sachbericht")
     snapshot_enabled = True
 
@@ -240,7 +241,7 @@ class JugendamtBackend(DatasetBackend):
         ]
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        """Aggregiert Ereignisse zu Jugendamt-Kategorien und Altersgruppen."""
+        """Aggregiert Ereignisse zu Berichtskategorien und Altersgruppen."""
         base_qs = _base_queryset(facility, date_from, date_to)
 
         # Aggregation ueber DocumentType.system_type
@@ -250,7 +251,7 @@ class JugendamtBackend(DatasetBackend):
             .order_by("document_type__system_type")
         )
 
-        # Konsolidierung auf die Jugendamt-Kategorien
+        # Konsolidierung auf die Berichtskategorien
         category_counts: OrderedDict[str, int] = OrderedDict()
         total = 0
         for row in by_dt:
@@ -317,13 +318,13 @@ class JugendamtBackend(DatasetBackend):
         )
         issues: list[CompletenessIssue] = []
 
-        # (a) Dokumenttypen ohne Jugendamt-Zuordnung (inkl. system_type NULL/leer).
+        # (a) Dokumenttypen ohne Berichtszuordnung (inkl. system_type NULL/leer).
         if counts["unmapped_events"]:
             issues.append(
                 CompletenessIssue(
                     "unmapped_system_types",
                     f"{counts['unmapped_events']} Ereignisse in {counts['unmapped_types']} "
-                    "Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+                    "Dokumenttypen ohne Berichtszuordnung im Zeitraum",
                     "warning",
                     count=counts["unmapped_events"],
                 )
@@ -348,7 +349,7 @@ class JugendamtBackend(DatasetBackend):
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278, T1).
 
-        Dieselbe Maschinerie wie fuer das PDF (``suppress_jugendamt_stats``):
+        Dieselbe Maschinerie wie fuer das PDF (``suppress_sample_report_1_stats``):
         Zellen < Schwelle werden ``count=None``/``suppressed=True`` (inkl.
         sekundaerer Suppression gegen Randsummen-Rueckrechnung),
         ``unique_clients`` und die Randsumme ``total`` < Schwelle werden
@@ -371,7 +372,7 @@ class JugendamtBackend(DatasetBackend):
         """
         threshold = _get_threshold(facility)
 
-        summary = suppress_jugendamt_stats(facility, result.summary)
+        summary = suppress_sample_report_1_stats(facility, result.summary)
         # Transparenz analog ``build_external_report``-Metadaten: der Empfaenger
         # soll erkennen, ab welcher Fallzahl unterdrueckt wurde.
         summary["k_anonymity_threshold"] = threshold

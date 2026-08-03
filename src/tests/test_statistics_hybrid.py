@@ -8,10 +8,10 @@ from django.utils import timezone
 
 from core.models import DocumentType, Event, StatisticsSnapshot
 from core.services.dashboard import (
-    _merge_jugendamt_stats,
+    _merge_sample_report_1_stats,
     _merge_stats,
     _split_into_segments,
-    get_jugendamt_statistics_hybrid,
+    get_sample_report_1_statistics_hybrid,
     get_statistics_hybrid,
 )
 
@@ -52,8 +52,8 @@ def _snapshot_data(total=5, anonym=1, identifiziert=3, qualifiziert=1, unique=3)
     }
 
 
-def _jugendamt_snapshot_data(total=5, unique=3):
-    """Build a Jugendamt snapshot data dict."""
+def _sample_report_1_snapshot_data(total=5, unique=3):
+    """Build a sample report snapshot data dict."""
     return {
         "total": total,
         "by_category": [["Kontakte", total]],
@@ -230,11 +230,11 @@ class TestMergeStats:
         assert clusters["27_plus"] == 1
 
 
-class TestMergeJugendamtStats:
-    """Tests for _merge_jugendamt_stats()."""
+class TestMergeSampleReport1Stats:
+    """Tests for _merge_sample_report_1_stats()."""
 
     def test_empty_list(self):
-        result = _merge_jugendamt_stats([])
+        result = _merge_sample_report_1_stats([])
         assert result["total"] == 0
         assert result["unique_clients"] == 0
         assert result["by_category"] == []
@@ -253,7 +253,7 @@ class TestMergeJugendamtStats:
             "by_age_cluster": [],
             "unique_clients": 3,
         }
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         assert result["total"] == 7
         assert result["unique_clients"] == 5
         cats = dict(result["by_category"])
@@ -277,7 +277,7 @@ class TestMergeJugendamtStats:
             ],
             "unique_clients": 2,
         }
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         clusters = {e["cluster"]: e["count"] for e in result["by_age_cluster"]}
         assert clusters["18_26"] == 3
         assert clusters["u18"] == 2
@@ -303,7 +303,7 @@ class TestHybridUsesSnapshotForPastMonth:
             year=2025,
             month=1,
             data=_snapshot_data(total=10, anonym=2, identifiziert=5, qualifiziert=3, unique=8),
-            jugendamt_data=_jugendamt_snapshot_data(total=10, unique=8),
+            jugendamt_data=_sample_report_1_snapshot_data(total=10, unique=8),
         )
 
         # Soft-delete the event so live query would return 0
@@ -335,7 +335,7 @@ class TestHybridLiveForCurrentMonth:
             year=2025,
             month=3,
             data=_snapshot_data(total=99),
-            jugendamt_data=_jugendamt_snapshot_data(total=99),
+            jugendamt_data=_sample_report_1_snapshot_data(total=99),
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
@@ -357,7 +357,7 @@ class TestHybridMergesSnapshotAndLive:
             year=2025,
             month=1,
             data=_snapshot_data(total=5, anonym=1, identifiziert=3, qualifiziert=1, unique=3),
-            jugendamt_data=_jugendamt_snapshot_data(total=5, unique=3),
+            jugendamt_data=_sample_report_1_snapshot_data(total=5, unique=3),
         )
 
         # Live event in March (current month)
@@ -391,20 +391,20 @@ class TestHybridFallbackWithoutSnapshot:
 
 
 @pytest.mark.django_db
-class TestJugendamtHybrid:
-    """Jugendamt hybrid works analogously to regular hybrid."""
+class TestSampleReport1Hybrid:
+    """sample report hybrid works analogously to regular hybrid."""
 
-    def test_jugendamt_hybrid_uses_snapshot(self, facility, client_identified, doc_type_contact, staff_user):
-        # Snapshot with Jugendamt data for January
+    def test_sample_report_1_hybrid_uses_snapshot(self, facility, client_identified, doc_type_contact, staff_user):
+        # Snapshot with sample report data for January
         StatisticsSnapshot.objects.create(
             facility=facility,
             year=2025,
             month=1,
             data=_snapshot_data(total=5),
-            jugendamt_data=_jugendamt_snapshot_data(total=10, unique=6),
+            jugendamt_data=_sample_report_1_snapshot_data(total=10, unique=6),
         )
 
-        # Live event in March (needs doc_type with system_type=contact for Jugendamt)
+        # Live event in March (needs doc_type with system_type=contact for the sample report)
         doc_type_contact.system_type = DocumentType.SystemType.CONTACT
         doc_type_contact.save()
         mar_dt = datetime(2025, 3, 8, 10, 0)
@@ -412,7 +412,7 @@ class TestJugendamtHybrid:
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
-            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 3, 31))
+            result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 3, 31))
 
         # Jan from snapshot (10) + Feb live (0) + Mar live (1) = 11
         assert result["total"] == 11
@@ -420,7 +420,7 @@ class TestJugendamtHybrid:
 
 
 @pytest.mark.django_db
-class TestJugendamtHybridReadsBackendData:
+class TestSampleReport1HybridReadsBackendData:
     """M5 P3 (Refs #1061): Der Snapshot-Read bevorzugt ``backend_data``.
 
     ``jugendamt_data`` bleibt als Rueckfallebene fuer Alt-Snapshots erhalten,
@@ -428,20 +428,20 @@ class TestJugendamtHybridReadsBackendData:
     """
 
     def test_backend_data_wins_over_jugendamt_data(self, facility):
-        """Divergierende Werte: ``backend_data["jugendamt"]`` gewinnt."""
+        """Divergierende Werte: ``backend_data["sample-report-1"]`` gewinnt."""
         StatisticsSnapshot.objects.create(
             facility=facility,
             year=2025,
             month=1,
             data=_snapshot_data(total=5),
-            backend_data={"jugendamt": _jugendamt_snapshot_data(total=10, unique=6)},
+            backend_data={"sample-report-1": _sample_report_1_snapshot_data(total=10, unique=6)},
             # Absichtlich abweichend — darf NICHT gelesen werden.
-            jugendamt_data=_jugendamt_snapshot_data(total=99, unique=77),
+            jugendamt_data=_sample_report_1_snapshot_data(total=99, unique=77),
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
-            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
+            result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
         assert result["total"] == 10
         assert result["unique_clients"] == 6
@@ -454,12 +454,12 @@ class TestJugendamtHybridReadsBackendData:
             month=1,
             data=_snapshot_data(total=5),
             backend_data={},
-            jugendamt_data=_jugendamt_snapshot_data(total=42, unique=17),
+            jugendamt_data=_sample_report_1_snapshot_data(total=42, unique=17),
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
-            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
+            result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
         assert result["total"] == 42
         assert result["unique_clients"] == 17
@@ -481,7 +481,7 @@ class TestJugendamtHybridReadsBackendData:
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
-            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
+            result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
         assert result["total"] == 1
 
@@ -513,7 +513,7 @@ class TestPartialEdgeMonthsUseLive:
             year=2025,
             month=1,
             data=_snapshot_data(total=99),
-            jugendamt_data=_jugendamt_snapshot_data(total=99),
+            jugendamt_data=_sample_report_1_snapshot_data(total=99),
         )
 
         # Query partial January (10th–25th) — snapshot should NOT be used

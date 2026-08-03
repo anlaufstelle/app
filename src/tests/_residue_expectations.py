@@ -185,7 +185,7 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii(
         "core_statisticssnapshot",
         "jugendamt_data",
-        reason="Aggregierte Jugendamt-Zaehlungen (Kategorie-Summen), keine Einzelpersonen.",
+        reason="Aggregierte Sachbericht-Zaehlungen (Kategorie-Summen), keine Einzelpersonen.",
     ),
     # M5 P3 (Refs #1061): backend-unabhaengige Map ``slug -> Roh-Aggregat``.
     # Inhaltlich dieselbe Klasse wie ``jugendamt_data`` — die Backends liefern

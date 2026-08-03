@@ -5,7 +5,7 @@ via ``getattr(facility.settings, "facility_full_name", facility.name)`` — the
 ``getattr`` default only fires when the *attribute is missing*, never for a
 present-but-empty ``CharField(blank=True)`` value. A configured facility whose
 ``facility_full_name`` was left blank rendered a blank name in the report /
-youth-welfare-office PDF. The JSON/DSGVO builders already did it right with
+Sachbericht-PDF. The JSON/DSGVO builders already did it right with
 ``... or facility.name``.
 
 All builders now share ``resolve_facility_display_name(facility)``.
@@ -56,7 +56,7 @@ class TestExportBuildersUseFacilityName:
             export.generate_report_pdf(facility, "2026-01-01", "2026-06-30", stats={}, internal_mode=True)
         assert self._captured_context(m)["facility_name"] == facility.name
 
-    def test_jugendamt_pdf_uses_facility_name_when_full_name_empty(self, facility):
+    def test_sample_report_1_pdf_uses_facility_name_when_full_name_empty(self, facility):
         Settings.objects.create(facility=facility, facility_full_name="")
         from core.services.system import export
 
@@ -64,10 +64,10 @@ class TestExportBuildersUseFacilityName:
             mock.patch.object(export, "render_to_string", return_value="<html></html>") as m,
             mock.patch.object(export, "weasyprint"),
             mock.patch(
-                "core.services.dashboard.get_jugendamt_statistics_hybrid",
+                "core.services.dashboard.get_sample_report_1_statistics_hybrid",
                 return_value={"total": 0, "by_category": [], "by_age_cluster": [], "unique_clients": 0},
             ),
-            mock.patch("core.services.dashboard.suppress_jugendamt_stats", side_effect=lambda f, s: s),
+            mock.patch("core.services.dashboard.suppress_sample_report_1_stats", side_effect=lambda f, s: s),
         ):
-            export.generate_jugendamt_pdf(facility, "2026-01-01", "2026-06-30")
+            export.generate_sample_report_1_pdf(facility, "2026-01-01", "2026-06-30")
         assert self._captured_context(m)["facility_name"] == facility.name

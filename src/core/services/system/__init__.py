@@ -12,7 +12,7 @@ Module:
 - :mod:`.field_types` — Form-Field-Type-Registry mit Spec-Dataclass.
 - :mod:`.offline`     — Offline-Bundle-Build fuer Streetwork-Stage-2.
 - :mod:`.bans`        — Hausverbot-Status pro Client.
-- :mod:`.export`      — Generischer CSV/PDF-Export (Events, Jugendamt-Reports).
+- :mod:`.export`      — Generischer CSV/PDF-Export (Events, Sachbericht-Reports).
 """
 
 from core.services.system._db_admin import (
@@ -30,8 +30,8 @@ from core.services.system.export import (
     _sanitize_csv_cell,
     _stream_row,
     export_events_csv,
-    generate_jugendamt_pdf,
     generate_report_pdf,
+    generate_sample_report_1_pdf,
 )
 from core.services.system.field_types import (
     FIELD_TYPE_REGISTRY,
@@ -95,7 +95,7 @@ __all__ = [
     "build_facility_offline_bundle",
     "bypass_replication_triggers",
     "export_events_csv",
-    "generate_jugendamt_pdf",
+    "generate_sample_report_1_pdf",
     "generate_report_pdf",
     "get_active_bans",
     "get_form_field_cls_for_file",

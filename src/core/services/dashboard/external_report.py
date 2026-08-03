@@ -114,10 +114,10 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     }
 
 
-def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
-    """K-Anon-Kleinstfallzahl-Suppression fuer das Jugendamt-PDF (Refs #1278, T1).
+def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
+    """K-Anon-Kleinstfallzahl-Suppression fuer das Sachbericht-PDF (Refs #1278, T1).
 
-    Das Jugendamt-PDF ist das am ehesten extern zirkulierende Artefakt und muss
+    Das Sachbericht-PDF ist das am ehesten extern zirkulierende Artefakt und muss
     derselben Small-Cell-Suppression unterliegen wie :func:`build_external_report`
     — bisher lief die Suppression nur im On-Screen-Bericht, das PDF gab Roh-
     Kleinstfallzahlen aus.
@@ -132,7 +132,7 @@ def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
       selbst eine Kleinstfallzahl und wird ``None``.
 
     ``by_category`` kommt als ``(name, count)``-Tupel-Liste (aus
-    ``JugendamtBackend.build_dataset(...).summary``) und wird auf Dicts mit ``name``/``count``/
+    ``SampleReport1Backend.build_dataset(...).summary``) und wird auf Dicts mit ``name``/``count``/
     ``suppressed`` normalisiert, damit das Template den Unterdrueckungs-Marker
     rendern kann. Gibt ein neues Dict zurueck; die Eingabe wird nicht mutiert.
     """
@@ -159,7 +159,7 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
 
     Security R4: Das Sachbericht-PDF (Standard-Modus = externes Artefakt fuer
     Traeger/Foerderer, Refs #792) lieferte rohe Kleinstfallzahlen, waehrend
-    Jugendamt-PDF (#1278) und On-Screen-Bericht laengst unterdruecken.
+    Sachbericht-PDF (#1278) und On-Screen-Bericht laengst unterdruecken.
     Gleiche Semantik wie ``build_external_report``: Zellen < Schwelle werden
     ``count=None``/``suppressed=True`` (inkl. sekundaerer Suppression),
     ``by_contact_stage`` ueber die Dict-Variante, ``unique_clients`` < k -> None.

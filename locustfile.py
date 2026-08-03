@@ -81,7 +81,7 @@ class StaffUser(HttpUser):
 
 
 class HeavyExportUser(HttpUser):
-    """Lower-frequency user that hits the slow paths (PDF export, Jugendamt)."""
+    """Lower-frequency user that hits the slow paths (PDF export, Sachbericht)."""
 
     wait_time = between(10, 30)
 

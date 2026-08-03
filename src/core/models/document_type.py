@@ -201,7 +201,7 @@ class DocumentType(models.Model):
         blank=True,
         verbose_name=_("Systemtyp"),
         help_text=_(
-            "Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach Erstellung unveränderbar."
+            "Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. Nach Erstellung unveränderbar."
         ),
     )
     entity_type = models.CharField(

@@ -11,7 +11,7 @@ Fix: Alle drei ``write_pdf``-Aufrufstellen uebergeben einen restriktiven
 inline ``data:``-URIs an den Default-Fetcher durchreicht:
 
 - ``core.services.system.export.generate_report_pdf``
-- ``core.services.system.export.generate_jugendamt_pdf``
+- ``core.services.system.export.generate_sample_report_1_pdf``
 - ``core.services.client.export.export_client_data_pdf``
 
 Da die legitimen Templates keine externen Ressourcen referenzieren, wird der
@@ -117,14 +117,14 @@ class TestPdfCallSitesPassRestrictedFetcher:
         assert out == b"%PDF-1.7 fake"
         assert _CapturingHTML.last_kwargs.get("url_fetcher") is sys_export.restricted_url_fetcher
 
-    def test_generate_jugendamt_pdf_passes_fetcher(self, facility, monkeypatch):
+    def test_generate_sample_report_1_pdf_passes_fetcher(self, facility, monkeypatch):
         from core.services.system import export as sys_export
 
         monkeypatch.setattr(sys_export, "render_to_string", lambda *a, **k: "<html></html>")
         monkeypatch.setattr(sys_export.weasyprint, "HTML", _CapturingHTML)
 
         today = date.today()
-        sys_export.generate_jugendamt_pdf(facility, today - timedelta(days=30), today)
+        sys_export.generate_sample_report_1_pdf(facility, today - timedelta(days=30), today)
 
         assert _CapturingHTML.last_kwargs.get("url_fetcher") is sys_export.restricted_url_fetcher
 

@@ -1,7 +1,7 @@
-"""Tests fuer das Jugendamt-``DatasetBackend`` (M5 P2, Refs #1061).
+"""Tests fuer das Beispiel-Sachbericht-``DatasetBackend`` (M5 P2, Refs #1061).
 
 Die Erwartungswerte sind **hart kodiert** und nicht gegen die alte
-``get_jugendamt_statistics`` gerechnet: Der Shim in
+``get_sample_report_1_statistics`` gerechnet: Der Shim in
 ``core/services/system/export.py`` wurde mit der ``backend_data``-Umstellung
 (P3) entfernt — die Verhaltensparitaet haelt ohne ihn.
 """
@@ -19,11 +19,11 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, Organization, User
 from core.reporting import registry
-from core.reporting.backends.jugendamt import (
+from core.reporting.backends.sample_report_1 import (
     _IDENTITY_CODES,
     _ISSUE_SEVERITIES,
     CATEGORY_MAP,
-    JugendamtBackend,
+    SampleReport1Backend,
     _hide_term,
     _prepare_issue,
 )
@@ -136,7 +136,7 @@ def _isolated_registry(monkeypatch):
 
 @pytest.fixture
 def backend():
-    return registry.get_backend("jugendamt")
+    return registry.get_backend("sample-report-1")
 
 
 @pytest.fixture
@@ -416,14 +416,14 @@ def identitaet_b_daten(facility, make_doc_type, make_client, make_event):
 
 
 class TestBackendMetadaten:
-    def test_ist_unter_slug_jugendamt_registriert(self, backend):
-        assert isinstance(backend, JugendamtBackend)
+    def test_ist_unter_slug_sample_report_1_registriert(self, backend):
+        assert isinstance(backend, SampleReport1Backend)
         assert isinstance(backend, DatasetBackend)
-        assert backend.slug == "jugendamt"
+        assert backend.slug == "sample-report-1"
 
     def test_anzeigename_ist_beispiel_sachbericht(self, backend):
         # Refs #1279: sichtbares Label bewusst umbenannt — interne Bezeichner
-        # (Slug, Modul, Map) bleiben "jugendamt".
+        # (Slug, Modul, Map) bleiben "sample-report-1".
         assert str(backend.name) == "Beispiel-Sachbericht"
 
     def test_snapshot_enabled(self, backend):
@@ -458,7 +458,7 @@ class TestBuildDataset:
         assert result.summary == {
             "total": 11,
             # Reihenfolge folgt dem system_type-Sort der Aggregation;
-            # Tupel (nicht Dicts) — jugendamt_pdf.html iteriert darueber.
+            # Tupel (nicht Dicts) — sample_report_1_pdf.html iteriert darueber.
             "by_category": [
                 ("Vermittlung", 2),
                 ("Kontakte", 3),
@@ -589,7 +589,7 @@ class TestValidateCompleteness:
         assert issues == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "3 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+                "3 Ereignisse in 2 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=3,
             )
@@ -609,7 +609,7 @@ class TestValidateCompleteness:
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "1 Ereignisse in 1 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+                "1 Ereignisse in 1 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=1,
             )
@@ -662,7 +662,7 @@ class TestValidateCompleteness:
         assert issues == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "2 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+                "2 Ereignisse in 2 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=2,
             ),
@@ -784,7 +784,7 @@ class TestPrepareExport:
         assert result.summary["total"] == 8
 
     def test_summary_key_satz_ist_eingefroren(self, backend, parity_daten):
-        """Fail-open-Guard (Review I1): ``suppress_jugendamt_stats`` reicht
+        """Fail-open-Guard (Review I1): ``suppress_sample_report_1_stats`` reicht
         unbekannte Keys via ``{**stats, …}`` **roh** durch. Ein neuer
         Summary-Key wuerde also ungefiltert im Export landen — dieser Test
         bricht, bis die Suppression ihn explizit mitdenkt.
@@ -828,7 +828,7 @@ class TestPrepareExport:
     def test_export_meldung_unmapped_nennt_nur_die_eigene_zahl(self, backend, facility):
         issue = CompletenessIssue(
             "unmapped_system_types",
-            "7 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+            "7 Ereignisse in 2 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
             "warning",
             count=7,
         )
@@ -843,7 +843,7 @@ class TestPrepareExport:
         assert backend.prepare_export(facility, result).completeness == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "7 Ereignisse ohne Jugendamt-Zuordnung im Zeitraum",
+                "7 Ereignisse ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=7,
             )
@@ -923,7 +923,7 @@ class TestPrepareExport:
         assert self._prepared(backend, kleine_daten).completeness == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "1 Ereignisse ohne Jugendamt-Zuordnung im Zeitraum",
+                "1 Ereignisse ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=1,
             ),
@@ -951,7 +951,7 @@ class TestPrepareExport:
 
 
 class TestExportDatasetIntegration:
-    """``export_dataset`` + echtes JugendamtBackend: der Kleinst-Datensatz darf
+    """``export_dataset`` + echtes SampleReport1Backend: der Kleinst-Datensatz darf
     in keinem Format eine Rohzahl zeigen (Refs #1278).
     """
 
@@ -1088,7 +1088,7 @@ class TestVierTermIdentitaet:
     (fehlende Meldung = 0) — bestimmt die Identitaet den vierten exakt, auch
     wenn er gerade unterdrueckt wurde. Der Export muss deshalb einen weiteren
     Term verbergen, und zwar ueber die Meldungszahlen: ``total`` und die
-    Altersgruppen-Zellen gehoeren dem Report-Koerper (``suppress_jugendamt_stats``).
+    Altersgruppen-Zellen gehoeren dem Report-Koerper (``suppress_sample_report_1_stats``).
     """
 
     def _payload(self, backend, facility):
@@ -1217,9 +1217,9 @@ class TestDiscovery:
         ``example`` (Referenz-Plugin) zu den real registrierten Backends — die
         Discovery-Assertion pinnt jetzt beide.
         """
-        monkeypatch.delitem(sys.modules, "core.reporting.backends.jugendamt", raising=False)
+        monkeypatch.delitem(sys.modules, "core.reporting.backends.sample_report_1", raising=False)
         monkeypatch.delitem(sys.modules, "core.reporting.backends.example", raising=False)
         monkeypatch.setattr(registry, "_REGISTRY", {})
         monkeypatch.setattr(registry, "_discovered", False)
 
-        assert [b.slug for b in registry.get_backends()] == ["example", "jugendamt"]
+        assert [b.slug for b in registry.get_backends()] == ["example", "sample-report-1"]

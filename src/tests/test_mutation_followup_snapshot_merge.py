@@ -1,7 +1,7 @@
 """Mutation-Followup-Tests für ``core.services.snapshot`` — Merge & Hybrid.
 
 Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
-enthält ``TestMergeStatsPerField``, ``TestMergeJugendamtStatsPerField``
+enthält ``TestMergeStatsPerField``, ``TestMergeSampleReport1StatsPerField``
 und ``TestGetStatisticsHybridCutoff`` — also die Feld-für-Feld-Aggregation
 und die Cutoff-Logik ``snapshot vs. live`` im hybriden Statistik-Pfad.
 
@@ -19,9 +19,9 @@ from core.models import (
     StatisticsSnapshot,
 )
 from core.services.dashboard import (
-    _empty_jugendamt_stats,
+    _empty_sample_report_1_stats,
     _empty_stats,
-    _merge_jugendamt_stats,
+    _merge_sample_report_1_stats,
     _merge_stats,
     get_statistics_hybrid,
 )
@@ -210,12 +210,12 @@ class TestMergeStatsPerField:
 
 
 # ---------------------------------------------------------------------------
-# _merge_jugendamt_stats — Tupel/List-Normalisierung + Aggregation
+# _merge_sample_report_1_stats — Tupel/List-Normalisierung + Aggregation
 # ---------------------------------------------------------------------------
 
 
-class TestMergeJugendamtStatsPerField:
-    """Refs ``_merge_jugendamt_stats`` (Line 208).
+class TestMergeSampleReport1StatsPerField:
+    """Refs ``_merge_sample_report_1_stats`` (Line 208).
 
     Adressierte Mutationen:
     - ``total += stats.get("total", 0)``  → ``-=``.
@@ -225,47 +225,47 @@ class TestMergeJugendamtStatsPerField:
     - List-Comprehension ``[(name, count) ...]`` würde Tupel/List-Form mutieren.
     """
 
-    def test_empty_list_returns_empty_jugendamt_stats(self):
-        result = _merge_jugendamt_stats([])
-        assert result == _empty_jugendamt_stats()
+    def test_empty_list_returns_empty_sample_report_1_stats(self):
+        result = _merge_sample_report_1_stats([])
+        assert result == _empty_sample_report_1_stats()
 
     def test_total_summed(self):
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["total"] = 3
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["total"] = 4
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         assert result["total"] == 7
 
     def test_total_asymmetric_inputs(self):
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["total"] = 2
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["total"] = 5
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         assert result["total"] == 7, "2+5=7, nicht -3, nicht 5, nicht 2"
 
     def test_unique_clients_summed(self):
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["unique_clients"] = 4
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["unique_clients"] = 6
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         assert result["unique_clients"] == 10
 
     def test_by_category_tuple_inputs(self):
         """Tupel-Inputs: ``("Kontakte", 5)``."""
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_category"] = [("Kontakte", 5)]
-        result = _merge_jugendamt_stats([s1])
+        result = _merge_sample_report_1_stats([s1])
         # Output ist immer list[tuple]
         assert result["by_category"] == [("Kontakte", 5)]
 
     def test_by_category_list_inputs(self):
         """List-Inputs (so kommen sie aus JSON-Snapshots zurück)."""
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_category"] = [["Beratung", 3]]
-        result = _merge_jugendamt_stats([s1])
+        result = _merge_sample_report_1_stats([s1])
         # Output ist tuple — Mutation ``[0], [1]`` → ``[1], [0]`` würde
         # ``(3, "Beratung")`` liefern.
         assert result["by_category"] == [("Beratung", 3)]
@@ -276,51 +276,51 @@ class TestMergeJugendamtStatsPerField:
         Mutation ``category_map.get(name, 0) + count`` → ``- count`` würde
         2 - 3 = -1 liefern statt 5.
         """
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_category"] = [("Kontakte", 2)]
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["by_category"] = [("Kontakte", 3)]
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         cats = dict(result["by_category"])
         assert cats["Kontakte"] == 5
 
     def test_by_category_distinct_names_preserved(self):
         """Verschiedene Kategorien bleiben separat."""
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_category"] = [("Kontakte", 2), ("Beratung", 1)]
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["by_category"] = [("Vermittlung", 4)]
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         cats = dict(result["by_category"])
         assert cats == {"Kontakte": 2, "Beratung": 1, "Vermittlung": 4}
 
     def test_by_category_tuple_and_list_mixed_normalize_to_tuple(self):
         """Tuple + List mixed input → beide werden im Output zu tuple."""
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_category"] = [("X", 1)]
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["by_category"] = [["X", 2]]
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         # X-Summe 3, als tuple
         assert ("X", 3) in result["by_category"]
 
     def test_age_cluster_merged(self):
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_age_cluster"] = [{"cluster": "18_26", "label": "18–26", "count": 2}]
-        s2 = _empty_jugendamt_stats()
+        s2 = _empty_sample_report_1_stats()
         s2["by_age_cluster"] = [{"cluster": "18_26", "label": "18–26", "count": 4}]
-        result = _merge_jugendamt_stats([s1, s2])
+        result = _merge_sample_report_1_stats([s1, s2])
         assert len(result["by_age_cluster"]) == 1
         assert result["by_age_cluster"][0]["count"] == 6
 
     def test_age_cluster_sorted_desc(self):
-        s1 = _empty_jugendamt_stats()
+        s1 = _empty_sample_report_1_stats()
         s1["by_age_cluster"] = [
             {"cluster": "a", "label": "A", "count": 1},
             {"cluster": "b", "label": "B", "count": 10},
             {"cluster": "c", "label": "C", "count": 5},
         ]
-        result = _merge_jugendamt_stats([s1])
+        result = _merge_sample_report_1_stats([s1])
         counts = [e["count"] for e in result["by_age_cluster"]]
         assert counts == [10, 5, 1]
 

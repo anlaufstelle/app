@@ -2,15 +2,15 @@
 
 Refs Matrix AUD-SEC-EXPORT-02 (Master #922).
 
-Externe Berichte gehen an Traeger, Foerdergeber oder Jugendamt und
+Externe Berichte gehen an Traeger, Foerdergeber oder Behoerden und
 duerfen keine Re-Identifizierungs-Hinweise enthalten. Konkret:
 
 - :func:`generate_report_pdf` mit ``internal_mode=False`` rendert die
   ``Top 5 Personen``-Tabelle gemaess Template-Branch nicht (siehe
   ``core/export/report_pdf.html`` Zeile 105f. — gated auf
   ``{% if internal_mode and stats.top_clients %}``). Refs #792 (C-24).
-- ``get_jugendamt_statistics`` (seit M5 P3 der Testhelfer aus
-  ``tests._reporting_helpers``, der auf ``JugendamtBackend.build_dataset``
+- ``get_sample_report_1_statistics`` (seit M5 P3 der Testhelfer aus
+  ``tests._reporting_helpers``, der auf ``SampleReport1Backend.build_dataset``
   zeigt) aggregiert ueber DocumentType-Kategorien und Altersgruppen, ohne
   Pseudonyme zurueckzugeben — der Output enthaelt keine ``pseudonym``-Felder.
 
@@ -21,7 +21,7 @@ Die Tests verifizieren beide Pfade:
    ``django.template.loader.render_to_string`` — robuster als
    PDF-Bytes nach WeasyPrint zu durchsuchen (Font-Subsetting verschluckt
    Plain-Text-Strings).
-2. Die Jugendamt-Aggregat-Funktion gibt strukturell keine Pseudonyme
+2. Die Sachbericht-Aggregat-Funktion gibt strukturell keine Pseudonyme
    zurueck (Output-Schema-Check).
 
 Hinweis: ``get_statistics`` (interne Statistik fuer Lead/Admin)
@@ -40,7 +40,7 @@ from django.utils import timezone
 
 from core.models import Client, Event
 from core.services.dashboard import get_statistics
-from tests._reporting_helpers import get_jugendamt_statistics
+from tests._reporting_helpers import get_sample_report_1_statistics
 
 # Eindeutige Pseudonyme — wenn sie irgendwo im HTML auftauchen, ist das
 # kein Zufall (kein Substring-Overlap mit Boilerplate).
@@ -147,16 +147,16 @@ class TestExportExternalNoPseudonyms:
         )
         assert "Top 5 Personen" in html
 
-    def test_jugendamt_aggregate_has_no_pseudonym_keys(self, populated_facility):
-        """``get_jugendamt_statistics`` liefert nur Aggregate ueber
+    def test_sample_report_1_aggregate_has_no_pseudonym_keys(self, populated_facility):
+        """``get_sample_report_1_statistics`` liefert nur Aggregate ueber
         DocumentType-Kategorien und Altersgruppen — keine Pseudonyme,
-        keine Klient-PKs. Damit ist der Jugendamt-Bericht von Haus aus
+        keine Klient-PKs. Damit ist der Beispiel-Sachbericht von Haus aus
         re-identifizierungs-frei.
         """
         today = timezone.localdate()
         date_from = today - timedelta(days=7)
 
-        stats = get_jugendamt_statistics(populated_facility, date_from, today)
+        stats = get_sample_report_1_statistics(populated_facility, date_from, today)
 
         # Top-Level-Keys: nur Aggregate, keine Klient-Referenzen.
         assert set(stats.keys()) == {"total", "by_category", "by_age_cluster", "unique_clients"}

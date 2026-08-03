@@ -528,7 +528,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
     color = _str_value(data, "color", path, errors)
     sort_order = _int_value(data, "sort_order", path, errors)
 
-    # ``system_type`` steuert Bann-Logik/Krisen-Highlight/Jugendamt-Export —
+    # ``system_type`` steuert Bann-Logik/Krisen-Highlight/Sachbericht-Export —
     # alles Ereignis-Semantik. An Person-/Fall-Typen wäre er bedeutungslos.
     if system_type is not None and entity_type != DocumentType.EntityType.EVENT.value:
         errors.append(

@@ -62,7 +62,7 @@ def clear_sudo(request) -> None:
 #   * destruktive installationsweite Toggles (Wartungsmodus, Konto-Unlock).
 # NICHT AUF
 #   * routinemaessige Fallarbeit,
-#   * aggregierte/k-anon Daten (ADR-023, Statistik-/Jugendamt-Exporte),
+#   * aggregierte/k-anon Daten (ADR-023, Statistik-/Sachbericht-Exporte),
 #   * oeffentliche Vorlagen (DSGVO-Doku-Paket, #1252),
 #   * Aktionen mit eigenem Step-up (altes Passwort, frischer OTP,
 #     Vier-Augen-Loeschung #1053, sudo-gegatete Admin-Site).

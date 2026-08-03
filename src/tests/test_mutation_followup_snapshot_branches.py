@@ -215,8 +215,8 @@ class TestCreateOrUpdateSnapshotBranches:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert "top_clients" not in snap.data, "top_clients darf nicht in Snapshot landen (PII-Risiko)"
 
-    def test_jugendamt_data_persisted_separately(self, facility, staff_user, client_identified):
-        """``defaults={..., "jugendamt_data": payloads.get("jugendamt", {})}`` — separater Feldlauf.
+    def test_sample_report_1_data_persisted_separately(self, facility, staff_user, client_identified):
+        """``defaults={..., "jugendamt_data": payloads.get("sample-report-1", {})}`` — separater Feldlauf.
 
         Seit M5 P3 (Refs #1061) speist sich das Feld aus der ``backend_data``-Map
         (Dual-Write), ``defaults`` traegt drei Keys. Mutation des Werts → ``{}``

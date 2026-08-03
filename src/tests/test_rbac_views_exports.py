@@ -1,4 +1,4 @@
-"""RBAC-Matrix-Tests, TestStatistics-, CSV-, PDF-, Jugendamt- und DSGVO-Exports.
+"""RBAC-Matrix-Tests, TestStatistics-, CSV-, PDF-, Sachbericht- und DSGVO-Exports.
 
 Refs #929 — gesplittet aus test_rbac_matrix.py.
 Refs #867: SUPER_ADMIN ist installations-weite Top-Rolle (Persona Jonas);
@@ -83,8 +83,8 @@ class TestPDFExportViewRBAC:
 
 
 @pytest.mark.django_db
-class TestJugendamtExportViewRBAC:
-    """JugendamtExportView — GET, LeadOrAdminRequiredMixin."""
+class TestSampleReport1ExportViewRBAC:
+    """SampleReport1ExportView — GET, LeadOrAdminRequiredMixin."""
 
     @pytest.mark.parametrize(
         "user_fixture,allowed",
@@ -96,10 +96,10 @@ class TestJugendamtExportViewRBAC:
             ("super_admin_user", False),
         ],
     )
-    def test_jugendamt_export(self, client, user_fixture, allowed, request):
+    def test_sample_report_1_export(self, client, user_fixture, allowed, request):
         _login(client, user_fixture, request)
         today = timezone.localdate()
-        url = reverse("core:statistics_jugendamt_export")
+        url = reverse("core:statistics_sample_report_1_export")
         response = client.get(url, {"date_from": str(today), "date_to": str(today)})
         if allowed:
             assert response.status_code == 200

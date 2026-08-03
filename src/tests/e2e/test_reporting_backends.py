@@ -80,9 +80,9 @@ class TestReportSectionVisibility:
         # nutzersichtbare Flaeche — ein neu registriertes Backend soll hier
         # sichtbar nachgezogen werden statt still aufzutauchen. Wer ein
         # Backend ergaenzt, aktualisiert diese Zeile mit.
-        assert values == ["", "example", "jugendamt"], f"Unerwartete Backend-Auswahl: {values}"
+        assert values == ["", "example", "sample-report-1"], f"Unerwartete Backend-Auswahl: {values}"
 
-        expect(select.locator("option[value='jugendamt']")).to_have_text("Beispiel-Sachbericht")
+        expect(select.locator("option[value='sample-report-1']")).to_have_text("Beispiel-Sachbericht")
         expect(select.locator("option[value='example']")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
 
     def test_lead_sees_report_section(self, lead_page, base_url):
@@ -91,29 +91,29 @@ class TestReportSectionVisibility:
         select = _open_statistics(page, base_url)
         expect(select).to_be_visible()
 
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
         expect(panel.locator("h3")).to_have_text("Beispiel-Sachbericht")
 
     def test_lead_can_download_report(self, lead_page, base_url):
         """Lead darf den Export ziehen (Server erzwingt LEAD_PLUS auf der Export-View)."""
         page = lead_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
 
         with page.expect_download() as download_info:
             panel.locator("a:has-text('CSV-Export')").click()
-        assert download_info.value.suggested_filename.startswith("jugendamt_")
+        assert download_info.value.suggested_filename.startswith("sample-report-1_")
 
 
 class TestReportPanelPreview:
     """HTMX-Vorschau: Panel-Inhalt je Backend."""
 
     @pytest.mark.smoke
-    def test_jugendamt_panel_renders_preview(self, authenticated_page, base_url):
+    def test_sample_report_1_panel_renders_preview(self, authenticated_page, base_url):
         """Auswahl "Beispiel-Sachbericht" → Panel mit Titel, Zeitraum und Vorschau-Tabelle."""
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
 
         expect(panel.locator("h3")).to_have_text("Beispiel-Sachbericht")
         expect(panel.locator("p").first).to_contain_text("Zeitraum")
@@ -128,7 +128,7 @@ class TestReportPanelPreview:
         """Die K-Anon-Fussnote steht am Panel — die Vorschau ist export-paritaetisch."""
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
 
         expect(panel).to_contain_text("Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt")
 
@@ -143,7 +143,7 @@ class TestReportPanelPreview:
         """
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
 
         badges = panel.locator("span", has_text=re.compile(r"^(Hinweis|Info)$")).count()
         clean_box = panel.get_by_text("Keine Vollständigkeitsprobleme erkannt").count()
@@ -164,7 +164,7 @@ class TestReportPanelPreview:
         """Zweite Auswahl ersetzt das Panel vollstaendig (kein Rest des ersten Backends)."""
         page = authenticated_page
         _open_statistics(page, base_url)
-        _select_backend(page, "jugendamt")
+        _select_backend(page, "sample-report-1")
         panel = _select_backend(page, "example")
 
         expect(panel.locator("h3")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
@@ -178,17 +178,17 @@ class TestReportDownloads:
         ("link_text", "suffix"),
         [("CSV-Export", ".csv"), ("JSON-Export", ".json"), ("XML-Export", ".xml")],
     )
-    def test_jugendamt_download_per_format(self, authenticated_page, base_url, link_text, suffix):
-        """Jeder Format-Link liefert eine Datei ``jugendamt_<von>_<bis>.<ext>``."""
+    def test_sample_report_1_download_per_format(self, authenticated_page, base_url, link_text, suffix):
+        """Jeder Format-Link liefert eine Datei ``sample-report-1_<von>_<bis>.<ext>``."""
         page = authenticated_page
         _open_statistics(page, base_url)
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
 
         with page.expect_download() as download_info:
             panel.locator(f"a:has-text('{link_text}')").click()
         filename = download_info.value.suggested_filename
 
-        assert filename.startswith("jugendamt_"), filename
+        assert filename.startswith("sample-report-1_"), filename
         assert filename.endswith(suffix), filename
 
     def test_example_csv_download(self, authenticated_page, base_url):
@@ -224,7 +224,7 @@ class TestReportPeriodPassthrough:
         expect(date_from_input).to_have_attribute("value", re.compile(r"^\d{4}-01-01$"), timeout=10000)
         year_start = date_from_input.get_attribute("value")
 
-        panel = _select_backend(page, "jugendamt")
+        panel = _select_backend(page, "sample-report-1")
 
         expect(panel.locator("p").first).to_contain_text("1. Januar")
         for link_text in ("CSV-Export", "JSON-Export", "XML-Export"):
@@ -249,7 +249,7 @@ class TestReportPanelConsoleHygiene:
         errors = track_console_errors(page)
 
         _open_statistics(page, base_url)
-        _select_backend(page, "jugendamt")
+        _select_backend(page, "sample-report-1")
         _select_backend(page, "example")
 
         assert errors == [], f"Konsolen-Fehler in der Berichte-Sektion: {errors}"

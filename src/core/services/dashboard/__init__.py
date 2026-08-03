@@ -17,8 +17,8 @@ Module:
 from core.services.dashboard.activity import log_activity
 from core.services.dashboard.external_report import (
     build_external_report,
-    suppress_jugendamt_stats,
     suppress_report_stats,
+    suppress_sample_report_1_stats,
 )
 from core.services.dashboard.focus_box import build_focus_box
 from core.services.dashboard.main import (
@@ -39,14 +39,14 @@ from core.services.dashboard.search import (
     search_similar_clients,
 )
 from core.services.dashboard.snapshot import (
-    _empty_jugendamt_stats,
+    _empty_sample_report_1_stats,
     _empty_stats,
-    _merge_jugendamt_stats,
+    _merge_sample_report_1_stats,
     _merge_stats,
     _split_into_segments,
     create_or_update_snapshot,
     ensure_snapshots_for_months,
-    get_jugendamt_statistics_hybrid,
+    get_sample_report_1_statistics_hybrid,
     get_snapshot,
     get_statistics_hybrid,
     get_statistics_trend,
@@ -71,10 +71,10 @@ __all__ = [
     "PeriodState",
     "STATISTICS_MAX_CUSTOM_RANGE_DAYS",
     "STATISTICS_MV_NAME",
-    "_empty_jugendamt_stats",
+    "_empty_sample_report_1_stats",
     "_empty_stats",
     "_flat_view_enabled",
-    "_merge_jugendamt_stats",
+    "_merge_sample_report_1_stats",
     "_merge_stats",
     "_parse_year",
     "_query_statistics_mv",
@@ -87,7 +87,7 @@ __all__ = [
     "facility_admin_dashboard_context",
     "filter_prefilled_data",
     "get_event_counts_by_month",
-    "get_jugendamt_statistics_hybrid",
+    "get_sample_report_1_statistics_hybrid",
     "get_snapshot",
     "get_statistics",
     "get_statistics_hybrid",
@@ -103,7 +103,7 @@ __all__ = [
     "search_similar_clients",
     "staff_dashboard_context",
     "super_admin_dashboard_context",
-    "suppress_jugendamt_stats",
+    "suppress_sample_report_1_stats",
     "suppress_report_stats",
     "validate_statistics_range",
 ]

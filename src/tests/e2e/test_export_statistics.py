@@ -1,4 +1,4 @@
-"""E2E-Tests: Statistik-Export (CSV/PDF/Jugendamt) und Zugriffskontrolle."""
+"""E2E-Tests: Statistik-Export (CSV/PDF/Sachbericht) und Zugriffskontrolle."""
 
 import pytest
 
@@ -43,22 +43,22 @@ class TestPDFExportE2E:
         assert download.suggested_filename.endswith(".pdf")
 
 
-class TestJugendamtExportE2E:
-    """Jugendamt-Export → Download."""
+class TestSampleReport1ExportE2E:
+    """Sachbericht-Export → Download."""
 
-    def test_jugendamt_export_button_visible(self, authenticated_page, base_url):
+    def test_sample_report_1_export_button_visible(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
         assert page.locator("a:has-text('Beispiel-Sachbericht')").is_visible()
 
-    def test_jugendamt_download(self, authenticated_page, base_url):
+    def test_sample_report_1_download(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_download() as download_info:
             page.locator("a:has-text('Beispiel-Sachbericht')").click()
         download = download_info.value
-        assert download.suggested_filename.startswith("jugendamt_")
+        assert download.suggested_filename.startswith("sample-report-1_")
 
 
 class TestStatisticsAccessControl:

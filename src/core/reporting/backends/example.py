@@ -13,8 +13,8 @@ Backends: ``summary["total"]`` ist die Summe aller Zeilen-``count``s
 stehen, waere eine unterdrueckte Zelle exakt als Differenz zu den sichtbaren
 Zeilen rueckrechenbar (A6.1, Refs #1024/#1016). Ein ``rows``-Backend mit einer
 einzigen Kennzahl je Zeile hat dagegen KEINE Vier-Term-Identitaet wie
-``JugendamtBackend`` (mehrere zusammenhaengende Kennzahlen/Meldungen) — wer so
-etwas aggregiert, orientiert sich an ``JugendamtBackend.prepare_export`` statt
+``SampleReport1Backend`` (mehrere zusammenhaengende Kennzahlen/Meldungen) — wer so
+etwas aggregiert, orientiert sich an ``SampleReport1Backend.prepare_export`` statt
 an dieser Vorlage.
 """
 
@@ -81,7 +81,7 @@ class ExampleBackend(DatasetBackend):
         """K-Anon-Lehrbeispiel (Refs #1278): Zeilen-Suppression inkl. A6.1-Schutz.
 
         Nutzt ``_suppress_small`` — dieselbe Primaer-/Sekundaer-Suppression wie
-        ``JugendamtBackend``/``build_external_report`` (A6.1, Refs #1024/#1016):
+        ``SampleReport1Backend``/``build_external_report`` (A6.1, Refs #1024/#1016):
         eine Zelle < Schwelle wird ``count=None``; bleibt danach genau EINE
         Zelle unterdrueckt, faellt zusaetzlich die naechstkleinere sichtbare
         Zelle (``_apply_secondary_suppression``) — sonst waere sie aus den
@@ -95,7 +95,7 @@ class ExampleBackend(DatasetBackend):
         Konservativ fuers Lehrbeispiel: faellt eine Zelle, faellt auch ``total``.
 
         ``records`` wird auf die deklarierten FieldSpec-Keys zurueckprojiziert
-        (wie ``JugendamtBackend.prepare_export``) — das interne
+        (wie ``SampleReport1Backend.prepare_export``) — das interne
         ``suppressed``-Flag aus ``_suppress_small`` ist keine eigene Spalte und
         wuerde sonst ungefiltert in CSV/JSON/XML landen.
         """

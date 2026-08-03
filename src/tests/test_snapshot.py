@@ -139,11 +139,11 @@ class TestEnsureSnapshotsForMonths:
 
 
 @pytest.mark.django_db
-class TestJugendamtDataStored:
-    """Jugendamt-Daten werden korrekt im Snapshot gespeichert."""
+class TestSampleReport1DataStored:
+    """Sachbericht-Daten werden korrekt im Snapshot gespeichert."""
 
-    def test_jugendamt_data_stored(self, facility, staff_user, client_identified):
-        # DocumentType mit system_type fuer Jugendamt-Mapping
+    def test_sample_report_1_data_stored(self, facility, staff_user, client_identified):
+        # DocumentType mit system_type fuer Sachbericht-Mapping
         dt_contact = DocumentType.objects.create(
             facility=facility,
             name="Kontaktaufnahme",
@@ -176,7 +176,7 @@ class TestBackendDataDualWrite:
     denselben Payload tragen.
     """
 
-    def _snapshot_with_jugendamt_event(self, facility, staff_user, client_identified):
+    def _snapshot_with_sample_report_1_event(self, facility, staff_user, client_identified):
         dt_contact = DocumentType.objects.create(
             facility=facility,
             name="Kontaktaufnahme",
@@ -191,19 +191,19 @@ class TestBackendDataDualWrite:
         return StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
 
     def test_backend_data_matches_jugendamt_data(self, facility, staff_user, client_identified):
-        snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)
+        snap = self._snapshot_with_sample_report_1_event(facility, staff_user, client_identified)
 
-        assert "jugendamt" in snap.backend_data
+        assert "sample-report-1" in snap.backend_data
         # Dual-Write: identischer Payload in beiden Feldern (Werte aus der DB,
         # also nach dem JSON-Roundtrip verglichen).
-        assert snap.backend_data["jugendamt"] == snap.jugendamt_data
-        assert snap.backend_data["jugendamt"]["total"] == 2
+        assert snap.backend_data["sample-report-1"] == snap.jugendamt_data
+        assert snap.backend_data["sample-report-1"]["total"] == 2
 
     def test_backend_data_is_json_roundtripped(self, facility, staff_user, client_identified):
         """Lazy-Uebersetzungen (Altersgruppen-Labels) landen als echte Strings."""
-        snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)
+        snap = self._snapshot_with_sample_report_1_event(facility, staff_user, client_identified)
 
-        labels = [row["label"] for row in snap.backend_data["jugendamt"]["by_age_cluster"]]
+        labels = [row["label"] for row in snap.backend_data["sample-report-1"]["by_age_cluster"]]
         assert labels, "by_age_cluster darf im Snapshot nicht leer sein."
         assert all(type(label) is str for label in labels)
 
@@ -211,7 +211,7 @@ class TestBackendDataDualWrite:
         """Die Map deckt genau die Backends mit ``snapshot_enabled`` ab.
 
         Zwei Dummy-Backends in einer isolierten Registry-Kopie (Muster
-        ``test_reporting_jugendamt._isolated_registry``) halten den Filter fest —
+        ``test_reporting_sample_report_1._isolated_registry``) halten den Filter fest —
         mit nur einem echten Backend waere er sonst nicht beobachtbar.
         """
         registry._discover()
@@ -221,9 +221,9 @@ class TestBackendDataDualWrite:
         monkeypatch.setattr(registry, "_REGISTRY", isolated_registry)
         monkeypatch.setattr(registry, "_discovered", True)
 
-        snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)
+        snap = self._snapshot_with_sample_report_1_event(facility, staff_user, client_identified)
 
-        assert set(snap.backend_data) == {"jugendamt", "mit_snapshot"}
+        assert set(snap.backend_data) == {"sample-report-1", "mit_snapshot"}
         assert snap.backend_data["mit_snapshot"] == {"wert": 1}
 
 
@@ -240,10 +240,10 @@ class TestSnapshotEnabledAllowlist:
     bewusst erweitern — und dabei die Aggregatreinheit pruefen.
     """
 
-    def test_nur_jugendamt_ist_snapshot_faehig(self):
+    def test_nur_sample_report_1_ist_snapshot_faehig(self):
         snapshot_faehig = {backend.slug for backend in registry.get_backends() if backend.snapshot_enabled}
 
-        assert snapshot_faehig == {"jugendamt"}
+        assert snapshot_faehig == {"sample-report-1"}
 
 
 @pytest.mark.django_db
