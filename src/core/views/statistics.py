@@ -356,7 +356,11 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             backend = get_backend(slug)
         except KeyError:
             raise Http404(_("Unbekanntes Berichts-Backend.")) from None
-        if backend.is_available(facility) is False:
+        # Truthiness (nicht ``is False``): dasselbe Praedikat wie der
+        # Dropdown-Filter in ``registry.get_available_backends`` — sonst wuerde
+        # ein falsy Nicht-``False``-Rueckgabewert (z. B. ``None`` aus einem
+        # nullable BooleanField) das Backend nur verstecken, nicht sperren.
+        if not backend.is_available(facility):
             raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
 
         today = timezone.localdate()
@@ -414,7 +418,8 @@ class DatasetExportView(LeadOrAdminRequiredMixin, View):
             backend = get_backend(slug)
         except KeyError:
             raise Http404(_("Unbekanntes Berichts-Backend.")) from None
-        if backend.is_available(facility) is False:
+        # Truthiness wie im Panel/in der Registry — siehe DatasetReportPanelView.
+        if not backend.is_available(facility):
             raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
 
         fmt = request.GET.get("format", "")

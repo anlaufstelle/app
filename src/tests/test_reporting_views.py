@@ -383,6 +383,67 @@ class TestDatasetExportView:
         assert entry.detail["date_to"] == str(today)
 
 
+class TestIsAvailableFalsyGate:
+    """Sichtbarkeits- und Zugriffs-Gate teilen dieselbe Falsy-Semantik.
+
+    ``get_available_backends`` filtert per Truthiness (``registry.py``), Panel
+    und Export mussten dieselbe Praedikat-Form benutzen: ein Backend, dessen
+    ``is_available`` einen falsy Nicht-``False``-Wert liefert (typisch
+    ``return facility.settings.report_enabled`` auf einem nullable
+    ``BooleanField`` → ``None``), verschwand sonst nur aus dem Dropdown, blieb
+    aber ueber ``?backend=<slug>`` mit HTTP 200 abrufbar (fail-open).
+    """
+
+    @pytest.fixture
+    def _none_backend(self):
+        class _NoneVerfuegbarkeitBackend(DatasetBackend):
+            name = "None-Verfuegbarkeit"
+
+            def get_field_specs(self):
+                return [FieldSpec(key="wert", label="Wert")]
+
+            def build_dataset(self, facility, date_from, date_to):
+                return DatasetResult(mode="rows", records=[{"wert": 1}], summary={}, completeness=[])
+
+            def is_available(self, facility):
+                # Kein literal False — genau der Rueckgabewert eines nullable
+                # BooleanField ohne gesetzten Wert.
+                return None
+
+        return register_backend("none_verfuegbarkeit")(_NoneVerfuegbarkeitBackend)
+
+    def test_backend_fehlt_im_dropdown(self, client, admin_user, _none_backend):
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics"))
+
+        assert response.status_code == 200
+        assert "None-Verfuegbarkeit" not in response.content.decode()
+
+    def test_panel_antwortet_404(self, client, lead_user, _none_backend):
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "none_verfuegbarkeit"})
+
+        assert response.status_code == 404
+
+    def test_export_antwortet_404(self, client, admin_user, _none_backend):
+        client.force_login(admin_user)
+        today = timezone.localdate()
+
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {
+                "backend": "none_verfuegbarkeit",
+                "format": "csv",
+                "date_from": str(today - timedelta(days=1)),
+                "date_to": str(today),
+            },
+        )
+
+        assert response.status_code == 404
+
+
 class TestPrepareExportRuftGenauEinmalAuf:
     """Review M4: Guard gegen doppelte ``prepare_export``-Transformation.
 

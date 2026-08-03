@@ -111,5 +111,10 @@ def get_backend(slug: str) -> DatasetBackend:
 
 
 def get_available_backends(facility: object) -> list[DatasetBackend]:
-    """``get_backends()``, gefiltert auf ``is_available(facility) == True``."""
+    """``get_backends()``, gefiltert auf ein **truthy** ``is_available(facility)``.
+
+    Panel- und Export-View verwenden dasselbe Praedikat (``not
+    backend.is_available(facility)`` → HTTP 404), damit Sichtbarkeit und
+    Erreichbarkeit nicht auseinanderlaufen.
+    """
     return [backend for backend in get_backends() if backend.is_available(facility)]
