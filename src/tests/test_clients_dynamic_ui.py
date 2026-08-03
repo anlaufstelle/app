@@ -756,6 +756,7 @@ class TestClientFieldsPartial:
         assert response.status_code == 404
 
     def test_inactive_type_is_404(self, client, staff_user, doc_type_client_profile):
+        """Ohne ``client``-Parameter bleibt das Verhalten unveraendert (Fall d)."""
         doc_type_client_profile.is_active = False
         doc_type_client_profile.save(update_fields=["is_active"])
         client.force_login(staff_user)
@@ -824,6 +825,155 @@ class TestClientFieldsPartial:
         )
         assert not bound.is_valid()
         assert "nachweis-erlaeuterung" in bound.errors
+
+
+# ---------------------------------------------------------------------------
+# Partial + inaktiver Ist-Typ der bearbeiteten Person (P7-Fix-Runde 2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestPartialAcceptsAssignedInactiveType:
+    """``?client=<pk>`` erlaubt genau den bereits zugewiesenen (inaktiven) Typ.
+
+    Ohne diese Symmetrie zum ``ClientForm``-Queryset entsteht ein **stiller
+    Datenverlust**: Bearbeiterin wechselt im Select weg vom inaktiven Ist-Typ
+    (HTMX laedt die Felder des anderen Typs), wechselt zurueck ⇒ 404 ⇒ HTMX
+    swapt bei 4xx NICHT ⇒ im DOM stehen weiter die Felder des ANDEREN Typs ⇒
+    der (voellig plausible) Submit traegt die Ist-Slugs nicht ⇒
+    ``merge_dynamic_data`` zieht nur ``restricted_slugs`` nach und leert die
+    Bestandswerte.
+    """
+
+    @pytest.fixture
+    def client_with_inactive_type(self, facility, staff_user, doc_type_client_profile):
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Partial-01",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        doc_type_client_profile.is_active = False
+        doc_type_client_profile.save(update_fields=["is_active"])
+        return target
+
+    def test_assigned_inactive_type_is_served(
+        self, client, staff_user, client_with_inactive_type, doc_type_client_profile
+    ):
+        """(a) mit ``client``-Param + inaktivem Ist-Typ ⇒ 200 mit dessen Feldern."""
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk), "client": str(client_with_inactive_type.pk)},
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'name="wohnsituation"' in content
+        assert 'name="diagnose"' in content
+
+    def test_other_inactive_type_stays_404(self, client, staff_user, client_with_inactive_type, doc_type_client_mixed):
+        """(b) ein inaktiver, aber NICHT zugewiesener Typ bleibt trotz Param 404."""
+        doc_type_client_mixed.is_active = False
+        doc_type_client_mixed.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_mixed.pk), "client": str(client_with_inactive_type.pk)},
+        )
+        assert response.status_code == 404
+
+    def test_foreign_client_pk_is_404(self, client, staff_user, doc_type_client_profile, foreign_client):
+        """(c) fremde Personen-PK ⇒ 404 (facility-gescopter Lookup, kein IDOR-Fenster)."""
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk), "client": str(foreign_client.pk)},
+        )
+        assert response.status_code == 404
+
+    def test_malformed_client_pk_is_404(self, client, staff_user, doc_type_client_profile):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk), "client": "keine-uuid"},
+        )
+        assert response.status_code == 404
+
+    def test_active_type_unaffected_by_param(self, client, staff_user, client_identified, doc_type_client_profile):
+        """Der Param lockert nichts fuer aktive Typen — er ist nur eine Ausnahme."""
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk), "client": str(client_identified.pk)},
+        )
+        assert response.status_code == 200
+
+    def test_invisible_assigned_type_still_403(self, client, staff_user, facility, doc_type_client_high):
+        """Sensitivity bleibt hart: der Param hebelt das 403-Gate nicht aus."""
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Partial-02",
+            created_by=staff_user,
+            document_type=doc_type_client_high,
+            data_json={"schutzkonzept": "streng vertraulich"},
+        )
+        doc_type_client_high.is_active = False
+        doc_type_client_high.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_high.pk), "client": str(target.pk)},
+        )
+        assert response.status_code == 403
+
+    def test_update_form_hx_get_carries_client_param(self, client, staff_user, client_with_inactive_type):
+        """Ohne den Param im ``hx-get`` schickt der Browser ihn nie mit."""
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_update", args=[client_with_inactive_type.pk])).content.decode()
+        expected = f"{reverse('core:client_fields_partial')}?client={client_with_inactive_type.pk}"
+        assert f'hx-get="{expected}"' in content
+
+    def test_create_form_hx_get_has_no_client_param(self, client, staff_user, doc_type_client_profile):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert f'hx-get="{reverse("core:client_fields_partial")}"' in content
+        assert "?client=" not in content
+
+    def test_switch_away_and_back_returns_own_fields(
+        self, client, staff_user, client_with_inactive_type, doc_type_client_profile, doc_type_client_mixed
+    ):
+        """(e) Charakterisierung des Ausgangsszenarios auf View-Ebene."""
+        client.force_login(staff_user)
+        partial = reverse("core:client_fields_partial")
+        client_pk = str(client_with_inactive_type.pk)
+
+        # 1. Weg vom Ist-Typ auf einen anderen (aktiven) Typ.
+        away = client.get(partial, {"document_type": str(doc_type_client_mixed.pk), "client": client_pk})
+        assert away.status_code == 200
+        assert 'name="sprache"' in away.content.decode()
+
+        # 2. Zurueck auf den inaktiven Ist-Typ — vor dem Fix ein 404, bei dem
+        #    HTMX den DOM unveraendert liess.
+        back = client.get(partial, {"document_type": str(doc_type_client_profile.pk), "client": client_pk})
+        assert back.status_code == 200
+        back_content = back.content.decode()
+        assert 'name="wohnsituation"' in back_content
+        assert 'name="sprache"' not in back_content
+
+        # 3. Und der darauf folgende Submit erhaelt die Bestandswerte.
+        response = client.post(
+            reverse("core:client_update", args=[client_with_inactive_type.pk]),
+            _client_post_data(
+                "P7-Partial-01",
+                document_type=str(doc_type_client_profile.pk),
+                wohnsituation="WG",
+            ),
+        )
+        assert response.status_code == 302
+        client_with_inactive_type.refresh_from_db()
+        assert client_with_inactive_type.document_type_id == doc_type_client_profile.pk
+        assert client_with_inactive_type.data_json["wohnsituation"] == "WG"
 
 
 # ---------------------------------------------------------------------------

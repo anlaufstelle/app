@@ -404,25 +404,62 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
     Rollen-Gate ist ``StaffRequiredMixin``: die Personen-Anlage/-Bearbeitung ist
     STAFF_PLUS (das Event-Partial ist ASSISTANT_PLUS, weil die Kontakterfassung
     Assistenzen offensteht).
+
+    **Optionaler ``client``-Parameter** (P7-Fix-Runde 2, Refs #1058): Beim
+    Bearbeiten einer Person haengt das Select die PK der bearbeiteten Person an
+    (``?document_type=…&client=…``). Ist der angefragte Typ genau der **bereits
+    zugewiesene**, darf er auch inaktiv sein — exakt die Queryset-Ausnahme aus
+    :class:`~core.forms.clients.ClientForm` gespiegelt. Ohne diese Symmetrie
+    entsteht ein stiller Datenverlust: Wechsel im Select weg vom inaktiven
+    Ist-Typ und wieder zurueck ergaebe 404, HTMX swapt bei 4xx **nicht**, im DOM
+    blieben die Felder des anderen Typs stehen — der anschliessende Submit
+    faende die Ist-Slugs nicht im POST und ``merge_dynamic_data`` leerte die
+    Bestandswerte. Alle uebrigen Grenzen bleiben unveraendert hart; ein
+    unsichtbarer Ist-Typ bleibt 403 (dort existiert das Select ohnehin nicht,
+    ``_lock_invisible_document_type``).
     """
+
+    def _assigned_document_type_pk(self, request):
+        """PK des Typs, der der bearbeiteten Person bereits zugewiesen ist.
+
+        ``None``, wenn kein ``client``-Parameter mitkam (Anlage-Formular oder
+        Konfigurations-Vorschau). Der Lookup ist facility-gescoped wie ueberall:
+        eine fremde oder unbekannte Personen-PK ergibt 404, ist also kein
+        IDOR-Fenster — und STAFF_PLUS darf Personen der eigenen Einrichtung
+        ohnehin lesen.
+        """
+        client_id = request.GET.get("client")
+        if not client_id:
+            return None
+        try:
+            client_obj = get_scoped_object(Client, request, pk=client_id)
+        except ValidationError as exc:
+            raise Http404(_("Person nicht gefunden.")) from exc
+        return client_obj.document_type_id
 
     def get(self, request):
         doc_type_id = request.GET.get("document_type")
         if not doc_type_id:
             return render(request, "core/partials/dynamic_fields.html", {"data_form": None})
 
+        assigned_pk = self._assigned_document_type_pk(request)
+
         try:
             doc_type = get_scoped_object(
                 DocumentType,
                 request,
                 pk=doc_type_id,
-                is_active=True,
                 entity_type=DocumentType.EntityType.CLIENT,
             )
         except ValidationError as exc:
             # Syntaktisch ungueltige UUID: Django wirft ValidationError statt
             # DoesNotExist — fail-closed als 404 behandeln, kein 500.
             raise Http404(_("Dokumentationstyp nicht gefunden.")) from exc
+
+        # Inaktive Typen bleiben 404 — ausser es ist der Ist-Typ der
+        # bearbeiteten Person (s. Klassen-Docstring).
+        if not doc_type.is_active and (assigned_pk is None or doc_type.pk != assigned_pk):
+            raise Http404(_("Dokumentationstyp nicht gefunden."))
 
         if not user_can_see_document_type(request.user, doc_type):
             raise PermissionDenied
