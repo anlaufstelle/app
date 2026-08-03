@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from core.models import (
     Activity,
+    AuditLog,
     DeletionRequest,
     Episode,
     Event,
@@ -610,6 +611,71 @@ def _gather_retention_proposals(facility, client, event_ids):
     ]
 
 
+# Refs #1752: Lesbare Kategorie je Audit-Zeile. Der rohe ``target_type``
+# („Client-JSON", „EventAttachment") ist interne Technik-Sprache; die Auskunft
+# soll sagen, *worauf* sich der Zugriff bezog.
+AUDIT_CATEGORY_OTHER = "Sonstiges"
+AUDIT_CATEGORIES = (
+    ("EventAttachment", "Anhang"),
+    ("Event", "Ereignis"),
+    ("Client", "Person"),
+)
+
+
+def _audit_category(target_type):
+    """Kategorie-Label zu einem Audit-``target_type`` (laengstes Praefix gewinnt)."""
+    for prefix, label in AUDIT_CATEGORIES:
+        if target_type.startswith(prefix):
+            return label
+    return AUDIT_CATEGORY_OTHER
+
+
+def _gather_audit_trail(facility, client, event_ids):
+    """Serialize the audit entries about the client — without actor identity.
+
+    Refs #1752 (Produktentscheid 2026-08-03): Der Audit-Auszug fehlte komplett;
+    ``docs/admin-guide.md`` setzte stillschweigend voraus, dass eine
+    Anwendungsbetreuung ``/audit/`` haendisch durchsucht und Treffer ergaenzt.
+    Er gehoert in die Auskunft — VIEW_QUALIFIED, EXPORT, DOWNLOAD, CLIENT_*
+    und alles Weitere, dessen Ziel die Person oder eines ihrer Ereignisse ist.
+
+    **Bewusst ohne Beschaeftigten-Identitaet.** ``user``, ``actor``,
+    ``ip_address`` und ``detail`` bleiben draussen:
+
+    * „Wer griff wann zu" ist zugleich ein Bewegungs-/Leistungsprofil der
+      Beschaeftigten — Art. 15 Abs. 4 schuetzt die Rechte Dritter. Anders als
+      beim einzelnen ``created_by`` eines Datensatzes entsteht hier ein
+      vollstaendiges Zugriffsprotokoll ueber Personen, die selbst nicht die
+      Auskunftsberechtigten sind.
+    * ``detail`` traegt je nach Aktion Anhang-Dateinamen
+      (``audit_security_violation``) — Attachment-Metadaten bleiben bis #1738
+      (AP3) ausgeschlossen.
+
+    Aktion, Zeitpunkt und Kategorie bleiben erhalten: die betroffene Person
+    erfaehrt, *dass* und *wann* auf welche Art auf ihre Daten zugegriffen wurde.
+
+    Download-Zeilen zeigen auf den Anhang, nicht auf das Ereignis; sie werden
+    ueber ``detail.event_id`` zugeordnet. Das kommt ohne Lesen der
+    Attachment-Tabelle aus und traegt auch dann noch, wenn die Anhaenge beim
+    Loeschen des Ereignisses laengst hart entfernt wurden.
+    """
+    event_id_strings = [str(pk) for pk in event_ids]
+    targets = Q(target_id=str(client.pk))
+    if event_id_strings:
+        targets |= Q(target_id__in=event_id_strings)
+        targets |= Q(action=AuditLog.Action.DOWNLOAD, detail__event_id__in=event_id_strings)
+    entries = AuditLog.objects.for_facility(facility).filter(targets).order_by("-timestamp", "pk")
+    return [
+        {
+            "action": entry.get_action_display(),
+            "category": _audit_category(entry.target_type),
+            "target_type": entry.target_type,
+            "timestamp": entry.timestamp.isoformat(),
+        }
+        for entry in entries
+    ]
+
+
 def _build_export_meta(facility):
     """Return export metadata (timestamp + resolved facility name)."""
     return {
@@ -649,6 +715,7 @@ def export_client_data(client, facility, user):
         "work_items": _gather_workitems(client),
         "activities": _gather_activities(facility, client, all_event_ids),
         "recent_visits": _gather_recent_visits(client),
+        "audit_trail": _gather_audit_trail(facility, client, all_event_ids),
         "export_meta": _build_export_meta(facility),
     }
 

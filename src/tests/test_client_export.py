@@ -778,3 +778,147 @@ class TestClientExportDeletedEvents:
         )
         data = export_client_data(sample_client, facility, staff_user)
         assert data["deleted_events"] == []
+
+
+@pytest.mark.django_db
+class TestClientExportAuditTrail:
+    """Refs #1752 — Audit-Auszug ueber die Person, ohne Beschaeftigten-Identitaet.
+
+    Produktentscheid 2026-08-03
+    (#1755): Aktion,
+    Zeitpunkt und Kategorie gehoeren in die Auskunft; Actor-Username/-Name
+    nicht (Beschaeftigtendaten-Konflikt).
+    """
+
+    def test_view_qualified_is_listed_as_person_category(self, sample_client, facility, admin_user):
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.VIEW_QUALIFIED,
+            target_type="Client",
+            target_id=str(sample_client.pk),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["audit_trail"]) == 1
+        entry = data["audit_trail"][0]
+        assert entry["action"] == "Qualifizierte Daten eingesehen"
+        assert entry["category"] == "Person"
+        assert entry["timestamp"] is not None
+
+    def test_export_rows_are_listed(self, sample_client, facility, admin_user):
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="Client-JSON",
+            target_id=str(sample_client.pk),
+            detail={"format": "JSON", "pseudonym": sample_client.pseudonym},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["action"] for e in data["audit_trail"]] == ["Export"]
+        assert data["audit_trail"][0]["category"] == "Person"
+
+    def test_client_actions_are_listed(self, sample_client, facility, admin_user):
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.CLIENT_UPDATE,
+            target_type="Client",
+            target_id=str(sample_client.pk),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["action"] for e in data["audit_trail"]] == ["Person aktualisiert"]
+
+    def test_event_rows_are_listed_as_event_category(self, sample_client, facility, sample_event, admin_user):
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.EVENT_CREATE,
+            target_type="Event",
+            target_id=str(sample_event.pk),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Ereignis"]
+
+    def test_download_rows_are_matched_via_event_detail(self, sample_client, facility, sample_event, admin_user):
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="EventAttachment",
+            target_id="11111111-1111-1111-1111-111111111111",
+            detail={"event_id": str(sample_event.pk), "field": "datei"},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
+        assert data["audit_trail"][0]["action"] == "Download"
+
+    def test_entries_carry_no_employee_identity(self, sample_client, facility, admin_user):
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.VIEW_QUALIFIED,
+            target_type="Client",
+            target_id=str(sample_client.pk),
+            detail={"pseudonym": sample_client.pseudonym},
+            ip_address="203.0.113.9",
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["audit_trail"][0]
+        assert set(entry.keys()) == {"action", "category", "target_type", "timestamp"}
+        rendered = str(entry)
+        assert "ce_admin" not in rendered
+        assert "203.0.113.9" not in rendered
+
+    def test_audit_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-Audit", created_by=admin_user)
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.VIEW_QUALIFIED,
+            target_type="Client",
+            target_id=str(other.pk),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["audit_trail"] == []
+
+    def test_download_of_other_clients_event_excluded(self, sample_client, facility, doc_type, admin_user):
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-DL", created_by=admin_user)
+        other_event = Event.objects.create(
+            facility=facility,
+            client=other,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="EventAttachment",
+            target_id="22222222-2222-2222-2222-222222222222",
+            detail={"event_id": str(other_event.pk)},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["audit_trail"] == []
+
+    def test_audit_of_deleted_event_included(self, sample_client, facility, doc_type, admin_user):
+        deleted = Event.objects.create(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            created_by=admin_user,
+        )
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.DELETE,
+            target_type="Event",
+            target_id=str(deleted.pk),
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["action"] for e in data["audit_trail"]] == ["Löschung"]

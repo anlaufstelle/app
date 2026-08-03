@@ -121,6 +121,7 @@ class TestExportClientDataAggregate:
             "work_items",
             "activities",
             "recent_visits",
+            "audit_trail",
             "export_meta",
         }
 
