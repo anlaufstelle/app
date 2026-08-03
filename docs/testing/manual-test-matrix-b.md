@@ -1237,12 +1237,12 @@
 </details>
 
 <details open>
-<summary><strong>👥 CLIENT — Klient:innen-Management (14 Cases)</strong></summary>
+<summary><strong>👥 CLIENT — Klient:innen-Management (16 Cases)</strong></summary>
 
-**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/api/clients/autocomplete/` 
-**Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`) 
-**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`) 
-**E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py` 
+**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/api/clients/autocomplete/` 
+**Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`) 
+**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`) 
+**E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py` 
 **Spezial-Setup:** Cross-Facility-Tests benötigen `make seed FACILITIES=2` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_2` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
 
 ---
@@ -1553,8 +1553,9 @@
 7. Mit `fachkraft` ursprüngliche Detail-URL erneut aufrufen.
 
 **Erwartetes Ergebnis:**
-- Nach Antrag: Redirect auf Detail mit Toast „Löschantrag gestellt — Leitung wird benachrichtigt.".
+- Nach Antrag: Redirect auf Detail mit Toast „Löschantrag gestellt. Er erscheint in der Löschanträge-Liste und muss von einer zweiten Person mit dem Recht ‚Löschbestätigung' bestätigt werden." — die Meldung verspricht **keine** Benachrichtigung mehr, weil es keine gibt (Refs #1736).
 - `DeletionRequest` mit `target_type=CLIENT`, `status=PENDING`, `requested_by=fachkraft`.
+- Detailseite trägt danach Badge + Banner des laufenden Antrags (siehe ENT-CLIENT-15).
 - Nach Genehmigung: `Client.is_deleted=True`, `AuditLog` `CLIENT_SOFT_DELETED`.
 - Direktaufruf der Detail-URL nach Genehmigung → 404 (Detail-View filtert `is_deleted=False`).
 
@@ -1587,7 +1588,8 @@
 - Fachkraft erhält 403 (`AdminRequiredMixin`).
 - Admin sieht Tabelle mit Spalten Pseudonym, Gelöscht-am, Gelöscht-von.
 - Sortierung absteigend nach `deleted_at`.
-- Pro Eintrag „Wiederherstellen"-Button.
+- Pro Eintrag **zwei** Aktionen: „Wiederherstellen" und „Jetzt endgültig anonymisieren" (`data-testid='client-anonymize-now-btn'`, siehe ENT-CLIENT-16).
+- Über der Tabelle steht der Semantik-Hinweis (`data-testid='client-trash-semantics-hint'`), dass Personen hier erst nach **bestätigter** Löschung erscheinen — ein laufender Antrag allein genügt nicht (Refs #1736).
 
 **DSGVO/Security-Note:**
 - Trash respektiert Facility-Scoping (`Client.objects.for_facility(facility)`).
@@ -1685,6 +1687,75 @@
 
 **DSGVO/Security-Note:**
 - Keine zusätzlichen Daten auf Mobile sichtbar (gleiche Pseudonymisierung).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CLIENT-15 — Laufender Löschantrag ist am Datensatz sichtbar (Badge, Banner, Zweitantrag)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Klient:innen / DeletionRequests | fachkraft (`miriam`) | C/F | ⚪ | `test_client_deletion_status.py::TestPendingRequestIsVisible` |
+
+**Code-Referenz:** `get_pending_deletion_request` / `pending_deletion_client_ids` in [src/core/services/client/main.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/main.py), Partial [`clients/partials/delete_request_action.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/clients/partials/delete_request_action.html) (Refs #1736)
+
+**Vorbereitung:**
+- Mit `fachkraft` einloggen, eigene Test-Person mit eindeutigem Pseudonym anlegen (Seed-Datensätze nicht mutieren).
+
+**Schritte:**
+1. Person öffnen, „Löschen beantragen" → Begründung „Manueller TC15" → abschicken.
+2. Auf der Detailseite Badge und Banner sichten.
+3. `/clients/?q=<Pseudonym>` aufrufen und die Zeile in der Liste sichten.
+4. `/clients/<uuid>/delete/` erneut direkt aufrufen und ein zweites Mal abschicken.
+
+**Erwartetes Ergebnis:**
+- Detailseite: Badge „Löschung beantragt" (`data-testid='client-deletion-pending-badge'`) neben dem Pseudonym **und** Banner (`data-testid='client-deletion-pending-banner'`) mit Datum, antragstellender Person und dem Hinweis auf die nötige Zweitbestätigung; der Banner verlinkt auf `/deletion-requests/` (`data-testid='client-deletion-pending-link'`).
+- Statt des Buttons „Löschen beantragen" steht ein **deaktiviertes** „Löschantrag läuft" (`data-testid='client-delete-request-pending'`).
+- Personenliste: Zeile trägt denselben Hinweis (`data-testid='client-row-deletion-pending-badge'`).
+- Zweiter Versuch: **kein** Erfolgs-Toast, sondern Info „Für diese Person läuft bereits ein Löschantrag … die eingegebene Begründung wurde nicht übernommen." Es entsteht **kein** zweiter `DeletionRequest`, und die zuletzt eingegebene Begründung wird nicht gespeichert.
+
+**DSGVO/Security-Note:**
+- Der Service ist idempotent; vorher meldete die View trotzdem Erfolg und verwarf die Begründung still — ein Fake-Erfolg auf einem Art.-17-Pfad.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CLIENT-16 — Papierkorb-Aktion „Jetzt endgültig anonymisieren" (inkl. Legal-Hold-Grenze)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Klient:innen / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestTrashAnonymizeAction` |
+
+**Code-Referenz:** `anonymize_client_now` in [src/core/services/client/main.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/main.py), `ClientAnonymizeView` in [src/core/views/client_deletion.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/client_deletion.py) (Refs #1737, #1756)
+
+**Voraussetzung:** Eine Person mit Notizen und mindestens einem Fall, deren Löschung im Vier-Augen-Prinzip **bestätigt** wurde (also im Papierkorb liegt) — z. B. Ergebnis von ENT-CLIENT-10.
+
+**Vorbereitung:**
+- Mit `admin` einloggen, Pseudonym der Test-Person notieren.
+
+**Schritte:**
+1. `/clients/trash/` öffnen.
+2. „Jetzt endgültig anonymisieren" bei der Test-Person klicken → im Bestätigungsdialog **Abbrechen**.
+3. Erneut klicken → im Dialog **OK**.
+4. Papierkorb-Liste erneut sichten.
+5. Gegenprobe Legal Hold: eine zweite Person im Papierkorb mit aktivem Sperrvermerk (auf der Person oder einem ihrer Ereignisse) versehen und die Aktion dort auslösen.
+6. Gegenprobe Deep-Link: `/clients/<uuid>/edit/` einer Person im Papierkorb direkt aufrufen.
+
+**Erwartetes Ergebnis:**
+- Der Dialog nennt Pseudonym und Wirkung ausdrücklich als **unwiderruflich** („Eine Wiederherstellung ist danach nicht mehr möglich").
+- Nach **Abbrechen**: nichts passiert, der Datensatz bleibt unverändert im Papierkorb.
+- Nach **OK**: Redirect auf `/clients/trash/` mit Toast „Person wurde endgültig anonymisiert."; Pseudonym, Notizen, Zusatzfelder sowie Fall-/Ereignisinhalte sind getilgt, der Datensatz bleibt soft-gelöscht (keine Auferstehung).
+- `AuditLog` `CLIENT_ANONYMIZED` mit `detail.trigger="manual"` — unterscheidbar vom nächtlichen `enforce_retention`-Lauf.
+- Bei aktivem Legal Hold: Fehlermeldung „Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.", der Datensatz bleibt unverändert.
+- `/clients/<uuid>/edit/` einer Person im Papierkorb → **404** (wie die Detailansicht); ein POST darauf schreibt nichts fort.
+- Gegenprobe Rolle: `fachkraft` und `leitung` erhalten auf `/clients/<uuid>/anonymize/` 403 (`FacilityAdminRequiredMixin`).
+
+**DSGVO/Security-Note:**
+- Zweck: Art.-17-Sofortlöschung ohne 30 Tage Papierkorb **und** Auflösen von Konfigurations-Blockaden ohne Datenresurrektion (siehe ENT-CONFIG-25).
+- Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — die Aktion wirkt nur auf `is_deleted=True`.
+- Ein Sperrvermerk darf durch eine manuelle Aktion nicht ausgehebelt werden (Spoliationsschutz, Refs #1066).
 
 **Status:** ☐ Offen
 
@@ -3351,12 +3422,12 @@
 </details>
 
 <details open>
-<summary><strong>🗑️ DEL — Lösch-Anträge / Vier-Augen (5 Cases)</strong></summary>
+<summary><strong>🗑️ DEL — Lösch-Anträge / Vier-Augen (6 Cases)</strong></summary>
 
 **Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/` 
 **Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`) 
 **Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`) 
-**E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py` 
+**E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py` 
 **Spezial-Setup:** Vier-Augen-Test braucht 2 separate Sessions (Antragsteller + Reviewer). DeletionRequest existiert pro `target_type` (Event vs. Client).
 
 ---
@@ -3492,6 +3563,40 @@
 
 **DSGVO/Security-Note:**
 - Zentrales Compliance-Feature: Vier-Augen-Prinzip ist DSGVO Art. 5 (Integrität) und Art. 32 (Sicherheit der Verarbeitung).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-DEL-06 — Rückkanal: die antragstellende Person findet ihren Antrag wieder
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| DeletionRequests | fachkraft (`miriam`) + leitung (`emma`) | C/F | ⚪ | `test_client_deletion_status.py::TestRequesterFeedbackChannel` |
+
+**Code-Referenz:** `User.can_access_deletion_requests` / `User.sees_all_deletion_requests` in [src/core/models/user.py](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — Navigation und View werten **dasselbe** Gate aus (Refs #1736)
+
+**Voraussetzung:** `fachkraft` hat weder eine Leitungsrolle noch das Recht *Löschbestätigung*.
+
+**Schritte:**
+1. Als `fachkraft` einloggen und **vor** dem Antrag die Navigation sichten.
+2. Für eine eigene Test-Person einen Löschantrag stellen.
+3. Navigation erneut sichten, „Löschanträge" öffnen.
+4. Vom Personen-Detail aus dem Banner-Link folgen.
+5. Als `leitung` denselben Antrag entscheiden (genehmigen oder ablehnen).
+6. Als `fachkraft` die Navigation ein drittes Mal sichten.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: **kein** Menüpunkt „Löschanträge" (`data-testid='nav-deletion-requests'` fehlt).
+- Schritt 3: Menüpunkt vorhanden; `/deletion-requests/` liefert 200 und zeigt **ausschließlich den eigenen** Antrag — keine fremden Begründungen und Ziel-Pseudonyme.
+- Schritt 4: Der Banner-Link vom Personen-Detail führt auf dieselbe Liste.
+- Schritt 6: Nach der Entscheidung ist der Menüpunkt wieder weg (kein offener eigener Antrag mehr).
+- Gegenprobe Leitung/Genehmiger-Pool: `leitung` bzw. eine Person mit dem Recht *Löschbestätigung* sieht **alle** Anträge der Einrichtung.
+- Jeder Antrag in der Liste nennt sein Ziel konkret (Pseudonym der Person bzw. Titel/Typ des Ereignisses) statt nur „Client"/„Event"; ein für die Rolle **unsichtbares** Ereignis behält ein neutrales Label ohne Link.
+
+**DSGVO/Security-Note:**
+- Der Rückkanal darf keine Fremd-PII öffnen: Zugang über einen eigenen offenen Antrag schaltet die Liste auf die eigenen Anträge (`sees_all_deletion_requests=False`).
+- Die Ziel-Beschriftung läuft fail-closed über `Event.objects.visible_to()` — sonst leckte der Dokumentationstyp-Name genau die Metadaten, die die Sensibilitäts-Policy verbirgt.
 
 **Status:** ☐ Offen
 
@@ -6195,11 +6300,11 @@
 </details>
 
 <details open>
-<summary><strong>🧩 CONFIG — Formular-Konfiguration (24 Cases)</strong></summary>
+<summary><strong>🧩 CONFIG — Formular-Konfiguration (25 Cases)</strong></summary>
 
 **Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/groups/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/` 
 **Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin` 
-**Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers`, `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`) 
+**Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`) 
 **Models:** `DocumentType` (`system_type`, `category`), `FieldTemplate` (`slug`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`) 
 **E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py` 
 **Spezial-Setup:**
@@ -6725,6 +6830,36 @@
 
 **Erwartetes Ergebnis:**
 - Sektion „Ohne Gruppe" ist sichtbar und enthält das Feld „Straßenkontakt" — bewusst ungruppiert demonstriert (Refs #1056).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CONFIG-25 — Lösch-Blocker weist Papierkorb-Anteil aus und nennt den Ausweg
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestConfigBlockerNamesTheWayOut` |
+
+**Code-Referenz:** `delete_document_type` (`_append_trash_share`) / `field_template_delete_blockers` + `field_template_trashed_client_count` in [src/core/services/config.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/config.py), Partial [`config/partials/trash_blocker_hint.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/config/partials/trash_blocker_hint.html) (Refs #1737)
+
+**Voraussetzung:** Ein Personen-Dokumentationstyp (`entity_type=client`), der **ausschließlich** von einer Person benutzt wird, die inzwischen im **Papierkorb** liegt (Löschung im Vier-Augen-Prinzip bestätigt).
+
+**Schritte:**
+1. Als `admin` `/config/document-types/<uuid>/delete/` des Typs aufrufen.
+2. Blocker-Begründung und Hinweisbox lesen.
+3. Dem Link aus der Hinweisbox folgen.
+4. Dort die Person per „Jetzt endgültig anonymisieren" abräumen (siehe ENT-CLIENT-16) und den Lösch-Dialog erneut aufrufen.
+5. Gegenprobe für Feldvorlagen: `/config/field-templates/<uuid>/delete/` einer nur von derselben Papierkorb-Person belegten Vorlage.
+
+**Erwartetes Ergebnis:**
+- Die Blocker-Begründung weist den **Papierkorb-Anteil** getrennt aus statt pauschal „müsste zuerst geändert werden" zu verlangen — ein Schritt, der für Papierkorb-Datensätze im Fach-UI gar nicht möglich ist.
+- Die Hinweisbox (`data-testid='config-delete-trash-hint'`) nennt den Ausweg und verlinkt auf den Papierkorb (`data-testid='config-delete-trash-link'`, Ziel `/clients/trash/`).
+- Nach der Anonymisierung ist der Blocker verschwunden und der Typ bzw. die Vorlage löschbar.
+- Beide Lösch-Dialoge (Dokumentationstyp **und** Feldvorlage) zeigen dieselbe Hinweisbox.
+
+**DSGVO/Security-Note:**
+- Der Ausweg darf keine Datenresurrektion erzwingen: „Wiederherstellen, umkonfigurieren, erneut löschen" holte einen bereits gelöschten Personendatensatz kurzzeitig zurück ins Fach-UI.
 
 **Status:** ☐ Offen
 

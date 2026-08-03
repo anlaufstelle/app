@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) and 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737).
 
 # Anlaufstelle -- Admin Guide
 
@@ -1325,6 +1325,37 @@ Deletion requests for personal data are processed using the four-eyes principle 
 
 Every grant and revocation of the permission, as well as every approval, is recorded in the immutable audit log. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
 
+#### Who sees the "Deletion requests" menu entry (Refs #1736)
+
+Visibility no longer follows the role alone, but actual need:
+
+| Who | Sees the menu entry | Sees in the list |
+|---|---|---|
+| Lead, facility admin | yes | **all** requests of the facility |
+| Holder of the *deletion confirmation* permission (without a lead role) | yes | **all** requests of the facility |
+| Requester with at least one **open** request of their own | yes, while the request is open | **only their own** requests |
+| Everyone else | no ||
+
+The last case is the **feedback channel**: whoever files a request can find it again via the navigation and via a notice banner on the affected record, and can see its status — without thereby gaining access to other people's reasons and target pseudonyms. Once the request is decided, the menu entry disappears again.
+
+A pending request is now visible on the record itself as well (a marker in the client list, a banner with date and requester on the client detail page); the "Request deletion" action is disabled while it is pending, and a second request is not possible.
+
+#### Trash: "Anonymize permanently now" (Refs #1737)
+
+An approved deletion moves the person into the **trash** (`/clients/trash/`, facility admin). They stay restorable there until the trash period (`client_trash_days`, default 30 days) expires and `enforce_retention` anonymizes them automatically.
+
+Next to "Restore", that page offers the action **"Anonymize permanently now"**, which brings the anonymization forward instead of waiting for the period:
+
+| Aspect | Behaviour |
+|---|---|
+| **Effect** | **Irreversible.** Pseudonym, notes, custom fields as well as case and event content are removed; what remains is an anonymous statistical aggregate. Restoring is **no longer** possible afterwards. A confirmation dialog states this explicitly. |
+| **Purpose** | (a) **Immediate erasure under Art. 17** when a data subject insists on erasure without delay and 30 days of trash are not defensible. (b) **Resolving configuration blockers**: a person in the trash keeps their document type and field values and thereby blocks deleting that type or field template. Previously the only options were restoring (a short-lived data resurrection) or waiting. The blocker message in the configuration UI now names the trash share and links there. |
+| **Limit: legal hold** | If an **active legal hold** exists on the person or on one of their events, the action is rejected with an error message — exactly like the nightly retention run (Refs #1066, #1756). A manual action must not override a hold. Lift the hold first, then anonymize. |
+| **Limit: trash only** | The action applies exclusively to records that are already soft-deleted. The four-eyes request path remains the only way **into** the trash — there is no shortcut around approval. |
+| **Trail** | Audit entry `CLIENT_ANONYMIZED` with `trigger="manual"`, distinguishable from the automatic run. |
+
+The record stays soft-deleted afterwards (anonymized, not restored) and does not vanish from the trash listing — it simply no longer carries personal data. Since #1737, people in the trash can also no longer be edited via a direct URL (`/clients/<id>/edit/` returns 404, like the detail view).
+
 ### 7.6 Data Subject Rights (Art. 15--20 GDPR)
 
 The following administrative capabilities are available for handling requests from data subjects:
@@ -1517,4 +1548,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 54ebefb86717decb7b98015958eb309dc361c415 -->
+<!-- source-hash: 9031e6d2392b7fa618e9696c9207d6690c166aff -->

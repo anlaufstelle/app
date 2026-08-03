@@ -273,7 +273,7 @@ Methodik:
 | B | Auth | 10 | 10 | 0 | 100 % |
 | B | Compliance | 4 | 0 | 4 | 0 % |
 | B | DSGVO | 8 | 8 | 0 | 100 % |
-| B | DeletionRequests | 5 | 5 | 0 | 100 % |
+| B | DeletionRequests | 6 | 6 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
 | B | Events | 12 | 11 | 1 | 92 % |
@@ -283,7 +283,9 @@ Methodik:
 | B | Fälle / Zusatzfelder | 1 | 0 | 1 | 0 % |
 | B | I18N | 5 | 1 | 4 | 20 % |
 | B | Klient:innen | 13 | 13 | 0 | 100 % |
+| B | Klient:innen / DeletionRequests | 1 | 1 | 0 | 100 % |
 | B | Klient:innen / RLS | 1 | 0 | 1 | 0 % |
+| B | Klient:innen / Retention | 1 | 1 | 0 | 100 % |
 | B | Klient:innen / Zusatzfelder | 3 | 0 | 3 | 0 % |
 | B | Konfiguration | 20 | 0 | 20 | 0 % |
 | B | Konfiguration / Audit | 1 | 0 | 1 | 0 % |
@@ -292,6 +294,7 @@ Methodik:
 | B | Konfiguration / Fälle | 1 | 0 | 1 | 0 % |
 | B | Konfiguration / Klient:innen | 1 | 0 | 1 | 0 % |
 | B | Konfiguration / RLS | 1 | 0 | 1 | 0 % |
+| B | Konfiguration / Retention | 1 | 1 | 0 | 100 % |
 | B | MFA | 9 | 9 | 0 | 100 % |
 | B | Meilensteine | 3 | 3 | 0 | 100 % |
 | B | Offline | 18 | 13 | 5 | 72 % |
@@ -323,10 +326,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 230 | 170 | 60 | 74 % |
+| B | 234 | 174 | 60 | 74 % |
 | C | 34 | 8 | 26 | 24 % |
 | D | 42 | 13 | 29 | 31 % |
-| **Gesamt** | **318** | **203** | **115** | **64 %** |
+| **Gesamt** | **322** | **207** | **115** | **64 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

@@ -1329,6 +1329,37 @@ Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein A
 
 Jede Vergabe und jeder Entzug des Rechts sowie jede Genehmigung werden im unveränderlichen Audit-Log protokolliert. Existiert für einen offenen Antrag außer der antragstellenden Person keine aktive Person mit dem Recht, zeigt die Löschantragsliste eine deutliche Warnung („Kein möglicher Genehmiger") — vergeben Sie das Recht dann an eine weitere Person.
 
+#### Wer den Menüpunkt „Löschanträge" sieht (Refs #1736)
+
+Die Sichtbarkeit folgt nicht mehr der Rolle allein, sondern dem tatsächlichen Bedarf:
+
+| Wer | Sieht den Menüpunkt | Sieht in der Liste |
+|---|---|---|
+| Leitung, Anwendungsbetreuung | ja | **alle** Anträge der Einrichtung |
+| Träger:in des Rechts *Löschbestätigung* (ohne Leitungsrolle) | ja | **alle** Anträge der Einrichtung |
+| Antragstellende Person mit mindestens einem **offenen** eigenen Antrag | ja, solange der Antrag offen ist | **nur die eigenen** Anträge |
+| Alle übrigen | nein ||
+
+Der letzte Fall ist der **Rückkanal**: Wer einen Antrag stellt, findet ihn danach über die Navigation und über einen Hinweisbanner am betroffenen Datensatz wieder und sieht seinen Status — ohne dadurch Zugriff auf fremde Begründungen und Ziel-Pseudonyme zu bekommen. Ist der Antrag entschieden, verschwindet der Menüpunkt wieder.
+
+Am Datensatz selbst ist ein laufender Antrag jetzt ebenfalls sichtbar (Kennzeichnung in der Personenliste, Banner mit Datum und antragstellender Person im Personen-Detail); die Aktion „Löschen beantragen" ist währenddessen deaktiviert, ein zweiter Antrag ist nicht möglich.
+
+#### Papierkorb: „Jetzt endgültig anonymisieren" (Refs #1737)
+
+Eine genehmigte Löschung legt die Person in den **Papierkorb** (`/clients/trash/`, Anwendungsbetreuung). Dort bleibt sie wiederherstellbar, bis die Papierkorb-Frist (`client_trash_days`, Standard 30 Tage) abläuft und `enforce_retention` sie automatisch anonymisiert.
+
+Neben „Wiederherstellen" steht dort die Aktion **„Jetzt endgültig anonymisieren"**. Sie zieht die Anonymisierung vor, statt auf die Frist zu warten:
+
+| Aspekt | Verhalten |
+|---|---|
+| **Wirkung** | **Unwiderruflich.** Pseudonym, Notizen, Zusatzfelder sowie Fall- und Ereignisinhalte werden entfernt; es bleibt ein anonymes Statistik-Aggregat. Eine Wiederherstellung ist danach **nicht** mehr möglich. Ein Bestätigungsdialog nennt das ausdrücklich. |
+| **Wozu** | (a) **Art.-17-Sofortlöschung**, wenn eine betroffene Person auf unverzüglicher Löschung besteht und 30 Tage Papierkorb nicht vertretbar sind. (b) **Auflösen von Konfigurations-Blockaden**: eine Person im Papierkorb behält ihren Dokumentationstyp und ihre Feldwerte und blockiert damit das Löschen dieses Typs bzw. der Feldvorlage. Bisher blieb nur Wiederherstellen (kurzzeitige Daten-Auferstehung) oder Warten. Die Blocker-Meldung der Konfigurations-Oberfläche weist den Papierkorb-Anteil jetzt aus und verlinkt dorthin. |
+| **Grenze: Aufbewahrungssperre** | Besteht ein **aktiver Legal Hold** auf der Person oder auf einem ihrer Ereignisse, wird die Aktion mit einer Fehlermeldung abgewiesen — genau wie der nächtliche Retention-Lauf (Refs #1066, #1756). Eine manuelle Aktion darf einen Sperrvermerk nicht aushebeln. Erst Hold aufheben, dann anonymisieren. |
+| **Grenze: nur im Papierkorb** | Die Aktion wirkt ausschließlich auf bereits soft-gelöschte Personen. Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — es gibt keinen Direktpfad an der Genehmigung vorbei. |
+| **Spur** | Audit-Eintrag `CLIENT_ANONYMIZED` mit `trigger="manual"`, unterscheidbar vom automatischen Lauf. |
+
+Der Datensatz bleibt danach soft-gelöscht (anonymisiert, nicht wiederhergestellt) und verschwindet aus dem Papierkorb-Bestand nicht — er trägt nur keine Personendaten mehr. Personen im Papierkorb lassen sich seit #1737 auch nicht mehr per Direkt-URL bearbeiten (`/clients/<id>/edit/` antwortet 404, wie die Detailansicht).
+
 ### 7.6 Betroffenenrechte (Art. 15–20 DSGVO)
 
 Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administrative Möglichkeiten zur Verfügung:
