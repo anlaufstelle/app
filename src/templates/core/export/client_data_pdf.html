@@ -34,7 +34,8 @@
         <tr><th>{% trans "Erstellt von" %}</th><td>{{ client.created_by|default:"-" }}</td></tr>
         {% comment %}M2/P7 (Refs #1058): Zusatzfelder gehoeren zur Auskunft, sobald die
         Person einen Dokumentationstyp traegt. Werte kommen entschluesselt aus
-        ``_gather_client_dynamic_data``.{% endcomment %}
+        ``_gather_entity_dynamic_data`` (verwaiste separat via
+        ``_gather_entity_orphan_data``, Refs #1725/#1730).{% endcomment %}
         {% if client.document_type %}
         <tr><th>{% trans "Dokumentationstyp" %}</th><td>{{ client.document_type }}</td></tr>
         {% for entry in client.dynamic_data %}
@@ -73,7 +74,8 @@
                 <td>{{ case.created_by|default:"-" }}</td>
                 {% comment %}M2/P8 (Refs #1058): Zusatzfelder gehoeren zur Auskunft, sobald der
                 Fall einen Dokumentationstyp traegt. Werte kommen entschluesselt aus
-                ``_gather_case_dynamic_data`` (Muster der Kontakt-Spalte „Daten").{% endcomment %}
+                ``_gather_entity_dynamic_data`` (verwaiste separat via
+                ``_gather_entity_orphan_data``, Refs #1725/#1730).{% endcomment %}
                 <td>
                     {% if case.document_type %}
                     <strong>{{ case.document_type }}</strong>
