@@ -501,6 +501,8 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 
 Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Qualifiziert", weil die Identität der Person bekannt sein muss.
 
+> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe** und **Aufbewahrungsfrist (`retention_days`)** lassen sich am Formular auch für Dokumentationstypen mit Entitätstyp **Person** oder **Fall** eintragen, werden dort aber **nicht ausgewertet**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Personen und Fälle unterliegen den einrichtungsweiten Fristen aus den Einstellungen. Das Formular weist mit einem Hilfetext am Feld darauf hin.
+
 #### Feldebenen-Sensibilität (`FieldTemplate.sensitivity`)
 
 Neben der Sensibilität des Dokumenttyps kann jedes einzelne Feld einer Feldvorlage eine **eigene** Sensibilitätsstufe erhalten (`FieldTemplate.sensitivity`). Effektiv gilt für die Sichtbarkeit des Feldes das **Maximum** aus Dokumenttyp- und Feld-Sensibilität — ein als `HIGH` markiertes Feld bleibt für Fachkräfte unsichtbar, auch wenn der Dokumenttyp selbst nur `NORMAL` ist.

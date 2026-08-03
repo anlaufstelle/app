@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 07:19+0200\n"
+"POT-Creation-Date: 2026-08-03 08:24+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -25,7 +25,7 @@ msgid "Qualifiziert"
 msgstr "Qualified"
 
 #: core/forms/cases.py:37 core/forms/events.py:54 core/models/case.py:34
-#: core/models/client.py:102 core/models/document_type.py:72
+#: core/models/client.py:102 core/models/document_type.py:92
 #: core/models/event.py:31 core/models/workitem.py:53
 #: core/models/workitem.py:190 core/services/system/export.py:109
 #: templates/core/attachments/partials/attachment_table.html:13
@@ -59,83 +59,113 @@ msgid ""
 "Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgstr "A person with this pseudonym already exists in this facility."
 
-#: core/forms/config.py:122
+#: core/forms/config.py:42
+msgid ""
+"Aus diesem Namen lässt sich kein gültiger Slug bilden — bitte mindestens "
+"einen Buchstaben (a–z) oder eine Ziffer verwenden."
+msgstr ""
+"This name does not produce a valid slug — please use at least one letter "
+"(a–z) or one digit."
+
+#: core/forms/config.py:124
+msgid "Wirkt nur bei Dokumentationstypen für Ereignisse."
+msgstr "Only effective for document types for events."
+
+#: core/forms/config.py:163
+msgid ""
+"Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ "
+"zulässig."
+msgstr ""
+"A system type is only allowed for document types with entity type \"event\"."
+
+#: core/forms/config.py:174
 msgid ""
 "Ein Dokumentationstyp mit diesem Namen und dieser Kategorie existiert in "
 "dieser Einrichtung bereits."
 msgstr ""
 "A document type with this name and category already exists in this facility."
 
-#: core/forms/config.py:178
+#: core/forms/config.py:232
 msgid ""
 "Eine Feldvorlage mit diesem Namen existiert in dieser Einrichtung bereits."
 msgstr "A field template with this name already exists in this facility."
 
-#: core/forms/config.py:229
+#: core/forms/config.py:264
+#, python-format
+msgid ""
+"Der Feldtyp kann nicht auf „Datei“ geändert werden — die Vorlage ist "
+"folgenden Dokumentationstypen für Personen/Fälle zugeordnet: %(types)s. "
+"Bitte dort zuerst die Zuordnung entfernen."
+msgstr ""
+"The field type cannot be changed to \"file\" — the template is assigned to "
+"the following document types for persons/cases: %(types)s. Please remove "
+"those assignments first."
+
+#: core/forms/config.py:322
 msgid ""
 "Eine Feldgruppe mit diesem Namen existiert für diesen Dokumentationstyp "
 "bereits."
 msgstr "A field group with this name already exists for this document type."
 
-#: core/forms/config.py:255 core/models/attachment.py:44
-#: core/models/document_type.py:305 core/models/document_type.py:542
+#: core/forms/config.py:348 core/models/attachment.py:44
+#: core/models/document_type.py:325 core/models/document_type.py:562
 #: templates/core/config/document_types/partials/field_board.html:122
 msgid "Feldvorlage"
 msgstr "Field template"
 
-#: core/forms/config.py:261 core/models/document_type.py:455
-#: core/models/document_type.py:550
+#: core/forms/config.py:354 core/models/document_type.py:475
+#: core/models/document_type.py:570
 #: templates/core/config/document_types/partials/field_board.html:126
 msgid "Feldgruppe"
 msgstr "Field group"
 
-#: core/forms/config.py:262
+#: core/forms/config.py:355
 msgid "– Ohne Gruppe –"
 msgstr "– No group –"
 
-#: core/forms/config.py:300 core/models/field_condition.py:53
+#: core/forms/config.py:393 core/models/field_condition.py:53
 msgid "Zielfeld"
 msgstr "Target field"
 
-#: core/forms/config.py:305 core/models/field_condition.py:60
+#: core/forms/config.py:398 core/models/field_condition.py:60
 msgid "Quellfeld"
 msgstr "Source field"
 
-#: core/forms/config.py:312 core/models/field_condition.py:66
+#: core/forms/config.py:405 core/models/field_condition.py:66
 #: templates/core/config/document_types/partials/condition_form.html:47
 msgid "Operator"
 msgstr "Operator"
 
-#: core/forms/config.py:316 core/models/field_condition.py:72
+#: core/forms/config.py:409 core/models/field_condition.py:72
 #: templates/core/config/document_types/partials/condition_form.html:56
 msgid "Vergleichswert"
 msgstr "Comparison value"
 
-#: core/forms/config.py:383 core/models/field_condition.py:135
+#: core/forms/config.py:476 core/models/field_condition.py:135
 msgid "Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig."
 msgstr "This operator is not allowed for the source field's type."
 
-#: core/forms/config.py:393 core/models/field_condition.py:146
+#: core/forms/config.py:486 core/models/field_condition.py:146
 msgid "Für diesen Operator ist ein Vergleichswert erforderlich."
 msgstr "A comparison value is required for this operator."
 
-#: core/forms/config.py:413
+#: core/forms/config.py:506
 msgid "Bitte eine gültige Zahl eingeben."
 msgstr "Please enter a valid number."
 
-#: core/forms/config.py:420
+#: core/forms/config.py:513
 msgid "Bitte „wahr“ oder „falsch“ auswählen."
 msgstr "Please select \"true\" or \"false\"."
 
-#: core/forms/config.py:425
+#: core/forms/config.py:518
 msgid "Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben."
 msgstr "Please enter a valid date (YYYY-MM-DD)."
 
-#: core/forms/config.py:431
+#: core/forms/config.py:524
 msgid "Bitte eine gültige Uhrzeit eingeben."
 msgstr "Please enter a valid time."
 
-#: core/forms/config.py:438
+#: core/forms/config.py:531
 msgid "Bitte eine gültige Option auswählen."
 msgstr "Please select a valid option."
 
@@ -167,8 +197,8 @@ msgid "Ende"
 msgstr "End"
 
 #: core/forms/events.py:42 core/models/case.py:72 core/models/client.py:78
-#: core/models/document_type.py:156 core/models/document_type.py:443
-#: core/models/document_type.py:536 core/models/event.py:37
+#: core/models/document_type.py:176 core/models/document_type.py:463
+#: core/models/document_type.py:556 core/models/event.py:37
 #: core/models/quick_template.py:41 core/services/system/export.py:108
 #: templates/core/attachments/partials/attachment_table.html:12
 #: templates/core/clients/offline_detail.html:124
@@ -193,7 +223,7 @@ msgid "Zeitpunkt"
 msgstr "Timestamp"
 
 #: core/forms/events.py:70 core/models/case.py:101
-#: core/models/document_type.py:73 core/models/episode.py:21
+#: core/models/document_type.py:93 core/models/episode.py:21
 #: core/models/event.py:45 templates/core/cases/episode_form.html:11
 #: templates/core/events/create.html:156 templates/core/events/detail.html:83
 msgid "Fall"
@@ -387,8 +417,8 @@ msgstr "Event"
 msgid "Entry-ID (Versionskette)"
 msgstr "Entry ID (version chain)"
 
-#: core/models/attachment.py:31 core/models/document_type.py:136
-#: core/models/document_type.py:451 core/models/document_type.py:552
+#: core/models/attachment.py:31 core/models/document_type.py:156
+#: core/models/document_type.py:471 core/models/document_type.py:572
 #: core/models/quick_template.py:56 core/models/time_filter.py:38
 msgid "Sortierung"
 msgstr "Sort order"
@@ -744,7 +774,7 @@ msgid "Konfiguration umsortiert"
 msgstr "Configuration reordered"
 
 #: core/models/audit.py:137 core/models/case.py:28 core/models/client.py:34
-#: core/models/document_type.py:82 core/models/document_type.py:246
+#: core/models/document_type.py:102 core/models/document_type.py:266
 #: core/models/event.py:23 core/models/organization.py:41
 #: core/models/quick_template.py:35 core/models/retention.py:33
 #: core/models/retention.py:93 core/models/settings.py:27
@@ -879,7 +909,7 @@ msgstr ""
 msgid "Titel"
 msgstr "Title"
 
-#: core/models/case.py:43 core/models/document_type.py:134
+#: core/models/case.py:43 core/models/document_type.py:154
 #: core/models/episode.py:26 core/models/organization.py:36
 #: core/models/outcome.py:16 core/models/workitem.py:99
 #: templates/core/cases/detail.html:112
@@ -1042,8 +1072,8 @@ msgstr ""
 "address) here. Sensitive content belongs in a FieldTemplate with "
 "sensitivity=HIGH."
 
-#: core/models/client.py:81 core/models/document_type.py:135
-#: core/models/document_type.py:297 core/models/organization.py:37
+#: core/models/client.py:81 core/models/document_type.py:155
+#: core/models/document_type.py:317 core/models/organization.py:37
 #: core/models/quick_template.py:60 core/models/time_filter.py:37
 #: templates/core/config/document_types/detail.html:63
 #: templates/core/config/document_types/partials/table.html:38
@@ -1082,81 +1112,81 @@ msgstr ""
 msgid "Personen"
 msgstr "People"
 
-#: core/models/document_type.py:33
+#: core/models/document_type.py:53
 msgid "Name ergibt keinen gültigen Slug."
 msgstr "Name does not produce a valid slug."
 
-#: core/models/document_type.py:47 core/models/document_type.py:59
+#: core/models/document_type.py:67 core/models/document_type.py:79
 #: templates/components/_event_card.html:18
 #: templates/core/zeitstrom/offline_zeitstrom.html:48
 msgid "Kontakt"
 msgstr "Contact"
 
-#: core/models/document_type.py:48
+#: core/models/document_type.py:68
 msgid "Leistung"
 msgstr "Service"
 
-#: core/models/document_type.py:49
+#: core/models/document_type.py:69
 msgid "Verwaltung"
 msgstr "Administration"
 
-#: core/models/document_type.py:50 core/models/document_type.py:66
+#: core/models/document_type.py:70 core/models/document_type.py:86
 #: templates/core/system/maintenance.html:56
 msgid "Notiz"
 msgstr "Note"
 
-#: core/models/document_type.py:53 core/models/workitem.py:27
+#: core/models/document_type.py:73 core/models/workitem.py:27
 #: templates/core/clients/_offline_workitem_fields.html:20
 #: templates/core/clients/offline_detail.html:15
 msgid "Normal"
 msgstr "Normal"
 
-#: core/models/document_type.py:54
+#: core/models/document_type.py:74
 msgid "Erhöht"
 msgstr "Elevated"
 
-#: core/models/document_type.py:55
+#: core/models/document_type.py:75
 msgid "Hoch"
 msgstr "High"
 
-#: core/models/document_type.py:58 templates/components/_ban_feed_card.html:8
+#: core/models/document_type.py:78 templates/components/_ban_feed_card.html:8
 #: templates/core/clients/detail.html:33 templates/core/clients/detail.html:167
 #: templates/core/handover/partials/_highlights.html:36
 msgid "Hausverbot"
 msgstr "Facility ban"
 
-#: core/models/document_type.py:60
+#: core/models/document_type.py:80
 #: templates/core/handover/partials/_highlights.html:34
 msgid "Krisengespräch"
 msgstr "Crisis counseling"
 
-#: core/models/document_type.py:61
+#: core/models/document_type.py:81
 msgid "Medizinische Versorgung"
 msgstr "Medical care"
 
-#: core/models/document_type.py:62
+#: core/models/document_type.py:82
 msgid "Spritzentausch"
 msgstr "Needle exchange"
 
-#: core/models/document_type.py:63
+#: core/models/document_type.py:83
 msgid "Begleitung"
 msgstr "Support"
 
-#: core/models/document_type.py:64
+#: core/models/document_type.py:84
 msgid "Beratungsgespräch"
 msgstr "Counseling session"
 
-#: core/models/document_type.py:65
+#: core/models/document_type.py:85
 msgid "Vermittlung"
 msgstr "Referral"
 
-#: core/models/document_type.py:71 core/models/event.py:88
+#: core/models/document_type.py:91 core/models/event.py:88
 #: core/models/event_history.py:27
 msgid "Ereignis"
 msgstr "Event"
 
-#: core/models/document_type.py:84 core/models/document_type.py:248
-#: core/models/document_type.py:445 core/models/organization.py:13
+#: core/models/document_type.py:104 core/models/document_type.py:268
+#: core/models/document_type.py:465 core/models/organization.py:13
 #: core/models/organization.py:35 templates/core/account/profile.html:14
 #: templates/core/config/document_types/partials/table.html:8
 #: templates/core/config/field_templates/partials/table.html:8
@@ -1167,22 +1197,22 @@ msgstr "Event"
 msgid "Name"
 msgstr "Name"
 
-#: core/models/document_type.py:92 core/models/document_type.py:251
-#: core/models/document_type.py:448
+#: core/models/document_type.py:112 core/models/document_type.py:271
+#: core/models/document_type.py:468
 #: templates/core/config/field_templates/form.html:18
 #: templates/core/config/field_templates/partials/table.html:9
 msgid "Slug"
 msgstr "Slug"
 
-#: core/models/document_type.py:94
+#: core/models/document_type.py:114
 msgid ""
 "Stabiler Identifier — wird als Lookup-Key im M2-Paketformat verwendet. Nach "
 "Erstellung unveränderbar."
 msgstr ""
-"Stable identifier — used as a lookup key in the M2 package format. Cannot "
-"be changed after creation."
+"Stable identifier — used as a lookup key in the M2 package format. Cannot be "
+"changed after creation."
 
-#: core/models/document_type.py:101 core/models/retention.py:52
+#: core/models/document_type.py:121 core/models/retention.py:52
 #: templates/core/config/document_types/detail.html:34
 #: templates/core/config/document_types/partials/table.html:9
 #: templates/core/export/jugendamt_pdf.html:54
@@ -1191,7 +1221,7 @@ msgstr ""
 msgid "Kategorie"
 msgstr "Category"
 
-#: core/models/document_type.py:103
+#: core/models/document_type.py:123
 msgid ""
 "Reine UI-Gruppierung für Statistik-Anzeige und Admin-Filter. Beeinflusst "
 "weder Export noch Bann-/Krisen-Logik — dafür ist der Systemtyp zuständig."
@@ -1199,42 +1229,42 @@ msgstr ""
 "UI grouping for statistics display and admin filters only. Does not affect "
 "export or ban/crisis logic — that is governed by the system type."
 
-#: core/models/document_type.py:112 core/models/document_type.py:267
+#: core/models/document_type.py:132 core/models/document_type.py:287
 #: templates/core/config/document_types/detail.html:38
 msgid "Sensibilität"
 msgstr "Sensitivity"
 
-#: core/models/document_type.py:113
+#: core/models/document_type.py:133
 msgid "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
 msgstr "Controls access rights: ELEVATED/HIGH require higher permissions"
 
-#: core/models/document_type.py:120
+#: core/models/document_type.py:140
 msgid "Mindest-Kontaktstufe"
 msgstr "Minimum contact stage"
 
-#: core/models/document_type.py:121
+#: core/models/document_type.py:141
 msgid "Mindest-Kontaktstufe der Person für diesen Dokumentationstyp"
 msgstr "Minimum contact stage of the person for this documentation type"
 
-#: core/models/document_type.py:130
+#: core/models/document_type.py:150
 msgid "Aufbewahrungsfrist (Tage)"
 msgstr "Retention period (days)"
 
-#: core/models/document_type.py:132
+#: core/models/document_type.py:152
 msgid "Icon"
 msgstr "Icon"
 
-#: core/models/document_type.py:133
+#: core/models/document_type.py:153
 msgid "Farbe"
 msgstr "Color"
 
-#: core/models/document_type.py:142 core/packages/loader.py:242
+#: core/models/document_type.py:162 core/packages/loader.py:246
 #: templates/core/config/document_types/detail.html:54
 #: templates/core/config/document_types/partials/table.html:11
 msgid "Systemtyp"
 msgstr "System type"
 
-#: core/models/document_type.py:144
+#: core/models/document_type.py:164
 msgid ""
 "Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach "
 "Erstellung unveränderbar."
@@ -1243,12 +1273,12 @@ msgstr ""
 "Cannot be changed after creation.Stable identifier — used as key in "
 "data_json. Immutable after creation."
 
-#: core/models/document_type.py:151 core/packages/loader.py:401
+#: core/models/document_type.py:171 core/packages/loader.py:406
 #: templates/core/config/document_types/detail.html:42
 msgid "Entitätstyp"
 msgstr "Entity type"
 
-#: core/models/document_type.py:152
+#: core/models/document_type.py:172
 msgid ""
 "Auf welche Entität sich Dokumente dieses Typs beziehen. Nach Erstellung "
 "unveränderbar."
@@ -1256,7 +1286,7 @@ msgstr ""
 "Which entity documents of this type relate to. Cannot be changed after "
 "creation."
 
-#: core/models/document_type.py:157
+#: core/models/document_type.py:177
 #: templates/core/config/document_types/detail.html:20
 #: templates/core/config/document_types/list.html:4
 #: templates/core/config/document_types/list.html:9
@@ -1265,63 +1295,63 @@ msgstr ""
 msgid "Dokumentationstypen"
 msgstr "Document types"
 
-#: core/models/document_type.py:196 core/models/document_type.py:375
-#: core/models/document_type.py:488
+#: core/models/document_type.py:216 core/models/document_type.py:395
+#: core/models/document_type.py:508
 msgid "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
 msgstr "Slug is not valid (only a-z, 0-9, hyphens)."
 
-#: core/models/document_type.py:214
+#: core/models/document_type.py:234
 msgid "system_type kann nach Erstellung nicht geändert werden."
 msgstr "system_type cannot be changed after creation."
 
-#: core/models/document_type.py:216
+#: core/models/document_type.py:236
 msgid "entity_type kann nach Erstellung nicht geändert werden."
 msgstr "entity_type cannot be changed after creation."
 
-#: core/models/document_type.py:218 core/models/document_type.py:392
-#: core/models/document_type.py:505
+#: core/models/document_type.py:238 core/models/document_type.py:412
+#: core/models/document_type.py:525
 msgid "Slug kann nach Erstellung nicht geändert werden."
 msgstr "Slug cannot be changed after creation."
 
-#: core/models/document_type.py:229
+#: core/models/document_type.py:249
 msgid "Text"
 msgstr "Text"
 
-#: core/models/document_type.py:230
+#: core/models/document_type.py:250
 msgid "Textbereich"
 msgstr "Text area"
 
-#: core/models/document_type.py:231
+#: core/models/document_type.py:251
 msgid "Zahl"
 msgstr "Number"
 
-#: core/models/document_type.py:232 core/services/system/export.py:106
+#: core/models/document_type.py:252 core/services/system/export.py:106
 #: templates/core/attachments/partials/attachment_table.html:14
 msgid "Datum"
 msgstr "Date"
 
-#: core/models/document_type.py:233 core/services/system/export.py:107
+#: core/models/document_type.py:253 core/services/system/export.py:107
 msgid "Uhrzeit"
 msgstr "Time"
 
-#: core/models/document_type.py:234
+#: core/models/document_type.py:254
 msgid "Ja/Nein"
 msgstr "Yes/No"
 
-#: core/models/document_type.py:235
+#: core/models/document_type.py:255
 #: templates/core/events/conflict_review.html:54
 msgid "Auswahl"
 msgstr "Selection"
 
-#: core/models/document_type.py:236
+#: core/models/document_type.py:256
 msgid "Mehrfachauswahl"
 msgstr "Multi-select"
 
-#: core/models/document_type.py:237
+#: core/models/document_type.py:257
 msgid "Datei"
 msgstr "Data"
 
-#: core/models/document_type.py:252
+#: core/models/document_type.py:272
 msgid ""
 "Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
 "unveränderbar."
@@ -1330,33 +1360,33 @@ msgstr ""
 "creation.Stable identifier — used as key in data_json. Immutable after "
 "creation."
 
-#: core/models/document_type.py:258 core/packages/loader.py:400
+#: core/models/document_type.py:278 core/packages/loader.py:405
 msgid "Feldtyp"
 msgstr "Field type"
 
-#: core/models/document_type.py:260
+#: core/models/document_type.py:280
 #: templates/core/config/document_types/partials/field_board.html:72
 #: templates/core/config/document_types/partials/field_board.html:97
 msgid "Pflichtfeld"
 msgstr "Required field"
 
-#: core/models/document_type.py:261
+#: core/models/document_type.py:281
 msgid "Verschlüsselt"
 msgstr "Encrypted"
 
-#: core/models/document_type.py:268
+#: core/models/document_type.py:288
 msgid "Feld-Level Sichtbarkeit. Leer = erbt vom Dokumentationstyp."
 msgstr "Field-level visibility. Empty = inherits from document type."
 
-#: core/models/document_type.py:273
+#: core/models/document_type.py:293
 msgid "Optionen (JSON)"
 msgstr "Options (JSON)"
 
-#: core/models/document_type.py:278
+#: core/models/document_type.py:298
 msgid "Default-Wert"
 msgstr "Default value"
 
-#: core/models/document_type.py:280
+#: core/models/document_type.py:300
 msgid ""
 "Wird beim Neu-Anlegen eines Ereignisses vorgeblendet. Leer lassen = kein "
 "Default. Für SELECT/MULTI_SELECT: Option-Slug(s) (mehrere durch Komma "
@@ -1365,15 +1395,15 @@ msgstr ""
 "Pre-filled when creating a new event. Leave empty = no default. For SELECT/"
 "MULTI_SELECT: option slug(s), comma-separated. Not supported for FILE."
 
-#: core/models/document_type.py:288
+#: core/models/document_type.py:308
 msgid "Statistik-Kategorie"
 msgstr "Statistics category"
 
-#: core/models/document_type.py:293
+#: core/models/document_type.py:313
 msgid "Hilfetext"
 msgstr "Help text"
 
-#: core/models/document_type.py:299
+#: core/models/document_type.py:319
 msgid ""
 "Deaktivierte Feldvorlagen werden in Formularen nicht mehr angezeigt. "
 "Bestehende Werte in Events bleiben erhalten (Soft-Delete-Alternative zum "
@@ -1382,7 +1412,7 @@ msgstr ""
 "Disabled field templates are no longer shown in forms. Existing values in "
 "events are preserved (soft-delete alternative to hard delete)."
 
-#: core/models/document_type.py:306
+#: core/models/document_type.py:326
 #: templates/core/config/field_templates/list.html:4
 #: templates/core/config/field_templates/list.html:9
 #: templates/core/config/field_templates/partials/table.html:5
@@ -1391,19 +1421,19 @@ msgstr ""
 msgid "Feldvorlagen"
 msgstr "Field templates"
 
-#: core/models/document_type.py:326 core/models/document_type.py:478
+#: core/models/document_type.py:346 core/models/document_type.py:498
 msgid "Nur a-z, 0-9 und Bindestriche erlaubt."
 msgstr "Only a-z, 0-9, and hyphens allowed."
 
-#: core/models/document_type.py:335
+#: core/models/document_type.py:355
 msgid "Felder mit Sensibilität=Hoch müssen verschlüsselt sein."
 msgstr "Fields with sensitivity=High must be encrypted."
 
-#: core/models/document_type.py:350 core/services/system/field_types.py:171
+#: core/models/document_type.py:370 core/services/system/field_types.py:171
 msgid "Für Datei-Felder ist kein Default-Wert zulässig."
 msgstr "Default value is not allowed for file fields."
 
-#: core/models/document_type.py:449
+#: core/models/document_type.py:469
 msgid ""
 "Stabiler Identifier — wird im M2-Paketformat referenziert. Nach Erstellung "
 "unveränderbar."
@@ -1411,25 +1441,25 @@ msgstr ""
 "Stable identifier — referenced by the M2 package format. Cannot be changed "
 "after creation."
 
-#: core/models/document_type.py:452
+#: core/models/document_type.py:472
 #: templates/core/config/document_types/partials/field_board.html:44
 #: templates/core/config/document_types/partials/group_form.html:42
 msgid "Einklappbar"
 msgstr "Collapsible"
 
-#: core/models/document_type.py:456
+#: core/models/document_type.py:476
 msgid "Feldgruppen"
 msgstr "Field groups"
 
-#: core/models/document_type.py:555
+#: core/models/document_type.py:575
 msgid "Dokumentationstyp-Feld"
 msgstr "Document type field"
 
-#: core/models/document_type.py:556
+#: core/models/document_type.py:576
 msgid "Dokumentationstyp-Felder"
 msgstr "Document type fields"
 
-#: core/models/document_type.py:571
+#: core/models/document_type.py:591
 msgid "Die Feldgruppe muss zum selben Dokumentationstyp gehören."
 msgstr "The field group must belong to the same document type."
 
@@ -2293,29 +2323,29 @@ msgstr "Deletion request"
 msgid "Löschanträge"
 msgstr "Deletion Requests"
 
-#: core/packages/loader.py:298
+#: core/packages/loader.py:303
 msgid "Feldvorlage konnte nicht angelegt werden — Zuordnung übersprungen."
 msgstr "Field template could not be created — assignment skipped."
 
-#: core/packages/loader.py:306
+#: core/packages/loader.py:311
 msgid "Feldgruppe konnte nicht angelegt werden — Zuordnung übersprungen."
 msgstr "Field group could not be created — assignment skipped."
 
-#: core/packages/loader.py:346
+#: core/packages/loader.py:351
 msgid ""
 "Ziel- oder Quellfeld konnte nicht zugeordnet werden — Bedingung übersprungen."
-msgstr ""
-"Target or source field could not be assigned — condition skipped."
+msgstr "Target or source field could not be assigned — condition skipped."
 
-#: core/packages/loader.py:376
+#: core/packages/loader.py:381
 msgid "Bestehende Bedingung wurde durch die Paketangabe ersetzt bzw. entfernt."
-msgstr "Existing condition was replaced or removed by the package specification."
+msgstr ""
+"Existing condition was replaced or removed by the package specification."
 
-#: core/packages/loader.py:400
+#: core/packages/loader.py:405
 msgid "Verschlüsselung"
 msgstr "Encryption"
 
-#: core/packages/loader.py:445
+#: core/packages/loader.py:450
 #, python-format
 msgid ""
 "%(label)s ist nach dem Anlegen unveränderlich (Bestand: %(current)r, Paket: "
@@ -2324,17 +2354,27 @@ msgstr ""
 "%(label)s is immutable after creation (current: %(current)r, package: "
 "%(wanted)r)."
 
-#: core/packages/loader.py:518
+#: core/packages/loader.py:523
 #, python-format
 msgid ""
 "Diese Options-Slugs fehlen im Paket und verschwinden aus der Feldvorlage: "
 "%(slugs)s. Bereits erfasste Werte behalten den Slug — im Paket besser "
 "„is_active: false“ setzen statt die Option zu entfernen."
 msgstr ""
-"These option slugs are missing from the package and will be removed from "
-"the field template: %(slugs)s. Values already recorded keep the slug — in "
-"the package, prefer setting \"is_active: false\" instead of removing the "
-"option."
+"These option slugs are missing from the package and will be removed from the "
+"field template: %(slugs)s. Values already recorded keep the slug — in the "
+"package, prefer setting \"is_active: false\" instead of removing the option."
+
+#: core/packages/loader.py:558
+#, python-format
+msgid ""
+"Zugriffsschranke gesenkt: Sensibilität geht von „%(current)s“ auf "
+"„%(desired)s“ zurück. Bereits erfasste Werte werden damit für zusätzliche "
+"Rollen sichtbar."
+msgstr ""
+"Access barrier lowered: sensitivity drops from \"%(current)s\" to "
+"\"%(desired)s\". Values already recorded therefore become visible to "
+"additional roles."
 
 #: core/retention/proposals.py:30
 msgid "Dokumenttyp"
@@ -2390,8 +2430,7 @@ msgstr "The document type is not intended for persons."
 #: core/services/client/main.py:71
 msgid ""
 "Dokumentationstyp bitte nur einmal angeben (Objekt oder ID, nicht beides)."
-msgstr ""
-"Please specify the document type only once (object or ID, not both)."
+msgstr "Please specify the document type only once (object or ID, not both)."
 
 #: core/services/client/main.py:82
 msgid "Der Dokumentationstyp existiert nicht."
@@ -2945,11 +2984,11 @@ msgid_plural ""
 "%(n)d Personen sind diesem Dokumentationstyp zugeordnet und müssten zuerst "
 "geändert werden."
 msgstr[0] ""
-"%(n)d person is assigned to this document type and would have to be "
-"changed first."
+"%(n)d person is assigned to this document type and would have to be changed "
+"first."
 msgstr[1] ""
-"%(n)d people are assigned to this document type and would have to be "
-"changed first."
+"%(n)d people are assigned to this document type and would have to be changed "
+"first."
 
 #: core/services/config.py:119
 #, python-format
@@ -2963,15 +3002,15 @@ msgstr[0] ""
 "%(n)d case is assigned to this document type and would have to be changed "
 "first."
 msgstr[1] ""
-"%(n)d cases are assigned to this document type and would have to be "
-"changed first."
+"%(n)d cases are assigned to this document type and would have to be changed "
+"first."
 
 #: core/services/config.py:133
 #, python-format
 msgid "Der Dokumentationstyp wird noch von %(n)d Objekt(en) referenziert."
 msgstr "The document type is still referenced by %(n)d object(s)."
 
-#: core/services/config.py:192
+#: core/services/config.py:195
 #, python-format
 msgid ""
 "%(n)d Dokumentationstyp-Zuordnung(en) verwenden diese Feldvorlage — bitte "
@@ -2980,33 +3019,47 @@ msgstr ""
 "%(n)d document type assignment(s) use this field template — please remove it "
 "there first."
 
-#: core/services/config.py:198
+#: core/services/config.py:201
 #, python-format
 msgid "%(n)d Dateianhang/-anhänge sind an diese Feldvorlage gebunden."
 msgstr "%(n)d file attachment(s) are bound to this field template."
 
-#: core/services/config.py:207
+#: core/services/config.py:210
 #, python-format
 msgid "%(n)d Ereignis(se) enthalten Daten unter dem Slug „%(slug)s“."
 msgstr "%(n)d event(s) contain data under the slug \"%(slug)s\"."
 
-#: core/services/config.py:356 core/views/config/document_types.py:272
+#: core/services/config.py:221
+#, python-format
+msgid "%(n)d Person enthält Daten unter dem Slug „%(slug)s“."
+msgid_plural "%(n)d Personen enthalten Daten unter dem Slug „%(slug)s“."
+msgstr[0] "%(n)d person contains data under the slug \"%(slug)s\"."
+msgstr[1] "%(n)d persons contain data under the slug \"%(slug)s\"."
+
+#: core/services/config.py:235
+#, python-format
+msgid "%(n)d Fall enthält Daten unter dem Slug „%(slug)s“."
+msgid_plural "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“."
+msgstr[0] "%(n)d case contains data under the slug \"%(slug)s\"."
+msgstr[1] "%(n)d cases contain data under the slug \"%(slug)s\"."
+
+#: core/services/config.py:387 core/views/config/document_types.py:272
 msgid "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field group does not belong to this document type."
 
-#: core/services/config.py:363
+#: core/services/config.py:394
 msgid ""
 "Datei-Feldvorlagen können nur Dokumentationstypen mit Entitätstyp „Ereignis“ "
 "zugeordnet werden."
 msgstr ""
-"File field templates can only be assigned to document types with entity "
-"type \"event\"."
+"File field templates can only be assigned to document types with entity type "
+"\"event\"."
 
-#: core/services/config.py:367 core/services/config.py:394
+#: core/services/config.py:398 core/services/config.py:425
 msgid "Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."
 msgstr "This field template is already assigned to the document type."
 
-#: core/services/config.py:557
+#: core/services/config.py:588
 msgid ""
 "Die übergebene Reihenfolge stimmt nicht mit dem Bestand überein (fremde, "
 "fehlende oder doppelte IDs)."
@@ -3014,15 +3067,15 @@ msgstr ""
 "The submitted order does not match the existing records (foreign, missing, "
 "or duplicate IDs)."
 
-#: core/services/config.py:778
+#: core/services/config.py:809
 msgid "Das zu verschiebende Feld gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field to be moved does not belong to this document type."
 
-#: core/services/config.py:795
+#: core/services/config.py:826
 msgid "Die Zielgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The target group does not belong to this document type."
 
-#: core/services/config.py:808
+#: core/services/config.py:839
 msgid ""
 "Die übergebene Reihenfolge stimmt nicht mit der Zielgruppe überein (fremde, "
 "fehlende oder doppelte IDs)."
@@ -3239,14 +3292,14 @@ msgstr "Default value must be 'true' or 'false'."
 msgid "Default-Wert '%(value)s' ist kein aktiver Options-Slug."
 msgstr "Default value '%(value)s' is not an active option slug."
 
-#: core/signals/field_template.py:47
+#: core/signals/field_template.py:52
 #, python-format
 msgid ""
-"Feldvorlage „%(name)s“ kann nicht gelöscht werden — es existieren Events mit "
-"Daten unter dem Slug „%(slug)s“. Alternativ: Feldvorlage deaktivieren "
+"Feldvorlage „%(name)s“ kann nicht gelöscht werden — es existieren Datensätze "
+"mit Daten unter dem Slug „%(slug)s“. Alternativ: Feldvorlage deaktivieren "
 "(is_active=False)."
 msgstr ""
-"Field template \"%(name)s\" cannot be deleted — events exist with data under "
+"Field template \"%(name)s\" cannot be deleted — records exist with data under "
 "slug \"%(slug)s\". Alternative: deactivate the field template "
 "(is_active=False)."
 
@@ -3325,32 +3378,32 @@ msgstr "Episode has been updated."
 msgid "Episode wurde abgeschlossen."
 msgstr "Episode has been completed."
 
-#: core/views/cases.py:270
+#: core/views/cases.py:278
 msgid "Fall wurde erstellt."
 msgstr "Case has been created."
 
-#: core/views/cases.py:422
+#: core/views/cases.py:433
 msgid "Fall wurde aktualisiert."
 msgstr "Case has been updated."
 
-#: core/views/cases.py:436
+#: core/views/cases.py:447
 msgid "Fall wurde geschlossen."
 msgstr "Case has been closed."
 
-#: core/views/cases.py:450
+#: core/views/cases.py:461
 msgid "Fall wurde wiedereröffnet."
 msgstr "Case has been reopened."
 
-#: core/views/cases.py:466
+#: core/views/cases.py:477
 msgid "Kein Ereignis ausgewählt."
 msgstr "No event selected."
 
-#: core/views/cases.py:540
+#: core/views/cases.py:551
 msgid "Fall nicht gefunden."
 msgstr "Case not found."
 
-#: core/views/cases.py:560 core/views/cases.py:565 core/views/clients.py:457
-#: core/views/clients.py:462 core/views/events.py:150
+#: core/views/cases.py:571 core/views/cases.py:576 core/views/clients.py:468
+#: core/views/clients.py:473 core/views/events.py:150
 msgid "Dokumentationstyp nicht gefunden."
 msgstr "Document type not found."
 
@@ -3366,15 +3419,15 @@ msgstr "Deletion request submitted — the lead will be notified."
 msgid "Person wiederhergestellt."
 msgstr "Person restored."
 
-#: core/views/clients.py:294
+#: core/views/clients.py:302
 msgid "Person wurde angelegt."
 msgstr "Person has been created."
 
-#: core/views/clients.py:387
+#: core/views/clients.py:398
 msgid "Person wurde aktualisiert."
 msgstr "Person has been updated."
 
-#: core/views/clients.py:437
+#: core/views/clients.py:448
 msgid "Person nicht gefunden."
 msgstr "Person not found."
 
@@ -5504,11 +5557,9 @@ msgid_plural ""
 "%(n)s Personen sind diesem Typ zugeordnet — ein Löschen ist daher nicht "
 "möglich."
 msgstr[0] ""
-"%(n)s person is assigned to this type — deletion is therefore not "
-"possible."
+"%(n)s person is assigned to this type — deletion is therefore not possible."
 msgstr[1] ""
-"%(n)s people are assigned to this type — deletion is therefore not "
-"possible."
+"%(n)s people are assigned to this type — deletion is therefore not possible."
 
 #: templates/core/config/document_types/confirm_delete.html:36
 #, python-format
@@ -5519,8 +5570,7 @@ msgid_plural ""
 msgstr[0] ""
 "%(n)s case is assigned to this type — deletion is therefore not possible."
 msgstr[1] ""
-"%(n)s cases are assigned to this type — deletion is therefore not "
-"possible."
+"%(n)s cases are assigned to this type — deletion is therefore not possible."
 
 #: templates/core/config/document_types/confirm_delete.html:44
 #, python-format

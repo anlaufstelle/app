@@ -199,6 +199,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
             continue
 
         _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
+        _warn_on_sensitivity_downgrade(existing.sensitivity, desired["sensitivity"], report, identifier)
         conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
         if conflicts:
             # Haertung (Refs #1058, Review-Punkt 3): NICHT in die Erfolgs-Map
@@ -247,6 +248,7 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
         report.errors.extend((identifier, message) for message in conflicts)
         return None
 
+    _warn_on_sensitivity_downgrade(existing.sensitivity, desired["sensitivity"], report, identifier)
     _apply_diff(existing, desired, report.document_types, report, identifier)
     return existing
 
@@ -523,6 +525,41 @@ def _warn_on_disappearing_options(
                     "statt die Option zu entfernen."
                 )
                 % {"slugs": ", ".join(missing)}
+            ),
+        )
+    )
+
+
+def _warn_on_sensitivity_downgrade(current: str, desired: str, report: PackageReport, identifier: str) -> None:
+    """Warnen, wenn das Paket die Sensibilität SENKT (Final-Review G, Refs #1058).
+
+    ``sensitivity`` ist per E13 updatebar — die Anwendung bleibt also erlaubt.
+    Sie senkt aber rückwirkend die Lese-Schranke bereits erfasster Werte
+    (``effective_sensitivity`` = max(Typ-, Feld-Sensibilität)): nach dem Lauf
+    sehen niedrigere Rollen Werte, die vorher für sie gesperrt waren. Der Report
+    macht das sichtbar, damit ein ``--dry-run`` es vor dem Echtlauf zeigt.
+    Anhebung und Gleichstand sind still.
+    """
+    # Funktionslokal (Schichtregel): der Loader haengt sonst modulweit am
+    # Service-Layer, obwohl er nur die Rang-Tabelle braucht.
+    from core.services.compliance.sensitivity import SENSITIVITY_RANK
+
+    # Schlüssel sind ``TextChoices``-Member; das Paket liefert rohe Strings
+    # (``""`` = erbt ⇒ Rang 0) — deshalb über die String-Werte nachschlagen.
+    ranks: dict[str, int] = {str(level): rank for level, rank in SENSITIVITY_RANK.items()}
+    current_rank = ranks.get(current, 0)
+    desired_rank = ranks.get(desired, 0)
+    if desired_rank >= current_rank:
+        return
+    report.warnings.append(
+        (
+            identifier,
+            str(
+                _(
+                    "Zugriffsschranke gesenkt: Sensibilität geht von „%(current)s“ auf „%(desired)s“ "
+                    "zurück. Bereits erfasste Werte werden damit für zusätzliche Rollen sichtbar."
+                )
+                % {"current": current or "normal", "desired": desired or "normal"}
             ),
         )
     )

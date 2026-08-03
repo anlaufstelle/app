@@ -116,6 +116,17 @@ class DocumentTypeForm(forms.ModelForm):
         if not self.instance._state.adding:
             self.fields["system_type"].disabled = True
             self.fields["entity_type"].disabled = True
+        # Final-Review H (Refs #1058): beide Felder werden ausschliesslich im
+        # Ereignis-Pfad ausgewertet (``enforce_document_type_retention`` zaehlt
+        # ``Event``; ``min_contact_stage`` greift nur in der Ereignis-Anlage).
+        # An Personen-/Fall-Typen sind sie wirkungslos — das steht hier, weil
+        # das Formular sie fuer alle Entitaetstypen anbietet.
+        entity_hint = _("Wirkt nur bei Dokumentationstypen für Ereignisse.")
+        for field_name in ("retention_days", "min_contact_stage"):
+            existing_help = self.fields[field_name].help_text
+            self.fields[field_name].help_text = (
+                f"{existing_help} {entity_hint}".strip() if existing_help else entity_hint
+            )
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]

@@ -484,3 +484,60 @@ class TestBlockOrder:
         assert blocks[0]["field"].field_template.slug == "notiz"
         assert blocks[1]["group"].slug == "basisdaten"
         assert [dtf.field_template.slug for dtf in blocks[1]["fields"]] == ["extra", "dauer"]
+
+
+@pytest.mark.django_db
+class TestSensitivityDowngradeWarning:
+    """Final-Review G (Refs #1058): ``sensitivity`` ist per E13 updatebar — ein
+    Paketlauf darf sie also senken. Weil das die Lese-Schranke bereits erfasster
+    Werte rueckwirkend absenkt (``effective_sensitivity`` = max(Typ, Feld)),
+    muss der Report das aber sichtbar machen. Muster:
+    ``_warn_on_disappearing_options``."""
+
+    def test_warns_on_document_type_downgrade(self, facility):
+        raw = _raw()
+        raw["document_types"][0]["sensitivity"] = "high"
+        _load(facility, raw)
+
+        raw["document_types"][0]["sensitivity"] = "normal"
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.document_types.updated == ["kontakt"]
+        assert [identifier for identifier, _message in report.warnings] == ["kontakt"]
+        assert "Zugriffsschranke gesenkt" in report.warnings[0][1]
+
+    def test_warns_on_field_template_downgrade(self, facility):
+        raw = _raw()
+        raw["field_templates"][1]["sensitivity"] = "elevated"
+        _load(facility, raw)
+
+        raw["field_templates"][1]["sensitivity"] = ""
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.field_templates.updated == ["notiz"]
+        assert [identifier for identifier, _message in report.warnings] == ["notiz"]
+        assert "Zugriffsschranke gesenkt" in report.warnings[0][1]
+
+    def test_no_warning_on_raise_or_equal(self, facility):
+        _load(facility, _raw())
+
+        raw = _raw()
+        raw["document_types"][0]["sensitivity"] = "elevated"
+        raw["field_templates"][1]["sensitivity"] = "elevated"
+        report = _load(facility, raw)
+
+        assert report.warnings == []
+
+        # Zweiter, identischer Lauf: unveraendert, weiterhin keine Warnung.
+        report = _load(facility, raw)
+        assert report.warnings == []
+        assert report.document_types.unchanged == ["kontakt"]
+
+    def test_no_warning_when_object_is_created(self, facility):
+        raw = _raw()
+        raw["document_types"][0]["sensitivity"] = "normal"
+        report = _load(facility, raw)
+
+        assert report.warnings == []

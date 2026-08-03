@@ -498,6 +498,8 @@ The example activity report is a customizable example or template -- not a bindi
 
 Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "Qualified" because the person's identity must be known.
 
+> **Effective for event types only (Refs #1058).** **Minimum contact stage** and **retention period (`retention_days`)** can also be entered on documentation types whose entity type is **person** or **case**, but they are **not evaluated** there: the contact-stage check only applies when creating events, and the retention run deletes events only. Persons and cases follow the facility-wide periods from the settings. The form shows a help text on both fields.
+
 #### Field-Level Sensitivity (`FieldTemplate.sensitivity`)
 
 In addition to the document type's sensitivity, each individual field of a field template can receive its **own** sensitivity level (`FieldTemplate.sensitivity`). For field visibility the **maximum** of the document-type and field sensitivity applies -- a field flagged `HIGH` stays invisible to staff even if the document type itself is only `NORMAL`.
@@ -1465,4 +1467,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: a5299da1dc9a13176962d9959915bc98cb854a35 -->
+<!-- source-hash: 2b231ef6a77ae66cd9090e2e04381ad683062e18 -->

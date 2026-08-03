@@ -146,7 +146,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `category` | `contact`, `service`, `admin`, `note` | `contact` | reine UI-Gruppierung |
 | `system_type` | `ban`, `contact`, `crisis`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert` |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
-| `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person |
+| `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
 | `icon`, `color` | String | `""` | |
 | `sort_order` | Int | `0` | Position des Typs in der Typ-Auswahl |
 | `groups` | Liste | *(leer)* | additiv — siehe unten |
@@ -310,7 +310,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 
 **Gruppen**
 
-- **Nie die letzte Gruppe eines Typs aus dem Paket entfernen.** Der Cleanup verwaister Gruppen greift nur, wenn das Paket für den Typ mindestens eine Gruppe deklariert; sonst bleibt die verwaiste Zeile in Bestands-Einrichtungen liegen. Sauberer Weg: erst die Felder aus der Gruppe nehmen, die leere Gruppe im Paket stehen lassen.
+- **Nie die letzte Gruppe eines Typs aus dem Paket entfernen.** Achtung, zwei Pfade: `load_package` entfernt **nie** eine Gruppe (v1 ist additiv, siehe Semantik-Tabelle in § 3). Nur der **Seed** räumt verwaiste Gruppen des Standardkatalogs auf (`_delete_orphan_field_groups`) — und auch dort nur, wenn das Paket für den Typ mindestens eine Gruppe deklariert. Sauberer Weg in beiden Fällen: erst die Felder aus der Gruppe nehmen, die leere Gruppe im Paket stehen lassen.
 
 **Rücksync — was ein Lauf überschreibt**
 
@@ -322,6 +322,9 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 | `icon`, `color`, `category`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt |
 | `sort_order` der Feldzuordnungen | zurückgesetzt — auch bei Typen **ohne** Gruppen; eine per Drag-and-Drop geänderte Reihenfolge geht verloren |
 | `default_value`, `help_text`, `options_json` der Vorlage | zurückgesetzt |
+| `sensitivity` der Vorlage | zurückgesetzt — eine **Absenkung** wird zusätzlich als Warnung gemeldet |
+
+**Senkt** ein Lauf die `sensitivity` (am Typ oder an der Vorlage), meldet der Report zusätzlich eine Warnung „Zugriffsschranke gesenkt“. Die Anwendung bleibt erlaubt — aber bereits erfasste Werte werden damit für zusätzliche Rollen lesbar, und ein `--dry-run` zeigt das vorab. Anhebungen sind still.
 
 Was **nicht** angefasst wird: `is_active`, `description`, `retention_days` am Typ und `is_active`, `statistics_category` an der Vorlage. Eine Einrichtung kann einen Paket-Typ also deaktivieren, ohne dass der nächste Lauf ihn reaktiviert.
 

@@ -17,7 +17,7 @@ Zusätzliche Randbedingungen:
 
 - **Bestandsdaten sind heilig.** Jede Einrichtung, die heute läuft (dev, demo, Pilotinstanzen), hat einen gewachsenen Katalog. Ein Loader, der gegen Bestand „vielleicht" idempotent ist, produziert Duplikate oder überschreibt gepflegte Konfiguration.
 - **Fremder Input.** Ein Community-Paket ist unvertrauenswürdiger Input in einem sicherheitskritischen Kontext: Feldsensibilität und Verschlüsselungs-Flags steuern, wer welche Art.-9-nahen Daten zu sehen bekommt.
-- **Keine neuen Dependencies.** `PyYAML` ist bereits im Baum (Fixtures); `jsonschema` wäre neu.
+- **Dependency-Budget.** `PyYAML` lag bereits als Entwicklungs-Abhängigkeit im Baum (Fixtures) und wurde für den Loader zur **Runtime**-Dependency hochgezogen (`requirements.in`, MIT-Lizenz) — eine Abhängigkeit, die das Format ohnehin braucht. `jsonschema` wäre eine **zusätzliche**, zweite gewesen, und zwar für den kleineren Teil der Regeln.
 - **Zwei Ordnungssemantiken laufen parallel ein.** [ADR-036](036-globale-block-sequenz-feldordnung.md) legt zeitgleich die globale Block-Sequenz fest — das Paketformat muss sie serialisieren können, sonst wäre eine Format-Migration nötig, bevor das Format je ausgeliefert wurde.
 
 ## Decision
@@ -33,11 +33,11 @@ Wir führen ein **versioniertes YAML-Paketformat (Schema v1)** ein, spielen es �
 - **Enum-Werte werden gegen die echten Modell-Choices geprüft** (`FieldTemplate.FieldType`, `DocumentType.Category`/`Sensitivity`/`SystemType`/`EntityType`, `FieldCondition.Operator`, `core.constants.CONTACT_STAGE_CHOICES`) — keine im Schema gespiegelten Literale, die auseinanderlaufen könnten. Das Slug-Format kommt aus `_SLUG_RE` in `core.models.document_type`.
 - **Alle Verstöße eines Laufs werden gesammelt**, jeder mit **pfadgenauem** Bezeichner: `document_types[2].field_refs[0].template_slug`. `PackageValidationError.errors` ist eine Liste aus `(Pfad, Meldung)`; `str(exc)` ist dieselbe Liste zeilenweise und damit direkt CLI-tauglich.
 - **Pflicht sind nur Identität und Werte ohne sinnvollen Modell-Default:** `slug` + `name` (bzw. `template_slug`, `target`/`depends_on`/`operator`, `slug`/`label` bei Optionen). Alles andere fällt auf den Modell-Default zurück. Ein Minimal-Eintrag ist `{slug, name}`.
-- **Handgerollt statt `jsonschema`.** Die Hälfte der Regeln sind Cross-Referenzen zwischen Abschnitten (Slug-Verweise) und Fach-Invarianten (Datei-Felder nur an Ereignis-Typen, `system_type` nur bei `entity_type: event`, HIGH-Sensibilität erzwingt Verschlüsselung), die ein JSON-Schema nicht ausdrücken könnte. Eine neue Dependency hätte den kleineren Teil abgedeckt.
+- **Handgerollt statt `jsonschema`.** Die Hälfte der Regeln sind Cross-Referenzen zwischen Abschnitten (Slug-Verweise) und Fach-Invarianten (Datei-Felder nur an Ereignis-Typen, `system_type` nur bei `entity_type: event`, HIGH-Sensibilität erzwingt Verschlüsselung), die ein JSON-Schema nicht ausdrücken könnte. Eine **zweite** neue Dependency (zusätzlich zu PyYAML) hätte nur den kleineren Teil abgedeckt.
 
 ### 2. Slug-Identität — `DocumentType.slug` ist der Lookup-Key und unveränderlich
 
-Migration [`0117_documenttype_slug_entity_type`](../../src/core/migrations/0117_documenttype_slug_entity_type.py) ergänzt `slug` (+ `entity_type`) in **einer** atomaren Datei: Spalte anlegen → deterministischer Backfill (Umlaut-Map + `slugify`, Truncation vor dem Counter-Suffix, Counter **pro Facility**) → fail-loud-Assert (kein Leerslug, keine Duplikate) → `UniqueConstraint(facility, slug)` → Slug-Immutabilitäts-Trigger.
+Migration [`0117_documenttype_slug_entity_type`](../../src/core/migrations/0117_documenttype_slug_entity_type.py) ergänzt `slug` (+ `entity_type`) in **einer** atomaren Datei: Spalte anlegen → deterministischer Backfill (Umlaut-Map + `slugify`, Normalisierung auf das `_SLUG_RE`-Format, Truncation vor dem Counter-Suffix, Counter **pro Facility**) → fail-loud-Assert (kein Leerslug, keine Duplikate) → `UniqueConstraint(facility, slug)` → Slug-Immutabilitäts-Trigger.
 
 Die Unveränderlichkeit ist **zweifach** verankert:
 
@@ -172,7 +172,7 @@ Der Loader ist **update-sicher**, und genau das ist eine sichtbare Verhaltensän
 
 ## Alternatives considered
 
-- **`jsonschema` + JSON-Schema-Datei statt handgerollter Validierung.** Verworfen: neue Dependency für den kleineren Teil der Regeln; Cross-Referenzen zwischen Abschnitten und Fach-Invarianten (FILE × `entity_type`, `system_type` × `entity_type`, HIGH ⇒ verschlüsselt) wären ohnehin handgeschrieben, und die pfadgenauen deutschen Meldungen wären schlechter.
+- **`jsonschema` + JSON-Schema-Datei statt handgerollter Validierung.** Verworfen: eine zweite neue Dependency (neben PyYAML) für den kleineren Teil der Regeln; Cross-Referenzen zwischen Abschnitten und Fach-Invarianten (FILE × `entity_type`, `system_type` × `entity_type`, HIGH ⇒ verschlüsselt) wären ohnehin handgeschrieben, und die pfadgenauen deutschen Meldungen wären schlechter.
 - **Django-Fixtures (`loaddata`) als Paketformat.** Verworfen: PK-basiert, nicht slug-basiert; kein Diff, keine Idempotenz, kein Dry-Run, keine Fach-Validierung — und ein Fixture aus einer fremden Einrichtung würde fremde UUIDs einschleppen.
 - **`update_or_create` als Loader-Kern.** Verworfen: schreibt mit `update_fields` und würde die erzwungenen Felder aus `FieldTemplate.save()` ausschließen (E12); außerdem kein Diff für den Report und kein `full_clean()`.
 - **Fehler sofort werfen statt sammeln.** Verworfen: ein Paket mit fünf Tippfehlern erzwänge fünf Läufe. Das Sammeln ist der Grund für die Savepoint-Bauform.
