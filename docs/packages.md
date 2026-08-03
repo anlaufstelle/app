@@ -124,7 +124,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 
 | Schlüssel | Typ | Default | Anmerkung |
 |---|---|---|---|
-| `slug` | Slug (`a-z`, `0-9`, `-`) | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich |
+| `slug` | Slug (`a-z`, `0-9`, `-`) | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich. **Reservierte Slugs** (feste Formularfeld-Namen) sind ein Schema-Fehler — s. Hinweis unter der Tabelle |
 | `name` | nicht-leerer String | **Pflicht** | Muss im Paket eindeutig sein (UI-Unterscheidbarkeit) |
 | `field_type` | `text`, `textarea`, `number`, `date`, `time`, `boolean`, `select`, `multi_select`, `file` | `text` | **Unveränderlich** nach dem Anlegen |
 | `is_required` | Bool | `false` | Pflichtfeld im Formular |
@@ -135,6 +135,8 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `default_value` | String | `""` | Wird bei jedem Lauf aus dem Paket geschrieben |
 
 `options[]`-Einträge: `slug` (Pflicht, Slug-Format, eindeutig je Vorlage), `label` (Pflicht, nicht leer), `is_active` (Bool, Default `true`).
+
+> **Reservierte Slugs (#1726):** Ein `slug`, der einen festen Formularfeld-Namen trifft, wird als **Schema-Fehler** abgelehnt — das dynamische Feld würde sonst nackt unter seinem Slug im selben `<form>` das gleichnamige feste Feld überschreiben (stiller Datenverlust). Betroffen sind u. a. `pseudonym`, `notes`, `client`, `title`, `description`, `case`, `document_type`, `lead_user`, `contact_stage`, `age_cluster`, `occurred_at`; die vollständige, an allen Schichten (Paket-Schema, Config-Formular, Modell) geteilte Liste steht als `_RESERVED_SLUGS` in `core/models/document_type.py`. Dieselbe Regel gilt für das nachträgliche **Zuordnen** einer bestehenden Feldvorlage mit reserviertem Slug über die Config-UI.
 
 ### `document_types[]`
 
