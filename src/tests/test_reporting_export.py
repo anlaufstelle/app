@@ -7,6 +7,7 @@ Moduls und werden hier bewusst nicht beruehrt.
 """
 
 import csv
+import dataclasses
 import json
 import xml.etree.ElementTree as ET
 from datetime import date
@@ -89,6 +90,29 @@ class _AggregateBackend(DatasetBackend):
                 "top_types": ["kontakt", "beratung"],
             },
             completeness=[],
+        )
+
+
+class _PreparingBackend(_RowsBackend):
+    """Dummy-Backend mit ``prepare_export``-Override — protokolliert den Aufruf.
+
+    Steht stellvertretend fuer die K-Anon-Suppression des JugendamtBackends:
+    ``export_dataset`` muss den Hook anwenden und **das transformierte**
+    Ergebnis rendern (Refs #1278).
+    """
+
+    slug = "dummy_prepared"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, DatasetResult]] = []
+
+    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+        self.calls.append((facility, result))
+        return dataclasses.replace(
+            result,
+            records=[{"datum": "unterdrückt", "formel": None}],
+            summary={"total": None},
+            completeness=[CompletenessIssue(code="unmapped", message="Anzahl unterdrückt.", severity="info")],
         )
 
 
@@ -254,6 +278,72 @@ class TestAlleBackendsAlleFormate:
         assert response["Content-Type"] == content_type
         expected_filename = f"{backend.slug}_{date_from}_{date_to}.{ext}"
         assert expected_filename in response["Content-Disposition"]
+
+
+class TestPrepareExportHook:
+    """Refs #1278: ``export_dataset`` reicht den Datensatz durch
+    ``backend.prepare_export`` — sonst umginge ein Formatwechsel (CSV/JSON/XML)
+    die K-Anon-Suppression, die fuer PDF/On-Screen laengst gilt.
+    """
+
+    def test_hook_wird_mit_facility_und_ergebnis_aufgerufen(self, facility, date_range):
+        date_from, date_to = date_range
+        backend = _PreparingBackend()
+
+        export_dataset(backend, facility, date_from, date_to, format="json")
+
+        assert len(backend.calls) == 1
+        called_facility, called_result = backend.calls[0]
+        assert called_facility is facility
+        # Der Hook bekommt den *rohen* Datensatz aus build_dataset.
+        assert called_result.summary == {"total": 2}
+
+    def test_json_rendert_das_transformierte_ergebnis(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_PreparingBackend(), facility, date_from, date_to, format="json")
+
+        payload = json.loads(response.content)
+        assert payload["summary"] == {"total": None}
+        assert payload["records"] == [{"datum": "unterdrückt", "formel": None}]
+        assert payload["completeness"] == [{"code": "unmapped", "message": "Anzahl unterdrückt.", "severity": "info"}]
+
+    def test_csv_rendert_das_transformierte_ergebnis(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_PreparingBackend(), facility, date_from, date_to, format="csv")
+        content = b"".join(response.streaming_content).decode("utf-8")
+        rows = list(csv.reader(content.splitlines()[1:]))
+
+        assert rows[0] == ["Datum", "Formel-Feld"]
+        # ``None`` wird zur leeren Zelle — nie zum String "None".
+        assert rows[1] == ["unterdrückt", ""]
+        assert len(rows) == 2
+
+    def test_xml_rendert_das_transformierte_ergebnis(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_PreparingBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        records = root.find("records").findall("record")
+        assert len(records) == 1
+        assert records[0].find("datum").text == "unterdrückt"
+        # ``None`` wird zum leeren Element (beim Zurueckparsen ``text is None``)
+        # — nie zum String "None".
+        assert not records[0].find("formel").text
+        assert not root.find("summary").find("total").text
+        assert b"None" not in response.content
+
+    def test_backend_ohne_override_bleibt_unveraendert(self, facility, date_range):
+        """Default-Hook = Identitaet: Roh-Datensatz kommt unveraendert im Export an."""
+        date_from, date_to = date_range
+        backend = _RowsBackend()
+        raw = backend.build_dataset(facility, date_from, date_to)
+
+        payload = json.loads(export_dataset(backend, facility, date_from, date_to, format="json").content)
+
+        assert payload["summary"] == raw.summary
+        assert payload["records"] == raw.records
 
 
 class TestRfc5987Dateiname:

@@ -37,11 +37,21 @@ class FieldSpec:
 
 @dataclass(frozen=True)
 class CompletenessIssue:
-    """Ein Vollstaendigkeits-/Datenqualitaets-Hinweis zu einem Datensatz."""
+    """Ein Vollstaendigkeits-/Datenqualitaets-Hinweis zu einem Datensatz.
+
+    ``count`` traegt die Rohzahl, die in ``message`` beziffert ist — rein
+    **interne Transformationsgrundlage** fuer :meth:`DatasetBackend.prepare_export`
+    (K-Anon-Suppression braucht die Zahl maschinenlesbar, um sie mit der
+    Schwelle zu vergleichen). Die Export-Serialisierer geben das Feld bewusst
+    **nicht** aus: JSON/XML fuehren weiterhin nur ``code``/``message``/
+    ``severity`` — sonst waere die gerade unterdrueckte Zahl wieder im
+    Artefakt.
+    """
 
     code: str  # maschinenlesbar, z. B. "unmapped_system_types"
     message: str  # menschenlesbar (deutsch)
     severity: Literal["info", "warning"] = "warning"
+    count: int | None = None  # Rohwert hinter ``message``; nie serialisiert
 
 
 @dataclass(frozen=True)
@@ -81,3 +91,11 @@ class DatasetBackend(ABC):
     def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
         """Datenqualitaets-Checks vor der Anzeige/dem Export (Default: keine Checks)."""
         return []  # Default: keine Checks
+
+    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+        """Transformation vor Export/Panel-Anzeige (z. B. K-Anon-Suppression).
+
+        Wird von ``export_dataset()`` und der Panel-Vorschau aufgerufen. Snapshots
+        nutzen ``build_dataset()`` direkt (Roh-Payload). Default: unveraendert.
+        """
+        return result

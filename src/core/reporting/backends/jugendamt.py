@@ -11,8 +11,14 @@ normalisiert.
 Neu ist allein :meth:`JugendamtBackend.validate_completeness`: die Checks
 brauchen die Rohdaten, die nicht im Datensatz landen (nicht zugeordnete
 Dokumenttypen, Ereignisse ohne Personenbezug).
+
+:meth:`JugendamtBackend.prepare_export` legt die K-Anon-Suppression des
+PDF-Pfads (:func:`~core.services.dashboard.external_report.suppress_jugendamt_stats`,
+Refs #1278) auf Export und Panel-Vorschau — ``build_dataset`` selbst bleibt
+roh, damit die Snapshot-Payload unveraendert bleibt.
 """
 
+import dataclasses
 from collections import OrderedDict
 
 from django.db.models import Count, Q
@@ -21,6 +27,11 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Event
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
+
+# Modul-Ebenen-Import ist zyklusfrei: ``core.services.dashboard`` verweist
+# nirgends zur Importzeit auf ``core.reporting`` — der einzige Rueckverweis
+# (``core.services.system.export``) ist ein lokaler Import in der Funktion.
+from core.services.dashboard.external_report import _get_threshold, suppress_jugendamt_stats
 
 # Mapping: DocumentType.system_type -> Jugendamt-Kategorie (fehlend = ausgeschlossen).
 # ``ban``/``note``/NULL fehlen bewusst — sie gehoeren nicht in den Bericht.
@@ -53,6 +64,24 @@ _AGE_LABELS = {
 # bereits mit ein. Blankes SQL-``NOT IN`` tut das nicht — der explizite Zweig
 # haelt die Absicht unabhaengig von diesem ORM-Detail fest.
 _UNMAPPED_Q = Q(document_type__system_type__isnull=True) | ~Q(document_type__system_type__in=tuple(CATEGORY_MAP))
+
+# Ersatztexte fuer Vollstaendigkeits-Meldungen, deren Rohzahl unter der
+# K-Anon-Schwelle liegt: die Luecke bleibt sichtbar (sonst waere der Bericht
+# irrefuehrend vollstaendig), die Zahl verschwindet. Bewusst ohne jede Ziffer
+# — auch Anteile/Bezugsgroessen lassen die unterdrueckte Zahl zurueckrechnen.
+_SUPPRESSED_MESSAGES = {
+    "unmapped_system_types": (
+        "Ereignisse ohne Jugendamt-Zuordnung im Zeitraum vorhanden (Anzahl unterdrückt, k-Anonymität)"
+    ),
+    "events_without_client": (
+        "Ereignisse ohne Personenbezug im Zeitraum vorhanden (Anzahl unterdrückt, k-Anonymität) "
+        "— nicht in Altersgruppen/Personenzahl enthalten"
+    ),
+}
+
+# Fail-safe fuer kuenftige Checks ohne eigenen Ersatztext: lieber unspezifisch
+# als eine Kleinstfallzahl im Export.
+_SUPPRESSED_FALLBACK = "Hinweis vorhanden (Anzahl unterdrückt, k-Anonymität)"
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -147,8 +176,12 @@ class JugendamtBackend(DatasetBackend):
         # diese Methode immer mit, und der Hybrid-/Snapshot-Pfad ruft
         # ``build_dataset`` je Zeitsegment einmal auf — Einzel-``count()``s
         # wuerden sich dort vervielfachen.
+        #
+        # ``events_in_period`` statt ``total``: der gleichnamige Summary-Key
+        # zaehlt nur die *gemappten* Ereignisse — hier ist die Bezugsgroesse
+        # aber alles Sichtbare im Zeitraum.
         counts = _base_queryset(facility, date_from, date_to).aggregate(
-            total=Count("id"),
+            events_in_period=Count("id"),
             without_client=Count("id", filter=Q(client__isnull=True)),
             unmapped_events=Count("id", filter=_UNMAPPED_Q),
             unmapped_types=Count("document_type_id", filter=_UNMAPPED_Q, distinct=True),
@@ -163,20 +196,62 @@ class JugendamtBackend(DatasetBackend):
                     f"{counts['unmapped_events']} Ereignisse in {counts['unmapped_types']} "
                     "Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
                     "warning",
+                    count=counts["unmapped_events"],
                 )
             )
 
         # (b) Ereignisse ohne Personenbezug — die Luecke in by_age_cluster
         # und unique_clients.
         if counts["without_client"]:
-            share = round(counts["without_client"] * 100 / counts["total"])
+            share = round(counts["without_client"] * 100 / counts["events_in_period"])
             issues.append(
                 CompletenessIssue(
                     "events_without_client",
-                    f"{counts['without_client']} von {counts['total']} Ereignissen ohne Personenbezug "
-                    f"({share} %) — nicht in Altersgruppen/Personenzahl enthalten",
+                    f"{counts['without_client']} von {counts['events_in_period']} Ereignissen im Zeitraum "
+                    f"ohne Personenbezug ({share} %) — nicht in Altersgruppen/Personenzahl enthalten",
                     "info",
+                    count=counts["without_client"],
                 )
             )
 
         return issues
+
+    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+        """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278, T1).
+
+        Dieselbe Maschinerie wie fuer das PDF (``suppress_jugendamt_stats``):
+        Zellen < Schwelle werden ``count=None``/``suppressed=True`` (inkl.
+        sekundaerer Suppression gegen Randsummen-Rueckrechnung),
+        ``unique_clients`` und die Randsumme ``total`` < Schwelle werden
+        ``None`` (Security R14). ``records`` wird aus den bereits
+        suppressierten Kategorie-Zeilen neu projiziert — sonst haette der
+        CSV-Export die Rohzahlen weiterhin gezeigt. Vollstaendigkeits-
+        Meldungen mit Rohzahl < Schwelle verlieren die Zahl, nicht den
+        Hinweis. ``build_dataset`` bleibt roh (Snapshot-Payload).
+
+        Erwartet das **rohe** ``build_dataset``-Ergebnis: ``by_category``
+        kommt als ``(name, count)``-Tupel herein und geht als Dict-Zeilen
+        heraus — ein zweiter Durchlauf ueber dasselbe Ergebnis ist damit
+        kein sinnvoller Aufruf.
+        """
+        threshold = _get_threshold(facility)
+
+        summary = suppress_jugendamt_stats(facility, result.summary)
+        # Transparenz analog ``build_external_report``-Metadaten: der Empfaenger
+        # soll erkennen, ab welcher Fallzahl unterdrueckt wurde.
+        summary["k_anonymity_threshold"] = threshold
+
+        records = [{"category": row["name"], "count": row["count"]} for row in summary["by_category"]]
+
+        completeness = [
+            dataclasses.replace(
+                issue,
+                message=_SUPPRESSED_MESSAGES.get(issue.code, _SUPPRESSED_FALLBACK),
+                count=None,
+            )
+            if issue.count is not None and issue.count < threshold
+            else issue
+            for issue in result.completeness
+        ]
+
+        return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

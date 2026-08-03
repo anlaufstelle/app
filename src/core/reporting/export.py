@@ -64,6 +64,12 @@ def export_dataset(
         raise ValueError(f"Unbekanntes Export-Format {format!r} — erwartet 'csv', 'json' oder 'xml'.")
 
     result = backend.build_dataset(facility, date_from, date_to)
+    # Repo-Invariante (Refs #1278/T1, Security R4+R14): jedes extern
+    # zirkulierende Berichts-Artefakt unterdrueckt Kleinstfallzahlen. Ein
+    # Formatwechsel (CSV/JSON/XML statt PDF) darf diese Haertung nie
+    # aushebeln — der Hook laeuft deshalb vor *jedem* Renderer. Snapshots
+    # umgehen ihn bewusst: sie rufen ``build_dataset`` direkt (Roh-Payload).
+    result = backend.prepare_export(facility, result)
     generated_at = timezone.now()
     filename = f"{backend.slug}_{date_from}_{date_to}.{format}"
 

@@ -54,6 +54,16 @@ class TestCompletenessIssue:
         issue = CompletenessIssue(code="info_code", message="Hinweis.", severity="info")
         assert issue.severity == "info"
 
+    def test_default_count_ist_none(self):
+        """``count`` ist optional — Backends ohne bezifferte Meldung lassen ihn leer."""
+        issue = CompletenessIssue(code="foo", message="Foo")
+        assert issue.count is None
+
+    def test_count_traegt_den_rohwert(self):
+        """Maschinenlesbarer Rohwert fuer die K-Anon-Transformation (Refs #1278)."""
+        issue = CompletenessIssue(code="foo", message="3 Ereignisse …", severity="info", count=3)
+        assert issue.count == 3
+
     def test_frozen(self):
         issue = CompletenessIssue(code="foo", message="Foo")
         with pytest.raises(FrozenInstanceError):
@@ -116,6 +126,13 @@ class TestDatasetBackendABC:
     def test_validate_completeness_default_leer(self):
         backend = _CompleteBackend()
         assert backend.validate_completeness(facility=None, date_from=None, date_to=None) == []
+
+    def test_prepare_export_default_gibt_dasselbe_objekt_zurueck(self):
+        """Default-Hook ist die Identitaet — nur Backends mit Suppression ueberschreiben ihn."""
+        backend = _CompleteBackend()
+        result = DatasetResult(mode="rows", records=[{"foo": 1}], summary={"total": 1}, completeness=[])
+
+        assert backend.prepare_export(facility=None, result=result) is result
 
     def test_snapshot_enabled_default_false(self):
         assert _CompleteBackend.snapshot_enabled is False

@@ -6,6 +6,8 @@ Die Erwartungswerte sind **hart kodiert** und nicht gegen die alte
 muss diesen Wegfall ueberleben.
 """
 
+import csv
+import json
 import sys
 from datetime import date, datetime
 
@@ -15,12 +17,16 @@ from django.utils import timezone
 from core.models import Client, DocumentType, Event, Facility, Organization, User
 from core.reporting import registry
 from core.reporting.backends.jugendamt import CATEGORY_MAP, JugendamtBackend
-from core.reporting.base import CompletenessIssue, DatasetBackend, FieldSpec
+from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.export import export_dataset
 
 pytestmark = pytest.mark.django_db
 
 DATE_FROM = date(2025, 5, 1)
 DATE_TO = date(2025, 5, 31)
+
+# Aggregat-Geruest fuer Tests, die nur die Completeness-Transformation pruefen.
+_LEERES_SUMMARY = {"total": 0, "by_category": [], "by_age_cluster": [], "unique_clients": 0}
 
 
 @pytest.fixture(autouse=True)
@@ -158,6 +164,43 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
     return facility
 
 
+@pytest.fixture
+def kleine_daten(facility, make_doc_type, make_client, make_event):
+    """Datensatz vollstaendig **unter** der K-Anon-Schwelle (Default k=5).
+
+    Enthaelt beide Vollstaendigkeits-Luecken (nicht gemappter Typ, Ereignis
+    ohne Personenbezug) mit Rohzahl 1 — beide muessen im Export ohne Zahl
+    erscheinen.
+    """
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+    person = make_client("JA-50", Client.AgeCluster.U18)
+
+    make_event(kontakt, person)
+    make_event(kontakt, person)
+    make_event(kontakt, None)  # ohne Personenbezug
+    make_event(beratung, person)
+    make_event(notiz, person)  # nicht gemappter Typ
+
+    return facility
+
+
+@pytest.fixture
+def grosse_daten(facility, make_doc_type, make_client, make_event):
+    """Datensatz vollstaendig **ab** der Schwelle — nichts wird unterdrueckt."""
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    personen = [make_client(f"JA-6{index}", Client.AgeCluster.AGE_18_26) for index in range(5)]
+
+    for person in personen:
+        make_event(kontakt, person)
+        make_event(beratung, person)
+    make_event(kontakt, personen[0])
+
+    return facility
+
+
 class TestBackendMetadaten:
     def test_ist_unter_slug_jugendamt_registriert(self, backend):
         assert isinstance(backend, JugendamtBackend)
@@ -194,7 +237,7 @@ class TestBackendMetadaten:
 
 
 class TestBuildDataset:
-    def test_summary_ist_byte_gleich_zum_bestandsformat(self, backend, parity_daten):
+    def test_summary_wertgleich_zum_bestandsformat(self, backend, parity_daten):
         """Hart kodierte Paritaet — Format und Zahlen wie in der Alt-Funktion."""
         result = backend.build_dataset(parity_daten, DATE_FROM, DATE_TO)
 
@@ -268,6 +311,15 @@ class TestBuildDataset:
         assert summary["by_age_cluster"] == [{"cluster": "unknown", "label": "Unbekannt", "count": 2}]
         assert summary["unique_clients"] == 1
 
+    def test_genau_vier_queries(self, backend, parity_daten, django_assert_num_queries):
+        """Guard fuer die Ein-Aggregat-Optimierung: je eine Query fuer Kategorien,
+        Altersgruppen, Personenzahl und ``validate_completeness``. Der Hybrid-/
+        Snapshot-Pfad ruft ``build_dataset`` je Zeitsegment auf — jede zusaetzliche
+        Query vervielfacht sich dort.
+        """
+        with django_assert_num_queries(4):
+            backend.build_dataset(parity_daten, DATE_FROM, DATE_TO)
+
     def test_leerer_zeitraum_liefert_leeres_aggregat(self, backend, parity_daten):
         result = backend.build_dataset(parity_daten, date(2025, 1, 1), date(2025, 1, 31))
 
@@ -325,8 +377,33 @@ class TestValidateCompleteness:
                 "unmapped_system_types",
                 "3 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
                 "warning",
+                count=3,
             )
         ]
+
+    def test_leerer_system_type_zaehlt_als_nicht_zugeordnet(
+        self, backend, facility, make_doc_type, make_client, make_event
+    ):
+        """``system_type=""`` (blank speicherbar) ist wie NULL nicht zugeordnet."""
+        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+        leer = make_doc_type("Leerer Systemtyp", "", DocumentType.Category.NOTE)
+        person = make_client("JA-22", Client.AgeCluster.AGE_18_26)
+
+        make_event(kontakt, person)
+        make_event(leer, person)
+
+        assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == [
+            CompletenessIssue(
+                "unmapped_system_types",
+                "1 Ereignisse in 1 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+                "warning",
+                count=1,
+            )
+        ]
+        # Gegenprobe im Datensatz: der leere Typ landet in keiner Kategorie.
+        summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
+        assert summary["total"] == 1
+        assert summary["by_category"] == [("Kontakte", 1)]
 
     def test_nicht_gemappte_ereignisse_ausserhalb_des_zeitraums_zaehlen_nicht(
         self, backend, facility, make_doc_type, make_client, make_event
@@ -358,8 +435,10 @@ class TestValidateCompleteness:
         assert issues == [
             CompletenessIssue(
                 "events_without_client",
-                "1 von 4 Ereignissen ohne Personenbezug (25 %) — nicht in Altersgruppen/Personenzahl enthalten",
+                "1 von 4 Ereignissen im Zeitraum ohne Personenbezug (25 %) "
+                "— nicht in Altersgruppen/Personenzahl enthalten",
                 "info",
+                count=1,
             )
         ]
 
@@ -371,11 +450,14 @@ class TestValidateCompleteness:
                 "unmapped_system_types",
                 "2 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
                 "warning",
+                count=2,
             ),
             CompletenessIssue(
                 "events_without_client",
-                "3 von 13 Ereignissen ohne Personenbezug (23 %) — nicht in Altersgruppen/Personenzahl enthalten",
+                "3 von 13 Ereignissen im Zeitraum ohne Personenbezug (23 %) "
+                "— nicht in Altersgruppen/Personenzahl enthalten",
                 "info",
+                count=3,
             ),
         ]
 
@@ -392,6 +474,176 @@ class TestValidateCompleteness:
         make_event(fremder_typ, None, event_facility=fremde_facility)
 
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
+
+
+class TestPrepareExport:
+    """Refs #1278 (T1) / Security R4+R14: jedes extern zirkulierende Berichts-
+    Artefakt unterdrueckt Kleinstfallzahlen. Der Export (CSV/JSON/XML) und die
+    Panel-Vorschau zeigen dieselbe suppressierte Sicht wie PDF und On-Screen-
+    Bericht — ein Formatwechsel darf die Haertung nie aushebeln.
+    """
+
+    def _prepared(self, backend, facility):
+        return backend.prepare_export(facility, backend.build_dataset(facility, DATE_FROM, DATE_TO))
+
+    def test_by_category_zellen_unter_der_schwelle_werden_unterdrueckt(self, backend, kleine_daten):
+        summary = self._prepared(backend, kleine_daten).summary
+
+        rows = {row["name"]: row for row in summary["by_category"]}
+        assert rows["Kontakte"]["count"] is None and rows["Kontakte"]["suppressed"] is True
+        assert rows["Beratung"]["count"] is None and rows["Beratung"]["suppressed"] is True
+
+    def test_records_spiegeln_die_suppressierten_zellen(self, backend, kleine_daten):
+        result = self._prepared(backend, kleine_daten)
+
+        assert result.records == [
+            {"category": "Kontakte", "count": None},
+            {"category": "Beratung", "count": None},
+        ]
+
+    def test_by_age_cluster_zellen_unter_der_schwelle_werden_unterdrueckt(self, backend, kleine_daten):
+        summary = self._prepared(backend, kleine_daten).summary
+
+        assert summary["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": None, "suppressed": True}]
+
+    def test_unique_clients_und_randsumme_unter_der_schwelle_werden_none(self, backend, kleine_daten):
+        # Security R14: die Randsumme selbst ist eine Kleinstfallzahl.
+        summary = self._prepared(backend, kleine_daten).summary
+
+        assert summary["unique_clients"] is None
+        assert summary["total"] is None
+
+    def test_schwelle_wird_transparent_ausgewiesen(self, backend, kleine_daten):
+        assert self._prepared(backend, kleine_daten).summary["k_anonymity_threshold"] == 5
+
+    def test_mode_und_field_specs_bleiben_unveraendert(self, backend, kleine_daten):
+        result = self._prepared(backend, kleine_daten)
+
+        assert result.mode == "aggregate"
+        assert backend.get_field_specs() == [FieldSpec("category", "Kategorie"), FieldSpec("count", "Anzahl")]
+        assert all(set(row) == {"category", "count"} for row in result.records)
+
+    def test_completeness_unter_der_schwelle_ohne_rohzahl(self, backend, kleine_daten):
+        issues = self._prepared(backend, kleine_daten).completeness
+
+        assert [issue.code for issue in issues] == ["unmapped_system_types", "events_without_client"]
+        for issue in issues:
+            assert issue.count is None
+            assert not any(char.isdigit() for char in issue.message)
+            assert "k-Anonymität" in issue.message
+        # Severity bleibt erhalten — nur die Zahl verschwindet.
+        assert [issue.severity for issue in issues] == ["warning", "info"]
+
+    def test_werte_ab_der_schwelle_bleiben_exakt_erhalten(self, backend, grosse_daten):
+        summary = self._prepared(backend, grosse_daten).summary
+
+        assert summary["by_category"] == [
+            {"name": "Kontakte", "count": 6, "suppressed": False},
+            {"name": "Beratung", "count": 5, "suppressed": False},
+        ]
+        assert summary["by_age_cluster"] == [{"cluster": "18_26", "label": "18–26", "count": 11, "suppressed": False}]
+        assert summary["total"] == 11
+        assert summary["unique_clients"] == 5
+        assert self._prepared(backend, grosse_daten).records == [
+            {"category": "Kontakte", "count": 6},
+            {"category": "Beratung", "count": 5},
+        ]
+
+    def test_completeness_ab_der_schwelle_bleibt_unveraendert(self, backend, facility):
+        issue = CompletenessIssue(
+            "unmapped_system_types",
+            "7 Ereignisse in 2 Dokumenttypen ohne Jugendamt-Zuordnung im Zeitraum",
+            "warning",
+            count=7,
+        )
+        result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
+
+        assert backend.prepare_export(facility, result).completeness == [issue]
+
+    def test_completeness_ohne_rohzahl_bleibt_unveraendert(self, backend, facility):
+        """Ohne ``count`` fehlt die Transformationsgrundlage — Meldung bleibt stehen."""
+        issue = CompletenessIssue("strukturhinweis", "Keine Zahl in dieser Meldung.", "info")
+        result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
+
+        assert backend.prepare_export(facility, result).completeness == [issue]
+
+    def test_unbekannter_code_faellt_auf_generische_meldung_zurueck(self, backend, facility):
+        """Fail-safe: ein kuenftiger Check ohne eigene Ersatzmeldung leakt keine Zahl."""
+        issue = CompletenessIssue("kuenftiger_check", "2 Ereignisse mit Luecke", "warning", count=2)
+        result = DatasetResult(mode="aggregate", records=[], summary=_LEERES_SUMMARY, completeness=[issue])
+
+        transformiert = backend.prepare_export(facility, result).completeness[0]
+        assert transformiert.count is None
+        assert not any(char.isdigit() for char in transformiert.message)
+        assert transformiert.code == "kuenftiger_check"
+
+    def test_schwelle_aus_den_facility_settings(self, backend, kleine_daten):
+        from core.models import Settings
+
+        Settings.objects.update_or_create(facility=kleine_daten, defaults={"k_anonymity_threshold": 1})
+
+        summary = self._prepared(backend, kleine_daten).summary
+        assert summary["k_anonymity_threshold"] == 1
+        assert summary["by_category"] == [
+            {"name": "Kontakte", "count": 3, "suppressed": False},
+            {"name": "Beratung", "count": 1, "suppressed": False},
+        ]
+        assert summary["total"] == 4
+        # Bei k=1 bleiben auch die Vollstaendigkeits-Meldungen beziffert.
+        assert [issue.count for issue in self._prepared(backend, kleine_daten).completeness] == [1, 1]
+
+    def test_build_dataset_bleibt_roh(self, backend, kleine_daten):
+        """Snapshot-Paritaet: die Suppression darf nicht in den Roh-Pfad lecken."""
+        raw = backend.build_dataset(kleine_daten, DATE_FROM, DATE_TO)
+        backend.prepare_export(kleine_daten, raw)
+
+        assert raw.summary == {
+            "total": 4,
+            "by_category": [("Kontakte", 3), ("Beratung", 1)],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4}],
+            "unique_clients": 1,
+        }
+        assert raw.records == [{"category": "Kontakte", "count": 3}, {"category": "Beratung", "count": 1}]
+        assert [issue.count for issue in raw.completeness] == [1, 1]
+
+
+class TestExportDatasetIntegration:
+    """``export_dataset`` + echtes JugendamtBackend: der Kleinst-Datensatz darf
+    in keinem Format eine Rohzahl zeigen (Refs #1278).
+    """
+
+    def test_json_enthaelt_keine_rohzahlen(self, backend, kleine_daten):
+        response = export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="json")
+        payload = json.loads(response.content)
+
+        assert payload["summary"]["total"] is None
+        assert payload["summary"]["unique_clients"] is None
+        assert payload["summary"]["k_anonymity_threshold"] == 5
+        assert all(row["count"] is None for row in payload["summary"]["by_category"])
+        assert all(row["count"] is None for row in payload["summary"]["by_age_cluster"])
+        assert all(record["count"] is None for record in payload["records"])
+        for issue in payload["completeness"]:
+            assert not any(char.isdigit() for char in issue["message"])
+        # Gegenprobe auf die konkreten Rohwerte des Datensatzes (3, 1, 4).
+        body = response.content.decode("utf-8")
+        assert '"count": 3' not in body
+        assert '"count": 1' not in body
+        assert '"total": 4' not in body
+
+    def test_csv_zelle_ist_leer_statt_none(self, backend, kleine_daten):
+        response = export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="csv")
+        content = b"".join(response.streaming_content).decode("utf-8")
+        rows = list(csv.reader(content.splitlines()[1:]))
+
+        assert rows[0] == ["Kategorie", "Anzahl"]
+        assert rows[1:] == [["Kontakte", ""], ["Beratung", ""]]
+        assert "None" not in content
+
+    def test_p4_serialisierer_feldsatz_unveraendert(self, backend, kleine_daten):
+        """``count`` ist rein intern — die Completeness-JSON-Felder bleiben bei drei."""
+        payload = json.loads(export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="json").content)
+
+        assert all(set(issue) == {"code", "message", "severity"} for issue in payload["completeness"])
 
 
 class TestDiscovery:
