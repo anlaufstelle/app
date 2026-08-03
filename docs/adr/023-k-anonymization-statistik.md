@@ -68,6 +68,19 @@ Die urspruengliche Entscheidung nannte als Suppression-Ort den externen Bericht 
 
 Detaillierte Begruendung + Test-Verweise: [`docs/security-notes.md` § K-Anonymitaet … / Geltungsbereich der Suppression](../security-notes.md).
 
+## Update 2026-08-03: Bridge und Hard-Pfad tilgen nachweislich dasselbe (Refs #1750, #1756)
+
+Das Update vom 2026-06-14 hielt fest, dass die Bridge die Fall-/Episoden-/Aufgaben-Kaskade mitfaehrt. Das war zum damaligen Stand richtig, blieb danach aber **nicht** richtig: die nach #1094 in den Hard-Pfad aufgenommenen Redaktions-Helfer (#1067, #1089, #1090, #1091) wurden in der Bridge nie nachgezogen. Ein per K-Anonymisierung „anonymisierter" Klient behielt dadurch Klartext in `EventHistory.data_before`/`data_after`, in `DeletionRequest.reason` und in `Activity.summary` — Art.-17-relevant, weil die Anwendung die Tilgung selbst zusichert.
+
+Der Befund ist geschlossen, und die Formulierung „beide Pfade tilgen dasselbe" ist jetzt **test-gepinnt** statt behauptet:
+
+- Die Bridge faehrt die **vollstaendige** Redaktionskaskade des Hard-Pfads.
+- Ein **ableitungsbasierter** Architektur-Guard (`TestKAnonBridgeRedactionParity` in [`test_architecture_guards_services.py`](../../src/tests/test_architecture_guards_services.py)) liest die Helfer-Menge per AST aus `anonymize_client` und verlangt, dass die Bridge jeden davon aufruft. Ein **neuer** Helfer im Hard-Pfad reisst den Test, bis er in der Bridge landet oder begruendet ausgenommen wird — genau die Drift, die den Befund erzeugt hat, kann sich nicht wiederholen.
+- Zwei bewusste Ausnahmen sind im Guard hinterlegt: `_redact_live_events` (die Eintrittsbedingung der Bridge garantiert `active_events == 0`) und `_redact_client_identity` (`k_anonymize_client` redigiert die Client-Zeile selbst; `_redact_client_identity` wuerde zusaetzlich `age_cluster` loeschen und damit den Quasi-Identifikator zerstoeren, auf dem die k-Anonymitaet beruht).
+- Zusaetzlich sweept [`test_pii_residue_sweep.py`](../../src/tests/test_pii_residue_sweep.py) den k-anonymisierten Pfad auf PII-Residuen und pinnt die Attachment-Loeschung als Invariante.
+
+Ebenfalls nachgezogen: **Sperrvermerke (Legal Hold) blockieren jetzt beide Bulk-Einstiege.** Die Bridge `anonymize_clients` uebersprang Klienten mit aktivem Hold bislang nicht (der Trash-Expiry-Pfad tat es seit #1066 schon); beide nutzen jetzt denselben Filter, der Ausschluss greift **vor** der Pfadwahl und gilt damit fuer Hard- wie K-Anon-Zweig. Fuer die k-Anonymitaet bleibt ein uebersprungener Klient regulaeres Mitglied seiner Aequivalenzklasse — die Zeile existiert mit echten Quasi-Identifikatoren weiter, ein Abzug wuerde das effektive k grundlos druecken (dieselbe Begruendung wie bei `count_clients_in_bucket`, #1442).
+
 ## References
 
 - [`src/core/services/compliance/k_anonymization.py`](../../src/core/services/compliance/k_anonymization.py) — `k_anonymize_client`, `is_k_anonymous`, `count_clients_in_bucket`

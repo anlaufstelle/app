@@ -478,6 +478,22 @@ aktivierte K-Anon-Pfad bei unterbesetzten Buckets (< *k*) fail-safe auf Hard-Del
 (Security-Review N5). Default festgeschrieben in
 `test_retention_k_anonymization.py::TestKAnonymity::test_model_default_is_hard_delete`.
 
+**Redaktions-Parität beider Retention-Pfade** (#1750):
+Die K-Anon-Bridge leistet **dieselbe** Tilgung wie der Hard-Pfad `anonymize_client` — und
+das ist seit dem Befund nicht mehr behauptet, sondern **test-gepinnt**. Ein ableitungsbasierter
+Architektur-Guard (`TestKAnonBridgeRedactionParity` in
+[`test_architecture_guards_services.py`](../src/tests/test_architecture_guards_services.py))
+liest die Redaktions-Helfer per AST aus `anonymize_client` und verlangt, dass die Bridge jeden
+davon aufruft; ein neuer Helfer im Hard-Pfad reißt den Test, bis er in der Bridge landet oder
+begründet ausgenommen wird. Genau diese Drift hatte den Befund erzeugt: die Bridge rief 2 von
+9 Helfern, ein k-anonymisierter Klient behielt Klartext in `EventHistory`, `DeletionRequest.reason`
+und `Activity.summary`. Zwei Ausnahmen sind bewusst hinterlegt (`_redact_live_events` — die
+Eintrittsbedingung garantiert `active_events == 0`; `_redact_client_identity` — würde
+`age_cluster` löschen und damit den Quasi-Identifikator zerstören, auf dem die k-Anonymität
+beruht). Sperrvermerke blockieren seit #1756
+**beide** Bulk-Einstiege; Begründung und Bucket-Entscheid in
+[ADR-023 Update 2026-08-03](adr/023-k-anonymization-statistik.md).
+
 ---
 
 ## TOTP-Secret at rest Fernet-verschlüsselt (Issue #1362)
