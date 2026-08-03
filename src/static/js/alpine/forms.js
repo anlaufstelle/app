@@ -229,7 +229,11 @@ document.addEventListener("alpine:init", () => {
                     return this.selectedId && this.clientCases.length > 0;
                 },
                 get showNoCasesHint() {
-                    return this.selectedId && this.clientCases.length === 0;
+                    // Refs #1735: Ohne konfigurierte Cases-URL (Rolle darf
+                    // ``cases_for_client`` nicht abrufen) wird gar nicht erst
+                    // geladen — dann darf hier auch nicht "Kein offener Fall"
+                    // stehen, das waere eine unbelegte Behauptung.
+                    return this.selectedId && this._casesForClientUrl && this.clientCases.length === 0;
                 },
                 buildAutocompleteUrl() {
                     const params = new URLSearchParams({ q: this.query });
@@ -273,7 +277,11 @@ document.addEventListener("alpine:init", () => {
                 },
                 loadCasesForClient(clientId) {
                     this.selectedCaseId = "";
-                    if (!clientId) {
+                    // Refs #1735: Fehlt die URL, ist die Rolle fuer
+                    // ``cases_for_client`` nicht berechtigt (Template setzt das
+                    // Attribut dann nicht). Frueher lief der Fetch trotzdem —
+                    // gegen die aktuelle Seite — und wurde still zu ``[]``.
+                    if (!clientId || !this._casesForClientUrl) {
                         this.clientCases = [];
                         return;
                     }

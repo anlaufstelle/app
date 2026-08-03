@@ -348,3 +348,79 @@ class TestEventCreateRestrictedFieldsHidden:
         content = response.content.decode()
         assert response.status_code == 200
         assert "Notiz (Krise)" in content
+
+
+# ===========================================================================
+# 8. Aktions-Buttons/Links, deren Ziel enger gegated ist als die Seite (#1735)
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestActionTargetGuards:
+    """Refs #1735: Fünf Flächen zeigten Aktionen, die für die Rolle im 403 enden.
+
+    Kein AuthZ-Problem (die View-Guards greifen), aber der Eindruck einer
+    defekten Anwendung: Listenansicht bietet an, was die Detailansicht korrekt
+    verbirgt. Der Guard ist überall derselbe wie in der Navigation.
+    """
+
+    def test_assistant_client_list_has_no_create_button(self, client, assistant_user):
+        client.force_login(assistant_user)
+        content = client.get(reverse("core:client_list")).content.decode()
+        assert reverse("core:client_create") not in content
+
+    def test_staff_client_list_keeps_create_button(self, client, staff_user):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_list")).content.decode()
+        assert reverse("core:client_create") in content
+
+    def test_assistant_workitem_inbox_has_no_create_button(self, client, assistant_user):
+        client.force_login(assistant_user)
+        content = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert reverse("core:workitem_create") not in content
+
+    def test_staff_workitem_inbox_keeps_create_button(self, client, staff_user):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert reverse("core:workitem_create") in content
+
+    def test_assistant_client_detail_hides_case_section(self, client, assistant_user, client_identified, case_open):
+        """Der Fall-Bereich ist für die Assistenz komplett gesperrt — die Links
+        liefen ins 403 und verrieten nebenbei Falltitel und Fallverantwortliche."""
+        client.force_login(assistant_user)
+        content = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
+        assert reverse("core:case_detail", kwargs={"pk": case_open.pk}) not in content
+        assert case_open.title not in content
+
+    def test_staff_client_detail_keeps_case_section(self, client, staff_user, client_identified, case_open):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
+        assert reverse("core:case_detail", kwargs={"pk": case_open.pk}) in content
+        assert case_open.title in content
+
+    def test_lead_dashboard_has_no_legal_hold_card(self, client, lead_user):
+        """``system_legal_hold_list`` ist super_admin-only; das Lead-Dashboard
+        rendert ausschliesslich für LEAD (``views/dashboard.py``)."""
+        client.force_login(lead_user)
+        content = client.get(reverse("core:dashboard")).content.decode()
+        assert reverse("core:system_legal_hold_list") not in content
+        assert 'data-testid="card-legal-holds"' not in content
+
+    def test_lead_dashboard_keeps_the_other_cards(self, client, lead_user):
+        """Gegenprobe: der Guard ist nicht zu breit."""
+        client.force_login(lead_user)
+        content = client.get(reverse("core:dashboard")).content.decode()
+        assert reverse("core:retention_dashboard") in content
+        assert reverse("core:statistics") in content
+
+    def test_assistant_event_create_has_no_cases_fetch_url(self, client, assistant_user):
+        """``cases_for_client`` ist STAFF_PLUS — der Fetch lief für die Assistenz
+        ins 403 und wurde in ``forms.js`` still zu ``[]`` geschluckt."""
+        client.force_login(assistant_user)
+        content = client.get(reverse("core:event_create")).content.decode()
+        assert reverse("core:cases_for_client") not in content
+
+    def test_staff_event_create_keeps_cases_fetch_url(self, client, staff_user):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:event_create")).content.decode()
+        assert reverse("core:cases_for_client") in content

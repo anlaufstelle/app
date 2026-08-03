@@ -37,8 +37,11 @@ class TestRoleDashboardLanding:
         expect(page.locator("[data-testid='lead-dashboard-cards']")).to_be_visible()
         expect(page.locator("[data-testid='card-deletion-requests']")).to_be_visible()
         expect(page.locator("[data-testid='card-retention-proposals']")).to_be_visible()
-        expect(page.locator("[data-testid='card-legal-holds']")).to_be_visible()
         expect(page.locator("[data-testid='card-last-snapshot']")).to_be_visible()
+        # Refs #1735: Die Legal-Holds-Kachel verlinkte eine super_admin-only-Seite
+        # (``SystemAuditMixin``) — für die Leitung endete der Klick im 403. Sie ist
+        # deshalb hinter demselben Rollen-Guard wie überall und hier nicht sichtbar.
+        expect(page.locator("[data-testid='card-legal-holds']")).to_have_count(0)
 
     @pytest.mark.smoke
     def test_facility_admin_dashboard_renders(self, authenticated_page, base_url):

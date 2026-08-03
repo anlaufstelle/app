@@ -13,7 +13,11 @@
           data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
           data-initial-client-id="{{ client_id|default:'' }}"
           data-autocomplete-url="{% url 'core:client_autocomplete' %}"
-          data-cases-for-client-url="{% url 'core:cases_for_client' %}">
+          {% comment %}Refs #1735: ``cases_for_client`` ist staff+, die Kontakterfassung
+          assistant+. Ohne Guard lief der Fetch für die Assistenz ins 403 und wurde in
+          forms.js still zu ``[]`` geschluckt — die Fall-Auswahl blieb dauerhaft leer
+          und der Hinweis „Kein offener Fall" behauptete etwas Falsches.{% endcomment %}
+          {% if user.is_staff_or_above %}data-cases-for-client-url="{% url 'core:cases_for_client' %}"{% endif %}>
         {% csrf_token %}
 
         {# Schnell-Vorlagen (Quick-Templates, Refs #494) #}

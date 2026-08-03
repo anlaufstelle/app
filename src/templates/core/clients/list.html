@@ -22,10 +22,13 @@
             <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
             {% trans "Alle offline mitnehmen" %}
         </button>
+        {# Refs #1735: Die Liste ist assistant+, das Anlegen staff+ — ohne Guard lief der Button für die Assistenz ins 403 (gleicher Guard wie in der Navigation). #}
+        {% if user.is_staff_or_above %}
         <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neue Person" %}
         </a>
+        {% endif %}
     </div>
 </div>
 

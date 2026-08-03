@@ -253,7 +253,11 @@
         <p class="text-[12px] text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
         {% endif %}
 
-        {# Fälle #}
+        {% comment %}Fälle — Refs #1735: der gesamte Fall-Bereich ist staff+ (``CaseDetailView``
+        trägt ``StaffRequiredMixin``). Ohne Guard rendert die Sektion für die Assistenz Links
+        ins 403 und verrät nebenbei Falltitel und Fallverantwortliche (die View liefert
+        ``open_cases`` rollenunabhängig).{% endcomment %}
+        {% if user.is_staff_or_above %}
         <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5 mt-5">{% trans "Fälle" %}</h2>
         {% if open_cases %}
         <div class="space-y-1.5">
@@ -272,7 +276,6 @@
         {% else %}
         <p class="text-[12px] text-ink-muted">{% trans "Keine offenen Fälle" %}</p>
         {% endif %}
-        {% if user.is_staff_or_above %}
         <div class="mt-2">
             <a href="{% url 'core:case_create' %}?client={{ client.pk }}" class="inline-flex items-center text-[12px] text-accent hover:underline font-semibold" data-testid="client-new-case-link">
                 <svg aria-hidden="true" class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>

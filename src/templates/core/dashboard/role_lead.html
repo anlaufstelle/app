@@ -23,11 +23,18 @@
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-retention-proposals">{{ pending_retention_proposals }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "ausstehend" %}</div>
     </a>
+    {% comment %}Refs #1735: ``system_legal_hold_list`` liegt hinter ``SuperAdminRequiredMixin``
+    (``SystemAuditMixin``). Dieses Template rendert laut ``views/dashboard.py`` ausschließlich
+    für LEAD — die Kachel samt Zähler war also für jede Rolle, die sie zu sehen bekam, ein
+    403-Link. Der Guard ist derselbe wie überall; er blendet die Kachel damit heute vollständig
+    aus, hält die Kachel aber korrekt, falls das Template je für super_admin wiederverwendet wird.{% endcomment %}
+    {% if user.is_super_admin %}
     <a href="{% url 'core:system_legal_hold_list' %}" class="card p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Legal Holds" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-legal-holds">{{ active_legal_holds }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "aktiv" %}</div>
     </a>
+    {% endif %}
     <a href="{% url 'core:statistics' %}" class="card p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Statistik" %}</div>
         {% if last_snapshot %}
