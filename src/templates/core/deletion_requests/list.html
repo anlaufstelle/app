@@ -12,7 +12,9 @@
     {% if pending_requests %}
     <div class="space-y-3">
         {% for dr in pending_requests %}
-        <div class="bg-surface border border-yellow-200 rounded-[10px] p-4">
+        {# data-testid/-dr-pk: stabiler Karten-Scope fuer E2E (Refs #1736). #}
+        <div class="bg-surface border border-yellow-200 rounded-[10px] p-4"
+             data-testid="deletion-request-card" data-dr-pk="{{ dr.pk }}">
             <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2 flex-wrap">
                     {% include "core/deletion_requests/partials/target.html" %}
