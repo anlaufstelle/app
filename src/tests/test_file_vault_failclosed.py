@@ -41,6 +41,7 @@ from core.models import (  # noqa: E402
     Settings,
 )
 from core.models.attachment import EventAttachment  # noqa: E402
+from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
 
 VALID_PDF_BYTES = (
@@ -125,7 +126,9 @@ class TestFileVaultFailClosed:
         assert EventAttachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "extension_not_allowed"
-        assert log.detail["filename"] == "trojaner.exe"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("trojaner.exe")
+        assert log.detail["filename_ext"] == "exe"
 
     def test_empty_allowed_file_types_rejects_exe(self, facility, staff_user, doc_type_with_file, event):
         """Case 2: Settings.allowed_file_types == '' → Default-Whitelist greift."""

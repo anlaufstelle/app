@@ -12,7 +12,7 @@ Module:
   ``audit_retention_decision``, ``audit_security_violation``,
   ``audit_system_view``).
 - :mod:`core.services.audit.hash` — HMAC-SHA256 PII-Pseudonymisierung
-  fuer E-Mails im AuditLog (``hmac_hash_email``).
+  im AuditLog: ``hmac_hash_email`` / ``hmac_hash_value`` (Refs #1751).
 
 Beispiele:
 
@@ -29,7 +29,7 @@ vom Architekturtest (``TestAuditLogCreationAllowlist``) blockiert.
 
 from core.services.audit.chain import compute_entry_hash, verify_chain
 from core.services.audit.diff import changed_fields_vs_db
-from core.services.audit.hash import hmac_hash_email
+from core.services.audit.hash import hmac_hash_email, hmac_hash_value
 from core.services.audit.helpers import (
     audit_admin_view,
     audit_client_event,
@@ -50,6 +50,7 @@ __all__ = [
     "changed_fields_vs_db",
     "compute_entry_hash",
     "hmac_hash_email",
+    "hmac_hash_value",
     "log_audit_event",
     "verify_chain",
 ]

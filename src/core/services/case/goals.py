@@ -100,7 +100,11 @@ def delete_milestone(milestone, user):
         facility=facility,
         target_type="Milestone",
         target_id=milestone_pk,
-        detail={"title": title, "case_id": str(case.pk)},
+        # Refs #1751 (Punkt 5): kein Titel ins detail. Meilenstein-Titel sind
+        # klientenbezogener Freitext (die Anonymisierung tilgt sie an
+        # ``Milestone.title``); im append-only AuditLog ueberlebten sie sie.
+        # Zuordnung bleibt vollstaendig ueber target_id + case_id.
+        detail={"case_id": str(case.pk)},
     )
     log_activity(
         facility=facility,

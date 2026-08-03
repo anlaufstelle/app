@@ -35,6 +35,24 @@ def _get_audit_hash_key() -> bytes:
     return hashlib.sha256(secret.encode("utf-8")).digest()
 
 
+def hmac_hash_value(value: str) -> str:
+    """Stabiler, nicht-reversibler HMAC-SHA256 ueber einen beliebigen String.
+
+    Refs #1751 (Punkt 5): dieselbe Pseudonymisierungs-Primitive wie fuer
+    E-Mails, aber ohne Normalisierung — fuer Werte, bei denen Gross-/
+    Kleinschreibung bedeutungstragend ist (z.B. Dateinamen). Der Hash
+    korreliert Wiederholungen desselben Werts, ohne den Klartext in das
+    append-only AuditLog zu schreiben.
+
+    Returns: Hex-Digest (64 Zeichen). Leere Eingaben liefern ``""`` — sonst
+    truege ein Pre-Save-Reject ohne Wert einen Pseudo-Hash, der wie ein
+    echter Treffer aussaehe.
+    """
+    if not value:
+        return ""
+    return hmac.new(_get_audit_hash_key(), str(value).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def hmac_hash_email(email: str) -> str:
     """Stabiler HMAC-SHA256 ueber die normalisierte E-Mail-Adresse.
 
@@ -46,5 +64,4 @@ def hmac_hash_email(email: str) -> str:
     """
     if not email:
         return ""
-    normalized = str(email).strip().lower()
-    return hmac.new(_get_audit_hash_key(), normalized.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac_hash_value(str(email).strip().lower())

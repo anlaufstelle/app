@@ -25,6 +25,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
 from core.models.attachment import EventAttachment  # noqa: E402
+from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import (  # noqa: E402  # noqa: E402
     EncryptionError,
     ScanResult,
@@ -703,7 +704,9 @@ class TestVirusScanIntegration:
         assert log.facility == facility
         assert log.detail["reason"] == "virus_detected"
         assert log.detail["signature"] == "Eicar-Test-Signature"
-        assert log.detail["filename"] == "malware.pdf"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("malware.pdf")
+        assert log.detail["filename_ext"] == "pdf"
 
     def test_scanner_unavailable_fails_closed(self, facility, staff_user, doc_type_with_file):
         event, ft_file = self._event(facility, staff_user, doc_type_with_file)

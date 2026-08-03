@@ -114,7 +114,6 @@ class TestGoalService:
         from core.models import AuditLog
 
         pk = milestone.pk
-        title = milestone.title
         case_id = milestone.goal.case.pk
         delete_milestone(milestone, staff_user)
         assert not Milestone.objects.filter(pk=pk).exists()
@@ -122,7 +121,10 @@ class TestGoalService:
         assert log.action == AuditLog.Action.MILESTONE_DELETE
         assert log.user == staff_user
         assert log.target_type == "Milestone"
-        assert log.detail["title"] == title
+        # Refs #1751 (Punkt 5): Der Meilenstein-Titel ist klientenbezogener
+        # Freitext und gehoert nicht ins append-only AuditLog — die Zuordnung
+        # traegt target_id (Meilenstein-PK) + case_id.
+        assert "title" not in log.detail
         assert log.detail["case_id"] == str(case_id)
 
 

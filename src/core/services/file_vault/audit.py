@@ -3,18 +3,45 @@
 Schmaler Wrapper um :func:`core.services.audit.audit_security_violation`,
 der den ``target_type="EventAttachment"`` und die ``target_id`` aus dem
 Event vereinheitlicht (``None`` bei Pre-Save-Rejects ohne Event-PK).
-Detail-Payload bleibt schema-stabil: ``reason``, ``filename`` plus
-optionale Extras (signature/extension/declared/detected/error).
-Refs #610 / #901.
+Detail-Payload bleibt schema-stabil: ``reason``, ``filename_hash``,
+``filename_ext`` plus optionale Extras (signature/extension/declared/
+detected/error).
+Refs #610 / #901 / #1751.
 """
 
 from __future__ import annotations
 
-from core.services.audit import audit_security_violation
+from core.services.audit import audit_security_violation, hmac_hash_value
+
+
+def _extension(filename: str) -> str:
+    """Kleingeschriebene Dateiendung ohne Punkt (``""`` wenn keine da ist)."""
+    name = filename or ""
+    return name.rsplit(".", 1)[-1].lower() if "." in name else ""
 
 
 def log_attachment_violation(facility, user, event, *, reason, filename, **extra):
-    """Schreibe einen ``SECURITY_VIOLATION``-AuditLog fuer einen File-Vault-Reject."""
+    """Schreibe einen ``SECURITY_VIOLATION``-AuditLog fuer einen File-Vault-Reject.
+
+    Refs #1751 (Punkt 5): der **Original-Dateiname wird nicht mehr im
+    Klartext** protokolliert. Hochgeladene Dateien heissen im Feld regelmaessig
+    nach der betroffenen Person („Bericht-Max-Mustermann.pdf"); das AuditLog
+    ist append-only (nachtraegliche Redaktion unmoeglich) und
+    ``SECURITY_VIOLATION`` steht zusaetzlich in
+    :data:`core.retention.audit_pruning.PRUNE_EXEMPT_ACTIONS` — dieser Name
+    ueberlebte damit jede Aufbewahrungsfrist **und** jede Anonymisierung.
+
+    Was die Forensik braucht, bleibt erhalten:
+
+    * ``filename_hash`` — stabiler HMAC; Wiederholungsversuche derselben
+      Datei bleiben korrelierbar, der Klartext ist nicht rekonstruierbar.
+    * ``filename_ext`` — die Endung als Typmarker (der eigentliche
+      Tatbestand bei ``extension_not_allowed``), ohne Personenbezug.
+
+    Der Parameter heisst bewusst weiterhin ``filename``: die Aufrufer in
+    ``policy.py`` uebergeben den echten Namen, die Minimierung passiert
+    zentral hier — so kann keine Aufrufstelle sie versehentlich umgehen.
+    """
     target_id = event.pk if getattr(event, "pk", None) else None
     return audit_security_violation(
         facility,
@@ -22,6 +49,7 @@ def log_attachment_violation(facility, user, event, *, reason, filename, **extra
         target_type="EventAttachment",
         target_id=target_id,
         reason=reason,
-        filename=filename,
+        filename_hash=hmac_hash_value(filename),
+        filename_ext=_extension(filename),
         **extra,
     )

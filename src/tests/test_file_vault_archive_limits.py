@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
 from core.models.attachment import EventAttachment
+from core.services.audit.hash import hmac_hash_value
 from core.services.file_vault import store_encrypted_file
 from core.services.file_vault.policy import enforce_archive_limits
 
@@ -115,7 +116,8 @@ class TestArchiveExpansionGuard:
         assert upload.tell() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "archive_bomb"
-        assert log.detail["filename"] == "bomb.zip"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("bomb.zip")
 
     def test_size_bomb_rejected(self, facility_with_settings, staff_user, event, settings):
         """Unkomprimierte Gesamtgröße über dem Byte-Cap → archive_bomb (Ratio isoliert)."""

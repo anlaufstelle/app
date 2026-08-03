@@ -34,6 +34,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
 from core.models.attachment import EventAttachment  # noqa: E402
+from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
 
 # Minimaler, aber gültiger PDF-Header — libmagic erkennt das als application/pdf.
@@ -153,7 +154,8 @@ class TestMagicBytesValidation:
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
         assert log.detail["detected"].startswith("image/png")
-        assert log.detail["filename"] == "tricky.pdf"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("tricky.pdf")
 
     def test_docx_accepted_when_libmagic_returns_zip(
         self, facility_with_settings, staff_user, doc_type_with_file, event
@@ -245,7 +247,8 @@ class TestMagicBytesValidation:
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["detected"] == "application/octet-stream"
-        assert log.detail["filename"] == "leer.pdf"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("leer.pdf")
 
     def test_pdf_content_under_png_extension_rejected(
         self, facility_with_settings, staff_user, doc_type_with_file, event
@@ -264,7 +267,8 @@ class TestMagicBytesValidation:
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["detected"] == "application/pdf"
-        assert log.detail["filename"] == "fake.png"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("fake.png")
 
 
 @pytest.mark.django_db
@@ -300,7 +304,8 @@ class TestAllowedFileTypesWhitelist:
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "extension_not_allowed"
         assert log.detail["extension"] == "svg"
-        assert log.detail["filename"] == "evil.svg"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("evil.svg")
 
     def test_fake_pdf_header_with_exe_payload_rejected(
         self, facility_with_settings, staff_user, doc_type_with_file, event
@@ -327,7 +332,8 @@ class TestAllowedFileTypesWhitelist:
         # Refs #1310 (S3): ``.pdf`` ist Strong-Magic → Reject via positive Allowlist.
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
-        assert log.detail["filename"] == "payload.pdf"
+        assert "filename" not in log.detail  # Refs #1751: write-time minimiert
+        assert log.detail["filename_hash"] == hmac_hash_value("payload.pdf")
 
     def test_double_extension_attack_uses_last_extension(
         self, facility_with_settings, staff_user, doc_type_with_file, event

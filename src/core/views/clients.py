@@ -586,7 +586,9 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, V
             AuditLog.Action.EXPORT,
             target_obj=client,
             target_type="Client-JSON",
-            detail={"format": "JSON", "pseudonym": client.pseudonym},
+            # Refs #1751 (Punkt 5): kein Pseudonym ins detail — reine
+            # target_id-Dublette im append-only Log (Muster aus Refs #1093).
+            detail={"format": "JSON"},
         )
 
         return safe_download_response(
@@ -614,7 +616,9 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, Vi
             AuditLog.Action.EXPORT,
             target_obj=client,
             target_type="Client-PDF",
-            detail={"format": "PDF", "pseudonym": client.pseudonym},
+            # Refs #1751 (Punkt 5): kein Pseudonym ins detail — reine
+            # target_id-Dublette im append-only Log (Muster aus Refs #1093).
+            detail={"format": "PDF"},
         )
 
         return safe_download_response(
