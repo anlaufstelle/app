@@ -1,0 +1,122 @@
+{% load i18n core_tags %}
+
+{% comment %}
+Dynamische ``data_json``-Felder, gruppiert nach FieldGroup (M0/P4, Refs #1056).
+
+Seit M2/P3 (Refs #1058) entity-neutral: gerendert wird allein aus ``data_form``
+(einer :class:`core.forms.dynamic.DynamicDataForm`), damit Client/Case dieselbe
+Feldfläche nutzen können. Der Event-Pfad erreicht dieses Partial über den Shim
+``core/events/partials/dynamic_fields.html`` (Pfad-Stabilität für
+``EventFieldsPartialView``, ``events/create.html``, ``events/edit.html``).
+
+Kontext-Keys:
+- ``data_form``  — PFLICHT; darf auch ``None`` sein (dann wird nichts gerendert).
+- ``existing_attachments`` — OPTIONAL, nur Event-Edit: ``{slug: [entry, ...]}``
+  für die Datei-Ersetzen-/Soft-Delete-Steuerung (#622).
+- ``event`` — OPTIONAL, nur Event-Edit: Träger der ``core:attachment_download``-URL.
+Beide Attachment-Keys werden ausschließlich im FILE-Renderpfad ausgewertet;
+fehlen sie (Create-Flow, Client/Case mit ``exclude_file_fields``), bleibt der
+Attachment-Block leer.
+
+Rendert je Gruppe eine Sektion via ``data_form.grouped_fields``. Gruppen-Header
+erscheinen nur, wenn benannte Gruppen existieren — ohne Gruppen bleibt die
+Darstellung flach (eine „Felder"-Sektion, wie zuvor). Einklappbare Gruppen
+(``is_collapsible``) tragen die CSP-kompatible Alpine-Komponente
+``collapsibleGroup`` (nur benannte Property-/Methoden-Pfade, keine Inline-
+Expressions/Argumente; Startzustand via ``data-start-open``).
+
+Bedingte Feldlogik (M1/P5, Refs #1057): Der Wurzel-``<div x-data="conditionEvaluator">``
+liegt IM HTMX-Swap-Ziel ``#dynamic-fields`` (create.html), trägt das E12-Payload als
+``json_script`` (nur wenn Bedingungen existieren) und die delegierten input/change-
+Listener. Jedes Feld sitzt in einem ``conditionalField``-Wrapper (``x-show="visible"``,
+liest den globalen ``fieldConditions``-Store). Beim DocType-Wechsel ersetzt HTMX den
+Wurzelknoten samt Payload — ohne Payload leert der Evaluator den Store (alles sichtbar),
+sodass ein neuer DocType nie Sichtbarkeiten des vorherigen erbt. CSP-strikt: nur die
+Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
+{% endcomment %}
+
+<div x-data="conditionEvaluator">
+{% if data_form.conditions_payload %}{{ data_form.conditions_payload|json_script:"field-conditions" }}{% endif %}
+{% if data_form and data_form.fields %}
+{% with grouped=data_form.grouped_fields target_slugs=data_form.condition_target_slugs %}
+{% for group, fields in grouped %}
+<div class="card p-4 space-y-4"{% if group.is_collapsible %} x-data="collapsibleGroup" data-start-open="true"{% endif %}>
+    {% if group.is_collapsible %}
+    <button type="button" @click="toggle" aria-expanded="true" :aria-expanded="ariaExpanded"
+            class="w-full flex items-center justify-between gap-2 text-left">
+        <span class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{{ group.name }}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+             class="w-4 h-4 shrink-0 text-ink-muted transition-transform" :class="rotateClass">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+        </svg>
+    </button>
+    {% else %}
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">
+        {% if group %}{{ group.name }}{% elif grouped|length > 1 %}{% trans "Ohne Gruppe" %}{% else %}{% trans "Felder" %}{% endif %}
+    </h2>
+    {% endif %}
+    <div class="space-y-4"{% if group.is_collapsible %} x-show="open"{% endif %}>
+        {% for field in fields %}
+        {# M1/P5 (Refs #1057): conditionalField-Wrapper je Feld; x-show liest den Store. x-cloak NUR an Bedingungs-Zielen (Flacker-Schutz); unkonditionierte/Quellfelder bleiben bei Alpine-Ausfall sichtbar. #}
+        <div x-data="conditionalField" data-field-slug="{{ field.name }}" x-show="visible"{% if field.name in target_slugs %} x-cloak{% endif %}>
+        {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
+        {# Refs #1143: gezielt auf den Datei-Widget-Typ prüfen — allow_multiple_selected ist auch bei CheckboxSelectMultiple True. #}
+        {% if field.field.widget.input_type == "file" %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
+                {{ field.label }}{% if field.field.required or field.field.is_conditionally_required %} *{% endif %}
+            </label>
+            {% with entries=existing_attachments|get_item:field.name %}
+            {% if entries %}
+            <ul class="mb-2 space-y-2" data-testid="attachment-entries-{{ field.name }}">
+                {% for entry in entries %}
+                <li class="flex flex-wrap items-center gap-2 p-2 bg-canvas border border-subtle rounded-[10px]"
+                    data-entry-id="{{ entry.entry_id }}">
+                    <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
+                       class="text-accent hover:underline text-sm">
+                        {{ entry.filename }}
+                    </a>
+                    <span class="text-xs text-ink-muted">({{ entry.size }})</span>
+                    <label class="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted">
+                        <span>{% trans "Ersetzen" %}:</span>
+                        <input type="file" name="{{ field.name }}__replace__{{ entry.entry_id }}"
+                               class="text-xs" data-testid="attachment-replace-{{ entry.entry_id }}">
+                    </label>
+                    <label class="inline-flex items-center gap-1 text-xs text-red-600">
+                        <input type="checkbox"
+                               name="__remove_checkbox__{{ field.name }}"
+                               value="{{ entry.entry_id }}"
+                               data-testid="attachment-remove-{{ entry.entry_id }}"
+                               data-attachment-remove
+                               data-remove-target="{{ field.name }}__remove">
+                        {% trans "Entfernen" %}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            <p class="text-xs text-ink-muted mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
+            {% aria_field field %}
+            {% endwith %}
+            {% if field.help_text %}
+            <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+            <ul id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
+                {% for error in field.errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% else %}
+        {% include "components/_form_field.html" with field=field %}
+        {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endwith %}
+{% endif %}
+</div>{# x-data="conditionEvaluator" #}
