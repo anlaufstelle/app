@@ -49,8 +49,16 @@ SUPPORTED_FORMATS = frozenset(_CONTENT_TYPES)
 # Gueltiger XML-Elementname (vereinfachtes NCName-Subset: Python-Identifier-
 # artig). Summary-Keys, die nicht darauf passen (z. B. Monatsschluessel wie
 # "2026-01"), werden als ``<entry key="…">`` statt als eigenes Element
-# gerendert.
+# gerendert. Geprueft wird immer mit ``fullmatch`` — ``$`` matcht in Python VOR
+# einem finalen Zeilenumbruch, ``"total\n"`` passierte einen ``match``-Guard
+# also und wuerde zum Elementnamen ``<total\n>`` (den der Parser still als
+# ``<total>`` zurueckliest: deklarierter Key != Elementname).
 _XML_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# In XML 1.0 unzulaessige Codepoints (alles ausserhalb von #x9 | #xA | #xD |
+# [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF], inkl. einzelner
+# Surrogate). Siehe :func:`_xml_safe`.
+_XML_ILLEGAL_RE = re.compile(r"[^\x09\x0a\x0d\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
 def export_dataset(
@@ -189,8 +197,12 @@ def _render_xml(
 
     completeness_el = ET.SubElement(root, "completeness")
     for issue in result.completeness:
-        issue_el = ET.SubElement(completeness_el, "issue", {"code": issue.code, "severity": issue.severity})
-        issue_el.text = issue.message
+        issue_el = ET.SubElement(
+            completeness_el,
+            "issue",
+            {"code": _xml_safe(issue.code), "severity": _xml_safe(issue.severity)},
+        )
+        issue_el.text = _xml_safe(issue.message)
 
     summary_el = ET.SubElement(root, "summary")
     _fill_xml_value(summary_el, result.summary)
@@ -203,14 +215,14 @@ def _render_xml(
         record_el = ET.SubElement(records_el, "record")
         for spec in field_specs:
             value = record.get(spec.key)
-            text = "" if value is None else str(value)
+            text = "" if value is None else _xml_safe(str(value))
             # Gleicher Fallback wie im summary-Renderer (``_fill_xml_value``):
             # ein FieldSpec-Key, der kein gueltiger XML-Elementname ist (z. B.
             # Ziffern-initial), wuerde sonst still unparsbares XML erzeugen.
-            if _XML_IDENTIFIER_RE.match(spec.key):
+            if _XML_IDENTIFIER_RE.fullmatch(spec.key):
                 field_el = ET.SubElement(record_el, spec.key)
             else:
-                field_el = ET.SubElement(record_el, "entry", {"key": spec.key})
+                field_el = ET.SubElement(record_el, "entry", {"key": _xml_safe(spec.key)})
             field_el.text = text
 
     return ET.tostring(root, xml_declaration=True, encoding="utf-8")
@@ -225,15 +237,34 @@ def _fill_xml_value(element: ET.Element, value: Any) -> None:
     """
     if isinstance(value, dict):
         for key, val in value.items():
-            if _XML_IDENTIFIER_RE.match(str(key)):
+            if _XML_IDENTIFIER_RE.fullmatch(str(key)):
                 child = ET.SubElement(element, str(key))
                 _fill_xml_value(child, val)
             else:
-                entry = ET.SubElement(element, "entry", {"key": str(key)})
+                entry = ET.SubElement(element, "entry", {"key": _xml_safe(str(key))})
                 _fill_xml_value(entry, val)
     elif isinstance(value, list):
         for item in value:
             child = ET.SubElement(element, "item")
             _fill_xml_value(child, item)
     else:
-        element.text = "" if value is None else str(value)
+        element.text = "" if value is None else _xml_safe(str(value))
+
+
+def _xml_safe(text: str) -> str:
+    """Entfernt in XML 1.0 unzulaessige Codepoints aus ``text``.
+
+    ``ElementTree`` escaped beim Serialisieren nur ``&``/``<``/``>`` (bzw.
+    zusaetzlich ``"``/``\\t``/``\\n``/``\\r`` in Attributwerten) und schreibt
+    Steuerzeichen wie ``\\x0b`` roh heraus — die XML-1.0-Grammatik verbietet sie
+    aber. Ein einziges Steuerzeichen in einem Freitext (z. B. einem
+    ``DocumentType.name``, den ein Backend in seine Records projiziert) machte
+    damit das GESAMTE Dokument fuer jeden konformen Parser unlesbar, waehrend
+    CSV/JSON desselben Berichts unauffaellig blieben.
+
+    Entfernt statt ersetzt: Steuerzeichen tragen in einem Bericht keine
+    Bedeutung, ein Platzhalter waere reines Rauschen. Analog zu
+    ``_sanitize_csv_cell`` im CSV-Pfad greift der Schutz zentral im Renderer,
+    nicht in den einzelnen Backends.
+    """
+    return _XML_ILLEGAL_RE.sub("", text)

@@ -169,6 +169,51 @@ class _NichtIdentifierKeyBackend(DatasetBackend):
         return DatasetResult(mode="rows", records=[{"1monat": 5}], summary={}, completeness=[])
 
 
+class _ZeilenumbruchKeyBackend(DatasetBackend):
+    """Key mit abschliessendem ``\\n`` — ``$`` matcht in Python VOR einem finalen
+    Zeilenumbruch, ein ``.match()``-Guard laesst ihn also durch und der Renderer
+    baute daraus ein Element ``<total\\n>``, das der Parser still zu ``<total>``
+    zurueckliest (deklarierter Key != Elementname).
+    """
+
+    slug = "dummy_zeilenumbruch"
+    name = "Dummy Zeilenumbruch"
+
+    def get_field_specs(self) -> list[FieldSpec]:
+        return [FieldSpec(key="total\n", label="Total")]
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(
+            mode="rows",
+            records=[{"total\n": 7}],
+            summary={"total\n": 7},
+            completeness=[],
+        )
+
+
+class _SteuerzeichenBackend(DatasetBackend):
+    """Freitexte mit XML-1.0-verbotenen Steuerzeichen an jeder Textsenke.
+
+    Erreichbar in Produktion ueber jedes Backend, das Benutzertexte in Records
+    projiziert (``ExampleBackend`` reicht ``DocumentType.name`` durch — ein
+    ``CharField`` ohne Zeichenvalidierung).
+    """
+
+    slug = "dummy_steuerzeichen"
+    name = "Dummy Steuerzeichen"
+
+    def get_field_specs(self) -> list[FieldSpec]:
+        return [FieldSpec(key="document_type", label="Dokumenttyp")]
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(
+            mode="rows",
+            records=[{"document_type": "Kontakt\x0bTyp"}],
+            summary={"hinweis": "vor\x0cnach", "2026\x0b01": 3},
+            completeness=[CompletenessIssue(code="unmapped", message="Nicht\x1bzugeordnet.", severity="info")],
+        )
+
+
 @pytest.fixture
 def facility():
     return _Facility()
@@ -485,6 +530,44 @@ class TestRandfaelle:
         assert entry is not None
         assert entry.get("key") == "1monat"
         assert entry.text == "5"
+
+    def test_xml_key_mit_zeilenumbruch_wird_als_entry_gerendert(self, facility, date_range):
+        """Der Elementnamen-Guard muss ``fullmatch`` sein: mit ``match`` passiert
+        ``"total\\n"`` die Pruefung (``$`` matcht vor einem finalen Newline) und
+        landet als Elementname ``<total\\n>`` im Baum — der Parser liest daraus
+        still ``<total>`` zurueck, der deklarierte Key ist verloren.
+        """
+        date_from, date_to = date_range
+        response = export_dataset(_ZeilenumbruchKeyBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        record = root.find("records").find("record")
+        assert record.find("total") is None  # kein still umbenanntes Element
+        assert record.find("entry").get("key") == "total\n"
+        # Derselbe Guard im summary-Renderer (``_fill_xml_value``).
+        summary = root.find("summary")
+        assert summary.find("total") is None
+        assert summary.find("entry").get("key") == "total\n"
+
+    def test_xml_steuerzeichen_bleiben_wohlgeformt(self, facility, date_range):
+        """XML 1.0 verbietet die meisten C0-Steuerzeichen; ElementTree escaped nur
+        ``&``/``<``/``>`` und schriebe sie roh heraus — ein einziger Dokumenttyp-
+        Name mit ``\\x0b`` machte damit den GESAMTEN Export unparsbar (CSV/JSON
+        desselben Berichts blieben unauffaellig).
+        """
+        date_from, date_to = date_range
+        response = export_dataset(_SteuerzeichenBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        assert root.find("records").find("record").find("document_type").text == "KontaktTyp"
+        assert root.find("completeness").find("issue").text == "Nichtzugeordnet."
+        summary = root.find("summary")
+        assert summary.find("hinweis").text == "vornach"
+        assert summary.find("entry").get("key") == "202601"
 
 
 class TestRfc5987Dateiname:
