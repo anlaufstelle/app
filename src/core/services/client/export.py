@@ -11,8 +11,14 @@ from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
 
 
-def _gather_client_dynamic_data(client):
-    """Dynamische Personen-Felder als ``[{slug, label, value}, ...]`` (M2 P7, Refs #1058).
+def _gather_entity_dynamic_data(entity):
+    """Dynamische Zusatzfelder als ``[{slug, label, value}, ...]`` (M2, Refs #1058, #1730).
+
+    Entity-neutraler Helfer für **jedes** Modell mit ``document_type`` +
+    ``data_json`` (``DynamicDataEncryptionMixin``: ``Client``, ``Case``, …). Löst
+    die zuvor wörtlich duplizierten ``_gather_client_dynamic_data`` /
+    ``_gather_case_dynamic_data`` ab (Refs #1730, Punkt 4) — Duck-Typing über
+    ``document_type_id``/``document_type``/``data_json``.
 
     Ohne ``document_type`` gibt es keine Feld-Definitionen und damit nichts zu
     exportieren -> ``None`` (der Aufrufer laesst die Keys dann ganz weg, der
@@ -30,8 +36,13 @@ def _gather_client_dynamic_data(client):
     Feldreihenfolge des Typs (``jsonb`` speichert Schluessel normalisiert, nicht
     in Eingabefolge).
 
-    Keine Datei-Marker-Behandlung noetig: FILE-Felder sind fuer Personen-Typen
-    dreischichtig ausgeschlossen (Config-UI, Service-Guard,
+    Nur die dem **aktuellen** Typ zugeordneten Slugs erscheinen hier — verwaiste
+    Werte (Slug in ``data_json``, aber nicht mehr am Typ) liefert separat
+    :func:`_gather_entity_orphan_data` (Refs #1725), damit dieses Bestandsformat
+    stabil bleibt.
+
+    Keine Datei-Marker-Behandlung noetig: FILE-Felder sind fuer Personen-/Fall-
+    Typen dreischichtig ausgeschlossen (Config-UI, Service-Guard,
     ``exclude_file_fields``) — Entscheid E8.
 
     Keine Sensitivity-Filterung: der Export haengt an ``LeadOrAdminRequiredMixin``
@@ -41,42 +52,10 @@ def _gather_client_dynamic_data(client):
     """
     from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
 
-    if client.document_type_id is None:
+    if entity.document_type_id is None:
         return None
-    values = client.data_json or {}
-    field_templates = build_field_template_lookup(client.document_type, ordered=True)
-    entries = []
-    for slug, ft in field_templates.items():
-        if slug not in values:
-            continue
-        raw = values[slug]
-        decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
-        entries.append({"slug": slug, "label": ft.name, "value": format_dynamic_display_value(decrypted, ft)})
-    return entries
-
-
-def _gather_case_dynamic_data(case):
-    """Dynamische Fall-Felder als ``[{slug, label, value}, ...]`` (M2 P8, Refs #1058).
-
-    Spiegel von :func:`_gather_client_dynamic_data` fuer das ``Case``-Aggregat:
-    ohne ``document_type`` gibt es keine Feld-Definitionen und damit nichts zu
-    exportieren -> ``None`` (der Aufrufer laesst die Keys dann ganz weg, der
-    Fall-Eintrag bleibt bitgleich zum Stand vor M2).
-
-    Die Faelle einer Person gehoeren zur Art.-15-Auskunft (``_gather_cases``);
-    seit P5 traegt ein Fall eigene, potenziell verschluesselte Zusatzfelder —
-    ohne diesen Zweig waere die Auskunft unvollstaendig. Werte werden
-    entschluesselt und durch
-    :func:`~core.services.dynamic_data.format_dynamic_display_value` geschickt
-    (SELECT-Slug -> Label, Boolean -> ``Ja``/``Nein``); Reihenfolge und
-    Sensitivity-Begruendung sind identisch zum Personen-Pendant.
-    """
-    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
-
-    if case.document_type_id is None:
-        return None
-    values = case.data_json or {}
-    field_templates = build_field_template_lookup(case.document_type, ordered=True)
+    values = entity.data_json or {}
+    field_templates = build_field_template_lookup(entity.document_type, ordered=True)
     entries = []
     for slug, ft in field_templates.items():
         if slug not in values:
@@ -100,7 +79,7 @@ def _gather_client_fields(client):
     # M2 P7 (Refs #1058): dynamische Felder gehoeren in die Auskunft, sobald der
     # Datensatz einen Typ traegt (P4b-Befund). Ohne Typ bleibt das Dict exakt so
     # wie vor M2 — Bestandstests pinnen genau diesen Schluesselsatz.
-    dynamic_data = _gather_client_dynamic_data(client)
+    dynamic_data = _gather_entity_dynamic_data(client)
     if dynamic_data is not None:
         fields["document_type"] = client.document_type.name
         fields["dynamic_data"] = dynamic_data
@@ -168,7 +147,7 @@ def _gather_cases(client):
         # M2 P8 (Refs #1058): dynamische Fall-Felder gehoeren in die Auskunft,
         # sobald der Fall einen Typ traegt. Ohne Typ bleibt das Dict exakt so
         # wie vor M2 — Bestandstests pinnen genau diesen Schluesselsatz.
-        dynamic_data = _gather_case_dynamic_data(case)
+        dynamic_data = _gather_entity_dynamic_data(case)
         if dynamic_data is not None:
             entry["document_type"] = case.document_type.name
             entry["dynamic_data"] = dynamic_data

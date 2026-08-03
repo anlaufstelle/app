@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 
 from core.models import (
@@ -27,6 +28,7 @@ from core.services.client import (
     _gather_cases,
     _gather_client_fields,
     _gather_deletion_requests,
+    _gather_entity_dynamic_data,
     _gather_event_history,
     _gather_events,
     _gather_workitems,
@@ -135,6 +137,74 @@ class TestGatherClientFields:
         )
         result = _gather_client_fields(c)
         assert result["created_by"] is None
+
+
+# ---------------------------------------------------------------------------
+# _gather_entity_dynamic_data — entity-neutrale Zusammenführung (Refs #1730-4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestGatherEntityDynamicData:
+    """Refs #1730 (Punkt 4): ``_gather_client_dynamic_data`` und
+    ``_gather_case_dynamic_data`` waren wörtliche Duplikate — jetzt EIN
+    entity-neutraler Helfer über Duck-Typing (``document_type``/``data_json``).
+
+    Verhalten muss exakt erhalten bleiben: ``None`` ohne Typ, sonst
+    ``[{slug, label, value}, ...]`` in konfigurierter Feldreihenfolge, Werte
+    entschlüsselt und über ``format_dynamic_display_value`` lesbar gemacht.
+    """
+
+    def test_returns_none_without_document_type(self, client_identified):
+        """Ohne ``document_type`` gibt es keine Feld-Definitionen → ``None``
+        (der Aufrufer lässt die Export-Keys dann ganz weg)."""
+        assert _gather_entity_dynamic_data(client_identified) is None
+
+    def test_client_entries_follow_configured_order_with_labels(self, facility, doc_type_client_profile, staff_user):
+        from core.models import Client
+
+        client = Client.objects.create(
+            facility=facility,
+            pseudonym="entity-dyn-01",
+            created_by=staff_user,
+            document_type=doc_type_client_profile,
+            data_json={"wohnsituation": "WG"},
+        )
+        entries = _gather_entity_dynamic_data(client)
+        assert entries == [{"slug": "wohnsituation", "label": "Wohnsituation", "value": "WG"}]
+
+    def test_case_entries_are_gathered_too(self, facility, client_identified, doc_type_case_form, staff_user):
+        """Derselbe Helfer bedient auch das ``Case``-Aggregat (Duck-Typing)."""
+        from core.models import Case
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="entity-dyn-case",
+            created_by=staff_user,
+            document_type=doc_type_case_form,
+            data_json={"anlass": "Mietschulden"},
+        )
+        entries = _gather_entity_dynamic_data(case)
+        assert entries == [{"slug": "anlass", "label": "Anlass", "value": "Mietschulden"}]
+
+    def test_encrypted_value_is_decrypted(self, facility, doc_type_client_profile, staff_user):
+        """Der Art.-15-Auskunftsanspruch zielt auf den Inhalt — der Wert wird
+        entschlüsselt ausgegeben, nicht als Fernet-Token."""
+        from core.models import Client
+        from core.services.file_vault import generate_key
+
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=generate_key()):
+            client = Client.objects.create(
+                facility=facility,
+                pseudonym="entity-dyn-enc",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"diagnose": "Sehr sensibel"},
+            )
+            entries = _gather_entity_dynamic_data(client)
+        by_slug = {e["slug"]: e for e in entries}
+        assert by_slug["diagnose"]["value"] == "Sehr sensibel"
 
 
 # ---------------------------------------------------------------------------
