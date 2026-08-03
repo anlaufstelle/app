@@ -170,7 +170,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
+ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
 
 # Schneller Gate: statische Prüfung + Unit-Ebene, ohne E2E/Browser.
 # Enge Feedback-Schleife + Pre-Commit. Beziehung: ci ⊇ verify-fast
