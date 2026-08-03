@@ -3,6 +3,13 @@
 Refs #930. Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Test-Klasse ``TestSerializeEvent`` (Event-pro-Eintrag-
 Serialisierung inkl. Decryption-Branches).
+
+Der Sollzustand der Auskunft ist am 2026-08-03 per Produktentscheid
+gewachsen (Refs #1752, #1755):
+jeder Ereignis-Eintrag trägt zusätzlich Fall-/Episoden-Bezug, Anonym-Flag,
+Papierkorb-Status und beide Zeitstempel. Die Pins hier folgen dieser
+Anforderungsänderung — **ohne** ihre Schärfe aufzugeben: der Schlüsselsatz
+bleibt exakt gepinnt und jedes neue Feld hat seinen eigenen Boundary-Test.
 """
 
 from __future__ import annotations
@@ -11,7 +18,11 @@ import pytest
 from django.utils import timezone
 
 from core.models import (
+    Case as CaseModel,
+)
+from core.models import (
     DocumentType,
+    Episode,
     Event,
 )
 from core.services.client import (
@@ -22,6 +33,25 @@ from tests._mutation_followup_client_export_helpers import (
     _make_doc_type,
     _make_event,
 )
+
+
+@pytest.fixture
+def case_with_episode(facility, client_identified, staff_user):
+    """Fall + Episode zum Anhängen an ein Ereignis (Refs #1752)."""
+    case = CaseModel.objects.create(
+        facility=facility,
+        client=client_identified,
+        title="Wohnungsnotfall",
+        created_by=staff_user,
+    )
+    episode = Episode.objects.create(
+        case=case,
+        title="Clearing-Phase",
+        started_at=timezone.now().date(),
+        created_by=staff_user,
+    )
+    return case, episode
+
 
 # ---------------------------------------------------------------------------
 # _serialize_event — pro-Event-Serialisierung inkl. Decryption
@@ -37,15 +67,29 @@ class TestSerializeEvent:
     - ``isinstance(value, dict)`` → safe_decrypt
     - else-Branch → 1:1 passthrough
     - ``event.created_by`` ``None``-Fallback
+    - ``event.case`` / ``event.episode`` ``None``-Fallback (Refs #1752)
     """
 
-    def test_contains_all_four_keys(self, sample_event):
+    def test_contains_all_ten_keys(self, sample_event):
+        """Anforderung geändert per Produktentscheid 2026-08-03 (Refs #1752):
+        vorher pinnte dieser Test vier Keys.
+
+        Der Pin bleibt exakt (``==``, nicht ``<=``): fällt ein Key weg, bricht
+        er — kommt ein ungewollter dazu (etwa Attachment-Metadaten, die bis
+        #1738 bewusst draußen bleiben), ebenfalls.
+        """
         result = _serialize_event(sample_event)
         assert set(result.keys()) == {
             "document_type",
             "occurred_at",
             "created_by",
             "data",
+            "case",
+            "episode",
+            "is_anonymous",
+            "is_deleted",
+            "created_at",
+            "updated_at",
         }
 
     def test_document_type_uses_name_not_pk(self, sample_event):
@@ -136,3 +180,94 @@ class TestSerializeEvent:
         )
         result = _serialize_event(ev)
         assert result["data"]["krise-notiz"] == "geheimer-text"
+
+    # -- Refs #1752: Fall-/Episoden-Bezug -----------------------------------
+
+    def test_case_none_when_event_has_no_case(self, sample_event):
+        """Mutation ``event.case.title if event.case else None`` → fester Wert
+        würde bei fallfreien Ereignissen einen Fall behaupten, den es nicht
+        gibt."""
+        assert _serialize_event(sample_event)["case"] is None
+
+    def test_case_uses_title_not_pk(self, facility, client_identified, doc_type_contact, staff_user, case_with_episode):
+        """Mutation ``event.case.title`` → ``event.case_id`` würde eine UUID
+        statt eines lesbaren Falltitels liefern."""
+        case, _episode = case_with_episode
+        ev = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            case=case,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        assert _serialize_event(ev)["case"] == "Wohnungsnotfall"
+
+    def test_episode_none_when_event_has_no_episode(self, sample_event):
+        """Mutation ``event.episode.title if event.episode else None`` → fester
+        Wert würde bei episodenfreien Ereignissen crashen oder falsch melden."""
+        assert _serialize_event(sample_event)["episode"] is None
+
+    def test_episode_uses_title_not_pk(
+        self, facility, client_identified, doc_type_contact, staff_user, case_with_episode
+    ):
+        case, episode = case_with_episode
+        ev = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            case=case,
+            episode=episode,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        assert _serialize_event(ev)["episode"] == "Clearing-Phase"
+
+    # -- Refs #1752: Anonym-Flag, Papierkorb-Status, Zeitstempel -------------
+
+    def test_is_anonymous_false_for_personalised_event(self, sample_event):
+        assert _serialize_event(sample_event)["is_anonymous"] is False
+
+    def test_is_anonymous_true_is_preserved(self, facility, client_identified, doc_type_contact, staff_user):
+        """Mutation ``event.is_anonymous`` → Negation/Konstante würde ein
+        anonym erfasstes Ereignis als personenbezogen ausweisen."""
+        ev = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=True,
+            created_by=staff_user,
+        )
+        assert _serialize_event(ev)["is_anonymous"] is True, "Bool muss 1:1 durchgereicht werden, nicht negiert"
+
+    def test_is_deleted_false_for_live_event(self, sample_event):
+        assert _serialize_event(sample_event)["is_deleted"] is False
+
+    def test_is_deleted_true_for_trashed_event(self, facility, client_identified, doc_type_contact, staff_user):
+        """Der Papierkorb-Abschnitt der Auskunft ist nur dann ehrlich, wenn das
+        Flag am Eintrag hängt — Mutation zur Konstante ``False`` ließe einen
+        gelöschten Datensatz als lebend erscheinen."""
+        ev = _make_event(facility, client_identified, doc_type_contact, staff_user, is_deleted=True)
+        assert _serialize_event(ev)["is_deleted"] is True
+
+    def test_created_at_is_isoformat(self, sample_event):
+        result = _serialize_event(sample_event)
+        assert isinstance(result["created_at"], str)
+        assert result["created_at"] == sample_event.created_at.isoformat()
+        assert "T" in result["created_at"]
+
+    def test_updated_at_is_isoformat(self, sample_event):
+        """Mutation ``event.updated_at`` → ``event.created_at`` würde die
+        letzte Änderung verschweigen — beide Zeitstempel müssen eigenständig
+        gepinnt sein."""
+        sample_event.data_json = {"dauer": 99}
+        sample_event.save()
+        sample_event.refresh_from_db()
+        result = _serialize_event(sample_event)
+        assert isinstance(result["updated_at"], str)
+        assert result["updated_at"] == sample_event.updated_at.isoformat()
+        assert result["updated_at"] != result["created_at"]
