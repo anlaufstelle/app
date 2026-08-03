@@ -317,10 +317,18 @@ class ClientCreateView(StaffRequiredMixin, View):
     name="post",
 )
 class ClientUpdateView(StaffRequiredMixin, View):
-    """Edit a client."""
+    """Edit a client.
+
+    Refs #1737 (Nebenbefund E): ``is_deleted=False`` gilt hier genauso wie in
+    Detail- und Antrags-View. Ohne den Scope war ``/clients/<pk>/edit/`` die
+    einzige Client-View, die am Papierkorb vorbei schrieb — Detail antwortete
+    404, das Bearbeiten-Formular aber 200. Der Weg raus aus einer Lösch-
+    Blockade fuehrt seitdem ueber den Papierkorb (Wiederherstellen bzw.
+    „Jetzt endgueltig anonymisieren"), nicht ueber einen Deep-Link.
+    """
 
     def get(self, request, pk):
-        client = get_scoped_object(Client, request, pk=pk)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
         form = ClientForm(instance=client, facility=request.current_facility, user=request.user)
         type_locked = _lock_invisible_document_type(request, client, form)
         # Update-GET zeigt Klartext (Event-Muster ``EventUpdateView.get``): die
@@ -334,7 +342,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
         return render(request, "core/clients/form.html", context)
 
     def post(self, request, pk):
-        client = get_scoped_object(Client, request, pk=pk)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
         old_stage = client.contact_stage
         # VOR ``is_valid()`` sichern: ``ModelForm._post_clean`` mutiert die
         # Instanz bereits (Refs #1613 — dieselbe Falle wie beim Stage-Diff).
