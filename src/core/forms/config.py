@@ -19,11 +19,31 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.widgets import INPUT_CSS
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
+from core.models.document_type import slug_base
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
     VALUELESS_OPERATORS,
 )
+
+
+def validate_slugifiable_name(name: str) -> str:
+    """Fail-fast, wenn ``name`` keinen Slug ergibt (Final-Review D, Refs #1058).
+
+    Die Modelle erzeugen den Slug erst in ``save()`` und werfen dort eine
+    ``ValidationError`` — nach ``form.is_valid()``, also ungefangen als HTTP 500.
+    Diese Prüfung zieht denselben Test in die Formularschicht vor, damit die
+    Config-UI einen normalen Feldfehler zeigt. Nur beim **Anlegen** relevant:
+    danach ist der Slug unveränderlich, ein Namenswechsel berührt ihn nicht.
+    """
+    if name and not slug_base(name):
+        raise ValidationError(
+            _(
+                "Aus diesem Namen lässt sich kein gültiger Slug bilden — bitte mindestens "
+                "einen Buchstaben (a–z) oder eine Ziffer verwenden."
+            )
+        )
+    return name
 
 
 class DocumentTypeForm(forms.ModelForm):
@@ -97,6 +117,12 @@ class DocumentTypeForm(forms.ModelForm):
             self.fields["system_type"].disabled = True
             self.fields["entity_type"].disabled = True
 
+    def clean_name(self) -> str:
+        name: str = self.cleaned_data["name"]
+        if self.instance._state.adding:
+            validate_slugifiable_name(name)
+        return name
+
     def clean_entity_type(self) -> str:
         # Leere Auswahl (Feld ist ``required=False``, s. __init__) auf den
         # Bestandsdefault EVENT auffüllen — sonst würde ``full_clean()`` im
@@ -110,6 +136,21 @@ class DocumentTypeForm(forms.ModelForm):
         # ``ModelForm.clean`` ist als ``dict | None`` typisiert (leere Form ⇒
         # None); ``or {}`` hält den strikten forms-mypy-Scope grün.
         cleaned = super().clean() or {}
+        # Final-Review E (Refs #1058): ``system_type`` ist laut Paketschema nur
+        # bei ``entity_type=event`` zulässig — und beide Felder sind nach dem
+        # Anlegen unveränderlich. Ohne diese Prüfung entstünde über die
+        # Config-UI ein dauerhaft nicht paketfähiger, nicht reparierbarer Typ.
+        # Bewusst nur beim Anlegen: bei der Bearbeitung sind beide Felder
+        # ``disabled`` (Werte kommen aus der Instanz), ein Bestandsobjekt mit
+        # dieser Kombination bliebe sonst unbearbeitbar.
+        if self.instance._state.adding:
+            system_type = cleaned.get("system_type")
+            entity_type = cleaned.get("entity_type")
+            if system_type and entity_type and entity_type != DocumentType.EntityType.EVENT:
+                self.add_error(
+                    "system_type",
+                    _("Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."),
+                )
         name = cleaned.get("name")
         category = cleaned.get("category")
         if name and category and self.facility is not None:
@@ -170,6 +211,8 @@ class FieldTemplateForm(forms.ModelForm):
 
     def clean_name(self):
         name = self.cleaned_data["name"]
+        if self.instance._state.adding:
+            validate_slugifiable_name(name)
         if name and self.facility is not None:
             qs = FieldTemplate.objects.for_facility(self.facility).filter(name=name)
             if self.instance.pk:
@@ -177,6 +220,43 @@ class FieldTemplateForm(forms.ModelForm):
             if qs.exists():
                 raise ValidationError(_("Eine Feldvorlage mit diesem Namen existiert in dieser Einrichtung bereits."))
         return name
+
+    def clean_field_type(self):
+        """Final-Review F (Refs #1058): Wechsel auf ``file`` blockieren, solange
+        die Vorlage einem Personen-/Fall-Typ zugeordnet ist.
+
+        Der E8-Guard („Datei-Felder nur an Ereignis-Typen") sitzt bislang nur an
+        der ZUORDNUNG (``add_field_to_doctype``). Wird der Feldtyp nachträglich
+        umgestellt, fällt das Feld still aus der Personen-/Fall-Maske
+        (``exclude_file_fields``) und sein Bestandswert wird beim nächsten
+        Speichern verworfen — ohne Meldung. Der Paket-Loader behandelt
+        ``field_type`` ohnehin als unveränderlich.
+        """
+        field_type = self.cleaned_data["field_type"]
+        if (
+            field_type != FieldTemplate.FieldType.FILE
+            or self.instance._state.adding
+            or self.instance.field_type == FieldTemplate.FieldType.FILE
+        ):
+            return field_type
+
+        blocking = list(
+            DocumentType.objects.filter(fields__field_template=self.instance)
+            .exclude(entity_type=DocumentType.EntityType.EVENT)
+            .order_by("name")
+            .values_list("name", flat=True)
+            .distinct()
+        )
+        if blocking:
+            raise ValidationError(
+                _(
+                    "Der Feldtyp kann nicht auf „Datei“ geändert werden — die Vorlage ist "
+                    "folgenden Dokumentationstypen für Personen/Fälle zugeordnet: %(types)s. "
+                    "Bitte dort zuerst die Zuordnung entfernen."
+                )
+                % {"types": ", ".join(blocking)}
+            )
+        return field_type
 
     def clean_options_json(self):
         # JSONField liefert bei leerem Textarea ``None``; das Model-Feld ist
@@ -220,6 +300,8 @@ class FieldGroupForm(forms.ModelForm):
 
     def clean_name(self):
         name = self.cleaned_data["name"]
+        if self.instance._state.adding:
+            validate_slugifiable_name(name)
         if name and self.doc_type is not None:
             qs = FieldGroup.objects.filter(document_type=self.doc_type, name=name)
             if self.instance.pk:

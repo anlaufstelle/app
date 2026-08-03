@@ -14,6 +14,7 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, connection, transaction
 
 from core.models import DocumentType
+from core.models.document_type import _SLUG_RE
 
 # Migrationsmodul hat einen ziffernstartigen Namen — nur via importlib ladbar
 # (Muster ``test_totp_secret_at_rest.py``).
@@ -358,3 +359,100 @@ class TestExistingDocumentTypesGetEventEntityType:
     def test_created_without_explicit_entity_type_is_event(self, facility):
         dt = DocumentType.objects.create(facility=facility, name="Bestandstyp")
         assert dt.entity_type == "event"
+
+
+@pytest.mark.django_db
+class TestSlugNormalization:
+    """Final-Review D (Refs #1058): ``slugify`` laesst Unterstriche durch und die
+    Truncation auf 120 Zeichen kann auf einem Bindestrich enden — beides
+    verletzt ``_SLUG_RE`` (``[a-z0-9]+(?:-[a-z0-9]+)*``). Das Paketformat kann
+    solche Slugs nie referenzieren: ``parse_package`` weist sie als
+    Schema-Fehler ab, der Typ waere damit dauerhaft nicht paketfaehig."""
+
+    def test_underscore_becomes_hyphen(self, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Feld_mit_Unterstrich")
+        assert dt.slug == "feld-mit-unterstrich"
+        assert _SLUG_RE.fullmatch(dt.slug)
+
+    def test_multiple_separators_collapse(self, facility):
+        dt = DocumentType.objects.create(facility=facility, name="A__B -- C")
+        assert dt.slug == "a-b-c"
+        assert _SLUG_RE.fullmatch(dt.slug)
+
+    def test_truncation_never_ends_on_hyphen(self, facility):
+        # 119 Zeichen + Trennzeichen + Rest: der Schnitt bei 120 landet exakt
+        # auf dem Bindestrich.
+        dt = DocumentType.objects.create(facility=facility, name="A" * 119 + " xy")
+        assert len(dt.slug) <= 120
+        assert not dt.slug.endswith("-")
+        assert _SLUG_RE.fullmatch(dt.slug)
+
+    def test_counter_suffix_never_produces_double_hyphen(self, facility):
+        long_name = "A" * 119 + " xy"
+        first = DocumentType.objects.create(facility=facility, name=long_name, category=DocumentType.Category.SERVICE)
+        second = DocumentType.objects.create(facility=facility, name=long_name, category=DocumentType.Category.ADMIN)
+        assert first.slug != second.slug
+        for slug in (first.slug, second.slug):
+            assert len(slug) <= 120
+            assert _SLUG_RE.fullmatch(slug), slug
+
+    def test_generated_slugs_are_package_referenceable(self, facility):
+        """Gegenprobe gegen die Schema-Validierung, die das Paketformat nutzt."""
+        from core.packages.schema import _SLUG_RE as SCHEMA_SLUG_RE
+
+        dt = DocumentType.objects.create(facility=facility, name="Beratung_Intensiv")
+        assert SCHEMA_SLUG_RE.fullmatch(dt.slug)
+
+
+class TestBackfillSlugNormalization:
+    """Der 0117-Backfill muss dieselbe Normalisierung fahren wie das Modell —
+    sonst traegt Bestand Slugs, die das Paketformat nie ausdruecken kann."""
+
+    def _drop_constraint_and_disable_trigger(self):
+        with connection.cursor() as cur:
+            cur.execute("ALTER TABLE core_documenttype DROP CONSTRAINT unique_facility_documenttype_slug")
+            cur.execute("ALTER TABLE core_documenttype DISABLE TRIGGER documenttype_slug_immutable")
+
+    def _run_backfill(self):
+        from django.apps import apps as real_apps
+
+        _migration.backfill_document_type_slugs(real_apps, None)
+
+    @pytest.mark.django_db
+    def test_backfill_normalizes_underscores(self, facility):
+        self._drop_constraint_and_disable_trigger()
+        DocumentType.objects.bulk_create([DocumentType(facility=facility, name="Feld_mit_Unterstrich", slug="")])
+
+        self._run_backfill()
+
+        dt = DocumentType.objects.get(facility=facility, name="Feld_mit_Unterstrich")
+        assert dt.slug == "feld-mit-unterstrich"
+        assert _SLUG_RE.fullmatch(dt.slug)
+
+    @pytest.mark.django_db
+    def test_backfill_truncation_never_ends_on_hyphen(self, facility):
+        self._drop_constraint_and_disable_trigger()
+        DocumentType.objects.bulk_create([DocumentType(facility=facility, name="A" * 119 + " xy", slug="")])
+
+        self._run_backfill()
+
+        slug = DocumentType.objects.get(facility=facility).slug
+        assert len(slug) <= 120
+        assert _SLUG_RE.fullmatch(slug), slug
+
+    @pytest.mark.django_db
+    def test_backfill_keeps_e16_seed_slugs_unchanged(self, facility):
+        """Beweis, dass die Normalisierung den Bestand NICHT umschreibt: die
+        neun E16-Seed-Namen ergeben exakt dieselben Slugs wie zuvor."""
+        self._drop_constraint_and_disable_trigger()
+        DocumentType.objects.bulk_create(
+            [
+                DocumentType(facility=facility, name=name, slug="", category=DocumentType.Category.SERVICE)
+                for name in TestE16SeedSlugTable.EXPECTED
+            ]
+        )
+
+        self._run_backfill()
+
+        actual = {dt.name: dt.slug for dt in DocumentType.objects.filter(facility=facility)}
+        assert actual == TestE16SeedSlugTable.EXPECTED

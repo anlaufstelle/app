@@ -11,7 +11,8 @@ Reihenfolge in dieser EINEN atomaren Datei:
 1. ``AddField(slug, default="")`` — Platzhalter, wird sofort backfuellt.
 2. ``AddField(entity_type, default="event")``.
 3. ``RunPython(backfill)`` — deterministischer Slug je Zeile (Umlaut-Map +
-   slugify, Truncation auf 120 Zeichen VOR dem Counter-Suffix, Leerslug-
+   slugify, ``_`` → ``-`` und Mehrfach-Bindestriche kollabiert, Truncation auf
+   120 Zeichen VOR dem Counter-Suffix ohne Rand-Bindestrich, Leerslug-
    Fallback ``"typ"``, Counter **pro Facility**), gefolgt von einem
    fail-loud Assert (kein leerer Slug, keine Duplikate je Facility) —
    *bevor* der naechste Schritt die DB-Constraint scharf schaltet.
@@ -32,6 +33,8 @@ waere gegen zukuenftige Modelaenderungen nicht stabil (Standard-Django-Migration
 Praxis).
 """
 
+import re
+
 from django.db import migrations, models
 from django.utils.text import slugify
 
@@ -40,9 +43,17 @@ _MAX_LEN = 120
 
 
 def _base_slug(name: str) -> str:
-    """Slugify + Umlaut-Map + Truncation, Leerslug-Fallback ``"typ"``."""
-    base = slugify((name or "").lower().translate(_UMLAUT_MAP))[:_MAX_LEN]
-    return base or "typ"
+    """Slugify + Umlaut-Map + Normalisierung + Truncation, Leerslug-Fallback ``"typ"``.
+
+    Normalisierung identisch zu ``core.models.document_type.slug_base``
+    (Refs #1058): ``slugify`` laesst Unterstriche durch und die Truncation kann
+    auf einem Bindestrich enden — beides verletzt das ``_SLUG_RE``-Format, das
+    der Paket-Loader erwartet. Bewusst inline gehalten (Migrationen importieren
+    keine aktuellen Modelle), aber wertgleich.
+    """
+    base = slugify((name or "").lower().translate(_UMLAUT_MAP)).replace("_", "-")
+    base = re.sub(r"-{2,}", "-", base).strip("-")
+    return base[:_MAX_LEN].strip("-") or "typ"
 
 
 def _next_free_slug(base: str, used: set) -> str:
@@ -52,7 +63,7 @@ def _next_free_slug(base: str, used: set) -> str:
     counter = 2
     while True:
         suffix = f"-{counter}"
-        candidate = f"{base[: _MAX_LEN - len(suffix)]}{suffix}"
+        candidate = f"{base[: _MAX_LEN - len(suffix)].strip('-')}{suffix}"
         if candidate not in used:
             return candidate
         counter += 1

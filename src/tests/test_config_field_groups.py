@@ -201,6 +201,17 @@ class TestGroupCreate:
         assert FieldGroup.objects.filter(document_type=doc_type_contact, name="Doppelt").count() == 1
         assert b"bereits" in response.content
 
+    def test_create_unslugifiable_name_is_form_error(self, client, admin_user, doc_type_contact):
+        """Final-Review D3 (Refs #1058): ``FieldGroup.save()`` wirft bei einem
+        Namen ohne slugifizierbare Zeichen eine ``ValidationError`` — ohne
+        Formular-Guard schlaegt das als HTTP 500 auf."""
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"group-new-name": "!!!"}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert not FieldGroup.objects.filter(document_type=doc_type_contact, name="!!!").exists()
+        assert "Slug" in response.content.decode()
+
     def test_create_non_htmx_redirects(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_fieldgroup_create", kwargs={"pk": doc_type_contact.pk})

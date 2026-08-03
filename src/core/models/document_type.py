@@ -16,6 +16,24 @@ _UMLAUT_MAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 _SLUG_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
+def slug_base(name: str, max_length: int = 120) -> str:
+    """Normalisierter Slug-Stamm aus ``name`` — leer, wenn keiner entsteht.
+
+    ``slugify`` allein genügt nicht (Final-Review D, Refs #1058): es lässt
+    Unterstriche durch (``\\w``) und die Truncation auf ``max_length`` kann auf
+    einem Bindestrich enden. Beides verletzt :data:`_SLUG_RE` und wäre damit im
+    Paketformat nicht referenzierbar. Deshalb: ``_`` → ``-``, Mehrfach-
+    Bindestriche kollabieren, Truncation, danach Rand-Bindestriche strippen.
+
+    Leerer Rückgabewert = der Name ergibt keinen Slug (reine Satzzeichen,
+    nicht-lateinische Schrift); die Aufrufer entscheiden über Fehler oder
+    Fallback.
+    """
+    base = slugify(name.lower().translate(_UMLAUT_MAP)).replace("_", "-")
+    base = re.sub(r"-{2,}", "-", base).strip("-")
+    return base[:max_length].strip("-")
+
+
 def generate_unique_slug(name: str, siblings_qs: models.QuerySet, max_length: int = 120) -> str:
     """Generiert einen Slug aus ``name``, eindeutig innerhalb ``siblings_qs``.
 
@@ -26,16 +44,18 @@ def generate_unique_slug(name: str, siblings_qs: models.QuerySet, max_length: in
     ``document_type=…``) und das eigene Objekt per ``.exclude(pk=…)``
     ausschließen — dieser Helfer filtert hier nur noch auf ``slug=``.
     Truncation auf ``max_length`` VOR dem Counter-Suffix, damit der
-    Suffix das Limit des Ziel-``SlugField`` nie sprengt.
+    Suffix das Limit des Ziel-``SlugField`` nie sprengt. Normalisierung des
+    Stamms: :func:`slug_base` (Refs #1058) — auch die gekürzte Variante vor dem
+    Suffix wird von Rand-Bindestrichen befreit, sonst entstünde ``…--2``.
     """
-    base = slugify(name.lower().translate(_UMLAUT_MAP))[:max_length]
+    base = slug_base(name, max_length)
     if not base:
         raise ValidationError(_("Name ergibt keinen gültigen Slug."))
     slug = base
     counter = 2
     while siblings_qs.filter(slug=slug).exists():
         suffix = f"-{counter}"
-        slug = f"{base[: max_length - len(suffix)]}{suffix}"
+        slug = f"{base[: max_length - len(suffix)].strip('-')}{suffix}"
         counter += 1
     return slug
 

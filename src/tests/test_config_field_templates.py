@@ -317,3 +317,78 @@ class TestIDOR:
         response = client.post(reverse(f"core:{route}", kwargs={"pk": foreign_field_template.pk}), _valid_post())
         assert response.status_code == 404
         assert FieldTemplate.objects.filter(pk=foreign_field_template.pk).exists()
+
+
+# ---------------------------------------------------------------------------
+# Final-Review D3/F — Namens-Validierung + FILE-Wechsel-Guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestNonSlugifiableName:
+    """Final-Review D3 (Refs #1058): ``FieldTemplate.save()`` wirft bei einem
+    Namen ohne slugifizierbare Zeichen eine ``ValidationError`` — die View fing
+    sie nicht ab (HTTP 500 statt Formularfehler)."""
+
+    @pytest.mark.parametrize("name", ["!!!", "危机"])
+    def test_create_with_unslugifiable_name_is_form_error(self, client, admin_user, name):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:config_fieldtemplate_create"), _valid_post(name=name))
+        assert response.status_code == 200
+        assert not FieldTemplate.objects.filter(name=name).exists()
+        assert "Slug" in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestFieldTypeSwitchToFile:
+    """Final-Review F (Refs #1058): der E8-Guard („Datei-Felder nur an
+    Ereignis-Typen") sitzt nur an der ZUORDNUNG. ``field_type`` blieb danach
+    editierbar — ein Wechsel auf ``file`` liess das Feld still aus der
+    Personen-/Fall-Maske fallen und verwarf den Bestandswert beim naechsten
+    Speichern."""
+
+    def _template_on_client_type(self, facility):
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Personenbogen F",
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Notiz F", field_type="text")
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+        return doc_type, ft
+
+    def test_switch_to_file_on_client_type_is_form_error(self, client, admin_user, facility):
+        doc_type, ft = self._template_on_client_type(facility)
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}),
+            _valid_post(name="Notiz F", field_type=FieldTemplate.FieldType.FILE),
+        )
+        assert response.status_code == 200
+        assert doc_type.name in response.content.decode()
+        ft.refresh_from_db()
+        assert ft.field_type == FieldTemplate.FieldType.TEXT
+
+    def test_switch_to_file_on_event_type_stays_allowed(self, client, admin_user, facility, doc_type_contact):
+        ft = FieldTemplate.objects.create(facility=facility, name="Nachweis F", field_type="text")
+        DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft, sort_order=99)
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}),
+            _valid_post(name="Nachweis F", field_type=FieldTemplate.FieldType.FILE),
+        )
+        assert response.status_code == 302
+        ft.refresh_from_db()
+        assert ft.field_type == FieldTemplate.FieldType.FILE
+
+    def test_unrelated_edit_of_client_assigned_template_stays_possible(self, client, admin_user, facility):
+        _doc_type, ft = self._template_on_client_type(facility)
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}),
+            _valid_post(name="Notiz F neu", field_type=FieldTemplate.FieldType.TEXTAREA),
+        )
+        assert response.status_code == 302
+        ft.refresh_from_db()
+        assert ft.field_type == FieldTemplate.FieldType.TEXTAREA

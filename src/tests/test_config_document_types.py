@@ -285,3 +285,87 @@ class TestIDOR:
         response = client.post(reverse(f"core:{route}", kwargs={"pk": foreign_doc_type.pk}), _valid_post())
         assert response.status_code == 404
         assert DocumentType.objects.filter(pk=foreign_doc_type.pk).exists()
+
+
+# ---------------------------------------------------------------------------
+# Final-Review D3/E — Namens-/Invarianten-Validierung im Formular
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestNonSlugifiableName:
+    """Final-Review D3 (Refs #1058): seit M2 erzeugt ``DocumentType.save()`` im
+    Anlege-Zweig einen Slug und wirft bei einem Namen ohne slugifizierbare
+    Zeichen eine ``ValidationError`` — die View fing sie nicht, Ergebnis war ein
+    HTTP 500 statt eines Formularfehlers."""
+
+    @pytest.mark.parametrize("name", ["!!!", "###", "Кризис"])
+    def test_create_with_unslugifiable_name_is_form_error(self, client, admin_user, name):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:config_doctype_create"), _valid_post(name=name))
+        assert response.status_code == 200
+        assert not DocumentType.objects.filter(name=name).exists()
+        assert "Slug" in response.content.decode()
+
+    def test_umlaut_name_still_accepted(self, client, admin_user):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:config_doctype_create"), _valid_post(name="Krisengespräch"))
+        assert response.status_code == 302
+        assert DocumentType.objects.get(name="Krisengespräch").slug == "krisengespraech"
+
+
+@pytest.mark.django_db
+class TestSystemTypeOnlyForEventTypes:
+    """Final-Review E (Refs #1058): das Paketschema verbietet ``system_type`` an
+    ``client``/``case``-Typen hart. Beide Felder sind nach dem Anlegen
+    unveränderbar — ein über die Config-UI angelegter Typ mit dieser Kombination
+    wäre dauerhaft nicht paketfähig und nicht reparierbar."""
+
+    def test_create_client_type_with_system_type_is_form_error(self, client, admin_user, facility):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(
+                name="Personen-Bann",
+                entity_type=DocumentType.EntityType.CLIENT,
+                system_type=DocumentType.SystemType.BAN,
+            ),
+        )
+        assert response.status_code == 200
+        assert not DocumentType.objects.filter(name="Personen-Bann").exists()
+
+    def test_create_client_type_without_system_type_is_fine(self, client, admin_user, facility):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(name="Personenbogen", entity_type=DocumentType.EntityType.CLIENT),
+        )
+        assert response.status_code == 302
+        obj = DocumentType.objects.get(name="Personenbogen")
+        assert obj.entity_type == DocumentType.EntityType.CLIENT
+        assert not obj.system_type
+
+    def test_create_event_type_with_system_type_is_fine(self, client, admin_user):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(name="Krisenbogen E", system_type=DocumentType.SystemType.CRISIS),
+        )
+        assert response.status_code == 302
+
+    def test_editing_legacy_inconsistent_type_stays_possible(self, client, admin_user, facility):
+        """Bestandsdaten (vor dem Guard angelegt) dürfen nicht unbearbeitbar
+        werden — beide Felder sind bei der Bearbeitung ohnehin ``disabled``."""
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Alt-Inkonsistent",
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CLIENT,
+            system_type=DocumentType.SystemType.BAN,
+        )
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
+            _valid_post(name="Alt-Inkonsistent", category=DocumentType.Category.ADMIN),
+        )
+        assert response.status_code == 302
