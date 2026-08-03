@@ -1289,10 +1289,13 @@ und stellt sie per `ENABLE ALWAYS` wieder her — alles in **einem**
 `transaction.atomic()` (SIGKILL-sicher).
 
 Konsequenz für den Betrieb: Der Wartungspfad braucht **Owner-Rechte**. Die
-Management-Commands `enforce_retention`, `backfill_audit_chain` und
-`reencrypt_fields` müssen daher als **Owner-/Admin-Rolle** (`POSTGRES_ADMIN_USER`)
-laufen — das ist über den ENV-Override (`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die
-Admin-Werte) bereits so eingerichtet (Retention-Cron § 6). Läuft ein solcher
+Management-Commands `enforce_retention`, `backfill_audit_chain`,
+`reencrypt_fields` und `load_package` (M2, Refs
+#1058 — RLS-Bypass-Guard
+bricht sonst fail-loud ab) müssen daher als **Owner-/Admin-Rolle**
+(`POSTGRES_ADMIN_USER`) laufen — das ist über den ENV-Override
+(`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die Admin-Werte) bereits so
+eingerichtet (Retention-Cron § 6). Läuft ein solcher
 Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
 table core_auditlog` ab — Fail-loud, kein stiller Audit-Verlust.
 
