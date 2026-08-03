@@ -224,6 +224,10 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
         # danach mit ConfigDeleteBlocked scheitert (kein 500, aber irreführende UX).
         client_count = Client.objects.filter(document_type=doc_type).count()
         case_count = Case.objects.filter(document_type=doc_type).count()
+        # Refs #1737 (A): Wieviel der Blockade steckt im Papierkorb? Ohne diese
+        # Zahl verlangt der Dialog einen Schritt, den man im Fach-UI gar nicht
+        # gehen kann — der Datensatz ist dort nicht mehr erreichbar.
+        client_trashed_count = Client.objects.filter(document_type=doc_type, is_deleted=True).count()
         # QuickTemplate.document_type ist FK CASCADE: zugehörige Schnellvorlagen
         # werden beim Löschen still mitentfernt — die Kaskade im Dialog ausweisen.
         quick_template_count = QuickTemplate.objects.filter(document_type=doc_type).count()
@@ -235,6 +239,7 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
                 "event_count": event_count,
                 "client_count": client_count,
                 "case_count": case_count,
+                "client_trashed_count": client_trashed_count,
                 "quick_template_count": quick_template_count,
             },
         )

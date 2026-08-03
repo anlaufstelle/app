@@ -680,6 +680,52 @@ def restore_client(client, user):
     )
 
 
+@transaction.atomic
+def anonymize_client_now(client, user):
+    """Anonymisiert eine Person im Papierkorb sofort — auf Admin-Anforderung.
+
+    Refs #1737 (Option B): Bisher war die Anonymisierung ausschliesslich der
+    naechtliche ``enforce_retention``-Lauf nach Ablauf von
+    ``Settings.client_trash_days``. Eine Loesch-Blockade durch einen Datensatz
+    im Papierkorb (``document_type``/``data_json`` bleiben beim Soft-Delete
+    erhalten) liess sich deshalb nur durch Wiederherstellen — also eine
+    kurzzeitige Datenresurrektion — oder 30 Tage Warten aufloesen. Der Weg ist
+    zugleich fuer Art.-17-Sofortloeschungen nuetzlich.
+
+    Zwei harte Voraussetzungen, beide als deutsche ``ValidationError`` (der
+    Aufrufer ist eine View mit Meldungs-Fläche):
+
+    (a) **Nur aus dem Papierkorb.** Ein Direktpfad an der Vier-Augen-Genehmigung
+        vorbei entstuende sonst durch die Hintertuer.
+    (b) **Kein aktiver Legal Hold** — weder auf der Person noch auf einem ihrer
+        Ereignisse. Exakt die Ausschluesse von
+        :func:`anonymize_eligible_soft_deleted_clients` (Refs #1066): eine
+        manuelle Aktion darf einen Hold nicht aushebeln (Spoliation).
+
+    Der Datensatz bleibt danach soft-geloescht — anonymisiert, nicht auferstanden.
+    """
+    if not client.is_deleted:
+        raise ValidationError(_("Nur Personen im Papierkorb können anonymisiert werden."))
+
+    held_client_ids = get_active_hold_target_ids(client.facility, "Client")
+    held_event_ids = get_active_hold_target_ids(client.facility, "Event")
+    blocked_by_event = bool(held_event_ids) and client.events.filter(pk__in=held_event_ids).exists()
+    if client.pk in held_client_ids or blocked_by_event:
+        raise ValidationError(
+            _("Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
+        )
+
+    anonymize_client(client, user=user)
+    audit_client_event(
+        client,
+        user,
+        AuditLog.Action.CLIENT_ANONYMIZED,
+        trigger="manual",
+        deleted_at=str(client.deleted_at),
+    )
+    return client
+
+
 def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=False):
     """Anonymisiert soft-deletete Personen, deren Papierkorb-Frist abgelaufen ist.
 

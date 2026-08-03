@@ -32,6 +32,7 @@ from core.views.cases import (
     CaseUpdateView,
 )
 from core.views.client_deletion import (
+    ClientAnonymizeView,
     ClientDeleteRequestView,
     ClientRestoreView,
     ClientTrashView,
@@ -186,6 +187,7 @@ urlpatterns = [
     path("clients/trash/", ClientTrashView.as_view(), name="client_trash"),
     path("clients/<uuid:pk>/delete/", ClientDeleteRequestView.as_view(), name="client_delete_request"),
     path("clients/<uuid:pk>/restore/", ClientRestoreView.as_view(), name="client_restore"),
+    path("clients/<uuid:pk>/anonymize/", ClientAnonymizeView.as_view(), name="client_anonymize"),
     # Cases
     path("cases/", CaseListView.as_view(), name="case_list"),
     path("cases/new/", CaseCreateView.as_view(), name="case_create"),

@@ -1,0 +1,22 @@
+{% load i18n %}
+{% comment %}
+    Ausweg aus einer Lösch-Blockade durch Personen im Papierkorb
+    (Refs #1737, Option A). Erwartet ``client_trashed_count``.
+
+    Ohne diesen Hinweis endet der Dialog in einer scheinbaren Sackgasse: die
+    blockierenden Datensätze sind im Fach-UI nicht mehr erreichbar (Detail
+    antwortet 404), und die Anonymisierung passierte bisher nur nächtlich.
+{% endcomment %}
+{% if client_trashed_count %}
+<div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-5" data-testid="config-delete-trash-hint">
+    <p class="text-[13px] text-ink-soft mb-2">
+        {% blocktrans count n=client_trashed_count %}{{ n }} der blockierenden Personen liegt im Papierkorb und ist über die Personenliste nicht mehr erreichbar.{% plural %}{{ n }} der blockierenden Personen liegen im Papierkorb und sind über die Personenliste nicht mehr erreichbar.{% endblocktrans %}
+    </p>
+    <p class="text-[13px] text-ink-soft mb-2">
+        {% trans "Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die blockierenden Werte unwiderruflich, ohne die Person wieder sichtbar zu machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst weg." %}
+    </p>
+    <a href="{% url 'core:client_trash' %}" class="text-[13px] text-accent font-semibold hover:underline" data-testid="config-delete-trash-link">
+        {% trans "Papierkorb öffnen" %}
+    </a>
+</div>
+{% endif %}

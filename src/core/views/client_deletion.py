@@ -5,12 +5,14 @@ Aufbau analog ``views/event_deletion.py``:
 - Genehmigung (Leitung+): laeuft ueber :class:`DeletionRequestReviewView`
   in event_deletion.py — die View wurde um Client-Targets erweitert.
 - Wiederherstellung (Admin): :class:`ClientRestoreView`
+- Sofort-Anonymisierung im Papierkorb (Admin): :class:`ClientAnonymizeView`
 - Papierkorb-Liste (Admin): :class:`ClientTrashView`
 """
 
 import logging
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -20,6 +22,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client
 from core.services.client import (
+    anonymize_client_now,
     get_pending_deletion_request,
     request_client_deletion,
     restore_client,
@@ -103,6 +106,30 @@ class ClientRestoreView(FacilityAdminRequiredMixin, View):
         restore_client(client, request.user)
         messages.success(request, _("Person wiederhergestellt."))
         return redirect("core:client_detail", pk=pk)
+
+
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
+class ClientAnonymizeView(FacilityAdminRequiredMixin, View):
+    """Admin anonymisiert eine Person im Papierkorb sofort (Refs #1737, B).
+
+    Rollen-Gate wie ``ClientRestoreView`` (Anwendungsbetreuung), Scope wie dort
+    hart auf ``is_deleted=True`` — der Vier-Augen-Antragsweg bleibt der einzige
+    Pfad IN den Papierkorb, diese Aktion wirkt nur darin. Die fachlichen
+    Guards (Papierkorb, Legal Hold) liegen im Service.
+    """
+
+    def post(self, request, pk):
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=True)
+        try:
+            anonymize_client_now(client, request.user)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            return redirect("core:client_trash")
+        messages.success(request, _("Person wurde endgültig anonymisiert."))
+        return redirect("core:client_trash")
 
 
 class ClientTrashView(FacilityAdminRequiredMixin, View):

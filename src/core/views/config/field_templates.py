@@ -118,7 +118,12 @@ class ConfigFieldTemplateDeleteView(FacilityAdminRequiredMixin, View):
         return render(
             request,
             "core/config/field_templates/confirm_delete.html",
-            {"field_template": field_template, "blockers": blockers},
+            {
+                "field_template": field_template,
+                "blockers": blockers,
+                # Refs #1737 (A): Papierkorb-Anteil der Blockade → Ausweg-Hinweis.
+                "client_trashed_count": config_service.field_template_trashed_client_count(field_template),
+            },
         )
 
     def post(self, request, pk):

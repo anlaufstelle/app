@@ -82,6 +82,43 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
     return obj
 
 
+# ---------------------------------------------------------------------------
+# Lösch-Blocker: Papierkorb-Anteil (Refs #1737, Option A)
+# ---------------------------------------------------------------------------
+
+
+def _append_trash_share(reason: str, trashed_count: int) -> str:
+    """Ergänzt eine Blocker-Begründung um den Papierkorb-Anteil.
+
+    Refs #1737: Die Blocker zählen über den Default-Manager, der ``is_deleted``
+    bewusst nicht filtert (:class:`~core.models.managers.FacilityScopedManager`).
+    Soft-gelöschte Personen blockieren also mit — die Meldung verlangte dafür
+    aber einen unmöglichen Schritt („müsste zuerst geändert werden"), weil ein
+    Datensatz im Papierkorb im Fach-UI gar nicht mehr erreichbar ist. Der
+    Zusatz benennt den Anteil; den Ausweg (Papierkorb öffnen, wiederherstellen
+    oder endgültig anonymisieren) zeigen die Lösch-Dialoge als Link.
+    """
+    if not trashed_count:
+        return reason
+    share = ngettext(
+        "Davon liegt %(t)d Person im Papierkorb.",
+        "Davon liegen %(t)d Personen im Papierkorb.",
+        trashed_count,
+    ) % {"t": trashed_count}
+    return f"{reason} {share}"
+
+
+def field_template_trashed_client_count(field_template: FieldTemplate) -> int:
+    """Anzahl soft-gelöschter Personen mit einem Wert unter diesem Slug."""
+    if not field_template.slug:
+        return 0
+    return Client.objects.filter(
+        facility_id=field_template.facility_id,
+        data_json__has_key=field_template.slug,
+        is_deleted=True,
+    ).count()
+
+
 def delete_document_type(request, doc_type: DocumentType) -> None:
     """Löscht einen DocumentType — blockiert bei referenzierenden Events/Personen/Fällen (PROTECT).
 
@@ -105,12 +142,15 @@ def delete_document_type(request, doc_type: DocumentType) -> None:
     client_count = Client.objects.filter(document_type=doc_type).count()
     if client_count:
         reasons.append(
-            ngettext(
-                "%(n)d Person ist diesem Dokumentationstyp zugeordnet und müsste zuerst geändert werden.",
-                "%(n)d Personen sind diesem Dokumentationstyp zugeordnet und müssten zuerst geändert werden.",
-                client_count,
+            _append_trash_share(
+                ngettext(
+                    "%(n)d Person ist diesem Dokumentationstyp zugeordnet und müsste zuerst geändert werden.",
+                    "%(n)d Personen sind diesem Dokumentationstyp zugeordnet und müssten zuerst geändert werden.",
+                    client_count,
+                )
+                % {"n": client_count},
+                Client.objects.filter(document_type=doc_type, is_deleted=True).count(),
             )
-            % {"n": client_count}
         )
 
     case_count = Case.objects.filter(document_type=doc_type).count()
@@ -218,12 +258,15 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
         ).count()
         if data_client_count:
             reasons.append(
-                ngettext(
-                    "%(n)d Person enthält Daten unter dem Slug „%(slug)s“.",
-                    "%(n)d Personen enthalten Daten unter dem Slug „%(slug)s“.",
-                    data_client_count,
+                _append_trash_share(
+                    ngettext(
+                        "%(n)d Person enthält Daten unter dem Slug „%(slug)s“.",
+                        "%(n)d Personen enthalten Daten unter dem Slug „%(slug)s“.",
+                        data_client_count,
+                    )
+                    % {"n": data_client_count, "slug": field_template.slug},
+                    field_template_trashed_client_count(field_template),
                 )
-                % {"n": data_client_count, "slug": field_template.slug}
             )
 
         data_case_count = Case.objects.filter(

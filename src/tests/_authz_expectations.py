@@ -229,6 +229,15 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_trashed.pk"),),
         idor=(("pk", "foreign_client_trashed.pk"),),
     ),
+    # Refs #1737 (B): Sofort-Anonymisierung im Papierkorb — gleiches Gate und
+    # gleicher Scope wie client_restore (Anwendungsbetreuung, is_deleted=True).
+    E(
+        "core:client_anonymize",
+        "facility-write",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "client_trashed.pk"),),
+        idor=(("pk", "foreign_client_trashed.pk"),),
+    ),
     E("core:case_create", "facility-write", get=STAFF_PLUS, post=STAFF_PLUS),
     E(
         "core:case_update",
