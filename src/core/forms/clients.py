@@ -9,21 +9,13 @@ from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.dynamic import DynamicDataForm
+from core.forms.dynamic import document_type_label as _document_type_label
 from core.forms.widgets import INPUT_CSS
 from core.models import Client, DocumentType
 
-
-def _document_type_label(document_type: DocumentType) -> str:
-    """Dropdown-Label eines Dokumentationstyps; deaktivierte werden markiert.
-
-    Muster :func:`core.forms.dynamic._select_choices` (Refs #1160): ein
-    deaktivierter Wert des BEARBEITETEN Datensatzes bleibt waehlbar, wird aber
-    sichtbar als solcher gekennzeichnet — sonst sieht die Leitung nicht, dass
-    dieser Typ fuer Neuanlagen nicht mehr angeboten wird.
-    """
-    if document_type.is_active:
-        return document_type.name
-    return f"{document_type.name} ({_('deaktiviert')})"
+# M2 P8 (Refs #1058): ``_document_type_label`` ist nach ``forms/dynamic.py``
+# gezogen (der Fall-Picker braucht dieselbe Beschriftung). Der Alt-Name bleibt
+# als Import-Alias erhalten — Muster P3/P7 (Umzug + Alias-Re-Export).
 
 
 class DynamicClientDataForm(DynamicDataForm):

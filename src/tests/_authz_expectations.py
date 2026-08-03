@@ -641,6 +641,11 @@ EXPECTATIONS = (
     # body-basiert in test_tally.py geprüft (Muster event_fields_partial).
     E("core:tally_increment", "partials-htmx", post=ASSISTANT_PLUS, extra_ok=(404,)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    # M2 P8 (Refs #1058): STAFF_PLUS — bewusst enger als das Event-Partial,
+    # analog ``client_fields_partial``. Faelle anlegen/bearbeiten ist STAFF_PLUS
+    # (``case_create``/``cases_for_client``), also darf auch die Feldflaeche
+    # dieses Formulars nicht tiefer aufgehen.
+    E("core:case_fields_partial", "partials-htmx", get=STAFF_PLUS),
     E("core:cases_for_client", "partials-htmx", get=STAFF_PLUS),
     E("core:global_search", "partials-htmx", get=ASSISTANT_PLUS),
     E(

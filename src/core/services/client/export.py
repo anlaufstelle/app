@@ -55,6 +55,38 @@ def _gather_client_dynamic_data(client):
     return entries
 
 
+def _gather_case_dynamic_data(case):
+    """Dynamische Fall-Felder als ``[{slug, label, value}, ...]`` (M2 P8, Refs #1058).
+
+    Spiegel von :func:`_gather_client_dynamic_data` fuer das ``Case``-Aggregat:
+    ohne ``document_type`` gibt es keine Feld-Definitionen und damit nichts zu
+    exportieren -> ``None`` (der Aufrufer laesst die Keys dann ganz weg, der
+    Fall-Eintrag bleibt bitgleich zum Stand vor M2).
+
+    Die Faelle einer Person gehoeren zur Art.-15-Auskunft (``_gather_cases``);
+    seit P5 traegt ein Fall eigene, potenziell verschluesselte Zusatzfelder —
+    ohne diesen Zweig waere die Auskunft unvollstaendig. Werte werden
+    entschluesselt und durch
+    :func:`~core.services.dynamic_data.format_dynamic_display_value` geschickt
+    (SELECT-Slug -> Label, Boolean -> ``Ja``/``Nein``); Reihenfolge und
+    Sensitivity-Begruendung sind identisch zum Personen-Pendant.
+    """
+    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
+
+    if case.document_type_id is None:
+        return None
+    values = case.data_json or {}
+    field_templates = build_field_template_lookup(case.document_type, ordered=True)
+    entries = []
+    for slug, ft in field_templates.items():
+        if slug not in values:
+            continue
+        raw = values[slug]
+        decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
+        entries.append({"slug": slug, "label": ft.name, "value": format_dynamic_display_value(decrypted, ft)})
+    return entries
+
+
 def _gather_client_fields(client):
     """Serialize the client's master data."""
     fields = {
@@ -117,9 +149,14 @@ def _gather_events(client, user):
 
 def _gather_cases(client):
     """Serialize all cases linked to the client."""
-    cases = CaseModel.objects.filter(client=client).select_related("created_by", "lead_user").order_by("-created_at")
-    return [
-        {
+    cases = (
+        CaseModel.objects.filter(client=client)
+        .select_related("created_by", "lead_user", "document_type")
+        .order_by("-created_at")
+    )
+    entries = []
+    for case in cases:
+        entry = {
             "title": case.title,
             "description": case.description,
             "status": case.get_status_display(),
@@ -128,8 +165,15 @@ def _gather_cases(client):
             "lead_user": case.lead_user.username if case.lead_user else None,
             "created_by": case.created_by.username if case.created_by else None,
         }
-        for case in cases
-    ]
+        # M2 P8 (Refs #1058): dynamische Fall-Felder gehoeren in die Auskunft,
+        # sobald der Fall einen Typ traegt. Ohne Typ bleibt das Dict exakt so
+        # wie vor M2 — Bestandstests pinnen genau diesen Schluesselsatz.
+        dynamic_data = _gather_case_dynamic_data(case)
+        if dynamic_data is not None:
+            entry["document_type"] = case.document_type.name
+            entry["dynamic_data"] = dynamic_data
+        entries.append(entry)
+    return entries
 
 
 def _gather_event_history(event_ids):

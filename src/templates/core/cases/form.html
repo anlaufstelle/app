@@ -75,6 +75,29 @@
 
             {# Fallverantwortlich #}
             {% include "components/_form_field.html" with field=form.lead_user %}
+
+            {% comment %}M2/P8 (Refs #1058): Dokumentationstyp-Select. Fehlt das Feld,
+            hat ``_lock_invisible_document_type`` es entfernt (Typ fuer diese Rolle
+            unsichtbar) — dann darf hier auch kein Hinweis stehen.{% endcomment %}
+            {% if form.document_type %}
+            {% include "components/_form_field.html" with field=form.document_type %}
+            {% comment %}E11: Der Typwechsel baut die Zusatzfelder neu auf — die Werte des
+            alten Typs haben im neuen Feldset keine Bedeutung und werden von
+            ``merge_dynamic_data`` verworfen. Statischer Hinweis (kein Inline-Handler,
+            CSP-strikt).{% endcomment %}
+            <p class="-mt-2 text-[12px] text-ink-muted" data-testid="doc-type-switch-hint">
+                {% trans "Beim Wechsel des Typs werden die Zusatzfeld-Werte verworfen." %}
+            </p>
+            {% endif %}
+        </div>
+
+        {% comment %}M2/P8 (Refs #1058): HTMX-Swap-Ziel des Typ-Selects. Der Wurzel-
+        ``<div x-data="conditionEvaluator">`` des Partials liegt IM Ziel — beim Wechsel
+        ersetzt HTMX ihn samt json_script-Payload (M1-Bedingungen). Attachment-Keys
+        (``existing_attachments``/``event``) werden bewusst NICHT gesetzt: der
+        FILE-Renderpfad ist bei ``exclude_file_fields = True`` nie erreichbar.{% endcomment %}
+        <div id="dynamic-fields" class="space-y-4">
+            {% include "core/partials/dynamic_fields.html" %}
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">

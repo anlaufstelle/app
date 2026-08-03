@@ -133,10 +133,18 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
         raw_data = fields.get("data_json", case.data_json)
         fields["data_json"] = _clean_case_dynamic_data(case.facility, effective_type, raw_data)
 
-    changed_fields = []
+    # Refs #1613 (M2 P8 nachgezogen): Diff gegen den DB-Stand, NICHT gegen die
+    # uebergebene Instanz. Seit P8 baut ``CaseUpdateView`` das Formular mit
+    # ``CaseForm(instance=case)`` (noetig fuer die Inaktiv-Ausnahme des
+    # ``document_type``-Querysets) — ``_post_clean()`` hat die Instanz dann
+    # bereits mutiert, ein ``getattr(case, key) != value`` saehe hier
+    # ``neu == neu`` und schriebe nie ``CASE_UPDATE`` (Threat-Model TB6,
+    # Repudiation). Gleiches Muster wie ``update_client``/``update_workitem``.
+    # Nur Feldnamen ins Audit, keine PII-Werte.
+    from core.services.audit.diff import changed_fields_vs_db
+
+    changed_fields = changed_fields_vs_db(case, fields)
     for key, value in fields.items():
-        if getattr(case, key) != value:
-            changed_fields.append(key)
         setattr(case, key, value)
     case.save()
 

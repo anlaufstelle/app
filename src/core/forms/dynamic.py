@@ -23,7 +23,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
-from core.models import FieldCondition, FieldGroup, FieldTemplate
+from core.models import DocumentType, FieldCondition, FieldGroup, FieldTemplate
 from core.models.settings import Settings
 from core.services.conditions import (
     FILE,
@@ -36,6 +36,25 @@ from core.services.conditions import (
 from core.services.config import block_ordered_dtf_queryset
 
 logger = logging.getLogger(__name__)
+
+
+def document_type_label(document_type: DocumentType) -> str:
+    """Dropdown-Label eines Dokumentationstyps; deaktivierte werden markiert.
+
+    Muster :func:`_select_choices` (Refs #1160): ein deaktivierter Wert des
+    BEARBEITETEN Datensatzes bleibt waehlbar, wird aber sichtbar als solcher
+    gekennzeichnet — sonst sieht die Leitung nicht, dass dieser Typ fuer
+    Neuanlagen nicht mehr angeboten wird.
+
+    M2 P8 (Refs #1058): aus ``forms/clients.py`` hierher gezogen — die
+    Beschriftung ist nicht personen-spezifisch und wird von jedem Formular mit
+    editierbarem ``document_type`` gebraucht (Person P7, Fall P8).
+    ``forms/clients.py`` behaelt den Alt-Namen ``_document_type_label`` als
+    Import-Alias (Muster P3/P7: Umzug + Alias-Re-Export).
+    """
+    if document_type.is_active:
+        return document_type.name
+    return f"{document_type.name} ({_('deaktiviert')})"
 
 
 class MultipleFileInput(forms.ClearableFileInput):
