@@ -8,7 +8,12 @@ Flächen dieselbe Menge meinen, liegt die Abfrage hier statt zweimal in den
 Views.
 """
 
-from core.models import User
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.formats import date_format
+from django.utils.translation import gettext_lazy as _
+
+from core.models import Client, DeletionRequest, Event, User
 
 
 def eligible_deletion_confirmers(facility, *, exclude_user=None):
@@ -24,3 +29,63 @@ def eligible_deletion_confirmers(facility, *, exclude_user=None):
     if exclude_user is not None and exclude_user.pk is not None:
         qs = qs.exclude(pk=exclude_user.pk)
     return qs.order_by("display_name", "username")
+
+
+def annotate_deletion_targets(requests, facility, user) -> None:
+    """Setzt ``target_label`` und ``target_url`` je Löschantrag (Refs #1736 E).
+
+    Die Liste zeigte als Ziel nur ``target_type`` — „Client"/„Event" ohne
+    Pseudonym oder Titel; wofür man da entscheidet, war nicht erkennbar. Die
+    Auflösung passiert gebündelt (zwei Queries für die ganze Liste, nicht eine
+    je Zeile) und **fail-closed**:
+
+    * Ereignisse laufen durch ``Event.objects.visible_to(user)`` — die
+      Sensibilitäts-Policy gilt hier wie überall sonst; ein für die Rolle
+      unsichtbares Ereignis behält ein neutrales Label und bekommt keinen
+      Link (sonst leckte der Dokumentationstyp-Name genau die Metadaten, die
+      die Policy verbirgt).
+    * Ein soft-gelöschtes oder nicht mehr auffindbares Ziel bekommt ebenfalls
+      keinen Link — die Detailansicht antwortet dort mit 404.
+
+    ``requests`` wird in-place annotiert (Listen aus der View).
+    """
+    requests = list(requests)
+    if not requests:
+        return
+
+    client_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CLIENT]
+    event_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.EVENT]
+
+    clients = {c.pk: c for c in Client.objects.filter(facility=facility, pk__in=client_ids)} if client_ids else {}
+    events = (
+        {
+            e.pk: e
+            for e in Event.objects.visible_to(user)
+            .filter(facility=facility, pk__in=event_ids)
+            .select_related("document_type")
+        }
+        if event_ids
+        else {}
+    )
+
+    for dr in requests:
+        if dr.target_type == DeletionRequest.TargetType.CLIENT:
+            target = clients.get(dr.target_id)
+            if target is None:
+                dr.target_label = _("Person (nicht mehr auffindbar)")
+                dr.target_url = ""
+                continue
+            dr.target_label = target.pseudonym
+            dr.target_url = "" if target.is_deleted else reverse("core:client_detail", args=[target.pk])
+            continue
+
+        target = events.get(dr.target_id)
+        if target is None:
+            # Unsichtbar (Sensibilität) oder nicht mehr vorhanden — beides
+            # bleibt bewusst ununterscheidbar generisch.
+            dr.target_label = _("Ereignis")
+            dr.target_url = ""
+            continue
+        occurred = date_format(timezone.localtime(target.occurred_at), "DATE_FORMAT")
+        dr.target_label = f"{target.document_type.name} — {occurred}"
+        dr.target_url = "" if target.is_deleted else reverse("core:event_detail", args=[target.pk])

@@ -1,0 +1,16 @@
+{% load i18n %}
+{% comment %}
+    Ziel eines Löschantrags (Refs #1736, E).
+
+    Vorher stand hier nur ``dr.target_type`` („Client"/„Event") — ohne
+    Pseudonym/Titel und ohne Link war nicht erkennbar, worüber entschieden
+    wird. Label und URL liefert ``annotate_deletion_targets``; ein leeres
+    ``target_url`` bedeutet: Ziel gelöscht, nicht auffindbar oder für diese
+    Rolle nicht sichtbar — dann bleibt es bewusst unverlinkt.
+{% endcomment %}
+<span class="text-[12px] text-ink-muted">{{ dr.get_target_type_display }}</span>
+{% if dr.target_url %}
+<a href="{{ dr.target_url }}" class="text-sm font-medium text-accent hover:underline" data-testid="deletion-target-link">{{ dr.target_label }}</a>
+{% else %}
+<span class="text-sm font-medium" data-testid="deletion-target-label">{{ dr.target_label }}</span>
+{% endif %}

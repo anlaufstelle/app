@@ -14,9 +14,9 @@
         {% for dr in pending_requests %}
         <div class="bg-surface border border-yellow-200 rounded-[10px] p-4">
             <div class="flex items-center justify-between mb-2">
-                <div>
-                    <span class="text-sm font-medium">{{ dr.target_type }}</span>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 ml-2">{% trans "Ausstehend" %}</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                    {% include "core/deletion_requests/partials/target.html" %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{% trans "Ausstehend" %}</span>
                 </div>
                 {% if dr.requested_by == request.user %}
                 <span class="text-xs text-ink-muted italic"
@@ -55,7 +55,7 @@
         {% for dr in approved_requests %}
         <div class="bg-surface border border-green-200 rounded-[10px] p-4">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium">{{ dr.target_type }}</span>
+                <span class="flex items-center gap-2 flex-wrap">{% include "core/deletion_requests/partials/target.html" %}</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">{% trans "Genehmigt" %}</span>
             </div>
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
@@ -78,7 +78,7 @@
         {% for dr in rejected_requests %}
         <div class="bg-surface border border-red-200 rounded-[10px] p-4">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium">{{ dr.target_type }}</span>
+                <span class="flex items-center gap-2 flex-wrap">{% include "core/deletion_requests/partials/target.html" %}</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">{% trans "Abgelehnt" %}</span>
             </div>
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>

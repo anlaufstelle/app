@@ -19,7 +19,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client, DeletionRequest, Event
 from core.services.client import approve_client_deletion, reject_client_deletion
-from core.services.deletion import eligible_deletion_confirmers
+from core.services.deletion import annotate_deletion_targets, eligible_deletion_confirmers
 from core.services.events import approve_deletion, reject_deletion
 from core.services.scoping import get_scoped_object
 from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
@@ -56,6 +56,10 @@ class DeletionRequestListView(DeletionRequestListAccessMixin, View):
         confirmer_ids = set(eligible_deletion_confirmers(facility).values_list("pk", flat=True))
         for dr in pending:
             dr.no_eligible_reviewer = not (confirmer_ids - {dr.requested_by_id})
+
+        # Refs #1736 (E): Ziel mit Pseudonym/Titel + Link statt „Client"/„Event".
+        for bucket in (pending, approved, rejected):
+            annotate_deletion_targets(bucket, facility, request.user)
 
         context = {
             "pending_requests": pending,
