@@ -559,6 +559,26 @@ class TestStatisticsRangeGuardViews:
         resp = client.get(reverse("core:statistics_jugendamt_export"), self._huge_range())
         assert resp.status_code == 400
 
+    def test_report_panel_rejects_huge_range(self, client, admin_user):
+        """Refs #1061: das generische Berichts-Panel gehoert in dieselbe Reihe.
+
+        Das Panel loest das Backend bewusst VOR der Periode auf (5xx-Guard der
+        AuthZ-Matrix), deshalb braucht der Aufruf einen gueltigen ``backend``.
+        """
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_report_panel"), {**self._huge_range(), "backend": "jugendamt"})
+        assert resp.status_code == 400
+
+    def test_report_export_rejects_huge_range(self, client, admin_user):
+        """Refs #1061: der generische Berichts-Download ebenso — ohne den Guard
+        stuende hier der Query-Amplification-Vektor wieder offen."""
+        client.force_login(admin_user)
+        resp = client.get(
+            reverse("core:statistics_report_export"),
+            {**self._huge_range(), "backend": "jugendamt", "format": "csv"},
+        )
+        assert resp.status_code == 400
+
 
 @pytest.mark.django_db
 class TestStatisticsRateLimit:
