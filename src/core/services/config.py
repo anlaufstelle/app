@@ -28,12 +28,16 @@ from collections import defaultdict
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Case, IntegerField, Max, ProtectedError, When
+from django.db.models import Case as CaseExpr
+from django.db.models import IntegerField, Max, ProtectedError, When
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from core.models import (
     AuditLog,
+    Case,
+    Client,
     DocumentType,
     DocumentTypeField,
     Event,
@@ -78,20 +82,49 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
 
 
 def delete_document_type(request, doc_type: DocumentType) -> None:
-    """Löscht einen DocumentType — blockiert bei referenzierenden Events (PROTECT).
+    """Löscht einen DocumentType — blockiert bei referenzierenden Events/Personen/Fällen (PROTECT).
 
-    ``Event.document_type`` ist ``PROTECT``; ein Delete mit Bestands-Events
-    würde eine ``ProtectedError`` werfen. Wir zählen die Referenzen vorab und
-    melden sie als ``ConfigDeleteBlocked``.
+    ``Event.document_type``/``Client.document_type``/``Case.document_type`` sind
+    alle ``PROTECT``; ein Delete mit Bestandsreferenzen würde eine
+    ``ProtectedError`` werfen. Wir zählen **alle drei** Referenzarten vorab und
+    melden sie gemeinsam als :class:`ConfigDeleteBlocked` (Muster
+    :func:`field_template_delete_blockers`: alle zutreffenden Gründe, nicht nur
+    der erste — ein Typ kann z.B. sowohl Events als auch Personen referenziert
+    haben, wenn ``entity_type`` erst nachträglich sinnvoll genutzt wurde).
     """
+    reasons: list[str] = []
+
     event_count = Event.objects.filter(document_type=doc_type).count()
     if event_count:
-        raise ConfigDeleteBlocked(
-            [
-                _("%(n)d Ereignis(se) verweisen auf diesen Dokumentationstyp und müssten zuerst entfernt werden.")
-                % {"n": event_count}
-            ]
+        reasons.append(
+            _("%(n)d Ereignis(se) verweisen auf diesen Dokumentationstyp und müssten zuerst entfernt werden.")
+            % {"n": event_count}
         )
+
+    client_count = Client.objects.filter(document_type=doc_type).count()
+    if client_count:
+        reasons.append(
+            ngettext(
+                "%(n)d Person ist diesem Dokumentationstyp zugeordnet und müsste zuerst geändert werden.",
+                "%(n)d Personen sind diesem Dokumentationstyp zugeordnet und müssten zuerst geändert werden.",
+                client_count,
+            )
+            % {"n": client_count}
+        )
+
+    case_count = Case.objects.filter(document_type=doc_type).count()
+    if case_count:
+        reasons.append(
+            ngettext(
+                "%(n)d Fall ist diesem Dokumentationstyp zugeordnet und müsste zuerst geändert werden.",
+                "%(n)d Fälle sind diesem Dokumentationstyp zugeordnet und müssten zuerst geändert werden.",
+                case_count,
+            )
+            % {"n": case_count}
+        )
+
+    if reasons:
+        raise ConfigDeleteBlocked(reasons)
 
     name, target_type, target_id = doc_type.name, doc_type.__class__.__name__, str(doc_type.pk)
     try:
@@ -307,12 +340,28 @@ def add_field_to_doctype(
     :func:`move_field` — mit ``ValueError`` abgewiesen (View → HTTP 400):
     ``DocumentTypeField.objects.create()`` ruft ``full_clean()`` nie auf, der
     ``DocumentTypeField.clean()``-Guard greift also nicht.
+
+    Entscheid E8 (Refs #1058), Schicht 2: FILE-Feldvorlagen sind an die
+    Event-Attachment-Pipeline gebunden — Personen/Fälle haben keinen
+    Upload-Pfad. Schicht 1 ist die Paketformat-Validierung
+    (``core.packages.schema``), Schicht 3 die stille Formular-Auslassung
+    (``DynamicDataForm.exclude_file_fields``, letzte Verteidigungslinie). Diese
+    Schicht verhindert die Zuordnung selbst als :class:`ValidationError`
+    (View → Formfehler, kein 500).
     """
     # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
     # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu
     # move_field (ValueError → HTTP 400).
     if field_group is not None and field_group.document_type_id != doc_type.id:
         raise ValueError(_("Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."))
+
+    if (
+        field_template.field_type == FieldTemplate.FieldType.FILE
+        and doc_type.entity_type != DocumentType.EntityType.EVENT
+    ):
+        raise ValidationError(
+            _("Datei-Feldvorlagen können nur Dokumentationstypen mit Entitätstyp „Ereignis“ zugeordnet werden.")
+        )
 
     if DocumentTypeField.objects.filter(document_type=doc_type, field_template=field_template).exists():
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."))
@@ -614,7 +663,7 @@ def block_ordered_dtf_queryset(doc_type: DocumentType):
         .select_related("field_template", "field_group")
         .annotate(
             block_pos=Coalesce("field_group__sort_order", "sort_order"),
-            block_is_free=Case(When(field_group__isnull=True, then=1), default=0, output_field=IntegerField()),
+            block_is_free=CaseExpr(When(field_group__isnull=True, then=1), default=0, output_field=IntegerField()),
         )
         .order_by("block_pos", "block_is_free", "sort_order", "pk")
     )

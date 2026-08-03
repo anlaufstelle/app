@@ -36,6 +36,17 @@ class DocumentTypeForm(forms.ModelForm):
       Feld ``disabled`` (Wert stammt aus der Instanz) — spiegelt die
       Model-Immutabilität (``DocumentType.save``) und die Admin-Parität
       (``DocumentTypeAdmin.get_readonly_fields``).
+    * ``entity_type`` (M2, Refs #1058): dasselbe Muster wie ``system_type`` —
+      nur beim Anlegen wählbar, bei Bearbeitung ``disabled`` (spiegelt die
+      Model-Immutabilität in ``DocumentType.save()`` und die Admin-Parität
+      ``DocumentTypeAdmin.get_readonly_fields``). Anders als ``system_type``
+      ist das Modellfeld selbst NICHT ``blank=True`` — ein ``required``-
+      Formfeld würde jeden POST ohne ``entity_type`` (Bestand: die meisten
+      Formulare/Tests setzen das Feld nicht explizit) als Fehler ablehnen.
+      Das Feld ist daher bewusst ``required=False``; ``clean_entity_type``
+      füllt eine leere Auswahl auf den Bestandswert ``EntityType.EVENT`` auf
+      (identisch zum bisherigen, impliziten Modell-Default) statt eine
+      „Pflichtfeld"-Fehlermeldung zu zeigen.
     * Die zusammengesetzte Unique-Regel ``(facility, name, category)`` wird als
       freundlicher Formfehler gemeldet statt als ``IntegrityError`` (facility ist
       kein Formfeld, daher greift Djangos ModelForm-Unique-Check hier nicht).
@@ -48,6 +59,7 @@ class DocumentTypeForm(forms.ModelForm):
             "category",
             "sensitivity",
             "system_type",
+            "entity_type",
             "min_contact_stage",
             "retention_days",
             "description",
@@ -58,6 +70,7 @@ class DocumentTypeForm(forms.ModelForm):
             "category": forms.Select(attrs={"class": INPUT_CSS}),
             "sensitivity": forms.Select(attrs={"class": INPUT_CSS}),
             "system_type": forms.Select(attrs={"class": INPUT_CSS}),
+            "entity_type": forms.Select(attrs={"class": INPUT_CSS}),
             "min_contact_stage": forms.Select(attrs={"class": INPUT_CSS}),
             "retention_days": forms.NumberInput(attrs={"class": INPUT_CSS, "min": 1}),
             "description": forms.Textarea(attrs={"class": INPUT_CSS, "rows": 3}),
@@ -66,16 +79,32 @@ class DocumentTypeForm(forms.ModelForm):
     def __init__(self, *args, facility=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
+        # entity_type ist am Modell nicht ``blank=True`` (anders als
+        # system_type) — als Formfeld bewusst optional, damit ein POST ohne
+        # den Schlüssel (Bestand) nicht am „Pflichtfeld"-Fehler scheitert;
+        # ``clean_entity_type`` liefert den Bestandsdefault EVENT nach.
+        self.fields["entity_type"].required = False
         # Neuobjekt: facility aus dem Scope an die Instanz binden, damit
         # form.save() (Service) den richtigen Mandanten schreibt.
         if facility is not None and self.instance.facility_id is None:
             self.instance.facility = facility
-        # Bearbeitung: system_type ist unveränderbar (Model erzwingt es beim
-        # save()); disabled-Feld hält den Instanzwert und ignoriert POST-Manipulation.
+        # Bearbeitung: system_type/entity_type sind unveränderbar (Model
+        # erzwingt es beim save()); disabled-Feld hält den Instanzwert und
+        # ignoriert POST-Manipulation.
         # ACHTUNG: nicht über instance.pk prüfen — der UUID-Default macht den pk
         # schon VOR dem ersten Speichern truthy; _state.adding unterscheidet korrekt.
         if not self.instance._state.adding:
             self.fields["system_type"].disabled = True
+            self.fields["entity_type"].disabled = True
+
+    def clean_entity_type(self) -> str:
+        # Leere Auswahl (Feld ist ``required=False``, s. __init__) auf den
+        # Bestandsdefault EVENT auffüllen — sonst würde ``full_clean()`` im
+        # ModelForm-``_post_clean`` eine leere Zeichenkette gegen die
+        # ``choices`` prüfen und (da das Modellfeld nicht ``blank=True`` ist)
+        # eine ValidationError werfen, die als generischer Formfehler
+        # aufschlüge statt als sinnvoller Default zu greifen.
+        return self.cleaned_data.get("entity_type") or DocumentType.EntityType.EVENT
 
     def clean(self):
         # ``ModelForm.clean`` ist als ``dict | None`` typisiert (leere Form ⇒

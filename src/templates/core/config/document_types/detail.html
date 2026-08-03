@@ -39,6 +39,18 @@
                 <dd class="text-ink font-medium">{{ doc_type.get_sensitivity_display }}</dd>
             </div>
             <div>
+                <dt class="text-ink-muted">{% trans "Entitätstyp" %}</dt>
+                <dd data-testid="doctype-entity-type-badge">
+                    {% if doc_type.entity_type == "client" %}
+                    {% include "components/_badge.html" with text=doc_type.get_entity_type_display color="purple" %}
+                    {% elif doc_type.entity_type == "case" %}
+                    {% include "components/_badge.html" with text=doc_type.get_entity_type_display color="teal" %}
+                    {% else %}
+                    {% include "components/_badge.html" with text=doc_type.get_entity_type_display color="blue" %}
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
                 <dt class="text-ink-muted">{% trans "Systemtyp" %}</dt>
                 <dd class="text-ink font-medium">{% if doc_type.system_type %}{{ doc_type.get_system_type_display }}{% else %}–{% endif %}</dd>
             </div>
