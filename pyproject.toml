@@ -270,6 +270,17 @@ strict_optional = true
 check_untyped_defs = true
 warn_unused_ignores = true
 
+# Refs #1058 (M2, E20): ``core.packages`` verarbeitet FREMDE Paket-Dicts
+# (YAML aus anderen Instanzen) — ohne Typdisziplin waere jedes ``Any`` aus
+# ``yaml.safe_load`` ein stiller Durchreicher bis in die Modell-Saves. Dieselben
+# Flags wie ``core.services.*``, plus ``check_untyped_defs`` (Muster
+# ``core.forms.*``: Modul liegt an der Grenze zu ungepruefter Aussenwelt).
+[[tool.mypy.overrides]]
+module = "core.packages.*"
+strict_optional = true
+check_untyped_defs = true
+warn_unused_ignores = true
+
 # Migrations + tests sind grundsaetzlich ausgenommen — Migration-Dateien
 # sind Django-generiert, Tests duerfen mit Fixtures locker umgehen.
 [[tool.mypy.overrides]]

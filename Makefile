@@ -110,7 +110,7 @@ lint:
 # mypy auf core/services strikt, Rest mit permissiver Baseline (Refs #741).
 # Erweiterung modulweise via [[tool.mypy.overrides]] in pyproject.toml.
 typecheck:
-	$(PYTHON) -m mypy src/core/services src/core/forms
+	$(PYTHON) -m mypy src/core/services src/core/forms src/core/packages
 
 # Maintenance-Mode (Refs #700). Aktiviert per File-Flag — bei nicht
 # gesetztem MAINTENANCE_FLAG_FILE-Env-Var wird /tmp/anlaufstelle.maintenance
