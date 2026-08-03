@@ -7,7 +7,8 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
-from core.services.system import get_active_bans, get_jugendamt_statistics
+from core.services.system import get_active_bans
+from tests._reporting_helpers import get_jugendamt_statistics
 
 
 @pytest.fixture

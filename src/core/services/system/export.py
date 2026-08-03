@@ -260,18 +260,6 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()
 
 
-def get_jugendamt_statistics(facility, date_from, date_to):
-    """Statistics aggregated by youth welfare office categories.
-
-    Delegations-Shim auf ``JugendamtBackend`` (M5 P2); Entfernung in M5-P3
-    (Refs #1061). Der Import bleibt lokal — die Registry laedt das
-    ``backends``-Package lazy, ein Modul-Import waere ein Zyklus-Risiko.
-    """
-    from core.reporting.registry import get_backend
-
-    return get_backend("jugendamt").build_dataset(facility, date_from, date_to).summary
-
-
 def generate_jugendamt_pdf(facility, date_from, date_to):
     """Generate the youth welfare office report as PDF.
 

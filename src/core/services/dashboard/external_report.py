@@ -132,7 +132,7 @@ def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
       selbst eine Kleinstfallzahl und wird ``None``.
 
     ``by_category`` kommt als ``(name, count)``-Tupel-Liste (aus
-    ``get_jugendamt_statistics``) und wird auf Dicts mit ``name``/``count``/
+    ``JugendamtBackend.build_dataset(...).summary``) und wird auf Dicts mit ``name``/``count``/
     ``suppressed`` normalisiert, damit das Template den Unterdrueckungs-Marker
     rendern kann. Gibt ein neues Dict zurueck; die Eingabe wird nicht mutiert.
     """

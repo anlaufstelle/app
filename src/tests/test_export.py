@@ -16,7 +16,7 @@ from core.models import (
     User,
 )
 from core.reporting.backends.jugendamt import CATEGORY_MAP as JUGENDAMT_CATEGORY_MAP
-from core.services.system import get_jugendamt_statistics
+from tests._reporting_helpers import get_jugendamt_statistics
 
 
 @pytest.fixture

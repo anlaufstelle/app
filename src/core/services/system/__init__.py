@@ -32,7 +32,6 @@ from core.services.system.export import (
     export_events_csv,
     generate_jugendamt_pdf,
     generate_report_pdf,
-    get_jugendamt_statistics,
 )
 from core.services.system.field_types import (
     FIELD_TYPE_REGISTRY,
@@ -102,7 +101,6 @@ __all__ = [
     "get_form_field_cls_for_file",
     "get_active_bans_for_client",
     "has_rls_bypass_context",
-    "get_jugendamt_statistics",
     "get_spec",
     "log_settings_change",
     "rls_bypass_for_read",

@@ -9,8 +9,12 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 
 from core.models import DocumentType, StatisticsSnapshot
+
+# Zyklusfrei: ``core.reporting.registry`` importiert nur ``core.reporting.base``
+# (keine Services, keine Models) und laedt das ``backends``-Package erst lazy
+# beim ersten ``get_*``-Aufruf.
+from core.reporting.registry import get_backend, get_backends
 from core.services.dashboard.statistics import get_statistics
-from core.services.system import get_jugendamt_statistics
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,16 @@ def create_or_update_snapshot(facility, year, month):
     date_to = date(year, month, last_day)
 
     stats = get_statistics(facility, date_from, date_to)
-    jg_stats = get_jugendamt_statistics(facility, date_from, date_to)
+
+    # M5 P3 (Refs #1061): Roh-Aggregate aller Snapshot-Backends aus der Registry
+    # statt eines hart verdrahteten Jugendamt-Aufrufs. Bewusst ``build_dataset``
+    # und NICHT ``prepare_export``: der Snapshot ist der interne Rohbestand, die
+    # k-Anon-Suppression gehoert allein in den Export-/Panel-Pfad.
+    payloads = {
+        backend.slug: backend.build_dataset(facility, date_from, date_to).summary
+        for backend in get_backends()
+        if backend.snapshot_enabled
+    }
 
     # Remove top_clients (not snapshot-safe due to anonymization)
     stats.pop("top_clients", None)
@@ -63,13 +76,20 @@ def create_or_update_snapshot(facility, year, month):
 
     # Force-convert lazy translation strings to plain strings for JSON storage
     stats = json.loads(json.dumps(stats, cls=DjangoJSONEncoder))
-    jg_stats = json.loads(json.dumps(jg_stats, cls=DjangoJSONEncoder))
+    payloads = json.loads(json.dumps(payloads, cls=DjangoJSONEncoder))
 
     StatisticsSnapshot.objects.update_or_create(
         facility=facility,
         year=year,
         month=month,
-        defaults={"data": stats, "jugendamt_data": jg_stats},
+        # Dual-Write: ``jugendamt_data`` laeuft parallel weiter, damit ein
+        # Rollback in beide Richtungen ohne Datenverlust moeglich bleibt. Das
+        # Abschalten des Alt-Feldes ist ein eigenes Folge-Issue.
+        defaults={
+            "data": stats,
+            "backend_data": payloads,
+            "jugendamt_data": payloads.get("jugendamt", {}),
+        },
     )
     logger.info(
         "Snapshot created/updated: facility=%s year=%d month=%d",
@@ -328,10 +348,14 @@ def get_jugendamt_statistics_hybrid(facility, date_from, date_to):
                 year=seg_from.year,
                 month=seg_from.month,
             ).first()
-            if snap and snap.jugendamt_data:
-                stats = snap.jugendamt_data
+            if snap:
+                # M5 P3 (Refs #1061): ``backend_data`` ist die fuehrende Quelle;
+                # ``jugendamt_data`` bleibt Rueckfallebene fuer Snapshots vor der
+                # Backfill-Migration 0122. ``or None`` normalisiert das leere
+                # Dict, damit der Live-Zweig unten wirklich greift.
+                stats = snap.backend_data.get("jugendamt") or snap.jugendamt_data or None
         if stats is None:
-            stats = get_jugendamt_statistics(facility, seg_from, seg_to)
+            stats = get_backend("jugendamt").build_dataset(facility, seg_from, seg_to).summary
         segment_stats.append(stats)
 
     return _merge_jugendamt_stats(segment_stats)

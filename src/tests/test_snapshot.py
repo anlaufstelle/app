@@ -6,10 +6,27 @@ import pytest
 from django.utils import timezone
 
 from core.models import DocumentType, Event, StatisticsSnapshot
+from core.reporting import registry
+from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.services.dashboard import (
     create_or_update_snapshot,
     ensure_snapshots_for_months,
 )
+
+
+class _DummyBackend(DatasetBackend):
+    """Minimal-Backend zum Beobachten des ``snapshot_enabled``-Filters."""
+
+    def __init__(self, slug, *, snapshot_enabled):
+        self.slug = slug
+        self.name = slug
+        self.snapshot_enabled = snapshot_enabled
+
+    def get_field_specs(self):
+        return [FieldSpec("wert", "Wert")]
+
+    def build_dataset(self, facility, date_from, date_to):
+        return DatasetResult(mode="aggregate", records=[], summary={"wert": 1}, completeness=[])
 
 
 def _create_event(facility, user, doc_type, client=None, is_anonymous=False, occurred_at=None):
@@ -148,6 +165,66 @@ class TestJugendamtDataStored:
         # by_category muss "Kontakte" mit count=2 enthalten
         category_dict = {entry[0]: entry[1] for entry in jg["by_category"]}
         assert category_dict["Kontakte"] == 2
+
+
+@pytest.mark.django_db
+class TestBackendDataDualWrite:
+    """M5 P3 (Refs #1061): ``backend_data`` traegt die Roh-Aggregate je Backend.
+
+    ``create_or_update_snapshot`` schreibt weiterhin ``jugendamt_data``
+    (Dual-Write, Rollback-Sicherheit in beide Richtungen) — beide Felder muessen
+    denselben Payload tragen.
+    """
+
+    def _snapshot_with_jugendamt_event(self, facility, staff_user, client_identified):
+        dt_contact = DocumentType.objects.create(
+            facility=facility,
+            name="Kontaktaufnahme",
+            category=DocumentType.Category.CONTACT,
+            system_type="contact",
+        )
+        jan = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
+        _create_event(facility, staff_user, dt_contact, client=client_identified, occurred_at=jan)
+        _create_event(facility, staff_user, dt_contact, client=client_identified, occurred_at=jan)
+
+        create_or_update_snapshot(facility, 2025, 1)
+        return StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
+
+    def test_backend_data_matches_jugendamt_data(self, facility, staff_user, client_identified):
+        snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)
+
+        assert "jugendamt" in snap.backend_data
+        # Dual-Write: identischer Payload in beiden Feldern (Werte aus der DB,
+        # also nach dem JSON-Roundtrip verglichen).
+        assert snap.backend_data["jugendamt"] == snap.jugendamt_data
+        assert snap.backend_data["jugendamt"]["total"] == 2
+
+    def test_backend_data_is_json_roundtripped(self, facility, staff_user, client_identified):
+        """Lazy-Uebersetzungen (Altersgruppen-Labels) landen als echte Strings."""
+        snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)
+
+        labels = [row["label"] for row in snap.backend_data["jugendamt"]["by_age_cluster"]]
+        assert labels, "by_age_cluster darf im Snapshot nicht leer sein."
+        assert all(type(label) is str for label in labels)
+
+    def test_only_snapshot_enabled_backends_are_stored(self, facility, staff_user, client_identified, monkeypatch):
+        """Die Map deckt genau die Backends mit ``snapshot_enabled`` ab.
+
+        Zwei Dummy-Backends in einer isolierten Registry-Kopie (Muster
+        ``test_reporting_jugendamt._isolated_registry``) halten den Filter fest —
+        mit nur einem echten Backend waere er sonst nicht beobachtbar.
+        """
+        registry._discover()
+        isolierte_registry = dict(registry._REGISTRY)
+        isolierte_registry["mit_snapshot"] = _DummyBackend("mit_snapshot", snapshot_enabled=True)
+        isolierte_registry["ohne_snapshot"] = _DummyBackend("ohne_snapshot", snapshot_enabled=False)
+        monkeypatch.setattr(registry, "_REGISTRY", isolierte_registry)
+        monkeypatch.setattr(registry, "_discovered", True)
+
+        snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)
+
+        assert set(snap.backend_data) == {"jugendamt", "mit_snapshot"}
+        assert snap.backend_data["mit_snapshot"] == {"wert": 1}
 
 
 @pytest.mark.django_db

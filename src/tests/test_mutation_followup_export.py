@@ -12,7 +12,9 @@ Sicht-Grenzen der drei Top-Survivor-Funktionen killen:
   Felder), Visibility-Filter pro Feld (Sensitivity), Masking-Branch
   ``[Eingeschränkt]`` statt Skip, CSV-Escape-Wege (``_sanitize_csv_cell``)
   und Pseudonym-vs-Anonym-vs-Dash-Fallback bei ``event.client``.
-- ``get_jugendamt_statistics`` (30 Survivors): Datumsbereiche-Boundaries
+- ``get_jugendamt_statistics`` (30 Survivors; seit M5 P3 der Testhelfer aus
+  ``tests._reporting_helpers`` auf ``JugendamtBackend.build_dataset``):
+  Datumsbereiche-Boundaries
   (``occurred_at__date__gte`` / ``__lte`` an Anfang/Ende), Aggregat-Counts
   pro Kategorie (``Kontakte``/``Beratung``/``Versorgung``/``Vermittlung``),
   Stage-/system_type-Filter (None ausschließen), Age-Cluster-Verteilung,
@@ -47,8 +49,8 @@ from core.reporting.backends.jugendamt import CATEGORY_MAP as JUGENDAMT_CATEGORY
 from core.services.system import (
     _build_event_row,
     _resolve_field_value,
-    get_jugendamt_statistics,
 )
+from tests._reporting_helpers import get_jugendamt_statistics
 
 # ---------------------------------------------------------------------------
 # Helper / Factories

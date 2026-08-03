@@ -24,6 +24,17 @@ class StatisticsSnapshot(models.Model):
     )
     data = models.JSONField(default=dict)
     jugendamt_data = models.JSONField(default=dict)
+    # M5 P3 (Refs #1061): backend-unabhängiger Nachfolger von ``jugendamt_data``.
+    # Ein Eintrag je Reporting-Backend mit ``snapshot_enabled``; der Wert ist das
+    # **rohe** Aggregat aus ``DatasetBackend.build_dataset(...).summary`` (ohne
+    # ``prepare_export``-Transformationen wie die k-Anon-Suppression, die nur den
+    # Export-/Panel-Pfad betreffen). ``jugendamt_data`` wird bis zum Ende der
+    # Übergangsphase parallel weitergeschrieben (Dual-Write) und ist die
+    # Rückfallebene für Snapshots vor Migration 0122.
+    backend_data = models.JSONField(
+        default=dict,
+        help_text=_("Map Backend-Slug → Roh-Aggregat des jeweiligen Reporting-Backends."),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -9,9 +9,10 @@ duerfen keine Re-Identifizierungs-Hinweise enthalten. Konkret:
   ``Top 5 Personen``-Tabelle gemaess Template-Branch nicht (siehe
   ``core/export/report_pdf.html`` Zeile 105f. — gated auf
   ``{% if internal_mode and stats.top_clients %}``). Refs #792 (C-24).
-- :func:`get_jugendamt_statistics` aggregiert ueber DocumentType-
-  Kategorien und Altersgruppen, ohne Pseudonyme zurueckzugeben — der
-  Output enthaelt keine ``pseudonym``-Felder.
+- ``get_jugendamt_statistics`` (seit M5 P3 der Testhelfer aus
+  ``tests._reporting_helpers``, der auf ``JugendamtBackend.build_dataset``
+  zeigt) aggregiert ueber DocumentType-Kategorien und Altersgruppen, ohne
+  Pseudonyme zurueckzugeben — der Output enthaelt keine ``pseudonym``-Felder.
 
 Die Tests verifizieren beide Pfade:
 
@@ -39,7 +40,7 @@ from django.utils import timezone
 
 from core.models import Client, Event
 from core.services.dashboard import get_statistics
-from core.services.system import get_jugendamt_statistics
+from tests._reporting_helpers import get_jugendamt_statistics
 
 # Eindeutige Pseudonyme — wenn sie irgendwo im HTML auftauchen, ist das
 # kein Zufall (kein Substring-Overlap mit Boilerplate).

@@ -75,7 +75,17 @@ class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
 class StatisticsSnapshotAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("facility", "year", "month", "updated_at")
     list_filter = ("facility", "year")
-    readonly_fields = ("id", "facility", "year", "month", "data", "jugendamt_data", "created_at", "updated_at")
+    readonly_fields = (
+        "id",
+        "facility",
+        "year",
+        "month",
+        "data",
+        "backend_data",
+        "jugendamt_data",
+        "created_at",
+        "updated_at",
+    )
 
     def has_add_permission(self, request):
         return False

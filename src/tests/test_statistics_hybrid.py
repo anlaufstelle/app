@@ -420,6 +420,73 @@ class TestJugendamtHybrid:
 
 
 @pytest.mark.django_db
+class TestJugendamtHybridReadsBackendData:
+    """M5 P3 (Refs #1061): Der Snapshot-Read bevorzugt ``backend_data``.
+
+    ``jugendamt_data`` bleibt als Rueckfallebene fuer Alt-Snapshots erhalten,
+    die vor der Backfill-Migration 0122 entstanden sind.
+    """
+
+    def test_backend_data_wins_over_jugendamt_data(self, facility):
+        """Divergierende Werte: ``backend_data["jugendamt"]`` gewinnt."""
+        StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2025,
+            month=1,
+            data=_snapshot_data(total=5),
+            backend_data={"jugendamt": _jugendamt_snapshot_data(total=10, unique=6)},
+            # Absichtlich abweichend — darf NICHT gelesen werden.
+            jugendamt_data=_jugendamt_snapshot_data(total=99, unique=77),
+        )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 3, 15)
+            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
+
+        assert result["total"] == 10
+        assert result["unique_clients"] == 6
+
+    def test_legacy_snapshot_falls_back_to_jugendamt_data(self, facility):
+        """Alt-Snapshot ohne ``backend_data`` liest weiterhin ``jugendamt_data``."""
+        StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2025,
+            month=1,
+            data=_snapshot_data(total=5),
+            backend_data={},
+            jugendamt_data=_jugendamt_snapshot_data(total=42, unique=17),
+        )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 3, 15)
+            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
+
+        assert result["total"] == 42
+        assert result["unique_clients"] == 17
+
+    def test_empty_snapshot_falls_back_to_live_query(self, facility, client_identified, doc_type_contact, staff_user):
+        """Beide Felder leer -> Live-Abfrage statt eines leeren Aggregats."""
+        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
+        doc_type_contact.save()
+        _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 8, 10, 0))
+
+        StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2025,
+            month=1,
+            data=_snapshot_data(total=5),
+            backend_data={},
+            jugendamt_data={},
+        )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 3, 15)
+            result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
+
+        assert result["total"] == 1
+
+
+@pytest.mark.django_db
 class TestPartialEdgeMonthsUseLive:
     """Partial first/last months always use live query even if past."""
 

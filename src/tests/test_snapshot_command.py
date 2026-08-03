@@ -167,6 +167,18 @@ def test_facility_filter(
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures("_events_jan_feb")
+def test_command_fills_backend_data(facility, settings_obj):
+    """M5 P3 (Refs #1061): Der Command-Lauf erzeugt die ``backend_data``-Map."""
+    call_command("create_statistics_snapshots", year=2025, month=1)
+
+    snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
+    assert "jugendamt" in snap.backend_data
+    # Dual-Write bleibt bis zum Ende der Uebergangsphase bestehen.
+    assert snap.backend_data["jugendamt"] == snap.jugendamt_data
+
+
+@pytest.mark.django_db
 def test_command_writes_run_marker(facility, settings_obj):
     """Refs #794: nach erfolgreichem (non-dry-run) Lauf entsteht genau ein
     SNAPSHOT_RUN_COMPLETED-Marker mit facility=None."""

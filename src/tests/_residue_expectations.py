@@ -187,6 +187,14 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         "jugendamt_data",
         reason="Aggregierte Jugendamt-Zaehlungen (Kategorie-Summen), keine Einzelpersonen.",
     ),
+    # M5 P3 (Refs #1061): backend-unabhaengige Map ``slug -> Roh-Aggregat``.
+    # Inhaltlich dieselbe Klasse wie ``jugendamt_data`` — die Backends liefern
+    # per ``DatasetResult.summary`` ausschliesslich Aggregate.
+    non_pii(
+        "core_statisticssnapshot",
+        "backend_data",
+        reason="Aggregierte Reporting-Zaehlungen je Backend-Slug, keine Einzelpersonen.",
+    ),
     # ---- core_quicktemplate ----------------------------------------------
     non_pii("core_quicktemplate", "name", reason="Anzeigename der Vorlage (z.B. 'Beratung 30 Min'), Konfiguration."),
     # prefilled_data traegt freie Feldwerte (slug→Wert) → konservativ pii.
