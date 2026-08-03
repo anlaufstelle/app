@@ -267,6 +267,7 @@ def generate_sample_report_1_pdf(facility, date_from, date_to):
     wird daher durch dieselbe k-Anon-Kleinstfallzahl-Suppression geleitet wie
     der externe On-Screen-Bericht — Zellen < Schwelle werden unterdrueckt.
     """
+    from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, SNAPSHOT_HYBRID
     from core.services.dashboard import get_sample_report_1_statistics_hybrid, suppress_sample_report_1_stats
 
     stats = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
@@ -279,6 +280,11 @@ def generate_sample_report_1_pdf(facility, date_from, date_to):
             "date_to": date_to,
             "stats": stats,
             "generated_at": timezone.now(),
+            # Quellenausweis (Refs #1743): dieses PDF ist das einzige hybrid
+            # gelesene Artefakt — die Zahlen kommen aus den Monats-Snapshots
+            # und ueberdauern die Loeschfristen.
+            "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
+            "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
         },
     )
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

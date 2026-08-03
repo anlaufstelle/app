@@ -544,6 +544,8 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 
 > **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.
 
+**Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Der Beispiel-Sachbericht ist das einzige Artefakt, das aus den gespeicherten **Monats-Auswertungen** liest. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Alle anderen Berichte (siehe unten) rechnen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
+
 ### Berichte (CSV / JSON / XML)
 
 Unterhalb der Diagramme finden Sie den Bereich **Berichte**. Dort stehen alle Berichtsstandards zur Verfügung, die für Ihre Einrichtung eingerichtet sind — der Beispiel-Sachbericht ebenso wie weitere, die Ihre Administration ergänzt hat.
@@ -556,6 +558,8 @@ Unterhalb der Diagramme finden Sie den Bereich **Berichte**. Dort stehen alle Be
 
 **Kleinstfallzahlen werden unterdrückt:** Vorschau *und* Download zeigen denselben datenschutzfreundlichen Datenstand — Werte unterhalb der K-Anonymitäts-Schwelle Ihrer Einrichtung (Standard 5) werden entfernt, damit sich aus einem Bericht keine einzelnen Personen ableiten lassen. **Dargestellt** wird ein entfernter Wert je nach Format unterschiedlich: in der Vorschau als Gedankenstrich („—"), im CSV als leere Zelle (die Metadatenzeile am Dateianfang weist auf die Unterdrückung hin), im JSON als `null`, im XML als leeres Element. Gelegentlich fällt zusätzlich ein zweiter, größerer Wert weg — das ist beabsichtigt, sonst ließe sich der unterdrückte Wert zurückrechnen. Aus demselben Grund enthalten Vollständigkeitshinweise bei sehr kleinen Zahlen gar keine Ziffer mehr.
 
+**Datenquelle: Live-Abfrage.** Unter der Vorschau steht, woher die Zahlen kommen. Vorschau und Download rechnen die Zahlen bei **jedem Aufruf neu** aus den Ereignisdaten. Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, erscheinen deshalb leer — anders als im Beispiel-Sachbericht-PDF, das aus den Monats-Auswertungen liest. In den Dateiformaten steht dieselbe Angabe maschinenlesbar: im CSV in der Metadatenzeile am Dateianfang, in JSON und XML als Feld `data_source` (Wert `live`).
+
 > **Hinweis:** Jeder Download wird im Audit-Log protokolliert; die Vorschau nicht. Ein leerer Zeitraum sieht in der Vorschau aus wie eine Unterdrückung — prüfen Sie im Zweifel den gewählten Zeitraum.
 
 ### Datenschutzfreundliche externe Berichte (Leitung / Admin)
@@ -564,7 +568,7 @@ Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) g
 
 - **Kein Pseudonym-Ranking** — die Top-Personen-Liste des internen Dashboards entfällt vollständig.
 - **K-Anonymität** — Aggregate mit weniger als *k* Datensätzen (Schwelle aus den Einrichtungs-Settings, Standard 5) werden als **„unterdrückt"** ausgewiesen statt mit konkreter Zahl. Das betrifft „Unterschiedliche Personen", „Nach Dokumentationstyp" und „Nach Altersgruppe".
-- **Datenschutzprofil-Kopf** — Einrichtung, Profil (`external`), Zeitraum, K-Anonymität-Schwelle und Erzeugungs-Zeitpunkt stehen oben im Bericht.
+- **Datenschutzprofil-Kopf** — Einrichtung, Profil (`external`), Zeitraum, K-Anonymität-Schwelle, Erzeugungs-Zeitpunkt und **Datenquelle** stehen oben im Bericht. Auch dieser Bericht rechnet live; in der JSON-Fassung steht die Angabe als `metadata.data_source` (Wert `live`).
 
 Über **„Als JSON exportieren"** (bzw. `?format=json` an der URL) erhalten Sie dieselben Daten maschinenlesbar. Jeder Aufruf wird als `EXPORT` im Audit-Log protokolliert. Der externe Bericht ist nur für **Leitung** und **Administration** zugänglich.
 

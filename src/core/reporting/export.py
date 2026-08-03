@@ -26,6 +26,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 
 from core.reporting.base import DatasetBackend, DatasetResult
+from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
 
 # Bewusste Wiederverwendung des Formula-Injection-Schutzes (OWASP CSV-
 # Injection, Refs #719) statt einer Neuimplementierung — dieselbe Zelle
@@ -125,6 +126,9 @@ def _render_csv(
         return chunk
 
     metadata = f"# Bericht: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
+    # Quellenausweis (Refs #1743): die Pipeline liest immer live. Steht VOR dem
+    # k-Anon-Hinweis, damit dieser das Zeilenende bleibt.
+    metadata += f" | Datenquelle: {DATA_SOURCE_NOTES[LIVE]}"
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
     # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
@@ -159,6 +163,11 @@ def _render_json(
         "date_to": date_to,
         "generated_at": generated_at,
         "mode": result.mode,
+        # Quellenausweis (Refs #1743): ``data_source`` ist der stabile,
+        # sprachunabhaengige Code fuer Maschinen, ``data_source_note`` die
+        # uebersetzte Kurzform fuer Menschen, die den Payload lesen.
+        "data_source": LIVE,
+        "data_source_note": str(DATA_SOURCE_NOTES[LIVE]),
         "field_specs": [{"key": spec.key, "label": spec.label} for spec in backend.get_field_specs()],
         "summary": result.summary,
         "records": result.records,
@@ -192,6 +201,9 @@ def _render_xml(
             "date_to": str(date_to),
             "generated_at": generated_at.isoformat(),
             "mode": result.mode,
+            # Quellenausweis (Refs #1743) — Code + uebersetzte Kurzform.
+            "data_source": LIVE,
+            "data_source_note": _xml_safe(str(DATA_SOURCE_NOTES[LIVE])),
         },
     )
 

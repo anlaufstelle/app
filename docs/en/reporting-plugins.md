@@ -299,7 +299,22 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 - **`unique_clients` across several months.** The hybrid path sums the monthly values (a documented approximation: anyone appearing in two months is counted twice); the live query performs a true DISTINCT count over the whole period.
 - **Periods beyond the retention deadlines.** Snapshots deliberately outlive event retention; the live query filters out soft-deleted events (`is_deleted=False`). For a period whose events have already been deleted, the PDF returns the snapshot figures whereas the panel and CSV/JSON/XML return (close to) zero, or suppression markers.
 
-This is not a peculiarity of the plugin system: the same class of divergence has always existed between the live external report and the hybrid PDF — M5 adds a third instance of the same pattern. Unifying them is follow-up work covering **all three** live-reading artifacts (#1743); it would additionally require `completeness` in the snapshot, which is not stored there today — otherwise a hybrid-fed export would silently report "no gaps".
+This is not a peculiarity of the plugin system: the same class of divergence has always existed between the live external report and the hybrid PDF — M5 adds a third instance of the same pattern.
+
+**Decision: the divergence stays, the source is declared** (#1743, product decision of 2026-08-03). The read paths are **not** unified — both are intentional (the snapshot outlives the retention deadlines, the live query counts more accurately across the whole period). Instead **every artifact declares its own source**. The texts and the stable codes live centrally in [`core/reporting/data_source.py`](../../src/core/reporting/data_source.py):
+
+| Artifact | Code | Declaration inside the artifact |
+|---|---|---|
+| Report panel (preview) | `live` | visible line "Datenquelle: Live-Abfrage zum Erstellungszeitpunkt — …" |
+| CSV export | `live` | metadata line, segment `\| Datenquelle: …` **before** the k-anonymity note |
+| JSON export | `live` | fields `data_source` (code) + `data_source_note` (translated short form) |
+| XML export | `live` | root attributes `data_source` + `data_source_note` |
+| External report (HTML + `?format=json`) | `live` | `metadata.data_source` / `metadata.data_source_note`, plus a header line and an explanatory sentence in the HTML |
+| Activity report PDF | `snapshot_hybrid` | footer line "Datenquelle: Monats-Aggregate — …" |
+
+`data_source` is deliberately a **stable, language-independent code** — it must never change with the interface language, otherwise a consumer would have to parse German prose. The human-readable variants (`data_source_note`, explanatory sentence) are translatable.
+
+Unifying the paths later remains possible but is not planned; it would additionally require `completeness` in the snapshot, which is not stored there today — otherwise a hybrid-fed export would silently report "no gaps".
 
 ---
 
@@ -503,4 +518,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: f2e7e86a079e2415ed45be45cae47f45882d78a2 -->
+<!-- source-hash: 2c9f5acfc4c61ddb8f065fda0653b38b42e40553 -->

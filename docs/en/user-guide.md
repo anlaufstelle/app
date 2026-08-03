@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551) and 2026-08-03 (§ 7 reports section, #1061).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551) and 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743).
 
 # Anlaufstelle -- User Guide
 
@@ -547,6 +547,8 @@ The example activity report generates a structured report based on a fixed examp
 
 > **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
 
+**Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The example activity report is the only artifact that reads from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". All other reports (see below) are calculated live and can therefore show different figures for the same period.
+
 ### Reports (CSV / JSON / XML)
 
 Below the charts you will find the **Reports** section. It offers every reporting standard configured for your facility -- the example activity report as well as any others your administrator has added.
@@ -559,6 +561,8 @@ Below the charts you will find the **Reports** section. It offers every reportin
 
 **Small case numbers are suppressed:** The preview *and* the download show the same privacy-friendly data -- values below your facility's k-anonymity threshold (default 5) are removed, so that no individual person can be derived from a report. How a removed value is **displayed** depends on the format: as a dash in the preview, as an empty cell in the CSV (the metadata line at the top of the file points out the suppression), as `null` in JSON, and as an empty element in XML. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
 
+**Data source: live query.** Below the preview you can see where the figures come from. The preview *and* the download recalculate the figures from the event data on **every request**. Periods whose events were removed after the retention deadlines therefore appear empty -- unlike the example activity report PDF, which reads from the monthly aggregates. The file formats carry the same statement in machine-readable form: in the CSV metadata line at the top of the file, and in JSON and XML as the field `data_source` (value `live`).
+
 > **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
 
 ### Privacy-friendly External Reports (Lead / Admin)
@@ -567,7 +571,7 @@ For sharing data with external parties (e.g., funding bodies or municipal author
 
 - **No pseudonym ranking** -- the top-persons list from the internal dashboard is omitted entirely.
 - **K-anonymization** -- aggregates with fewer than *k* records (threshold from the facility settings, default 5) are shown as **"suppressed"** rather than as a concrete number. This applies to "Unique persons", "By documentation type", and "By age group".
-- **Privacy profile header** -- facility, profile (`external`), time period, k-anonymity threshold, and generation timestamp appear at the top of the report.
+- **Privacy profile header** -- facility, profile (`external`), time period, k-anonymity threshold, generation timestamp, and **data source** appear at the top of the report. This report is calculated live as well; in the JSON version the statement appears as `metadata.data_source` (value `live`).
 
 Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive the same data in machine-readable form. Every request is logged as an `EXPORT` event in the audit log. The external report is accessible to **leads** and **administrators** only.
 
@@ -870,5 +874,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 14d9f4e819827dd4c623c9c8c1dd0ec2b0e7ed42 -->
+<!-- source-hash: 357110a8c9bf1c17b733b0c506760702480f3a45 -->
 

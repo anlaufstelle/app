@@ -31,12 +31,18 @@
             <dt class="font-semibold text-blue-800">{% trans "Erzeugt am" %}</dt>
             <dd class="text-blue-900">{{ report.metadata.generated_at }}</dd>
         </div>
+        {# Quellenausweis (Refs #1743): dieser Bericht liest live, das Sachbericht-PDF hybrid. #}
+        <div>
+            <dt class="font-semibold text-blue-800">{% trans "Datenquelle" %}</dt>
+            <dd class="text-blue-900">{{ report.metadata.data_source_note }}</dd>
+        </div>
     </dl>
     <p class="text-xs text-blue-700 mt-3">
         {% blocktrans with threshold=report.metadata.k_anonymity_threshold %}
         Aggregate mit weniger als {{ threshold }} Datensätzen werden zum Schutz der Anonymität unterdrückt (Anzeige als „unterdrückt").
         {% endblocktrans %}
     </p>
+    <p class="text-xs text-blue-700 mt-2">{{ data_source_explanation }}</p>
 </section>
 
 <section aria-labelledby="report-totals" class="mb-6">

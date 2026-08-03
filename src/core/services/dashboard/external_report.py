@@ -20,6 +20,7 @@ from typing import Any
 from django.utils import timezone
 
 from core.models import Settings
+from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
 from core.services.dashboard.statistics import get_statistics
 
 DEFAULT_K_THRESHOLD = 5
@@ -110,6 +111,14 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
             "k_anonymity_threshold": threshold,
             "generated_at": timezone.now().isoformat(),
             "privacy_profile": "external",
+            # Quellenausweis (Refs #1743): dieser Bericht liest live ueber
+            # ``get_statistics`` — anders als das hybrid gespeiste
+            # Sachbericht-PDF. ``data_source`` ist der stabile Code fuer
+            # Maschinen (``?format=json``), ``data_source_note`` die
+            # uebersetzte Kurzform fuer den HTML-Kopf. Der Cast haelt den
+            # JSON-Pfad frei von Lazy-Proxys.
+            "data_source": LIVE,
+            "data_source_note": str(DATA_SOURCE_NOTES[LIVE]),
         },
     }
 

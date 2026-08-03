@@ -579,3 +579,46 @@ class TestRfc5987Dateiname:
         facility = _Facility(name="Fördeinrichtung Süd")
         response = export_dataset(_UnicodeSlugBackend(), facility, date_from, date_to, format="csv")
         assert "filename*=" in response["Content-Disposition"]
+
+
+class TestQuellenausweis:
+    """Refs #1743 (Produktentscheid Option c): jedes Berichts-Artefakt weist
+    seine Datenquelle aus. Die generische Pipeline liest **immer** live
+    (``build_dataset``), also traegt sie in allen drei Formaten den
+    Live-Ausweis — den stabilen Code ``live`` fuer Maschinen und die
+    uebersetzbare Kurzform fuer Menschen.
+    """
+
+    def test_csv_metadatenzeile_nennt_die_datenquelle(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
+        erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert "| Datenquelle: Live-Abfrage zum Erstellungszeitpunkt" in erste_zeile
+
+    def test_csv_datenquelle_steht_vor_dem_k_anon_hinweis(self, facility, date_range):
+        """Reihenfolge fixiert: der k-Anon-Hinweis bleibt das Ende der Zeile."""
+        date_from, date_to = date_range
+        response = export_dataset(_ThresholdBackend(), facility, date_from, date_to, format="csv")
+        erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert erste_zeile.index("Datenquelle:") < erste_zeile.index("k-Anonymität:")
+        assert erste_zeile.endswith(" | k-Anonymität: Zellen < 7 unterdrückt")
+
+    def test_json_traegt_code_und_lesbare_kurzform(self, facility, date_range):
+        date_from, date_to = date_range
+        payload = json.loads(export_dataset(_RowsBackend(), facility, date_from, date_to, format="json").content)
+
+        # Stabiler Code — darf sich mit der Oberflaechensprache NICHT aendern.
+        assert payload["data_source"] == "live"
+        assert payload["data_source_note"] == "Live-Abfrage zum Erstellungszeitpunkt"
+
+    def test_xml_wurzel_traegt_code_und_kurzform(self, facility, date_range):
+        date_from, date_to = date_range
+        response = export_dataset(_AggregateBackend(), facility, date_from, date_to, format="xml")
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(response.content)  # noqa: S314
+
+        assert root.attrib["data_source"] == "live"
+        assert root.attrib["data_source_note"] == "Live-Abfrage zum Erstellungszeitpunkt"

@@ -22,6 +22,7 @@
         .signature { margin-top: 60px; }
         .signature-line { border-top: 1px solid #333; width: 250px; margin-top: 40px; padding-top: 4px; font-size: 10px; color: #666; }
         .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
+        .footer p { margin: 0 0 4px 0; }
     </style>
 </head>
 <body>
@@ -94,8 +95,10 @@
         <div class="signature-line">{% trans "Ort, Datum, Unterschrift" %}</div>
     </div>
 
+    {# Quellenausweis (Refs #1743): dieses PDF liest hybrid ueber Monats-Snapshots. #}
     <div class="footer">
-        {% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}
+        <p class="data-source">{% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}</p>
+        <p>{% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}</p>
     </div>
 </body>
 </html>

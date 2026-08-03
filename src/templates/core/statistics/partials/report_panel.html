@@ -69,6 +69,11 @@ Vorschau eines Reporting-Backends. Rendert das Ergebnis von
 </p>
 {% endif %}
 
+{# Quellenausweis (Refs #1743): Vorschau und Download lesen live, das Sachbericht-PDF hybrid. #}
+<p class="text-[12px] text-ink-muted mb-4">
+    {% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}
+</p>
+
 {# Export-Links: Server erzwingt LEAD_PLUS auf core:statistics_report_export — keine eigene Rollenprüfung hier nötig. #}
 <div class="flex flex-wrap gap-2.5 no-print">
     <a href="{% url 'core:statistics_report_export' %}?backend={{ backend.slug }}&format=csv&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"

@@ -173,6 +173,27 @@ Der **Anzeigename bleibt „Beispiel-Sachbericht"** (#1279); zusätzlich sind di
 
 Unberührt bleiben die übrigen Entscheide, insbesondere der sachberichtspezifische Monats-Merge (Konsequenz 5/Entscheid 8), die Live-vs-Hybrid-Divergenz (Konsequenz 8, #1743) und der `DocumentType.slug`-Zweitschlüssel als offene Folgearbeit (#1741).
 
+## Update 2026-08-03: Zielsemantik der Lesepfade — Divergenz bewusst, Quelle ausgewiesen (Refs #1743)
+
+**Konsequenz 8 („Panel/Export lesen live, das Sachbericht-PDF liest hybrid") ist damit entschieden**, nicht aufgelöst: Die Lesepfade bleiben, wie sie sind.
+
+**Entscheid (Maintainer, 2026-08-03):** Die vier extern zirkulierenden Berichts-Artefakte werden **nicht** auf eine gemeinsame Quelle gezogen. Beide Lesepfade sind fachlich gewollt — der Monats-Snapshot überdauert die Aufbewahrungsfristen bewusst, die Live-Abfrage zählt über den Gesamtzeitraum genauer. Verworfen wurden damit ausdrücklich: **(a) alles hybrid** (bräuchte `completeness` im Snapshot — sonst verschwiege ein Snapshot-Monat seine Lücken — und den in Entscheid 8 bewusst ausgeschlossenen generischen Monats-Merge) und **(b) alles live** (änderte das etablierte PDF-Verhalten für Zeiträume jenseits der Aufbewahrungsfristen: das PDF lieferte dort plötzlich (nahe) null statt der Snapshot-Zahlen).
+
+Stattdessen gilt ab sofort die Regel: **Jedes Berichts-Artefakt weist seine Datenquelle im Artefakt selbst aus.** Umgesetzt über ein eigenes Modul [`core/reporting/data_source.py`](../../src/core/reporting/data_source.py) mit zwei stabilen Codes (`live`, `snapshot_hybrid`), einer übersetzbaren Kurzform je Code und einem Erklärsatz für die sichtbaren Artefakte:
+
+| Artefakt | Quelle | Ausweis |
+|---|---|---|
+| Berichts-Panel, CSV/JSON/XML (`export_dataset`) | `live` | JSON/XML: Felder `data_source` + `data_source_note`; CSV: Segment in der Metadatenzeile (vor dem k-Anon-Hinweis); Panel: sichtbare Zeile |
+| Externer Bericht (HTML + `?format=json`) | `live` | `metadata.data_source` + `metadata.data_source_note`, im HTML zusätzlich sichtbar |
+| Sachbericht-PDF | `snapshot_hybrid` | sichtbare Fußzeile mit Kurzform + Erklärsatz |
+
+Zwei Punkte, die die Bauform tragen:
+
+- **Der Code ist sprachunabhängig, der Text ist übersetzbar.** `data_source` (`"live"`/`"snapshot_hybrid"`) ist Maschinen-Vertrag und darf sich nie mit der Oberflächensprache ändern; `data_source_note` und der Erklärsatz sind `gettext_lazy` und wechseln mit dem Locale. Ein einziges Feld, das beides leisten sollte, zwänge Konsumenten dazu, deutschen Fließtext zu parsen.
+- **Der Ausweis hängt am Pfad, nicht am Backend.** `export_dataset` ruft immer `build_dataset` — der Live-Ausweis wird deshalb in der Pipeline gesetzt, nicht im `summary` eines Backends. Anders wäre er (a) je Backend erneut zu setzen und (b) über `prepare_export` an den Snapshot-Payload gekoppelt, in dem er nichts verloren hat.
+
+Die **bekannten Divergenzen bleiben unverändert und dokumentiert**: mehrmonatige `unique_clients` (hybrid summiert Monatswerte und zählt Personen mehrfach, live macht einen echten DISTINCT-Count) und Zeiträume jenseits der Aufbewahrungsfristen (Snapshots überdauern die Event-Retention, die Live-Abfrage sieht soft-gelöschte Ereignisse nicht mehr) — siehe Konsequenz 8 und [docs/reporting-plugins.md § 5](../reporting-plugins.md). Neu ist allein, dass ein Empfänger die Divergenz am Artefakt erkennen kann, statt sie für einen Fehler zu halten.
+
 ## References
 
 - [`src/core/reporting/base.py`](../../src/core/reporting/base.py) — Vertrag (`DatasetBackend`, `DatasetResult`, `FieldSpec`, `CompletenessIssue`, `snapshot_enabled`-Zusage)

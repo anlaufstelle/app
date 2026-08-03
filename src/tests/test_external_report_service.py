@@ -169,6 +169,19 @@ class TestExternalReportMetadata:
         assert "generated_at" in meta
         assert meta["privacy_profile"] == "external"
 
+    def test_metadata_weist_die_live_datenquelle_aus(self, facility, report_period):
+        """Refs #1743: der externe Bericht liest live — und sagt das im Artefakt.
+
+        Stabiler Code fuer Maschinen (``?format=json``), uebersetzte Kurzform
+        fuer den Kopf der HTML-Fassung.
+        """
+        from core.services.dashboard import build_external_report
+
+        meta = build_external_report(facility, *report_period)["metadata"]
+
+        assert meta["data_source"] == "live"
+        assert meta["data_source_note"] == "Live-Abfrage zum Erstellungszeitpunkt"
+
     def test_metadata_uses_custom_threshold_from_settings(self, facility, report_period):
         from core.models import Settings
         from core.services.dashboard import build_external_report

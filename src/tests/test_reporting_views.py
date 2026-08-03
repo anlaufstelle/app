@@ -110,6 +110,23 @@ class TestDatasetReportPanelView:
         assert response.status_code == 200
         assert "Keine Vollständigkeitsprobleme erkannt" in response.content.decode()
 
+    def test_panel_weist_die_live_datenquelle_aus(self, client, lead_user, doc_type_contact, sample_event):
+        """Refs #1743: die Vorschau liest live (``build_dataset``) und sagt das.
+
+        Ohne den Ausweis stuenden Panel/CSV-Zahlen und die Zahlen des hybrid
+        gelesenen Sachbericht-PDFs unkommentiert nebeneinander — dieselbe
+        Kennzahl, verschiedene Quelle, keine Erklaerung.
+        """
+        _mapped(doc_type_contact)
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Live-Abfrage zum Erstellungszeitpunkt" in content
+        assert "bei jedem Aufruf neu aus den Ereignisdaten berechnet" in content
+
     def test_unbekanntes_backend_404(self, client, lead_user):
         """Pflichtfall 3a."""
         client.force_login(lead_user)

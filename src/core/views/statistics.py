@@ -12,6 +12,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
+from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, LIVE
 from core.reporting.export import SUPPORTED_FORMATS, export_dataset
 from core.reporting.registry import get_available_backends, get_backend
 from core.services.audit import log_audit_event
@@ -320,6 +321,10 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
                 "date_to": period_state.date_to,
                 "selected_year": period_state.selected_year,
                 "current_year": today.year,
+                # Quellenausweis (Refs #1743): der Erklaersatz gehoert zur
+                # Darstellung, der Code/die Kurzform stehen in
+                # ``report["metadata"]`` und damit auch im JSON-Format.
+                "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
             },
         )
 
@@ -388,6 +393,10 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             "preview_rows": preview_rows,
             "preview_total": len(result.records),
             "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
+            # Quellenausweis (Refs #1743): die Vorschau ruft ``build_dataset``,
+            # liest also live — anders als das hybrid gespeiste Sachbericht-PDF.
+            "data_source_note": DATA_SOURCE_NOTES[LIVE],
+            "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
         }
         return render(request, self.template_name, context)
 

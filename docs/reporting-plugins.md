@@ -296,7 +296,22 @@ Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backe
 - **`unique_clients` über mehrere Monate.** Der hybride Pfad summiert die Monatswerte (dokumentierte Näherung: wer in zwei Monaten erscheint, zählt zweimal); die Live-Abfrage macht einen echten DISTINCT-Count über den Gesamtzeitraum.
 - **Zeiträume jenseits der Aufbewahrungsfristen.** Snapshots überdauern die Event-Retention bewusst; die Live-Abfrage filtert soft-gelöschte Ereignisse (`is_deleted=False`) heraus. Für einen Zeitraum, dessen Ereignisse bereits gelöscht sind, liefert das PDF die Snapshot-Zahlen, Panel und CSV/JSON/XML dagegen (nahe) null bzw. Unterdrückungs-Marker.
 
-Das ist keine Eigenheit des Plugin-Systems: dieselbe Divergenzklasse besteht seit jeher zwischen dem live gelesenen Externen Bericht und dem hybrid gelesenen PDF — M5 fügt eine dritte Instanz desselben Musters hinzu. Eine Vereinheitlichung ist Folgearbeit über **alle drei** live lesenden Artefakte (#1743); sie bräuchte zusätzlich `completeness` im Snapshot, das dort heute nicht gespeichert wird — ein hybrid gespeister Export meldete sonst still „keine Lücken".
+Das ist keine Eigenheit des Plugin-Systems: dieselbe Divergenzklasse besteht seit jeher zwischen dem live gelesenen Externen Bericht und dem hybrid gelesenen PDF — M5 fügt eine dritte Instanz desselben Musters hinzu.
+
+**Entscheid: Divergenz bleibt, Quelle wird ausgewiesen** (#1743, Produktentscheid 2026-08-03). Die Lesepfade werden **nicht** vereinheitlicht — beide sind fachlich gewollt (der Snapshot überdauert die Aufbewahrungsfristen, die Live-Abfrage zählt über den Gesamtzeitraum genauer). Stattdessen **weist jedes Artefakt seine Quelle selbst aus**. Die Texte und die stabilen Codes dafür stehen zentral in [`core/reporting/data_source.py`](../src/core/reporting/data_source.py):
+
+| Artefakt | Code | Ausweis im Artefakt |
+|---|---|---|
+| Berichts-Panel (Vorschau) | `live` | sichtbare Zeile „Datenquelle: Live-Abfrage zum Erstellungszeitpunkt — …" |
+| CSV-Export | `live` | Metadatenzeile, Segment `\| Datenquelle: …` **vor** dem k-Anon-Hinweis |
+| JSON-Export | `live` | Felder `data_source` (Code) + `data_source_note` (übersetzte Kurzform) |
+| XML-Export | `live` | Wurzel-Attribute `data_source` + `data_source_note` |
+| Externer Bericht (HTML + `?format=json`) | `live` | `metadata.data_source` / `metadata.data_source_note`, im HTML zusätzlich als Kopfzeile + Erklärsatz |
+| Sachbericht-PDF | `snapshot_hybrid` | Fußzeile „Datenquelle: Monats-Aggregate — …" |
+
+`data_source` ist bewusst ein **stabiler, sprachunabhängiger Code** — er darf sich nie mit der Oberflächensprache ändern, sonst müsste ein Konsument deutschen Fließtext parsen. Die menschenlesbaren Fassungen (`data_source_note`, Erklärsatz) sind übersetzbar.
+
+Eine spätere Vereinheitlichung bleibt möglich, ist aber nicht geplant; sie bräuchte zusätzlich `completeness` im Snapshot, das dort heute nicht gespeichert wird — ein hybrid gespeister Export meldete sonst still „keine Lücken".
 
 ---
 

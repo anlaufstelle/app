@@ -515,6 +515,57 @@ class TestSampleReport1PdfKAnonSuppression:
 
 
 @pytest.mark.django_db
+class TestSampleReport1PdfQuellenausweis:
+    """Refs #1743 (Produktentscheid Option c): das Sachbericht-PDF ist das
+    einzige hybrid gelesene Artefakt (Monats-Snapshots statt Live-Abfrage) und
+    muss das im Artefakt selbst ausweisen — sonst stehen die Zahlen des PDFs
+    und die des live gelesenen Panels/CSV unkommentiert nebeneinander.
+    """
+
+    def test_pdf_kontext_traegt_den_hybrid_quellenausweis(self, facility, monkeypatch):
+        from core.services.system import export as sys_export
+
+        captured = {}
+
+        def fake_render(template_name, context):
+            captured.update(context)
+            return "<html></html>"
+
+        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
+        monkeypatch.setattr(sys_export.weasyprint, "HTML", _CaptureHTML)
+
+        today = date.today()
+        sys_export.generate_sample_report_1_pdf(facility, today - timedelta(days=2), today)
+
+        assert str(captured["data_source_note"]) == "Monats-Aggregate"
+        assert "nach Ablauf der Löschfristen erhalten" in str(captured["data_source_explanation"])
+
+    def test_template_zeigt_den_quellenausweis_sichtbar(self):
+        from datetime import datetime
+
+        from django.template.loader import render_to_string
+
+        from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, SNAPSHOT_HYBRID
+
+        html = render_to_string(
+            "core/export/sample_report_1_pdf.html",
+            {
+                "facility_name": "Teststelle",
+                "date_from": date(2025, 8, 1),
+                "date_to": date(2025, 8, 31),
+                "stats": {"total": 17, "unique_clients": 9, "by_category": [], "by_age_cluster": []},
+                "generated_at": timezone.make_aware(datetime(2025, 9, 1, 9, 0)),
+                "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
+                "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
+            },
+        )
+
+        assert "Datenquelle" in html
+        assert "Monats-Aggregate" in html
+        assert "nach Ablauf der Löschfristen erhalten" in html
+
+
+@pytest.mark.django_db
 class TestReportPdfKAnonSuppression:
     """Security R4: Der Halbjahres-Sachbericht (externes Artefakt fuer
     Traeger/Foerderer) lieferte rohe Kleinstfallzahlen, waehrend Sachbericht-PDF

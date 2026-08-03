@@ -19,6 +19,14 @@ class TestExternalReportView:
         assert "Datenschutzprofil" in content
         assert "K-Anonymit" in content  # K-Anonymität, robust gegen Encoding
 
+    def test_html_weist_die_live_datenquelle_aus(self, client, lead_user):
+        """Refs #1743: sichtbarer Quellenausweis im Kopf des externen Berichts."""
+        client.force_login(lead_user)
+        response = client.get("/statistics/external/")
+        content = response.content.decode()
+        assert "Live-Abfrage zum Erstellungszeitpunkt" in content
+        assert "bei jedem Aufruf neu aus den Ereignisdaten berechnet" in content
+
     def test_html_response_for_facility_admin(self, client, admin_user):
         client.force_login(admin_user)
         response = client.get("/statistics/external/")
