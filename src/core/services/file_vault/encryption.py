@@ -5,14 +5,24 @@ Supports MultiFernet for key rotation: multiple keys can be configured
 all keys are tried for decryption.
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import struct
 from functools import lru_cache
+from typing import TYPE_CHECKING, Any
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from django.conf import settings
 from django.test.signals import setting_changed
+
+if TYPE_CHECKING:
+    # Nur fuer Typannotationen (PEP 563 macht sie ohnehin lazy) — kein
+    # Laufzeit-Import noetig. Analog ``core/services/conditions.py``: hier
+    # zusaetzlich, um keinen harten Modul-Level-Import von ``core.models``
+    # in dieses tief verlinkte Krypto-Modul zu ziehen.
+    from core.models import DocumentType
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +149,21 @@ def safe_decrypt(value, default="[verschlüsselt]"):
         return default
 
 
-def encrypt_event_data(document_type, data_json):
-    """Encrypt sensitive fields for bulk_create scenarios where save() is bypassed."""
+def encrypt_dynamic_data(document_type: DocumentType, data_json: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Encrypt sensitive fields for bulk_create scenarios where save() is bypassed.
+
+    Entity-agnostisch trotz des Parameternamens ``document_type``: die
+    Funktion braucht nur ein Objekt mit ``.fields.filter(field_template__is_encrypted=True)``
+    (aktuell ``DocumentType``, kuenftig z. B. ``Client``/``Case``-Aequivalente).
+
+    File-Marker (``__file__``/``__files__``) werden uebersprungen — FILE-Felder
+    sind immer ``is_encrypted=True`` (``DocumentType.save()``), ihr Marker-Dict
+    ist aber Metadaten, kein Klartext (analog
+    ``DynamicDataEncryptionMixin._encrypt_sensitive_fields``, die diesen Skip
+    im Save-Pfad schon immer hatte — der Bulk-Pfad hier holt das nach).
+    """
+    from core.services.events.fields import _is_file_marker
+
     if not data_json:
         return data_json
     encrypted_slugs = set(
@@ -151,7 +174,7 @@ def encrypt_event_data(document_type, data_json):
     result = data_json.copy()
     for key in encrypted_slugs:
         value = result.get(key)
-        if value and not is_encrypted_value(value):
+        if value and not is_encrypted_value(value) and not _is_file_marker(value):
             result[key] = encrypt_field(value)
     return result
 

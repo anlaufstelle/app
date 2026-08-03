@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS
-from core.services.file_vault import encrypt_event_data
+from core.services.file_vault import encrypt_dynamic_data
 
 
 def random_time_of_day(max_hour: int | None = None, max_minute: int | None = None) -> tuple[int, int]:
@@ -274,7 +274,7 @@ def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client
 
     if batch:
         for event in batch:
-            event.data_json = encrypt_event_data(event.document_type, event.data_json)
+            event.data_json = encrypt_dynamic_data(event.document_type, event.data_json)
         Event.objects.bulk_create(batch, batch_size=1000)
 
     return len(batch)

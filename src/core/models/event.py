@@ -7,9 +7,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import EventManager
+from core.models.mixins import DynamicDataEncryptionMixin
 
 
-class Event(models.Model):
+class Event(DynamicDataEncryptionMixin):
     """A single documentation event (contact, service, note, etc.)."""
 
     objects = EventManager()
@@ -115,27 +116,3 @@ class Event(models.Model):
     def save(self, *args, **kwargs):
         self._encrypt_sensitive_fields()
         super().save(*args, **kwargs)
-
-    def _encrypt_sensitive_fields(self):
-        """Encrypt fields that are marked as encrypted in the field template."""
-        from core.services.file_vault import encrypt_field, is_encrypted_value
-
-        if not self.document_type_id or not self.data_json:
-            return
-
-        if not hasattr(self, "_cached_encrypted_slugs"):
-            self._cached_encrypted_slugs = set(
-                self.document_type.fields.filter(
-                    field_template__is_encrypted=True,
-                ).values_list("field_template__slug", flat=True)
-            )
-        encrypted_field_names = self._cached_encrypted_slugs
-        for key in encrypted_field_names:
-            value = self.data_json.get(key)
-            if value and not is_encrypted_value(value):
-                # Skip file attachment markers — they are metadata, not user data.
-                # Beide Formate berücksichtigen: Stufe A (__file__) und Stufe B
-                # (__files__, Refs #622).
-                if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
-                    continue
-                self.data_json[key] = encrypt_field(value)

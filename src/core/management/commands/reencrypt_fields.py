@@ -10,7 +10,7 @@ from django.db import transaction
 
 from core.models import Event, EventHistory
 from core.models.attachment import EventAttachment
-from core.services.file_vault import encrypt_event_data, encrypt_field, is_encrypted_value, safe_decrypt
+from core.services.file_vault import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import bypass_replication_triggers
 
 
@@ -66,9 +66,9 @@ class Command(BaseCommand):
             # A4.4 (Refs #1024): zusätzlich Plaintext-PII-Felder (laut
             # document_type ``is_encrypted=True``) nachverschlüsseln — heilt
             # Altbestand, der vor Einführung der Feldverschlüsselung als Klartext
-            # gespeichert wurde. ``encrypt_event_data`` lässt bereits verschlüsselte
+            # gespeichert wurde. ``encrypt_dynamic_data`` lässt bereits verschlüsselte
             # Werte unangetastet.
-            healed = encrypt_event_data(event.document_type, new_data) if event.document_type_id else new_data
+            healed = encrypt_dynamic_data(event.document_type, new_data) if event.document_type_id else new_data
             if changed or healed != event.data_json:
                 updated += 1
                 if not dry_run:
