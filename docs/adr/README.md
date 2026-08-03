@@ -69,6 +69,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) | Evaluator-Semantik der bedingten Feldlogik (gemeinsame FE/BE-Regeln + Testvektoren) | Accepted |
 | [ADR-036](036-globale-block-sequenz-feldordnung.md) | Globale Block-Sequenz für Feldgruppen und ungruppierte Felder | Accepted |
 | [ADR-037](037-konfigurationspakete-dynamische-felder.md) | Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder | Accepted |
+| [ADR-038](038-reporting-plugin-backends.md) | Reporting-Backends als Plugin-System | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
