@@ -1319,10 +1319,40 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 
 | Recht | Maßnahme |
 |---|---|
-| Auskunft (Art. 15) | Audit-Log und Personendaten als Anwendungsbetreuung (`facility_admin`) einsehen, ggf. exportieren |
+| Auskunft (Art. 15) | Datenauskunft als JSON oder PDF über die Personenansicht ziehen (Leitung oder Anwendungsbetreuung, Re-Authentifizierung erforderlich) — Umfang siehe unten |
 | Berichtigung (Art. 16) | Felder als Anwendungsbetreuung im Admin-UI direkt bearbeiten |
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
+
+#### Umfang der Auskunft (Art. 15)
+
+Die Auskunft wird in der Personenansicht als **JSON** (maschinenlesbar, Art. 20) oder als **PDF** (lesbares Dokument) erzeugt. Beide Formate decken denselben Umfang ab; das PDF fasst zusammen, lässt aber keine Kategorie aus. Auslösen dürfen die Rollen mit Export-Recht (Leitung, Anwendungsbetreuung); der Aufruf verlangt eine Re-Authentifizierung (Sudo-Mode), ist ratelimitiert und wird selbst im Audit-Log protokolliert.
+
+Enthalten sind (Refs #1752):
+
+| Kategorie | Inhalt |
+|---|---|
+| Stammdaten | Pseudonym, Kontaktstufe, Altersgruppe, **Notizen**, Aktiv-Status, K-Anonymisierungs-Status, Papierkorb-Status (gelöscht am/von), Erstell- und Änderungszeitpunkt, Zusatzfelder inkl. nicht mehr zugeordneter Felder (entschlüsselt) |
+| Fälle | Titel, Beschreibung, Status, Fristen, Fallverantwortung, Papierkorb-Status, Zusatzfelder |
+| Episoden | Titel, Beschreibung, Beginn/Ende je Fall |
+| Wirkungsziele | Ziele samt Meilensteinen und Erreichungsstand |
+| Ereignisse | Dokumentationstyp, Zeitpunkt, Fall-/Episoden-Bezug, Felddaten (entschlüsselt) |
+| Gelöschte Ereignisse | Existenz und Zeitpunkt der noch nicht endgültig entfernten Ereignisse (Papierkorb) |
+| Änderungshistorie | Aktion, Zeitpunkt, bearbeitende Person **und die Inhalte vorher/nachher** — auch für gelöschte Ereignisse |
+| Löschanträge | Anträge auf Löschung von Ereignissen **und der Person selbst**, inkl. Begründung und 4-Augen-Prüfung |
+| Aufbewahrung | Sperrvermerke (Legal Holds, Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
+| Aufgaben | Titel, Beschreibung, Typ, Status, Priorität, Zuständigkeit, Fristen |
+| Aktivitäten | Zeitstrom-Einträge zur Person, ihren Fällen, Ereignissen und Aufgaben |
+| Merkliste | Zeitpunkte, zu denen die Personenakte aufgerufen bzw. als Favorit markiert wurde |
+| Zugriffsprotokoll | Audit-Einträge zur Person und ihren Ereignissen: Aktion, Zeitpunkt, Bezug |
+
+**Bewusst nicht enthalten — als manueller Ergänzungsschritt zu prüfen:**
+
+1. **Angaben zu Dateianhängen** (Dateiname, Größe, Versionskette, entfernte Anhänge) und deren Inhalte. Bis zur Umsetzung von #1738 bleiben sie außen vor. Fragt die betroffene Person danach oder sind Anhänge zu ihren Ereignissen erfasst, ergänzen Sie die Angaben manuell aus der Ereignis-Detailansicht.
+2. **Namen der zugreifenden Beschäftigten im Zugriffsprotokoll.** Das Protokoll führt Aktion, Zeitpunkt und Bezug, aber keine Actor-Identität: „wer griff wann zu" ist zugleich ein Zugriffsprotokoll über Beschäftigte und damit ein Datum Dritter (Art. 15 Abs. 4 DSGVO). Dasselbe gilt für die Merkliste. Verlangt die betroffene Person auch diese Angaben, ist eine Abwägung im Einzelfall nötig — die Rohdaten stehen der Anwendungsbetreuung unter `/audit/` zur Verfügung.
+3. **Binärinhalte** jeder Art (Dateien, Bilder). Diese sind bei Bedarf gesondert über die Ereignis-Detailansicht herauszugeben.
+
+Der PDF-Hinweiskasten benennt die Punkte 1 und 2 gegenüber der betroffenen Person ausdrücklich — die Auskunft behauptet keine Vollständigkeit, die sie nicht hat.
 
 ### 7.7 Empfohlene organisatorische Maßnahmen
 

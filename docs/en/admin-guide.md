@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) and 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) and 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752).
 
 # Anlaufstelle -- Admin Guide
 
@@ -1315,10 +1315,40 @@ The following administrative capabilities are available for handling requests fr
 
 | Right | Action |
 |---|---|
-| Access (Art. 15) | View personal data and audit log as application manager (`facility_admin`); export if needed |
+| Access (Art. 15) | Generate the data access record as JSON or PDF from the client view (lead or application manager, re-authentication required) -- scope see below |
 | Rectification (Art. 16) | Edit fields directly as application manager in the admin UI |
 | Erasure (Art. 17) | Submit a deletion request through the application (four-eyes principle) |
 | Data portability (Art. 20) | Export function in the application |
+
+#### Scope of the Access Record (Art. 15)
+
+The access record is generated from the client view as **JSON** (machine-readable, Art. 20) or as **PDF** (human-readable document). Both formats cover the same scope; the PDF summarizes but omits no category. Only roles with export permission (lead, application manager) may trigger it; the request requires re-authentication (sudo mode), is rate-limited, and is itself recorded in the audit log.
+
+Included (Refs #1752):
+
+| Category | Content |
+|---|---|
+| Master data | Pseudonym, contact stage, age cluster, **notes**, active flag, k-anonymization flag, trash status (deleted at/by), creation and modification timestamps, custom fields including orphaned fields (decrypted) |
+| Cases | Title, description, status, dates, case lead, trash status, custom fields |
+| Episodes | Title, description, start/end per case |
+| Outcome goals | Goals with milestones and achievement status |
+| Events | Document type, timestamp, case/episode reference, field data (decrypted) |
+| Deleted events | Existence and timestamp of events not yet purged (trash) |
+| Change history | Action, timestamp, editing user **and the before/after contents** -- including for deleted events |
+| Deletion requests | Requests targeting events **and the client record itself**, with reason and four-eyes review |
+| Retention | Legal holds (Art. 18) and open deletion proposals with due date and category |
+| Tasks | Title, description, type, status, priority, assignment, dates |
+| Activities | Activity feed entries about the client, their cases, events and tasks |
+| Recently viewed | Timestamps at which the client record was opened or bookmarked |
+| Access log | Audit entries about the client and their events: action, timestamp, reference |
+
+**Deliberately excluded -- review as a manual supplementary step:**
+
+1. **File attachment metadata** (filename, size, version chain, removed attachments) and their contents. They remain out of scope until #1738 is implemented. If the data subject asks for them, or if attachments exist on their events, add the details manually from the event detail view.
+2. **Names of the accessing staff members in the access log.** The log carries action, timestamp and reference, but no actor identity: "who accessed what and when" is simultaneously an access log about employees and therefore third-party data (Art. 15(4) GDPR). The same applies to the recently-viewed list. If the data subject requests these details as well, a case-by-case assessment is required -- the raw data is available to the application manager under `/audit/`.
+3. **Binary contents** of any kind (files, images). Release these separately via the event detail view if required.
+
+The PDF notice box states points 1 and 2 explicitly to the data subject -- the record does not claim a completeness it does not have.
 
 ### 7.7 Recommended Organizational Measures
 
@@ -1471,4 +1501,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: d628ab142a80c085f70b146e5a0954c23c461389 -->
+<!-- source-hash: 0959c1ab5c68fdceefd2e1cfc4d7346e39874129 -->
