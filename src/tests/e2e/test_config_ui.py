@@ -352,7 +352,8 @@ class TestFieldBoard:
             card = page.locator(f'[data-testid="field-group"][data-group-id="{gpk}"]')
             expect(card.locator("h3")).to_contain_text(renamed, timeout=10000)
 
-            # Feld entfernen.
+            # Feld entfernen — seit #1725 fragt hx-confirm vorher nach (wie Goals, C6).
+            page.once("dialog", lambda dialog: dialog.accept())
             card.locator('[data-testid="field-row"]:has-text("Dauer") [data-testid="field-remove-btn"]').click()
             expect(card.locator('[data-testid="field-row"]')).to_have_count(0, timeout=10000)
 
