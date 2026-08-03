@@ -61,6 +61,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Dev-Setup, Make-Targets, Coding Conventions, Architektur, PR-Prozess | Entwickler |
+| [reporting-plugins.md](reporting-plugins.md) | Berichts-Backends als Plugin-System: API-Referenz (`DatasetBackend`, `DatasetResult`), „Eigenes Backend in fünf Schritten", Discovery, Snapshot-Vertrag, k-Anonymität, Export-Formate, Test-Checkliste (Refs #1061, [ADR-038](adr/038-reporting-plugin-backends.md)); EN: [en/reporting-plugins.md](en/reporting-plugins.md) | Entwickler |
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
 | testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail im Hub [testing/manual-test-matrix.md](testing/manual-test-matrix.md) (Front-matter + Anhänge) mit Sektions-Dateien `manual-test-matrix-a.md`…`-d.md`, Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |

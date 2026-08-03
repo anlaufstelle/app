@@ -544,6 +544,20 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 
 > **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.
 
+### Berichte (CSV / JSON / XML)
+
+Unterhalb der Diagramme finden Sie den Bereich **Berichte**. Dort stehen alle Berichtsstandards zur Verfügung, die für Ihre Einrichtung eingerichtet sind — der Beispiel-Sachbericht ebenso wie weitere, die Ihre Administration ergänzt hat.
+
+1. Wählen Sie im Dropdown **Bericht** den gewünschten Bericht aus.
+2. Direkt darunter erscheint eine **Vorschau** mit den Zahlen des oben gewählten Zeitraums.
+3. Über die Schaltflächen **CSV-Export**, **JSON-Export** und **XML-Export** laden Sie denselben Datenstand als Datei herunter. CSV eignet sich für Tabellenkalkulationen, JSON und XML für die Weiterverarbeitung in anderen Systemen.
+
+**Vollständigkeitshinweise:** Über der Vorschau steht, was der Bericht *nicht* zeigt — zum Beispiel Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist, oder Ereignisse ohne Personenbezug. Ein gelbes **Hinweis**-Feld bedeutet: Es fehlen Daten, die Zahlen sind also zu niedrig. Ein graues **Info**-Feld bedeutet: Die Daten sind enthalten, fehlen aber in einzelnen Teilauswertungen. Steht dort „Keine Vollständigkeitsprobleme erkannt", ist der Bericht lückenlos.
+
+**Kleinstfallzahlen werden unterdrückt:** Vorschau *und* Download zeigen dieselbe datenschutzfreundliche Sicht. Werte unterhalb der K-Anonymitäts-Schwelle Ihrer Einrichtung (Standard 5) erscheinen als „—" statt als konkrete Zahl, damit sich aus einem Bericht keine einzelnen Personen ableiten lassen. Gelegentlich fällt dabei auch ein zweiter, größerer Wert weg — das ist beabsichtigt, sonst ließe sich der unterdrückte Wert zurückrechnen. Aus demselben Grund enthalten Vollständigkeitshinweise bei sehr kleinen Zahlen gar keine Ziffer mehr.
+
+> **Hinweis:** Jeder Download wird im Audit-Log protokolliert; die Vorschau nicht. Ein leerer Zeitraum sieht in der Vorschau aus wie eine Unterdrückung — prüfen Sie im Zweifel den gewählten Zeitraum.
+
 ### Datenschutzfreundliche externe Berichte (Leitung / Admin)
 
 Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) gibt es unter `/statistics/external/` einen **externen Bericht mit Datenschutzprofil**. Er nutzt dieselben Zeitraum-Filter wie das Statistik-Dashboard, ist aber bewusst datensparsam:

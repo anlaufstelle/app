@@ -17,6 +17,7 @@
 | [domain-concept-summary.md](domain-concept-summary.md) | Summary of the domain concept (not a 1:1 translation) | Stakeholders, Developers |
 | [glossary.md](glossary.md) | Bilingual glossary of domain terms (DE↔EN) | Everyone |
 | [data-protection.md](data-protection.md) | GDPR guide: article/right → ADR/template/code/FAQ (companion to German [datenschutz.md](../datenschutz.md)) | Everyone (Auditor/Dev/Operator) |
+| [reporting-plugins.md](reporting-plugins.md) | Report backends as a plugin system: API reference (`DatasetBackend`, `DatasetResult`), "your own backend in five steps", discovery, snapshot contract, k-anonymity, export formats, test checklist (Refs #1061, [ADR-038](../adr/038-reporting-plugin-backends.md)) | Developers |
 | [../../README.en.md](../../README.en.md) | Project README | Everyone |
 | [../../CONTRIBUTING.en.md](../../CONTRIBUTING.en.md) | Contributing guidelines | Developers |
 
@@ -68,4 +69,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 57cb03bbba2ce4943e92edc084aa739fb655276c -->
+<!-- source-hash: b30d1853fe47e8d9a32fac7c747d4a9750cf8a74 -->

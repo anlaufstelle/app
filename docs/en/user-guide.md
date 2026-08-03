@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417) and 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551) and 2026-08-03 (§ 7 reports section, #1061).
 
 # Anlaufstelle -- User Guide
 
@@ -547,6 +547,20 @@ The example activity report generates a structured report based on a fixed examp
 
 > **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
 
+### Reports (CSV / JSON / XML)
+
+Below the charts you will find the **Reports** section. It offers every reporting standard configured for your facility -- the example activity report as well as any others your administrator has added.
+
+1. Select the report you want from the **Report** dropdown.
+2. A **preview** with the figures for the period selected above appears right below it.
+3. Use the **CSV Export**, **JSON Export**, and **XML Export** buttons to download the same data as a file. CSV suits spreadsheets; JSON and XML are meant for further processing in other systems.
+
+**Completeness notices:** Above the preview you can see what the report does *not* show -- for example events whose documentation type maps to no report category, or events without a person reference. A yellow **Hinweis** (notice) box means data is missing, so the figures are too low. A grey **Info** box means the data is included but missing from individual sub-analyses. If it reads "Keine Vollständigkeitsprobleme erkannt" (no completeness issues detected), the report has no gaps.
+
+**Small case numbers are suppressed:** The preview *and* the download show the same privacy-friendly view. Values below your facility's k-anonymity threshold (default 5) appear as a dash rather than as a concrete number, so that no individual person can be derived from a report. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
+
+> **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
+
 ### Privacy-friendly External Reports (Lead / Admin)
 
 For sharing data with external parties (e.g., funding bodies or municipal authorities), an **external report with a privacy profile** is available at `/statistics/external/`. It uses the same time-period filters as the statistics dashboard but is deliberately data-minimal:
@@ -855,6 +869,6 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-07-14 -->
-<!-- source-hash: 67c1567 -->
+<!-- translation-date: 2026-08-03 -->
+<!-- source-hash: 7b1f4ed8377240d6aaf5217914f8e7b2b9a131d6 -->
 
