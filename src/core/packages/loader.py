@@ -199,7 +199,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
             continue
 
         _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
-        _warn_on_sensitivity_downgrade(existing.sensitivity, desired["sensitivity"], report, identifier)
+        _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
         conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
         if conflicts:
             # Haertung (Refs #1058, Review-Punkt 3): NICHT in die Erfolgs-Map
@@ -248,7 +248,7 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
         report.errors.extend((identifier, message) for message in conflicts)
         return None
 
-    _warn_on_sensitivity_downgrade(existing.sensitivity, desired["sensitivity"], report, identifier)
+    _warn_on_doctype_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
     _apply_diff(existing, desired, report.document_types, report, identifier)
     return existing
 
@@ -530,27 +530,74 @@ def _warn_on_disappearing_options(
     )
 
 
-def _warn_on_sensitivity_downgrade(current: str, desired: str, report: PackageReport, identifier: str) -> None:
-    """Warnen, wenn das Paket die Sensibilität SENKT (Final-Review G, Refs #1058).
+def _warn_on_field_sensitivity_downgrade(
+    existing: FieldTemplate, desired_sensitivity: str, report: PackageReport, identifier: str
+) -> None:
+    """Warnen, wenn das Paket die EFFEKTIVE Sensibilität einer Vorlage senkt (Refs #1727).
 
-    ``sensitivity`` ist per E13 updatebar — die Anwendung bleibt also erlaubt.
-    Sie senkt aber rückwirkend die Lese-Schranke bereits erfasster Werte
-    (``effective_sensitivity`` = max(Typ-, Feld-Sensibilität)): nach dem Lauf
-    sehen niedrigere Rollen Werte, die vorher für sie gesperrt waren. Der Report
-    macht das sichtbar, damit ein ``--dry-run`` es vor dem Echtlauf zeigt.
-    Anhebung und Gleichstand sind still.
+    Absenkung ist per E13 erlaubt, senkt aber rückwirkend die Lese-Schranke
+    bereits erfasster Werte. Maßgeblich ist die **effektive** Sensibilität
+    ``effective_sensitivity`` = max(Typ, Feld) — nicht der rohe Feldwert: Frei
+    (``""``) heißt „erbt vom Typ", nicht Rang 0. Ein Wechsel ``elevated`` →
+    ``""`` an einer Vorlage, die nur an ``elevated``-Typen hängt, senkt effektiv
+    **nichts** (Final-Review G Refs #1058 warnte hier fälschlich). Deshalb:
+    Warnung nur, wenn für MINDESTENS EINEN referenzierenden Dokumentationstyp die
+    effektive Sensibilität sinkt. Ohne Referenz (Vorlage noch nirgends
+    zugeordnet) bleibt der konservative Roh-Vergleich (``""`` ⇒ Rang 0).
     """
     # Funktionslokal (Schichtregel): der Loader haengt sonst modulweit am
-    # Service-Layer, obwohl er nur die Rang-Tabelle braucht.
-    from core.services.compliance.sensitivity import SENSITIVITY_RANK
+    # Service-Layer, obwohl er nur die Sensibilitaets-Helfer braucht.
+    from core.services.compliance.sensitivity import SENSITIVITY_RANK, effective_sensitivity
 
-    # Schlüssel sind ``TextChoices``-Member; das Paket liefert rohe Strings
-    # (``""`` = erbt ⇒ Rang 0) — deshalb über die String-Werte nachschlagen.
-    ranks: dict[str, int] = {str(level): rank for level, rank in SENSITIVITY_RANK.items()}
-    current_rank = ranks.get(current, 0)
-    desired_rank = ranks.get(desired, 0)
-    if desired_rank >= current_rank:
-        return
+    old_field = existing.sensitivity
+    new_field = desired_sensitivity
+    # Referenzierende Typen (DB-Query im Loader ist ok — er laeuft mit DB-Zugriff
+    # und Bypass-Kontext). Distinct auf die Typ-Sensibilitaeten reicht.
+    type_sensitivities = list(
+        DocumentType.objects.filter(fields__field_template=existing).values_list("sensitivity", flat=True).distinct()
+    )
+    if type_sensitivities:
+        downgraded = any(
+            effective_sensitivity(ts, new_field) < effective_sensitivity(ts, old_field) for ts in type_sensitivities
+        )
+    else:
+        ranks: dict[str, int] = {str(level): rank for level, rank in SENSITIVITY_RANK.items()}
+        downgraded = ranks.get(new_field, 0) < ranks.get(old_field, 0)
+    if downgraded:
+        _emit_sensitivity_downgrade_warning(report, identifier, old_field, new_field)
+
+
+def _warn_on_doctype_sensitivity_downgrade(
+    existing: DocumentType, desired_sensitivity: str, report: PackageReport, identifier: str
+) -> None:
+    """Warnen, wenn das Paket die effektive Sensibilität eines Typs senkt (Refs #1727).
+
+    Die effektive Sensibilität des Typs SELBST ist sein eigener Rang (kein
+    Feld-Override): sinkt er, fällt die Ereignis-Sichtbarkeitsschranke, und für
+    jedes zugeordnete Feld, das vom Typ erbt (``sensitivity=""``) oder darunter
+    liegt, sinkt zusätzlich die effektive Feld-Schranke max(Typ, Feld). Analog
+    zum Feld-Pfad über ``effective_sensitivity`` formuliert; ``DocumentType.
+    sensitivity`` ist nie ``""``, daher ist der Typ-Rang hier deckungsgleich mit
+    dem bisherigen Roh-Vergleich.
+    """
+    from core.services.compliance.sensitivity import effective_sensitivity
+
+    old_type = existing.sensitivity
+    new_type = desired_sensitivity
+    # Typ-Ebene (effektiv = eigener Rang) ODER mindestens ein zugeordnetes Feld,
+    # dessen effektive Schranke sinkt. Das ``or`` kurzschliesst die Feld-Query,
+    # sobald schon die Typ-Ebene sinkt (bzw. bei Anhebung/Gleichstand pruefen wir
+    # die Felder — dort kann dann ohnehin nichts sinken).
+    type_drops = effective_sensitivity(new_type) < effective_sensitivity(old_type)
+    if type_drops or any(
+        effective_sensitivity(new_type, fs) < effective_sensitivity(old_type, fs)
+        for fs in existing.fields.values_list("field_template__sensitivity", flat=True)
+    ):
+        _emit_sensitivity_downgrade_warning(report, identifier, old_type, new_type)
+
+
+def _emit_sensitivity_downgrade_warning(report: PackageReport, identifier: str, current: str, desired: str) -> None:
+    """Gemeinsame Warn-Meldung für Feld-/Typ-Sensibilitäts-Absenkung."""
     report.warnings.append(
         (
             identifier,

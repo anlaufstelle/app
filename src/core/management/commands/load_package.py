@@ -36,6 +36,7 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from core.models.organization import Facility
 from core.packages.loader import PackageLoadError, PackageReport, load_package
 from core.packages.schema import PackageV1, PackageValidationError, parse_package
+from core.packages.yaml_io import safe_load_unique
 
 # Refs #1016/#1070/#1512: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -126,7 +127,11 @@ class Command(BaseCommand):
             raise CommandError(f"Datei {path_str!r} kann nicht gelesen werden: {exc}.") from exc
 
         try:
-            data = yaml.safe_load(text)
+            # Härtung Refs #1727: Duplikat-Keys sind ein Fehler (kein stiller
+            # Last-Write-Wins). ``DuplicateKeyError`` ist eine ``yaml.YAMLError``-
+            # Subklasse und wird von derselben except-Klausel als CommandError
+            # gemeldet.
+            data = safe_load_unique(text)
         except yaml.YAMLError as exc:
             raise CommandError(f"YAML-Fehler in {path_str!r}:\n{exc}") from exc
 

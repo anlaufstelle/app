@@ -540,6 +540,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
 
     groups = _parse_group_list(data, path, errors)
     field_refs = _parse_field_ref_list(data, path, errors)
+    _check_block_positions(data, groups, field_refs, path, errors)
     conditions = _parse_condition_list(data, path, errors)
 
     if slug is None:
@@ -559,6 +560,94 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         field_refs=field_refs,
         conditions=conditions,
     )
+
+
+def _raw_index_by_key(raw: Any, key: str) -> dict[str, int]:
+    """Erst-Vorkommen-Index je ``key``-Wert in einer rohen Eintragsliste.
+
+    Dient nur dazu, die Blockpositions-Fehler pfadgenau auf den ORIGINAL-Index
+    im Paket zeigen zu lassen (``field_refs[k]``/``groups[j]``) — die geparsten
+    Defs tragen ihren Roh-Index nicht.
+    """
+    result: dict[str, int] = {}
+    if isinstance(raw, list):
+        for index, entry in enumerate(raw):
+            if isinstance(entry, dict):
+                value = entry.get(key)
+                if isinstance(value, str) and value not in result:
+                    result[value] = index
+    return result
+
+
+def _check_block_positions(
+    data: dict[str, Any],
+    groups: tuple[GroupDef, ...],
+    field_refs: tuple[FieldRefDef, ...],
+    path: str,
+    errors: Errors,
+) -> None:
+    """Haertung Refs #1727: Blockpositions-Eindeutigkeit (ADR-036).
+
+    ``groups[].sort_order`` und die ``sort_order`` der ``field_refs`` OHNE
+    ``group_slug`` teilen sich EINE globale Block-Sequenz je Dokumentationstyp —
+    ein Positions-Duplikat darin ist ein Fehler: zwei Bloecke beanspruchten
+    denselben Slot, die Reihenfolge waere nicht definiert (der bisherige stille
+    Tie waere layout-abhaengig von der DB-Zeilenordnung). ``field_refs`` MIT
+    ``group_slug`` tragen dagegen einen Innen-Index je Gruppe (Dual-Semantik,
+    ADR-036, ``docs/packages.md`` § 2) — dort gilt Eindeutigkeit JE GRUPPE.
+
+    Beide Ebenen sind unabhaengig: ein Innen-Index 0 darf gleich einer globalen
+    Blockposition 0 sein, und derselbe Innen-Index in zwei verschiedenen Gruppen
+    ist erlaubt. Reihenfolge der Meldung: Gruppen vor freien Feldern (bestimmt
+    nur, welcher der beiden Eintraege als "belegt" gilt und welcher als
+    kollidierend gemeldet wird).
+    """
+    group_raw_index = _raw_index_by_key(data.get("groups"), "slug")
+    ref_raw_index = _raw_index_by_key(data.get("field_refs"), "template_slug")
+
+    def _duplicate_block_message(position: int, occupant: str) -> str:
+        return (
+            f"Blockposition {position} ist bereits belegt (durch {occupant}) — jede Position der "
+            f"globalen Block-Sequenz muss eindeutig sein."
+        )
+
+    # Globale Block-Sequenz: Gruppen zuerst, dann freie Felder.
+    global_positions: dict[int, str] = {}
+    for group in groups:
+        occupant = global_positions.get(group.sort_order)
+        if occupant is not None:
+            gpath = f"{path}.groups[{group_raw_index.get(group.slug, 0)}].sort_order"
+            errors.append((gpath, _duplicate_block_message(group.sort_order, occupant)))
+        else:
+            global_positions[group.sort_order] = f"Gruppe {group.slug!r}"
+    for ref in field_refs:
+        if ref.group_slug is not None:
+            continue
+        occupant = global_positions.get(ref.sort_order)
+        rpath = f"{path}.field_refs[{ref_raw_index.get(ref.template_slug, 0)}].sort_order"
+        if occupant is not None:
+            errors.append((rpath, _duplicate_block_message(ref.sort_order, occupant)))
+        else:
+            global_positions[ref.sort_order] = f"freies Feld {ref.template_slug!r}"
+
+    # Innen-Positionen je Gruppe (Dual-Semantik): eindeutig innerhalb der Gruppe.
+    inner_positions: dict[str, dict[int, str]] = {}
+    for ref in field_refs:
+        if ref.group_slug is None:
+            continue
+        seen = inner_positions.setdefault(ref.group_slug, {})
+        occupant = seen.get(ref.sort_order)
+        if occupant is not None:
+            rpath = f"{path}.field_refs[{ref_raw_index.get(ref.template_slug, 0)}].sort_order"
+            errors.append(
+                (
+                    rpath,
+                    f"Innen-Position {ref.sort_order} ist in der Gruppe {ref.group_slug!r} bereits belegt "
+                    f"(durch Feld {occupant!r}) — die Positionen innerhalb einer Gruppe müssen eindeutig sein.",
+                )
+            )
+        else:
+            seen[ref.sort_order] = ref.template_slug
 
 
 def _parse_group_list(data: dict[str, Any], path: str, errors: Errors) -> tuple[GroupDef, ...]:

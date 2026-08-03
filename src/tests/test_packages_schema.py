@@ -423,6 +423,53 @@ class TestCrossReferences:
         raw["document_types"].append({"slug": "kontakt-2", "name": "Kontakt", "category": "service"})
         parse_package(raw)
 
+    # --- Blockpositions-Eindeutigkeit (Härtung Refs #1727, ADR-036) ----------
+
+    def test_duplicate_block_position_two_groups(self) -> None:
+        """Zwei Gruppen auf derselben globalen Blockposition kollidieren."""
+        raw = _valid_raw()
+        raw["document_types"][0]["groups"].append({"slug": "weitere", "name": "Weitere", "sort_order": 0})
+        assert "document_types[0].groups[1].sort_order" in _paths(raw)
+
+    def test_duplicate_block_position_group_and_free_field(self) -> None:
+        """Ein freies Feld auf der Blockposition einer Gruppe kollidiert — beide
+        teilen sich die globale Block-Sequenz."""
+        raw = _valid_raw()
+        raw["document_types"][0]["field_refs"][1]["sort_order"] = 0  # notiz (frei) auf 0 wie Gruppe basisdaten
+        assert "document_types[0].field_refs[1].sort_order" in _paths(raw)
+
+    def test_duplicate_block_position_two_free_fields(self) -> None:
+        """Zwei freie Felder auf derselben Blockposition kollidieren."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "extra", "name": "Extra", "field_type": "text"})
+        raw["document_types"][0]["field_refs"].append({"template_slug": "extra", "sort_order": 1})  # wie notiz
+        assert "document_types[0].field_refs[2].sort_order" in _paths(raw)
+
+    def test_duplicate_inner_position_within_group(self) -> None:
+        """Zwei Felder mit demselben Innen-Index in derselben Gruppe kollidieren."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "extra", "name": "Extra", "field_type": "text"})
+        raw["document_types"][0]["field_refs"].append(
+            {"template_slug": "extra", "group_slug": "basisdaten", "sort_order": 0}  # wie dauer
+        )
+        assert "document_types[0].field_refs[2].sort_order" in _paths(raw)
+
+    def test_inner_index_may_equal_global_block_position(self) -> None:
+        """Positivfall Gruppen-intern: ein Innen-Index (dauer=0 in basisdaten)
+        darf gleich einer globalen Blockposition (basisdaten=0) sein — zwei
+        unabhängige Sequenzen. ``_valid_raw`` demonstriert genau das."""
+        parse_package(_valid_raw())  # wirft nicht
+
+    def test_same_inner_index_in_different_groups_is_allowed(self) -> None:
+        """Positivfall: gleicher Innen-Index in verschiedenen Gruppen ist ok."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "extra", "name": "Extra", "field_type": "text"})
+        raw["document_types"][0]["groups"].append({"slug": "weitere", "name": "Weitere", "sort_order": 2})
+        raw["document_types"][0]["field_refs"].append(
+            {"template_slug": "extra", "group_slug": "weitere", "sort_order": 0}  # Innen-0 wie dauer, andere Gruppe
+        )
+        parse_package(raw)  # basisdaten=0, notiz(frei)=1, weitere=2 → global eindeutig
+
 
 class TestSemanticRules:
     def test_file_field_on_client_entity_is_rejected(self) -> None:

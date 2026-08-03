@@ -127,6 +127,17 @@ class TestFileErrors:
         with pytest.raises(CommandError):
             _run(file=path, facility=facility.id)
 
+    def test_duplicate_yaml_key_raises_command_error(self, tmp_path, facility):
+        """Härtung Refs #1727: Duplikat-Keys (mit ``yaml.safe_dump`` nicht
+        erzeugbar → roher Text) sind ein Fehler, kein stiller Last-Write-Wins."""
+        path = tmp_path / "dup.yaml"
+        path.write_text(
+            "schema_version: 1\nfield_templates:\n  - slug: dauer\n    name: Dauer\n    name: Dauer 2\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CommandError):
+            _run(file=path, facility=facility.id)
+
     def test_yaml_list_top_level_raises_command_error(self, tmp_path, facility):
         path = _write_yaml(tmp_path, ["a", "b"])
 
@@ -197,7 +208,12 @@ class TestReportRobustness:
                     "slug": "kontakt",
                     "name": "Kontakt",
                     "entity_type": "event",
-                    "field_refs": [{"template_slug": "dauer"}, {"template_slug": "notiz"}],
+                    # Distinkte Blockpositionen: seit Härtung Refs #1727 dürfen
+                    # zwei freie Felder nicht beide auf Default-Position 0 liegen.
+                    "field_refs": [
+                        {"template_slug": "dauer", "sort_order": 0},
+                        {"template_slug": "notiz", "sort_order": 1},
+                    ],
                     "conditions": [
                         {"target": "notiz", "depends_on": "dauer", "operator": "greater_than", "value": 5},
                         {"target": "notiz", "depends_on": "dauer", "operator": "less_than", "value": 100},

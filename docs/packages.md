@@ -176,6 +176,13 @@ Seit [ADR-036](adr/036-globale-block-sequenz-feldordnung.md) teilen sich Feldgru
 
 So entstehen Layouts wie `Feld_x · Gruppe_A(…) · Feld_a · Gruppe_B(…)`. Im Beispiel oben tragen `basisdaten` = 0, `leistungen-notizen` = 1 und `strassenkontakt` = 2 die drei Blockpositionen; `dauer` = 0 / `alterscluster` = 1 sind Innen-Indizes von `basisdaten`. Der Loader schreibt die Werte **1:1** — das Paket ist deklarativ, es wird nichts umnummeriert.
 
+> **Blockpositionen müssen eindeutig sein (Schema-Fehler).** Weil der Loader die Werte 1:1 übernimmt, ist jede doppelt vergebene Position ein **Schema-Fehler**, nicht bloß eine Warnung (sonst wäre die Reihenfolge undefiniert und von der DB-Zeilenordnung abhängig). Konkret:
+> - In der **globalen Block-Sequenz** eines Typs muss jede Position eindeutig sein — über Gruppen (`groups[].sort_order`) **und** ungruppierte Felder (`field_refs[].sort_order` **ohne** `group_slug`) hinweg. Zwei Gruppen auf `0`, oder eine Gruppe auf `0` und ein freies Feld auf `0`, sind ein Fehler.
+> - **Innerhalb einer Gruppe** muss der Innen-Index (`field_refs[].sort_order` **mit** `group_slug`) je Gruppe eindeutig sein.
+> - Beide Ebenen sind **unabhängig**: ein Innen-Index `0` darf gleich einer globalen Blockposition `0` sein, und derselbe Innen-Index in zwei verschiedenen Gruppen ist erlaubt.
+>
+> Achtung Default: `sort_order` fehlt ⇒ `0`. Mehrere freie Felder **ohne** `sort_order` landen damit alle auf Position `0` und kollidieren — freie Felder brauchen explizite, verschiedene Positionen.
+
 ---
 
 ## 3. Loader-Semantik
@@ -257,7 +264,9 @@ docker compose exec \
 
 > ⚠️ **Rollen-Voraussetzung.** Der Loader schreibt in fünf Tabellen mit Row-Level-Security (`core_documenttype`, `core_fieldtemplate`, `core_documenttypefield`, `core_fieldgroup`, `core_fieldcondition`). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ohne den ENV-Override sähe der Lauf 0 Bestandszeilen und scheiterte am ersten Schreibzugriff. Der Command prüft das vorab und bricht mit einer klaren Meldung ab. Hintergrund: [Ops-Runbook § 9.5](ops-runbook.md), [ADR-033](adr/033-runtime-owner-role-separation.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Override überflüssig.
 
-**Exit-Verhalten:** `0` bei Erfolg. Ein Abbruch mit `CommandError` (Exit ≠ 0) bei unlesbarer Datei, YAML-Syntaxfehler, fehlender/unbekannter Facility-UUID, Schema-Verstoß oder Loader-Fehler. Bei Loader-Fehlern wird der (verworfene) Report **trotzdem** ausgegeben — er zeigt, was ohne die Fehler passiert wäre.
+**Exit-Verhalten:** `0` bei Erfolg. Ein Abbruch mit `CommandError` (Exit ≠ 0) bei unlesbarer Datei, YAML-Syntaxfehler (dazu zählen **doppelte Schlüssel** in einem Mapping — siehe unten), fehlender/unbekannter Facility-UUID, Schema-Verstoß oder Loader-Fehler. Bei Loader-Fehlern wird der (verworfene) Report **trotzdem** ausgegeben — er zeigt, was ohne die Fehler passiert wäre.
+
+> **Doppelte YAML-Schlüssel sind ein Fehler.** Trägt ein Mapping denselben Schlüssel zweimal (z. B. versehentlich zwei `name:` oder zwei `sort_order:` in einem Eintrag), bricht der Import mit Key-Name und Zeile ab — statt still den letzten Wert zu übernehmen (Last-Write-Wins). Das gilt für Pakete **und** den Standardkatalog (`default.yaml`), die beide über denselben strikten Loader gelesen werden.
 
 > **`--dry-run` kann fehlschlagen.** Ein Dry-Run mit Fehlern bricht genauso ab wie ein Echtlauf (Exit ≠ 0). Das ist der Sinn der Sache: erst prüfen, dann anwenden.
 
@@ -324,7 +333,9 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 | `default_value`, `help_text`, `options_json` der Vorlage | zurückgesetzt |
 | `sensitivity` der Vorlage | zurückgesetzt — eine **Absenkung** wird zusätzlich als Warnung gemeldet |
 
-**Senkt** ein Lauf die `sensitivity` (am Typ oder an der Vorlage), meldet der Report zusätzlich eine Warnung „Zugriffsschranke gesenkt“. Die Anwendung bleibt erlaubt — aber bereits erfasste Werte werden damit für zusätzliche Rollen lesbar, und ein `--dry-run` zeigt das vorab. Anhebungen sind still.
+**Senkt** ein Lauf die **effektive** `sensitivity` (am Typ oder an der Vorlage), meldet der Report zusätzlich eine Warnung „Zugriffsschranke gesenkt“. Die Anwendung bleibt erlaubt — aber bereits erfasste Werte werden damit für zusätzliche Rollen lesbar, und ein `--dry-run` zeigt das vorab. Anhebungen sind still.
+
+Maßgeblich ist die **effektive** Sensibilität `max(Typ, Feld)`, nicht der rohe Feldwert. Eine Feld-`sensitivity` von `""` heißt „erbt vom Typ" (nicht Rang 0): Wird eine Vorlage von `elevated` auf `""` gesetzt, während der referenzierende Typ selbst `elevated` (oder höher) ist, ändert sich effektiv **nichts** — dann **keine** Warnung. Sinkt die effektive Schranke dagegen für mindestens einen referenzierenden Typ (z. B. dieselbe Absenkung unter einem `normal`-Typ), wird gewarnt. Ist die Vorlage noch keinem Typ zugeordnet, greift ein konservativer Roh-Vergleich (`""` ⇒ Rang 0).
 
 Was **nicht** angefasst wird: `is_active`, `description`, `retention_days` am Typ und `is_active`, `statistics_category` an der Vorlage. Eine Einrichtung kann einen Paket-Typ also deaktivieren, ohne dass der nächste Lauf ihn reaktiviert.
 

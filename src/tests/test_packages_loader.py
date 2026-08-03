@@ -541,3 +541,55 @@ class TestSensitivityDowngradeWarning:
         report = _load(facility, raw)
 
         assert report.warnings == []
+
+    # --- effektive Sensibilität (Härtung Refs #1727) -------------------------
+
+    def test_field_downgrade_absorbed_by_type_gives_no_warning(self, facility):
+        """Ticket-Kernfall #1727: Vorlage ``elevated`` → ``""`` bei Typ
+        ``elevated`` ⇒ KEINE Warnung. Die effektive Schranke bleibt
+        max(elevated, „erbt") = elevated — der bisherige Roh-Vergleich wertete
+        ``""`` als Rang 0 und meldete hier einen False-Positive."""
+        raw = _raw()
+        raw["document_types"][0]["sensitivity"] = "elevated"
+        raw["field_templates"][1]["sensitivity"] = "elevated"
+        _load(facility, raw)
+
+        raw["field_templates"][1]["sensitivity"] = ""
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.field_templates.updated == ["notiz"]
+        assert report.warnings == []
+
+    def test_field_downgrade_under_normal_type_still_warns(self, facility):
+        """Gegenprobe: dieselbe Vorlagen-Absenkung ``elevated`` → ``""`` unter
+        Typ ``normal`` senkt effektiv von 1 auf 0 ⇒ Warnung."""
+        raw = _raw()
+        raw["document_types"][0]["sensitivity"] = "normal"
+        raw["field_templates"][1]["sensitivity"] = "elevated"
+        _load(facility, raw)
+
+        raw["field_templates"][1]["sensitivity"] = ""
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert [identifier for identifier, _message in report.warnings] == ["notiz"]
+        assert "Zugriffsschranke gesenkt" in report.warnings[0][1]
+
+    def test_unreferenced_field_downgrade_falls_back_to_raw_warning(self, facility):
+        """Ohne referenzierenden Typ (Vorlage nicht zugeordnet) greift der
+        konservative Roh-Vergleich: ``elevated`` → ``""`` warnt."""
+        raw = {
+            "schema_version": 1,
+            "field_templates": [
+                {"slug": "solo", "name": "Solo", "field_type": "text", "sensitivity": "elevated"},
+            ],
+            "document_types": [],
+        }
+        _load(facility, raw)
+
+        raw["field_templates"][0]["sensitivity"] = ""
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert [identifier for identifier, _message in report.warnings] == ["solo"]

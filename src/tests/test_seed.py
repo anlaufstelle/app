@@ -566,16 +566,27 @@ def _catalog_without_group(*, doc_type_slug: str, group_slug: str) -> dict:
 
     Die betroffenen ``field_refs`` verlieren ihren ``group_slug`` (sonst
     verweisen sie ins Leere und das Paket wäre schema-ungültig) — genau die
-    Situation "Katalog listet die Felder nicht mehr in einer Gruppe".
+    Situation "Katalog listet die Felder nicht mehr in einer Gruppe". Sie
+    bekommen dabei frische, kollisionsfreie Blockpositionen am Ende der globalen
+    Block-Sequenz: seit der Blockpositions-Härtung (Refs #1727) darf kein freies
+    Feld die Blockposition einer verbleibenden Gruppe oder eines anderen freien
+    Feldes teilen (der bisherige Innen-Index 0/1/2 der ausgruppierten Felder
+    kollidierte sonst mit der verbleibenden Gruppe bzw. untereinander).
     """
     data = doc_types.load_default_package_data()
     for dt_def in data["document_types"]:
         if dt_def["slug"] != doc_type_slug:
             continue
         dt_def["groups"] = [g for g in dt_def.get("groups", []) if g["slug"] != group_slug]
+        used_positions = {
+            ref["sort_order"] for ref in dt_def.get("field_refs", []) if ref.get("group_slug") != group_slug
+        } | {g.get("sort_order", 0) for g in dt_def["groups"]}
+        next_position = (max(used_positions) + 1) if used_positions else 0
         for ref in dt_def.get("field_refs", []):
             if ref.get("group_slug") == group_slug:
                 del ref["group_slug"]
+                ref["sort_order"] = next_position
+                next_position += 1
     return data
 
 

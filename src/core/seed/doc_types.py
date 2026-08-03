@@ -32,12 +32,12 @@ import copy
 import importlib.resources
 from typing import Any
 
-import yaml
 from django.db import transaction
 
 from core.models import DocumentType, Facility, FieldGroup
 from core.packages.loader import PackageReport, load_package
 from core.packages.schema import PackageV1, parse_package
+from core.packages.yaml_io import safe_load_unique
 
 # Paket-Ressource neben dem Loader (``core/packages/default.yaml``) — über
 # ``importlib.resources`` adressiert, damit der Pfad unabhängig vom
@@ -63,7 +63,9 @@ def load_default_package_data() -> dict[str, Any]:
     global _package_data_cache
     if _package_data_cache is None:
         text = importlib.resources.files(_PACKAGE_ANCHOR).joinpath(_PACKAGE_RESOURCE).read_text(encoding="utf-8")
-        data = yaml.safe_load(text)
+        # Härtung Refs #1727: auch der Standardkatalog läuft über den Duplikat-
+        # Key-strikten Loader — ein Copy-Paste-Fehler im Repo fällt so auf.
+        data = safe_load_unique(text)
         if not isinstance(data, dict):
             raise ValueError(f"{_PACKAGE_ANCHOR}/{_PACKAGE_RESOURCE} enthält kein Mapping auf oberster Ebene.")
         _package_data_cache = data
