@@ -23,6 +23,7 @@ Abgedeckt:
 """
 
 import json
+import uuid
 
 import pytest
 from cryptography.fernet import Fernet
@@ -160,6 +161,80 @@ class TestClientDocumentTypeGuard:
                 pseudonym="P4b-Guard-03",
                 data_json={"irgendwas": "Wert"},
             )
+
+    def test_create_rejects_foreign_facility_type_via_raw_pk(self, facility, foreign_doc_type_client, staff_user):
+        """``document_type_id=<pk>`` darf den Guard nicht umgehen.
+
+        ``create_client`` reicht ``**data`` an ``Client(...)`` durch, und Django
+        akzeptiert dort auch die ``*_id``-Schreibweise. Ein Guard, der nur
+        ``data["document_type"]`` liest, waere damit blind — der fremde Typ
+        landete an der Zeile und fiele erst spaeter (RLS/Encrypt/FK) auf.
+        """
+        with pytest.raises(ValidationError, match="Einrichtung"):
+            create_client(
+                facility,
+                staff_user,
+                pseudonym="P4b-Guard-05",
+                document_type_id=foreign_doc_type_client.pk,
+            )
+
+    def test_create_rejects_event_entity_type_via_raw_pk(self, facility, doc_type_contact, staff_user):
+        with pytest.raises(ValidationError, match="Personen"):
+            create_client(
+                facility,
+                staff_user,
+                pseudonym="P4b-Guard-06",
+                document_type_id=doc_type_contact.pk,
+            )
+
+    def test_create_rejects_unknown_document_type_id(self, facility, staff_user):
+        with pytest.raises(ValidationError, match="existiert nicht"):
+            create_client(
+                facility,
+                staff_user,
+                pseudonym="P4b-Guard-07",
+                document_type_id=uuid.uuid4(),
+            )
+
+    def test_create_rejects_malformed_document_type_id(self, facility, staff_user):
+        """Kein UUID — als fachlicher Fehler abweisen, nicht als ValueError durchschlagen."""
+        with pytest.raises(ValidationError, match="existiert nicht"):
+            create_client(
+                facility,
+                staff_user,
+                pseudonym="P4b-Guard-08",
+                document_type_id="kein-uuid",
+            )
+
+    def test_create_accepts_valid_document_type_id(self, facility, doc_type_client_profile, staff_user):
+        """Positiv-Kontrolle: die ``*_id``-Schreibweise bleibt nutzbar."""
+        client = create_client(
+            facility,
+            staff_user,
+            pseudonym="P4b-Guard-09",
+            document_type_id=doc_type_client_profile.pk,
+            data_json={"wohnsituation": "WG", "nicht-am-typ": "Schmuggelware"},
+        )
+
+        client.refresh_from_db()
+        assert client.document_type_id == doc_type_client_profile.pk
+        assert client.data_json == {"wohnsituation": "WG"}
+
+    def test_create_rejects_both_spellings_at_once(self, facility, doc_type_client_profile, staff_user):
+        """Beide Schreibweisen gleichzeitig ist mehrdeutig — fail-closed."""
+        with pytest.raises(ValidationError, match="nur einmal"):
+            create_client(
+                facility,
+                staff_user,
+                pseudonym="P4b-Guard-10",
+                document_type=doc_type_client_profile,
+                document_type_id=doc_type_client_profile.pk,
+            )
+
+    def test_update_rejects_raw_pk_spelling(self, client_identified, doc_type_client_profile, staff_user):
+        """``update_client`` bleibt bei der strengen Allowlist (nur ``document_type``)."""
+        with pytest.raises(ValueError, match="document_type_id"):
+            update_client(client_identified, staff_user, document_type_id=doc_type_client_profile.pk)
 
     def test_valid_type_is_accepted(self, facility, doc_type_client_profile, staff_user):
         client = create_client(

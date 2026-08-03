@@ -46,6 +46,44 @@ def _check_client_document_type(facility, document_type):
     return document_type
 
 
+def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
+    """Normalisiert beide FK-Schreibweisen auf EIN ``document_type``-Objekt.
+
+    ``create_client`` reicht ``**data`` unveraendert an ``Client(...)`` durch,
+    und Django akzeptiert dort neben ``document_type=<obj>`` auch
+    ``document_type_id=<pk>``. Ein Guard, der nur ``data["document_type"]``
+    liest, waere fuer die zweite Schreibweise blind — ein facility-fremder oder
+    ereignis-gebundener Typ landete dann an der Zeile und fiele erst spaeter
+    (FK/RLS/Verschluesselung) und ohne fachliche Meldung auf.
+
+    Die ``*_id``-Variante wird daher hier aufgeloest und durch das Objekt
+    ersetzt, sodass :func:`_check_client_document_type` **genau einen** Pfad zu
+    pruefen hat. Unbekannte oder syntaktisch ungueltige PKs werden als
+    ``ValidationError`` abgewiesen (fail-closed), ebenso das gleichzeitige
+    Setzen beider Schreibweisen — das waere mehrdeutig, weil die Reihenfolge
+    der ``kwargs`` entschiede, welcher Wert gewinnt.
+    """
+    if "document_type_id" not in data:
+        return data.get("document_type")
+
+    raw_pk = data.pop("document_type_id")
+    if data.get("document_type") is not None:
+        raise ValidationError(_("Dokumentationstyp bitte nur einmal angeben (Objekt oder ID, nicht beides)."))
+    if raw_pk is None:
+        data["document_type"] = None
+        return None
+    try:
+        document_type = DocumentType.objects.filter(pk=raw_pk).first()
+    except (ValidationError, ValueError, TypeError):
+        # Django wirft bei ungueltigen UUID-Strings ValidationError, nicht
+        # ValueError (gleiche Falle wie in ``get_client_or_none``).
+        document_type = None
+    if document_type is None:
+        raise ValidationError(_("Der Dokumentationstyp existiert nicht."))
+    data["document_type"] = document_type
+    return document_type
+
+
 def _clean_client_dynamic_data(facility, document_type, data_json) -> dict:
     """Guard + Whitelist fuer die Dynamikdaten einer Person (M2 P4b, Refs #1058).
 
@@ -301,8 +339,12 @@ def create_client(facility, user, **data):
     M2 P4b (Refs #1058): ``document_type``/``data_json`` laufen durch
     :func:`_clean_client_dynamic_data` — Facility-Scope, ``entity_type=client``
     und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
+    :func:`_normalize_document_type_kwarg` faengt dabei auch die
+    ``document_type_id=<pk>``-Schreibweise ab, die sonst am Guard vorbei direkt
+    an ``Client(...)`` durchgereicht wuerde.
     """
-    data["data_json"] = _clean_client_dynamic_data(facility, data.get("document_type"), data.get("data_json"))
+    document_type = _normalize_document_type_kwarg(data)
+    data["data_json"] = _clean_client_dynamic_data(facility, document_type, data.get("data_json"))
     client = Client(facility=facility, created_by=user, **data)
     client.save()
     log_activity(
