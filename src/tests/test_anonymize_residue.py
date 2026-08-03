@@ -41,13 +41,16 @@ def normal_doc_type(facility):
 
 
 @pytest.fixture
-def client_with_full_history(facility, normal_doc_type, doc_type_client_profile, admin_user):
+def client_with_full_history(facility, normal_doc_type, doc_type_client_profile, doc_type_case_form, admin_user):
     """Klient mit Event + EventHistory + DeletionRequest + WorkItem + Case + Episode.
 
     M2 P4b (Refs #1058): zusaetzlich mit Personen-``document_type`` +
     ``data_json``-Probe. Der Needle liegt bewusst im **unverschluesselten**
     Slug (``wohnsituation``) — nur so ist er ueberhaupt als Klartext-Residue
     beobachtbar; der encrypted-Slug wuerde die Probe hinter Fernet verstecken.
+
+    M2 P5 (Refs #1058): der Fall bekommt analog Fall-``document_type`` +
+    ``data_json`` (unverschluesselter Slug ``anlass``).
     """
     cli = Client.objects.create(
         facility=facility,
@@ -63,6 +66,11 @@ def client_with_full_history(facility, normal_doc_type, doc_type_client_profile,
         title="Mietproblem 2026",
         description="Konkrete Adresse: Hauptstraße 5",
         created_by=admin_user,
+        # M2 P5 (Refs #1058): Fall-``document_type`` + ``data_json``-Probe,
+        # analog zur Client-Probe oben. Needle im unverschluesselten Slug
+        # (``anlass``), sonst versteckt Fernet die Probe.
+        document_type=doc_type_case_form,
+        data_json={"anlass": "Mahnung von Vermieter Mueller"},
     )
     Episode.objects.create(
         case=case,
@@ -155,6 +163,20 @@ class TestAnonymizeResidueMatrix:
         episode = Episode.objects.get(case=case)
         assert episode.title == "Episode (anonymisiert)"
         assert episode.description == ""
+
+    def test_case_dynamic_data_redacted(self, client_with_full_history):
+        """M2 P5 (Refs #1058): ``data_json`` leer, ``document_type`` geloest.
+
+        Der PROTECT-Verweis muss fallen — sonst kettet ein anonymisierter
+        Fall den Konfigurationstyp dauerhaft fest, obwohl seine Daten weg
+        sind. Muster ``test_client_dynamic_data_redacted``.
+        """
+        cli, case, _ = client_with_full_history
+        assert case.data_json, "Positiv-Kontrolle: die Probe muss vorher befuellt sein"
+        cli.anonymize()
+        case.refresh_from_db()
+        assert case.data_json == {}
+        assert case.document_type_id is None
 
     def test_workitem_redacted(self, client_with_full_history):
         cli, _, _ = client_with_full_history

@@ -16,7 +16,7 @@ pytestmark = pytest.mark.architecture
 #   Event  — Refs #736 / #713
 #   Client — M2 P4b (Refs #1058)
 #   Case   — folgt in M2 P5 (Refs #1058), dann hier ergaenzen
-ENCRYPTED_DATA_JSON_MODELS = ("Event", "Client")
+ENCRYPTED_DATA_JSON_MODELS = ("Event", "Client", "Case")
 
 
 def _bypass_patterns(model: str) -> tuple[tuple[str, re.Pattern], ...]:

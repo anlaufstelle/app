@@ -216,6 +216,21 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     )
     DocumentTypeField.objects.create(document_type=dt_person, field_template=ft_wohnsituation, sort_order=0)
 
+    # 0a) Fall-Dokumentationstyp mit einem unverschluesselten Feld (M2 P5,
+    #     Refs #1058) — gleiche Begruendung wie ``dt_person`` oben.
+    dt_case = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CASE,
+        name="Residue-Fallformular",
+    )
+    ft_anlass = FieldTemplate.objects.create(
+        facility=facility,
+        name="Residue-Anlass",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    DocumentTypeField.objects.create(document_type=dt_case, field_template=ft_anlass, sort_order=0)
+
     # 1) Person anlegen (Service schreibt Activity "Person … angelegt") — inkl.
     #    Dynamikdaten-Sentinel in ``core_client.data_json``.
     client = create_client(
@@ -237,13 +252,16 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         contact_stage=Client.ContactStage.QUALIFIED,
     )
 
-    # 3) Fall mit Freitext (core_case.{title,description}).
+    # 3) Fall mit Freitext (core_case.{title,description}) — inkl.
+    #    Dynamikdaten-Sentinel in ``core_case.data_json`` (M2 P5, Refs #1058).
     case = create_case(
         facility,
         admin_user,
         client=client,
         title="RESIDUEPROBE-Falltitel",
         description="RESIDUEPROBE-Fallbeschreibung",
+        document_type=dt_case,
+        data_json={ft_anlass.slug: "RESIDUEPROBE-Fallanlass"},
     )
 
     # 3a) Episode unter dem Fall (core_episode.{title,description}). Kein

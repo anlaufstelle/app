@@ -224,6 +224,42 @@ def doc_type_client_profile(facility):
 
 
 @pytest.fixture
+def doc_type_case_form(facility):
+    """Fall-Dokumentationstyp (M2 P5, Refs #1058) mit je einem normalen und
+    einem verschlüsselten Feld.
+
+    Pendant zu ``doc_type_client_profile`` für ``entity_type=case``:
+    ``Case.data_json`` wird gegen genau diese Feldmenge whitelistet,
+    ``anlass`` bleibt Klartext (Residue-Proben), ``verlauf`` ist
+    ``is_encrypted=True`` und muss nach ``Case.save()`` als Fernet-Token in
+    der DB liegen.
+    """
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CASE,
+        name="Fallformular",
+    )
+
+    ft_anlass = FieldTemplate.objects.create(
+        facility=facility,
+        name="Anlass",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    ft_verlauf = FieldTemplate.objects.create(
+        facility=facility,
+        name="Verlauf",
+        field_type=FieldTemplate.FieldType.TEXTAREA,
+        is_encrypted=True,
+    )
+
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_anlass, sort_order=0)
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_verlauf, sort_order=1)
+
+    return doc_type
+
+
+@pytest.fixture
 def doc_type_crisis(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
@@ -529,6 +565,22 @@ def foreign_doc_type_client(second_facility):
         category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personenprofil (fremd)",
+    )
+
+
+@pytest.fixture
+def foreign_doc_type_case(second_facility):
+    """Fall-Dokumentationstyp auf ``second_facility`` (M2 P5, Refs #1058).
+
+    Spiegel zu ``doc_type_case_form`` für die Cross-Facility-Probe: der Typ
+    ist inhaltlich gültig (``entity_type=case``), gehört aber zur falschen
+    Einrichtung — der Service-Guard muss ihn ablehnen.
+    """
+    return DocumentType.objects.create(
+        facility=second_facility,
+        category=DocumentType.Category.ADMIN,
+        entity_type=DocumentType.EntityType.CASE,
+        name="Fallformular (fremd)",
     )
 
 

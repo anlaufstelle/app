@@ -74,6 +74,18 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     pii("core_case", "title"),
     pii("core_case", "description"),
     non_pii("core_case", "status", reason="Enum (open/closed), kein Freitext."),
+    # M2 P5 (Refs #1058): dynamische Fall-Felder — exakt dieselbe Form wie
+    # ``core_client.data_json``/``core_event.data_json`` (freie Feldwerte je
+    # DocumentType-Slug), daher dieselbe Einordnung. Residue-Erwartung nach
+    # Anonymisierung: ``{}`` (siehe ``_redact_cases_and_episodes``).
+    pii("core_case", "data_json"),
+    # ``core_case.document_type_id`` ist eine UUID-Spalte und faellt damit
+    # NICHT unter das Completeness-Gate (``TEXTY_TYPES`` in
+    # test_pii_residue_sweep.py deckt nur Text-/JSON-Spalten ab) — analog zu
+    # ``core_client.document_type_id``/``core_event.document_type_id``.
+    # Fachlich: reiner Konfig-FK ohne Klientenbezug; er wird bei der
+    # Anonymisierung trotzdem auf NULL gesetzt, damit der PROTECT-Verweis den
+    # Typ nicht dauerhaft blockiert.
     # ---- core_workitem ---------------------------------------------------
     pii("core_workitem", "title"),
     pii("core_workitem", "description"),

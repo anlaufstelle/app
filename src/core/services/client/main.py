@@ -132,7 +132,15 @@ def _redact_client_identity(client) -> None:
 
 
 def _redact_cases_and_episodes(client) -> list:
-    """Anonymisiere alle Cases + ihre Episoden. Returns case_ids für Folgeschritte."""
+    """Anonymisiere alle Cases + ihre Episoden. Returns case_ids für Folgeschritte.
+
+    M2 P5 (Refs #1058, Entscheid E7): ``data_json`` traegt seit P5 freie
+    Feldwerte (auch verschluesselte) und wird mit geleert; ``document_type``
+    faellt auf ``NULL`` zurueck, damit der ``PROTECT``-Verweis anonymisierte
+    Bestaende nicht dauerhaft an einen Konfigurationstyp kettet (der Typ waere
+    sonst nie loeschbar, obwohl die Daten weg sind) — Muster
+    ``_redact_client_identity``.
+    """
     from core.models.case import Case
     from core.models.episode import Episode
 
@@ -141,7 +149,9 @@ def _redact_cases_and_episodes(client) -> list:
     for case in cases:
         case.title = f"[Anonymisiert {case.created_at:%Y-%m-%d}]"
         case.description = ""
-        case.save(update_fields=["title", "description"])
+        case.data_json = {}
+        case.document_type = None
+        case.save(update_fields=["title", "description", "data_json", "document_type"])
 
     Episode.objects.filter(case_id__in=case_ids).update(
         title="Episode (anonymisiert)",
@@ -295,7 +305,8 @@ def anonymize_client(client, user=None):
     Re-Identifikation ermöglichen würden:
 
     - ``Client``-Felder (pseudonym, notes, age_cluster, is_active)
-    - ``Case.title`` / ``Case.description`` aller verknüpften Fälle
+    - ``Case.title`` / ``Case.description`` / ``Case.data_json`` /
+      ``Case.document_type`` (M2 P5, Refs #1058) aller verknüpften Fälle
     - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
     - alle Workitems (auch DONE/DISMISSED): title, description
     - ``Event.data_json``/``search_text`` aller noch nicht soft-deleteten

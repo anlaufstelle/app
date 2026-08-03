@@ -8,10 +8,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
-from core.models.mixins import SoftDeletableModel
+from core.models.mixins import DynamicDataEncryptionMixin, SoftDeletableModel
 
 
-class Case(SoftDeletableModel):
+class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
     """Case/file for a client."""
 
     class Status(models.TextChoices):
@@ -55,6 +55,23 @@ class Case(SoftDeletableModel):
         verbose_name=_("Status"),
         help_text=_("Offen = aktiver Fall, Geschlossen = abgeschlossen"),
     )
+    # M2/P5 (Refs #1058, Entscheid E4): Faelle bekommen dieselbe dynamische
+    # Feldmechanik wie Personen/Ereignisse. ``null=True`` weil der Bestand (und
+    # jeder Fall ohne Dokumentationstyp) typlos bleibt; ``PROTECT`` schuetzt
+    # befuellte ``data_json``-Werte davor, dass ein Loeschen des Typs ihre
+    # Feld-Semantik (Slug -> Label/Sensitivity/Verschluesselung) unbemerkt
+    # entwertet — der Anonymisierungs-Pfad (``_redact_cases_and_episodes``)
+    # loest den Verweis daher aktiv auf, statt anonymisierte Bestaende
+    # dauerhaft an den Typ zu ketten.
+    document_type = models.ForeignKey(
+        "core.DocumentType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cases",
+        verbose_name=_("Dokumentationstyp"),
+    )
+    data_json = models.JSONField(default=dict, blank=True, verbose_name=_("Daten (JSON)"))
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -92,6 +109,13 @@ class Case(SoftDeletableModel):
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        # E5: Der Mixin ueberschreibt ``save()`` bewusst NICHT (MRO-Kollision mit
+        # ``SoftDeletableModel``) — jedes Modell ruft die Verschluesselung explizit
+        # auf, direkt vor dem Persistieren. Muster: ``Client.save()``/``Event.save()``.
+        self._encrypt_sensitive_fields()
+        super().save(*args, **kwargs)
 
     def create_episode(self, *, user, title, description="", started_at=None):
         """Create an :class:`Episode` for this case.
