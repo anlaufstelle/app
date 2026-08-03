@@ -115,7 +115,7 @@ class FieldSpec:
     label: str  # display name
 ```
 
-`key` is the dict key inside `records` **and** the XML element name of a field. Keys that are not valid XML element names are emitted by the XML renderer as `<entry key="…">` instead of as an element of their own — the format stays well-formed but becomes more awkward to consume. Stick to `^[a-z0-9_]+$` and the case never arises.
+`key` is the dict key inside `records` **and** the XML element name of a field. Keys that are not valid XML element names are emitted by the XML renderer as `<entry key="…">` instead of as an element of their own — the format stays well-formed but becomes more awkward to consume. Stick to `^[a-z0-9_]+$` **and do not start with a digit**, then the case never arises: the renderer validates against `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../../src/core/reporting/export.py)), so a key such as `2026_total` would fall back to `entry` despite being a valid slug.
 
 `label` is the CSV header cell and the table heading in the panel.
 
@@ -146,8 +146,15 @@ The reference plugin [`backends/example.py`](../../src/core/reporting/backends/e
 ### Step 1 — Create the module and register it
 
 ```python
+import dataclasses
+
+from django.db.models import Count
+from django.utils.translation import gettext_lazy as _
+
+from core.models import DocumentType, Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
+from core.services.dashboard.external_report import _get_threshold, _suppress_small
 
 
 @register_backend("example")
@@ -159,6 +166,8 @@ class ExampleBackend(DatasetBackend):
 ```
 
 Put the file at `src/core/reporting/backends/<name>.py`. The decorator sets `slug`, validates its format and rejects duplicate slugs with `ImproperlyConfigured`.
+
+This is the **complete** import header of `example.py` — the excerpts in steps 3 and 4 assume it and do not repeat it.
 
 ### Step 2 — Declare the columns
 
@@ -175,6 +184,8 @@ Put the file at `src/core/reporting/backends/<name>.py`. The decorator sets `slu
 The order is the column order in the CSV and in the panel.
 
 ### Step 3 — Build the dataset
+
+Imports as in step 1 (`Event`, `DocumentType`, `Count`):
 
 ```python
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
@@ -217,7 +228,7 @@ Three points that are easy to miss:
 
 ### Step 4 — Guarantee k-anonymity
 
-As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py`:
+As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1 — `dataclasses`, `_get_threshold`, `_suppress_small`):
 
 ```python
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
@@ -264,6 +275,8 @@ python src/manage.py shell -c "from core.reporting.registry import get_backends;
 ## 5. Snapshot Integration
 
 For every backend with `snapshot_enabled = True`, `create_or_update_snapshot(facility, year, month)` writes the **raw** `build_dataset(...).summary` into the map `StatisticsSnapshot.backend_data` (key = slug). `prepare_export` deliberately does **not** run there — the snapshot is the internal raw record.
+
+The loop iterates over `get_backends()`, **not** over `get_available_backends(facility)`: a snapshot-capable backend is therefore persisted even when its `is_available(facility)` returns `False`. `is_available` controls only the visibility in the dropdown and the 404 response of panel and export — it is not a switch for data storage. Do not rely on it if you really want to disable a backend for individual facilities.
 
 > **`snapshot_enabled` is a data-protection contract, not a feature switch.**
 >
@@ -477,4 +490,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 7cce8dc54a8eb196013073ca0e5aea5317b6a538 -->
+<!-- source-hash: fb275d0d4390323882ebe564af38578840fc17a5 -->

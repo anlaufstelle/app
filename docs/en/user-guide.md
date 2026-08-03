@@ -553,11 +553,11 @@ Below the charts you will find the **Reports** section. It offers every reportin
 
 1. Select the report you want from the **Report** dropdown.
 2. A **preview** with the figures for the period selected above appears right below it.
-3. Use the **CSV Export**, **JSON Export**, and **XML Export** buttons to download the same data as a file. CSV suits spreadsheets; JSON and XML are meant for further processing in other systems.
+3. Use the **CSV export**, **JSON export**, and **XML export** buttons to download the same data as a file. CSV suits spreadsheets; JSON and XML are meant for further processing in other systems.
 
-**Completeness notices:** Above the preview you can see what the report does *not* show -- for example events whose documentation type maps to no report category, or events without a person reference. A yellow **Hinweis** (notice) box means data is missing, so the figures are too low. A grey **Info** box means the data is included but missing from individual sub-analyses. If it reads "Keine Vollständigkeitsprobleme erkannt" (no completeness issues detected), the report has no gaps.
+**Completeness notices:** Above the preview you can see what the report does *not* show -- for example events whose documentation type maps to no report category, or events without a person reference. A yellow **Note** badge means data is missing, so the figures are too low. A grey **Info** badge means the data is included but missing from individual sub-analyses. If it says "No completeness issues detected", the report has no gaps.
 
-**Small case numbers are suppressed:** The preview *and* the download show the same privacy-friendly view. Values below your facility's k-anonymity threshold (default 5) appear as a dash rather than as a concrete number, so that no individual person can be derived from a report. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
+**Small case numbers are suppressed:** The preview *and* the download show the same privacy-friendly data -- values below your facility's k-anonymity threshold (default 5) are removed, so that no individual person can be derived from a report. How a removed value is **displayed** depends on the format: as a dash in the preview, as an empty cell in the CSV (the metadata line at the top of the file points out the suppression), as `null` in JSON, and as an empty element in XML. Occasionally a second, larger value is dropped as well -- this is intentional, because otherwise the suppressed value could be calculated back. For the same reason, completeness notices contain no digits at all when the numbers are very small.
 
 > **Note:** Every download is recorded in the audit log; the preview is not. An empty period looks like suppression in the preview -- when in doubt, check the selected time period.
 
@@ -870,5 +870,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 7b1f4ed8377240d6aaf5217914f8e7b2b9a131d6 -->
+<!-- source-hash: 5bd77f4102c54a5430694a9ed9c813ca829d873b -->
 

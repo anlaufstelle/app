@@ -73,6 +73,8 @@ Das Reporting-Mapping läuft über **`DocumentType.system_type`** — die stabil
 
 Repo-Invariante seit #1278 (Security R4/R14): **jedes extern zirkulierende Berichts-Artefakt unterdrückt Kleinstfallzahlen.** Ein Formatwechsel darf diese Härtung nicht aushebeln. Deshalb bekommt der Vertrag einen Transformations-Hook, und zwar mit einer scharfen Grenze:
 
+> **Scope-Ergänzung während der Umsetzung.** Dieser Abschnitt gehörte **nicht** zu den ursprünglichen Entscheiden E1–E14 der M5-Planung. `prepare_export`, die Umformulierung der Vollständigkeits-Meldungen und die Schließung der Vier-Term-Identität sind aus den Reviews der Umsetzungsphase entstanden — die generische CSV/JSON/XML-Pipeline hätte die Härtung aus #1278 sonst am PDF-Pfad vorbei ausgehebelt. Die Entscheidung wird hier nachgetragen, weil sie den Vertrag in `base.py` dauerhaft erweitert.
+
 | Pfad | Aufruf | Sicht |
 |---|---|---|
 | Export CSV/JSON/XML | `export_dataset()` ruft `prepare_export` vor **jedem** Renderer | suppressiert |

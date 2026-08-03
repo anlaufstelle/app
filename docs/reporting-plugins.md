@@ -112,7 +112,7 @@ class FieldSpec:
     label: str  # Anzeigename
 ```
 
-`key` ist der Dict-Schlüssel in `records` **und** der XML-Elementname eines Feldes. Schlüssel, die kein gültiger XML-Elementname sind, werden vom XML-Renderer als `<entry key="…">` ausgegeben statt als eigenes Element — das Format bleibt wohlgeformt, wird aber unhandlicher. Halte dich an `^[a-z0-9_]+$`, dann tritt der Fall nicht ein.
+`key` ist der Dict-Schlüssel in `records` **und** der XML-Elementname eines Feldes. Schlüssel, die kein gültiger XML-Elementname sind, werden vom XML-Renderer als `<entry key="…">` ausgegeben statt als eigenes Element — das Format bleibt wohlgeformt, wird aber unhandlicher. Halte dich an `^[a-z0-9_]+$` **und beginne nicht mit einer Ziffer**, dann tritt der Fall nicht ein: Der Renderer prüft gegen `^[A-Za-z_][A-Za-z0-9_]*$` ([`export.py`](../src/core/reporting/export.py)), ein Schlüssel wie `2026_total` fiele also trotz gültigem Slug-Format in den `entry`-Fallback.
 
 `label` ist die CSV-Kopfzeile und die Tabellenüberschrift im Panel.
 
@@ -143,8 +143,15 @@ Das Referenz-Plugin [`backends/example.py`](../src/core/reporting/backends/examp
 ### Schritt 1 — Modul anlegen und registrieren
 
 ```python
+import dataclasses
+
+from django.db.models import Count
+from django.utils.translation import gettext_lazy as _
+
+from core.models import DocumentType, Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
+from core.services.dashboard.external_report import _get_threshold, _suppress_small
 
 
 @register_backend("example")
@@ -156,6 +163,8 @@ class ExampleBackend(DatasetBackend):
 ```
 
 Datei nach `src/core/reporting/backends/<name>.py`. Der Decorator setzt `slug`, prüft das Format und weist doppelte Slugs mit `ImproperlyConfigured` ab.
+
+Das ist der **vollständige** Import-Kopf von `example.py` — die Auszüge in Schritt 3 und 4 setzen ihn voraus und wiederholen ihn nicht.
 
 ### Schritt 2 — Spalten deklarieren
 
@@ -172,6 +181,8 @@ Datei nach `src/core/reporting/backends/<name>.py`. Der Decorator setzt `slug`, 
 Die Reihenfolge ist die Spaltenreihenfolge im CSV und im Panel.
 
 ### Schritt 3 — Datensatz bauen
+
+Imports wie in Schritt 1 (`Event`, `DocumentType`, `Count`):
 
 ```python
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
@@ -214,7 +225,7 @@ Drei Punkte, die leicht untergehen:
 
 ### Schritt 4 — K-Anonymität sicherstellen
 
-Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtlektüre**, nicht Kür. Details in [§ 6](#6-k-anonymität--der-prepare_export-hook); der Minimalfall aus `example.py`:
+Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtlektüre**, nicht Kür. Details in [§ 6](#6-k-anonymität--der-prepare_export-hook); der Minimalfall aus `example.py` (Imports wie in Schritt 1 — `dataclasses`, `_get_threshold`, `_suppress_small`):
 
 ```python
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
@@ -261,6 +272,8 @@ python src/manage.py shell -c "from core.reporting.registry import get_backends;
 ## 5. Snapshot-Integration
 
 `create_or_update_snapshot(facility, year, month)` schreibt für jedes Backend mit `snapshot_enabled = True` das **rohe** `build_dataset(...).summary` in die Map `StatisticsSnapshot.backend_data` (Schlüssel = Slug). `prepare_export` läuft dabei bewusst **nicht** — der Snapshot ist der interne Rohbestand.
+
+Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backends(facility)`: Ein snapshot-fähiges Backend wird also auch dann persistiert, wenn sein `is_available(facility)` `False` liefert. `is_available` steuert ausschließlich die Sichtbarkeit im Dropdown und die 404-Antwort von Panel und Export — es ist kein Schalter für die Datenhaltung. Wer ein Backend für einzelne Einrichtungen wirklich stilllegen will, darf sich darauf nicht verlassen.
 
 > **`snapshot_enabled` ist ein Datenschutz-Vertrag, kein Feature-Schalter.**
 >
