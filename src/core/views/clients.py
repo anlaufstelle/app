@@ -30,6 +30,7 @@ from core.services.client import (
 from core.services.compliance import user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
+    count_filled_dynamic_values,
     decrypt_dynamic_text_data,
     merge_dynamic_data,
     remove_restricted_fields,
@@ -146,6 +147,16 @@ def _lock_invisible_document_type(request, client, form):
         del form.fields["document_type"]
         return True
     return False
+
+
+def _values_at_risk(data_json, *, type_locked: bool) -> int:
+    """Zusatzfeld-Werte, die ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733).
+
+    Speist Warnung und Rueckfrage im Bearbeiten-Formular. Ist das Select
+    gesperrt (unsichtbarer Typ, ``_lock_invisible_document_type``), gibt es
+    keine Wechselmoeglichkeit — dann auch nichts zu bestaetigen.
+    """
+    return 0 if type_locked else count_filled_dynamic_values(data_json)
 
 
 class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin, View):
@@ -338,7 +349,13 @@ class ClientUpdateView(StaffRequiredMixin, View):
             None if type_locked else client.document_type,
             initial_data=decrypt_dynamic_text_data(client.data_json),
         )
-        context = {"form": form, "data_form": data_form, "client": client, "is_edit": True}
+        context = {
+            "form": form,
+            "data_form": data_form,
+            "client": client,
+            "is_edit": True,
+            "dynamic_values_at_risk": _values_at_risk(client.data_json, type_locked=type_locked),
+        }
         return render(request, "core/clients/form.html", context)
 
     def post(self, request, pk):
@@ -368,7 +385,13 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     initial_data=decrypt_dynamic_text_data(old_data),
                 )
             )
-            context = {"form": form, "data_form": data_form, "client": client, "is_edit": True}
+            context = {
+                "form": form,
+                "data_form": data_form,
+                "client": client,
+                "is_edit": True,
+                "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+            }
             return render(request, "core/clients/form.html", context)
 
         fields = dict(form.cleaned_data)
@@ -383,7 +406,13 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 initial_data=decrypt_dynamic_text_data(old_data),
             )
             if not data_form.is_valid():
-                context = {"form": form, "data_form": data_form, "client": client, "is_edit": True}
+                context = {
+                    "form": form,
+                    "data_form": data_form,
+                    "client": client,
+                    "is_edit": True,
+                    "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                }
                 return render(request, "core/clients/form.html", context)
             # P4b-Review (fail-closed-Vertrag): ``update_client`` weist
             # ``document_type=None`` bei befuelltem ``data_json``-Altbestand ab.

@@ -25,6 +25,11 @@ Handrunde, nicht vorab. Abgedeckt sind zwei Flüsse:
       trägt den Wert daher wie eine Bearbeiterin erneut ein und belegt, dass Typ **und**
       Werte den Umweg überstehen.
 
+  (3) **Rückfrage vor dem Verwerfen** ``test_confirm_only_when_values_are_at_risk_and_dismiss_keeps_data``
+      (Refs #1733): Anlage und Speichern ohne Typwechsel fragen nicht nach; das
+      Entfernen des Typs an einer Person mit befülltem Zusatzfeld fragt nach, nennt
+      die Feldanzahl, und ein Abbruch lässt Formular wie Datensatz unangetastet.
+
 Wegwerf-Konvention (die E2E-DB ist geteilt!): alle Objekte tragen das Präfix
 ``E2E-Cli-…`` mit uuid4-Suffix und werden in ``finally`` best-effort abgeräumt —
 zuerst wird der Typ von der Person gelöst („— Kein Typ —"), weil
@@ -159,6 +164,10 @@ def _detach_document_type(page, base_url, edit_url, detail_re) -> None:
     ``Case.document_type`` sind PROTECT, der Lösch-Dialog wäre sonst blockiert.
     Nebeneffekt (gewollt): der Service leert dabei ``data_json`` — auch der
     verschlüsselte Wegwerf-Wert verschwindet.
+
+    Refs #1733: genau dieser Nebeneffekt löst jetzt die Rückfrage vor dem
+    Speichern aus. Ohne Dialog-Handler dismisst Playwright sie automatisch, der
+    Submit würde abgebrochen und das Aufräumen liefe still ins Leere.
     """
     try:
         page.goto(edit_url, wait_until="domcontentloaded")
@@ -166,6 +175,7 @@ def _detach_document_type(page, base_url, edit_url, detail_re) -> None:
         if select.count() == 0:
             return
         select.select_option(value="")
+        page.once("dialog", lambda dialog: dialog.accept())
         page.locator(ENTITY_SUBMIT).click()
         page.wait_for_url(detail_re, timeout=15000)
     except Exception:
@@ -319,8 +329,15 @@ class TestClientDynamicFields:
             expect(page.locator(f"textarea[name='{slug_secret}']")).to_have_count(0)
 
             fill_dynamic_field(page, f"input[name='{slug_other}']", value_other)
+            # Refs #1733: Der Wechsel verwirft zwei befüllte Werte — die
+            # Rückfrage muss kommen (und die Anzahl nennen), sonst würde hier
+            # unbemerkt gespeichert.
+            dialogs = []
+            page.once("dialog", lambda dialog: (dialogs.append(dialog.message), dialog.accept()))
             page.locator(ENTITY_SUBMIT).click()
             page.wait_for_url(CLIENT_DETAIL_RE)
+            assert dialogs, "Refs #1733: keine Rückfrage beim Typwechsel mit befüllten Werten"
+            assert "2" in dialogs[0], f"Rückfrage ohne Feldanzahl: {dialogs[0]!r}"
             section = page.locator(DYNAMIC_SECTION)
             expect(section).to_contain_text(type_b, timeout=10000)
             expect(section).to_contain_text(value_other)
@@ -414,6 +431,11 @@ class TestInactiveAssignedClientType:
             # Bearbeiterin trägt den Wert wieder ein. Entscheidend ist, dass das
             # eigene Feld überhaupt zurückkommt: nur so landet sein Slug im POST.
             fill_dynamic_field(page, f"input[name='{slug_own}']", value_own)
+            # Refs #1733: Das Feldset wurde zweimal nachgeladen — die Rückfrage
+            # hängt bewusst am Nachladen, nicht am Select-Wert, und kommt
+            # deshalb auch bei diesem Weg-und-Zurück (genau hier drohte der
+            # stille Verlust).
+            page.once("dialog", lambda dialog: dialog.accept())
             page.locator(ENTITY_SUBMIT).click()
             page.wait_for_url(CLIENT_DETAIL_RE)
 
@@ -432,3 +454,108 @@ class TestInactiveAssignedClientType:
                 _delete_doctype_safe(page, base_url, pk)
             for name in (ft_own, ft_away):
                 _delete_field_template(page, base_url, name)
+
+
+# ---------------------------------------------------------------------------
+# (3) Rückfrage vor dem Verwerfen von Zusatzfeld-Werten (Refs #1733)
+# ---------------------------------------------------------------------------
+
+
+def _wait_for_dialogs(page, dialogs, expected, *, attempts=50) -> None:
+    """Python-seitig auf ``expected`` erfasste Dialoge pollen.
+
+    Der Dialog-Handler laeuft asynchron zum ``click()`` — ohne Warteschleife
+    liest die Assertion die Liste, bevor der Browser den Dialog ueberhaupt
+    geoeffnet hat (kein ``wait_for_function``: dessen async-Falle liefert
+    False-Positives, s. e2e-runbook).
+    """
+    for _ in range(attempts):
+        if len(dialogs) >= expected:
+            return
+        page.wait_for_timeout(100)
+    raise AssertionError(f"Erwartet {expected} Rückfrage(n), erfasst: {dialogs}")
+
+
+class TestTypeChangeDiscardConfirm:
+    """Refs #1733: Der Typwechsel/-entfernen war die einzige irreversible
+    Datenwirkung ohne Rückfrage. Geprüft wird beides — dass sie kommt, wenn
+    etwas zu verlieren ist, und dass sie ausbleibt, wenn nicht."""
+
+    def test_confirm_only_when_values_are_at_risk_and_dismiss_keeps_data(self, authenticated_page, base_url):
+        page = authenticated_page
+        errors = track_console_errors(page)
+
+        ft_own = _cli_name("notiz")
+        slug_own = _slug_of(ft_own)
+        type_own = _cli_name("TypConfirm")
+        value_own = "Erstkontakt am Bahnhofsvorplatz"
+
+        _create_field_template(page, base_url, ft_own, "text")
+        pk_own = _create_entity_doctype(page, base_url, type_own, "client")
+        _assign_free_field(page, ft_own)
+
+        # Ein einziger Dialog-Handler für den ganzen Fluss; ``mode`` schaltet
+        # zwischen Bestätigen und Abbrechen um (mehrere ``page.once``-Handler
+        # würden sich gegenseitig ins Gehege kommen).
+        dialogs: list[str] = []
+        mode = {"accept": True}
+
+        def _handle(dialog):
+            dialogs.append(dialog.message)
+            dialog.accept() if mode["accept"] else dialog.dismiss()
+
+        page.on("dialog", _handle)
+
+        client_pk = None
+        try:
+            # --- Anlage: Feldset wird nachgeladen, aber nichts kann verloren gehen
+            pseudonym = _cli_name("PersonConfirm")
+            page.goto(f"{base_url}/clients/new/", wait_until="domcontentloaded")
+            page.fill('input[name="pseudonym"]', pseudonym)
+            switch_document_type(page, label=type_own)
+            fill_dynamic_field(page, f"input[name='{slug_own}']", value_own)
+            page.locator(ENTITY_SUBMIT).click()
+            page.wait_for_url(CLIENT_DETAIL_RE)
+            client_pk = CLIENT_DETAIL_RE.search(page.url).group(1)
+            edit_url = f"{base_url}/clients/{client_pk}/edit/"
+            assert dialogs == [], f"Anlage-Formular darf nicht nachfragen: {dialogs}"
+
+            # --- Bearbeiten ohne Typwechsel: Warnung ja, Rückfrage nein --------
+            page.goto(edit_url, wait_until="domcontentloaded")
+            hint = page.locator("[data-testid='doc-type-switch-hint']")
+            expect(hint).to_be_visible()
+            expect(hint).to_contain_text("entfernt")
+            page.fill('input[name="pseudonym"]', f"{pseudonym}-b")
+            page.locator(ENTITY_SUBMIT).click()
+            page.wait_for_url(CLIENT_DETAIL_RE)
+            assert dialogs == [], f"Speichern ohne Typwechsel darf nicht nachfragen: {dialogs}"
+
+            # --- Typ entfernen + Abbrechen: nichts passiert -------------------
+            mode["accept"] = False
+            page.goto(edit_url, wait_until="domcontentloaded")
+            switch_document_type(page, value="")
+            page.locator(ENTITY_SUBMIT).click()
+            _wait_for_dialogs(page, dialogs, 1)
+            assert "1" in dialogs[0], f"Rückfrage ohne Feldanzahl: {dialogs[0]!r}"
+            # Abbruch heisst: kein Submit — wir stehen weiter im Formular.
+            expect(page).to_have_url(re.compile(r"/clients/[0-9a-f-]+/edit/$"))
+            # Der Wert steht unverändert am Datensatz.
+            page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
+            expect(page.locator(DYNAMIC_SECTION)).to_contain_text(value_own, timeout=10000)
+
+            # --- Dasselbe bestätigt: jetzt greift der Verwurf ------------------
+            mode["accept"] = True
+            page.goto(edit_url, wait_until="domcontentloaded")
+            switch_document_type(page, value="")
+            page.locator(ENTITY_SUBMIT).click()
+            page.wait_for_url(CLIENT_DETAIL_RE)
+            _wait_for_dialogs(page, dialogs, 2)
+            expect(page.locator("#main-content")).not_to_contain_text(value_own)
+
+            assert errors == [], f"Konsolen-Errors/CSP-Verstöße im Confirm-Fluss: {errors}"
+        finally:
+            page.remove_listener("dialog", _handle)
+            if client_pk:
+                _detach_document_type(page, base_url, f"{base_url}/clients/{client_pk}/edit/", CLIENT_DETAIL_RE)
+            _delete_doctype_safe(page, base_url, pk_own)
+            _delete_field_template(page, base_url, ft_own)

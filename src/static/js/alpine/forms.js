@@ -89,6 +89,48 @@ const _autocompleteShared = {
 
 document.addEventListener("alpine:init", () => {
     /**
+     * Rueckfrage vor dem Verwerfen von Zusatzfeld-Werten (Refs #1733).
+     *
+     * Am ``<form>`` der Personen-/Fall-Bearbeitung. Ein Typwechsel ODER das
+     * Entfernen des Typs baut ``data_json`` komplett neu auf (E11,
+     * ``merge_dynamic_data``) — die Werte des alten Typs sind danach weg und
+     * nicht wiederherstellbar (das Audit haelt nur Feldnamen fest). Muster
+     * ``confirmBulkStatus``: bedingt, CSP-konform, Text uebersetzbar aus dem
+     * Template (``data-confirm-discard``); fehlt das Attribut, wird lieber
+     * abgeschickt als blockiert.
+     *
+     * Ausloeser ist bewusst das **erfolgte Nachladen** des Zusatzfeld-Blocks
+     * (htmx-Swap auf ``#dynamic-fields``), nicht ein Vergleich des
+     * Select-Werts mit dem Ausgangswert: das Partial kommt ohne
+     * ``initial_data`` zurueck, ein Weg-und-wieder-zurueck landet also
+     * ebenfalls bei leeren Feldern und wuerde beim Speichern genauso Werte
+     * verwerfen — der Select-Wert waere dann unveraendert und die Rueckfrage
+     * bliebe aus.
+     */
+    Alpine.data("confirmDynamicDataLoss", () => ({
+        _fieldsReloaded: false,
+        init() {
+            // htmx ersetzt den *Inhalt* von #dynamic-fields (hx-swap
+            // innerHTML), das Element selbst ueberlebt jeden Wechsel — der
+            // Listener bleibt also ueber beliebig viele Swaps gueltig.
+            const target = document.getElementById("dynamic-fields");
+            if (!target) return;
+            target.addEventListener("htmx:afterSwap", () => {
+                this._fieldsReloaded = true;
+            });
+        },
+        confirmDiscard(event) {
+            if (!this._fieldsReloaded) return;
+            const form = event && event.target;
+            if (!form || typeof form.getAttribute !== "function") return;
+            const msg = form.getAttribute("data-confirm-discard");
+            if (msg && !window.confirm(msg)) {
+                event.preventDefault();
+            }
+        },
+    }));
+
+    /**
      * Klientel-Autocomplete-Basis. Verwendet in cases/form.html und
      * workitems/form.html (zweite Stelle ohne Cases-Anbindung).
      * Initial-Werte (Pseudonym, Client-ID) und die Autocomplete-URL

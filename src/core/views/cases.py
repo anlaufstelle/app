@@ -30,6 +30,7 @@ from core.services.client import get_client_or_none
 from core.services.compliance import get_visible_event_or_404, user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
+    count_filled_dynamic_values,
     decrypt_dynamic_text_data,
     merge_dynamic_data,
     remove_restricted_fields,
@@ -143,6 +144,15 @@ def _lock_invisible_document_type(request, case, form):
         del form.fields["document_type"]
         return True
     return False
+
+
+def _values_at_risk(data_json, *, type_locked: bool) -> int:
+    """Zusatzfeld-Werte, die ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733).
+
+    Spiegel von ``views/clients.py``: speist Warnung und Rueckfrage im
+    Bearbeiten-Formular; bei gesperrtem Select gibt es nichts zu bestaetigen.
+    """
+    return 0 if type_locked else count_filled_dynamic_values(data_json)
 
 
 def _get_case_event_context(case, facility, user):
@@ -338,6 +348,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
             "is_edit": True,
             "client_id": str(case.client.pk) if case.client else "",
             "client_pseudonym": case.client.pseudonym if case.client else "",
+            "dynamic_values_at_risk": _values_at_risk(case.data_json, type_locked=type_locked),
         }
         return render(request, "core/cases/form.html", context)
 
@@ -380,6 +391,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 "is_edit": True,
                 "client_id": request.POST.get("client", ""),
                 "client_pseudonym": "",
+                "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
             }
             return render(request, "core/cases/form.html", context)
 
@@ -402,6 +414,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     "is_edit": True,
                     "client_id": request.POST.get("client", ""),
                     "client_pseudonym": "",
+                    "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
                 }
                 return render(request, "core/cases/form.html", context)
             # P5/P4b-Review (fail-closed-Vertrag): ``update_case`` weist

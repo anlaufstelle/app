@@ -33,7 +33,7 @@ from core.forms.dynamic import DynamicDataForm
 from core.forms.events import DynamicEventDataForm, MultipleFileField
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
 from core.services.conditions import build_conditions_payload
-from core.services.dynamic_data import merge_dynamic_data, validate_data_json
+from core.services.dynamic_data import count_filled_dynamic_values, merge_dynamic_data, validate_data_json
 
 FieldType = FieldTemplate.FieldType
 Operator = FieldCondition.Operator
@@ -436,3 +436,39 @@ class TestCleanWithoutFacilityFailsLoud:
         form = DynamicDataForm({}, document_type=all_types_doctype, facility=None)
 
         assert form.is_valid(), form.errors
+
+
+# ---------------------------------------------------------------------------
+# services.dynamic_data — count_filled_dynamic_values (Refs #1733)
+# ---------------------------------------------------------------------------
+
+
+class TestCountFilledDynamicValues:
+    """Zähler für die Rückfrage beim Typwechsel/-entfernen (Refs #1733).
+
+    Die Zahl beziffert, was ``merge_dynamic_data`` beim Wechsel verwirft — sie
+    darf leere Slugs (nichts zu verlieren) nicht mitzählen, sonst warnt der
+    Dialog vor einem Verlust, den es nicht gibt.
+    """
+
+    def test_empty_and_none(self):
+        assert count_filled_dynamic_values(None) == 0
+        assert count_filled_dynamic_values({}) == 0
+
+    def test_counts_only_filled_slugs(self):
+        data = {"text": "wert", "leer": "", "nur_leerzeichen": "   ", "fehlt": None}
+        assert count_filled_dynamic_values(data) == 1
+
+    def test_empty_collections_do_not_count(self):
+        assert count_filled_dynamic_values({"multi": [], "map": {}}) == 0
+        assert count_filled_dynamic_values({"multi": ["a"], "map": {"k": "v"}}) == 2
+
+    def test_false_boolean_is_not_a_value_but_zero_is(self):
+        """Ein nicht gesetztes Häkchen ist kein Datenverlust — eine 0 schon."""
+        assert count_filled_dynamic_values({"haken": False}) == 0
+        assert count_filled_dynamic_values({"haken": True}) == 1
+        assert count_filled_dynamic_values({"anzahl": 0}) == 1
+
+    def test_encrypted_token_counts(self):
+        """Verschlüsselte Werte liegen als Fernet-Token im JSONB — sie zählen."""
+        assert count_filled_dynamic_values({"geheim": "gAAAAABk-token"}) == 1

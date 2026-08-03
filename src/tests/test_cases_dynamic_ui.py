@@ -277,10 +277,80 @@ class TestCaseTypePicker:
         content = client.get(reverse("core:case_create")).content.decode()
         assert doc_type_case_form.name not in content
 
-    def test_form_shows_type_switch_warning(self, client, staff_user, doc_type_case_form):
+    def test_create_form_has_no_type_switch_warning(self, client, staff_user, doc_type_case_form):
+        """Refs #1733: im Anlage-Formular kann nichts verloren gehen."""
         client.force_login(staff_user)
         content = client.get(reverse("core:case_create")).content.decode()
-        assert "Zusatzfeld-Werte verworfen" in content
+        assert "doc-type-switch-hint" not in content
+        assert "data-confirm-discard" not in content
+
+
+# ---------------------------------------------------------------------------
+# Typwechsel/-entfernen: Warnung + Rückfrage (Refs #1733)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCaseTypeChangeConfirm:
+    """Spiegel von ``TestClientTypeChangeConfirm`` — derselbe E11-Rebuild trifft
+    Fälle genauso (``merge_dynamic_data``)."""
+
+    def _target(self, facility, client_obj, staff_user, doc_type, data_json):
+        return Case.objects.create(
+            facility=facility,
+            client=client_obj,
+            title="P8-Confirm",
+            created_by=staff_user,
+            document_type=doc_type,
+            data_json=data_json,
+        )
+
+    def test_edit_with_values_carries_confirm_attributes_and_count(
+        self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key
+    ):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = self._target(
+                facility, client_identified, staff_user, doc_type_case_form, {"anlass": "A", "verlauf": "B"}
+            )
+            client.force_login(staff_user)
+            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+        assert 'x-data="confirmDynamicDataLoss"' in content
+        confirm = re.search(r'data-confirm-discard="([^"]*)"', content).group(1)
+        assert "2" in confirm
+        assert "entfernen" in confirm.lower()
+
+    def test_edit_without_values_has_no_confirm_and_no_warning(
+        self, client, staff_user, facility, client_identified, doc_type_case_form
+    ):
+        target = self._target(facility, client_identified, staff_user, doc_type_case_form, {})
+        client.force_login(staff_user)
+        content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+        assert "data-confirm-discard" not in content
+        assert "doc-type-switch-hint" not in content
+
+    def test_edit_with_values_shows_alert_styled_warning(
+        self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key
+    ):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = self._target(facility, client_identified, staff_user, doc_type_case_form, {"anlass": "A"})
+            client.force_login(staff_user)
+            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+        hint = re.search(r'<[^>]*data-testid="doc-type-switch-hint"[^>]*>(.*?)</div>', content, re.S)
+        assert hint is not None, "Hinweis fehlt im Bearbeiten-Formular mit Werten"
+        assert 'role="alert"' in hint.group(0)
+        assert "amber" in hint.group(0)
+        assert "entfern" in hint.group(1).lower()
+
+    def test_locked_invisible_type_gets_no_confirm(
+        self, client, staff_user, facility, client_identified, doc_type_case_high, fernet_key
+    ):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = self._target(
+                facility, client_identified, staff_user, doc_type_case_high, {"gefahrenlage": "geheim"}
+            )
+            client.force_login(staff_user)
+            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+        assert "data-confirm-discard" not in content
 
 
 # ---------------------------------------------------------------------------

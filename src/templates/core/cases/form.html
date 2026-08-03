@@ -7,7 +7,12 @@
 <div class="max-w-lg">
     <h1 class="text-[22px] font-bold text-ink mb-6">{% if is_edit %}{% trans "Fall bearbeiten" %}{% else %}{% trans "Neuer Fall" %}{% endif %}</h1>
 
-    <form method="post" class="space-y-4">
+    {% comment %}Refs #1733: Bedingte Rueckfrage vor dem Speichern — spiegelbildlich
+    zum Personen-Formular; nur wenn ein Typwechsel/-entfernen tatsaechlich befuellte
+    Zusatzfeld-Werte verwerfen wuerde.{% endcomment %}
+    <form method="post" class="space-y-4"
+          {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
+          data-confirm-discard="{% blocktrans count n=dynamic_values_at_risk %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}"{% endif %}>
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
         {% if is_edit and case %}
@@ -81,13 +86,17 @@
             unsichtbar) — dann darf hier auch kein Hinweis stehen.{% endcomment %}
             {% if form.document_type %}
             {% include "components/_form_field.html" with field=form.document_type %}
-            {% comment %}E11: Der Typwechsel baut die Zusatzfelder neu auf — die Werte des
-            alten Typs haben im neuen Feldset keine Bedeutung und werden von
-            ``merge_dynamic_data`` verworfen. Statischer Hinweis (kein Inline-Handler,
-            CSP-strikt).{% endcomment %}
-            <p class="-mt-2 text-[12px] text-ink-muted" data-testid="doc-type-switch-hint">
-                {% trans "Beim Wechsel des Typs werden die Zusatzfeld-Werte verworfen." %}
-            </p>
+            {% comment %}E11: Ein Typwechsel — und ebenso das Entfernen des Typs — baut die
+            Zusatzfelder neu auf; die Werte des alten Typs werden von
+            ``merge_dynamic_data`` verworfen. Refs #1733: als Warnung gestaltet und nur
+            dort, wo wirklich etwas zu verlieren ist.{% endcomment %}
+            {% if dynamic_values_at_risk %}
+            <div class="-mt-1 bg-amber-50 border border-amber-200 rounded-[10px] p-3" role="alert" data-testid="doc-type-switch-hint">
+                <p class="text-[13px] text-amber-800">
+                    {% blocktrans count n=dynamic_values_at_risk %}Achtung: Wird der Typ gewechselt oder entfernt, wird der gespeicherte Wert von {{ n }} Zusatzfeld verworfen — er lässt sich nicht wiederherstellen.{% plural %}Achtung: Wird der Typ gewechselt oder entfernt, werden die gespeicherten Werte von {{ n }} Zusatzfeldern verworfen — sie lassen sich nicht wiederherstellen.{% endblocktrans %}
+                </p>
+            </div>
+            {% endif %}
             {% endif %}
         </div>
 

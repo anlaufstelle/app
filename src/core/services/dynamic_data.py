@@ -200,6 +200,37 @@ def merge_dynamic_data(
     return validate_data_json(document_type, merged)
 
 
+def count_filled_dynamic_values(data_json: Mapping[str, Any] | None) -> int:
+    """Anzahl der Slugs in ``data_json``, die tatsächlich einen Wert tragen.
+
+    Beziffert, was ein Typwechsel bzw. -entfernen an einer Person/einem Fall
+    verwerfen würde (:func:`merge_dynamic_data`, E11) — Grundlage der Rückfrage
+    vor dem Speichern (Refs #1733) nach dem Muster der Feld-Entfernen-Bestätigung
+    im Feld-Board.
+
+    Bewusst wertneutral gezählt, ohne Sensitivity-Gate: die Zahl geht in einen
+    Bestätigungstext, nicht in eine Anzeige — sie nennt keine Slugs und keine
+    Werte. Restricted Felder würden beim Wechsel genauso verworfen und müssen
+    deshalb mitgezählt werden.
+
+    „Gefüllt" heisst: nicht ``None``, kein leerer/nur aus Leerzeichen
+    bestehender String, keine leere Liste/Map und kein ``False`` (ein nicht
+    gesetztes Häkchen ist kein Datenverlust). Eine ``0`` zählt dagegen als
+    erfasster Wert. Verschlüsselte Werte liegen als Fernet-Token vor und werden
+    für die reine Zählung **nicht** entschlüsselt.
+    """
+    count = 0
+    for value in (data_json or {}).values():
+        if value is None or isinstance(value, bool) and not value:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if isinstance(value, list | tuple | dict | set) and not value:
+            continue
+        count += 1
+    return count
+
+
 def decrypt_dynamic_text_data(data_json: Mapping[str, Any] | None) -> dict[str, Any]:
     """Klartext-``data_json`` für die Formular-Vorbelegung (M2 P7, Refs #1058).
 

@@ -269,10 +269,87 @@ class TestClientTypePicker:
         content = client.get(reverse("core:client_create")).content.decode()
         assert doc_type_client_profile.name not in content
 
-    def test_form_shows_type_switch_warning(self, client, staff_user, doc_type_client_profile):
+    def test_create_form_has_no_type_switch_warning(self, client, staff_user, doc_type_client_profile):
+        """Refs #1733: im Anlage-Formular kann nichts verloren gehen — der
+        Hinweis erschien dort bislang trotzdem und war reines Rauschen."""
         client.force_login(staff_user)
         content = client.get(reverse("core:client_create")).content.decode()
-        assert "Zusatzfeld-Werte verworfen" in content
+        assert "doc-type-switch-hint" not in content
+        assert "data-confirm-discard" not in content
+
+
+# ---------------------------------------------------------------------------
+# Typwechsel/-entfernen: Warnung + Rückfrage (Refs #1733)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestClientTypeChangeConfirm:
+    """Der Typwechsel ist die einzige irreversible Datenwirkung ohne Rückfrage
+    gewesen (E11-Rebuild, ``merge_dynamic_data``). Warnung + bedingter Confirm
+    erscheinen nur dort, wo tatsächlich etwas zu verlieren ist."""
+
+    def _target(self, facility, staff_user, doc_type, data_json):
+        return Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Confirm",
+            created_by=staff_user,
+            document_type=doc_type,
+            data_json=data_json,
+        )
+
+    def test_edit_with_values_carries_confirm_attributes_and_count(
+        self, client, staff_user, facility, doc_type_client_profile, fernet_key
+    ):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = self._target(
+                facility, staff_user, doc_type_client_profile, {"wohnsituation": "WG", "diagnose": "Text"}
+            )
+            client.force_login(staff_user)
+            content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        assert 'x-data="confirmDynamicDataLoss"' in content
+        assert 'data-confirm-discard="' in content
+        # Der Confirm-Text nennt die Anzahl der betroffenen Felder.
+        confirm = re.search(r'data-confirm-discard="([^"]*)"', content).group(1)
+        assert "2" in confirm
+        # Der Fall „Typ entfernen" wird ausdrücklich mitgenannt.
+        assert "entfernen" in confirm.lower()
+
+    def test_edit_without_values_has_no_confirm_and_no_warning(
+        self, client, staff_user, facility, doc_type_client_profile
+    ):
+        target = self._target(facility, staff_user, doc_type_client_profile, {})
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        assert "data-confirm-discard" not in content
+        assert "doc-type-switch-hint" not in content
+
+    def test_edit_with_values_shows_alert_styled_warning(
+        self, client, staff_user, facility, doc_type_client_profile, fernet_key
+    ):
+        """Option A: keine graue 12px-Zeile mehr, sondern Amber-Box mit
+        ``role="alert"`` (Muster ``config/document_types/confirm_delete.html``)
+        — und der Wortlaut deckt das Entfernen mit ab."""
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = self._target(facility, staff_user, doc_type_client_profile, {"wohnsituation": "WG"})
+            client.force_login(staff_user)
+            content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        hint = re.search(r'<[^>]*data-testid="doc-type-switch-hint"[^>]*>(.*?)</div>', content, re.S)
+        assert hint is not None, "Hinweis fehlt im Bearbeiten-Formular mit Werten"
+        assert 'role="alert"' in hint.group(0)
+        assert "amber" in hint.group(0)
+        assert "entfern" in hint.group(1).lower()
+
+    def test_locked_invisible_type_gets_no_confirm(
+        self, client, lead_user, staff_user, facility, doc_type_client_high, fernet_key
+    ):
+        """Ist der Typ für die Rolle unsichtbar, entfernt die View das Select —
+        ohne Wechselmöglichkeit gibt es auch nichts zu bestätigen."""
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            target = self._target(facility, staff_user, doc_type_client_high, {"schutzkonzept": "geheim"})
+            client.force_login(staff_user)
+            content = client.get(reverse("core:client_update", args=[target.pk])).content.decode()
+        assert "data-confirm-discard" not in content
 
 
 # ---------------------------------------------------------------------------
