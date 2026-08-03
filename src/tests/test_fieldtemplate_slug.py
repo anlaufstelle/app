@@ -166,9 +166,8 @@ class TestExplicitSlug:
 
 @pytest.mark.django_db
 class TestUnknownKeyFallback:
-    def test_unknown_key_does_not_crash_detail_view(self, client, staff_user, facility, doc_type_contact):
-        """Event with unknown key in data_json should not crash the detail view."""
-        event = Event.objects.create(
+    def _make_event(self, facility, doc_type_contact, staff_user):
+        return Event.objects.create(
             facility=facility,
             document_type=doc_type_contact,
             occurred_at="2026-01-01T12:00:00Z",
@@ -176,10 +175,30 @@ class TestUnknownKeyFallback:
             is_anonymous=True,
             created_by=staff_user,
         )
+
+    def test_unknown_key_does_not_crash_detail_view(self, client, staff_user, facility, doc_type_contact):
+        """Event mit unbekanntem Key crasht die Detail-Ansicht nicht.
+
+        Seit #1725 gilt fuer Waisen-Keys OHNE zugehoerige FieldTemplate der
+        konservative HIGH-Fallback: staff sieht den Wert nicht mehr im
+        Klartext, sondern restringiert.
+        """
+        event = self._make_event(facility, doc_type_contact, staff_user)
         client.force_login(staff_user)
         from django.urls import reverse
 
         response = client.get(reverse("core:event_detail", args=[event.pk]))
         assert response.status_code == 200
         content = response.content.decode()
-        assert "some value" in content
+        assert "some value" not in content
+        assert "[Eingeschränkt]" in content
+
+    def test_unknown_key_visible_for_lead(self, client, lead_user, staff_user, facility, doc_type_contact):
+        """HIGH-Fallback (#1725): Leitung darf den Waisen-Wert weiterhin sehen."""
+        event = self._make_event(facility, doc_type_contact, staff_user)
+        client.force_login(lead_user)
+        from django.urls import reverse
+
+        response = client.get(reverse("core:event_detail", args=[event.pk]))
+        assert response.status_code == 200
+        assert "some value" in response.content.decode()
