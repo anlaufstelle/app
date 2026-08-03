@@ -1,10 +1,10 @@
 """Gemeinsamer Testzugriff auf Roh-Aggregate der Reporting-Backends (M5 P3, Refs #1061).
 
-Bis M5 P3 lieferte ``core.services.system.get_sample_report_1_statistics`` das
-Sachbericht-Aggregat; die Funktion ist mit der Umstellung auf die
-Backend-Registry ersatzlos entfallen. Bestandstests pruefen weiterhin dieselben
-Zahlen — nur die Bezugsquelle wechselt. Der Helfer buendelt diesen Wechsel an
-einer Stelle, statt ihn in jeder Testdatei zu wiederholen.
+Bis M5 P3 lieferte eine eigene Funktion in ``core.services.system.export`` das
+Sachbericht-Aggregat; sie ist mit der Umstellung auf die Backend-Registry
+ersatzlos entfallen. Bestandstests pruefen weiterhin dieselben Zahlen — nur die
+Bezugsquelle wechselt. Der Helfer buendelt diesen Wechsel an einer Stelle,
+statt ihn in jeder Testdatei zu wiederholen.
 
 Bewusst ``build_dataset(...).summary`` und **nicht** ``prepare_export``: das ist
 der rohe, unsuppressierte Datenstand, den die Bestandstests erwarten. Die
