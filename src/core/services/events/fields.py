@@ -16,6 +16,7 @@ from django.core.files.uploadedfile import UploadedFile
 
 from core.models import Client
 from core.services.compliance import user_can_see_field
+from core.services.config import block_ordered_dtf_queryset
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +89,9 @@ def build_field_template_lookup(document_type, *, ordered=False):
     iterate over the lookup without triggering N+1 queries. Pass
     ``ordered=True`` when the caller relies on ``sort_order``.
     """
-    qs = document_type.fields.select_related("field_template")
-    if ordered:
-        qs = qs.order_by("sort_order")
+    # #1713-Folge: geordnete Lookups folgen der globalen Block-Reihenfolge
+    # (Dict-Insertion-Order == Anzeige-Reihenfolge, z. B. Event-Detail).
+    qs = block_ordered_dtf_queryset(document_type) if ordered else document_type.fields.select_related("field_template")
     return {dtf.field_template.slug: dtf.field_template for dtf in qs}
 
 

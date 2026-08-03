@@ -300,19 +300,18 @@ class FieldConditionForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.document_type = document_type
         if document_type is not None:
-            self.fields["target_field"].queryset = (  # type: ignore[attr-defined]
-                DocumentTypeField.objects.filter(document_type=document_type)
-                .select_related("field_template")
-                .order_by("sort_order")
+            from core.services.config import block_ordered_dtf_queryset
+
+            # #1713-Folge: Dropdowns in globaler Block-Reihenfolge (wie das
+            # Formular rendert) — flaches sort_order hätte Positions-Ties.
+            self.fields["target_field"].queryset = block_ordered_dtf_queryset(  # type: ignore[attr-defined]
+                document_type
             )
-            self.fields["depends_on_field"].queryset = (  # type: ignore[attr-defined]
-                DocumentTypeField.objects.filter(
-                    document_type=document_type,
-                    field_template__field_type__in=ALLOWED_SOURCE_FIELD_TYPES,
-                    field_template__is_encrypted=False,
-                )
-                .select_related("field_template")
-                .order_by("sort_order")
+            self.fields["depends_on_field"].queryset = block_ordered_dtf_queryset(  # type: ignore[attr-defined]
+                document_type
+            ).filter(
+                field_template__field_type__in=ALLOWED_SOURCE_FIELD_TYPES,
+                field_template__is_encrypted=False,
             )
             # #1715: Die Verkabelung ist aufgespalten (NICHT ergänzt — sonst
             # doppelter Value-Fetch/Race beim Quellwechsel). Die QUELLE holt jetzt

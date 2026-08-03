@@ -531,3 +531,37 @@ class TestBlockOrderHelpers:
         blocks = iter_blocks_in_order(doc_type_contact)
         kinds = [(blk["kind"], blk.get("group").pk if blk["kind"] == "group" else blk["field"].pk) for blk in blocks]
         assert kinds == [("field", a.pk), ("group", grp.pk), ("field", b.pk)]
+
+
+@pytest.mark.django_db
+class TestBlockOrderedQuerysetParity:
+    """SQL-Queryset ``block_ordered_dtf_queryset`` == Python-Iterator (#1713/#1719-Fund)."""
+
+    def test_queryset_matches_iterator_order(self, facility):
+        doc_type = DocumentType.objects.create(facility=facility, name="Paritaet Blockordnung")
+        from core.services.config import block_ordered_dtf_queryset, iter_fields_in_block_order
+
+        g1 = FieldGroup.objects.create(document_type=doc_type, name="Gruppe Eins", sort_order=0)
+        g2 = FieldGroup.objects.create(document_type=doc_type, name="Gruppe Zwei", sort_order=2)
+
+        def _ft(name):
+            return FieldTemplate.objects.create(facility=facility, name=name, field_type=FieldTemplate.FieldType.TEXT)
+
+        def _dtf(name, *, group=None, sort_order=0):
+            return DocumentTypeField.objects.create(
+                document_type=doc_type, field_template=_ft(name), field_group=group, sort_order=sort_order
+            )
+
+        # Normalisierter Zustand mit Innen-Index-Ties: Gruppe(0), frei(1), Gruppe(2), frei(3).
+        _dtf("A1", group=g1, sort_order=0)
+        _dtf("A2", group=g1, sort_order=1)
+        _dtf("Frei Mitte", sort_order=1)
+        _dtf("B1", group=g2, sort_order=0)
+        _dtf("Frei Ende", sort_order=3)
+
+        expected = [dtf.pk for dtf in iter_fields_in_block_order(doc_type)]
+        actual = [dtf.pk for dtf in block_ordered_dtf_queryset(doc_type)]
+        assert actual == expected
+        # Explizite Erwartung: Gruppe-vor-Frei-Tie-Break bei Position 0/1 und Interleaving.
+        names = [dtf.field_template.name for dtf in block_ordered_dtf_queryset(doc_type)]
+        assert names == ["A1", "A2", "Frei Mitte", "B1", "Frei Ende"]

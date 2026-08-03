@@ -11,7 +11,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, Client, DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
+from core.models import Case, Client, DocumentType, FieldCondition, FieldGroup, FieldTemplate
 from core.models.settings import Settings
 from core.services.conditions import (
     FILE,
@@ -21,6 +21,7 @@ from core.services.conditions import (
     is_empty,
     normalize_value,
 )
+from core.services.config import block_ordered_dtf_queryset
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -341,13 +342,12 @@ class DynamicEventDataForm(forms.Form):
         if not document_type:
             return
 
-        dtf_qs = (
-            DocumentTypeField.objects.filter(
-                document_type=document_type,
-            )
-            .select_related("field_template", "field_group")
-            .order_by("sort_order")
-        )
+        # #1713/#1719-Folge: Felder in globaler BLOCK-Reihenfolge einfügen —
+        # ``self.fields``-Iterationsreihenfolge == Anzeige-Reihenfolge (darauf
+        # verlassen sich z. B. der Serienerfassungs-Autofocus und alle
+        # "erstes Feld"-Konsumenten). Ein flaches ``order_by("sort_order")``
+        # hätte Ties zwischen Innen-Indizes und Globalpositionen.
+        dtf_qs = block_ordered_dtf_queryset(document_type)
 
         for dtf in dtf_qs:
             ft = dtf.field_template

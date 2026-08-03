@@ -316,3 +316,48 @@ class TestCreateAndEditRenderGroups:
         assert "Notiz" in body
         # Speichern-Button und Hidden-Field bleiben erhalten (Form-Struktur intakt).
         assert 'name="expected_updated_at"' in body
+
+
+# ---------------------------------------------------------------------------
+# Einfüge-Reihenfolge von self.fields == Anzeige-Reihenfolge (Refs #1719-Fund)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestFieldInsertionOrderIsBlockOrder:
+    """``self.fields`` folgt der globalen Block-Reihenfolge (#1713).
+
+    Regression zum Serienerfassungs-Autofocus: Konsumenten wie
+    ``next(iter(form.fields.values()))`` verlassen sich darauf, dass das ERSTE
+    Formularfeld auch das erste ANGEZEIGTE Feld ist. Vor dem Fix ergab das
+    flache ``order_by("sort_order")`` bei Innen-Index-Ties (dauer=0 in Gruppe A,
+    leistungen=0 in Gruppe B) eine DB-abhängige Reihenfolge.
+    """
+
+    def _tie_doctype(self, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Tie-Regression")
+        g1 = FieldGroup.objects.create(document_type=dt, name="Basis", sort_order=0)
+        g2 = FieldGroup.objects.create(document_type=dt, name="Details", sort_order=1)
+        # Innen-Indizes kollidieren bewusst über Gruppen hinweg (beide 0/1) und
+        # mit der Globalposition des freien Felds (2).
+        _assign(dt, _text_field(facility, "B Eins"), group=g1, sort_order=0)
+        _assign(dt, _text_field(facility, "B Zwei"), group=g1, sort_order=1)
+        _assign(dt, _text_field(facility, "D Eins"), group=g2, sort_order=0)
+        _assign(dt, _text_field(facility, "D Zwei"), group=g2, sort_order=1)
+        _assign(dt, _text_field(facility, "Frei"), sort_order=2)
+        return dt
+
+    def test_fields_iteration_matches_grouped_fields_flattened(self, facility):
+        dt = self._tie_doctype(facility)
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+
+        flattened = [bf.name for _group, bounds in form.grouped_fields() for bf in bounds]
+        assert list(form.fields) == flattened
+        assert flattened == ["b-eins", "b-zwei", "d-eins", "d-zwei", "frei"]
+
+    def test_first_field_is_first_displayed_field(self, facility):
+        """Der Autofocus-Konsument (Serienerfassung, views/events.py) sieht das erste sichtbare Feld."""
+        dt = self._tie_doctype(facility)
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+
+        assert next(iter(form.fields)) == "b-eins"

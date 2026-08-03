@@ -28,7 +28,8 @@ from collections import defaultdict
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Max, ProtectedError
+from django.db.models import Case, IntegerField, Max, ProtectedError, When
+from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
 
 from core.models import (
@@ -590,6 +591,47 @@ def iter_fields_in_block_order(doc_type: DocumentType) -> list[DocumentTypeField
         else:
             result.append(block["field"])
     return result
+
+
+def block_ordered_dtf_queryset(doc_type: DocumentType):
+    """``DocumentTypeField``-Queryset in globaler Block-Reihenfolge (#1713).
+
+    SQL-Pendant zu :func:`iter_fields_in_block_order` für Konsumenten, die ein
+    **Queryset** brauchen (Formular-Aufbau, Dropdowns, geordnete Lookups):
+    Blockposition = ``COALESCE(field_group.sort_order, eigener sort_order)``,
+    Gruppenblock vor freiem Block bei gleicher Position, innerhalb der Gruppe
+    Innen-``sort_order``. Ein nacktes ``order_by("sort_order")`` ist unter der
+    Block-Semantik ein Bug-Muster: Innen-Indizes gruppierter Felder kollidieren
+    mit globalen Positionen (Ties, deren DB-Auflösung die Anzeige scrambelt).
+
+    Divergenz zu ``iter_blocks_in_order`` nur bei degenerierten Alt-Daten
+    (Positions-Tie zwischen zwei Gruppen — Tie-Break hier ``sort_order``/``pk``
+    statt Gruppenname); die Reorder-Endpunkte renumerieren kompakt und
+    Migration 0115 normalisiert Bestände, sodass solche Ties nicht vorkommen.
+    """
+    return (
+        DocumentTypeField.objects.filter(document_type=doc_type)
+        .select_related("field_template", "field_group")
+        .annotate(
+            block_pos=Coalesce("field_group__sort_order", "sort_order"),
+            block_is_free=Case(
+                When(field_group__isnull=True, then=1), default=0, output_field=IntegerField()
+            ),
+        )
+        .order_by("block_pos", "block_is_free", "sort_order", "pk")
+    )
+
+
+def dtf_block_sort_key(dtf: DocumentTypeField) -> tuple:
+    """Python-Sortierschlüssel eines ``DocumentTypeField`` in Block-Reihenfolge (#1713).
+
+    Für bereits geladene Objekte (``field_group`` via ``select_related``!),
+    z. B. die Zielfeld-Sortierung des Bedingungs-Boards — gleiche Ordnung wie
+    :func:`block_ordered_dtf_queryset`.
+    """
+    if dtf.field_group is not None:
+        return (dtf.field_group.sort_order, 0, dtf.sort_order, str(dtf.pk))
+    return (dtf.sort_order, 1, dtf.sort_order, str(dtf.pk))
 
 
 def _compact_block_positions(doc_type: DocumentType) -> None:

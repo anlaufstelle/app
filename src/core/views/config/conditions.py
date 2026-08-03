@@ -94,7 +94,9 @@ def condition_board_context(doc_type, *, form=None):
     """
     conditions = list(
         FieldCondition.objects.filter(target_field__document_type=doc_type)
-        .select_related("target_field__field_template", "depends_on_field__field_template")
+        .select_related(
+            "target_field__field_template", "target_field__field_group", "depends_on_field__field_template"
+        )
         .order_by("group_index", "id")
     )
 
@@ -111,7 +113,9 @@ def condition_board_context(doc_type, *, form=None):
     for entry in by_target.values():
         groups = [{"index": index, "rows": rows} for index, rows in sorted(entry["groups"].items())]
         condition_targets.append({"target": entry["target"], "groups": groups})
-    condition_targets.sort(key=lambda item: (item["target"].sort_order, str(item["target"].field_template.name)))
+    # #1713-Folge: Zielfeld-Blöcke in globaler Block-Reihenfolge (flaches
+    # sort_order hätte Positions-Ties zwischen Innen-Indizes und Globalpositionen).
+    condition_targets.sort(key=lambda item: config_service.dtf_block_sort_key(item["target"]))
 
     next_group_index = max((condition.group_index for condition in conditions), default=-1) + 1
     if form is None:
