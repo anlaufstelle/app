@@ -367,3 +367,28 @@ class TestMergeDynamicData:
         merge_dynamic_data(cond_doctype, cleaned, old_data=old, restricted_slugs={"notiz"})
         assert cleaned == {"dauer": 5}
         assert old == {"notiz": "geheim"}
+
+    def test_restricted_slug_known_by_both_types_survives_type_switch(self, facility):
+        """Haertung (Refs #1058, Review-Punkt 8): ein restricted Slug, den der
+        ALTE und der NEUE Typ beide kennen (dieselbe Feldvorlage ist beiden
+        Typen zugeordnet), ueberlebt den Typwechsel — die E11-Whitelist
+        entscheidet nach Typ-Zugehoerigkeit des Slugs, nicht nach Typ-Identitaet.
+        Nagelt damit fest, dass ``test_type_switch_drops_old_keys`` oben NICHT
+        bedeutet "jeder Typwechsel loescht alle restricted Alt-Werte", sondern
+        nur die, die der neue Typ nicht (mehr) kennt.
+        """
+        shared_ft = _ft(facility, "Notiz", FieldType.TEXTAREA)
+        old_type = DocumentType.objects.create(facility=facility, name="Alter Typ")
+        _assign(old_type, shared_ft, sort_order=0)
+        new_type = DocumentType.objects.create(facility=facility, name="Neuer Typ")
+        _assign(new_type, shared_ft, sort_order=0)
+        _assign(new_type, _ft(facility, "Zusatz", FieldType.TEXT), sort_order=1)
+
+        merged = merge_dynamic_data(
+            new_type,
+            {"zusatz": "neu"},
+            old_data={"notiz": "geheim"},
+            restricted_slugs={"notiz"},
+        )
+
+        assert merged == {"zusatz": "neu", "notiz": "geheim"}

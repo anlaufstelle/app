@@ -197,6 +197,15 @@ class TestCaseDocumentTypeGuard:
         )
         assert case.document_type_id == doc_type_case_form.pk
 
+    def test_update_rejects_raw_pk_spelling(self, case_open, doc_type_case_form, staff_user):
+        """Haertung (Refs #1058, Review-Punkt 10, analog P4b
+        ``test_client_dynamic_data.py::test_update_rejects_raw_pk_spelling``):
+        ``update_case`` bleibt bei der strengen Allowlist (nur ``document_type``,
+        keine ``*_id``-Schreibweise) — die Allowlist weist die Roh-PK-Schreibweise
+        als unbekanntes Feld ab, bevor sie ueberhaupt den Typ-Guard erreicht."""
+        with pytest.raises(ValueError, match="document_type_id"):
+            update_case(case_open, staff_user, document_type_id=doc_type_case_form.pk)
+
 
 @pytest.mark.django_db
 class TestCaseDataJsonWhitelist:

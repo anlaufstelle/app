@@ -3,7 +3,7 @@
 Deckt den Bulk-Pfad ab, der bei ``bulk_create``/Heal-Laeufen
 ``Event.save()`` (und damit ``DynamicDataEncryptionMixin._encrypt_sensitive_fields``)
 umgeht. Kernbefund: FILE-Felder sind immer ``is_encrypted=True``
-(``DocumentType.save()``), daher landet ihr Marker-Dict
+(``FieldTemplate.save()``), daher landet ihr Marker-Dict
 (``__file__``/``__files__``) in der ``encrypted_slugs``-Menge — ohne
 File-Marker-Skip wuerde der Marker faelschlich als Klartext verschluesselt
 (kaputte Anhangsreferenz). Der Save-Pfad (``Event._encrypt_sensitive_fields``,
@@ -15,6 +15,17 @@ from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, FieldTemplate
 from core.services.file_vault import decrypt_field, encrypt_dynamic_data, encrypt_field, is_encrypted_value
+
+
+def _encrypted_slugs(document_type) -> set[str]:
+    """Spiegelt die Query aus ``encrypt_dynamic_data`` — dient den Tests unten
+    als direkter Beleg, dass ein Slug wirklich Teil der encrypted-Menge ist
+    (Refs #1058, Review-Haertung 7a: schliesst die Vakuum-gruen-Gefahr, dass
+    ein Marker-Test nur zufaellig gruen ist, weil sein Slug nie relevant war).
+    """
+    return set(
+        document_type.fields.filter(field_template__is_encrypted=True).values_list("field_template__slug", flat=True)
+    )
 
 
 @pytest.fixture
@@ -46,10 +57,13 @@ def doc_type_with_file_field(facility):
 @pytest.mark.django_db
 class TestEncryptDynamicDataFileMarkerSkip:
     def test_singleton_file_marker_untouched(self, doc_type_with_file_field, settings):
-        settings.ENCRYPTION_KEY = "dummy-key-not-needed-for-this-path"
         from cryptography.fernet import Fernet
 
         settings.ENCRYPTION_KEY = Fernet.generate_key().decode()
+        assert "anhang" in _encrypted_slugs(doc_type_with_file_field), (
+            "Testvoraussetzung: 'anhang' muss in der encrypted-Slug-Menge liegen — "
+            "sonst prueft die folgende Assertion den Marker-Skip nicht wirklich"
+        )
         marker = {"__file__": True, "attachment_id": "11111111-1111-1111-1111-111111111111"}
         data_json = {"anhang": marker}
 
@@ -61,6 +75,10 @@ class TestEncryptDynamicDataFileMarkerSkip:
         from cryptography.fernet import Fernet
 
         settings.ENCRYPTION_KEY = Fernet.generate_key().decode()
+        assert "anhang" in _encrypted_slugs(doc_type_with_file_field), (
+            "Testvoraussetzung: 'anhang' muss in der encrypted-Slug-Menge liegen — "
+            "sonst prueft die folgende Assertion den Marker-Skip nicht wirklich"
+        )
         marker = {"__files__": True, "entries": [{"id": "a", "sort": 0}, {"id": "b", "sort": 1}]}
         data_json = {"anhang": marker}
 

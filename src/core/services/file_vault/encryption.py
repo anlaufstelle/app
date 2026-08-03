@@ -157,7 +157,7 @@ def encrypt_dynamic_data(document_type: DocumentType, data_json: dict[str, Any] 
     (aktuell ``DocumentType``, kuenftig z. B. ``Client``/``Case``-Aequivalente).
 
     File-Marker (``__file__``/``__files__``) werden uebersprungen — FILE-Felder
-    sind immer ``is_encrypted=True`` (``DocumentType.save()``), ihr Marker-Dict
+    sind immer ``is_encrypted=True`` (``FieldTemplate.save()``), ihr Marker-Dict
     ist aber Metadaten, kein Klartext (analog
     ``DynamicDataEncryptionMixin._encrypt_sensitive_fields``, die diesen Skip
     im Save-Pfad schon immer hatte — der Bulk-Pfad hier holt das nach).

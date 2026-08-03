@@ -292,6 +292,20 @@ class TestClientDocumentTypeGuard:
         )
         assert client.document_type_id == doc_type_client_profile.pk
 
+    def test_create_accepts_explicit_document_type_id_none(self, facility, staff_user):
+        """Haertung (Refs #1058, Review-Punkt 9): ``document_type_id=None`` ist
+        explizit zulaessig — ein bisher ungetesteter Zweig von
+        ``_normalize_document_type_kwarg`` (``raw_pk is None``). Unterscheidet
+        sich vom Weglassen des Schluessels nur im Code-Pfad, nicht im Ergebnis:
+        kein Typ."""
+        client = create_client(
+            facility,
+            staff_user,
+            pseudonym="P4b-Guard-11",
+            document_type_id=None,
+        )
+        assert client.document_type_id is None
+
 
 @pytest.mark.django_db
 class TestClientDataJsonWhitelist:
