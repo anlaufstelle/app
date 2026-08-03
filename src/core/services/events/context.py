@@ -152,9 +152,10 @@ def resolve_default_document_type(facility):
 
     Liefert ``(default_doc_type, initial)`` — ``default_doc_type`` ist die
     aktive Standard-Dokumentart der Facility-Settings (oder ``None``, wenn
-    keine gesetzt ist oder sie zwischenzeitlich deaktiviert/verschoben
-    wurde). ``initial`` ist ein Dict, das in das ``EventMetaForm`` geht
-    (``{"document_type": <pk>}`` oder leer).
+    keine gesetzt ist, sie zwischenzeitlich deaktiviert/verschoben wurde,
+    oder — M2, Refs #1058, Entscheid E21 — ihr ``entity_type`` nicht
+    ``event`` ist). ``initial`` ist ein Dict, das in das ``EventMetaForm``
+    geht (``{"document_type": <pk>}`` oder leer).
     """
     initial: dict = {}
     try:

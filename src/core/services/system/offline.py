@@ -272,10 +272,18 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     # ``events_qs`` lief bereits durch ``Event.objects.visible_to(user)``
     # (dieselbe ``allowed_sensitivities_for_user``-Grenze), sodass die Union
     # keinen zusaetzlichen Leak oeffnen kann.
+    # M2 (Refs #1058, Fix-Runde 1 F-1): zusaetzlich ``entity_type=EVENT`` —
+    # ohne den Filter koennte ein client-/case-Typ im Offline-Create-Picker
+    # auftauchen; ein darauf basierender Replay-POST auf ``event_create``
+    # wuerde vom (bereits entity_type-gefilterten) ``EventMetaForm`` als
+    # ungueltige Wahl verworfen (422/Dead-Letter) — dieselbe Bundle-ist-
+    # Derivat-Verletzung wie ein fehlender Sensitivity-Filter, nur als
+    # Correctness- statt Leak-Vektor. Die Event-Union direkt darunter bleibt
+    # bewusst ungefiltert: Events tragen ohnehin nur event-Typen (P1-Invariante).
     doc_types = {
         dt.pk: dt
         for dt in DocumentType.objects.for_facility(facility)
-        .filter(is_active=True)
+        .filter(is_active=True, entity_type=DocumentType.EntityType.EVENT)
         .filter(sensitivity__in=allowed_sensitivities_for_user(user))
         .order_by("sort_order", "name")
     }
@@ -387,8 +395,13 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
     # Typen (echtes Derivat des Online-Create-Formulars). Der bestehende
     # ``user_can_see_field``-Filter in ``_serialize_document_type`` bleibt die
     # zweite (Feld-EBENEN-)Grenze.
+    # M2 (Refs #1058, Fix-Runde 1 F-1): zusaetzlich ``entity_type=EVENT`` —
+    # exakt dieselbe Begruendung wie im Client-Bundle oben (build_client_
+    # offline_bundle): ohne den Filter koennte ein client-/case-Typ im
+    # personenlosen Offline-Create-Picker landen und einen Replay-POST auf
+    # ``event_create`` in die 422/Dead-Letter-Falle laufen lassen.
     doc_types = (
-        DocumentType.objects.filter(facility=facility, is_active=True)
+        DocumentType.objects.filter(facility=facility, is_active=True, entity_type=DocumentType.EntityType.EVENT)
         .filter(sensitivity__in=allowed_sensitivities_for_user(user))
         .order_by("sort_order", "name")
     )

@@ -757,6 +757,37 @@ class TestClientBundleDocTypeSensitivityFilter:
 
 
 @pytest.mark.django_db
+class TestClientBundleDocTypeEntityTypeFilter:
+    """M2 (Refs #1058, Fix-Runde 1 F-1): der DocType-Katalog des Klient-
+    Bundles muss zusaetzlich zum Sensitivity-Filter (``TestClientBundleDocTypeSensitivityFilter``)
+    ``entity_type=event`` durchsetzen — spiegelbildlich zum Online-
+    ``EventMetaForm`` (``forms/events.py``). Ohne den Filter koennte ein
+    client-/case-Typ im Offline-Create-Picker landen; ein darauf basierender
+    Replay-POST auf ``event_create`` wuerde vom (bereits entity_type-
+    gefilterten) ``EventMetaForm`` als ungueltige Wahl verworfen
+    (422/Dead-Letter)."""
+
+    @staticmethod
+    def _dt_pks(bundle):
+        return {dt["pk"] for dt in bundle["document_types"]}
+
+    def test_client_type_absent_from_catalog(self, facility, client_identified, staff_user):
+        client_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personendaten",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert str(client_dt.pk) not in self._dt_pks(bundle)
+
+    def test_event_type_present_in_catalog(self, facility, client_identified, staff_user, doc_type_contact):
+        """Gegenprobe: der Filter darf event-Typen (Default/Bestand) nicht
+        zusaetzlich unterdruecken."""
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert str(doc_type_contact.pk) in self._dt_pks(bundle)
+
+
+@pytest.mark.django_db
 class TestOfflineClientBundleView:
     """HTTP contract of ``GET /api/v1/offline/bundle/client/<uuid>/``."""
 

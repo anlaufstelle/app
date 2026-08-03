@@ -171,6 +171,22 @@ class TestListTemplatesForUser:
         )
         assert list_templates_for_user(staff_user, facility) == []
 
+    def test_client_type_template_hidden(self, facility, staff_user):
+        """M2 (Refs #1058, Fix-Runde 1 F-2): ein Template auf einem
+        client-/case-Typ ist kein Event-Recording-Feature und fällt aus der
+        Liste — unabhängig von der Sensitivity-Berechtigung des Users."""
+        client_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personendaten",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        QuickTemplate.objects.create(
+            facility=facility,
+            document_type=client_dt,
+            name="Client-Vorlage",
+        )
+        assert list_templates_for_user(staff_user, facility) == []
+
 
 @pytest.mark.django_db
 class TestApplyTemplate:
@@ -232,6 +248,22 @@ class TestGetTemplateForUser:
             document_type=doc_type_with_all,
             name="Aus",
             is_active=False,
+        )
+        assert get_template_for_user(staff_user, facility, template.pk) is None
+
+    def test_client_type_template_not_returned(self, facility, staff_user):
+        """M2 (Refs #1058, Fix-Runde 1 F-2): ein Template auf einem
+        client-/case-Typ wirkt wie „kein Template" (analog zum
+        E21-Fix in resolve_default_document_type)."""
+        client_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personendaten",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        template = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=client_dt,
+            name="Client-Vorlage",
         )
         assert get_template_for_user(staff_user, facility, template.pk) is None
 
@@ -312,6 +344,36 @@ class TestEventCreateWithTemplate:
         assert response.status_code == 200
         assert response.context["applied_template"] is None
 
+    def test_event_create_client_type_template_ignored_no_field_leak(self, client, staff_user, facility):
+        """M2 (Refs #1058, Fix-Runde 1 F-2): ``?template=<client-Typ-Template>``
+        darf weder den Typ vorwaehlen noch dessen Feldlabels im
+        ``DynamicEventDataForm`` vorrendern — wirkt wie ein unbekanntes
+        Template (``applied_template`` bleibt ``None``)."""
+        unique_label = "Klienten-Template-Feld-RF1058"
+        client_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personendaten",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name=unique_label,
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        DocumentTypeField.objects.create(document_type=client_dt, field_template=ft, sort_order=0)
+        template = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=client_dt,
+            name="Client-Vorlage",
+        )
+        client.force_login(staff_user)
+        url = reverse("core:event_create") + f"?template={template.pk}"
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.context["applied_template"] is None
+        body = response.content.decode()
+        assert unique_label not in body, "client-Typ-Template darf keine Feldlabels vorrendern (Refs #774-Muster)."
+
 
 @pytest.mark.django_db
 class TestGetTemplatesForDocumentType:
@@ -324,6 +386,18 @@ class TestGetTemplatesForDocumentType:
     def test_assistant_blocked_for_elevated_doctype(self, facility, assistant_user, doc_type_elevated):
         QuickTemplate.objects.create(facility=facility, document_type=doc_type_elevated, name="Hidden")
         result = get_templates_for_document_type(assistant_user, facility, doc_type_elevated)
+        assert result == []
+
+    def test_client_type_doctype_returns_empty(self, facility, staff_user):
+        """M2 (Refs #1058, Fix-Runde 1 F-2): Defense-in-Depth — auch ein
+        direkt uebergebener client-Typ liefert keine Templates."""
+        client_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personendaten",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        QuickTemplate.objects.create(facility=facility, document_type=client_dt, name="Hidden")
+        result = get_templates_for_document_type(staff_user, facility, client_dt)
         assert result == []
 
 
