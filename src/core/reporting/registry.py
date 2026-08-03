@@ -65,6 +65,12 @@ def _discover() -> None:
     Idempotent ueber das Modul-Flag ``_discovered``. Der Import des
     ``backends``-Package selbst passiert erst hier (lazy) — siehe
     Modul-Docstring zur Zyklenfreiheit.
+
+    Scheitert der Import eines Backend-Moduls, wird der Fehler als
+    :class:`ImproperlyConfigured` mit dem Modulnamen re-raised **und
+    ``_discovered`` zurueckgesetzt**: sonst gaelte die Discovery als
+    erledigt und jeder weitere ``get_backends()``-Aufruf lieferte still
+    eine unvollstaendige Registry (fehlendes Backend statt lauter Fehler).
     """
     global _discovered
     if _discovered:
@@ -74,7 +80,13 @@ def _discover() -> None:
     from core.reporting import backends
 
     for _finder, module_name, _is_pkg in pkgutil.iter_modules(backends.__path__):
-        importlib.import_module(f"{backends.__name__}.{module_name}")
+        dotted_name = f"{backends.__name__}.{module_name}"
+        try:
+            importlib.import_module(dotted_name)
+        except Exception as exc:
+            _discovered = False
+            msg = f"Reporting-Backend-Modul {dotted_name!r} ist nicht importierbar: {exc}"
+            raise ImproperlyConfigured(msg) from exc
 
 
 def get_backends() -> list[DatasetBackend]:
@@ -89,6 +101,6 @@ def get_backend(slug: str) -> DatasetBackend:
     return _REGISTRY[slug]
 
 
-def get_available_backends(facility) -> list[DatasetBackend]:
+def get_available_backends(facility: object) -> list[DatasetBackend]:
     """``get_backends()``, gefiltert auf ``is_available(facility) == True``."""
     return [backend for backend in get_backends() if backend.is_available(facility)]

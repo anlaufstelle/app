@@ -3,6 +3,7 @@
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
+from core.reporting import backends as backends_pkg
 from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 
@@ -14,16 +15,36 @@ def _isolated_registry(monkeypatch):
     Ad-hoc-Test-Backends (per ``@register_backend`` in einzelnen Testfaellen
     registriert) duerfen nicht in Folgetests desselben xdist-Workers leaken.
     Direkt am Modul ``core.reporting.registry`` patchen — kein Proxy. Der
-    Default ``_discovered = True`` haelt die echte Discovery (leeres
-    ``backends``-Package) aus allen Tests heraus, die sie nicht explizit
-    pruefen (siehe ``TestDiscovery``, dort lokal auf ``False`` zurueckgesetzt).
+    Default ``_discovered = True`` haelt die echte Discovery aus allen Tests
+    heraus, die sie nicht explizit pruefen (siehe ``TestDiscovery``, dort
+    lokal auf ``False`` zurueckgesetzt).
+
+    Die echte Discovery laeuft **vor** dem Patchen einmal: ``@register_backend``
+    ist ein Import-Seiteneffekt und laeuft je Modul nur beim *ersten* Import.
+    Wuerde die echte Discovery erstmals gegen ein Test-Dict laufen, landeten
+    die echten Backends nur dort, waeren nach dem Teardown weg — und da die
+    Module dann in ``sys.modules`` stecken, wuerde der Decorator nie wieder
+    laufen: die reale Registry bliebe fuer den Rest des Prozesses leer und
+    jeder spaetere ``get_backend(...)``-Aufruf (auch in anderen Testmodulen)
+    liefe ordnungsabhaengig in einen ``KeyError``. Isoliert wird danach mit
+    einem **leeren** Dict, damit die Erwartungswerte hier unabhaengig von der
+    Menge real registrierter Backends bleiben.
     """
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
+    registry._discover()
+    monkeypatch.setattr(registry, "_REGISTRY", {})
     monkeypatch.setattr(registry, "_discovered", True)
     yield
 
 
-def _make_backend_cls(*, available: bool = True) -> type[DatasetBackend]:
+_NO_FACILITY_CHECK = object()
+
+
+def _make_backend_cls(
+    *,
+    available: bool = True,
+    expected_facility: object = _NO_FACILITY_CHECK,
+    calls: list[str] | None = None,
+) -> type[DatasetBackend]:
     class _DummyBackend(DatasetBackend):
         def get_field_specs(self) -> list[FieldSpec]:
             return []
@@ -32,6 +53,10 @@ def _make_backend_cls(*, available: bool = True) -> type[DatasetBackend]:
             return DatasetResult(mode="rows", records=[], summary={}, completeness=[])
 
         def is_available(self, facility) -> bool:
+            if expected_facility is not _NO_FACILITY_CHECK:
+                assert facility is expected_facility, "facility wurde nicht unveraendert durchgereicht"
+            if calls is not None:
+                calls.append(self.slug)
             return available
 
     return _DummyBackend
@@ -74,13 +99,22 @@ class TestGetBackends:
 
 
 class TestGetAvailableBackends:
-    def test_filtert_nicht_verfuegbare_backends(self):
-        registry.register_backend("verfuegbar")(_make_backend_cls(available=True))
-        registry.register_backend("gesperrt")(_make_backend_cls(available=False))
+    def test_filtert_nicht_verfuegbare_backends_und_reicht_facility_durch(self):
+        # Sentinel statt None: die Dummies pruefen die Identitaet des
+        # durchgereichten Arguments, ``calls`` belegt dass der assert lief.
+        facility = object()
+        calls: list[str] = []
+        registry.register_backend("verfuegbar")(
+            _make_backend_cls(available=True, expected_facility=facility, calls=calls)
+        )
+        registry.register_backend("gesperrt")(
+            _make_backend_cls(available=False, expected_facility=facility, calls=calls)
+        )
 
-        available = registry.get_available_backends(facility=None)
+        available = registry.get_available_backends(facility)
 
         assert [b.slug for b in available] == ["verfuegbar"]
+        assert sorted(calls) == ["gesperrt", "verfuegbar"]
 
 
 class TestDiscovery:
@@ -88,11 +122,13 @@ class TestDiscovery:
         monkeypatch.setattr(registry, "_discovered", False)
 
         import_calls = []
+        iter_calls = []
 
         def _fake_import_module(name):
             import_calls.append(name)
 
         def _fake_iter_modules(path):
+            iter_calls.append(path)
             return [(None, "ein_fake_backend", False)]
 
         monkeypatch.setattr(registry.importlib, "import_module", _fake_import_module)
@@ -100,11 +136,46 @@ class TestDiscovery:
 
         registry.get_backends()
         assert import_calls == ["core.reporting.backends.ein_fake_backend"]
+        # Gescannt wird genau das ``backends``-Package (nicht irgendein Pfad).
+        assert len(iter_calls) == 1
+        assert iter_calls[0] is backends_pkg.__path__
 
         registry.get_backends()
         assert import_calls == ["core.reporting.backends.ein_fake_backend"]  # kein zweiter Import
+        assert len(iter_calls) == 1  # und kein zweiter Scan
 
-    def test_discovery_laeuft_gegen_echtes_leeres_backends_package(self, monkeypatch):
-        """Ohne Mocks: echtes (leeres) ``backends``-Package, kein Fehler."""
+    def test_discovery_laeuft_gegen_echtes_backends_package(self, monkeypatch):
+        """Ohne Mocks: das echte ``backends``-Package importiert fehlerfrei.
+
+        Bewusst **ohne** Aussage ueber die Anzahl registrierter Backends —
+        die waechst mit jedem neuen Plugin (Refs #1061).
+        """
         monkeypatch.setattr(registry, "_discovered", False)
-        assert registry.get_backends() == []
+
+        discovered = registry.get_backends()
+
+        assert all(isinstance(backend, DatasetBackend) for backend in discovered)
+        assert registry._discovered is True
+
+    def test_import_fehler_wird_als_improperly_configured_gemeldet(self, monkeypatch):
+        """Ein kaputtes Backend-Modul darf nicht still fehlen (Review P1)."""
+        monkeypatch.setattr(registry, "_discovered", False)
+
+        ursache = RuntimeError("kaputtes Backend-Modul")
+
+        def _fake_import_module(name):
+            raise ursache
+
+        monkeypatch.setattr(registry.importlib, "import_module", _fake_import_module)
+        monkeypatch.setattr(registry.pkgutil, "iter_modules", lambda path: [(None, "kaputt", False)])
+
+        with pytest.raises(ImproperlyConfigured) as excinfo:
+            registry.get_backends()
+
+        assert "core.reporting.backends.kaputt" in str(excinfo.value)
+        assert excinfo.value.__cause__ is ursache
+        # Flag zurueckgesetzt: der naechste Aufruf scheitert erneut, statt
+        # still eine unvollstaendige Registry zu liefern.
+        assert registry._discovered is False
+        with pytest.raises(ImproperlyConfigured):
+            registry.get_backends()
