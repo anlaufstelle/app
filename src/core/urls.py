@@ -126,6 +126,8 @@ from core.views.search import GlobalSearchPartialView, SearchView
 from core.views.statistics import (
     ChartDataView,
     CSVExportView,
+    DatasetExportView,
+    DatasetReportPanelView,
     ExternalReportView,
     JugendamtExportView,
     PDFExportView,
@@ -370,6 +372,9 @@ urlpatterns = [
     path("statistics/export/jugendamt/", JugendamtExportView.as_view(), name="statistics_jugendamt_export"),
     path("statistics/chart-data/", ChartDataView.as_view(), name="statistics_chart_data"),
     path("statistics/external/", ExternalReportView.as_view(), name="statistics_external_report"),
+    # M5 P5 (Refs #1061): Berichts-Plugin-Panel + generischer Export.
+    path("statistics/reports/panel/", DatasetReportPanelView.as_view(), name="statistics_report_panel"),
+    path("statistics/reports/export/", DatasetExportView.as_view(), name="statistics_report_export"),
     # DSGVO
     path("dsgvo/", DSGVOPackageView.as_view(), name="dsgvo_package"),
     path("dsgvo/<slug:document>/", DSGVODocumentDownloadView.as_view(), name="dsgvo_document"),

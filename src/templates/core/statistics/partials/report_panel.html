@@ -1,0 +1,87 @@
+{% load i18n %}
+
+{# Berichts-Panel (M5 P5, Refs #1061): export-paritätische (k-anon-suppressierte)
+   Vorschau eines Reporting-Backends. Rendert das Ergebnis von
+   ``backend.prepare_export(...)`` — nie den rohen Datensatz. #}
+
+<h3 class="text-[15px] font-bold text-ink mb-1">{{ backend.name }}</h3>
+<p class="text-[13px] text-ink-muted mb-4">
+    {% trans "Zeitraum" %}: <span class="font-mono">{{ date_from|date:"DATE_FORMAT" }} – {{ date_to|date:"DATE_FORMAT" }}</span>
+</p>
+
+{# Vollständigkeits-Hinweise #}
+<div class="mb-5 space-y-2">
+    {% if result.completeness %}
+        {% for issue in result.completeness %}
+        <div class="flex items-start gap-2">
+            {% if issue.severity == "warning" %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 flex-shrink-0">{% trans "Hinweis" %}</span>
+            {% else %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-800 flex-shrink-0">{% trans "Info" %}</span>
+            {% endif %}
+            <p class="text-[13px] text-ink-soft">{{ issue.message }}</p>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="bg-green-50 border border-green-200 rounded-[10px] p-3">
+            <p class="text-[13px] text-green-700">{% trans "Keine Vollständigkeitsprobleme erkannt" %}</p>
+        </div>
+    {% endif %}
+</div>
+
+{# Vorschau #}
+<div class="mb-2 bg-surface rounded-[10px] border border-subtle overflow-hidden">
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                {% for spec in field_specs %}
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{{ spec.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for row in preview_rows %}
+            <tr>
+                {% for cell in row %}
+                <td class="px-4 py-2.5 text-[13px] text-ink">{% if cell is None %}—{% else %}{{ cell }}{% endif %}</td>
+                {% endfor %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td class="px-4 py-2.5 text-[13px] text-ink-muted" colspan="{{ field_specs|length }}">{% trans "Keine Daten im gewählten Zeitraum." %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if result.mode == "rows" %}
+<p class="text-[12px] text-ink-muted mb-4">
+    {% blocktrans with shown=preview_rows|length total=preview_total %}Zeigt {{ shown }} von {{ total }} Zeilen{% endblocktrans %}
+</p>
+{% endif %}
+
+{% if k_anonymity_threshold is not None %}
+<p class="text-[12px] text-ink-muted italic mb-4">
+    {% trans "Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)." %}
+</p>
+{% endif %}
+
+{# Export-Links: Server erzwingt LEAD_PLUS auf core:statistics_report_export — keine eigene Rollenprüfung hier nötig. #}
+<div class="flex flex-wrap gap-2.5 no-print">
+    <a href="{% url 'core:statistics_report_export' %}?backend={{ backend.slug }}&format=csv&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
+       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {% trans "CSV-Export" %}
+    </a>
+    <a href="{% url 'core:statistics_report_export' %}?backend={{ backend.slug }}&format=json&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
+       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {% trans "JSON-Export" %}
+    </a>
+    <a href="{% url 'core:statistics_report_export' %}?backend={{ backend.slug }}&format=xml&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
+       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {% trans "XML-Export" %}
+    </a>
+</div>

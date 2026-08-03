@@ -2,7 +2,7 @@
 
 import logging
 
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -12,6 +12,8 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
+from core.reporting.export import export_dataset
+from core.reporting.registry import get_available_backends, get_backend
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
     InvalidStatisticsPeriodError,
@@ -71,6 +73,9 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             # double-counts clients seen in multiple months. Surface that fact
             # to the template so it can render a "ca." prefix + tooltip.
             "unique_clients_is_approximation": is_multi_month_range(period_state.date_from, period_state.date_to),
+            # M5 P5 (Refs #1061): Berichts-Plugins (z. B. "Beispiel-Sachbericht")
+            # fuers Dropdown der Berichte-Sektion — nur fuer diese Facility verfuegbare.
+            "report_backends": get_available_backends(facility),
         }
 
         return self.render_htmx_or_full(context)
@@ -317,3 +322,112 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
                 "current_year": today.year,
             },
         )
+
+
+class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
+    """Berichts-Panel (M5 P5, Refs #1061): HTMX-Vorschau eines Reporting-Backends.
+
+    Rendert dieselbe export-paritaetische (k-anon-suppressierte) Sicht wie der
+    Download — ``backend.prepare_export(facility, backend.build_dataset(...))``,
+    NIEMALS das rohe ``build_dataset``-Ergebnis (Kleinstfallzahl-Leak). Kein
+    Audit-Log (interne Vorschau, Parität zum Dashboard — der Export auditiert).
+    """
+
+    partial_template_name = "core/statistics/partials/report_panel.html"
+
+    # Refs #1589/#1061: dieselbe Frequenz wie StatisticsView/ChartDataView
+    # (RATELIMIT_FREQUENT, 120/h) — das Panel wird wie das Dashboard bei jedem
+    # Filterwechsel (Backend-/Zeitraum-Select) per HTMX nachgeladen, nicht die
+    # niedrigere 10/h der Download-Export-Views.
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
+    def get(self, request):
+        from core.services.dashboard import parse_statistics_period
+
+        facility = request.current_facility
+
+        # Backend-Aufloesung VOR allem anderen (Periode, Datensatz-Bau): 5xx-Guard
+        # der AuthZ-Matrix ruft diese View ohne Query-Parameter auf — die Fehler
+        # muessen deterministisch 400/404 sein, ohne z. B. einen kaputten
+        # Custom-Zeitraum zuerst auszuwerten.
+        slug = request.GET.get("backend", "").strip()
+        if not slug:
+            return HttpResponse(_("backend erforderlich"), status=400)
+        try:
+            backend = get_backend(slug)
+        except KeyError:
+            raise Http404(_("Unbekanntes Berichts-Backend.")) from None
+        if backend.is_available(facility) is False:
+            raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
+
+        today = timezone.localdate()
+        try:
+            period_state = parse_statistics_period(request.GET, today)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
+
+        # Sicherheitskritisch (K-Anon, Refs #1278/T1): niemals build_dataset()
+        # allein rendern — prepare_export() ist die export-paritaetische Sicht.
+        result = backend.prepare_export(
+            facility, backend.build_dataset(facility, period_state.date_from, period_state.date_to)
+        )
+
+        field_specs = backend.get_field_specs()
+        preview_records = result.records if result.mode == "aggregate" else result.records[:10]
+        preview_rows = [[record.get(spec.key) for spec in field_specs] for record in preview_records]
+
+        context = {
+            "backend": backend,
+            "date_from": period_state.date_from,
+            "date_to": period_state.date_to,
+            "field_specs": field_specs,
+            "result": result,
+            "preview_rows": preview_rows,
+            "preview_total": len(result.records),
+            "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
+        }
+        return render(request, self.partial_template_name, context)
+
+
+class DatasetExportView(LeadOrAdminRequiredMixin, View):
+    """Generischer Berichts-Download (M5 P5, Refs #1061): CSV/JSON/XML via ``export_dataset``.
+
+    Format-/Backend-Verfuegbarkeitspruefung analog ``DatasetReportPanelView``;
+    ``export_dataset`` wendet ``backend.prepare_export`` intern bereits an
+    (Refs #1278) — hier kommt es nicht noch einmal zum Einsatz.
+    """
+
+    @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
+    def get(self, request):
+        facility = request.current_facility
+        date_from = parse_date(request.GET.get("date_from"), None)
+        date_to = parse_date(request.GET.get("date_to"), None)
+        if not date_from or not date_to:
+            return HttpResponse(_("date_from und date_to erforderlich"), status=400)
+        # Refs #1589: gleiche Range-Validierung wie die uebrigen Export-Views.
+        try:
+            validate_statistics_range(date_from, date_to)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
+
+        slug = request.GET.get("backend", "").strip()
+        try:
+            backend = get_backend(slug)
+        except KeyError:
+            raise Http404(_("Unbekanntes Berichts-Backend.")) from None
+        if backend.is_available(facility) is False:
+            raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
+
+        fmt = request.GET.get("format", "")
+        try:
+            response = export_dataset(backend, facility, date_from, date_to, format=fmt)
+        except ValueError:
+            return HttpResponse(_("Unbekanntes Export-Format."), status=400)
+
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
+            target_type="DatasetExport",
+            detail={"backend": slug, "format": fmt, "date_from": str(date_from), "date_to": str(date_to)},
+        )
+
+        return response

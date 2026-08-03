@@ -378,6 +378,7 @@ EXPECTATIONS = (
     E("core:statistics", "lead-admin", get=LEAD_PLUS),
     E("core:statistics_chart_data", "lead-admin", get=LEAD_PLUS),
     E("core:statistics_external_report", "lead-admin", get=LEAD_PLUS),
+    E("core:statistics_report_panel", "lead-admin", get=LEAD_PLUS),
     # ---- deletion (Vier-Augen-Löschworkflow, Refs #1053) -------------------
     E("core:deletion_request_list", "deletion", get=LEAD_PLUS),
     E(
@@ -430,6 +431,9 @@ EXPECTATIONS = (
     E("core:statistics_csv_export", "export", get=LEAD_PLUS),
     E("core:statistics_pdf_export", "export", get=LEAD_PLUS),
     E("core:statistics_jugendamt_export", "export", get=LEAD_PLUS),
+    # Refs #1061 (M5 P5): Parität zu den übrigen Statistik-Exports — bewusst
+    # OHNE sudo (anders als die Client-Rohdaten-Exporte oben).
+    E("core:statistics_report_export", "export", get=LEAD_PLUS),
     # ---- system (nur super_admin, Refs #867) --------------------------------
     E("core:system_dashboard", "system", get=SUPER_ONLY),
     E("core:system_audit_list", "system", get=SUPER_ONLY),

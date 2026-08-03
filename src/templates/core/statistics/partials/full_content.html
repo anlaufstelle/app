@@ -80,3 +80,29 @@
 <div id="dashboard-content">
     {% include "core/statistics/partials/dashboard_content.html" %}
 </div>
+
+{# Berichte-Sektion (M5 P5, Refs #1061): Backend-Auswahl + generischer Export.
+   Sichtbarkeit wie das Dashboard selbst (die ganze Seite ist LEAD_PLUS-gated) —
+   nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist. #}
+{% if report_backends %}
+<section id="report-section" class="mt-8 no-print">
+    <h2 class="text-[15px] font-bold text-ink mb-3">{% trans "Berichte" %}</h2>
+    <form class="flex flex-wrap gap-3 items-end mb-4">
+        <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+        <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+        <div>
+            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bericht" %}</label>
+            <select name="backend"
+                    hx-get="{% url 'core:statistics_report_panel' %}"
+                    hx-trigger="change"
+                    hx-include="closest form"
+                    hx-target="#report-panel"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
+                <option value="">{% trans "Bericht wählen …" %}</option>
+                {% for b in report_backends %}<option value="{{ b.slug }}">{{ b.name }}</option>{% endfor %}
+            </select>
+        </div>
+    </form>
+    <div id="report-panel"></div>
+</section>
+{% endif %}
