@@ -30,8 +30,10 @@ from core.retention.enforcement import (
     process_facility_retention,
 )
 from core.retention.legal_holds import (
+    client_has_active_hold,
     create_legal_hold,
     dismiss_legal_hold,
+    exclude_clients_with_active_holds,
     get_active_hold_target_ids,
     has_active_hold,
 )
@@ -65,6 +67,7 @@ __all__ = [
     "bulk_defer_proposals",
     "bulk_reject_proposals",
     "cleanup_stale_proposals",
+    "client_has_active_hold",
     "collect_doomed_events",
     "create_legal_hold",
     "create_proposal",
@@ -76,6 +79,7 @@ __all__ = [
     "enforce_document_type_retention",
     "enforce_identified",
     "enforce_qualified",
+    "exclude_clients_with_active_holds",
     "get_active_hold_target_ids",
     "get_dashboard_proposals",
     "has_active_hold",

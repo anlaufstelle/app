@@ -7,7 +7,7 @@ gegen Loeschung; orthogonal zu Vorschlaegen und Enforcement).
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import AuditLog, LegalHold, RetentionProposal
+from core.models import AuditLog, Client, LegalHold, RetentionProposal
 from core.services.audit import audit_retention_decision
 
 
@@ -101,3 +101,46 @@ def get_active_hold_target_ids(facility, target_type="Event"):
         expires_at__lt=timezone.localdate(),
     )
     return set(qs.values_list("target_id", flat=True))
+
+
+def exclude_clients_with_active_holds(queryset, facility):
+    """Nimmt Klienten mit aktivem Legal Hold aus *queryset* (Refs #1066, #1756).
+
+    Ausgeschlossen wird, wer selbst unter einem Hold steht
+    (``target_type="Client"``) **oder** mindestens ein Event unter Hold hat
+    (``target_type="Event"``) — sonst risse die Loeschung des Eltern-Klienten
+    den gehaltenen Event mit (Spoliation). Nicht aufgehobene, nicht
+    abgelaufene Holds zaehlen; die Aktiv-Grenze zieht
+    :func:`get_active_hold_target_ids` (``timezone.localdate``).
+
+    Die Anonymisierung wird damit nur **aufgeschoben**: ein spaeterer
+    Retention-Lauf holt sie nach, sobald der Hold aufgehoben oder abgelaufen
+    ist. Die Zeile bleibt bis dahin unveraendert — sie zaehlt insbesondere
+    weiter zu ihrer k-Anonymitaets-Aequivalenzklasse, weil sie mit echten
+    Quasi-Identifikatoren real existiert (siehe ``count_clients_in_bucket``).
+
+    Gemeinsamer Helfer statt Kopie: der Trash-Expiry-Pfad
+    (:func:`core.services.client.anonymize_eligible_soft_deleted_clients`) und
+    die K-Anon-Bridge (:func:`core.retention.anonymization.anonymize_clients`)
+    muessen exakt dieselbe Menge ausnehmen — #1756 war genau die Drift
+    zwischen beiden.
+    """
+    return queryset.exclude(pk__in=get_active_hold_target_ids(facility, "Client")).exclude(
+        events__pk__in=get_active_hold_target_ids(facility, "Event")
+    )
+
+
+def client_has_active_hold(client):
+    """Einzel-Pruefung derselben Regel wie :func:`exclude_clients_with_active_holds`.
+
+    Fuer die manuelle Sofort-Anonymisierung
+    (:func:`core.services.client.anonymize_client_now`), die den Ausschluss als
+    Meldung statt als Mengen-Filter braucht. Bewusst **auf** dem Mengen-Filter
+    aufgesetzt statt daneben nachgebaut: die drei Anonymisierungs-Einstiege
+    (Trash-Ablauf, Retention-Bridge, manuelle Aktion) duerfen nicht erneut
+    auseinanderlaufen (Refs #1756).
+    """
+    return not exclude_clients_with_active_holds(
+        Client.objects.filter(pk=client.pk),
+        client.facility,
+    ).exists()

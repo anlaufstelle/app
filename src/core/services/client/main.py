@@ -11,7 +11,7 @@ from core.models import AuditLog, Client, DocumentType
 from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
-from core.retention.legal_holds import get_active_hold_target_ids
+from core.retention.legal_holds import client_has_active_hold, exclude_clients_with_active_holds
 from core.services.audit import audit_client_event, audit_event
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import validate_data_json
@@ -324,9 +324,10 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     belegt weiterhin, DASS eine Aufbewahrungspflicht bestand).
 
     Hinweis zur Reichweite: ein **aktiver** Hold blockiert die Anonymisierung
-    ueber ``anonymize_eligible_soft_deleted_clients`` (Refs #1066), sodass in
-    der Praxis nur aufgehobene/abgelaufene Holds hier ankommen. Der Filter
-    unterscheidet trotzdem nicht nach Aktivitaet: waere ein aktiver Hold
+    an beiden Retention-Einstiegen — ``anonymize_eligible_soft_deleted_clients``
+    (Refs #1066) und der K-Anon-Bridge ``anonymize_clients`` (Refs #1756) —,
+    sodass in der Praxis nur aufgehobene/abgelaufene Holds hier ankommen. Der
+    Filter unterscheidet trotzdem nicht nach Aktivitaet: waere ein aktiver Hold
     vorhanden, waere bereits die Anonymisierung selbst der Fehler — nicht
     diese Redaktion.
     """
@@ -810,19 +811,18 @@ def anonymize_client_now(client, user):
     (a) **Nur aus dem Papierkorb.** Ein Direktpfad an der Vier-Augen-Genehmigung
         vorbei entstuende sonst durch die Hintertuer.
     (b) **Kein aktiver Legal Hold** — weder auf der Person noch auf einem ihrer
-        Ereignisse. Exakt die Ausschluesse von
-        :func:`anonymize_eligible_soft_deleted_clients` (Refs #1066): eine
-        manuelle Aktion darf einen Hold nicht aushebeln (Spoliation).
+        Ereignisse. Exakt die Ausschluesse der beiden Retention-Einstiege
+        (Refs #1066): eine manuelle Aktion darf einen Hold nicht aushebeln
+        (Spoliation). Seit #1756 ueber den gemeinsamen
+        :func:`core.retention.legal_holds.client_has_active_hold` statt einer
+        eigenen Kopie der Regel.
 
     Der Datensatz bleibt danach soft-geloescht — anonymisiert, nicht auferstanden.
     """
     if not client.is_deleted:
         raise ValidationError(_("Nur Personen im Papierkorb können anonymisiert werden."))
 
-    held_client_ids = get_active_hold_target_ids(client.facility, "Client")
-    held_event_ids = get_active_hold_target_ids(client.facility, "Event")
-    blocked_by_event = bool(held_event_ids) and client.events.filter(pk__in=held_event_ids).exists()
-    if client.pk in held_client_ids or blocked_by_event:
+    if client_has_active_hold(client):
         raise ValidationError(
             _("Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
         )
@@ -850,23 +850,24 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     zur Event-Retention (:mod:`core.retention.enforcement`). Sonst würde
     das Löschen des Eltern-Klienten einen Event-Hold aushebeln
     (Spoliation): Anonymisierung wird aufgeschoben, bis der Hold
-    aufgehoben/abgelaufen ist; ein späterer Lauf holt sie nach.
+    aufgehoben/abgelaufen ist; ein späterer Lauf holt sie nach. Refs #1756:
+    Der Ausschluss liegt seither in
+    :func:`core.retention.legal_holds.exclude_clients_with_active_holds` —
+    die K-Anon-Bridge (``anonymize_clients``) nutzt denselben Helfer, damit
+    beide Anonymisierungs-Einstiege nicht erneut auseinanderlaufen.
 
     Returns: Anzahl anonymisierter Datensätze.
     """
     from datetime import timedelta
 
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
-    held_event_ids = get_active_hold_target_ids(facility, "Event")
-    held_client_ids = get_active_hold_target_ids(facility, "Client")
-    qs = (
+    qs = exclude_clients_with_active_holds(
         Client.objects.filter(
             facility=facility,
             is_deleted=True,
             deleted_at__lt=cutoff,
-        )
-        .exclude(pk__in=held_client_ids)
-        .exclude(events__pk__in=held_event_ids)
+        ),
+        facility,
     )
     if dry_run:
         return qs.count()

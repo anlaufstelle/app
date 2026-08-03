@@ -15,6 +15,11 @@ contact_stage)``; unterbesetzte Buckets (< k) fallen fail-safe auf den
 Hard-Pfad zurueck, statt faelschlich als ``k_anonymized=True`` markiert zu
 werden.
 
+Aktive Legal Holds (Person oder eines ihrer Events) nehmen einen Klienten
+vom Lauf aus — derselbe Ausschluss wie im Trash-Expiry-Pfad, geteilt ueber
+``core.retention.legal_holds.exclude_clients_with_active_holds`` (Refs #1066,
+#1756).
+
 Beide Pfade tilgen dieselbe PII-Kaskade: der Hard-Pfad inline in
 ``anonymize_client``, der K-Anon-Pfad hier im Bridge-Layer (Refs #1094,
 #1750) — die ``k_anonymize_client``-Primitive selbst bleibt client-only.
@@ -29,6 +34,7 @@ from django.db.models import Count, Q
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client, Event, Settings
+from core.retention.legal_holds import exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
 from core.services.client import (
     _redact_activities,
@@ -94,6 +100,18 @@ def anonymize_clients(facility, dry_run):
     ``is_deleted=True``. Already anonymized clients (pseudonym starts with
     ``Gelöscht-`` or ``k_anonymized=True``) are skipped.
 
+    Refs #1756: Klienten mit **aktivem Legal Hold** — auf der Person selbst
+    oder auf einem ihrer Events — sind ausgeschlossen, ueber denselben Helfer
+    wie der Trash-Expiry-Pfad (:func:`exclude_clients_with_active_holds`,
+    Refs #1066). Bis dahin hebelte dieser Einstieg den Spoliations-Schutz aus
+    und redigierte seit #1751 sogar die Begruendung eines noch aktiven Holds.
+    Der Ausschluss greift VOR der Pfadwahl, gilt also fuer Hard- und K-Anon-
+    Pfad; er wirkt nur aufschiebend (naechster Lauf holt nach). Fuer die
+    k-Anonymitaet bleibt ein uebersprungener Klient regulaeres Mitglied seiner
+    Aequivalenzklasse — die Zeile existiert mit echten Quasi-Identifikatoren
+    weiter, ein Abzug wuerde das k grundlos druecken (vgl.
+    ``count_clients_in_bucket``, Refs #1442).
+
     Honors ``Settings.retention_use_k_anonymization`` (Refs #780): when active
     on the facility, a client is k-anonymized via
     :func:`_k_anonymize_with_cascade` with ``k=settings.k_anonymity_threshold``
@@ -106,7 +124,7 @@ def anonymize_clients(facility, dry_run):
     Returns ``{"count": N}`` (total, both paths combined).
     """
     candidates = (
-        Client.objects.filter(facility=facility)
+        exclude_clients_with_active_holds(Client.objects.filter(facility=facility), facility)
         .exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))
         .annotate(
             total_events=Count("events"),

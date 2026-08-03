@@ -14,11 +14,13 @@ Vier Cases:
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.models import AuditLog, Client, Event, Settings
+from core.models import AuditLog, Client, Event, LegalHold, Settings
 from core.retention.anonymization import anonymize_clients
 from core.services.compliance import is_k_anonymous
 
@@ -302,3 +304,201 @@ class TestKAnonEnforcement:
             AuditLog.objects.filter(action=AuditLog.Action.DELETE).values_list("detail__category", flat=True)
         )
         assert {"client_k_anonymized", "client_anonymized"} <= categories
+
+
+@pytest.mark.django_db
+class TestLegalHoldBlocksBridge:
+    """Refs #1756: Ein aktiver Legal Hold blockiert auch die K-Anon-Bridge.
+
+    ``anonymize_eligible_soft_deleted_clients`` (Trash-Expiry) nimmt Klienten
+    mit aktivem Hold — auf der Person ODER einem ihrer Events — seit #1066
+    aus (Spoliations-Schutz). ``anonymize_clients`` tat das nicht: der
+    Retention-Pfad anonymisierte den Klienten trotz laufender
+    Aufbewahrungspflicht und redigierte seit #1751 zusaetzlich die
+    ``LegalHold.reason`` des **noch aktiven** Holds.
+
+    Fail-safe-Richtung ist hier die **Aufbewahrung**: die Retention-Zusage
+    wird aufgeschoben (ein spaeterer Lauf holt sie nach, sobald der Hold
+    aufgehoben/abgelaufen ist), waehrend der unterbesetzte Bucket aus
+    Security-Review N5 in die andere Richtung faellt (staerker loeschen =
+    Hard-Anonymize). Beide Male gewinnt der schwerer reparierbare Schaden.
+    """
+
+    HOLD_REASON = "Ermittlungsverfahren 42 Js 1/26"
+
+    def _settings(self, facility, *, k_anon=True, k=5):
+        return Settings.objects.create(facility=facility, retention_use_k_anonymization=k_anon, k_anonymity_threshold=k)
+
+    def _make_candidate(self, facility, staff_user, doc_type, pseudonym, *, events=1, **kwargs):
+        """Klient mit ausschliesslich soft-geloeschten Events = Bridge-Kandidat.
+
+        Gibt ``(client, erstes_event)`` zurueck; ``events > 1`` legt weitere,
+        ungehaltene Events an (Mehr-Event-Fall des Ausschlusses).
+        """
+        c = _make_client(facility, pseudonym=pseudonym, **kwargs)
+        created = [
+            Event.objects.create(
+                facility=facility,
+                client=c,
+                document_type=doc_type,
+                occurred_at=timezone.now(),
+                data_json={"dauer": 1},
+                is_deleted=True,
+                created_by=staff_user,
+            )
+            for _ in range(events)
+        ]
+        return c, created[0]
+
+    def _fill_bucket(self, facility, n=4, prefix="Peer"):
+        """Bucket-Genossen ohne Events — zaehlen fuer k, sind keine Kandidaten."""
+        for i in range(n):
+            _make_client(facility, pseudonym=f"{prefix}-{i}")
+
+    def _hold(self, facility, user, target_type, target_id, **kwargs):
+        return LegalHold.objects.create(
+            facility=facility,
+            target_type=target_type,
+            target_id=target_id,
+            reason=self.HOLD_REASON,
+            created_by=user,
+            **kwargs,
+        )
+
+    def test_client_hold_blocks_bridge(self, facility, staff_user, lead_user, doc_type_contact):
+        """Direkter Hold auf der Person (``target_type="Client"``)."""
+        self._settings(facility)
+        self._fill_bucket(facility)
+        held, _ = self._make_candidate(facility, staff_user, doc_type_contact, "P-ClientHold")
+        plain, _ = self._make_candidate(facility, staff_user, doc_type_contact, "P-Plain")
+        hold = self._hold(facility, lead_user, "Client", held.pk)
+
+        result = anonymize_clients(facility, dry_run=False)
+
+        held.refresh_from_db()
+        plain.refresh_from_db()
+        hold.refresh_from_db()
+        assert result["count"] == 1, "Nur der ungehaltene Klient darf gezaehlt werden"
+        assert held.pseudonym == "P-ClientHold"
+        assert held.k_anonymized is False
+        assert hold.reason == self.HOLD_REASON, "Begruendung eines AKTIVEN Holds darf nicht redigiert werden"
+        assert plain.k_anonymized is True, "Positiv-Kontrolle: der Lauf agiert real"
+
+    def test_event_hold_blocks_bridge(self, facility, staff_user, lead_user, doc_type_contact):
+        """Hold auf EINEM Event der Person — der Eltern-Klient bleibt stehen.
+
+        Der gehaltene Klient hat bewusst drei Events, nur eines davon unter
+        Hold: der Ausschluss muss „mindestens ein gehaltener Event" bedeuten,
+        nicht „alle" (SQL: ``NOT EXISTS``-Subquery, kein Join — die
+        ``Count("events")``-Annotation der Kandidatenabfrage bleibt exakt).
+        """
+        self._settings(facility)
+        self._fill_bucket(facility)
+        held, held_event = self._make_candidate(facility, staff_user, doc_type_contact, "P-EventHold", events=3)
+        plain, _ = self._make_candidate(facility, staff_user, doc_type_contact, "P-Plain")
+        hold = self._hold(facility, lead_user, "Event", held_event.pk)
+
+        result = anonymize_clients(facility, dry_run=False)
+
+        held.refresh_from_db()
+        plain.refresh_from_db()
+        hold.refresh_from_db()
+        assert result["count"] == 1
+        assert held.pseudonym == "P-EventHold"
+        assert held.k_anonymized is False
+        assert hold.reason == self.HOLD_REASON
+        assert plain.k_anonymized is True
+
+    def test_hard_path_also_excludes_held_clients(self, facility, staff_user, lead_user, doc_type_contact):
+        """Der Ausschluss greift VOR der Pfadwahl — auch ohne K-Anon-Setting."""
+        self._settings(facility, k_anon=False)
+        held, held_event = self._make_candidate(facility, staff_user, doc_type_contact, "P-HardHold")
+        plain, _ = self._make_candidate(facility, staff_user, doc_type_contact, "P-HardPlain")
+        self._hold(facility, lead_user, "Event", held_event.pk)
+
+        result = anonymize_clients(facility, dry_run=False)
+
+        held.refresh_from_db()
+        plain.refresh_from_db()
+        assert result["count"] == 1
+        assert held.pseudonym == "P-HardHold"
+        assert plain.pseudonym.startswith("Gelöscht-")
+
+    def test_dry_run_count_excludes_held_clients(self, facility, staff_user, lead_user, doc_type_contact):
+        """dry_run meldet dieselbe Menge wie der echte Lauf (Muster aus #1066)."""
+        self._settings(facility)
+        held, held_event = self._make_candidate(facility, staff_user, doc_type_contact, "P-DryHeld")
+        self._hold(facility, lead_user, "Event", held_event.pk)
+
+        assert anonymize_clients(facility, dry_run=True)["count"] == 0
+        held.refresh_from_db()
+        assert held.pseudonym == "P-DryHeld"
+
+    def test_dismissed_and_expired_holds_do_not_block(self, facility, staff_user, lead_user, doc_type_contact):
+        """Nur AKTIVE Holds schieben auf — sonst waere die Loeschung dauerhaft ausgesetzt.
+
+        Aufgehobene und abgelaufene Holds muessen weiterhin durchlaufen; ihre
+        Begruendung wird dabei mitredigiert (#1751), sonst blieben genau die
+        Alt-Zeilen mit Klartext-Begruendung fuer immer stehen.
+        """
+        self._settings(facility)
+        self._fill_bucket(facility)
+        dismissed_client, dismissed_event = self._make_candidate(facility, staff_user, doc_type_contact, "P-Dismissed")
+        dismissed = self._hold(
+            facility,
+            lead_user,
+            "Event",
+            dismissed_event.pk,
+            dismissed_at=timezone.now(),
+            dismissed_by=lead_user,
+        )
+        expired_client, _ = self._make_candidate(facility, staff_user, doc_type_contact, "P-Expired")
+        expired = self._hold(
+            facility,
+            lead_user,
+            "Client",
+            expired_client.pk,
+            expires_at=timezone.localdate() - timedelta(days=1),
+        )
+
+        result = anonymize_clients(facility, dry_run=False)
+
+        dismissed_client.refresh_from_db()
+        expired_client.refresh_from_db()
+        dismissed.refresh_from_db()
+        expired.refresh_from_db()
+        assert result["count"] == 2
+        assert dismissed_client.k_anonymized is True
+        assert expired_client.k_anonymized is True
+        assert dismissed.reason == "[Anonymisiert]"
+        assert expired.reason == "[Anonymisiert]"
+
+    def test_held_client_still_counts_towards_bucket(self, facility, staff_user, lead_user, doc_type_contact):
+        """Bucket-Entscheidung: ein uebersprungener Klient bleibt Bucket-Mitglied.
+
+        Der Hold **verschiebt** die Anonymisierung nur — die Zeile bleibt mit
+        echten Quasi-Identifikatoren (``age_cluster``, ``contact_stage``) in der
+        DB und gehoert damit ehrlich zur Aequivalenzklasse, genau wie jeder
+        andere noch nicht anonymisierte Klient (dieselbe Begruendung wie fuer
+        die mitgezaehlten ``k_anonymized``-Zeilen in ``count_clients_in_bucket``,
+        Refs #1442). Ein Abzug waere die falsche Richtung: er wuerde das k
+        kuenstlich druecken und Mit-Klienten grundlos in den Hard-Pfad kippen —
+        obwohl die Zeile real existiert und niemanden weniger schuetzt.
+
+        Setup: Ziel + gehaltener Klient + 3 Genossen = Bucket 5 = k. Zaehlte der
+        gehaltene Klient nicht mit, faende sich das Ziel bei 4 < k wieder und
+        fiele fail-safe auf Hard-Anonymize zurueck.
+        """
+        self._settings(facility, k=5)
+        self._fill_bucket(facility, n=3)
+        target, _ = self._make_candidate(facility, staff_user, doc_type_contact, "P-Target")
+        held, held_event = self._make_candidate(facility, staff_user, doc_type_contact, "P-Held")
+        self._hold(facility, lead_user, "Event", held_event.pk)
+
+        result = anonymize_clients(facility, dry_run=False)
+
+        target.refresh_from_db()
+        held.refresh_from_db()
+        assert result["count"] == 1
+        assert target.k_anonymized is True, "Der gehaltene Klient muss als Bucket-Genosse zaehlen"
+        assert held.k_anonymized is False
