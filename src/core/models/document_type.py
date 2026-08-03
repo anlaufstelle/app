@@ -84,6 +84,11 @@ class DocumentType(models.Model):
     name = models.CharField(max_length=200, verbose_name=_("Name"))
     slug = models.SlugField(
         max_length=120,
+        # blank=True NUR für die Validierung: full_clean() auf ungespeicherten
+        # Instanzen muss ohne Slug durchlaufen (Bestandsmuster, z. B.
+        # test_contact_stage) — save() generiert ihn bei _state.adding immer,
+        # und der Immutabilitäts-Guard + DB-Trigger verhindern spätere Leerung.
+        blank=True,
         verbose_name=_("Slug"),
         help_text=_(
             "Stabiler Identifier — wird als Lookup-Key im M2-Paketformat verwendet. Nach Erstellung unveränderbar."

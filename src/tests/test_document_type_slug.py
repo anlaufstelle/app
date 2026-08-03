@@ -34,6 +34,16 @@ class TestSlugGeneration:
         with pytest.raises(ValidationError, match="gültigen Slug"):
             DocumentType.objects.create(facility=facility, name="!!!")
 
+    def test_full_clean_before_save_allows_empty_slug(self, facility):
+        # Bestandsmuster (z. B. test_contact_stage): full_clean() auf einer
+        # ungespeicherten Instanz OHNE Slug muss durchlaufen — der Slug
+        # entsteht erst in save(). blank=True deckt genau diesen Pfad;
+        # nach dem Speichern ist der Slug trotzdem gesetzt.
+        dt = DocumentType(facility=facility, name="Validierung vor Save")
+        dt.full_clean()
+        dt.save()
+        assert dt.slug == "validierung-vor-save"
+
 
 @pytest.mark.django_db
 class TestSlugCollision:

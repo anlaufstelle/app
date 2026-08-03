@@ -94,6 +94,7 @@ class Migration(migrations.Migration):
             model_name="documenttype",
             name="slug",
             field=models.SlugField(
+                blank=True,
                 default="",
                 help_text=(
                     "Stabiler Identifier — wird als Lookup-Key im M2-Paketformat verwendet. "
