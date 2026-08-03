@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) and 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) and 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753).
 
 # Anlaufstelle -- Admin Guide
 
@@ -1299,7 +1299,23 @@ The audit log is **append-only** and immutable. It automatically records:
 
 Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, facility, user, and time period. The application manager (`facility_admin`) has access for their own facility. Pre-auth audit logs without a facility reference (e.g. `LOGIN_FAILED` for an unknown username) are visible exclusively to the system administration (`super_admin`) in the `/system/` area -- see [ADR-007 Update 2026-05-10](../adr/007-auditlog-append-only.md).
 
-**Audit log retention:** The audit log itself is not subject to automatic deletion within the application. In accordance with your internal documentation requirements (e.g., following BSI recommendations or your Data Protection Impact Assessment), you should establish an external archiving strategy.
+**Audit log retention:** The audit log **does** have its own automatic retention period inside the application — deliberately longer than every domain retention period, so that forensics still finds traces after an incident that was noticed late ([ADR-021](../adr/021-retention-modell.md), German).
+
+| Setting in `Settings` | Default | Effect |
+|---|---|---|
+| `auditlog_retention_months` | 24 months | Every `enforce_retention` run deletes entries older than this period (exact calendar-month arithmetic, not a 30-day approximation). `0` = **disabled**, the log then grows without bound. |
+
+Three actions are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_ACTIONS` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)):
+
+- `SECURITY_VIOLATION` — forensic evidence from breach detection,
+- `RETENTION_RUN_COMPLETED` — the marker the compliance dashboard reads to show the last successful retention run,
+- `AUDIT_PRUNE_CHECKPOINT` — the tombstone of the pruning itself.
+
+**Checkpoint mechanics:** the audit log is chained via HMAC (every entry references the previous one). Pruning necessarily tears that chain. So that the integrity check does not report the gap as tampering, every prune run writes an `AUDIT_PRUNE_CHECKPOINT` entry recording the chain boundaries of the deleted rows, which legitimises the discontinuity. The chain itself is **never** rewritten — the log stays append-only.
+
+> **Important:** the period only takes effect if `enforce_retention` actually runs (see [§ 7.3](#73-retention-periods-and-enforce_retention)). Deleted entries are gone for good — if you need longer evidence retention, define an **external** archiving strategy (e.g. following BSI recommendations or your Data Protection Impact Assessment) and export the log before the period kicks in.
+>
+> **Residual data-protection risk:** because the log is append-only, anonymising a person does **not** redact it — details and countermeasures in [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) (German).
 
 ### 7.5 Deletion Requests (Four-Eyes Principle / Dual Approval)
 
@@ -1501,4 +1517,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 0959c1ab5c68fdceefd2e1cfc4d7346e39874129 -->
+<!-- source-hash: 54ebefb86717decb7b98015958eb309dc361c415 -->

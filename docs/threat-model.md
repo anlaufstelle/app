@@ -123,7 +123,7 @@ TB6│   Snapshot-Bundle AES-GCM-256 (non-extractable Key)    │
 | **I** Cross-Facility-Read | RLS FORCE-Modus auf 22 Tabellen + Manager-Layer + Mixin-Layer (Defense-in-Depth) | Migration [`0047`](../src/core/migrations/0047_postgres_rls_setup.py), ableitungsbasiert erzwungen in [`test_rls.py`](../src/tests/test_rls.py) | Statistik-MV bewusst ohne RLS — siehe [`security-notes.md`](security-notes.md) |
 | **I** Sensitive Felder ohne Encryption | `is_encrypted=True` erzwungen für `Sensitivity=HIGH` — Refs #733; `Client.pseudonym` bleibt bis post-v1.0 im Klartext (UX-Trade-off, [Defer-Begründung](security-notes.md#clientpseudonym-bleibt-im-klartext-bis-post-v10-issue-717)) | [`document_type.py`](../src/core/models/document_type.py), [`client.py`](../src/core/models/client.py) | Klartext-Freitexte (`Client.notes`, `Case.description`) #716 |
 | **I** TOTP-Secret-Leak at rest (Dump/Replica/Backup) | TOTP-Secret Fernet-verschlüsselt über das Proxy-Modell `EncryptedTOTPDevice` (vorhandenes MultiFernet, Key-Rotation) — ein DB-Dump liefert nur Chiffretext; konsistent zu den Hash-Backup-Codes (#790) | [ADR-031](adr/031-totp-secret-at-rest.md), [`mfa.py`](../src/core/models/mfa.py), [`totp.py`](../src/core/services/security/totp.py) | — (Refs #1362 geschlossen) |
-| **D** AuditLog-Tabelle wächst unbegrenzt | Composite-Indexes + 24-Monat-Retention via `enforce_retention` | [`audit.py`](../src/core/models/audit.py), [`retention.py`](../src/core/services/retention.py) ||
+| **D** AuditLog-Tabelle wächst unbegrenzt | Composite-Indexes + eigene AuditLog-Frist via `enforce_retention` (`Settings.auditlog_retention_months`, **Default 24 Monate, pro Einrichtung konfigurierbar, `0` = Pruning abgeschaltet**); `SECURITY_VIOLATION`/`RETENTION_RUN_COMPLETED`/`AUDIT_PRUNE_CHECKPOINT` sind prune-exempt | [`audit.py`](../src/core/models/audit.py), [`audit_pruning.py`](../src/core/retention/audit_pruning.py) | Bei `= 0` bzw. bei prune-exempten Aktionen kein Löschhorizont — siehe § 6 |
 | **E** RLS-Bypass via Superuser-DB-Rolle | DB-User darf **kein** Superuser sein; FORCE-Modus aktiv; CI laedt ``rls_test_role`` (``NOSUPERUSER``) und verifiziert Cross-Tenant-0-Rows ([test_rls_functional.py](../src/tests/test_rls_functional.py)) | [`ops-runbook.md` § 9](ops-runbook.md) | — ( #718 geschlossen) |
 
 #### A1.4 — Runtime-/Owner-Rollentrennung (Append-Only-Immutability)
@@ -194,6 +194,10 @@ Diese Threat-Model-Tabelle nennt Lücken nur als Stichwort. Vollständige Befund
 - Sicherheitsbericht 2026-04-26 (internes Code-Audit, dev-only) — Verteidigungslinien-Inventar
 - Vollanalyse 2026-04-25 (internes Code-Audit, dev-only) — Quer-Audit über Codequalität + Sicherheit
 - Aktive Tracking-Issues: #681, #691, #684, #695
+
+Ausdrücklich als Restrisiko akzeptiert und dokumentiert:
+
+- **Audit-Log-Restdaten überleben die Art.-17-Löschung** — das Log ist append-only, die Anonymisierung einer Person redigiert es nicht. Neue Einträge sind seit #1751 PII-minimiert; Alt-Zeilen und die Beschäftigten-`username` bleiben bis zum Pruning stehen, bei `auditlog_retention_months = 0` oder prune-exempten Aktionen (`SECURITY_VIOLATION`) dauerhaft. Details, Abwägung und Betriebsempfehlung: [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) (#1753).
 
 ---
 

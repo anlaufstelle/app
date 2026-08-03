@@ -20,11 +20,11 @@
 | Recht | Verweis | Für |
 |---|---|---|
 | Art. 13/14 Informationspflichten | [Informationspflichten](../src/core/dsgvo_templates/informationspflichten.md) | [Träger] [Auditor] |
-| Art. 15 Auskunft | Personen-Datenexport JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../src/core/views/clients.py)) · [FAQ §C](faq.md#c-rollen--datenschutz) | [Träger] [Dev] |
+| Art. 15 Auskunft | Personen-Datenexport JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../src/core/views/clients.py)) · **maßgeblich für Umfang und die drei bewussten Ausschlüsse: [Admin-Guide § 7.6](admin-guide.md#umfang-der-auskunft-art-15)** · [FAQ §C](faq.md#c-rollen--datenschutz) | [Träger] [Dev] |
 | Art. 16 Berichtigung | [ADR-013](adr/013-dsgvo-art16-no-selfservice.md) — bewusst kein Self-Service | [Auditor] [Dev] |
-| Art. 17 Löschung | [ADR-021](adr/021-retention-modell.md) (Soft-Delete-Strategien, k-Anon-Retention inkl. Freitext-Kaskade #1094) · [`core/retention/`](../src/core/retention/) | [Auditor] [Dev] [Träger] |
+| Art. 17 Löschung | [ADR-021](adr/021-retention-modell.md) (Soft-Delete-Strategien, realer Fristen-Zuschnitt, k-Anon-Retention inkl. Freitext-Kaskade #1094) · [`core/retention/`](../src/core/retention/) · **Restrisiko:** das append-only Audit-Log wird nicht mitredigiert — [security-notes.md § Audit-Log-Restdaten](security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) | [Auditor] [Dev] [Träger] |
 | Art. 18 Einschränkung | Legal Hold — [ADR-021](adr/021-retention-modell.md) · [`legal_holds.py`](../src/core/retention/legal_holds.py) | [Auditor] [Dev] |
-| Art. 20 Datenübertragbarkeit | teilweise über den maschinenlesbaren Personen-JSON-Export; kein dedizierter Übertragbarkeits-Workflow | [Träger] |
+| Art. 20 Datenübertragbarkeit | über den maschinenlesbaren Personen-JSON-Export — **identische Datenbasis wie Art. 15** (derselbe Export, gleiche Ausschlüsse, [Admin-Guide § 7.6](admin-guide.md#umfang-der-auskunft-art-15)); kein dedizierter Übertragbarkeits-Workflow | [Träger] |
 
 ## C. Technische & organisatorische Maßnahmen (Art. 25, 32 DSGVO)
 

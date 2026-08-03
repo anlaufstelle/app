@@ -2,7 +2,7 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}
-**Version:** 1.1 (Softwarestand v0.10, 2026-04-19)
+**Version:** 1.2 (Softwarestand v0.23, 2026-08-03)
 
 ---
 
@@ -44,11 +44,27 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 - Sensible Daten verschlüsselt
 
 ### 2.3 Speicherbegrenzung
-- Automatische Löschfristen nach Kontaktstufe:
- - Anonym: {{ retention_anonymous_days }} Tage
- - Identifiziert: {{ retention_identified_days }} Tage
- - Qualifiziert: {{ retention_qualified_days }} Tage
-- 4-Augen-Prinzip für manuelle Löschungen
+
+Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Die ersten drei sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert eingesetzt; die übrigen vier stehen mit ihrem Standardwert und sind vor Freigabe dieser DSFA gegen die Einstellungen der Einrichtung zu prüfen und ggf. zu korrigieren.
+
+| # | Frist | Wert | Einstellung | Wirkung bei Ablauf |
+|---|-------|------|-------------|--------------------|
+| 1 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht |
+| 2 | Kontakte identifizierter Personen | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht |
+| 3 | Qualifizierte Fälle (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Löschvorschlag; Soft-Delete erst nach Freigabe im 4-Augen-Prinzip |
+| 4 | Abweichende Frist einzelner Dokumentationstypen | je Typ gesetzt, sonst keine | `DocumentType.retention_days` | Überschreibt die Fristen 1–3 für Ereignisse dieses Typs |
+| 5 | Aktivitäten / Zeitstrom-Einträge | Standard 365 Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
+| 6 | Papierkorb-Frist für gelöschte Personen | Standard 30 Tage | `client_trash_days` | Person wird automatisch anonymisiert; bis dahin wiederherstellbar |
+| 7 | Audit-Log | Standard 24 Monate | `auditlog_retention_months` | Einträge werden gelöscht. `0` schaltet die Löschung **ab**; Sicherheitsverstöße und System-Marker sind generell ausgenommen |
+
+Ergänzende Regeln:
+
+- **Abgeleitete Anonymisierung der Person:** Sobald **alle** Ereignisse einer Person soft-gelöscht sind, wird die Person beim nächsten Aufbewahrungslauf anonymisiert — auch ohne abgelaufene Papierkorb-Frist.
+- **Kein eigener Löschhorizont für Fälle, Episoden, Aufgaben, Wirkungsziele und Meilensteine.** Sie hängen am Lebenszyklus der Person: ihre personenbeziehbaren Freitexte werden bei deren Anonymisierung mitgetilgt.
+- **Sperrvermerke (Legal Hold, Art. 18)** halten jede automatische Löschung und Anonymisierung an, bis der Vermerk aufgehoben wird.
+- **4-Augen-Prinzip** für manuelle Löschungen personenbezogener Daten.
+- **Restrisiko:** Das Audit-Log ist unveränderlich (Nachweispflicht, Art. 5 Abs. 2) und wird von einer Anonymisierung **nicht** mitredigiert. Vorhandene Einträge verschwinden erst mit Frist 7 — bei `auditlog_retention_months = 0` oder bei protokollierten Sicherheitsverstößen gar nicht.
+- Die Fristen werden durch den täglich laufenden Aufbewahrungs-Job durchgesetzt; ist der Job nicht eingerichtet, greift **keine** der sieben Fristen.
 
 ---
 

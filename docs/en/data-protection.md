@@ -20,11 +20,11 @@
 | Right | Reference | For |
 |---|---|---|
 | Art. 13/14 Information duties | [Information duties](../../src/core/dsgvo_templates/informationspflichten.md) | [Operator] [Auditor] |
-| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
+| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the three deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
 | Art. 16 Rectification | [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) — deliberately no self-service | [Auditor] [Dev] |
-| Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) | [Auditor] [Dev] [Operator] |
+| Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **residual risk:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) | [Auditor] [Dev] [Operator] |
 | Art. 18 Restriction | Legal Hold — [ADR-021](../adr/021-retention-modell.md) · [`legal_holds.py`](../../src/core/retention/legal_holds.py) | [Auditor] [Dev] |
-| Art. 20 Portability | partially via the machine-readable per-person JSON export; no dedicated portability workflow | [Operator] |
+| Art. 20 Portability | via the machine-readable per-person JSON export — **same data basis as Art. 15** (same export, same exclusions, [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)); no dedicated portability workflow | [Operator] |
 
 ## C. Technical & organizational measures (Art. 25, 32 GDPR)
 
@@ -64,5 +64,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-01 -->
-<!-- source-hash: 20dc603830ea354473edd3beb7241ea99e9cbce3 -->
+<!-- translation-date: 2026-08-03 -->
+<!-- source-hash: ff274161da752964b5c1dd997b08c0d5288777e8 -->

@@ -1303,7 +1303,23 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 
 Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrichtung, Benutzer und Zeitraum gefiltert werden. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung. Pre-Auth-AuditLogs ohne Facility-Bezug (z. B. `LOGIN_FAILED` bei unbekanntem Username) sind ausschließlich für die Systemadministration (`super_admin`) im `/system/`-Bereich sichtbar — siehe [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md).
 
-**Aufbewahrung des Audit-Logs:** Das Audit-Log selbst unterliegt keiner automatischen Löschfrist innerhalb der Anwendung. Gemäß Ihrer internen Dokumentationspflicht (z. B. nach Empfehlung des BSI oder Ihrer Datenschutz-Folgenabschätzung) sollten Sie eine externe Archivierungsstrategie festlegen.
+**Aufbewahrung des Audit-Logs:** Das Audit-Log **hat** eine eigene automatische Löschfrist innerhalb der Anwendung — sie ist bewusst länger als alle Fach-Fristen, damit Forensik nach einem spät bemerkten Vorfall noch Spuren findet ([ADR-021](adr/021-retention-modell.md)).
+
+| Einstellung in `Settings` | Standard | Wirkung |
+|---|---|---|
+| `auditlog_retention_months` | 24 Monate | Bei jedem `enforce_retention`-Lauf werden Einträge gelöscht, die älter als diese Frist sind (kalendergenaue Monatsrechnung, keine 30-Tage-Näherung). `0` = **deaktiviert**, dann wächst das Log unbegrenzt. |
+
+Drei Aktionen sind von dieser Frist **ausgenommen** und bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_ACTIONS` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)):
+
+- `SECURITY_VIOLATION` — Forensik-Nachweise der Breach-Detection,
+- `RETENTION_RUN_COMPLETED` — der Marker, aus dem das Compliance-Dashboard den letzten erfolgreichen Retention-Lauf liest,
+- `AUDIT_PRUNE_CHECKPOINT` — der Tombstone des Prunings selbst.
+
+**Checkpoint-Mechanik:** Das Audit-Log ist über eine HMAC-Kette verkettet (jeder Eintrag verweist auf den vorherigen). Ein Pruning reißt diese Kette zwangsläufig auf. Damit die Integritätsprüfung diese Lücke nicht als Manipulation meldet, schreibt jeder Prune-Lauf einen `AUDIT_PRUNE_CHECKPOINT`-Eintrag, der die Kettengrenzen der gelöschten Einträge festhält und die Diskontinuität legitimiert. Die Kette selbst wird dabei **nie** umgeschrieben — das Log bleibt append-only.
+
+> **Wichtig:** Die Frist wirkt nur, wenn `enforce_retention` tatsächlich läuft (siehe [§ 7.3](#73-löschfristen-und-enforce_retention)). Gelöschte Einträge sind endgültig weg — wer eine längere Nachweisführung braucht, legt eine **externe** Archivierungsstrategie fest (z. B. nach Empfehlung des BSI oder Ihrer Datenschutz-Folgenabschätzung) und exportiert das Log, bevor die Frist greift.
+>
+> **Datenschutz-Restrisiko:** Weil das Log append-only ist, wird es von der Anonymisierung einer Person **nicht** mitredigiert — Details und Gegenmaßnahmen in [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753).
 
 ### 7.5 Löschanträge (4-Augen-Prinzip)
 

@@ -48,6 +48,22 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
 - **Loeschen ohne Legal-Hold-Schicht (nur Vorschlaege).** Verworfen: ein vergessener `defer`-Klick auf einen RetentionProposal waere ein juristisches Eigentor. Hold als unabhaengige Einfrier-Schicht ist robuster.
 - **Differential-Privacy statt k-Anonymisierung als Standard-Anonymisierung.** Vertagt: Bibliotheks-Abhaengigkeit + neuer Bedrohungs-Modell-Aufwand stehen aktuell nicht im Verhaeltnis zum Mehrwert fuer kleine Traeger. Re-Evaluation, wenn ein externer Statistik-Bedarf entsteht (siehe [ADR-023](023-k-anonymization-statistik.md)).
 
+## Update 2026-08-03: Realer Fristen-Zuschnitt — nicht jede Entitaet hat eine eigene Frist (Refs #1753)
+
+Die Entscheidung oben formuliert *„Events, Cases, Clients, WorkItems und AuditLog haben je eigene Fristen"*. Das ist **ueberzeichnet** und wird hier praezisiert; die Umsetzung war nie anders, die Formulierung war es. **Reine Doku-Korrektur — kein neues Feature, keine Verhaltensaenderung.** Der tatsaechliche Zuschnitt:
+
+| Entitaet | Eigene konfigurierbare Frist? | Mechanik |
+|---|---|---|
+| **Event** | **ja** — `retention_anonymous_days` (90), `retention_identified_days` (365), `retention_qualified_days` (3650), zusaetzlich `DocumentType.retention_days` als Typ-Override | Soft-Delete durch `enforce_retention`; `qualified` nur ueber `RetentionProposal` mit Lead/Admin-Freigabe |
+| **Activity** (Zeitstrom) | **ja** — `retention_activities_days` (365) | **Hard**-Delete, kein Soft-Delete |
+| **AuditLog** | **ja** — `auditlog_retention_months` (24, `0` = aus) | `prune_auditlog`; drei prune-exempte Aktionen, Checkpoint-Tombstone fuer die HMAC-Kette |
+| **Client** | **nein**, zwei *abgeleitete* Ausloeser | (a) `client_trash_days` (30) nach **manuellem** Soft-Delete → `anonymize_eligible_soft_deleted_clients`; (b) `anonymize_clients`, sobald **alle** Events der Person soft-geloescht sind. Beide Wege enden in `anonymize_client` |
+| **Case, Episode, WorkItem, OutcomeGoal, Milestone** | **nein** | Kein eigener Cutoff und kein eigener Cron-Pfad. Sie haengen am **Owner-Lebenszyklus**: ihre Freitexte werden als Teil der Redaktionskaskade von `anonymize_client` getilgt (`_redact_cases_and_episodes`, `_redact_case_goals`, `_redact_workitems`) — seit #1751 inklusive Wirkungszielen und Meilensteinen. Die Zeilen selbst bleiben bestehen, nur die personenbeziehbaren Inhalte fallen |
+
+Konsequenz fuer Betreiber und Auditor: „loeschen" heisst fuer Faelle/Episoden/Aufgaben/Ziele **Redaktion beim Anonymisieren der Person**, nicht Ablauf einer eigenen Frist. Wer fuer diese Entitaeten eine unabhaengige Frist braucht (z. B. „abgeschlossene Faelle nach X Jahren", auch wenn die Person aktiv bleibt), braucht dafuer ein eigenes Feature — es existiert heute nicht.
+
+Beide Anonymisierungs-Pfade (hart und k-anonymisiert) fahren dieselbe Kaskade; die Paritaet ist seit #1750 durch einen ableitungsbasierten Architektur-Guard erzwungen (siehe [ADR-023 Update 2026-08-03](023-k-anonymization-statistik.md)). Legal Holds blockieren beide Bulk-Einstiege (#1756).
+
 ## References
 
 - [`src/core/retention/`](../../src/core/retention/) — Submodule (`anonymization`, `audit_pruning`, `enforcement`, `legal_holds`, `proposals`)

@@ -166,7 +166,7 @@ Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Mode
 | [`Case.description`](../src/core/models/case.py#L37-L46) | `Case` | Fall-Beschreibung | mittel |
 | [`Episode.description`](../src/core/models/episode.py#L21-L29) | `Episode` | Episoden-Verlauf | mittel |
 | [`WorkItem.description`](../src/core/models/workitem.py#L90-L98) | `WorkItem` | Aufgaben-Beschreibung | mittel |
-| [`AuditLog.detail`](../src/core/models/audit.py#L83) | `AuditLog` | JSON mit `username`, `pseudonym`, `changed_fields` | mittel (Pseudonym + username) |
+| [`AuditLog.detail`](../src/core/models/audit.py#L181) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und `username` bei Login-/Rechte-Vorgängen | mittel (Beschäftigten-`username`); seit #1751 **keine** Klienten-PII mehr in neuen Einträgen |
 
 ### Was bereits umgesetzt ist (Audit-Item 16)
 
@@ -185,7 +185,7 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 **Aktueller Schutz:**
 - Backup-Encryption AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`
 - RLS + Role-Mixin verhindern Cross-Facility-Reads
-- DSGVO-Anonymize-Cascade (#715) säubert auch diese Felder
+- DSGVO-Anonymize-Cascade (#715) säubert die **vier Fach-Freitexte** (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) — **nicht** `AuditLog.detail`: das Audit-Log ist append-only (DB-Trigger aus Migration `0024` + HMAC-Kette), eine nachträgliche Redaktion ist dort strukturell unmöglich. Der einzige Hebel ist Minimierung **beim Schreiben**; seit #1751 enthalten neue Einträge deshalb keine Klienten-PII mehr (Dateiname → HMAC + Endung, kein Meilenstein-Titel, kein Pseudonym im Export-Eintrag). Alt-Zeilen bleiben unverändert stehen — siehe [§ Audit-Log-Restdaten überleben die Art.-17-Löschung](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)
 
 **Wenn jetzt durchgezogen:** ~1–2 Tage Arbeit + Risiko in Search/Export, ohne Live-Feedback aus Pilot zu haben.
 
@@ -200,6 +200,55 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 
 - Migration `0075` zeigt die neuen `help_text`-Werte in allen vier ModelForms (Client/Case/Episode/WorkItem). `make migrate` ohne Fehler.
 - Threat-Model-Eintrag: [`threat-model.md` § TB2/TB3, Zeile *I Sensitive Felder ohne Encryption*](threat-model.md#tb2tb3--django--postgresql)
+
+---
+
+## Audit-Log-Restdaten überleben die Art.-17-Löschung (Issue #1753)
+
+**Status:** Akzeptiertes Restrisiko, seit #1751 für **neue** Einträge abgemildert. Betriebliche Gegenmaßnahme: Aufbewahrungsfrist nicht abschalten.
+
+### Beobachtung
+
+Die Anonymisierung einer Person (Art. 17) räumt die Fach-Tabellen ab, **nicht** das Audit-Log: `AuditLog` ist append-only (DB-Trigger `auditlog_immutable` aus Migration `0024`, `ENABLE ALWAYS` seit `0107`, plus HMAC-Verkettung). `anonymize_client()` ([`src/core/services/client/main.py`](../src/core/services/client/main.py)) fasst es nicht an — und **kann** es nicht, ohne die Kette zu brechen. Was in einer Audit-Zeile steht, bleibt dort bis zum Pruning stehen.
+
+Daraus folgen drei Fälle, in denen personenbeziehbare Restdaten die Löschung überdauern:
+
+1. **Bis zum Pruning** — Regelfall: bis zu `Settings.auditlog_retention_months` (Default 24 Monate) nach dem Eintrag.
+2. **Dauerhaft bei `auditlog_retention_months = 0`** — der Wert schaltet das Pruning ab ([`audit_pruning.py`](../src/core/retention/audit_pruning.py): `months <= 0` → No-op). Dann überlebt **jede** Audit-Zeile jede Löschung, unbegrenzt.
+3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED` und `AUDIT_PRUNE_CHECKPOINT` (beide tragen nur System-Metadaten).
+
+### Was bereits umgesetzt ist (#1751, Punkt 5)
+
+Weil nachträgliche Redaktion strukturell ausgeschlossen ist, ist **Minimierung beim Schreiben** der einzige Hebel. Alle `detail`-Schreibstellen wurden inventarisiert; drei führten Klienten-PII im Klartext und schreiben sie seither nicht mehr:
+
+| Schreibstelle | Vorher | Jetzt |
+|---|---|---|
+| File-Vault-Reject (`SECURITY_VIOLATION`) | Original-Dateiname im Klartext (Uploads heißen im Feld regelmäßig nach der betroffenen Person) | `filename_hash` (stabiler HMAC, Wiederholungen bleiben korrelierbar) + `filename_ext` als Typmarker — zentral in [`log_attachment_violation`](../src/core/services/file_vault/audit.py), keine der neun Aufrufstellen kann die Minimierung umgehen |
+| `MILESTONE_DELETE` | Meilenstein-`title` (derselbe Freitext, den die Anonymisierung tilgt) | nur `case_id`; Zuordnung über `target_id` |
+| Art.-15-/20-Export | `pseudonym` | nur `format`; Zuordnung über `target_id` |
+
+Der File-Vault-Fall war der schärfste: `SECURITY_VIOLATION` ist prune-exempt, der Klartextname hätte also Frist **und** Anonymisierung überlebt.
+
+Bewusst **nicht** umgestellt ist der `username` bei fehlgeschlagenem Login (einziger Nachweis, *was* versucht wurde — bei Angriffen existiert der User nicht, `AuditLog.user` ist `NULL`) und bei Rollenwechsel/Deaktivierung/Löschbestätigung (wegen `on_delete=SET_NULL` die einzige dauerhafte Zuschreibung einer Rechte-Eskalation). Beides sind **Beschäftigten**-, keine Klientendaten.
+
+### Restfläche (akzeptiert)
+
+- **Alt-Zeilen bleiben unverändert.** Vor #1751 geschriebene Einträge tragen die Klartextwerte weiter; sie zu redigieren hieße, die HMAC-Kette zu brechen (und damit genau die Integritätszusicherung aufzugeben, wegen der das Log existiert). Sie verschwinden mit dem regulären Pruning.
+- **`changed_fields`, `target_id` und Zeitstempel bleiben personenbeziehbar** — solange die Ziel-Zeile noch existiert, ist die Zuordnung auflösbar. Das ist gewollt: ohne sie wäre das Log als Rechenschaftsnachweis (Art. 5 Abs. 2) wertlos.
+- **Abwägung:** Art. 17 Abs. 3 lit. b/e deckt die Aufbewahrung zur Erfüllung rechtlicher Nachweispflichten und zur Rechtsverteidigung; der Nachweis *dass* verarbeitet wurde ist der Zweck des Logs. Die Grenze ist die Verhältnismäßigkeit der Frist — deshalb ist sie konfigurierbar und im Regelfall endlich.
+
+### Betriebliche Empfehlung
+
+- `auditlog_retention_months = 0` **nicht** setzen. Wer unbegrenzte Nachweisführung braucht, exportiert das Log turnusmäßig nach außen, statt das Pruning abzuschalten — sonst gibt es innerhalb der Anwendung keinen Löschhorizont mehr.
+- Die Frist gehört in Verarbeitungsverzeichnis und Löschkonzept (die DSFA-Vorlage [`dsfa.md` § 2.3](../src/core/dsgvo_templates/dsfa.md) nennt sie).
+- Bei einem Auskunfts-/Löschersuchen: der Art.-15-Export enthält bereits einen Audit-Auszug zur Person (ohne Beschäftigten-Identität, [`docs/admin-guide.md` § 7.6](admin-guide.md#umfang-der-auskunft-art-15)); die vollständigen Rohzeilen stehen der Anwendungsbetreuung unter `/audit/` zur Verfügung.
+
+### Verifikation
+
+- [`test_audit_detail_pii_minimization.py`](../src/tests/test_audit_detail_pii_minimization.py) — pinnt für alle drei Schreibstellen, dass der Klartext **nicht** im `detail` landet.
+- [`test_audit_trigger.py`](../src/tests/test_audit_trigger.py) — Append-only-Trigger (Grund, warum nachträgliche Redaktion ausscheidet).
+- [`test_pii_residue_sweep.py`](../src/tests/test_pii_residue_sweep.py) — Residuen-Sweep über die Redaktionspfade.
+- Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken-verweis-auf-audit-reports)
 
 ---
 

@@ -452,7 +452,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | Bereich | View | Warum sensibel |
 |---------|------|----------------|
 | **DSGVO-Paket** (Übersicht + Download) | `DSGVOPackageView`, `DSGVODocumentDownloadView` | Vollständige Datenschutz-Dokumentation der Einrichtung — TOM, Verfahrensverzeichnis, Datenschutzerklärung etc. |
-| **Personen-Datenexport** (JSON + PDF, DSGVO Art. 15) | `ClientDataExportJSONView`, `ClientDataExportPDFView` | Komplettes Datenpaket einer Person inkl. aller verschlüsselten Felder |
+| **Personen-Datenexport** (JSON + PDF, DSGVO Art. 15) | `ClientDataExportJSONView`, `ClientDataExportPDFView` | Datenauskunft über die Kernbestände einer Person — Stammdaten, Fälle, Episoden, Ereignisse, Änderungshistorie, Aufgaben, Aktivitäten und Aufbewahrungs-Metadaten, jeweils inkl. der entschlüsselten dynamischen Felder ([Umfang und bewusste Ausschlüsse: Admin-Guide § 7.6](admin-guide.md#umfang-der-auskunft-art-15)) |
 | **2FA deaktivieren** | `MFADisableView` | Entzieht den eigenen 2FA-Schutz — Account wäre danach nur noch passwort-geschützt |
 
 Andere Aktionen (Klient-Detail anzeigen, Kontakte anlegen, Aufgaben bearbeiten …) brauchen **keinen** Sudo-Mode — die normale Session reicht.
