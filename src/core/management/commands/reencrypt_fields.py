@@ -1,14 +1,17 @@
-"""Re-encrypt all encrypted Event/EventHistory/EventAttachment fields with the current primary key.
+"""Re-encrypt all encrypted Event/EventHistory/EventAttachment/Client/Case fields
+with the current primary key.
 
 A4.4 (Refs #1024): Für ``Event.data_json`` werden zusätzlich Plaintext-PII-Felder
 (laut document_type ``is_encrypted=True``) nachverschlüsselt — Heal von Altbestand
-vor Einführung der Feldverschlüsselung.
+vor Einführung der Feldverschlüsselung. M2/P6 (Refs #1058): dasselbe Heal-Muster
+gilt fuer ``Client.data_json``/``Case.data_json`` (``DynamicDataEncryptionMixin``,
+P4a/P4b/P5) — sonst entstuende eine Rotationsluecke fuer die neuen Modellgruppen.
 """
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from core.models import Event, EventHistory
+from core.models import Case, Client, Event, EventHistory
 from core.models.attachment import EventAttachment
 from core.services.file_vault import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import bypass_replication_triggers
@@ -38,7 +41,8 @@ class Command(BaseCommand):
         "Re-encrypt all encrypted fields with the current primary encryption key — "
         "Event.data_json, EventHistory.data_before/data_after, "
         "EventAttachment.original_filename_encrypted (Refs #783), TOTP-Secrets "
-        "(Refs #1362). Heilt zusätzlich Plaintext-PII in Event.data_json (Refs #1024 A4.4)."
+        "(Refs #1362), Client.data_json, Case.data_json (Refs #1058). Heilt zusätzlich "
+        "Plaintext-PII in Event/Client/Case.data_json (Refs #1024 A4.4, #1058)."
     )
 
     def add_arguments(self, parser):
@@ -50,12 +54,15 @@ class Command(BaseCommand):
         history_updated = self._reencrypt_event_history(dry_run)
         attachments_updated = self._reencrypt_attachments(dry_run)
         totp_updated = self._reencrypt_totp_devices(dry_run)
+        clients_updated = self._reencrypt_clients(dry_run)
+        cases_updated = self._reencrypt_cases(dry_run)
 
         action = "Would re-encrypt" if dry_run else "Re-encrypted"
         self.stdout.write(
             self.style.SUCCESS(
                 f"{action} {events_updated} events, {history_updated} history entries, "
-                f"{attachments_updated} attachments, {totp_updated} TOTP devices."
+                f"{attachments_updated} attachments, {totp_updated} TOTP devices, "
+                f"{clients_updated} clients, {cases_updated} cases."
             )
         )
 
@@ -74,6 +81,43 @@ class Command(BaseCommand):
                 if not dry_run:
                     event.data_json = healed
                     event.save(update_fields=["data_json", "updated_at"])
+        return updated
+
+    def _reencrypt_clients(self, dry_run: bool) -> int:
+        """M2/P6 (Refs #1058, Entscheid E17): rotiert ALLE ``Client``-Rows inkl.
+        soft-deleted.
+
+        ``FacilityScopedManager`` filtert ``is_deleted`` nicht (anders als eine
+        ``SoftDeletableFacilityScopedManager``-Variante) — ``Client.objects``
+        deckt damit ohne Extra-Filter bereits den vollen Bestand ab. Anders als
+        bei Events (bewusst ``is_deleted=False``, bekannte Lücke, hier nicht
+        angefasst) sollen Personen-Altbestände nicht dauerhaft unter einem
+        ausrangierten Schlüssel liegen bleiben, nur weil sie gelöscht sind.
+        """
+        updated = 0
+        for client in Client.objects.iterator(chunk_size=500):
+            new_data, changed = _reencrypt_data_json(client.data_json)
+            healed = encrypt_dynamic_data(client.document_type, new_data) if client.document_type_id else new_data
+            if changed or healed != client.data_json:
+                updated += 1
+                if not dry_run:
+                    client.data_json = healed
+                    client.save(update_fields=["data_json", "updated_at"])
+        return updated
+
+    def _reencrypt_cases(self, dry_run: bool) -> int:
+        """M2/P6 (Refs #1058, Entscheid E17): rotiert ALLE ``Case``-Rows inkl.
+        soft-deleted — Begruendung analog :meth:`_reencrypt_clients`.
+        """
+        updated = 0
+        for case in Case.objects.iterator(chunk_size=500):
+            new_data, changed = _reencrypt_data_json(case.data_json)
+            healed = encrypt_dynamic_data(case.document_type, new_data) if case.document_type_id else new_data
+            if changed or healed != case.data_json:
+                updated += 1
+                if not dry_run:
+                    case.data_json = healed
+                    case.save(update_fields=["data_json", "updated_at"])
         return updated
 
     def _reencrypt_event_history(self, dry_run: bool) -> int:
