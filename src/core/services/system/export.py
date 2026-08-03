@@ -3,11 +3,9 @@
 import csv
 import io
 import logging
-from collections import OrderedDict
 
 import weasyprint
 import weasyprint.urls
-from django.db.models import Count
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -262,75 +260,16 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()
 
 
-# Mapping: DocumentType.system_type -> Jugendamt category (missing = excluded)
-JUGENDAMT_CATEGORY_MAP = {
-    "contact": "Kontakte",
-    "crisis": "Beratung",
-    "medical": "Versorgung",
-    "needle_exchange": "Versorgung",
-    "accompaniment": "Vermittlung",
-    "counseling": "Beratung",
-    "referral": "Vermittlung",
-}
-
-
 def get_jugendamt_statistics(facility, date_from, date_to):
-    """Statistics aggregated by youth welfare office categories."""
-    base_qs = Event.objects.filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__date__gte=date_from,
-        occurred_at__date__lte=date_to,
-    )
+    """Statistics aggregated by youth welfare office categories.
 
-    # Aggregate by DocumentType system_type
-    by_dt = (
-        base_qs.values("document_type__system_type").annotate(count=Count("id")).order_by("document_type__system_type")
-    )
+    Delegations-Shim auf ``JugendamtBackend`` (M5 P2); Entfernung in M5-P3
+    (Refs #1061). Der Import bleibt lokal — die Registry laedt das
+    ``backends``-Package lazy, ein Modul-Import waere ein Zyklus-Risiko.
+    """
+    from core.reporting.registry import get_backend
 
-    # Consolidate into Jugendamt categories
-    category_counts = OrderedDict()
-    total = 0
-    for row in by_dt:
-        system_type = row["document_type__system_type"]
-        cat = JUGENDAMT_CATEGORY_MAP.get(system_type)
-        if cat is None:
-            continue
-        category_counts[cat] = category_counts.get(cat, 0) + row["count"]
-        total += row["count"]
-
-    by_category = [(name, count) for name, count in category_counts.items()]
-
-    # Age clusters
-    age_labels = {
-        "u18": _("Unter 18"),
-        "18_26": _("18–26"),
-        "27_plus": _("27+"),
-        "unknown": _("Unbekannt"),
-    }
-    by_age_cluster = list(
-        base_qs.exclude(client__isnull=True)
-        .values("client__age_cluster")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
-    by_age_cluster = [
-        {
-            "cluster": row["client__age_cluster"],
-            "label": age_labels.get(row["client__age_cluster"], ""),
-            "count": row["count"],
-        }
-        for row in by_age_cluster
-    ]
-
-    unique_clients = base_qs.exclude(client__isnull=True).values("client").distinct().count()
-
-    return {
-        "total": total,
-        "by_category": by_category,
-        "by_age_cluster": by_age_cluster,
-        "unique_clients": unique_clients,
-    }
+    return get_backend("jugendamt").build_dataset(facility, date_from, date_to).summary
 
 
 def generate_jugendamt_pdf(facility, date_from, date_to):

@@ -22,7 +22,6 @@ from core.services.system._db_admin import (
 )
 from core.services.system.bans import get_active_bans, get_active_bans_for_client
 from core.services.system.export import (
-    JUGENDAMT_CATEGORY_MAP,
     _build_event_row,
     _build_header,
     _collect_field_templates,
@@ -74,7 +73,6 @@ __all__ = [
     "FIELD_TYPE_REGISTRY",
     "FILE",
     "FieldTypeSpec",
-    "JUGENDAMT_CATEGORY_MAP",
     "LOOKBACK_DAYS",
     "MULTI_SELECT",
     "SELECT",

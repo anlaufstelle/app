@@ -43,8 +43,8 @@ from core.models import (
     Event,
     FieldTemplate,
 )
+from core.reporting.backends.jugendamt import CATEGORY_MAP as JUGENDAMT_CATEGORY_MAP
 from core.services.system import (
-    JUGENDAMT_CATEGORY_MAP,
     _build_event_row,
     _resolve_field_value,
     get_jugendamt_statistics,
