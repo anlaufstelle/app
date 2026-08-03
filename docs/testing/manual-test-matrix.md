@@ -328,7 +328,7 @@ Methodik:
 | D | 42 | 13 | 29 | 31 % |
 | **Gesamt** | **311** | **197** | **114** | **63 %** |
 
-> Auto-generiert per `python scripts/build_test_matrix_index.py` ([#909](https://github.com/anlaufstelle/app/issues/909)).
+> Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
 
 ---

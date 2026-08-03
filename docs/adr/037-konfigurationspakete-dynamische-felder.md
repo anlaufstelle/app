@@ -200,5 +200,3 @@ Der Loader ist **update-sicher**, und genau das ist eine sichtbare Verhaltensän
 - [ADR-014](014-encrypted-file-vault.md) — Encrypted File Vault (warum Datei-Felder ereignisgebunden bleiben)
 - [ADR-006](006-fernet-field-encryption.md) — Fernet/MultiFernet-Feldverschlüsselung (Grundlage der Rotation)
 - Issue #1058 — M2-Planung (Entscheide E3–E21)
-</content>
-</invoke>

@@ -288,6 +288,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 - **Slugs nie ändern.** Ein geänderter Slug ist ein neues Objekt — in jeder Bestands-Einrichtung entsteht ein Duplikat. Wer einen anderen Slug will, legt einen neuen Typ an und deaktiviert den alten.
 - **`system_type` immer mitführen**, wo einer existiert. Fehlender Schlüssel bedeutet `null`, und `Wert → null` ist ein Fehler, der den ganzen Lauf abbricht.
 - **`entity_type` immer mitführen**, wenn der Typ kein Ereignis-Typ ist. Fehlt der Schlüssel, gilt `event` — bei einem Bestandstyp mit `client`/`case` ist das ein Immutabilitäts-Fehler.
+- **`field_type` (und bei Bedarf `is_encrypted`) immer mitführen.** Fehlt `field_type`, gilt `text`; gegen eine bestehende Vorlage mit einem anderen Typ ist das ein Immutabilitäts-Fehler, der den **gesamten** Lauf abbricht. Kein stiller Footgun — der Fehler ist laut und pfadgenau, aber ein völlig vermeidbarer Abbruch, der beim Weiterreichen eines Pakets erst beim Empfänger auftritt.
 
 **Optionen**
 
@@ -338,5 +339,3 @@ In beiden Fällen wird **nichts** angewendet, auch nicht für die übrigen Typen
 - [ADR-024 — Slug-basierte, stabile Identifikatoren](adr/024-slug-based-identifiers.md)
 - [`src/core/packages/default.yaml`](../src/core/packages/default.yaml) — Standardkatalog als vollständiges Beispiel
 - [Admin-Guide](admin-guide.md) — Betrieb, Schlüsselrotation, Backup
-</content>
-</invoke>

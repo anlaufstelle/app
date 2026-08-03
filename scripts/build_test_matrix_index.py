@@ -71,6 +71,13 @@ ANHANG_C_END = "<!-- ANHANG-C:END -->"
 # klickbare Markdown-Links. Der Generator emittiert sie direkt in dieser
 # Form, damit ``--check`` byte-idempotent bleibt und nicht gegen eine
 # manuelle Nachbearbeitung der erzeugten Dateien anläuft.
+#
+# Refs #1058 (M2/P13, Fix-Runde): Die referenzierten Nummern (#909, #916,
+# #1071) sind Tickets des **Entwicklungs-Trackers**, nicht des oeffentlichen
+# Spiegel-Repos — dort existieren sie unter diesen Nummern nicht. Die
+# uebrige Doku verlinkt konsistent ``anlaufstelle/app`` (siehe
+# ``docs/README.md``: im Release-Snapshot entschaerft der Sanitizer die
+# Ticket-Links ohnehin zu Klartext-``#NNN``).
 ISSUE_URL_BASE = "https://github.com/anlaufstelle/app/issues"
 
 
