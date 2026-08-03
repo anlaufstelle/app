@@ -198,6 +198,7 @@ Diese Threat-Model-Tabelle nennt Lücken nur als Stichwort. Vollständige Befund
 Ausdrücklich als Restrisiko akzeptiert und dokumentiert:
 
 - **Audit-Log-Restdaten überleben die Art.-17-Löschung** — das Log ist append-only, die Anonymisierung einer Person redigiert es nicht. Neue Einträge sind seit #1751 PII-minimiert; Alt-Zeilen und die Beschäftigten-`username` bleiben bis zum Pruning stehen, bei `auditlog_retention_months = 0` oder prune-exempten Aktionen (`SECURITY_VIOLATION`) dauerhaft. Details, Abwägung und Betriebsempfehlung: [`security-notes.md` § Audit-Log-Restdaten überleben die Art.-17-Löschung](security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) (#1753).
+- **Disclosure aus Berichts-Artefakten** — die k-Anonymitäts-Zusicherung gilt **je Artefakt und je Zeitraum**. Nicht geschützt sind Randsummen-Residuen, die Differenz mehrerer Grundgesamtheiten (Personen- vs. Ereigniszählung) und die Differenz mehrerer Freigaben über verschachtelte Zeiträume (Monats- plus Jahresbericht). Zusätzlich offen und als Fehler eingestuft: die Schwelle wird auf **Ereignis**- statt Personenzahlen angewandt, die count-absteigende Zeilensortierung verrät den Träger der Kleinstfallzahl, und die Unterdrückungs-Entscheidung der Vollständigkeitsmeldungen ist selbst ein Kanal. Kanal-Inventar mit Verdikten, Aufwänden und akzeptierten Grenzen: [`security-notes.md` § Disclosure-Analyse der Berichts-Artefakte](security-notes.md#disclosure-analyse-der-berichts-artefakte-2026-08-03-issue-1742) (#1742).
 
 ---
 

@@ -422,10 +422,20 @@ Merkmale.
 
 ### Maßnahme
 
-Anlaufstelle wendet **K-Anonymität** an: Merkmalskombinationen mit weniger als *k*
-Personen werden im Aggregat unterdrückt (`count=None`, `suppressed=True`). Schwelle
+Anlaufstelle wendet **K-Anonymität** an: Aggregat-Zellen mit weniger als *k*
+gezählten Einheiten werden unterdrückt (`count=None`, `suppressed=True`). Schwelle
 pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/settings.py)
-(Default **5**). Verdrahtet in den datenschutzfreundlichen externen Berichten
+(Default **5**).
+
+> **Präzisierung (Refs #1742):** Die
+> gezählte Einheit ist heute in **allen** suppressionsbewehrten Zellen das **Ereignis**
+> (`Count("id")`), nicht die Person. Eine sichtbare Zelle „Unter 18: 7" bedeutet 7 *Kontakte*
+> und kann von **einer** Person stammen. Die einzige personenbasierte Größe ist
+> `unique_clients`. Frühere Fassungen dieses Abschnitts sprachen von „weniger als *k*
+> **Personen**" — das liefert der Code nicht; die Lücke ist als **K0** unten dokumentiert
+> und offen.
+
+Verdrahtet in den datenschutzfreundlichen externen Berichten
 ([`external_report.py`](../src/core/services/dashboard/external_report.py), Refs #921)
 und optional im Retention-Löschpfad (`retention_use_k_anonymization`, Refs #780).
 Konzeptionelle Definition mit Beispiel: [Glossar § K-Anonymität im Detail](glossar.md#k-anonymität-im-detail).
@@ -493,6 +503,354 @@ Eintrittsbedingung garantiert `active_events == 0`; `_redact_client_identity` �
 beruht). Sperrvermerke blockieren seit #1756
 **beide** Bulk-Einstiege; Begründung und Bucket-Entscheid in
 [ADR-023 Update 2026-08-03](adr/023-k-anonymization-statistik.md).
+
+### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
+
+**Status:** Analyse abgeschlossen, Umsetzungsentscheidung offen. Sieben Kanäle untersucht, alle
+**bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
+k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
+Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
+(Bezugsgrößen in Vollständigkeitsmeldungen, Vier-Term-Identität) sind verifiziert geschlossen, die
+hier gelisteten liegen außerhalb dieses Scopes und bestehen größtenteils seit
+#1278.
+
+#### Scope, Empfängermodell, Methodik
+
+Betrachtet wird die **Berichts-Artefakt-Familie**: Halbjahres-Sachbericht-PDF (Standardmodus),
+Beispiel-Sachbericht-PDF, externer Bericht (HTML **und** `?format=json`), Berichts-Export
+(CSV/JSON/XML), On-Screen-Berichts-Panel. **Nicht** im Scope: internes Statistik-Dashboard und
+Trend-JSON (bewusst roh, #1311) sowie der
+`?internal=1`-Modus des Sachbericht-PDF (Security-Review R4).
+
+Kein Befund setzt privilegierten Zugriff voraus (Kerckhoffs): der Empfänger kennt **k** (steht im
+Artefakt bzw. in der öffentlichen Doku), den Algorithmus (Open Source), **welche** Zellen unterdrückt
+sind (Label + Marker bleiben sichtbar) und die **Zeilenreihenfolge**.
+
+Methodik: Preimage-Enumeration über Kleinst-Welten — die Suppressionslogik wurde gegen den
+Produktionscode auf Verhaltensgleichheit geprüft, dann für eine beobachtete Publikation *alle*
+konsistenten Rohwelten aufgezählt; einwertiges Preimage = Kleinstfallzahl exakt rekonstruiert. Nur
+Beobachtungen mit publizierter Randsumme **innerhalb** der Enumerationsgrenze sind auswertbar, sonst
+erzeugt die Grenze selbst Schein-Pins. Alle Prozentangaben sind modellabhängig, Größenordnung statt
+Betriebskennzahl.
+
+#### Übersicht
+
+| # | Kanal | Empfehlung | Aufwand | Priorität |
+|---|---|---|---|---|
+| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 |
+| **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 |
+| **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 |
+| **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 |
+| **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 |
+| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 |
+| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 |
+| **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 |
+| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 |
+
+Alle Verdikte: **bestätigt** (per Enumeration belegt, nicht vermutet). **Reihenfolge:** K5 → K0
+(Fail-safe) → K6 → K2 → K1-Guard → K3 → K4b. K5 zuerst, weil es die Messbasis aller übrigen Kanäle
+senkt und keine Utility kostet.
+
+> **Kopplungs-Warnung — die wichtigste Aussage dieser Analyse:** **Machbarkeits-Audit (K2)** und
+> **Residual-Guard (K1)** wirken **nur paarweise mit der Sortier-Korrektur (K5)**. Der Guard allein
+> ist zirkulär validiert: er entscheidet über ein Preimage-Modell der *ungeguardeten* Sicht, sein
+> Feuern ist selbst informativ. Ground-Truth über beweisbar vollständige Preimages: 24 von 853
+> Sichten behalten mit Guard **allein** einen exakten Pin (Gegenbeispiel: Randsumme 11, drei Zeilen
+> alle unterdrückt ⇒ Preimage {(1,1,9),(2,1,8)}, dritte Zeile in beiden = 1). Erst **K5 + Guard**
+> ergaben 0 Pins über 516 beweisbar vollständige Sichten. Wer den Guard ohne K5 ausliefert, hat die
+> Kosten bezahlt und den Kanal nicht geschlossen.
+
+#### K0 — Die Schwelle wird auf Ereigniszahlen angewandt, nicht auf Personenzahlen
+
+Sämtliche suppressionsbewehrten Zellen sind `Count("id")` über **Ereignisse**; `_suppress_small`
+vergleicht die Schwelle also gegen eine Ereigniszahl. Die Äquivalenzklasse, die k-Anonymität schützen
+soll (Einrichtung × Zeitraum × Altersgruppe), darf damit Größe 1 haben und wird trotzdem publiziert
+**ohne** jeden Rückrechnungsschritt. Selbstbeweisend wird der Fall, sobald `unique_clients`
+unterdrückt ist: dann steht im Artefakt, dass die Gesamtpersonenmenge < k ist, während die
+Altersverteilung genau dieser Menge im Klartext danebensteht.
+
+*Betroffen:* alle Artefakte. *Beleg:* Brute-Force über 2 000 718 Welten — 2,6 Mio. publizierte
+Alterszellen mit Personen-Bucket < k, die Mehrzahl davon sogar bei **sichtbarem** `unique_clients` ≥ k.
+Exakte Pinnung ist konstruierbar: 4 Personen à 5 Kontakte in 4 Clustern ⇒ vier sichtbare Alterszellen
+bei unterdrücktem `unique_clients` ⇒ jede Zelle genau 1 Person.
+
+*Empfehlung — schließen* (keine Restunschärfe des Modells, sondern das Verfahren auf der falschen
+Größe): **(a, S, sofort)** ist `unique_clients` < k, die **gesamte** personenabgeleitete
+Aufschlüsselung unterdrücken, nicht nur die Kennzahl — wenige Zeilen in den drei Wrappern.
+**(b, M)** Zellkriterium für personenbezogene Zellen auf die DISTINCT-Personenzahl des Buckets
+umstellen. **Falle:** `count_clients_in_bucket` ist dafür **nicht** verwendbar (kein Zeitraumfilter,
+zählt alle Clients der Einrichtung — ein direkter Aufruf wäre *fail-open*); es braucht eine
+zeitraum-skopierte Variante, und die Snapshot-Payload muss `persons` je Cluster mitführen
+(Formatänderung, kollidiert mit #1741).
+**Nebenwirkung:** nach (b) gilt „unterdrückt ⇒ Wert ≤ k−1" nicht mehr — das entschärft K1, bricht
+aber die Annahme, auf der der Guard aus K1/K2 rechnet. Beide Maßnahmen gemeinsam modellieren.
+
+#### K5 — Zeilensortierung nach Anzahl als Rangkanal
+
+`by_age_cluster` und `by_document_type` werden absteigend nach Anzahl erzeugt (`order_by("-count")`)
+und nach dem Snapshot-Merge erneut so sortiert. `_suppress_small` setzt nur
+`count=None`/`suppressed=True` und **verändert die Reihenfolge nicht**; alle Templates iterieren
+unverändert (kein `dictsort`). Der Marker ist uniform, die **Position** nicht — die Zeilenreihenfolge
+publiziert die Rangordnung der unterdrückten Zellen.
+
+*Betroffen:* beide PDFs, externer Bericht (HTML + JSON), Berichts-Export **JSON und XML**. *Nicht
+betroffen:* CSV (nur `records`), `by_category` (feste Kategorien-Ordnung), `by_contact_stage` (Dict mit
+festen Schlüsseln). *Beleg:* über 28 560 Zell-Welten mit **0** Verletzungen gilt — sobald überhaupt
+unterdrückt wird, ist die **letzte** Tabellenzeile unterdrückt, und die zuletzt gelistete unterdrückte
+Zeile trägt **immer** einen Wert < k. Ohne jede Arithmetik veröffentlicht das Artefakt damit,
+**welche** Altersgruppe bzw. **welcher** Dokumenttyp die Kleinstfallzahl trägt; zusätzlich sinkt die
+Zuordnung von r unterdrückten Werten zu Labels von r! auf 1. Über 292 820 Welten (identische
+Suppression, Unterschied nur in der Publikationsreihenfolge): Klassen mit ≥ 1 exakt gepinnter Zelle
+**7 149 (Rang) vs. 152 (kanonisch)** — Faktor 47.
+
+*Empfehlung — schließen (bestes Kosten-Nutzen-Verhältnis der Analyse, S):* nach `_suppress_small` eine
+**wertunabhängige** Ausgabereihenfolge herstellen — unterdrückte Zeilen als Block in kanonischer
+Ordnung ans Listenende (Altersgruppen in Modellreihenfolge, Dokumenttypen nach `(category, name)`);
+sichtbare Zeilen dürfen count-sortiert bleiben, ihre Werte stehen ohnehin im Klartext. **Ein**
+Eingriffspunkt, wirkt automatisch auf alle Templates plus JSON/XML; muss **nach** der Suppression
+greifen, damit der Snapshot-/Hybrid-Pfad nicht driftet. Gemessen ohne neuen Kanal (numerisch identisch
+zur Basislinie „alles in fester Labelordnung"); Bestandstests bleiben grün; der interne/On-Screen-
+Rohpfad bleibt unberührt (dort ist das Ranking Nutzwert). **Keine Definitionsgrenze:** die Rangordnung
+ist kein publizierter Aggregatwert, sondern ein darstellerisches Nebenprodukt der Query-Sortierung
+und sie untergräbt gezielt die Sekundärsuppression, deren einziger Zweck es ist, zwei
+ununterscheidbare Unbekannte zu hinterlassen. **Restrisiko ehrlich ausweisen:** K5 senkt gepinnte
+Zellen um Faktor ~47, eliminiert sie aber nicht — die Restfälle brauchen den Guard.
+
+#### K6 — Die Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen
+
+M5 hat die **Zahlen** aus den Vollständigkeitsmeldungen entfernt, wenn sie klein sind — nicht aber die
+Tatsache, **dass** entfernt wurde. `_prepare_issue` entscheidet über eine Disjunktion auf **Rohdaten**
+(`template is None or count < k or complement < k`); beide Zweige sind invertierbar, weil die
+Komplemente an publizierte Größen gekoppelt sind. Tragend ist dabei nicht die Disjunktion, sondern:
+eine **bezifferte** Meldung publiziert implizit „mein Komplement ≥ k", also eine untere Schranke
+selbst wenn *jede* Alterszelle unterdrückt ist. Der Modellfehler sitzt in `_known_terms`: verborgene
+Terme gelten dort als *unbestimmt*, obwohl sie auf ein k-breites Intervall eingegrenzt sind; ein
+Term-**Zähler** kann das prinzipiell nicht abbilden.
+
+*Betroffen:* Berichts-Export **JSON** und **XML**, On-Screen-**Panel**. *Nicht betroffen:* CSV (lässt
+die Meldungen weg) und die **PDFs** (rendern keinen Vollständigkeits-Block) — die tragen weiterhin
+K0–K5. *Beleg:* gegen den Originalcode reproduziert; 1 653 stabile Beobachtungsklassen, in denen die
+Voll-Inversion einen verborgenen Term exakt pinnt und ein Referenz-Angreifer ohne diesen Kanal in
+1 465 Fällen offen bleibt.
+
+*Empfehlung — schließen (S):* den Vollständigkeits-Block **vollständig datenunabhängig** machen (beide
+Meldungen **immer**, nie mit Zahl). Gemessen im selben Weltraum sinken die Klassen mit gepinntem
+verborgenem Term von 13 082 (Status quo) über 5 931 (nur die Zahl weglassen) auf **804** — die
+Restpins sind dann Struktureffekte aus K1–K3, nicht mehr der Meldungskanal. Damit entfallen
+`_prepare_issue`-Prädikat, `complements`, `_known_terms`, `_term_status`, `_hide_term` und
+`_close_identity_leak` **ersatzlos**. Kosten: der Bericht meldet die Lücke auch dann unbeziffert, wenn
+es keine gibt — genau das ist für `_hide_term` bereits als gewollt dokumentiert. **Keine
+Definitionsgrenze:** der Kanal entsteht nicht aus der unvermeidbaren Arithmetik publizierter
+Randsummen, sondern aus einer selbst eingeführten, **datenabhängigen Verzweigung** im Suppressionscode.
+
+#### K2 — Auslösekriterium der Sekundär-Suppression
+
+`_apply_secondary_suppression` ist an die **Zellenzahl** gekoppelt (`if len(suppressed) != 1: return`)
+statt an die **Machbarkeitsspanne**. Bei ≥ 2 primär unterdrückten Zellen läuft die Regel damit **nie**
+— obwohl gerade dann R = s (alle = 1) oder R = s·(k−1) die Zellen vollständig bestimmt; und läuft sie,
+wählt sie mit `min(visible, key=count)` ausgerechnet die **kleinste** sichtbare Zelle, minimiert damit
+das Residuum und verrät zusätzlich eine Obergrenze. `_suppress_stage_dict` trägt eine zweite Kopie
+derselben Heuristik.
+
+*Beleg:* der Nachbau wurde gegen die **echten** Funktionen über 28 560 bzw. 2 197 Welten verglichen
+(0 Abweichungen). Isoliert auf die Fälle, in denen die Sekundärregel tatsächlich feuert: **27,5 %**
+(264/960) mit exakt gepinnter Kleinstzelle — die Regel schützt in gut einem Viertel ihrer Einsätze gar
+nicht.
+
+*Empfehlung — schließen (M):* die Heuristik durch ein **Machbarkeits-Audit** ersetzen. Für eine
+eindimensionale Tabelle mit exakt publizierter Randsumme ist die Spanne je unterdrückter Zelle
+geschlossen berechenbar (keine NP-harte Optimierung); solange die kleinste Spanne zu eng ist, fällt
+eine weitere sichtbare Zelle — die **größte** statt der kleinsten, weil das das Residuum und damit die
+Mehrdeutigkeit maximiert (Gegenprobe: „kleinste fällt" hinterlässt 2,5 % Rest-Leak, „größte fällt"
+0,2 %). `_suppress_stage_dict` auf dieselbe Funktion umstellen. **Kostenaussage korrigiert:** Das
+Audit ist **nicht** billiger als der Status quo — über 130 320 Welten unterdrückt es in **keiner** Welt
+weniger Zellen, in 13,5 % mehr, und die unterdrückte Fallmasse steigt von 15,4 % auf 27,8 %, weil
+gezielt die größte Zelle geopfert wird. Das widerspricht direkt der Zusicherung des Bestandstests
+`test_list_single_suppression_triggers_secondary` („größte bleibt sichtbar") und ist damit ein
+**Produktentscheid**: die Spitzenkategorie verschwindet aus Träger-/Förderberichten. Günstigere
+Variante mit denselben 0 Leaks im geprüften Raum: Audit-Schwelle „Spanne ≥ 2" statt „Spanne ≥ k−1".
+**Restfall:** bei unterdrückter Randsumme (`total < k`, R14) argumentiert das Audit ins Leere; dafür
+braucht es die eigene Regel „Tabellenkörper unterdrücken, wenn die Randsumme selbst unterdrückt ist"
+das ist K1, nicht K2.
+
+#### K1 — Struktur-Kollaps / Residuum bei publizierter Randsumme
+
+Randsumme und teilsupprimierte Aufschlüsselung stehen im selben Artefakt, und die Aufschlüsselung ist
+**per Konstruktion die exakte Partition** der Randsumme: `Event.document_type` ist NOT NULL ⇒
+`total_contacts` = Σ `by_document_type`; `Client.ContactStage` hat genau zwei Werte ⇒ anonym +
+identifiziert + qualifiziert = `total_contacts`; im Beispiel-Sachbericht akkumuliert `total` exakt
+dieselben Zeilen wie `by_category`. Damit ist R = Randsumme − Σ sichtbare Zellen exakt bekannt. Vier
+Strukturfakten engen weiter ein: jede ausgewiesene Zeile hat Wert ≥ 1 (GROUP BY erzeugt keine
+Nullzeilen); unterdrückt ⇒ Wert ≤ k−1 (außer bei Sekundärsuppression); bei ≥ 3 unterdrückten Zellen
+sind **alle** primär; und die Zeilenreihenfolge ist eine Ordnungsaussage (K5). An beiden Rändern
+kollabiert die Partition auf genau eine Welt.
+
+*Betroffen:* beide PDFs, externer Bericht (HTML + JSON), Berichts-Export JSON + XML. *Nicht betroffen:*
+CSV (kein `summary`) und das On-Screen-Panel (nur `preview_rows`). *Beleg:* drei durchgerechnete
+Kleinst-Welten mit einwertigem Preimage; quantifiziert (5 Zeilen, Werte 1..8) enthalten **64,1 %** der
+publizierenden Welten mindestens eine exakt rückrechenbare Zelle — Kontrollfall ohne
+`-count`-Sortierung: **3,7 %**.
+
+*Empfehlung — teilweise schließen:* **(1)** K5 (größter Effekt: senkt die Pin-Rate um ~92–94 % und
+macht Restleaks zu Multimengen- statt zeilenscharfen Aussagen). **(2)** Residual-Guard als Fixpunkt
+(M+): die Suppression führt nach Primär-/Sekundärdurchlauf die Inferenz des Empfängers selbst aus und
+unterdrückt nach, solange irgendeine unterdrückte Zelle über alle konsistenten Welten konstant ist;
+bleibt keine sichtbare Zelle übrig, fällt die Randsumme. **Nur gemeinsam mit K5** (Kopplungs-Warnung
+oben). Verifizierte Fallstricke: die geschlossene Intervallformel allein reicht nicht (übersieht
+Sortierung und gemischte Hypothesen), und sobald der Guard auch sichtbare Zellen unterdrückt, entfällt
+die [1, k−1]-Schranke — dann braucht es eine Intervall-Formulierung statt naiver Aufzählung.
+**Verworfen:** Bandausweis der Randsumme (controlled rounding), allein nicht ausreichend und teurer in
+der Utility. *Utility-Kosten des Guards:* Sichten mit Randsumme **und** unterdrückten Zellen gehen im
+Testmodell von 403 auf 151 zurück; K5 **vor** dem Guard ist auch utility-seitig richtig.
+
+*Zusätzliche Invariante für Guard/Test:* Die Identität anonym + identifiziert + qualifiziert =
+`total_contacts` hängt allein daran, dass `Client.ContactStage` genau zwei Werte hat. Ein dritter Wert
+bräche sie **still** und verschöbe die Disclosure-Fläche.
+
+#### K3 — Zwei Grundgesamtheiten nebeneinander
+
+In jedem Artefakt stehen Aggregate über **verschiedenen Basismengen**: `total_contacts`,
+`by_contact_stage` und `by_document_type` zählen alle Ereignisse, `by_age_cluster` und `unique_clients`
+nur Ereignisse **mit** Personenbezug (im Beispiel-Sachbericht zählen `total`/`by_category` sogar nur
+**gemappte** Ereignisse). Die Differenz ist **kein publiziertes Aggregat** und berührt daher keine
+Suppressionsregel — ist aber aus zwei sichtbaren (also gerade nicht unterdrückten, weil großen)
+Randsummen exakt ausrechenbar. Der Kanal erzeugt **kleine Zahlen aus großen**:
+`W := total_contacts − Σ by_age_cluster` sind die Ereignisse ohne Personenbezug, und W darf beliebig
+klein sein. Zweiter Schritt: weil `anonym` als „`is_anonymous` ODER `client IS NULL`" definiert ist,
+folgt **W ≤ anonym** — eine harte Schranke *nach unten*, gegen die die Sekundärsuppression (die
+Mehrdeutigkeit *nach oben* erzeugt) nichts ausrichtet.
+
+*Beleg:* Sweep über 76 910 Welten — die zweite Grundgesamtheit erhöht die Fälle mit exakt bestimmtem
+Stufenvektor um **+89 %**; über 15 728 distinkte Publikationen ist W fast durchweg exakt bestimmbar, in
+**8 820** davon mit 0 < W < k, also als echte Kleinstfallzahl, **ohne dass eine Suppressionsregel
+angesprochen hätte**. Der M5-Schutz `_close_identity_leak` verhindert im Export-Pfad das exakte
+Pinning, die Differenz bleibt aber invariant; im PDF-Pfad läuft `prepare_export` überhaupt nicht.
+
+*Severity-Korrektur (geprüft, nicht tragfähig):* Die Lesart „ungemappte Ereignisse ⇒ mindestens ein
+Hausverbot/eine Notiz" ist **falsch** — `_UNMAPPED_Q` umfasst auch `system_type IS NULL`, und jeder
+einrichtungseigene Dokumenttyp ohne Systemtyp fällt hinein. Korrekt ist nur „mindestens ein Ereignis
+eines Typs ohne Berichts-Mapping".
+
+*Empfehlung — teilweise schließen:* **(A1, M)** im Sachbericht `by_age_cluster` um eine Zeile „ohne
+Personenbezug" ergänzen, sodass Σ = `total_contacts`; W wird damit eine reguläre, suppressionsfähige
+Zelle (gemessen: exaktes W mit 0 < W < k von 8 820 auf **0**). **Drei Auflagen:** die Restzeile muss
+**unbedingt** emittiert werden, auch bei W = 0 (sonst ist ihre bloße Existenz die Aussage W ≥ 1); die
+Snapshot-Merges müssen sie für Alt-Snapshots **synthetisieren**, nicht bloß tolerieren; und die
+Alterstabelle fällt damit **neu** unter K1/K2 — der Guard muss sie mit abdecken. **(A2)** Im
+Beispiel-Sachbericht dieselbe Idee **nicht** naiv umsetzen: eine Zeile „ohne Berichts-Mapping" bei
+unveränderter Randsumme erzeugt einen **neuen** exakten Kanal (485 von 840 durchgerechneten
+Kleinzell-Welten werden pinnbar, heute 0), weil die Sekundärsuppression voraussetzt, dass die Zeilen
+sich auf die publizierte Randsumme summieren; gangbar nur mit umgestellter Randsumme oder
+teilmengenbewusster Sekundärsuppression. **(A3, S, unabhängig)** PDF und externer Bericht benennen die
+Grundgesamtheit je Tabelle heute gar nicht — das ist nicht nur ein Leck, sondern inhaltlich
+irreführend.
+
+#### K4 — Berichtsübergreifende Korrelation
+
+Die Suppression ist ausschließlich **artefakt-lokal**: jede Ausgabe entscheidet neu gegen k, ohne
+Wissen über bereits herausgegebene Artefakte. Es gibt kein Freigabe-Ledger und keine Bindung an eine
+feste Zeitraum-Partition; `date_from`/`date_to` sind frei wählbar (nur Spannen-Cap 1096 Tage).
+
+- **K4a — Zeitraum-Differenz.** Alle Aggregate sind über disjunkte Segmente exakt additiv; für A ⊂ B
+ gilt zellenweise B − A = (B\A), inklusive aller Zellen, die ein direkter Bericht über B\A
+ unterdrücken würde. *Beleg (Regelfall des externen Berichtswesens):* 12 Monats-PDFs + 1 Jahres-PDF
+ eine im März unterdrückte Zelle **inklusive Sekundär-Opfer** ergibt sich aus der Jahressumme minus
+ den 11 sichtbaren Monatszellen. Verschärfung bei verschachtelten Zeiträumen (Jan–Mai und Jan–Jun,
+ Juni = genau ein Ereignis): in **beiden** Artefakten ist keine einzige Zelle unterdrückt, und die
+ Konsistenzklassen für den Juni schrumpfen über mehrere Freigaben auf **eine** — effektives k = 1 bei
+ nominellem k = 5.
+- **K4b — `unique_clients`-Inflation.** `unique_clients` ist als einziges Feld nicht additiv, wird im
+ Hybrid-Pfad aber summiert. Die k-Prüfung läuft damit gegen eine aufgeblähte Zahl (Personen-Monate):
+ 3 Personen × 6 Monate à 1 Kontakt ⇒ PDF publiziert „Einzigartige Personen: 18", während der
+ Live-Export mit distinct = 3 < k unterdrückt. **Ursache ist die monatsweise Segmentierung**, nicht
+ der Snapshot-Inhalt; der „ca."-Hinweis existiert nur im internen Dashboard, in **keinem**
+ exportierten Artefakt.
+- **K4c — Lesequellen-Divergenz.** PDFs lesen Snapshot-Hybrid, externer Bericht und Export live;
+ `enforce_retention` friert Snapshots bewusst **vor** dem Soft-Delete ein. PDF minus Export ist damit
+ ein Fingerabdruck des Gelöschten (Brute-Force über 45 Einzel-Löschkandidaten: genau 2 konsistent,
+ beide derselben Kategorie).
+
+*Empfehlung:* **K4b schließen (S–M, Priorität 1)** — in keinem extern zirkulierenden Artefakt darf eine
+über Monate summierte Personenzahl als „Einzigartige Personen" erscheinen, und die k-Prüfung darf nie
+gegen die Summe laufen; bevorzugt Full-Range-**distinct** als eigener Term (dasselbe Muster, das der
+Hybrid-Pfad für `top_clients` schon verwendet). Gemeinsam mit
+#1743 lösen, das den Punkt heute als
+Genauigkeitsfrage führt — er ist ein Suppressions-Bypass; K4b ist außerdem **Voraussetzung** für jede
+Vereinheitlichung der Lesequelle. **K4c (S, abgewertet)** ist ein Spezialfall generischer
+Snapshot-Staleness; belastbar sind (i) Quelle + Snapshot-Stand in jedes extern zirkulierende Artefakt
+**stempeln** (die CSV-Metazeile ist das Muster), (ii) im Löschkonzept festhalten, dass eingefrorene
+Aggregate die Löschung überleben, (iii) Handlungsanweisung „PDF und Live-Export desselben Zeitraums
+nicht an denselben Empfänger". **K4a akzeptieren** (siehe unten), flankierend eine
+**Freigabe-Übersicht** aus den ohnehin auditierten Exporten — mit zwei Auflagen: das `EXPORT`-Detail
+braucht ein Empfänger-/Zweckfeld (sonst Alarmmüdigkeit bei jedem Überlapp), und die Historie darf nicht
+von `auditlog_retention_months` gekappt werden, sonst täuscht die Übersicht Vollständigkeit vor.
+**Nicht empfohlen:** ein Kalenderraster für Berichtszeiträume (bricht nicht-kalendarische
+Förderzeiträume und **erhöht** die Ausnutzbarkeit der Partitions-Rückrechnung) sowie echtes
+Query-Auditing/DP mit Budget (korrekt, aber unverhältnismäßig für ein Werkzeug, dessen Betreiberin
+legitim Vollzugriff auf die Rohdaten hat).
+
+#### Akzeptierte Definitionsgrenzen
+
+Drei Restkanäle sind **nicht** schließbar, ohne das Verfahren selbst aufzugeben. Sie sind bewusst
+akzeptiert und gehören in die Kommunikation gegenüber Empfängern:
+
+1. **Die Summe der unterdrückten Zellen ist exakt bekannt.** R = Randsumme − Σ sichtbare Zellen, und
+ jede unterdrückte Zelle bleibt auf ein Teilintervall von [1, k−1] eingeschränkt. Das ist die
+ Definition von Zell-Suppression: k-Anonymität schützt Merkmalskombinationen, nicht die
+ Randsummen-Arithmetik. R zu eliminieren hieße, die Randsumme aufzugeben (in
+ [ADR-023](adr/023-k-anonymization-statistik.md) aus Utility-Gründen verworfen) oder Rauschen/DP
+ einzuführen (dort explizit vertagt). Ebenfalls untrennbar: der Ausweis „unterdrückt" verrät, dass es
+ in dieser Aufschlüsselung eine Zelle < k gibt — und dieser Ausweis ist gewollt (Nichtirreführung).
+2. **Ungleichungen zwischen Personen- und Ereigniszählungen.** `unique_clients` zählt **Personen**, die
+ Tabellen zählen **Ereignisse**; zwischen zwei Maßeinheiten gibt es keine gemeinsame
+ Grundgesamtheit, an der eine Zell-Suppression ansetzen könnte. Wer das schließen will, braucht
+ kontrolliertes Runden/Intervallausweis statt Suppression — ein anderes SDC-Verfahren mit
+ erheblichem Nutzenverlust. **Nicht** von dieser Akzeptanz gedeckt: K4b (das ist ein Bug, keine
+ Grenze) und die Lesequellen-Divergenz K4c.
+3. **Die Differenz mehrerer Freigaben über verschachtelte Zeiträume (K4a).** k-Anonymität ist eine
+ Eigenschaft **einer** veröffentlichten Tabelle über **einer** Grundgesamtheit. Im Regelfall
+ (Monatsberichte plus Jahresbericht) sind beide Artefakte für sich vollständig k-anonym — es gibt
+ keine Zelle, an der eine artefakt-lokale Suppression ansetzen könnte. Der Kanal ist nicht durch M5
+ entstanden, er ist der Familie inhärent, seit sie frei wählbare Zeiträume anbietet.
+
+Formulierung für die Empfänger-Kommunikation:
+
+> Die k-Anonymitäts-Zusicherung gilt **je Artefakt und je Zeitraum**. Werden für dieselbe Einrichtung
+> Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (z. B. Monatsberichte plus
+> Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen
+> exakt zurückrechnen — auch dann, wenn die Sekundärsuppression gegriffen hat, und auch dann, wenn in
+> keinem der beteiligten Berichte eine einzige Zelle unterdrückt wurde.
+
+Betriebshinweis: Berichtszeiträume nicht unter einem Monat wählen.
+
+#### Geprüft und nicht tragfähig
+
+Damit diese Punkte nicht erneut untersucht werden:
+
+- **`by_age_cluster` als Residuum-Kanal (K1):** widerlegt — kein Artefakt publiziert heute eine
+ Randsumme = Σ Altersgruppen. *Wird* tragfähig, sobald K3-A1 die Restzeile einführt.
+- **Primär/Sekundär allein an der Zeilenposition unterscheidbar (K5):** widerlegt in der generischen
+ Form — in 40 % der Zwei-Zellen-Fälle sind beide primär; der Schluss braucht eine publizierte
+ Untergrenze für die Summe.
+- **„Residual-Guard allein bringt 0 Pins" (K1):** widerlegt — 24/853 Sichten behalten einen exakten
+ Pin; die Aussage war zirkulär validiert (Kopplungs-Warnung).
+- **„Machbarkeits-Audit kostet weniger Information als der Status quo" (K2):** widerlegt — es
+ unterdrückt in keiner Welt weniger, in 13,5 % mehr Zellen.
+- **CSV-Export** trägt K1, K3, K5 und K6 **nicht** (nur `records` + Metazeile); das
+ **On-Screen-Panel** trägt K1 und K3 nicht, K6 **doch**.
+- Frühere Zwischenstände nannten Rest-Pins, die sich bei vollständiger Preimage-Auswertung auflösten.
+ Verbindlich ist nur das Kriterium „publizierte Randsumme ≤ Enumerationsgrenze".
+
+#### Regressionsschutz (bei Umsetzung erforderlich)
+
+Einzelfall-Asserts haben diese Kanalklasse jahrelang nicht gefunden. Erforderlich sind: **(1)** ein
+Kleinst-Welt-Enumerationstest über die publizierte Sicht mit der Invariante „keine unterdrückte Zelle
+ist über das Preimage eindeutig bestimmt" — **Auflage:** nur Beobachtungen werten, deren publizierte
+Randsumme ≤ Enumerationsgrenze ist; **(2)** ein Ordnungstest (zwei Welten mit vertauschten Zellwerten
+müssen dieselbe Ausgabe erzeugen); **(3)** ein Architektur-Guard, der neue Artefakte mit Randsumme +
+Aufschlüsselung durch dieselbe Suppressionsfunktion zwingt; **(4)** ein K0-Test (4 Personen à 5
+Kontakte in 4 Clustern ⇒ keine sichtbare Alterszelle; 3 Personen × 6 Monate ⇒ keine Personenzahl ≥ k
+im PDF); **(5)** ein Invarianten-Test, dass `Client.ContactStage` genau zwei Werte hat.
 
 ---
 
