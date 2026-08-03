@@ -189,7 +189,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     ),
     # M5 P3 (Refs #1061): backend-unabhaengige Map ``slug -> Roh-Aggregat``.
     # Inhaltlich dieselbe Klasse wie ``jugendamt_data`` — die Backends liefern
-    # per ``DatasetResult.summary`` ausschliesslich Aggregate.
+    # per ``DatasetResult.summary`` ausschliesslich Aggregate. Diese pauschale
+    # Einordnung traegt nur, solange der Vertrag am Attribut ``snapshot_enabled``
+    # (``core/reporting/base.py``: aggregatrein, keine Pseudonyme/Personenzeilen/
+    # Freitexte) eingehalten wird — wer ihn aufweicht, muss diesen Eintrag mit
+    # aendern.
     non_pii(
         "core_statisticssnapshot",
         "backend_data",

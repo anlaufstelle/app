@@ -111,7 +111,8 @@ class TestCreateOrUpdateSnapshotBranches:
     - ``date(year, month, 1)`` → andere Defaults.
     - ``date(year, month, last_day)`` → off-by-one am Monatsende.
     - ``update_or_create`` → ``create`` (würde IntegrityError bei Update).
-    - ``defaults={"data": stats, "jugendamt_data": jg_stats}`` — beide Keys.
+    - ``defaults={"data": …, "backend_data": …, "jugendamt_data": …}`` — alle
+      drei Keys (seit M5 P3, Refs #1061; vorher nur ``data``/``jugendamt_data``).
     """
 
     def test_creates_new_snapshot_when_none_exists(self, facility, staff_user, client_identified, doc_type_contact):
@@ -215,10 +216,12 @@ class TestCreateOrUpdateSnapshotBranches:
         assert "top_clients" not in snap.data, "top_clients darf nicht in Snapshot landen (PII-Risiko)"
 
     def test_jugendamt_data_persisted_separately(self, facility, staff_user, client_identified):
-        """``defaults={..., "jugendamt_data": jg_stats}`` — separater Feldlauf.
+        """``defaults={..., "jugendamt_data": payloads.get("jugendamt", {})}`` — separater Feldlauf.
 
-        Mutation ``jg_stats`` → ``{}`` oder Vertauschung mit ``data`` würde
-        ``jugendamt_data`` leeren oder duplizieren.
+        Seit M5 P3 (Refs #1061) speist sich das Feld aus der ``backend_data``-Map
+        (Dual-Write), ``defaults`` traegt drei Keys. Mutation des Werts → ``{}``
+        oder Vertauschung mit ``data`` würde ``jugendamt_data`` leeren oder
+        duplizieren.
         """
         dt = DocumentType.objects.create(
             facility=facility,

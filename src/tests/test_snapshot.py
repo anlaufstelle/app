@@ -215,10 +215,10 @@ class TestBackendDataDualWrite:
         mit nur einem echten Backend waere er sonst nicht beobachtbar.
         """
         registry._discover()
-        isolierte_registry = dict(registry._REGISTRY)
-        isolierte_registry["mit_snapshot"] = _DummyBackend("mit_snapshot", snapshot_enabled=True)
-        isolierte_registry["ohne_snapshot"] = _DummyBackend("ohne_snapshot", snapshot_enabled=False)
-        monkeypatch.setattr(registry, "_REGISTRY", isolierte_registry)
+        isolated_registry = dict(registry._REGISTRY)
+        isolated_registry["mit_snapshot"] = _DummyBackend("mit_snapshot", snapshot_enabled=True)
+        isolated_registry["ohne_snapshot"] = _DummyBackend("ohne_snapshot", snapshot_enabled=False)
+        monkeypatch.setattr(registry, "_REGISTRY", isolated_registry)
         monkeypatch.setattr(registry, "_discovered", True)
 
         snap = self._snapshot_with_jugendamt_event(facility, staff_user, client_identified)

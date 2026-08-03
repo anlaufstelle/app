@@ -43,7 +43,7 @@ from django.db import migrations
 _BATCH_SIZE = 500
 
 
-def _kandidaten(StatisticsSnapshot):
+def _candidates(StatisticsSnapshot):
     """Snapshots mit befuelltem ``backend_data["jugendamt"]``-Nachtrag.
 
     Uebersprungen werden Zeilen ohne ``jugendamt_data`` (nichts zu uebernehmen)
@@ -59,7 +59,7 @@ def _kandidaten(StatisticsSnapshot):
 
 def backfill_backend_data(apps, schema_editor):
     StatisticsSnapshot = apps.get_model("core", "StatisticsSnapshot")
-    for batch in batched(_kandidaten(StatisticsSnapshot), _BATCH_SIZE):
+    for batch in batched(_candidates(StatisticsSnapshot), _BATCH_SIZE):
         StatisticsSnapshot.objects.bulk_update(batch, ["backend_data"])
 
 

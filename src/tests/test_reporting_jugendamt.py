@@ -2,8 +2,8 @@
 
 Die Erwartungswerte sind **hart kodiert** und nicht gegen die alte
 ``get_jugendamt_statistics`` gerechnet: Der Shim in
-``core/services/system/export.py`` faellt in P3 weg, die Verhaltensparitaet
-muss diesen Wegfall ueberleben.
+``core/services/system/export.py`` wurde mit der ``backend_data``-Umstellung
+(P3) entfernt — die Verhaltensparitaet haelt ohne ihn.
 """
 
 import csv

@@ -72,6 +72,18 @@ class DatasetBackend(ABC):
 
     slug: str = ""  # wird von @register_backend gesetzt/validiert
     name: str = ""  # Anzeigename im UI-Dropdown (gettext_lazy-fähig)
+    # **Vertrag von ``snapshot_enabled``** (M5 P3, Refs #1061): Das ``summary``
+    # eines so markierten Backends muss **aggregatrein** sein — keine
+    # Pseudonyme, keine Personenzeilen, keine Freitexte.
+    #
+    # Der Grund liegt ausserhalb dieses Moduls: Der Payload wird **roh** (also
+    # ohne ``prepare_export`` und damit ohne K-Anon-Suppression) in
+    # ``StatisticsSnapshot.backend_data`` persistiert, und diese Spalte ist im
+    # PII-Residue-Sweep **pauschal** als non-PII klassifiziert
+    # (``src/tests/_residue_expectations.py``) — die Klassifikation prueft den
+    # Inhalt nicht je Backend nach. Ein Backend, dessen Aggregat diese Zusage
+    # nicht halten kann, bleibt ``snapshot_enabled = False``; sonst wandert PII
+    # an der Klassifikation vorbei in den Snapshot.
     snapshot_enabled: bool = False  # True → summary landet in StatisticsSnapshot.backend_data
 
     def is_available(self, facility) -> bool:  # Hook für facility-abhängige Backends
