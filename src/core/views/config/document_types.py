@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 
 from core.forms.config import DocumentTypeFieldAddForm, DocumentTypeForm
-from core.models import DocumentType, DocumentTypeField, Event, FieldGroup, QuickTemplate
+from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldGroup, QuickTemplate
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.views.mixins import (
@@ -201,13 +201,27 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         event_count = Event.objects.filter(document_type=doc_type).count()
+        # P9-Fix-Runde 1 (V-2, Refs #1058): Client.document_type/Case.document_type
+        # sind seit M2 ebenfalls PROTECT (wie Event.document_type) — die
+        # Vorab-Warnung muss dieselben Blocker zeigen wie der eigentliche
+        # Löschversuch (config_service.delete_document_type), sonst sieht der
+        # Dialog einen aktivierten „Endgültig löschen“-Button, obwohl der POST
+        # danach mit ConfigDeleteBlocked scheitert (kein 500, aber irreführende UX).
+        client_count = Client.objects.filter(document_type=doc_type).count()
+        case_count = Case.objects.filter(document_type=doc_type).count()
         # QuickTemplate.document_type ist FK CASCADE: zugehörige Schnellvorlagen
         # werden beim Löschen still mitentfernt — die Kaskade im Dialog ausweisen.
         quick_template_count = QuickTemplate.objects.filter(document_type=doc_type).count()
         return render(
             request,
             "core/config/document_types/confirm_delete.html",
-            {"doc_type": doc_type, "event_count": event_count, "quick_template_count": quick_template_count},
+            {
+                "doc_type": doc_type,
+                "event_count": event_count,
+                "client_count": client_count,
+                "case_count": case_count,
+                "quick_template_count": quick_template_count,
+            },
         )
 
     def post(self, request, pk):

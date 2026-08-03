@@ -11,9 +11,29 @@
     </p>
 
     {% if event_count %}
-    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker">
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker-event">
         <p class="text-[13px] text-amber-800">
             {% blocktrans count n=event_count %}{{ n }} Ereignis verweist auf diesen Typ — ein Löschen ist daher nicht möglich.{% plural %}{{ n }} Ereignisse verweisen auf diesen Typ — ein Löschen ist daher nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    {% endif %}
+
+    {% if client_count %}
+    {# P9-Fix-Runde 1 (V-2, Refs #1058): Client.document_type ist PROTECT, wie #}
+    {# Event.document_type — dieselbe Vorab-Warnung, eigener data-testid. #}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker-client">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans count n=client_count %}{{ n }} Person ist diesem Typ zugeordnet — ein Löschen ist daher nicht möglich.{% plural %}{{ n }} Personen sind diesem Typ zugeordnet — ein Löschen ist daher nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    {% endif %}
+
+    {% if case_count %}
+    {# P9-Fix-Runde 1 (V-2, Refs #1058): Case.document_type ist PROTECT, wie #}
+    {# Event.document_type — dieselbe Vorab-Warnung, eigener data-testid. #}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker-case">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans count n=case_count %}{{ n }} Fall ist diesem Typ zugeordnet — ein Löschen ist daher nicht möglich.{% plural %}{{ n }} Fälle sind diesem Typ zugeordnet — ein Löschen ist daher nicht möglich.{% endblocktrans %}
         </p>
     </div>
     {% endif %}
@@ -37,7 +57,7 @@
 
     <form method="post" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         {% csrf_token %}
-        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if event_count %}disabled aria-disabled="true"{% endif %} data-testid="doctype-delete-confirm">
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if event_count or client_count or case_count %}disabled aria-disabled="true"{% endif %} data-testid="doctype-delete-confirm">
             {% trans "Endgültig löschen" %}
         </button>
         <a href="{% url 'core:config_doctype_detail' doc_type.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>

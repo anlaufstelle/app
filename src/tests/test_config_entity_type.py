@@ -13,14 +13,24 @@ Deckt:
    zuordenbar (Schicht 1 = Paketformat, Schicht 3 = stille Formular-
    Auslassung — beide Bestand).
 4. Den ``entity_type``-Badge in Liste/Detail.
-5. Dokumentiert (nicht behoben — außerhalb des P9-Scopes) die Live-Vorschau-
-   Lücke für client-/case-Typen.
+5. (Fix-Runde 1, V-1) Die Live-Vorschau wählt jetzt die passende
+   ``*_fields_partial``-URL nach ``entity_type`` statt hart auf
+   ``event_fields_partial`` zu zeigen (vormals dokumentierte 404-Lücke,
+   ``TestLivePreviewEntityTypeGapDocumented`` — durch
+   ``TestLivePreviewEntityTypeAware`` ersetzt).
+6. (Fix-Runde 1, V-2) Die Delete-Confirm-Seite zeigt jetzt Client-/Case-
+   Zähler + Warnbox + deaktivierten Löschen-Button, analog ``event_count``.
 
 Nutzt ausschließlich Bestandsfixtures (``doc_type_contact``/
 ``doc_type_client_profile``/``doc_type_case_form``/``client_identified``/
-``case_open``, alle aus ``conftest.py``) — ``conftest.py``/``core/urls.py``/
-``_authz_expectations.py`` sind P8-Hoheitsgebiet (parallel), hier NICHT
-angefasst.
+``case_open``, alle aus ``conftest.py``). Die Datei-Scope-Beschränkung aus der
+ersten P9-Runde (``core/urls.py``/``_authz_expectations.py``/``conftest.py``
+= P8-Hoheitsgebiet) ist für diese Fix-Runde vom Controller aufgehoben (P8 ist
+fertig, berührt ``views/config``/Config-Templates nicht) — die neuen Tests
+nutzen zusätzlich ``core:client_fields_partial``/``core:case_fields_partial``
+(P7/P8, jetzt via ``git merge m2-p8`` im Worktree verfügbar) sowie
+``client_count``/``case_count`` im View-Context von
+``ConfigDocumentTypeDeleteView``.
 """
 
 from __future__ import annotations
@@ -379,39 +389,141 @@ class TestEntityTypeBadge:
 
 
 # ---------------------------------------------------------------------------
-# Befund (dokumentiert, NICHT gefixt — außerhalb des P9-Scopes): Live-Vorschau
+# Live-Vorschau — entity_type-Weiche (P9-Fix-Runde 1, V-1, Refs #1058)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-class TestLivePreviewEntityTypeGapDocumented:
-    """Dokumentiert einen Befund (P9-Brief: "Prüfen ... Befund in den Report,
-    kein Umbau ohne Not") — bewusst NICHT gefixt.
-
-    Die Live-Formularvorschau auf der Detailseite (M0-P11,
-    ``core/config/document_types/detail.html``) rendert bedingungslos ein
-    ``hx-get`` auf ``core:event_fields_partial``. Dessen View
-    (``EventFieldsPartialView.get``) scoped den Lookup fest auf
-    ``entity_type=EVENT`` (Strichlisten-/Formular-Konsistenz-Guard, Refs
-    #1058) — für client-/case-Dokumentationstypen liefert der Endpunkt daher
-    planmäßig 404 statt einer Formularvorschau. In der Praxis bleibt die Pane
-    dauerhaft bei "Vorschau wird geladen …" hängen, UND der globale
-    HTMX-Fehler-Handler (``htmx-errors.js``, ``htmx:responseError``) blendet
-    bei jedem initialen Laden UND jedem Board-Refresh (Folge-Trigger
-    ``refresh-preview``) einen Fehler-Toast ein. Kein 500 — aber die
-    Live-Vorschau ist für client/case-Typen funktional nutzlos.
-
-    Das Feld-Board selbst (``field_board.html`` + zugehörige Views) ist
-    dagegen entity-agnostisch und funktioniert für client/case out-of-the-box
-    (siehe ``TestFileFieldEntityTypeGuard.test_ui_flow_non_file_field_on_client_type_succeeds``).
+class TestLivePreviewEntityTypeAware:
+    """Ersetzt die vormals dokumentierte Lücke (ehem.
+    ``TestLivePreviewEntityTypeGapDocumented`` — 404 für client/case, s. P9-
+    Report/Fix-Runde 1, V-1): Die Live-Vorschau wählt die hx-get-URL jetzt nach
+    ``doc_type.entity_type`` — ``client_fields_partial``/``case_fields_partial``
+    (P7/P8) statt hart ``event_fields_partial``. Alle drei Partials rendern
+    dasselbe geteilte Template (``core/partials/dynamic_fields.html``) und
+    liefern bei einem reinen ``?document_type=`` (ohne ``client=``/``case=``)
+    anstandslos ein ungebundenes Formular — kein Kontext-Vertragsbruch, daher
+    kein Fallback-Hinweis nötig (Entscheidung s. Report).
     """
 
-    def test_event_fields_partial_404_for_client_doctype(self, client, admin_user, doc_type_client_profile):
+    def test_detail_uses_client_partial_for_client_type(self, client, admin_user, doc_type_client_profile):
         client.force_login(admin_user)
-        response = client.get(reverse("core:event_fields_partial"), {"document_type": str(doc_type_client_profile.pk)})
-        assert response.status_code == 404
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_client_profile.pk}))
+        body = response.content.decode()
+        client_partial_url = reverse("core:client_fields_partial")
+        assert f'hx-get="{client_partial_url}?document_type={doc_type_client_profile.pk}"' in body
+        # KEIN hx-get auf event_fields_partial mehr im Markup (V-1-Vorgabe) —
+        # sonst käme weiterhin der 404-Toast aus htmx-errors.js.
+        assert reverse("core:event_fields_partial") not in body
 
-    def test_event_fields_partial_404_for_case_doctype(self, client, admin_user, doc_type_case_form):
+    def test_detail_uses_case_partial_for_case_type(self, client, admin_user, doc_type_case_form):
         client.force_login(admin_user)
-        response = client.get(reverse("core:event_fields_partial"), {"document_type": str(doc_type_case_form.pk)})
-        assert response.status_code == 404
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_case_form.pk}))
+        body = response.content.decode()
+        case_partial_url = reverse("core:case_fields_partial")
+        assert f'hx-get="{case_partial_url}?document_type={doc_type_case_form.pk}"' in body
+        assert reverse("core:event_fields_partial") not in body
+
+    def test_detail_still_uses_event_partial_for_event_type(self, client, admin_user, doc_type_contact):
+        # Regression: Event-Typen zeigen weiterhin auf event_fields_partial.
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        body = response.content.decode()
+        event_partial_url = reverse("core:event_fields_partial")
+        assert f'hx-get="{event_partial_url}?document_type={doc_type_contact.pk}"' in body
+
+    def test_client_partial_returns_200_with_field_markup(self, client, admin_user, doc_type_client_profile):
+        client.force_login(admin_user)
+        response = client.get(reverse("core:client_fields_partial"), {"document_type": str(doc_type_client_profile.pk)})
+        assert response.status_code == 200
+        # Feldname aus der Fixture (FieldTemplate.name ist die Form-Label-Quelle,
+        # forms/dynamic.py) muss im gerenderten (ungebundenen) Formular auftauchen.
+        assert "Wohnsituation" in response.content.decode()
+
+    def test_case_partial_returns_200_with_field_markup(self, client, admin_user, doc_type_case_form):
+        client.force_login(admin_user)
+        response = client.get(reverse("core:case_fields_partial"), {"document_type": str(doc_type_case_form.pk)})
+        assert response.status_code == 200
+        assert "Anlass" in response.content.decode()
+
+
+# ---------------------------------------------------------------------------
+# Delete-Confirm-Vorwarnung — Client-/Case-Zähler (P9-Fix-Runde 1, V-2, Refs #1058)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestDeleteConfirmClientCaseCounters:
+    """Vorab-Zähler auf der Confirm-Seite (GET) für Client-/Case-Referenzen,
+    exakt wie beim bestehenden Event-Pfad: Warnbox + deaktivierter
+    „Endgültig löschen“-Button. Vorher zeigte die Confirm-Seite nur den
+    ``event_count`` — ein Typ mit ausschließlich Client-/Case-Referenzen hätte
+    einen aktivierten Button gezeigt, obwohl der POST danach über
+    ``ConfigDeleteBlocked`` scheitert (kein 500, aber irreführende UX)."""
+
+    def test_confirm_page_shows_client_count_and_disables_button(
+        self, client, admin_user, facility, doc_type_client_profile, staff_user
+    ):
+        Client.objects.create(
+            facility=facility, pseudonym="Confirm-01", document_type=doc_type_client_profile, created_by=staff_user
+        )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": doc_type_client_profile.pk}))
+        assert response.status_code == 200
+        assert response.context["client_count"] == 1
+        body = response.content.decode()
+        assert 'data-testid="doctype-delete-blocker-client"' in body
+        assert 'disabled aria-disabled="true"' in body
+
+    def test_confirm_page_shows_case_count_and_disables_button(
+        self, client, admin_user, facility, doc_type_case_form, client_identified, staff_user
+    ):
+        Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_case_form,
+            title="Confirm-Fall",
+            created_by=staff_user,
+        )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": doc_type_case_form.pk}))
+        assert response.status_code == 200
+        assert response.context["case_count"] == 1
+        body = response.content.decode()
+        assert 'data-testid="doctype-delete-blocker-case"' in body
+        assert 'disabled aria-disabled="true"' in body
+
+    def test_confirm_page_event_only_case_unchanged(
+        self, client, admin_user, facility, client_identified, doc_type_contact, staff_user
+    ):
+        # Regression (Bestand, Muster test_confirm_page_shows_event_count):
+        # ein reiner Event-Verweis bleibt exakt wie vorher — Button disabled,
+        # Event-Blocker-Box da, KEINE Client-/Case-Boxen, Zähler beide 0.
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": doc_type_contact.pk}))
+        assert response.status_code == 200
+        assert response.context["client_count"] == 0
+        assert response.context["case_count"] == 0
+        body = response.content.decode()
+        assert 'data-testid="doctype-delete-blocker-event"' in body
+        assert 'data-testid="doctype-delete-blocker-client"' not in body
+        assert 'data-testid="doctype-delete-blocker-case"' not in body
+        assert 'disabled aria-disabled="true"' in body
+
+    def test_confirm_page_no_references_button_enabled(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Frisch ohne Refs", category="contact")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
+        assert response.status_code == 200
+        assert response.context["client_count"] == 0
+        assert response.context["case_count"] == 0
+        assert response.context["event_count"] == 0
+        assert 'disabled aria-disabled="true"' not in response.content.decode()

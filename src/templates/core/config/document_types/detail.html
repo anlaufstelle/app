@@ -88,13 +88,21 @@
     </div>
 
     {% comment %}
-    Live-Formularvorschau (P11, Refs #1056): einklappbare Sektion, die das ECHTE
-    Event-Formular-Partial für diesen Typ per HTMX lädt (kein JS-Duplikat der
-    Feld-Renderer). Aktualisiert sich nach jeder Board-Mutation über das am Body
-    gebubbelte ``refresh-preview``-Event (HX-Trigger-Header aus board_response) —
-    CSP-konform, kein Inline-JS. Der Ein-/Ausklapp-Zustand liegt in der
-    ``configPreview``-Alpine-Komponente (nur benannte Property-/Methoden-Pfade).
-    Inaktive Typen filtert das Partial (is_active=True) weg → Hinweis statt Pane.
+    Live-Formularvorschau (P11, Refs #1056; entity_type-Weiche P9-Fix-Runde 1,
+    Refs #1058, V-1): einklappbare Sektion, die das ECHTE Formular-Partial für
+    diesen Typ per HTMX lädt (kein JS-Duplikat der Feld-Renderer). Die
+    hx-get-URL wird nach ``doc_type.entity_type`` gewählt — event nutzt
+    ``event_fields_partial``, client/case die P7/P8-Pendants
+    ``client_fields_partial``/``case_fields_partial``. Alle drei rendern
+    dasselbe geteilte Partial ``core/partials/dynamic_fields.html`` und liefern
+    bei einem reinen ``?document_type=`` (ohne ``client=``/``case=``) ein
+    ungebundenes Formular — exakt der Vorschau-Vertrag hier (kein Person-/
+    Fall-Kontext verfügbar/nötig). Aktualisiert sich nach jeder Board-Mutation
+    über das am Body gebubbelte ``refresh-preview``-Event (HX-Trigger-Header aus
+    board_response) — CSP-konform, kein Inline-JS. Der Ein-/Ausklapp-Zustand
+    liegt in der ``configPreview``-Alpine-Komponente (nur benannte Property-/
+    Methoden-Pfade). Inaktive Typen filtert das Partial (is_active=True) weg →
+    Hinweis statt Pane.
     {% endcomment %}
     <div class="mt-8" x-data="configPreview" data-start-open="true" data-testid="config-preview">
         <button type="button" @click="toggle" aria-expanded="true" :aria-expanded="ariaExpanded"
@@ -107,8 +115,15 @@
         </button>
         <div x-show="open">
             {% if doc_type.is_active %}
+            {% if doc_type.entity_type == "client" %}
+            {% url 'core:client_fields_partial' as preview_partial_url %}
+            {% elif doc_type.entity_type == "case" %}
+            {% url 'core:case_fields_partial' as preview_partial_url %}
+            {% else %}
+            {% url 'core:event_fields_partial' as preview_partial_url %}
+            {% endif %}
             <div class="card p-5" data-testid="config-preview-pane"
-                 hx-get="{% url 'core:event_fields_partial' %}?document_type={{ doc_type.pk }}"
+                 hx-get="{{ preview_partial_url }}?document_type={{ doc_type.pk }}"
                  hx-trigger="load, refresh-preview from:body"
                  hx-swap="innerHTML">
                 <p class="text-[13px] text-ink-muted">{% trans "Vorschau wird geladen …" %}</p>
