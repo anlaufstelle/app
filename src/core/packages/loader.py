@@ -294,6 +294,14 @@ def _apply_field_refs(
     Reihenfolge im Block, ohne Gruppe die eigene Position in der globalen
     Block-Sequenz. Der Loader schreibt den deklarierten Wert unverändert.
     """
+    # Reserved-Slug-Guard (Refs #1726): hier ist KEIN eigener Guard nötig. Eine
+    # ``field_ref`` kann nur eine Vorlage aus ``templates`` zuordnen, und
+    # ``templates`` stammt ausschliesslich aus ``package.field_templates`` (via
+    # ``_apply_field_templates``); das Paket-Schema (``_parse_field_template``)
+    # lehnt reservierte Slugs bereits beim Parsen ab. Ein ``field_ref`` auf einen
+    # reservierten Slug fände die Vorlage also nie in ``templates`` und würde als
+    # „Feldvorlage konnte nicht angelegt werden" gemeldet — die Zuordnung einer
+    # BESTEHENDEN Reserved-Slug-DB-Vorlage ist über diesen Pfad nicht erreichbar.
     fields: dict[str, DocumentTypeField] = {}
     for ref_def in doc_def.field_refs:
         identifier = f"{doc_def.slug}/{ref_def.template_slug}"

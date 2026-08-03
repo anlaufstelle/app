@@ -330,6 +330,27 @@ class TestAddRemoveField:
         with pytest.raises(ValidationError):
             add_field_to_doctype(req, doc_type_contact, existing_ft)
 
+    def test_add_reserved_slug_template_raises_and_creates_nothing(self, req, facility, doc_type_contact):
+        """Refs #1726: Der Reserved-Slug-Guard fehlte bislang an der ZUORDNUNG.
+
+        Eine Bestands-Feldvorlage mit reserviertem Slug (z. B. ``title``) — vor
+        dem #1726-Guard via Bulk/DB entstanden, von Migration 0120 nur
+        inventarisiert, NICHT umbenannt — liess sich weiterhin einem
+        Dokumentationstyp zuordnen und loeste die #1726-Formularfeld-Kollision
+        aus: das dynamische Feld wuerde nackt als ``<input name="title">`` im
+        selben ``<form>`` wie ``CaseForm.title`` gerendert und beim Absenden den
+        festen Wert ueberschreiben (stiller Datenverlust). ``bulk_create`` umgeht
+        ``Model.clean()``/``save()`` — genau wie der Bestand vor dem Guard.
+        """
+        (legacy,) = FieldTemplate.objects.bulk_create(
+            [FieldTemplate(facility=facility, name="Titel-Alt", slug="title", field_type="text")]
+        )
+        before = DocumentTypeField.objects.filter(document_type=doc_type_contact).count()
+        with pytest.raises(ValidationError, match="festen Formularfeld"):
+            add_field_to_doctype(req, doc_type_contact, legacy)
+        assert DocumentTypeField.objects.filter(document_type=doc_type_contact).count() == before
+        assert not DocumentTypeField.objects.filter(document_type=doc_type_contact, field_template=legacy).exists()
+
     def test_add_with_foreign_group_raises_and_creates_nothing(self, req, facility, doc_type_contact):
         # Befund A (Refs #1056): eine FieldGroup aus einem FREMDEN DocumentType
         # darf nicht durchrutschen — .create() ruft full_clean() nie auf, der

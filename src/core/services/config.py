@@ -46,6 +46,7 @@ from core.models import (
     FieldGroup,
     FieldTemplate,
 )
+from core.models.document_type import _RESERVED_SLUGS
 from core.services.audit import log_audit_event
 
 
@@ -385,6 +386,24 @@ def add_field_to_doctype(
     # move_field (ValueError → HTTP 400).
     if field_group is not None and field_group.document_type_id != doc_type.id:
         raise ValueError(_("Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."))
+
+    # Reserved-Slug-Guard (Refs #1726): der #1726-Guard sitzt an der ERZEUGUNG
+    # einer Feldvorlage (Config-Form, Modell-clean()/save(), Paket-Schema) — nicht
+    # an dieser ZUORDNUNG. Eine Bestands-Vorlage mit reserviertem Slug (vor dem
+    # Guard via .create()/Bulk/DB entstanden; Migration 0120 inventarisiert solche
+    # Slugs nur, benennt sie NICHT um) liesse sich sonst hier zuordnen, und das
+    # dynamische Feld würde nackt unter seinem Slug im selben ``<form>`` das
+    # gleichnamige feste Formularfeld überschreiben (stiller Datenverlust — genau
+    # der Effekt, den #1726 verhindern soll). Fehlerklasse wie der FILE-Guard:
+    # ValidationError (View → Formfehler statt 500).
+    if field_template.slug in _RESERVED_SLUGS:
+        raise ValidationError(
+            _(
+                "Der Slug „%(slug)s“ dieser Feldvorlage kollidiert mit einem festen "
+                "Formularfeld und kann nicht zugeordnet werden."
+            )
+            % {"slug": field_template.slug}
+        )
 
     if (
         field_template.field_type == FieldTemplate.FieldType.FILE
