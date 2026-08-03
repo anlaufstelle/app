@@ -296,7 +296,7 @@ Methodik:
 | B | Meilensteine | 3 | 3 | 0 | 100 % |
 | B | Offline | 18 | 13 | 5 | 72 % |
 | B | Pwa | 6 | 4 | 2 | 67 % |
-| B | Statistik | 8 | 8 | 0 | 100 % |
+| B | Statistik | 15 | 14 | 1 | 93 % |
 | B | Suche | 6 | 6 | 0 | 100 % |
 | B | Sudo | 4 | 4 | 0 | 100 % |
 | B | Sys | 6 | 6 | 0 | 100 % |
@@ -323,10 +323,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 223 | 164 | 59 | 74 % |
+| B | 230 | 170 | 60 | 74 % |
 | C | 34 | 8 | 26 | 24 % |
 | D | 42 | 13 | 29 | 31 % |
-| **Gesamt** | **311** | **197** | **114** | **63 %** |
+| **Gesamt** | **318** | **203** | **115** | **64 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

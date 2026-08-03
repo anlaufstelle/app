@@ -4072,13 +4072,13 @@
 </details>
 
 <details open>
-<summary><strong>📊 STAT — Statistik (8 Cases)</strong></summary>
+<summary><strong>📊 STAT — Statistik (15 Cases)</strong></summary>
 
-**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/jugendamt/` 
+**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/jugendamt/`, `/statistics/reports/panel/`, `/statistics/reports/export/` 
 **Views:** `src/core/views/statistics.py` 
-**Services:** `src/core/services/statistics.py`, `src/core/services/export.py` 
+**Services:** `src/core/services/statistics.py`, `src/core/services/export.py`, `src/core/reporting/` (Registry + Backends) 
 **Management-Commands:** `create_statistics_snapshots` 
-**E2E-Coverage:** `test_export_statistics.py`, `test_statistics_charts.py`, `test_statistics_dashboard.py`, `test_statistics_snapshot.py`
+**E2E-Coverage:** `test_export_statistics.py`, `test_statistics_charts.py`, `test_statistics_dashboard.py`, `test_statistics_snapshot.py`, `test_reporting_backends.py`
 
 ---
 
@@ -4309,6 +4309,206 @@
 
 **DSGVO/Security-Note:**
 - Performance via Snapshots (`StatisticsSnapshot`-Tabelle), nicht via Live-Aggregat über Klientendaten.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-10 — Berichte-Sektion: Backend wählen → Vorschau-Panel
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py` |
+
+**Voraussetzung:** Seed-Daten mit Ereignissen im aktuellen Zeitraum.
+
+**Vorbereitung:**
+- Mit `leitung` einloggen, `/statistics/` aufrufen, bis zur Sektion „Berichte" scrollen.
+
+**Schritte:**
+1. Dropdown „Bericht" öffnen.
+2. „Beispiel-Sachbericht" wählen (kein Reload — HTMX lädt das Panel nach).
+3. Panel lesen: Titel, Zeitraum-Zeile, Vorschau-Tabelle, Fußnote.
+
+**Erwartetes Ergebnis:**
+- Panel erscheint unterhalb des Dropdowns, ohne Seitenwechsel.
+- Titel = Backend-Name, darunter „Zeitraum: <von> – <bis>" im ausgewählten Zeitraum.
+- Vorschau-Tabelle mit den Spalten des Backends (Kategorie/Anzahl); bei Zeilen-Backends max. 10 Zeilen plus „Zeigt X von Y Zeilen".
+- Fußnote „Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)."
+- Keine Konsolen-Fehler durch die Berichts-Interaktion (der Alpine-CSP-Parserhinweis `Unexpected token: fetchAndRender` tritt bei **jedem** HTMX-Swap dieser Seite auf, auch beim reinen Zeitraumwechsel, und ist nicht berichtsspezifisch).
+
+**DSGVO/Security-Note:**
+- Die Vorschau rendert `prepare_export()`, nicht den Rohdatensatz — sie zeigt exakt das, was auch im Export landet (keine Kleinstfallzahlen in der Vorschau).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-11 — Vollständigkeits-Hinweise im Berichts-Panel
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_jugendamt.py::TestValidateCompleteness` |
+
+**Voraussetzung:** ENT-STAT-10; Zeitraum mit Ereignissen ohne Personenbezug bzw. ohne Jugendamt-Zuordnung (Seed liefert beides).
+
+**Vorbereitung:**
+- Panel „Beispiel-Sachbericht" offen.
+
+**Schritte:**
+1. Bereich oberhalb der Vorschau-Tabelle lesen.
+2. Zeitraum auf einen Bereich ohne solche Lücken stellen (z.B. sehr kurzer Zeitraum) und erneut wählen.
+
+**Erwartetes Ergebnis:**
+- Mit Lücken: Badges „Hinweis"/„Info" mit Klartext, z.B. „… Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten".
+- Ohne Lücken: grüner Kasten „Keine Vollständigkeitsprobleme erkannt".
+- Fällt eine Zahl unter die Kleinstfallzahl-Schwelle, bleibt die Meldung stehen, nennt aber **keine Ziffer** („… unterdrückt (k-Anonymität)").
+
+**DSGVO/Security-Note:**
+- Die Meldungen dürfen die unterdrückte Zahl nicht rückrechenbar machen: keine Bezugsgröße, kein Prozentanteil in der Export-/Panel-Fassung.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-12 — Berichts-Downloads in drei Formaten (CSV/JSON/XML)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py` |
+
+**Voraussetzung:** ENT-STAT-10.
+
+**Vorbereitung:**
+- Panel „Beispiel-Sachbericht" offen.
+
+**Schritte:**
+1. „CSV-Export" klicken.
+2. „JSON-Export" klicken.
+3. „XML-Export" klicken.
+4. Dateien öffnen und mit der Panel-Vorschau vergleichen.
+
+**Erwartetes Ergebnis:**
+- Drei Downloads mit Dateinamen `jugendamt_<von>_<bis>.csv` / `.json` / `.xml` (Slug des Backends, Zeitraum aus dem Panel).
+- Inhalt deckungsgleich mit der Vorschau (gleiche Zeilen, gleiche Suppressionen).
+- `assistenz`/`fachkraft` erhalten beim Direktaufruf von `/statistics/reports/export/` 403 (LEAD+, vgl. ENT-STAT-08).
+
+**DSGVO/Security-Note:**
+- Aggregate ohne Personenbezug; Übermittlung an Dritte nur rechtsgrundlagengestützt (vgl. ENT-STAT-06).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-13 — Neu registriertes Backend erscheint automatisch im Dropdown
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_registry.py` |
+
+**Voraussetzung:** Beispiel-Backend `src/core/reporting/backends/example.py` vorhanden (Copy-Vorlage).
+
+**Vorbereitung:**
+- `/statistics/` als `leitung` offen.
+
+**Schritte:**
+1. Dropdown „Bericht" öffnen und die Einträge lesen.
+2. „Beispiel: Ereignisse je Dokumenttyp" wählen.
+3. „CSV-Export" klicken.
+
+**Erwartetes Ergebnis:**
+- Das Dropdown listet beide registrierten Backends (nach Slug sortiert), ohne dass View oder Template dafür angepasst wurden — die Registry entdeckt Backend-Module selbst.
+- Panel des Beispiel-Backends zeigt eigene Spalten (Dokumenttyp/Kategorie/System-Typ/Anzahl) und die Zeilen-Zählung.
+- Download heißt `example_<von>_<bis>.csv`.
+
+**DSGVO/Security-Note:**
+- Ein Backend, das für die Einrichtung nicht verfügbar ist (`is_available() == False`), darf weder im Dropdown erscheinen noch per Direkt-URL erreichbar sein (404).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-14 — Zeitraum-Durchreichung: Dashboard-Zeitraum gilt für Bericht und Export
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_views.py::TestBerichteFormZeitraumDurchreichung` |
+
+**Voraussetzung:** ENT-STAT-10.
+
+**Vorbereitung:**
+- `/statistics/` offen, Standard-Zeitraum aktiv.
+
+**Schritte:**
+1. Oben „Jahr" wählen (HTMX tauscht den Seiteninhalt; das Berichts-Panel ist danach leer).
+2. Erneut „Beispiel-Sachbericht" wählen.
+3. Zeitraum-Zeile des Panels lesen und mit dem Rest der Seite vergleichen.
+4. Mit „Von/Bis" einen eigenen Zeitraum setzen, „Anwenden", Bericht erneut wählen.
+5. Über einen Export-Link den Download ziehen und den Dateinamen prüfen.
+
+**Erwartetes Ergebnis:**
+- Panel-Zeitraum entspricht dem oben gewählten Zeitraum (z.B. „1. Januar … – …" nach „Jahr").
+- Die Export-Links tragen denselben Zeitraum als `date_from`/`date_to`; der Dateiname des Downloads enthält beide Daten.
+- Ein unzulässiger Zeitraum (Bis vor Von, zu lange Spanne) führt zu einer Fehlermeldung statt zu einem stillen Standard-Zeitraum.
+
+**DSGVO/Security-Note:**
+- Datenminimierung: exportiert wird nur der gewählte Zeitraum, nicht der Gesamtbestand.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-15 — Audit-Eintrag nach Berichts-Export
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `src/tests/test_reporting_views.py::TestDatasetExportView` |
+
+**Voraussetzung:** ENT-STAT-12 (mindestens ein Download durchgeführt).
+
+**Vorbereitung:**
+- Zweiter Tab mit `/audit/`.
+
+**Schritte:**
+1. Im Berichts-Panel „JSON-Export" klicken.
+2. `/audit/` neu laden und den obersten Eintrag öffnen.
+3. Anschließend nur das Panel öffnen (Backend wählen, nichts herunterladen) und `/audit/` erneut prüfen.
+
+**Erwartetes Ergebnis:**
+- Der Export erzeugt genau einen Audit-Eintrag der Aktion „Export" mit Ziel-Typ `DatasetExport` und Detail-Feldern `backend`, `format`, `date_from`, `date_to`.
+- Die reine Panel-Vorschau erzeugt **keinen** Audit-Eintrag (interne Ansicht, Parität zum Dashboard).
+
+**DSGVO/Security-Note:**
+- Rechenschaftspflicht (Art. 5 Abs. 2): jede Datenausleitung ist nachvollziehbar; der Audit-Eintrag enthält selbst keine Berichtsdaten.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-STAT-16 — K-Anonymität: Kleinstfallzahlen im Export unterdrückt
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Statistik | leitung | C | ⚪ | `src/tests/test_reporting_jugendamt.py::TestPrepareExport`, `test_reporting_backends.py` |
+
+**Voraussetzung:** Kleinstfallzahl-Schwelle der Einrichtung gesetzt (Standard); Zeitraum mit Kategorien unterhalb der Schwelle.
+
+**Vorbereitung:**
+- Panel „Beispiel-Sachbericht" offen.
+
+**Schritte:**
+1. Vorschau-Tabelle lesen: Zellen unterhalb der Schwelle.
+2. CSV-Export ziehen und dieselben Zellen im Export prüfen.
+3. JSON- und XML-Export gegenprüfen.
+4. Summen/Gesamtwerte gegen die sichtbaren Einzelwerte rechnen.
+
+**Erwartetes Ergebnis:**
+- Unterdrückte Zellen erscheinen in Vorschau **und** Export als „—" bzw. leer, nie als Zahl.
+- Kein Feld erlaubt die Rückrechnung einer unterdrückten Zelle (Gesamtsumme/Bezugsgrößen fallen mit, wenn sie den Wert verraten würden).
+- Der Hinweis auf die Unterdrückung bleibt sichtbar — der Bericht wirkt nicht fälschlich vollständig (CSV: Kommentarzeile im Metadaten-Kopf; JSON/XML/Panel: Vollständigkeits-Hinweise).
+
+**DSGVO/Security-Note:**
+- Art. 89/Statistikprivileg setzt Nicht-Identifizierbarkeit voraus: Kleinstfallzahlen sind der Haupt-Reidentifikationshebel externer Berichte.
 
 **Status:** ☐ Offen
 
