@@ -25,11 +25,14 @@ def test_insert_ohne_backend_data_spalte_nutzt_db_default(facility):
     snapshot_id = uuid.uuid4()
 
     with connection.cursor() as cursor:
+        # Ohne das Sachbericht-Sonderfeld: Migration ``0124`` (Refs #1740) hat die
+        # Spalte entfernt. Der simulierte Alt-Code-INSERT nennt weiterhin *nicht*
+        # ``backend_data`` — genau darum geht es hier.
         cursor.execute(
             """
             INSERT INTO core_statisticssnapshot
-                (id, facility_id, year, month, data, jugendamt_data, created_at, updated_at)
-            VALUES (%s, %s, 2026, 1, '{}'::jsonb, '{}'::jsonb, NOW(), NOW())
+                (id, facility_id, year, month, data, created_at, updated_at)
+            VALUES (%s, %s, 2026, 1, '{}'::jsonb, NOW(), NOW())
             """,
             [snapshot_id, facility.id],
         )

@@ -303,7 +303,6 @@ class TestHybridUsesSnapshotForPastMonth:
             year=2025,
             month=1,
             data=_snapshot_data(total=10, anonym=2, identifiziert=5, qualifiziert=3, unique=8),
-            jugendamt_data=_sample_report_1_snapshot_data(total=10, unique=8),
         )
 
         # Soft-delete the event so live query would return 0
@@ -335,7 +334,6 @@ class TestHybridLiveForCurrentMonth:
             year=2025,
             month=3,
             data=_snapshot_data(total=99),
-            jugendamt_data=_sample_report_1_snapshot_data(total=99),
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
@@ -357,7 +355,6 @@ class TestHybridMergesSnapshotAndLive:
             year=2025,
             month=1,
             data=_snapshot_data(total=5, anonym=1, identifiziert=3, qualifiziert=1, unique=3),
-            jugendamt_data=_sample_report_1_snapshot_data(total=5, unique=3),
         )
 
         # Live event in March (current month)
@@ -401,7 +398,7 @@ class TestSampleReport1Hybrid:
             year=2025,
             month=1,
             data=_snapshot_data(total=5),
-            jugendamt_data=_sample_report_1_snapshot_data(total=10, unique=6),
+            backend_data={"sample-report-1": _sample_report_1_snapshot_data(total=10, unique=6)},
         )
 
         # Live event in March (needs doc_type with system_type=contact for the sample report)
@@ -421,22 +418,19 @@ class TestSampleReport1Hybrid:
 
 @pytest.mark.django_db
 class TestSampleReport1HybridReadsBackendData:
-    """M5 P3 (Refs #1061): Der Snapshot-Read bevorzugt ``backend_data``.
+    """M5 P3 (Refs #1061) / #1740: ``backend_data`` ist die einzige Snapshot-Quelle.
 
-    ``jugendamt_data`` bleibt als Rueckfallebene fuer Alt-Snapshots erhalten,
-    die vor der Backfill-Migration 0122 entstanden sind.
+    Das Sonderfeld des Sachberichts und sein Read-Fallback sind mit dem Ende
+    der Uebergangsphase entfallen (Migrationen ``0123``/``0124``).
     """
 
-    def test_backend_data_wins_over_jugendamt_data(self, facility):
-        """Divergierende Werte: ``backend_data["sample-report-1"]`` gewinnt."""
+    def test_backend_data_ist_die_quelle(self, facility):
         StatisticsSnapshot.objects.create(
             facility=facility,
             year=2025,
             month=1,
             data=_snapshot_data(total=5),
             backend_data={"sample-report-1": _sample_report_1_snapshot_data(total=10, unique=6)},
-            # Absichtlich abweichend — darf NICHT gelesen werden.
-            jugendamt_data=_sample_report_1_snapshot_data(total=99, unique=77),
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
@@ -446,26 +440,35 @@ class TestSampleReport1HybridReadsBackendData:
         assert result["total"] == 10
         assert result["unique_clients"] == 6
 
-    def test_legacy_snapshot_falls_back_to_jugendamt_data(self, facility):
-        """Alt-Snapshot ohne ``backend_data`` liest weiterhin ``jugendamt_data``."""
+    def test_snapshot_ohne_backend_key_faellt_auf_live_zurueck(
+        self, facility, client_identified, doc_type_contact, staff_user
+    ):
+        """Snapshot mit fremdem Backend, ohne ``sample-report-1`` -> Live-Abfrage.
+
+        Genau der Zustand eines Snapshots, dessen Aggregat nie geschrieben
+        wurde: ohne Fallback-Feld darf der Lesepfad kein leeres Aggregat
+        ausliefern, sondern muss live nachrechnen.
+        """
+        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
+        doc_type_contact.save()
+        _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 8, 10, 0))
+
         StatisticsSnapshot.objects.create(
             facility=facility,
             year=2025,
             month=1,
             data=_snapshot_data(total=5),
-            backend_data={},
-            jugendamt_data=_sample_report_1_snapshot_data(total=42, unique=17),
+            backend_data={"traeger": {"total": 42}},
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
-        assert result["total"] == 42
-        assert result["unique_clients"] == 17
+        assert result["total"] == 1
 
     def test_empty_snapshot_falls_back_to_live_query(self, facility, client_identified, doc_type_contact, staff_user):
-        """Beide Felder leer -> Live-Abfrage statt eines leeren Aggregats."""
+        """Leeres ``backend_data`` -> Live-Abfrage statt eines leeren Aggregats."""
         doc_type_contact.system_type = DocumentType.SystemType.CONTACT
         doc_type_contact.save()
         _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 8, 10, 0))
@@ -476,7 +479,6 @@ class TestSampleReport1HybridReadsBackendData:
             month=1,
             data=_snapshot_data(total=5),
             backend_data={},
-            jugendamt_data={},
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
@@ -513,7 +515,6 @@ class TestPartialEdgeMonthsUseLive:
             year=2025,
             month=1,
             data=_snapshot_data(total=99),
-            jugendamt_data=_sample_report_1_snapshot_data(total=99),
         )
 
         # Query partial January (10th–25th) — snapshot should NOT be used

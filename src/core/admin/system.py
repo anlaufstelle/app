@@ -82,7 +82,6 @@ class StatisticsSnapshotAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "month",
         "data",
         "backend_data",
-        "jugendamt_data",
         "created_at",
         "updated_at",
     )

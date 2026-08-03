@@ -174,8 +174,8 @@ def test_command_fills_backend_data(facility, settings_obj):
 
     snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
     assert "sample-report-1" in snap.backend_data
-    # Dual-Write bleibt bis zum Ende der Uebergangsphase bestehen.
-    assert snap.backend_data["sample-report-1"] == snap.jugendamt_data
+    # Roh-Aggregat des Backends, nicht bloss ein leerer Platzhalter.
+    assert set(snap.backend_data["sample-report-1"]) == {"total", "by_category", "by_age_cluster", "unique_clients"}
 
 
 @pytest.mark.django_db

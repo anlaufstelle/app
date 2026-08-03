@@ -89,6 +89,20 @@ class TestMigrate0122BackfillBackendData(MigratorTestCase):
         snap = StatisticsSnapshot.objects.get(pk=self.other_backend_pk)
         assert snap.backend_data == {"traeger": {"total": 42}, "jugendamt": {"total": 3}}
 
+    def tearDown(self):
+        """Snapshots vor dem Vorwaerts-Reset der Migrationskette raeumen (Refs #1739).
+
+        ``MigratorTestCase.tearDown`` migriert bis zum Kopf durch. Migration
+        ``0123`` prueft dabei fail-loud auf Snapshots, deren Altfeld vom
+        ``backend_data``-Eintrag abweicht — Fall (c) konstruiert genau so eine
+        Divergenz absichtlich (in Produktion unerreichbar, weil der Dual-Write
+        beide Felder aus derselben Quelle schreibt). Ohne dieses Aufraeumen
+        schluege der Reset fehl.
+        """
+        StatisticsSnapshot = self.new_state.apps.get_model("core", "StatisticsSnapshot")
+        StatisticsSnapshot.objects.all().delete()
+        super().tearDown()
+
     # --- Idempotenz -----------------------------------------------------------
 
     def test_second_run_changes_nothing(self):

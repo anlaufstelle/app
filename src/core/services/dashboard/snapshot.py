@@ -82,13 +82,11 @@ def create_or_update_snapshot(facility, year, month):
         facility=facility,
         year=year,
         month=month,
-        # Dual-Write: ``jugendamt_data`` laeuft parallel weiter, damit ein
-        # Rollback in beide Richtungen ohne Datenverlust moeglich bleibt. Das
-        # Abschalten des Alt-Feldes ist ein eigenes Folge-Issue.
+        # Refs #1740: Der Dual-Write ins Altfeld des Sachberichts ist beendet —
+        # ``backend_data`` ist die einzige Quelle (Migrationen 0123/0124).
         defaults={
             "data": stats,
             "backend_data": payloads,
-            "jugendamt_data": payloads.get("sample-report-1", {}),
         },
     )
     logger.info(
@@ -349,11 +347,11 @@ def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
                 month=seg_from.month,
             ).first()
             if snap:
-                # M5 P3 (Refs #1061): ``backend_data`` ist die fuehrende Quelle;
-                # ``jugendamt_data`` bleibt Rueckfallebene fuer Snapshots vor der
-                # Backfill-Migration 0122. ``or None`` normalisiert das leere
+                # M5 P3 (Refs #1061) / #1740: ``backend_data`` ist die einzige
+                # Quelle — der Fallback auf das Altfeld ist mit dem Ende der
+                # Uebergangsphase entfallen. ``or None`` normalisiert das leere
                 # Dict, damit der Live-Zweig unten wirklich greift.
-                stats = snap.backend_data.get("sample-report-1") or snap.jugendamt_data or None
+                stats = snap.backend_data.get("sample-report-1") or None
         if stats is None:
             stats = get_backend("sample-report-1").build_dataset(facility, seg_from, seg_to).summary
         segment_stats.append(stats)

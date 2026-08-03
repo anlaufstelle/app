@@ -85,7 +85,6 @@ class TestTrendReturnsPerSegmentData:
             year=2025,
             month=1,
             data=_snapshot_data(total=10),
-            jugendamt_data={},
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
@@ -105,7 +104,6 @@ class TestTrendReturnsPerSegmentData:
             year=2025,
             month=3,
             data=_snapshot_data(total=99),
-            jugendamt_data={},
         )
 
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:

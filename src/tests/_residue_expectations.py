@@ -182,14 +182,10 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         "data",
         reason="Aggregierte Monats-Zaehlungen (by_document_type/by_age_cluster counts), keine Einzelpersonen.",
     ),
-    non_pii(
-        "core_statisticssnapshot",
-        "jugendamt_data",
-        reason="Aggregierte Sachbericht-Zaehlungen (Kategorie-Summen), keine Einzelpersonen.",
-    ),
-    # M5 P3 (Refs #1061): backend-unabhaengige Map ``slug -> Roh-Aggregat``.
-    # Inhaltlich dieselbe Klasse wie ``jugendamt_data`` — die Backends liefern
-    # per ``DatasetResult.summary`` ausschliesslich Aggregate. Diese pauschale
+    # M5 P3 (Refs #1061): backend-unabhaengige Map ``slug -> Roh-Aggregat``,
+    # seit #1740 Nachfolger des entfallenen Sachbericht-Sonderfelds. Die
+    # Backends liefern per ``DatasetResult.summary`` ausschliesslich
+    # Aggregate (Kategorie-Summen, keine Einzelpersonen). Diese pauschale
     # Einordnung traegt nur, solange der Vertrag am Attribut ``snapshot_enabled``
     # (``core/reporting/base.py``: aggregatrein, keine Pseudonyme/Personenzeilen/
     # Freitexte) eingehalten wird — wer ihn aufweicht, muss diesen Eintrag mit

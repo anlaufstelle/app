@@ -361,7 +361,6 @@ class TestGetStatisticsHybridCutoff:
                 "by_age_cluster": [],
                 "unique_clients": 999,
             },
-            jugendamt_data={},
         )
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
@@ -396,7 +395,6 @@ class TestGetStatisticsHybridCutoff:
                 "by_age_cluster": [],
                 "unique_clients": 999,
             },
-            jugendamt_data={},
         )
         mar = datetime(2025, 3, 5, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, mar)
@@ -424,7 +422,6 @@ class TestGetStatisticsHybridCutoff:
                 "by_age_cluster": [],
                 "unique_clients": 0,
             },
-            jugendamt_data={},
         )
         # Event in Januar
         jan = datetime(2025, 1, 15, 10, 0)
@@ -454,7 +451,6 @@ class TestGetStatisticsHybridCutoff:
                 "unique_clients": 3,
                 # KEIN top_clients-Key (so wie create_or_update_snapshot speichert)
             },
-            jugendamt_data={},
         )
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
@@ -482,7 +478,6 @@ class TestGetStatisticsHybridCutoff:
                 "by_age_cluster": [],
                 "unique_clients": 5,
             },
-            jugendamt_data={},
         )
         # Live-Event in März (current month bei localdate=2025-03-15)
         mar = datetime(2025, 3, 10, 10, 0)

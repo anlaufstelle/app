@@ -158,7 +158,7 @@ class TestSampleReport1DataStored:
         create_or_update_snapshot(facility, 2025, 1)
 
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
-        jg = snap.jugendamt_data
+        jg = snap.backend_data["sample-report-1"]
 
         assert jg["total"] == 2
         assert jg["unique_clients"] == 1
@@ -168,12 +168,11 @@ class TestSampleReport1DataStored:
 
 
 @pytest.mark.django_db
-class TestBackendDataDualWrite:
+class TestBackendData:
     """M5 P3 (Refs #1061): ``backend_data`` traegt die Roh-Aggregate je Backend.
 
-    ``create_or_update_snapshot`` schreibt weiterhin ``jugendamt_data``
-    (Dual-Write, Rollback-Sicherheit in beide Richtungen) — beide Felder muessen
-    denselben Payload tragen.
+    Seit #1740 ist ``backend_data`` die **einzige** Quelle — der Dual-Write in
+    das Sonderfeld des Sachberichts ist beendet und die Spalte entfernt.
     """
 
     def _snapshot_with_sample_report_1_event(self, facility, staff_user, client_identified):
@@ -190,13 +189,10 @@ class TestBackendDataDualWrite:
         create_or_update_snapshot(facility, 2025, 1)
         return StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
 
-    def test_backend_data_matches_jugendamt_data(self, facility, staff_user, client_identified):
+    def test_backend_data_traegt_den_sachbericht(self, facility, staff_user, client_identified):
         snap = self._snapshot_with_sample_report_1_event(facility, staff_user, client_identified)
 
         assert "sample-report-1" in snap.backend_data
-        # Dual-Write: identischer Payload in beiden Feldern (Werte aus der DB,
-        # also nach dem JSON-Roundtrip verglichen).
-        assert snap.backend_data["sample-report-1"] == snap.jugendamt_data
         assert snap.backend_data["sample-report-1"]["total"] == 2
 
     def test_backend_data_is_json_roundtripped(self, facility, staff_user, client_identified):

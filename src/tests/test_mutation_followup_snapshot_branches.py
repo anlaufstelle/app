@@ -111,8 +111,8 @@ class TestCreateOrUpdateSnapshotBranches:
     - ``date(year, month, 1)`` → andere Defaults.
     - ``date(year, month, last_day)`` → off-by-one am Monatsende.
     - ``update_or_create`` → ``create`` (würde IntegrityError bei Update).
-    - ``defaults={"data": …, "backend_data": …, "jugendamt_data": …}`` — alle
-      drei Keys (seit M5 P3, Refs #1061; vorher nur ``data``/``jugendamt_data``).
+    - ``defaults={"data": …, "backend_data": …}`` — beide Keys (seit M5 P3,
+      Refs #1061; das Sonderfeld des Sachberichts ist mit #1740 entfallen).
     """
 
     def test_creates_new_snapshot_when_none_exists(self, facility, staff_user, client_identified, doc_type_contact):
@@ -215,13 +215,12 @@ class TestCreateOrUpdateSnapshotBranches:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert "top_clients" not in snap.data, "top_clients darf nicht in Snapshot landen (PII-Risiko)"
 
-    def test_sample_report_1_data_persisted_separately(self, facility, staff_user, client_identified):
-        """``defaults={..., "jugendamt_data": payloads.get("sample-report-1", {})}`` — separater Feldlauf.
+    def test_backend_data_persisted_separately(self, facility, staff_user, client_identified):
+        """``defaults={..., "backend_data": payloads}`` — separater Feldlauf.
 
-        Seit M5 P3 (Refs #1061) speist sich das Feld aus der ``backend_data``-Map
-        (Dual-Write), ``defaults`` traegt drei Keys. Mutation des Werts → ``{}``
-        oder Vertauschung mit ``data`` würde ``jugendamt_data`` leeren oder
-        duplizieren.
+        Seit M5 P3 (Refs #1061) traegt ``backend_data`` das Sachbericht-Aggregat,
+        seit #1740 als einzige Quelle. Mutation des Werts → ``{}`` oder
+        Vertauschung mit ``data`` würde die Map leeren oder duplizieren.
         """
         dt = DocumentType.objects.create(
             facility=facility,
@@ -233,10 +232,10 @@ class TestCreateOrUpdateSnapshotBranches:
         _make_event(facility, client_identified, dt, staff_user, jan)
         create_or_update_snapshot(facility, 2025, 1)
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
-        assert snap.jugendamt_data["total"] == 1
-        # data und jugendamt_data sind getrennte Felder — beide gefüllt
+        assert snap.backend_data["sample-report-1"]["total"] == 1
+        # data und backend_data sind getrennte Felder — beide gefüllt
         assert snap.data["total_contacts"] == 1
-        assert snap.jugendamt_data != snap.data
+        assert snap.backend_data != snap.data
 
     def test_by_document_type_enriched_with_system_type(self, facility, staff_user, client_identified):
         """``entry["system_type"] = dt.system_type if dt and dt.system_type
@@ -357,7 +356,7 @@ class TestGetSnapshot:
     """Refs ``get_snapshot`` (Line 93).
 
     Adressierte Mutationen:
-    - ``snap.data if snap else None`` → ``snap.jugendamt_data`` Vertauschung.
+    - ``snap.data if snap else None`` → ``snap.backend_data`` Vertauschung.
     - ``if snap else None`` → ``if snap else {}`` würde Aufrufer kippen.
     """
 
@@ -366,28 +365,28 @@ class TestGetSnapshot:
         assert get_snapshot(facility, 2025, 1) is None
 
     def test_returns_data_dict_when_exists(self, facility):
-        """Positivbranch: Row vorhanden → ``snap.data`` (nicht jugendamt_data)."""
+        """Positivbranch: Row vorhanden → ``snap.data`` (nicht backend_data)."""
         StatisticsSnapshot.objects.create(
             facility=facility,
             year=2025,
             month=1,
             data={"marker_data": "yes", "total_contacts": 5},
-            jugendamt_data={"marker_jg": "yes", "total": 99},
+            backend_data={"sample-report-1": {"marker_jg": "yes", "total": 99}},
         )
         result = get_snapshot(facility, 2025, 1)
         assert result is not None
-        assert result.get("marker_data") == "yes", "get_snapshot muss .data zurückgeben, nicht .jugendamt_data"
+        assert result.get("marker_data") == "yes", "get_snapshot muss .data zurückgeben, nicht .backend_data"
         assert "marker_jg" not in result
 
     def test_other_year_returns_none(self, facility):
         """Year-Filter greift — Mutation ``year=year`` → ``year=year+1`` etc."""
-        StatisticsSnapshot.objects.create(facility=facility, year=2025, month=1, data={"x": 1}, jugendamt_data={})
+        StatisticsSnapshot.objects.create(facility=facility, year=2025, month=1, data={"x": 1})
         assert get_snapshot(facility, 2024, 1) is None
         assert get_snapshot(facility, 2026, 1) is None
 
     def test_other_month_returns_none(self, facility):
         """Month-Filter greift."""
-        StatisticsSnapshot.objects.create(facility=facility, year=2025, month=1, data={"x": 1}, jugendamt_data={})
+        StatisticsSnapshot.objects.create(facility=facility, year=2025, month=1, data={"x": 1})
         assert get_snapshot(facility, 2025, 2) is None
 
 

@@ -24,14 +24,12 @@ class StatisticsSnapshot(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(12)],
     )
     data = models.JSONField(default=dict)
-    jugendamt_data = models.JSONField(default=dict)
-    # M5 P3 (Refs #1061): backend-unabhängiger Nachfolger von ``jugendamt_data``.
+    # M5 P3 (Refs #1061): backend-unabhängige Map ``Backend-Slug → Roh-Aggregat``.
     # Ein Eintrag je Reporting-Backend mit ``snapshot_enabled``; der Wert ist das
     # **rohe** Aggregat aus ``DatasetBackend.build_dataset(...).summary`` (ohne
     # ``prepare_export``-Transformationen wie die k-Anon-Suppression, die nur den
-    # Export-/Panel-Pfad betreffen). ``jugendamt_data`` wird bis zum Ende der
-    # Übergangsphase parallel weitergeschrieben (Dual-Write) und ist die
-    # Rückfallebene für Snapshots vor Migration 0122.
+    # Export-/Panel-Pfad betreffen). Seit #1740 die **einzige** Quelle — das
+    # Vorgängerfeld des Beispiel-Sachberichts ist mit Migration `0124` entfallen.
     # ``db_default`` zusätzlich zum Python-``default``: Django verwirft den
     # DB-Default sonst direkt nach dem ``ADD COLUMN`` (Migration 0121). Rollt
     # jemand nur den App-Code auf den Stand vor M5 zurück und lässt das Schema
