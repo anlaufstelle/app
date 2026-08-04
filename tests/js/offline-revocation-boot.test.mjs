@@ -160,9 +160,27 @@ describe("#1760 Befund 2a — Boot-Poll ist gedrosselt", () => {
         window.offlineEdit = undefined;
         window.crypto_session = { ready: async () => {}, hasSessionKey: () => false };
 
+        // Refs #1775: Der Stempel steht FRISCH — der Boot-Poll waere jetzt
+        // gedrosselt. Ohne dieses Vorsetzen prueft der Test die Drossel
+        // ueberhaupt nicht: bei leerem ``meta`` liefe auch ein faelschlich
+        // gedrosselter Sync-Pfad durch. Belegt per Mutationsprobe — ein
+        // ``if (await _bootRevocationDue(st))`` in ``_runSyncSequence`` liess
+        // die alte Fassung gruen.
+        const key = orchestrator._BOOT_REVOCATION_META_KEY;
+        const stempel = { checkedAt: Date.now() };
+        await store.setMetaValue(key, stempel);
+
         await orchestrator.requestSync("test-1");
         await orchestrator.requestSync("test-2");
 
+        expect(store.applyClientRevocations).toHaveBeenCalledTimes(2);
+        // Der Sync-Pfad fasst den Boot-Stempel auch nicht an: er liegt
+        // vollstaendig ausserhalb der Drossel, statt sie nur zu ignorieren.
+        expect(await store.getMetaValue(key)).toBe(stempel);
+        // Gegenprobe im selben Test: derselbe Stempel drosselt den BOOT-Pfad
+        // wirklich. Sonst bewiese der Test oben nur, dass ein wirkungsloser
+        // Stempel nichts blockiert (Schluessel-/Formatdrift).
+        await orchestrator._startupRevocationCheck();
         expect(store.applyClientRevocations).toHaveBeenCalledTimes(2);
     });
 });

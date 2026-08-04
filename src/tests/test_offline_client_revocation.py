@@ -292,7 +292,38 @@ class TestRevocationEndpointRateLimit:
         source = inspect.getsource(OfflineClientRevocationsView)
         assert "RATELIMIT_OFFLINE_REVOCATIONS" in source
         assert "RATELIMIT_OFFLINE_BUNDLE" not in source
-        assert hasattr(OfflineClientRevocationsView.get, "__wrapped__"), "get() muss ratelimit-gewrappt bleiben"
+
+    @pytest.mark.django_db
+    def test_das_limit_greift_wirklich(self, client, staff_user, settings):
+        """Refs #1775: Wirk-Test statt ``hasattr(get, "__wrapped__")``.
+
+        Das ``__wrapped__``-Attribut belegte nur, dass ueberhaupt ein Dekorator
+        auf ``get`` sitzt. Belegt per Mutationsprobe: ``block=True`` auf
+        ``block=False`` zu drehen — das Limit zaehlt dann zwar noch, weist aber
+        nichts mehr ab — liess den alten Guard gruen. Genau das ist der Zustand,
+        vor dem er schuetzen soll.
+
+        Muster wie ``test_offline_bundle_api.test_rate_limited_after_120_requests``:
+        django-ratelimit mit ``block=True`` wirft ``Ratelimited``
+        (``PermissionDenied``-Subklasse), die der eigene ``handler403`` auf 429
+        abbildet — nicht auf 403, weil der Offline-Client 403 als Rechteentzug
+        deutet und lokale Bundles purgen wuerde (Refs #1354).
+        """
+        from django.core.cache import cache
+
+        from core.constants import RATELIMIT_OFFLINE_REVOCATIONS
+
+        budget = _per_hour(RATELIMIT_OFFLINE_REVOCATIONS)
+        settings.RATELIMIT_ENABLE = True
+        cache.clear()
+        try:
+            client.force_login(staff_user)
+            url = reverse("core:offline_revocations")
+            for i in range(budget):
+                assert client.get(url).status_code == 200, f"Request {i + 1}/{budget} wurde zu frueh abgewiesen"
+            assert client.get(url).status_code == 429, f"Request {budget + 1} haette abgewiesen werden muessen"
+        finally:
+            cache.clear()
 
 
 @pytest.mark.django_db
