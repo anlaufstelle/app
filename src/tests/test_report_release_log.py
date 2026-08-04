@@ -29,12 +29,36 @@ from core.services.dashboard.release_log import (
 
 
 def _export(facility, user, date_from, date_to, **detail):
+    """Ein **herausgegebenes Artefakt** (Download) — die Freigabe-Menge."""
+    from core.services.dashboard.release_log import RELEASE_ARTIFACT_KEY
+
     return AuditLog.objects.create(
         facility=facility,
         user=user,
         action=AuditLog.Action.EXPORT,
         target_type="PDF",
-        detail={"format": "PDF", "date_from": date_from, "date_to": date_to, **detail},
+        detail={
+            "format": "PDF",
+            RELEASE_ARTIFACT_KEY: True,
+            "date_from": date_from,
+            "date_to": date_to,
+            **detail,
+        },
+    )
+
+
+def _bildschirm_aufruf(facility, user, date_from, date_to):
+    """Ein On-Screen-Aufruf des externen Berichts — **keine** Herausgabe.
+
+    Dieselbe Aktion, derselbe Zeitraum im ``detail``, aber kein Artefakt hat das
+    Haus verlassen. Jeder Reload erzeugt so eine Zeile.
+    """
+    return AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.EXPORT,
+        target_type="ExternalReport",
+        detail={"format": "html", "date_from": date_from, "date_to": date_to},
     )
 
 
@@ -45,10 +69,10 @@ class TestEmpfaengerUndZweckfeld:
         """Ein ``{"recipient": ""}`` behauptete eine Angabe, die es nicht gibt —
         und liesse sich später nicht von „Feld gab es damals noch nicht"
         unterscheiden."""
-        assert release_detail({"recipient": "  ", "purpose": ""}) == {}
+        assert release_detail({"recipient": "  ", "purpose": ""}, artifact_released=False) == {}
 
     def test_angaben_werden_uebernommen_und_getrimmt(self):
-        assert release_detail({"recipient": " Stadt Musterstadt ", "purpose": "Nachweis"}) == {
+        assert release_detail({"recipient": " Stadt Musterstadt ", "purpose": "Nachweis"}, artifact_released=False) == {
             "recipient": "Stadt Musterstadt",
             "purpose": "Nachweis",
         }
@@ -56,9 +80,22 @@ class TestEmpfaengerUndZweckfeld:
     def test_freitext_wird_gekappt(self):
         """Der Audit-Log ist append-only und überlebt seit K4a die Löschfristen —
         eine unbedachte Eingabe ist nachträglich nicht redigierbar."""
-        detail = release_detail({"recipient": "x" * 500})
+        detail = release_detail({"recipient": "x" * 500}, artifact_released=False)
 
         assert len(detail["recipient"]) == RELEASE_FIELD_MAX_LENGTH
+
+    def test_der_freigabe_marker_ist_ein_pflicht_keyword(self):
+        """Ohne Default: jede EXPORT-auditierende Aufrufstelle muss ausdrücklich
+        sagen, ob bei ihr ein Artefakt das Haus verlassen hat. Ein Default wäre
+        in beide Richtungen falsch (stille Dauer-Aufbewahrung von Ansichten bzw.
+        stiller Ausfall eines neuen Download-Pfads aus der Übersicht)."""
+        with pytest.raises(TypeError):
+            release_detail({})
+
+    def test_nur_mit_marker_entsteht_der_freigabe_schluessel(self):
+        from core.services.dashboard.release_log import RELEASE_ARTIFACT_KEY
+
+        assert release_detail({}, artifact_released=True) == {RELEASE_ARTIFACT_KEY: True}
 
 
 @pytest.mark.django_db
@@ -96,6 +133,41 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
         detail = self._letzter_export(facility).detail
         assert detail["recipient"] == "Stadt Musterstadt"
         assert detail["purpose"] == "Verwendungsnachweis 2026"
+
+    @pytest.mark.parametrize(
+        ("url_name", "params", "ist_freigabe"),
+        [
+            ("core:statistics_csv_export", {}, True),
+            ("core:statistics_pdf_export", {}, True),
+            ("core:statistics_sample_report_1_export", {}, True),
+            ("core:statistics_report_export", {"backend": "sample-report-1", "format": "csv"}, True),
+            # Der externe Bericht ist BEIDES: ``?format=json`` liefert ein
+            # maschinenlesbares Artefakt, die HTML-Ansicht ist nur eine Ansicht.
+            ("core:statistics_external_report", {"period": "custom", "format": "json"}, True),
+            ("core:statistics_external_report", {"period": "custom"}, False),
+        ],
+    )
+    def test_nur_herausgegebene_artefakte_tragen_den_freigabe_marker(
+        self, client, lead_user, facility, url_name, params, ist_freigabe
+    ):
+        """Design-Constraint: echte Artefakt-Downloads sind Freigaben,
+        Bildschirm-Ansichten nicht — und zwar an EINER Definition
+        (``RELEASE_EXPORT_Q``), die Retention und Uebersicht teilen."""
+        from core.services.dashboard.release_log import RELEASE_ARTIFACT_KEY
+
+        client.force_login(lead_user)
+
+        client.get(reverse(url_name), {"date_from": "2026-01-01", "date_to": "2026-06-30", **params})
+
+        detail = self._letzter_export(facility).detail
+        assert detail.get(RELEASE_ARTIFACT_KEY, False) is ist_freigabe, detail
+
+    def test_bildschirmaufruf_landet_nicht_in_der_uebersicht(self, client, lead_user, facility):
+        client.force_login(lead_user)
+
+        client.get(reverse("core:statistics_external_report"), {"period": "custom"})
+
+        assert build_release_overview(facility) == []
 
     def test_ohne_angabe_bleibt_das_detail_unveraendert(self, client, lead_user, facility):
         """Die Felder sind optional — ein Pflichtfeld erzwänge eine Angabe auch
@@ -187,6 +259,24 @@ class TestUeberlappungswarnung:
 
         felder = {field.name for field in dataclasses.fields(releases[0])}
         assert "user" not in felder and "actor" not in felder, felder
+
+    def test_bildschirmaufruf_ist_keine_freigabe(self, facility, lead_user):
+        """Der externe Bericht auditiert **jeden** HTML-GET — jeder Reload.
+
+        Solche Zeilen als Herausgabe zu fuehren, waere in zwei Richtungen
+        falsch: sie verdraengen bei ``RELEASE_LOG_LIMIT`` echte Downloads aus
+        dem Auswertungsfenster (stiller falscher Negativ genau in der Warnung,
+        die die Retention-Ausnahme absichern soll), und sie behaupten eine
+        Herausgabe, die nicht stattgefunden hat.
+        """
+        _bildschirm_aufruf(facility, lead_user, "2026-01-01", "2026-12-31")
+        _export(facility, lead_user, "2026-03-01", "2026-03-31")
+
+        releases = build_release_overview(facility)
+
+        assert len(releases) == 1
+        assert releases[0].date_from == date(2026, 3, 1)
+        assert not releases[0].overlaps, "ein Bildschirmaufruf darf keine Ueberlappung ausloesen"
 
     def test_uebersicht_ist_facility_gescopt(self, facility, second_facility, lead_user, second_facility_user):
         _export(facility, lead_user, "2026-01-01", "2026-12-31")
@@ -296,6 +386,29 @@ class TestExportUeberlebtDieAuditRetention:
             "Ein Art.-15-Klientenexport ist keine Berichts-Freigabe und bleibt der Frist unterworfen."
         )
         assert not AuditLog.objects.filter(pk=generisch.pk).exists()
+
+    def test_bildschirmaufruf_ist_nicht_prune_exempt(self, facility, settings_obj, lead_user):
+        """Sonst waechst der Log mit jedem Reload unbegrenzt weiter — inklusive
+        Beschaeftigten-Username, dauerhaft und nicht redigierbar."""
+        from django.db import connection
+
+        from core.retention.audit_pruning import prune_auditlog
+
+        if connection.vendor != "postgresql":
+            pytest.skip("prune_auditlog erfordert PostgreSQL")
+
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        now = timezone.now()
+        ansicht = _bildschirm_aufruf(facility, lead_user, "2020-01-01", "2020-12-31")
+        download = _export(facility, lead_user, "2020-01-01", "2020-12-31")
+        self._veralten(now, ansicht, download)
+
+        result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        assert result["count"] == 1
+        assert not AuditLog.objects.filter(pk=ansicht.pk).exists(), "Bildschirmaufrufe bleiben befristet"
+        assert AuditLog.objects.filter(pk=download.pk).exists(), "das herausgegebene Artefakt bleibt"
 
     def test_die_uebersicht_findet_den_alten_eintrag_noch(self, facility, lead_user):
         _export(facility, lead_user, "2020-01-01", "2020-12-31")

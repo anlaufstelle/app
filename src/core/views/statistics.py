@@ -225,7 +225,7 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
                 "format": "CSV",
                 "date_from": str(date_from),
                 "date_to": str(date_to),
-                **release_detail(request.GET),
+                **release_detail(request.GET, artifact_released=True),
             },
         )
 
@@ -271,7 +271,7 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
                 "format": "PDF",
                 "date_from": str(date_from),
                 "date_to": str(date_to),
-                **release_detail(request.GET),
+                **release_detail(request.GET, artifact_released=True),
             },
         )
 
@@ -311,7 +311,7 @@ class SampleReport1ExportView(LeadOrAdminRequiredMixin, View):
                 "format": "Sachbericht-PDF",
                 "date_from": str(date_from),
                 "date_to": str(date_to),
-                **release_detail(request.GET),
+                **release_detail(request.GET, artifact_released=True),
             },
         )
 
@@ -345,21 +345,29 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
 
         report = build_external_report(facility, period_state.date_from, period_state.date_to)
 
+        output_format = request.GET.get("format", "html")
         # Audit-Log: jeder externe Bericht ist ein DSGVO-relevanter Export.
+        #
+        # K4a (Refs #1770): Eine **Freigabe** ist nur der Abruf, bei dem ein
+        # Artefakt das Haus verlaesst — hier ``?format=json``. Die HTML-Ansicht
+        # wird bei JEDEM Aufruf auditiert, auch bei jedem Reload; sie als
+        # Herausgabe zu fuehren liesse den Log unbegrenzt und dauerhaft
+        # (prune-exempt) wachsen und verdraengte in der Freigabe-Uebersicht die
+        # echten Downloads aus dem Auswertungsfenster. Die Audit-Zeile bleibt,
+        # sie ist nur eine normale, befristete Zeile.
         log_audit_event(
             request,
             AuditLog.Action.EXPORT,
             target_type="ExternalReport",
             detail={
-                "format": request.GET.get("format", "html"),
+                "format": output_format,
                 "date_from": str(period_state.date_from),
                 "date_to": str(period_state.date_to),
                 "k_threshold": report["metadata"]["k_anonymity_threshold"],
-                **release_detail(request.GET),
+                **release_detail(request.GET, artifact_released=output_format == "json"),
             },
         )
 
-        output_format = request.GET.get("format", "html")
         if output_format == "json":
             return JsonResponse(report)
         return render(
@@ -466,7 +474,11 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             # "Stadt X & Kreis Y" den Querystring zerlegt; das Ergebnis geht als
             # **fertiges** Fragment ins Template, damit dort keine
             # Escaping-Entscheidung mehr zu treffen ist.
-            "release_query": "".join(f"&{key}={quote(value)}" for key, value in release_detail(request.GET).items()),
+            # ``artifact_released=False``: hier wird nichts herausgegeben, die
+            # Vorschau reicht nur Empfaenger/Zweck an die Download-Links weiter.
+            "release_query": "".join(
+                f"&{key}={quote(value)}" for key, value in release_detail(request.GET, artifact_released=False).items()
+            ),
         }
         return render(request, self.template_name, context)
 
@@ -554,7 +566,7 @@ class DatasetExportView(LeadOrAdminRequiredMixin, View):
                 "format": fmt,
                 "date_from": str(date_from),
                 "date_to": str(date_to),
-                **release_detail(request.GET),
+                **release_detail(request.GET, artifact_released=True),
             },
         )
 

@@ -22,13 +22,25 @@ zwei Auflagen benannt, beide sind umgesetzt:
 
 **``EXPORT`` ist eine Sammelklasse, kein Freigabe-Register.** Unter derselben
 Aktion laufen die Art.-15-Datenauskunft einer Person (``target_id`` = Klienten-
-UUID), die DSGVO-Dokument-Downloads und jeder Aufruf des externen Berichts. Was
-eine **Berichts-Freigabe** ausmacht, ist deshalb nicht die Aktion, sondern der
-mitgeschriebene **Berichtszeitraum** — :data:`RELEASE_EXPORT_Q` ist die eine
-Stelle, an der diese Grenze definiert wird, und beide Konsumenten (Übersicht und
-Retention-Ausnahme) lesen sie von dort. Ohne die Grenze wäre die Übersicht eine
-Beschäftigten-Metadatensicht für Leitungen (``/audit/`` ist ADMIN_ONLY) und die
-Retention-Ausnahme eine Speicherbegrenzungs-Regression für Klientendaten.
+UUID), die DSGVO-Dokument-Downloads und **jeder Bildschirm-Aufruf** des externen
+Berichts. Eine Berichts-Freigabe erkennt man deshalb an zwei Dingen, die beide im
+``detail`` stehen müssen und beide ihren eigenen Grund haben:
+
+* :data:`RELEASE_ARTIFACT_KEY` — **ein Artefakt hat das Haus verlassen.** Ohne
+  diese Grenze zählte jeder Reload der HTML-Ansicht als Herausgabe: der Log
+  wüchse mit jedem Seitenaufruf unbegrenzt (prune-exempt, mit
+  Beschäftigten-Username), und die Ansichten verdrängten bei
+  :data:`RELEASE_LOG_LIMIT` die echten Downloads aus dem Auswertungsfenster —
+  ein stiller falscher Negativ in genau der Warnung, die die Retention-Ausnahme
+  rechtfertigt.
+* :data:`RELEASE_PERIOD_KEY` — **es gibt einen Berichtszeitraum.** Ohne ihn ist
+  keine Überlappung berechenbar; das ist die Grenze gegen die Klienten-/
+  DSGVO-Exportpfade.
+
+:data:`RELEASE_EXPORT_Q` fasst beides zu **einer** Definition zusammen, und beide
+Konsumenten (Übersicht und Retention-Ausnahme) lesen sie von dort. Zwei Kopien
+wären zwei Wahrheiten: eine Zeile, die die Übersicht führt, aber das Pruning
+löscht, macht die Übersicht still unvollständig.
 """
 
 from __future__ import annotations
@@ -59,28 +71,57 @@ RELEASE_FIELD_MAX_LENGTH = 200
 # Zwischenstand) — und Pflichtfelder ohne Anlass werden mit „x" gefüllt.
 RELEASE_FIELDS = ("recipient", "purpose")
 
-# Detail-Schlüssel, an dem eine Berichts-Freigabe erkennbar ist. Alle
-# Berichts-Export-Views schreiben ihn (``date_from``/``date_to``); die
-# Klienten-/DSGVO-Exportpfade tun es nicht — sie haben keinen Zeitraum.
+# Detail-Schlüssel des Berichtszeitraums. Alle Berichts-Export-Views schreiben
+# ihn (``date_from``/``date_to``); die Klienten-/DSGVO-Exportpfade tun es nicht —
+# sie haben keinen Zeitraum, und ohne Zeitraum ist keine Überlappung berechenbar.
 RELEASE_PERIOD_KEY = "date_from"
+
+# Detail-Marker „ein Artefakt hat das Haus verlassen". Er wird ausschließlich von
+# den Download-Pfaden geschrieben (:func:`release_detail` mit
+# ``artifact_released=True``); eine HTML-Ansicht setzt ihn nie. Ein **positiver**
+# Marker statt einer Format-Negativliste: ein künftiges Ausgabeformat ist damit
+# per Default *keine* Freigabe (fail-safe), statt durch ein vergessenes
+# Listen-Update stillschweigend eine zu werden.
+RELEASE_ARTIFACT_KEY = "artifact_released"
 
 # **Die** Definition einer Berichts-Freigabe (siehe Modul-Docstring). Bewusst ein
 # ``Q`` statt einer Aktionsliste: die Aktion allein ist zu grob.
-RELEASE_EXPORT_Q = Q(action=AuditLog.Action.EXPORT) & Q(detail__has_key=RELEASE_PERIOD_KEY)
+RELEASE_EXPORT_Q = (
+    Q(action=AuditLog.Action.EXPORT) & Q(detail__has_key=RELEASE_PERIOD_KEY) & Q(detail__has_key=RELEASE_ARTIFACT_KEY)
+)
+
+# **Warum ``has_key`` und nicht ``detail__artifact_released=True``:** Der
+# Wertvergleich auf einem fehlenden JSON-Schlüssel ergibt in SQL nicht FALSE,
+# sondern NULL — und ``exclude(...)`` daraus ``NOT NULL`` = NULL, also „Zeile
+# nicht in der Löschmenge". Der Marker wirkte damit genau umgekehrt: eine
+# Bildschirm-Ansicht OHNE Marker wäre prune-exempt geworden. ``has_key`` ist ein
+# echter Boolescher Operator (``?``) und liefert für fehlende Schlüssel FALSE.
+# Test-gepinnt in ``test_report_release_log.py::…::test_bildschirmaufruf_ist_nicht_prune_exempt``.
 
 
-def release_detail(query_params) -> dict[str, str]:
-    """Empfänger/Zweck aus den Query-Parametern für das ``EXPORT``-Audit-Detail.
+def release_detail(query_params, *, artifact_released: bool) -> dict[str, object]:
+    """Freigabe-Anteil des ``EXPORT``-Audit-Details.
 
-    Rückgabe ist bewusst **leer**, wenn nichts angegeben wurde: ein Detail mit
+    ``artifact_released`` ist ein **Pflicht-Keyword ohne Default**: jede
+    EXPORT-auditierende Aufrufstelle muss ausdrücklich sagen, ob bei ihr ein
+    Artefakt das Haus verlassen hat. Ein Default wäre in beide Richtungen
+    falsch — ``True`` machte jede künftige Bildschirm-Ansicht still zur
+    dauerhaft aufbewahrten Herausgabe, ``False`` ließe einen neuen Download-Pfad
+    still aus der Übersicht fallen. Dasselbe Muster wie ``margin``/``order`` in
+    der Suppression: lieber ein ``TypeError`` beim Schreiben des Codes als eine
+    stille Fehlklassifikation im Betrieb.
+
+    Empfänger/Zweck werden **unabhängig davon** übernommen, wenn sie angegeben
+    wurden — sie sind Herkunftsangabe, keine Freigabe-Entscheidung. Die Rückgabe
+    ist bewusst **leer**, wenn nichts angegeben wurde: ein Detail mit
     ``{"recipient": ""}`` behauptete eine Angabe, die es nicht gibt, und ließe
     sich später nicht von „Feld gab es damals noch nicht" unterscheiden.
 
-    Kein Schema-Eingriff: die Felder wandern in das bestehende ``detail``-
-    JSONField. Der Audit-Log ist append-only und hash-verkettet — jede
-    Schema-Migration darauf wäre teuer und hier unnötig.
+    Kein Schema-Eingriff: alles wandert in das bestehende ``detail``-JSONField.
+    Der Audit-Log ist append-only und hash-verkettet — jede Schema-Migration
+    darauf wäre teuer und hier unnötig.
     """
-    detail = {}
+    detail: dict[str, object] = {RELEASE_ARTIFACT_KEY: True} if artifact_released else {}
     for field in RELEASE_FIELDS:
         value = (query_params.get(field) or "").strip()[:RELEASE_FIELD_MAX_LENGTH]
         if value:
@@ -156,9 +197,10 @@ def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT) -> list[Rel
     Liest ausschließlich ``AuditLog``-Einträge, die :data:`RELEASE_EXPORT_Q`
     erfüllen — es gibt kein zweites Register und keinen neuen Schreibpfad. Der
     Filter ist nicht bloß Kosmetik: ``EXPORT`` umfasst auch Art.-15-Auskünfte
-    und DSGVO-Downloads, die hier weder hingehören (kein Berichtszeitraum, keine
-    Überlappung berechenbar) noch hin dürfen (Klientenbezug auf einer
-    LEAD_PLUS-Seite).
+    und DSGVO-Downloads (kein Berichtszeitraum, keine Überlappung berechenbar,
+    Klientenbezug auf einer LEAD_PLUS-Seite) sowie jeden **Bildschirm-Aufruf**
+    des externen Berichts — letztere verdrängten sonst bei
+    :data:`RELEASE_LOG_LIMIT` die echten Downloads aus dem Auswertungsfenster.
 
     Die Übersicht ist damit genau so vollständig wie die Audit-Spur der
     Berichts-Exporte; ihr blinder Fleck sind Artefakte, die auf anderem Weg
