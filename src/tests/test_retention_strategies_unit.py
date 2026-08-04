@@ -222,6 +222,64 @@ class TestEnforceDocumentTypeRetention:
         )
         assert enforce_document_type_retention(facility, timezone.now(), dry_run=True)["count"] == 0
 
+    def test_neg_client_entity_doctype_is_an_explicit_noop(
+        self, facility, staff_user, admin_user, client_identified, doc_type_client_profile
+    ):
+        """``retention_days`` bleibt event-only (Produktentscheid M24, Refs #1738).
+
+        Fuer Personen- und Fall-Typen gilt der **Owner-Lebenszyklus**: ihre
+        Daten (und damit ihre Anhaenge) fallen mit der Klienten-Anonymisierung,
+        nicht ueber eine eigene Zeitfrist. Ein an einem Personen-Typ gesetztes
+        ``retention_days`` darf deshalb nichts ausloesen.
+
+        Der Test prueft beides:
+
+        * **Wirkung** — die Person, ihr personen-eigener Anhang und die
+          Vorschlagsliste bleiben unangetastet.
+        * **Mechanik** — der Personen-Typ wird gar nicht erst abgefragt. Ohne
+          den ``entity_type``-Filter lief pro Personen-/Fall-Typ eine
+          Event-Count-Query, die nur deshalb leer blieb, weil ein Ereignis
+          niemals einen Personen-Typ traegt. Diese stille Kopplung waere die
+          Sollbruchstelle, sobald der Typ jemals an einer anderen Entitaet
+          haengt; ohne die Query-Probe koennte der Filter unbemerkt wieder
+          herausfallen (der Wirkungs-Teil allein bliebe gruen).
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from core.models import Attachment, FieldTemplate, RetentionProposal
+
+        doc_type_client_profile.retention_days = 1
+        doc_type_client_profile.save(update_fields=["retention_days"])
+        client_identified.document_type = doc_type_client_profile
+        client_identified.save(update_fields=["document_type"])
+        attachment = Attachment.objects.create(
+            facility=facility,
+            client=client_identified,
+            field_template=FieldTemplate.objects.create(
+                facility=facility,
+                name="Personenanlage",
+                field_type=FieldTemplate.FieldType.FILE,
+            ),
+            storage_filename="person.enc",
+            original_filename_encrypted={"ct": "x", "iv": "y"},
+            file_size=42,
+            mime_type="text/plain",
+            created_by=admin_user,
+        )
+
+        with CaptureQueriesContext(connection) as ctx:
+            result = enforce_document_type_retention(facility, timezone.now(), dry_run=False)
+
+        assert result == {"count": 0}
+        assert Attachment.objects.filter(pk=attachment.pk).exists()
+        assert not RetentionProposal.objects.filter(facility=facility).exists()
+        # psycopg rendert UUID-Parameter ohne Bindestriche — beide Schreibweisen
+        # pruefen, sonst laeuft die Probe still ins Leere.
+        needles = (str(doc_type_client_profile.pk), doc_type_client_profile.pk.hex)
+        touching = [q["sql"] for q in ctx.captured_queries if any(n in q["sql"] for n in needles)]
+        assert not touching, f"Personen-Typ wurde trotz Event-only-Frist abgefragt:\n{touching}"
+
 
 @pytest.mark.django_db
 class TestNonPositiveDaysSkipped:

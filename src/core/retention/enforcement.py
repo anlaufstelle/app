@@ -262,6 +262,15 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
 def enforce_document_type_retention(facility, now, dry_run):
     """Soft-delete events whose DocumentType has a custom ``retention_days`` that has been exceeded.
 
+    ``retention_days`` ist **event-only** (Produktentscheid M24, Refs #1738 /
+    ADR-039): fuer Personen- und Fall-Typen gilt der Owner-Lebenszyklus (ihre
+    Daten und Anhaenge fallen mit der Klienten-Anonymisierung, Papierkorb-Frist
+    ``client_trash_days``), eine eigene Zeitfrist gibt es in v1 nicht. Der
+    ``entity_type``-Filter macht diesen No-Op explizit: ohne ihn blieb der Lauf
+    nur deshalb wirkungslos, weil ein ``Event`` niemals einen Personen-/Fall-Typ
+    traegt — eine stille Kopplung statt einer erklaerten Regel (Negativtest:
+    ``test_neg_client_entity_doctype_is_an_explicit_noop``).
+
     Returns ``{"count": N}``.
     """
 
@@ -271,6 +280,7 @@ def enforce_document_type_retention(facility, now, dry_run):
     held_client_ids = get_active_hold_target_ids(facility, "Client")
     doc_types_with_retention = DocumentType.objects.filter(
         facility=facility,
+        entity_type=DocumentType.EntityType.EVENT,
         retention_days__isnull=False,
     )
 
