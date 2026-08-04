@@ -107,3 +107,38 @@ class TestSoftDeletedAttachmentsAreHidden:
         client.force_login(staff_user)
         response = client.get(reverse(LIST_URL_NAME))
         assert "ereignis.pdf" in response.content.decode()
+
+
+# ---------------------------------------------------------------------------
+# B2 — Dropdown-Leak von HIGH-Typnamen
+# ---------------------------------------------------------------------------
+
+
+class TestDropdownSensitivityFilter:
+    """B2 (Refs #1738, Security): das Filter-Dropdown listete ALLE aktiven
+    Ereignistypen — auch solche, deren Sensitivitaet die Rolle nicht sehen darf.
+
+    Der Typname ist selbst eine Information („Krisengespraech", „Suizidprotokoll"):
+    die Zeilen waren korrekt gefiltert, der Name stand trotzdem im HTML.
+    """
+
+    def test_high_type_name_is_not_offered_to_assistant(self, client, assistant_user, facility):
+        ft = _file_template(facility, "Geheimdatei")
+        high = _doc_type(
+            facility,
+            "Hochsensibler Typ",
+            DocumentType.EntityType.EVENT,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            file_field=ft,
+        )
+        client.force_login(assistant_user)
+        response = client.get(reverse(LIST_URL_NAME))
+        assert response.status_code == 200
+        assert high.pk not in [dt.pk for dt in response.context["doc_types"]]
+        assert "Hochsensibler Typ" not in response.content.decode()
+
+    def test_normal_type_stays_offered(self, client, assistant_user, event_attachment):
+        _event, _attachment, dt, _ft = event_attachment
+        client.force_login(assistant_user)
+        response = client.get(reverse(LIST_URL_NAME))
+        assert dt.pk in [d.pk for d in response.context["doc_types"]]

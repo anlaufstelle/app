@@ -119,8 +119,17 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # Document types for filter dropdown. M2 (Refs #1058): nur event-Typen
         # — Attachments haengen immer an einem Event, client-/case-Typen
         # gehoeren nicht in den Filter (Entscheid E21).
+        #
+        # B2 (M24/AP4, Refs #1738, Security): Das Dropdown listete bis hierher
+        # ALLE aktiven Ereignistypen — auch solche, deren Sensitivitaet die
+        # Rolle gar nicht sehen darf. Die Ergebniszeilen waren korrekt
+        # gefiltert, der TYPNAME stand trotzdem im HTML jeder Assistenz — und
+        # ein Typname ist selbst eine Information („Krisengespraech"). Derselbe
+        # ``allowed``-Filter wie auf den Zeilen schliesst das.
         doc_types = DocumentType.objects.for_facility(facility).filter(
-            is_active=True, entity_type=DocumentType.EntityType.EVENT
+            is_active=True,
+            entity_type=DocumentType.EntityType.EVENT,
+            sensitivity__in=allowed,
         )
 
         context = {
