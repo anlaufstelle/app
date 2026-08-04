@@ -177,13 +177,31 @@ def _lock_invisible_document_type(request, case, form):
     return False
 
 
-def _values_at_risk(data_json, *, type_locked: bool) -> int:
-    """Zusatzfeld-Werte, die ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733).
+def _active_attachment_chains(owner) -> int:
+    """Aktive Versions**ketten** eines Owners (Spiegel aus ``views/clients.py``).
 
-    Spiegel von ``views/clients.py``: speist Warnung und Rueckfrage im
-    Bearbeiten-Formular; bei gesperrtem Select gibt es nichts zu bestaetigen.
+    DISTINCT ueber ``entry_id`` — dieselbe Zaehlung wie
+    :func:`~core.services.attachments.discard_type_switch_file_chains`.
+    ``order_by()`` ist Pflicht (``Meta.ordering`` zoege ``-created_at`` ins
+    DISTINCT).
     """
-    return 0 if type_locked else count_filled_dynamic_values(data_json)
+    return owner.attachments.filter(deleted_at__isnull=True).order_by().values("entry_id").distinct().count()
+
+
+def _values_at_risk(case, data_json, *, type_locked: bool) -> dict[str, int] | None:
+    """Was ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733/#1738).
+
+    Spiegel von ``views/clients.py``: ``None``, wenn nichts auf dem Spiel steht,
+    sonst ``{"field_values": n, "files": m}`` — Datei-Marker zaehlen NICHT als
+    Feldwert, Dateien werden als Ketten separat beziffert.
+    """
+    if type_locked:
+        return None
+    field_values = count_filled_dynamic_values(data_json)
+    files = _active_attachment_chains(case)
+    if not field_values and not files:
+        return None
+    return {"field_values": field_values, "files": files}
 
 
 def _get_case_event_context(case, facility, user):
@@ -421,7 +439,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
             "is_edit": True,
             "client_id": str(case.client.pk) if case.client else "",
             "client_pseudonym": case.client.pseudonym if case.client else "",
-            "dynamic_values_at_risk": _values_at_risk(case.data_json, type_locked=type_locked),
+            "dynamic_values_at_risk": _values_at_risk(case, case.data_json, type_locked=type_locked),
             # M24/AP4 (Refs #1738): in JEDEM Render-Zweig — sonst verschwinden
             # bestehende Anhang-Zeilen beim Re-Render aus dem Formular.
             "existing_attachments": build_attachment_context(case),
@@ -468,7 +486,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 "is_edit": True,
                 "client_id": request.POST.get("client", ""),
                 "client_pseudonym": "",
-                "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
                 "existing_attachments": build_attachment_context(case),
             }
             return render(request, "core/cases/form.html", context)
@@ -496,7 +514,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     "is_edit": True,
                     "client_id": request.POST.get("client", ""),
                     "client_pseudonym": "",
-                    "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                    "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
                     "existing_attachments": build_attachment_context(case),
                 }
                 return render(request, "core/cases/form.html", context)

@@ -293,9 +293,19 @@ def count_filled_dynamic_values(data_json: Mapping[str, Any] | None) -> int:
     gesetztes Häkchen ist kein Datenverlust). Eine ``0`` zählt dagegen als
     erfasster Wert. Verschlüsselte Werte liegen als Fernet-Token vor und werden
     für die reine Zählung **nicht** entschlüsselt.
+
+    **Datei-Marker zählen NICHT** (M24/AP4, Refs #1738): Ein FILE-Slug trägt
+    keinen Feldwert, sondern einen Zeiger auf ``Attachment``-Zeilen. Ein
+    Typwechsel verwirft ihn zwar ebenfalls — aber als *Datei*, und Dateien
+    beziffert der Dialog separat über die Zahl der Versionsketten
+    (:func:`~core.services.attachments.discard_type_switch_file_chains`).
+    Ohne diese Trennung stünde im Bestätigungstext „1 Feldwert", wo in
+    Wahrheit eine Datei gemeint ist.
     """
     count = 0
     for value in (data_json or {}).values():
+        if is_file_marker(value):
+            continue
         if value is None or isinstance(value, bool) and not value:
             continue
         if isinstance(value, str) and not value.strip():

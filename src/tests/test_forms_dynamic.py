@@ -472,3 +472,18 @@ class TestCountFilledDynamicValues:
     def test_encrypted_token_counts(self):
         """Verschlüsselte Werte liegen als Fernet-Token im JSONB — sie zählen."""
         assert count_filled_dynamic_values({"geheim": "gAAAAABk-token"}) == 1
+
+    def test_file_markers_are_not_field_values(self):
+        """M24/AP4 (Refs #1738): Datei-Marker zählen NICHT als Feldwert.
+
+        Ein FILE-Slug trägt keinen Wert, sondern einen Zeiger auf die
+        ``Attachment``-Zeilen. Er würde beim Typwechsel zwar ebenfalls
+        verworfen, aber als *Datei* — der Dialog nennt Dateien separat
+        (``discard_type_switch_file_chains``-Zählung). Ohne diese Trennung
+        stünde im Text „1 Feldwert", obwohl es eine Datei ist.
+        """
+        stufe_a = {"__file__": True, "attachment_id": "11111111-1111-1111-1111-111111111111"}
+        stufe_b = {"__files__": True, "entries": [{"id": "22222222-2222-2222-2222-222222222222", "sort": 0}]}
+        assert count_filled_dynamic_values({"anhang": stufe_a}) == 0
+        assert count_filled_dynamic_values({"anhang": stufe_b}) == 0
+        assert count_filled_dynamic_values({"anhang": stufe_b, "text": "wert"}) == 1

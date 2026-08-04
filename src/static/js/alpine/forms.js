@@ -106,6 +106,14 @@ document.addEventListener("alpine:init", () => {
      * ebenfalls bei leeren Feldern und wuerde beim Speichern genauso Werte
      * verwerfen — der Select-Wert waere dann unveraendert und die Rueckfrage
      * bliebe aus.
+     *
+     * M24/AP4 (Refs #1738, ADR-039 §7): Seit Personen und Faelle Datei-
+     * Anhaenge tragen koennen, verwirft derselbe Typwechsel zusaetzlich deren
+     * Versionsketten (``discard_type_switch_file_chains``, soft-delete). Der
+     * Text aus ``data-confirm-discard`` nennt darum beide Groessen — Feldwerte
+     * UND Dateien. Die Mechanik hier bleibt unveraendert: welche Zahlen im Text
+     * stehen, entscheidet allein die View (``_values_at_risk``); die Komponente
+     * liest weiterhin nur das Attribut.
      */
     Alpine.data("confirmDynamicDataLoss", () => ({
         _fieldsReloaded: false,

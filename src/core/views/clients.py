@@ -191,14 +191,45 @@ def _lock_invisible_document_type(request, client, form):
     return False
 
 
-def _values_at_risk(data_json, *, type_locked: bool) -> int:
-    """Zusatzfeld-Werte, die ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733).
+def _active_attachment_chains(owner) -> int:
+    """Anzahl der aktiven Versions**ketten** eines Owners (M24/AP4, Refs #1738).
+
+    Bewusst dieselbe Zaehlung wie
+    :func:`~core.services.attachments.discard_type_switch_file_chains` (das
+    genau diese Ketten beim Typwechsel soft-loescht): DISTINCT ueber
+    ``entry_id``, nicht ueber Einzelversionen — eine ersetzte Datei ist EINE
+    Datei, keine zwei. ``order_by()`` ist Pflicht: ``Attachment.Meta.ordering``
+    zoege ``-created_at`` ins DISTINCT und die Ketten kaemen mehrfach zurueck.
+    """
+    return owner.attachments.filter(deleted_at__isnull=True).order_by().values("entry_id").distinct().count()
+
+
+def _values_at_risk(client, data_json, *, type_locked: bool) -> dict[str, int] | None:
+    """Was ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733/#1738).
 
     Speist Warnung und Rueckfrage im Bearbeiten-Formular. Ist das Select
     gesperrt (unsichtbarer Typ, ``_lock_invisible_document_type``), gibt es
     keine Wechselmoeglichkeit — dann auch nichts zu bestaetigen.
+
+    Rueckgabe ``None``, wenn nichts auf dem Spiel steht (Template-Vertrag:
+    ``{% if dynamic_values_at_risk %}``), sonst
+    ``{"field_values": n, "files": m}``:
+
+    * ``field_values`` — befuellte Zusatzfeld-Slugs OHNE Datei-Marker,
+    * ``files`` — aktive Versionsketten (M24/AP4, Refs #1738). Beide Zahlen
+      erscheinen getrennt im Text; „1 Feldwert" fuer eine Datei waere
+      irrefuehrend.
+
+    ``data_json`` kommt separat, weil der POST-Re-Render den DB-Stand VOR der
+    ``ModelForm._post_clean``-Mutation braucht (Refs #1613).
     """
-    return 0 if type_locked else count_filled_dynamic_values(data_json)
+    if type_locked:
+        return None
+    field_values = count_filled_dynamic_values(data_json)
+    files = _active_attachment_chains(client)
+    if not field_values and not files:
+        return None
+    return {"field_values": field_values, "files": files}
 
 
 class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin, View):
@@ -444,7 +475,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
             "data_form": data_form,
             "client": client,
             "is_edit": True,
-            "dynamic_values_at_risk": _values_at_risk(client.data_json, type_locked=type_locked),
+            "dynamic_values_at_risk": _values_at_risk(client, client.data_json, type_locked=type_locked),
             # M24/AP4 (Refs #1738): bestehende Anhaenge samt Ersetzen-/Entfernen-
             # Steuerung. In JEDEM Render-Zweig noetig — sonst verschwinden die
             # Zeilen beim Re-Render eines ungueltigen Formulars aus dem Formular
@@ -486,7 +517,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 "data_form": data_form,
                 "client": client,
                 "is_edit": True,
-                "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                "dynamic_values_at_risk": _values_at_risk(client, old_data, type_locked=type_locked),
                 "existing_attachments": build_attachment_context(client),
             }
             return render(request, "core/clients/form.html", context)
@@ -512,7 +543,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     "data_form": data_form,
                     "client": client,
                     "is_edit": True,
-                    "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                    "dynamic_values_at_risk": _values_at_risk(client, old_data, type_locked=type_locked),
                     "existing_attachments": build_attachment_context(client),
                 }
                 return render(request, "core/clients/form.html", context)
