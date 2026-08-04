@@ -21,9 +21,19 @@ Zahl waere hier der schlimmste Ausgang: sie kann die Suppression fail-open
 aushebeln, ohne dass es jemandem auffiele.
 
 Idempotent: ein zweiter Lauf findet keine Zeile ohne ``persons`` mehr
-(0 Aenderungen). Reversibel und verlustfrei: ``reverse_code`` entfernt die
-nachgetragenen Schluessel wieder — sie sind rein additiv, der Ausgangszustand
-wird exakt wiederhergestellt.
+(0 Aenderungen). Reversibel, aber nur fuer den Bestand zum Migrationszeitpunkt
+verlustfrei (Refs #1778): ``reverse_code`` entfernt die nachgetragenen
+Schluessel additiv wieder — fuer Snapshots, die zum Zeitpunkt DIESES Laufs
+existierten, wird der Ausgangszustand exakt wiederhergestellt. ``_stripped``
+unterscheidet beim Rueckwaertslauf aber NICHT zwischen hier nachgetragenen und
+seither nativ von ``create_or_update_snapshot`` geschriebenen ``persons``-
+Werten (s. o.) — es entfernt den Schluessel bei jeder Zeile, die ihn traegt.
+Ein spaeterer Rueckwaertslauf verliert also auch die Personenzahlen von
+Snapshots, die ERST NACH diesem Deploy nativ im neuen Format entstanden sind.
+Das bleibt fail-safe (der Lesepfad behandelt das fehlende ``persons`` wie
+"unter der Schwelle" und unterdrueckt, s. o.), ist aber keine reine Inverse
+dieser Migration — "exakt wiederhergestellt" gilt nur fuer den damaligen
+Bestand, nicht auf Dauer.
 
 **RLS:** ``core_statisticssnapshot``, ``core_event`` und ``core_client`` tragen
 ``facility_isolation``-Policies mit ``FORCE ROW LEVEL SECURITY``
