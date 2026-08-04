@@ -153,6 +153,35 @@ class TestPurgeOrphanFieldData:
         # Report weist die uebersprungene Datei-Waise aus.
         assert "uebersprungen" in out.getvalue()
 
+    def test_file_orphan_marker_is_skipped_for_client_owner(
+        self, facility, client_identified, doc_type_client_profile, staff_user
+    ):
+        """M24 (Refs #1738, ADR-039 §7): Die Skip-Regel gilt owner-generisch.
+
+        Bis M24 konnten nur Ereignisse FILE-Marker tragen (E8-Sperre). Seit der
+        Owner-Generik koennen auch Personen und Faelle verwaiste Datei-Marker
+        haben — sie duerfen genauso wenig geloescht werden, sonst waere die
+        zugehoerige ``Attachment``-Zeile UI-unsichtbar und nur noch ueber die
+        Klient-Hartloeschung erreichbar.
+        """
+        client_identified.document_type = doc_type_client_profile
+        client_identified.data_json = {
+            "wohnsituation": "WG",
+            "alt-datei": {"__files__": True, "entries": [{"id": "22222222-2222-2222-2222-222222222222", "sort": 0}]},
+            "alt-text": "Rest",
+        }
+        client_identified.save(update_fields=["document_type", "data_json"])
+
+        out = StringIO()
+        call_command("purge_orphan_field_data", stdout=out)
+        client_identified.refresh_from_db()
+
+        assert "alt-datei" in client_identified.data_json, "FILE-Waise an der Person darf nicht geloescht werden"
+        assert client_identified.data_json["alt-datei"]["__files__"] is True
+        assert "alt-text" not in client_identified.data_json
+        assert client_identified.data_json["wohnsituation"] == "WG"
+        assert "uebersprungen" in out.getvalue()
+
     def test_soft_deleted_entity_orphan_is_purged(self, facility, doc_type_client_profile, staff_user):
         """Refs #1725: Der Purge raeumt bewusst AUCH soft-geloeschte Datensaetze
         (anders als reencrypt_fields' is_deleted=False-Luecke) — sonst

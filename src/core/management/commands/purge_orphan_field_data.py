@@ -13,9 +13,14 @@ Dieser Command entfernt bei Personen, Faellen und Ereignissen jene
 Typs gehoeren. Zugeordnete Werte — auch verschluesselte — bleiben unangetastet:
 es werden nur Keys entfernt, keine Werte umgeschrieben.
 
-**Verwaiste FILE-Marker werden bewusst UEBERSPRUNGEN** (nur bei Ereignissen
-moeglich) und separat gezaehlt/gemeldet, statt geloescht: der ``data_json``-
-Marker ist die einzige Bruecke zur verschluesselten ``Attachment``-Zeile.
+**Verwaiste FILE-Marker werden bewusst UEBERSPRUNGEN** und separat
+gezaehlt/gemeldet, statt geloescht: der ``data_json``-Marker ist die einzige
+Bruecke zur verschluesselten ``Attachment``-Zeile.
+
+M24 (Refs #1738, ADR-039 §7): Die Skip-Regel galt frueher faktisch nur fuer
+Ereignisse (Datei-Felder waren an Personen-/Fall-Typen gesperrt, E8). Seit der
+Owner-Generik gilt sie fuer **alle drei** Entitaeten — Personen und Faelle
+koennen ebenfalls FILE-Waisen tragen und werden genauso verschont.
 Loeschte man ihn hier, verschonte ``cleanup_orphan_storage_files`` die Datei (die
 Attachment-Zeile existiert weiter) und sie waere danach UI-unsichtbar und nur
 noch ueber die Klient-Hardloeschung erreichbar — schlechter minimiert statt
@@ -34,8 +39,10 @@ from django.core.management.base import BaseCommand, CommandError
 from core.models import Case, Client, Event
 
 # Refs #1725: FILE-Marker-Erkennung (Stufe A/B) — verwaiste Datei-Marker werden
-# uebersprungen, nicht geloescht (s. Modul-Docstring).
-from core.services.events.fields import _is_file_marker
+# uebersprungen, nicht geloescht (s. Modul-Docstring). Refs #1738: Der Helfer
+# ist mit der Owner-Generik nach ``services/dynamic_data`` gezogen (SSOT), weil
+# Marker nicht mehr event-gebunden sind.
+from core.services.dynamic_data import is_file_marker
 
 # Refs #1016/#1554: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -69,7 +76,7 @@ def _purge_entity_data_json(entity):
     allowed = set(entity.document_type.fields.values_list("field_template__slug", flat=True))
     orphans = [k for k in data if k not in allowed]
     # FILE-Waisen bewusst behalten (Refs #1725) — s. Modul-Docstring.
-    skipped_files = sorted(k for k in orphans if _is_file_marker(data[k]))
+    skipped_files = sorted(k for k in orphans if is_file_marker(data[k]))
     removed = sorted(k for k in orphans if k not in set(skipped_files))
     if not removed:
         # Nichts zu schreiben; uebersprungene FILE-Waisen trotzdem melden.

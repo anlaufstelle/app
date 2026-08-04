@@ -1,6 +1,10 @@
 """Re-encrypt all encrypted Event/EventHistory/Attachment/Client/Case fields
 with the current primary key.
 
+M24 (Refs #1738): ``Attachment`` ist seit ADR-039 owner-generisch (Ereignis,
+Person, Fall) — die Rotation erfasst weiterhin ALLE Zeilen ohne Owner-Filter
+(kein Verhaltensunterschied, aber jetzt ausdruecklich dokumentiert).
+
 A4.4 (Refs #1024): Für ``Event.data_json`` werden zusätzlich Plaintext-PII-Felder
 (laut document_type ``is_encrypted=True``) nachverschlüsselt — Heal von Altbestand
 vor Einführung der Feldverschlüsselung. M2/P6 (Refs #1058): dasselbe Heal-Muster
@@ -284,6 +288,13 @@ class Command(BaseCommand):
         """``Attachment.original_filename_encrypted`` ist ein Fernet-
         verschluesseltes JSON-Marker-Dict. Hier reicht ein normales Save —
         keine append-only-Trigger schuetzen die Tabelle.
+
+        M24 (Refs #1738, ADR-039): Die Iteration ist **owner-generisch** und
+        war es immer — sie laeuft ueber ALLE ``Attachment``-Zeilen, gleich ob
+        sie an einem Ereignis, einer Person oder einem Fall haengen, und
+        schliesst soft-geloeschte (``deleted_at``) mit ein. Kein Owner-Filter,
+        keine Verhaltensaenderung durch die Owner-Generik; die neuen
+        personen-/falleigenen Zeilen rotieren automatisch mit.
         """
         updated = 0
         for att in Attachment.objects.iterator(chunk_size=500):
