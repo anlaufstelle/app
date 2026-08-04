@@ -11,7 +11,9 @@
     Typwechsel/-entfernen tatsaechlich befuellte Zusatzfeld-Werte verwerfen wuerde
     (``dynamic_values_at_risk``, aus der View). Der Confirm haengt am erfolgten
     Nachladen des Feldsets, nicht am Select-Wert (s. Komponente).{% endcomment %}
-    <form method="post" class="space-y-4"
+    {% comment %}M24/AP4 (Refs #1738, ADR-039): multipart — Personen-Typen dürfen
+    Datei-Felder tragen.{% endcomment %}
+    <form method="post" enctype="multipart/form-data" class="space-y-4"
           {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
           data-confirm-discard="{% blocktrans count n=dynamic_values_at_risk %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}"{% endif %}>
         {% csrf_token %}
@@ -41,9 +43,9 @@
 
         {% comment %}M2/P7 (Refs #1058): HTMX-Swap-Ziel des Typ-Selects. Der Wurzel-
         ``<div x-data="conditionEvaluator">`` des Partials liegt IM Ziel — beim Wechsel
-        ersetzt HTMX ihn samt json_script-Payload (M1-Bedingungen). Attachment-Keys
-        (``existing_attachments``/``event``) werden bewusst NICHT gesetzt: der
-        FILE-Renderpfad ist bei ``exclude_file_fields = True`` nie erreichbar.{% endcomment %}
+        ersetzt HTMX ihn samt json_script-Payload (M1-Bedingungen). M24/AP4
+        (Refs #1738): ``existing_attachments`` kommt aus der View und trägt den
+        FILE-Renderpfad (Ersetzen/Entfernen je Anhang).{% endcomment %}
         <div id="dynamic-fields" class="space-y-4">
             {% include "core/partials/dynamic_fields.html" %}
         </div>

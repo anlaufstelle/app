@@ -5,6 +5,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
@@ -15,8 +16,15 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.clients import ClientForm, DynamicClientDataForm
-from core.models import AuditLog, Client, DocumentType, Event, WorkItem
+from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, WorkItem
 from core.models import Case as CaseModel
+from core.services.attachments import (
+    apply_attachment_changes,
+    build_attachment_context,
+    discard_type_switch_file_chains,
+    finalize_staged_files,
+    preserve_file_markers,
+)
 from core.services.audit import log_audit_event
 from core.services.client import (
     create_client,
@@ -30,11 +38,15 @@ from core.services.client import (
 from core.services.compliance import user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
+    build_field_template_lookup,
     count_filled_dynamic_values,
     decrypt_dynamic_text_data,
+    file_marker_slugs,
     merge_dynamic_data,
     remove_restricted_fields,
 )
+from core.services.events import split_file_and_text_data
+from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
 from core.services.security import RequireSudoModeMixin
 from core.services.system import get_active_bans_for_client
@@ -57,7 +69,7 @@ logger = logging.getLogger(__name__)
 # sie 1:1 mit ``entity_type=case``.
 
 
-def _client_data_form(request, document_type, *, data=None, initial_data=None):
+def _client_data_form(request, document_type, *, data=None, files=None, initial_data=None, existing_file_slugs=None):
     """``DynamicClientDataForm`` bauen und beschraenkte Felder entfernen.
 
     Liefert ``(data_form, restricted_slugs)``. ``remove_restricted_fields``
@@ -68,19 +80,47 @@ def _client_data_form(request, document_type, *, data=None, initial_data=None):
 
     ``document_type=None`` (Person ohne Typ) ergibt ein feldloses Formular;
     gebunden (``data`` gesetzt) ist es dann trivial gueltig.
+
+    ``files`` (M24/AP4, Refs #1738): ``request.FILES`` im POST-Pfad — Personen
+    koennen seit ADR-039 Datei-Felder tragen. **Nur im POST setzen**: auf GET
+    und im HTMX-Partial gibt es keine Uploads, ein gesetztes ``files`` wuerde
+    das Formular dort faelschlich als gebunden markieren.
+
+    ``existing_file_slugs`` (E17, Refs #1057): FILE-Slugs mit bestehendem
+    Anhang zaehlen im Update-Pfad als „gefuellt" — die Marker erreichen die
+    Form nicht ueber ``initial_data`` (``decrypt_dynamic_text_data`` strippt
+    sie).
     """
     data_form = DynamicClientDataForm(
         data,
+        files,
         document_type=document_type,
         initial_data=initial_data,
         facility=request.current_facility,
+        existing_file_slugs=existing_file_slugs,
     )
     if document_type is None:
         return data_form, []
     return data_form, remove_restricted_fields(request.user, document_type, data_form)
 
 
-def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial_data=None):
+def _file_field_slugs(document_type):
+    """Slugs der FILE-Felder eines Typs (M24/AP4, Refs #1738).
+
+    Basis fuer ``preserve_file_markers``: nur Slugs des **aktuellen** Typs
+    duerfen nachgezogen werden — bei einem Typwechsel gehoert ein Alt-Slug
+    nicht mehr zum Feldset.
+    """
+    if document_type is None:
+        return set()
+    return {
+        slug
+        for slug, ft in build_field_template_lookup(document_type).items()
+        if ft.field_type == FieldTemplate.FieldType.FILE
+    }
+
+
+def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial_data=None, files=None):
     """Dynamik-Formular fuer den POST-Re-Render eines ungueltigen Formulars.
 
     Refs #774 (Spiegel aus ``EventCreateView.post``): ohne den Sensitivity-Check
@@ -122,7 +162,9 @@ def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial
         return data_form
     if not user_can_see_document_type(request.user, doc_type):
         return data_form
-    data_form, _restricted = _client_data_form(request, doc_type, data=request.POST, initial_data=initial_data)
+    data_form, _restricted = _client_data_form(
+        request, doc_type, data=request.POST, files=files, initial_data=initial_data
+    )
     return data_form
 
 
@@ -285,13 +327,13 @@ class ClientCreateView(StaffRequiredMixin, View):
         if not form.is_valid():
             context = {
                 "form": form,
-                "data_form": _rerender_data_form(request, request.POST.get("document_type")),
+                "data_form": _rerender_data_form(request, request.POST.get("document_type"), files=request.FILES),
                 "is_edit": False,
             }
             return render(request, "core/clients/form.html", context)
 
         doc_type = form.cleaned_data.get("document_type")
-        data_form, restricted = _client_data_form(request, doc_type, data=request.POST)
+        data_form, restricted = _client_data_form(request, doc_type, data=request.POST, files=request.FILES)
         if not data_form.is_valid():
             return render(
                 request,
@@ -299,26 +341,73 @@ class ClientCreateView(StaffRequiredMixin, View):
                 {"form": form, "data_form": data_form, "is_edit": False},
             )
 
+        # M24/AP4 (Refs #1738): Uploads vom Textteil trennen — Muster
+        # ``EventCreateView.post``.
+        file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
+
         # E11 (Refs #1058): ``merge_dynamic_data`` ist der einzige Punkt der
         # Merge-Policy. ``create_client`` validiert anschliessend erneut gegen
         # die Slug-Whitelist — bewusste Doppellinie (die View ist nicht der
         # einzige Schreibpfad).
         data_json = (
-            merge_dynamic_data(doc_type, data_form.cleaned_data, old_data=None, restricted_slugs=restricted)
+            merge_dynamic_data(doc_type, text_data, old_data=None, restricted_slugs=restricted)
             if doc_type is not None
             else {}
         )
 
-        client = create_client(
-            facility=facility,
-            user=request.user,
-            pseudonym=form.cleaned_data["pseudonym"],
-            contact_stage=form.cleaned_data["contact_stage"],
-            age_cluster=form.cleaned_data["age_cluster"],
-            notes=form.cleaned_data["notes"],
-            document_type=doc_type,
-            data_json=data_json,
-        )
+        # Refs #1345 (Muster ``EventCreateView.post``): ClamAV-Scan +
+        # Fernet-Verschluesselung laufen VOR der Transaktion. ``create_client``
+        # schreibt eine AuditLog-Zeile, deren INSERT den per-Facility
+        # ``pg_advisory_xact_lock`` der Hashkette bis zum Commit haelt — laege
+        # die (bis ``CLAMAV_TIMEOUT`` dauernde) Datei-Verarbeitung mit im
+        # ``atomic``, blockierte sie jede andere audit-schreibende Aktion
+        # derselben Einrichtung. ``owner=None``: die Person existiert noch nicht.
+        staged_all = []
+        staged_by_slug: dict[str, list] = {}
+        try:
+            for slug, uploaded_list in file_fields.items():
+                prepared = []
+                for uploaded_file in uploaded_list or []:
+                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, owner=None)
+                    staged_all.append(staged)
+                    prepared.append(staged)
+                if prepared:
+                    staged_by_slug[slug] = prepared
+        except ValidationError as e:
+            # Policy-/Virus-Reject VOR der Transaktion: der zugehoerige
+            # SECURITY_VIOLATION-Audit ist bereits durable geschrieben und
+            # ueberlebt bewusst; die gestagten ``.enc`` werden entfernt.
+            for staged in staged_all:
+                staged.output_path.unlink(missing_ok=True)
+            form.add_error(None, e.message if hasattr(e, "message") else str(e))
+            return render(
+                request,
+                "core/clients/form.html",
+                {"form": form, "data_form": data_form, "is_edit": False},
+            )
+
+        committed = False
+        try:
+            with transaction.atomic():
+                client = create_client(
+                    facility=facility,
+                    user=request.user,
+                    pseudonym=form.cleaned_data["pseudonym"],
+                    contact_stage=form.cleaned_data["contact_stage"],
+                    age_cluster=form.cleaned_data["age_cluster"],
+                    notes=form.cleaned_data["notes"],
+                    document_type=doc_type,
+                    data_json=data_json,
+                )
+                finalize_staged_files(client, request.user, staged_by_slug, doc_type)
+            committed = True
+        finally:
+            # Jeder Nicht-Commit-Ausgang laesst die vorab verschluesselten
+            # ``.enc`` verwaisen — restlos entfernen (Refs #1345).
+            if not committed:
+                for staged in staged_all:
+                    staged.output_path.unlink(missing_ok=True)
+
         messages.success(request, _("Person wurde angelegt."))
         return redirect("core:client_detail", pk=client.pk)
 
@@ -348,6 +437,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
             request,
             None if type_locked else client.document_type,
             initial_data=decrypt_dynamic_text_data(client.data_json),
+            existing_file_slugs=file_marker_slugs(client.data_json),
         )
         context = {
             "form": form,
@@ -355,6 +445,11 @@ class ClientUpdateView(StaffRequiredMixin, View):
             "client": client,
             "is_edit": True,
             "dynamic_values_at_risk": _values_at_risk(client.data_json, type_locked=type_locked),
+            # M24/AP4 (Refs #1738): bestehende Anhaenge samt Ersetzen-/Entfernen-
+            # Steuerung. In JEDEM Render-Zweig noetig — sonst verschwinden die
+            # Zeilen beim Re-Render eines ungueltigen Formulars aus dem Formular
+            # (Refs #1056 P4, Event-Lehre).
+            "existing_attachments": build_attachment_context(client),
         }
         return render(request, "core/clients/form.html", context)
 
@@ -383,6 +478,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     # Wie im Valid-Pfad (und im Event-Pfad): bestehende, auch
                     # deaktivierte SELECT-Werte bleiben waehlbar (Refs #1058).
                     initial_data=decrypt_dynamic_text_data(old_data),
+                    files=request.FILES,
                 )
             )
             context = {
@@ -391,19 +487,24 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 "client": client,
                 "is_edit": True,
                 "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                "existing_attachments": build_attachment_context(client),
             }
             return render(request, "core/clients/form.html", context)
 
         fields = dict(form.cleaned_data)
+        doc_type = None
+        file_fields: dict[str, list] = {}
         if not type_locked:
             doc_type = form.cleaned_data.get("document_type")
             data_form, restricted = _client_data_form(
                 request,
                 doc_type,
                 data=request.POST,
+                files=request.FILES,
                 # Wie im Event-Pfad: bestehende (auch deaktivierte)
                 # SELECT-Werte bleiben fuer die Validierung waehlbar.
                 initial_data=decrypt_dynamic_text_data(old_data),
+                existing_file_slugs=file_marker_slugs(old_data),
             )
             if not data_form.is_valid():
                 context = {
@@ -412,32 +513,59 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     "client": client,
                     "is_edit": True,
                     "dynamic_values_at_risk": _values_at_risk(old_data, type_locked=type_locked),
+                    "existing_attachments": build_attachment_context(client),
                 }
                 return render(request, "core/clients/form.html", context)
+            file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
             # P4b-Review (fail-closed-Vertrag): ``update_client`` weist
             # ``document_type=None`` bei befuelltem ``data_json``-Altbestand ab.
             # Typ und Daten gehen deshalb IMMER als Paar raus — beim Entfernen
             # des Typs also ``document_type=None`` + ``data_json={}``.
-            fields["data_json"] = (
+            merged = (
                 merge_dynamic_data(
                     doc_type,
-                    data_form.cleaned_data,
+                    text_data,
                     old_data=old_data,
                     restricted_slugs=restricted,
                 )
                 if doc_type is not None
                 else {}
             )
+            # M24/AP4 (Refs #1738): FILE-Felder tragen keinen Formularwert — ihr
+            # Wert IST der Marker auf die ``Attachment``-Zeilen. Ohne diese
+            # Re-Injektion wuerde bereits der erste reine Text-Edit still ALLE
+            # Bestandsanhaenge aus dem ``data_json`` werfen.
+            preserve_file_markers(client, merged, old_data, _file_field_slugs(doc_type))
+            fields["data_json"] = merged
+
+        # ADR-039 §7: Ein Typwechsel (auch das Entfernen des Typs) verwirft das
+        # ``data_json`` komplett — die Versionsketten blieben sonst als
+        # UI-unsichtbare Waisen liegen. Bewusst SOFT-Delete, im selben atomic
+        # wie der Update und VOR ``apply_attachment_changes`` (Uploads des
+        # NEUEN Typs sollen nicht mit verworfen werden).
+        type_switched = not type_locked and (doc_type.pk if doc_type is not None else None) != old_doc_type_id
 
         expected_updated_at = request.POST.get("expected_updated_at") or None
         try:
-            client = update_client(
-                client,
-                request.user,
-                old_stage=old_stage,
-                expected_updated_at=expected_updated_at,
-                **fields,
-            )
+            with transaction.atomic():
+                if type_switched:
+                    discard_type_switch_file_chains(client, request.user)
+                client = update_client(
+                    client,
+                    request.user,
+                    old_stage=old_stage,
+                    expected_updated_at=expected_updated_at,
+                    **fields,
+                )
+                if doc_type is not None:
+                    apply_attachment_changes(
+                        client,
+                        request.user,
+                        request.POST,
+                        request.FILES,
+                        file_fields,
+                        doc_type,
+                    )
         except ValidationError as e:
             messages.error(request, e.message if hasattr(e, "message") else str(e))
             return redirect("core:client_update", pk=client.pk)
@@ -550,11 +678,25 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
         # Refs #1758: nur der Rueckweg auf den GESPEICHERTEN Typ ist vorbefuellt
         # (s. Klassen-Docstring) — jeder andere Typ bleibt leer.
         initial_data = None
+        existing_attachments = {}
+        existing_file_slugs = None
         if assigned_client is not None and doc_type.pk == assigned_pk:
             initial_data = decrypt_dynamic_text_data(assigned_client.data_json)
+            # M24/AP4 (Refs #1738): Anhang-Kontext NUR auf dem Rueckweg zum
+            # gespeicherten Typ. Bei einem echten Typwechsel verwirft die
+            # E11-Policy das ``data_json`` ohnehin — die Anhang-Steuerung eines
+            # anderen Feldsets duerfte dort gar nicht erscheinen.
+            existing_attachments = build_attachment_context(assigned_client)
+            existing_file_slugs = file_marker_slugs(assigned_client.data_json)
 
-        data_form, _restricted = _client_data_form(request, doc_type, initial_data=initial_data)
-        return render(request, "core/partials/dynamic_fields.html", {"data_form": data_form})
+        data_form, _restricted = _client_data_form(
+            request, doc_type, initial_data=initial_data, existing_file_slugs=existing_file_slugs
+        )
+        return render(
+            request,
+            "core/partials/dynamic_fields.html",
+            {"data_form": data_form, "existing_attachments": existing_attachments},
+        )
 
 
 class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):

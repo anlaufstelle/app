@@ -171,10 +171,9 @@ def doc_type_case_conditional(facility):
 def doc_type_case_file_condition(facility):
     """Fall-Typ, dessen Bedingungs-QUELLE ein FILE-Feld ist (P3-Review-Nachzug).
 
-    FILE ist fuer Fall-Typen dreifach ausgeschlossen (Config-UI, Service,
-    ``exclude_file_fields``) — diese Konfiguration kann nur als Bestandsrest
-    entstehen. Der Fixture stellt sie kuenstlich her, damit das dokumentierte
-    Verhalten (Drop-Regel) fixiert ist.
+    M24/AP4 (Refs #1738, ADR-039 §9): FILE-Felder sind an Fall-Typen regulaer —
+    die E8-Sperre ist gefallen. Der Fixture pinnt, dass die Bedingung dadurch
+    aktiv ist (Spiegel aus dem Personen-Pfad).
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
@@ -1021,19 +1020,17 @@ class TestCaseFieldsPartial:
         assert "betreuungsdetails" in content
         assert "is_not_empty" in content
 
-    def test_file_source_condition_target_is_unconditional_and_required(
-        self, client, staff_user, facility, doc_type_case_file_condition
-    ):
-        """P3-Review-Nachzug: Quelle ist ein per ``exclude_file_fields`` geskipptes FILE-Feld.
+    def test_file_source_condition_is_active(self, client, staff_user, facility, doc_type_case_file_condition):
+        """Anforderungsaenderung M24/AP4 (Refs #1738, ADR-039 §9).
 
-        Dokumentiertes (akzeptiertes) Verhalten: die Bedingung faellt der
-        Drop-Regel (E8/#774) zum Opfer, weil ihre Quelle nicht mehr im Feldset
-        liegt. Das Ziel wird damit **still unbedingt sichtbar** und behaelt
-        seine Pflicht (``_enforce_conditional_required`` setzt ohne Payload
-        ``visible = alle Felder``). Akzeptiert, weil FILE fuer Fall-Typen
-        dreischichtig ausgeschlossen ist — der Fall entsteht nur aus
-        Bestands-Konfigurationsresten, und „sichtbar + pflichtig" ist die
-        fail-closed-Richtung.
+        **Vorher (E8):** die Bedingungs-Quelle war ein per
+        ``exclude_file_fields`` uebersprungenes FILE-Feld; die Bedingung fiel
+        der Drop-Regel (#774) zum Opfer, das Ziel wurde still unbedingt
+        sichtbar und pflichtig.
+
+        **Jetzt:** Datei-Felder sind an Fall-Typen regulaer — die Quelle liegt
+        im Feldset, die Bedingung wird ausgeliefert, die Pflicht des Ziels
+        greift nur bei gefuellter Quelle (Spiegel aus dem Personen-Pfad).
         """
         client.force_login(staff_user)
         response = client.get(
@@ -1042,14 +1039,14 @@ class TestCaseFieldsPartial:
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'name="kostenbescheid"' not in content
-        assert 'id="field-conditions"' not in content
+        assert 'name="kostenbescheid"' in content
+        assert 'id="field-conditions"' in content
         assert 'name="bescheid-erlaeuterung"' in content
 
         form = response.context["data_form"]
-        assert "kostenbescheid" not in form.fields
+        assert "kostenbescheid" in form.fields
         assert form.fields["bescheid-erlaeuterung"].required is False
-        assert form.condition_target_slugs == set()
+        assert form.condition_target_slugs == {"bescheid-erlaeuterung"}
         # ``facility`` ist Pflicht: ``DynamicDataForm.clean()`` steigt ohne sie
         # frueh aus und liesse die konditionale Pflichtpruefung aus.
         bound = form.__class__(
@@ -1057,8 +1054,7 @@ class TestCaseFieldsPartial:
             document_type=doc_type_case_file_condition,
             facility=facility,
         )
-        assert not bound.is_valid()
-        assert "bescheid-erlaeuterung" in bound.errors
+        assert bound.is_valid(), bound.errors
 
 
 # ---------------------------------------------------------------------------

@@ -163,10 +163,10 @@ def doc_type_client_conditional(facility):
 def doc_type_client_file_condition(facility):
     """Personen-Typ, dessen Bedingungs-QUELLE ein FILE-Feld ist (P3-Review-Nachzug).
 
-    FILE ist fuer Personen-Typen dreifach ausgeschlossen (Config-UI, Service,
-    ``exclude_file_fields``) — diese Konfiguration kann nur als Bestandsrest
-    entstehen. Der Fixture stellt sie kuenstlich her, damit das dokumentierte
-    Verhalten (Drop-Regel) fixiert ist.
+    M24/AP4 (Refs #1738, ADR-039 §9): FILE-Felder sind an Personen-Typen
+    regulaer — die frueher dreischichtige E8-Sperre ist gefallen. Diese
+    Konfiguration ist damit kein Bestandsrest mehr, sondern ein gueltiges
+    Setup; der Fixture pinnt, dass die Bedingung dadurch aktiv ist.
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
@@ -875,20 +875,21 @@ class TestClientFieldsPartial:
         assert "betreuungsdetails" in content
         assert "is_not_empty" in content
 
-    def test_file_source_condition_target_is_unconditional_and_required(
-        self, client, staff_user, facility, doc_type_client_file_condition
-    ):
-        """P3-Review-Nachzug: Quelle ist ein per ``exclude_file_fields`` geskipptes FILE-Feld.
+    def test_file_source_condition_is_active(self, client, staff_user, facility, doc_type_client_file_condition):
+        """Anforderungsaenderung M24/AP4 (Refs #1738, ADR-039 §9).
 
-        Dokumentiertes (akzeptiertes) Verhalten: die Bedingung faellt der
-        Drop-Regel (E8/#774) zum Opfer, weil ihre Quelle nicht mehr im Feldset
-        liegt. Das Ziel wird damit **still unbedingt sichtbar** und behaelt
-        seine Pflicht (``_enforce_conditional_required`` setzt ohne Payload
-        ``visible = alle Felder``). Akzeptiert, weil FILE fuer Personen-Typen
-        dreischichtig ausgeschlossen ist (Config-UI, Service-Guard,
-        ``exclude_file_fields``) — der Fall entsteht nur aus Bestands-
-        Konfigurationsresten, und "sichtbar + pflichtig" ist die
-        fail-closed-Richtung (kein stiller Pflicht-Opt-out).
+        **Vorher (E8):** die Bedingungs-Quelle war ein per
+        ``exclude_file_fields`` uebersprungenes FILE-Feld. Die Bedingung fiel
+        deshalb der Drop-Regel (#774) zum Opfer, und das Ziel wurde **still
+        unbedingt sichtbar und pflichtig** — akzeptiert, weil ein FILE-Feld an
+        einem Personen-Typ nur als Bestands-Konfigurationsrest entstehen
+        konnte.
+
+        **Jetzt:** Datei-Felder sind an Personen-Typen regulaer (eigene
+        Owner-FK, Download-Route, Versionskette). Die Quelle liegt im Feldset,
+        die Bedingung wird ausgeliefert, und das Ziel ist ein echtes
+        Bedingungsziel: die Pflicht greift nur, wenn die Quelle gefuellt ist.
+        Der Sonderfall ist damit ersatzlos entfallen.
         """
         client.force_login(staff_user)
         response = client.get(
@@ -897,26 +898,26 @@ class TestClientFieldsPartial:
         )
         assert response.status_code == 200
         content = response.content.decode()
-        # FILE-Feld ist gar nicht erst gebaut worden ...
-        assert 'name="nachweis"' not in content
-        # ... die Bedingung faellt damit weg (kein Payload) ...
-        assert 'id="field-conditions"' not in content
-        # ... und das Ziel ist unbedingt sichtbar.
+        # FILE-Feld wird gebaut ...
+        assert 'name="nachweis"' in content
+        # ... die Bedingung wird ausgeliefert ...
+        assert 'id="field-conditions"' in content
+        # ... und das Ziel ist ein Bedingungsziel.
         assert 'name="nachweis-erlaeuterung"' in content
 
         form = response.context["data_form"]
-        assert "nachweis" not in form.fields
+        assert "nachweis" in form.fields
         assert form.fields["nachweis-erlaeuterung"].required is False
-        assert form.condition_target_slugs == set()
+        assert form.condition_target_slugs == {"nachweis-erlaeuterung"}
         # ``facility`` ist Pflicht: ``DynamicDataForm.clean()`` steigt ohne sie
-        # frueh aus und liesse die konditionale Pflichtpruefung aus.
+        # frueh aus und liesse die konditionale Pflichtpruefung aus. Ohne
+        # gewaehlte Datei ist die Quelle leer -> Ziel unsichtbar -> keine Pflicht.
         bound = form.__class__(
             {"nachweis-erlaeuterung": ""},
             document_type=doc_type_client_file_condition,
             facility=facility,
         )
-        assert not bound.is_valid()
-        assert "nachweis-erlaeuterung" in bound.errors
+        assert bound.is_valid(), bound.errors
 
 
 # ---------------------------------------------------------------------------

@@ -11,12 +11,14 @@ Feldfläche nutzen können. Der Event-Pfad erreicht dieses Partial über den Shi
 
 Kontext-Keys:
 - ``data_form``  — PFLICHT; darf auch ``None`` sein (dann wird nichts gerendert).
-- ``existing_attachments`` — OPTIONAL, nur Event-Edit: ``{slug: [entry, ...]}``
-  für die Datei-Ersetzen-/Soft-Delete-Steuerung (#622).
-- ``event`` — OPTIONAL, nur Event-Edit: Träger der ``core:attachment_download``-URL.
-Beide Attachment-Keys werden ausschließlich im FILE-Renderpfad ausgewertet;
-fehlen sie (Create-Flow, Client/Case mit ``exclude_file_fields``), bleibt der
-Attachment-Block leer.
+- ``existing_attachments`` — OPTIONAL, nur Bearbeiten-Flows: ``{slug: [entry, ...]}``
+  für die Datei-Ersetzen-/Soft-Delete-Steuerung (#622). Fehlt der Key
+  (Anlage-Flow), bleibt der Attachment-Block leer.
+
+M24/AP4 (Refs #1738, ADR-039): Der frühere Kontext-Key ``event`` ist entfallen.
+Anhänge hängen jetzt an Ereignis, Person ODER Fall; jeder Entry trägt seine
+``download_url`` selbst (``services/attachments.attachment_download_url``), das
+Partial kennt den Owner-Typ nicht mehr.
 
 Rendert je Gruppe eine Sektion via ``data_form.grouped_fields``. Gruppen-Header
 erscheinen nur, wenn benannte Gruppen existieren — ohne Gruppen bleibt die
@@ -72,7 +74,7 @@ Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
                 {% for entry in entries %}
                 <li class="flex flex-wrap items-center gap-2 p-2 bg-canvas border border-subtle rounded-[10px]"
                     data-entry-id="{{ entry.entry_id }}">
-                    <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
+                    <a href="{{ entry.download_url }}"
                        class="text-accent hover:underline text-sm">
                         {{ entry.filename }}
                     </a>

@@ -1,7 +1,5 @@
 """Forms for client management."""
 
-from typing import ClassVar
-
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -22,14 +20,15 @@ class DynamicClientDataForm(DynamicDataForm):
     """Personen-Auspraegung der dynamischen ``data_json``-Form (M2 P7, Refs #1058).
 
     Bewusst ohne eigenen Body — der komplette Feldaufbau liegt in
-    :class:`~core.forms.dynamic.DynamicDataForm`. Einziger Unterschied zum
-    Event-Pendant ist :attr:`exclude_file_fields`: FILE-Felder haben nur im
-    Event-Pfad eine Attachment-/File-Vault-Pipeline (Entscheid E8/E9). Ein per
-    Konfiguration dennoch zugeordnetes FILE-Feld wird beim Aufbau geloggt und
-    uebersprungen, statt ein Feld zu erzeugen, dessen Upload nirgends landet.
-    """
+    :class:`~core.forms.dynamic.DynamicDataForm`.
 
-    exclude_file_fields: ClassVar[bool] = True
+    M24/AP4 (Refs #1738, ADR-039 §9): Der Skip ``exclude_file_fields = True``
+    ist **ersatzlos entfallen**. Anhaenge haengen seit ADR-039 an Ereignis,
+    Person oder Fall; ein FILE-Feld an einem Personen-Typ ist kein
+    Fehlkonfigurations-Rest mehr, sondern ein regulaerer Upload mit
+    Download-Route und Versionskette. Die Klasse bleibt (leer) bestehen —
+    stabiler Importpfad und stabiler Logname.
+    """
 
 
 class ClientForm(forms.ModelForm):
