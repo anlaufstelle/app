@@ -134,7 +134,7 @@ class TestClientAttachmentJourney:
         page.goto(f"{base_url}/clients/{client_pk}/")
         page.wait_for_selector("text=m24-nachweis.pdf", timeout=10000)
         with page.expect_download() as download_info:
-            page.locator("a:has-text('m24-nachweis.pdf')").first.click()
+            page.locator("a:has-text('m24-nachweis.pdf')").click()
         assert download_info.value.suggested_filename == "m24-nachweis.pdf"
 
         # Ersetzen: Vorversion bleibt erreichbar
@@ -181,7 +181,7 @@ class TestCaseAttachmentJourney:
         page.goto(f"{base_url}/cases/{case_pk}/")
         page.wait_for_selector("text=m24-nachweis.pdf", timeout=10000)
         with page.expect_download() as download_info:
-            page.locator("a:has-text('m24-nachweis.pdf')").first.click()
+            page.locator("a:has-text('m24-nachweis.pdf')").click()
         assert download_info.value.suggested_filename == "m24-nachweis.pdf"
 
 

@@ -20,12 +20,11 @@
         <tbody class="divide-y divide-subtle">
             {% for item in attachments %}
             <tr class="hover:bg-canvas">
-                {# M24/AP4 (Refs #1738, Integrations-Review): Der Titel führt zum
-                   DATENSATZ (Person/Fall/Ereignis), nicht ein zweites Mal zum
-                   Download — sonst hätte die Zeile zwei Links auf dieselbe Datei
-                   und keinen Weg mehr in den Kontext. Ohne ``owner_url`` (Rolle
-                   darf den Owner nicht öffnen) bleibt der Titel unverlinkt statt
-                   ins Leere zu zeigen. #}
+                {% comment %} M24/AP4 (Refs #1738, Integrations-Review): Der Titel führt
+                zum DATENSATZ (Person/Fall/Ereignis), nicht ein zweites Mal zum Download —
+                sonst hätte die Zeile zwei Links auf dieselbe Datei und keinen Weg mehr in
+                den Kontext. Ohne ``owner_url`` (Rolle darf den Owner nicht öffnen) bleibt
+                der Titel unverlinkt statt ins Leere zu zeigen. {% endcomment %}
                 <td class="px-4 py-3">
                     {% if item.owner_url %}
                     <a href="{{ item.owner_url }}" class="text-sm font-medium text-accent hover:text-accent flex items-center">
@@ -65,8 +64,7 @@
     {% for item in attachments %}
     <div class="bg-surface border border-subtle rounded-[10px] p-3">
         <div class="flex items-center justify-between">
-            {# Siehe Desktop-Zeile: Titel → Datensatz, Download bleibt die
-               eigene Aktion rechts. #}
+            {# Siehe Desktop-Zeile: Titel → Datensatz, Download bleibt eigene Aktion. #}
             {% if item.owner_url %}
             <a href="{{ item.owner_url }}" class="text-sm font-medium text-accent hover:text-accent flex items-center min-w-0">
                 <svg aria-hidden="true" class="w-4 h-4 mr-1.5 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
