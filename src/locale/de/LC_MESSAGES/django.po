@@ -1834,6 +1834,22 @@ msgstr "Quick-Template"
 msgid "Quick-Templates"
 msgstr "Quick-Templates"
 
+#: src/core/models/offline_revocation.py:55
+msgid "Personen-ID"
+msgstr "Personen-ID"
+
+#: src/core/models/offline_revocation.py:59
+msgid "Widerrufen am"
+msgstr "Widerrufen am"
+
+#: src/core/models/offline_revocation.py:76
+msgid "Offline-Widerruf"
+msgstr "Offline-Widerruf"
+
+#: src/core/models/offline_revocation.py:77
+msgid "Offline-Widerrufe"
+msgstr "Offline-Widerrufe"
+
 #: src/core/models/recent_client_visit.py:37
 msgid "Personen-Besuch"
 msgstr "Personen-Besuch"
