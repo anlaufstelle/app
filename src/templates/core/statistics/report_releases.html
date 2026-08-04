@@ -36,7 +36,6 @@ sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
                 <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Berichtszeitraum" %}</th>
                 <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Empfänger" %}</th>
                 <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zweck" %}</th>
-                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Ausgelöst von" %}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-subtle">
@@ -57,11 +56,10 @@ sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
                 </td>
                 <td class="px-4 py-2.5 text-[13px] text-ink-soft">{{ release.recipient|default:"—" }}</td>
                 <td class="px-4 py-2.5 text-[13px] text-ink-soft">{{ release.purpose|default:"—" }}</td>
-                <td class="px-4 py-2.5 text-[13px] text-ink-muted">{{ release.user|default:"—" }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="px-4 py-2.5 text-[13px] text-ink-muted">{% trans "Noch keine Herausgabe protokolliert." %}</td>
+                <td colspan="5" class="px-4 py-2.5 text-[13px] text-ink-muted">{% trans "Noch keine Herausgabe protokolliert." %}</td>
             </tr>
             {% endfor %}
         </tbody>

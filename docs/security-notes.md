@@ -215,7 +215,7 @@ Daraus folgen drei Fälle, in denen personenbeziehbare Restdaten die Löschung �
 
 1. **Bis zum Pruning** — Regelfall: bis zu `Settings.auditlog_retention_months` (Default 24 Monate) nach dem Eintrag.
 2. **Dauerhaft bei `auditlog_retention_months = 0`** — der Wert schaltet das Pruning ab ([`audit_pruning.py`](../src/core/retention/audit_pruning.py): `months <= 0` → No-op). Dann überlebt **jede** Audit-Zeile jede Löschung, unbegrenzt.
-3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED` und `AUDIT_PRUNE_CHECKPOINT` (beide tragen nur System-Metadaten).
+3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED` und `AUDIT_PRUNE_CHECKPOINT` (beide tragen nur System-Metadaten) sowie — seit #1770 — für `EXPORT`-Einträge **mit Berichtszeitraum** (`RELEASE_EXPORT_Q`, Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person und die DSGVO-Dokument-Downloads laufen — die tragen keinen Zeitraum und bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
 
 ### Was bereits umgesetzt ist (#1751, Punkt 5)
 

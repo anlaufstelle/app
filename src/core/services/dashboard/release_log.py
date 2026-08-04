@@ -17,14 +17,26 @@ zwei Auflagen benannt, beide sind umgesetzt:
   Überlappung einen Alarm, den niemand bewerten kann, und die Übersicht wird
   weggeklickt (:func:`release_detail`).
 * Die Historie darf **nicht** von ``auditlog_retention_months`` gekappt werden,
-  sonst täuscht die Übersicht Vollständigkeit vor
-  (``PRUNE_EXEMPT_ACTIONS`` in :mod:`core.retention.audit_pruning`).
+  sonst täuscht die Übersicht Vollständigkeit vor (:data:`RELEASE_EXPORT_Q`,
+  ausgewertet in :mod:`core.retention.audit_pruning`).
+
+**``EXPORT`` ist eine Sammelklasse, kein Freigabe-Register.** Unter derselben
+Aktion laufen die Art.-15-Datenauskunft einer Person (``target_id`` = Klienten-
+UUID), die DSGVO-Dokument-Downloads und jeder Aufruf des externen Berichts. Was
+eine **Berichts-Freigabe** ausmacht, ist deshalb nicht die Aktion, sondern der
+mitgeschriebene **Berichtszeitraum** — :data:`RELEASE_EXPORT_Q` ist die eine
+Stelle, an der diese Grenze definiert wird, und beide Konsumenten (Übersicht und
+Retention-Ausnahme) lesen sie von dort. Ohne die Grenze wäre die Übersicht eine
+Beschäftigten-Metadatensicht für Leitungen (``/audit/`` ist ADMIN_ONLY) und die
+Retention-Ausnahme eine Speicherbegrenzungs-Regression für Klientendaten.
 """
 
 from __future__ import annotations
 
 import dataclasses
 from datetime import date
+
+from django.db.models import Q
 
 from core.models import AuditLog
 from core.utils.formatting import parse_date
@@ -46,6 +58,15 @@ RELEASE_FIELD_MAX_LENGTH = 200
 # Angabe auch dort, wo der Export gar keine Herausgabe ist (Probelauf,
 # Zwischenstand) — und Pflichtfelder ohne Anlass werden mit „x" gefüllt.
 RELEASE_FIELDS = ("recipient", "purpose")
+
+# Detail-Schlüssel, an dem eine Berichts-Freigabe erkennbar ist. Alle
+# Berichts-Export-Views schreiben ihn (``date_from``/``date_to``); die
+# Klienten-/DSGVO-Exportpfade tun es nicht — sie haben keinen Zeitraum.
+RELEASE_PERIOD_KEY = "date_from"
+
+# **Die** Definition einer Berichts-Freigabe (siehe Modul-Docstring). Bewusst ein
+# ``Q`` statt einer Aktionsliste: die Aktion allein ist zu grob.
+RELEASE_EXPORT_Q = Q(action=AuditLog.Action.EXPORT) & Q(detail__has_key=RELEASE_PERIOD_KEY)
 
 
 def release_detail(query_params) -> dict[str, str]:
@@ -78,9 +99,15 @@ class Release:
     date_to: date | None
     recipient: str
     purpose: str
-    user: str
     # Kurzbeschreibungen der Freigaben, mit denen sich der Zeitraum überschneidet.
     overlaps: tuple[str, ...] = ()
+
+    # **Bewusst ohne handelnde Person.** Für den Zweck („welche Zeiträume sind
+    # draußen, und überschneiden sie sich?") ist sie irrelevant; die
+    # Rechenschaft über *wer* trägt der Audit-Log selbst. Sie hier zu führen
+    # öffnete Leitungen eine Beschäftigten-Metadatensicht, die ``/audit/``
+    # (FacilityAdminRequiredMixin) ihnen vorenthält — eine stille
+    # Rechteausweitung über eine Nebentür.
 
     @property
     def has_period(self) -> bool:
@@ -103,7 +130,6 @@ def _as_release(entry: AuditLog) -> Release:
         date_to=parse_date(detail.get("date_to")),
         recipient=str(detail.get("recipient") or ""),
         purpose=str(detail.get("purpose") or ""),
-        user=str(entry.user) if entry.user_id else "",
     )
 
 
@@ -127,19 +153,20 @@ def _overlaps(first: Release, second: Release) -> bool:
 def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT) -> list[Release]:
     """Die auditierten Herausgaben der Einrichtung, mit Überlappungswarnung.
 
-    Liest ausschließlich ``AuditLog``-Einträge der Aktion ``EXPORT`` — es gibt
-    kein zweites Register und keinen neuen Schreibpfad. Die Übersicht ist damit
-    genau so vollständig wie die Audit-Spur; ihr blinder Fleck sind Artefakte,
-    die auf anderem Weg weitergegeben wurden (abfotografierter Bildschirm,
-    weitergeleitete PDF-Datei) — das ist eine organisatorische, keine technische
-    Grenze und gehört so in die Betreiber-Doku.
+    Liest ausschließlich ``AuditLog``-Einträge, die :data:`RELEASE_EXPORT_Q`
+    erfüllen — es gibt kein zweites Register und keinen neuen Schreibpfad. Der
+    Filter ist nicht bloß Kosmetik: ``EXPORT`` umfasst auch Art.-15-Auskünfte
+    und DSGVO-Downloads, die hier weder hingehören (kein Berichtszeitraum, keine
+    Überlappung berechenbar) noch hin dürfen (Klientenbezug auf einer
+    LEAD_PLUS-Seite).
+
+    Die Übersicht ist damit genau so vollständig wie die Audit-Spur der
+    Berichts-Exporte; ihr blinder Fleck sind Artefakte, die auf anderem Weg
+    weitergegeben wurden (abfotografierter Bildschirm, weitergeleitete
+    PDF-Datei) — das ist eine organisatorische, keine technische Grenze und
+    gehört so in die Betreiber-Doku.
     """
-    entries = (
-        AuditLog.objects.for_facility(facility)
-        .filter(action=AuditLog.Action.EXPORT)
-        .select_related("user")
-        .order_by("-timestamp")[:limit]
-    )
+    entries = AuditLog.objects.for_facility(facility).filter(RELEASE_EXPORT_Q).order_by("-timestamp")[:limit]
     releases = [_as_release(entry) for entry in entries]
     return [
         dataclasses.replace(

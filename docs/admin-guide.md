@@ -1570,7 +1570,11 @@ Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über der
 
 Die **Freigabe-Übersicht** (Statistik → „Freigabe-Übersicht", Rolle: Leitung/Einrichtungsverwaltung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
 
-> **Aufbewahrung:** `EXPORT`-Einträge werden von `auditlog_retention_months` **nicht** gekappt — sonst täuschte die Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format und Ihre Empfänger-/Zweckangaben, aber keine Personendaten. Zweckbindung: Nachweis herausgegebener Statistiken.
+> **Aufbewahrung:** Audit-Einträge über die Herausgabe eines **Berichtszeitraums** werden von `auditlog_retention_months` **nicht** gekappt — sonst täuschte die Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, Ihre Empfänger-/Zweckangaben und die auslösende Person. Zweckbindung: Nachweis herausgegebener Statistiken.
+>
+> Die Ausnahme gilt **nur** für diese Teilmenge: Datenauskünfte zu einzelnen Personen (Art. 15) und DSGVO-Dokument-Downloads werden zwar unter derselben Audit-Aktion protokolliert, tragen aber keinen Berichtszeitraum und unterliegen weiter der normalen Frist.
+>
+> **Empfänger und Zweck sind Freitextfelder.** Die Anwendung prüft ihren Inhalt nicht und kann ihn später nicht mehr ändern (das Audit-Log ist unveränderlich). Tragen Sie deshalb die **Organisation** ein, nicht den Namen einer Ansprechperson — sonst steht ein Personenname dauerhaft im Log.
 
 **3. Die Übersicht ist genau so vollständig wie die Audit-Spur.**
 

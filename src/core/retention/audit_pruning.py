@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from core.models import AuditLog
 from core.services.audit import audit_event
+from core.services.dashboard.release_log import RELEASE_EXPORT_Q
 from core.services.system import bypass_replication_triggers
 
 # A6.3 (Refs #1024 / #1016): Aktionen, die NICHT der Routine-Retention
@@ -24,28 +25,46 @@ from core.services.system import bypass_replication_triggers
 # protokolliert die ``boundary_hash``-Grenzen geloeschter Zeilen und darf nie
 # gepruned werden, sonst verloere ``verify_chain`` die Legitimation der
 # Diskontinuitaet.
-# Refs #1770 (K4a): EXPORT ist der Nachweis, **welche Statistik-Zeitraeume wann
-# an wen herausgegeben wurden** — die Datenbasis der Freigabe-Uebersicht
-# (``core.services.dashboard.release_log``). Wuerde die Routine-Frist sie
-# kappen, taeuschte die Uebersicht Vollstaendigkeit vor: eine im vierten Jahr
-# herausgegebene Jahresauswertung ueberschnitte sich mit Monatsberichten, die
-# der Log nicht mehr kennt, und die Ueberlappungswarnung bliebe stumm. Ein
-# stiller falscher Negativ ist hier schlechter als laengere Aufbewahrung.
+# Refs #1770 (K4a): Berichts-Freigaben sind der Nachweis, **welche
+# Statistik-Zeitraeume wann an wen herausgegeben wurden** — die Datenbasis der
+# Freigabe-Uebersicht. Wuerde die Routine-Frist sie kappen, taeuschte die
+# Uebersicht Vollstaendigkeit vor: eine im vierten Jahr herausgegebene
+# Jahresauswertung ueberschnitte sich mit Monatsberichten, die der Log nicht
+# mehr kennt, und die Ueberlappungswarnung bliebe stumm. Ein stiller falscher
+# Negativ ist hier schlechter als laengere Aufbewahrung.
 #
-# **DSGVO-Begruendung** (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2): Der
-# Zweck ist der Nachweis herausgegebener **Statistiken**, nicht die Beobachtung
-# von Beschaeftigten. Das ``detail`` traegt Zeitraum, Format und die frei
-# erfassten Empfaenger-/Zweckangaben — **keine** Klient-PII, keine Pseudonyme,
-# keine Personenzeilen (die Artefakte selbst sind k-anonymisiert). Die
-# handelnde Person steht wie in jedem Audit-Eintrag drin; die Aufbewahrung
-# folgt damit derselben Rechenschaftslogik wie SECURITY_VIOLATION. Festgehalten
-# in ``docs/security-notes.md`` § Disclosure-Analyse (K4a).
+# **Die Ausnahme ist so eng wie ihre Begruendung.** Sie haengt NICHT an der
+# Aktion ``EXPORT`` — die ist eine Sammelklasse, unter der auch die
+# Art.-15-Datenauskunft einer Person (``target_id`` = Klienten-UUID) und die
+# DSGVO-Dokument-Downloads laufen. Deren ``detail`` ist im PII-Sweep als
+# personenbeziehbar klassifiziert (``src/tests/_residue_expectations.py``); sie
+# dauerhaft von der Frist zu befreien waere eine Speicherbegrenzungs-Regression
+# und von der Zweckbindung unten NICHT gedeckt. Ausgenommen ist deshalb allein,
+# was einen **Berichtszeitraum** traegt (``RELEASE_EXPORT_Q``).
+#
+# **DSGVO-Begruendung** (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2): Der Zweck
+# ist der Nachweis herausgegebener **Statistiken**, nicht die Beobachtung von
+# Beschaeftigten. Das ``detail`` dieser Teilmenge traegt Zeitraum, Format und die
+# frei erfassten Empfaenger-/Zweckangaben; die Artefakte selbst sind
+# k-anonymisiert, es gibt dort keine Pseudonyme und keine Personenzeilen. Die
+# **Freitextfelder sind Freitext** — die Datenminimierung dort ist eine
+# Betreiber-Obliegenheit (Empfehlung in der Betreiber-Doku: Organisation statt
+# Person nennen), keine technische Zusicherung; laengenbegrenzt, aber nicht
+# inhaltlich geprueft. Die handelnde Person steht wie in jedem Audit-Eintrag
+# drin. Damit folgt die Aufbewahrung derselben Rechenschaftslogik wie
+# SECURITY_VIOLATION. Festgehalten in ``docs/security-notes.md``
+# § Disclosure-Analyse (K4a).
 PRUNE_EXEMPT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.RETENTION_RUN_COMPLETED,
     AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
-    AuditLog.Action.EXPORT,
 )
+
+# Das vollstaendige Ausnahme-Praedikat: pauschale Aktionen ODER die eng gefasste
+# Berichts-Freigabe. Beide Stellen unten (Loeschmenge und Ueberlebenden-Menge)
+# MUESSEN dasselbe Praedikat verwenden — sonst meldet ``verify_chain`` falsche
+# Kettenbrueche, weil ein Ueberlebender nicht als solcher erkannt wurde.
+PRUNE_EXEMPT_Q = Q(action__in=PRUNE_EXEMPT_ACTIONS) | RELEASE_EXPORT_Q
 
 
 def _months_before(moment: datetime, months: int) -> datetime:
@@ -82,8 +101,12 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
 
     ``settings_obj.auditlog_retention_months == 0`` -> No-op (deaktiviert).
 
-    Ausgenommen (``PRUNE_EXEMPT_ACTIONS``, A6.3): SECURITY_VIOLATION und
-    RETENTION_RUN_COMPLETED bleiben unabhaengig vom Alter erhalten.
+    Ausgenommen (``PRUNE_EXEMPT_Q``): SECURITY_VIOLATION,
+    RETENTION_RUN_COMPLETED und AUDIT_PRUNE_CHECKPOINT (A6.3) bleiben
+    unabhaengig vom Alter erhalten, ebenso ``EXPORT``-Eintraege **mit
+    Berichtszeitraum** (K4a, Refs #1770) — Klienten-/DSGVO-Exporte laufen unter
+    derselben Aktion, tragen aber keinen Zeitraum und bleiben der Frist
+    unterworfen.
 
     Refs #129 Teil B, Refs #733 (#14),
     Refs #781 (C-13), Refs #1024 (A6.3).
@@ -93,7 +116,7 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
         return {"count": 0}
     now = now or timezone.now()
     cutoff = _months_before(now, months)
-    qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff).exclude(action__in=PRUNE_EXEMPT_ACTIONS)
+    qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff).exclude(PRUNE_EXEMPT_Q)
     count = qs.count()
     if count == 0 or dry_run:
         return {"count": count}
@@ -104,12 +127,14 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     # ``boundary_hashes`` = alle Schnittpunkte (entry_hash einer geloeschten
     # Zeile, auf die eine ueberlebende Zeile via ``prev_hash`` zeigt) — deckt
     # auch prune-exempte Ueberlebende MITTEN im geloeschten Bereich ab, sodass
-    # ``verify_chain`` keine falschen Brueche meldet.
+    # ``verify_chain`` keine falschen Brueche meldet. Dass hier dasselbe
+    # ``PRUNE_EXEMPT_Q`` steht wie in der Loeschmenge, ist tragend: eine
+    # abweichende Kopie liesse Ueberlebende ungezaehlt.
     deleted_hashes = {h for h in qs.values_list("entry_hash", flat=True) if h}
     newest_boundary = qs.order_by("-timestamp", "-id").values_list("entry_hash", flat=True).first() or ""
     survivor_prevs = set(
         AuditLog.objects.filter(facility=facility)
-        .filter(Q(timestamp__gte=cutoff) | Q(action__in=PRUNE_EXEMPT_ACTIONS))
+        .filter(Q(timestamp__gte=cutoff) | PRUNE_EXEMPT_Q)
         .values_list("prev_hash", flat=True)
     )
     boundary_hashes = sorted(survivor_prevs & deleted_hashes)

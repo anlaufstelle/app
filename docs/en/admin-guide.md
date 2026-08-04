@@ -1568,7 +1568,11 @@ If reports are released for the same facility covering sub-periods **and** their
 
 The **release overview** (Statistics → "Release overview", role: lead/facility administration) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; overlapping periods sent to *different* recipients are harmless, sent to the same one they are not.
 
-> **Retention:** `EXPORT` entries are **not** truncated by `auditlog_retention_months` — otherwise the overview would pretend to be complete. They contain the period, the format and your recipient/purpose entries, but no personal data. Purpose limitation: evidence of released statistics.
+> **Retention:** Audit entries about the release of a **reporting period** are **not** truncated by `auditlog_retention_months` — otherwise the overview would pretend to be complete. They contain the period, the format, your recipient/purpose entries and the person who triggered the export. Purpose limitation: evidence of released statistics.
+>
+> The exception applies to **that subset only**: data subject access requests for individual people (Art. 15) and GDPR document downloads are logged under the same audit action but carry no reporting period, so the normal deadline still applies to them.
+>
+> **Recipient and purpose are free-text fields.** The application does not check their content and cannot change it later (the audit log is immutable). Enter the **organisation**, not the name of a contact person — otherwise a person's name stays in the log permanently.
 
 **3. The overview is exactly as complete as the audit trail.**
 
@@ -1581,4 +1585,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 23d67bf41113ddf56eb3f4ad8b8d2e1728b67d70 -->
+<!-- source-hash: d95882394f95b4e2afb8665c9eb25efa74da755e -->

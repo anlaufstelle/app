@@ -150,17 +150,43 @@ class TestUeberlappungswarnung:
 
         assert all(release.overlaps for release in releases)
 
-    def test_eintraege_ohne_zeitraum_werden_nicht_gemeldet(self, facility, lead_user):
-        """Ältere EXPORT-Einträge (z. B. Klienten-Datenauskunft) tragen keinen
-        Berichtszeitraum — sie sind keine Freigabe im Sinne von K4a."""
+    def test_eintraege_ohne_zeitraum_werden_gar_nicht_gelistet(self, facility, lead_user):
+        """``EXPORT`` ist die **Sammelklasse**: darunter fallen auch die
+        Art.-15-Datenauskunft einer Person und die DSGVO-Dokument-Downloads.
+        Die Übersicht ist eine Freigabe-Liste für **Berichtszeiträume** — solche
+        Einträge gehören dort nicht hin, und zwar nicht bloß „ohne Warnung",
+        sondern gar nicht: sonst zeigte eine Seite mit LEAD_PLUS-Guard
+        Audit-Metadaten, die `/audit/` nur der Einrichtungsverwaltung zeigt.
+        """
         AuditLog.objects.create(
-            facility=facility, user=lead_user, action=AuditLog.Action.EXPORT, target_type="Client", detail={}
+            facility=facility,
+            user=lead_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="Client",
+            target_id="1f0d6b1e-0000-0000-0000-000000000000",
+            detail={"format": "JSON"},
         )
         _export(facility, lead_user, "2026-01-01", "2026-12-31")
 
         releases = build_release_overview(facility)
 
-        assert not any(release.overlaps for release in releases)
+        assert len(releases) == 1, "nur Herausgaben MIT Berichtszeitraum gehoeren in die Uebersicht"
+        assert releases[0].has_period
+
+    def test_uebersicht_nennt_keine_handelnde_person(self, facility, lead_user):
+        """Datensparsamkeit: Für den Zweck („welche Zeiträume sind draußen?")
+        ist die handelnde Person irrelevant; die Rechenschaft trägt der
+        Audit-Log selbst. Sie hier zu zeigen, öffnete Leitungen eine
+        Beschäftigten-Metadatensicht, die `/audit/` (ADMIN_ONLY) ihnen
+        vorenthält."""
+        import dataclasses
+
+        _export(facility, lead_user, "2026-01-01", "2026-12-31")
+
+        releases = build_release_overview(facility)
+
+        felder = {field.name for field in dataclasses.fields(releases[0])}
+        assert "user" not in felder and "actor" not in felder, felder
 
     def test_uebersicht_ist_facility_gescopt(self, facility, second_facility, lead_user, second_facility_user):
         _export(facility, lead_user, "2026-01-01", "2026-12-31")
@@ -214,36 +240,62 @@ class TestFreigabeUebersichtView:
 class TestExportUeberlebtDieAuditRetention:
     """Auflage 3: sonst täuscht die Übersicht Vollständigkeit vor."""
 
-    def test_export_ist_prune_exempt(self, facility, settings_obj, lead_user):
+    def _veralten(self, now, *entries):
         from django.db import connection
 
-        from core.retention.audit_pruning import PRUNE_EXEMPT_ACTIONS, prune_auditlog
+        ids = [str(entry.pk) for entry in entries]
+        with connection.cursor() as cur:
+            cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
+            cur.execute(
+                f"UPDATE core_auditlog SET timestamp = %s WHERE id IN ({', '.join(['%s'] * len(ids))})",
+                [now - timedelta(days=24 * 31), *ids],
+            )
+            cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
+
+    def test_nur_berichts_freigaben_sind_prune_exempt(self, facility, settings_obj, lead_user):
+        """Die Ausnahme ist **so eng wie ihre Begründung**.
+
+        ``EXPORT`` ist die Sammelklasse: darunter laufen auch die
+        Art.-15-Datenauskunft einer Person (``target_id`` = Klienten-UUID) und
+        die DSGVO-Dokument-Downloads. Deren ``detail`` ist im PII-Sweep als
+        personenbeziehbar klassifiziert — sie dauerhaft von der Frist zu
+        befreien, wäre eine Speicherbegrenzungs-Regression und **nicht** von
+        der K4a-Zweckbindung („Nachweis herausgegebener Statistiken") gedeckt.
+        Ausgenommen ist deshalb nur, was einen **Berichtszeitraum** trägt.
+        """
+        from django.db import connection
+
+        from core.retention.audit_pruning import prune_auditlog
 
         if connection.vendor != "postgresql":
             pytest.skip("prune_auditlog erfordert PostgreSQL")
 
-        assert AuditLog.Action.EXPORT in PRUNE_EXEMPT_ACTIONS
-
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
         now = timezone.now()
-        alt = _export(facility, lead_user, "2020-01-01", "2020-12-31")
+        freigabe = _export(facility, lead_user, "2020-01-01", "2020-12-31")
+        klientenexport = AuditLog.objects.create(
+            facility=facility,
+            user=lead_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="Client",
+            target_id="1f0d6b1e-0000-0000-0000-000000000000",
+            detail={"format": "JSON"},
+        )
         generisch = AuditLog.objects.create(facility=facility, user=lead_user, action=AuditLog.Action.LOGIN)
-        with connection.cursor() as cur:
-            cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
-            cur.execute(
-                "UPDATE core_auditlog SET timestamp = %s WHERE id IN (%s, %s)",
-                [now - timedelta(days=24 * 31), str(alt.pk), str(generisch.pk)],
-            )
-            cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
+        self._veralten(now, freigabe, klientenexport, generisch)
 
         result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
 
-        assert result["count"] == 1, "nur der generische LOGIN-Eintrag darf fallen"
-        assert AuditLog.objects.filter(pk=alt.pk).exists(), (
-            "Ein gekappter EXPORT-Eintrag laesst die Ueberlappungswarnung stumm bleiben — "
+        assert result["count"] == 2, "LOGIN und Klientenexport fallen, die Berichts-Freigabe nicht"
+        assert AuditLog.objects.filter(pk=freigabe.pk).exists(), (
+            "Ein gekappter Freigabe-Eintrag laesst die Ueberlappungswarnung stumm bleiben — "
             "ein stiller falscher Negativ, schlechter als laengere Aufbewahrung."
         )
+        assert not AuditLog.objects.filter(pk=klientenexport.pk).exists(), (
+            "Ein Art.-15-Klientenexport ist keine Berichts-Freigabe und bleibt der Frist unterworfen."
+        )
+        assert not AuditLog.objects.filter(pk=generisch.pk).exists()
 
     def test_die_uebersicht_findet_den_alten_eintrag_noch(self, facility, lead_user):
         _export(facility, lead_user, "2020-01-01", "2020-12-31")

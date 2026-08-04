@@ -55,7 +55,7 @@ Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Alle sieben sin
 | 4 | Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Überschreibt die Fristen 1–3 für Ereignisse dieses Typs |
 | 5 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
 | 6 | Papierkorb-Frist für gelöschte Personen | {{ client_trash_days }} Tage | `client_trash_days` | Person wird automatisch anonymisiert; bis dahin wiederherstellbar |
-| 7 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Einträge werden gelöscht. `0` schaltet die Löschung **ab**; Sicherheitsverstöße und System-Marker sind generell ausgenommen |
+| 7 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Einträge werden gelöscht. `0` schaltet die Löschung **ab**; Sicherheitsverstöße, System-Marker und der Nachweis herausgegebener Berichtszeiträume (Empfänger/Zweck/Zeitraum, ohne Personenbezug) sind generell ausgenommen |
 
 Ergänzende Regeln:
 
@@ -63,7 +63,7 @@ Ergänzende Regeln:
 - **Kein eigener Löschhorizont für Fälle, Episoden, Aufgaben, Wirkungsziele und Meilensteine.** Sie hängen am Lebenszyklus der Person: ihre personenbeziehbaren Freitexte werden bei deren Anonymisierung mitgetilgt.
 - **Sperrvermerke (Legal Hold, Art. 18)** halten jede automatische Löschung und Anonymisierung an, bis der Vermerk aufgehoben wird.
 - **4-Augen-Prinzip** für manuelle Löschungen personenbezogener Daten.
-- **Restrisiko:** Das Audit-Log ist unveränderlich (Nachweispflicht, Art. 5 Abs. 2) und wird von einer Anonymisierung **nicht** mitredigiert. Vorhandene Einträge verschwinden erst mit Frist 7 — bei `auditlog_retention_months = 0` oder bei protokollierten Sicherheitsverstößen gar nicht.
+- **Restrisiko:** Das Audit-Log ist unveränderlich (Nachweispflicht, Art. 5 Abs. 2) und wird von einer Anonymisierung **nicht** mitredigiert. Vorhandene Einträge verschwinden erst mit Frist 7 — bei `auditlog_retention_months = 0`, bei protokollierten Sicherheitsverstößen oder beim Nachweis herausgegebener Berichtszeiträume gar nicht.
 - Die Fristen werden durch den täglich laufenden Aufbewahrungs-Job durchgesetzt; ist der Job nicht eingerichtet, greift **keine** der sieben Fristen.
 
 ---

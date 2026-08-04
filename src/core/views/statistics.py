@@ -481,9 +481,17 @@ class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):
     nichts zu unterdruecken. Die Uebersicht kann das nicht verhindern, sie macht
     es **sichtbar**.
 
-    Rollen-Guard wie das Berichts-Panel selbst (``LeadOrAdminRequiredMixin``):
-    die Seite zeigt Zeitraeume, Formate und die frei erfassten Empfaenger-/Zweck-
-    Angaben — keine Personendaten, aber Herausgabe-Metadaten der Einrichtung.
+    Rollen-Guard wie das Berichts-Panel selbst (``LeadOrAdminRequiredMixin``) —
+    und das ist nur tragfaehig, weil die Datenquelle **eng gefiltert** ist:
+    ``build_release_overview`` liest ausschliesslich Audit-Eintraege MIT
+    Berichtszeitraum (``RELEASE_EXPORT_Q``). Ungefiltert liefe ``EXPORT`` als
+    Sammelklasse — Art.-15-Datenauskuenfte einzelner Personen und
+    DSGVO-Downloads inklusive — auf einer Seite, die eine Leitung sehen darf,
+    waehrend ``/audit/`` der Einrichtungsverwaltung vorbehalten ist.
+
+    Gezeigt werden Zeitraum, Format und die frei erfassten Empfaenger-/Zweck-
+    Angaben; die **handelnde Person bewusst nicht** (Datensparsamkeit, siehe
+    ``release_log.Release``).
     """
 
     template_name = "core/statistics/report_releases.html"
