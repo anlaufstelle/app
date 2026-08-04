@@ -312,7 +312,7 @@ This is not a peculiarity of the plugin system: the same class of divergence has
 | Artifact | Code | Declaration inside the artifact |
 |---|---|---|
 | Report panel (preview) | `live` | visible line "Datenquelle: Live-Abfrage zum Erstellungszeitpunkt — …" |
-| CSV export | `live` | metadata line, segment `\| Datenquelle: …` **before** the k-anonymity note |
+| CSV export | `live` | metadata line, segments `\| data_source: live \| Datenquelle: …` **before** the k-anonymity note (Refs #1765: stable code AND translated label, like JSON/XML) |
 | JSON export | `live` | fields `data_source` (code) + `data_source_note` (translated short form) |
 | XML export | `live` | root attributes `data_source` + `data_source_note` |
 | External report (HTML + `?format=json`) | `live` | `metadata.data_source` / `metadata.data_source_note`, plus a header line and an explanatory sentence in the HTML |
@@ -392,12 +392,13 @@ All three formats go through `safe_download_response` (RFC 5987 file name, `X-Co
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
+# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
 Kategorie,Anzahl
 Kontakte,42
 ```
 
 - The metadata line carries the k-anonymity note only if `summary["k_anonymity_threshold"]` is set. Without it the recipient would see empty cells with no explanation — unlike JSON, XML and the panel, the CSV carries no completeness notices.
+- Refs #1765: the `data_source: live` segment is the stable, language-independent code (parity with JSON/XML) — a parser should match on it, never on the translated label `Datenquelle: …`. Under the EN locale that reads `data_source: live | Data source: Live query at the time of creation`.
 - **Every** cell, including metadata and header, passes through `_sanitize_csv_cell`, the existing formula-injection guard from `core.services.system.export` (OWASP CSV injection, #719). Deliberate reuse instead of a second implementation.
 - Completeness notices deliberately do **not** appear in the CSV: it stays machine-readable. Use JSON, XML or the panel if you need them.
 - Cells are read via `record.get(spec.key)` — a missing key is an empty cell, not an error.
@@ -528,5 +529,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 735ea6dd0cea775aee9d04b16cd3f8fa00d48ce6 -->
+<!-- translation-date: 2026-08-04 -->
+<!-- source-hash: 13282584f75dfcbfe475b620e22921fdbf1bcdaf -->

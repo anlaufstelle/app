@@ -309,7 +309,7 @@ Das ist keine Eigenheit des Plugin-Systems: dieselbe Divergenzklasse besteht sei
 | Artefakt | Code | Ausweis im Artefakt |
 |---|---|---|
 | Berichts-Panel (Vorschau) | `live` | sichtbare Zeile „Datenquelle: Live-Abfrage zum Erstellungszeitpunkt — …" |
-| CSV-Export | `live` | Metadatenzeile, Segment `\| Datenquelle: …` **vor** dem k-Anon-Hinweis |
+| CSV-Export | `live` | Metadatenzeile, Segmente `\| data_source: live \| Datenquelle: …` **vor** dem k-Anon-Hinweis (Refs #1765: stabiler Code UND übersetztes Label, wie JSON/XML) |
 | JSON-Export | `live` | Felder `data_source` (Code) + `data_source_note` (übersetzte Kurzform) |
 | XML-Export | `live` | Wurzel-Attribute `data_source` + `data_source_note` |
 | Externer Bericht (HTML + `?format=json`) | `live` | `metadata.data_source` / `metadata.data_source_note`, im HTML zusätzlich als Kopfzeile + Erklärsatz |
@@ -389,12 +389,13 @@ Alle drei Formate laufen über `safe_download_response` (RFC-5987-Dateiname, `X-
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
+# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
 Kategorie,Anzahl
 Kontakte,42
 ```
 
 - Die Metadatenzeile trägt den k-Anon-Hinweis nur, wenn `summary["k_anonymity_threshold"]` gesetzt ist. Ohne den Zusatz sähe der Empfänger leere Zellen ohne Erklärung — das CSV trägt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
+- Refs #1765: das Segment `data_source: live` ist der stabile, sprachunabhängige Code (Parität zu JSON/XML) — ein Parser matcht darauf, nie auf das übersetzte Label `Datenquelle: …`. Unter EN-Locale steht dort `data_source: live | Data source: Live query at the time of creation`.
 - **Jede** Zelle, auch Metadaten und Header, läuft durch `_sanitize_csv_cell` — den bestehenden Formula-Injection-Schutz aus `core.services.system.export` (OWASP CSV-Injection, #719). Bewusste Wiederverwendung statt Zweitimplementierung.
 - Completeness-Meldungen erscheinen **nicht** im CSV: Es bleibt maschinenlesbar. Wer sie braucht, nimmt JSON, XML oder das Panel.
 - Zellen werden über `record.get(spec.key)` gezogen — ein fehlender Schlüssel ist eine leere Zelle, kein Fehler.

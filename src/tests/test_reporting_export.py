@@ -15,6 +15,7 @@ from datetime import date
 import pytest
 from django.http import HttpResponse, StreamingHttpResponse
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import override
 
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
@@ -587,6 +588,13 @@ class TestQuellenausweis:
     (``build_dataset``), also traegt sie in allen drei Formaten den
     Live-Ausweis — den stabilen Code ``live`` fuer Maschinen und die
     uebersetzbare Kurzform fuer Menschen.
+
+    Refs #1765: die CSV-Metadatenzeile trug bisher NUR das uebersetzte Label
+    mit hart deutschem Praefix ("Datenquelle: <uebersetzter Wert>" — unter
+    EN-Locale ein DE/EN-Mischtext) und anders als JSON/XML keinen stabilen,
+    sprachunabhaengigen Code zum Parsen. Sie traegt jetzt **beides**: das
+    Codepaar ``data_source: live`` (identisch zu JSON/XML) UND das
+    mituebersetzte Label.
     """
 
     def test_csv_metadatenzeile_nennt_die_datenquelle(self, facility, date_range):
@@ -595,6 +603,35 @@ class TestQuellenausweis:
         erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
 
         assert "| Datenquelle: Live-Abfrage zum Erstellungszeitpunkt" in erste_zeile
+
+    def test_csv_metadatenzeile_traegt_stabilen_code(self, facility, date_range):
+        """Refs #1765: Codepaar analog JSON/XML — ein CSV-Parser kann stabil auf
+        ``data_source: live`` matchen, unabhaengig von der Oberflaechensprache."""
+        date_from, date_to = date_range
+        response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
+        erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert "| data_source: live |" in erste_zeile
+
+    def test_csv_code_steht_vor_dem_uebersetzten_label(self, facility, date_range):
+        """Reihenfolge fixiert: der stabile Code steht vor dem uebersetzten Label."""
+        date_from, date_to = date_range
+        response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
+        erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert erste_zeile.index("data_source: live") < erste_zeile.index("Datenquelle:")
+
+    def test_csv_datenquelle_label_wird_unter_en_locale_uebersetzt(self, facility, date_range):
+        """Refs #1765: das Label war hart deutsch — unter EN-Locale muss es wie
+        Panel/PDF „Data source" heissen (derselbe ``msgid`` „Datenquelle"), der
+        stabile Code bleibt unveraendert ``live``."""
+        date_from, date_to = date_range
+        with override("en"):
+            response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
+            erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
+
+        assert "| data_source: live | Data source: Live query at the time of creation" in erste_zeile
+        assert "Datenquelle" not in erste_zeile
 
     def test_csv_datenquelle_steht_vor_dem_k_anon_hinweis(self, facility, date_range):
         """Reihenfolge fixiert: der k-Anon-Hinweis bleibt das Ende der Zeile."""

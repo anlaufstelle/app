@@ -24,6 +24,7 @@ from typing import Any
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import timezone
+from django.utils.translation import gettext
 
 from core.reporting.base import DatasetBackend, DatasetResult
 from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
@@ -128,7 +129,17 @@ def _render_csv(
     metadata = f"# Bericht: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
     # Quellenausweis (Refs #1743): die Pipeline liest immer live. Steht VOR dem
     # k-Anon-Hinweis, damit dieser das Zeilenende bleibt.
-    metadata += f" | Datenquelle: {DATA_SOURCE_NOTES[LIVE]}"
+    #
+    # Refs #1765: bis hierhin stand nur das uebersetzte Label mit hart
+    # deutschem Praefix ("Datenquelle: <uebersetzter Wert>") — unter
+    # EN-Locale ein DE/EN-Mischtext, und anders als JSON/XML ohne stabilen
+    # Code zum Parsen. Jetzt traegt die Zeile BEIDES: den stabilen,
+    # sprachunabhaengigen Code (Paritaet zu JSON/XML, ``data_source``-Feld
+    # aus core.reporting.data_source) UND das mituebersetzte Label —
+    # derselbe ``msgid`` "Datenquelle" wie im Berichts-Panel/PDF
+    # ({% trans "Datenquelle" %}), damit die EN-Katalogpflege nicht
+    # dupliziert.
+    metadata += f" | data_source: {LIVE} | {gettext('Datenquelle')}: {DATA_SOURCE_NOTES[LIVE]}"
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
     # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
