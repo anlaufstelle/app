@@ -6,7 +6,7 @@ Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/co
 
 - **Warum das System so aussieht, wie es aussieht:** [ADR-038](adr/038-reporting-plugin-backends.md).
 - **Warum Kleinstfallzahlen unterdrückt werden:** [ADR-023](adr/023-k-anonymization-statistik.md) und #1278.
-- **Warum das Mapping über `system_type` (und den `slug`) läuft und nie über `category`:** [ADR-034](adr/034-config-ui-category-system-type.md), [ADR-038 § 4](adr/038-reporting-plugin-backends.md).
+- **Warum das Mapping über `system_type` (und den `slug`) läuft und nie über `category`:** [ADR-034](adr/034-config-ui-category-system-type.md), [ADR-038 § 4](adr/038-reporting-plugin-backends.md). `DocumentType.category` ist seit [ADR-040](adr/040-documenttype-category-entfernt.md) entfernt — die Regel ist damit strukturell besiegelt.
 
 > **Die wichtigste Regel vorweg.** Alles, was ein Backend über `build_dataset()` liefert, ist **roh**. Alles, was das Haus verlässt (Download **und** Panel-Vorschau), läuft vorher durch `prepare_export()`. Wer Zahlen produziert, die extern zirkulieren, muss diesen Hook implementieren — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook).
 
@@ -188,7 +188,6 @@ Das ist der **vollständige** Import-Kopf von `example.py` — die Auszüge in S
     def get_field_specs(self) -> list[FieldSpec]:
         return [
             FieldSpec("document_type", _("Dokumenttyp")),
-            FieldSpec("category", _("Kategorie")),
             FieldSpec("system_type", _("System-Typ")),
             FieldSpec("count", _("Anzahl")),
         ]
@@ -210,7 +209,7 @@ Imports wie in Schritt 1 (`Event`, `DocumentType`, `Count`):
                 occurred_at__date__lte=date_to,
             )
             .values("document_type_id", "document_type__name",
-                    "document_type__category", "document_type__system_type")
+                    "document_type__system_type")
             .annotate(count=Count("id"))
             .order_by("document_type__name")
         )
@@ -218,7 +217,6 @@ Imports wie in Schritt 1 (`Event`, `DocumentType`, `Count`):
         records = [
             {
                 "document_type": row["document_type__name"],
-                "category": str(DocumentType.Category(row["document_type__category"]).label),
                 "system_type": row["document_type__system_type"] or "",
                 "count": row["count"],
             }
@@ -454,7 +452,7 @@ Kontakte,42
   "population_note": "alle Ereignisse im Zeitraum",
   "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
-  "records": [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "contact", "count": 42}],
+  "records": [{"document_type": "Kontakt", "system_type": "contact", "count": 42}],
   "completeness": [{"code": "…", "message": "…", "severity": "warning"}]
 }
 ```
@@ -509,8 +507,9 @@ Beispiele aus dem Sachbericht:
 - **Keine externen Plugin-Pakete.** Discovery scannt ausschließlich `core/reporting/backends/`; `entry_points` von Drittpaketen sind nicht vorgesehen. Ein fremdes Paket mit Lesezugriff auf Sozialdaten wäre eine Vertrauensentscheidung eigener Güte (Signatur, Freigabe, Sandbox) — als spätere Erweiterung denkbar, dann mit eigenem Sicherheitskonzept.
 - **Keine generische PDF-Pipeline.** Die Formate der Pipeline sind CSV, JSON und XML; der Sachbericht-PDF bleibt ein eigener, unveränderter Pfad.
 - **`core/reporting` liegt außerhalb der mypy-strict-Zone und der mutmut-Pfade.** Der Code ist strict-kompatibel annotiert; die Aufnahme in die Gates ändert Build-Konfiguration und ist ein offener Maintainer-Entscheid.
-- **Das Mapping ist hart kodiert.** Beide Maps (`CATEGORY_MAP` über `system_type`, `SLUG_MAP` über `slug`) stehen im Backend-Modul; es gibt **kein** Konfigurationsfeld dafür. Das ist ein Entscheid, kein Übergangszustand ([ADR-038](adr/038-reporting-plugin-backends.md), Update 2026-08-04): eine Config-UI machte Berichtszahlen per Klick verschiebbar. Eine Mapping-Änderung ist damit ein Code-Change mit Review — und `DocumentType.category` wird fürs Reporting nie verwendet.
+- **Das Mapping ist hart kodiert.** Beide Maps (`CATEGORY_MAP` über `system_type`, `SLUG_MAP` über `slug`) stehen im Backend-Modul; es gibt **kein** Konfigurationsfeld dafür. Das ist ein Entscheid, kein Übergangszustand ([ADR-038](adr/038-reporting-plugin-backends.md), Update 2026-08-04): eine Config-UI machte Berichtszahlen per Klick verschiebbar. Eine Mapping-Änderung ist damit ein Code-Change mit Review — und `DocumentType.category` wurde fürs Reporting nie verwendet und existiert seit [ADR-040](adr/040-documenttype-category-entfernt.md) nicht mehr.
 - **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). **Keine neuen Werte ohne echte App-Logik** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; solche Zuordnungen gehören ins Backend-Mapping deines Berichts. Von den neun Werten tragen nur `ban` und `crisis` App-Logik; die sechs Werte in `CATEGORY_MAP` sind reine Bericht-Opt-ins, `note` ist exportseitig identisch mit `NULL`. Ein Freeze-Guard pinnt die Liste und diese Rollenaufteilung (`src/tests/test_system_type.py`). Seit dem Slug-Zweitschlüssel (#1741) ist `system_type` **nicht mehr der einzige Weg**, einen einrichtungseigenen Dokumentationstyp in den Sachbericht zu bekommen — der Slug tut es auch. Eine Reduktion der Werteliste auf `ban`/`crisis` ist geprüft und **nicht** geplant; ihre Vorbedingung (der Slug-Produktentscheid) ist seit 2026-08-04 erfüllt, der Rest bleibt Sache des RFC.
+
 
 ---
 
@@ -561,6 +560,7 @@ Vor dem Commit: `make verify-fast` (Lint, Checks, Typecheck, Unit-Tests). Bei UI
 - [ADR-038](adr/038-reporting-plugin-backends.md) — Entwurfsentscheidungen, Alternativen, Konsequenzen
 - [ADR-023](adr/023-k-anonymization-statistik.md) — K-Anonymisierung für externe Statistik
 - [ADR-034](adr/034-config-ui-category-system-type.md) — `category` vs. `system_type`
+- [ADR-040](adr/040-documenttype-category-entfernt.md) — `category` entfernt
 - [ADR-037](adr/037-konfigurationspakete-dynamische-felder.md) — Konfigurationspakete, `DocumentType.slug`
 - [user-guide.md § 7](user-guide.md#7-statistik-und-export) — Bedienung der Berichte-Sektion aus Anwendersicht
 - [packages.md](packages.md) — Konfigurationspakete (Quelle der Dokumentationstypen, die Berichte auswerten)

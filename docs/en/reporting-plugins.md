@@ -9,7 +9,7 @@ The practical consequence: **a new report is a single file.** A module under [`s
 
 - **Why the system looks the way it does:** [ADR-038](../adr/038-reporting-plugin-backends.md).
 - **Why small cell counts are suppressed:** [ADR-023](../adr/023-k-anonymization-statistik.md) and #1278.
-- **Why the mapping uses `system_type` (and the `slug`) and never `category`:** [ADR-034](../adr/034-config-ui-category-system-type.md), [ADR-038 § 4](../adr/038-reporting-plugin-backends.md).
+- **Why the mapping uses `system_type` (and the `slug`) and never `category`:** [ADR-034](../adr/034-config-ui-category-system-type.md), [ADR-038 § 4](../adr/038-reporting-plugin-backends.md). `DocumentType.category` has been removed as of [ADR-040](../adr/040-documenttype-category-entfernt.md) (German) -- the rule is now structural.
 
 > **The most important rule up front.** Everything a backend returns from `build_dataset()` is **raw**. Everything that leaves the building (download **and** panel preview) passes through `prepare_export()` first. If you produce numbers that circulate externally, you must implement that hook — see [§ 6](#6-k-anonymity--the-prepare_export-hook).
 
@@ -191,7 +191,6 @@ This is the **complete** import header of `example.py` — the excerpts in steps
     def get_field_specs(self) -> list[FieldSpec]:
         return [
             FieldSpec("document_type", _("Dokumenttyp")),
-            FieldSpec("category", _("Kategorie")),
             FieldSpec("system_type", _("System-Typ")),
             FieldSpec("count", _("Anzahl")),
         ]
@@ -213,7 +212,7 @@ Imports as in step 1 (`Event`, `DocumentType`, `Count`):
                 occurred_at__date__lte=date_to,
             )
             .values("document_type_id", "document_type__name",
-                    "document_type__category", "document_type__system_type")
+                    "document_type__system_type")
             .annotate(count=Count("id"))
             .order_by("document_type__name")
         )
@@ -221,7 +220,6 @@ Imports as in step 1 (`Event`, `DocumentType`, `Count`):
         records = [
             {
                 "document_type": row["document_type__name"],
-                "category": str(DocumentType.Category(row["document_type__category"]).label),
                 "system_type": row["document_type__system_type"] or "",
                 "count": row["count"],
             }
@@ -457,7 +455,7 @@ Kontakte,42
   "population_note": "alle Ereignisse im Zeitraum",
   "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
-  "records": [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "contact", "count": 42}],
+  "records": [{"document_type": "Kontakt", "system_type": "contact", "count": 42}],
   "completeness": [{"code": "…", "message": "…", "severity": "warning"}]
 }
 ```
@@ -512,8 +510,9 @@ Examples from the activity report:
 - **No external plugin packages.** Discovery scans `core/reporting/backends/` only; `entry_points` from third-party packages are not provided for. A foreign package with read access to social-services data is a trust decision of its own kind (signing, approval, sandboxing) — conceivable as a later extension, and then with a security concept of its own.
 - **No generic PDF pipeline.** The pipeline formats are CSV, JSON and XML; the activity report PDF remains a separate, unchanged path.
 - **`core/reporting` lies outside the mypy strict zone and outside the mutmut paths.** The code is annotated strict-compatibly; adding it to those gates changes build configuration and is an open maintainer decision.
-- **The mapping is hard-coded.** Both maps (`CATEGORY_MAP` over `system_type`, `SLUG_MAP` over `slug`) live in the backend module; there is **no** configuration field for them. That is a decision, not a transitional state ([ADR-038](../adr/038-reporting-plugin-backends.md), update of 2026-08-04): a config UI would make report figures movable by a click. Changing a mapping is therefore a code change with review — and `DocumentType.category` is never used for reporting.
+- **The mapping is hard-coded.** Both maps (`CATEGORY_MAP` over `system_type`, `SLUG_MAP` over `slug`) live in the backend module; there is **no** configuration field for them. That is a decision, not a transitional state ([ADR-038](../adr/038-reporting-plugin-backends.md), update of 2026-08-04): a config UI would make report figures movable by a click. Changing a mapping is therefore a code change with review — and `DocumentType.category` was never used for reporting and no longer exists ([ADR-040](../adr/040-documenttype-category-entfernt.md), German).
 - **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new values without real application logic** — an additional report category is no reason to extend a core data-model enum; such mappings belong in your report's backend mapping. Of the nine values only `ban` and `crisis` carry application logic; the six values in `CATEGORY_MAP` are pure report opt-ins, and `note` is identical to `NULL` as far as the export is concerned. A freeze guard pins the list and that role split (`src/tests/test_system_type.py`). Since the slug secondary key (#1741), `system_type` is **no longer the only way** to get a facility's own documentation type into the activity report — the slug does it too. Reducing the value list to `ban`/`crisis` has been evaluated and is **not** planned; its precondition (the slug product decision) has been met since 2026-08-04, the rest is up to the RFC.
+
 
 ---
 
@@ -564,6 +563,7 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 - [ADR-038](../adr/038-reporting-plugin-backends.md) — design decisions, alternatives, consequences
 - [ADR-023](../adr/023-k-anonymization-statistik.md) — k-anonymization for external statistics
 - [ADR-034](../adr/034-config-ui-category-system-type.md) — `category` vs. `system_type`
+- [ADR-040](../adr/040-documenttype-category-entfernt.md) — `category` removed
 - [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) — configuration packages, `DocumentType.slug`
 - [user-guide.md § 7](user-guide.md#7-statistics-and-export) — using the reports section from an end-user perspective
 - [packages.md](../packages.md) — configuration packages (source of the documentation types that reports evaluate)
@@ -571,4 +571,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 6d7cdd2d2328b20877c3e793ff458c0d8f25a5cd -->
+<!-- source-hash: a0479705cad0454743eb58b73b0c8fe0ecd0551a -->

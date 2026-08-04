@@ -440,20 +440,13 @@ Unter **Core → Dokumentationstypen** legen Sie fest, welche Arten von Dokument
 - **Feldvorlagen** (Freitextfelder, Auswahlfelder etc.)
 - **Löschfrist** in Tagen (überschreibt die globale Einrichtungseinstellung, falls gesetzt)
 
-#### Kategorie
+#### Eindeutigkeit des Namens
 
-Die Kategorie gruppiert Dokumentationstypen für Filter und die **Statistik-Seite**:
+Das Paar `(Einrichtung, Name)` ist eindeutig: Pro Einrichtung kann jeder Dokumentationstyp-Name nur **einmal** vergeben werden. Der Versuch, einen zweiten Typ mit demselben Namen anzulegen, wird als Formularfehler abgewiesen.
 
-| Kategorie | Bedeutung | Beispiel |
-|-----------|-----------|----------|
-| **Kontakt** | Direkte Kontakte mit Personen | Beratungsgespräch, Krisengespräch |
-| **Leistung** | Erbrachte Leistungen | Spritzentausch, Begleitung |
-| **Verwaltung** | Administrative Vorgänge | Hausverbot, Vermittlung |
-| **Notiz** | Freie Notizen | Beobachtungen, Vermerke |
-
-> **Hinweis:** Die Kategorie ist eine **reine UI-Gruppierung** für Statistik-Anzeige und Admin-Filter. Sie beeinflusst weder den Beispiel-Sachbericht-Export noch die Bann-/Krisen-Logik — dafür ist der **Systemtyp** maßgeblich (siehe unten).
+> **Geändert 2026-08-04 (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** Das Feld **Kategorie** (Kontakt/Leistung/Verwaltung/Notiz) ist **entfallen** — samt Formularfeld, Listen-Filter und den „Kategorie"-Spalten in Statistik-Dashboard und Berichts-PDF. Es war eine reine Anzeige-Gruppierung ohne Wirkung auf Export oder Bann-/Krisen-Logik; dafür war und ist der **Systemtyp** maßgeblich (siehe unten). Mit der Kategorie ist auch ihre Rolle im Eindeutigkeits-Schlüssel entfallen: Bisher war derselbe Name in zwei Kategorien erlaubt (z. B. „Notiz" als Verwaltung *und* als Notiz), jetzt nicht mehr. Beim Update prüft die Migration das vorab und **bricht ab**, wenn eine Einrichtung solche Doppelnamen führt — benennen Sie sie vorher um; ein automatisches Zusammenführen wäre ein Datenentscheid, den nur Sie treffen können.
 >
-> Der Tripel `(Einrichtung, Name, Kategorie)` ist eindeutig: Pro Einrichtung kann derselbe Dokumentationstyp-Name nur einmal pro Kategorie existieren. Gleiche Namen unter unterschiedlichen Kategorien (z.B. „Notiz" als Verwaltung *und* als Notiz) sind erlaubt.
+> In **Konfigurationspaketen** (YAML) darf der Schlüssel `category` stehen bleiben: Pakete bleiben gültig und ladbar, der Wert wird aber ignoriert und der Ladebericht weist ihn als Warnung aus. Siehe [docs/packages.md](packages.md).
 
 #### Sensibilitätsstufe
 
@@ -498,7 +491,7 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 
 > **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Typen ohne Systemtyp haben keine spezielle interne Logik und werden vom Beispiel-Sachbericht-Export ausgeschlossen, funktionieren aber ganz normal für die Dokumentation.
 >
-> Systemtypen wie `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Beispiel-Sachbericht-Export — die Kategorie alleine entscheidet nicht, ob ein Eintrag exportiert wird. **`note` gehört ausdrücklich *nicht* zu dieser Whitelist**: Ereignisse dieses Typs bleiben — wie `ban` und wie Typen ganz ohne Systemtyp — außen vor.
+> Systemtypen wie `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Beispiel-Sachbericht-Export. **`note` gehört ausdrücklich *nicht* zu dieser Whitelist**: Ereignisse dieses Typs bleiben — wie `ban` und wie Typen ganz ohne Systemtyp — außen vor.
 >
 > **Ereignisse ohne Berichtszuordnung erzeugen einen Vollständigkeitshinweis.** Der Bericht weist unter „Berichte" aus, wie viele Ereignisse er *nicht* zeigt. Darin zählen auch die bewusst ausgeschlossenen (`ban`, `note`) mit — eine Einrichtung mit vielen Hausverboten sieht diesen Hinweis also dauerhaft, ohne dass etwas falsch konfiguriert wäre. Die Trennung von „bewusst ausgeschlossen" und „nicht zugeordnet" ist als eigene Frage erfasst (#1748).
 

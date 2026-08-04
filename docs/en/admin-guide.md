@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) and 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749).
 
 # Anlaufstelle -- Admin Guide
 
@@ -441,18 +441,13 @@ Under **Core > Documentation types**, you define which kinds of documentation ca
 - **Field templates** (free-text fields, selection fields, etc.)
 - **Retention period** in days (overrides the global facility setting if specified)
 
-#### Category
+#### Uniqueness of the Name
 
-The category groups documentation types for filtering and the **statistics page**:
+The pair `(facility, name)` is unique: within one facility, each documentation-type name can be used only **once**. Trying to create a second type with the same name is rejected as a form error.
 
-| Category | Purpose | Example |
-|----------|---------|---------|
-| **Contact** | Direct contacts with persons | Counseling session, crisis intervention |
-| **Service** | Services provided | Needle exchange, accompaniment |
-| **Admin** | Administrative processes | Ban, referral |
-| **Note** | Free-form notes | Observations, memos |
-
-> **Note:** The category is used on the statistics page for grouping by documentation type. For the example activity report export, the **system type** is used instead (see below).
+> **Changed on 2026-08-04 (#1749, [ADR-040](../adr/040-documenttype-category-entfernt.md)):** The **Category** field (Contact/Service/Admin/Note) has been **removed** -- together with the form field, the list filter and the "Category" columns in the statistics dashboard and the report PDF. It was a pure display grouping with no effect on the export or on the ban/crisis logic; the **system type** was and remains authoritative for that (see below). Its role in the uniqueness key is gone as well: the same name in two categories used to be allowed (e.g. "Note" as Admin *and* as Note), and no longer is. During the update the migration checks this up front and **aborts** if a facility carries such duplicate names -- rename them beforehand; merging them automatically would be a data decision only you can make.
+>
+> In **configuration packages** (YAML) the `category` key may stay: packages remain valid and loadable, but the value is ignored and the load report flags it as a warning. See [docs/packages.md](../packages.md) (German).
 
 #### Sensitivity Level
 
@@ -497,7 +492,7 @@ The example activity report is a customizable example or template -- not a bindi
 
 > **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and are excluded from the example activity report export, but work normally for documentation.
 >
-> System types such as `contact`, `counseling` or `medical` have **no visible UI logic** (unlike `ban` and `crisis`). They serve solely as a whitelist for the example activity report export -- the category alone does not decide whether an entry is exported. **`note` is explicitly *not* part of that whitelist**: events of that type stay out, just like `ban` and like types with no system type at all.
+> System types such as `contact`, `counseling` or `medical` have **no visible UI logic** (unlike `ban` and `crisis`). They serve solely as a whitelist for the example activity report export. **`note` is explicitly *not* part of that whitelist**: events of that type stay out, just like `ban` and like types with no system type at all.
 >
 > **Events without a report mapping produce a completeness notice.** Under "Reports" the report states how many events it does *not* show. Deliberately excluded ones (`ban`, `note`) are counted there as well -- so a facility with many entry bans permanently sees that notice without anything being misconfigured. Separating "deliberately excluded" from "unmapped" is tracked as a question of its own (#1748).
 
@@ -1607,4 +1602,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: cc67bdec01108652a27b2d6d1e50830cbb35c42d -->
+<!-- source-hash: e79912d097b1d79c4adf76e85fc77cc7ed3ec2db -->

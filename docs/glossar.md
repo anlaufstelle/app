@@ -41,7 +41,7 @@
 | **File Vault** | Datei-Anhänge werden verschlüsselt im Ruhezustand gespeichert (Fernet/AES-128). Dateien werden vor der Verschlüsselung von ClamAV gescannt. Downloads laufen über einen zentralen Safe-Download-Helfer mit RFC-5987-Content-Disposition. |
 | **Fuzzy-Schwellwert** | Einrichtungsbezogene Ähnlichkeitsschwelle (`Settings.search_trigram_threshold`, 0.0–1.0, Default ~0.3). Niedriger = mehr Treffer, mehr Rauschen. |
 | **Fuzzy-Suche** | Tippfehler-tolerante Suche über PostgreSQL-`pg_trgm`-Trigramm-Ähnlichkeit. Findet „Müller" bei der Suche nach „Muller". |
-| **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp der Kategorie „Administration" abgebildet. |
+| **Hausverbot** | Betretungsverbot für eine Person in einer Einrichtung, mit Begründung, Gültigkeitszeitraum und Erteilender. In Anlaufstelle als Dokumentationstyp mit Systemtyp `ban` abgebildet. |
 | **Inbox** | Persönliche Übersicht aller offenen Hinweise und fälligen Aufgaben für die angemeldete Mitarbeitende. Teil der Operations-Ebene. |
 | **IndexedDB** | Browser-native Datenbank, die der Offline-Store nutzt. Hält AES-GCM-verschlüsselte Ereignisse, Entwürfe und gecachte Clients. |
 | **JSONB** | PostgreSQL-Datentyp für binäres JSON. Wird in Anlaufstelle verwendet, um die Feldwerte eines Ereignisses zusammen mit dem Ereignis zu speichern. Indexierbar (GIN-Index), abfragbar, performant. |

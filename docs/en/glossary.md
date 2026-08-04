@@ -38,7 +38,7 @@
 | File Vault | Encrypted file vault | File attachments stored encrypted at rest (Fernet/AES-128). Files are scanned by ClamAV before encryption. Downloads use a central safe-download helper with RFC-5987 Content-Disposition. |
 | Fuzzy-Schwellwert | Fuzzy threshold / Trigram threshold | Per-facility similarity cutoff (`Settings.search_trigram_threshold`, 0.0–1.0, default ~0.3). Lower = more matches, more noise. |
 | Fuzzy-Suche | Fuzzy search | Typo-tolerant search using PostgreSQL `pg_trgm` trigram similarity. Finds "Müller" when searching for "Muller". |
-| Hausverbot | Site ban | A ban prohibiting a person from entering a facility, with reason, validity period, and issuer. Modeled in Anlaufstelle as a document type in the "Administration" category. |
+| Hausverbot | Site ban | A ban prohibiting a person from entering a facility, with reason, validity period, and issuer. Modeled in Anlaufstelle as a document type with system type `ban`. |
 | Inbox | Inbox | Personal overview of all open notes and due tasks for the logged-in staff member. Part of the operations layer. |
 | IndexedDB | IndexedDB | Browser-native database used by the offline store. Holds AES-GCM-encrypted events, drafts, and cached clients. |
 | JSONB | JSONB | PostgreSQL data type for binary JSON. Used in Anlaufstelle to store event field values together with the event record. Indexable (GIN index), queryable, performant. |
@@ -77,4 +77,4 @@
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-07-14 -->
-<!-- source-hash: 803dd15 -->
+<!-- source-hash: 8d5c8b31a456dc49b327b35a25a434814f376055 -->

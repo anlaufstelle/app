@@ -1,6 +1,6 @@
 # ADR-034: category vs. system_type in der Konfigurations-UI
 
-- **Status:** Accepted
+- **Status:** Teilweise superseded durch [ADR-040](040-documenttype-category-entfernt.md) (2026-08-04) — `category` ist entfernt; die Aussagen zu `system_type` gelten unverändert.
 - **Date:** 2026-08-02
 - **Deciders:** Tobias Nix
 - **Refs:** #1056 (M0, Entscheidung E11), #1058 (M2, `DocumentType.slug`), [anlaufstelle/app#38](https://github.com/anlaufstelle/app/issues/38) (M5, Reporting-Entscheid), [ADR-024](024-slug-based-identifiers.md) (Slug-basierte Identifikatoren)

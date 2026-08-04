@@ -4735,7 +4735,7 @@
 
 **Erwartetes Ergebnis:**
 - Das Dropdown listet beide registrierten Backends (nach Slug sortiert), ohne dass View oder Template dafür angepasst wurden — die Registry entdeckt Backend-Module selbst.
-- Panel des Beispiel-Backends zeigt eigene Spalten (Dokumenttyp/Kategorie/System-Typ/Anzahl) und die Zeilen-Zählung.
+- Panel des Beispiel-Backends zeigt eigene Spalten (Dokumenttyp/System-Typ/Anzahl) und die Zeilen-Zählung.
 - Download heißt `example_<von>_<bis>.csv`.
 
 **DSGVO/Security-Note:**
