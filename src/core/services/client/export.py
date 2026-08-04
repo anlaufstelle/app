@@ -22,7 +22,7 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.services.facility import resolve_facility_display_name
-from core.services.file_vault import get_original_filename, safe_decrypt
+from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
 
 
@@ -72,6 +72,15 @@ def _gather_attachments(owner):
     wird **entschluesselt** ausgewiesen; ein Fernet-Token waere keine Auskunft
     (dieselbe Begruendung wie in :func:`_gather_entity_dynamic_data`).
 
+    Entschluesselt wird bewusst mit dem Modul-Standard
+    ``safe_decrypt(..., default="[verschlüsselt]")`` statt mit
+    :func:`~core.services.file_vault.get_original_filename` (Refs #1738, G4):
+    dessen Fallback ``"download"`` ist fuer den Content-Disposition-Header
+    richtig, in einer Auskunft aber eine Falschaussage — er waere von einer
+    echten Datei namens „download" nicht zu unterscheiden und behauptete einen
+    Dateinamen, den es nie gab. Bei unlesbarem Token muss die Auskunft sagen,
+    dass der Name nicht entschluesselbar ist.
+
     Die **vollstaendige Versionskette** wird ausgewiesen, inklusive ersetzter
     (``is_current=False`` + ``superseded_at``) und vom Nutzer entfernter Glieder
     (``removed_at``). Soft-deletete Zeilen sind bis zum physischen Loeschen
@@ -98,7 +107,7 @@ def _gather_attachments(owner):
         {
             "field": attachment.field_template.name,
             "field_slug": attachment.field_template.slug,
-            "filename": get_original_filename(attachment),
+            "filename": safe_decrypt(attachment.original_filename_encrypted),
             "file_size": attachment.file_size,
             "mime_type": attachment.detected_mime or attachment.mime_type,
             "uploaded_at": attachment.created_at.isoformat(),
@@ -778,6 +787,12 @@ def _gather_audit_trail(facility, client, event_ids):
     Aktion, Zeitpunkt und Kategorie bleiben erhalten: die betroffene Person
     erfaehrt, *dass* und *wann* auf welche Art auf ihre Daten zugegriffen wurde.
 
+    Direkt ueber ``target_id`` zugeordnet werden Zeilen auf **alle drei**
+    Owner-Sorten: Person, Fall und Ereignis. Der Fall-Zweig gehoert seit M24
+    dazu, weil die Anhang-Domaene ``target_id`` auf die Owner-PK setzt
+    (ADR-039 §5) — ein ``SECURITY_VIOLATION`` an einem fall-eigenen Upload
+    traegt also die Fall-PK.
+
     Download-Zeilen zeigen auf den Anhang, nicht auf seinen Owner; sie werden
     ueber ``detail`` zugeordnet. Das kommt ohne Lesen der Attachment-Tabelle aus
     und traegt auch dann noch, wenn die Anhaenge beim Loeschen des Owners
@@ -793,6 +808,15 @@ def _gather_audit_trail(facility, client, event_ids):
     case_id_strings = [str(pk) for pk in client.cases.values_list("pk", flat=True)]
     owner_id_strings = [str(client.pk), *case_id_strings, *event_id_strings]
     targets = Q(target_id=str(client.pk))
+    if case_id_strings:
+        # Refs #1738 (G4): Die Anhang-Domaene setzt ``target_id`` auf die
+        # **Owner**-PK (ADR-039 §5, AP2) — bei fall-eigenen Uploads also auf den
+        # Fall. Ohne diesen Zweig fiel jede fall-gezielte Zeile (etwa
+        # ``SECURITY_VIOLATION`` bei abgelehnter Endung) aus dem Protokoll: die
+        # Fall-IDs wurden bis dahin ausschliesslich im DOWNLOAD/``owner_id``-
+        # Zweig verwendet. Ueber-Matching ist ausgeschlossen, weil die IDs aus
+        # ``client.cases`` stammen (plus ``for_facility`` + RLS).
+        targets |= Q(target_id__in=case_id_strings)
     if event_id_strings:
         targets |= Q(target_id__in=event_id_strings)
         # Alt-Schema (vor ADR-039 §5) — unmigrierbare Bestandszeilen.

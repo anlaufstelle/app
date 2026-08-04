@@ -977,6 +977,47 @@ class TestClientExportAuditTrail:
         assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
         assert data["audit_trail"][0]["action"] == "Download"
 
+    def test_case_targeted_attachment_rows_are_listed(self, sample_client, facility, sample_case, admin_user):
+        """Anhang-Zeilen zeigen per ``target_id`` auf den OWNER (ADR-039 §5, AP2).
+
+        Bei fall-eigenen Uploads ist das die Fall-PK — und die matchte bisher
+        keinen einzigen Zweig: ``case_id_strings`` wurde nur im
+        DOWNLOAD/``owner_id``-Zweig verwendet. Ein ``SECURITY_VIOLATION`` an
+        einem Fall-Upload (abgelehnte Endung, Virus-Fund) fiel damit komplett
+        aus dem Zugriffsprotokoll der betroffenen Person heraus (Refs #1738).
+        """
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.SECURITY_VIOLATION,
+            target_type="Attachment",
+            target_id=str(sample_case.pk),
+            detail={"reason": "extension_not_allowed", "owner_type": "case", "owner_id": str(sample_case.pk)},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
+        assert data["audit_trail"][0]["action"] == "Sicherheitsverletzung"
+
+    def test_case_targeted_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
+        """Gegenprobe zum Fall-Zweig: fremde Fall-IDs duerfen nicht mitmatchen."""
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-Fall", created_by=admin_user)
+        other_case = CaseModel.objects.create(
+            facility=facility,
+            client=other,
+            title="Fremdfall",
+            created_by=admin_user,
+        )
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.SECURITY_VIOLATION,
+            target_type="Attachment",
+            target_id=str(other_case.pk),
+            detail={"reason": "extension_not_allowed", "owner_type": "case", "owner_id": str(other_case.pk)},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["audit_trail"] == []
+
     def test_download_of_other_clients_owner_excluded(self, sample_client, facility, admin_user):
         """Gegenprobe zum Owner-Schema: fremde Owner-IDs bleiben draussen."""
         other = Client.objects.create(
@@ -1199,6 +1240,28 @@ class TestClientExportAttachments:
         assert "__file__" not in payload
         # Positiv-Kontrolle: das Feld faellt nicht weg, es wird nur lesbar.
         assert data["events"][0]["data"][file_field_template.slug] == ATTACHMENT_FIELD_PLACEHOLDER
+
+    def test_undecryptable_filename_is_named_as_encrypted_not_as_download(
+        self, sample_client, facility, file_field_template, admin_user
+    ):
+        """Ein unlesbares Namens-Token darf keinen Dateinamen erfinden (Refs #1738).
+
+        ``get_original_filename`` faellt auf ``"download"`` zurueck — sinnvoll
+        fuer den Content-Disposition-Header, in einer Auskunft aber eine
+        Falschaussage: von einer echten Datei namens „download" ist der
+        Fallback nicht zu unterscheiden. Der Modul-Standard
+        ``safe_decrypt(..., default="[verschlüsselt]")`` sagt statt dessen, dass
+        der Name nicht entschluesselbar ist.
+        """
+        _make_attachment(
+            facility,
+            sample_client,
+            file_field_template,
+            admin_user,
+            original_filename_encrypted={"__encrypted__": True, "value": "kaputtes-token"},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["attachments"][0]["filename"] == "[verschlüsselt]"
 
     def test_attachments_of_another_client_are_excluded(self, sample_client, facility, file_field_template, admin_user):
         other = Client.objects.create(
