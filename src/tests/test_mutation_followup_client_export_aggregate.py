@@ -102,7 +102,10 @@ class TestExportClientDataAggregate:
     der Visibility-Filter den ``_gather_events``-Pfad hochgereicht wird
     (Defense in Depth). Der Schlüsselsatz ist mit
     #1752 um die
-    Quertabellen-Kategorien gewachsen (Produktentscheid 2026-08-03).
+    Quertabellen-Kategorien gewachsen (Produktentscheid 2026-08-03) und mit
+    #1738 um
+    ``attachments`` (M24: Anhang-Metadaten aller drei Owner gehoeren in die
+    Auskunft; die personen-eigenen als eigene Top-Level-Kategorie).
     """
 
     def test_top_level_dict_contains_all_aggregate_keys(self, client_identified, facility, staff_user):
@@ -111,6 +114,7 @@ class TestExportClientDataAggregate:
             "client",
             "events",
             "deleted_events",
+            "attachments",
             "cases",
             "episodes",
             "outcome_goals",

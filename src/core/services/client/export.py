@@ -22,7 +22,7 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.services.facility import resolve_facility_display_name
-from core.services.file_vault import safe_decrypt
+from core.services.file_vault import get_original_filename, safe_decrypt
 from core.services.system.export import restricted_url_fetcher
 
 
@@ -49,6 +49,66 @@ def _soft_delete_meta(obj):
         "deleted_at": _isoformat(obj.deleted_at),
         "deleted_by": _username(obj.deleted_by),
     }
+
+
+# Refs #1738 (M24, ADR-039): FILE-Felder speichern in ``data_json`` nur einen
+# Verweis auf die Attachment-Zeilen (``__file__``/``__files__``-Marker). Das rohe
+# Marker-Dict waere in einem Auskunftsdokument technischer Ausschuss samt
+# Attachment-UUIDs; die lesbaren Angaben stehen im jeweiligen Anhang-Abschnitt.
+ATTACHMENT_FIELD_PLACEHOLDER = "[Dateianhang – Angaben unter „Dateianhänge“]"
+
+
+def _gather_attachments(owner):
+    """Anhang-**Metadaten** eines Owners als ``[{field, filename, ...}, ...]`` (Refs #1738).
+
+    Owner-generisch: ``owner`` ist ein ``Client``, ``Case`` oder ``Event`` —
+    der Zugriff laeuft ueber den geteilten Reverse-Accessor
+    ``owner.attachments`` und ist damit automatisch owner-gescopt (ADR-039 §1).
+
+    **Keine Binaerinhalte** (Produktentscheid M24, konsistent mit
+    M4/#1060): die
+    Auskunft benennt, welche Datei wann von wem hinterlegt wurde — die Datei
+    selbst wird ueber den regulaeren Download herausgegeben. Der Originalname
+    wird **entschluesselt** ausgewiesen; ein Fernet-Token waere keine Auskunft
+    (dieselbe Begruendung wie in :func:`_gather_entity_dynamic_data`).
+
+    Die **vollstaendige Versionskette** wird ausgewiesen, inklusive ersetzter
+    (``is_current=False`` + ``superseded_at``) und vom Nutzer entfernter Glieder
+    (``removed_at``). Soft-deletete Zeilen sind bis zum physischen Loeschen
+    (Owner-Lebenszyklus, ADR-039) weiterhin gespeicherte Daten der betroffenen
+    Person — sie zu verschweigen waere eine unvollstaendige Auskunft; sie
+    unmarkiert zu listen ebenso irrefuehrend. Muster wie ``_soft_delete_meta``
+    bei den uebrigen Kategorien.
+
+    ``mime_type`` liefert den **verifizierten** Typ (libmagic, Refs #1274) und
+    faellt nur fuer Bestandszeilen ohne Erkennung auf den browser-gemeldeten
+    zurueck — dieselbe Rangfolge wie beim Download.
+
+    Speicherinterna (``storage_filename``, Attachment-PK, verschluesselter
+    Namens-Blob) bleiben draussen: sie sind keine Auskunft ueber die Person,
+    sondern Ablage-Technik.
+    """
+    attachments = owner.attachments.select_related("field_template", "created_by").order_by(
+        "field_template__name",
+        "sort_order",
+        "created_at",
+        "pk",
+    )
+    return [
+        {
+            "field": attachment.field_template.name,
+            "field_slug": attachment.field_template.slug,
+            "filename": get_original_filename(attachment),
+            "file_size": attachment.file_size,
+            "mime_type": attachment.detected_mime or attachment.mime_type,
+            "uploaded_at": attachment.created_at.isoformat(),
+            "uploaded_by": _username(attachment.created_by),
+            "is_current": attachment.is_current,
+            "superseded_at": _isoformat(attachment.superseded_at),
+            "removed_at": _isoformat(attachment.deleted_at),
+        }
+        for attachment in attachments
+    ]
 
 
 def _gather_entity_dynamic_data(entity):
@@ -81,16 +141,22 @@ def _gather_entity_dynamic_data(entity):
     :func:`_gather_entity_orphan_data` (Refs #1725), damit dieses Bestandsformat
     stabil bleibt.
 
-    Keine Datei-Marker-Behandlung noetig: FILE-Felder sind fuer Personen-/Fall-
-    Typen dreischichtig ausgeschlossen (Config-UI, Service-Guard,
-    ``exclude_file_fields``) — Entscheid E8.
+    **Datei-Felder** tragen hier nur einen Platzhalter
+    (:data:`ATTACHMENT_FIELD_PLACEHOLDER`): ihr Wert in ``data_json`` ist ein
+    ``__file__``/``__files__``-Marker, also ein Verweis auf Attachment-Zeilen,
+    kein Feldwert. Die lesbaren Angaben liefert :func:`_gather_attachments`.
+    Der Marker-Check laeuft **vor** :func:`safe_decrypt` — Marker sind ebenfalls
+    ``dict``, aber keine Krypto-Huelle (Muster :func:`_history_value`). Bis M24
+    (Refs #1738) war der Zweig entbehrlich, weil FILE an Personen-/Fall-Typen
+    gesperrt war (ADR-037 §9 „E8"); mit dem Fall dieser Sperre waere das rohe
+    Marker-Dict samt Attachment-UUIDs in der Auskunft gelandet.
 
     Keine Sensitivity-Filterung: der Export haengt an ``LeadOrAdminRequiredMixin``
     + SudoMode, und Leitung/Admin duerfen ohnehin jede Sensitivitaetsstufe
     sehen (``ROLE_MAX_SENSITIVITY``). Eine Filterung waere hier eine
     Scheinsicherheit, die eine unvollstaendige Auskunft erzeugen koennte.
     """
-    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
+    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value, is_file_marker
 
     if entity.document_type_id is None:
         return None
@@ -101,6 +167,9 @@ def _gather_entity_dynamic_data(entity):
         if slug not in values:
             continue
         raw = values[slug]
+        if is_file_marker(raw):
+            entries.append({"slug": slug, "label": ft.name, "value": ATTACHMENT_FIELD_PLACEHOLDER})
+            continue
         decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
         entries.append({"slug": slug, "label": ft.name, "value": format_dynamic_display_value(decrypted, ft)})
     return entries
@@ -125,7 +194,7 @@ def _gather_entity_orphan_data(entity):
     Scheinsicherheit, die eine unvollständige Auskunft erzeugen könnte.
     """
     from core.models import FieldTemplate
-    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value
+    from core.services.dynamic_data import build_field_template_lookup, format_dynamic_display_value, is_file_marker
 
     if entity.document_type_id is None:
         return None
@@ -145,8 +214,15 @@ def _gather_entity_orphan_data(entity):
     for slug in orphan_slugs:
         ft = resolved.get(slug)
         raw = values[slug]
-        decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
         label = ft.name if ft is not None else slug
+        # Refs #1738: Auch verwaiste Werte koennen Datei-Marker sein — FILE-
+        # Waisen entstehen regulaer, weil ``purge_orphan_field_data`` sie
+        # bewusst ueberspringt (ADR-039 §7). Ohne denselben Zweig wie oben
+        # laendete das rohe Marker-Dict hier doch noch in der Auskunft.
+        if is_file_marker(raw):
+            entries.append({"slug": slug, "label": label, "value": ATTACHMENT_FIELD_PLACEHOLDER})
+            continue
+        decrypted = safe_decrypt(raw) if isinstance(raw, dict) else raw
         entries.append({"slug": slug, "label": label, "value": format_dynamic_display_value(decrypted, ft)})
     return entries
 
@@ -186,7 +262,13 @@ def _gather_client_fields(client):
 
 
 def _serialize_event(event):
-    """Serialize a single Event instance, decrypting encrypted data_json values."""
+    """Serialize a single Event instance, decrypting encrypted data_json values.
+
+    Refs #1738 (M24): ``attachments`` kommt hinzu — **nur wenn nicht leer**,
+    damit das Bestandsformat fuer Ereignisse ohne Dateien bitgleich bleibt
+    (Muster ``dynamic_data_orphaned``). Damit schliesst sich die Bestandsluecke,
+    dass der Export bislang keinerlei Anhang-Daten enthielt.
+    """
     decrypted_data = {}
     if event.data_json:
         for key, value in event.data_json.items():
@@ -194,7 +276,7 @@ def _serialize_event(event):
                 decrypted_data[key] = safe_decrypt(value)
             else:
                 decrypted_data[key] = value
-    return {
+    entry = {
         "document_type": event.document_type.name,
         "occurred_at": event.occurred_at.isoformat(),
         "created_by": _username(event.created_by),
@@ -209,6 +291,10 @@ def _serialize_event(event):
         "created_at": event.created_at.isoformat(),
         "updated_at": event.updated_at.isoformat(),
     }
+    attachments = _gather_attachments(event)
+    if attachments:
+        entry["attachments"] = attachments
+    return entry
 
 
 def _gather_events(client, user, *, is_deleted=False):
@@ -273,14 +359,22 @@ def _gather_cases(client):
         orphaned = _gather_entity_orphan_data(case)
         if orphaned:
             entry["dynamic_data_orphaned"] = orphaned
+        # Refs #1738 (M24): fall-eigene Anhaenge, Key nur wenn nicht leer
+        # (Bestandsformat bleibt bitgleich fuer Faelle ohne Dateien).
+        attachments = _gather_attachments(case)
+        if attachments:
+            entry["attachments"] = attachments
         entries.append(entry)
     return entries
 
 
 # Refs #1752: Anhang-Marker (``__file__``/``__files__``) sind Metadaten der
-# Datei-Ablage, keine Feldwerte. Attachment-Metadaten bleiben bis #1738 (AP3)
-# bewusst aus der Auskunft; in der Historie steht daher nur der Platzhalter —
-# sonst wanderten Attachment-IDs ueber den Umweg des Snapshots doch hinein.
+# Datei-Ablage, keine Feldwerte — in der Historie steht daher nur ein
+# Platzhalter. Refs #1738 (M24): Attachment-Metadaten sind inzwischen Teil der
+# Auskunft, aber ueber :func:`_gather_attachments` — aus der lebenden Zeile mit
+# Feldname, Dateiname und Zeitstempeln. Der Historien-Snapshot bleibt bewusst
+# beim Platzhalter: er traegt nur rohe Attachment-IDs, die als Zahlenkolonne
+# keine Auskunft waeren und den Bezug zur Datei nicht herstellen.
 HISTORY_ATTACHMENT_PLACEHOLDER = "[Anhang]"
 
 
@@ -657,22 +751,34 @@ def _gather_audit_trail(facility, client, event_ids):
       vollstaendiges Zugriffsprotokoll ueber Personen, die selbst nicht die
       Auskunftsberechtigten sind.
     * ``detail`` traegt je nach Aktion Anhang-Dateinamen
-      (``audit_security_violation``) — Attachment-Metadaten bleiben bis #1738
-      (AP3) ausgeschlossen.
+      (``audit_security_violation``) und Roh-IDs — es bleibt als **Feld**
+      draussen. Die Anhang-Angaben liefert seit M24 (Refs #1738) statt dessen
+      :func:`_gather_attachments` aus der lebenden Zeile; ``detail`` dient hier
+      nur noch der Zuordnung (s. u.), nicht der Ausgabe.
 
     Aktion, Zeitpunkt und Kategorie bleiben erhalten: die betroffene Person
     erfaehrt, *dass* und *wann* auf welche Art auf ihre Daten zugegriffen wurde.
 
-    Download-Zeilen zeigen auf den Anhang, nicht auf das Ereignis; sie werden
-    ueber ``detail.event_id`` zugeordnet. Das kommt ohne Lesen der
-    Attachment-Tabelle aus und traegt auch dann noch, wenn die Anhaenge beim
-    Loeschen des Ereignisses laengst hart entfernt wurden.
+    Download-Zeilen zeigen auf den Anhang, nicht auf seinen Owner; sie werden
+    ueber ``detail`` zugeordnet. Das kommt ohne Lesen der Attachment-Tabelle aus
+    und traegt auch dann noch, wenn die Anhaenge beim Loeschen des Owners
+    laengst hart entfernt wurden. **Zwei Schemata** (ADR-039 §5): neue Zeilen
+    tragen ``owner_type``/``owner_id`` — der Owner kann eine Person, ein Fall
+    oder ein Ereignis sein —, Alt-Zeilen weiterhin ``event_id``. Alt-Zeilen sind
+    HMAC-verkettet und append-only, also nie migrierbar; beide Zweige muessen
+    daher dauerhaft nebeneinander stehen. Ohne den Owner-Zweig fiele der
+    Download einer personen- oder falleigenen Datei komplett aus dem
+    Zugriffsprotokoll der betroffenen Person heraus.
     """
     event_id_strings = [str(pk) for pk in event_ids]
+    case_id_strings = [str(pk) for pk in client.cases.values_list("pk", flat=True)]
+    owner_id_strings = [str(client.pk), *case_id_strings, *event_id_strings]
     targets = Q(target_id=str(client.pk))
     if event_id_strings:
         targets |= Q(target_id__in=event_id_strings)
+        # Alt-Schema (vor ADR-039 §5) — unmigrierbare Bestandszeilen.
         targets |= Q(action=AuditLog.Action.DOWNLOAD, detail__event_id__in=event_id_strings)
+    targets |= Q(action=AuditLog.Action.DOWNLOAD, detail__owner_id__in=owner_id_strings)
     entries = AuditLog.objects.for_facility(facility).filter(targets).order_by("-timestamp", "pk")
     return [
         {
@@ -714,6 +820,14 @@ def export_client_data(client, facility, user):
         "client": _gather_client_fields(client),
         "events": events_data,
         "deleted_events": deleted_events_data,
+        # Refs #1738 (M24): personen-eigene Anhaenge als EIGENE Top-Level-
+        # Kategorie — nicht als Unterfeld von ``client``. Der abgeleitete
+        # PDF-Guard (``test_every_category_has_its_own_pdf_section``) iteriert
+        # ueber Top-Level-Keys; als Unterfeld liefe der Block an ihm vorbei.
+        # Fall- und ereignis-eigene Anhaenge haengen dagegen sinnvollerweise am
+        # jeweiligen Datensatz (``cases[i]``/``events[i]``) und haben dort
+        # eigene PDF-Nadeln.
+        "attachments": _gather_attachments(client),
         "cases": _gather_cases(client),
         "episodes": _gather_episodes(client),
         "outcome_goals": _gather_outcome_goals(client),

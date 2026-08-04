@@ -1014,9 +1014,12 @@ class TestGatherEventHistory:
         ]
 
     def test_attachment_markers_stay_placeholders(self, sample_event, staff_user):
-        """Attachment-Metadaten bleiben bis #1738 (AP3) draußen — Mutation am
-        Marker-Check (``__file__``/``__files__``) würde Anhang-IDs über den
-        Umweg des Historien-Snapshots doch in die Auskunft spülen."""
+        """Der Historien-Snapshot bleibt beim Platzhalter (Refs #1738) — Mutation
+        am Marker-Check (``__file__``/``__files__``) würde rohe Anhang-IDs über
+        den Umweg des Snapshots in die Auskunft spülen.
+
+        Die lesbaren Anhang-Angaben liefert seit M24 ``_gather_attachments``
+        aus der lebenden Zeile; der Snapshot kennt nur die IDs."""
         EventHistory.objects.create(
             event=sample_event,
             action=EventHistory.Action.UPDATE,

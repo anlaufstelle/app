@@ -70,27 +70,63 @@ class TestSerializeEvent:
     - ``event.case`` / ``event.episode`` ``None``-Fallback (Refs #1752)
     """
 
+    BASE_KEYS = {
+        "document_type",
+        "occurred_at",
+        "created_by",
+        "data",
+        "case",
+        "episode",
+        "is_anonymous",
+        "is_deleted",
+        "created_at",
+        "updated_at",
+    }
+
     def test_contains_all_ten_keys(self, sample_event):
         """Anforderung geändert per Produktentscheid 2026-08-03 (Refs #1752):
         vorher pinnte dieser Test vier Keys.
 
+        Anforderung erneut geändert mit M24 (Refs #1738, ADR-039):
+        Attachment-Metadaten sind jetzt Teil der Auskunft — vorher pinnte der
+        Test hier ihre Abwesenheit. Der Schlüsselsatz eines Ereignisses **ohne**
+        Dateien bleibt aber exakt derselbe: ``attachments`` kommt nur dazu, wenn
+        es Anhänge gibt (``Key nur wenn nicht leer``), damit das Bestandsformat
+        bitgleich bleibt.
+
         Der Pin bleibt exakt (``==``, nicht ``<=``): fällt ein Key weg, bricht
-        er — kommt ein ungewollter dazu (etwa Attachment-Metadaten, die bis
-        #1738 bewusst draußen bleiben), ebenfalls.
+        er — kommt ein ungewollter dazu, ebenfalls.
         """
         result = _serialize_event(sample_event)
-        assert set(result.keys()) == {
-            "document_type",
-            "occurred_at",
-            "created_by",
-            "data",
-            "case",
-            "episode",
-            "is_anonymous",
-            "is_deleted",
-            "created_at",
-            "updated_at",
-        }
+        assert set(result.keys()) == self.BASE_KEYS
+
+    def test_attachments_key_appears_only_with_attachments(self, sample_event, facility, staff_user):
+        """Gegenstück zum Pin oben: mit Anhang genau EIN zusätzlicher Key.
+
+        Ohne diesen Test bliebe der exakte Schlüsselsatz oben grün, wenn der
+        Anhang-Zweig ganz verschwände — der Ereignis-Anhang fiele dann
+        unbemerkt wieder aus der Auskunft (die Lücke, die M24 geschlossen hat).
+        """
+        from core.models import Attachment, FieldTemplate
+        from core.services.file_vault import encrypt_field
+
+        Attachment.objects.create(
+            facility=facility,
+            event=sample_event,
+            field_template=FieldTemplate.objects.create(
+                facility=facility,
+                name="Serializer-Anlage",
+                field_type=FieldTemplate.FieldType.FILE,
+            ),
+            storage_filename="s.enc",
+            original_filename_encrypted=encrypt_field("Anlage.pdf"),
+            file_size=7,
+            mime_type="application/pdf",
+            created_by=staff_user,
+        )
+        result = _serialize_event(sample_event)
+        assert set(result.keys()) == self.BASE_KEYS | {"attachments"}
+        assert [a["filename"] for a in result["attachments"]] == ["Anlage.pdf"]
 
     def test_document_type_uses_name_not_pk(self, sample_event):
         """Mutation ``event.document_type.name`` → ``event.document_type_id``

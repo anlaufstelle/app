@@ -30,6 +30,7 @@ from core.services.client.dsgvo_package import (
 from core.services.client.export import (
     _build_export_meta,
     _gather_activities,
+    _gather_attachments,
     _gather_audit_trail,
     _gather_cases,
     _gather_client_fields,
@@ -93,6 +94,7 @@ __all__ = [
     "_document_type_retention_overrides",
     "_format_document_type_overrides",
     "_gather_activities",
+    "_gather_attachments",
     "_gather_audit_trail",
     "_gather_cases",
     "_gather_client_fields",

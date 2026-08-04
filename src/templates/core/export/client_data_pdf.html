@@ -23,11 +23,12 @@
     <div class="notice">
         {% trans "Dieses Dokument enthält die zu Ihrer Person gespeicherten Daten gemäß Art. 15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)." %}
         {% comment %}Refs #1752: Die Auskunft benennt ihre bewussten Ausschluesse, statt
-        Vollstaendigkeit zu behaupten. Attachment-Metadaten folgen mit #1738 (AP3);
-        das Zugriffsprotokoll bleibt ohne Beschaeftigten-Identitaet (Art. 15 Abs. 4,
-        Rechte Dritter).{% endcomment %}
+        Vollstaendigkeit zu behaupten. Refs #1738 (M24): Anhang-Metadaten (Dateiname,
+        Groesse, Versionen) sind seit dem Owner-Umbau enthalten — uebrig bleiben die
+        Binaerinhalte der Dateien und die Beschaeftigten-Identitaet im Zugriffsprotokoll
+        (Art. 15 Abs. 4, Rechte Dritter).{% endcomment %}
         <br><br>
-        {% trans "Nicht enthalten sind: Angaben zu Dateianhängen (Dateiname, Größe, Versionen) sowie deren Inhalte; im Zugriffsprotokoll bleiben außerdem die Namen der zugreifenden Beschäftigten außen vor, da es sich dabei zugleich um Daten Dritter handelt. Diese Angaben können auf Nachfrage gesondert geprüft werden." %}
+        {% trans "Nicht enthalten sind: die Inhalte der Dateien selbst (aufgeführt sind nur die Angaben zu den Dateianhängen — Dateiname, Größe, Versionen); im Zugriffsprotokoll bleiben außerdem die Namen der zugreifenden Beschäftigten außen vor, da es sich dabei zugleich um Daten Dritter handelt. Diese Angaben können auf Nachfrage gesondert geprüft werden." %}
     </div>
 
     <h2>{% trans "1. Stammdaten" %}</h2>
@@ -61,7 +62,50 @@
         {% endif %}
     </table>
 
-    <h2>{% trans "2. Fälle" %}</h2>
+    {% comment %}Refs #1738 (M24, ADR-039): Personen-eigene Dateianhaenge als eigener
+    Abschnitt direkt nach den Stammdaten — es sind Dokumente der Person selbst.
+    Fall- und ereignis-eigene Anhaenge stehen dagegen bei ihrem jeweiligen
+    Datensatz (Spalte „Dateianhänge" in den Abschnitten 3 und 6), weil sie nur
+    dort ihren Bezug behalten. Ausgewiesen werden ausschliesslich Metadaten —
+    die Dateien selbst gibt der regulaere Download heraus (M4/#1060).{% endcomment %}
+    <h2>{% trans "2. Dateianhänge" %}</h2>
+    {% if attachments %}
+    <p>{% trans "Zu Ihrer Person hinterlegte Dateien. Aufgeführt sind die Angaben zu den Dateien, nicht deren Inhalte. Ersetzte und entfernte Fassungen sind mitaufgeführt, solange sie noch gespeichert sind." %}</p>
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Feld" %}</th>
+                <th>{% trans "Dateiname" %}</th>
+                <th>{% trans "Größe (Bytes)" %}</th>
+                <th>{% trans "Dateityp" %}</th>
+                <th>{% trans "Hochgeladen am" %}</th>
+                <th>{% trans "Hochgeladen von" %}</th>
+                <th>{% trans "Stand" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for attachment in attachments %}
+            <tr>
+                <td>{{ attachment.field }}</td>
+                <td>{{ attachment.filename }}</td>
+                <td>{{ attachment.file_size }}</td>
+                <td>{{ attachment.mime_type }}</td>
+                <td>{{ attachment.uploaded_at }}</td>
+                <td>{{ attachment.uploaded_by|default:"-" }}</td>
+                <td>
+                    {% if attachment.removed_at %}{% blocktrans with date=attachment.removed_at %}entfernt am {{ date }}{% endblocktrans %}
+                    {% elif not attachment.is_current %}{% blocktrans with date=attachment.superseded_at %}ersetzt am {{ date }}{% endblocktrans %}
+                    {% else %}{% trans "aktuell" %}{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Dateianhänge vorhanden." %}</p>
+    {% endif %}
+
+    <h2>{% trans "3. Fälle" %}</h2>
     {% if cases %}
     <table>
         <thead>
@@ -75,6 +119,7 @@
                 <th>{% trans "Fallverantwortlich" %}</th>
                 <th>{% trans "Erstellt von" %}</th>
                 <th>{% trans "Zusatzfelder" %}</th>
+                <th>{% trans "Dateianhänge" %}</th>
             </tr>
         </thead>
         <tbody>
@@ -104,6 +149,13 @@
                     {% endfor %}
                     {% else %}-{% endif %}
                 </td>
+                {% comment %}Refs #1738: fall-eigene Anhaenge — Metadaten kompakt in der
+                Fall-Zeile, damit der Bezug zum Fall erhalten bleibt.{% endcomment %}
+                <td>
+                    {% for attachment in case.attachments %}
+                        {{ attachment.field }}: {{ attachment.filename }} ({{ attachment.file_size }} {% trans "Bytes" %}, {{ attachment.mime_type }}){% if attachment.removed_at %} — {% trans "entfernt" %}{% elif not attachment.is_current %} — {% trans "ersetzt" %}{% endif %}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}-{% endfor %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -114,7 +166,7 @@
 
     {% comment %}Refs #1752: Episoden und Wirkungsziele fehlten bislang komplett,
     obwohl sie Freitext zur Person tragen.{% endcomment %}
-    <h2>{% trans "3. Episoden" %}</h2>
+    <h2>{% trans "4. Episoden" %}</h2>
     {% if episodes %}
     <table>
         <thead>
@@ -144,7 +196,7 @@
     <p>{% trans "Keine Episoden vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "4. Wirkungsziele und Meilensteine" %}</h2>
+    <h2>{% trans "5. Wirkungsziele und Meilensteine" %}</h2>
     {% if outcome_goals %}
     <table>
         <thead>
@@ -176,7 +228,7 @@
     <p>{% trans "Keine Wirkungsziele vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "5. Kontakte" %}</h2>
+    <h2>{% trans "6. Kontakte" %}</h2>
     {% if events %}
     <table>
         <thead>
@@ -187,6 +239,7 @@
                 <th>{% trans "Episode" %}</th>
                 <th>{% trans "Erstellt von" %}</th>
                 <th>{% trans "Daten" %}</th>
+                <th>{% trans "Dateianhänge" %}</th>
             </tr>
         </thead>
         <tbody>
@@ -202,6 +255,13 @@
                         <strong>{{ key }}:</strong> {{ value }}{% if not forloop.last %}, {% endif %}
                     {% endfor %}
                 </td>
+                {% comment %}Refs #1738: ereignis-eigene Anhaenge — bis M24 fehlten
+                Anhang-Angaben in der Auskunft komplett, auch fuer Ereignisse.{% endcomment %}
+                <td>
+                    {% for attachment in event.attachments %}
+                        {{ attachment.field }}: {{ attachment.filename }} ({{ attachment.file_size }} {% trans "Bytes" %}, {{ attachment.mime_type }}){% if attachment.removed_at %} — {% trans "entfernt" %}{% elif not attachment.is_current %} — {% trans "ersetzt" %}{% endif %}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}-{% endfor %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -213,7 +273,7 @@
     {% comment %}Refs #1752: Soft-deletete Ereignisse sind bis zum Hard-Purge weiterhin
     gespeicherte Daten. Ihr ``data_json`` ist beim Loeschen geleert — ausgewiesen
     werden Existenz und Zeitpunkt, die Inhalte stehen in der Aenderungshistorie.{% endcomment %}
-    <h2>{% trans "6. Gelöschte Ereignisse (Papierkorb)" %}</h2>
+    <h2>{% trans "7. Gelöschte Ereignisse (Papierkorb)" %}</h2>
     {% if deleted_events %}
     <p>{% trans "Diese Ereignisse sind gelöscht, aber noch nicht endgültig entfernt. Ihre Inhalte wurden beim Löschen entfernt; was noch vorhanden ist, steht in der Änderungshistorie." %}</p>
     <table>
@@ -242,7 +302,7 @@
     <p>{% trans "Keine gelöschten Ereignisse vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "7. Änderungshistorie" %}</h2>
+    <h2>{% trans "8. Änderungshistorie" %}</h2>
     {% if event_history %}
     <table>
         <thead>
@@ -282,7 +342,7 @@
     <p>{% trans "Keine Änderungshistorie vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "8. Löschanträge" %}</h2>
+    <h2>{% trans "9. Löschanträge" %}</h2>
     {% if deletion_requests %}
     <table>
         <thead>
@@ -317,7 +377,7 @@
     {% comment %}Refs #1752 (Art. 18): Legal Hold erklaert, warum Daten trotz
     abgelaufener Frist noch existieren; der Loeschvorschlag benennt die anstehende
     Loeschung samt Frist.{% endcomment %}
-    <h2>{% trans "9. Aufbewahrung: Sperrvermerke und Löschvorschläge" %}</h2>
+    <h2>{% trans "10. Aufbewahrung: Sperrvermerke und Löschvorschläge" %}</h2>
     <h3>{% trans "Sperrvermerke (Legal Holds)" %}</h3>
     {% if legal_holds %}
     <table>
@@ -378,7 +438,7 @@
     <p>{% trans "Keine Löschvorschläge vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "10. Aufgaben" %}</h2>
+    <h2>{% trans "11. Aufgaben" %}</h2>
     {% if work_items %}
     <table>
         <thead>
@@ -414,7 +474,7 @@
     <p>{% trans "Keine Aufgaben vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "11. Aktivitäten" %}</h2>
+    <h2>{% trans "12. Aktivitäten" %}</h2>
     {% if activities %}
     <table>
         <thead>
@@ -445,7 +505,7 @@
     {% comment %}Refs #1752: Merklisten-/Zuletzt-besucht-Eintraege sind gespeicherte
     Information ueber die Person. Bewusst OHNE die zugreifende Person — sonst waere
     das ein Zugriffsprotokoll ueber Beschaeftigte (Art. 15 Abs. 4).{% endcomment %}
-    <h2>{% trans "12. Merkliste und zuletzt aufgerufen" %}</h2>
+    <h2>{% trans "13. Merkliste und zuletzt aufgerufen" %}</h2>
     {% if recent_visits %}
     <table>
         <thead>
@@ -469,7 +529,7 @@
 
     {% comment %}Refs #1752: Zugriffsprotokoll bewusst ohne Beschaeftigten-Identitaet
     (Produktentscheid 2026-08-03) — Aktion, Zeitpunkt und Kategorie ja, Namen nein.{% endcomment %}
-    <h2>{% trans "13. Zugriffsprotokoll" %}</h2>
+    <h2>{% trans "14. Zugriffsprotokoll" %}</h2>
     <p>{% trans "Protokollierte Zugriffe auf Ihre Daten. Die Namen der zugreifenden Beschäftigten sind nicht aufgeführt, da es sich dabei zugleich um Daten Dritter handelt." %}</p>
     {% if audit_trail %}
     <table>

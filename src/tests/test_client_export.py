@@ -672,7 +672,13 @@ class TestClientExportHistoryContents:
         assert data["event_history"][0]["data_after"] == [{"slug": "unbekannt", "label": "unbekannt", "value": "Wert"}]
 
     def test_history_masks_attachment_markers(self, sample_client, facility, sample_event, admin_user):
-        """Anhang-Metadaten bleiben bis #1738 ausgeschlossen — nur der Platzhalter."""
+        """Im Historien-Snapshot bleibt es beim Platzhalter (Refs #1738).
+
+        Anhang-Angaben liefert seit M24 ``_gather_attachments`` aus der
+        lebenden Zeile (Feldname, Dateiname, Zeitstempel). Der Snapshot traegt
+        dagegen nur rohe Attachment-IDs — als Zahlenkolonne waeren sie keine
+        Auskunft, sondern nur ein Leck interner Kennungen.
+        """
         EventHistory.objects.create(
             event=sample_event,
             changed_by=admin_user,
@@ -940,6 +946,275 @@ class TestClientExportAuditTrail:
         data = export_client_data(sample_client, facility, admin_user)
         assert [e["action"] for e in data["audit_trail"]] == ["Löschung"]
 
+    @pytest.mark.parametrize("owner_kind", ["client", "case", "event"])
+    def test_download_rows_are_matched_via_owner_detail(
+        self, sample_client, facility, sample_case, sample_event, admin_user, owner_kind
+    ):
+        """Neues Detail-Schema der Anhang-Domaene (ADR-039 §5, Refs #1738).
+
+        Download-Zeilen zeigen auf den Anhang, nicht auf seinen Owner; die
+        Zuordnung laeuft ueber ``detail``. Seit M24 steht dort ``owner_type``/
+        ``owner_id`` statt ``event_id`` — und der Owner kann eine Person oder
+        ein Fall sein. Ohne die Erweiterung fiele der Download einer
+        personen-eigenen Datei komplett aus dem Zugriffsprotokoll der
+        betroffenen Person heraus.
+        """
+        owner_pk = {
+            "client": sample_client.pk,
+            "case": sample_case.pk,
+            "event": sample_event.pk,
+        }[owner_kind]
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="Attachment",
+            target_id="22222222-2222-2222-2222-222222222222",
+            detail={"owner_type": owner_kind, "owner_id": str(owner_pk), "field": "datei"},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
+        assert data["audit_trail"][0]["action"] == "Download"
+
+    def test_download_of_other_clients_owner_excluded(self, sample_client, facility, admin_user):
+        """Gegenprobe zum Owner-Schema: fremde Owner-IDs bleiben draussen."""
+        other = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Owner",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=admin_user,
+        )
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="Attachment",
+            target_id="33333333-3333-3333-3333-333333333333",
+            detail={"owner_type": "client", "owner_id": str(other.pk), "field": "datei"},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["audit_trail"] == []
+
+
+@pytest.fixture
+def file_field_template(facility):
+    """FILE-Feldvorlage fuer Anhang-Tests (Refs #1738)."""
+    from core.models import FieldTemplate
+
+    return FieldTemplate.objects.create(
+        facility=facility,
+        name="Nachweis",
+        field_type=FieldTemplate.FieldType.FILE,
+    )
+
+
+def _make_attachment(facility, owner, field_template, user, filename="Mietvertrag.pdf", **overrides):
+    """Attachment-Zeile mit verschluesseltem Originalnamen (ohne Disk-Datei).
+
+    Die Auskunft liefert ausschliesslich **Metadaten** (M4/#1060, ADR-039) —
+    fuer alle Pruefungen hier ist keine ``.enc``-Datei noetig.
+    """
+    from core.models import Attachment
+    from core.models.attachment import owner_field_name
+    from core.services.file_vault import encrypt_field
+
+    defaults = {
+        "facility": facility,
+        "field_template": field_template,
+        "storage_filename": "0000-storage.enc",
+        "original_filename_encrypted": encrypt_field(filename),
+        "file_size": 2048,
+        "mime_type": "application/octet-stream",
+        "detected_mime": "application/pdf",
+        "created_by": user,
+        owner_field_name(owner): owner,
+    }
+    defaults.update(overrides)
+    return Attachment.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+class TestClientExportAttachments:
+    """Art.-15-Auskunft ueber Dateianhaenge — alle drei Owner (Refs #1738, ADR-039).
+
+    Produktentscheid M24: Attachment-**Metadaten** gehoeren in JSON und PDF,
+    Binaerinhalte nicht (konsistent mit M4/#1060). Das schliesst zugleich die
+    Bestandsluecke, dass der Export bis dahin ueberhaupt keine Anhang-Daten
+    enthielt — auch nicht fuer Ereignisse.
+    """
+
+    EXPECTED_KEYS = {
+        "field",
+        "field_slug",
+        "filename",
+        "file_size",
+        "mime_type",
+        "uploaded_at",
+        "uploaded_by",
+        "is_current",
+        "superseded_at",
+        "removed_at",
+    }
+
+    def test_client_owned_attachment_is_a_top_level_category(
+        self, sample_client, facility, file_field_template, admin_user
+    ):
+        _make_attachment(facility, sample_client, file_field_template, admin_user)
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["attachments"]) == 1
+        entry = data["attachments"][0]
+        assert set(entry) == self.EXPECTED_KEYS
+        assert entry["field"] == "Nachweis"
+        assert entry["field_slug"] == file_field_template.slug
+        assert entry["filename"] == "Mietvertrag.pdf"
+        assert entry["file_size"] == 2048
+        assert entry["uploaded_by"] == admin_user.username
+        assert entry["is_current"] is True
+        assert entry["superseded_at"] is None
+        assert entry["removed_at"] is None
+
+    def test_top_level_category_is_empty_list_without_attachments(self, sample_client, facility, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["attachments"] == []
+
+    def test_case_owned_attachment_is_nested_in_its_case(
+        self, sample_client, facility, sample_case, file_field_template, admin_user
+    ):
+        _make_attachment(facility, sample_case, file_field_template, admin_user, filename="Fallakte.pdf")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [a["filename"] for a in data["cases"][0]["attachments"]] == ["Fallakte.pdf"]
+
+    def test_event_owned_attachment_is_nested_in_its_event(
+        self, sample_client, facility, sample_event, file_field_template, admin_user
+    ):
+        """Schliesst die Bestandsluecke: Ereignis-Anhaenge fehlten bisher komplett."""
+        _make_attachment(facility, sample_event, file_field_template, admin_user, filename="Ereignis.pdf")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [a["filename"] for a in data["events"][0]["attachments"]] == ["Ereignis.pdf"]
+
+    def test_nested_key_absent_when_owner_has_no_attachments(
+        self, sample_client, facility, sample_case, sample_event, admin_user
+    ):
+        """``Key nur wenn nicht leer`` — das Bestandsformat bleibt bitgleich."""
+        data = export_client_data(sample_client, facility, admin_user)
+        assert "attachments" not in data["cases"][0]
+        assert "attachments" not in data["events"][0]
+
+    def test_mime_prefers_the_verified_type(self, sample_client, facility, file_field_template, admin_user):
+        """``detected_mime or mime_type`` — der browser-gemeldete Typ ist nur Fallback."""
+        _make_attachment(facility, sample_client, file_field_template, admin_user)
+        _make_attachment(
+            facility,
+            sample_client,
+            file_field_template,
+            admin_user,
+            filename="Ohne-Erkennung.bin",
+            detected_mime="",
+            mime_type="text/plain",
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        by_name = {a["filename"]: a["mime_type"] for a in data["attachments"]}
+        assert by_name["Mietvertrag.pdf"] == "application/pdf"
+        assert by_name["Ohne-Erkennung.bin"] == "text/plain"
+
+    def test_removed_attachment_is_listed_with_its_removal_date(
+        self, sample_client, facility, file_field_template, admin_user
+    ):
+        """Soft-deletete Kettenglieder bleiben gespeicherte Daten der Person.
+
+        Bis zum physischen Loeschen (Owner-Lebenszyklus) existiert die Datei
+        weiter — die Auskunft weist sie deshalb aus und markiert sie ueber
+        ``removed_at`` als entfernt, statt sie zu verschweigen.
+        """
+        removed_at = timezone.now() - timedelta(days=3)
+        _make_attachment(
+            facility,
+            sample_client,
+            file_field_template,
+            admin_user,
+            filename="Entfernt.pdf",
+            deleted_at=removed_at,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [a["filename"] for a in data["attachments"]] == ["Entfernt.pdf"]
+        assert data["attachments"][0]["removed_at"] == removed_at.isoformat()
+
+    def test_superseded_version_is_listed_as_not_current(
+        self, sample_client, facility, file_field_template, admin_user
+    ):
+        """Die Versionskette gehoert vollstaendig zur Auskunft."""
+        superseded_at = timezone.now() - timedelta(days=1)
+        current = _make_attachment(facility, sample_client, file_field_template, admin_user, filename="V2.pdf")
+        _make_attachment(
+            facility,
+            sample_client,
+            file_field_template,
+            admin_user,
+            filename="V1.pdf",
+            entry_id=current.entry_id,
+            is_current=False,
+            superseded_by=current,
+            superseded_at=superseded_at,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        old = next(a for a in data["attachments"] if a["filename"] == "V1.pdf")
+        assert old["is_current"] is False
+        assert old["superseded_at"] == superseded_at.isoformat()
+
+    def test_no_storage_internals_leak_into_the_export(self, sample_client, facility, file_field_template, admin_user):
+        """Keine Binaerinhalte, keine Speicherpfade (M4/#1060, ADR-039)."""
+        attachment = _make_attachment(facility, sample_client, file_field_template, admin_user)
+        data = export_client_data(sample_client, facility, admin_user)
+        payload = str(data)
+        assert attachment.storage_filename not in payload
+        assert "original_filename_encrypted" not in payload
+        assert str(attachment.pk) not in payload
+
+    def test_attachments_of_another_client_are_excluded(self, sample_client, facility, file_field_template, admin_user):
+        other = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Anhang",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=admin_user,
+        )
+        _make_attachment(facility, other, file_field_template, admin_user, filename="Fremd.pdf")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["attachments"] == []
+
+    def test_file_marker_field_renders_a_readable_placeholder(
+        self, sample_client, facility, file_field_template, admin_user
+    ):
+        """Marker-Dicts duerfen nicht roh in den Zusatzfeldern erscheinen.
+
+        FILE-Felder speichern in ``data_json`` nur einen Verweis
+        (``__files__``-Marker). Ohne eigenen Zweig laendete das rohe Dict samt
+        Attachment-UUIDs im Auskunftsdokument — technisch und unlesbar. Die
+        eigentlichen Angaben stehen im Anhang-Abschnitt.
+        """
+        from core.models import DocumentTypeField
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personenprofil-Datei",
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=file_field_template, sort_order=0)
+        sample_client.document_type = dt
+        sample_client.data_json = {
+            file_field_template.slug: {
+                "__files__": True,
+                "entries": [{"id": "44444444-4444-4444-4444-444444444444", "sort": 0}],
+            }
+        }
+        sample_client.save(update_fields=["document_type", "data_json"])
+
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = next(e for e in data["client"]["dynamic_data"] if e["slug"] == file_field_template.slug)
+        assert "__files__" not in str(entry)
+        assert "44444444" not in str(entry)
+        assert "Dateianhang" in entry["value"]
+
 
 @pytest.fixture
 def fully_populated_client(facility, doc_type, sample_client, admin_user, confirmer_user, lead_user):
@@ -1035,6 +1310,23 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         target_type="Client",
         target_id=str(sample_client.pk),
     )
+    # Refs #1738: je ein Anhang an Person, Fall und Ereignis — die drei Owner
+    # haben im PDF drei verschiedene Fundstellen (eigener Abschnitt bzw. Spalte
+    # in Faelle/Kontakte); der Paritaets-Guard deckt nur Top-Level-Keys ab.
+    from core.models import FieldTemplate
+
+    ft_pdf = FieldTemplate.objects.create(
+        facility=facility,
+        name="PDF-Anhangfeld",
+        field_type=FieldTemplate.FieldType.FILE,
+    )
+    pdf_owners = (
+        (sample_client, "PDF-Personenakte.pdf"),
+        (case, "PDF-Fallakte.pdf"),
+        (event, "PDF-Ereignisakte.pdf"),
+    )
+    for owner, filename in pdf_owners:
+        _make_attachment(facility, owner, ft_pdf, admin_user, filename=filename)
     return sample_client
 
 
@@ -1103,6 +1395,24 @@ class TestClientExportPdfCoverage:
         html = _render_export_html(fully_populated_client, facility, admin_user)
         assert needle in html
 
+    @pytest.mark.parametrize(
+        "needle",
+        [
+            "PDF-Personenakte.pdf",  # personen-eigener Anhang (eigener Abschnitt)
+            "PDF-Fallakte.pdf",  # fall-eigener Anhang (Spalte im Fall-Abschnitt)
+            "PDF-Ereignisakte.pdf",  # ereignis-eigener Anhang (Spalte im Kontakt-Abschnitt)
+        ],
+    )
+    def test_pdf_names_attachments_of_every_owner(self, fully_populated_client, facility, admin_user, needle):
+        """Refs #1738: Der Paritaets-Guard unten deckt nur Top-Level-Keys ab.
+
+        Die fall- und ereignis-eigenen Anhaenge haengen als verschachtelte
+        Schluessel in ``cases``/``events`` — sie brauchen daher eigene Nadeln,
+        sonst koennte ihr Template-Zweig fehlen, ohne dass ein Test bricht.
+        """
+        html = _render_export_html(fully_populated_client, facility, admin_user)
+        assert needle in html
+
     def test_pdf_lists_deleted_events_section(self, fully_populated_client, facility, admin_user):
         html = _render_export_html(fully_populated_client, facility, admin_user)
         assert "Gelöschte Ereignisse" in html
@@ -1121,9 +1431,19 @@ class TestClientExportPdfCoverage:
         assert "ce_admin" not in audit_section
 
     def test_pdf_names_the_deliberate_exclusions(self, fully_populated_client, facility, admin_user):
-        """Die Auskunft muss ihre bewussten Ausschluesse benennen statt Vollstaendigkeit zu behaupten."""
+        """Die Auskunft muss ihre bewussten Ausschluesse benennen statt Vollstaendigkeit zu behaupten.
+
+        Anforderung geaendert mit M24 (Refs #1738): Anhang-**Metadaten** waren
+        bis dahin selbst ein erklaerter Ausschluss und sind jetzt Teil der
+        Auskunft. Uebrig bleiben zwei Ausschluesse — die Beschaeftigten-
+        Identitaet im Zugriffsprotokoll (Art. 15 Abs. 4, Rechte Dritter) und
+        die Binaerinhalte der Dateien (M4/#1060).
+        """
         html = _render_export_html(fully_populated_client, facility, admin_user)
-        assert "Dateianhänge" in html
+        notice = html.split("<h2>", 1)[0]
+        assert "Beschäftigten" in notice
+        assert "Inhalte der Dateien" in notice
+        assert "Nicht enthalten sind: Angaben zu Dateianhängen" not in notice
 
     def test_every_category_has_its_own_pdf_section(self, fully_populated_client, facility, admin_user):
         """Abgeleiteter Guard (Refs #1765) — Vorbild ``TestKAnonBridgeRedactionParity``.
@@ -1177,6 +1497,8 @@ class TestClientExportCompleteness:
         "events",
         "deleted_events",
         "cases",
+        # Refs #1738 (M24): Anhang-Metadaten der Person als eigene Kategorie.
+        "attachments",
         "episodes",
         "outcome_goals",
         "event_history",
