@@ -63,9 +63,21 @@ Nicht betroffen: ``0018``/``0023``/``0035``/``0037`` (liefen *vor* ``0047``, RLS
 existierte zur Laufzeit noch nicht), ``0084``/``0094`` (``core_user`` —
 Auth-Grenze, bewusst ohne RLS), ``0093`` (Cache-Tabelle), ``0102``
 (``otp_totp_totpdevice``), ``0049`` (Materialized View, bewusst ohne RLS).
-Diese Migrationen werden **nicht** nachtraeglich mit dem Guard versehen: sie
-sind auf allen Bestandsinstanzen laengst angewandt, ein nachtraeglicher Guard
-liefe dort nie und wuerde nur die Migrationshistorie umschreiben.
+
+Diese Migrationen werden **nicht** nachtraeglich mit dem Guard versehen. Zwei
+Klassen mit unterschiedlicher Begruendung:
+
+* ``0068``–``0099`` sind Bestandteil von ``v0.23.0`` (Snapshot endet bei
+  ``0109``) und auf allen Instanzen laengst angewandt — ein nachtraeglicher
+  Guard liefe dort nie und schriebe nur die Migrationshistorie um.
+* ``0115``/``0117``/``0120``/``0122`` sind **noch nicht** released (``v0.23.0``
+  reicht nur bis ``0109``); sie laufen beim naechsten Deploy im selben
+  ``migrate``-Aufruf wie ``0123``. Da ``0123`` den Guard traegt und bei falscher
+  Rolle fail-loud abbricht, *bevor* die Batch committet, ist der ganze Lauf
+  transitiv geschuetzt. Ein Retrofit auf diese vier bliebe moeglich, wurde aber
+  bewusst unterlassen, um die Migrationsdateien so kurz vor dem Release nicht
+  erneut anzufassen — der Guard ist ab ``0123`` die Konvention fuer *neue*
+  Datenmigrationen.
 """
 
 from __future__ import annotations
