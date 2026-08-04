@@ -602,8 +602,9 @@ beruht). Sperrvermerke blockieren seit #1756
 (#1769) sowie **K0 (b, Zellkriterium)**,
 **K4b**, **K2**, **K1**, **K3 (A1/A3)** und **K4c**
 (#1770) sind **mitigiert**; **K4a** bleibt die
-akzeptierte Definitionsgrenze, flankiert durch die Freigabe-Übersicht, und **K3-A2** ist ein bewusst
-offener Produktentscheid (Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
+akzeptierte Definitionsgrenze, flankiert durch die Freigabe-Übersicht, und **K3-A2** ist seit dem
+Maintainer-Entscheid vom 2026-08-04 **entschieden: Option A, Status quo ohne Restzeile**
+(#1773; Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
 Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
@@ -640,7 +641,7 @@ Betriebskennzahl.
 | **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | **mitigiert** (#1770, Variante „Spanne ≥ 2") |
 | **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | **mitigiert** (#1770) |
 | **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | **mitigiert** (#1770) — Fixpunkt-Guard inkl. der Personen-Randsumme Σ `persons` = `unique_clients` |
-| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | **mitigiert** — A1 + A3 (#1770); A2 = offener Produktentscheid |
+| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | **mitigiert** — A1 + A3 (#1770); A2 = entschieden, Option A / Status quo (#1773) |
 | **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | **mitigiert** (#1770) |
 | **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert; Freigabe-Übersicht (#1770) |
 
@@ -1157,10 +1158,20 @@ Zwei Details, ohne die die Umsetzung fail-open wäre:
 **Damit überholt:** der Eintrag unter „Geprüft und nicht tragfähig", `by_age_cluster` publiziere keine
 Ereignis-Randsumme — er hatte genau diese Umsetzung als seinen Auslöser benannt.
 
-*Status (A2): **offener Produktentscheid, bewusst nicht umgesetzt***
-(#1770, Status quo). Im Beispiel-Sachbericht
-bleibt es bei `margin=None` und **ohne** Restzeile; die Begründung steht an
-`_SAMPLE_REPORT_1_BREAKDOWNS` im Code.
+*Status (A2): **entschieden — Option A, Status quo** (Maintainer-Entscheid 2026-08-04,
+#1773 /
+#1785).* Im Beispiel-Sachbericht bleibt es bei
+`margin=None` und **ohne** Restzeile „ohne Berichtszuordnung"; die Begründung steht an
+`_SAMPLE_REPORT_1_BREAKDOWNS` im Code. Der Entscheid kostet keine Schutzwirkung: der W-Kanal aus K3
+existiert in diesem Artefakt nachweislich nicht (keine publizierte Größe entspricht Σ der
+Alterstabelle oder „alle Ereignisse"), und die Grundgesamtheits-Ausweise aus A3 machen die
+Doppeldeutigkeit der beiden Basismengen sichtbar — sie sind die Antwort auf die fachliche Frage, die
+eine Restzeile beantworten sollte. Was der Verzicht kostet, ist allein die bezifferte
+Vollständigkeitsangabe im Artefakt; der unbezifferte Vollständigkeitshinweis (K6) bleibt.
+**Aus dem RFC ist damit kein „später" geworden, sondern ein Nein mit Wiedervorlagegrund:** die
+Optionen B und C unten bleiben gangbar, aber keine wird ohne neuen Anlass gebaut. Wer die Zeile
+ergänzen will, kommt an ihnen nicht vorbei — die **naive** Form ist nachweislich pinnbar
+(485/840 Welten).
 
 **Wichtig für die Wiedervorlage:** Das ist *keine* technische Unmöglichkeit. Die Analyse nennt **zwei**
 gangbare Routen, und beide stehen weiterhin offen:

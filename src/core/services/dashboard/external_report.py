@@ -624,14 +624,17 @@ _SAMPLE_REPORT_1_BREAKDOWNS = (
     # Kleinzell-Welten pinnbar, heute 0), weil die Sekundaersuppression
     # voraussetzt, dass die Zeilen sich auf die publizierte Randsumme summieren.
     #
-    # Das ist **keine technische Unmoeglichkeit**, sondern ein offener
-    # Produktentscheid. Die Analyse nennt ZWEI gangbare Routen, beide stehen
-    # weiterhin offen: (1) umgestellte Randsumme (``total`` = alle Ereignisse)
-    # oder (2) teilmengenbewusste Sekundaersuppression (Rechnen mit
+    # Das ist **keine technische Unmoeglichkeit**, sondern ein Produktentscheid
+    # — und der ist gefallen: **Option A, Status quo ohne Restzeile**
+    # (Maintainer, 2026-08-04, Refs #1773/#1785). Tragend war, dass der W-Kanal
+    # aus K3 hier ohnehin nicht existiert (es gibt keine Ereignis-Gesamtsumme,
+    # aus der W ableitbar waere) und die Grundgesamtheits-Ausweise aus K3-A3 die
+    # Doppeldeutigkeit sichtbar machen. Die beiden Routen der Analyse bleiben
+    # fuer eine Wiedervorlage gangbar, werden aber ohne neuen Anlass nicht
+    # gebaut: (1) umgestellte Randsumme (``total`` = alle Ereignisse) oder
+    # (2) teilmengenbewusste Sekundaersuppression (Rechnen mit
     # ``Σ Zeilen <= Randsumme`` statt ``=``, also ein zweites Inferenzmodell
-    # neben dem Partitions-Modell in ``disclosure.py``). Status quo, weil der
-    # W-Kanal aus K3 hier ohnehin nicht existiert: es gibt keine
-    # Ereignis-Gesamtsumme, aus der W ableitbar waere.
+    # neben dem Partitions-Modell in ``disclosure.py``).
     _Breakdown("by_age_cluster", None, ORDER_AGE_CLUSTER, reveals_person_gap=True),
 )
 
