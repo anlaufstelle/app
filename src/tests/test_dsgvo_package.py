@@ -1,11 +1,35 @@
 """Tests for DSGVO documentation package."""
 
+import re
+
 import pytest
 from django.core.cache import cache
 from django.test import Client as DjangoClient
 
 from core.models import AuditLog, Facility, Organization, Settings, User
 from core.services.client import _document_type_retention_overrides, get_document_list, render_document
+
+# Refs #1775: Zeilen der Fristen-Tabelle in dsfa.md § 2.3
+# ("| # | Frist | Wert | Einstellung | Wirkung bei Ablauf |"). Nur diese eine
+# Tabelle im Dokument hat eine laufende Nummer in der ersten Spalte.
+_RETENTION_ROW = re.compile(r"^\|\s*(?P<nr>\d+)\s*\|\s*(?P<frist>[^|]*?)\s*\|\s*(?P<wert>[^|]*?)\s*\|")
+
+
+def _retention_rows(content: str) -> dict[int, tuple[str, str]]:
+    """``{Zeilennummer: (Frist, Wert)}`` aus dsfa.md § 2.3.
+
+    Refs #1775: ``"365 Tage" in content`` beweist **nichts** ueber eine
+    bestimmte Frist — die Default-Werte von Frist 2 (``retention_identified_days``)
+    und Frist 5 (``retention_activities_days``) sind beide 365, und das Wort
+    "keine" steht ohnehin in der Prosa unter der Tabelle ("greift **keine** der
+    sieben Fristen"). Erst die Zuordnung Zeile → Zellinhalt ist trennscharf.
+    """
+    rows: dict[int, tuple[str, str]] = {}
+    for line in content.splitlines():
+        match = _RETENTION_ROW.match(line)
+        if match:
+            rows[int(match.group("nr"))] = (match.group("frist"), match.group("wert"))
+    return rows
 
 
 @pytest.fixture
@@ -111,10 +135,13 @@ class TestDsfaExtendedRetentionPlaceholders:
         settings_obj.save()
 
         content, _ = render_document("dsfa", facility)
+        rows = _retention_rows(content)
 
-        assert "200 Tage" in content
-        assert "45 Tage" in content
-        assert "36 Monate" in content
+        # Refs #1775: zellgenau statt ``"200 Tage" in content`` — sonst
+        # bestuende der Test auch, wenn der Wert in der falschen Zeile landet.
+        assert rows[5] == ("Aktivitäten / Zeitstrom-Einträge", "200 Tage")
+        assert rows[6] == ("Papierkorb-Frist für gelöschte Personen", "45 Tage")
+        assert rows[7] == ("Audit-Log", "36 Monate")
         assert "{{ retention_activities_days }}" not in content
         assert "{{ client_trash_days }}" not in content
         assert "{{ auditlog_retention_months }}" not in content
@@ -123,27 +150,52 @@ class TestDsfaExtendedRetentionPlaceholders:
         # `facility`-Fixture legt Settings ohne explizite activities/trash/
         # auditlog-Werte an -> Modell-Defaults 365/30/24 gelten.
         content, _ = render_document("dsfa", facility)
+        rows = _retention_rows(content)
 
-        assert "365 Tage" in content
-        assert "30 Tage" in content
-        assert "24 Monate" in content
+        # Refs #1775: "365 Tage" allein war nicht trennscharf — die Fixture
+        # setzt ``retention_identified_days=365``, Zeile 2 traegt denselben
+        # Text. Ein kaputter ``retention_activities_days``-Platzhalter blieb
+        # damit unbemerkt.
+        assert rows[5] == ("Aktivitäten / Zeitstrom-Einträge", "365 Tage")
+        assert rows[6] == ("Papierkorb-Frist für gelöschte Personen", "30 Tage")
+        assert rows[7] == ("Audit-Log", "24 Monate")
 
     def test_check_prosa_is_removed(self, facility):
         """Die "Standardwert, vor Freigabe zu prüfen"-Prosa entfällt, weil
-        jetzt alle sieben Fristen echte Ist-Werte sind."""
-        content, _ = render_document("dsfa", facility)
+        jetzt alle sieben Fristen echte Ist-Werte sind.
 
+        Refs #1775: Die reinen Negativ-Assertionen ("Standardwert"/"Prüfauftrag"
+        kommen nicht vor) waren nie rot — "Prüfauftrag" stand ueberhaupt nie in
+        der Vorlage. Der Kern der Anforderung ist positiv formulierbar: **jede**
+        der sieben Zellen traegt einen konkreten Ist-Wert.
+        """
+        content, _ = render_document("dsfa", facility)
+        rows = _retention_rows(content)
+
+        assert sorted(rows) == [1, 2, 3, 4, 5, 6, 7], f"§ 2.3 hat nicht mehr sieben Fristen: {rows}"
+        for nr, (frist, wert) in rows.items():
+            assert "{{" not in wert, f"Frist {nr} ({frist}) traegt einen ungerenderten Platzhalter: {wert!r}"
+            # Zeile 4 ist die einzige nicht-numerische ("keine" bzw.
+            # "<Typ>: <n> Tage"); die uebrigen sechs sind "<n> Tage/Monate".
+            erwartet = r"^(keine|.+: \d+ Tage)$" if nr == 4 else r"^\d+ (Tage|Monate)$"
+            assert re.match(erwartet, wert), f"Frist {nr} ({frist}) ist kein Ist-Wert, sondern Prosa: {wert!r}"
+
+        # Die alte Prosa-Fassung im Einleitungssatz ("die uebrigen vier stehen
+        # mit ihrem Standardwert und sind vor Freigabe zu pruefen").
         assert "Standardwert" not in content
-        assert "Prüfauftrag" not in content
+        assert "Alle sieben sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert" in content
 
     def test_document_type_override_placeholder_is_replaced(self, facility):
         content, _ = render_document("dsfa", facility)
+        rows = _retention_rows(content)
 
         assert "{{ retention_document_type_overrides }}" not in content
         # Die alte generische Beschreibung entfaellt zugunsten des Ist-Werts.
         assert "je Typ gesetzt, sonst keine" not in content
-        # Kein Dokumentationstyp mit eigener Frist konfiguriert -> "keine".
-        assert "keine" in content
+        # Refs #1775: Kein Dokumentationstyp mit eigener Frist -> die ZELLE
+        # sagt "keine". ``"keine" in content`` war vakuum-wahr: die Prosa unter
+        # der Tabelle enthaelt "greift **keine** der sieben Fristen".
+        assert rows[4] == ("Abweichende Frist einzelner Dokumentationstypen", "keine")
 
 
 class TestVerarbeitungsverzeichnisAuditLogFrist:
@@ -194,7 +246,10 @@ class TestVerarbeitungsverzeichnisAuditLogFrist:
 
         content, _ = render_document("dsfa", facility)
 
-        assert "Vermittlung: 180 Tage" in content
+        assert _retention_rows(content)[4] == (
+            "Abweichende Frist einzelner Dokumentationstypen",
+            "Vermittlung: 180 Tage",
+        )
         assert "je Typ gesetzt, sonst keine" not in content
 
     def test_document_type_override_ignores_non_event_types(self, facility):
@@ -231,7 +286,10 @@ class TestVerarbeitungsverzeichnisAuditLogFrist:
 
         content, _ = render_document("dsfa", facility)
 
-        assert "Vermittlung: 180 Tage" in content
+        assert _retention_rows(content)[4] == (
+            "Abweichende Frist einzelner Dokumentationstypen",
+            "Vermittlung: 180 Tage",
+        )
         assert "Personenprofil-Frist" not in content
         assert "Fallformular-Frist" not in content
 

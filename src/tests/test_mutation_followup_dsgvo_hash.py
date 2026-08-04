@@ -368,15 +368,24 @@ class TestSettingsHash:
 
     def test_real_document_type_retention_days_changes_hash(self, facility):
         """Refs #1762: eine echte DocumentType-Ausnahme (Zeile 4, dsfa.md
-        § 2.3) muss über das zweite Argument den Hash ändern — der
-        Aufrufer (``render_document``) berechnet die Liste aus der DB."""
+        § 2.3) muss über das zweite Argument den Hash ändern.
+
+        Refs #1775: Die Liste kommt jetzt aus demselben DB-Roundtrip, den auch
+        ``render_document`` fährt (``_document_type_retention_overrides``) —
+        vorher baute der Test sie von Hand und der Testname versprach damit
+        mehr, als er prüfte: ein ausgefallener Ableitungspfad (falscher Filter,
+        leere Liste) wäre unbemerkt geblieben.
+        """
         from core.models import DocumentType
+        from core.services.client import _document_type_retention_overrides
 
         real = Settings.objects.create(facility=facility, facility_full_name="Anlaufstelle Musterstadt")
-        h_without = _settings_hash(real)
+        h_without = _settings_hash(real, document_type_overrides=_document_type_retention_overrides(facility))
 
-        dt = DocumentType.objects.create(facility=facility, name="Vermittlung", retention_days=180)
-        overrides = [(dt.name, dt.retention_days)]
+        DocumentType.objects.create(facility=facility, name="Vermittlung", retention_days=180)
+        overrides = _document_type_retention_overrides(facility)
+
+        assert overrides == [("Vermittlung", 180)], f"DB-Ableitung liefert nicht die erwartete Ausnahme: {overrides}"
         h_with = _settings_hash(real, document_type_overrides=overrides)
 
         assert h_without != h_with
