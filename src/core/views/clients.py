@@ -120,7 +120,9 @@ def _file_field_slugs(document_type):
     }
 
 
-def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial_data=None, files=None):
+def _rerender_data_form(
+    request, doc_type_id, *, allow_inactive_pk=None, initial_data=None, files=None, existing_file_slugs=None
+):
     """Dynamik-Formular fuer den POST-Re-Render eines ungueltigen Formulars.
 
     Refs #774 (Spiegel aus ``EventCreateView.post``): ohne den Sensitivity-Check
@@ -144,6 +146,12 @@ def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial
     gueltige Option" an einem unberuehrten Feld — und der naechste Submit
     leerte den Bestandswert still. Beim Anlegen gibt es keinen Bestand
     (``None``).
+
+    ``existing_file_slugs`` (E17, Integrations-Review Refs #1738): dasselbe
+    Argument fuer FILE-Felder. Der Re-Render ist ein GEBUNDENES Formular und
+    validiert mit; ohne die Marker-Slugs bekaeme ein sichtbares, pflichtiges
+    FILE-Ziel einer Feldbedingung einen Pflichtfehler, obwohl die Datei
+    laengst hochgeladen ist (der Valid-Zweig reicht sie seit #1057 durch).
     """
     data_form = DynamicClientDataForm()
     if not doc_type_id:
@@ -163,7 +171,12 @@ def _rerender_data_form(request, doc_type_id, *, allow_inactive_pk=None, initial
     if not user_can_see_document_type(request.user, doc_type):
         return data_form
     data_form, _restricted = _client_data_form(
-        request, doc_type, data=request.POST, files=files, initial_data=initial_data
+        request,
+        doc_type,
+        data=request.POST,
+        files=files,
+        initial_data=initial_data,
+        existing_file_slugs=existing_file_slugs,
     )
     return data_form
 
@@ -510,6 +523,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     # deaktivierte SELECT-Werte bleiben waehlbar (Refs #1058).
                     initial_data=decrypt_dynamic_text_data(old_data),
                     files=request.FILES,
+                    # E17 (Refs #1738): wie im Valid-Pfad — sonst verlangt der
+                    # gebundene Re-Render eine bereits hochgeladene Datei erneut.
+                    existing_file_slugs=file_marker_slugs(old_data),
                 )
             )
             context = {

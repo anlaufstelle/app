@@ -15,7 +15,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from core.models import Case, Client, DocumentType, DocumentTypeField, FieldTemplate
+from core.models import Case, Client, DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
 from core.models.attachment import Attachment
 
 pytestmark = pytest.mark.django_db
@@ -489,6 +489,132 @@ class TestCaseAttachmentForm:
         attachment.refresh_from_db()
         assert attachment.deleted_at is not None, "Kette haette soft-geloescht werden muessen"
         assert ft_file.slug not in case.data_json, f"Marker-Leiche im data_json: {case.data_json}"
+
+
+class TestInvalidMetaFormKeepsFileMarkers:
+    """E17 auf dem Ungueltig-Meta-Zweig (Integrations-Review, Refs #1738).
+
+    Ist das META-Formular ungueltig (Pseudonym leer, Titel leer), rendert die
+    View das Dynamik-Formular ueber ``_rerender_data_form`` GEBUNDEN neu — es
+    validiert dabei also mit. Ohne ``existing_file_slugs`` sieht diese
+    Validierung keinen Bestandsanhang: ein sichtbares, pflichtiges FILE-Ziel
+    einer Feldbedingung bekommt einen Pflichtfehler angehaengt, obwohl die
+    Datei laengst hochgeladen ist. Der Benutzer muesste sie erneut waehlen —
+    exakt die E17-Regression, die der Valid-Zweig seit #1057 vermeidet.
+    """
+
+    @staticmethod
+    def _file_condition_type(facility, entity_type, *, source_name, file_name):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name=f"Bedingter Anhang {entity_type}",
+            category=DocumentType.Category.ADMIN,
+            entity_type=entity_type,
+        )
+        ft_source = FieldTemplate.objects.create(
+            facility=facility, name=source_name, field_type=FieldTemplate.FieldType.TEXT
+        )
+        ft_file = FieldTemplate.objects.create(
+            facility=facility, name=file_name, field_type=FieldTemplate.FieldType.FILE, is_required=True
+        )
+        source = DocumentTypeField.objects.create(document_type=dt, field_template=ft_source, sort_order=0)
+        target = DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=1)
+        FieldCondition.objects.create(
+            target_field=target,
+            depends_on_field=source,
+            operator=FieldCondition.Operator.IS_NOT_EMPTY,
+            group_index=0,
+        )
+        return dt, ft_source, ft_file
+
+    def test_client_rerender_does_not_demand_the_existing_file_again(self, client, staff_user, facility):
+        dt, ft_source, ft_file = self._file_condition_type(
+            facility, DocumentType.EntityType.CLIENT, source_name="Anlass", file_name="Nachweis"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Bedingt",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=dt,
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "Bedingt",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "",
+                "document_type": str(dt.pk),
+                ft_source.slug: "Grund",
+                ft_file.slug: _pdf("bestand.pdf"),
+            },
+        )
+        person.refresh_from_db()
+        assert ft_file.slug in person.data_json
+
+        # Zweiter POST: META ungueltig (Pseudonym leer), Datei-Feld leer.
+        response = client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "",
+                "document_type": str(dt.pk),
+                ft_source.slug: "Grund",
+            },
+        )
+        assert response.status_code == 200
+        assert ft_file.slug not in response.context["data_form"].errors, (
+            f"Unberechtigter Pflichtfehler am FILE-Ziel: {response.context['data_form'].errors}"
+        )
+
+    def test_case_rerender_does_not_demand_the_existing_file_again(
+        self, client, staff_user, facility, client_identified
+    ):
+        dt, ft_source, ft_file = self._file_condition_type(
+            facility, DocumentType.EntityType.CASE, source_name="Sachlage", file_name="Beleg"
+        )
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Bedingter Fall",
+            document_type=dt,
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {
+                "client": str(client_identified.pk),
+                "title": "Bedingter Fall",
+                "description": "",
+                "lead_user": "",
+                "document_type": str(dt.pk),
+                ft_source.slug: "Grund",
+                ft_file.slug: _pdf("fallbestand2.pdf"),
+            },
+        )
+        case.refresh_from_db()
+        assert ft_file.slug in case.data_json
+
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {
+                "client": str(client_identified.pk),
+                "title": "",
+                "description": "",
+                "lead_user": "",
+                "document_type": str(dt.pk),
+                ft_source.slug: "Grund",
+            },
+        )
+        assert response.status_code == 200
+        assert ft_file.slug not in response.context["data_form"].errors, (
+            f"Unberechtigter Pflichtfehler am FILE-Ziel: {response.context['data_form'].errors}"
+        )
 
 
 FORM_TEMPLATES = ["src/templates/core/clients/form.html", "src/templates/core/cases/form.html"]
