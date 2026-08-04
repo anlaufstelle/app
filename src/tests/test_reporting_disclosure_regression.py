@@ -158,9 +158,10 @@ class TestKleinstWeltEnumeration:
       Zellen ungeschuetzt, die sich beide aus dem Residuum ergeben (R = 2 auf
       zwei Zellen ⇒ beide sind 1). Die Positiv-Kontrolle unten fuehrt genau
       diesen Stand nach und zeigt, dass er reisst.
-    * **K1** (bis jetzt): ohne Fixpunkt blieb nach einer Sekundaer-Suppression
-      eine neue Rueckrechenbarkeit stehen, weil niemand ein zweites Mal
-      nachgerechnet hat.
+    * **Fixpunkt** (K1/K2, bis jetzt): ohne Iteration bleibt nach der ersten
+      Sekundaer-Suppression eine neue Rueckrechenbarkeit stehen, weil niemand
+      ein zweites Mal nachrechnet. Auch dafuer gibt es eine Positiv-Kontrolle —
+      keine Behauptung.
     """
 
     @pytest.mark.parametrize(("labels", "limit"), _WORLD_SHAPES)
@@ -203,6 +204,23 @@ class TestKleinstWeltEnumeration:
 
         assert leaks, "Die Aufzaehlung findet die bekannte K2-Luecke nicht mehr — Harness pruefen"
 
+    def test_positivkontrolle_ohne_fixpunkt_reisst(self, facility):
+        """Dritte Positiv-Kontrolle: dieselbe Suppression, aber das
+        Machbarkeits-Audit laeuft nur **einen** Schritt statt bis zum Fixpunkt.
+
+        Gemessen: 2 gepinnte Kleinstzellen im Weltraum „3 Zeilen, Σ <= 14" (im
+        4-Zeilen-Raum 0 — die Kontrolle ist deshalb bewusst auf den kleineren
+        Raum gescopt). Damit ist die Iteration belegt und nicht behauptet: nach
+        dem ersten Opfer aendern sich die Schranken aller uebrigen Zellen, und
+        genau dort entsteht die naechste Rueckrechenbarkeit.
+        """
+        leaks = _pinned_small_cells(
+            _preimage_groups(lambda world: _single_pass_publish(world, DEFAULT_K_THRESHOLD)),
+            DEFAULT_K_THRESHOLD,
+        )
+
+        assert leaks, "Ohne Fixpunkt muesste die zweite Runde fehlen und eine Zelle gepinnt bleiben"
+
     def test_positivkontrolle_k5_ohne_kanonische_ordnung_reisst(self, facility):
         """Zweite Positiv-Kontrolle: derselbe (neue) Suppressionsstand, aber die
         Ausgabereihenfolge wieder count-sortiert wie vor
@@ -225,6 +243,42 @@ class TestKleinstWeltEnumeration:
         leaks = _pinned_small_cells(_preimage_groups(query_order), DEFAULT_K_THRESHOLD)
 
         assert leaks, "Ohne kanonische Ordnung muesste die Zeilenposition die Kleinstzelle verraten"
+
+
+def _single_pass_publish(world: dict[str, int], threshold: int) -> dict[str, Any]:
+    """Die aktuelle Suppression, aber OHNE Fixpunkt (nur fuer die Positiv-Kontrolle).
+
+    Primaersuppression, **ein** Schritt des Machbarkeits-Audits (kleinste
+    sichtbare Zelle faellt), kanonische Ordnung, R14 — und dann Schluss. Nutzt
+    denselben Rechenkern wie die Produktion, damit die Kontrolle wirklich nur
+    die fehlende Iteration misst und nicht einen Nachbau.
+    """
+    from core.services.dashboard.disclosure import findings
+    from core.services.dashboard.external_report import _local_partition
+
+    total = sum(world.values())
+    names = list(world)
+    values = [world[name] for name in names]
+    flags = [value < threshold for value in values]
+    victims = [False] * len(values)
+    margin = total if total >= threshold else None
+
+    if margin is not None:
+        partition = _local_partition(values, flags, victims, threshold, margin=margin, min_value=1, person_gated=False)
+        if findings([partition], threshold=threshold):
+            candidates = [index for index, flag in enumerate(flags) if not flag]
+            if candidates:
+                victim = min(candidates, key=lambda index: (values[index], index))
+                flags[victim] = True
+
+    rows = [
+        {"name": names[index], "count": None if flags[index] else values[index], "suppressed": flags[index]}
+        for index in range(len(names))
+    ]
+    rows.sort(key=lambda row: -(row["count"] or 0))
+    visible = [row for row in rows if not row["suppressed"]]
+    hidden = sorted((row for row in rows if row["suppressed"]), key=lambda row: row["name"])
+    return {"total_contacts": margin, "by_document_type": [*visible, *hidden]}
 
 
 def _legacy_publish(world: dict[str, int], threshold: int) -> dict[str, Any]:

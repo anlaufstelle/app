@@ -1066,3 +1066,162 @@ class TestPersonenkriteriumInDenWrappern:
         summary = get_backend("sample-report-1").build_dataset(facility, *report_period).summary
 
         assert summary["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": 4, "persons": 1}]
+
+
+@pytest.mark.django_db
+class TestResidualGuardEskalation:
+    """K1 (Refs #1770): die Eskalationsleiter von ``apply_residual_guard``.
+
+    Der Guard ist die **zweite** Verteidigungslinie hinter dem tabellenlokalen
+    Machbarkeits-Audit — und genau deshalb feuert er in normalen Berichten fast
+    nie: das Audit hat die Rückrechenbarkeit meist schon aufgelöst, bevor der
+    Guard überhaupt hinsieht. Ein Deckungslauf über die Reporting-Testfläche
+    zeigte, dass `_escalate` dort **null**-mal aufgerufen wurde; Leiter,
+    Randsummen-Drop, Fail-safe und Iterationsgrenze waren damit unverifiziert.
+
+    Diese Tests rufen den Guard deshalb direkt auf konstruierten publizierten
+    Sichten auf. Zwei davon (Cross-Partition und Fail-safe) sind **keine**
+    Konstruktion, sondern ein realer, über `suppress_report_stats` erreichbarer
+    Zustand.
+    """
+
+    def _breakdowns(self):
+        from core.services.dashboard.external_report import _EXTERNAL_REPORT_BREAKDOWNS
+
+        return _EXTERNAL_REPORT_BREAKDOWNS
+
+    def test_opferzelle_faellt_wenn_eine_unterdrueckte_zelle_gepinnt_ist(self):
+        """(a) Genau eine unterdrückte Zeile ⇒ sie IST das Residuum (12 von 15).
+
+        Der Guard opfert die kleinste sichtbare Zelle — dieselbe Regel wie das
+        Audit — und rechnet danach neu: zwei Unbekannte aus [1, ∞) mit Summe 15
+        sind nicht mehr eindeutig.
+        """
+        from core.services.dashboard.external_report import apply_residual_guard
+
+        report = {
+            "total_contacts": 15,
+            "unique_clients": 40,
+            "by_document_type": [
+                {"name": "Gross", "category": "note", "count": 12, "suppressed": False},
+                {"name": "Klein", "category": "contact", "count": None, "suppressed": True},
+            ],
+        }
+        apply_residual_guard(report, 5, self._breakdowns())
+
+        assert [row["suppressed"] for row in report["by_document_type"]] == [True, True]
+        assert report["total_contacts"] == 15, "die Randsumme bleibt — es gab eine Zelle zu opfern"
+
+    def test_randsumme_faellt_wenn_keine_sichtbare_zelle_mehr_da_ist(self):
+        """(b) Fünf unterdrückte Zeilen, Randsumme 5 ⇒ jede Zeile ist zwingend 1
+        (Zeilen-Existenz). Es gibt keine sichtbare Zelle mehr zu opfern, also
+        fällt die Randsumme — ohne sie gibt es keine Gleichung."""
+        from core.services.dashboard.external_report import apply_residual_guard
+
+        report = {
+            "total_contacts": 5,
+            "unique_clients": 40,
+            "by_document_type": [
+                {"name": f"T{index}", "category": "contact", "count": None, "suppressed": True} for index in range(5)
+            ],
+        }
+        apply_residual_guard(report, 5, self._breakdowns())
+
+        assert report["total_contacts"] is None
+        assert len(report["by_document_type"]) == 5, "die Zeilen selbst bleiben stehen"
+
+    def test_stufen_dict_opfert_die_kleinste_sichtbare_stufe(self):
+        """(a) für die Dict-Variante: dieselbe Leiter, andere Datenform."""
+        from core.services.dashboard.external_report import apply_residual_guard
+
+        report = {
+            "total_contacts": 30,
+            "unique_clients": 40,
+            "by_contact_stage": {"anonym": 18, "identifiziert": 9, "qualifiziert": None},
+        }
+        apply_residual_guard(report, 5, self._breakdowns())
+
+        assert report["by_contact_stage"]["identifiziert"] is None, "kleinste sichtbare Stufe fällt"
+        assert report["by_contact_stage"]["anonym"] == 18
+
+    def test_vollstaendig_sichtbare_schwestertabelle_stellt_die_randsumme_wieder_her(self):
+        """(c) Cross-Partition-Rekonstruktion.
+
+        ``by_document_type`` und ``by_contact_stage`` partitionieren **dieselbe**
+        Randsumme. Ist die Stufentabelle vollständig sichtbar, ist ihre Summe die
+        Randsumme — das Fallenlassen von ``total_contacts`` allein nützt dann
+        nichts, weil der Empfänger sie nebenan addiert. Der Guard rechnet das mit
+        und eskaliert weiter, bis nichts mehr rückrechenbar ist.
+        """
+        from core.services.dashboard.external_report import apply_residual_guard
+
+        report = {
+            "total_contacts": 15,
+            "unique_clients": 40,
+            "by_document_type": [
+                {"name": f"T{index}", "category": "contact", "count": None, "suppressed": True} for index in range(15)
+            ],
+            "by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
+        }
+        apply_residual_guard(report, 5, self._breakdowns())
+
+        assert report["total_contacts"] is None
+        # Fail-safe: die Randsumme allein reicht nicht, weil die Stufen sie
+        # rekonstruieren — und in den Stufen gibt es keinen Befund, an dem die
+        # Leiter ansetzen könnte. Also fallen beide Aufschlüsselungen.
+        assert "by_document_type" not in report
+        assert "by_contact_stage" not in report
+        assert report["unique_clients"] is None, "die Personen-Randsumme faellt im Fail-safe mit"
+
+    def test_fail_safe_kollabiert_das_reale_artefakt(self, facility):
+        """(d) Derselbe Zustand über den echten Wrapper — kein Laboraufbau.
+
+        15 Dokumenttypen mit je einem Ereignis, drei gleich große Kontaktstufen:
+        der Bericht verliert alles außer den (unterdrückten) Kennzahlen. Das ist
+        die dokumentierte Fail-safe-Richtung, nicht ein Fehler — der Preis dafür,
+        dass 15 Zeilen mit Randsumme 15 jede für sich zwingend „1" sind, und dass
+        die vollständig sichtbare Stufentabelle die Randsumme rekonstruierbar
+        hält.
+
+        Dass dieser Zustand über den Wrapper erreichbar ist, ist zugleich die
+        Begründung für den „unterdrückt"-Zweig in den Templates: „Keine Daten im
+        Zeitraum" wäre hier sachlich falsch.
+        """
+        from core.services.dashboard import suppress_report_stats
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 15,
+                "unique_clients": 20,
+                "by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
+                "persons_by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
+                "by_document_type": [{"name": f"T{index}", "category": "contact", "count": 1} for index in range(15)],
+                "by_age_cluster": [],
+            },
+        )
+
+        assert out == {"total_contacts": None, "unique_clients": None}
+
+    def test_iterationsgrenze_faellt_fail_safe_auf_die_ganze_aufschluesselung(self, monkeypatch):
+        """(e) Wird die harte Obergrenze erreicht, fällt die Aufschlüsselung.
+
+        Die Grenze ist im Normalbetrieb unerreichbar (jeder Schritt unterdrückt
+        monoton eine weitere Zelle oder Randsumme). Sie ist die Sicherung gegen
+        eine künftige Erweiterung, die diese Monotonie verliert — und genau
+        deshalb muss ihr Verhalten geprüft sein und nicht nur behauptet.
+        """
+        from core.services.dashboard import external_report
+
+        monkeypatch.setattr(external_report, "MAX_GUARD_ITERATIONS", 1)
+        report = {
+            "total_contacts": 5,
+            "unique_clients": 40,
+            "by_document_type": [
+                {"name": f"T{index}", "category": "contact", "count": None, "suppressed": True} for index in range(5)
+            ],
+        }
+        external_report.apply_residual_guard(report, 5, external_report._EXTERNAL_REPORT_BREAKDOWNS)
+
+        assert "by_document_type" not in report
+        assert report["total_contacts"] is None
