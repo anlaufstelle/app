@@ -588,13 +588,14 @@ beruht). Sperrvermerke blockieren seit #1756
 
 ### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
 
-**Status:** Analyse abgeschlossen; Umsetzung weitgehend abgeschlossen — **K5**
+**Status:** Analyse **abgeschlossen und umgesetzt** — **K5**
 (#1767), **K0 (a, Fail-safe)**
 (#1768), **K6**
 (#1769) sowie **K0 (b, Zellkriterium)**,
-**K4b**, **K2** und **K1** (#1770) sind
-**mitigiert**; K3 bleibt offen, K4a/K4c sind akzeptiert bzw. abgewertet (Spalte „Status" in der
-Übersicht). Sieben Kanäle untersucht, alle
+**K4b**, **K2**, **K1**, **K3 (A1/A3)** und **K4c**
+(#1770) sind **mitigiert**; **K4a** bleibt die
+akzeptierte Definitionsgrenze, flankiert durch die Freigabe-Übersicht, und **K3-A2** ist ein bewusst
+offener Produktentscheid (Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
 Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
@@ -631,9 +632,9 @@ Betriebskennzahl.
 | **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | **mitigiert** (#1770, Variante „Spanne ≥ 2") |
 | **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | **mitigiert** (#1770) |
 | **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | **mitigiert** (#1770) — Fixpunkt-Guard inkl. der Personen-Randsumme Σ `persons` = `unique_clients` |
-| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | offen |
-| **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | offen |
-| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert |
+| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | **mitigiert** — A1 + A3 (#1770); A2 = offener Produktentscheid |
+| **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | **mitigiert** (#1770) |
+| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert; Freigabe-Übersicht (#1770) |
 
 Alle Verdikte: **bestätigt** (per Enumeration belegt, nicht vermutet). **Reihenfolge:** K5 → K0
 (Fail-safe) → K6 → K2 → K1-Guard → K3 → K4b. K5 zuerst, weil es die Messbasis aller übrigen Kanäle
@@ -1079,6 +1080,69 @@ teilmengenbewusster Sekundärsuppression. **(A3, S, unabhängig)** PDF und exter
 Grundgesamtheit je Tabelle heute gar nicht — das ist nicht nur ein Leck, sondern inhaltlich
 irreführend.
 
+*Status (A1): **mitigiert*** (#1770).
+`with_no_person_row` in [`external_report.py`](../src/core/services/dashboard/external_report.py) hängt
+die Zeile „Ohne Personenbezug" an `by_age_cluster` an — in `build_external_report` und
+`suppress_report_stats`, also in **jedem** Artefakt, das `total_contacts` publiziert. Die drei Auflagen
+sind einzeln verankert:
+
+1. **Immer emittiert, auch bei W = 0.** Datenunabhängige Existenz; W = 0 läuft als reguläre
+ Kleinstzelle in die Suppression. Erschiene die Zeile nur bei W > 0, wäre ihre bloße Existenz die
+ Aussage „W ≥ 1" — dieselbe datenabhängige Verzweigung, die K6 im Vollständigkeitsblock beseitigt hat.
+2. **Synthetisiert statt gespeichert.** Die Zeile entsteht **an der Artefaktgrenze** aus
+ `total_contacts` − Σ und wird nie aus einem Snapshot übernommen. Damit ist die
+ Snapshot-Merge-Auflage stärker erfüllt als gefordert: es gibt keinen Alt-/Neu-Snapshot-Split, weil
+ kein Snapshot die Zeile je trägt (`_merge_stats` summiert `total_contacts` und die Alterszeilen
+ ohnehin konsistent, die Differenz über den gemergten Gesamtzeitraum ist exakt). `with_no_person_row`
+ ist idempotent — ein künftiger Lesepfad, der die Zeile mitbrächte, zählte W sonst doppelt.
+3. **Die Alterstabelle fällt neu unter K1/K2.** Sie deklariert `margin="total_contacts"` (vorher
+ `margin=None`, das Machbarkeits-Audit lief dort gar nicht) und steht mit derselben Randsumme in
+ `_EXTERNAL_REPORT_BREAKDOWNS` wie `by_document_type`/`by_contact_stage`.
+
+Zwei Details, ohne die die Umsetzung fail-open wäre:
+
+* **Die Restzeile trägt kein `persons`.** Ihre Äquivalenzklasse ist keine Personenmenge, sondern die
+ Menge der Ereignisse ohne Personen-FK — untereinander nicht verknüpfbar (dieselbe Begründung wie bei
+ `persons_by_contact_stage['anonym']`). Sie bleibt damit aus der Personen-Randsumme Σ `persons` =
+ `unique_clients` heraus, die sonst still bräche.
+* **Zeilen-Existenz-Untergrenze je Zelle** (`_row_min_value`): GROUP-BY-Zeilen tragen ≥ 1 Fall, die
+ datenunabhängig emittierte Restzeile darf 0 sein. Eine pauschale `lo = 1` machte das Intervallmodell
+ **unerfüllbar**, und ein leeres Intervall gilt in `disclosure.findings` als begründete Ausnahme — der
+ Guard liefe fail-open, und zwar auch für die **Nachbarzellen**, deren Obergrenze über Σ `lo` der
+ übrigen Zellen berechnet wird.
+
+**Damit überholt:** der Eintrag unter „Geprüft und nicht tragfähig", `by_age_cluster` publiziere keine
+Ereignis-Randsumme — er hatte genau diese Umsetzung als seinen Auslöser benannt.
+
+*Status (A2): **bewusst nicht umgesetzt***. Im Beispiel-Sachbericht bleibt es bei `margin=None` und
+**ohne** Restzeile; die Begründung steht an `_SAMPLE_REPORT_1_BREAKDOWNS` im Code. Gangbar wäre dort
+nur eine **umgestellte Randsumme** (`total` = alle Ereignisse statt nur der gemappten) — ein
+Produktentscheid über die Kernkennzahl des Berichts, kein Nebeneffekt einer Sicherheitsmaßnahme.
+
+*Verifikation:* `test_reporting_disclosure_regression.py::TestKleinstWeltEnumerationRestzeile` zählt den
+Weltraum „zwei Altersgruppen ≥ 1 plus W ≥ 0, Σ ≤ 14" exakt auf und prüft, dass W über sein Preimage
+nicht eindeutig ist. **Zwei Positiv-Kontrollen** belegen den Trefferfall statt ihn zu behaupten: der
+Stand vor A1 (keine Restzeile — W nur als Differenz) und die von der Analyse verworfene **naive**
+Fassung (Zeile emittiert, aber keine Randsumme deklariert, also kein Audit). Beide reißen; die
+umgesetzte Form liefert 0 Pins. Belegt ist damit die eigentliche Aussage: **die Zeile allein löst
+nichts** — tragend ist die Kombination aus datenunabhängiger Emission, deklarierter Randsumme und
+K1/K2-Durchlauf. Zellenweise gepinnt in `test_external_report_service.py::TestRestzeileOhnePersonenbezug`.
+
+*Status (A3): **mitigiert*** (#1770). Jede
+Tabelle der Artefakte benennt ihre Grundgesamtheit, aufgesetzt auf die `data_source`-Infrastruktur aus
+#1743 statt daneben: `table_note(population,
+data_source)` in [`data_source.py`](../src/core/reporting/data_source.py) liefert
+„Grundgesamtheit: … · Quelle: …" als **eine** Aussage — getrennte Ausweise wären zwei Halbaussagen.
+Stabile Codes (`all_events`, `events_with_person`, `mapped_events`, `persons`) gehen an die
+Maschinenformate (`report["metadata"]["populations"]`, Chart-JSON), die übersetzten Nominalphrasen an
+HTML/PDF. Reporting-Backends deklarieren ihre Menge selbst (`DatasetBackend.population`, Default
+`all_events`; `SampleReport1Backend` überschreibt auf `mapped_events`). **Auch das interne Dashboard**
+trägt den Ausweis: es zeigt die Alterstabelle ohne die A1-Restzeile, zählt dort also nur Ereignisse mit
+Personenbezug — ohne die Angabe läse jemand dieselbe Tabelle in zwei Bedeutungen (Suppression bleibt
+dort bewusst aus, interner Rohpfad,
+#1311). Test-gepinnt in
+`test_reporting_population_stamp.py`.
+
 #### K4 — Berichtsübergreifende Korrelation
 
 Die Suppression ist ausschließlich **artefakt-lokal**: jede Ausgabe entscheidet neu gegen k, ohne
@@ -1118,6 +1182,20 @@ feste Zeitraum-Partition; `date_from`/`date_to` sind frei wählbar (nur Spannen-
  ein Fingerabdruck des Gelöschten (Brute-Force über 45 Einzel-Löschkandidaten: genau 2 konsistent,
  beide derselben Kategorie).
 
+ *Status: **mitigiert** (im Rahmen der Abwertung)*
+ (#1770). Die drei belastbaren Maßnahmen
+ sind umgesetzt: **(i)** Quelle **und Stand** stehen in jedem extern zirkulierenden Artefakt.
+ #1743 hatte die *Quelle* ausgewiesen, nicht
+ aber ihren *Stand* — „Monats-Aggregate" beantwortet nicht, von wann sie sind. Der hybride Lesepfad
+ führt jetzt `snapshot_as_of` mit (jüngster `updated_at` der **tatsächlich beitragenden** Snapshots;
+ `None`, wenn kein Segment aus einem Aggregat kam — dann behauptet das Artefakt keine Herkunft, die es
+ nicht gibt), beide PDFs und das Dashboard rendern ihn. **(ii)** Dass eingefrorene Aggregate die
+ Löschung überleben, steht im Löschkonzept und im Admin-Handbuch. **(iii)** Der Betriebshinweis „PDF
+ und Live-Export desselben Zeitraums nicht an denselben Empfänger" steht im Admin-Handbuch (DE+EN).
+ **Unverändert:** die Lesequellen bleiben getrennt — eine Vereinheitlichung ist weiterhin nicht
+ geplant, K4b bleibt ihre Voraussetzung. Test-gepinnt in
+ `test_reporting_population_stamp.py::TestSnapshotStandStempel`.
+
 *Empfehlung (umgesetzt):* **K4b schließen (S–M, Priorität 1)** — in keinem extern zirkulierenden
 Artefakt darf eine über Monate summierte Personenzahl als „Einzigartige Personen" erscheinen, und die
 k-Prüfung darf nie gegen die Summe laufen; umgesetzt als Full-Range-**distinct** als eigener Term
@@ -1135,6 +1213,40 @@ von `auditlog_retention_months` gekappt werden, sonst täuscht die Übersicht Vo
 Förderzeiträume und **erhöht** die Ausnutzbarkeit der Partitions-Rückrechnung) sowie echtes
 Query-Auditing/DP mit Budget (korrekt, aber unverhältnismäßig für ein Werkzeug, dessen Betreiberin
 legitim Vollzugriff auf die Rohdaten hat).
+
+*Status (K4a-Flankierung): **umgesetzt***
+(#1770). Die **Freigabe-Übersicht**
+(`/statistics/reports/releases/`, Rollen-Guard wie das Berichts-Panel) listet die herausgegebenen
+Berichtszeiträume der Einrichtung und warnt bei Überschneidung; Service:
+[`release_log.py`](../src/core/services/dashboard/release_log.py). Sie kann den Kanal **nicht
+schließen** — K4a bleibt die akzeptierte Definitionsgrenze, sie macht ihn sichtbar. Beide Auflagen
+der Analyse sind erfüllt:
+
+* **Empfänger-/Zweckfeld.** Beide Felder werden am Export optional erfasst und wandern in das
+ bestehende `EXPORT`-Audit-`detail` (JSON, **keine** Schema-Migration auf dem append-only,
+ hash-verketteten Log). Sie sind bewusst optional — ein Pflichtfeld erzwänge eine Angabe auch dort, wo
+ der Export gar keine Herausgabe ist (Probelauf), und Pflichtfelder ohne Anlass werden mit „x"
+ gefüllt. Freitext auf 200 Zeichen gekappt: der Log überlebt seit dieser Welle die Löschfristen und
+ ist nachträglich nicht redigierbar.
+* **Historie nicht von `auditlog_retention_months` gekappt.** `AuditLog.Action.EXPORT` steht in
+ `PRUNE_EXEMPT_ACTIONS`. Ohne die Ausnahme täuschte die Übersicht Vollständigkeit vor: eine im
+ vierten Jahr herausgegebene Jahresauswertung überschnitte sich mit Monatsberichten, die der Log nicht
+ mehr kennt, und die Warnung bliebe stumm — ein stiller falscher Negativ, schlechter als längere
+ Aufbewahrung. **DSGVO-Begründung (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2):** Zweck ist der
+ Nachweis herausgegebener **Statistiken**, nicht die Beobachtung von Beschäftigten. Das `detail` trägt
+ Zeitraum, Format und die frei erfassten Empfänger-/Zweckangaben — **keine** Klient-PII, keine
+ Pseudonyme, keine Personenzeilen (die Artefakte selbst sind k-anonymisiert); die handelnde Person
+ steht wie in jedem Audit-Eintrag drin. Damit folgt die Aufbewahrung derselben Rechenschaftslogik wie
+ `SECURITY_VIOLATION`.
+
+**Bewusste Einschränkung der Warnung:** gemeldet werden nur **nicht-identische** Überschneidungen. Aus
+zwei Berichten über *denselben* Zeitraum lässt sich keine Differenz bilden, ganz gleich, an wen sie
+gingen — der zweite ist typischerweise ein erneuter Download. Der Kanal lebt von verschachtelten oder
+teilweise überlappenden Zeiträumen (A ⊊ B), und genau die bleiben stehen; ohne die Einschränkung
+produzierte die Übersicht Alarme ohne Aussage. **Blinder Fleck, ehrlich ausgewiesen:** die Übersicht ist
+genau so vollständig wie die Audit-Spur — eine weitergeleitete PDF-Datei oder ein abfotografierter
+Bildschirm erscheinen nicht darin. Das ist eine organisatorische, keine technische Grenze und steht so
+auf der Seite selbst. Test-gepinnt in `test_report_release_log.py`.
 
 #### Akzeptierte Definitionsgrenzen
 
@@ -1174,12 +1286,14 @@ Betriebshinweis: Berichtszeiträume nicht unter einem Monat wählen.
 
 Damit diese Punkte nicht erneut untersucht werden:
 
-- **`by_age_cluster` als Residuum-Kanal (K1):** widerlegt **für die Ereignis-Randsumme** — kein
- Artefakt publiziert eine Randsumme = Σ Altersgruppen (die Tabelle zählt nur Ereignisse *mit*
- Personenbezug, `total_contacts` alle). Deshalb läuft das Machbarkeits-Audit dort mit `margin=None`,
- also gar nicht; jede Zusatzunterdrückung wäre reiner Utility-Verlust ohne Schutzgewinn. *Wird*
- tragfähig, sobald K3-A1 die Restzeile „ohne Personenbezug" einführt — dann ist die Tabelle eine
- exakte Partition von `total_contacts` und muss eine Randsumme deklarieren.
+- **`by_age_cluster` als Residuum-Kanal (K1):** war widerlegt **für die Ereignis-Randsumme** — kein
+ Artefakt publizierte eine Randsumme = Σ Altersgruppen (die Tabelle zählt nur Ereignisse *mit*
+ Personenbezug, `total_contacts` alle), das Machbarkeits-Audit lief dort mit `margin=None`, also gar
+ nicht. **Überholt seit K3-A1** (die Umsetzung, die dieser Eintrag selbst als Auslöser benannt hatte):
+ mit der Restzeile „ohne Personenbezug" ist die Tabelle eine exakte Partition von `total_contacts`,
+ deklariert diese Randsumme und läuft durch Audit und Fixpunkt-Guard. Der Eintrag steht nur noch als
+ Historie hier — er beschreibt den Zustand vor
+ #1770.
  **Nicht widerlegt ist die Personen-Randsumme:** seit K0-b gilt Σ `persons`(`by_age_cluster`) =
  `unique_clients`, und über *diese* Gleichung ist der Kanal tragfähig — geschlossen durch die
  total-Doktrin (`unique_clients` fällt bei der ersten personenbedingt unterdrückten Zeile) und
