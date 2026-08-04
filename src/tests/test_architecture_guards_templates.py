@@ -253,8 +253,8 @@ class TestAlpineCspCompatibilityGuard:
     # x-show erfasste, keine Event-Handler).
     _ALPINE_EVENT_HANDLER = re.compile(
         r"""(?:^|\s)
-            (?:@[a-zA-Z][\w.\-]*          # @click, @click.away, @keydown.enter.prevent, ...
-            |x-on:[a-zA-Z][\w.\-]*
+            (?:@[a-zA-Z][\w.:\-]*          # @click, @click.away, @htmx:after-swap.window, ...
+            |x-on:[a-zA-Z][\w.:\-]*        # x-on:click, x-on:htmx:after-swap.window, ...
             |x-init
             )
             \s*=\s*
@@ -266,13 +266,60 @@ class TestAlpineCspCompatibilityGuard:
     # ``!==``, ``<=``, ``>=``) und Arrow-Defaults (``=>``): kein ``=``/``!``/
     # ``<``/``>`` unmittelbar davor, kein ``=``/``>`` unmittelbar danach.
     _ASSIGNMENT_OUTSIDE_COMPARISON = re.compile(r"(?<![=!<>])=(?!=|>)")
+    # Statement-Keyword am Ausdrucksanfang (Kontrollfluss/Deklaration): der
+    # CSP-Parser wertet nur EINEN Ausdruck aus, solche Keywords sind immer
+    # ein Statement, nie ein Ausdruck. ``\b`` verhindert Treffer auf
+    # Identifiern, die nur mit dem Keyword beginnen (``forceRefresh()``,
+    # ``constructor``, ...). Refs #1763 Review Fix-Runde 1.
+    _STATEMENT_KEYWORD = re.compile(r"^\s*(?:if|for|while|return|var|let|const)\b")
+
+    @staticmethod
+    def _has_top_level_comma(value: str) -> bool:
+        """True bei einem Komma AUSSERHALB von Klammern/Brackets (Komma-
+        Operator-Sequenz wie ``a(), b()``) — Argument-Kommas innerhalb eines
+        einzelnen Aufrufs (``foo(a, b)``) bleiben erlaubt, weil sie zu genau
+        einem Ausdruck gehoeren. Refs #1763 Review Fix-Runde 1.
+        """
+        depth = 0
+        for ch in value:
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth = max(0, depth - 1)
+            elif ch == "," and depth == 0:
+                return True
+        return False
+
+    @classmethod
+    def _event_handler_violation(cls, value: str) -> str | None:
+        """Verstoss-Beschreibung oder ``None``, wenn ``value`` als
+        Event-Handler-Wert unter @alpinejs/csp zulaessig ist (ein einzelner
+        Ausdruck — Methodenaufrufe mit Argumenten, ``$dispatch(...)``,
+        ternaere Ausdruecke bleiben erlaubt). Verboten: ``;``-Verkettung,
+        Statement-Keywords (if/for/while/return/var/let/const),
+        Top-Level-Komma-Sequenzen und Zuweisungen ausserhalb Vergleich/
+        Arrow-Default.
+        """
+        if ";" in value:
+            return f"Mehrfach-Statement (';'): {value!r}"
+        if cls._STATEMENT_KEYWORD.match(value):
+            return f"Statement-Keyword (if/for/while/return/var/let/const): {value!r}"
+        if cls._has_top_level_comma(value):
+            return f"Komma-Sequenz (Komma ausserhalb Klammern): {value!r}"
+        if cls._ASSIGNMENT_OUTSIDE_COMPARISON.search(value):
+            return f"Zuweisung: {value!r}"
+        return None
 
     def test_no_statement_expressions_in_event_handlers(self):
-        """Event-Handler-Statements (``;``-Verkettung, Zuweisung) brechen den
-        @alpinejs/csp-Build silent, genau wie bei den bereits erfassten
-        wertbindenden Direktiven (Refs #693). Methodenaufrufe mit Argumenten,
-        ``$dispatch(...)`` und ternaere Ausdruecke bleiben erlaubt — sie sind
-        ein einzelner Ausdruck. Refs #1763.
+        """Event-Handler-Statements brechen den @alpinejs/csp-Build silent,
+        genau wie bei den bereits erfassten wertbindenden Direktiven (Refs
+        #693). Erfasst ``;``-Verkettung, Statement-Keywords
+        (if/for/while/return/var/let/const) und Top-Level-Komma-Sequenzen
+        sowie Zuweisungen. Methodenaufrufe mit Argumenten, ``$dispatch(...)``
+        und ternaere Ausdruecke bleiben erlaubt — sie sind ein einzelner
+        Ausdruck. Refs #1763 (inkl. Review Fix-Runde 1: Event-Namen mit
+        ``:`` wie ``htmx:after-swap`` wurden vorher gar nicht erst erkannt,
+        und ein Inline-``if (...)`` ohne ``;``/``=`` schlug durch).
         """
         if not self._TEMPLATES_DIR.exists():
             pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
@@ -280,27 +327,63 @@ class TestAlpineCspCompatibilityGuard:
         for template_file in self._TEMPLATES_DIR.rglob("*.html"):
             source = template_file.read_text(errors="ignore")
             for match in self._ALPINE_EVENT_HANDLER.finditer(source):
-                value = match.group("value")
-                line = source[: match.start()].count("\n") + 1
-                if ";" in value:
-                    violations.append(
-                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
-                        f"Mehrfach-Statement (';') in Event-Handler: {value!r}"
-                    )
+                reason = self._event_handler_violation(match.group("value"))
+                if reason is None:
                     continue
-                if self._ASSIGNMENT_OUTSIDE_COMPARISON.search(value):
-                    violations.append(
-                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} Zuweisung in Event-Handler: {value!r}"
-                    )
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} {reason}")
         assert not violations, (
             "Event-Handler (@..., x-on:..., x-init) enthalten echte Statements "
-            "(';'-Verkettung oder Zuweisung). Der @alpinejs/csp-Build wertet nur "
-            "einen einzelnen Ausdruck aus (Methodenaufrufe mit Argumenten sind "
-            "erlaubt) — bitte in eine benannte Component-Methode "
-            "(Alpine.data(...)) auslagern, die intern beide Schritte ausfuehrt.\n"
+            "(';'-Verkettung, Statement-Keyword, Komma-Sequenz oder Zuweisung). "
+            "Der @alpinejs/csp-Build wertet nur einen einzelnen Ausdruck aus "
+            "(Methodenaufrufe mit Argumenten sind erlaubt) — bitte in eine "
+            "benannte Component-Methode (Alpine.data(...)) auslagern, die "
+            "intern alle Schritte ausfuehrt.\n"
             "Refs #1763, #1747, #693.\n"
             f"Betroffen: {violations}"
         )
+
+    def test_event_handler_name_regex_matches_colon_events(self):
+        """Review Fix-Runde 1 (#1763): Event-Namen mit ``:`` (HTMX-Custom-
+        Events wie ``htmx:after-swap``) muessen als Event-Handler erkannt
+        werden — sonst greift die Statement-Erkennung oben gar nicht erst.
+        Beide Formen sind die empirischen #1747-Regressionsfixtures aus dem
+        Review (die reale #1747-Stelle betraf eine wertbindende Direktive
+        und ist laengst gefixt; hier wird nur das Namensmuster gegen diese
+        Klasse abgesichert, damit ein kuenftiger ``@htmx:after-swap.window``-
+        oder ``x-on:htmx:after-swap.window``-Handler nicht erneut durchrutscht).
+        """
+        at_form = '<div @htmx:after-swap.window="if (open) fetchAndRender()"></div>'
+        xon_form = '<div x-on:htmx:after-swap.window="close(); toggleOffline()"></div>'
+        for html in (at_form, xon_form):
+            matches = list(self._ALPINE_EVENT_HANDLER.finditer(html))
+            assert matches, f"Event-Handler-Regex erkennt {html!r} nicht (':' im Event-Namen fehlt)."
+            assert self._event_handler_violation(matches[0].group("value")) is not None
+
+    def test_if_statement_in_event_handler_is_a_violation(self):
+        """Die zweite #1747-Fixture: ``if (...) ...`` hat weder ``;`` noch
+        ``=`` — ohne die Keyword-Regel waere das ein blinder Fleck."""
+        assert self._event_handler_violation("if (open) fetchAndRender()") is not None
+
+    def test_comma_sequence_in_event_handler_is_a_violation(self):
+        assert self._event_handler_violation("retryQueueEntry(item.id), discardQueueEntry(item.id)") is not None
+
+    def test_ternary_in_event_handler_remains_allowed(self):
+        assert self._event_handler_violation("open ? close() : toggle()") is None
+
+    def test_method_call_with_arguments_in_event_handler_remains_allowed(self):
+        assert self._event_handler_violation("retryQueueEntry(item.id)") is None
+
+    def test_bare_identifier_event_handler_remains_allowed(self):
+        assert self._event_handler_violation("toggle") is None
+
+    def test_dispatch_call_in_event_handler_remains_allowed(self):
+        assert self._event_handler_violation("$dispatch('retention-bulk-change')") is None
+
+    def test_identifier_with_keyword_prefix_is_not_a_false_positive(self):
+        """``forceRefresh()`` beginnt mit ``for``, ist aber kein for-Statement
+        — die Keyword-Regel braucht eine Wortgrenze, kein Praefix-Match."""
+        assert self._event_handler_violation("forceRefresh()") is None
 
     # Zwei identisch benannte Alpine-Event-Attribute auf demselben Tag: der
     # HTML-Parser verwirft das zweite stillschweigend, nur der erste Handler
