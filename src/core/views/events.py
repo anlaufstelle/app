@@ -5,7 +5,7 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.http import Http404, HttpResponseBadRequest
+from django.http import Http404, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -17,7 +17,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.models import Client, DocumentType, Event
-from core.services.client import get_client_or_none
+from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.compliance import (
     get_visible_event_or_404,
     user_can_see_document_type,
@@ -550,6 +550,29 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         )
         if not request.user.is_staff_or_above and self.event.created_by != request.user:
             raise PermissionDenied
+        # Refs #1771/#1774: Schreibgate gegen widerrufene Personen. Anders als die
+        # Create-Pfade loest diese View den Personenbezug nicht ueber
+        # ``EventMetaForm.clean_client`` auf (der Client ist am Ereignis fixiert),
+        # deshalb greift ``resolve_writable_client`` hier nie — die Grenze muss
+        # explizit gezogen werden. Ein Offline-Replay oder ein staler Deep-Link
+        # auf ein Ereignis einer anonymisierten (``is_active=False``) oder
+        # papierkorb-geloeschten (``is_deleted=True``) Person darf keinen frischen
+        # Klartext (``data_json``/``search_text``) und keine neuen
+        # Attachment-``.enc``-Dateien schreiben; ``anonymize_clients`` erfasst
+        # diesen Bestand nie wieder. Auf ``dispatch`` (nicht nur ``post``), damit
+        # auch das GET-Bearbeiten-Formular fuer eine fort-Person 404 liefert.
+        client = self.event.client
+        if client is not None and (client.is_deleted or not client.is_active):
+            if _wants_raw_json_response(request):
+                # Offline-Replay: 422, damit ``offline-queue.js`` den Eintrag als
+                # endgueltigen Konflikt (dead-letter) einsortiert statt zu retryen.
+                return JsonResponse(
+                    {"error": "invalid", "errors": {"client": [{"message": str(CLIENT_WRITE_REVOKED_MESSAGE)}]}},
+                    status=422,
+                )
+            # HTML/Deep-Link: die Person ist fort — 404 wie an den uebrigen
+            # Widerrufs-Flaechen (Personen-/Fall-Detail).
+            raise Http404(CLIENT_WRITE_REVOKED_MESSAGE)
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):

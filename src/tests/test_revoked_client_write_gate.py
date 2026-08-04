@@ -36,6 +36,7 @@ from core.forms.cases import CaseForm
 from core.forms.events import EventMetaForm
 from core.forms.workitems import WorkItemForm
 from core.models import Attachment, Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate, WorkItem
+from core.services.events import create_event
 from tests._form_helpers import assert_field_error, assert_form_valid
 
 pytestmark = pytest.mark.django_db
@@ -332,6 +333,114 @@ class TestClientUpdateViewRejectsAnonymized:
     def test_live_client_is_still_editable(self, client, staff_user, client_identified):
         client.force_login(staff_user)
         assert client.get(reverse("core:client_update", args=[client_identified.pk])).status_code == 200
+
+
+class TestEventUpdateViewRejectsRevokedClient:
+    """``/events/<pk>/edit/`` — der PII-schwerste offline-queuebare Schreibpfad.
+
+    Anders als die Create-Pfade loest ``EventUpdateView`` den Personenbezug nicht
+    ueber ``EventMetaForm.clean_client`` auf — der Client ist am Ereignis fixiert.
+    ``resolve_writable_client`` greift hier also nie; die Widerrufs-Grenze muss in
+    der View explizit gezogen werden. Ohne sie schreibt ein Offline-Replay oder
+    ein staler Deep-Link frischen ``data_json``/``search_text`` (Art.-9-Freitext)
+    — und seit M24 auch neue ``.enc``-Anhaenge — an eine bereits redigierte
+    Person zurueck; ``anonymize_clients`` erfasst diesen Bestand nie wieder
+    (bereits anonymisierte Personen fallen aus dem Kandidatenfilter).
+    """
+
+    def _event_for(self, facility, staff_user, doc_type, person):
+        return create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type,
+            client=person,
+            occurred_at=timezone.now(),
+            data_json={"dauer": "10", "notiz": "Ausgangsstand"},
+        )
+
+    def test_html_edit_on_anonymized_client_is_blocked_and_writes_nothing(
+        self, client, staff_user, facility, doc_type_contact
+    ):
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Noch aktiv",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            age_cluster=Client.AgeCluster.UNKNOWN,
+        )
+        event = self._event_for(facility, staff_user, doc_type_contact, person)
+        person.is_active = False
+        person.pseudonym = f"Gelöscht-{str(person.pk)[:8]}"
+        person.save(update_fields=["is_active", "pseudonym"])
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", args=[event.pk]),
+            {"dauer": "15", "notiz": "FRISCHER KLARTEXT NACH LOESCHUNG"},
+        )
+
+        assert response.status_code == 404
+        event.refresh_from_db()
+        assert "FRISCHER KLARTEXT NACH LOESCHUNG" not in (event.search_text or "")
+
+    def test_offline_replay_on_anonymized_client_is_dead_letter_422(
+        self, client, staff_user, facility, doc_type_contact
+    ):
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Noch aktiv",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            age_cluster=Client.AgeCluster.UNKNOWN,
+        )
+        event = self._event_for(facility, staff_user, doc_type_contact, person)
+        person.is_active = False
+        person.save(update_fields=["is_active"])
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", args=[event.pk]),
+            {"dauer": "15", "notiz": "Replay-Klartext"},
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 422
+        event.refresh_from_db()
+        assert "Replay-Klartext" not in (event.search_text or "")
+
+    def test_trashed_client_event_edit_is_blocked(self, client, staff_user, facility, doc_type_contact):
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Papierkorb-Kandidat",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            age_cluster=Client.AgeCluster.UNKNOWN,
+        )
+        event = self._event_for(facility, staff_user, doc_type_contact, person)
+        person.is_deleted = True
+        person.save(update_fields=["is_deleted"])
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", args=[event.pk]),
+            {"dauer": "20", "notiz": "nach Papierkorb"},
+        )
+        assert response.status_code == 404
+
+    def test_live_client_event_edit_still_works(self, client, staff_user, facility, doc_type_contact):
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Lebt",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            age_cluster=Client.AgeCluster.UNKNOWN,
+        )
+        event = self._event_for(facility, staff_user, doc_type_contact, person)
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", args=[event.pk]),
+            {"dauer": "25", "notiz": "regulaere Aenderung"},
+        )
+        assert response.status_code == 302
+        event.refresh_from_db()
+        assert "regulaere Aenderung" in (event.search_text or "")
 
 
 class TestCaseCreateRejectsRevokedClient:
