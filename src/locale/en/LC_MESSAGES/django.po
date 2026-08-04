@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 15:33+0200\n"
+"POT-Creation-Date: 2026-08-04 16:24+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2637,6 +2637,10 @@ msgstr "Population: {population} · Source: {source}"
 msgid "Datenquelle"
 msgstr "Data source"
 
+#: src/core/reporting/export.py:147
+msgid "Grundgesamtheit"
+msgstr "Population"
+
 #: src/core/services/case/cases.py:38 src/core/services/client/main.py:45
 msgid "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
 msgstr "The document type does not belong to this facility."
@@ -4051,7 +4055,7 @@ msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No valid proposals found."
 
 #: src/core/views/statistics.py:202 src/core/views/statistics.py:244
-#: src/core/views/statistics.py:290 src/core/views/statistics.py:518
+#: src/core/views/statistics.py:290 src/core/views/statistics.py:526
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
 
@@ -4059,15 +4063,15 @@ msgstr "date_from and date_to required"
 msgid "backend erforderlich"
 msgstr "backend required"
 
-#: src/core/views/statistics.py:421 src/core/views/statistics.py:529
+#: src/core/views/statistics.py:421 src/core/views/statistics.py:537
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unknown report backend."
 
-#: src/core/views/statistics.py:427 src/core/views/statistics.py:532
+#: src/core/views/statistics.py:427 src/core/views/statistics.py:540
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Report is not available for this facility."
 
-#: src/core/views/statistics.py:536
+#: src/core/views/statistics.py:544
 msgid "Unbekanntes Export-Format."
 msgstr "Unknown export format."
 
@@ -7799,7 +7803,11 @@ msgid ""
 "Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider "
 "Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, "
 "wenn in keinem der beiden etwas unterdrückt wurde."
-msgstr "Reporting periods released by this facility, taken from the audit trail. Where two periods overlap, the difference between the two reports reveals what a single report would have suppressed — even if nothing was suppressed in either of them."
+msgstr ""
+"Reporting periods released by this facility, taken from the audit trail. "
+"Where two periods overlap, the difference between the two reports reveals "
+"what a single report would have suppressed — even if nothing was suppressed "
+"in either of them."
 
 #: src/templates/core/statistics/report_releases.html:22
 #, python-format
@@ -7812,7 +7820,9 @@ msgstr[1] "%(count)s releases with an overlapping period"
 msgid ""
 "Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
 "sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
-msgstr "Check whether the overlapping reports went to the same recipient. Identical periods are harmless and are not reported."
+msgstr ""
+"Check whether the overlapping reports went to the same recipient. Identical "
+"periods are harmless and are not reported."
 
 #: src/templates/core/statistics/report_releases.html:34
 msgid "Herausgegeben am"
@@ -7836,26 +7846,24 @@ msgstr "Recipients"
 msgid "Zweck"
 msgstr "Purpose"
 
-#: src/templates/core/statistics/report_releases.html:39
-msgid "Ausgelöst von"
-msgstr "Triggered by"
-
-#: src/templates/core/statistics/report_releases.html:52
+#: src/templates/core/statistics/report_releases.html:51
 msgid "Überschneidung"
 msgstr "Overlap"
 
-#: src/templates/core/statistics/report_releases.html:64
+#: src/templates/core/statistics/report_releases.html:62
 msgid "Noch keine Herausgabe protokolliert."
 msgstr "No release recorded yet."
 
-#: src/templates/core/statistics/report_releases.html:72
+#: src/templates/core/statistics/report_releases.html:70
 msgid ""
 "Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf "
 "anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter "
 "Bildschirm — erscheinen hier nicht."
-msgstr "The overview is exactly as complete as the audit trail. Disclosures by other means — a forwarded PDF file, a photographed screen — do not appear here."
+msgstr ""
+"The overview is exactly as complete as the audit trail. Disclosures by other "
+"means — a forwarded PDF file, a photographed screen — do not appear here."
 
-#: src/templates/core/statistics/report_releases.html:76
+#: src/templates/core/statistics/report_releases.html:74
 msgid "Zurück zur Statistik"
 msgstr "Back to statistics"
 

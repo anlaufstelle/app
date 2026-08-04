@@ -387,13 +387,14 @@ All three formats go through `safe_download_response` (RFC 5987 file name, `X-Co
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
+# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt | population: all_events | Grundgesamtheit: alle Ereignisse im Zeitraum [| k-Anonymität: Zellen < k unterdrückt]
 Kategorie,Anzahl
 Kontakte,42
 ```
 
 - The metadata line carries the k-anonymity note only if `summary["k_anonymity_threshold"]` is set. Without it the recipient would see empty cells with no explanation — unlike JSON, XML and the panel, the CSV carries no completeness notices.
 - Refs #1765: the `data_source: live` segment is the stable, language-independent code (parity with JSON/XML) — a parser should match on it, never on the translated label `Datenquelle: …`. Under the EN locale that reads `data_source: live | Data source: Live query at the time of creation`.
+- Refs #1770 (K3-A3): the same pattern for the **population** — `population: <code>` is the stable code from `DatasetBackend.population`, `Grundgesamtheit: …` the translated label. A report that does not say *what* it counts is not only leaky but misleading: several tables over different base sets add up to different numbers.
 - **Every** cell, including metadata and header, passes through `_sanitize_csv_cell`, the existing formula-injection guard from `core.services.system.export` (OWASP CSV injection, #719). Deliberate reuse instead of a second implementation.
 - Completeness notices deliberately do **not** appear in the CSV: it stays machine-readable. Use JSON, XML or the panel if you need them.
 - Cells are read via `record.get(spec.key)` — a missing key is an empty cell, not an error.
@@ -410,6 +411,8 @@ Kontakte,42
   "mode": "rows",
   "data_source": "live",
   "data_source_note": "Live-Abfrage zum Erstellungszeitpunkt",
+  "population": "all_events",
+  "population_note": "alle Ereignisse im Zeitraum",
   "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
   "records": [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "contact", "count": 42}],
@@ -417,13 +420,14 @@ Kontakte,42
 }
 ```
 
-Serialized with `DjangoJSONEncoder`, `ensure_ascii=False`, `indent=2`. `completeness` carries **only** `code`/`message`/`severity` — `count` stays internal.
+Serialized with `DjangoJSONEncoder`, `ensure_ascii=False`, `indent=2`. `completeness` carries **only** `code`/`message`/`severity` — `count` stays internal. `population`/`population_note` come from `DatasetBackend.population` (default `all_events`); a backend that counts more narrowly overrides the attribute and the declaration follows everywhere.
 
 ### XML
 
 ```xml
 <dataset backend="example" date_from="2026-01-01" date_to="2026-01-31" generated_at="…" mode="rows"
-         data_source="live" data_source_note="Live-Abfrage zum Erstellungszeitpunkt">
+         data_source="live" data_source_note="Live-Abfrage zum Erstellungszeitpunkt"
+         population="all_events" population_note="alle Ereignisse im Zeitraum">
   <completeness><issue code="…" severity="warning">…</issue></completeness>
   <summary><total>42</total></summary>
   <records><record><document_type>Kontakt</document_type><count>42</count></record></records>
@@ -525,4 +529,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 42f83b0a286d4a7411d5e38a906967b68379b021 -->
+<!-- source-hash: 53648917c182ada527607faecf07d007ed4143a6 -->

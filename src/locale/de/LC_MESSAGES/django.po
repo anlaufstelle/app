@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 15:33+0200\n"
+"POT-Creation-Date: 2026-08-04 16:24+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2657,6 +2657,10 @@ msgstr "Grundgesamtheit: {population} · Quelle: {source}"
 msgid "Datenquelle"
 msgstr "Datenquelle"
 
+#: src/core/reporting/export.py:147
+msgid "Grundgesamtheit"
+msgstr "Grundgesamtheit"
+
 #: src/core/services/case/cases.py:38 src/core/services/client/main.py:45
 msgid "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
 msgstr "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
@@ -4085,7 +4089,7 @@ msgid "Keine gültigen Vorschläge gefunden."
 msgstr "Keine gültigen Vorschläge gefunden."
 
 #: src/core/views/statistics.py:202 src/core/views/statistics.py:244
-#: src/core/views/statistics.py:290 src/core/views/statistics.py:518
+#: src/core/views/statistics.py:290 src/core/views/statistics.py:526
 msgid "date_from und date_to erforderlich"
 msgstr "date_from und date_to erforderlich"
 
@@ -4093,15 +4097,15 @@ msgstr "date_from und date_to erforderlich"
 msgid "backend erforderlich"
 msgstr "backend erforderlich"
 
-#: src/core/views/statistics.py:421 src/core/views/statistics.py:529
+#: src/core/views/statistics.py:421 src/core/views/statistics.py:537
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unbekanntes Berichts-Backend."
 
-#: src/core/views/statistics.py:427 src/core/views/statistics.py:532
+#: src/core/views/statistics.py:427 src/core/views/statistics.py:540
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Bericht für diese Einrichtung nicht verfügbar."
 
-#: src/core/views/statistics.py:536
+#: src/core/views/statistics.py:544
 msgid "Unbekanntes Export-Format."
 msgstr "Unbekanntes Export-Format."
 
@@ -7871,7 +7875,11 @@ msgid ""
 "Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider "
 "Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, "
 "wenn in keinem der beiden etwas unterdrückt wurde."
-msgstr "Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, wenn in keinem der beiden etwas unterdrückt wurde."
+msgstr ""
+"Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. "
+"Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider "
+"Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, "
+"wenn in keinem der beiden etwas unterdrückt wurde."
 
 #: src/templates/core/statistics/report_releases.html:22
 #, python-format
@@ -7884,7 +7892,9 @@ msgstr[1] "%(count)s Herausgaben mit überschneidendem Zeitraum"
 msgid ""
 "Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
 "sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
-msgstr "Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
+msgstr ""
+"Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
+"sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
 
 #: src/templates/core/statistics/report_releases.html:34
 msgid "Herausgegeben am"
@@ -7908,26 +7918,25 @@ msgstr "Empfänger"
 msgid "Zweck"
 msgstr "Zweck"
 
-#: src/templates/core/statistics/report_releases.html:39
-msgid "Ausgelöst von"
-msgstr "Ausgelöst von"
-
-#: src/templates/core/statistics/report_releases.html:52
+#: src/templates/core/statistics/report_releases.html:51
 msgid "Überschneidung"
 msgstr "Überschneidung"
 
-#: src/templates/core/statistics/report_releases.html:64
+#: src/templates/core/statistics/report_releases.html:62
 msgid "Noch keine Herausgabe protokolliert."
 msgstr "Noch keine Herausgabe protokolliert."
 
-#: src/templates/core/statistics/report_releases.html:72
+#: src/templates/core/statistics/report_releases.html:70
 msgid ""
 "Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf "
 "anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter "
 "Bildschirm — erscheinen hier nicht."
-msgstr "Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier nicht."
+msgstr ""
+"Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf "
+"anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter "
+"Bildschirm — erscheinen hier nicht."
 
-#: src/templates/core/statistics/report_releases.html:76
+#: src/templates/core/statistics/report_releases.html:74
 msgid "Zurück zur Statistik"
 msgstr "Zurück zur Statistik"
 

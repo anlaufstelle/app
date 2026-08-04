@@ -275,9 +275,9 @@ class TestInternerModusWeistSeineGrundgesamtheitAus:
     def test_interner_modus_nennt_die_engere_menge(self, facility):
         context = self._rendered(facility, internal_mode=True)
 
-        assert str(context["population_notes"]["by_age_cluster"]).find("Ereignisse mit Personenbezug") >= 0, (
-            context["population_notes"]["by_age_cluster"]
-        )
+        assert str(context["population_notes"]["by_age_cluster"]).find("Ereignisse mit Personenbezug") >= 0, context[
+            "population_notes"
+        ]["by_age_cluster"]
         # Die Dokumenttyp-Tabelle zaehlt in beiden Modi alle Ereignisse.
         assert "alle Ereignisse im Zeitraum" in str(context["population_notes"]["by_document_type"])
 
@@ -294,3 +294,58 @@ class TestInternerModusWeistSeineGrundgesamtheitAus:
         context = self._rendered(facility, internal_mode=True)
 
         assert all(row["cluster"] != NO_PERSON_CLUSTER for row in context["stats"]["by_age_cluster"])
+
+
+@pytest.mark.django_db
+class TestGrundgesamtheitImBerichtsExport:
+    """K3-A3 muss auch die **maschinenlesbaren** Artefakte erreichen.
+
+    Panel und Download zeigen denselben Datensatz; benennt nur das Panel seine
+    Grundgesamtheit, ist die Angabe genau dort weg, wo sie am dringendsten
+    gebraucht wird — in der Datei, die das Haus verlaesst und weiterverarbeitet
+    wird. Dasselbe Muster wie beim Quellenausweis (#1743): stabiler Code plus
+    uebersetzte Kurzform.
+    """
+
+    def _dataset(self):
+        from core.reporting.base import DatasetResult
+
+        return DatasetResult(
+            mode="aggregate",
+            records=[{"category": "Kontakte", "count": 30}],
+            summary={"total": 30, "unique_clients": 20, "by_category": [("Kontakte", 30)], "by_age_cluster": []},
+            completeness=[],
+        )
+
+    def _render(self, facility, renderer):
+        from django.utils import timezone
+
+        from core.reporting.export import _render_csv, _render_json, _render_xml
+        from core.reporting.registry import get_backend
+
+        backend = get_backend("sample-report-1")
+        prepared = backend.prepare_export(facility, self._dataset())
+        moment = timezone.now()
+        if renderer == "csv":
+            return "".join(_render_csv(backend, facility, date(2026, 1, 1), date(2026, 6, 30), prepared, moment))
+        render = _render_json if renderer == "json" else _render_xml
+        return render(backend, date(2026, 1, 1), date(2026, 6, 30), prepared, moment).decode("utf-8")
+
+    @pytest.mark.parametrize("renderer", ["csv", "json", "xml"])
+    def test_export_nennt_die_grundgesamtheit(self, facility, renderer):
+        ausgabe = self._render(facility, renderer)
+
+        assert MAPPED_EVENTS in ausgabe, "stabiler Code fuer Maschinen (Paritaet zu data_source)"
+        assert "Ereignisse mit Berichtszuordnung im Zeitraum" in ausgabe, "uebersetzte Kurzform fuer Menschen"
+
+    @pytest.mark.parametrize("renderer", ["csv", "json", "xml"])
+    def test_der_code_folgt_der_backend_deklaration(self, facility, renderer, monkeypatch):
+        """Gegenprobe: der Ausweis ist kein hartkodierter Text, sondern liest
+        ``DatasetBackend.population``."""
+        from core.reporting.registry import get_backend
+
+        monkeypatch.setattr(get_backend("sample-report-1"), "population", ALL_EVENTS)
+
+        ausgabe = self._render(facility, renderer)
+
+        assert "alle Ereignisse im Zeitraum" in ausgabe

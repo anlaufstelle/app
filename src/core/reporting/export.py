@@ -27,7 +27,7 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from core.reporting.base import DatasetBackend, DatasetResult
-from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
+from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE, POPULATION_NOTES
 
 # Bewusste Wiederverwendung des Formula-Injection-Schutzes (OWASP CSV-
 # Injection, Refs #719) statt einer Neuimplementierung — dieselbe Zelle
@@ -140,6 +140,12 @@ def _render_csv(
     # ({% trans "Datenquelle" %}), damit die EN-Katalogpflege nicht
     # dupliziert.
     metadata += f" | data_source: {LIVE} | {gettext('Datenquelle')}: {DATA_SOURCE_NOTES[LIVE]}"
+    # K3-A3 (Refs #1770): dasselbe Muster fuer die Grundgesamtheit. Panel und
+    # Download zeigen denselben Datensatz — benennt nur das Panel seine
+    # Basismenge, fehlt die Angabe genau in der Datei, die das Haus verlaesst.
+    metadata += (
+        f" | population: {backend.population} | {gettext('Grundgesamtheit')}: {POPULATION_NOTES[backend.population]}"
+    )
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
     # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
@@ -180,6 +186,12 @@ def _render_json(
         # uebersetzte Kurzform fuer Menschen, die den Payload lesen.
         "data_source": LIVE,
         "data_source_note": str(DATA_SOURCE_NOTES[LIVE]),
+        # K3-A3 (Refs #1770): Grundgesamtheit im selben Muster — stabiler Code
+        # fuer Maschinen, uebersetzte Kurzform fuer Menschen. Sie kommt aus
+        # ``DatasetBackend.population``, nicht aus einem Literal hier: ein
+        # Backend, das enger zaehlt, muss den Ausweis mitbringen koennen.
+        "population": backend.population,
+        "population_note": str(POPULATION_NOTES[backend.population]),
         # ``label`` ist seit #1744 ``gettext_lazy``; der Cast ist — wie bei
         # ``name`` — Explizitheit an der Payload-Grenze, nicht Notwendigkeit.
         "field_specs": [{"key": spec.key, "label": str(spec.label)} for spec in backend.get_field_specs()],
@@ -218,6 +230,9 @@ def _render_xml(
             # Quellenausweis (Refs #1743) — Code + uebersetzte Kurzform.
             "data_source": LIVE,
             "data_source_note": _xml_safe(str(DATA_SOURCE_NOTES[LIVE])),
+            # K3-A3 (Refs #1770) — dasselbe Muster fuer die Grundgesamtheit.
+            "population": backend.population,
+            "population_note": _xml_safe(str(POPULATION_NOTES[backend.population])),
         },
     )
 

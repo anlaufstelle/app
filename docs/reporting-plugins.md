@@ -384,13 +384,14 @@ Alle drei Formate laufen über `safe_download_response` (RFC-5987-Dateiname, `X-
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt [| k-Anonymität: Zellen < k unterdrückt]
+# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt | population: all_events | Grundgesamtheit: alle Ereignisse im Zeitraum [| k-Anonymität: Zellen < k unterdrückt]
 Kategorie,Anzahl
 Kontakte,42
 ```
 
 - Die Metadatenzeile trägt den k-Anon-Hinweis nur, wenn `summary["k_anonymity_threshold"]` gesetzt ist. Ohne den Zusatz sähe der Empfänger leere Zellen ohne Erklärung — das CSV trägt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
 - Refs #1765: das Segment `data_source: live` ist der stabile, sprachunabhängige Code (Parität zu JSON/XML) — ein Parser matcht darauf, nie auf das übersetzte Label `Datenquelle: …`. Unter EN-Locale steht dort `data_source: live | Data source: Live query at the time of creation`.
+- Refs #1770 (K3-A3): dasselbe Muster für die **Grundgesamtheit** — `population: <code>` ist der stabile Code aus `DatasetBackend.population`, `Grundgesamtheit: …` das übersetzte Label. Ein Bericht, der nicht sagt, *worüber* er zählt, ist nicht nur undicht, sondern irreführend: mehrere Tabellen über verschiedenen Basismengen summieren sich zu verschiedenen Zahlen.
 - **Jede** Zelle, auch Metadaten und Header, läuft durch `_sanitize_csv_cell` — den bestehenden Formula-Injection-Schutz aus `core.services.system.export` (OWASP CSV-Injection, #719). Bewusste Wiederverwendung statt Zweitimplementierung.
 - Completeness-Meldungen erscheinen **nicht** im CSV: Es bleibt maschinenlesbar. Wer sie braucht, nimmt JSON, XML oder das Panel.
 - Zellen werden über `record.get(spec.key)` gezogen — ein fehlender Schlüssel ist eine leere Zelle, kein Fehler.
@@ -407,6 +408,8 @@ Kontakte,42
   "mode": "rows",
   "data_source": "live",
   "data_source_note": "Live-Abfrage zum Erstellungszeitpunkt",
+  "population": "all_events",
+  "population_note": "alle Ereignisse im Zeitraum",
   "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
   "records": [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "contact", "count": 42}],
@@ -414,13 +417,14 @@ Kontakte,42
 }
 ```
 
-Serialisiert mit `DjangoJSONEncoder`, `ensure_ascii=False`, `indent=2`. `completeness` führt **nur** `code`/`message`/`severity` — `count` bleibt intern.
+Serialisiert mit `DjangoJSONEncoder`, `ensure_ascii=False`, `indent=2`. `completeness` führt **nur** `code`/`message`/`severity` — `count` bleibt intern. `population`/`population_note` kommen aus `DatasetBackend.population` (Default `all_events`); ein Backend, das enger zählt, überschreibt das Attribut und der Ausweis zieht überall mit.
 
 ### XML
 
 ```xml
 <dataset backend="example" date_from="2026-01-01" date_to="2026-01-31" generated_at="…" mode="rows"
-         data_source="live" data_source_note="Live-Abfrage zum Erstellungszeitpunkt">
+         data_source="live" data_source_note="Live-Abfrage zum Erstellungszeitpunkt"
+         population="all_events" population_note="alle Ereignisse im Zeitraum">
   <completeness><issue code="…" severity="warning">…</issue></completeness>
   <summary><total>42</total></summary>
   <records><record><document_type>Kontakt</document_type><count>42</count></record></records>
