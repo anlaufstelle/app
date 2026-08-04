@@ -508,7 +508,9 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 
 Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Qualifiziert", weil die Identität der Person bekannt sein muss.
 
-> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe** und **Aufbewahrungsfrist (`retention_days`)** lassen sich am Formular auch für Dokumentationstypen mit Entitätstyp **Person** oder **Fall** eintragen, werden dort aber **nicht ausgewertet**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Personen und Fälle unterliegen den einrichtungsweiten Fristen aus den Einstellungen. Das Formular weist mit einem Hilfetext am Feld darauf hin.
+> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Aufbewahrungsfrist (`retention_days`)** und **Systemtyp** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Personen und Fälle unterliegen den einrichtungsweiten Fristen aus den Einstellungen.
+>
+> Das Formular **blendet diese drei Felder aus**, sobald Sie als Entitätstyp **Person** oder **Fall** wählen (Refs #1757) — Sie füllen also keine Felder mehr aus, die nie greifen. Das Ausblenden ist rein optisch: bereits gesetzte Werte bleiben unverändert am Datensatz, und ein Feld mit Fehlermeldung bleibt sichtbar. Ohne JavaScript bleiben alle Felder sichtbar und tragen wie bisher den erklärenden Hilfetext.
 
 #### Feldebenen-Sensibilität (`FieldTemplate.sensitivity`)
 
