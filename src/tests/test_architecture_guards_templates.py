@@ -302,6 +302,41 @@ class TestAlpineCspCompatibilityGuard:
             f"Betroffen: {violations}"
         )
 
+    # Zwei identisch benannte Alpine-Event-Attribute auf demselben Tag: der
+    # HTML-Parser verwirft das zweite stillschweigend, nur der erste Handler
+    # laeuft je (Refs #1764). Die Rueckreferenz ``\1`` erzwingt denselben
+    # Attributnamen; ``\s+`` zwischen den beiden Treffern ueberschreitet nie
+    # eine Tag-Grenze (dafuer waere ein literales ``>``/``<`` noetig), daher
+    # ist kein vollstaendiges Tag-Parsing noetig.
+    _DUPLICATE_ALPINE_EVENT_ATTR = re.compile(r'((?:@|x-on:)[a-zA-Z][\w.\-]*)\s*=\s*"[^"]*"\s+\1\s*=\s*"[^"]*"')
+
+    def test_no_duplicate_alpine_event_attribute_per_tag(self):
+        """Ein Tag darf ein Alpine-Event-Attribut (``@change`` etc.) nicht
+        zweimal tragen: der HTML-Parser verwirft das Duplikat, nur der erste
+        Handler wird je ausgefuehrt — Refs #1764 (``@change="setDocTypeFilter"
+        @change="fetchAndRender"`` liess den Chart-Refetch beim
+        Dokumentationstyp-Filter ungewollt aus).
+        """
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._DUPLICATE_ALPINE_EVENT_ATTR.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                violations.append(
+                    f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
+                    f"doppeltes Event-Attribut: {match.group(0)!r}"
+                )
+        assert not violations, (
+            "Diese Tags tragen dasselbe Alpine-Event-Attribut (z. B. @change) "
+            "zweimal direkt hintereinander. Der HTML-Parser verwirft das "
+            "Duplikat — nur der erste Handler laeuft. Bitte beide Schritte in "
+            "einer benannten Component-Methode zusammenfassen und ein "
+            "einzelnes Attribut binden.\nRefs #1764.\n"
+            f"Betroffen: {violations}"
+        )
+
     def test_no_htmx_inline_handlers_in_templates(self):
         """``hx-on::evt`` Inline-Handler werden intern per ``Function()``
         evaluiert und brauchen ``script-src 'unsafe-eval'``. Refs #692.

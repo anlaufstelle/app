@@ -29,7 +29,16 @@ function buildStatisticsCharts() {
     error: null,
     sources: [],
     docTypeFilter: "",
-    setDocTypeFilter(event) { this.docTypeFilter = event.target.value; },
+    // Refs #1764: ersetzt die vorherigen zwei Handler `setDocTypeFilter` +
+    // `fetchAndRender`, die im Template als zwei `@change`-Attribute auf
+    // demselben <select> gebunden waren. Der HTML-Parser verwirft ein
+    // zweites gleichnamiges Attribut auf einem Element still -- nur
+    // `setDocTypeFilter` (Wert merken, kein Refetch) lief, der Chart-Refetch
+    // griff dadurch erst beim naechsten Filterwechsel.
+    onDocTypeChange(event) {
+      this.docTypeFilter = event.target.value;
+      this.fetchAndRender();
+    },
     // CSP-konforme Wrapper
     get hasSources() {
       return this.sources.length > 0;

@@ -66,7 +66,7 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
 
     {# Chart-Filter #}
     <div class="flex flex-wrap gap-3 mb-4">
-        <select :value="docTypeFilter" @change="setDocTypeFilter" @change="fetchAndRender"
+        <select :value="docTypeFilter" @change="onDocTypeChange"
                 class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
             <option value="">{% trans "Alle Dokumentationstypen" %}</option>
             {% for dt in document_types %}
