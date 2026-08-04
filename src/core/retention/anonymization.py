@@ -37,6 +37,7 @@ from core.models import AuditLog, Client, Event, Settings
 from core.retention.legal_holds import exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
 from core.services.client import (
+    _delete_recent_visits,
     _redact_activities,
     _redact_case_goals,
     _redact_cases_and_episodes,
@@ -91,6 +92,7 @@ def _k_anonymize_with_cascade(client, k):
         _redact_retention_proposals(event_ids)
         _redact_legal_holds(client, event_ids)
         _redact_activities(client, event_ids)
+        _delete_recent_visits(client)
 
 
 def anonymize_clients(facility, dry_run):

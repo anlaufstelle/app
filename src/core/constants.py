@@ -34,6 +34,17 @@ WORKITEM_INBOX_CAP = 50
 # 7-Tage-Zeitraum zu beschneiden.
 WORKITEM_RECENT_DONE_PREVIEW = 5
 
+# Refs #1761 (DSGVO-Hygiene): Grenzen des ``RecentClientVisit``-Prune in
+# ``track_client_visit``. ``RECENT_VISIT_MAX_PER_USER`` ist die bestehende
+# „letzte N pro User"-Kappung (bis #1761 als Magic Number im Service);
+# ``RECENT_VISIT_MAX_AGE_DAYS`` ergaenzt sie um eine Altersfrist, damit eine
+# Besuchsspur nicht unbegrenzt weiterlebt, nur weil dieselbe Person dauerhaft
+# in den Top N bleibt. Die Zeile traegt zwar kein eigenes PII-Feld (nur FKs +
+# ``visited_at``), verknuepft aber Person und Mitarbeiter:in ueber die Zeit —
+# reine Datensparsamkeit, kein Klartext-Leck.
+RECENT_VISIT_MAX_PER_USER = 20
+RECENT_VISIT_MAX_AGE_DAYS = 90
+
 # MFA-Setup-Grace-Frist (Refs #689): Fenster nach dem ersten Login, in dem ein
 # rollen-erzwungener Nutzer die 2FA einrichten kann, bevor der Zugang gesperrt
 # wird. Bewusst gesetzte Zwaenge (``mfa_required``/facility-weit) greifen ohne

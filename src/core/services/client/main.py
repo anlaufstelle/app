@@ -1,12 +1,14 @@
 """Service layer for client-related business logic."""
 
 import logging
+from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import RECENT_VISIT_MAX_AGE_DAYS, RECENT_VISIT_MAX_PER_USER
 from core.models import AuditLog, Client, DocumentType
 from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
@@ -341,6 +343,24 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     LegalHold.objects.filter(facility=client.facility).filter(targets).update(reason="[Anonymisiert]")
 
 
+def _delete_recent_visits(client) -> None:
+    """Loesche die ``RecentClientVisit``-Zeilen dieser Person (Refs #1761).
+
+    Die Zeile traegt kein eigenes PII-Feld (nur FKs + ``visited_at``), ist also
+    kein Klartext-Leck — aber sie ist gespeicherte Information *ueber die
+    Person* (wer hat sie wann angesehen) und speist das „zuletzt besucht"-
+    Widget (``AccountProfileView``), das nach der Anonymisierung sonst weiter
+    einen Eintrag zeigte, jetzt unter dem Ersatz-Pseudonym. Anders als die
+    ``_redact_*``-Helfer wird hier **geloescht** statt redigiert: es gibt kein
+    Feld, dessen Erhalt einen Nachweis- oder Aggregat-Zweck haette (im
+    Gegensatz zu ``DeletionRequest``/``LegalHold``, wo die Meta-Spur bleibt).
+
+    Bewusst ueber ALLE Nutzer:innen hinweg, nicht nur die handelnde — der
+    Besuchseintrag einer Kollegin traegt denselben Bezug.
+    """
+    RecentClientVisit.objects.filter(client=client).delete()
+
+
 def _redact_activities(client, event_ids: list) -> None:
     """Redigiere ``Activity.summary`` fuer Client-, Event-, WorkItem- und Case-Targets.
 
@@ -433,6 +453,9 @@ def anonymize_client(client, user=None):
       der Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067),
       die WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090) und
       die Case-Target-Activity den Fall-/Meilenstein-Titel (Refs #1751).
+    - ``RecentClientVisit``-Zeilen der Person werden **gelöscht** (Refs #1761)
+      — sonst listete das „zuletzt besucht"-Widget die anonymisierte Person
+      weiter.
 
     Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
@@ -449,6 +472,7 @@ def anonymize_client(client, user=None):
     _redact_retention_proposals(event_ids)
     _redact_legal_holds(client, event_ids)
     _redact_activities(client, event_ids)
+    _delete_recent_visits(client)
 
     logger.info(
         "client_anonymized",
@@ -620,18 +644,38 @@ def get_client_or_none(facility, client_id):
 def track_client_visit(user, client, facility):
     """Record that a user visited a client detail page.
 
-    Upserts a RecentClientVisit row and prunes old entries (max 20 per user).
+    Upserts a ``RecentClientVisit`` row und prunt anschliessend die Historie
+    dieser Nutzer:in — zweistufig:
+
+    1. **Anzahl** — nur die ``RECENT_VISIT_MAX_PER_USER`` juengsten Besuche
+       bleiben (Refs #642).
+    2. **Alter** — Zeilen aelter als ``RECENT_VISIT_MAX_AGE_DAYS`` fallen
+       zusaetzlich raus (Refs #1761). Ohne diese Frist lebte eine Besuchsspur
+       unbegrenzt weiter, solange dieselbe Person in den Top N blieb; das
+       widerspricht der Datensparsamkeit, auch wenn die Zeile selbst keinen
+       Klartext traegt (nur FKs + ``visited_at``).
+
+    Beide Schritte sind bewusst an ``user`` gescopt: der Prune haengt am
+    Schreibpfad dieser Nutzer:in (kein Cron), und der Index
+    ``(user, facility, -visited_at)`` traegt beide Abfragen. Die Zeilen einer
+    **anonymisierten** Person raeumt nicht dieser Pfad ab, sondern
+    :func:`_delete_recent_visits` im Anonymisierungs-Service — sofort und ueber
+    alle Nutzer:innen hinweg.
     """
     RecentClientVisit.objects.update_or_create(
         user=user,
         client=client,
         defaults={"facility": facility},
     )
-    # Prune: keep only the 20 most recent visits. Subquery-Variante spart
-    # einen Roundtrip gegenüber "erst SELECT LIMIT 20 holen, dann DELETE"
-    # — Refs #642.
-    keep_qs = RecentClientVisit.objects.filter(user=user).order_by("-visited_at").values("pk")[:20]
+    # Prune (Anzahl): Subquery-Variante spart einen Roundtrip gegenüber
+    # "erst SELECT LIMIT N holen, dann DELETE" — Refs #642.
+    keep_qs = (
+        RecentClientVisit.objects.filter(user=user).order_by("-visited_at").values("pk")[:RECENT_VISIT_MAX_PER_USER]
+    )
     RecentClientVisit.objects.filter(user=user).exclude(pk__in=keep_qs).delete()
+    # Prune (Alter): Refs #1761.
+    age_cutoff = timezone.now() - timedelta(days=RECENT_VISIT_MAX_AGE_DAYS)
+    RecentClientVisit.objects.filter(user=user, visited_at__lt=age_cutoff).delete()
 
 
 # --- Vier-Augen-Lösch-Workflow für Personen (Refs #626) ---
@@ -858,8 +902,6 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
 
     Returns: Anzahl anonymisierter Datensätze.
     """
-    from datetime import timedelta
-
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
     qs = exclude_clients_with_active_holds(
         Client.objects.filter(
