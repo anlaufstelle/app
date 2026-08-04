@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.test import Client as DjangoClient
 
 from core.models import AuditLog, Facility, Organization, Settings, User
-from core.services.client import get_document_list, render_document
+from core.services.client import _document_type_retention_overrides, get_document_list, render_document
 
 
 @pytest.fixture
@@ -196,6 +196,44 @@ class TestVerarbeitungsverzeichnisAuditLogFrist:
 
         assert "Vermittlung: 180 Tage" in content
         assert "je Typ gesetzt, sonst keine" not in content
+
+    def test_document_type_override_ignores_non_event_types(self, facility):
+        """Nur Ereignis-Typen zaehlen — sonst behauptet die DSFA eine Frist,
+        die nirgends durchgesetzt wird (Refs #1738, G4).
+
+        ``retention_days`` ist seit M24 event-only (ADR-039): der
+        Durchsetzungslauf (``enforce_document_type_retention``) und die
+        Strategie-Quelle (``iter_strategies``) filtern auf
+        ``entity_type=EVENT``. Zeile 4 in dsfa.md § 2.3 ist der **Ist-Wert
+        dessen, was der Aufbewahrungs-Job tut** — ein Personen- oder Fall-Typ
+        mit gesetzter Frist waere dort eine durchgesetzte Frist, die es nicht
+        gibt. Fuer Personen- und Fall-Daten gilt der Owner-Lebenszyklus, der in
+        derselben DSFA an anderer Stelle beschrieben ist.
+        """
+        from core.models import DocumentType
+
+        DocumentType.objects.create(
+            facility=facility,
+            name="Personenprofil-Frist",
+            entity_type=DocumentType.EntityType.CLIENT,
+            retention_days=42,
+        )
+        DocumentType.objects.create(
+            facility=facility,
+            name="Fallformular-Frist",
+            entity_type=DocumentType.EntityType.CASE,
+            retention_days=43,
+        )
+        # Positiv-Kontrolle im selben Lauf: der Ereignis-Typ erscheint sehr wohl.
+        DocumentType.objects.create(facility=facility, name="Vermittlung", retention_days=180)
+
+        assert _document_type_retention_overrides(facility) == [("Vermittlung", 180)]
+
+        content, _ = render_document("dsfa", facility)
+
+        assert "Vermittlung: 180 Tage" in content
+        assert "Personenprofil-Frist" not in content
+        assert "Fallformular-Frist" not in content
 
 
 @pytest.mark.django_db

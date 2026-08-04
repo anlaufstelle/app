@@ -93,14 +93,25 @@ def _document_type_retention_overrides(facility) -> list[tuple[str, int]]:
     pro Dokumentationstyp gesetzt — der Ist-Wert muss deshalb ueber alle
     DocumentTypes der Facility abgeleitet (berechnet) werden. Gleiche
     Filterung wie ``core.retention.enforcement.enforce_document_type_retention``
-    (nur ``retention_days`` gesetzt zaehlt, unabhaengig von ``is_active``),
-    damit die DSFA exakt beschreibt, was der Aufbewahrungs-Job tatsaechlich
-    durchsetzt. Liefert eine Liste von (Name, Tage)-Paaren in Modell-
-    Standardreihenfolge (``sort_order``, ``name``); leer, wenn kein Typ eine
-    eigene Frist hat.
+    (``entity_type=EVENT`` und ``retention_days`` gesetzt; ``is_active`` spielt
+    keine Rolle), damit die DSFA exakt beschreibt, was der Aufbewahrungs-Job
+    tatsaechlich durchsetzt. Liefert eine Liste von (Name, Tage)-Paaren in
+    Modell-Standardreihenfolge (``sort_order``, ``name``); leer, wenn kein Typ
+    eine eigene Frist hat.
+
+    Refs #1738 (M24/G4): Der ``entity_type``-Filter kam mit der Event-only-Regel
+    fuer ``retention_days`` (ADR-039) dazu. Ohne ihn wies Zeile 4 die Frist
+    eines Personen- oder Fall-Typs als **durchgesetzte** Frist aus, obwohl sie
+    nirgends durchgesetzt wird — eine Falschaussage in genau dem Dokument, das
+    Aufsichtspruefungen als Ist-Beschreibung dient. Fuer Personen- und
+    Fall-Daten gilt der Owner-Lebenszyklus.
     """
     overrides: list[tuple[str, int]] = []
-    for dt in DocumentType.objects.filter(facility=facility, retention_days__isnull=False):
+    for dt in DocumentType.objects.filter(
+        facility=facility,
+        entity_type=DocumentType.EntityType.EVENT,
+        retention_days__isnull=False,
+    ):
         if dt.retention_days is None:
             continue
         overrides.append((dt.name, dt.retention_days))
