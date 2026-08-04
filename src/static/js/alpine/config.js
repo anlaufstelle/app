@@ -85,7 +85,28 @@ document.addEventListener("alpine:init", () => {
                 // ohne erkennbaren Grund (z. B. „Aufbewahrungsfrist >= 1" nach
                 // einem Wechsel auf Person/Fall).
                 const hasError = wrapper.querySelector("[role='alert']") !== null;
-                wrapper.hidden = !inScope && !hasError;
+                const hide = !inScope && !hasError;
+                if (hide) {
+                    // Refs #1776: das ist der VOR jedem Server-Roundtrip
+                    // greifende Fall — ein HTML5-Constraint (z. B. "min" an
+                    // retention_days) auf einem ausgeblendeten Feld blockiert
+                    // das Absenden ohne sichtbare Meldung, weil der Browser
+                    // kein unsichtbares Feld fokussieren kann, um die
+                    // Fehler-Bubble zu zeigen. Nur INVALIDE Werte werden
+                    // geleert (Konstraint "lösen" durch Wert-Leerung) —
+                    // konsistent mit dem serverseitigen Bereinigen
+                    // (``DocumentTypeForm.clean``, Punkt 5 aus #1776): fuer
+                    // entity_type != event wird retention_days beim
+                    // Speichern ohnehin verworfen. Gueltige Werte anderer
+                    // ausgeblendeter Felder (z. B. system_type) bleiben
+                    // unangetastet, falls die Nutzerin zurueckwechselt.
+                    wrapper.querySelectorAll("input, select, textarea").forEach((field) => {
+                        if (!field.checkValidity()) {
+                            field.value = "";
+                        }
+                    });
+                }
+                wrapper.hidden = hide;
             });
         },
     }));
