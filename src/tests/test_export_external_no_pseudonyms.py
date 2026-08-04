@@ -172,7 +172,11 @@ class TestExportExternalNoPseudonyms:
             for pseudonym in _PSEUDONYMS:
                 assert pseudonym not in name
 
-        # by_age_cluster: nur Cluster-Labels + Counts.
+        # by_age_cluster: nur Cluster-Labels, Counts und die DISTINCT-Personenzahl
+        # des Buckets (K0-b, Refs #1770) — keine Klient-Referenzen. ``persons``
+        # ist Suppressions-Eingabe im Roh-Aggregat und wird vor jeder Ausgabe
+        # entfernt (siehe ``_suppress_small``).
         for row in stats["by_age_cluster"]:
-            assert set(row.keys()) == {"cluster", "label", "count"}
+            assert set(row.keys()) == {"cluster", "label", "count", "persons"}
+            assert isinstance(row["persons"], int)
             assert "pseudonym" not in row
