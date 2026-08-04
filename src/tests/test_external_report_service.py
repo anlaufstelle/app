@@ -84,6 +84,183 @@ class TestSecondarySuppression:
         assert result["anonym"] == 10
 
 
+class TestKanonischeOrdnungUnterdrueckterZeilen:
+    """K5 (Refs #1767): die Zeilenreihenfolge darf keine Rangaussage tragen.
+
+    ``by_age_cluster`` und ``by_document_type`` entstehen absteigend nach Anzahl
+    (``order_by("-count")``, im Hybrid-Pfad erneut so sortiert); ``_suppress_small``
+    nullte bisher nur die Werte und liess die Reihenfolge unangetastet. Damit
+    stand die unterdrueckte Kleinstzelle **immer** am Tabellenende — das Artefakt
+    verriet ohne jede Arithmetik, WELCHE Altersgruppe bzw. WELCHER Dokumenttyp
+    die Kleinstfallzahl traegt, und die Zuordnung von r unterdrueckten Werten zu
+    Labels sank von r! auf 1.
+
+    Unterdrueckte Zeilen stehen deshalb als Block in kanonischer,
+    **wertunabhaengiger** Ordnung am Listenende (Altersgruppen in
+    Modellreihenfolge, Dokumenttypen nach ``(category, name)``); sichtbare
+    Zeilen duerfen count-sortiert bleiben, ihre Werte stehen ohnehin im Klartext.
+    """
+
+    AGE_LABELS = {"u18": "Unter 18", "18_26": "18–26", "27_plus": "27+", "unknown": "Unbekannt"}
+
+    def _age_rows(self, counts: dict[str, int]) -> list[dict]:
+        """Altersgruppen-Zeilen in der Query-Ordnung (absteigend nach Anzahl)."""
+        rows = [{"cluster": key, "label": self.AGE_LABELS[key], "count": value} for key, value in counts.items()]
+        return sorted(rows, key=lambda row: row["count"], reverse=True)
+
+    def _doc_rows(self, counts: dict[tuple[str, str], int]) -> list[dict]:
+        rows = [{"name": name, "category": category, "count": value} for (category, name), value in counts.items()]
+        return sorted(rows, key=lambda row: row["count"], reverse=True)
+
+    def test_unterdrueckte_altersgruppen_stehen_als_block_in_modellreihenfolge(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = self._age_rows({"27_plus": 20, "unknown": 9, "18_26": 3, "u18": 2})
+        result = _suppress_small(rows, threshold=5)
+
+        assert [row["cluster"] for row in result] == ["27_plus", "unknown", "u18", "18_26"]
+        assert [row["suppressed"] for row in result] == [False, False, True, True]
+
+    def test_vertauschte_zellwerte_erzeugen_dieselbe_reihenfolge(self):
+        """Ordnungstest (security-notes § Regressionsschutz (2)): zwei Welten, die
+        sich nur in der Zuordnung der unterdrueckten Werte unterscheiden, muessen
+        dieselbe Publikationsreihenfolge erzeugen — sonst ist die Position selbst
+        die Aussage, welche Zelle die kleinere ist.
+        """
+        from core.services.dashboard.external_report import _suppress_small
+
+        welt_a = _suppress_small(self._age_rows({"27_plus": 20, "18_26": 4, "u18": 1}), threshold=5)
+        welt_b = _suppress_small(self._age_rows({"27_plus": 20, "18_26": 1, "u18": 4}), threshold=5)
+
+        assert [row["cluster"] for row in welt_a] == [row["cluster"] for row in welt_b]
+        assert [row["count"] for row in welt_a] == [row["count"] for row in welt_b]
+
+    def test_unterdrueckte_dokumenttypen_nach_kategorie_und_name(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = self._doc_rows(
+            {
+                ("contact", "Kontakt"): 20,
+                ("note", "Notiz"): 9,
+                ("service", "Beratung"): 3,
+                ("contact", "Aufnahme"): 2,
+            }
+        )
+        result = _suppress_small(rows, threshold=5)
+
+        assert [row["name"] for row in result] == ["Kontakt", "Notiz", "Aufnahme", "Beratung"]
+        assert [row["suppressed"] for row in result] == [False, False, True, True]
+
+    def test_sichtbare_zeilen_bleiben_count_sortiert(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = self._doc_rows(
+            {
+                ("contact", "Aufnahme"): 7,
+                ("note", "Notiz"): 30,
+                ("service", "Beratung"): 12,
+                ("contact", "Kontakt"): 1,
+                ("service", "Vermittlung"): 2,
+            }
+        )
+        result = _suppress_small(rows, threshold=5)
+
+        sichtbar = [row["name"] for row in result if not row["suppressed"]]
+        assert sichtbar == ["Notiz", "Beratung", "Aufnahme"]
+
+    def test_ohne_unterdrueckung_bleibt_die_reihenfolge_unveraendert(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = self._age_rows({"27_plus": 20, "u18": 9, "18_26": 7})
+        result = _suppress_small(rows, threshold=5)
+
+        assert [row["cluster"] for row in result] == ["27_plus", "u18", "18_26"]
+
+    def test_by_category_zeilen_ohne_kanonische_ordnung_bleiben_unberuehrt(self):
+        """Dokumentierte Grenze: ``by_category`` traegt keinen Rangkanal.
+
+        Die Kategoriezeilen des Beispiel-Sachberichts entstehen in fester
+        Kategorien-Ordnung (Konsolidierung ueber ``system_type``), nicht nach
+        Anzahl — ihre Position ist keine Rangaussage. Sie werden deshalb
+        bewusst NICHT umsortiert (sonst braeche der Bestandstest
+        ``test_records_spiegeln_die_suppressierten_zellen`` ohne Sicherheitsgewinn).
+        """
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [{"name": "Kontakte", "count": 12}, {"name": "Beratung", "count": 3}, {"name": "Versorgung", "count": 2}]
+        result = _suppress_small(rows, threshold=5)
+
+        assert [row["name"] for row in result] == ["Kontakte", "Beratung", "Versorgung"]
+
+
+@pytest.mark.django_db
+class TestKanonischeOrdnungInDenWrappern:
+    """K5 wirkt an EINEM Eingriffspunkt und damit in allen drei Wrappern —
+    Templates, JSON und XML erben ihn ohne eigene Anpassung.
+    """
+
+    def test_suppress_report_stats_ordnet_beide_tabellen_kanonisch(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": 12,
+            "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
+            "by_document_type": [
+                {"name": "Notiz", "category": "note", "count": 30},
+                {"name": "Beratung", "category": "service", "count": 4},
+                {"name": "Aufnahme", "category": "contact", "count": 3},
+            ],
+            "by_age_cluster": [
+                {"cluster": "27_plus", "label": "27+", "count": 30},
+                {"cluster": "unknown", "label": "Unbekannt", "count": 4},
+                {"cluster": "u18", "label": "Unter 18", "count": 3},
+            ],
+        }
+        out = suppress_report_stats(facility, stats)
+
+        assert [row["name"] for row in out["by_document_type"]] == ["Notiz", "Aufnahme", "Beratung"]
+        assert [row["cluster"] for row in out["by_age_cluster"]] == ["27_plus", "u18", "unknown"]
+
+    def test_suppress_sample_report_1_stats_ordnet_die_altersgruppen_kanonisch(self, facility):
+        from core.services.dashboard import suppress_sample_report_1_stats
+
+        stats = {
+            "total": 40,
+            "unique_clients": 12,
+            "by_category": [("Kontakte", 30), ("Beratung", 4), ("Versorgung", 3)],
+            "by_age_cluster": [
+                {"cluster": "27_plus", "label": "27+", "count": 30},
+                {"cluster": "unknown", "label": "Unbekannt", "count": 4},
+                {"cluster": "18_26", "label": "18–26", "count": 3},
+            ],
+        }
+        out = suppress_sample_report_1_stats(facility, stats)
+
+        assert [row["cluster"] for row in out["by_age_cluster"]] == ["27_plus", "18_26", "unknown"]
+
+    def test_externer_bericht_publiziert_die_kleinstzelle_nicht_mehr_als_letzte_zeile(
+        self, facility, client_qualified, doc_type_contact, doc_type_crisis, staff_user, report_period
+    ):
+        """Ende-zu-Ende ueber ``build_external_report``: der Dokumenttyp mit der
+        Kleinstfallzahl (``Kontakt``, 2) darf nicht laenger daran erkennbar
+        sein, dass er als letzte Zeile steht.
+        """
+        from core.services.dashboard import build_external_report
+
+        _make_events(facility, client_qualified, doc_type_crisis, staff_user, 9)
+        _make_events(facility, client_qualified, doc_type_contact, staff_user, 2)
+
+        rows = build_external_report(facility, *report_period)["by_document_type"]
+
+        # Query-Ordnung waere ["Krisengespräch", "Kontakt"] (9 vor 2). Kanonisch
+        # steht ``Kontakt`` (category "contact") vor ``Krisengespräch``
+        # (category "service") — beide sind unterdrueckt (primaer/sekundaer),
+        # die Position sagt also nichts mehr ueber ihre Groesse.
+        assert [row["name"] for row in rows] == ["Kontakt", "Krisengespräch"]
+        assert all(row["suppressed"] for row in rows)
+
+
 @pytest.mark.django_db
 class TestExternalReportContent:
     """Inhaltliche Tests: keine Pseudonyme, K-Anon-Schwelle wirkt."""

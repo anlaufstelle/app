@@ -19,11 +19,43 @@ from typing import Any
 
 from django.utils import timezone
 
-from core.models import Settings
+from core.models import Client, Settings
 from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
 from core.services.dashboard.statistics import get_statistics
 
 DEFAULT_K_THRESHOLD = 5
+
+# Modellreihenfolge der Altersgruppen — die kanonische, wertunabhaengige
+# Ordnung fuer unterdrueckte ``by_age_cluster``-Zeilen (K5, Refs #1767). Aus
+# ``Client.AgeCluster`` abgeleitet statt hier dupliziert: eine neue Altersgruppe
+# soll die Ordnung automatisch erben.
+_AGE_CLUSTER_ORDER = {value: index for index, value in enumerate(Client.AgeCluster.values)}
+
+
+def _age_cluster_key(row: dict[str, Any]) -> tuple[int, str]:
+    """Altersgruppen in Modellreihenfolge; Unbekanntes stabil ans Ende."""
+    cluster = row.get("cluster")
+    return (_AGE_CLUSTER_ORDER.get(cluster, len(_AGE_CLUSTER_ORDER)), str(cluster or ""))
+
+
+def _document_type_key(row: dict[str, Any]) -> tuple[str, str]:
+    """Dokumenttypen nach ``(category, name)`` — beides wertunabhaengig."""
+    return (str(row.get("category") or ""), str(row.get("name") or ""))
+
+
+# Erkennungsfeld -> kanonischer Sortierschluessel. Die Zuordnung laeuft ueber die
+# **Zeilenform**, nicht ueber die Aufrufstelle: so erbt jedes Artefakt, das
+# dieselben Zeilen durch ``_suppress_small`` schickt (Templates, JSON, XML,
+# PDF-Pfad, Hybrid-/Snapshot-Pfad), die Ordnung automatisch.
+#
+# Bewusst NICHT erfasst: ``by_category`` des Beispiel-Sachberichts (Zeilen mit
+# ``name``/``count``). Diese Liste entsteht in fester Kategorien-Ordnung
+# (Konsolidierung ueber ``system_type``), nicht nach Anzahl — ihre Position ist
+# keine Rangaussage, eine Umsortierung braechte keinen Schutz.
+_CANONICAL_ROW_KEYS = (
+    ("cluster", _age_cluster_key),
+    ("category", _document_type_key),
+)
 
 
 def _get_threshold(facility) -> int:
@@ -55,6 +87,36 @@ def _apply_secondary_suppression(rows: list[dict[str, Any]], count_key: str) -> 
     smallest["suppressed"] = True
 
 
+def _canonicalize_suppressed_order(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """K5 (Refs #1767): unterdrueckte Zeilen wertunabhaengig ans Listenende.
+
+    ``by_age_cluster``/``by_document_type`` entstehen absteigend nach Anzahl
+    (``order_by("-count")``, im Hybrid-Pfad erneut so sortiert). Die Suppression
+    nullt nur die Werte — die **Position** blieb damit eine Rangaussage: die
+    unterdrueckte Kleinstzelle stand immer am Tabellenende, das Artefakt verriet
+    also ohne jede Arithmetik, welche Altersgruppe/welcher Dokumenttyp die
+    Kleinstfallzahl traegt.
+
+    Deshalb: sichtbare Zeilen behalten ihre (count-sortierte) Reihenfolge — ihre
+    Werte stehen ohnehin im Klartext —, unterdrueckte Zeilen folgen als Block in
+    kanonischer, wertunabhaengiger Ordnung. Der Eingriff sitzt bewusst am Ende
+    von :func:`_suppress_small` (nach der Sekundaer-Suppression), damit alle drei
+    Wrapper und damit alle Artefakte ihn erben, ohne dass ein Template oder ein
+    Renderer etwas davon wissen muss.
+
+    Zeilenformen ohne definierte kanonische Ordnung bleiben unveraendert (siehe
+    ``_CANONICAL_ROW_KEYS``).
+    """
+    if not rows:
+        return rows
+    for field, key in _CANONICAL_ROW_KEYS:
+        if all(field in row for row in rows):
+            visible = [row for row in rows if not row.get("suppressed")]
+            hidden = sorted((row for row in rows if row.get("suppressed")), key=key)
+            return [*visible, *hidden]
+    return rows
+
+
 def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str = "count") -> list[dict[str, Any]]:
     """Markiert Aggregate < threshold als unterdrueckt (count=None, suppressed=True)."""
     result = []
@@ -68,7 +130,7 @@ def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str =
             row_copy["suppressed"] = False
         result.append(row_copy)
     _apply_secondary_suppression(result, count_key)
-    return result
+    return _canonicalize_suppressed_order(result)
 
 
 def _suppress_stage_dict(stage_dict: dict[str, int], threshold: int) -> dict[str, Any]:

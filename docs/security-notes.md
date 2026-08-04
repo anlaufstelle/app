@@ -506,7 +506,9 @@ beruht). Sperrvermerke blockieren seit #1756
 
 ### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
 
-**Status:** Analyse abgeschlossen, Umsetzungsentscheidung offen. Sieben Kanäle untersucht, alle
+**Status:** Analyse abgeschlossen; Umsetzung läuft — **K5 mitigiert**
+(#1767), die übrigen Kanäle sind offen bzw.
+akzeptiert (Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
 Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
@@ -535,17 +537,17 @@ Betriebskennzahl.
 
 #### Übersicht
 
-| # | Kanal | Empfehlung | Aufwand | Priorität |
-|---|---|---|---|---|
-| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 |
-| **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 |
-| **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 |
-| **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 |
-| **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 |
-| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 |
-| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 |
-| **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 |
-| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 |
+| # | Kanal | Empfehlung | Aufwand | Priorität | Status |
+|---|---|---|---|---|---|
+| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | offen |
+| **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 | **mitigiert** (#1767) |
+| **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | offen |
+| **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | offen |
+| **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | offen |
+| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | offen |
+| **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | offen |
+| **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | offen |
+| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert |
 
 Alle Verdikte: **bestätigt** (per Enumeration belegt, nicht vermutet). **Reihenfolge:** K5 → K0
 (Fail-safe) → K6 → K2 → K1-Guard → K3 → K4b. K5 zuerst, weil es die Messbasis aller übrigen Kanäle
@@ -615,6 +617,19 @@ ist kein publizierter Aggregatwert, sondern ein darstellerisches Nebenprodukt de
 und sie untergräbt gezielt die Sekundärsuppression, deren einziger Zweck es ist, zwei
 ununterscheidbare Unbekannte zu hinterlassen. **Restrisiko ehrlich ausweisen:** K5 senkt gepinnte
 Zellen um Faktor ~47, eliminiert sie aber nicht — die Restfälle brauchen den Guard.
+
+*Status: **mitigiert*** (#1767).
+`_canonicalize_suppressed_order` in [`external_report.py`](../src/core/services/dashboard/external_report.py)
+läuft als **einziger** Eingriffspunkt am Ende von `_suppress_small` — nach der Sekundär-Suppression,
+damit der Snapshot-/Hybrid-Pfad nicht driftet. Sichtbare Zeilen behalten ihre count-sortierte
+Reihenfolge, unterdrückte folgen als Block in kanonischer Ordnung (Altersgruppen aus
+`Client.AgeCluster` abgeleitet, Dokumenttypen nach `(category, name)`); Templates, JSON und XML erben
+das ohne eigene Anpassung. Die Zuordnung läuft über die **Zeilenform**, nicht über die Aufrufstelle
+`by_category` bleibt bewusst unberührt (feste Kategorien-Ordnung, kein Rangkanal). Test-gepinnt in
+`test_external_report_service.py::TestKanonischeOrdnungUnterdrueckterZeilen` (inkl. des geforderten
+Ordnungstests „zwei Welten mit vertauschten Zellwerten erzeugen dieselbe Ausgabe") und
+`::TestKanonischeOrdnungInDenWrappern`. **Unverändert gültig:** das oben ausgewiesene Restrisiko
+K5 senkt die Pin-Rate, der Residual-Guard (K1) bleibt offen.
 
 #### K6 — Die Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen
 
