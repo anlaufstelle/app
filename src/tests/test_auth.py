@@ -330,6 +330,34 @@ class TestRateLimiting:
             )
         assert response.status_code == 429
 
+    def test_rate_limit_zaehler_ueberlebt_cache_druck(self, client, staff_user):
+        """Refs #1775: ``test_rate_limit_blocks_after_threshold`` fiel im
+        Parallel-Lauf einmalig aus — nicht wegen des Ratelimits, sondern wegen
+        des Caches.
+
+        Djangos LocMem-Default deckelt auf ``MAX_ENTRIES = 300`` und wirft bei
+        Ueberschreitung jeden dritten Eintrag weg (``CULL_FREQUENCY = 3``).
+        Faellt dabei der Ratelimit-Zaehler heraus, faengt die Zaehlung bei null
+        an und der Test sieht statt 429 eine 200 — ein Flake, der wie ein
+        echter Ratelimit-Ausfall aussieht und beim Nachlauf verschwindet.
+
+        Hier wird der Druck absichtlich erzeugt. Mit dem LocMem-Default ist der
+        Test rot; ``settings/test.py`` hebt ``MAX_ENTRIES`` deshalb an.
+        """
+        from django.core.cache import cache
+
+        ip = "10.99.99.98"
+        for _ in range(5):
+            client.post("/login/", {"username": "teststaff", "password": "wrong"}, REMOTE_ADDR=ip)
+
+        # Fremde Eintraege, wie sie ein paralleler Lauf nebenher erzeugt.
+        for i in range(400):
+            cache.set(f"fremdlast-{i}", i)
+
+        response = client.post("/login/", {"username": "teststaff", "password": "wrong"}, REMOTE_ADDR=ip)
+
+        assert response.status_code == 429, "Cache-Verdraengung hat den Ratelimit-Zaehler geleert"
+
     def test_password_reset_post_rate_limited(self, client):
         """Nach 5 POST-Requests auf password-reset von derselben IP → 429
         (Ratelimited via handler403, Refs #1354)."""

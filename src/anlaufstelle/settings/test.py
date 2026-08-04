@@ -19,6 +19,23 @@ PASSWORD_HASHERS = [
 # Rate-Limiting in Tests deaktivieren (E2E-Tests machen viele Logins auf einer IP)
 RATELIMIT_ENABLE = False
 
+# Refs #1775: Djangos LocMem-Default deckelt auf ``MAX_ENTRIES = 300`` und
+# verwirft bei Ueberschreitung jeden dritten Eintrag (``CULL_FREQUENCY = 3``).
+# Die Tests, die das Rate-Limit gezielt aktivieren, legen ihren Zaehler in
+# denselben Cache — faellt er einer Verdraengung zum Opfer, beginnt die
+# Zaehlung bei null und der Test sieht statt 429 eine 200. Genau so fiel
+# ``test_auth.TestRateLimiting.test_rate_limit_blocks_after_threshold`` im
+# Parallel-Lauf einmalig aus: ein Flake, der wie ein echter Ratelimit-Ausfall
+# aussieht und beim Nachlauf verschwindet. Ein grosszuegiges Limit kostet im
+# Testlauf nichts (prozess-lokales Dict, das der Prozess ohnehin wegwirft).
+# Der Regressionstest dazu: ``test_rate_limit_zaehler_ueberlebt_cache_druck``.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "OPTIONS": {"MAX_ENTRIES": 100_000},
+    }
+}
+
 # Tests laufen ohne collectstatic — einfachen Storage ohne Manifest verwenden
 STORAGES = {
     "staticfiles": {
