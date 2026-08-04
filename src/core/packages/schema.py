@@ -11,8 +11,14 @@ direkt auf die Zeile im YAML zeigen.
 
 Bewusst ohne ``jsonschema``-Dependency: die Regeln hier sind zur Hälfte
 Cross-Referenzen (Slug-Verweise zwischen den Abschnitten) und Fach-Invarianten
-(E8: Datei-Felder nur an Ereignis-Typen), die ein JSON-Schema ohnehin nicht
+(z. B. Systemtypen nur an Ereignis-Typen), die ein JSON-Schema ohnehin nicht
 ausdrücken könnte.
+
+M24/AP2 (Refs #1738, ADR-039 §9): Die frühere E8-Invariante („Datei-Felder nur
+an Ereignis-Typen", Refs #1058) ist **ersatzlos entfallen** — Anhänge hängen
+seit ADR-039 an Ereignis, Person oder Fall. **Kein ``schema_version``-Bump:**
+eine gelockerte Restriktion ist abwärtskompatibel, jedes bisher gültige Paket
+bleibt gültig.
 
 Pflicht sind nur Identität und die Werte ohne sinnvollen Modell-Default:
 ``slug``/``name`` (bzw. ``template_slug``, ``target``/``depends_on``/
@@ -61,12 +67,6 @@ _CONTACT_STAGES: frozenset[str] = frozenset(value for value, _label in CONTACT_S
 _OPTION_FIELD_TYPES: frozenset[str] = frozenset(
     {FieldTemplate.FieldType.SELECT.value, FieldTemplate.FieldType.MULTI_SELECT.value}
 )
-# E8: Datei-Felder gibt es in v1 nur an Ereignis-Typen (Person/Fall haben keine
-# Upload-Pipeline) — Schicht 1 der Absicherung, Schicht 2 liegt im Config-Service.
-_NON_FILE_ENTITY_TYPES: frozenset[str] = frozenset(
-    {DocumentType.EntityType.CLIENT.value, DocumentType.EntityType.CASE.value}
-)
-
 _PACKAGE_KEYS = frozenset({"schema_version", "field_templates", "document_types"})
 _FIELD_TEMPLATE_KEYS = frozenset(
     {
@@ -788,14 +788,6 @@ def _cross_check_document_type(
                     f"Unbekannte Feldgruppe {ref.group_slug!r} — sie muss unter 'groups' dieses Typs deklariert sein.",
                 )
             )
-        if template.field_type == FieldTemplate.FieldType.FILE.value and doc_type.entity_type in _NON_FILE_ENTITY_TYPES:
-            errors.append(
-                (
-                    f"{ref_path}.template_slug",
-                    "Datei-Felder sind nur für Dokumentationstypen mit entity_type 'event' zulässig.",
-                )
-            )
-
     for index, condition in enumerate(doc_type.conditions or ()):
         condition_path = f"{path}.conditions[{index}]"
         for key, slug in (("target", condition.target), ("depends_on", condition.depends_on)):

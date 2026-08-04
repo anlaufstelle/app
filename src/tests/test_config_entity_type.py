@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.messages import get_messages
-from django.core.exceptions import ValidationError
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
@@ -270,40 +269,47 @@ class TestDeleteBlockedByClientOrCase:
 
 
 # ---------------------------------------------------------------------------
-# E8 Schicht 2 — FILE-Feldvorlagen nur an Ereignis-Typen zuordenbar
+# Anforderungsaenderung M24 (Refs #1738, ADR-039 §9): E8 Schicht 2 entfaellt
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-class TestFileFieldEntityTypeGuard:
-    def test_file_field_on_client_type_raises(self, req, facility, doc_type_client_profile):
+class TestFileFieldEntityTypeNoLongerGuarded:
+    """Die vormalige E8-Sperre („FILE-Feldvorlagen nur an Ereignis-Typen",
+    Refs #1058) ist im Config-Service ersatzlos gefallen: seit ADR-039 haengen
+    Anhaenge an Ereignis, Person ODER Fall. Diese Klasse hiess vorher
+    ``TestFileFieldEntityTypeGuard`` und pruefte das Gegenteil — die Umkehrung
+    ist eine bewusste Anforderungsaenderung, kein Regressionsfund.
+
+    Bewusst NICHT hier: der Formular-Skip ``DynamicDataForm.exclude_file_fields``
+    und der Typwechsel-Guard ``FieldTemplateForm.clean_field_type``. Beide
+    fallen zusammen mit dem UI-Pfad (AP4) und sind bis dahin weiter aktiv.
+    """
+
+    def test_file_field_on_client_type_is_assigned(self, req, facility, doc_type_client_profile):
         ft_file = FieldTemplate.objects.create(
             facility=facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE
         )
-        with pytest.raises(ValidationError):
-            add_field_to_doctype(req, doc_type_client_profile, ft_file)
-        assert not DocumentTypeField.objects.filter(
-            document_type=doc_type_client_profile, field_template=ft_file
-        ).exists()
+        dtf = add_field_to_doctype(req, doc_type_client_profile, ft_file)
+        assert dtf.field_template_id == ft_file.pk
+        assert DocumentTypeField.objects.filter(document_type=doc_type_client_profile, field_template=ft_file).exists()
 
-    def test_file_field_on_case_type_raises(self, req, facility, doc_type_case_form):
+    def test_file_field_on_case_type_is_assigned(self, req, facility, doc_type_case_form):
         ft_file = FieldTemplate.objects.create(facility=facility, name="Beleg", field_type=FieldTemplate.FieldType.FILE)
-        with pytest.raises(ValidationError):
-            add_field_to_doctype(req, doc_type_case_form, ft_file)
-        assert not DocumentTypeField.objects.filter(document_type=doc_type_case_form, field_template=ft_file).exists()
+        dtf = add_field_to_doctype(req, doc_type_case_form, ft_file)
+        assert dtf.field_template_id == ft_file.pk
+        assert DocumentTypeField.objects.filter(document_type=doc_type_case_form, field_template=ft_file).exists()
 
     def test_file_field_on_event_type_still_allowed(self, req, facility, doc_type_contact):
-        # Regression: E8 betrifft nur client/case — der bestehende Event-Pfad
-        # (Attachment-Pipeline) darf nicht mitgesperrt werden.
+        # Regression: der bestehende Event-Pfad (Attachment-Pipeline) bleibt
+        # unveraendert erlaubt.
         ft_file = FieldTemplate.objects.create(
             facility=facility, name="Nachweis", field_type=FieldTemplate.FieldType.FILE
         )
         dtf = add_field_to_doctype(req, doc_type_contact, ft_file)
         assert dtf.field_template_id == ft_file.pk
 
-    def test_ui_flow_non_hx_redirects_with_error_message_no_500(
-        self, client, admin_user, facility, doc_type_client_profile
-    ):
+    def test_ui_flow_non_hx_redirects_with_success_message(self, client, admin_user, facility, doc_type_client_profile):
         ft_file = FieldTemplate.objects.create(facility=facility, name="Foto", field_type=FieldTemplate.FieldType.FILE)
         client.force_login(admin_user)
         response = client.post(
@@ -311,17 +317,14 @@ class TestFileFieldEntityTypeGuard:
             {"field_template": str(ft_file.pk), "field_group": ""},
         )
         assert response.status_code == 302
-        assert not DocumentTypeField.objects.filter(
-            document_type=doc_type_client_profile, field_template=ft_file
-        ).exists()
-        # Der Redirect-Zweig zeigt die generische board_response-Fehlermeldung;
-        # die konkrete deutsche E8-Meldung steht im Formfehler des HX-Zweigs
-        # (siehe test_ui_flow_hx_request_rerenders_board_no_500).
-        assert any("zugeordnet" in m for m in _messages(response))
+        assert DocumentTypeField.objects.filter(document_type=doc_type_client_profile, field_template=ft_file).exists()
+        assert any("Foto" in m for m in _messages(response))
 
-    def test_ui_flow_hx_request_rerenders_board_no_500(self, client, admin_user, facility, doc_type_client_profile):
-        # Realistischer Board-Pfad (HTMX): kein 500, das Board wird mit
-        # Formfehler frisch gerendert statt zu redirecten.
+    def test_ui_flow_hx_request_rerenders_board_with_assignment(
+        self, client, admin_user, facility, doc_type_client_profile
+    ):
+        # Realistischer Board-Pfad (HTMX): das Board wird frisch gerendert und
+        # zeigt das jetzt zugeordnete Datei-Feld.
         ft_file = FieldTemplate.objects.create(facility=facility, name="Scan", field_type=FieldTemplate.FieldType.FILE)
         client.force_login(admin_user)
         response = client.post(
@@ -330,11 +333,8 @@ class TestFileFieldEntityTypeGuard:
             HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
-        assert not DocumentTypeField.objects.filter(
-            document_type=doc_type_client_profile, field_template=ft_file
-        ).exists()
-        # Deutsche E8-Meldung landet als Formfehler im frisch gerenderten Board.
-        assert "Datei-Feldvorlagen" in response.content.decode()
+        assert DocumentTypeField.objects.filter(document_type=doc_type_client_profile, field_template=ft_file).exists()
+        assert "Datei-Feldvorlagen" not in response.content.decode()
 
     def test_ui_flow_non_file_field_on_client_type_succeeds(
         self, client, admin_user, facility, doc_type_client_profile

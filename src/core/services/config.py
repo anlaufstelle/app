@@ -416,13 +416,12 @@ def add_field_to_doctype(
     ``DocumentTypeField.objects.create()`` ruft ``full_clean()`` nie auf, der
     ``DocumentTypeField.clean()``-Guard greift also nicht.
 
-    Entscheid E8 (Refs #1058), Schicht 2: FILE-Feldvorlagen sind an die
-    Event-Attachment-Pipeline gebunden — Personen/Fälle haben keinen
-    Upload-Pfad. Schicht 1 ist die Paketformat-Validierung
-    (``core.packages.schema``), Schicht 3 die stille Formular-Auslassung
-    (``DynamicDataForm.exclude_file_fields``, letzte Verteidigungslinie). Diese
-    Schicht verhindert die Zuordnung selbst als :class:`ValidationError`
-    (View → Formfehler, kein 500).
+    M24/AP2 (Refs #1738, ADR-039 §9): Der frühere E8-Guard („FILE-Feldvorlagen
+    nur an Ereignis-Typen", Refs #1058) ist hier **ersatzlos entfallen** —
+    Anhänge hängen seit ADR-039 an Ereignis, Person oder Fall, die Sperre hatte
+    damit keinen Gegenstand mehr. Der Formular-Skip
+    ``DynamicDataForm.exclude_file_fields`` und der Typwechsel-Guard
+    ``FieldTemplateForm.clean_field_type`` fallen mit dem UI-Pfad (AP4).
     """
     # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
     # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu
@@ -446,14 +445,6 @@ def add_field_to_doctype(
                 "Formularfeld und kann nicht zugeordnet werden."
             )
             % {"slug": field_template.slug}
-        )
-
-    if (
-        field_template.field_type == FieldTemplate.FieldType.FILE
-        and doc_type.entity_type != DocumentType.EntityType.EVENT
-    ):
-        raise ValidationError(
-            _("Datei-Feldvorlagen können nur Dokumentationstypen mit Entitätstyp „Ereignis“ zugeordnet werden.")
         )
 
     if DocumentTypeField.objects.filter(document_type=doc_type, field_template=field_template).exists():

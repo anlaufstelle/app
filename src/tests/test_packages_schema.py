@@ -472,8 +472,11 @@ class TestCrossReferences:
 
 
 class TestSemanticRules:
-    def test_file_field_on_client_entity_is_rejected(self) -> None:
-        # Entscheid E8: Datei-Felder gibt es v1 nur an Ereignis-Typen.
+    def test_file_field_on_client_entity_is_allowed(self) -> None:
+        """Anforderungsaenderung M24 (Refs #1738, ADR-039 §9): Die E8-Sperre
+        („Datei-Felder nur an Ereignis-Typen", Refs #1058) faellt ersatzlos —
+        Anhaenge haengen jetzt auch an Personen und Faellen. Vorher war genau
+        dieses Paket ein Validierungsfehler."""
         raw = _valid_raw()
         raw["field_templates"].append({"slug": "anhang", "name": "Anhang", "field_type": "file", "is_encrypted": True})
         raw["document_types"].append(
@@ -484,7 +487,23 @@ class TestSemanticRules:
                 "field_refs": [{"template_slug": "anhang"}],
             }
         )
-        assert "document_types[1].field_refs[0].template_slug" in _paths(raw)
+        package = parse_package(raw)
+        assert package.document_types[1].field_refs[0].template_slug == "anhang"
+
+    def test_file_field_on_case_entity_is_allowed(self) -> None:
+        """Spiegel zum Personen-Typ (Anforderungsaenderung M24, Refs #1738)."""
+        raw = _valid_raw()
+        raw["field_templates"].append({"slug": "beleg", "name": "Beleg", "field_type": "file", "is_encrypted": True})
+        raw["document_types"].append(
+            {
+                "slug": "fallbogen",
+                "name": "Fallbogen",
+                "entity_type": "case",
+                "field_refs": [{"template_slug": "beleg"}],
+            }
+        )
+        package = parse_package(raw)
+        assert package.document_types[1].field_refs[0].template_slug == "beleg"
 
     def test_file_field_on_event_entity_is_allowed(self) -> None:
         raw = _valid_raw()
