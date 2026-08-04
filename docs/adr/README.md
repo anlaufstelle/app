@@ -70,6 +70,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-036](036-globale-block-sequenz-feldordnung.md) | Globale Block-Sequenz für Feldgruppen und ungruppierte Felder | Accepted |
 | [ADR-037](037-konfigurationspakete-dynamische-felder.md) | Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder | Accepted |
 | [ADR-038](038-reporting-plugin-backends.md) | Reporting-Backends als Plugin-System | Accepted |
+| [ADR-039](039-owner-generische-dateianhaenge.md) | Owner-generische Dateianhänge (Attachment an Ereignis, Person, Fall) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 

@@ -136,6 +136,8 @@ Nur der Ereignis-Pfad hat eine Attachment-/File-Vault-Pipeline ([ADR-014](014-en
 
 Schicht 3 ist die letzte Verteidigungslinie und bewusst **kein** Fehler: der Datensatz muss bearbeitbar bleiben, auch wenn die Konfiguration kaputt ist.
 
+**Update 2026-08-04:** Abgelöst durch [ADR-039](039-owner-generische-dateianhaenge.md) ab Migration 0129 — die Attachment-Pipeline ist owner-generisch (`Attachment` mit eigener `facility_id`), Datei-Felder sind seither auch an Personen- und Fall-Typen zulässig (#1738). Die Sperrschichten (real **vier**, nicht drei: zusätzlich der Typwechsel-Guard `FieldTemplateForm.clean_field_type` in `core/forms/config.py`) wurden ersatzlos entfernt.
+
 ### 10. Schlüsselrotation deckt die neuen `data_json`-Träger mit ab
 
 `manage.py reencrypt_fields` rotiert seit M2 auch `Client.data_json` und `Case.data_json` (samt Heal von Klartext-PII nach `encrypt_dynamic_data`), sonst entstünde für die neuen Modellgruppen eine Rotationslücke: ein ausrangierter Fernet-Schlüssel wäre nicht wirklich entfernbar.
