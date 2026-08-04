@@ -53,6 +53,7 @@ from core.services.client.export import (
     export_client_data_pdf,
 )
 from core.services.client.main import (
+    CLIENT_WRITE_REVOKED_MESSAGE,
     _delete_event_attachments_for_client,
     _delete_owned_attachments_for_client,
     _delete_recent_visits,
@@ -78,12 +79,14 @@ from core.services.client.main import (
     pending_deletion_client_ids,
     reject_client_deletion,
     request_client_deletion,
+    resolve_writable_client,
     restore_client,
     track_client_visit,
     update_client,
 )
 
 __all__ = [
+    "CLIENT_WRITE_REVOKED_MESSAGE",
     "DOCUMENTS",
     "TEMPLATE_DIR",
     "_build_export_meta",
@@ -140,6 +143,7 @@ __all__ = [
     "reject_client_deletion",
     "render_document",
     "request_client_deletion",
+    "resolve_writable_client",
     "restore_client",
     "track_client_visit",
     "update_client",

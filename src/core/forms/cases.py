@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.dynamic import DynamicDataForm
 from core.forms.dynamic import document_type_label as _document_type_label
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, Client, DocumentType, User
+from core.models import Case, DocumentType, User
 
 
 class DynamicCaseDataForm(DynamicDataForm):
@@ -136,8 +136,13 @@ class CaseForm(forms.ModelForm):
         # Refs #819: scoped Query — eine Person aus einer fremden
         # Facility liefert direkt DoesNotExist statt der nachgelagerten
         # Facility-Pruefung. Defense-in-Depth gegen ID-Erraten.
-        scoped = Client.objects.for_facility(self.facility) if self.facility else Client.objects.all()
-        try:
-            return scoped.get(pk=client_id)
-        except Client.DoesNotExist as exc:
-            raise ValidationError(_("Person existiert nicht.")) from exc
+        # Refs #1771: zusaetzlich das Widerrufs-Gate (Papierkorb/anonymisiert) —
+        # ein Fall an einer redigierten Person waere frischer Klartext (Titel,
+        # Beschreibung, ``data_json``, seit M24 auch Datei-Anhaenge).
+        from core.services.client import resolve_writable_client
+
+        return resolve_writable_client(
+            self.facility,
+            client_id,
+            missing_error=_("Person existiert nicht."),
+        )

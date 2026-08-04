@@ -8,7 +8,6 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.widgets import INPUT_CSS
 from core.models import User, WorkItem
-from core.models.client import Client
 
 
 def max_workitem_date() -> date:
@@ -142,13 +141,20 @@ class WorkItemForm(forms.ModelForm):
         client_id = self.cleaned_data.get("client")
         if not client_id:
             return None
-        try:
-            return Client.objects.filter(
-                pk=client_id,
-                facility=self.facility,
-            ).get()
-        except Client.DoesNotExist as exc:
-            raise forms.ValidationError(_("Ungültige Person-ID")) from exc  # pragma: no mutate
+        # Refs #1771: gemeinsames Widerrufs-Gate mit Event-/Fall-Formular. Der
+        # WorkItem-Pfad ist dabei der heikelste Bestand: ``title`` und
+        # ``description`` sind Freitext, und es gibt KEINEN nachgelagerten
+        # Prune — ``_redact_workitems`` laeuft ausschliesslich aus den beiden
+        # Anonymisierungs-Kaskaden. Ein Replay nach der Anonymisierung bliebe
+        # also unbefristet als Klartext an einer redigierten Person stehen
+        # (docs/security-notes.md § Offline-Widerruf).
+        from core.services.client import resolve_writable_client
+
+        return resolve_writable_client(
+            self.facility,
+            client_id,
+            missing_error=_("Ungültige Person-ID"),  # pragma: no mutate
+        )
 
     def clean(self):
         cleaned = super().clean() or {}

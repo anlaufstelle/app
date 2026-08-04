@@ -697,6 +697,53 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     return client
 
 
+#: Ablehnungsgrund fuer Schreibzugriffe auf widerrufene Personen (Refs #1771).
+#: Bewusst EINE Meldung fuer beide Zustaende (Papierkorb, anonymisiert): welcher
+#: der beiden vorliegt, ist fuer die Schreibende folgenlos — beide sind
+#: endgueltig, und die Unterscheidung waere nur ein zusaetzliches Detail ueber
+#: eine bereits geloeschte Person.
+CLIENT_WRITE_REVOKED_MESSAGE = _(
+    "Diese Person wurde gelöscht oder anonymisiert — es können keine Daten mehr zu ihr gespeichert werden."
+)
+
+
+def resolve_writable_client(facility, client_id, *, missing_error):
+    """Loest eine Personen-UUID fuer einen SCHREIBZUGRIFF auf (Refs #1771).
+
+    Der gemeinsame Kern der drei ``clean_client``-Methoden (``EventMetaForm``,
+    ``CaseForm``, ``WorkItemForm``). Zwei Grenzen, in dieser Reihenfolge:
+
+    1. **Facility-Scope** (Refs #819/#1423) — eine fremde oder unbekannte UUID
+       ist von aussen ununterscheidbar „existiert nicht"; der Aufrufer liefert
+       die Meldung (``missing_error``), damit die gewachsenen Formular-Texte
+       unveraendert bleiben.
+    2. **Widerruf** — ``is_deleted=True`` (Papierkorb) ODER ``is_active=False``
+       (anonymisiert). Der ``FacilityScopedManager`` filtert **keinen** von
+       beiden; ohne diesen Schritt schreibt ein Offline-Replay oder ein stales
+       Formular frischen Klartext an einen bereits redigierten Datensatz.
+
+    ``is_active=False`` ist dabei der Zustand, den ein reines
+    ``is_deleted``-Gate nicht faengt: die K-Anon-Bridge
+    (:func:`core.retention.anonymization.anonymize_clients`) anonymisiert
+    Personen, deren Ereignisse alle soft-geloescht sind, **ohne** sie in den
+    Papierkorb zu legen.
+
+    Beide Faelle sind ein ``ValidationError`` am Formularfeld. Ueber den
+    bestehenden 422-Replay-Contract (:func:`core.views._json_contracts
+    ._invalid_form_response`) landet ein Offline-Replay damit als
+    ``localStatus: "dead"`` in der Dead-Letter-UI — nicht als 409/429/5xx, die
+    ``offline-queue.js`` erneut ausspielen wuerde.
+    """
+    scoped = Client.objects.for_facility(facility) if facility else Client.objects.all()
+    try:
+        client = scoped.get(pk=client_id)
+    except Client.DoesNotExist as exc:
+        raise ValidationError(missing_error) from exc
+    if client.is_deleted or not client.is_active:
+        raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
+    return client
+
+
 def get_client_or_none(facility, client_id):
     """Lookup a client by PK scoped to *facility*.
 

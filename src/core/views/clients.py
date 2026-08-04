@@ -469,10 +469,18 @@ class ClientUpdateView(StaffRequiredMixin, View):
     404, das Bearbeiten-Formular aber 200. Der Weg raus aus einer Lösch-
     Blockade fuehrt seitdem ueber den Papierkorb (Wiederherstellen bzw.
     „Jetzt endgueltig anonymisieren"), nicht ueber einen Deep-Link.
+
+    Refs #1771: ``is_active=True`` kommt dazu — der zweite Widerrufs-Zustand.
+    Eine anonymisierte Person muss NICHT im Papierkorb liegen: die K-Anon-
+    Bridge (``retention/anonymization.py``) redigiert jede Person, deren
+    Ereignisse alle soft-geloescht sind, und laesst ``is_deleted=False``. Die
+    Zeile passierte damit jedes Papierkorb-Gate, und seit M24 (#1738) traegt
+    ein Edit-POST hier zusaetzlich Datei-Uploads (``Attachment``-Zeile +
+    ``.enc`` auf Disk).
     """
 
     def get(self, request, pk):
-        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         form = ClientForm(instance=client, facility=request.current_facility, user=request.user)
         type_locked = _lock_invisible_document_type(request, client, form)
         # Update-GET zeigt Klartext (Event-Muster ``EventUpdateView.get``): die
@@ -498,7 +506,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
         return render(request, "core/clients/form.html", context)
 
     def post(self, request, pk):
-        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         old_stage = client.contact_stage
         # VOR ``is_valid()`` sichern: ``ModelForm._post_clean`` mutiert die
         # Instanz bereits (Refs #1613 — dieselbe Falle wie beim Stage-Diff).
@@ -694,12 +702,18 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
         legitimen Aufrufer verliert der Scope nicht: das Bearbeiten-Formular,
         das ``?client=`` ueberhaupt erst anhaengt, ist fuer Papierkorb-Personen
         unerreichbar.
+
+        ``is_active=True`` (Refs #1771) zieht denselben Schluss fuer den zweiten
+        Widerrufs-Zustand nach: eine anonymisierte Person muss nicht im
+        Papierkorb liegen (K-Anon-Bridge), und ihr Bearbeiten-Formular ist seit
+        #1771 ebenfalls 404 — das Partial darf nicht die letzte 200-Antwort auf
+        derselben Person bleiben.
         """
         client_id = request.GET.get("client")
         if not client_id:
             return None
         try:
-            return get_scoped_object(Client, request, pk=client_id, is_deleted=False)
+            return get_scoped_object(Client, request, pk=client_id, is_deleted=False, is_active=True)
         except ValidationError as exc:
             raise Http404(_("Person nicht gefunden.")) from exc
 

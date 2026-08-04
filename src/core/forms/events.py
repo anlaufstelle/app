@@ -9,7 +9,6 @@ Die Modul-Helfer der Form werden hier ebenfalls re-exportiert.
 """
 
 from django import forms
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -25,7 +24,7 @@ from core.forms.dynamic import (  # noqa: F401 — Re-Export, Importpfad-Stabili
     _select_choices,
 )
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, Client, DocumentType
+from core.models import Case, DocumentType
 
 
 def _case_label(case: Case) -> str:
@@ -106,15 +105,26 @@ class EventMetaForm(forms.Form):
         Anonym-Fallback im View (Datenintegritaetsverlust) — jetzt ein
         harter Formularfehler, der ueber den bestehenden 422-Replay-
         Contract sauber als ``invalid`` klassifiziert wird.
+
+        Refs #1771: Die Aufloesung laeuft seither ueber
+        :func:`~core.services.client.resolve_writable_client` — der Scope allein
+        liess widerrufene Personen (Papierkorb ``is_deleted``, anonymisiert
+        ``is_active=False``) durch, und ein Offline-Replay schrieb frischen
+        Klartext an den redigierten Datensatz.
         """
         client_id = self.cleaned_data.get("client")
         if not client_id:
             return None
-        scoped = Client.objects.for_facility(self._facility) if self._facility else Client.objects.all()
-        try:
-            return scoped.get(pk=client_id)
-        except Client.DoesNotExist as exc:
-            raise ValidationError(_("Person existiert nicht.")) from exc  # pragma: no mutate
+        # Lokaler Import: ``core.services.client`` zieht Modelle und weitere
+        # Services nach, ein Modul-Top-Level-Import riskierte einen Zirkel
+        # ueber ``core.forms``.
+        from core.services.client import resolve_writable_client
+
+        return resolve_writable_client(
+            self._facility,
+            client_id,
+            missing_error=_("Person existiert nicht."),  # pragma: no mutate
+        )
 
     def clean(self):
         cleaned = super().clean()
