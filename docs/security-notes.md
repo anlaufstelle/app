@@ -215,7 +215,7 @@ Daraus folgen drei Fälle, in denen personenbeziehbare Restdaten die Löschung �
 
 1. **Bis zum Pruning** — Regelfall: bis zu `Settings.auditlog_retention_months` (Default 24 Monate) nach dem Eintrag.
 2. **Dauerhaft bei `auditlog_retention_months = 0`** — der Wert schaltet das Pruning ab ([`audit_pruning.py`](../src/core/retention/audit_pruning.py): `months <= 0` → No-op). Dann überlebt **jede** Audit-Zeile jede Löschung, unbegrenzt.
-3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED` und `AUDIT_PRUNE_CHECKPOINT` (beide tragen nur System-Metadaten) sowie — seit #1770 — für `EXPORT`-Einträge **mit Berichtszeitraum** (`RELEASE_EXPORT_Q`, Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person und die DSGVO-Dokument-Downloads laufen — die tragen keinen Zeitraum und bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
+3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED` und `AUDIT_PRUNE_CHECKPOINT` (beide tragen nur System-Metadaten) sowie — seit #1770 — für `EXPORT`-Einträge, die eine **Berichts-Freigabe** sind (`RELEASE_EXPORT_Q`: Berichtszeitraum **und** herausgegebenes Artefakt; Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person, die DSGVO-Dokument-Downloads (beide ohne Zeitraum) und jeder **Bildschirm-Aufruf** des externen Berichts (Zeitraum, aber kein Artefakt) laufen — die alle bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
 
 ### Was bereits umgesetzt ist (#1751, Punkt 5)
 
@@ -1244,16 +1244,34 @@ der Analyse sind erfüllt:
  der Export gar keine Herausgabe ist (Probelauf), und Pflichtfelder ohne Anlass werden mit „x"
  gefüllt. Freitext auf 200 Zeichen gekappt: der Log überlebt seit dieser Welle die Löschfristen und
  ist nachträglich nicht redigierbar.
-* **Historie nicht von `auditlog_retention_months` gekappt.** `AuditLog.Action.EXPORT` steht in
- `PRUNE_EXEMPT_ACTIONS`. Ohne die Ausnahme täuschte die Übersicht Vollständigkeit vor: eine im
- vierten Jahr herausgegebene Jahresauswertung überschnitte sich mit Monatsberichten, die der Log nicht
- mehr kennt, und die Warnung bliebe stumm — ein stiller falscher Negativ, schlechter als längere
- Aufbewahrung. **DSGVO-Begründung (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2):** Zweck ist der
- Nachweis herausgegebener **Statistiken**, nicht die Beobachtung von Beschäftigten. Das `detail` trägt
- Zeitraum, Format und die frei erfassten Empfänger-/Zweckangaben — **keine** Klient-PII, keine
- Pseudonyme, keine Personenzeilen (die Artefakte selbst sind k-anonymisiert); die handelnde Person
- steht wie in jedem Audit-Eintrag drin. Damit folgt die Aufbewahrung derselben Rechenschaftslogik wie
- `SECURITY_VIOLATION`.
+* **Historie nicht von `auditlog_retention_months` gekappt.** Die Ausnahme hängt **nicht** an der
+ Aktion `EXPORT` — die ist eine Sammelklasse — sondern an `RELEASE_EXPORT_Q` in
+ [`release_log.py`](../src/core/services/dashboard/release_log.py): Aktion `EXPORT` **und**
+ Berichtszeitraum im `detail` **und** der Marker „ein Artefakt hat das Haus verlassen". Dieselbe eine
+ Definition speist Übersicht und Retention-Ausnahme; zwei Kopien wären zwei Wahrheiten (eine Zeile,
+ die die Übersicht führt, aber das Pruning löscht, macht die Übersicht still unvollständig).
+
+ Drei Klassen fallen damit ausdrücklich **nicht** unter die Ausnahme und bleiben der 24-Monats-Frist
+ unterworfen: Art.-15-Datenauskünfte einzelner Personen, DSGVO-Dokument-Downloads (beide ohne
+ Berichtszeitraum) und die **Bildschirm-Aufrufe** des externen Berichts (mit Zeitraum, aber ohne
+ herausgegebenes Artefakt — sie werden bei jedem Reload auditiert und ließen den Log sonst unbegrenzt
+ wachsen). *Implementierungsfalle, test-gepinnt:* der Marker wird per `has_key` geprüft, nicht per
+ Wertvergleich — ein fehlender JSON-Schlüssel ergibt in SQL NULL, und `exclude(NULL)` hätte die
+ markerlosen Zeilen aus der Löschmenge genommen statt sie hineinzunehmen.
+
+ Ohne die Ausnahme täuschte die Übersicht Vollständigkeit vor: eine im vierten Jahr herausgegebene
+ Jahresauswertung überschnitte sich mit Monatsberichten, die der Log nicht mehr kennt, und die Warnung
+ bliebe stumm — ein stiller falscher Negativ, schlechter als längere Aufbewahrung.
+
+ **DSGVO-Begründung (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2):** Zweck ist der Nachweis
+ herausgegebener **Statistiken**, nicht die Beobachtung von Beschäftigten. Das `detail` dieser
+ Teilmenge trägt Zeitraum, Format und die erfassten Empfänger-/Zweckangaben; die Artefakte selbst sind
+ k-anonymisiert, es gibt dort keine Pseudonyme und keine Personenzeilen. **Was dauerhaft stehen
+ bleibt, ist damit trotzdem nicht personenlos:** die auslösende Person steht wie in jedem
+ Audit-Eintrag drin, und Empfänger/Zweck sind **ungeprüfter Freitext** — ihre Datenminimierung ist
+ eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch: Organisation statt Ansprechperson),
+ keine technische Zusicherung. Unter dieser Maßgabe folgt die Aufbewahrung derselben
+ Rechenschaftslogik wie `SECURITY_VIOLATION`.
 
 **Bewusste Einschränkung der Warnung:** gemeldet werden nur **nicht-identische** Überschneidungen. Aus
 zwei Berichten über *denselben* Zeitraum lässt sich keine Differenz bilden, ganz gleich, an wen sie

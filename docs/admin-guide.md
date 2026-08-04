@@ -1303,7 +1303,7 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 | Anmeldung / Abmeldung | Jeder Login/Logout |
 | Fehlgeschlagene Anmeldung | Falsches Passwort |
 | Qualifizierte Daten eingesehen | Zugriff auf identifizierbare Personendaten |
-| Export | Datenexport durch Benutzer |
+| Export | Datenexport durch Benutzer — auch Datenauskünfte zu einzelnen Personen und der Aufruf des externen Berichts am Bildschirm. **Herausgegebene Berichtsdateien** (CSV/PDF/JSON/XML mit Berichtszeitraum) sind eine Teilmenge davon: nur sie unterliegen nicht der Aufbewahrungsfrist und erscheinen in der [Freigabe-Übersicht](#8-statistik-snapshots--materialized-view) |
 | Löschung | Manuell oder durch `enforce_retention` |
 | Stufenwechsel | Änderung des Kontaktstatus einer Person |
 | Einstellungen geändert | Änderungen an Einrichtungseinstellungen |

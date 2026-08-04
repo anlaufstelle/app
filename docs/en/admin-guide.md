@@ -1301,7 +1301,7 @@ The audit log is **append-only** and immutable. It automatically records:
 | Login / Logout | Every login/logout |
 | Failed login | Incorrect password |
 | Qualified data viewed | Access to identifiable personal data |
-| Export | Data export by a user |
+| Export | Data export by a user — including data subject access requests for individual people and on-screen views of the external report. **Released report files** (CSV/PDF/JSON/XML with a reporting period) are a subset: only those are exempt from the retention deadline and appear in the [release overview](#8-statistics-snapshots--materialized-view) |
 | Deletion | Manual or via `enforce_retention` |
 | Level change | Change in a person's contact status |
 | Settings changed | Changes to facility settings |
@@ -1585,4 +1585,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: d95882394f95b4e2afb8665c9eb25efa74da755e -->
+<!-- source-hash: 1944a2c1643b4a605346e7ece779392216eea206 -->
