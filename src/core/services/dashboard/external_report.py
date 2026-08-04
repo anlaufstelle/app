@@ -20,6 +20,7 @@ from datetime import date
 from typing import Any
 
 from django.utils import timezone
+from django.utils.translation import gettext_lazy
 
 from core.models import Client, Settings
 from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
@@ -28,17 +29,93 @@ from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
 
 DEFAULT_K_THRESHOLD = 5
 
+# --- K3-A1 (Refs #1770): Restzeile „ohne Personenbezug" ---------------------
+#
+# ``by_age_cluster`` zaehlt nur Ereignisse MIT Personenbezug, ``total_contacts``
+# alle. Die Differenz W = ``total_contacts`` − Σ ``by_age_cluster`` ist **kein
+# publiziertes Aggregat** und beruehrte damit keine Suppressionsregel — sie war
+# aber aus zwei sichtbaren (also gerade nicht unterdrueckten, weil grossen)
+# Randsummen exakt ausrechenbar. Der Kanal erzeugt kleine Zahlen aus grossen:
+# ueber 15 728 distinkte Publikationen war W fast durchweg exakt bestimmbar, in
+# 8 820 davon mit 0 < W < k.
+#
+# Die Restzeile macht W zu einer regulaeren, suppressionsfaehigen Zelle. Damit
+# ist die Alterstabelle eine **exakte Partition** von ``total_contacts`` und
+# faellt neu unter K1/K2 (siehe ``_EXTERNAL_REPORT_BREAKDOWNS``).
+NO_PERSON_CLUSTER = "__no_person__"
+NO_PERSON_LABEL = gettext_lazy("Ohne Personenbezug")
+
 # Modellreihenfolge der Altersgruppen — die kanonische, wertunabhaengige
 # Ordnung fuer unterdrueckte ``by_age_cluster``-Zeilen (K5, Refs #1767). Aus
 # ``Client.AgeCluster`` abgeleitet statt hier dupliziert: eine neue Altersgruppe
-# soll die Ordnung automatisch erben.
+# soll die Ordnung automatisch erben. Die Restzeile steht **fest** hinter allen
+# Altersgruppen: ihre Position darf nie eine Wertaussage sein.
 _AGE_CLUSTER_ORDER = {value: index for index, value in enumerate(Client.AgeCluster.values)}
+_AGE_CLUSTER_ORDER[NO_PERSON_CLUSTER] = len(_AGE_CLUSTER_ORDER)
 
 
 def _age_cluster_key(row: dict[str, Any]) -> tuple[int, str]:
     """Altersgruppen in Modellreihenfolge; Unbekanntes stabil ans Ende."""
     cluster = row.get("cluster")
     return (_AGE_CLUSTER_ORDER.get(cluster, len(_AGE_CLUSTER_ORDER)), str(cluster or ""))
+
+
+def with_no_person_row(
+    age_rows: Sequence[dict[str, Any]], total_events: int | None, *, count_key: str = "count"
+) -> list[dict[str, Any]]:
+    """Haengt die Restzeile „ohne Personenbezug" an (K3-A1, Refs #1770).
+
+    Drei Auflagen der Analyse, alle drei hier verankert:
+
+    1. **Immer emittieren, auch bei W = 0.** Erschiene die Zeile nur bei W > 0,
+       waere ihre blosse Existenz die Aussage „W >= 1" — genau die
+       datenabhaengige Verzweigung, die K6 im Vollstaendigkeitsblock beseitigt
+       hat. W = 0 laeuft stattdessen als regulaere Kleinstzelle in die
+       Suppression.
+    2. **Fuer Alt-Snapshots synthetisieren, nicht bloss tolerieren.** Die Zeile
+       wird hier — an der Artefaktgrenze — aus ``total_contacts`` − Σ
+       *berechnet* und nie aus einem Snapshot uebernommen. Damit gibt es keinen
+       Alt-/Neu-Snapshot-Split und keine Formataenderung: der Merge summiert
+       ``total_contacts`` und die Alterszeilen ohnehin konsistent, also ist die
+       Differenz ueber den gemergten Gesamtzeitraum exakt. Ein Rueckfall auf
+       eine gespeicherte Zeile waere der Bypass.
+    3. **Die Tabelle faellt neu unter K1/K2** — das leistet nicht diese
+       Funktion, sondern die Randsummen-Deklaration an der Aufrufstelle
+       (``margin=published_total``) und der Eintrag in
+       ``_EXTERNAL_REPORT_BREAKDOWNS``.
+
+    Idempotent: eine bereits vorhandene Restzeile wird verworfen und neu
+    gerechnet — sonst zaehlte ein kuenftiger Lesepfad, der sie mitbraechte, W
+    doppelt.
+
+    Die Zeile traegt bewusst **kein** ``persons``-Feld: ihre Aequivalenzklasse
+    ist keine Personenmenge, sondern die Menge der Ereignisse ohne
+    Personen-FK — untereinander nicht verknuepfbar (dieselbe Begruendung wie
+    bei ``persons_by_contact_stage['anonym']``). Sie bleibt damit aus der
+    Personen-Randsumme Σ ``persons`` = ``unique_clients`` heraus, die sonst
+    still braeche.
+    """
+    rows = [dict(row) for row in age_rows if row.get("cluster") != NO_PERSON_CLUSTER]
+    counted = sum(row.get(count_key) or 0 for row in rows)
+    remainder = max(0, (total_events or 0) - counted)
+    return [*rows, {"cluster": NO_PERSON_CLUSTER, "label": str(NO_PERSON_LABEL), count_key: remainder}]
+
+
+def _row_min_value(row: dict[str, Any]) -> int:
+    """Zeilen-Existenz-Untergrenze **je Zeile** (K1/K2-Inferenzmodell).
+
+    GROUP-BY-Zeilen entstehen nur fuer nichtleere Buckets, tragen also
+    mindestens einen Fall (``lo = 1``). Die Restzeile aus :func:`with_no_person_row`
+    wird dagegen **datenunabhaengig** emittiert und darf 0 sein (``lo = 0``) —
+    wie die festen Schluessel in ``by_contact_stage``.
+
+    Diese Unterscheidung ist nicht kosmetisch: eine Untergrenze 1 auf einer
+    Zelle, die 0 sein kann, macht das Intervallmodell **unerfuellbar**, und ein
+    leeres Intervall gilt in ``disclosure.findings`` als begruendete Ausnahme.
+    Der Guard liefe damit fail-open — auch fuer die Nachbarzellen, deren
+    Obergrenze ueber Σ ``lo`` der uebrigen Zellen berechnet wird.
+    """
+    return 0 if row.get("cluster") == NO_PERSON_CLUSTER else 1
 
 
 def _document_type_key(row: dict[str, Any]) -> tuple[str, str]:
@@ -85,7 +162,7 @@ def _audit_feasible_span(
     threshold: int,
     *,
     margin: int | None,
-    min_value: int,
+    min_values: Sequence[int],
     person_gated: bool,
     tiebreak: Callable[[int], tuple],
 ) -> None:
@@ -122,8 +199,9 @@ def _audit_feasible_span(
     Leere und laeuft gar nicht — ohne die Gleichung R = Randsumme − Σ sichtbare
     Zellen gibt es nichts zurueckzurechnen.
 
-    Mutiert ``flags`` in place. ``min_value`` ist die Zeilen-Existenz-Untergrenze
-    (1 fuer GROUP-BY-Zeilen, 0 fuer Aufschluesselungen mit festen Schluesseln),
+    Mutiert ``flags`` in place. ``min_values`` ist die Zeilen-Existenz-Untergrenze
+    **je Zelle** (1 fuer GROUP-BY-Zeilen, 0 fuer datenunabhaengig emittierte
+    Zellen — feste Schluessel wie ``by_contact_stage`` und die K3-A1-Restzeile),
     ``tiebreak`` liefert bei wertgleichen Kandidaten eine wertunabhaengige,
     deterministische Reihenfolge (kanonische K5-Ordnung).
     """
@@ -132,7 +210,7 @@ def _audit_feasible_span(
     victims = [False] * len(values)
     for _ in range(MAX_GUARD_ITERATIONS):
         partition = _local_partition(
-            values, flags, victims, threshold, margin=margin, min_value=min_value, person_gated=person_gated
+            values, flags, victims, threshold, margin=margin, min_values=min_values, person_gated=person_gated
         )
         if not findings([partition], threshold=threshold):
             return
@@ -154,7 +232,7 @@ def _local_partition(
     threshold: int,
     *,
     margin: int,
-    min_value: int,
+    min_values: Sequence[int],
     person_gated: bool,
 ) -> Partition:
     """Die Sicht des Empfaengers auf **eine** Tabelle — mit echter Herkunft.
@@ -164,7 +242,7 @@ def _local_partition(
     (konservativ, siehe Angreifermodell in
     :mod:`core.services.dashboard.disclosure`):
 
-    * Wert < *k* ⇒ ereignisbedingt primaer unterdrueckt ⇒ ``[min_value, k-1]``.
+    * Wert < *k* ⇒ ereignisbedingt primaer unterdrueckt ⇒ ``[min_values[i], k-1]``.
     * Wert >= *k* und Sekundaer-Opfer ⇒ **Bedingung X, zwingend an die Opferwahl
       gekoppelt:** :func:`_audit_feasible_span` opfert die **kleinste** sichtbare
       Zelle, der Wert liegt also nicht *ueber* irgendeiner verbliebenen sichtbaren
@@ -185,6 +263,7 @@ def _local_partition(
     visible_min = min(visible, default=None)
     cells = []
     for index, value in enumerate(values):
+        min_value = min_values[index]
         if not flags[index]:
             cells.append(Cell(key=str(index), published=value, lo=min_value, hi=None))
         elif value < threshold:
@@ -309,9 +388,10 @@ def _suppress_small(
         flags,
         threshold,
         margin=margin,
-        # GROUP-BY-Zeilen entstehen nur fuer nichtleere Buckets: jede gelistete
-        # Zeile traegt >= 1 Ereignis (Zeilen-Existenz-Kanal).
-        min_value=1,
+        # Zeilen-Existenz je Zeile (siehe ``_row_min_value``): GROUP-BY-Zeilen
+        # entstehen nur fuer nichtleere Buckets und tragen >= 1 Ereignis, die
+        # K3-A1-Restzeile wird datenunabhaengig emittiert und darf 0 sein.
+        min_values=[_row_min_value(row) for row in raw],
         person_gated=any(PERSONS_KEY in row for row in raw),
         tiebreak=_order_tiebreak(raw, order),
     )
@@ -411,7 +491,7 @@ def _suppress_stage_dict(
         flags,
         threshold,
         margin=margin,
-        min_value=0,
+        min_values=[0] * len(keys),
         person_gated=True,
         # Feste Schluesselordnung — wertunabhaengig, deshalb reicht die Position.
         tiebreak=lambda index: (-index,),
@@ -455,15 +535,31 @@ class _Breakdown:
 _EXTERNAL_REPORT_BREAKDOWNS = (
     _Breakdown("by_document_type", "total_contacts", ORDER_DOCUMENT_TYPE),
     _Breakdown("by_contact_stage", "total_contacts", ORDER_INPUT, kind="stages", reveals_person_gap=True),
-    # by_age_cluster zaehlt nur Ereignisse MIT Personenbezug — kein Artefakt
-    # publiziert eine Randsumme = Σ Altersgruppen (K3/„Geprueft und nicht
-    # tragfaehig"). Der tragfaehige Kanal dieser Tabelle laeuft ueber die
-    # **Personen**-Randsumme und steht als eigene Partition daneben.
-    _Breakdown("by_age_cluster", None, ORDER_AGE_CLUSTER, reveals_person_gap=True),
+    # K3-A1 (Refs #1770): Seit die Restzeile „ohne Personenbezug" mitlaeuft, ist
+    # die Alterstabelle eine **exakte Partition von ``total_contacts``** — der
+    # Eintrag „geprueft und nicht tragfaehig" der Analyse (kein Artefakt
+    # publiziere eine Ereignis-Randsumme = Σ Altersgruppen) ist damit
+    # ueberholt, und zwar genau an der Stelle, die er selbst als Ausloeser
+    # benannt hat. Die Tabelle deklariert die Randsumme deshalb und faellt neu
+    # unter K1/K2. Der **zweite** Kanal dieser Tabelle bleibt die
+    # Personen-Randsumme Σ ``persons`` = ``unique_clients``; sie steht als
+    # eigene Partition daneben (K0-b, Auflage 2) und ist von der Restzeile
+    # unberuehrt, weil diese kein ``persons`` traegt.
+    _Breakdown("by_age_cluster", "total_contacts", ORDER_AGE_CLUSTER, reveals_person_gap=True),
 )
 
 _SAMPLE_REPORT_1_BREAKDOWNS = (
     _Breakdown("by_category", "total", ORDER_INPUT),
+    # K3-A2 (Refs #1770) — **bewusst ohne** Randsumme und ohne Restzeile: Hier
+    # zaehlt ``total`` nur die **gemappten** Ereignisse, die Alterstabelle die
+    # Ereignisse **mit Personenbezug** — zwei verschiedene Grundgesamtheiten.
+    # Eine Restzeile bei unveraenderter Randsumme oeffnete nachweislich einen
+    # neuen exakten Kanal (485 von 840 durchgerechneten Kleinzell-Welten
+    # pinnbar, heute 0), weil die Sekundaersuppression voraussetzt, dass die
+    # Zeilen sich auf die publizierte Randsumme summieren. Gangbar waere sie
+    # nur mit **umgestellter** Randsumme (``total`` = alle Ereignisse) — ein
+    # Produktentscheid ueber die Kernkennzahl des Berichts, kein Nebeneffekt
+    # einer Sicherheitsmassnahme.
     _Breakdown("by_age_cluster", None, ORDER_AGE_CLUSTER, reveals_person_gap=True),
 )
 
@@ -545,7 +641,11 @@ def _published_partitions(
             cells = tuple(Cell(key=str(key), published=value, lo=0, hi=None) for key, value in sorted(data.items()))
         else:
             cells = tuple(
-                Cell(key=str(index), published=None if row.get("suppressed") else row.get(spec.count_key), lo=1)
+                Cell(
+                    key=str(index),
+                    published=None if row.get("suppressed") else row.get(spec.count_key),
+                    lo=_row_min_value(row),
+                )
                 for index, row in enumerate(data)
             )
         partitions.append(
@@ -689,11 +789,18 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
         raw["by_document_type"], threshold, margin=published_total, order=ORDER_DOCUMENT_TYPE
     )
     age_rows = require_person_counts(raw["by_age_cluster"])
-    # margin=None: kein Artefakt publiziert eine Ereignis-Randsumme
-    # = Σ Altersgruppen (die Tabelle zaehlt nur Ereignisse MIT Personenbezug).
-    # Der tragfaehige Kanal laeuft ueber die Personen-Randsumme und wird von
-    # ``drop_person_margin_on_person_suppression`` + K1-Guard behandelt.
-    by_age_cluster = _suppress_small(age_rows, threshold, margin=None, order=ORDER_AGE_CLUSTER)
+    # K3-A1 (Refs #1770): Mit der Restzeile ist die Alterstabelle eine exakte
+    # Partition von ``total_contacts`` und deklariert deshalb diese Randsumme
+    # (vorher ``margin=None``, das Audit lief dort gar nicht). ``age_rows``
+    # bleibt bewusst OHNE Restzeile — es ist die Eingabe der **Personen**-
+    # Randsumme Σ ``persons`` = ``unique_clients``, in der die personenlosen
+    # Ereignisse nichts zu suchen haben.
+    by_age_cluster = _suppress_small(
+        with_no_person_row(age_rows, raw["total_contacts"]),
+        threshold,
+        margin=published_total,
+        order=ORDER_AGE_CLUSTER,
+    )
     by_contact_stage = _suppress_stage_dict(
         raw["by_contact_stage"], threshold, persons=raw.get("persons_by_contact_stage"), margin=published_total
     )
@@ -765,9 +872,11 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
     # Die Kategorie-Ordnung ist wertunabhaengig (feste Konsolidierungsordnung).
     by_category = _suppress_small(category_rows, threshold, margin=published_total, order=ORDER_INPUT)
     age_rows = require_person_counts(list(stats.get("by_age_cluster", [])))
-    # margin=None wie im externen Bericht: keine Ereignis-Randsumme ueber die
-    # Altersgruppen (``total`` zaehlt gemappte Ereignisse, die Alterstabelle
-    # Ereignisse mit Personenbezug — zwei verschiedene Grundgesamtheiten, K3).
+    # K3-A2 (Refs #1770): HIER bleibt es bei ``margin=None`` und **ohne**
+    # Restzeile. ``total`` zaehlt nur gemappte Ereignisse, die Alterstabelle
+    # Ereignisse mit Personenbezug — zwei verschiedene Grundgesamtheiten. Eine
+    # Restzeile bei unveraenderter Randsumme oeffnete nachweislich einen neuen
+    # exakten Kanal; Begruendung an ``_SAMPLE_REPORT_1_BREAKDOWNS``.
     by_age_cluster = _suppress_small(age_rows, threshold, margin=None, order=ORDER_AGE_CLUSTER)
 
     out = {
@@ -805,8 +914,15 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
         list(stats.get("by_document_type", [])), threshold, margin=published_total, order=ORDER_DOCUMENT_TYPE
     )
     age_rows = require_person_counts(list(stats.get("by_age_cluster", [])))
-    # margin=None — siehe ``build_external_report``.
-    out["by_age_cluster"] = _suppress_small(age_rows, threshold, margin=None, order=ORDER_AGE_CLUSTER)
+    # K3-A1 (Refs #1770) — siehe ``build_external_report``: Restzeile aus dem
+    # ROHEN ``total_contacts`` (nicht aus ``published_total``, das R14 schon
+    # genullt haben kann) und Randsummen-Deklaration.
+    out["by_age_cluster"] = _suppress_small(
+        with_no_person_row(age_rows, total),
+        threshold,
+        margin=published_total,
+        order=ORDER_AGE_CLUSTER,
+    )
     out["by_contact_stage"] = _suppress_stage_dict(
         dict(stats.get("by_contact_stage", {})),
         threshold,

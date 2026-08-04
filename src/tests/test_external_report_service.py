@@ -145,7 +145,7 @@ class TestSecondarySuppression:
             victims=[False, True, False],
             threshold=5,
             margin=21,
-            min_value=1,
+            min_values=[1, 1, 1],
             person_gated=False,
         )
         opfer = partition.cells[1]
@@ -165,7 +165,7 @@ class TestSecondarySuppression:
             victims=[True, False, False],
             threshold=5,
             margin=22,
-            min_value=1,
+            min_values=[1, 1, 1],
             person_gated=False,
         )
         assert (partition.cells[0].lo, partition.cells[0].hi) == (5, None)
@@ -325,7 +325,14 @@ class TestKanonischeOrdnungInDenWrappern:
         out = suppress_report_stats(facility, stats)
 
         assert [row["name"] for row in out["by_document_type"]] == ["Notiz", "Aufnahme", "Beratung"]
-        assert [row["cluster"] for row in out["by_age_cluster"]] == ["27_plus", "u18", "unknown"]
+        # K3-A1 (Refs #1770): die Restzeile „ohne Personenbezug" steht **fest** am Ende
+        # der kanonischen Ordnung — ihre Position ist nie eine Wertaussage.
+        assert [row["cluster"] for row in out["by_age_cluster"]] == [
+            "27_plus",
+            "u18",
+            "unknown",
+            "__no_person__",
+        ]
 
     def test_suppress_sample_report_1_stats_ordnet_die_altersgruppen_kanonisch(self, facility):
         from core.services.dashboard import suppress_sample_report_1_stats
@@ -462,7 +469,12 @@ class TestPersonenabgeleiteteTabellenFailSafe:
         }
         out = suppress_report_stats(facility, stats)
 
-        assert out["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": 40, "suppressed": False}]
+        # K3-A1 (Refs #1770): die Restzeile „ohne Personenbezug" kommt hinzu (hier
+        # W = 40 − 40 = 0 und damit unterdrueckt) — sie ist datenunabhaengig da.
+        assert out["by_age_cluster"] == [
+            {"cluster": "u18", "label": "Unter 18", "count": 40, "suppressed": False},
+            {"cluster": "__no_person__", "label": "Ohne Personenbezug", "count": None, "suppressed": True},
+        ]
         assert out["by_contact_stage"] == {"anonym": 20, "identifiziert": 12, "qualifiziert": 8}
 
     def test_suppress_sample_report_1_stats_laesst_die_altersgruppen_fallen(self, facility):
@@ -1024,7 +1036,11 @@ class TestPersonenkriteriumInDenWrappern:
         out = suppress_report_stats(facility, stats)
 
         assert "persons_by_contact_stage" not in out
-        assert out["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": 40, "suppressed": False}]
+        # K3-A1 (Refs #1770): plus die datenunabhaengige Restzeile (W = 0).
+        assert out["by_age_cluster"] == [
+            {"cluster": "u18", "label": "Unter 18", "count": 40, "suppressed": False},
+            {"cluster": "__no_person__", "label": "Ohne Personenbezug", "count": None, "suppressed": True},
+        ]
 
     def test_suppress_sample_report_1_stats_behandelt_alt_format_fail_safe(self, facility):
         from core.services.dashboard import suppress_sample_report_1_stats
@@ -1225,3 +1241,223 @@ class TestResidualGuardEskalation:
 
         assert "by_document_type" not in report
         assert report["total_contacts"] is None
+
+
+@pytest.mark.django_db
+class TestRestzeileOhnePersonenbezug:
+    """K3-A1 (Refs #1770): ``W = total_contacts − Σ by_age_cluster`` wird eine Zelle.
+
+    Ohne die Restzeile ist W — die Zahl der Ereignisse **ohne** Personenbezug —
+    aus zwei sichtbaren Randsummen exakt ausrechenbar, **ohne dass eine
+    Suppressionsregel angesprochen haette** (Analyse: 8 820 Welten mit
+    0 < W < k). Die Zeile macht W zu einer regulaeren, suppressionsfaehigen
+    Zelle und die Alterstabelle zu einer exakten Partition von
+    ``total_contacts`` — womit sie neu unter K1/K2 faellt.
+    """
+
+    def test_restzeile_wird_immer_emittiert_auch_bei_null(self, facility):
+        """Auflage 1: datenunabhaengige Existenz.
+
+        Wuerde die Zeile nur bei W > 0 erscheinen, waere ihre blosse Existenz
+        die Aussage „W >= 1" — genau die datenabhaengige Verzweigung, die K6 im
+        Vollstaendigkeitsblock beseitigt hat.
+        """
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 40,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                # Σ = 40 = total_contacts ⇒ W = 0
+                "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 40, "persons": 20}],
+            },
+        )
+
+        rest = [row for row in out["by_age_cluster"] if row["cluster"] == NO_PERSON_CLUSTER]
+        assert len(rest) == 1, "Die Restzeile muss auch bei W = 0 emittiert werden"
+        assert rest[0]["suppressed"] is True, "W = 0 liegt unter der Schwelle und wird unterdrueckt"
+
+    def test_restzeile_traegt_die_ereignisse_ohne_personenbezug(self, facility):
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 40,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 25, "persons": 20}],
+            },
+        )
+
+        rest = next(row for row in out["by_age_cluster"] if row["cluster"] == NO_PERSON_CLUSTER)
+        assert rest["count"] == 15, "W = 40 − 25"
+        assert rest["suppressed"] is False
+
+    def test_restzeile_steht_in_der_kanonischen_ordnung_am_ende(self, facility):
+        """K5-Kopplung: die Restzeile hat einen **festen** Platz in der
+        wertunabhaengigen Ordnung — sonst waere ihre Position eine Rangaussage."""
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 10,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                "by_age_cluster": [
+                    {"cluster": "27_plus", "label": "27+", "count": 4, "persons": 4},
+                    {"cluster": "u18", "label": "Unter 18", "count": 3, "persons": 3},
+                ],
+            },
+        )
+
+        unterdrueckt = [row["cluster"] for row in out["by_age_cluster"] if row["suppressed"]]
+        assert unterdrueckt[-1] == NO_PERSON_CLUSTER, unterdrueckt
+
+    def test_alterstabelle_deklariert_die_ereignis_randsumme(self):
+        """Auflage 3: die Tabelle faellt neu unter K1 — der Guard braucht dafuer
+        die Randsumme, gegen die sie sich summiert."""
+        from core.services.dashboard.external_report import _EXTERNAL_REPORT_BREAKDOWNS
+
+        spec = next(item for item in _EXTERNAL_REPORT_BREAKDOWNS if item.key == "by_age_cluster")
+        assert spec.margin_key == "total_contacts"
+
+    def test_die_restzeile_faellt_unter_das_machbarkeits_audit(self, facility):
+        """K2 auf der Alterstabelle: ist W exakt zurueckrechenbar, faellt eine
+        weitere sichtbare Zelle — vorher lief das Audit dort mit ``margin=None``
+        gar nicht."""
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 22,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                # 10 + 9 sichtbar, W = 3 ⇒ ohne Audit waere W = 22 − 19 exakt.
+                "by_age_cluster": [
+                    {"cluster": "27_plus", "label": "27+", "count": 10, "persons": 10},
+                    {"cluster": "18_26", "label": "18–26", "count": 9, "persons": 9},
+                ],
+            },
+        )
+
+        rest = next(row for row in out["by_age_cluster"] if row["cluster"] == NO_PERSON_CLUSTER)
+        assert rest["suppressed"] is True
+        sichtbar = [row["count"] for row in out["by_age_cluster"] if not row["suppressed"]]
+        assert len(sichtbar) < 2, f"W bliebe exakt rueckrechenbar, sichtbar: {sichtbar}"
+
+    def test_externer_bericht_traegt_die_restzeile(self, facility, doc_type_contact, staff_user, report_period):
+        """Der zweite Wrapper mit publizierter Ereignis-Randsumme."""
+        from core.models import Client
+        from core.services.dashboard import build_external_report
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        for index in range(6):
+            person = Client.objects.create(
+                facility=facility,
+                contact_stage=Client.ContactStage.QUALIFIED,
+                age_cluster=Client.AgeCluster.AGE_27_PLUS,
+                pseudonym=f"K3A1-{index:02d}",
+                created_by=staff_user,
+            )
+            _make_events(facility, person, doc_type_contact, staff_user, 2)
+        # Sechs Ereignisse ohne Personenbezug — genau W.
+        _make_events(facility, None, doc_type_contact, staff_user, 6)
+
+        report = build_external_report(facility, *report_period)
+
+        rest = next(row for row in report["by_age_cluster"] if row["cluster"] == NO_PERSON_CLUSTER)
+        assert rest["count"] == 6
+        assert sum(row["count"] or 0 for row in report["by_age_cluster"]) == report["total_contacts"]
+
+    def test_hybrid_merge_synthetisiert_die_restzeile_fuer_alt_snapshots(self, facility):
+        """Auflage 2: Alt-Snapshots tragen die Zeile nicht — sie wird an der
+        Artefaktgrenze aus ``total_contacts − Σ`` **synthetisiert**, nie aus dem
+        Snapshot uebernommen. Damit gibt es keinen Alt-/Neu-Snapshot-Split.
+        """
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        # Ein gemergter Alt-Bestand ohne jede Restzeile.
+        merged_alt = {
+            "total_contacts": 30,
+            "unique_clients": 20,
+            "by_contact_stage": {},
+            "persons_by_contact_stage": {},
+            "by_document_type": [],
+            "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 18, "persons": 18}],
+        }
+
+        out = suppress_report_stats(facility, merged_alt)
+
+        rest = next(row for row in out["by_age_cluster"] if row["cluster"] == NO_PERSON_CLUSTER)
+        assert rest["count"] == 12
+
+    def test_restzeile_wird_nicht_doppelt_angehaengt(self, facility):
+        """Idempotenz-Guard: brauchte ein kuenftiger Lesepfad die Zeile schon
+        mit, duerfte sie hier nicht ein zweites Mal entstehen (W waere sonst
+        doppelt gezaehlt)."""
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 30,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                "by_age_cluster": [
+                    {"cluster": "27_plus", "label": "27+", "count": 18, "persons": 18},
+                    {"cluster": NO_PERSON_CLUSTER, "label": "Ohne Personenbezug", "count": 12},
+                ],
+            },
+        )
+
+        rest = [row for row in out["by_age_cluster"] if row["cluster"] == NO_PERSON_CLUSTER]
+        assert len(rest) == 1
+        assert rest[0]["count"] == 12
+
+    def test_beispiel_sachbericht_bekommt_keine_restzeile(self, facility):
+        """K3-A2 — **nicht naiv**: im Beispiel-Sachbericht zaehlt ``total`` nur
+        die **gemappten** Ereignisse. Eine Restzeile bei unveraenderter Randsumme
+        erzeugte dort einen neuen exakten Kanal (485 von 840 Kleinzell-Welten
+        pinnbar), weil die Sekundaersuppression voraussetzt, dass die Zeilen sich
+        auf die publizierte Randsumme summieren.
+        """
+        from core.services.dashboard import suppress_sample_report_1_stats
+        from core.services.dashboard.external_report import (
+            _SAMPLE_REPORT_1_BREAKDOWNS,
+            NO_PERSON_CLUSTER,
+        )
+
+        out = suppress_sample_report_1_stats(
+            facility,
+            {
+                "total": 30,
+                "unique_clients": 20,
+                "by_category": [("Kontakte", 18), ("Beratung", 12)],
+                "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 18, "persons": 18}],
+            },
+        )
+
+        assert all(row["cluster"] != NO_PERSON_CLUSTER for row in out["by_age_cluster"])
+        spec = next(item for item in _SAMPLE_REPORT_1_BREAKDOWNS if item.key == "by_age_cluster")
+        assert spec.margin_key is None, "Ohne umgestellte Randsumme darf dort keine Gleichung deklariert werden"
