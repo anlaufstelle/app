@@ -161,7 +161,13 @@ from django.utils.translation import gettext_lazy as _
 from core.models import DocumentType, Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import _get_threshold, _suppress_small
+from core.services.dashboard.external_report import (
+    ORDER_INPUT,
+    _Breakdown,
+    _get_threshold,
+    _suppress_small,
+    apply_residual_guard,
+)
 
 
 @register_backend("example")
@@ -235,24 +241,40 @@ Drei Punkte, die leicht untergehen:
 
 ### Schritt 4 — K-Anonymität sicherstellen
 
-Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtlektüre**, nicht Kür. Details in [§ 6](#6-k-anonymität--der-prepare_export-hook); der Minimalfall aus `example.py` (Imports wie in Schritt 1 — `dataclasses`, `_get_threshold`, `_suppress_small`):
+Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtlektüre**, nicht Kür. Details in [§ 6](#6-k-anonymität--der-prepare_export-hook); der Minimalfall aus `example.py` (Imports wie in Schritt 1):
 
 ```python
+    # Deklaration für den zentralen Residual-Guard: ``total`` ist die Summe
+    # aller Zeilen-``count``s, ``records`` also die exakte Partition dieser
+    # Randsumme. ``ORDER_INPUT``: die Query sortiert nach ``document_type__name``
+    # — die Zeilenposition ist bereits wertunabhängig (K5).
+    _EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
+
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         threshold = _get_threshold(facility)
-        suppressed_rows = _suppress_small(result.records, threshold, count_key="count")
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in suppressed_rows]
-
         total = result.summary["total"]
-        any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
-        drop_total = total < threshold or any_row_suppressed
+        # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl.
+        published_total = None if total < threshold else total
+        view = {
+            "total": published_total,
+            "records": _suppress_small(
+                result.records, threshold, margin=published_total, order=ORDER_INPUT
+            ),
+        }
+        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
+
+        field_keys = [spec.key for spec in self.get_field_specs()]
+        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
 
         summary = dict(result.summary)
-        summary["total"] = None if drop_total else total
+        summary["total"] = view["total"]
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)
 ```
+
+`margin` und `order` sind **Keyword-only und ohne Default** — ein Aufruf ohne sie ist ein `TypeError` (fail-closed): `margin` sagt, ob es eine publizierte Randsumme gibt, an der das Machbarkeits-Audit rechnen kann, `order` benennt die kanonische Ausgabeordnung unterdrückter Zeilen.
+
+`apply_residual_guard` ist der **letzte** Schritt und für jedes `prepare_export` mit publizierter Randsumme Pflicht (der Architektur-Guard `test_architecture_guards_services.py` erzwingt es): er führt die Empfänger-Inferenz aus und lässt notfalls die Randsumme oder die ganze Aufschlüsselung fallen. Die frühere Eigenbau-Regel „fällt eine Zelle, fällt auch `total`" ist damit **entfallen** (#1770) — sie war eine zweite, pauschalere Suppressionslogik neben der zentralen, also genau das, was der Architektur-Guard heute verbietet.
 
 Die Rückprojektion auf die deklarierten `FieldSpec`-Schlüssel ist kein Schönheitsschritt: `_suppress_small` hängt jeder Zeile ein internes `suppressed`-Flag an, das sonst ungefiltert in CSV, JSON und XML landen würde.
 
@@ -344,8 +366,8 @@ Die Schwelle *k* kommt je Einrichtung aus `Settings.k_anonymity_threshold` (Defa
 
 Eine Kennzahl je Zeile plus eine Randsumme. Zu lösen ist genau eine Rückrechnungs-Gefahr: `total = Σ counts`. Bliebe `total` nach einer Zeilen-Suppression roh stehen, wäre die unterdrückte Zelle exakt als Differenz zu den sichtbaren Zeilen bestimmbar. Deshalb:
 
-- `_suppress_small(rows, threshold, count_key="count")` setzt Zellen `< k` auf `count=None`/`suppressed=True` und führt die **Sekundär-Suppression nach A6.1** (#1024/#1016) gleich mit aus: Bleibt danach genau **eine** Zelle unterdrückt, fällt zusätzlich die nächstkleinere sichtbare Zelle, damit mindestens zwei Unbekannte übrig bleiben.
-- `total` fällt, wenn es **selbst** unter der Schwelle liegt (R14) **oder** wenn überhaupt eine Zeile unterdrückt ist. Letzteres ist die konservative Wahl: Die Sekundär-Suppression schützt nur den Fall *genau einer* unterdrückten Zelle; bleiben mehrere unterdrückt, wäre `total` weiterhin ein Rückrechnungs-Hebel.
+- `_suppress_small(rows, threshold, margin=…, order=…)` setzt Zellen `< k` auf `count=None`/`suppressed=True` und führt die **Sekundär-Suppression** gleich mit aus. Sie hängt seit #1770 nicht mehr an der Zellen*zahl* (A6.1: „genau eine unterdrückte Zelle"), sondern an der gemessenen **Machbarkeitsspanne** (`_audit_feasible_span`): Solange für eine unterdrückte Zelle nur noch ein einziger Wert möglich ist, fällt zusätzlich die **kleinste** sichtbare Zelle — und danach wird neu gerechnet, bis zum Fixpunkt. Ziel ist eine Spanne ≥ 2, also kein exakter Pin.
+- `total` fällt, wenn es **selbst** unter der Schwelle liegt (R14). Darüber hinaus entscheidet `apply_residual_guard`: Er prüft die publizierte Partition gegen das Inferenzmodell und lässt erst die Randsumme, notfalls die ganze Aufschlüsselung fallen. Die alte pauschale Regel „eine Zeile unterdrückt ⇒ `total` weg" ist ersatzlos entfallen; sie unterdrückte mehr als nötig und lag trotzdem neben den Fällen, die der Spannen-Audit findet.
 
 ### Vollbeispiel — `SampleReport1Backend`
 

@@ -164,7 +164,13 @@ from django.utils.translation import gettext_lazy as _
 from core.models import DocumentType, Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import _get_threshold, _suppress_small
+from core.services.dashboard.external_report import (
+    ORDER_INPUT,
+    _Breakdown,
+    _get_threshold,
+    _suppress_small,
+    apply_residual_guard,
+)
 
 
 @register_backend("example")
@@ -238,24 +244,40 @@ Three points that are easy to miss:
 
 ### Step 4 — Guarantee k-anonymity
 
-As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1 — `dataclasses`, `_get_threshold`, `_suppress_small`):
+As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1):
 
 ```python
+    # Declaration for the central residual guard: ``total`` is the sum of all
+    # row ``count``s, so ``records`` is the exact partition of that marginal
+    # total. ``ORDER_INPUT``: the query sorts by ``document_type__name`` — the
+    # row position is already value-independent (K5).
+    _EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
+
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         threshold = _get_threshold(facility)
-        suppressed_rows = _suppress_small(result.records, threshold, count_key="count")
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in suppressed_rows]
-
         total = result.summary["total"]
-        any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
-        drop_total = total < threshold or any_row_suppressed
+        # R14: a marginal total < k is itself a small cell.
+        published_total = None if total < threshold else total
+        view = {
+            "total": published_total,
+            "records": _suppress_small(
+                result.records, threshold, margin=published_total, order=ORDER_INPUT
+            ),
+        }
+        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
+
+        field_keys = [spec.key for spec in self.get_field_specs()]
+        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
 
         summary = dict(result.summary)
-        summary["total"] = None if drop_total else total
+        summary["total"] = view["total"]
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)
 ```
+
+`margin` and `order` are **keyword-only and have no default** — a call without them raises `TypeError` (fail-closed): `margin` states whether a published marginal total exists for the feasibility audit to work against, `order` names the canonical output order of suppressed rows.
+
+`apply_residual_guard` is the **final** step and is mandatory for every `prepare_export` with a published marginal total (the architecture guard in `test_architecture_guards_services.py` enforces it): it runs the recipient inference and, if necessary, drops the marginal total or the whole breakdown. The former home-grown rule "if a cell is dropped, drop `total` too" is therefore **gone** (#1770) — it was a second, blunter suppression logic beside the central one, exactly what the architecture guard now forbids.
 
 Projecting back onto the declared `FieldSpec` keys is not cosmetic: `_suppress_small` attaches an internal `suppressed` flag to every row, which would otherwise end up unfiltered in CSV, JSON and XML.
 
@@ -347,8 +369,8 @@ The threshold *k* comes per facility from `Settings.k_anonymity_threshold` (defa
 
 One metric per row plus a marginal total. Exactly one back-calculation risk has to be solved: `total = Σ counts`. If `total` stayed raw after a row was suppressed, the suppressed cell would be exactly determinable as the difference from the visible rows. Therefore:
 
-- `_suppress_small(rows, threshold, count_key="count")` sets cells `< k` to `count=None`/`suppressed=True` and performs **secondary suppression per A6.1** (#1024/#1016) in the same step: if exactly **one** cell remains suppressed afterwards, the next-smallest visible cell is suppressed as well, so that at least two unknowns remain.
-- `total` is dropped if it is **itself** below the threshold (R14) **or** if any row is suppressed at all. The latter is the conservative choice: secondary suppression only protects the case of *exactly one* suppressed cell; if several stay suppressed, `total` would remain a lever for back-calculation.
+- `_suppress_small(rows, threshold, margin=…, order=…)` sets cells `< k` to `count=None`/`suppressed=True` and performs **secondary suppression** in the same step. Since #1770 it no longer hinges on the *number* of cells (A6.1: "exactly one suppressed cell") but on the measured **feasible span** (`_audit_feasible_span`): as long as only a single value remains possible for a suppressed cell, the **smallest** visible cell is dropped as well — and the calculation is redone, up to the fixpoint. The goal is a span ≥ 2, i.e. no exact pin.
+- `total` is dropped if it is **itself** below the threshold (R14). Beyond that, `apply_residual_guard` decides: it checks the published partition against the inference model and drops first the marginal total, if necessary the whole breakdown. The old blanket rule "one row suppressed ⇒ drop `total`" is gone; it suppressed more than necessary and still missed the cases the span audit finds.
 
 ### Full example — `SampleReport1Backend`
 
@@ -387,8 +409,8 @@ All three formats go through `safe_download_response` (RFC 5987 file name, `X-Co
 ### CSV
 
 ```
-# Bericht: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Datenquelle: Live-Abfrage zum Erstellungszeitpunkt | population: all_events | Grundgesamtheit: alle Ereignisse im Zeitraum [| k-Anonymität: Zellen < k unterdrückt]
-Kategorie,Anzahl
+# Report: <slug> | <facility> | <date_from>–<date_to> | <generated_at> | data_source: live | Data source: Live query at the time of creation | population: all_events | Population: all events in the period [| k-anonymity: cells < k suppressed]
+Category,Count
 Kontakte,42
 ```
 
@@ -529,4 +551,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 53648917c182ada527607faecf07d007ed4143a6 -->
+<!-- source-hash: 5706e1fdecfe6aceeb69d78f1d17717e12ba63b0 -->
