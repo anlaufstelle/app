@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785).
 
 # Anlaufstelle -- User Guide
 
@@ -678,6 +678,8 @@ If an event was edited online (by someone else) and offline (by you) at the same
 ## 9. Roles and Permissions
 
 Anlaufstelle distinguishes five roles. Your role is assigned by the facility administrator (Anwendungsbetreuung) of your facility.
+
+> **Audience of this section:** the **practical** view -- what you are allowed to do with your role in day-to-day work. The professional rationale behind the model is in the [domain concept (Role)](../fachkonzept-anlaufstelle.md#role--die-rolle) (German only), the technical details (DB values, RLS scoping) in [FAQ § C](../faq.md#die-fünf-rollen) (German only), and creating and managing roles in [Admin Guide § 2.4](admin-guide.md#role-descriptions).
 
 ### Role Overview
 
