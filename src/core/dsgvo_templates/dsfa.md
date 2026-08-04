@@ -2,7 +2,7 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}
-**Version:** 1.2 (Softwarestand v0.23, 2026-08-03)
+**Version:** 1.3 (Softwarestand v0.23, 2026-08-04)
 
 ---
 
@@ -45,17 +45,17 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 
 ### 2.3 Speicherbegrenzung
 
-Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Die ersten drei sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert eingesetzt; die übrigen vier stehen mit ihrem Standardwert und sind vor Freigabe dieser DSFA gegen die Einstellungen der Einrichtung zu prüfen und ggf. zu korrigieren.
+Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Alle sieben sind unten mit dem für diese Einrichtung **tatsächlich konfigurierten** Wert eingesetzt.
 
 | # | Frist | Wert | Einstellung | Wirkung bei Ablauf |
 |---|-------|------|-------------|--------------------|
 | 1 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht |
 | 2 | Kontakte identifizierter Personen | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht |
 | 3 | Qualifizierte Fälle (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Löschvorschlag; Soft-Delete erst nach Freigabe im 4-Augen-Prinzip |
-| 4 | Abweichende Frist einzelner Dokumentationstypen | je Typ gesetzt, sonst keine | `DocumentType.retention_days` | Überschreibt die Fristen 1–3 für Ereignisse dieses Typs |
-| 5 | Aktivitäten / Zeitstrom-Einträge | Standard 365 Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
-| 6 | Papierkorb-Frist für gelöschte Personen | Standard 30 Tage | `client_trash_days` | Person wird automatisch anonymisiert; bis dahin wiederherstellbar |
-| 7 | Audit-Log | Standard 24 Monate | `auditlog_retention_months` | Einträge werden gelöscht. `0` schaltet die Löschung **ab**; Sicherheitsverstöße und System-Marker sind generell ausgenommen |
+| 4 | Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Überschreibt die Fristen 1–3 für Ereignisse dieses Typs |
+| 5 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
+| 6 | Papierkorb-Frist für gelöschte Personen | {{ client_trash_days }} Tage | `client_trash_days` | Person wird automatisch anonymisiert; bis dahin wiederherstellbar |
+| 7 | Audit-Log | {{ auditlog_retention_months }} Monate | `auditlog_retention_months` | Einträge werden gelöscht. `0` schaltet die Löschung **ab**; Sicherheitsverstöße und System-Marker sind generell ausgenommen |
 
 Ergänzende Regeln:
 

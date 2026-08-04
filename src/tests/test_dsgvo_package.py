@@ -97,6 +97,66 @@ class TestDSGVOPackageService:
 
 
 @pytest.mark.django_db
+class TestDsfaExtendedRetentionPlaceholders:
+    """Refs #1762: dsfa.md § 2.3 rendert alle sieben Aufbewahrungsfristen als
+    tatsächlichen Ist-Wert — vorher waren es nur die ersten drei
+    (``retention_{anonymous,identified,qualified}_days``), die restlichen
+    vier standen als "Standardwert mit Prüfauftrag"-Prosa im Dokument."""
+
+    def test_scalar_fields_render_configured_values(self, facility):
+        settings_obj = facility.settings
+        settings_obj.retention_activities_days = 200
+        settings_obj.client_trash_days = 45
+        settings_obj.auditlog_retention_months = 36
+        settings_obj.save()
+
+        content, _ = render_document("dsfa", facility)
+
+        assert "200 Tage" in content
+        assert "45 Tage" in content
+        assert "36 Monate" in content
+        assert "{{ retention_activities_days }}" not in content
+        assert "{{ client_trash_days }}" not in content
+        assert "{{ auditlog_retention_months }}" not in content
+
+    def test_default_values_render_when_settings_use_model_defaults(self, facility):
+        # `facility`-Fixture legt Settings ohne explizite activities/trash/
+        # auditlog-Werte an -> Modell-Defaults 365/30/24 gelten.
+        content, _ = render_document("dsfa", facility)
+
+        assert "365 Tage" in content
+        assert "30 Tage" in content
+        assert "24 Monate" in content
+
+    def test_check_prosa_is_removed(self, facility):
+        """Die "Standardwert, vor Freigabe zu prüfen"-Prosa entfällt, weil
+        jetzt alle sieben Fristen echte Ist-Werte sind."""
+        content, _ = render_document("dsfa", facility)
+
+        assert "Standardwert" not in content
+        assert "Prüfauftrag" not in content
+
+    def test_document_type_override_placeholder_is_replaced(self, facility):
+        content, _ = render_document("dsfa", facility)
+
+        assert "{{ retention_document_type_overrides }}" not in content
+        # Die alte generische Beschreibung entfaellt zugunsten des Ist-Werts.
+        assert "je Typ gesetzt, sonst keine" not in content
+        # Kein Dokumentationstyp mit eigener Frist konfiguriert -> "keine".
+        assert "keine" in content
+
+    def test_document_type_override_shows_real_configured_type(self, facility):
+        from core.models import DocumentType
+
+        DocumentType.objects.create(facility=facility, name="Vermittlung", retention_days=180)
+
+        content, _ = render_document("dsfa", facility)
+
+        assert "Vermittlung: 180 Tage" in content
+        assert "je Typ gesetzt, sonst keine" not in content
+
+
+@pytest.mark.django_db
 class TestDSGVOPackageView:
     """View-level tests for package overview."""
 

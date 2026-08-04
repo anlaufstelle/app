@@ -1,20 +1,28 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.client.dsgvo_package``.
 
-Refs #930. Ziel: Mutationen in ``_settings_hash`` killen — die
-Funktion erzeugt einen 8-stelligen, deterministischen SHA-256-Hash über
-einen JSON-Snapshot retention-relevanter Settings-Felder.
+Refs #930, erweitert Refs #1762. Ziel: Mutationen in ``_settings_hash``
+killen — die Funktion erzeugt einen 8-stelligen, deterministischen SHA-256-
+Hash über einen JSON-Snapshot retention-relevanter Settings-Felder **plus**
+der abgeleiteten Dokumentationstyp-Ausnahmen. Refs #1762 hat dsfa.md § 2.3 von
+"nur drei echte Platzhalter, vier Standardwerte mit Prüfauftrag" auf "alle
+sieben Fristen als Ist-Wert" umgestellt — ohne die Hash-Erweiterung würde eine
+inhaltlich geänderte DSFA (z. B. andere ``retention_activities_days``) denselben
+Settings-Stempel tragen wie zuvor, und der Aktualitätsnachweis für
+Aufsichtsprüfungen wäre unwahr.
 
 Die Mutmut-Survivors fallen in folgende Kategorien:
 
-1. **Field-Selection** — jedes der vier Payload-Felder
+1. **Field-Selection** — jedes der sieben skalaren Payload-Felder
    (``retention_anonymous_days``, ``retention_identified_days``,
-   ``retention_qualified_days``, ``facility_full_name``) muss in den
-   Hash einfließen. Mutationen, die ein Feld auslassen oder durch eine
-   Konstante ersetzen, werden durch "ändern → Hash ändert sich"-Tests
-   erkannt.
+   ``retention_qualified_days``, ``retention_activities_days``,
+   ``client_trash_days``, ``auditlog_retention_months``,
+   ``facility_full_name``) sowie die abgeleiteten
+   ``document_type_overrides`` müssen in den Hash einfließen. Mutationen,
+   die ein Feld auslassen oder durch eine Konstante ersetzen, werden durch
+   "ändern → Hash ändert sich"-Tests erkannt.
 2. **Default-Konstanten** — ``getattr(.., "field", DEFAULT)``-Defaults
-   (90 / 365 / 3650 / "") müssen exakt sein. Mutation der Default-
-   Konstanten wird durch Hash-Vergleich mit echtem Settings-Objekt
+   (90 / 365 / 3650 / 365 / 30 / 24 / "") müssen exakt sein. Mutation der
+   Default-Konstanten wird durch Hash-Vergleich mit echtem Settings-Objekt
    getroffen, wenn das Settings-Objekt die jeweilige Default-Beschreibung
    spiegelt.
 3. **Sort-Keys** — ``json.dumps(payload, sort_keys=True)``: ohne
@@ -30,6 +38,12 @@ Die Mutmut-Survivors fallen in folgende Kategorien:
 6. **None/Empty-Handling** — ``getattr(..., "", "") or ""``: ein
    ``facility_full_name=None`` muss zum gleichen Hash führen wie
    ``facility_full_name=""``.
+7. **Document-Type-Overrides** (Refs #1762) — ``DocumentType.retention_days``
+   ist kein einzelnes Settings-Feld, sondern pro Dokumentationstyp gesetzt
+   (Zeile 4 in dsfa.md § 2.3, "Abweichende Frist einzelner
+   Dokumentationstypen"). ``_settings_hash`` nimmt die dafür abgeleitete
+   Liste als zweites Argument entgegen; ändert sie sich, muss sich der Hash
+   ändern.
 """
 
 from __future__ import annotations
@@ -45,7 +59,7 @@ from core.services.client import _settings_hash
 
 
 def _make_stub(**overrides):
-    """Erzeugt ein Settings-ähnliches Stub-Objekt mit allen vier Feldern.
+    """Erzeugt ein Settings-ähnliches Stub-Objekt mit allen sieben Feldern.
 
     Defaults entsprechen den Defaults aus dem Settings-Modell, sodass das
     Stub-Ergebnis mit einem frisch angelegten ``Settings``-Datensatz
@@ -55,6 +69,9 @@ def _make_stub(**overrides):
         "retention_anonymous_days": 90,
         "retention_identified_days": 365,
         "retention_qualified_days": 3650,
+        "retention_activities_days": 365,
+        "client_trash_days": 30,
+        "auditlog_retention_months": 24,
         "facility_full_name": "Anlaufstelle Musterstadt",
     }
     base.update(overrides)
@@ -102,13 +119,20 @@ class TestSettingsHash:
             retention_anonymous_days=90,
             retention_identified_days=365,
             retention_qualified_days=3650,
+            retention_activities_days=365,
+            client_trash_days=30,
+            auditlog_retention_months=24,
             facility_full_name="Anlaufstelle Musterstadt",
         )
         expected_payload = {
             "retention_anonymous_days": 90,
             "retention_identified_days": 365,
             "retention_qualified_days": 3650,
+            "retention_activities_days": 365,
+            "client_trash_days": 30,
+            "auditlog_retention_months": 24,
             "facility_full_name": "Anlaufstelle Musterstadt",
+            "document_type_overrides": [],
         }
         expected = hashlib.sha256(json.dumps(expected_payload, sort_keys=True).encode("utf-8")).hexdigest()[:8]
         assert _settings_hash(stub) == expected
@@ -138,6 +162,40 @@ class TestSettingsHash:
         h_baseline = _settings_hash(_make_stub(facility_full_name="A"))
         h_changed = _settings_hash(_make_stub(facility_full_name="B"))
         assert h_baseline != h_changed
+
+    def test_changing_retention_activities_days_changes_hash(self):
+        """Refs #1762: vormals Standardwert-Prosa, jetzt echter Ist-Wert —
+        muss den Hash beeinflussen wie die drei Ur-Felder."""
+        h_baseline = _settings_hash(_make_stub(retention_activities_days=365))
+        h_changed = _settings_hash(_make_stub(retention_activities_days=366))
+        assert h_baseline != h_changed
+
+    def test_changing_client_trash_days_changes_hash(self):
+        h_baseline = _settings_hash(_make_stub(client_trash_days=30))
+        h_changed = _settings_hash(_make_stub(client_trash_days=31))
+        assert h_baseline != h_changed
+
+    def test_changing_auditlog_retention_months_changes_hash(self):
+        h_baseline = _settings_hash(_make_stub(auditlog_retention_months=24))
+        h_changed = _settings_hash(_make_stub(auditlog_retention_months=25))
+        assert h_baseline != h_changed
+
+    def test_changing_document_type_overrides_changes_hash(self):
+        """Refs #1762: die abgeleitete vierte Frist (Zeile 4, dsfa.md § 2.3)
+        ist kein Settings-Feld, sondern wird als zweites Argument übergeben —
+        muss trotzdem den Hash beeinflussen."""
+        stub = _make_stub()
+        h_none = _settings_hash(stub)
+        h_one = _settings_hash(stub, document_type_overrides=[("Vermittlung", 180)])
+        h_two = _settings_hash(stub, document_type_overrides=[("Vermittlung", 180), ("Notiz", 30)])
+        assert h_none != h_one
+        assert h_one != h_two
+        assert h_none != h_two
+
+    def test_document_type_overrides_default_to_empty(self):
+        """Ohne zweites Argument entspricht der Hash einer leeren Liste."""
+        stub = _make_stub()
+        assert _settings_hash(stub) == _settings_hash(stub, document_type_overrides=[])
 
     # ------------------------------------------------------------------
     # Default-Konstanten: getattr-Defaults müssen exakt sein
@@ -188,6 +246,45 @@ class TestSettingsHash:
             retention_qualified_days=3650,
         )
         assert _settings_hash(stub_empty) == _settings_hash(stub_missing)
+
+    def test_missing_activities_field_defaults_to_threesixfive(self):
+        """Default-Konstante 365 (retention_activities_days, Refs #1762)."""
+        stub_full = _make_stub(retention_activities_days=365)
+        stub_missing = SimpleNamespace(
+            retention_anonymous_days=90,
+            retention_identified_days=365,
+            retention_qualified_days=3650,
+            client_trash_days=30,
+            auditlog_retention_months=24,
+            facility_full_name="Anlaufstelle Musterstadt",
+        )
+        assert _settings_hash(stub_full) == _settings_hash(stub_missing)
+
+    def test_missing_trash_field_defaults_to_thirty(self):
+        """Default-Konstante 30 (client_trash_days, Refs #1762)."""
+        stub_full = _make_stub(client_trash_days=30)
+        stub_missing = SimpleNamespace(
+            retention_anonymous_days=90,
+            retention_identified_days=365,
+            retention_qualified_days=3650,
+            retention_activities_days=365,
+            auditlog_retention_months=24,
+            facility_full_name="Anlaufstelle Musterstadt",
+        )
+        assert _settings_hash(stub_full) == _settings_hash(stub_missing)
+
+    def test_missing_auditlog_field_defaults_to_twentyfour(self):
+        """Default-Konstante 24 (auditlog_retention_months, Refs #1762)."""
+        stub_full = _make_stub(auditlog_retention_months=24)
+        stub_missing = SimpleNamespace(
+            retention_anonymous_days=90,
+            retention_identified_days=365,
+            retention_qualified_days=3650,
+            retention_activities_days=365,
+            client_trash_days=30,
+            facility_full_name="Anlaufstelle Musterstadt",
+        )
+        assert _settings_hash(stub_full) == _settings_hash(stub_missing)
 
     # ------------------------------------------------------------------
     # None / "or"-Branch
@@ -250,7 +347,8 @@ class TestSettingsHash:
     def test_unrelated_settings_field_does_not_affect_hash(self, facility):
         """Felder ausserhalb des Payloads (``session_timeout_minutes``)
         dürfen Hash nicht beeinflussen — verifiziert die Field-
-        Selection auf der Inklusions-Seite (nur die 4 sind drin)."""
+        Selection auf der Inklusions-Seite (nur die dokumentierten sieben
+        skalaren Felder plus ``document_type_overrides`` sind drin)."""
         s = Settings.objects.create(
             facility=facility,
             facility_full_name="Anlaufstelle Musterstadt",
@@ -267,3 +365,18 @@ class TestSettingsHash:
         assert h_before == h_after, (
             f"session_timeout_minutes darf den Hash nicht beeinflussen, bekam aber {h_before} → {h_after}"
         )
+
+    def test_real_document_type_retention_days_changes_hash(self, facility):
+        """Refs #1762: eine echte DocumentType-Ausnahme (Zeile 4, dsfa.md
+        § 2.3) muss über das zweite Argument den Hash ändern — der
+        Aufrufer (``render_document``) berechnet die Liste aus der DB."""
+        from core.models import DocumentType
+
+        real = Settings.objects.create(facility=facility, facility_full_name="Anlaufstelle Musterstadt")
+        h_without = _settings_hash(real)
+
+        dt = DocumentType.objects.create(facility=facility, name="Vermittlung", retention_days=180)
+        overrides = [(dt.name, dt.retention_days)]
+        h_with = _settings_hash(real, document_type_overrides=overrides)
+
+        assert h_without != h_with
