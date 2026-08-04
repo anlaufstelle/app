@@ -252,6 +252,51 @@ Bewusst **nicht** umgestellt ist der `username` bei fehlgeschlagenem Login (einz
 
 ---
 
+## Offline-Bundles nach Anonymisierung: Revoke-Liste + 48-h-TTL als letzte Linie (Issue #1760)
+
+**Status:** Aktiver Widerrufskanal seit #1760; das Restrisiko „dauerhaft offline gebliebenes Gerät" bleibt akzeptiert und ist durch die Bundle-TTL begrenzt.
+
+### Beobachtung
+
+Ein offline mitgenommener Personendatensatz liegt als AES-GCM-verschlüsseltes Bundle in der IndexedDB des Geräts ([ADR-022](adr/022-offline-snapshot-keys.md), [`offline.py`](../src/core/services/system/offline.py)) — mit Pseudonym, Notizen, Fall-Titeln und Ereignisdaten im entschlüsselbaren Klartext, solange die Session lebt. Wird die Person serverseitig anonymisiert, räumte das bis #1760 **nur den Server** ab. Kein Signal erreichte das Gerät:
+
+- Die Revalidierung beim nächsten Online-Kontakt (`revalidateCachedClient` in [`offline-store.js`](../src/static/js/offline-store.js)) purgt lokal nur bei **401/404/410**. Eine anonymisierte Person existiert aber weiter (die Zeile bleibt für Statistik-Aggregate stehen) und liefert **200**.
+- Und selbst dieses 200 wird bewusst **nicht** über den lokalen Stand geschrieben, solange zu der Person ungesyncte Änderungen offen sind (`"skipped"`-Zweig — sonst überschriebe ein Refresh nicht replizierte Arbeit). Genau dort überlebte der Klartext.
+
+Damit blieb der gelöschte Datenbestand bis zu 48 h (`BUNDLE_TTL_SECONDS`) auf dem Gerät lesbar. Bezug: #1476 (R20), #1493.
+
+### Maßnahme: personen-genaue Revoke-Liste
+
+Der Server führt seit #1760 eine Widerrufsliste ([`OfflineClientRevocation`](../src/core/models/offline_revocation.py), Migrationen `0126`/`0127`). Beide Anonymisierungs-Einstiege — der harte Pfad in `anonymize_client()` und die K-Anon-Bridge — schreiben in derselben Transaktion wie die Redaktions-Kaskade einen Eintrag. Der Eintrag ist **klartextfrei**: nur Einrichtung, die (ehemalige) Personen-UUID und der Zeitstempel; `client_pk` ist bewusst kein Fremdschlüssel, damit der Widerruf die Zeile überdauern kann.
+
+Der Client holt die Liste unter `GET /api/v1/offline/revocations/` (Rolle Assistenz+, RLS-gescoped, `no-store`) und wendet sie an — **bei jedem Sync** als *erstem* Schritt der Orchestrator-Sequenz und **beim Boot** als eigener, minimaler Lauf unter demselben Web Lock. Der Boot-Check ist notwendig, weil die Sync-Sequenz sonst nur ein `online`-Event oder replaybare Arbeit als Auslöser hätte — ein Gerät, das schlicht wieder benutzt wird, träfe nie auf die Liste.
+
+Drei Design-Entscheidungen mit Sicherheitsbezug:
+
+1. **Widerruf läuft vor dem Replay.** Läge er danach, spielte der Replay die gequeuten Schreibzugriffe zu der gerade anonymisierten Person noch aus — frische Klartext-PII zurück auf den Server, die Art.-17-Löschung liefe rückwärts.
+2. **Ungesyncte Arbeit wird verworfen, nicht als Dead-Letter erhalten** (fail-safe). Ein Dead-Letter behielte den entschlüsselbaren Klartext genau dort liegen, wo der Widerruf ihn entfernen soll; ein Replay träfe serverseitig ohnehin auf einen anonymisierten Datensatz. Es ist derselbe Löschgrund wie der Sicherheits-Purge bei Rechteentzug (F-10, #1110) und nutzt dieselbe Primitive (`removeOfflineClient(pk, {force: true})`) — kein zweiter Purge-Pfad. Betroffen sind Bundle-Spiegel, ungesyncte Ereignisse, Queue-Einträge und Entwürfe mit Personenbezug.
+3. **Der Abruf wird nicht auditiert.** Die Antwort ist PII-frei (opake UUIDs bereits anonymisierter Personen) und wird bei jedem Sync gepollt — ein Eintrag je Abruf würde das append-only Log fluten, ohne einen Datenabfluss zu dokumentieren. Dieselbe Abwägung wie beim audit-freien 304-Zweig der Bundle-Endpunkte. Die Widerrufs-*Erzeugung* hängt am bestehenden `CLIENT_ANONYMIZED`- bzw. Retention-Entscheidungs-Audit.
+
+**Aufbewahrung der Widerrufe:** `OFFLINE_REVOCATION_RETENTION_SECONDS` = 2 × Bundle-TTL (96 h), danach Prune im nächtlichen `enforce_retention`-Lauf. Begründung: ein Bundle ist höchstens 48 h gültig, ein Gerät kann aber exakt am Fristende wieder online gehen und muss den Eintrag dann noch sehen — der doppelte Abstand deckt diese Überlappung plus Uhren-Drift ab, ohne die Liste unbegrenzt wachsen zu lassen. Der Eintrag ist zwar klartextfrei, bleibt aber ein pseudonymer Bezug auf eine bereits gelöschte Person und darf nicht länger liegen, als er einen Zweck hat (Art. 5 Abs. 1 lit. e).
+
+### Restrisiko (akzeptiert)
+
+**Ein Gerät, das nach der Anonymisierung nie wieder online geht, erhält das Signal nicht.** Für diesen Fall bleibt die **48-h-Bundle-TTL die letzte Verteidigungslinie**: `purgeExpired`/`purgeExpiredBundles` verwerfen den Server-Spiegel rein lokal, sobald `expiresAt` überschritten ist, und der Idle-Wipe entzieht davor bereits den Schlüssel (Session-Dauer, Default 30 Min). Ein Widerruf kann diese Grenze prinzipiell nicht unterschreiten — jede Server→Gerät-Zustellung setzt Konnektivität voraus.
+
+Zwei weitere, bewusst nicht geschlossene Kanten:
+
+- **Ungesyncte Ereignisse überleben den reinen TTL-Ablauf** (by design, #1353 — kein stiller Datenverlust). Für ein dauerhaft offline gebliebenes Gerät bedeutet das: der Bundle-Spiegel fällt nach 48 h weg, eine offline erfasste Notiz zu derselben Person bleibt bis zum nächsten Online-Kontakt liegen. Sie ist dann der Anlass, nicht das Ergebnis der Löschung — und der Widerruf greift, sobald das Gerät zurückkehrt.
+- **Ohne Session-Key räumt der Widerruf nur die Bundle-Zeilen ab** (planer Delete), nicht Queue-/Entwurfs-Zeilen: deren Personenbezug steckt im verschlüsselten Umschlag. Ohne Schlüssel sind sie allerdings auch für einen Angreifer unlesbar; der nächste Lauf mit Schlüssel holt es nach (die Liste ist cursor-frei und damit idempotent).
+
+### Verifikation
+
+- [`test_offline_client_revocation.py`](../src/tests/test_offline_client_revocation.py) — Widerruf entsteht auf beiden Anonymisierungspfaden, Endpoint ist facility-gescoped/audit-frei, Prune-Fenster.
+- [`tests/js/offline-revocations.test.mjs`](../tests/js/offline-revocations.test.mjs) — Client-Purge gegen echtes Dexie + echte Krypto (inkl. ungesyncter Arbeit und Entwürfe).
+- [`e2e/test_offline_revocation_journey.py`](../src/tests/e2e/test_offline_revocation_journey.py) — Person mitgenommen → anonymisiert → Sync bzw. Boot purgt sie restlos; der gequeute Schreibzugriff wird nicht repliziert.
+- Threat-Model: [`threat-model.md` § TB6](threat-model.md), Zeile „**I** Bundle überlebt die Löschung der Person".
+
+---
+
 ## `Client.pseudonym` bleibt im Klartext bis post-v1.0 (Issue #717)
 
 **Status:** Bewusste Defer-Entscheidung. Re-Evaluation per Trigger-Liste.

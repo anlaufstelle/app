@@ -40,7 +40,7 @@ def known_residue(table: str, column: str, reason: str, issue: str = "") -> ColR
     return ColRule(table, column, "known_residue", reason=reason, issue=issue)
 
 
-# Jede Text-/JSON-Spalte der 22 facility-gescopten Tabellen (test_rls.EXPECTED_TABLES)
+# Jede Text-/JSON-Spalte der facility-gescopten Tabellen (test_rls.EXPECTED_TABLES)
 # wird hier genau einmal eingeordnet. Reihenfolge folgt SCOPED_TABLES. Bei Unsicherheit
 # konservativ ``pii`` (sichere Richtung — der Sweep validiert das Redaktions-Ziel).
 COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
