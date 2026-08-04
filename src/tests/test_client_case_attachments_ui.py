@@ -11,6 +11,8 @@ Spiegel der Event-Anhang-View-Tests (``test_file_vault.py::TestFileUploadView``,
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -32,6 +34,12 @@ PDF_HEADER = (
 
 def _pdf(name):
     return SimpleUploadedFile(name, PDF_HEADER + name.encode(), content_type="application/pdf")
+
+
+def _fake_pdf(name):
+    """``.pdf``-Endung, Klartext-Inhalt — passiert die Formular-Whitelist,
+    faellt aber am Magic-Bytes-Check von ``prepare_encrypted_upload`` durch."""
+    return SimpleUploadedFile(name, b"kein PDF, nur Text.\n" * 8, content_type="application/pdf")
 
 
 @pytest.fixture
@@ -489,6 +497,93 @@ class TestCaseAttachmentForm:
         attachment.refresh_from_db()
         assert attachment.deleted_at is not None, "Kette haette soft-geloescht werden muessen"
         assert ft_file.slug not in case.data_json, f"Marker-Leiche im data_json: {case.data_json}"
+
+
+class TestCreateStagingLeavesNoOrphans:
+    """Staging-/Unlink-Pfad der Anlage-Views (Refs #1345 owner-generisch, #1738).
+
+    Scan + Fernet-Verschluesselung laufen bewusst VOR der Transaktion — die
+    ``.enc`` liegt also schon auf Disk, bevor Person/Fall existieren. Scheitert
+    eine SPAETERE Datei an der Policy, muss die View jede bereits gestagte
+    Datei wieder entfernen; sonst waechst unter ``MEDIA_ROOT`` ein
+    unreferenzierter, verschluesselter Rest, den kein Loeschpfad je erfasst
+    (DSGVO-relevant: der Inhalt ist personenbezogen, die Metadaten fehlen).
+
+    Ausgeloest ueber den Magic-Bytes-Check: ``.pdf``-Endung (Formular-Whitelist
+    passiert) mit Klartext-Inhalt.
+    """
+
+    @staticmethod
+    def _enc_files(media_root) -> list:
+        return sorted(Path(media_root).rglob("*.enc"))
+
+    @staticmethod
+    def _multi_file_type(facility, entity_type, name, file_name):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name=name,
+            category=DocumentType.Category.ADMIN,
+            entity_type=entity_type,
+        )
+        ft_file = FieldTemplate.objects.create(
+            facility=facility, name=file_name, field_type=FieldTemplate.FieldType.FILE
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+        return dt, ft_file
+
+    def test_client_create_unlinks_staged_files_on_policy_reject(
+        self, client, staff_user, facility, settings, tmp_path
+    ):
+        settings.MEDIA_ROOT = str(tmp_path)
+        dt, ft_file = self._multi_file_type(
+            facility, DocumentType.EntityType.CLIENT, "Personen-Mehrfachdatei", "Unterlagen"
+        )
+        before = self._enc_files(tmp_path)
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_create"),
+            {
+                "pseudonym": "Staging-Person",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "",
+                "document_type": str(dt.pk),
+                ft_file.slug: [_pdf("echt.pdf"), _fake_pdf("unecht.pdf")],
+            },
+        )
+
+        # Formular-Re-Render statt Redirect, Person nicht angelegt.
+        assert response.status_code == 200
+        assert not Client.objects.filter(pseudonym="Staging-Person").exists()
+        assert not Attachment.objects.exists()
+        # Und keine verwaiste .enc: die erste Datei war bereits gestagt.
+        assert self._enc_files(tmp_path) == before
+
+    def test_case_create_unlinks_staged_files_on_policy_reject(
+        self, client, staff_user, facility, client_identified, settings, tmp_path
+    ):
+        settings.MEDIA_ROOT = str(tmp_path)
+        dt, ft_file = self._multi_file_type(facility, DocumentType.EntityType.CASE, "Fall-Mehrfachdatei", "Belege")
+        before = self._enc_files(tmp_path)
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:case_create"),
+            {
+                "client": str(client_identified.pk),
+                "title": "Staging-Fall",
+                "description": "",
+                "lead_user": "",
+                "document_type": str(dt.pk),
+                ft_file.slug: [_pdf("echt2.pdf"), _fake_pdf("unecht2.pdf")],
+            },
+        )
+
+        assert response.status_code == 200
+        assert not Case.objects.filter(title="Staging-Fall").exists()
+        assert not Attachment.objects.exists()
+        assert self._enc_files(tmp_path) == before
 
 
 class TestInvalidMetaFormKeepsFileMarkers:
