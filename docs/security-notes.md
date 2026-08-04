@@ -891,18 +891,16 @@ eine Brute-Force-Aufzählung nachgeprüft). Sechs Eigenschaften tragen das Ergeb
 * **Schwelle „Spanne ≥ 2" statt „≥ k−1".** Die strengere Variante unterdrückt in 13,5 % der Welten
  mehr Zellen, ohne im geprüften Raum weniger Leaks zu hinterlassen. „Spanne ≥ 2" heißt genau: kein
  exakter Pin.
-* **Die größte statt der kleinsten sichtbaren Zelle fällt.** Das maximiert das Residuum und damit die
- Mehrdeutigkeit (gemessen 0,2 % statt 2,5 % Rest-Leak). **Produktkosten, bewusst getragen:** die
- Spitzenkategorie verschwindet aus Träger-/Förderberichten, sobald überhaupt unterdrückt wird. Der
- Bestandstest `test_list_single_suppression_triggers_secondary` sicherte bis dahin das Gegenteil zu
- („größte bleibt sichtbar") und ist mit dem Produktentscheid umgeschrieben.
+* **Es fällt die kleinste sichtbare Zelle** (User-Entscheid, Begründung und die daran gekoppelte
+ Modellschranke im eigenen Unterabschnitt unten). Die Zusicherung „größte bleibt sichtbar" des
+ Bestandstests `test_list_single_suppression_triggers_secondary` bleibt damit gültig.
 * **Eine Funktion statt zweier Kopien.** `_suppress_stage_dict` trug eine zweite Fassung derselben
  Heuristik; sie ist ersatzlos entfallen und ruft dasselbe Audit. Der Architektur-Guard hält das offen
  nachprüfbar.
 * **Die alte Guard-Annahme ist ersetzt.** Nach K0-b gilt „unterdrückt ⇒ Wert ≤ *k*−1" **nicht** mehr
  (eine Zelle kann personenbedingt bei beliebig großer Ereigniszahl fallen). Das Audit bildet die
- tatsächliche Semantik ab: Wert < *k* ⇒ [1, *k*−1]; personenbedingt oder als Sekundär-Opfer gefallen
- ⇒ [*k*, ∞) bzw. [größte verbliebene sichtbare Zelle, ∞).
+ tatsächliche Semantik ab: Wert < *k* ⇒ [1, *k*−1]; personenbedingt gefallen ⇒ [*k*, ∞);
+ Sekundär-Opfer ⇒ [*k*, kleinste verbliebene sichtbare Zelle] (Bedingung X, s. u.).
 * **Randsumme ist ein Pflicht-Keyword.** Jede Aufrufstelle sagt, ob es eine publizierte Randsumme
  gibt, an der das Audit rechnen kann — der von der Analyse benannte **Restfall** (unterdrückte
  Randsumme ⇒ Audit läuft ins Leere) ist damit kein Sonderpfad, sondern der Normalfall
@@ -918,18 +916,36 @@ eine Brute-Force-Aufzählung nachgeprüft). Sechs Eigenschaften tragen das Ergeb
 Test-gepinnt in `test_external_report_service.py::TestSecondarySuppression`,
 `test_disclosure_inference.py` und `test_reporting_disclosure_regression.py`.
 
-*Trigger für Re-Evaluation der Opferwahl (Utility, nicht Sicherheit):* Die Messung „kleinste fällt
-= 2,5 % Rest-Leak, größte fällt = 0,2 %" stammt aus einem **einmalig** laufenden Audit. Die Umsetzung
-iteriert dagegen bis zum Fixpunkt, und **an einem Fixpunkt sind beide Opferregeln im Modell leakfrei**
-— sie unterscheiden sich dann nur noch darin, welche und wie viele Zellen fallen. In einem typischen
-Bericht (Randsumme 100; 60/30/8/2) verschwindet mit „größte fällt" die 60, mit „kleinste fällt" nur
-die 8, in beiden Fällen ohne Rest-Pin. Wer die Utility-Kosten neu bewertet, kann die Regel deshalb
-umstellen, ohne die Zusicherung zu schwächen — der Enumerationstest ist die Gegenprobe, und der
-Bestandstest `test_list_single_suppression_triggers_secondary` würde dann wieder „größte bleibt
-sichtbar" zusichern. Bis zu einem solchen Entscheid gilt die Empfehlung der Analyse: **größte fällt**,
-weil sie das Residuum und damit die Mehrdeutigkeit maximiert und die Regel nach oben statt nach unten
-begrenzt (die publizierte Zusatzinformation ist „das Opfer ist mindestens so groß wie jede sichtbare
-Zelle" statt „höchstens so klein wie die kleinste").
+##### Opferwahl: „kleinste sichtbare Zelle" — mit zwingender Kopplung (User-Entscheid)
+
+Die Analyse empfahl, die **größte** sichtbare Zelle zu opfern, weil das das Residuum maximiert
+(gemessen: „kleinste fällt" 2,5 %, „größte fällt" 0,2 % Rest-Leak). Diese Messung stammt aus einem
+**einmalig** laufenden Audit. Die Umsetzung iteriert bis zum **Fixpunkt**, und dort sind beide
+Opferregeln leakfrei — sie unterscheiden sich nur noch darin, welche und wie viele Zellen fallen.
+
+**Entschieden: es fällt die kleinste sichtbare Zelle.** Grund ist die Utility: in einem typischen
+Bericht (Randsumme 100, Zeilen 60/30/8/2) verschwände mit „größte fällt" die **60** — die
+Spitzenkategorie aus jedem Träger-/Förderbericht, sobald überhaupt eine Kleinstzelle existiert, mit
+„kleinste fällt" nur die 8. Gemessen fällt die Spitzenkategorie damit **halb so oft**; der Preis ist
+etwas mehr Kleinzellen-Suppression (es fallen tendenziell mehr, dafür kleine Zellen). Der
+Bestandstest `test_list_single_suppression_triggers_secondary` („größte bleibt sichtbar") bleibt
+damit unverändert gültig.
+
+> **Bedingung X — nicht optional.** Die Opferregel und die a-priori-Schranke des Sekundär-Opfers im
+> Guard-Modell sind **eine** Entscheidung. „Kleinste fällt" publiziert die Aussage *„dieses Opfer
+> liegt unter jeder verbliebenen sichtbaren Zelle"* — eine **Obergrenze**, die ein Empfänger aus dem
+> offenen Algorithmus ableiten kann. Sie muss in `_local_partition` gespiegelt sein
+> (`hi = min(sichtbare)` statt `lo = max(k, größte sichtbare)`), sonst rechnet der Guard gegen ein zu
+> schwaches Angreifermodell. **Belegt:** ohne die Spiegelung bleiben im Weltraum „3 Zeilen, Σ ≤ 14"
+> zwei exakte Pins stehen (der Enumerationstest wird rot); mit ihr sind es 0 Pins in „3 Zeilen,
+> Σ ≤ 14" **und** „4 Zeilen, Σ ≤ 16". Wer die Regel je zurückdreht, dreht **beides** zurück.
+> Test-gepinnt in `test_external_report_service.py::TestSecondarySuppression::test_opferwahl_und_a_priori_schranke_sind_gekoppelt`
+> (plus der Fall ohne sichtbare Zelle, in dem es keine ableitbare Obergrenze gibt).
+
+Dieselbe Opferregel und derselbe wertunabhängige Zweitschlüssel gelten im tabellenlokalen Audit
+(`_audit_feasible_span`) **und** im Fixpunkt-Guard (`_suppress_smallest_visible`): beide nehmen das
+Minimum über `(Wert, kanonische K5-Ordnung)`. Zwei verschiedene Opferregeln in derselben Suppression
+wären zwei Angreifermodelle, von denen mindestens eines nicht modelliert ist.
 
 #### K1 — Struktur-Kollaps / Residuum bei publizierter Randsumme
 
@@ -970,8 +986,9 @@ bräche sie **still** und verschöbe die Disclosure-Fläche.
 läuft als **letzter** Schritt jeder Artefakt-Erzeugung, führt die Empfänger-Inferenz über die fertige
 Sicht selbst aus und eskaliert deterministisch, bis kein Befund mehr bleibt:
 
-1. die **größte** sichtbare Zelle der betroffenen Aufschlüsselung fällt (Auswahl bei Wertgleichheit
- über die kanonische K5-Ordnung, nie über die Eingabeordnung),
+1. die **kleinste** sichtbare Zelle der betroffenen Aufschlüsselung fällt — dieselbe Opferregel und
+ derselbe Zweitschlüssel wie im tabellenlokalen Audit (Auswahl bei Wertgleichheit über die
+ kanonische K5-Ordnung, nie über die Eingabeordnung),
 2. ist keine sichtbare Zelle mehr da, fällt die **Randsumme** — ohne sie gibt es keine Gleichung,
 3. hilft auch das nicht oder ist die harte Iterationsgrenze erreicht, fällt fail-safe die **ganze
  Aufschlüsselung** (Key weg, nicht nur Werte auf `None` — eine genullte Zeile wäre selbst noch die
@@ -1174,11 +1191,13 @@ unterdrückte Zelle ist über das Preimage eindeutig bestimmt" — in
 zweiten Wrapper, dem Beispiel-Sachbericht). Präzisierungen, die die Umsetzung nötig gemacht hat:
 
 * **Auflage eingehalten:** gewertet werden nur Beobachtungen, deren publizierte Randsumme ≤
- **Enumerationsgrenze** ist. Die Grenze ist die benannte Konstante `ENUMERATION_LIMIT = 14` (drei
- nichtleere Zeilen, 364 Welten — eine *exakte* Aufzählung, keine Stichprobe, und alle interessanten
- Fälle um die Default-Schwelle 5 liegen darin). Ist die Randsumme unterdrückt, kennt der Empfänger
- sie nicht; dann sind auch Welten jenseits der Grenze konsistent, und ein hier „eindeutiges"
- Preimage wäre ein Artefakt der Aufzählung (Schein-Pin).
+ **Enumerationsgrenze** ist. Geprüft werden **zwei** Welträume, beide exakt aufgezählt und nicht
+ gestichprobt: `ENUMERATION_LIMIT = 14` bei drei nichtleeren Zeilen (364 Welten) und Σ ≤ 16 bei vier
+ Zeilen (1820 Welten). Der zweite ist kein Luxus — die Sekundär-Suppression zeigt ihre
+ Fixpunkt-Eigenschaft erst, wenn nach dem ersten Opfer noch mehr als eine sichtbare Zelle übrig ist.
+ Ist die Randsumme unterdrückt, kennt der Empfänger sie nicht; dann sind auch Welten jenseits der
+ Grenze konsistent, und ein hier „eindeutiges" Preimage wäre ein Artefakt der Aufzählung
+ (Schein-Pin).
 * **Die Invariante ist auf Kleinstfallzahlen geschärft:** ein exakt bestimmter Wert ≥ *k* ist kein
  Befund — das Sekundär-Opfer *darf* rückrechenbar sein, es wurde nur unterdrückt, um die Kleinstzelle
  zu schützen. Die Begründung steht bei den drei Ausnahmen in `disclosure.findings`.

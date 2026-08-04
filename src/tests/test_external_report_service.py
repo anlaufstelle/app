@@ -51,15 +51,14 @@ class TestSecondarySuppression:
     """
 
     def test_list_single_suppression_triggers_secondary(self):
-        """Geändert mit dem Produktentscheid zu K2 (#1770): die Regel opfert die
-        **größte** statt der kleinsten sichtbaren Zelle.
+        """Die Zusicherung „größte bleibt sichtbar" bleibt gültig (#1770).
 
-        Vorher zeigte dieser Test „größte bleibt sichtbar" — das war die
-        Heuristik, die 2,5 % Rest-Leak hinterließ (gegen 0,2 % bei „größte
-        fällt"): wer die kleinste sichtbare Zelle opfert, minimiert das
-        Residuum und verrät zusätzlich eine Obergrenze für die Kleinstzelle.
-        Die Spitzenkategorie verschwindet damit aus Träger-/Förderberichten,
-        sobald überhaupt unterdrückt wird — bewusst in Kauf genommen.
+        Geprüft wurde, ob der Wechsel auf das Machbarkeits-Audit sie bricht: das
+        tut er nicht, weil die Opferwahl auf der **kleinsten** sichtbaren Zelle
+        bleibt (User-Entscheid). Neu ist nur, dass hinter der Wahl kein
+        Zellenzähler mehr steht, sondern eine gemessene Spanne — und dass die
+        dabei publizierte Obergrenze („das Opfer liegt unter jeder verbliebenen
+        sichtbaren Zelle") im Guard-Modell gespiegelt ist.
         """
         from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
 
@@ -67,9 +66,9 @@ class TestSecondarySuppression:
         result = _suppress_small(rows, threshold=5, margin=21, order=ORDER_INPUT)
         by_name = {r["name"]: r for r in result}
         assert by_name["C"]["suppressed"] is True  # primär (<5)
-        assert by_name["A"]["suppressed"] is True  # sekundär: die größte fällt
-        assert by_name["A"]["count"] is None
-        assert by_name["B"]["suppressed"] is False  # Residuum 13 auf zwei Zellen: nichts gepinnt
+        assert by_name["B"]["suppressed"] is True  # sekundär: die kleinste sichtbare fällt
+        assert by_name["B"]["count"] is None
+        assert by_name["A"]["suppressed"] is False  # größte bleibt sichtbar
 
     def test_list_two_already_suppressed_no_secondary(self):
         from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
@@ -122,8 +121,54 @@ class TestSecondarySuppression:
             stages, threshold=5, persons={"anonym": 10, "identifiziert": 8, "qualifiziert": 3}, margin=21
         )
         assert result["qualifiziert"] is None  # primär
-        assert result["anonym"] is None  # sekundär: die größte fällt
-        assert result["identifiziert"] == 8
+        assert result["identifiziert"] is None  # sekundär: die kleinste sichtbare fällt
+        assert result["anonym"] == 10
+
+    def test_opferwahl_und_a_priori_schranke_sind_gekoppelt(self):
+        """Bedingung X (#1770): wer die kleinste sichtbare Zelle opfert, verrät
+        damit eine **Obergrenze** — und die muss im Modell stehen.
+
+        Das Opfer liegt per Konstruktion unter jeder verbliebenen sichtbaren
+        Zelle; ein Empfänger, der den Algorithmus kennt (Open Source), weiß das.
+        Bliebe die Schranke unmodelliert, rechnete der Guard gegen ein zu
+        schwaches Angreifermodell — gemessen: zwei exakte Pins im Weltraum
+        „3 Zeilen, Σ ≤ 14" (`test_reporting_disclosure_regression.py` ist die
+        Gegenprobe). Dieser Test pinnt die Kopplung direkt an der Stelle, an der
+        sie brechen würde.
+        """
+        from core.services.dashboard.external_report import _local_partition
+
+        # A = 10 sichtbar, B = 8 Sekundär-Opfer, C = 3 primär unterdrückt.
+        partition = _local_partition(
+            [10, 8, 3],
+            flags=[False, True, True],
+            victims=[False, True, False],
+            threshold=5,
+            margin=21,
+            min_value=1,
+            person_gated=False,
+        )
+        opfer = partition.cells[1]
+        assert (opfer.lo, opfer.hi) == (5, 10), "Sekundär-Opfer: [k, kleinste sichtbare Zelle]"
+        primaer = partition.cells[2]
+        assert (primaer.lo, primaer.hi) == (1, 4), "primär unterdrückt: [Zeilen-Existenz, k-1]"
+
+    def test_ohne_sichtbare_zelle_hat_das_opfer_keine_obergrenze(self):
+        """Ist nichts mehr sichtbar, gibt es keine ableitbare Obergrenze — die
+        Opfer beschränken dann nur einander, was ein Box-Modell nicht ausdrückt.
+        """
+        from core.services.dashboard.external_report import _local_partition
+
+        partition = _local_partition(
+            [20, 1, 1],
+            flags=[True, True, True],
+            victims=[True, False, False],
+            threshold=5,
+            margin=22,
+            min_value=1,
+            person_gated=False,
+        )
+        assert (partition.cells[0].lo, partition.cells[0].hi) == (5, None)
 
     def test_stage_dict_leere_stufe_loest_keine_sekundaersuppression_aus(self):
         """Eine Stufe, die exakt auf 0 zurückrechenbar ist, schützt niemanden —
@@ -877,10 +922,10 @@ class TestPersonenbasiertesZellkriterium:
         )
 
         assert result["qualifiziert"] is None
-        # Das Machbarkeits-Audit opfert zusaetzlich die GROESSTE sichtbare Stufe
-        # (K2, Refs #1770) — vorher fiel die kleinste.
-        assert result["anonym"] is None
-        assert result["identifiziert"] == 30
+        # Das Machbarkeits-Audit opfert zusaetzlich die kleinste sichtbare Stufe
+        # (K2, Refs #1770) — dieselbe Opferwahl wie vorher, neues Kriterium.
+        assert result["identifiziert"] is None
+        assert result["anonym"] == 40
 
     def test_stage_dict_ohne_personenzahlen_unterdrueckt_alles(self):
         """Alt-Format ohne ``persons_by_contact_stage`` ⇒ unbekannt ⇒ fail-safe."""

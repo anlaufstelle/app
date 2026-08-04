@@ -44,6 +44,16 @@ ENUMERATION_LIMIT = 14
 
 _ROW_LABELS = ("A", "B", "C")
 
+# Zwei Weltraeume statt einem. Der zweite (vier Zeilen, Σ <= 16, 1820 Welten)
+# ist kein Luxus: die Sekundaer-Suppression zeigt ihre Fixpunkt-Eigenschaft erst,
+# wenn nach dem ersten Opfer noch mehr als eine sichtbare Zelle uebrig ist —
+# bei drei Zeilen ist danach hoechstens eine uebrig. Beide Raeume bleiben exakt
+# aufzaehlbar.
+_WORLD_SHAPES = (
+    pytest.param(_ROW_LABELS, ENUMERATION_LIMIT, id="3-zeilen-summe-14"),
+    pytest.param(("A", "B", "C", "D"), 16, id="4-zeilen-summe-16"),
+)
+
 
 def _worlds(labels: tuple[str, ...] = _ROW_LABELS, limit: int = ENUMERATION_LIMIT) -> list[dict[str, int]]:
     """Alle Welten mit ``len(labels)`` nichtleeren Zeilen und Σ <= ``limit``.
@@ -95,14 +105,16 @@ def _observation(published: dict[str, Any]) -> tuple:
     )
 
 
-def _preimage_groups(publish) -> dict[tuple, list[dict[str, int]]]:
+def _preimage_groups(publish, labels=_ROW_LABELS, limit=ENUMERATION_LIMIT) -> dict[tuple, list[dict[str, int]]]:
     groups: dict[tuple, list[dict[str, int]]] = defaultdict(list)
-    for world in _worlds():
+    for world in _worlds(labels, limit):
         groups[_observation(publish(world))].append(world)
     return groups
 
 
-def _pinned_small_cells(groups: dict[tuple, list[dict[str, int]]], threshold: int) -> list[str]:
+def _pinned_small_cells(
+    groups: dict[tuple, list[dict[str, int]]], threshold: int, limit: int = ENUMERATION_LIMIT
+) -> list[str]:
     """Unterdrueckte Kleinstfallzahlen, die ueber ihr Preimage eindeutig sind."""
     leaks = []
     for observation, worlds in groups.items():
@@ -112,7 +124,7 @@ def _pinned_small_cells(groups: dict[tuple, list[dict[str, int]]], threshold: in
         # Randsumme unterdrueckt, kennt der Empfaenger sie nicht — dann sind auch
         # Welten jenseits der Grenze konsistent, und ein hier „eindeutiges"
         # Preimage waere ein Artefakt der Aufzaehlung, kein Leak.
-        if margin is None or margin > ENUMERATION_LIMIT:
+        if margin is None or margin > limit:
             continue
         for name, _count, suppressed in observation[1]:
             if not suppressed:
@@ -151,10 +163,11 @@ class TestKleinstWeltEnumeration:
       nachgerechnet hat.
     """
 
-    def test_keine_unterdrueckte_kleinstzelle_ist_eindeutig(self, facility):
-        groups = _preimage_groups(lambda world: _publish_document_types(facility, world))
+    @pytest.mark.parametrize(("labels", "limit"), _WORLD_SHAPES)
+    def test_keine_unterdrueckte_kleinstzelle_ist_eindeutig(self, facility, labels, limit):
+        groups = _preimage_groups(lambda world: _publish_document_types(facility, world), labels, limit)
 
-        leaks = _pinned_small_cells(groups, DEFAULT_K_THRESHOLD)
+        leaks = _pinned_small_cells(groups, DEFAULT_K_THRESHOLD, limit)
 
         assert not leaks, (
             "Diese unterdrueckten Kleinstfallzahlen sind ueber die publizierte "

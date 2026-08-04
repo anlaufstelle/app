@@ -95,16 +95,28 @@ def _audit_feasible_span(
     (``if len(suppressed) != 1: return``, A6.1 aus #1024/#1016). Die schuetzte
     in 27,5 % ihrer Einsaetze gar nicht: bei >= 2 primaer unterdrueckten Zellen
     lief sie **nie**, obwohl gerade dann R = s (alle = 1) die Zellen vollstaendig
-    bestimmt — und wenn sie lief, opferte sie mit ``min(visible)`` die
-    **kleinste** sichtbare Zelle, minimierte damit das Residuum und verriet
-    zusaetzlich eine Obergrenze.
+    bestimmt.
 
     Stattdessen wird die Spanne selbst gemessen (siehe
     :mod:`core.services.dashboard.disclosure`): solange irgendeine unterdrueckte
-    Zelle rueckrechenbar ist, faellt die **groesste** sichtbare Zelle — sie
-    maximiert das Residuum und damit die Mehrdeutigkeit (gemessen:
-    „kleinste faellt" hinterlaesst 2,5 % Rest-Leak, „groesste faellt" 0,2 %).
-    Danach wird neu gerechnet, bis zum Fixpunkt.
+    Zelle rueckrechenbar ist, faellt die **kleinste** sichtbare Zelle, danach
+    wird neu gerechnet — bis zum Fixpunkt.
+
+    **Warum die kleinste (User-Entscheid #1770) und was daran haengt.** Die
+    Analyse empfahl die groesste, weil sie das Residuum maximiert; gemessen war
+    das an einem **einmalig** laufenden Audit („kleinste faellt" 2,5 %,
+    „groesste faellt" 0,2 % Rest-Leak). Diese Umsetzung iteriert bis zum
+    Fixpunkt, und dort sind beide Regeln leakfrei — aber nur unter einer
+    **zwingenden Kopplung**: wer die kleinste sichtbare Zelle opfert, publiziert
+    damit die Aussage „dieses Opfer liegt unter jeder verbliebenen sichtbaren
+    Zelle", also eine **Obergrenze**. Diese Obergrenze MUSS in
+    :func:`_local_partition` gespiegelt werden (``hi = min(sichtbare)`` statt
+    ``lo = max(k, groesste sichtbare)``), sonst rechnet der Guard gegen ein zu
+    schwaches Angreifermodell: ohne die Spiegelung bleiben im Weltraum „3 Zeilen,
+    Σ <= 14" zwei exakte Pins stehen
+    (``test_reporting_disclosure_regression.py`` ist die Gegenprobe und wird
+    ohne sie rot). Utility-Gewinn der Regel: die Spitzenkategorie faellt nur noch
+    halb so oft.
 
     Ohne publizierte Randsumme (``margin is None``) argumentiert das Audit ins
     Leere und laeuft gar nicht — ohne die Gleichung R = Randsumme − Σ sichtbare
@@ -130,7 +142,7 @@ def _audit_feasible_span(
             # holen. Die Eskalation (Randsumme fallen lassen) gehoert dem
             # Report-Guard, der die Randsumme ueberhaupt in der Hand hat.
             return
-        victim = max(candidates, key=lambda index: (values[index], tiebreak(index)))
+        victim = min(candidates, key=lambda index: (values[index], tiebreak(index)))
         flags[victim] = True
         victims[victim] = True
 
@@ -153,14 +165,24 @@ def _local_partition(
     :mod:`core.services.dashboard.disclosure`):
 
     * Wert < *k* ⇒ ereignisbedingt primaer unterdrueckt ⇒ ``[min_value, k-1]``.
-    * Wert >= *k* und Sekundaer-Opfer ⇒ die Regel opfert immer die **groesste**
-      sichtbare Zelle, der Wert liegt also nicht unter jeder verbliebenen
-      sichtbaren Zelle ⇒ ``[max(k, groesste sichtbare Zelle), ∞)``.
+    * Wert >= *k* und Sekundaer-Opfer ⇒ **Bedingung X, zwingend an die Opferwahl
+      gekoppelt:** :func:`_audit_feasible_span` opfert die **kleinste** sichtbare
+      Zelle, der Wert liegt also nicht *ueber* irgendeiner verbliebenen sichtbaren
+      Zelle ⇒ ``[k, kleinste sichtbare Zelle]``. Faellt die Opferwahl je wieder
+      auf „groesste", muss diese Schranke mitgespiegelt werden
+      (``[max(k, groesste sichtbare Zelle), ∞)``) — beides sind Aussagen, die der
+      Empfaenger aus dem oeffentlichen Algorithmus ableiten kann, und eine
+      *nicht* modellierte Schranke macht den Guard blind (belegt: ohne die
+      Spiegelung bleiben im Weltraum „3 Zeilen, Σ <= 14" zwei exakte Pins).
+      Ist keine sichtbare Zelle mehr uebrig, gibt es keine solche Schranke
+      (``[k, ∞)``) — die Opfer beschraenken dann nur einander, was ein
+      Box-Modell nicht ausdruecken kann.
     * Wert >= *k* ohne Opfer-Eigenschaft ⇒ personenbedingt unterdrueckt (K0-b)
       ⇒ ``[k, ∞)``. Genau hier ist die alte Guard-Annahme
       „unterdrueckt ⇒ Wert <= k-1" gebrochen.
     """
-    visible_max = max((values[index] for index, flag in enumerate(flags) if not flag), default=threshold)
+    visible = [values[index] for index, flag in enumerate(flags) if not flag]
+    visible_min = min(visible, default=None)
     cells = []
     for index, value in enumerate(values):
         if not flags[index]:
@@ -168,7 +190,7 @@ def _local_partition(
         elif value < threshold:
             cells.append(Cell(key=str(index), published=None, lo=min_value, hi=threshold - 1))
         elif victims[index]:
-            cells.append(Cell(key=str(index), published=None, lo=max(threshold, visible_max), hi=None))
+            cells.append(Cell(key=str(index), published=None, lo=threshold, hi=visible_min))
         else:
             cells.append(Cell(key=str(index), published=None, lo=threshold, hi=None))
     return Partition(
@@ -304,16 +326,20 @@ def _suppress_small(
 
 
 def _order_tiebreak(rows: Sequence[dict[str, Any]], order: str) -> Callable[[int], tuple]:
-    """Wertunabhaengiger Zweitschluessel fuer die Opferwahl des K2-Audits.
+    """Wertunabhaengiger Zweitschluessel fuer die Opferwahl (Audit UND Guard).
 
     Bei wertgleichen Kandidaten darf nicht die Eingabeordnung entscheiden (sie
     ist count-sortiert und damit selbst eine Rangaussage) — es entscheidet die
     kanonische K5-Ordnung, sonst die Position als letzter, stabiler Anker.
+
+    Beide Opferwahlen nehmen das **Minimum** ueber ``(Wert, tiebreak)``; damit
+    faellt bei Wertgleichheit die kanonisch **erste** Zelle, in
+    :func:`_audit_feasible_span` wie in :func:`_suppress_smallest_visible`.
     """
     key = _CANONICAL_ORDERS[order]
     if key is None:
-        return lambda index: (-index,)
-    return lambda index: (key(rows[index]), -index)
+        return lambda index: (index,)
+    return lambda index: (key(rows[index]), index)
 
 
 # Aufschluesselungen, deren Aequivalenzklassen **Personen** sind (nicht
@@ -543,8 +569,15 @@ def _published_partitions(
     return partitions
 
 
-def _suppress_largest_visible(report: dict[str, Any], spec: _Breakdown) -> bool:
-    """Opfert die groesste sichtbare Zelle einer Aufschluesselung. Erfolg?"""
+def _suppress_smallest_visible(report: dict[str, Any], spec: _Breakdown) -> bool:
+    """Opfert die kleinste sichtbare Zelle einer Aufschluesselung. Erfolg?
+
+    Dieselbe Opferregel wie im tabellenlokalen Audit (User-Entscheid #1770) und
+    derselbe wertunabhaengige Zweitschluessel — beide nehmen das Minimum ueber
+    ``(Wert, tiebreak)``, sodass bei Wertgleichheit die kanonisch erste Zelle
+    faellt. Zwei verschiedene Opferregeln in derselben Suppression waeren zwei
+    Angreifermodelle, von denen mindestens eines nicht modelliert ist.
+    """
     data = report.get(spec.key)
     if not data:
         return False
@@ -552,13 +585,13 @@ def _suppress_largest_visible(report: dict[str, Any], spec: _Breakdown) -> bool:
         visible = {key: value for key, value in data.items() if value is not None}
         if not visible:
             return False
-        report[spec.key] = {**data, max(sorted(visible), key=lambda key: visible[key]): None}
+        report[spec.key] = {**data, min(sorted(visible), key=lambda key: visible[key]): None}
         return True
     visible = [index for index, row in enumerate(data) if not row.get("suppressed")]
     if not visible:
         return False
     tiebreak = _order_tiebreak(data, spec.order)
-    victim = max(visible, key=lambda index: (data[index][spec.count_key], tiebreak(index)))
+    victim = min(visible, key=lambda index: (data[index][spec.count_key], tiebreak(index)))
     data[victim][spec.count_key] = None
     data[victim]["suppressed"] = True
     # Der Guard laeuft NACH der Kanonisierung — die neue Unterdrueckung muss
@@ -580,8 +613,9 @@ def apply_residual_guard(
     sich eine unterdrueckte Zelle exakt rekonstruieren laesst. Eskalationsleiter
     je Befund:
 
-    1. die **groesste** sichtbare Zelle der betroffenen Aufschluesselung fallen
-       lassen (maximiert das Residuum, siehe :func:`_audit_feasible_span`),
+    1. die **kleinste** sichtbare Zelle der betroffenen Aufschluesselung fallen
+       lassen (dieselbe Opferregel wie das tabellenlokale Audit, siehe
+       :func:`_audit_feasible_span`),
     2. ist keine sichtbare Zelle mehr da: die **Randsumme** fallen lassen —
        ohne sie gibt es keine Gleichung mehr,
     3. hilft auch das nicht (oder ist die harte Iterationsgrenze erreicht):
@@ -612,7 +646,7 @@ def _escalate(report: dict[str, Any], specs: dict[str, _Breakdown], current: lis
     """Ein Schritt der Eskalationsleiter. Gibt zurueck, ob etwas passiert ist."""
     for partition_name, _cell in current:
         spec = specs.get(partition_name)
-        if spec is not None and _suppress_largest_visible(report, spec):
+        if spec is not None and _suppress_smallest_visible(report, spec):
             return True
         margin_key = spec.margin_key if spec is not None else PERSON_MARGIN_KEY
         if margin_key and report.get(margin_key) is not None:
