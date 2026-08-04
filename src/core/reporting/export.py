@@ -126,7 +126,12 @@ def _render_csv(
         output.truncate(0)
         return chunk
 
-    metadata = f"# Bericht: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
+    # Refs #1766: auch das Zeilenpraefix ist Fliesstext — bliebe es deutsch,
+    # waere die Zeile nach dem Uebersetzen der Segmente immer noch gemischt.
+    # Der Wert dahinter (``backend.slug``) ist der stabile Code und bleibt.
+    metadata = (
+        f"# {gettext('Bericht')}: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
+    )
     # Quellenausweis (Refs #1743): die Pipeline liest immer live. Steht VOR dem
     # k-Anon-Hinweis, damit dieser das Zeilenende bleibt.
     #
@@ -149,9 +154,15 @@ def _render_csv(
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
     # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
+    #
+    # Refs #1766: als EIN msgid mit Platzhalter statt „Label + Wert" wie bei den
+    # Nachbarsegmenten — hier gibt es keinen sprachunabhaengigen Code, an dem
+    # sich das Segment trennen liesse, und ein halb uebersetztes Segment waere
+    # genau der DE/EN-Mischtext, den #1765 fuer die Nachbarn beseitigt hat.
+    # Die Schwelle selbst ist bewusst publiziert (Transparenz), nicht redigiert.
     threshold = result.summary.get("k_anonymity_threshold")
     if threshold is not None:
-        metadata += f" | k-Anonymität: Zellen < {threshold} unterdrückt"
+        metadata += " | " + gettext("k-Anonymität: Zellen < %(threshold)s unterdrückt") % {"threshold": threshold}
     yield _flush([_sanitize_csv_cell(metadata)])
     yield _flush([_sanitize_csv_cell(spec.label) for spec in field_specs])
     for record in result.records:

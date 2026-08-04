@@ -2637,6 +2637,11 @@ msgstr "Population: {population} · Source: {source}"
 msgid "Datenquelle"
 msgstr "Data source"
 
+#: src/core/reporting/export.py:158
+#, python-format
+msgid "k-Anonymität: Zellen < %(threshold)s unterdrückt"
+msgstr "k-anonymity: cells < %(threshold)s suppressed"
+
 #: src/core/reporting/export.py:147
 msgid "Grundgesamtheit"
 msgstr "Population"

@@ -161,6 +161,53 @@ class TestJsonExportEnglisch:
         assert payload["data_source"] == "live"
 
 
+class TestCsvMetadatenzeileEnglisch:
+    """``DatasetExportView`` (CSV) unter ``en`` — die Metadatenzeile.
+
+    Das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise; die
+    Metadatenzeile ist der **einzige** Fliesstext, den ein Empfaenger dort
+    sieht. Bleibt ihr k-Anon-Segment deutsch, liest ein englischsprachiger
+    Empfaenger die leeren Zellen als „keine Daten" statt als Unterdrueckung —
+    genau die Fehlklasse, die #1769/#1770 anderswo schliessen.
+    """
+
+    @pytest.fixture
+    def zeile(self, client, admin_user, doc_type_contact, sample_event):
+        client.force_login(_speaks_english(admin_user))
+        today = timezone.localdate()
+
+        response = client.get(
+            reverse("core:statistics_report_export"),
+            {
+                "backend": "sample-report-1",
+                "format": "csv",
+                "date_from": str(today - timedelta(days=30)),
+                "date_to": str(today),
+            },
+        )
+
+        assert response.status_code == 200
+        content = b"".join(response.streaming_content).decode("utf-8")
+        return content.splitlines()[0]
+
+    def test_metadatenzeile_ohne_deutschen_fliesstext(self, zeile):
+        assert not _de_stems_in(zeile), f"deutsche Segmente in der EN-Metadatenzeile: {_de_stems_in(zeile)}"
+        assert "Datenquelle" not in zeile
+        assert "k-Anonymität" not in zeile
+        assert "Bericht:" not in zeile
+
+    def test_metadatenzeile_traegt_die_englischen_fassungen(self, zeile):
+        """Gegenprobe: die Segmente sind da, nur eben englisch."""
+        assert "Data source:" in zeile
+        assert "Population:" in zeile
+        assert "k-anonymity: cells < 5 suppressed" in zeile
+
+    def test_maschinenlesbare_codes_bleiben_sprachunabhaengig(self, zeile):
+        """Die Parser-Anker sind Maschinen-Vertrag (siehe docs/reporting-plugins.md)."""
+        assert "data_source: live" in zeile
+        assert "population: " in zeile
+
+
 class TestBackendStringsUnterOverride:
     """Direkte Backend-Aufrufe unter ``override("en")`` — ohne Request-Pfad.
 
