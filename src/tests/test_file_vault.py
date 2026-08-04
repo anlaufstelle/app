@@ -31,7 +31,7 @@ from core.services.file_vault import (  # noqa: E402  # noqa: E402
     ScanResult,
     VirusScannerUnavailableError,
     delete_attachment_file,
-    delete_event_attachments,
+    delete_attachments_for,
     get_attachment_path,
     get_decrypted_file_stream,
     get_original_filename,
@@ -248,12 +248,12 @@ class TestFileVaultService:
         delete_attachment_file(attachment)
         assert not path.exists()
 
-    def test_delete_event_attachments(self, event_with_file):
+    def test_delete_attachments_for(self, event_with_file):
         event, attachment = event_with_file
         path = get_attachment_path(attachment)
         assert path.exists()
 
-        delete_event_attachments(event)
+        delete_attachments_for(event)
         assert not path.exists()
         assert Attachment.objects.filter(event=event).count() == 0
 

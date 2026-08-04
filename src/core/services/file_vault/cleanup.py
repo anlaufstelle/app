@@ -1,8 +1,9 @@
 """Disk- und DB-Cleanup-Pfade fuer den File-Vault.
 
-- :func:`delete_event_attachments` ist der Hot-Path-Cleanup, wenn ein
-  Event gelöscht wird (Retention, Vier-Augen-Workflow): erst Dateien
-  unlinken, dann DB-Records loeschen.
+- :func:`delete_attachments_for` ist der Hot-Path-Cleanup, wenn ein Owner
+  (Ereignis, Person oder Fall) geloescht wird (Retention, Vier-Augen-
+  Workflow, Anonymisierung): erst Dateien unlinken, dann DB-Records
+  loeschen.
 - :func:`cleanup_orphan_storage_files` ist der periodische Cron-Helper,
   der ``.enc``-Dateien ohne DB-Referenz findet (Race-Conditions zwischen
   ``encrypt_file`` und ``Attachment.create`` koennen Orphans
@@ -23,11 +24,23 @@ from core.services.file_vault.storage import delete_attachment_file
 logger = logging.getLogger(__name__)
 
 
-def delete_event_attachments(event):
-    """Delete all attachments for an event (files + DB records)."""
-    for attachment in event.attachments.all():
+def delete_attachments_for(owner):
+    """Delete all attachments of an owner (files + DB records).
+
+    ``owner`` ist ein ``Event``, ``Client`` oder ``Case``. Harter Rename von
+    ``delete_event_attachments`` (AP2, Refs #1738 / ADR-039) — bewusst OHNE
+    Kompatibilitaets-Alias: die drei Aufrufstellen sind bekannt, und ein
+    Alt-Name mit Event-Semantik waere bei einem personen-/falleigenen Owner
+    irrefuehrend.
+
+    **Physischer** Loeschpfad (Invariante I-M1, ADR-039 §7): der Aufrufer MUSS
+    im selben ``transaction.atomic`` die ``__files__``-Marker des Owners
+    bereinigen bzw. dessen ``data_json`` leeren — sonst zeigen Marker auf
+    nicht mehr existierende Zeilen.
+    """
+    for attachment in owner.attachments.all():
         delete_attachment_file(attachment)
-    event.attachments.all().delete()
+    owner.attachments.all().delete()
 
 
 def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
@@ -41,9 +54,13 @@ def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
 
     Dieser Helper findet solche Orphans, indem er alle ``.enc``-Dateien
     im Media-Root mit den aktuell registrierten ``storage_filename``-
-    Werten der DB abgleicht. ``min_age_seconds`` schuetzt vor Race
-    Conditions: eine Datei, die gerade frisch geschrieben wird, hat
-    eventuell noch keinen DB-Eintrag (Default 1h ist konservativ).
+    Werten der DB abgleicht. Der Abgleich ist **owner-generisch**: gezaehlt
+    werden ALLE ``Attachment``-Zeilen, gleich ob sie an einem Ereignis, einer
+    Person oder einem Fall haengen (ADR-039) — und auch soft-deletete Zeilen
+    (``deleted_at``), deren Datei bis zur Owner-Loeschung erhalten bleibt.
+    ``min_age_seconds`` schuetzt vor Race Conditions: eine Datei, die gerade
+    frisch geschrieben wird, hat eventuell noch keinen DB-Eintrag (Default 1h
+    ist konservativ).
 
     Vorgesehen fuer einen periodischen Management-Command/Cron, nicht
     fuer den Hot-Path. Returns: Anzahl der geloeschten Dateien.

@@ -3,7 +3,16 @@
 Enthaelt die produktiv aufgerufenen Funktionen rund um Upload, Replace,
 Soft-Delete und Read-Pfade. Validation-Policy haengt an
 :mod:`core.services.file_vault.policy`; physischer Cleanup (Orphans,
-Event-Loeschung) liegt in :mod:`core.services.file_vault.cleanup`.
+Owner-Loeschung) liegt in :mod:`core.services.file_vault.cleanup`.
+
+Owner-Generik (AP2, Refs #1738 / ADR-039): Ein Anhang haengt an genau EINEM
+Owner — ``Event``, ``Client`` oder ``Case``. Alle Schreib-/Lesepfade
+adressieren ihn ueber den geteilten Reverse-Accessor ``owner.attachments``
+und leiten die ``facility`` IMMER aus ``owner.facility`` ab (ADR-039 §2:
+``facility`` ist nie ein freier Parameter). Wo ein Aufrufer die ``facility``
+zusaetzlich mitgibt (``prepare_encrypted_upload``/``store_encrypted_file``,
+weil die Pre-Encrypt-Policy sie ohne Owner braucht), erzwingt ein Guard die
+Uebereinstimmung fail-loud.
 """
 
 from __future__ import annotations
@@ -16,7 +25,7 @@ from pathlib import Path
 from django.conf import settings as django_settings
 from django.utils import timezone
 
-from core.models.attachment import Attachment
+from core.models.attachment import Attachment, owner_field_name
 from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.file_vault.policy import (
     enforce_allowed_file_types,
@@ -53,7 +62,7 @@ class StagedUpload:
     content_type: str
 
 
-def prepare_encrypted_upload(facility, uploaded_file, user, *, event=None):
+def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     """Validieren, scannen und verschluesseln — OHNE DB-Write (Refs #1345).
 
     Fuehrt die volle Pre-Encrypt-Policy-Pipeline plus ClamAV-Scan und
@@ -67,9 +76,10 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, event=None):
 
     Reihenfolge der Checks bleibt EXAKT wie bisher (#1268: Groesse VOR
     Voll-Pufferung im Virenscan — Memory-DoS-Schutz; #1274: verifizierter
-    libmagic-MIME festgehalten). ``event`` ist optional und geht nur in die
-    ``SECURITY_VIOLATION``-Audit-Attribution ein (``None`` bei Anlage eines noch
-    nicht existierenden Events). Bei jedem Fehler wird eine bereits geschriebene
+    libmagic-MIME festgehalten). ``owner`` (Ereignis, Person oder Fall) ist
+    optional und geht nur in die ``SECURITY_VIOLATION``-Audit-Attribution ein
+    (``None`` bei Anlage eines noch nicht existierenden Owners — der Create-Pfad
+    staged VOR dem Insert). Bei jedem Fehler wird eine bereits geschriebene
     ``.enc``-Datei entfernt und die Exception re-raised.
 
     1. Enforce ``Settings.allowed_file_types`` extension whitelist (Refs #610).
@@ -83,20 +93,20 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, event=None):
     6. UUID-Dateiname + Facility-Unterverzeichnis + Fernet-Encrypt auf Disk
        (Chunks an die Storage-ID gebunden, A4.5 / Refs #1016).
     """
-    enforce_allowed_file_types(facility, uploaded_file, event, user)
+    enforce_allowed_file_types(facility, uploaded_file, owner, user)
     # #1268: harte Service-Groessenobergrenze VOR der Voll-Pufferung im Virenscan
     # (Memory-DoS-Schutz). #1363: erzwingt zugleich das per-Facility-Limit als SSOT
     # (min(Facility-Limit, globaler Cap)) fuer ALLE Aufrufer, auch den Replace-Pfad,
     # der am DynamicEventDataForm vorbeilaeuft.
-    enforce_upload_size(facility, uploaded_file, event, user)
-    run_virus_scan(facility, uploaded_file, event, user)
+    enforce_upload_size(facility, uploaded_file, owner, user)
+    run_virus_scan(facility, uploaded_file, owner, user)
     # #1274: den verifizierten (libmagic) MIME festhalten, damit er beim Download
     # massgeblich ist statt des browser-gemeldeten content_type.
-    detected_mime = enforce_magic_bytes(facility, uploaded_file, event, user)
+    detected_mime = enforce_magic_bytes(facility, uploaded_file, owner, user)
     # #1268: Decompression-Bomb-Schutz fuer Bild-Uploads (Pixel-Obergrenze).
-    enforce_image_limits(facility, uploaded_file, event, user)
+    enforce_image_limits(facility, uploaded_file, owner, user)
     # #1310 (S4): Archiv-Expansions-Guard (Zip-Bomb) fuer ZIP/OOXML-Container.
-    enforce_archive_limits(facility, uploaded_file, event, user)
+    enforce_archive_limits(facility, uploaded_file, owner, user)
 
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
@@ -120,12 +130,17 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, event=None):
     )
 
 
-def commit_staged_upload(event, field_template, staged, user, *, supersedes=None, sort_order=None):
+def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None):
     """Persistiere eine per :func:`prepare_encrypted_upload` gestagte Datei als
     ``Attachment`` — reiner DB-Write (Refs #1345).
 
     Sicher innerhalb der Aufrufer-``transaction.atomic()`` aufzurufen: hier faellt
     kein ClamAV-Scan und keine Verschluesselung mehr an, nur der schnelle Insert.
+
+    ``owner`` ist ein ``Event``, ``Client`` oder ``Case`` (AP2, Refs #1738); der
+    passende Owner-FK wird ueber :func:`~core.models.attachment.owner_field_name`
+    gesetzt (fail-loud bei fremden Modellen), die ``facility`` IMMER aus
+    ``owner.facility`` abgeleitet (ADR-039 §2).
 
     Modi:
     * ``supersedes=None`` → **add**: Neue Versionskette mit frischer ``entry_id``.
@@ -134,10 +149,14 @@ def commit_staged_upload(event, field_template, staged, user, *, supersedes=None
       (``is_current=False``, ``superseded_by=<new>``, ``superseded_at``).
 
     Bei einem DB-Fehler wird die gestagte ``.enc``-Datei entfernt (#662).
-    Disk file stays until the event itself is deleted or anonymized
+    Disk file stays until the owner itself is deleted or anonymized
     (Refs #587/622 — Versionshistorie + Stufe-B Multi-Entry).
     """
     try:
+        # Fail-loud im try-Block: ein unzulaessiger Owner soll dieselbe
+        # Cleanup-Garantie ausloesen wie ein DB-Fehler (#662) — sonst bliebe
+        # die bereits verschluesselte ``.enc`` als Waise auf der Disk liegen.
+        owner_field = owner_field_name(owner)
         if supersedes is not None:
             # Replace-Modus: entry_id + sort_order vom Vorgänger übernehmen.
             entry_id = supersedes.entry_id
@@ -150,8 +169,8 @@ def commit_staged_upload(event, field_template, staged, user, *, supersedes=None
         new_attachment = Attachment.objects.create(
             # ADR-039 §2: facility IMMER aus dem Owner abgeleitet, nie als
             # freier Parameter (owner-generisch ab AP2, Refs #1738).
-            facility=event.facility,
-            event=event,
+            facility=owner.facility,
+            **{owner_field: owner},
             field_template=field_template,
             storage_filename=staged.storage_name,
             original_filename_encrypted=encrypt_field(staged.original_name),
@@ -182,7 +201,7 @@ def store_encrypted_file(
     facility,
     uploaded_file,
     field_template,
-    event,
+    owner,
     user,
     supersedes=None,
     sort_order=None,
@@ -192,38 +211,54 @@ def store_encrypted_file(
     Duenner Wrapper um :func:`prepare_encrypted_upload` + :func:`commit_staged_upload`
     (Refs #1345). Fuer Aufrufer, die Scan/Encrypt und DB-Write NICHT trennen
     muessen (Seed, Update/Replace-Pfad ``apply_attachment_changes``): der
-    Vertrag (Signatur, Reihenfolge der Checks, Cleanup-Garantie) bleibt
-    unveraendert. Der Create-Pfad (``EventCreateView``) ruft die beiden Phasen
-    dagegen getrennt, um den Scan aus der Audit-Lock-Transaktion zu ziehen.
+    Vertrag (Reihenfolge der Checks, Cleanup-Garantie) bleibt unveraendert;
+    ``event`` heisst ab AP2 ``owner`` (Ereignis, Person oder Fall, Refs #1738).
+
+    ADR-039 §2 fail-loud: ``facility`` ist hier nur noch der Policy-/Pfad-Kontext
+    der Pre-Encrypt-Pipeline — massgeblich fuer die Zeile ist ``owner.facility``.
+    Weichen beide voneinander ab, laege die ``.enc``-Datei in einem fremden
+    Facility-Verzeichnis, waehrend die DB-Zeile (und damit die RLS-Sicht) zur
+    Owner-Facility gehoerte. Das wird abgewiesen statt still divergieren zu
+    lassen — VOR jedem Scan/Encrypt, damit keine Datei entsteht.
     """
-    staged = prepare_encrypted_upload(facility, uploaded_file, user, event=event)
-    return commit_staged_upload(event, field_template, staged, user, supersedes=supersedes, sort_order=sort_order)
+    if owner is not None and getattr(owner, "facility_id", None) != facility.pk:
+        raise ValueError(
+            "Facility des Owners weicht von der uebergebenen Facility ab "
+            f"(owner.facility_id={getattr(owner, 'facility_id', None)!r}, facility={facility.pk!r})"
+        )
+    staged = prepare_encrypted_upload(facility, uploaded_file, user, owner=owner)
+    return commit_staged_upload(owner, field_template, staged, user, supersedes=supersedes, sort_order=sort_order)
 
 
-def soft_delete_attachment_chain(event, entry_id, user):
+def soft_delete_attachment_chain(owner, entry_id, user):
     """Markiere alle Attachments einer Versionskette (entry_id) als soft-deleted.
 
     Für UI-Lösch-Aktionen (Stufe B, Refs #622). Physischer Disk-Cleanup
-    erfolgt weiterhin erst im Event-Delete/Anonymize. Bereits soft-deleted
+    erfolgt weiterhin erst im Owner-Delete/Anonymize. Bereits soft-deleted
     eingetragene Entries werden nicht erneut angefasst.
+
+    ``owner`` ist ein ``Event``, ``Client`` oder ``Case``; der Zugriff laeuft
+    ueber den geteilten Reverse-Accessor ``owner.attachments`` und ist damit
+    automatisch owner-gescopt (AP2, Refs #1738).
 
     Returns: Anzahl der neu soft-deleted Attachments in der Kette.
     """
-    qs = event.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
+    qs = owner.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
     now = timezone.now()
     updated = qs.update(deleted_at=now)
     return updated
 
 
-def get_current_entries_for_field(event, field_template):
+def get_current_entries_for_field(owner, field_template):
     """Liefert die aktuellen, nicht soft-deleted Einträge für ein FILE-Feld.
 
     Gibt Heads der Versionsketten zurück (is_current=True, deleted_at IS NULL),
     sortiert nach ``sort_order`` und ``created_at``. Der Aufrufer kann daraus
-    ``entry_id``, ``pk``, ``original_filename`` etc. ableiten.
+    ``entry_id``, ``pk``, ``original_filename`` etc. ableiten. ``owner`` ist ein
+    ``Event``, ``Client`` oder ``Case`` (AP2, Refs #1738).
     """
     return list(
-        event.attachments.filter(
+        owner.attachments.filter(
             field_template=field_template,
             is_current=True,
             deleted_at__isnull=True,
@@ -232,8 +267,16 @@ def get_current_entries_for_field(event, field_template):
 
 
 def get_attachment_path(attachment):
-    """Return the full filesystem path of an encrypted attachment."""
-    return _facility_dir(attachment.event.facility) / attachment.storage_filename
+    """Return the full filesystem path of an encrypted attachment.
+
+    G2-Befund (Refs #1738): laeuft ueber die **eigene** ``attachment.facility``
+    statt ueber ``attachment.event.facility`` — fuer personen-/falleigene Zeilen
+    waere der Umweg ein ``AttributeError`` (``event`` ist dort ``None``). Fuer
+    Ereignis-Anhaenge ist das Ergebnis bitgleich zum Bestand: die
+    ``facility``-Spalte wurde in Migration 0130 genau aus ``event.facility``
+    zurueckgeschrieben — es gibt keine Datei-Moves.
+    """
+    return _facility_dir(attachment.facility) / attachment.storage_filename
 
 
 def get_decrypted_file_stream(attachment):

@@ -23,8 +23,18 @@ def _requires_postgres():
         pytest.skip("AuditLog-Trigger (Hash-Chain/Immutable) erfordert PostgreSQL")
 
 
-class _EventStub:
-    """Minimaler Event-Stand-in — ``log_attachment_violation`` liest nur ``pk``."""
+class _OwnerStub:
+    """Minimaler Owner-Stand-in.
+
+    ``log_attachment_violation`` liest vom Owner nur ``pk`` und — seit der
+    Owner-Generik (AP2, Refs #1738) — ``_meta.model_name`` fuer das
+    ``owner_type`` im Detail-Schema.
+    """
+
+    class _Meta:
+        model_name = "event"
+
+    _meta = _Meta()
 
     def __init__(self, pk):
         self.pk = pk
@@ -50,17 +60,20 @@ class TestLogAttachmentViolationTarget:
         stimmen, sonst ist der Verstoß nicht dem verursachenden Vorgang
         zuzuordnen.
         """
-        event = _EventStub(pk=4242)
+        owner = _OwnerStub(pk=4242)
         entry = log_attachment_violation(
             facility,
             staff_user,
-            event,
+            owner,
             reason="extension_not_allowed",
             filename="schaden.exe",
         )
         assert entry is not None
         assert entry.target_type == "Attachment"  # mutmut_11 (None) + mutmut_22 (XX…XX)
         assert entry.target_id == str(4242)  # mutmut_1 + mutmut_2 + mutmut_18
+        # AP2 (Refs #1738): Detail-Schema der Anhang-Domaene traegt den Owner.
+        assert entry.detail["owner_type"] == "event"
+        assert entry.detail["owner_id"] == str(4242)
 
     def test_target_id_none_when_event_has_no_pk(self, facility, staff_user):
         """Regression-Anker für den Pre-Save-Reject-Pfad (Event ohne PK):
@@ -71,10 +84,11 @@ class TestLogAttachmentViolationTarget:
         entry = log_attachment_violation(
             facility,
             staff_user,
-            _EventStub(pk=None),
+            _OwnerStub(pk=None),
             reason="virus_detected",
             filename="virus.pdf",
         )
         assert entry is not None
         assert entry.target_type == "Attachment"
         assert entry.target_id in ("", None)
+        assert entry.detail["owner_id"] is None

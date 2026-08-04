@@ -11,6 +11,12 @@ Split (#910) ist sie nach ``file_vault/policy.py`` umgezogen. Die
 do-not-mutate-Whitelist in ``pyproject.toml`` zeigt entsprechend auf
 diesen Pfad — echte Encryption-Pfade ueber ``store_encrypted_file``
 produzieren 15-30 s Mutmut-Timeouts pro Mutation.
+
+AP2 (Refs #1738 / ADR-039): Der dritte Parameter aller Enforcer heisst
+``owner`` statt ``event`` — er ist ein ``Event``, ``Client`` oder ``Case``
+(oder ``None``, wenn der Owner beim Pre-Save-Reject noch nicht existiert) und
+wird ausschliesslich an die Audit-Attribution durchgereicht. Keine
+Enforcement-Regel liest den Owner selbst.
 """
 
 from __future__ import annotations
@@ -38,7 +44,7 @@ _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif"
 _ARCHIVE_EXTENSIONS = frozenset({"zip", "docx", "xlsx", "pptx"})
 
 
-def enforce_upload_size(facility, uploaded_file, event, user):
+def enforce_upload_size(facility, uploaded_file, owner, user):
     """Reject uploads exceeding ``min(Facility-Limit, globaler Cap)``.
 
     Refs #1268 (T3): urspruenglich nur die harte globale Obergrenze
@@ -78,7 +84,7 @@ def enforce_upload_size(facility, uploaded_file, event, user):
     log_attachment_violation(
         facility,
         user,
-        event,
+        owner,
         reason="file_too_large",
         filename=uploaded_file.name,
         size=size,
@@ -90,7 +96,7 @@ def enforce_upload_size(facility, uploaded_file, event, user):
     )
 
 
-def enforce_image_limits(facility, uploaded_file, event, user):
+def enforce_image_limits(facility, uploaded_file, owner, user):
     """Reject decompression-bomb images (Refs #1268 (T3)).
 
     Setzt ``PIL.Image.MAX_IMAGE_PIXELS`` und lehnt Bilder ab, deren (aus dem
@@ -135,7 +141,7 @@ def enforce_image_limits(facility, uploaded_file, event, user):
         log_attachment_violation(
             facility,
             user,
-            event,
+            owner,
             reason="image_too_large",
             filename=name,
             pixels=pixels,
@@ -180,7 +186,7 @@ def _zip_entry_count(uploaded_file) -> int | None:
     return entries
 
 
-def enforce_archive_limits(facility, uploaded_file, event, user):
+def enforce_archive_limits(facility, uploaded_file, owner, user):
     """Reject zip-bomb archives (Refs #1310 (S4)).
 
     Fuer ZIP-Container (zip + OOXML docx/xlsx/pptx) wird aus dem Zip-Directory
@@ -216,7 +222,7 @@ def enforce_archive_limits(facility, uploaded_file, event, user):
         log_attachment_violation(
             facility,
             user,
-            event,
+            owner,
             reason="archive_too_many_entries",
             filename=name,
             entries=entries,
@@ -251,7 +257,7 @@ def enforce_archive_limits(facility, uploaded_file, event, user):
         log_attachment_violation(
             facility,
             user,
-            event,
+            owner,
             reason="archive_bomb",
             filename=name,
             uncompressed=total_uncompressed,
@@ -266,7 +272,7 @@ def enforce_archive_limits(facility, uploaded_file, event, user):
         )
 
 
-def enforce_allowed_file_types(facility, uploaded_file, event, user):
+def enforce_allowed_file_types(facility, uploaded_file, owner, user):
     """Reject uploads whose extension is not in ``Settings.allowed_file_types``.
 
     The form layer already performs this check for UX, but the service layer
@@ -297,7 +303,7 @@ def enforce_allowed_file_types(facility, uploaded_file, event, user):
     log_attachment_violation(
         facility,
         user,
-        event,
+        owner,
         reason="extension_not_allowed",
         filename=name,
         extension=ext,
@@ -374,7 +380,7 @@ _STRONG_MAGIC = {
 }
 
 
-def enforce_magic_bytes(facility, uploaded_file, event, user):
+def enforce_magic_bytes(facility, uploaded_file, owner, user):
     """Verify the file's true MIME type (sniffed via libmagic) matches the
     browser-declared ``content_type``.
 
@@ -416,7 +422,7 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
         log_attachment_violation(
             facility,
             user,
-            event,
+            owner,
             reason="magic_not_allowlisted",
             filename=uploaded_file.name,
             declared=declared_mime,
@@ -444,7 +450,7 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
     log_attachment_violation(
         facility,
         user,
-        event,
+        owner,
         reason="mime_mismatch",
         filename=uploaded_file.name,
         declared=declared_mime,
@@ -456,7 +462,7 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
     )
 
 
-def run_virus_scan(facility, uploaded_file, event, user):
+def run_virus_scan(facility, uploaded_file, owner, user):
     """Scan ``uploaded_file`` via ClamAV. Raises ``ValidationError`` on hit or
     when the scanner is unreachable while ``CLAMAV_ENABLED`` is true.
 
@@ -474,7 +480,7 @@ def run_virus_scan(facility, uploaded_file, event, user):
         log_attachment_violation(
             facility,
             user,
-            event,
+            owner,
             reason="virus_scanner_unavailable",
             filename=uploaded_file.name,
             error=str(exc),
@@ -485,7 +491,7 @@ def run_virus_scan(facility, uploaded_file, event, user):
         log_attachment_violation(
             facility,
             user,
-            event,
+            owner,
             reason="virus_detected",
             filename=uploaded_file.name,
             signature=result.signature or "",

@@ -27,7 +27,7 @@ from core.services.events.fields import (
     normalize_file_marker,
     stage_index,
 )
-from core.services.file_vault import delete_event_attachments
+from core.services.file_vault import delete_attachments_for
 
 
 def finalize_staged_files(event, user, staged_by_slug, document_type):
@@ -402,7 +402,7 @@ def soft_delete_event(event, user):
     history_payload = build_redacted_delete_history(event)
     event.is_deleted = True
     event.data_json = {}
-    delete_event_attachments(event)
+    delete_attachments_for(event)
     event.save()
     EventHistory.objects.create(
         event=event,

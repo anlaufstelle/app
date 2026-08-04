@@ -322,7 +322,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         # aeusseren Transaktion haelt. Lag die (bis CLAMAV_TIMEOUT dauernde)
         # Datei-Verarbeitung mit im selben ``atomic``, blockierte sie jede andere
         # audit-schreibende Aktion derselben Facility. Wir stagen deshalb hier
-        # (event=None: das Event existiert noch nicht) und persistieren die
+        # (owner=None: das Event existiert noch nicht) und persistieren die
         # fertig verschluesselten Dateien erst im schnellen atomic-Block unten.
         staged_all = []
         staged_by_slug: dict[str, list] = {}
@@ -330,7 +330,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             for slug, uploaded_list in file_fields.items():
                 prepared = []
                 for uploaded_file in uploaded_list or []:
-                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, event=None)
+                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, owner=None)
                     staged_all.append(staged)
                     prepared.append(staged)
                 if prepared:

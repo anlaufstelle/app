@@ -31,9 +31,18 @@ from core.services.audit.hash import hmac_hash_value
 pytestmark = pytest.mark.django_db
 
 
-class _EventStub:
-    """Stand-in fuer den Pre-Save-Reject: ``log_attachment_violation`` liest nur ``pk``."""
+class _OwnerStub:
+    """Stand-in fuer den Pre-Save-Reject.
 
+    ``log_attachment_violation`` liest vom Owner nur ``pk`` und — seit der
+    Owner-Generik (AP2, Refs #1738) — ``_meta.model_name`` fuer das
+    ``owner_type`` im Detail-Schema.
+    """
+
+    class _Meta:
+        model_name = "event"
+
+    _meta = _Meta()
     pk = None
 
 
@@ -57,7 +66,7 @@ class TestAttachmentViolationFilenameMinimized:
         entry = log_attachment_violation(
             facility,
             staff_user,
-            _EventStub(),
+            _OwnerStub(),
             reason="extension_not_allowed",
             filename="Bericht-Klartext-Person.exe",
         )
@@ -74,7 +83,7 @@ class TestAttachmentViolationFilenameMinimized:
 
         def _hash_for(name):
             return log_attachment_violation(
-                facility, staff_user, _EventStub(), reason="virus_detected", filename=name
+                facility, staff_user, _OwnerStub(), reason="virus_detected", filename=name
             ).detail["filename_hash"]
 
         first = _hash_for("a.pdf")
@@ -88,7 +97,7 @@ class TestAttachmentViolationFilenameMinimized:
         from core.services.file_vault.audit import log_attachment_violation
 
         entry = log_attachment_violation(
-            facility, staff_user, _EventStub(), reason="mime_mismatch", filename="ohne-endung"
+            facility, staff_user, _OwnerStub(), reason="mime_mismatch", filename="ohne-endung"
         )
         assert entry.detail["filename_ext"] == ""
         assert entry.detail["filename_hash"] == hmac_hash_value("ohne-endung")
@@ -97,7 +106,7 @@ class TestAttachmentViolationFilenameMinimized:
         """Pre-Save-Rejects ohne Dateinamen duerfen keinen Pseudo-Hash erzeugen."""
         from core.services.file_vault.audit import log_attachment_violation
 
-        entry = log_attachment_violation(facility, staff_user, _EventStub(), reason="mime_mismatch", filename="")
+        entry = log_attachment_violation(facility, staff_user, _OwnerStub(), reason="mime_mismatch", filename="")
         assert entry.detail["filename_hash"] == ""
         assert entry.detail["filename_ext"] == ""
 

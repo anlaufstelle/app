@@ -22,7 +22,7 @@ from core.retention.legal_holds import get_active_hold_target_ids
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
-from core.services.file_vault import delete_event_attachments
+from core.services.file_vault import delete_attachments_for
 
 
 def collect_doomed_events(facility, settings_obj, now):
@@ -107,7 +107,7 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
             # Event-Commit und Datei-Unlink eine ``.enc``-Datei MIT Record
             # hinterlassen; ``cleanup_orphan_storage_files`` ueberspringt Dateien
             # MIT Record -> PII-Residue bliebe dauerhaft (DSGVO-Blocker).
-            delete_event_attachments(event)
+            delete_attachments_for(event)
         deleted_event_ids.append(pk)
 
     extra = dict(extra_detail) if extra_detail else {}

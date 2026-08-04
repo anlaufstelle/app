@@ -65,13 +65,13 @@ class TestClientAnonymizeCharacterization:
             data_json={"dauer": 5, "notiz": "x"},
             created_by=staff_user,
         )
-        # ``delete_event_attachments`` wird in ``anonymize_client`` per
+        # ``delete_attachments_for`` wird in ``anonymize_client`` per
         # function-local Import gezogen; daher am Quellmodul patchen.
-        with patch("core.services.file_vault.delete_event_attachments") as del_files:
+        with patch("core.services.file_vault.delete_attachments_for") as del_files:
             anonymize_client(client_identified, user=staff_user)
 
         # Charakterisierung: pro betroffenem Event genau ein Aufruf an
-        # ``delete_event_attachments`` — der Service entfernt die Disk-Dateien.
+        # ``delete_attachments_for`` — der Service entfernt die Disk-Dateien.
         del_files.assert_called_once()
         assert del_files.call_args.args[0].pk == event.pk
 
@@ -283,7 +283,7 @@ class TestAnonymizeClientHelpers:
             data_json={"dauer": 5},
             created_by=staff_user,
         )
-        with patch("core.services.file_vault.delete_event_attachments") as del_files:
+        with patch("core.services.file_vault.delete_attachments_for") as del_files:
             event_ids = _delete_event_attachments_for_client(client_identified)
 
         assert event.pk in event_ids

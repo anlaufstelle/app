@@ -198,11 +198,11 @@ def _redact_workitems(client) -> None:
 def _delete_event_attachments_for_client(client) -> list:
     """Loescht Attachments aller Events des Klienten. Returns event_ids."""
     from core.models.event import Event
-    from core.services.file_vault import delete_event_attachments
+    from core.services.file_vault import delete_attachments_for
 
     event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
     for event in Event.objects.filter(pk__in=event_ids).iterator():
-        delete_event_attachments(event)
+        delete_attachments_for(event)
     return event_ids
 
 
@@ -462,7 +462,7 @@ def anonymize_client(client, user=None):
       Klienten — append-only-Trigger (Migration 0012) wird transaktional
       umgangen, sonst blockt das ``UPDATE``.
     - ``Attachment``: Disk-Files + DB-Zeilen via
-      :func:`core.services.file_vault.delete_event_attachments`.
+      :func:`core.services.file_vault.delete_attachments_for`.
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.

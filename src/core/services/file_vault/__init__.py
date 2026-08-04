@@ -6,7 +6,7 @@ Subpackage-Split (#910, erweitert in #959) aus den ehemaligen
 - :mod:`policy`     — Pre-Encrypt-Validation (Extension, Magic-Bytes, ClamAV)
 - :mod:`audit`      — AuditLog-Sink fuer ``SECURITY_VIOLATION``-Eintraege
 - :mod:`storage`    — Hot-Path Storage/Retrieval (store, get_*, soft-delete, ...)
-- :mod:`cleanup`    — Delete-Pfade (Event-Loeschung, Orphan-Cron)
+- :mod:`cleanup`    — Delete-Pfade (Owner-Loeschung, Orphan-Cron)
 - :mod:`encryption` — Fernet-Verschluesselung fuer Felder + Streams (Refs #959)
 - :mod:`virus_scan` — ClamAV-Pre-Encrypt-Scan (Refs #524, Refs #959)
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from core.services.file_vault.cleanup import (
     cleanup_orphan_storage_files,
-    delete_event_attachments,
+    delete_attachments_for,
 )
 from core.services.file_vault.encryption import (
     CHUNK_SIZE,
@@ -74,7 +74,7 @@ __all__ = [
     "decrypt_field",
     "decrypt_file_stream",
     "delete_attachment_file",
-    "delete_event_attachments",
+    "delete_attachments_for",
     "encrypt_dynamic_data",
     "encrypt_field",
     "encrypt_file",

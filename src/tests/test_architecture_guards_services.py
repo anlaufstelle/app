@@ -268,7 +268,7 @@ class TestKAnonBridgeRedactionParity:
         "_delete_event_attachments_for_client": (
             "Anhaenge sind zum Bridge-Zeitpunkt bereits geloescht: beide "
             "Soft-Delete-Pfade (``soft_delete_event`` und ``retention.enforcement``) "
-            "rufen ``delete_event_attachments``. Die Invariante ist in "
+            "rufen ``delete_attachments_for``. Die Invariante ist in "
             "``test_pii_residue_sweep.py`` "
             "(``test_attachments_gone_after_retention_k_anonymization``) gepinnt, "
             "damit eine geaenderte Eintrittsbedingung nicht still zur Luecke wird."

@@ -270,7 +270,7 @@ class TestRetentionAttachmentCleanupSelfHeals:
         path = get_attachment_path(att)
         assert path.exists()
 
-        real_delete = enforcement_mod.delete_event_attachments
+        real_delete = enforcement_mod.delete_attachments_for
         calls = {"n": 0}
 
         def flaky_delete(ev):
@@ -284,7 +284,7 @@ class TestRetentionAttachmentCleanupSelfHeals:
         def prod_qs():
             return Event.objects.filter(pk=event.pk, is_deleted=False)
 
-        with patch.object(enforcement_mod, "delete_event_attachments", side_effect=flaky_delete):
+        with patch.object(enforcement_mod, "delete_attachments_for", side_effect=flaky_delete):
             with pytest.raises(RuntimeError):
                 _soft_delete_events(prod_qs(), facility, category="identified", retention_days=365)
 

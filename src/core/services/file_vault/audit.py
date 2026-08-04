@@ -2,11 +2,11 @@
 
 Schmaler Wrapper um :func:`core.services.audit.audit_security_violation`,
 der den ``target_type="Attachment"`` und die ``target_id`` aus dem
-Event vereinheitlicht (``None`` bei Pre-Save-Rejects ohne Event-PK).
+Owner vereinheitlicht (``None`` bei Pre-Save-Rejects ohne Owner-PK).
 Detail-Payload bleibt schema-stabil: ``reason``, ``filename_hash``,
-``filename_ext`` plus optionale Extras (signature/extension/declared/
-detected/error).
-Refs #610 / #901 / #1751.
+``filename_ext``, ``owner_type``/``owner_id`` plus optionale Extras
+(signature/extension/declared/detected/error).
+Refs #610 / #901 / #1751 / #1738.
 """
 
 from __future__ import annotations
@@ -38,7 +38,27 @@ def _extension(filename: str) -> str:
     return ""
 
 
-def log_attachment_violation(facility, user, event, *, reason, filename, **extra):
+def _owner_reference(owner):
+    """``(owner_type, owner_id)`` fuer das Detail-Schema der Anhang-Domaene.
+
+    ADR-039 §5 vereinheitlicht das Detail auf ``owner_type``/``owner_id``
+    (statt des frueheren ``event_id``). Bewusst **defensiv** statt fail-loud:
+    dieser Sink laeuft ausschliesslich im Fehlerpfad eines abgewiesenen
+    Uploads — ein ``AttributeError`` beim Ermitteln der Owner-Metadaten wuerde
+    die forensische Spur des eigentlichen Verstosses zerstoeren. Fehlt der
+    Owner (Pre-Save-Reject) oder laesst er sich nicht bestimmen, bleiben beide
+    Werte ``None``; der Schluessel selbst ist immer vorhanden, damit
+    Auswertungen ein stabiles Schema sehen.
+    """
+    if owner is None:
+        return None, None
+    meta = getattr(owner, "_meta", None)
+    owner_type = getattr(meta, "model_name", None) if meta is not None else None
+    pk = getattr(owner, "pk", None)
+    return owner_type, (str(pk) if pk else None)
+
+
+def log_attachment_violation(facility, user, owner, *, reason, filename, **extra):
     """Schreibe einen ``SECURITY_VIOLATION``-AuditLog fuer einen File-Vault-Reject.
 
     Refs #1751 (Punkt 5): der **Original-Dateiname wird nicht mehr im
@@ -59,8 +79,16 @@ def log_attachment_violation(facility, user, event, *, reason, filename, **extra
     Der Parameter heisst bewusst weiterhin ``filename``: die Aufrufer in
     ``policy.py`` uebergeben den echten Namen, die Minimierung passiert
     zentral hier — so kann keine Aufrufstelle sie versehentlich umgehen.
+
+    Refs #1738 (ADR-039 §5): ``owner`` ist ein ``Event``, ``Client`` oder
+    ``Case`` (oder ``None`` beim Pre-Save-Reject). ``target_type`` bleibt
+    ``"Attachment"``, ``target_id`` bleibt die Owner-PK; das Detail traegt
+    zusaetzlich ``owner_type``/``owner_id`` — ohne sie waere aus einem
+    ``SECURITY_VIOLATION`` nicht mehr ableitbar, an welcher Entitaet der
+    Upload versucht wurde.
     """
-    target_id = event.pk if getattr(event, "pk", None) else None
+    target_id = owner.pk if getattr(owner, "pk", None) else None
+    owner_type, owner_id = _owner_reference(owner)
     return audit_security_violation(
         facility,
         user,
@@ -69,5 +97,7 @@ def log_attachment_violation(facility, user, event, *, reason, filename, **extra
         reason=reason,
         filename_hash=hmac_hash_value(filename),
         filename_ext=_extension(filename),
+        owner_type=owner_type,
+        owner_id=owner_id,
         **extra,
     )
