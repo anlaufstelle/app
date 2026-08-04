@@ -334,7 +334,12 @@ document.addEventListener("alpine:init", () => {
                             this.clientCases = [];
                         });
                 },
-                onDocTypeChange(event) {
+                // Refs #1775: umbenannt von ``onDocTypeChange`` — der Name war
+                // doppelt vergeben (``statistics-charts.js`` nutzt ihn fuer den
+                // Chart-Filter). Zwei gleichnamige Handler in verschiedenen
+                // Alpine-Komponenten sind im Template nicht auseinanderzuhalten
+                // und laden zum Verwechseln der Fundstelle ein.
+                onEventDocTypeChange(event) {
                     this.updateAnonymousAllowed(event.target);
                 },
                 setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },

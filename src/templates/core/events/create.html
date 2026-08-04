@@ -65,7 +65,7 @@
                     <label for="id_document_type" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.document_type.label }} *</label>
                     <select name="document_type" id="id_document_type"
                             x-ref="docTypeSelect"
-                            @change="onDocTypeChange"
+                            @change="onEventDocTypeChange"
                             aria-required="true"
                             {% if meta_form.document_type.errors %}aria-invalid="true" aria-describedby="id_document_type-error"{% endif %}
                             class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
