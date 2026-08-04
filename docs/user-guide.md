@@ -544,7 +544,7 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 
 > **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.
 
-**Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Der Beispiel-Sachbericht ist das einzige Artefakt, das aus den gespeicherten **Monats-Auswertungen** liest. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Alle anderen Berichte (siehe unten) rechnen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
+**Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Die Sachbericht-PDFs — der Beispiel-Sachbericht wie auch der Halbjahresbericht-Export — lesen aus den gespeicherten **Monats-Auswertungen**. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Die Berichte der Berichte-Sektion (CSV/JSON/XML, siehe unten) rechnen dagegen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
 
 ### Berichte (CSV / JSON / XML)
 

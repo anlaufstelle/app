@@ -547,7 +547,7 @@ The example activity report generates a structured report based on a fixed examp
 
 > **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
 
-**Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The example activity report is the only artifact that reads from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". All other reports (see below) are calculated live and can therefore show different figures for the same period.
+**Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The activity report PDFs -- both the example activity report and the semi-annual report export -- read from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". The reports in the reports section (CSV/JSON/XML, see below) are calculated live and can therefore show different figures for the same period.
 
 ### Reports (CSV / JSON / XML)
 
@@ -874,5 +874,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 357110a8c9bf1c17b733b0c506760702480f3a45 -->
+<!-- source-hash: 64425e1945380788d02374625fc32de48aaad323 -->
 
