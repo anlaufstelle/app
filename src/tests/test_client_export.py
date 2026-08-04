@@ -28,6 +28,7 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.services.client import export_client_data
+from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
 
 
 @pytest.fixture
@@ -1161,14 +1162,43 @@ class TestClientExportAttachments:
         assert old["is_current"] is False
         assert old["superseded_at"] == superseded_at.isoformat()
 
-    def test_no_storage_internals_leak_into_the_export(self, sample_client, facility, file_field_template, admin_user):
-        """Keine Binaerinhalte, keine Speicherpfade (M4/#1060, ADR-039)."""
+    def test_no_storage_internals_leak_into_the_export(
+        self, sample_client, facility, sample_event, file_field_template, admin_user
+    ):
+        """Keine Binaerinhalte, keine Speicherpfade, keine Marker (M4/#1060, ADR-039).
+
+        Der Ereignis-Zweig ist der schaerfste Fall: Ereignisse tragen seit der
+        E8-Aera (ADR-037 §9) FILE-Marker in ``data_json`` — der **gesamte
+        Bestand** laeuft also durch :func:`_serialize_event`. Ohne den
+        Platzhalter-Zweig landete das rohe ``__files__``-Dict samt
+        Attachment-UUIDs in ``events[i]["data"][slug]`` (JSON) und in der
+        PDF-Spalte „Daten" (G4-Blocker, Refs #1738).
+        """
+        import json
+
         attachment = _make_attachment(facility, sample_client, file_field_template, admin_user)
+        event_attachment = _make_attachment(
+            facility, sample_event, file_field_template, admin_user, filename="Ereignis.pdf"
+        )
+        sample_event.data_json = {
+            **sample_event.data_json,
+            file_field_template.slug: {
+                "__files__": True,
+                "entries": [{"id": str(event_attachment.pk), "sort": 0}],
+            },
+        }
+        sample_event.save(update_fields=["data_json"])
+
         data = export_client_data(sample_client, facility, admin_user)
-        payload = str(data)
+        payload = json.dumps(data, default=str, ensure_ascii=False)
         assert attachment.storage_filename not in payload
         assert "original_filename_encrypted" not in payload
         assert str(attachment.pk) not in payload
+        assert str(event_attachment.pk) not in payload
+        assert "__files__" not in payload
+        assert "__file__" not in payload
+        # Positiv-Kontrolle: das Feld faellt nicht weg, es wird nur lesbar.
+        assert data["events"][0]["data"][file_field_template.slug] == ATTACHMENT_FIELD_PLACEHOLDER
 
     def test_attachments_of_another_client_are_excluded(self, sample_client, facility, file_field_template, admin_user):
         other = Client.objects.create(

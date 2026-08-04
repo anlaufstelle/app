@@ -268,11 +268,30 @@ def _serialize_event(event):
     damit das Bestandsformat fuer Ereignisse ohne Dateien bitgleich bleibt
     (Muster ``dynamic_data_orphaned``). Damit schliesst sich die Bestandsluecke,
     dass der Export bislang keinerlei Anhang-Daten enthielt.
+
+    **Datei-Felder** tragen — wie in :func:`_gather_entity_dynamic_data` — nur
+    :data:`ATTACHMENT_FIELD_PLACEHOLDER`; der Marker-Check laeuft **vor**
+    :func:`safe_decrypt`, weil Marker ebenfalls ``dict`` sind, aber keine
+    Krypto-Huelle. Anders als bei Person und Fall ist das hier **kein**
+    Neuland-Fall: Ereignisse tragen seit der E8-Aera (ADR-037 §9) FILE-Marker,
+    der gesamte Bestand laeuft also durch diese Schleife. Ohne den Zweig landete
+    das rohe Marker-Dict samt Attachment-UUIDs in ``data[slug]`` — im JSON wie
+    in der PDF-Spalte „Daten" (G4-Blocker, Refs #1738).
+
+    Diese Schleife arbeitet bewusst **ohne** ``FieldTemplate``-Lookup (anders als
+    :func:`_gather_entity_dynamic_data`): das Ereignis-Format ist Bestand,
+    ``data_json`` wird slug-treu ausgegeben. Der Marker-Check haengt deshalb am
+    Wert, nicht an der Feld-Definition — und traegt damit auch fuer Slugs, die
+    inzwischen nicht mehr am Typ haengen.
     """
+    from core.services.dynamic_data import is_file_marker
+
     decrypted_data = {}
     if event.data_json:
         for key, value in event.data_json.items():
-            if isinstance(value, dict):
+            if is_file_marker(value):
+                decrypted_data[key] = ATTACHMENT_FIELD_PLACEHOLDER
+            elif isinstance(value, dict):
                 decrypted_data[key] = safe_decrypt(value)
             else:
                 decrypted_data[key] = value
