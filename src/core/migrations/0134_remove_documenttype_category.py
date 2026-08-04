@@ -73,7 +73,7 @@ def guard_no_duplicate_names(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0131_rls_attachment"),
+        ("core", "0133_attachment_composite_fk"),
     ]
 
     operations = [

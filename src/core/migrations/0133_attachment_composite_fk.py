@@ -133,7 +133,7 @@ def guard_no_divergent_owner_facility(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0131_rls_attachment"),
+        ("core", "0132_clear_retention_days_non_event"),
     ]
 
     operations = [
