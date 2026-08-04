@@ -223,7 +223,10 @@ jede Zeitraum-Überschneidung einen Alarm, den niemand bewerten kann.
 
 Bewusst ein reines GET-Formular mit `formaction` je Schaltfläche statt drei
 Links: nur so kommen die beiden Felder ohne JavaScript an allen drei Zielen an.
-Kein `action` am Formular — der AuthZ-Template-Guard läse es als POST-Ziel.
+Kein `action` am Formular, weil es keins braucht (jede Schaltfläche nennt ihr
+Ziel selbst) — und weil `action` die POST-Semantik des AuthZ-Template-Guards
+auslöste, die hier sachlich falsch wäre. Die `formaction`-Ziele prüft der Guard
+seit #1770 mit (GET-Semantik); sie sind nicht ausgenommen.
 {% endcomment %}
 <form method="get" class="no-print mb-4">
     <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">

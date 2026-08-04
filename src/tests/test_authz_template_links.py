@@ -49,10 +49,23 @@ SKIPPED_CATEGORIES = frozenset({"export", "offline-api"})
 # Attribute, in denen im Projekt Ziel-URLs stehen, samt HTTP-Methode, mit der
 # sie aufgerufen werden. ``data-…-url`` ist das etablierte Muster, eine URL aus
 # dem Template an eine Alpine-/JS-Komponente zu reichen (per fetch = GET).
+#
+# ``formaction`` MUSS eigens aufgezaehlt werden: ``\baction`` matcht darin
+# nicht (vor ``action`` steht ein Wortzeichen), und ohne den Eintrag waere jede
+# per Submit-Button angesteuerte Route still ungeprueft — genau der Fall der
+# Statistik-Export-Aktionen seit
+# #1770. Es steht
+# bewusst VOR ``action``, damit die Absicht beim Lesen nicht untergeht.
 _LINK_ATTR_RE = re.compile(
-    r'\b(href|action|hx-get|hx-post|hx-put|hx-patch|hx-delete|data-[\w-]*url)\s*=\s*"([^"]*)"',
+    r'\b(href|formaction|action|hx-get|hx-post|hx-put|hx-patch|hx-delete|data-[\w-]*url)\s*=\s*"([^"]*)"',
     re.IGNORECASE,
 )
+# ``formaction`` erbt die Methode seines Formulars. Im Projekt ist das
+# durchgaengig ``method="get"`` (Download-Ausloeser mit mitgeschickten Feldern);
+# als POST gewertet meldete der Guard bei jeder GET-only-Route einen Fehlalarm.
+# Ein kuenftiges POST-Formular mit ``formaction`` braeuchte hier eine feinere
+# Auswertung (Methode des umschliessenden ``<form>``) — bis dahin ist die
+# GET-Annahme die, die zu den Fundstellen passt.
 _POST_ATTRS = frozenset({"action", "hx-post", "hx-put", "hx-patch", "hx-delete"})
 
 # Praefixe, die nie auf eine View zeigen (Resolver404 waere nur teurer).
@@ -221,6 +234,32 @@ class TestGuardMechanics:
     def test_detects_a_form_action_to_a_narrower_route(self):
         html = '<form method="post" action="/clients/new/"></form>'
         assert violations_in_html("core:client_list", html, "assistant")
+
+    def test_detects_a_formaction_on_a_submit_button(self):
+        """``formaction`` ist eine vollwertige Ziel-URL — und war ein blinder
+        Fleck.
+
+        Das Muster ist keine Exotik: seit der Freigabe-Erfassung
+        (#1770) tragen
+        die Export-Aktionen der Statistikseite ihre Ziele als ``formaction``
+        eines GET-Formulars, damit die optionalen Felder Empfaenger/Zweck ohne
+        JavaScript an allen Zielen ankommen. ``\b(href|action|…)`` matchte dort
+        NICHT (in ``formaction`` steht vor ``action`` ein Wortzeichen) — drei
+        Routen waren still ungeprueft.
+        """
+        html = '<form method="get"><button type="submit" formaction="/clients/new/">x</button></form>'
+        assert violations_in_html("core:client_list", html, "assistant")
+        assert not violations_in_html("core:client_list", html, "staff")
+
+    def test_formaction_wird_als_get_gewertet(self):
+        """``formaction`` erbt die Methode seines Formulars; im Projekt ist das
+        durchgaengig ``method="get"`` (Download-Ausloeser). Wuerde es als POST
+        gewertet, meldete der Guard bei jeder GET-only-Route einen Fehlalarm."""
+        html = '<form method="get"><button type="submit" formaction="/clients/new/">x</button></form>'
+
+        attrs = {attr: method for attr, method, _path in _iter_link_targets(html)}
+
+        assert attrs["formaction"] == "GET"
 
     def test_detects_a_data_url_attribute(self):
         """Fundstelle 5 aus #1735 kam ausschliesslich ueber ``data-…-url``."""
