@@ -704,6 +704,12 @@ EXPECTATIONS = (
     # ASSISTANT_PLUS, aber pk-los (kein Roster/kein IDOR — Facility-Scope aus
     # request.current_facility).
     E("core:offline_facility_bundle", "offline-api", get=ASSISTANT_PLUS),
+    # Refs #1760: personen-genaue Offline-Widerrufsliste. Wie offline_bundle
+    # ASSISTANT_PLUS, aber pk-los — der Facility-Scope kommt aus
+    # request.current_facility (plus RLS, Migration 0127); kein Objekt-Lookup
+    # ueber eine URL-pk, daher kein IDOR-Vektor. Die Antwort traegt nur opake
+    # UUIDs bereits anonymisierter Personen (PII-frei).
+    E("core:offline_revocations", "offline-api", get=ASSISTANT_PLUS),
     # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
     # Refresh-Pfad. Public wie offline_client_shell — der Token ist kein
     # Geheimnis (Django rendert ihn in jedes Formular), PII-frei; bisherige

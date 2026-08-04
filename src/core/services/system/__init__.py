@@ -57,6 +57,13 @@ from core.services.system.offline import (
     build_client_offline_bundle,
     build_facility_offline_bundle,
 )
+from core.services.system.offline_revocation import (
+    OFFLINE_REVOCATION_MAX_ENTRIES,
+    OFFLINE_REVOCATION_RETENTION_SECONDS,
+    list_offline_client_revocations,
+    prune_offline_client_revocations,
+    revoke_offline_client_bundles,
+)
 from core.services.system.settings import (
     _AUDIT_EXEMPT,
     _AUDIT_FIELDS,
@@ -76,6 +83,8 @@ __all__ = [
     "MULTI_SELECT",
     "SELECT",
     "MAX_EVENTS_PER_BUNDLE",
+    "OFFLINE_REVOCATION_MAX_ENTRIES",
+    "OFFLINE_REVOCATION_RETENTION_SECONDS",
     "_build_event_row",
     "_build_header",
     "_collect_field_templates",
@@ -102,7 +111,10 @@ __all__ = [
     "get_active_bans_for_client",
     "has_rls_bypass_context",
     "get_spec",
+    "list_offline_client_revocations",
     "log_settings_change",
+    "prune_offline_client_revocations",
+    "revoke_offline_client_bundles",
     "rls_bypass_for_read",
     "snapshot_settings",
     "update_settings",

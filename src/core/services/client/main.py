@@ -361,6 +361,26 @@ def _delete_recent_visits(client) -> None:
     RecentClientVisit.objects.filter(client=client).delete()
 
 
+def _revoke_offline_bundles(client) -> None:
+    """Widerrufe bereits ausgelieferte Offline-Bundles dieser Person (Refs #1760).
+
+    Die Redaktions-Kaskade oben raeumt den **Server** auf. Ein Bundle, das schon
+    im IndexedDB eines Aussendienst-Geraets liegt, erreicht sie nicht: es traegt
+    bis zu 48 h (``BUNDLE_TTL_SECONDS``) Klartext weiter, und die bestehende
+    Revalidierung purgt ihn nicht — die anonymisierte Person liefert weiterhin
+    **200**, und bei offenen ungesyncten Aenderungen wird das frische Bundle
+    sogar bewusst NICHT ueber den lokalen Stand geschrieben.
+
+    Der Widerruf laeuft daher als eigener, personen-genauer Kanal in DERSELBEN
+    Transaktion wie die Kaskade. Duenner Wrapper, damit der ableitungsbasierte
+    Paritaets-Guard (``TestKAnonBridgeRedactionParity``) den Aufruf wie jeden
+    ``_redact_*``-Helfer erfasst und die K-Anon-Bridge nicht zurueckfaellt.
+    """
+    from core.services.system import revoke_offline_client_bundles
+
+    revoke_offline_client_bundles(client)
+
+
 def _redact_activities(client, event_ids: list) -> None:
     """Redigiere ``Activity.summary`` fuer Client-, Event-, WorkItem- und Case-Targets.
 
@@ -456,6 +476,9 @@ def anonymize_client(client, user=None):
     - ``RecentClientVisit``-Zeilen der Person werden **gelöscht** (Refs #1761)
       — sonst listete das „zuletzt besucht"-Widget die anonymisierte Person
       weiter.
+    - Bereits ausgelieferte **Offline-Bundles** werden über einen
+      personen-genauen Revoke-Eintrag entwertet (Refs #1760) — der Server-
+      seitige Teil der Kaskade erreicht das IndexedDB der Geräte sonst nicht.
 
     Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
@@ -473,6 +496,7 @@ def anonymize_client(client, user=None):
     _redact_legal_holds(client, event_ids)
     _redact_activities(client, event_ids)
     _delete_recent_visits(client)
+    _revoke_offline_bundles(client)
 
     logger.info(
         "client_anonymized",

@@ -9,6 +9,7 @@ from .event import Event
 from .event_history import EventHistory
 from .field_condition import FieldCondition
 from .mfa import EncryptedTOTPDevice
+from .offline_revocation import OfflineClientRevocation
 from .organization import Facility, Organization
 from .outcome import Milestone, OutcomeGoal
 from .quick_template import QuickTemplate
@@ -37,6 +38,7 @@ __all__ = [
     "FieldGroup",
     "FieldTemplate",
     "Milestone",
+    "OfflineClientRevocation",
     "Organization",
     "OutcomeGoal",
     "QuickTemplate",

@@ -15,6 +15,7 @@ import json
 from django.http import HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import render
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.http import parse_etags
 from django.views import View
@@ -25,7 +26,12 @@ from core.constants import RATELIMIT_OFFLINE_BUNDLE
 from core.models import AuditLog, Client
 from core.services.audit import log_audit_event
 from core.services.scoping import get_scoped_object
-from core.services.system import build_client_offline_bundle, build_facility_offline_bundle
+from core.services.system import (
+    OFFLINE_REVOCATION_RETENTION_SECONDS,
+    build_client_offline_bundle,
+    build_facility_offline_bundle,
+    list_offline_client_revocations,
+)
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 # Refs #1410 (a): volatile Bundle-Metadaten, die sich pro Request aendern und
@@ -161,6 +167,43 @@ class OfflineFacilityBundleView(AssistantOrAboveRequiredMixin, View):
         response["ETag"] = etag
         # Refs #1342: explizites no-store zusaetzlich zur Blanket-Middleware
         # (kein Datenabfluss ueber Browser-/Festplatten-Cache).
+        response["Cache-Control"] = "no-store, private"
+        return response
+
+
+class OfflineClientRevocationsView(AssistantOrAboveRequiredMixin, View):
+    """``GET /api/v1/offline/revocations/`` — personen-genaue Widerrufsliste (Refs #1760).
+
+    Gegenrichtung zum Bundle-Endpoint: er sagt, was ein Geraet **haben** darf;
+    dieser sagt, was es **loeschen** muss. Notwendig, weil eine anonymisierte
+    Person weiterhin ``200`` liefert (kein 404-Purge greift) und der Client ein
+    frisches Bundle bei offenen ungesyncten Aenderungen bewusst NICHT ueber den
+    lokalen Stand schreibt — der 48-h-Klartext ueberlebte die Anonymisierung.
+
+    Die Antwort ist **PII-frei**: nur opake UUIDs bereits anonymisierter
+    Personen, das Retention-Fenster und die Serverzeit. Sie wird daher — anders
+    als der Bundle-Read — **nicht** auditiert: der Client pollt bei jedem Sync
+    und beim Boot, ein Eintrag je Abruf wuerde das append-only Log fluten, ohne
+    einen Datenabfluss zu dokumentieren (gleiche Abwaegung wie beim
+    audit-freien 304-Zweig der Bundle-Views).
+
+    Rate-Limit und ``no-store`` wie bei den Bundle-Endpoints. Die
+    Facility-Grenze zieht ``for_facility(request.current_facility)`` (plus RLS,
+    Migration 0127).
+    """
+
+    http_method_names = ["get"]
+
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_BUNDLE, method="GET", block=True))
+    def get(self, request):
+        facility = request.current_facility
+        now = timezone.now()
+        payload = {
+            "revocations": list_offline_client_revocations(facility, now=now),
+            "server_time": now.isoformat(),
+            "retention_seconds": OFFLINE_REVOCATION_RETENTION_SECONDS,
+        }
+        response = JsonResponse(payload)
         response["Cache-Control"] = "no-store, private"
         return response
 

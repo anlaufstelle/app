@@ -47,6 +47,7 @@ from core.services.client import (
     _redact_legal_holds,
     _redact_retention_proposals,
     _redact_workitems,
+    _revoke_offline_bundles,
 )
 from core.services.compliance import is_k_anonymous, k_anonymize_client
 
@@ -93,6 +94,7 @@ def _k_anonymize_with_cascade(client, k):
         _redact_legal_holds(client, event_ids)
         _redact_activities(client, event_ids)
         _delete_recent_visits(client)
+        _revoke_offline_bundles(client)
 
 
 def anonymize_clients(facility, dry_run):

@@ -102,6 +102,7 @@ from core.views.offline import (
     OfflineClientBundleView,
     OfflineClientDetailView,
     OfflineClientListShellView,
+    OfflineClientRevocationsView,
     OfflineClientShellView,
     OfflineConflictListView,
     OfflineConflictReviewView,
@@ -436,6 +437,14 @@ urlpatterns = [
         "api/v1/offline/bundle/facility/",
         OfflineFacilityBundleView.as_view(),
         name="offline_facility_bundle",
+    ),
+    # Refs #1760: personen-genaue Widerrufsliste — was ein Geraet aus seinem
+    # IndexedDB loeschen MUSS (Gegenrichtung zum Bundle-Endpoint). PII-frei,
+    # daher audit-frei; der Client pollt bei jedem Sync und beim Boot.
+    path(
+        "api/v1/offline/revocations/",
+        OfflineClientRevocationsView.as_view(),
+        name="offline_revocations",
     ),
     # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
     # Refresh-Pfad (loest das fragile /login/-HTML-Scraping ab).

@@ -27,6 +27,7 @@ from core.services.retention import (
 # Refs #1016/#1070: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
 from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
+from core.services.system import prune_offline_client_revocations
 
 
 @dataclass
@@ -43,6 +44,9 @@ class _RetentionTotals:
     trash_anonymized: int = 0
     activities: int = 0
     auditlog_pruned: int = 0
+    # Refs #1760: abgelaufene Offline-Widerrufe (klartext-frei, aber pseudonymer
+    # Bezug auf bereits anonymisierte Personen -> Art. 5 Abs. 1 lit. e).
+    offline_revocations_pruned: int = 0
 
 
 class Command(BaseCommand):
@@ -142,6 +146,12 @@ class Command(BaseCommand):
 
         totals.trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
         totals.auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
+        # Refs #1760: Widerrufe aelter als OFFLINE_REVOCATION_RETENTION_SECONDS
+        # (2x Bundle-TTL) haben ihren Zweck erfuellt — kein Geraet im TTL-Fenster
+        # braucht sie noch. Kein eigener Cron: der naechtliche Lauf ist ohnehin
+        # der Ort, an dem die Masse der Widerrufe entsteht (Anonymisierung).
+        if not dry_run:
+            totals.offline_revocations_pruned += prune_offline_client_revocations(facility, now)
 
         # Cleanup stale proposals after actual deletion
         if not dry_run:
@@ -177,6 +187,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.anonymized} client(s) in total."))
         self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.trash_anonymized} trash-expired client(s) in total."))
         self.stdout.write(self.style.SUCCESS(f"Pruned {totals.auditlog_pruned} audit-log entry/entries in total."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Pruned {totals.offline_revocations_pruned} expired offline revocation(s) in total.")
+        )
 
         # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
         # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
@@ -193,6 +206,7 @@ class Command(BaseCommand):
                 "anonymized_clients": totals.anonymized,
                 "anonymized_trash_clients": totals.trash_anonymized,
                 "pruned_auditlog": totals.auditlog_pruned,
+                "pruned_offline_revocations": totals.offline_revocations_pruned,
             },
         )
 
