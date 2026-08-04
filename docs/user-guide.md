@@ -220,7 +220,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 
 - **Hochladen:** Im Kontakt-Formular gibt es ein Feld für den Datei-Upload. Wählen Sie eine Datei von Ihrem Gerät aus und speichern Sie das Ereignis wie gewohnt. An Person und Fall läuft es identisch: Datei im Formular wählen, Datensatz speichern.
 - **Virenscan:** Vor dem Speichern wird jede Datei automatisch durch einen Virenscanner (ClamAV) geprüft. Infizierte Dateien werden abgelehnt — Sie erhalten eine Fehlermeldung und das Ereignis wird nicht gespeichert.
-- **Verschlüsselung:** Alle Anhänge werden verschlüsselt gespeichert (AES-GCM). Das bedeutet: Die Datei ist auf dem Server nicht im Klartext lesbar, sondern nur über Anlaufstelle selbst abrufbar.
+- **Verschlüsselung:** Alle Anhänge werden verschlüsselt gespeichert (Fernet, AES-128-CBC mit HMAC-SHA256). Das bedeutet: Die Datei ist auf dem Server nicht im Klartext lesbar, sondern nur über Anlaufstelle selbst abrufbar.
 - **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Administration kann diesen Wert anpassen.
 - **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
 - **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses (bzw. der Person oder des Falls) und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
@@ -291,7 +291,7 @@ Jede Zeile zeigt den Originaldateinamen. Ein Klick darauf liefert die entschlüs
 
 ### Verschlüsselung
 
-Alle Dateien liegen auf dem Server verschlüsselt (AES-GCM). Entschlüsselt wird erst beim Download-Request im Django-Prozess; direkt auf die Festplatte zugreifende Admins sehen nur die verschlüsselten Binärdaten.
+Alle Dateien liegen auf dem Server verschlüsselt (Fernet, AES-128-CBC mit HMAC-SHA256). Entschlüsselt wird erst beim Download-Request im Django-Prozess; direkt auf die Festplatte zugreifende Admins sehen nur die verschlüsselten Binärdaten.
 
 ### Vorversionen
 

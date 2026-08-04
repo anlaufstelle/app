@@ -731,7 +731,7 @@ Quick templates are filtered per user using [`user_can_see_document_type`](https
 
 ### 2.9 Encrypted File Vault & Virus Scanning
 
-File attachments (photos, scans, documents) on **events, clients and cases** ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) (German), Refs #1738 -- exactly one owner per file) are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM. Refs #524.
+File attachments (photos, scans, documents) on **events, clients and cases** ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) (German), Refs #1738 -- exactly one owner per file) are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then encrypted chunk-wise with **Fernet** (AES-128-CBC with HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) using the `ENCRYPTION_KEYS` key material. Refs #524.
 
 #### Upload Flow
 
@@ -740,7 +740,7 @@ File attachments (photos, scans, documents) on **events, clients and cases** ([A
 3. **ClamAV scan** before encryption:
  - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
  - Virus detected → the upload is discarded and an audit-log entry is written.
-4. The payload is encrypted with AES-GCM (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
+4. The payload is encrypted chunk-wise with Fernet (MultiFernet) (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
 5. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
 
 > **Plaintext staging buffer** (#1661): Uploads above `FILE_UPLOAD_MAX_MEMORY_SIZE` (default 2.5 MB) are buffered by Django as a plaintext temp file on disk (`FILE_UPLOAD_TEMP_DIR`) before step 3, ahead of scanning and encryption. In the shipped Compose files this buffer lives on a `/tmp` tmpfs (RAM) rather than persistent storage. Details, verification, and fallback options without tmpfs: [ops runbook § 5.7a](../ops-runbook.md).

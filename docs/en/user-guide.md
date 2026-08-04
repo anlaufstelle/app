@@ -221,7 +221,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 - **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual.
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
-- **Encryption:** All attachments are stored encrypted (AES-GCM). That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
+- **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
 - **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your administrator can adjust this limit.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
@@ -284,7 +284,7 @@ Each row shows the original filename. Clicking it delivers the decrypted file --
 
 ### Encryption
 
-All files are stored encrypted on the server (AES-GCM). Decryption only happens at download request time inside the Django process; admins with direct disk access only see the encrypted binary data.
+All files are stored encrypted on the server (Fernet, AES-128-CBC with HMAC-SHA256). Decryption only happens at download request time inside the Django process; admins with direct disk access only see the encrypted binary data.
 
 ### Previous versions
 
@@ -873,5 +873,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 1a55309aaa0365309c83b27acca5a32d5703c5fd -->
+<!-- source-hash: 2c60c85872fae8709c0a65279a450079e8416456 -->
 
