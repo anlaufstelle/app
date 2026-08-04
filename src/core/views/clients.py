@@ -497,12 +497,25 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
         eine fremde oder unbekannte Personen-PK ergibt 404, ist also kein
         IDOR-Fenster — und STAFF_PLUS darf Personen der eigenen Einrichtung
         ohnehin lesen.
+
+        ``is_deleted=False`` (Refs #1758, Fix-Runde): der ``FacilityScopedManager``
+        filtert Papierkorb-Zeilen ausdruecklich NICHT (``models/managers.py``) —
+        der Scope muss hier explizit stehen, genau wie in Detail
+        (``ClientDetailView``) und Bearbeiten (``ClientUpdateView.get/post``,
+        letztere durch #1737 nachgezogen). Ohne ihn waere das vorbefuellte
+        Feldset ein Lesepfad auf die ENTSCHLUESSELTEN ``data_json``-Werte einer
+        soft-geloeschten Person: 200 mit Klartext, obwohl Detail und Bearbeiten
+        404 liefern. Solange das Partial nur ``document_type_id`` las, war die
+        Luecke folgenlos — mit dem Prefill ist sie es nicht mehr. Einen
+        legitimen Aufrufer verliert der Scope nicht: das Bearbeiten-Formular,
+        das ``?client=`` ueberhaupt erst anhaengt, ist fuer Papierkorb-Personen
+        unerreichbar.
         """
         client_id = request.GET.get("client")
         if not client_id:
             return None
         try:
-            return get_scoped_object(Client, request, pk=client_id)
+            return get_scoped_object(Client, request, pk=client_id, is_deleted=False)
         except ValidationError as exc:
             raise Http404(_("Person nicht gefunden.")) from exc
 

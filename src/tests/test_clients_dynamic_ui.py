@@ -1164,6 +1164,46 @@ class TestPartialPrefillsAssignedType:
         assert 'name="gefaehrdung"' not in content
         assert "nur fuer Leitung" not in content
 
+    def test_trashed_client_is_404_and_never_prefills(
+        self, client, staff_user, admin_user, client_with_values, doc_type_client_profile, fernet_key
+    ):
+        """Papierkorb-Grenze (Refs #1737-Konvention): soft-geloescht ⇒ 404, kein Klartext.
+
+        Der ``?client=``-Lookup ist der einzige Personen-Pfad, der den
+        ``is_deleted=False``-Scope nicht setzte (Detail ``clients.py:206``,
+        Bearbeiten ``:342``/``:362`` setzen ihn). Solange das Partial nur
+        ``document_type_id`` las, war das folgenlos — mit dem Prefill wuerde es
+        zum Lesepfad auf die ENTSCHLUESSELTEN Zusatzfeld-Werte einer Person, die
+        Detail und Bearbeiten mit 404 verweigern. Einen legitimen Aufrufer gibt
+        es nicht: das Bearbeiten-Formular, das den Parameter setzt, ist fuer
+        Papierkorb-Personen unerreichbar.
+        """
+        client_with_values.soft_delete(user=admin_user)
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:client_fields_partial"),
+                {"document_type": str(doc_type_client_profile.pk), "client": str(client_with_values.pk)},
+            )
+        assert response.status_code == 404
+        assert "WG im Nordviertel" not in response.content.decode()
+        assert "vertraulicher Klartext" not in response.content.decode()
+
+    def test_restored_client_prefills_again(
+        self, client, staff_user, admin_user, client_with_values, doc_type_client_profile, fernet_key
+    ):
+        """Gegenprobe: nach dem Wiederherstellen greift der Rueckweg-Prefill wieder."""
+        client_with_values.soft_delete(user=admin_user)
+        client_with_values.restore()
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:client_fields_partial"),
+                {"document_type": str(doc_type_client_profile.pk), "client": str(client_with_values.pk)},
+            )
+        assert response.status_code == 200
+        assert "WG im Nordviertel" in response.content.decode()
+
     def test_switch_away_and_back_then_submit_keeps_values(
         self, client, staff_user, client_with_values, doc_type_client_profile, doc_type_client_mixed, fernet_key
     ):
