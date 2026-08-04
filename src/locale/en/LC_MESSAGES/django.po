@@ -473,7 +473,7 @@ msgstr ""
 
 #: src/core/models/attachment.py:48
 msgid "Speicherdateiname"
-msgstr "Save"
+msgstr "Storage file name"
 
 #: src/core/models/attachment.py:49
 msgid "UUID-basierter Dateiname auf Disk (z.B. abcd1234.enc)"
@@ -548,7 +548,7 @@ msgstr "Created on"
 
 #: src/core/models/attachment.py:89
 msgid "Aktuelle Version"
-msgstr "Current password"
+msgstr "Current version"
 
 #: src/core/models/attachment.py:97
 msgid "Ersetzt durch"
@@ -556,11 +556,11 @@ msgstr "Superseded by"
 
 #: src/core/models/attachment.py:102
 msgid "Ersetzt am"
-msgstr "Created on"
+msgstr "Superseded on"
 
 #: src/core/models/attachment.py:106
 msgid "Dateianhang"
-msgstr "Data"
+msgstr "Attachment"
 
 #: src/core/models/attachment.py:107
 msgid "Dateianhänge"
@@ -1432,7 +1432,7 @@ msgstr "Multi-select"
 
 #: src/core/models/document_type.py:304
 msgid "Datei"
-msgstr "Data"
+msgstr "File"
 
 #: src/core/models/document_type.py:319
 msgid ""
@@ -1807,7 +1807,7 @@ msgstr "Display name"
 
 #: src/core/models/quick_template.py:46
 msgid "Beispiel: 'Beratungsgespräch 30 Min'."
-msgstr "Counseling session"
+msgstr "Example: 'Counseling session 30 min'."
 
 #: src/core/models/quick_template.py:51
 msgid "Vorbefüllte Werte"
@@ -1877,12 +1877,12 @@ msgstr "Rejected"
 #: src/core/models/retention.py:41
 #: src/templates/core/export/client_data_pdf.html:369
 msgid "Vorgeschlagen am"
-msgstr "Completed on"
+msgstr "Proposed on"
 
 #: src/core/models/retention.py:42
 #: src/templates/core/export/client_data_pdf.html:368
 msgid "Löschfrist"
-msgstr "Delete"
+msgstr "Deletion due date"
 
 #: src/core/models/retention.py:53
 msgid "anonymous, identified, qualified oder document_type"
@@ -1893,7 +1893,7 @@ msgstr "anonymous, identified, qualified, or document_type"
 #: src/templates/core/export/client_data_pdf.html:370
 #: src/templates/core/workitems/detail.html:117
 msgid "Wiedervorlage am"
-msgstr "Field template"
+msgstr "Follow-up on"
 
 #: src/core/models/retention.py:59
 msgid "Datum, ab dem ein zurückgestellter Vorschlag wieder vorgelegt wird."
@@ -1941,7 +1941,7 @@ msgstr "Dismissed on"
 
 #: src/core/models/retention.py:126
 msgid "Aufgehoben von"
-msgstr "Tasks"
+msgstr "Dismissed by"
 
 #: src/core/models/retention.py:144
 #: src/templates/core/dashboard/role_lead.html:34
@@ -1957,7 +1957,7 @@ msgstr "active"
 
 #: src/core/models/retention.py:164
 msgid "inaktiv"
-msgstr "active"
+msgstr "inactive"
 
 #: src/core/models/settings.py:32
 msgid "Vollständiger Name"
@@ -2003,7 +2003,7 @@ msgstr ""
 
 #: src/core/models/settings.py:82
 msgid "AuditLog-Aufbewahrung (Monate)"
-msgstr "Retention anonymous (days)"
+msgstr "AuditLog retention (months)"
 
 #: src/core/models/settings.py:84
 msgid ""
@@ -2015,7 +2015,7 @@ msgstr ""
 
 #: src/core/models/settings.py:96
 msgid "Erlaubte Dateitypen"
-msgstr "Recorded data"
+msgstr "Allowed file types"
 
 #: src/core/models/settings.py:97
 msgid "Kommagetrennte Dateiendungen (z.B. pdf,jpg,png,docx)"
@@ -2311,17 +2311,17 @@ msgstr "Urgent"
 #: src/core/models/workitem.py:32
 #: src/templates/core/clients/_offline_workitem_fields.html:43
 msgid "Keine"
-msgstr "No deadline"
+msgstr "None"
 
 #: src/core/models/workitem.py:33
 #: src/templates/core/clients/_offline_workitem_fields.html:44
 msgid "Wöchentlich"
-msgstr "Delete"
+msgstr "Weekly"
 
 #: src/core/models/workitem.py:34
 #: src/templates/core/clients/_offline_workitem_fields.html:45
 msgid "Monatlich"
-msgstr "Month"
+msgstr "Monthly"
 
 #: src/core/models/workitem.py:35
 #: src/templates/core/clients/_offline_workitem_fields.html:46
@@ -2408,7 +2408,7 @@ msgstr ""
 
 #: src/core/models/workitem.py:135
 msgid "Folgeaufgabe erstellt am"
-msgstr "Task has been created."
+msgstr "Follow-up task created on"
 
 #: src/core/models/workitem.py:137
 msgid ""
@@ -3358,7 +3358,7 @@ msgstr "Overdue"
 #: src/core/services/dashboard/focus_box.py:43 src/core/utils/dates.py:60
 #: src/core/utils/dates.py:67
 msgid "Heute fällig"
-msgstr "Overdue"
+msgstr "Due today"
 
 #: src/core/services/dashboard/focus_box.py:44
 msgid "Dringend · Wichtig"
@@ -3425,7 +3425,7 @@ msgstr "[encrypted]"
 
 #: src/core/services/events/crud.py:185
 msgid "Fall gehört nicht zur selben Einrichtung wie das Ereignis."
-msgstr "Event does not belong to the same facility as the case."
+msgstr "Case does not belong to the same facility as the event."
 
 #: src/core/services/events/crud.py:189
 msgid ""
@@ -3468,7 +3468,7 @@ msgstr "Your role is not permitted to create this documentation."
 
 #: src/core/services/events/feed.py:149
 msgid "[Datei]"
-msgstr "Data"
+msgstr "[File]"
 
 #: src/core/services/events/feed.py:152
 #, python-format
@@ -3587,7 +3587,7 @@ msgstr ""
 
 #: src/core/utils/dates.py:74
 msgid "Morgen fällig"
-msgstr "Overdue"
+msgstr "Due tomorrow"
 
 #: src/core/utils/dates.py:110
 #, python-format
@@ -4013,7 +4013,7 @@ msgstr "Reason is required."
 
 #: src/core/views/retention.py:80
 msgid "Ungültiges Datum."
-msgstr "Invalid status"
+msgstr "Invalid date."
 
 #: src/core/views/retention.py:97
 msgid "Für diesen Vorschlag existiert bereits ein aktiver Hold."
@@ -4021,11 +4021,11 @@ msgstr "An active hold already exists for this proposal."
 
 #: src/core/views/retention.py:148
 msgid "Keine Vorschläge ausgewählt."
-msgstr "No event selected."
+msgstr "No proposals selected."
 
 #: src/core/views/retention.py:152
 msgid "Keine gültigen Vorschläge gefunden."
-msgstr "No entries found."
+msgstr "No valid proposals found."
 
 #: src/core/views/statistics.py:171 src/core/views/statistics.py:204
 #: src/core/views/statistics.py:245 src/core/views/statistics.py:418
@@ -4133,7 +4133,7 @@ msgstr "Invalid input."
 
 #: src/core/views/workitem_bulk.py:153
 msgid "Keine Aufgaben ausgewählt."
-msgstr "No event selected."
+msgstr "No tasks selected."
 
 #: src/core/views/workitem_bulk.py:157
 #: src/tests/test_i18n_de_msgstr_drift.py:37
@@ -4165,7 +4165,7 @@ msgstr "%(count)d tasks updated."
 
 #: src/core/views/workitem_bulk.py:245
 msgid "Ungültige Priorität"
-msgstr "Invalid status"
+msgstr "Invalid priority"
 
 #: src/core/views/workitem_bulk.py:257
 msgid "Unbekannte Benutzerin/Benutzer"
@@ -4587,7 +4587,7 @@ msgstr "Copy to clipboard"
 
 #: src/templates/auth/mfa_backup_codes.html:39
 msgid "Als Datei herunterladen"
-msgstr "Download"
+msgstr "Download as file"
 
 #: src/templates/auth/mfa_backup_codes.html:43
 #: src/templates/core/system/vvt.html:23
@@ -4608,7 +4608,7 @@ msgstr "Finish setup"
 
 #: src/templates/auth/mfa_backup_codes.html:63
 msgid "Zu den 2FA-Einstellungen"
-msgstr "Settings"
+msgstr "Go to 2FA settings"
 
 #: src/templates/auth/mfa_login.html:9
 msgid "2FA-Code eingeben"
@@ -4655,7 +4655,7 @@ msgstr "Use backup code"
 
 #: src/templates/auth/mfa_login.html:120
 msgid "Zurück zur Authenticator-App"
-msgstr "Back to home page"
+msgstr "Back to authenticator app"
 
 #: src/templates/auth/mfa_login.html:129
 #: src/templates/partials/_navigation_desktop.html:181
@@ -4735,7 +4735,7 @@ msgstr "TOTP code"
 
 #: src/templates/auth/mfa_settings.html:81
 msgid "Generieren"
-msgstr "Approve"
+msgstr "Generate"
 
 #: src/templates/auth/mfa_settings.html:89
 msgid "Passkeys (Sicherheitsschlüssel)"
@@ -4788,11 +4788,11 @@ msgstr "Two-factor authentication is currently inactive."
 
 #: src/templates/auth/mfa_settings.html:146 src/templates/auth/mfa_setup.html:7
 msgid "2FA einrichten"
-msgstr "Facilities"
+msgstr "Set up 2FA"
 
 #: src/templates/auth/mfa_settings.html:153
 msgid "Zurück zum Profil"
-msgstr "Back to list"
+msgstr "Back to profile"
 
 #: src/templates/auth/mfa_setup.html:16
 msgid ""
@@ -4948,7 +4948,7 @@ msgstr ""
 
 #: src/templates/components/_activity_card.html:33
 msgid "Benutzer:"
-msgstr "User"
+msgstr "User:"
 
 #: src/templates/components/_activity_card.html:40
 msgid "Objekttyp:"
@@ -4956,7 +4956,7 @@ msgstr "Object type:"
 
 #: src/templates/components/_activity_card.html:46
 msgid "Zeitpunkt:"
-msgstr "Timestamp"
+msgstr "Timestamp:"
 
 #: src/templates/components/_activity_card.html:52
 msgid "Zum Objekt"
@@ -4996,7 +4996,7 @@ msgstr "Hide password"
 #: src/templates/components/_workitem_row.html:15
 #: src/templates/components/_workitem_row.html:63
 msgid "Wiedervorlage"
-msgstr "Field template"
+msgstr "Follow-up"
 
 #: src/templates/components/_workitem_row.html:15
 #: src/templates/components/_workitem_row.html:63
@@ -5007,12 +5007,12 @@ msgstr "FU"
 #: src/templates/components/_workitem_row.html:66
 #: src/templates/core/workitems/detail.html:112
 msgid "Wiederkehrend"
-msgstr "Reopen"
+msgstr "Recurring"
 
 #: src/templates/components/_workitem_row.html:48
 #: src/templates/core/retention/partials/proposal_card.html:10
 msgid "Auswählen"
-msgstr "Selection"
+msgstr "Select"
 
 #: src/templates/components/_workitem_row.html:59
 msgid "Fällig:"
@@ -5098,7 +5098,7 @@ msgstr "Language"
 
 #: src/templates/core/account/profile.html:46
 msgid "2FA verwalten"
-msgstr "Administration"
+msgstr "Manage 2FA"
 
 #: src/templates/core/account/profile.html:60
 msgid "Zuletzt besuchte Personen"
@@ -5142,7 +5142,7 @@ msgstr "Files"
 
 #: src/templates/core/attachments/list.html:14
 msgid "Dokumentationstyp filtern"
-msgstr "Document types"
+msgstr "Filter by document type"
 
 #: src/templates/core/attachments/list.html:20
 #: src/templates/core/statistics/partials/dashboard_content.html:71
@@ -5156,7 +5156,7 @@ msgstr "Filter person ID…"
 
 #: src/templates/core/attachments/partials/attachment_table.html:9
 msgid "Dateiname"
-msgstr "Data"
+msgstr "File name"
 
 #: src/templates/core/attachments/partials/attachment_table.html:10
 msgid "Größe"
@@ -5249,7 +5249,7 @@ msgstr "Reopen"
 #: src/templates/core/clients/detail.html:111
 #: src/templates/core/events/detail.html:38
 msgid "Weitere Aktionen"
-msgstr "All actions"
+msgstr "More actions"
 
 #: src/templates/core/cases/episode_form.html:4
 #: src/templates/core/cases/episode_form.html:8
@@ -5434,7 +5434,7 @@ msgstr "Goal achieved"
 
 #: src/templates/core/cases/partials/goals_section.html:100
 msgid "Meilenstein umschalten"
-msgstr "Delete Milestone"
+msgstr "Toggle milestone"
 
 #: src/templates/core/cases/partials/goals_section.html:119
 msgid "Meilenstein wirklich löschen?"
@@ -5814,7 +5814,7 @@ msgstr ""
 #: src/templates/core/events/offline_create.html:32
 #: src/templates/core/workitems/offline_create.html:32
 msgid "Online öffnen"
-msgstr "Reopen"
+msgstr "Open online"
 
 #: src/templates/core/clients/offline_detail.html:50
 msgid "Änderung synchronisiert."
@@ -5905,7 +5905,7 @@ msgstr "Non-transferable"
 
 #: src/templates/core/clients/offline_detail.html:316
 msgid "Keine Fälle"
-msgstr "Open Cases"
+msgstr "No cases"
 
 #: src/templates/core/clients/offline_detail.html:343
 #: src/templates/core/workitems/offline_create.html:4
@@ -6537,7 +6537,7 @@ msgstr "Tenants"
 
 #: src/templates/core/dashboard/role_super_admin.html:22
 msgid "Benutzer aktiv"
-msgstr "active users"
+msgstr "Active users"
 
 #: src/templates/core/dashboard/role_super_admin.html:24
 msgid "über alle Mandanten"
@@ -6723,7 +6723,7 @@ msgstr "Loading conflict…"
 #: src/templates/core/events/conflict_review.html:27
 #: src/templates/core/events/conflict_review.html:36
 msgid "Zur Konflikt-Übersicht"
-msgstr "Overview"
+msgstr "To the conflict overview"
 
 #: src/templates/core/events/conflict_review.html:34
 msgid "Konflikt aufgelöst."
@@ -6744,7 +6744,7 @@ msgstr "Field"
 
 #: src/templates/core/events/conflict_review.html:52
 msgid "Meine Version"
-msgstr "Medical care"
+msgstr "My version"
 
 #: src/templates/core/events/conflict_review.html:53
 msgid "Server-Version"
@@ -6760,7 +6760,7 @@ msgstr "Server"
 
 #: src/templates/core/events/conflict_review.html:79
 msgid "Meine Version behalten"
-msgstr "Delete Milestone"
+msgstr "Keep my version"
 
 #: src/templates/core/events/conflict_review.html:84
 msgid "Server-Version übernehmen"
@@ -6772,7 +6772,7 @@ msgstr "Merge manually"
 
 #: src/templates/core/events/create.html:27
 msgid "Schnell-Vorlagen"
-msgstr "Field templates"
+msgstr "Quick templates"
 
 #: src/templates/core/events/create.html:30
 #, python-format
@@ -6781,7 +6781,7 @@ msgstr "Template applied: <strong>%(name)s</strong>"
 
 #: src/templates/core/events/create.html:31
 msgid "Vorlage entfernen"
-msgstr "Remove"
+msgstr "Remove template"
 
 #: src/templates/core/events/create.html:34
 msgid "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen."
@@ -6906,7 +6906,7 @@ msgstr ""
 
 #: src/templates/core/events/edit.html:58
 msgid "Zurück"
-msgstr "Reset"
+msgstr "Back"
 
 #: src/templates/core/events/offline_create.html:4
 msgid "Neue Erfassung (offline)"
@@ -7323,7 +7323,7 @@ msgstr "No group"
 
 #: src/templates/core/partials/dynamic_fields.html:81
 msgid "Ersetzen"
-msgstr "Reset"
+msgstr "Replace"
 
 #: src/templates/core/partials/dynamic_fields.html:98
 msgid "Weitere Dateien hinzufügen (mehrere möglich):"
@@ -7343,7 +7343,7 @@ msgstr "Postponed"
 
 #: src/templates/core/retention/partials/dashboard_content.html:24
 msgid "Aufbewahrungsfristen"
-msgstr "Retention period (days)"
+msgstr "Retention periods"
 
 #: src/templates/core/retention/partials/dashboard_content.html:26
 #: src/templates/core/retention/partials/dashboard_content.html:27
@@ -7391,7 +7391,7 @@ msgstr "Reject selected proposals (no deletion)?"
 
 #: src/templates/core/retention/partials/dashboard_content.html:77
 msgid "Auswahl aufheben"
-msgstr "Selection"
+msgstr "Deselect all"
 
 #: src/templates/core/retention/partials/dashboard_content.html:86
 msgid "Alle auswählbaren Vorschläge markieren"
@@ -7407,11 +7407,11 @@ msgstr "No deletion proposals available"
 
 #: src/templates/core/retention/partials/proposal_card.html:20
 msgid "Frist:"
-msgstr "No deadline"
+msgstr "Deadline:"
 
 #: src/templates/core/retention/partials/proposal_card.html:26
 msgid "Pseudonym:"
-msgstr "Pseudonym"
+msgstr "Pseudonym:"
 
 #: src/templates/core/retention/partials/proposal_card.html:29
 msgid "Dokumenttyp:"
@@ -7419,19 +7419,19 @@ msgstr "Document type:"
 
 #: src/templates/core/retention/partials/proposal_card.html:32
 msgid "Datum:"
-msgstr "Date"
+msgstr "Date:"
 
 #: src/templates/core/retention/partials/proposal_card.html:45
 msgid "Löschung freigeben?"
-msgstr "Deletion"
+msgstr "Release deletion?"
 
 #: src/templates/core/retention/partials/proposal_card.html:51
 msgid "Hold setzen"
-msgstr "Set password"
+msgstr "Set hold"
 
 #: src/templates/core/retention/partials/proposal_card.html:64
 msgid "Grund für den Hold..."
-msgstr "Reason for deletion..."
+msgstr "Reason for the hold..."
 
 #: src/templates/core/retention/partials/proposal_card.html:67
 msgid "optional"
@@ -7439,11 +7439,11 @@ msgstr "optional"
 
 #: src/templates/core/retention/partials/proposal_card.html:74
 msgid "Hold erstellen"
-msgstr "Create Case"
+msgstr "Create hold"
 
 #: src/templates/core/retention/partials/proposal_card.html:88
 msgid "Begründung:"
-msgstr "Reason"
+msgstr "Reason:"
 
 #: src/templates/core/retention/partials/proposal_card.html:90
 msgid "Läuft ab:"
@@ -7451,7 +7451,7 @@ msgstr "Expires:"
 
 #: src/templates/core/retention/partials/proposal_card.html:92
 msgid "Erstellt von:"
-msgstr "Created by"
+msgstr "Created by:"
 
 #: src/templates/core/retention/partials/proposal_card.html:98
 msgid "Hold aufheben?"
@@ -7482,7 +7482,7 @@ msgstr "Search field"
 #: src/templates/core/search/partials/global_results.html:34
 #: src/templates/core/search/partials/results.html:37
 msgid "Ähnliche Pseudonyme"
-msgstr "Pseudonym"
+msgstr "Similar pseudonyms"
 
 #: src/templates/core/search/partials/global_results.html:40
 msgid "ähnlich"
@@ -7524,7 +7524,7 @@ msgstr "Privacy profile"
 #: src/templates/core/statistics/external_report.html:19
 #: src/templates/partials/_navigation_mobile.html:99
 msgid "Profil"
-msgstr "My Profile"
+msgstr "Profile"
 
 #: src/templates/core/statistics/external_report.html:23
 #: src/templates/core/statistics/partials/dashboard_content.html:5
@@ -7585,19 +7585,19 @@ msgstr "Export as JSON"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:13
 msgid "Dokumentierte Einträge"
-msgstr "Document types"
+msgstr "Documented entries"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:18
 msgid "Ohne Pseudonym"
-msgstr "Pseudonym"
+msgstr "Without pseudonym"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:23
 msgid "Mit Pseudonym"
-msgstr "Pseudonym"
+msgstr "With pseudonym"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:28
 msgid "Mit erweit. Angaben"
-msgstr "No recently completed tasks."
+msgstr "With extended details"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:37
 msgid ""
@@ -7625,19 +7625,19 @@ msgstr "Person with the most contacts"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:97
 msgid "Kontakte im Zeitverlauf"
-msgstr "Contacts today"
+msgstr "Contacts over time"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:104
 msgid "Live-Daten"
-msgstr "Basic data"
+msgstr "Live data"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:108
 msgid "Snapshot"
-msgstr "Statistics snapshot"
+msgstr "Snapshot"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:124
 msgid "Altersgruppen"
-msgstr "Age group"
+msgstr "Age groups"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:218
 #: src/templates/core/statistics/partials/report_panel.html:82
@@ -8247,11 +8247,11 @@ msgstr "No deadline"
 
 #: src/templates/core/workitems/detail.html:112
 msgid "Wiederkehrend:"
-msgstr "Reopen"
+msgstr "Recurring:"
 
 #: src/templates/core/workitems/detail.html:125
 msgid "Keine Wiedervorlage"
-msgstr "Field template"
+msgstr "No follow-up"
 
 #: src/templates/core/workitems/detail.html:166
 msgid "Zurück zur Inbox"
@@ -8299,11 +8299,11 @@ msgstr ""
 
 #: src/templates/core/workitems/inbox.html:167
 msgid "Status ändern..."
-msgstr "Filter by status"
+msgstr "Change status..."
 
 #: src/templates/core/workitems/inbox.html:184
 msgid "Priorität ändern..."
-msgstr "Change Password"
+msgstr "Change priority..."
 
 #: src/templates/core/workitems/inbox.html:199
 msgid "Zuweisen"
@@ -8315,7 +8315,7 @@ msgstr "Remove assignment"
 
 #: src/templates/core/workitems/inbox.html:209
 msgid "Auswahl löschen"
-msgstr "Selection"
+msgstr "Clear selection"
 
 #: src/templates/core/workitems/inbox.html:217
 msgid "Alle sichtbaren auswählen"
@@ -8457,7 +8457,7 @@ msgstr "Collapse all"
 
 #: src/templates/core/zeitstrom/index.html:176
 msgid "Zeitstrom Feed"
-msgstr "Timeline"
+msgstr "Timeline feed"
 
 #: src/templates/core/zeitstrom/index.html:183
 msgid "Team-Aufgaben mit Handlungsbedarf"
@@ -8605,7 +8605,7 @@ msgstr "Search..."
 
 #: src/templates/partials/_navigation_desktop.html:32
 msgid "Suchergebnisse"
-msgstr "No results"
+msgstr "Search results"
 
 #: src/templates/partials/_navigation_desktop.html:41
 #: src/templates/partials/_navigation_desktop.html:43
@@ -8616,20 +8616,20 @@ msgstr "Create new"
 #: src/templates/partials/_navigation_desktop.html:49
 #: src/templates/partials/_navigation_mobile.html:23
 msgid "Kontakt dokumentieren"
-msgstr "Contact has been documented."
+msgstr "Document contact"
 
 #: src/templates/partials/_navigation_desktop.html:50
 msgid "Eintrag im Zeitstrom"
-msgstr "Timeline"
+msgstr "Timeline entry"
 
 #: src/templates/partials/_navigation_desktop.html:55
 msgid "Neues Pseudonym vergeben"
-msgstr "Enter pseudonym..."
+msgstr "Assign a new pseudonym"
 
 #: src/templates/partials/_navigation_desktop.html:58
 #: src/templates/partials/_navigation_mobile.html:30
 msgid "Aufgabe erstellen"
-msgstr "Task has been created."
+msgstr "Create task"
 
 #: src/templates/partials/_navigation_desktop.html:59
 msgid "Für Team oder Person"
@@ -8638,7 +8638,7 @@ msgstr "For team or person"
 #: src/templates/partials/_navigation_desktop.html:62
 #: src/templates/partials/_navigation_mobile.html:33
 msgid "Fall anlegen"
-msgstr "Edit Case"
+msgstr "Create case"
 
 #: src/templates/partials/_navigation_desktop.html:63
 msgid "Längere Begleitung dokumentieren"
@@ -8714,11 +8714,12 @@ msgstr "an account has been created for you on Anlaufstelle."
 msgid ""
 "Bitte setzen Sie über den folgenden Link Ihr Passwort, um Ihr Konto zu "
 "aktivieren:"
-msgstr "Click the following link to reset your password:"
+msgstr ""
+"Please set your password via the following link to activate your account:"
 
 #: src/templates/registration/invite_email.html:10
 msgid "Ihr Benutzername:"
-msgstr "Username"
+msgstr "Your username:"
 
 #: src/templates/registration/invite_email.html:12
 msgid ""
