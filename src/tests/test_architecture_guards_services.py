@@ -412,49 +412,39 @@ class TestZentraleSuppressionsfunktion:
         """Zentrales Modul + alle Reporting-Backends (die Artefakt-Erzeuger)."""
         return [self._CENTRAL_MODULE, *sorted(self._BACKEND_DIR.glob("*.py"))]
 
-    def test_jede_aufrufstelle_deklariert_randsumme_und_ordnung(self):
+    # --- Guard-Logik, von den Guards UND der Positiv-Kontrolle aufgerufen ---
+    # Refs #1775: Vorher stand die Erkennung inline in den Testkoerpern und die
+    # "Positiv-Kontrolle" parste einen eigenen AST-Schnipsel — sie belegte damit
+    # nur, dass ``ast`` funktioniert, nie dass der Guard trifft. Als gemeinsame
+    # Methode laeuft in der Kontrolle dieselbe Logik wie im Guard.
+
+    @classmethod
+    def _fehlende_pflicht_keywords(cls, modules) -> list[str]:
         violations = []
-        for module in self._suppression_modules():
-            for function, required in self._REQUIRED_KEYWORDS.items():
-                for call in self._calls(module, function):
+        for module in modules:
+            for function, required in cls._REQUIRED_KEYWORDS.items():
+                for call in cls._calls(module, function):
                     given = {keyword.arg for keyword in call.keywords if keyword.arg}
                     missing = required - given
                     if missing:
                         violations.append(f"{module}:{call.lineno} {function}() ohne {sorted(missing)}")
-        assert not violations, (
-            "Diese Aufrufstellen der zentralen Suppression lassen ein Pflicht-Keyword weg. "
-            "``margin`` sagt, ob es eine publizierte Randsumme gibt, an der das "
-            "Machbarkeits-Audit rechnen kann (K2); ``order`` benennt die kanonische "
-            "Ausgabeordnung unterdrueckter Zeilen (K5). Beides fail-closed, damit eine "
-            "neue Tabelle nicht still ungeschuetzt bleibt:\n" + "\n".join(violations)
-        )
+        return violations
 
-    def test_order_kommt_aus_der_zentralen_liste(self):
+    def _fremde_ordnungen(self, modules) -> list[str]:
         violations = []
-        for module in self._suppression_modules():
+        for module in modules:
             for call in self._calls(module, "_suppress_small"):
                 for keyword in call.keywords:
                     if keyword.arg != "order":
                         continue
                     if not isinstance(keyword.value, ast.Name) or keyword.value.id not in self._KNOWN_ORDERS:
                         violations.append(f"{module}:{call.lineno} order={ast.unparse(keyword.value)}")
-        assert not violations, (
-            "``order`` muss eine der zentral definierten Ordnungen sein "
-            f"({sorted(self._KNOWN_ORDERS)}) — eine an der Aufrufstelle erfundene "
-            "Ordnung entzieht sich dem K5-Schutz:\n" + "\n".join(violations)
-        )
+        return violations
 
-    def test_kein_artefakt_baut_eigene_unterdrueckung(self):
-        """Ausserhalb des zentralen Moduls darf niemand ``suppressed`` setzen.
-
-        Geprueft wird das Setzen des Markers (``row["suppressed"] = ...`` bzw.
-        ``suppressed=...`` in einem Dict-Literal) — Lesen ist erlaubt und
-        ueblich (Templates, Rueckprojektion der Records).
-        """
+    @staticmethod
+    def _eigenbau_unterdrueckungen(modules) -> list[str]:
         violations = []
-        for module in sorted(self._APP_DIR.rglob("*.py")):
-            if module == self._CENTRAL_MODULE or "migrations" in module.parts:
-                continue
+        for module in modules:
             tree = ast.parse(module.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, ast.Assign):
@@ -469,6 +459,39 @@ class TestZentraleSuppressionsfunktion:
                     for key in node.keys:
                         if isinstance(key, ast.Constant) and key.value == "suppressed":
                             violations.append(f"{module}:{node.lineno} baut eine Zeile mit eigenem ``suppressed``")
+        return violations
+
+    def test_jede_aufrufstelle_deklariert_randsumme_und_ordnung(self):
+        violations = self._fehlende_pflicht_keywords(self._suppression_modules())
+        assert not violations, (
+            "Diese Aufrufstellen der zentralen Suppression lassen ein Pflicht-Keyword weg. "
+            "``margin`` sagt, ob es eine publizierte Randsumme gibt, an der das "
+            "Machbarkeits-Audit rechnen kann (K2); ``order`` benennt die kanonische "
+            "Ausgabeordnung unterdrueckter Zeilen (K5). Beides fail-closed, damit eine "
+            "neue Tabelle nicht still ungeschuetzt bleibt:\n" + "\n".join(violations)
+        )
+
+    def test_order_kommt_aus_der_zentralen_liste(self):
+        violations = self._fremde_ordnungen(self._suppression_modules())
+        assert not violations, (
+            "``order`` muss eine der zentral definierten Ordnungen sein "
+            f"({sorted(self._KNOWN_ORDERS)}) — eine an der Aufrufstelle erfundene "
+            "Ordnung entzieht sich dem K5-Schutz:\n" + "\n".join(violations)
+        )
+
+    def test_kein_artefakt_baut_eigene_unterdrueckung(self):
+        """Ausserhalb des zentralen Moduls darf niemand ``suppressed`` setzen.
+
+        Geprueft wird das Setzen des Markers (``row["suppressed"] = ...`` bzw.
+        ``suppressed=...`` in einem Dict-Literal) — Lesen ist erlaubt und
+        ueblich (Templates, Rueckprojektion der Records).
+        """
+        kandidaten = [
+            module
+            for module in sorted(self._APP_DIR.rglob("*.py"))
+            if module != self._CENTRAL_MODULE and "migrations" not in module.parts
+        ]
+        violations = self._eigenbau_unterdrueckungen(kandidaten)
         assert not violations, (
             "Nur core/services/dashboard/external_report.py darf ueber Unterdrueckung "
             "entscheiden. Eine zweite Kopie der Regel driftet garantiert — genau das "
@@ -511,21 +534,40 @@ class TestZentraleSuppressionsfunktion:
             "ohne den zentralen Fixpunkt-Guard (K1) zu durchlaufen:\n" + "\n".join(violations)
         )
 
-    def test_synthetischer_verstoss_wird_erkannt(self):
-        """Positiv-Kontrolle: der Guard muss seinen eigenen Trefferfall zeigen.
+    def test_synthetischer_verstoss_wird_erkannt(self, tmp_path):
+        """Positiv-Kontrolle: die drei GUARDS muessen ihren Trefferfall zeigen.
 
-        Ohne diesen Anker koennte eine spaetere Refaktorierung die AST-Suche
-        leerlaufen lassen (z. B. wenn die Suppression ueber ein Modul-Alias
-        aufgerufen wird) und der Guard waere still gruen.
+        Refs #1775: Vorher parste dieser Test einen eigenen AST-Schnipsel und
+        pruefte damit nur, dass ``ast`` noch funktioniert — die Guard-Logik
+        selbst lief nie mit. Belegt per Mutationsprobe: ``missing = required -
+        given`` zu ``given - required`` zu entkernen liess ALLE Tests dieser
+        Klasse gruen. Jetzt bekommen die Guards ein synthetisches Modul mit
+        genau den Verstoessen zu sehen, gegen die sie schuetzen sollen.
         """
-        tree = ast.parse("rows = _suppress_small(rows, threshold)\n")
-        calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_suppress_small"
-        ]
-        assert calls, "AST-Suche findet den Aufruf nicht mehr"
-        assert {keyword.arg for keyword in calls[0].keywords if keyword.arg} != {"margin", "order"}
+        modul = tmp_path / "verstoss_backend.py"
+        modul.write_text(
+            "ORDER_ERFUNDEN = 'an der Aufrufstelle erfunden'\n"
+            "rows = _suppress_small(rows, threshold)\n"
+            "stage = _suppress_stage_dict(stage, margin=total)\n"
+            "mehr = _suppress_small(rows, margin=total, order=ORDER_ERFUNDEN)\n"
+            'zeile["suppressed"] = True\n'
+            'eigenbau = {"suppressed": False}\n',
+            encoding="utf-8",
+        )
+
+        fehlende = self._fehlende_pflicht_keywords([modul])
+        assert len(fehlende) == 2, fehlende
+        assert "_suppress_small() ohne ['margin', 'order']" in fehlende[0]
+        assert "_suppress_stage_dict() ohne ['persons']" in fehlende[1]
+
+        fremde = self._fremde_ordnungen([modul])
+        assert len(fremde) == 1, fremde
+        assert "order=ORDER_ERFUNDEN" in fremde[0]
+
+        eigenbau = self._eigenbau_unterdrueckungen([modul])
+        assert len(eigenbau) == 2, eigenbau
+        assert "setzt den Unterdrueckungs-Marker selbst" in eigenbau[0]
+        assert "baut eine Zeile mit eigenem ``suppressed``" in eigenbau[1]
 
     def test_die_suche_findet_die_bekannten_aufrufstellen(self):
         """Zweiter Anker: die Menge der gefundenen Aufrufstellen darf nicht
