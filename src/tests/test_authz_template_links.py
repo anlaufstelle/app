@@ -60,13 +60,22 @@ _LINK_ATTR_RE = re.compile(
     r'\b(href|formaction|action|hx-get|hx-post|hx-put|hx-patch|hx-delete|data-[\w-]*url)\s*=\s*"([^"]*)"',
     re.IGNORECASE,
 )
-# ``formaction`` erbt die Methode seines Formulars. Im Projekt ist das
-# durchgaengig ``method="get"`` (Download-Ausloeser mit mitgeschickten Feldern);
-# als POST gewertet meldete der Guard bei jeder GET-only-Route einen Fehlalarm.
-# Ein kuenftiges POST-Formular mit ``formaction`` braeuchte hier eine feinere
-# Auswertung (Methode des umschliessenden ``<form>``) — bis dahin ist die
-# GET-Annahme die, die zu den Fundstellen passt.
 _POST_ATTRS = frozenset({"action", "hx-post", "hx-put", "hx-patch", "hx-delete"})
+
+# ``formaction`` traegt seine Methode NICHT im Attributnamen — sie steht am
+# Button (``formmethod``) oder am umschliessenden ``<form>`` (``method``). Die
+# frueher pauschale GET-Annahme passte zu den damaligen Fundstellen, war aber
+# fail-open: ein POST-``formaction`` auf eine POST-only-Route findet keine
+# GET-Erwartung und wird **still uebersprungen** — ausgerechnet bei der
+# Methode, die etwas veraendert (Refs #1772, Punkt 4).
+#
+# Ausgewertet wird deshalb wie im Browser: ``formmethod`` am Element schlaegt
+# ``method`` am Formular, und ohne beides bleibt es beim HTML-Default GET
+# (auch fuer ein ``formaction`` ausserhalb jedes Formulars — das ist schlicht
+# wirkungslos). Geraten wird nirgends.
+_FORM_TAG_RE = re.compile(r"<\s*(/?)form\b([^>]*)>", re.IGNORECASE)
+_METHOD_RE = re.compile(r'\bmethod\s*=\s*"([^"]*)"', re.IGNORECASE)
+_FORMMETHOD_RE = re.compile(r'\bformmethod\s*=\s*"([^"]*)"', re.IGNORECASE)
 
 # Praefixe, die nie auf eine View zeigen (Resolver404 waere nur teurer).
 _NON_VIEW_PREFIXES = ("/static/", "/media/")
@@ -148,16 +157,52 @@ def guard_content(request):
         request.getfixturevalue(name)
 
 
+def _form_spans(html: str) -> list[tuple[int, int, str]]:
+    """``(start, ende, methode)`` je ``<form>``-Element (Formulare schachteln nicht)."""
+    spans: list[tuple[int, int, str]] = []
+    offen: tuple[int, str] | None = None
+    for match in _FORM_TAG_RE.finditer(html):
+        if match.group(1):  # </form>
+            if offen is not None:
+                spans.append((offen[0], match.start(), offen[1]))
+                offen = None
+            continue
+        methode = _METHOD_RE.search(match.group(2))
+        offen = (match.end(), (methode.group(1) if methode else "get").strip().upper() or "GET")
+    if offen is not None:  # unbalanciertes Markup: bis zum Dokumentende
+        spans.append((offen[0], len(html), offen[1]))
+    return spans
+
+
+def _formaction_method(html: str, position: int, spans: list[tuple[int, int, str]]) -> str:
+    """Methode eines ``formaction`` an ``position`` — Browser-Semantik."""
+    tag_start = html.rfind("<", 0, position)
+    tag_end = html.find(">", position)
+    tag = html[tag_start : tag_end if tag_end != -1 else len(html)]
+    am_element = _FORMMETHOD_RE.search(tag)
+    if am_element:
+        return am_element.group(1).strip().upper() or "GET"
+    for start, ende, methode in spans:
+        if start <= position < ende:
+            return methode
+    return "GET"
+
+
 def _iter_link_targets(html: str):
     """``(attribut, methode, pfad)`` fuer jede Ziel-URL im Markup."""
-    for attr, value in _LINK_ATTR_RE.findall(html):
-        attr = attr.lower()
-        path = value.split("#", 1)[0].split("?", 1)[0].strip()
+    spans = _form_spans(html)
+    for match in _LINK_ATTR_RE.finditer(html):
+        attr = match.group(1).lower()
+        path = match.group(2).split("#", 1)[0].split("?", 1)[0].strip()
         if not path or not path.startswith("/") or path.startswith("//"):
             continue
         if path.startswith(_NON_VIEW_PREFIXES):
             continue
-        yield attr, ("POST" if attr in _POST_ATTRS else "GET"), path
+        if attr == "formaction":
+            method = _formaction_method(html, match.start(), spans)
+        else:
+            method = "POST" if attr in _POST_ATTRS else "GET"
+        yield attr, method, path
 
 
 def _target_endpoint(path: str) -> str | None:
@@ -250,6 +295,57 @@ class TestGuardMechanics:
         html = '<form method="get"><button type="submit" formaction="/clients/new/">x</button></form>'
         assert violations_in_html("core:client_list", html, "assistant")
         assert not violations_in_html("core:client_list", html, "staff")
+
+    def test_formaction_erbt_die_methode_des_umschliessenden_formulars(self):
+        """Refs #1772 (Punkt 4): ``formaction`` galt unbedingt als GET.
+
+        Ein POST-``formaction`` auf eine POST-only-Route lief damit ins Leere:
+        die Route deklariert kein GET, der Guard fand also keine Erwartung und
+        uebersprang die Fundstelle **still** — ausgerechnet bei der Methode,
+        die etwas veraendert.
+        """
+        html = '<form method="post"><button type="submit" formaction="/system/lockouts/unlock/">x</button></form>'
+
+        assert violations_in_html("core:client_list", html, "lead")
+        assert not violations_in_html("core:client_list", html, "super_admin")
+
+    def test_formmethod_am_button_schlaegt_die_formular_methode(self):
+        """Das Attribut am Button ist die spezifischere Angabe (HTML-Semantik)."""
+        from tests.test_authz_template_links import _iter_link_targets
+
+        in_get_form = (
+            '<form method="get"><button formmethod="post" formaction="/system/lockouts/unlock/">x</button></form>'
+        )
+        in_post_form = '<form method="POST"><button formmethod="get" formaction="/clients/new/">x</button></form>'
+
+        assert [m for _attr, m, _p in _iter_link_targets(in_get_form)] == ["POST"]
+        assert [m for _attr, m, _p in _iter_link_targets(in_post_form)] == ["GET"]
+
+    def test_formaction_ohne_formular_bleibt_get(self):
+        """HTML-Default: ein ``<form>`` ohne ``method`` ist GET — und ein
+        ``formaction`` ausserhalb jedes Formulars ist wirkungslos. Beide Faelle
+        bleiben GET, damit die Erkennung nicht raet.
+        """
+        from tests.test_authz_template_links import _iter_link_targets
+
+        assert [
+            m for _attr, m, _p in _iter_link_targets('<form><button formaction="/clients/new/">x</button></form>')
+        ] == ["GET"]
+        assert [m for _attr, m, _p in _iter_link_targets('<button formaction="/clients/new/">x</button>')] == ["GET"]
+
+    def test_zwei_formulare_verwechseln_ihre_methoden_nicht(self):
+        """Positionsgenau: das zweite ``formaction`` gehoert zum zweiten Formular."""
+        from tests.test_authz_template_links import _iter_link_targets
+
+        html = (
+            '<form method="get"><button formaction="/clients/new/">a</button></form>'
+            '<form method="post"><button formaction="/system/lockouts/unlock/">b</button></form>'
+        )
+
+        assert [(m, p) for _attr, m, p in _iter_link_targets(html)] == [
+            ("GET", "/clients/new/"),
+            ("POST", "/system/lockouts/unlock/"),
+        ]
 
     def test_formaction_wird_als_get_gewertet(self):
         """``formaction`` erbt die Methode seines Formulars; im Projekt ist das
