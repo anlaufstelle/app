@@ -279,3 +279,24 @@ class TestPackageVersionStamp:
         h_before = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_before).group(1)
         h_after = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_after).group(1)
         assert h_before != h_after, "Settings-Aenderung muss Hash-Wechsel bewirken (Refs #840)."
+
+    def test_document_type_override_changes_footer_hash(self, facility):
+        """Refs #1762: prueft die Durchreichung von document_type_overrides
+        durch render_document -> _build_footer -> _settings_hash. Die
+        direkten _settings_hash-Tests uebergeben die Liste explizit und
+        wuerden einen Ausfall dieser Verdrahtung nicht bemerken — nur der
+        gerenderte Fussnoten-Hash zeigt, ob render_document sie tatsaechlich
+        weiterreicht."""
+        content_before, _ = render_document("dsfa", facility)
+
+        from core.models import DocumentType
+
+        DocumentType.objects.create(facility=facility, name="Vermittlung", retention_days=180)
+
+        content_after, _ = render_document("dsfa", facility)
+
+        import re
+
+        h_before = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_before).group(1)
+        h_after = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_after).group(1)
+        assert h_before != h_after, "Dokumentationstyp-Override muss Fussnoten-Hash aendern (Refs #1762)."
