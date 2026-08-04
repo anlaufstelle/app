@@ -15,6 +15,7 @@ Module:
 
 from core.services.case.cases import (
     assign_event_to_case,
+    cases_with_live_client,
     close_case,
     create_case,
     remove_event_from_case,
@@ -64,6 +65,7 @@ __all__ = [
     "bulk_assign_workitems",
     "bulk_update_workitem_priority",
     "bulk_update_workitem_status",
+    "cases_with_live_client",
     "close_case",
     "create_case",
     "create_goal",

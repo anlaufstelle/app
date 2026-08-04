@@ -10,10 +10,10 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
-from core.models import Case
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.case import (
     achieve_goal,
+    cases_with_live_client,
     create_goal,
     create_milestone,
     delete_milestone,
@@ -36,7 +36,7 @@ class GoalCreateView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk):
-        case = get_scoped_object(Case, request, pk=case_pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         title = request.POST.get("title", "").strip()
         if title:
             create_goal(case=case, user=request.user, title=title)
@@ -48,7 +48,7 @@ class GoalUpdateView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
-        case = get_scoped_object(Case, request, pk=case_pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         title = request.POST.get("title", "").strip() or None
         description = request.POST.get("description")
@@ -61,7 +61,7 @@ class GoalToggleView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
-        case = get_scoped_object(Case, request, pk=case_pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         if goal.is_achieved:
             unachieve_goal(goal, request.user)
@@ -75,7 +75,7 @@ class MilestoneCreateView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, goal_pk):
-        case = get_scoped_object(Case, request, pk=case_pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=goal_pk, case=case)
         title = request.POST.get("title", "").strip()
         if title:
@@ -88,7 +88,7 @@ class MilestoneToggleView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
-        case = get_scoped_object(Case, request, pk=case_pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
         toggle_milestone(milestone, request.user)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
@@ -99,7 +99,7 @@ class MilestoneDeleteView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
-        case = get_scoped_object(Case, request, pk=case_pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
         delete_milestone(milestone, request.user)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))

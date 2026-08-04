@@ -28,6 +28,7 @@ from core.services.attachments import (
 )
 from core.services.case import (
     assign_event_to_case,
+    cases_with_live_client,
     close_case,
     create_case,
     remove_event_from_case,
@@ -256,7 +257,9 @@ class CaseListView(StaffRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMi
 
     def get(self, request):
         facility = request.current_facility
-        qs = Case.objects.for_facility(facility)
+        # Refs #1777: Faelle widerrufener Personen (Papierkorb/anonymisiert)
+        # gehoeren nicht in die Liste — sonst verlinkt sie auf 404-Detailseiten.
+        qs = cases_with_live_client().for_facility(facility)
 
         qs = self.apply_search(qs, request)
         qs = self.apply_filters(qs, request)
@@ -400,7 +403,7 @@ class CaseDetailView(StaffRequiredMixin, View):
         # ``select_related("document_type")``: die Zusatzfelder-Sektion greift
         # auf Name und Sensitivitaet des Typs zu (M2 P8, Refs #1058).
         case = get_scoped_object(
-            Case.objects.select_related("client", "lead_user", "created_by", "document_type"),
+            cases_with_live_client().select_related("client", "lead_user", "created_by", "document_type"),
             request,
             pk=pk,
         )
@@ -431,7 +434,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
 
     def get(self, request, pk):
         facility = request.current_facility
-        case = get_scoped_object(Case.objects.select_related("document_type"), request, pk=pk)
+        case = get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk)
         form = CaseForm(instance=case, facility=facility, user=request.user)
         type_locked = _lock_invisible_document_type(request, case, form)
         if case.client:
@@ -461,7 +464,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
 
     def post(self, request, pk):
         facility = request.current_facility
-        case = get_scoped_object(Case.objects.select_related("document_type"), request, pk=pk)
+        case = get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk)
         # VOR ``is_valid()`` sichern: ``ModelForm._post_clean`` mutiert die
         # Instanz bereits (Refs #1613). Das gilt auch fuer ``document_type``:
         # ist NUR der Titel ungueltig, traegt ``case.document_type_id`` im
@@ -602,7 +605,7 @@ class CaseCloseView(LeadOrAdminRequiredMixin, View):
     """Close a case (Lead or Admin only)."""
 
     def post(self, request, pk):
-        case = get_scoped_object(Case, request, pk=pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=pk)
         close_case(case, request.user)
         messages.success(request, _("Fall wurde geschlossen."))
         return redirect("core:case_detail", pk=case.pk)
@@ -616,7 +619,7 @@ class CaseReopenView(LeadOrAdminRequiredMixin, View):
     """Reopen a case (Lead or Admin only)."""
 
     def post(self, request, pk):
-        case = get_scoped_object(Case, request, pk=pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=pk)
         reopen_case(case, request.user)
         messages.success(request, _("Fall wurde wiedereröffnet."))
         return redirect("core:case_detail", pk=case.pk)
@@ -631,7 +634,7 @@ class CaseAssignEventView(StaffRequiredMixin, View):
 
     def post(self, request, pk):
         facility = request.current_facility
-        case = get_scoped_object(Case, request, pk=pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=pk)
         event_id = request.POST.get("event_id")
         if not event_id:
             messages.error(request, _("Kein Ereignis ausgewählt."))
@@ -653,7 +656,7 @@ class CaseRemoveEventView(StaffRequiredMixin, View):
 
     def post(self, request, pk, event_pk):
         facility = request.current_facility
-        case = get_scoped_object(Case, request, pk=pk)
+        case = get_scoped_object(cases_with_live_client(), request, pk=pk)
         event = get_visible_event_or_404(request.user, facility, event_pk)
         remove_event_from_case(event, request.user)
 
@@ -714,7 +717,7 @@ class CaseFieldsPartialView(StaffRequiredMixin, View):
         if not case_id:
             return None
         try:
-            return get_scoped_object(Case, request, pk=case_id)
+            return get_scoped_object(cases_with_live_client(), request, pk=case_id)
         except ValidationError as exc:
             raise Http404(_("Fall nicht gefunden.")) from exc
 
@@ -778,11 +781,17 @@ class CasesForClientView(StaffRequiredMixin, View):
             return JsonResponse([], safe=False)
 
         facility = request.current_facility
-        cases = Case.objects.filter(
-            facility=facility,
-            client_id=client_id,
-            status=Case.Status.OPEN,
-        ).values("id", "title")
+        # Refs #1777: dieselbe Personen-Grenze wie Liste und Detail — der
+        # Picker darf keinen Fall anbieten, dessen Detailseite 404 liefert.
+        cases = (
+            cases_with_live_client()
+            .filter(
+                facility=facility,
+                client_id=client_id,
+                status=Case.Status.OPEN,
+            )
+            .values("id", "title")
+        )
 
         data = [{"id": str(c["id"]), "title": c["title"]} for c in cases]
         return JsonResponse(data, safe=False)

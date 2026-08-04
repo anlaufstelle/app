@@ -17,6 +17,36 @@ from core.services.security import check_version_conflict
 logger = logging.getLogger(__name__)
 
 
+def cases_with_live_client():
+    """Faelle, deren Person weder im Papierkorb noch anonymisiert ist (Refs #1777).
+
+    **Die Loeschgrenze der Fall-Domaene verlaeuft ueber die Person, nicht ueber
+    den Fall.** ``Case`` erbt zwar ``SoftDeletableModel``, aber kein
+    Produktionspfad setzt ``is_deleted`` je auf einem Fall — es gibt keinen
+    Fall-Loeschworkflow (``DeletionRequest.TargetType`` kennt nur
+    ``EVENT``/``CLIENT``, ADR-039 §6). Ein ``is_deleted=False``-Filter an den
+    Fall-Views waere darum wirkungslos; die wirksame Grenze ist der
+    Pflicht-FK ``Case.client``:
+
+    * ``client__is_deleted=True`` — Person im Papierkorb (#1737),
+    * ``client__is_active=False`` — Person anonymisiert (#1771; muss NICHT im
+      Papierkorb liegen, die K-Anon-Bridge laesst ``is_deleted=False``).
+
+    Ohne diesen Filter bleibt der Fall der letzte offene Zugang zum Bestand
+    einer widerrufenen Person — lesend (Titel, Beschreibung, ``data_json``,
+    Anhaenge) und ueber Bearbeiten/Episoden/Ziele auch schreibend, waehrend
+    Personen-Detail und -Bearbeiten laengst 404 antworten.
+
+    Liefert ein ``FacilityScopedQuerySet``; ``.for_facility(...)`` und
+    ``select_related(...)`` bleiben also anwendbar, und
+    :func:`~core.services.scoping.get_scoped_object` nimmt es direkt entgegen.
+    Die Invariante „Faelle kennen kein Soft-Delete" ist in
+    ``tests/test_cases_trash_invariant.py`` gepinnt — faellt sie, braucht diese
+    Funktion zusaetzlich ein ``is_deleted=False`` am Fall selbst.
+    """
+    return Case.objects.filter(client__is_deleted=False, client__is_active=True)
+
+
 def _check_case_document_type(facility, document_type):
     """Prueft den Fall-``DocumentType`` (M2 P5, Refs #1058).
 

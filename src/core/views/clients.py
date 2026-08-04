@@ -26,6 +26,7 @@ from core.services.attachments import (
     preserve_file_markers,
 )
 from core.services.audit import log_audit_event
+from core.services.case import cases_with_live_client
 from core.services.client import (
     create_client,
     export_client_data,
@@ -322,8 +323,13 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
 
         active_bans = get_active_bans_for_client(client, user=request.user)
 
+        # Refs #1777: dieselbe Personen-Grenze wie Fall-Liste und -Detail. Eine
+        # anonymisierte Person (``is_active=False``) bleibt hier erreichbar —
+        # ihre Faelle sind es seit #1777 nicht mehr, die Sektion darf also nicht
+        # auf 404-Seiten verlinken.
         open_cases = (
-            CaseModel.objects.filter(
+            cases_with_live_client()
+            .filter(
                 facility=facility,
                 client=client,
                 status=CaseModel.Status.OPEN,
