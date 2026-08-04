@@ -230,6 +230,39 @@ class TestCaseAttachmentDownload:
         client.force_login(staff_user)
         assert client.get(_case_url(case, attachment)).status_code == 404
 
+    def test_trashed_case_is_404(self, client, staff_user, case_owner):
+        """Stufe 1: Papierkorb-Fall liefert keine Dateien mehr aus.
+
+        ``CaseAttachmentDownloadView.get_owner`` scopt auf ``is_deleted=False``
+        — genau wie Detail- und Bearbeiten-View. Ohne diesen Pin haette ein
+        Wegfall des Filters (der Anhang selbst bleibt ja gueltig) niemanden
+        gestoert: der Fall ist aus jeder Liste verschwunden, der Deep-Link
+        haette weiter entschluesselt.
+        """
+        case, attachment, _ft = case_owner
+        case.is_deleted = True
+        case.deleted_at = timezone.now()
+        case.save(update_fields=["is_deleted", "deleted_at"])
+        client.force_login(staff_user)
+        assert client.get(_case_url(case, attachment)).status_code == 404
+
+    def test_attachment_of_other_case_is_404(self, client, staff_user, facility, client_identified, case_owner):
+        """Stufe 3: Owner-Bindung — der Anhang muss an GENAU diesem Fall haengen."""
+        _case, attachment, _ft = case_owner
+        other_case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Fall ohne Datei",
+            document_type=_case.document_type,
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        url = reverse(
+            "core:case_attachment_download",
+            kwargs={"pk": other_case.pk, "attachment_pk": attachment.pk},
+        )
+        assert client.get(url).status_code == 404
+
     def test_audit_detail_carries_owner_keys(self, client, staff_user, case_owner):
         case, attachment, ft = case_owner
         client.force_login(staff_user)

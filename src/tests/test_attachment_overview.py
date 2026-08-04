@@ -284,6 +284,35 @@ class TestOwnerGenericOverview:
         content = client.get(reverse(LIST_URL_NAME)).content.decode()
         assert "aus_person.pdf" not in content
 
+    def test_trashed_event_owner_is_hidden(self, client, staff_user, three_owner_attachments):
+        """Der Papierkorb-Filter gilt fuer ALLE drei Owner-Arten.
+
+        Integrations-Review (Refs #1738): gepinnt war nur der Personen-Zweig.
+        ``Event`` traegt ein eigenes ``is_deleted`` (kein
+        ``SoftDeletableModel``) — faellt seine Klausel weg, taucht eine aus dem
+        Zeitstrom entfernte Datei hier wieder auf, samt Download-Link.
+        """
+        event, _ = three_owner_attachments["event"]
+        event.is_deleted = True
+        event.save(update_fields=["is_deleted"])
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "aus_ereignis.pdf" not in content
+        assert "aus_person.pdf" in content
+        assert "aus_fall.pdf" in content
+
+    def test_trashed_case_owner_is_hidden(self, client, staff_user, three_owner_attachments):
+        """Spiegel fuer den Fall-Zweig (``Case`` erbt ``is_deleted``)."""
+        case, _ = three_owner_attachments["case"]
+        case.is_deleted = True
+        case.deleted_at = timezone.now()
+        case.save(update_fields=["is_deleted", "deleted_at"])
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "aus_fall.pdf" not in content
+        assert "aus_ereignis.pdf" in content
+        assert "aus_person.pdf" in content
+
     def test_owner_without_document_type_is_hidden_fail_closed(self, client, staff_user, facility, client_identified):
         """Ohne ``document_type`` gibt es keine Bezugs-Sensitivitaet — die Zeile
         bleibt fuer JEDE Rolle unsichtbar (fail-closed), statt still als NORMAL
