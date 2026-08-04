@@ -29,7 +29,7 @@ from collections import defaultdict
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Case as CaseExpr
-from django.db.models import IntegerField, Max, ProtectedError, When
+from django.db.models import IntegerField, Max, ProtectedError, Q, When
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
@@ -87,7 +87,7 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
 # ---------------------------------------------------------------------------
 
 
-def _append_trash_share(reason: str, trashed_count: int) -> str:
+def _append_trash_share(reason: str, trashed_count: int, *, of_attachments: bool = False) -> str:
     """Ergänzt eine Blocker-Begründung um den Papierkorb-Anteil.
 
     Refs #1737: Die Blocker zählen über den Default-Manager, der ``is_deleted``
@@ -97,26 +97,88 @@ def _append_trash_share(reason: str, trashed_count: int) -> str:
     Datensatz im Papierkorb im Fach-UI gar nicht mehr erreichbar ist. Der
     Zusatz benennt den Anteil; den Ausweg (Papierkorb öffnen, wiederherstellen
     oder endgültig anonymisieren) zeigen die Lösch-Dialoge als Link.
+
+    ``of_attachments`` (M24/AP4, Refs #1738): Der zweite Blocker-Grund zählt
+    **Dateianhänge**, nicht Personen — „Davon liegt 1 Person im Papierkorb"
+    bezöge sich dort auf die falsche Größe. Der Satz nennt deshalb die Anhänge;
+    die Bezugsgröße Papierkorb (und damit der Ausweg) bleibt dieselbe. Die
+    Personen-Formulierung ist unverändert — Bestandsübersetzungen bleiben
+    gültig.
     """
     if not trashed_count:
         return reason
-    share = ngettext(
-        "Davon liegt %(t)d Person im Papierkorb.",
-        "Davon liegen %(t)d Personen im Papierkorb.",
-        trashed_count,
-    ) % {"t": trashed_count}
+    if of_attachments:
+        share = ngettext(
+            "Davon gehört %(t)d Anhang zu einer Person im Papierkorb.",
+            "Davon gehören %(t)d Anhänge zu Personen im Papierkorb.",
+            trashed_count,
+        ) % {"t": trashed_count}
+    else:
+        share = ngettext(
+            "Davon liegt %(t)d Person im Papierkorb.",
+            "Davon liegen %(t)d Personen im Papierkorb.",
+            trashed_count,
+        ) % {"t": trashed_count}
     return f"{reason} {share}"
 
 
-def field_template_trashed_client_count(field_template: FieldTemplate) -> int:
-    """Anzahl soft-gelöschter Personen mit einem Wert unter diesem Slug."""
+def _trashed_client_ids_with_slug(field_template: FieldTemplate) -> set:
+    """PKs soft-gelöschter Personen mit einem Wert unter diesem Slug."""
     if not field_template.slug:
-        return 0
-    return Client.objects.filter(
-        facility_id=field_template.facility_id,
-        data_json__has_key=field_template.slug,
-        is_deleted=True,
-    ).count()
+        return set()
+    return set(
+        Client.objects.filter(
+            facility_id=field_template.facility_id,
+            data_json__has_key=field_template.slug,
+            is_deleted=True,
+        ).values_list("pk", flat=True)
+    )
+
+
+def _trashed_client_ids_with_attachment(field_template: FieldTemplate) -> set:
+    """PKs soft-gelöschter Personen, deren **Anhänge** diese Vorlage blockieren.
+
+    M24/AP4 (Refs #1738, ADR-039): ``Attachment.field_template`` ist ``PROTECT``
+    — seit dem Owner-Umbau hängt ein solcher Anhang an der Person selbst, an
+    einem ihrer Ereignisse oder an einem ihrer Fälle. Alle drei Wege führen auf
+    dieselbe Person; ``set``-Vereinigung entfernt Doppelzählungen.
+    """
+    base = Attachment.objects.filter(field_template=field_template)
+    ids = set(base.filter(client__is_deleted=True).values_list("client_id", flat=True))
+    ids |= set(base.filter(event__client__is_deleted=True).values_list("event__client_id", flat=True))
+    ids |= set(base.filter(case__client__is_deleted=True).values_list("case__client_id", flat=True))
+    return ids
+
+
+def field_template_trashed_client_count(field_template: FieldTemplate) -> int:
+    """Personen im Papierkorb, die das Löschen dieser Vorlage blockieren.
+
+    Speist den Ausweg-Hinweis („Papierkorb öffnen") der Lösch-Dialoge.
+
+    **Zwei Quellen** (M24/AP4, Refs #1738 — #1737 hatte die zweite bereits
+    angekündigt): ein Wert unter dem Slug im ``data_json`` ODER ein
+    ``Attachment``, das die Vorlage per ``PROTECT`` festhält. Ohne die zweite
+    Quelle blieb eine reine Anhang-Blockade ohne sichtbaren Ausweg: der Dialog
+    nannte die Anhänge, verschwieg aber, dass ihre Person im Papierkorb liegt
+    und über die Personenliste nicht mehr erreichbar ist.
+
+    Distinct über beide Quellen — dieselbe Person zählt nicht doppelt.
+    """
+    return len(_trashed_client_ids_with_slug(field_template) | _trashed_client_ids_with_attachment(field_template))
+
+
+def field_template_trashed_attachment_count(field_template: FieldTemplate) -> int:
+    """Blockierende **Anhänge**, die zu einer Person im Papierkorb gehören.
+
+    Bezugsgröße des Anhang-Blocker-Satzes (M24/AP4, Refs #1738); zählt Anhänge,
+    nicht Personen. Owner-generisch: Person, Ereignis der Person oder Fall der
+    Person.
+    """
+    return (
+        Attachment.objects.filter(field_template=field_template)
+        .filter(Q(client__is_deleted=True) | Q(event__client__is_deleted=True) | Q(case__client__is_deleted=True))
+        .count()
+    )
 
 
 def delete_document_type(request, doc_type: DocumentType) -> None:
@@ -239,7 +301,16 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
 
     attachment_count = Attachment.objects.filter(field_template=field_template).count()
     if attachment_count:
-        reasons.append(_("%(n)d Dateianhang/-anhänge sind an diese Feldvorlage gebunden.") % {"n": attachment_count})
+        # M24/AP4 (Refs #1738): Papierkorb-Anteil auch hier — seit ADR-039 ist
+        # ``Attachment.field_template`` (PROTECT) die zweite Quelle einer
+        # Blockade, deren Verursacher im Fach-UI nicht mehr erreichbar ist.
+        reasons.append(
+            _append_trash_share(
+                _("%(n)d Dateianhang/-anhänge sind an diese Feldvorlage gebunden.") % {"n": attachment_count},
+                field_template_trashed_attachment_count(field_template),
+                of_attachments=True,
+            )
+        )
 
     if field_template.slug:
         data_event_count = Event.objects.filter(
@@ -265,7 +336,12 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
                         data_client_count,
                     )
                     % {"n": data_client_count, "slug": field_template.slug},
-                    field_template_trashed_client_count(field_template),
+                    # Nur der Slug-Anteil: dieser Satz zaehlt Personen MIT
+                    # Slug-Daten. Der (seit M24 breitere)
+                    # ``field_template_trashed_client_count`` speist den
+                    # Ausweg-Hinweis der Dialoge und schluesse hier Personen ein,
+                    # die allein ueber einen Anhang blockieren (Refs #1738).
+                    len(_trashed_client_ids_with_slug(field_template)),
                 )
             )
 
