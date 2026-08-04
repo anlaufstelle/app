@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 01:23+0200\n"
+"POT-Creation-Date: 2026-08-04 15:33+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11,7 +11,7 @@ msgstr ""
 #: src/core/constants.py:8 src/core/models/client.py:18
 #: src/core/retention/proposals.py:28
 #: src/templates/core/clients/offline_list.html:46
-#: src/templates/core/export/report_pdf.html:49
+#: src/templates/core/export/report_pdf.html:51
 #: src/templates/core/retention/partials/dashboard_content.html:27
 #: src/templates/core/statistics/partials/dashboard_content.html:22
 msgid "Identifiziert"
@@ -20,7 +20,7 @@ msgstr "Identified"
 #: src/core/constants.py:9 src/core/models/client.py:19
 #: src/core/retention/proposals.py:29
 #: src/templates/core/clients/offline_list.html:47
-#: src/templates/core/export/report_pdf.html:53
+#: src/templates/core/export/report_pdf.html:55
 #: src/templates/core/retention/partials/dashboard_content.html:28
 #: src/templates/core/statistics/partials/dashboard_content.html:27
 msgid "Qualifiziert"
@@ -80,34 +80,34 @@ msgstr ""
 "The name \"%(name)s\" produces the slug \"%(slug)s\", which collides with a "
 "fixed form field — please choose a different name."
 
-#: src/core/forms/config.py:146
+#: src/core/forms/config.py:163
 msgid "Wirkt nur bei Dokumentationstypen für Ereignisse."
 msgstr "Only effective for document types for events."
 
-#: src/core/forms/config.py:156
+#: src/core/forms/config.py:178
 msgid "Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
 msgstr "Only allowed for document types with entity type \"Event\"."
 
-#: src/core/forms/config.py:196
+#: src/core/forms/config.py:236
 msgid ""
 "Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ "
 "zulässig."
 msgstr ""
 "A system type is only allowed for document types with entity type \"event\"."
 
-#: src/core/forms/config.py:207
+#: src/core/forms/config.py:247
 msgid ""
 "Ein Dokumentationstyp mit diesem Namen und dieser Kategorie existiert in "
 "dieser Einrichtung bereits."
 msgstr ""
 "A document type with this name and category already exists in this facility."
 
-#: src/core/forms/config.py:265
+#: src/core/forms/config.py:305
 msgid ""
 "Eine Feldvorlage mit diesem Namen existiert in dieser Einrichtung bereits."
 msgstr "A field template with this name already exists in this facility."
 
-#: src/core/forms/config.py:297
+#: src/core/forms/config.py:337
 #, python-format
 msgid ""
 "Der Feldtyp kann nicht auf „Datei“ geändert werden — die Vorlage ist "
@@ -118,71 +118,71 @@ msgstr ""
 "the following document types for persons/cases: %(types)s. Please remove "
 "those assignments first."
 
-#: src/core/forms/config.py:355
+#: src/core/forms/config.py:395
 msgid ""
 "Eine Feldgruppe mit diesem Namen existiert für diesen Dokumentationstyp "
 "bereits."
 msgstr "A field group with this name already exists for this document type."
 
-#: src/core/forms/config.py:381 src/core/models/attachment.py:44
+#: src/core/forms/config.py:421 src/core/models/attachment.py:44
 #: src/core/models/document_type.py:372 src/core/models/document_type.py:625
 #: src/templates/core/config/document_types/partials/field_board.html:124
 msgid "Feldvorlage"
 msgstr "Field template"
 
-#: src/core/forms/config.py:387 src/core/models/document_type.py:538
+#: src/core/forms/config.py:427 src/core/models/document_type.py:538
 #: src/core/models/document_type.py:633
 #: src/templates/core/config/document_types/partials/field_board.html:128
 msgid "Feldgruppe"
 msgstr "Field group"
 
-#: src/core/forms/config.py:388
+#: src/core/forms/config.py:428
 msgid "– Ohne Gruppe –"
 msgstr "– No group –"
 
-#: src/core/forms/config.py:426 src/core/models/field_condition.py:53
+#: src/core/forms/config.py:466 src/core/models/field_condition.py:53
 msgid "Zielfeld"
 msgstr "Target field"
 
-#: src/core/forms/config.py:431 src/core/models/field_condition.py:60
+#: src/core/forms/config.py:471 src/core/models/field_condition.py:60
 msgid "Quellfeld"
 msgstr "Source field"
 
-#: src/core/forms/config.py:438 src/core/models/field_condition.py:66
+#: src/core/forms/config.py:478 src/core/models/field_condition.py:66
 #: src/templates/core/config/document_types/partials/condition_form.html:47
 msgid "Operator"
 msgstr "Operator"
 
-#: src/core/forms/config.py:442 src/core/models/field_condition.py:72
+#: src/core/forms/config.py:482 src/core/models/field_condition.py:72
 #: src/templates/core/config/document_types/partials/condition_form.html:56
 msgid "Vergleichswert"
 msgstr "Comparison value"
 
-#: src/core/forms/config.py:509 src/core/models/field_condition.py:135
+#: src/core/forms/config.py:549 src/core/models/field_condition.py:135
 msgid "Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig."
 msgstr "This operator is not allowed for the source field's type."
 
-#: src/core/forms/config.py:519 src/core/models/field_condition.py:146
+#: src/core/forms/config.py:559 src/core/models/field_condition.py:146
 msgid "Für diesen Operator ist ein Vergleichswert erforderlich."
 msgstr "A comparison value is required for this operator."
 
-#: src/core/forms/config.py:539
+#: src/core/forms/config.py:579
 msgid "Bitte eine gültige Zahl eingeben."
 msgstr "Please enter a valid number."
 
-#: src/core/forms/config.py:546
+#: src/core/forms/config.py:586
 msgid "Bitte „wahr“ oder „falsch“ auswählen."
 msgstr "Please select \"true\" or \"false\"."
 
-#: src/core/forms/config.py:551
+#: src/core/forms/config.py:591
 msgid "Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben."
 msgstr "Please enter a valid date (YYYY-MM-DD)."
 
-#: src/core/forms/config.py:557
+#: src/core/forms/config.py:597
 msgid "Bitte eine gültige Uhrzeit eingeben."
 msgstr "Please enter a valid time."
 
-#: src/core/forms/config.py:564
+#: src/core/forms/config.py:604
 msgid "Bitte eine gültige Option auswählen."
 msgstr "Please select a valid option."
 
@@ -816,11 +816,12 @@ msgstr "Configuration reordered"
 #: src/core/models/audit.py:137 src/core/models/case.py:28
 #: src/core/models/client.py:34 src/core/models/document_type.py:142
 #: src/core/models/document_type.py:313 src/core/models/event.py:23
-#: src/core/models/organization.py:41 src/core/models/quick_template.py:35
-#: src/core/models/retention.py:33 src/core/models/retention.py:93
-#: src/core/models/settings.py:27 src/core/models/time_filter.py:21
-#: src/core/models/user.py:36 src/core/models/workitem.py:45
-#: src/core/models/workitem.py:199 src/templates/core/account/profile.html:31
+#: src/core/models/offline_revocation.py:51 src/core/models/organization.py:41
+#: src/core/models/quick_template.py:35 src/core/models/retention.py:33
+#: src/core/models/retention.py:93 src/core/models/settings.py:27
+#: src/core/models/time_filter.py:21 src/core/models/user.py:37
+#: src/core/models/workitem.py:45 src/core/models/workitem.py:199
+#: src/templates/core/account/profile.html:31
 #: src/templates/core/statistics/external_report.html:15
 #: src/templates/core/system/auditlog_detail.html:41
 #: src/templates/core/system/auditlog_list.html:62
@@ -832,8 +833,8 @@ msgstr "Configuration reordered"
 msgid "Einrichtung"
 msgstr "Facility"
 
-#: src/core/models/audit.py:145 src/core/models/user.py:105
-#: src/core/models/user.py:106 src/templates/auth/_demo_credentials.html:23
+#: src/core/models/audit.py:145 src/core/models/user.py:106
+#: src/core/models/user.py:107 src/templates/auth/_demo_credentials.html:23
 #: src/templates/core/audit/detail.html:19
 #: src/templates/core/audit/list.html:30
 #: src/templates/core/audit/partials/table.html:9
@@ -1052,29 +1053,29 @@ msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episodes can only be created for open cases."
 
 #: src/core/models/client.py:22
-#: src/core/reporting/backends/sample_report_1.py:63
-#: src/core/services/dashboard/statistics.py:158
+#: src/core/reporting/backends/sample_report_1.py:65
+#: src/core/services/dashboard/statistics.py:224
 #: src/templates/core/clients/offline_list.html:53
 msgid "Unter 18"
 msgstr "Under 18"
 
 #: src/core/models/client.py:23
-#: src/core/reporting/backends/sample_report_1.py:64
-#: src/core/services/dashboard/statistics.py:159
+#: src/core/reporting/backends/sample_report_1.py:66
+#: src/core/services/dashboard/statistics.py:225
 #: src/templates/core/clients/offline_list.html:54
 msgid "18–26"
 msgstr "18–26"
 
 #: src/core/models/client.py:24
-#: src/core/reporting/backends/sample_report_1.py:65
-#: src/core/services/dashboard/statistics.py:160
+#: src/core/reporting/backends/sample_report_1.py:67
+#: src/core/services/dashboard/statistics.py:226
 #: src/templates/core/clients/offline_list.html:55
 msgid "27+"
 msgstr "27+"
 
 #: src/core/models/client.py:25
-#: src/core/reporting/backends/sample_report_1.py:66
-#: src/core/services/dashboard/statistics.py:161
+#: src/core/reporting/backends/sample_report_1.py:68
+#: src/core/services/dashboard/statistics.py:227
 #: src/templates/core/clients/offline_list.html:56
 #: src/templates/core/system/compliance.html:37
 #: src/templates/core/system/compliance.html:57
@@ -1090,7 +1091,7 @@ msgstr "Unknown"
 #: src/templates/core/clients/partials/table.html:16
 #: src/templates/core/clients/trash.html:19
 #: src/templates/core/export/client_data_pdf.html:36
-#: src/templates/core/export/report_pdf.html:111
+#: src/templates/core/export/report_pdf.html:123
 msgid "Pseudonym"
 msgstr "Pseudonym"
 
@@ -1108,10 +1109,10 @@ msgstr "Identified = pseudonym known, Qualified = full identity known"
 
 #: src/core/models/client.py:52 src/core/services/system/export.py:109
 #: src/templates/core/export/client_data_pdf.html:38
-#: src/templates/core/export/report_pdf.html:88
-#: src/templates/core/export/sample_report_1_pdf.html:77
-#: src/templates/core/statistics/external_report.html:109
-#: src/templates/core/statistics/partials/dashboard_content.html:184
+#: src/templates/core/export/report_pdf.html:97
+#: src/templates/core/export/sample_report_1_pdf.html:82
+#: src/templates/core/statistics/external_report.html:120
+#: src/templates/core/statistics/partials/dashboard_content.html:182
 msgid "Altersgruppe"
 msgstr "Age group"
 
@@ -1119,7 +1120,7 @@ msgstr "Age group"
 msgid "Altersgruppe der Person zum Zeitpunkt der Erfassung"
 msgstr "Person's age group at time of registration"
 
-#: src/core/models/client.py:57 src/core/models/user.py:50
+#: src/core/models/client.py:57 src/core/models/user.py:51
 #: src/templates/core/clients/detail.html:210
 #: src/templates/core/clients/offline_detail.html:105
 #: src/templates/core/export/client_data_pdf.html:39
@@ -1287,16 +1288,16 @@ msgstr ""
 "changed after creation."
 
 #: src/core/models/document_type.py:161 src/core/models/retention.py:52
-#: src/core/reporting/backends/example.py:45
-#: src/core/reporting/backends/sample_report_1.py:140
+#: src/core/reporting/backends/example.py:51
+#: src/core/reporting/backends/sample_report_1.py:147
 #: src/templates/core/config/document_types/detail.html:34
 #: src/templates/core/config/document_types/partials/table.html:9
 #: src/templates/core/export/client_data_pdf.html:367
-#: src/templates/core/export/report_pdf.html:65
-#: src/templates/core/export/sample_report_1_pdf.html:55
-#: src/templates/core/statistics/partials/dashboard_content.html:143
-#: src/tests/test_reporting_export.py:639
-#: src/tests/test_reporting_export.py:661
+#: src/templates/core/export/report_pdf.html:70
+#: src/templates/core/export/sample_report_1_pdf.html:59
+#: src/templates/core/statistics/partials/dashboard_content.html:140
+#: src/tests/test_reporting_export.py:676
+#: src/tests/test_reporting_export.py:698
 msgid "Kategorie"
 msgstr "Category"
 
@@ -1374,7 +1375,7 @@ msgstr ""
 #: src/templates/core/config/document_types/list.html:4
 #: src/templates/core/config/document_types/list.html:9
 #: src/templates/core/config/document_types/partials/table.html:5
-#: src/templates/core/statistics/partials/dashboard_content.html:116
+#: src/templates/core/statistics/partials/dashboard_content.html:111
 msgid "Dokumentationstypen"
 msgstr "Document types"
 
@@ -1592,7 +1593,7 @@ msgstr "Search index"
 #: src/templates/core/events/delete_confirm.html:34
 #: src/templates/core/events/detail.html:61
 #: src/templates/core/events/edit.html:24
-#: src/templates/core/export/report_pdf.html:45
+#: src/templates/core/export/report_pdf.html:47
 #: src/templates/core/retention/partials/dashboard_content.html:26
 #: src/templates/core/statistics/partials/dashboard_content.html:17
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:58
@@ -1741,6 +1742,22 @@ msgstr "Deleted on"
 msgid "Gelöscht von"
 msgstr "Deleted by"
 
+#: src/core/models/offline_revocation.py:55
+msgid "Personen-ID"
+msgstr "Person ID"
+
+#: src/core/models/offline_revocation.py:59
+msgid "Widerrufen am"
+msgstr "Revoked at"
+
+#: src/core/models/offline_revocation.py:76
+msgid "Offline-Widerruf"
+msgstr "Offline revocation"
+
+#: src/core/models/offline_revocation.py:77
+msgid "Offline-Widerrufe"
+msgstr "Offline revocations"
+
 #: src/core/models/organization.py:17 src/core/models/organization.py:33
 #: src/templates/core/system/_subnav.html:10
 #: src/templates/core/system/dashboard.html:187
@@ -1800,7 +1817,7 @@ msgstr "Milestone"
 msgid "Meilensteine"
 msgstr "Milestones"
 
-#: src/core/models/quick_template.py:45 src/core/models/user.py:41
+#: src/core/models/quick_template.py:45 src/core/models/user.py:42
 msgid "Anzeigename"
 msgstr "Display name"
 
@@ -1823,22 +1840,6 @@ msgstr "Quick template"
 #: src/core/models/quick_template.py:77
 msgid "Quick-Templates"
 msgstr "Quick templates"
-
-#: src/core/models/offline_revocation.py:55
-msgid "Personen-ID"
-msgstr "Person ID"
-
-#: src/core/models/offline_revocation.py:59
-msgid "Widerrufen am"
-msgstr "Revoked at"
-
-#: src/core/models/offline_revocation.py:76
-msgid "Offline-Widerruf"
-msgstr "Offline revocation"
-
-#: src/core/models/offline_revocation.py:77
-msgid "Offline-Widerrufe"
-msgstr "Offline revocations"
 
 #: src/core/models/recent_client_visit.py:37
 msgid "Personen-Besuch"
@@ -1942,15 +1943,12 @@ msgstr "Dismissed on"
 msgid "Aufgehoben von"
 msgstr "Dismissed by"
 
-#: src/core/models/retention.py:144
-#: src/templates/core/dashboard/role_lead.html:34
-#: src/templates/core/system/_subnav.html:34
+#: src/core/models/retention.py:144 src/templates/core/system/_subnav.html:34
 msgid "Legal Holds"
 msgstr "Legal holds"
 
 #: src/core/models/retention.py:164
 #: src/templates/core/cases/partials/episode_list.html:37
-#: src/templates/core/dashboard/role_lead.html:36
 msgid "aktiv"
 msgstr "active"
 
@@ -2151,45 +2149,45 @@ msgstr "Pre-selected as default shift when no active shift is detected"
 msgid "Zeitfilter"
 msgstr "Time filter"
 
-#: src/core/models/user.py:18
+#: src/core/models/user.py:19
 msgid "Systemadministration"
 msgstr "System administration"
 
-#: src/core/models/user.py:19
+#: src/core/models/user.py:20
 msgid "Anwendungsbetreuung"
 msgstr "Application support"
 
-#: src/core/models/user.py:20
+#: src/core/models/user.py:21
 msgid "Leitung"
 msgstr "Manager"
 
-#: src/core/models/user.py:21
+#: src/core/models/user.py:22
 msgid "Fachkraft"
 msgstr "Social worker"
 
-#: src/core/models/user.py:22
+#: src/core/models/user.py:23
 msgid "Assistenz"
 msgstr "Assistant"
 
-#: src/core/models/user.py:28 src/templates/auth/_demo_credentials.html:24
+#: src/core/models/user.py:29 src/templates/auth/_demo_credentials.html:24
 #: src/templates/core/account/profile.html:22
 #: src/templates/core/system/dashboard.html:230
 msgid "Rolle"
 msgstr "Role"
 
-#: src/core/models/user.py:46
+#: src/core/models/user.py:47
 msgid "Telefon"
 msgstr "Phone"
 
-#: src/core/models/user.py:54
+#: src/core/models/user.py:55
 msgid "Passwort muss geändert werden"
 msgstr "Password must be changed"
 
-#: src/core/models/user.py:58
+#: src/core/models/user.py:59
 msgid "2FA erforderlich"
 msgstr "2FA required"
 
-#: src/core/models/user.py:60
+#: src/core/models/user.py:61
 msgid ""
 "Wenn aktiv, muss der Nutzer ein TOTP-Gerät einrichten, bevor er die "
 "Anwendung weiter nutzen kann. Wird automatisch gesetzt, wenn die Einrichtung "
@@ -2199,11 +2197,11 @@ msgstr ""
 "the application. Automatically set when the facility requires 2FA for all "
 "users."
 
-#: src/core/models/user.py:68
+#: src/core/models/user.py:69
 msgid "Frist für 2FA-Einrichtung"
 msgstr "2FA setup deadline"
 
-#: src/core/models/user.py:70
+#: src/core/models/user.py:71
 msgid ""
 "Ende der Übergangsfrist, bis zu der ein rollen-erzwungener Nutzer die Zwei-"
 "Faktor-Authentifizierung einrichten muss. Wird beim ersten Login auf 30 Tage "
@@ -2213,15 +2211,15 @@ msgstr ""
 "authentication. Set to 30 days on first login; after it expires, access is "
 "locked until setup is complete (Refs #689)."
 
-#: src/core/models/user.py:80
+#: src/core/models/user.py:81
 msgid "Bevorzugte Sprache"
 msgstr "Preferred Language"
 
-#: src/core/models/user.py:84
+#: src/core/models/user.py:85
 msgid "Löschbestätigung"
 msgstr "Deletion confirmation"
 
-#: src/core/models/user.py:86
+#: src/core/models/user.py:87
 msgid ""
 "Darf Löschanträge als zweite Person genehmigen (Vier-Augen-Prinzip). "
 "Rollenunabhängig vergebbar, damit auch bei einer einzelnen Leitung ein "
@@ -2231,11 +2229,11 @@ msgstr ""
 "Can be granted independently of roles so an approver is available even with "
 "a single lead. Own requests remain excluded."
 
-#: src/core/models/user.py:96
+#: src/core/models/user.py:97
 msgid "Offline-Schlüssel-Salt"
 msgstr "Offline key salt"
 
-#: src/core/models/user.py:98
+#: src/core/models/user.py:99
 msgid ""
 "Base64URL-Salt für die client-seitige PBKDF2-Ableitung. Lazy generiert beim "
 "ersten Salt-Endpoint-Aufruf, rotiert bei Passwort-Änderung."
@@ -2345,9 +2343,9 @@ msgstr "Assigned to"
 #: src/templates/core/clients/_offline_workitem_fields.html:11
 #: src/templates/core/config/field_templates/partials/table.html:10
 #: src/templates/core/export/client_data_pdf.html:397
-#: src/templates/core/export/report_pdf.html:64
-#: src/templates/core/statistics/external_report.html:79
-#: src/templates/core/statistics/partials/dashboard_content.html:142
+#: src/templates/core/export/report_pdf.html:69
+#: src/templates/core/statistics/external_report.html:81
+#: src/templates/core/statistics/partials/dashboard_content.html:139
 #: src/templates/core/workitems/detail.html:20
 #: src/templates/core/workitems/inbox.html:33
 msgid "Typ"
@@ -2515,34 +2513,34 @@ msgstr ""
 "\"%(desired)s\". Values already recorded therefore become visible to "
 "additional roles."
 
-#: src/core/reporting/backends/example.py:36
+#: src/core/reporting/backends/example.py:42
 msgid "Beispiel: Ereignisse je Dokumenttyp"
 msgstr "Example: events per document type"
 
-#: src/core/reporting/backends/example.py:44 src/core/retention/proposals.py:30
+#: src/core/reporting/backends/example.py:50 src/core/retention/proposals.py:30
 msgid "Dokumenttyp"
 msgstr "Document type"
 
-#: src/core/reporting/backends/example.py:46
+#: src/core/reporting/backends/example.py:52
 msgid "System-Typ"
 msgstr "System type"
 
-#: src/core/reporting/backends/example.py:47
-#: src/core/reporting/backends/sample_report_1.py:141
-#: src/templates/core/export/report_pdf.html:66
-#: src/templates/core/export/report_pdf.html:89
-#: src/templates/core/export/sample_report_1_pdf.html:56
-#: src/templates/core/export/sample_report_1_pdf.html:78
-#: src/templates/core/statistics/external_report.html:80
-#: src/templates/core/statistics/external_report.html:110
-#: src/templates/core/statistics/partials/dashboard_content.html:144
-#: src/templates/core/statistics/partials/dashboard_content.html:185
+#: src/core/reporting/backends/example.py:53
+#: src/core/reporting/backends/sample_report_1.py:148
+#: src/templates/core/export/report_pdf.html:71
+#: src/templates/core/export/report_pdf.html:98
+#: src/templates/core/export/sample_report_1_pdf.html:60
+#: src/templates/core/export/sample_report_1_pdf.html:83
+#: src/templates/core/statistics/external_report.html:82
+#: src/templates/core/statistics/external_report.html:121
+#: src/templates/core/statistics/partials/dashboard_content.html:141
+#: src/templates/core/statistics/partials/dashboard_content.html:183
 #: src/templates/core/system/dashboard.html:231
-#: src/tests/test_reporting_export.py:639
+#: src/tests/test_reporting_export.py:676
 msgid "Anzahl"
 msgstr "Count"
 
-#: src/core/reporting/backends/sample_report_1.py:98
+#: src/core/reporting/backends/sample_report_1.py:100
 msgid ""
 "Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-"
 "Anonymität)"
@@ -2550,7 +2548,7 @@ msgstr ""
 "Figure for events with no report category in the period suppressed (k-"
 "anonymity)"
 
-#: src/core/reporting/backends/sample_report_1.py:99
+#: src/core/reporting/backends/sample_report_1.py:102
 msgid ""
 "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-"
 "Anonymität) — nicht in Altersgruppen/Personenzahl enthalten"
@@ -2558,37 +2556,14 @@ msgstr ""
 "Figure for events without a person reference in the period suppressed (k-"
 "anonymity) — not included in age groups/number of persons"
 
-#: src/templates/core/export/report_pdf.html:135
-#: src/templates/core/export/sample_report_1_pdf.html:106
-msgid ""
-"* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig "
-"gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. "
-"Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, "
-"sind darin nicht enthalten."
-msgstr ""
-"* Unique people are counted distinctly across the whole reporting period "
-"(live query) rather than summed from the monthly aggregates. Periods whose "
-"events were removed after the retention deadlines are not included."
-
-#: src/templates/core/export/report_pdf.html:105
-#: src/templates/core/export/sample_report_1_pdf.html:92
-#: src/templates/core/statistics/external_report.html:131
-msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
-msgstr "Age group figures suppressed (k-anonymity)."
-
-#: src/templates/core/export/report_pdf.html:83
-#: src/templates/core/statistics/external_report.html:99
-msgid "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."
-msgstr "Documentation type figures suppressed (k-anonymity)."
-
-#: src/core/reporting/backends/sample_report_1.py:134
+#: src/core/reporting/backends/sample_report_1.py:136
 #: src/templates/core/export/sample_report_1_pdf.html:6
-#: src/templates/core/export/sample_report_1_pdf.html:29
-#: src/templates/core/statistics/partials/dashboard_content.html:229
+#: src/templates/core/export/sample_report_1_pdf.html:30
+#: src/templates/core/statistics/partials/dashboard_content.html:260
 msgid "Beispiel-Sachbericht"
 msgstr "Example Activity Report"
 
-#: src/core/reporting/backends/sample_report_1.py:233
+#: src/core/reporting/backends/sample_report_1.py:251
 #, python-brace-format
 msgid ""
 "{events} Ereignisse in {types} Dokumenttypen ohne Berichtszuordnung im "
@@ -2597,7 +2572,7 @@ msgstr ""
 "{events} events in {types} document types with no report category in the "
 "period"
 
-#: src/core/reporting/backends/sample_report_1.py:250
+#: src/core/reporting/backends/sample_report_1.py:269
 #, python-brace-format
 msgid ""
 "{without_client} von {events_in_period} Ereignissen im Zeitraum ohne "
@@ -2606,15 +2581,15 @@ msgstr ""
 "{without_client} of {events_in_period} events in the period without a person "
 "reference ({share} %) — not included in age groups/number of persons"
 
-#: src/core/reporting/data_source.py:35
+#: src/core/reporting/data_source.py:36
 msgid "Live-Abfrage zum Erstellungszeitpunkt"
 msgstr "Live query at the time of creation"
 
-#: src/core/reporting/data_source.py:36
+#: src/core/reporting/data_source.py:37
 msgid "Monats-Aggregate"
 msgstr "Monthly aggregates"
 
-#: src/core/reporting/data_source.py:44
+#: src/core/reporting/data_source.py:45
 msgid ""
 "Die Zahlen werden bei jedem Aufruf neu aus den Ereignisdaten berechnet; "
 "Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, "
@@ -2623,7 +2598,7 @@ msgstr ""
 "The figures are recalculated from the event data on every request; periods "
 "whose events were removed once the retention deadlines expired appear empty."
 
-#: src/core/reporting/data_source.py:48
+#: src/core/reporting/data_source.py:49
 msgid ""
 "Die Zahlen stammen aus den gespeicherten Monats-Auswertungen und bleiben "
 "auch nach Ablauf der Löschfristen erhalten; live erzeugte Berichte desselben "
@@ -2633,7 +2608,36 @@ msgstr ""
 "after the retention deadlines expire; live-generated reports for the same "
 "period can therefore differ."
 
-#: src/core/services/case/cases.py:38 src/core/services/client/main.py:43
+#: src/core/reporting/data_source.py:71
+msgid "alle Ereignisse im Zeitraum"
+msgstr "all events in the period"
+
+#: src/core/reporting/data_source.py:72
+msgid "Ereignisse mit Personenbezug im Zeitraum"
+msgstr "events linked to a person in the period"
+
+#: src/core/reporting/data_source.py:73
+msgid "Ereignisse mit Berichtszuordnung im Zeitraum"
+msgstr "events with a report category in the period"
+
+#: src/core/reporting/data_source.py:74
+msgid "Personen mit mindestens einem Ereignis im Zeitraum"
+msgstr "people with at least one event in the period"
+
+#: src/core/reporting/data_source.py:89
+#, python-brace-format
+msgid "Grundgesamtheit: {population} · Quelle: {source}"
+msgstr "Population: {population} · Source: {source}"
+
+#: src/core/reporting/export.py:142
+#: src/templates/core/export/report_pdf.html:140
+#: src/templates/core/export/sample_report_1_pdf.html:108
+#: src/templates/core/statistics/external_report.html:36
+#: src/templates/core/statistics/partials/report_panel.html:74
+msgid "Datenquelle"
+msgstr "Data source"
+
+#: src/core/services/case/cases.py:38 src/core/services/client/main.py:45
 msgid "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
 msgstr "The document type does not belong to this facility."
 
@@ -2641,7 +2645,7 @@ msgstr "The document type does not belong to this facility."
 msgid "Der Dokumentationstyp ist nicht für Fälle vorgesehen."
 msgstr "The document type is not intended for cases."
 
-#: src/core/services/case/cases.py:59 src/core/services/client/main.py:102
+#: src/core/services/case/cases.py:59 src/core/services/client/main.py:104
 msgid ""
 "Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."
 msgstr "Dynamic data cannot be saved without a document type."
@@ -2676,28 +2680,28 @@ msgstr "Anonymous events cannot be attached to a client-bound case."
 msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Event person does not match case person."
 
-#: src/core/services/client/main.py:45
+#: src/core/services/client/main.py:47
 msgid "Der Dokumentationstyp ist nicht für Personen vorgesehen."
 msgstr "The document type is not intended for persons."
 
-#: src/core/services/client/main.py:71
+#: src/core/services/client/main.py:73
 msgid ""
 "Dokumentationstyp bitte nur einmal angeben (Objekt oder ID, nicht beides)."
 msgstr "Please specify the document type only once (object or ID, not both)."
 
-#: src/core/services/client/main.py:82
+#: src/core/services/client/main.py:84
 msgid "Der Dokumentationstyp existiert nicht."
 msgstr "The document type does not exist."
 
-#: src/core/services/client/main.py:533
+#: src/core/services/client/main.py:581
 msgid "Nur die Leitung darf eine qualifizierte Person herabstufen."
 msgstr "Only the lead may downgrade a qualified person."
 
-#: src/core/services/client/main.py:823
+#: src/core/services/client/main.py:891
 msgid "Nur Personen im Papierkorb können anonymisiert werden."
 msgstr "Only persons in the trash can be anonymized."
 
-#: src/core/services/client/main.py:827
+#: src/core/services/client/main.py:895
 msgid ""
 "Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — "
 "Anonymisierung nicht möglich."
@@ -3363,6 +3367,10 @@ msgstr ""
 "The submitted order does not match the target group (foreign, missing, or "
 "duplicate IDs)."
 
+#: src/core/services/dashboard/external_report.py:46
+msgid "Ohne Personenbezug"
+msgstr "Not linked to a person"
+
 #: src/core/services/dashboard/focus_box.py:42 src/core/views/workitems.py:129
 #: src/templates/core/dashboard/role_staff.html:27
 #: src/templates/core/dashboard/role_staff.html:45
@@ -3380,11 +3388,11 @@ msgstr "Due today"
 msgid "Dringend · Wichtig"
 msgstr "Urgent · Important"
 
-#: src/core/services/dashboard/main.py:119
+#: src/core/services/dashboard/main.py:108
 msgid "Keine Settings konfiguriert — bitte initial einrichten."
 msgstr "No settings configured — please set up initially."
 
-#: src/core/services/dashboard/main.py:123
+#: src/core/services/dashboard/main.py:112
 msgid ""
 "MFA-Pflicht (2FA) ist einrichtungsweit nicht aktiv — Login bleibt ohne "
 "zweiten Faktor moeglich."
@@ -3392,7 +3400,7 @@ msgstr ""
 "MFA (2FA) is not enforced facility-wide — login remains possible without a "
 "second factor."
 
-#: src/core/services/dashboard/main.py:128
+#: src/core/services/dashboard/main.py:117
 msgid ""
 "K-Anonymisierung ist deaktiviert — Loeschlauf entfernt Datensaetze hart. "
 "Falls Statistik-Erhalt gewuenscht, in Settings aktivieren."
@@ -3696,12 +3704,12 @@ msgstr "Case has been reopened."
 msgid "Kein Ereignis ausgewählt."
 msgstr "No event selected."
 
-#: src/core/views/cases.py:564
+#: src/core/views/cases.py:572
 msgid "Fall nicht gefunden."
 msgstr "Case not found."
 
-#: src/core/views/cases.py:584 src/core/views/cases.py:589
-#: src/core/views/clients.py:514 src/core/views/clients.py:519
+#: src/core/views/cases.py:592 src/core/views/cases.py:597
+#: src/core/views/clients.py:540 src/core/views/clients.py:545
 #: src/core/views/events.py:150
 msgid "Dokumentationstyp nicht gefunden."
 msgstr "Document type not found."
@@ -3745,7 +3753,7 @@ msgstr "Person has been created."
 msgid "Person wurde aktualisiert."
 msgstr "Person has been updated."
 
-#: src/core/views/clients.py:494
+#: src/core/views/clients.py:520
 msgid "Person nicht gefunden."
 msgstr "Person not found."
 
@@ -4042,24 +4050,24 @@ msgstr "No proposals selected."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No valid proposals found."
 
-#: src/core/views/statistics.py:171 src/core/views/statistics.py:204
-#: src/core/views/statistics.py:245 src/core/views/statistics.py:418
+#: src/core/views/statistics.py:202 src/core/views/statistics.py:244
+#: src/core/views/statistics.py:290 src/core/views/statistics.py:518
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
 
-#: src/core/views/statistics.py:359
+#: src/core/views/statistics.py:417
 msgid "backend erforderlich"
 msgstr "backend required"
 
-#: src/core/views/statistics.py:363 src/core/views/statistics.py:429
+#: src/core/views/statistics.py:421 src/core/views/statistics.py:529
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unknown report backend."
 
-#: src/core/views/statistics.py:369 src/core/views/statistics.py:432
+#: src/core/views/statistics.py:427 src/core/views/statistics.py:532
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Report is not available for this facility."
 
-#: src/core/views/statistics.py:436
+#: src/core/views/statistics.py:536
 msgid "Unbekanntes Export-Format."
 msgstr "Unknown export format."
 
@@ -4213,7 +4221,7 @@ msgid "Alle"
 msgstr "All"
 
 #: src/core/views/zeitstrom.py:115 src/templates/core/cases/detail.html:124
-#: src/templates/core/export/report_pdf.html:112
+#: src/templates/core/export/report_pdf.html:124
 #: src/templates/core/handover/partials/_stats_grid.html:7
 #: src/templates/core/search/partials/global_results.html:20
 msgid "Kontakte"
@@ -5157,7 +5165,7 @@ msgid "Dokumentationstyp filtern"
 msgstr "Filter by document type"
 
 #: src/templates/core/attachments/list.html:20
-#: src/templates/core/statistics/partials/dashboard_content.html:71
+#: src/templates/core/statistics/partials/dashboard_content.html:66
 #: src/templates/core/zeitstrom/index.html:151
 msgid "Alle Dokumentationstypen"
 msgstr "All document types"
@@ -5282,7 +5290,7 @@ msgstr "New Episode"
 #: src/templates/core/clients/offline_detail.html:298
 #: src/templates/core/clients/offline_detail.html:352
 #: src/templates/core/clients/offline_detail.html:423
-#: src/templates/core/config/document_types/form.html:25
+#: src/templates/core/config/document_types/form.html:50
 #: src/templates/core/config/document_types/partials/group_form.html:45
 #: src/templates/core/config/field_templates/form.html:30
 #: src/templates/core/events/create.html:191
@@ -5308,8 +5316,8 @@ msgstr "Create Episode"
 #: src/templates/core/clients/offline_detail.html:357
 #: src/templates/core/clients/offline_detail.html:428
 #: src/templates/core/config/document_types/confirm_delete.html:65
-#: src/templates/core/config/document_types/form.html:28
-#: src/templates/core/config/document_types/form.html:30
+#: src/templates/core/config/document_types/form.html:53
+#: src/templates/core/config/document_types/form.html:55
 #: src/templates/core/config/field_templates/confirm_delete.html:47
 #: src/templates/core/config/field_templates/form.html:32
 #: src/templates/core/events/create.html:204
@@ -6149,11 +6157,11 @@ msgstr "Edit document type"
 msgid "Neuer Dokumentationstyp"
 msgstr "New document type"
 
-#: src/templates/core/config/document_types/form.html:19
+#: src/templates/core/config/document_types/form.html:44
 msgid "Der Systemtyp und der Entitätstyp sind nach dem Anlegen unveränderbar."
 msgstr "The system type and the entity type cannot be changed after creation."
 
-#: src/templates/core/config/document_types/form.html:25
+#: src/templates/core/config/document_types/form.html:50
 #: src/templates/core/config/document_types/partials/group_form.html:45
 #: src/templates/core/config/field_templates/form.html:30
 msgid "Anlegen"
@@ -6479,7 +6487,7 @@ msgstr "GDPR workflows, retention and statistics at a glance."
 msgid "ausstehend"
 msgstr "pending"
 
-#: src/templates/core/dashboard/role_lead.html:40
+#: src/templates/core/dashboard/role_lead.html:34
 #: src/templates/core/statistics/index.html:4
 #: src/templates/core/statistics/index.html:12
 #: src/templates/partials/_navigation_desktop.html:108
@@ -6487,11 +6495,11 @@ msgstr "pending"
 msgid "Statistik"
 msgstr "Statistics"
 
-#: src/templates/core/dashboard/role_lead.html:43
+#: src/templates/core/dashboard/role_lead.html:37
 msgid "letzter Snapshot"
 msgstr "last snapshot"
 
-#: src/templates/core/dashboard/role_lead.html:46
+#: src/templates/core/dashboard/role_lead.html:40
 msgid "noch kein Snapshot"
 msgstr "no snapshot yet"
 
@@ -7163,117 +7171,141 @@ msgid "Keine protokollierten Zugriffe vorhanden."
 msgstr "No logged accesses available."
 
 #: src/templates/core/export/client_data_pdf.html:509
-#: src/templates/core/export/report_pdf.html:127
-#: src/templates/core/export/sample_report_1_pdf.html:101
+#: src/templates/core/export/report_pdf.html:148
+#: src/templates/core/export/sample_report_1_pdf.html:116
 #, python-format
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Generated on %(date)s · Anlaufstelle"
 
 #: src/templates/core/export/report_pdf.html:6
-#: src/templates/core/export/report_pdf.html:35
+#: src/templates/core/export/report_pdf.html:37
 msgid "Statistikbericht"
 msgstr "Statistics Report"
 
-#: src/templates/core/export/report_pdf.html:31
+#: src/templates/core/export/report_pdf.html:33
 msgid "INTERN — nicht zur Weitergabe. Enthält Pseudonym-Ranking."
 msgstr "INTERNAL — not for distribution. Contains pseudonym ranking."
 
-#: src/templates/core/export/report_pdf.html:37
-#: src/templates/core/export/sample_report_1_pdf.html:45
+#: src/templates/core/export/report_pdf.html:39
+#: src/templates/core/export/sample_report_1_pdf.html:46
 msgid "Zusammenfassung"
 msgstr "Summary"
 
-#: src/templates/core/export/report_pdf.html:40
-#: src/templates/core/export/report_pdf.html:44
-#: src/templates/core/export/report_pdf.html:48
-#: src/templates/core/export/report_pdf.html:52
-#: src/templates/core/export/report_pdf.html:57
-#: src/templates/core/export/report_pdf.html:74
-#: src/templates/core/export/report_pdf.html:96
-#: src/templates/core/export/sample_report_1_pdf.html:46
+#: src/templates/core/export/report_pdf.html:42
+#: src/templates/core/export/report_pdf.html:46
+#: src/templates/core/export/report_pdf.html:50
+#: src/templates/core/export/report_pdf.html:54
+#: src/templates/core/export/report_pdf.html:60
+#: src/templates/core/export/report_pdf.html:79
+#: src/templates/core/export/report_pdf.html:105
 #: src/templates/core/export/sample_report_1_pdf.html:47
-#: src/templates/core/export/sample_report_1_pdf.html:63
-#: src/templates/core/export/sample_report_1_pdf.html:85
+#: src/templates/core/export/sample_report_1_pdf.html:49
+#: src/templates/core/export/sample_report_1_pdf.html:67
+#: src/templates/core/export/sample_report_1_pdf.html:90
 #: src/templates/core/statistics/external_report.html:55
 #: src/templates/core/statistics/external_report.html:65
-#: src/templates/core/statistics/external_report.html:89
-#: src/templates/core/statistics/external_report.html:119
+#: src/templates/core/statistics/external_report.html:91
+#: src/templates/core/statistics/external_report.html:130
 msgid "unterdrückt"
 msgstr "suppressed"
 
-#: src/templates/core/export/report_pdf.html:41
+#: src/templates/core/export/report_pdf.html:43
 #: src/templates/core/statistics/partials/dashboard_content.html:12
 msgid "Gesamtkontakte"
 msgstr "Total contacts"
 
-#: src/templates/core/export/report_pdf.html:57
-#: src/templates/core/export/sample_report_1_pdf.html:47
+#: src/templates/core/export/report_pdf.html:60
+#: src/templates/core/export/sample_report_1_pdf.html:49
 msgid "Einzigartige Personen:"
 msgstr "Unique people:"
 
-#: src/templates/core/export/report_pdf.html:59
-#: src/templates/core/statistics/partials/dashboard_content.html:135
+#: src/templates/core/export/report_pdf.html:62
+#: src/templates/core/statistics/partials/dashboard_content.html:130
 msgid "Kontakte nach Dokumentationstyp"
 msgstr "Contacts by Document Type"
 
-#: src/templates/core/export/report_pdf.html:80
-#: src/templates/core/export/report_pdf.html:102
-#: src/templates/core/statistics/partials/dashboard_content.html:171
-#: src/templates/core/statistics/partials/dashboard_content.html:208
+#: src/templates/core/export/report_pdf.html:86
+#: src/templates/core/statistics/external_report.html:102
+msgid "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."
+msgstr "Documentation type figures suppressed (k-anonymity)."
+
+#: src/templates/core/export/report_pdf.html:88
+#: src/templates/core/export/report_pdf.html:114
+#: src/templates/core/statistics/partials/dashboard_content.html:168
+#: src/templates/core/statistics/partials/dashboard_content.html:206
 #: src/templates/core/statistics/partials/report_panel.html:53
 msgid "Keine Daten im gewählten Zeitraum."
 msgstr "No data in the selected period."
 
-#: src/templates/core/export/report_pdf.html:83
-#: src/templates/core/statistics/partials/dashboard_content.html:177
+#: src/templates/core/export/report_pdf.html:91
+#: src/templates/core/statistics/partials/dashboard_content.html:174
 msgid "Kontakte nach Altersgruppe"
 msgstr "Contacts by Age Group"
 
-#: src/templates/core/export/report_pdf.html:107
+#: src/templates/core/export/report_pdf.html:112
+#: src/templates/core/export/sample_report_1_pdf.html:97
+#: src/templates/core/statistics/external_report.html:141
+msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
+msgstr "Age group figures suppressed (k-anonymity)."
+
+#: src/templates/core/export/report_pdf.html:119
 msgid "Top 5 Personen"
 msgstr "Top 5 people"
 
-#: src/templates/core/export/sample_report_1_pdf.html:31
+#: src/templates/core/export/report_pdf.html:143
+#: src/templates/core/export/sample_report_1_pdf.html:111
+#: src/templates/core/statistics/partials/dashboard_content.html:213
+#, python-format
+msgid "Stand der Monats-Aggregate: %(date)s"
+msgstr "Monthly aggregates as of: %(date)s"
+
+#: src/templates/core/export/report_pdf.html:146
+#: src/templates/core/export/sample_report_1_pdf.html:114
+msgid ""
+"* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig "
+"gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. "
+"Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, "
+"sind darin nicht enthalten."
+msgstr ""
+"* Unique people are counted distinctly across the whole reporting period "
+"(live query) rather than summed from the monthly aggregates. Periods whose "
+"events were removed after the retention deadlines are not included."
+
+#: src/templates/core/export/sample_report_1_pdf.html:32
 msgid "Vorlage – frei anpassbar"
 msgstr "Template – freely customizable"
 
-#: src/templates/core/export/sample_report_1_pdf.html:35
+#: src/templates/core/export/sample_report_1_pdf.html:36
 msgid "Einrichtung:"
 msgstr "Facility:"
 
-#: src/templates/core/export/sample_report_1_pdf.html:39
+#: src/templates/core/export/sample_report_1_pdf.html:40
 msgid "Berichtszeitraum:"
 msgstr "Reporting period:"
 
-#: src/templates/core/export/sample_report_1_pdf.html:46
+#: src/templates/core/export/sample_report_1_pdf.html:47
 msgid "Gesamtkontakte (ohne Notizen/Hausverbote):"
 msgstr "Total contacts (excluding notes/bans):"
 
-#: src/templates/core/export/sample_report_1_pdf.html:50
+#: src/templates/core/export/sample_report_1_pdf.html:52
 msgid "Leistungen nach Kategorie"
 msgstr "Services by Category"
 
-#: src/templates/core/export/sample_report_1_pdf.html:69
+#: src/templates/core/export/sample_report_1_pdf.html:73
 msgid "Keine relevanten Kontakte im Berichtszeitraum."
 msgstr "No relevant contacts in the reporting period."
 
-#: src/templates/core/export/sample_report_1_pdf.html:72
+#: src/templates/core/export/sample_report_1_pdf.html:76
 msgid "Altersverteilung"
 msgstr "Age Distribution"
 
-#: src/templates/core/export/sample_report_1_pdf.html:91
+#: src/templates/core/export/sample_report_1_pdf.html:99
 msgid "Keine Altersdaten vorhanden."
 msgstr "No age data available."
 
-#: src/templates/core/export/sample_report_1_pdf.html:95
+#: src/templates/core/export/sample_report_1_pdf.html:103
 msgid "Ort, Datum, Unterschrift"
 msgstr "Place, date, signature"
-
-#: src/templates/core/export/sample_report_1_pdf.html:100
-#: src/templates/core/statistics/external_report.html:36
-#: src/templates/core/statistics/partials/report_panel.html:74
-msgid "Datenquelle"
-msgstr "Data source"
 
 #: src/templates/core/handover/partials/_highlights.html:101
 msgid "Keine besonderen Vorkommnisse"
@@ -7568,7 +7600,7 @@ msgid "Kontakte gesamt"
 msgstr "Total contacts"
 
 #: src/templates/core/statistics/external_report.html:62
-#: src/templates/core/statistics/partials/dashboard_content.html:43
+#: src/templates/core/statistics/partials/dashboard_content.html:38
 msgid "Unterschiedliche Personen"
 msgstr "Distinct people"
 
@@ -7576,16 +7608,16 @@ msgstr "Distinct people"
 msgid "Nach Dokumentationstyp"
 msgstr "By documentation type"
 
-#: src/templates/core/statistics/external_report.html:97
-#: src/templates/core/statistics/external_report.html:127
+#: src/templates/core/statistics/external_report.html:104
+#: src/templates/core/statistics/external_report.html:143
 msgid "Keine Daten im Zeitraum."
 msgstr "No data in the period."
 
-#: src/templates/core/statistics/external_report.html:105
+#: src/templates/core/statistics/external_report.html:114
 msgid "Nach Altersgruppe"
 msgstr "By age group"
 
-#: src/templates/core/statistics/external_report.html:137
+#: src/templates/core/statistics/external_report.html:155
 msgid "Als JSON exportieren"
 msgstr "Export as JSON"
 
@@ -7607,57 +7639,87 @@ msgstr "With extended details"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:37
 msgid ""
-"Über den gesamten Zeitraum eindeutig gezählt (Live-Abfrage). Zeiträume, deren "
-"Ereignisse nach Ablauf der Löschfristen entfernt wurden, sind darin nicht "
-"enthalten."
+"Über den gesamten Zeitraum eindeutig gezählt (Live-Abfrage). Zeiträume, "
+"deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, sind darin "
+"nicht enthalten."
 msgstr ""
-"Counted distinctly across the whole period (live query). Periods whose events "
-"were removed after the retention deadlines are not included."
+"Counted distinctly across the whole period (live query). Periods whose "
+"events were removed after the retention deadlines are not included."
 
-#: src/templates/core/statistics/partials/dashboard_content.html:44
+#: src/templates/core/statistics/partials/dashboard_content.html:39
 msgid "Personen mit mindestens einem Kontakt im Zeitraum"
 msgstr "People with at least one contact in the period"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:48
+#: src/templates/core/statistics/partials/dashboard_content.html:43
 #, python-format
 msgid "%(count)s Kontakt"
 msgid_plural "%(count)s Kontakte"
 msgstr[0] "%(count)s contact"
 msgstr[1] "%(count)s contacts"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:52
+#: src/templates/core/statistics/partials/dashboard_content.html:47
 msgid "Person mit den meisten Kontakten"
 msgstr "Person with the most contacts"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:97
+#: src/templates/core/statistics/partials/dashboard_content.html:92
 msgid "Kontakte im Zeitverlauf"
 msgstr "Contacts over time"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:104
+#: src/templates/core/statistics/partials/dashboard_content.html:99
 msgid "Live-Daten"
 msgstr "Live data"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:108
+#: src/templates/core/statistics/partials/dashboard_content.html:103
 msgid "Snapshot"
 msgstr "Snapshot"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:124
+#: src/templates/core/statistics/partials/dashboard_content.html:119
 msgid "Altersgruppen"
 msgstr "Age groups"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:218
-#: src/templates/core/statistics/partials/report_panel.html:82
+#: src/templates/core/statistics/partials/dashboard_content.html:233
+#: src/templates/core/statistics/partials/full_content.html:117
+msgid "Empfänger (optional)"
+msgstr "Recipient (optional)"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:235
+#: src/templates/core/statistics/partials/full_content.html:119
+msgid "z. B. Stadt Musterstadt"
+msgstr "e.g. City of Anytown"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:239
+#: src/templates/core/statistics/partials/full_content.html:127
+msgid "Zweck (optional)"
+msgstr "Purpose (optional)"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:241
+#: src/templates/core/statistics/partials/full_content.html:129
+msgid "z. B. Verwendungsnachweis 2026"
+msgstr "e.g. 2026 funding report"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:249
+#: src/templates/core/statistics/partials/report_panel.html:85
 #: src/templates/core/system/auditlog_list.html:16
 msgid "CSV-Export"
 msgstr "CSV export"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:222
+#: src/templates/core/statistics/partials/dashboard_content.html:253
 msgid "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
 msgstr "Uses the period selected above as the reporting period."
 
-#: src/templates/core/statistics/partials/dashboard_content.html:224
+#: src/templates/core/statistics/partials/dashboard_content.html:255
 msgid "PDF-Export"
 msgstr "PDF export"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:265
+#: src/templates/core/statistics/report_releases.html:11
+#: src/templates/core/statistics/report_releases.html:14
+msgid "Freigabe-Übersicht"
+msgstr "Release overview"
+
+#: src/templates/core/statistics/partials/dashboard_content.html:266
+msgid "welche Berichtszeiträume wurden bereits herausgegeben?"
+msgstr "which reporting periods have already been released?"
 
 #: src/templates/core/statistics/partials/full_content.html:10
 msgid "Monat"
@@ -7722,14 +7784,80 @@ msgid ""
 msgstr ""
 "Values below the minimum case-count threshold are suppressed (k-anonymity)."
 
-#: src/templates/core/statistics/partials/report_panel.html:87
+#: src/templates/core/statistics/partials/report_panel.html:90
 #: src/templates/core/system/auditlog_list.html:21
 msgid "JSON-Export"
 msgstr "JSON export"
 
-#: src/templates/core/statistics/partials/report_panel.html:92
+#: src/templates/core/statistics/partials/report_panel.html:95
 msgid "XML-Export"
 msgstr "XML export"
+
+#: src/templates/core/statistics/report_releases.html:16
+msgid ""
+"Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. "
+"Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider "
+"Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, "
+"wenn in keinem der beiden etwas unterdrückt wurde."
+msgstr "Reporting periods released by this facility, taken from the audit trail. Where two periods overlap, the difference between the two reports reveals what a single report would have suppressed — even if nothing was suppressed in either of them."
+
+#: src/templates/core/statistics/report_releases.html:22
+#, python-format
+msgid "%(count)s Herausgabe mit überschneidendem Zeitraum"
+msgid_plural "%(count)s Herausgaben mit überschneidendem Zeitraum"
+msgstr[0] "%(count)s release with an overlapping period"
+msgstr[1] "%(count)s releases with an overlapping period"
+
+#: src/templates/core/statistics/report_releases.html:25
+msgid ""
+"Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
+"sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
+msgstr "Check whether the overlapping reports went to the same recipient. Identical periods are harmless and are not reported."
+
+#: src/templates/core/statistics/report_releases.html:34
+msgid "Herausgegeben am"
+msgstr "Released on"
+
+#: src/templates/core/statistics/report_releases.html:35
+msgid "Artefakt"
+msgstr "Artefact"
+
+#: src/templates/core/statistics/report_releases.html:36
+msgid "Berichtszeitraum"
+msgstr "Reporting period"
+
+#: src/templates/core/statistics/report_releases.html:37
+#: src/templates/core/system/vvt.html:72
+msgid "Empfänger"
+msgstr "Recipients"
+
+#: src/templates/core/statistics/report_releases.html:38
+#: src/templates/core/system/vvt.html:51
+msgid "Zweck"
+msgstr "Purpose"
+
+#: src/templates/core/statistics/report_releases.html:39
+msgid "Ausgelöst von"
+msgstr "Triggered by"
+
+#: src/templates/core/statistics/report_releases.html:52
+msgid "Überschneidung"
+msgstr "Overlap"
+
+#: src/templates/core/statistics/report_releases.html:64
+msgid "Noch keine Herausgabe protokolliert."
+msgstr "No release recorded yet."
+
+#: src/templates/core/statistics/report_releases.html:72
+msgid ""
+"Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf "
+"anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter "
+"Bildschirm — erscheinen hier nicht."
+msgstr "The overview is exactly as complete as the audit trail. Disclosures by other means — a forwarded PDF file, a photographed screen — do not appear here."
+
+#: src/templates/core/statistics/report_releases.html:76
+msgid "Zurück zur Statistik"
+msgstr "Back to statistics"
 
 #: src/templates/core/system/_banner.html:12
 msgid ""
@@ -8211,10 +8339,6 @@ msgstr ""
 "code.\n"
 "    "
 
-#: src/templates/core/system/vvt.html:51
-msgid "Zweck"
-msgstr "Purpose"
-
 #: src/templates/core/system/vvt.html:56
 msgid "Rechtsgrundlage"
 msgstr "Legal basis"
@@ -8222,10 +8346,6 @@ msgstr "Legal basis"
 #: src/templates/core/system/vvt.html:61
 msgid "Datenkategorien"
 msgstr "Data categories"
-
-#: src/templates/core/system/vvt.html:72
-msgid "Empfänger"
-msgstr "Recipients"
 
 #: src/templates/core/system/vvt.html:83
 msgid "Speicherfrist"
@@ -8846,14 +8966,14 @@ msgstr "No person taken offline."
 msgid "{used} / {quota} ({percent}% belegt)"
 msgstr "{used} / {quota} ({percent}% used)"
 
-#: src/tests/test_reporting_export.py:41
+#: src/tests/test_reporting_export.py:42
 msgid "Dummy Zeilenbericht"
 msgstr "Dummy row report"
 
-#: src/tests/test_reporting_export.py:636
+#: src/tests/test_reporting_export.py:673
 msgid "Dummy Lazybericht"
 msgstr "Dummy lazy report"
 
-#: src/tests/test_reporting_export.py:646
+#: src/tests/test_reporting_export.py:683
 msgid "Lücke im Zeitraum"
 msgstr "Gap in the period"
