@@ -21,6 +21,7 @@ from datetime import date
 
 import pytest
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 from core.reporting.data_source import (
     ALL_EVENTS,
@@ -154,6 +155,62 @@ class TestGrundgesamtheitInDenArtefakten:
 
         assert get_backend("sample-report-1").population == MAPPED_EVENTS
         assert DatasetBackend.population == ALL_EVENTS, "weiteste Menge als Default, engere muessen ueberschreiben"
+
+
+@pytest.mark.django_db
+class TestGrundgesamtheitImEchtenViewRender:
+    """Refs #1775: Die Template-Tests oben setzen ``population_notes`` **selbst**
+    in den Kontext.
+
+    Sie belegen damit nur, dass das Template den Ausweis rendert, wenn er
+    ankommt — faellt er in der View weg, bleiben sie gruen. Genau diese Luecke
+    war der Befund. Diese Tests gehen deshalb ueber den echten Request-Pfad
+    (Client → View → Template) und lesen das ausgelieferte HTML.
+
+    Der Marker ist die CSS-Klasse ``report-population``, die alle drei
+    HTML-Flaechen um den Ausweis legen — sie zeigt, wo der Ausweis stehen SOLL,
+    und deckt damit auch den Fall "Absatz da, Inhalt leer" auf.
+    """
+
+    @staticmethod
+    def _ausweise(html: str) -> list[str]:
+        """Die Inhalte aller ``report-population``-Absaetze der Seite."""
+        import re
+
+        return [treffer.strip() for treffer in re.findall(r'class="[^"]*report-population"[^>]*>(.*?)</p>', html, re.S)]
+
+    def test_externer_bericht_view(self, client, lead_user):
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_external_report"))
+
+        assert response.status_code == 200
+        ausweise = self._ausweise(response.content.decode())
+        assert len(ausweise) == 2, f"beide Tabellen brauchen den Ausweis, gefunden: {ausweise}"
+        assert all("Grundgesamtheit:" in a for a in ausweise), ausweise
+        assert all("alle Ereignisse im Zeitraum" in a for a in ausweise), ausweise
+
+    def test_statistik_dashboard_view(self, client, lead_user):
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics"))
+
+        assert response.status_code == 200
+        ausweise = self._ausweise(response.content.decode())
+        assert ausweise, "Dashboard liefert keinen Grundgesamtheits-Ausweis aus"
+        assert all("Grundgesamtheit:" in a for a in ausweise), ausweise
+
+    def test_berichts_panel_view(self, client, lead_user):
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
+
+        assert response.status_code == 200
+        ausweise = self._ausweise(response.content.decode())
+        assert len(ausweise) == 1, f"Vorschautabelle braucht ihren Ausweis, gefunden: {ausweise}"
+        # Das Backend deklariert die engere Menge — der Ausweis liest sie aus,
+        # statt einen Text zu wiederholen.
+        assert "Ereignisse mit Berichtszuordnung im Zeitraum" in ausweise[0], ausweise
 
 
 @pytest.mark.django_db
