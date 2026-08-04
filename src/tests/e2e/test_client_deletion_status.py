@@ -17,6 +17,10 @@ import uuid
 
 import pytest
 
+# Personen-Dokumentationstypen legt der Seed nicht an (nur entity_type=event) —
+# der etablierte Config-UI-Helfer legt bei Bedarf einen eigenen an.
+from .test_client_dynamic_fields import _create_entity_doctype
+
 pytestmark = pytest.mark.e2e
 
 
@@ -171,16 +175,19 @@ class TestConfigBlockerNamesTheWayOut:
     """Refs #1737 (A): der Lösch-Dialog zeigt den Papierkorb-Anteil + Ausweg."""
 
     def test_document_type_delete_dialog_links_to_trash(self, staff_page, lead_page, authenticated_page, base_url):
-        # Person mit Personen-Dokumentationstyp in den Papierkorb bringen.
+        # Person mit Personen-Dokumentationstyp in den Papierkorb bringen. Der
+        # Seed legt nur ``entity_type=event``-Typen an, das Personen-Select auf
+        # ``/clients/new/`` hat dann <2 Optionen — deshalb den Typ hier selbst
+        # anlegen (Refs #1737 A), statt den Test auf den Seed hoffen zu lassen
+        # (frueher: ``pytest.skip`` → der Test lief nie).
         admin = authenticated_page
+        doc_type_label = f"E2E-Blocker-Typ-{uuid.uuid4().hex[:6]}"
+        _create_entity_doctype(admin, base_url, doc_type_label, "client")
+
         admin.goto(f"{base_url}/clients/new/")
-        doc_select = admin.locator("select[name='document_type']")
-        if doc_select.count() == 0 or doc_select.locator("option").count() < 2:
-            pytest.skip("Kein Personen-Dokumentationstyp im Seed vorhanden")
         pseudonym = f"E2E-Blocker-{uuid.uuid4().hex[:6]}"
         admin.fill('input[name="pseudonym"]', pseudonym)
-        doc_select.select_option(index=1)
-        doc_type_label = doc_select.locator("option").nth(1).text_content().strip()
+        admin.locator("select[name='document_type']").select_option(label=doc_type_label)
         admin.locator("#main-content button[type='submit']").click()
         admin.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
         detail_url = admin.url
