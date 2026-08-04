@@ -391,7 +391,7 @@ class TestAlpineCspCompatibilityGuard:
     # Attributnamen; ``\s+`` zwischen den beiden Treffern ueberschreitet nie
     # eine Tag-Grenze (dafuer waere ein literales ``>``/``<`` noetig), daher
     # ist kein vollstaendiges Tag-Parsing noetig.
-    _DUPLICATE_ALPINE_EVENT_ATTR = re.compile(r'((?:@|x-on:)[a-zA-Z][\w.\-]*)\s*=\s*"[^"]*"\s+\1\s*=\s*"[^"]*"')
+    _DUPLICATE_ALPINE_EVENT_ATTR = re.compile(r'((?:@|x-on:)[a-zA-Z][\w.:\-]*)\s*=\s*"[^"]*"\s+\1\s*=\s*"[^"]*"')
 
     def test_no_duplicate_alpine_event_attribute_per_tag(self):
         """Ein Tag darf ein Alpine-Event-Attribut (``@change`` etc.) nicht
@@ -419,6 +419,17 @@ class TestAlpineCspCompatibilityGuard:
             "einzelnes Attribut binden.\nRefs #1764.\n"
             f"Betroffen: {violations}"
         )
+
+    def test_duplicate_colon_event_name_is_detected(self):
+        """Review Fix-Runde 2 (#1763): dieselbe ':'-Luecke wie bei
+        ``_ALPINE_EVENT_HANDLER`` (Fix-Runde 1) bestand auch im Namensmuster
+        der Duplikat-Regel — ein doppelt gebundenes kolon-benanntes
+        Custom-Event (HTMX-Events wie ``htmx:after-swap``) entging der
+        Pruefung, weil ``:`` im Attributnamen nicht Teil der Zeichenklasse
+        war."""
+        html = '<div @htmx:after-swap.window="a()" @htmx:after-swap.window="b()"></div>'
+        matches = list(self._DUPLICATE_ALPINE_EVENT_ATTR.finditer(html))
+        assert matches, f"Duplikat-Regex erkennt {html!r} nicht (':' im Event-Namen fehlt)."
 
     def test_no_htmx_inline_handlers_in_templates(self):
         """``hx-on::evt`` Inline-Handler werden intern per ``Function()``
