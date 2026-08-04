@@ -1550,7 +1550,29 @@ python manage.py create_statistics_snapshots --year 2026 --month 2
 
 - **CSV export:** The CSV export still contains only existing events (no snapshot data), because it exports individual rows.
 - **Top persons:** The ranking of the most active persons is always computed live and may change after a deletion.
-- **Distinct persons:** The distinct-person count across multiple months is an approximation (sum, not an exact distinct count).
+- **Distinct persons:** The figure is counted **live** and distinctly across the whole reporting period, not summed from the monthly aggregates (#1770). For periods whose events were removed once the retention deadlines expired it therefore comes out lower than the other figures in the same report; the artefacts flag this at the figure.
+
+### Releasing Reports: What You Need to Know
+
+Statistics artefacts are k-anonymised (values below the threshold are suppressed). That assurance holds **per artefact and per period** — not across several releases. Three operating rules follow from this.
+
+**1. Do not give the activity report PDF and a live export of the same period to the same recipient.**
+
+The PDFs read from the **monthly aggregates** (snapshots); the external report and the CSV/JSON/XML exports query the events **live**. Both routes are intentional: the aggregates outlive the retention deadlines, the live query counts more accurately across the whole period. Precisely for that reason they are not identical — and **the difference between the two figures is a fingerprint of what has been deleted in the meantime**. Anyone who puts both artefacts for the same period side by side can infer individual deleted records from it; k-anonymity does not protect against this, because each artefact on its own is fully anonymous.
+
+Every artefact therefore states **source and as-of date** ("Data source: monthly aggregates", "Monthly aggregates as of: …"). Check that line before you put two reports into the same folder.
+
+**2. Do not choose reporting periods shorter than a month — and keep an eye on overlaps.**
+
+If reports are released for the same facility covering sub-periods **and** their union (twelve monthly reports plus one annual report), every cell suppressed in a sub-report can be recomputed exactly from the sum of the others — even if **not a single** cell was suppressed in any of the reports involved. This is a property of the method, not a defect: k-anonymity is a property of *one* table over *one* population.
+
+The **release overview** (Statistics → "Release overview", role: lead/facility administration) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; overlapping periods sent to *different* recipients are harmless, sent to the same one they are not.
+
+> **Retention:** `EXPORT` entries are **not** truncated by `auditlog_retention_months` — otherwise the overview would pretend to be complete. They contain the period, the format and your recipient/purpose entries, but no personal data. Purpose limitation: evidence of released statistics.
+
+**3. The overview is exactly as complete as the audit trail.**
+
+A forwarded PDF file, a photographed screen or a value copied by hand does not appear there. That is an organisational boundary; the technical trail ends at the download.
 
 ### Admin Interface
 
@@ -1559,4 +1581,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 86f772c35075f7114c7219224ea05af9cf264b10 -->
+<!-- source-hash: 23d67bf41113ddf56eb3f4ad8b8d2e1728b67d70 -->

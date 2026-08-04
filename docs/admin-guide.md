@@ -1552,7 +1552,29 @@ python manage.py create_statistics_snapshots --year 2026 --month 2
 
 - **CSV-Export:** Der CSV-Export enthält weiterhin nur vorhandene Events (keine Snapshot-Daten), da er Einzelzeilen exportiert.
 - **Top-Personen:** Die Rangliste der aktivsten Personen wird immer live berechnet und kann sich nach einer Löschung verändern.
-- **Eindeutige Personen:** Die Zählung über mehrere Monate ist eine Näherung (Summe statt exakte Distinct-Zählung).
+- **Eindeutige Personen:** Die Zahl wird über den gesamten Berichtszeitraum **live** eindeutig gezählt und nicht aus den Monats-Aggregaten summiert (#1770). Für Zeiträume, deren Events nach Ablauf der Löschfristen entfernt wurden, fällt sie deshalb niedriger aus als die übrigen Zahlen desselben Berichts; die Artefakte weisen das an der Zahl aus.
+
+### Herausgabe von Berichten: was Sie wissen müssen
+
+Statistik-Artefakte sind k-anonymisiert (Werte unter der Schwelle werden unterdrückt). Diese Zusicherung gilt **je Artefakt und je Zeitraum** — nicht über mehrere Herausgaben hinweg. Daraus folgen drei Betriebsregeln.
+
+**1. Sachbericht-PDF und Live-Export desselben Zeitraums nicht an denselben Empfänger geben.**
+
+Die PDFs lesen aus den **Monats-Aggregaten** (Snapshots), der externe Bericht und die CSV-/JSON-/XML-Exporte fragen **live** die Ereignisse ab. Beide Wege sind gewollt: die Aggregate überdauern die Löschfristen, die Live-Abfrage zählt über den Gesamtzeitraum genauer. Genau deshalb sind sie aber nicht identisch — und **die Differenz beider Zahlen ist ein Fingerabdruck dessen, was zwischenzeitlich gelöscht wurde**. Wer beide Artefakte desselben Zeitraums nebeneinanderlegt, kann daraus auf einzelne gelöschte Datensätze schließen; k-Anonymität schützt davor nicht, weil beide Artefakte für sich vollständig anonym sind.
+
+Jedes Artefakt weist deshalb **Quelle und Stand** aus („Datenquelle: Monats-Aggregate", „Stand der Monats-Aggregate: …"). Prüfen Sie diese Zeile, bevor Sie zwei Berichte in dieselbe Mappe legen.
+
+**2. Berichtszeiträume nicht unter einem Monat wählen — und Überschneidungen im Blick behalten.**
+
+Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (zwölf Monatsberichte plus ein Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen exakt zurückrechnen — auch dann, wenn in **keinem** der beteiligten Berichte eine einzige Zelle unterdrückt wurde. Das ist eine Eigenschaft des Verfahrens, kein Fehler: k-Anonymität ist eine Eigenschaft *einer* Tabelle über *einer* Grundgesamtheit.
+
+Die **Freigabe-Übersicht** (Statistik → „Freigabe-Übersicht", Rolle: Leitung/Einrichtungsverwaltung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
+
+> **Aufbewahrung:** `EXPORT`-Einträge werden von `auditlog_retention_months` **nicht** gekappt — sonst täuschte die Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format und Ihre Empfänger-/Zweckangaben, aber keine Personendaten. Zweckbindung: Nachweis herausgegebener Statistiken.
+
+**3. Die Übersicht ist genau so vollständig wie die Audit-Spur.**
+
+Eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm oder ein per Hand abgeschriebener Wert erscheinen dort nicht. Das ist eine organisatorische Grenze; die technische Spur endet beim Download.
 
 ### Admin-Oberfläche
 
