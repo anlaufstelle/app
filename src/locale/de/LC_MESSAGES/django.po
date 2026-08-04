@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 16:24+0200\n"
+"POT-Creation-Date: 2026-08-04 17:18+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2578,7 +2578,7 @@ msgstr ""
 #: src/core/reporting/backends/sample_report_1.py:136
 #: src/templates/core/export/sample_report_1_pdf.html:6
 #: src/templates/core/export/sample_report_1_pdf.html:30
-#: src/templates/core/statistics/partials/dashboard_content.html:260
+#: src/templates/core/statistics/partials/dashboard_content.html:263
 msgid "Beispiel-Sachbericht"
 msgstr "Beispiel-Sachbericht"
 
@@ -4089,23 +4089,23 @@ msgid "Keine gültigen Vorschläge gefunden."
 msgstr "Keine gültigen Vorschläge gefunden."
 
 #: src/core/views/statistics.py:202 src/core/views/statistics.py:244
-#: src/core/views/statistics.py:290 src/core/views/statistics.py:526
+#: src/core/views/statistics.py:290 src/core/views/statistics.py:538
 msgid "date_from und date_to erforderlich"
 msgstr "date_from und date_to erforderlich"
 
-#: src/core/views/statistics.py:417
+#: src/core/views/statistics.py:425
 msgid "backend erforderlich"
 msgstr "backend erforderlich"
 
-#: src/core/views/statistics.py:421 src/core/views/statistics.py:537
+#: src/core/views/statistics.py:429 src/core/views/statistics.py:549
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unbekanntes Berichts-Backend."
 
-#: src/core/views/statistics.py:427 src/core/views/statistics.py:540
+#: src/core/views/statistics.py:435 src/core/views/statistics.py:552
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Bericht für diese Einrichtung nicht verfügbar."
 
-#: src/core/views/statistics.py:544
+#: src/core/views/statistics.py:556
 msgid "Unbekanntes Export-Format."
 msgstr "Unbekanntes Export-Format."
 
@@ -7753,47 +7753,47 @@ msgstr "Snapshot"
 msgid "Altersgruppen"
 msgstr "Altersgruppen"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:233
+#: src/templates/core/statistics/partials/dashboard_content.html:236
 #: src/templates/core/statistics/partials/full_content.html:117
 msgid "Empfänger (optional)"
 msgstr "Empfänger (optional)"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:235
+#: src/templates/core/statistics/partials/dashboard_content.html:238
 #: src/templates/core/statistics/partials/full_content.html:119
 msgid "z. B. Stadt Musterstadt"
 msgstr "z. B. Stadt Musterstadt"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:239
+#: src/templates/core/statistics/partials/dashboard_content.html:242
 #: src/templates/core/statistics/partials/full_content.html:127
 msgid "Zweck (optional)"
 msgstr "Zweck (optional)"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:241
+#: src/templates/core/statistics/partials/dashboard_content.html:244
 #: src/templates/core/statistics/partials/full_content.html:129
 msgid "z. B. Verwendungsnachweis 2026"
 msgstr "z. B. Verwendungsnachweis 2026"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:249
+#: src/templates/core/statistics/partials/dashboard_content.html:252
 #: src/templates/core/statistics/partials/report_panel.html:85
 #: src/templates/core/system/auditlog_list.html:16
 msgid "CSV-Export"
 msgstr "CSV-Export"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:253
+#: src/templates/core/statistics/partials/dashboard_content.html:256
 msgid "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
 msgstr "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
 
-#: src/templates/core/statistics/partials/dashboard_content.html:255
+#: src/templates/core/statistics/partials/dashboard_content.html:258
 msgid "PDF-Export"
 msgstr "PDF-Export"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:265
+#: src/templates/core/statistics/partials/dashboard_content.html:268
 #: src/templates/core/statistics/report_releases.html:11
 #: src/templates/core/statistics/report_releases.html:14
 msgid "Freigabe-Übersicht"
 msgstr "Freigabe-Übersicht"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:266
+#: src/templates/core/statistics/partials/dashboard_content.html:269
 msgid "welche Berichtszeiträume wurden bereits herausgegeben?"
 msgstr "welche Berichtszeiträume wurden bereits herausgegeben?"
 
@@ -7928,15 +7928,21 @@ msgstr "Noch keine Herausgabe protokolliert."
 
 #: src/templates/core/statistics/report_releases.html:70
 msgid ""
-"Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf "
-"anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter "
-"Bildschirm — erscheinen hier nicht."
-msgstr ""
-"Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf "
-"anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter "
-"Bildschirm — erscheinen hier nicht."
+"Die Übersicht zeigt Herausgaben ab Einführung dieser Protokollierung. Ältere "
+"Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als "
+"Herausgabe erkennen und erscheinen deshalb nicht hier — nachträglich "
+"nachtragen lässt sich das nicht, weil das Audit-Log unveränderlich ist."
+msgstr "Die Übersicht zeigt Herausgaben ab Einführung dieser Protokollierung. Ältere Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als Herausgabe erkennen und erscheinen deshalb nicht hier — nachträglich nachtragen lässt sich das nicht, weil das Audit-Log unveränderlich ist."
 
-#: src/templates/core/statistics/report_releases.html:74
+#: src/templates/core/statistics/report_releases.html:73
+msgid ""
+"Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten "
+"eines Berichts am Bildschirm ist keine Herausgabe. Weitergaben auf anderem "
+"Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — "
+"erscheinen hier ebenfalls nicht."
+msgstr "Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten eines Berichts am Bildschirm ist keine Herausgabe. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier ebenfalls nicht."
+
+#: src/templates/core/statistics/report_releases.html:77
 msgid "Zurück zur Statistik"
 msgstr "Zurück zur Statistik"
 

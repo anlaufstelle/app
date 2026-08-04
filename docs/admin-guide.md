@@ -1570,15 +1570,25 @@ Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über der
 
 Die **Freigabe-Übersicht** (Statistik → „Freigabe-Übersicht", Rolle: Leitung/Einrichtungsverwaltung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
 
-> **Aufbewahrung:** Audit-Einträge über die Herausgabe eines **Berichtszeitraums** werden von `auditlog_retention_months` **nicht** gekappt — sonst täuschte die Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, Ihre Empfänger-/Zweckangaben und die auslösende Person. Zweckbindung: Nachweis herausgegebener Statistiken.
+> **Aufbewahrung — drei Klassen, nicht zwei.** Unter der Audit-Aktion „Export" laufen drei verschiedene Dinge, und nur das erste ist eine Herausgabe im Sinne dieser Übersicht:
 >
-> Die Ausnahme gilt **nur** für diese Teilmenge: Datenauskünfte zu einzelnen Personen (Art. 15) und DSGVO-Dokument-Downloads werden zwar unter derselben Audit-Aktion protokolliert, tragen aber keinen Berichtszeitraum und unterliegen weiter der normalen Frist.
+> | Klasse | Beispiel | Aufbewahrung | In der Übersicht? |
+> |---|---|---|---|
+> | **Herausgegebene Berichtsdatei** | CSV-/PDF-/JSON-/XML-Download mit Berichtszeitraum | **unbefristet** (nicht von `auditlog_retention_months` gekappt) | ja |
+> | Bericht am **Bildschirm** angesehen | Aufruf des externen Berichts im Browser — auch mit Zeitraum, auch bei jedem Neuladen | normale Frist | nein |
+> | Auskunft/Download **ohne** Berichtszeitraum | Datenauskunft zu einer Person (Art. 15), DSGVO-Dokumente | normale Frist | nein |
+>
+> Ein Berichtszeitraum allein genügt also **nicht** — es muss auch eine Datei herausgegeben worden sein. Ohne die unbefristete Aufbewahrung der ersten Klasse täuschte die Übersicht Vollständigkeit vor; ohne die Befristung der zweiten wüchse das Audit-Log mit jedem Seitenaufruf unbegrenzt.
+>
+> Die unbefristet aufbewahrten Einträge enthalten Zeitraum, Format, Ihre Empfänger-/Zweckangaben und die auslösende Person. Zweckbindung: Nachweis herausgegebener Statistiken.
 >
 > **Empfänger und Zweck sind Freitextfelder.** Die Anwendung prüft ihren Inhalt nicht und kann ihn später nicht mehr ändern (das Audit-Log ist unveränderlich). Tragen Sie deshalb die **Organisation** ein, nicht den Namen einer Ansprechperson — sonst steht ein Personenname dauerhaft im Log.
 
-**3. Die Übersicht ist genau so vollständig wie die Audit-Spur.**
+**3. Die Übersicht hat zwei bekannte Lücken.**
 
-Eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm oder ein per Hand abgeschriebener Wert erscheinen dort nicht. Das ist eine organisatorische Grenze; die technische Spur endet beim Download.
+**Erstens: sie beginnt mit ihrer Einführung.** Die Markierung, an der eine Herausgabe erkennbar ist, gibt es erst seit diesem Release. Herausgaben aus der Zeit davor stehen weiterhin im Audit-Log, lassen sich dort aber nicht als Herausgabe erkennen — sie erscheinen nicht in der Übersicht, sind nicht von der Frist ausgenommen und lösen keine Überschneidungswarnung aus. **Nachtragen ist technisch ausgeschlossen:** das Audit-Log ist unveränderlich und über eine Prüfsummen-Kette gegen nachträgliche Änderungen gesichert; ein Nachtragen wäre von einer Manipulation nicht zu unterscheiden. Rechnen Sie in den ersten Monaten nach dem Update also damit, dass ältere Herausgaben fehlen — die Seite weist darauf hin.
+
+**Zweitens: sie endet beim Download.** Eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm oder ein per Hand abgeschriebener Wert erscheinen dort nicht. Das ist eine organisatorische Grenze.
 
 ### Admin-Oberfläche
 

@@ -1273,12 +1273,27 @@ der Analyse sind erfüllt:
  keine technische Zusicherung. Unter dieser Maßgabe folgt die Aufbewahrung derselben
  Rechenschaftslogik wie `SECURITY_VIOLATION`.
 
+**Rollout-Grenze, ehrlich ausgewiesen — und kein Backfill möglich.** Der Marker
+„herausgegebenes Artefakt" ist mit dieser Welle neu; **keine** vor dem Deploy geschriebene Zeile trägt
+ihn. Bestands-Freigaben sind deshalb weder prune-exempt noch in der Übersicht sichtbar, und eine
+Überlappungswarnung kann gegen sie nicht feuern — für bis zu `auditlog_retention_months` bleibt die
+Übersicht damit unvollständig. **Nachtragen ist ausgeschlossen, nicht bloß unbequem:** `detail` geht in
+den Ketten-Hash ein (`chain._canonical_payload`), eine nachträgliche Markierung bräche also die
+HMAC-Kette ab der geänderten Zeile — genau das, was
+`test_audit_chain.py::TestTamperDetection::test_inplace_detail_mutation_breaks_chain` als Manipulation
+nachweist; sie zu „reparieren" hieße, die Kette vorwärts neu zu schreiben und ihre einzige Eigenschaft
+aufzugeben. Dieselbe Doktrin gilt schon beim Pruning („die Kette wird nie umgeschrieben, der Checkpoint
+legitimiert nur die Lücke"). Die Richtung ist fail-safe (lieber eine Freigabe zu wenig zeigen als eine
+erfinden); die Übersichtsseite und das Admin-Handbuch benennen die Grenze ausdrücklich, statt
+Vollständigkeit zu behaupten. Test-gepinnt in `test_report_release_log.py`
+(`…_altzeilen_vor_der_marker_einfuehrung_…`, roh konstruierte Alt-Schema-Zeile ohne Marker).
+
 **Bewusste Einschränkung der Warnung:** gemeldet werden nur **nicht-identische** Überschneidungen. Aus
 zwei Berichten über *denselben* Zeitraum lässt sich keine Differenz bilden, ganz gleich, an wen sie
 gingen — der zweite ist typischerweise ein erneuter Download. Der Kanal lebt von verschachtelten oder
 teilweise überlappenden Zeiträumen (A ⊊ B), und genau die bleiben stehen; ohne die Einschränkung
-produzierte die Übersicht Alarme ohne Aussage. **Blinder Fleck, ehrlich ausgewiesen:** die Übersicht ist
-genau so vollständig wie die Audit-Spur — eine weitergeleitete PDF-Datei oder ein abfotografierter
+produzierte die Übersicht Alarme ohne Aussage. **Zweiter blinder Fleck (neben der Rollout-Grenze oben):** die
+Übersicht endet beim Download — eine weitergeleitete PDF-Datei oder ein abfotografierter
 Bildschirm erscheinen nicht darin. Das ist eine organisatorische, keine technische Grenze und steht so
 auf der Seite selbst. Test-gepinnt in `test_report_release_log.py`.
 

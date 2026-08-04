@@ -1568,15 +1568,25 @@ If reports are released for the same facility covering sub-periods **and** their
 
 The **release overview** (Statistics → "Release overview", role: lead/facility administration) lists the reporting periods already released, taken from the audit trail, and marks overlaps. It prevents nothing — it shows you where to look. To keep the warning meaningful, fill in the optional **Recipient** and **Purpose** fields on export; overlapping periods sent to *different* recipients are harmless, sent to the same one they are not.
 
-> **Retention:** Audit entries about the release of a **reporting period** are **not** truncated by `auditlog_retention_months` — otherwise the overview would pretend to be complete. They contain the period, the format, your recipient/purpose entries and the person who triggered the export. Purpose limitation: evidence of released statistics.
+> **Retention — three classes, not two.** Three different things are logged under the "Export" audit action, and only the first is a release in the sense of this overview:
 >
-> The exception applies to **that subset only**: data subject access requests for individual people (Art. 15) and GDPR document downloads are logged under the same audit action but carry no reporting period, so the normal deadline still applies to them.
+> | Class | Example | Retention | In the overview? |
+> |---|---|---|---|
+> | **Released report file** | CSV/PDF/JSON/XML download with a reporting period | **indefinite** (not truncated by `auditlog_retention_months`) | yes |
+> | Report viewed **on screen** | opening the external report in the browser — even with a period, and on every reload | normal deadline | no |
+> | Access request/download **without** a reporting period | data subject access request for a person (Art. 15), GDPR documents | normal deadline | no |
+>
+> A reporting period alone is therefore **not** enough — a file must actually have been released. Without the indefinite retention of the first class the overview would pretend to be complete; without the deadline on the second the audit log would grow without limit on every page view.
+>
+> The indefinitely retained entries contain the period, the format, your recipient/purpose entries and the person who triggered the export. Purpose limitation: evidence of released statistics.
 >
 > **Recipient and purpose are free-text fields.** The application does not check their content and cannot change it later (the audit log is immutable). Enter the **organisation**, not the name of a contact person — otherwise a person's name stays in the log permanently.
 
-**3. The overview is exactly as complete as the audit trail.**
+**3. The overview has two known gaps.**
 
-A forwarded PDF file, a photographed screen or a value copied by hand does not appear there. That is an organisational boundary; the technical trail ends at the download.
+**First: it starts when it was introduced.** The marker that identifies a release only exists as of this release. Releases from before that are still in the audit log but cannot be recognised as releases there — they do not appear in the overview, are not exempt from the deadline and do not trigger an overlap warning. **Adding them retroactively is technically impossible:** the audit log is immutable and protected against later changes by a checksum chain; adding an entry would be indistinguishable from tampering. So expect older releases to be missing for the first few months after the update — the page says so itself.
+
+**Second: it ends at the download.** A forwarded PDF file, a photographed screen or a value copied by hand does not appear there. That is an organisational boundary.
 
 ### Admin Interface
 
@@ -1585,4 +1595,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 1944a2c1643b4a605346e7ece779392216eea206 -->
+<!-- source-hash: 3a7446e9f05600d5bf4ca9e7b74ad2769c8ce211 -->

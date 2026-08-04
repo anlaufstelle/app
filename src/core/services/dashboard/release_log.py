@@ -41,6 +41,31 @@ Berichts. Eine Berichts-Freigabe erkennt man deshalb an zwei Dingen, die beide i
 Konsumenten (Übersicht und Retention-Ausnahme) lesen sie von dort. Zwei Kopien
 wären zwei Wahrheiten: eine Zeile, die die Übersicht führt, aber das Pruning
 löscht, macht die Übersicht still unvollständig.
+
+**Rollout-Grenze — kein Backfill möglich, und das ist keine Bequemlichkeit.**
+:data:`RELEASE_ARTIFACT_KEY` ist neu; **keine** vor seiner Einführung
+geschriebene Zeile trägt ihn. Bestands-Freigaben sind deshalb weder
+prune-exempt noch in der Übersicht sichtbar — für bis zu
+``auditlog_retention_months`` laufen sie wie bisher aus dem Log, und eine
+Überlappungswarnung kann gegen sie nicht feuern. Nachtragen ist **ausgeschlossen**:
+
+* ``AuditLog.save()`` verbietet Updates, und der DB-Trigger ``auditlog_immutable``
+  steht auf ``ENABLE ALWAYS`` (nur die Owner-Rolle könnte ihn abschalten);
+* vor allem geht ``detail`` in den Ketten-Hash ein
+  (``core.services.audit.chain._canonical_payload``). Eine nachträgliche
+  Markierung bräche die HMAC-Kette ab der geänderten Zeile — genau das, was
+  ``test_audit_chain.py::TestTamperDetection::test_inplace_detail_mutation_breaks_chain``
+  als Manipulation nachweist. Sie zu „reparieren" hieße, die Kette vorwärts
+  neu zu schreiben, und damit ihre einzige Eigenschaft aufzugeben: dass
+  Vergangenes nicht unbemerkt änderbar ist. Dieselbe Doktrin gilt schon beim
+  Pruning („die Kette wird nie umgeschrieben, der Checkpoint legitimiert nur
+  die Lücke", :mod:`core.retention.audit_pruning`).
+
+Die Richtung ist fail-safe (lieber eine Freigabe zu wenig zeigen als eine
+erfinden), aber sie macht die Übersicht in den ersten Monaten unvollständig.
+Deshalb sagt die Seite es selbst, statt Vollständigkeit zu behaupten; die
+Betreiber-Doku nennt dieselbe Grenze. Test-gepinnt in
+``test_report_release_log.py`` (``…_altzeilen_vor_der_marker_einfuehrung_…``).
 """
 
 from __future__ import annotations
@@ -202,11 +227,12 @@ def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT) -> list[Rel
     des externen Berichts — letztere verdrängten sonst bei
     :data:`RELEASE_LOG_LIMIT` die echten Downloads aus dem Auswertungsfenster.
 
-    Die Übersicht ist damit genau so vollständig wie die Audit-Spur der
-    Berichts-Exporte; ihr blinder Fleck sind Artefakte, die auf anderem Weg
-    weitergegeben wurden (abfotografierter Bildschirm, weitergeleitete
-    PDF-Datei) — das ist eine organisatorische, keine technische Grenze und
-    gehört so in die Betreiber-Doku.
+    Zwei blinde Flecken, beide bewusst und beide auf der Seite selbst
+    ausgewiesen: Herausgaben aus der Zeit **vor** der Markierung (Rollout-Grenze,
+    siehe Modul-Docstring — kein Backfill möglich) und Artefakte, die auf
+    anderem Weg weitergegeben wurden (abfotografierter Bildschirm,
+    weitergeleitete PDF-Datei). Der zweite ist eine organisatorische, keine
+    technische Grenze.
     """
     entries = AuditLog.objects.for_facility(facility).filter(RELEASE_EXPORT_Q).order_by("-timestamp")[:limit]
     releases = [_as_release(entry) for entry in entries]

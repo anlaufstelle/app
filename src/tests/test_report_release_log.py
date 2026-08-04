@@ -47,6 +47,25 @@ def _export(facility, user, date_from, date_to, **detail):
     )
 
 
+def _alt_zeile_vor_marker_einfuehrung(facility, user, date_from, date_to):
+    """Eine Download-Zeile aus der Zeit **vor** dem Artefakt-Marker.
+
+    Bewusst roh ueber ``AuditLog.objects.create`` konstruiert, NICHT ueber
+    ``_export`` — genau so sehen die Bestandszeilen nach dem Deploy aus:
+    Berichtszeitraum ja, Download-Format ja, Marker nein (den gab es damals
+    nicht). Nachtraeglich markieren laesst sich das nicht (append-only +
+    HMAC-Kette, siehe Modul-Docstring von ``release_log``), also muss das
+    Verhalten fail-safe und **bekannt** sein.
+    """
+    return AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.EXPORT,
+        target_type="PDF",
+        detail={"format": "PDF", "date_from": date_from, "date_to": date_to},
+    )
+
+
 def _bildschirm_aufruf(facility, user, date_from, date_to):
     """Ein On-Screen-Aufruf des externen Berichts — **keine** Herausgabe.
 
@@ -278,6 +297,26 @@ class TestUeberlappungswarnung:
         assert releases[0].date_from == date(2026, 3, 1)
         assert not releases[0].overlaps, "ein Bildschirmaufruf darf keine Ueberlappung ausloesen"
 
+    def test_altzeilen_vor_der_marker_einfuehrung_sind_nicht_gelistet(self, facility, lead_user):
+        """**Rollout-Grenze, bewusst so und offengelegt.** Der Artefakt-Marker
+        ist neu; keine vor dem Deploy geloggte Zeile traegt ihn, und
+        nachtraeglich markieren laesst sich nichts (append-only + HMAC-Kette).
+
+        Die Uebersicht zeigt deshalb Freigaben **ab Einfuehrung der Markierung**
+        — die Seite sagt das ausdruecklich, statt Vollstaendigkeit zu
+        behaupten. Fail-safe ist die Richtung richtig (lieber eine Freigabe zu
+        wenig zeigen als eine erfinden); der Preis ist eine
+        Ueberlappungswarnung, die gegen Alt-Freigaben nicht feuern kann.
+        """
+        _alt_zeile_vor_marker_einfuehrung(facility, lead_user, "2026-01-01", "2026-12-31")
+        _export(facility, lead_user, "2026-03-01", "2026-03-31")
+
+        releases = build_release_overview(facility)
+
+        assert len(releases) == 1
+        assert releases[0].date_from == date(2026, 3, 1)
+        assert not releases[0].overlaps, "gegen eine Alt-Freigabe kann die Warnung nicht feuern"
+
     def test_uebersicht_ist_facility_gescopt(self, facility, second_facility, lead_user, second_facility_user):
         _export(facility, lead_user, "2026-01-01", "2026-12-31")
         _export(second_facility, second_facility_user, "2026-03-01", "2026-03-31")
@@ -409,6 +448,36 @@ class TestExportUeberlebtDieAuditRetention:
         assert result["count"] == 1
         assert not AuditLog.objects.filter(pk=ansicht.pk).exists(), "Bildschirmaufrufe bleiben befristet"
         assert AuditLog.objects.filter(pk=download.pk).exists(), "das herausgegebene Artefakt bleibt"
+
+    def test_altzeilen_vor_der_marker_einfuehrung_bleiben_befristet(self, facility, settings_obj, lead_user):
+        """Die Kehrseite derselben Rollout-Grenze: Bestands-Freigaben laufen
+        nach der normalen Frist aus dem Log.
+
+        Das ist **kein** zusaetzlicher Datenverlust — es ist genau das
+        Verhalten, das vor dieser Welle galt. Ein Backfill waere der einzige
+        Weg dagegen und ist ausgeschlossen: ``detail`` geht in den
+        Ketten-Hash ein (``test_audit_chain.py::test_inplace_detail_mutation_breaks_chain``),
+        eine nachtraegliche Markierung braeche also die Tamper-Evidenz.
+        """
+        from django.db import connection
+
+        from core.retention.audit_pruning import prune_auditlog
+
+        if connection.vendor != "postgresql":
+            pytest.skip("prune_auditlog erfordert PostgreSQL")
+
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        now = timezone.now()
+        alt = _alt_zeile_vor_marker_einfuehrung(facility, lead_user, "2020-01-01", "2020-12-31")
+        neu = _export(facility, lead_user, "2020-01-01", "2020-12-31")
+        self._veralten(now, alt, neu)
+
+        result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        assert result["count"] == 1
+        assert not AuditLog.objects.filter(pk=alt.pk).exists()
+        assert AuditLog.objects.filter(pk=neu.pk).exists()
 
     def test_die_uebersicht_findet_den_alten_eintrag_noch(self, facility, lead_user):
         _export(facility, lead_user, "2020-01-01", "2020-12-31")
