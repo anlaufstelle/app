@@ -209,6 +209,76 @@ _CASE_OPEN = """
 """
 
 
+# Anker der ~20 Konfigurations-Endpoints (Refs #1783). Alle URLs dort setzen
+# ``pk`` = Dokumentationstyp und kombinieren ihn mit einem KIND desselben Typs
+# (``dtf_pk``/``group_pk``/``condition_pk``, Views lookup-en strikt
+# ``get_object_or_404(..., document_type=doc_type)``). Deshalb wird der Typ
+# zuerst geerntet und die Kind-Queries pinnen sich per %(doc_type_contact)s.
+#
+# Die vier Bedingungen sind NICHT kosmetisch:
+#
+# * ``core_fieldgroup``/mindestens 3 Feld-Zuordnungen — sonst haetten
+#   ``field_group`` bzw. ``doc_type_field`` kein Objekt (zwei DTFs traegt schon
+#   die Bedingung, die dritte ist die frei konsumierbare Zuordnung).
+# * mindestens ein Ereignis — ``config_doctype_delete`` POST laeuft in der
+#   Matrix als ERLAUBTE Zelle (facility_admin steht in ``ROLES`` an erster
+#   Stelle). Nur mit Bestandsreferenz greift der PROTECT-Blocker
+#   (``config_service.delete_document_type``) und der Anker ueberlebt seine
+#   eigene Loeschzelle; sonst faenden ALLE nachfolgenden config-Zellen 404 und
+#   der Report waere voller Falschmeldungen.
+# * mindestens ein zulaessiges Quellfeld — Voraussetzung fuer die Bedingung,
+#   die ``prepare_audit_objects`` anlegt (der Seed-Katalog kennt keine).
+_CONFIG_DOC_TYPE = """
+    SELECT dt.id FROM core_documenttype dt
+    WHERE dt.facility_id = %(fac)s
+      AND EXISTS (SELECT 1 FROM core_fieldgroup g WHERE g.document_type_id = dt.id)
+      AND EXISTS (SELECT 1 FROM core_event e WHERE e.document_type_id = dt.id)
+      AND (SELECT count(*) FROM core_documenttypefield f WHERE f.document_type_id = dt.id) >= 3
+      AND EXISTS (
+          SELECT 1 FROM core_documenttypefield f
+          JOIN core_fieldtemplate t ON t.id = f.field_template_id
+          WHERE f.document_type_id = dt.id AND t.field_type <> 'file' AND NOT t.is_encrypted
+      )
+    ORDER BY dt.id LIMIT 1
+"""
+
+# Quell-/Zielfeld der Audit-Bedingung: das Quellfeld muss ein zulaessiger
+# Bedingungs-Quelltyp und unverschluesselt sein (core/services/conditions.py:
+# ALLOWED_SOURCE_FIELD_TYPES = alles ausser ``file``), das Zielfeld irgendein
+# anderes Feld desselben Typs (CheckConstraint fieldcondition_no_self_reference).
+_CONDITION_SOURCE_FIELD = f"""
+    SELECT f.id FROM core_documenttypefield f
+    JOIN core_fieldtemplate t ON t.id = f.field_template_id
+    WHERE f.document_type_id = ({_CONFIG_DOC_TYPE})
+      AND t.field_type <> 'file' AND NOT t.is_encrypted
+    ORDER BY f.id LIMIT 1
+"""  # noqa: S608 — nur statische Fragmente, keine Userdaten.
+
+_CONDITION_TARGET_FIELD = f"""
+    SELECT f.id FROM core_documenttypefield f
+    WHERE f.document_type_id = ({_CONFIG_DOC_TYPE})
+      AND f.id <> ({_CONDITION_SOURCE_FIELD})
+    ORDER BY f.id LIMIT 1
+"""  # noqa: S608 — nur statische Fragmente, keine Userdaten.
+
+# Der Seed-Katalog (core/packages/default.yaml) deklariert KEINE ``conditions``
+# — ohne diesen Schritt gaebe es fuer ``field_condition`` nie ein Objekt.
+# ``is_not_empty`` ist bewusst gewaehlt: der Operator ist fuer JEDEN zulaessigen
+# Quelltyp erlaubt und braucht keinen ``value`` (VALUELESS_OPERATORS), die
+# Bedingung ist damit unabhaengig vom konkreten Katalog fachlich gueltig.
+# Idempotent ueber NOT EXISTS auf denselben Dokumentationstyp.
+_ENSURE_CONFIG_CONDITION = f"""
+    INSERT INTO core_fieldcondition (id, target_field_id, depends_on_field_id, operator, value, group_index)
+    SELECT gen_random_uuid(), tgt.id, src.id, 'is_not_empty', NULL, 0
+    FROM ({_CONDITION_SOURCE_FIELD}) AS src(id), ({_CONDITION_TARGET_FIELD}) AS tgt(id)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM core_fieldcondition c
+        JOIN core_documenttypefield f ON f.id = c.target_field_id
+        WHERE f.document_type_id = ({_CONFIG_DOC_TYPE})
+    )
+"""  # noqa: S608 — nur statische Fragmente, keine Userdaten.
+
+
 def _owner_attachment_source(owner_column):
     """Erster owner-eigener Anhang der Facility (``client``/``case``)."""
     return f"""
@@ -265,6 +335,10 @@ def prepare_audit_objects(conn, fac_id):
        fail-closed 404, ADR-039 §12 Stufe 2), dann den Anhang umhängen —
        Muster von Schritt 3. Idempotent: nach dem ersten Lauf sind Quelle und
        Ziel identisch, beide UPDATEs werden zu No-ops.
+    9. Eine ``FieldCondition`` am Konfigurations-Anker (M24-Folge, Refs #1783):
+       der Seed-Katalog deklariert keine ``conditions``, die vier
+       Regel-Editor-Endpoints wären ohne diesen Schritt dauerhaft
+       unerntbar. Siehe ``_ENSURE_CONFIG_CONDITION``.
     """
     cur = _superuser_cursor(conn)
     params = {"fac": fac_id}
@@ -405,6 +479,8 @@ def prepare_audit_objects(conn, fac_id):
             """,  # noqa: S608
             params,
         )
+    # 9. Feldbedingung am Konfigurations-Anker (Refs #1783).
+    cur.execute(_ENSURE_CONFIG_CONDITION, params)
 
 
 # SQL pro Fixture-Name aus der Erwartungs-Tabelle. %(fac)s = Facility-ID.
@@ -507,6 +583,46 @@ HARVEST_SQL = {
           AND a.case_id = %(case_open)s
         ORDER BY a.id LIMIT 1
     """,
+    # ---- Konfigurations-Endpoints (Refs #1783) ----------------------------
+    # Bis dahin die einzige benannte Blindstelle des Live-Audits
+    # (``LIVE_AUDIT_UNHARVESTED``): ~20 Endpoints liefen als SETUP-ERROR, also
+    # ungeprüft, unter der 10%-Schwelle des Struktur-Asserts.
+    # ``doc_type_contact`` MUSS vor seinen drei Kind-Queries stehen (siehe
+    # ``_HARVEST_ORDER``-Guard) — sie pinnen sich per %(doc_type_contact)s auf
+    # genau diesen Typ, weil die Views das Kind strikt am Elternteil suchen.
+    "doc_type_contact": _CONFIG_DOC_TYPE,
+    # Feld-Zuordnung, die KEINE Bedingung trägt: ``config_doctype_field_remove``
+    # POST löscht sie (erlaubte Zelle), und ein CASCADE über
+    # ``target_field``/``depends_on_field`` würde die Bedingung mitreißen — die
+    # ``config_condition_*``-Zellen stehen in EXPECTATIONS danach und fänden
+    # dann 404 (Falschmeldung auf einer Allow-Zelle).
+    "doc_type_field": """
+        SELECT f.id FROM core_documenttypefield f
+        WHERE f.document_type_id = %(doc_type_contact)s
+          AND NOT EXISTS (
+              SELECT 1 FROM core_fieldcondition c
+              WHERE c.target_field_id = f.id OR c.depends_on_field_id = f.id
+          )
+        ORDER BY f.id LIMIT 1
+    """,
+    "field_group": "SELECT id FROM core_fieldgroup WHERE document_type_id = %(doc_type_contact)s ORDER BY id LIMIT 1",
+    "field_condition": """
+        SELECT c.id FROM core_fieldcondition c
+        JOIN core_documenttypefield f ON f.id = c.target_field_id
+        WHERE f.document_type_id = %(doc_type_contact)s
+        ORDER BY c.id LIMIT 1
+    """,
+    # Feldvorlage MIT Zuordnung: ``config_fieldtemplate_delete`` POST ist eine
+    # erlaubte Zelle und läuft VOR ``config_fieldtemplate_toggle``. Nur mit
+    # mindestens einer DocumentTypeField-Zuordnung greift der Lösch-Blocker
+    # (``config_service.field_template_delete_blockers``) und die Vorlage
+    # überlebt bis zur Toggle-Zelle.
+    "field_template": """
+        SELECT t.id FROM core_fieldtemplate t
+        WHERE t.facility_id = %(fac)s
+          AND EXISTS (SELECT 1 FROM core_documenttypefield f WHERE f.field_template_id = t.id)
+        ORDER BY t.id LIMIT 1
+    """,
     "audit_entry": "SELECT id FROM core_auditlog WHERE facility_id = %(fac)s ORDER BY id LIMIT 1",
     "retention_proposal": (
         "SELECT id FROM core_retentionproposal WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
@@ -519,13 +635,21 @@ HARVEST_SQL = {
     ),
 }
 
-# Drift-Guard für die Zweiphasen-Ernte: case_open muss vor den Queries
-# liegen, die %(case_open)s referenzieren (harvest_ids füllt es on-the-fly).
+# Eltern-Namen, deren geerntete ID den NACHFOLGENDEN Queries als
+# gleichnamiger Parameter zur Verfügung steht (``harvest_ids`` füllt sie
+# on-the-fly). Werte: die Kind-Queries, die den Parameter referenzieren — der
+# Drift-Guard darunter pinnt die Reihenfolge im Dict.
+_CHAINED_PARENTS = {
+    "case_open": ("episode", "outcome_goal", "milestone", "authz_case_attachment"),
+    # Refs #1783: die drei Kinder des Konfigurations-Ankers.
+    "doc_type_contact": ("doc_type_field", "field_group", "field_condition"),
+}
+
 _HARVEST_ORDER = list(HARVEST_SQL)
-assert all(
-    _HARVEST_ORDER.index("case_open") < _HARVEST_ORDER.index(name)
-    for name in ("episode", "outcome_goal", "milestone", "authz_case_attachment")
-), "HARVEST_SQL: case_open muss vor episode/outcome_goal/milestone/authz_case_attachment stehen"
+for _parent, _children in _CHAINED_PARENTS.items():
+    assert all(_HARVEST_ORDER.index(_parent) < _HARVEST_ORDER.index(_child) for _child in _children), (
+        f"HARVEST_SQL: {_parent} muss vor {', '.join(_children)} stehen"
+    )
 
 # Audit-Pendants der Unit-Fixture-Namen für IDOR (foreign_X in Facility 2 = X-SQL dort).
 FOREIGN_ALIASES = {
@@ -546,27 +670,37 @@ FOREIGN_ALIASES = {
     "foreign_retention_proposal": "retention_proposal",
     "foreign_legal_hold": "legal_hold",
     "foreign_deletion_request": "deletion_request",
+    # Konfigurations-Endpoints (Refs #1783). Der Unit-Fixture-Name des fremden
+    # Dokumentationstyps heisst ``foreign_doc_type`` (ohne ``_contact``) — die
+    # Alias-Tabelle ist genau fuer solche Namensbrueche da.
+    "foreign_doc_type": "doc_type_contact",
+    "foreign_doc_type_field": "doc_type_field",
+    "foreign_field_group": "field_group",
+    "foreign_field_condition": "field_condition",
+    "foreign_field_template": "field_template",
 }
 
 
 def harvest_ids(conn, fac_id):
     """``fixture_name → id`` (oder ``None`` = SETUP-ERROR-Zelle im Report).
 
-    Zweiphasig: sobald ``case_open`` geerntet ist, steht seine ID den
-    nachfolgenden Queries als ``%(case_open)s`` zur Verfügung (Episode/Goal/
-    Milestone müssen im SELBEN Fall liegen — Views lookup-en case-gebunden).
-    Dict-Reihenfolge von HARVEST_SQL stellt sicher, dass case_open vor den
-    abhängigen Queries läuft; psycopg ignoriert überzählige Mapping-Keys.
+    Mehrphasig: sobald ein Eltern-Name aus ``_CHAINED_PARENTS`` geerntet ist,
+    steht seine ID den nachfolgenden Queries als gleichnamiger Parameter zur
+    Verfügung — Episode/Goal/Milestone müssen im SELBEN Fall liegen,
+    Feld-Zuordnung/-Gruppe/-Bedingung am SELBEN Dokumentationstyp (die Views
+    suchen das Kind strikt am Elternteil). Die Dict-Reihenfolge von
+    ``HARVEST_SQL`` stellt sicher, dass die Eltern vorher laufen
+    (``_HARVEST_ORDER``-Guard); psycopg ignoriert überzählige Mapping-Keys.
     """
     cur = _superuser_cursor(conn)
     out = {}
-    params = {"fac": fac_id, "case_open": None}
+    params = {"fac": fac_id, **dict.fromkeys(_CHAINED_PARENTS)}
     for name, sql in HARVEST_SQL.items():
         cur.execute(sql, params)
         row = cur.fetchone()
         out[name] = row[0] if row else None
-        if name == "case_open":
-            params["case_open"] = out[name]
+        if name in _CHAINED_PARENTS:
+            params[name] = out[name]
     return out
 
 

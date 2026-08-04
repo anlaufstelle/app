@@ -196,6 +196,10 @@ Gated über die Env-Var `AUTHZ_AUDIT=1` (`skipif`) + Marker `authz_audit`. Serie
 
 **Fail-open mit Report:** Der Lauf **failt nicht** bei AuthZ-Abweichungen — diese landen als „ABWEICHUNG" im generierten Markdown-Report (`docs/archive/audits/2026-06-12-a1-laufzeit-authz-matrix.md`). Der eigentliche Regressionsschutz ist die schnelle Unit-Matrix (`test_authz_matrix.py`); der Live-Audit ist das periodische Vollbild. Er failt nur bei **strukturellem** Versagen (Schwellen: > 850 geprüfte Zeilen, < 10 % Setup-/Request-Fehler). Destruktive POSTs werden über `DESTRUCTIVE_RESET`-Hooks zurückgesetzt.
 
+**Keine erlaubten Blindstellen mehr** (#1783): Fixture-Namen ohne `HARVEST_SQL`-Query bzw. `FOREIGN_ALIASES`-Eintrag liefen früher still als SETUP-ERROR durch — unter der 10-%-Schwelle also *ungeprüft*, ohne dass etwas rot wurde. Die letzte solche Bestandslücke (die ~20 Konfigurations-Endpoints) ist geschlossen, die benannte Allowlist `LIVE_AUDIT_UNHARVESTED` ersatzlos entfallen. Zwei Guards halten das: `test_every_fixture_reference_is_live_harvestable` (jeder Name der Erwartungs-Tabelle ist erntbar, **ohne Ausnahme**) und `test_no_stale_harvest_entries` (keine Query ohne Abnehmer). Ein dritter, `TestLiveAuditHarvestQueriesRunAgainstTheSchema`, führt jede Query im normalen Unit-Lauf gegen das echte Schema aus — sonst fiele ein Tippfehler erst beim nächsten manuellen Audit auf, und dann als stille SETUP-ERROR-Zelle.
+
+Nicht alle Matrix-Objekte liefert der Seed: `prepare_audit_objects` bessert je Facility idempotent nach (Papierkorb-Person, vertragskonformes Ereignis samt Anhang, Owner-Zuordnung der personen-/falleigenen Anhänge — und seit #1783 eine `FieldCondition` am Konfigurations-Anker, weil `core/packages/default.yaml` keine `conditions` deklariert).
+
 Schritt-für-Schritt-Bedienung + Debugging: siehe [e2e-runbook.md](e2e-runbook.md).
 
 ---

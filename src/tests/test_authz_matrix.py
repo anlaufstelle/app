@@ -6,8 +6,11 @@ Eintrag / Eintrag ohne Pattern), damit neue Endpoints eine bewusste
 AuthZ-Deklaration erzwingen.
 """
 
+import uuid
+
 import pytest
 from django.conf import settings
+from django.db import DatabaseError, connection
 from django.urls import get_resolver, reverse
 from django.urls.resolvers import URLPattern, URLResolver
 
@@ -25,31 +28,15 @@ EXCLUDED_ROUTE_PREFIXES = ("i18n/",)
 # Permanente Redirects ohne eigene AuthZ-Logik (RedirectView, Refs core/urls.py).
 UNNAMED_ALLOWLIST = {"aktivitaetslog/", "timeline/"}
 
-# Fixture-Namen, die der Live-Audit (tests/e2e/test_authz_audit.py) BEWUSST
-# nicht erntet — ihre Zellen laufen dort als SETUP-ERROR (Refs #1738).
-#
-# Es sind ausschliesslich die Konfigurations-Endpoints (Dokumentationstyp,
-# Feldvorlage, Feldgruppe, Feldbedingung). Diese Luecke ist **Bestand** und
-# aelter als M24; sie wird hier nur sichtbar gemacht, nicht geschlossen — jede
-# der Queries braucht eine eigene Vertragsentscheidung (welcher Typ, welche
-# Sensitivitaet, welches Kind am selben Elternteil), das gehoert in ein eigenes
-# Ticket. Neue Namen gehoeren NICHT hierher, sondern in HARVEST_SQL /
-# FOREIGN_ALIASES; ``test_unharvested_allowlist_is_not_stale`` haelt die Liste
-# sauber.
-LIVE_AUDIT_UNHARVESTED = frozenset(
-    {
-        "doc_type_contact",
-        "doc_type_field",
-        "field_condition",
-        "field_group",
-        "field_template",
-        "foreign_doc_type",
-        "foreign_doc_type_field",
-        "foreign_field_condition",
-        "foreign_field_group",
-        "foreign_field_template",
-    }
-)
+# Frueher stand hier ``LIVE_AUDIT_UNHARVESTED`` — eine benannte Allowlist mit
+# den zehn Konfigurations-Fixture-Namen (Dokumentationstyp, Feldvorlage,
+# Feldgruppe, Feldbedingung + foreign-Pendants), deren Endpoints der Live-Audit
+# (``AUTHZ_AUDIT=1``) nie probte. Mit Refs #1783 sind sie erntbar
+# (``_authz_audit_helpers``: ``_CONFIG_DOC_TYPE`` + die drei Kind-Queries,
+# ``_ENSURE_CONFIG_CONDITION``), und die Allowlist ist ersatzlos entfallen:
+# ``test_every_fixture_reference_is_live_harvestable`` kennt damit KEINE
+# Ausnahme mehr. Ein neuer Fixture-Name in der Erwartungs-Tabelle braucht
+# seither zwingend einen HARVEST_SQL- oder FOREIGN_ALIASES-Eintrag.
 
 
 def _referenced_fixture_names():
@@ -157,26 +144,67 @@ class TestCompletenessGate:
         ``url_kwargs``/``idor`` (Literale ohne Punkt sind keine Fixture-Refs)
         muss entweder direkt geerntet werden oder ueber einen Foreign-Alias
         aufloesbar sein.
+
+        Refs #1783: **ohne Ausnahmeliste.** Die frueher hier abgezogene
+        Bestands-Allowlist (zehn Konfigurations-Namen) ist geschlossen; ein
+        neuer Name kann sich seither nicht mehr an diesem Guard vorbeimelden.
         """
         referenced = _referenced_fixture_names()
         resolvable = set(helpers.HARVEST_SQL) | set(helpers.FOREIGN_ALIASES)
-        missing = referenced - resolvable - LIVE_AUDIT_UNHARVESTED
+        missing = referenced - resolvable
         assert not missing, (
             "Fixture-Namen ohne HARVEST_SQL/FOREIGN_ALIASES-Eintrag — der Live-Audit "
             f"wuerde diese Endpoints still als SETUP-ERROR ueberspringen: {sorted(missing)}"
         )
 
-    def test_unharvested_allowlist_is_not_stale(self):
-        """Die Allowlist darf nicht verrotten (Refs #1738).
+    def test_no_stale_harvest_entries(self):
+        """Gegenrichtung: geerntet wird nur, was die Erwartungs-Tabelle nutzt.
 
-        Wird ein bislang blinder Name spaeter doch geerntet oder faellt sein
-        Endpoint aus der Tabelle, muss der Eintrag hier verschwinden — sonst
-        verdeckt die Allowlist irgendwann echte neue Blindstellen.
+        Refs #1783 — an die Stelle der abgeschafften Allowlist tritt der
+        Drift-Guard in die andere Richtung: eine ``HARVEST_SQL``-Query ohne
+        Abnehmer laeuft in jedem Audit-Lauf mit und verrottet still, wenn ihr
+        Endpoint aus der Tabelle faellt.
         """
         referenced = _referenced_fixture_names()
-        resolvable = set(helpers.HARVEST_SQL) | set(helpers.FOREIGN_ALIASES)
-        stale = {name for name in LIVE_AUDIT_UNHARVESTED if name not in referenced or name in resolvable}
-        assert not stale, f"LIVE_AUDIT_UNHARVESTED-Eintraege ohne Blindstelle (Drift): {sorted(stale)}"
+        harvested = set(helpers.HARVEST_SQL) | set(helpers.FOREIGN_ALIASES)
+        stale = harvested - referenced
+        assert not stale, f"HARVEST_SQL/FOREIGN_ALIASES-Eintraege ohne Abnehmer in EXPECTATIONS: {sorted(stale)}"
+
+
+@pytest.mark.django_db
+class TestLiveAuditHarvestQueriesRunAgainstTheSchema:
+    """Die Harvest-Queries laufen sonst NUR im manuellen Live-Audit (Refs #1783).
+
+    Ein Tippfehler in einem Tabellen-/Spaltennamen oder eine Schema-Drift
+    (umbenannte Spalte, entfallenes Feld) faellt dort erst Monate spaeter auf —
+    und dann als **stille** SETUP-ERROR-Zelle unter der 10%-Schwelle des
+    Struktur-Asserts, also genau in der Blindstellen-Klasse, die
+    ``test_every_fixture_reference_is_live_harvestable`` schliessen soll. Hier
+    laufen sie gegen das echte Testschema; das Ergebnis interessiert nicht, nur
+    dass Postgres sie annimmt.
+
+    Die Eltern-Parameter stehen bewusst auf ``None`` (kein Fixture-Setup): eine
+    ``= NULL``-Vergleichsklausel ist syntaktisch vollwertig und liefert leer.
+    """
+
+    _PARAMS = {"fac": uuid.UUID(int=0), **dict.fromkeys(helpers._CHAINED_PARENTS)}
+
+    def test_every_harvest_query_is_valid_sql(self):
+        for name, sql in helpers.HARVEST_SQL.items():
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute(sql, self._PARAMS)
+                    cursor.fetchall()
+                except DatabaseError as exc:  # pragma: no cover - Fehlerpfad
+                    # Fail-fast: die Transaktion ist nach dem ersten Fehler
+                    # ohnehin vergiftet, weitere Queries saehen nur Folgefehler.
+                    pytest.fail(f"HARVEST_SQL[{name!r}] laeuft nicht gegen das Schema: {exc}")
+
+    def test_ensure_config_condition_is_valid_sql(self):
+        """Der einzige INSERT in ``prepare_audit_objects`` (Refs #1783)."""
+        with connection.cursor() as cursor:
+            cursor.execute(helpers._ENSURE_CONFIG_CONDITION, self._PARAMS)
+            assert cursor.rowcount == 0, "Platzhalter-Facility duerfte keine Bedingung erzeugen"
 
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
