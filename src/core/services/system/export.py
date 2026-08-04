@@ -242,6 +242,7 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
         ALL_EVENTS,
         DATA_SOURCE_EXPLANATIONS,
         DATA_SOURCE_NOTES,
+        EVENTS_WITH_PERSON,
         SNAPSHOT_HYBRID,
         table_note,
     )
@@ -270,13 +271,17 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
             "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
             "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
             # K3-A3 (Refs #1770): Jede Tabelle benennt ihre Grundgesamtheit.
-            # Beide zaehlen hier **alle** Ereignisse des Zeitraums — die
-            # Alterstabelle erst, seit die Restzeile "ohne Personenbezug"
-            # mitlaeuft (K3-A1); ohne sie waeren es zwei verschiedene
-            # Basismengen ohne jeden Hinweis darauf.
+            # Die Alterstabelle zaehlt **alle** Ereignisse des Zeitraums, aber
+            # erst seit die Restzeile "ohne Personenbezug" mitlaeuft (K3-A1) —
+            # und die entsteht in der Suppression, die der Internal-Mode oben
+            # gerade ueberspringt. Dort zaehlt sie also weiter nur Ereignisse
+            # MIT Personenbezug, und genau das muss dastehen: ein Ausweis
+            # "alle Ereignisse" waere hier die Sorte Falschangabe, die K3-A3
+            # beseitigen sollte. Die Dokumenttyp-Tabelle ist in beiden Modi
+            # dieselbe Menge.
             "population_notes": {
                 "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
-                "by_age_cluster": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
+                "by_age_cluster": table_note(EVENTS_WITH_PERSON if internal_mode else ALL_EVENTS, SNAPSHOT_HYBRID),
             },
         },
     )

@@ -233,3 +233,64 @@ class TestSnapshotStandStempel:
         )
 
         assert "Stand der Monats-Aggregate:" in seite
+
+
+@pytest.mark.django_db
+class TestInternerModusWeistSeineGrundgesamtheitAus:
+    """Der ``?internal=1``-Modus des Halbjahres-PDF **ueberspringt die
+    Suppression** (Security R4: er ist das interne Artefakt mit
+    Pseudonym-Ranking und INTERN-Banner) — und damit auch die K3-A1-Restzeile,
+    die erst dort entsteht.
+
+    Die Alterstabelle zaehlt in diesem Modus also weiterhin **nur Ereignisse mit
+    Personenbezug**. Ein Ausweis „alle Ereignisse im Zeitraum" waere dort eine
+    schlicht falsche Angabe — und zwar genau die Sorte Falschangabe, die K3-A3
+    beseitigen sollte.
+    """
+
+    def _rendered(self, facility, *, internal_mode):
+        from unittest.mock import patch
+
+        from core.services.system.export import generate_report_pdf
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": 20,
+            "by_contact_stage": {"anonym": 10, "identifiziert": 15, "qualifiziert": 15},
+            "persons_by_contact_stage": {"anonym": 10, "identifiziert": 15, "qualifiziert": 15},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 30, "persons": 20}],
+            "top_clients": [],
+        }
+        captured = {}
+
+        def _capture(template, context):
+            captured["context"] = context
+            return "<html></html>"
+
+        with patch("core.services.system.export.render_to_string", side_effect=_capture):
+            generate_report_pdf(facility, date(2026, 1, 1), date(2026, 6, 30), stats, internal_mode=internal_mode)
+        return captured["context"]
+
+    def test_interner_modus_nennt_die_engere_menge(self, facility):
+        context = self._rendered(facility, internal_mode=True)
+
+        assert str(context["population_notes"]["by_age_cluster"]).find("Ereignisse mit Personenbezug") >= 0, (
+            context["population_notes"]["by_age_cluster"]
+        )
+        # Die Dokumenttyp-Tabelle zaehlt in beiden Modi alle Ereignisse.
+        assert "alle Ereignisse im Zeitraum" in str(context["population_notes"]["by_document_type"])
+
+    def test_externer_modus_nennt_alle_ereignisse(self, facility):
+        """Gegenprobe: dort laeuft die Suppression und mit ihr die Restzeile."""
+        context = self._rendered(facility, internal_mode=False)
+
+        assert "alle Ereignisse im Zeitraum" in str(context["population_notes"]["by_age_cluster"])
+
+    def test_interner_modus_hat_wirklich_keine_restzeile(self, facility):
+        """Anker: waere die Restzeile doch da, waere der Test oben falsch."""
+        from core.services.dashboard.external_report import NO_PERSON_CLUSTER
+
+        context = self._rendered(facility, internal_mode=True)
+
+        assert all(row["cluster"] != NO_PERSON_CLUSTER for row in context["stats"]["by_age_cluster"])
