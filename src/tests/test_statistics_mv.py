@@ -385,7 +385,6 @@ class TestMaterializedViewRLS:
 
         dt_other = DocumentType.objects.create(
             facility=second_facility,
-            category=DocumentType.Category.CONTACT,
             name="Kontakt-Zweit",
         )
         _make_event(

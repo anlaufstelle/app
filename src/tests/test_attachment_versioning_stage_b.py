@@ -41,7 +41,7 @@ def _upload(marker=b"A"):
 
 @pytest.fixture
 def doc_type_with_file(facility):
-    dt = DocumentType.objects.create(facility=facility, name="DocFile", category=DocumentType.Category.NOTE)
+    dt = DocumentType.objects.create(facility=facility, name="DocFile")
     ft = FieldTemplate.objects.create(facility=facility, name="Anhang", field_type="file")
     DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
     return dt, ft

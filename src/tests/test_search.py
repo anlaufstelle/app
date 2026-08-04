@@ -122,7 +122,6 @@ class TestSearch:
 
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.NOTE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Notiz mit High-Feld",
         )

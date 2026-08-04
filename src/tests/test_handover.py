@@ -26,7 +26,6 @@ def doc_type_ban(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Hausverbot",
-        category=DocumentType.Category.ADMIN,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         system_type="ban",
         color="red",

@@ -719,7 +719,6 @@ def test_collect_doomed_events_covers_all_strategies(
 
     doc_type_custom = DocumentType.objects.create(
         facility=facility_with_settings,
-        category=DocumentType.Category.CONTACT,
         name="Custom Retention Type",
         retention_days=30,
     )

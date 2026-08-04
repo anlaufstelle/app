@@ -103,7 +103,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
         )
         with pytest.raises(Exception, match="Kontaktstufe"):
@@ -123,7 +122,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
         )
         event = create_event(
@@ -143,7 +141,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
         )
         with pytest.raises(Exception, match="Anonyme Kontakte"):
@@ -163,7 +160,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Frei",
-            category=DocumentType.Category.NOTE,
         )
         event = create_event(
             facility=facility,
@@ -186,7 +182,6 @@ class TestMinContactStageGate:
             document_type=DocumentType.objects.create(
                 facility=facility,
                 name="Frei",
-                category=DocumentType.Category.NOTE,
             ),
             occurred_at=timezone.now(),
             data_json={},
@@ -202,7 +197,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
             is_active=True,
         )
@@ -223,7 +217,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Frei",
-            category=DocumentType.Category.NOTE,
         )
         event = create_event(
             facility=facility,
@@ -245,7 +238,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
         )
         with pytest.raises(Exception, match="Person ausgewählt werden"):
@@ -267,7 +259,6 @@ class TestMinContactStageGate:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
             is_active=True,
         )

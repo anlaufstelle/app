@@ -43,7 +43,6 @@ def normal_dt_with_high_file(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="DocFileHigh",
-        category=DocumentType.Category.NOTE,
         sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     ft = FieldTemplate.objects.create(

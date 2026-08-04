@@ -228,7 +228,6 @@ class TestComputeDiffSensitivity:
         # NORMAL doc type so assistant can create events, but with an ELEVATED field
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name="Kontakt (Elevated-Feld)",
             sensitivity=DocumentType.Sensitivity.NORMAL,
         )
@@ -421,7 +420,6 @@ def doc_type_masking_matrix(facility):
 
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         name="Masking-Matrix",
         sensitivity=DocumentType.Sensitivity.NORMAL,
     )

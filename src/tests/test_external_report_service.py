@@ -397,9 +397,9 @@ class TestKanonischeOrdnungInDenWrappern:
             "unique_clients": 12,
             "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
             "by_document_type": [
-                {"name": "Notiz", "category": "note", "count": 30},
-                {"name": "Beratung", "category": "service", "count": 4},
-                {"name": "Aufnahme", "category": "contact", "count": 3},
+                {"name": "Notiz", "count": 30},
+                {"name": "Beratung", "count": 4},
+                {"name": "Aufnahme", "count": 3},
             ],
             "persons_by_contact_stage": {"anonym": 12, "identifiziert": 9, "qualifiziert": 6},
             "by_age_cluster": [
@@ -554,7 +554,7 @@ class TestPersonenabgeleiteteTabellenFailSafe:
             "total_contacts": 40,
             "unique_clients": 3,
             "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
-            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_document_type": [{"name": "Kontakt", "count": 40}],
             "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
         }
         out = suppress_report_stats(facility, stats)
@@ -573,7 +573,7 @@ class TestPersonenabgeleiteteTabellenFailSafe:
             "unique_clients": 5,
             "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
             "persons_by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
-            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_document_type": [{"name": "Kontakt", "count": 40}],
             "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40, "persons": 5}],
         }
         out = suppress_report_stats(facility, stats)
@@ -610,7 +610,7 @@ class TestPersonenabgeleiteteTabellenFailSafe:
             "total_contacts": 40,
             "unique_clients": None,
             "by_contact_stage": {"anonym": 40, "identifiziert": 0, "qualifiziert": 0},
-            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_document_type": [{"name": "Kontakt", "count": 40}],
             "by_age_cluster": [],
         }
         out = suppress_report_stats(facility, stats)
@@ -1029,7 +1029,7 @@ class TestPersonenbasiertesZellkriterium:
         keine Personenpruefung (sonst waere jede Dokumenttyp-Zeile unterdrueckt)."""
         from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
 
-        rows = [{"name": "Kontakt", "category": "contact", "count": 30}]
+        rows = [{"name": "Kontakt", "count": 30}]
         result = _suppress_small(rows, threshold=5, margin=30, order=ORDER_DOCUMENT_TYPE)
 
         assert result[0]["suppressed"] is False
@@ -1121,7 +1121,7 @@ class TestPersonenkriteriumInDenWrappern:
             "total_contacts": 40,
             "unique_clients": 12,
             "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
-            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_document_type": [{"name": "Kontakt", "count": 40}],
             "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
         }
         out = suppress_report_stats(facility, stats)
@@ -1139,7 +1139,7 @@ class TestPersonenkriteriumInDenWrappern:
             "unique_clients": 12,
             "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
             "persons_by_contact_stage": {"anonym": 9, "identifiziert": 7, "qualifiziert": 6},
-            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_document_type": [{"name": "Kontakt", "count": 40}],
             "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40, "persons": 12}],
         }
         out = suppress_report_stats(facility, stats)
@@ -1228,8 +1228,8 @@ class TestResidualGuardEskalation:
             "total_contacts": 15,
             "unique_clients": 40,
             "by_document_type": [
-                {"name": "Gross", "category": "note", "count": 12, "suppressed": False},
-                {"name": "Klein", "category": "contact", "count": None, "suppressed": True},
+                {"name": "Gross", "count": 12, "suppressed": False},
+                {"name": "Klein", "count": None, "suppressed": True},
             ],
         }
         apply_residual_guard(report, 5, self._breakdowns())
@@ -1246,9 +1246,7 @@ class TestResidualGuardEskalation:
         report = {
             "total_contacts": 5,
             "unique_clients": 40,
-            "by_document_type": [
-                {"name": f"T{index}", "category": "contact", "count": None, "suppressed": True} for index in range(5)
-            ],
+            "by_document_type": [{"name": f"T{index}", "count": None, "suppressed": True} for index in range(5)],
         }
         apply_residual_guard(report, 5, self._breakdowns())
 
@@ -1283,9 +1281,7 @@ class TestResidualGuardEskalation:
         report = {
             "total_contacts": 15,
             "unique_clients": 40,
-            "by_document_type": [
-                {"name": f"T{index}", "category": "contact", "count": None, "suppressed": True} for index in range(15)
-            ],
+            "by_document_type": [{"name": f"T{index}", "count": None, "suppressed": True} for index in range(15)],
             "by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
         }
         apply_residual_guard(report, 5, self._breakdowns())
@@ -1321,7 +1317,7 @@ class TestResidualGuardEskalation:
                 "unique_clients": 20,
                 "by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
                 "persons_by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
-                "by_document_type": [{"name": f"T{index}", "category": "contact", "count": 1} for index in range(15)],
+                "by_document_type": [{"name": f"T{index}", "count": 1} for index in range(15)],
                 "by_age_cluster": [],
             },
         )
@@ -1342,9 +1338,7 @@ class TestResidualGuardEskalation:
         report = {
             "total_contacts": 5,
             "unique_clients": 40,
-            "by_document_type": [
-                {"name": f"T{index}", "category": "contact", "count": None, "suppressed": True} for index in range(5)
-            ],
+            "by_document_type": [{"name": f"T{index}", "count": None, "suppressed": True} for index in range(5)],
         }
         external_report.apply_residual_guard(report, 5, external_report._EXTERNAL_REPORT_BREAKDOWNS)
 

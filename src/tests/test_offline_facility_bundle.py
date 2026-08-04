@@ -35,7 +35,6 @@ def doc_type_normal_with_high_field(facility):
     """NORMAL document type with a HIGH-sensitivity field override."""
     dt = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         sensitivity=DocumentType.Sensitivity.NORMAL,
         name="NormalMitHighField",
     )
@@ -61,7 +60,6 @@ def doc_type_qualified_only(facility):
     """Active DocumentType requiring a minimum contact stage of ``qualified``."""
     return DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.NORMAL,
         name="NurQualifiziert",
         min_contact_stage="qualified",
@@ -73,7 +71,6 @@ def doc_type_high(facility):
     """Active HIGH-sensitivity DocumentType (only Lead/Admin may create it)."""
     return DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Suizidgefaehrdung-GEHEIM",
     )
@@ -84,7 +81,6 @@ def doc_type_elevated(facility):
     """Active ELEVATED-sensitivity DocumentType (Staff+ may create it)."""
     return DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         name="Krisenintervention-ELEVATED",
     )
@@ -122,7 +118,6 @@ class TestBuildFacilityOfflineBundleService:
     def test_bundle_lists_active_document_types(self, facility, staff_user, doc_type_contact):
         inactive = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Stillgelegt",
             is_active=False,
@@ -139,14 +134,12 @@ class TestBuildFacilityOfflineBundleService:
         auseinanderdriftet."""
         dt_c = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Charlie",
             sort_order=10,
         )
         dt_a = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Alpha",
             sort_order=5,
@@ -389,7 +382,6 @@ class TestOfflineFieldOrderMatchesForm:
 
         dt = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="OfflineInterleaved",
         )

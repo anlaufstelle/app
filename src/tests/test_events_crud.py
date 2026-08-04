@@ -501,7 +501,6 @@ def doc_type_with_date(facility):
 
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         name="Arztbesuch",
     )
     ft_datum = FieldTemplate.objects.create(
@@ -693,7 +692,7 @@ class TestMergeUpdatePayload:
     def doc_type_with_file(self, facility):
         from core.models import DocumentType, DocumentTypeField, FieldTemplate
 
-        dt = DocumentType.objects.create(facility=facility, name="Mit Datei", category=DocumentType.Category.NOTE)
+        dt = DocumentType.objects.create(facility=facility, name="Mit Datei")
         ft_file = FieldTemplate.objects.create(
             facility=facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE
         )
@@ -784,7 +783,6 @@ class TestCreateEventValidationHelpers:
 
         return DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             name="Mindeststufe",
             min_contact_stage=Client.ContactStage.QUALIFIED,
         )

@@ -283,7 +283,7 @@ class TestUsageCounters:
         self, client, admin_user, facility, client_identified, doc_type_contact, staff_user
     ):
         ft = FieldTemplate.objects.create(facility=facility, name="Vielgenutzt", field_type="file")
-        other_dt = DocumentType.objects.create(facility=facility, name="Zweiter Typ", category="service")
+        other_dt = DocumentType.objects.create(facility=facility, name="Zweiter Typ")
         DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft)
         DocumentTypeField.objects.create(document_type=other_dt, field_template=ft)
         ev = _make_event(facility, client_identified, doc_type_contact, staff_user)
@@ -387,7 +387,6 @@ class TestFieldTypeSwitchToFile:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Personenbogen F",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
         )
         ft = FieldTemplate.objects.create(facility=facility, name="Notiz F", field_type="text")
@@ -409,7 +408,6 @@ class TestFieldTypeSwitchToFile:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Fallbogen F",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CASE,
         )
         ft = FieldTemplate.objects.create(facility=facility, name="Notiz Fall F", field_type="text")

@@ -116,7 +116,7 @@ class TestSaveDocumentType:
         return modelform_factory(DocumentType, fields=["facility", "name", "category"])
 
     def test_create_writes_config_create_audit(self, req, facility):
-        form = self._form_cls()(data={"facility": facility.pk, "name": "Neuer Typ", "category": "contact"})
+        form = self._form_cls()(data={"facility": facility.pk, "name": "Neuer Typ"})
         assert form.is_valid(), form.errors
         obj = save_document_type(req, form, creating=True)
         entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_CREATE, target_id=str(obj.pk)).latest("timestamp")
@@ -151,7 +151,7 @@ class TestDeleteDocumentType:
         ).exists()
 
     def test_success_without_references(self, req, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="Wegwerf")
         pk = str(dt.pk)  # Django nullt obj.pk beim delete() → vorher festhalten.
         delete_document_type(req, dt)
         assert not DocumentType.objects.filter(pk=pk).exists()
@@ -358,7 +358,7 @@ class TestAddRemoveField:
         # DocumentTypeField.clean()-Guard greift also nicht. Der Service muss die
         # Zugehörigkeit selbst prüfen (Fehlerklasse konsistent zu move_field →
         # ValueError für HTTP 400) und darf keinen DTF anlegen.
-        other_dt = DocumentType.objects.create(facility=facility, name="Fremd-Typ", category="contact")
+        other_dt = DocumentType.objects.create(facility=facility, name="Fremd-Typ")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremde Gruppe")
         ft = FieldTemplate.objects.create(facility=facility, name="Neu-Fremd", field_type="text")
         before = DocumentTypeField.objects.filter(document_type=doc_type_contact).count()
@@ -456,7 +456,6 @@ class TestCountFieldRemovalImpact:
         )
         other_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
             name="Zweit-Profil",
         )
@@ -607,7 +606,7 @@ class TestMoveField:
         assert (grp.sort_order, moved.sort_order, other_free.sort_order) == (0, 1, 2)
 
     def test_cross_doctype_group_raises(self, req, facility, doc_type_contact):
-        other_dt = DocumentType.objects.create(facility=facility, name="Anderer", category="contact")
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremd")
         dtf = doc_type_contact.fields.first()
         with pytest.raises(ValueError):

@@ -56,7 +56,7 @@ for key, (name, entity, sens) in {
 }.items():
     dt, _ = DocumentType.objects.get_or_create(
         facility=fac, name=name,
-        defaults={"category": "contact", "entity_type": entity, "sensitivity": sens},
+        defaults={"entity_type": entity, "sensitivity": sens},
     )
     if key != "p2":
         DocumentTypeField.objects.get_or_create(document_type=dt, field_template=ft, defaults={"sort_order": 0})

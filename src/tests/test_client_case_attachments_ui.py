@@ -48,7 +48,6 @@ def client_doc_type_with_file(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Personenakte",
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
     )
     ft_text = FieldTemplate.objects.create(facility=facility, name="Vermerk", field_type=FieldTemplate.FieldType.TEXT)
@@ -64,7 +63,6 @@ def case_doc_type_with_file(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Fallakte",
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
     )
     ft_text = FieldTemplate.objects.create(facility=facility, name="Sachstand", field_type=FieldTemplate.FieldType.TEXT)
@@ -275,7 +273,6 @@ class TestClientAttachmentForm:
         other = DocumentType.objects.create(
             facility=facility,
             name="Personenakte B",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
         )
         person = Client.objects.create(
@@ -325,7 +322,6 @@ class TestClientAttachmentForm:
         shared = DocumentType.objects.create(
             facility=facility,
             name="Personenakte C",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
         )
         # Dieselbe Vorlage, zweite Zuordnung — derselbe Slug in beiden Typen.
@@ -463,7 +459,6 @@ class TestCaseAttachmentForm:
         shared = DocumentType.objects.create(
             facility=facility,
             name="Fallakte B",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CASE,
         )
         DocumentTypeField.objects.create(document_type=shared, field_template=ft_file, sort_order=0)
@@ -522,7 +517,6 @@ class TestCreateStagingLeavesNoOrphans:
         dt = DocumentType.objects.create(
             facility=facility,
             name=name,
-            category=DocumentType.Category.ADMIN,
             entity_type=entity_type,
         )
         ft_file = FieldTemplate.objects.create(
@@ -603,7 +597,6 @@ class TestInvalidMetaFormKeepsFileMarkers:
         dt = DocumentType.objects.create(
             facility=facility,
             name=f"Bedingter Anhang {entity_type}",
-            category=DocumentType.Category.ADMIN,
             entity_type=entity_type,
         )
         ft_source = FieldTemplate.objects.create(

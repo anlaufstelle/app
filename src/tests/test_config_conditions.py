@@ -390,9 +390,7 @@ class TestConditionBoardRefresh:
         assert 'hx-swap="outerHTML"' in body
 
     def test_empty_state_when_fewer_than_two_fields(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(
-            facility=facility, category=DocumentType.Category.CONTACT, name="Einzelfeld-Typ"
-        )
+        dt = DocumentType.objects.create(facility=facility, name="Einzelfeld-Typ")
         ft = FieldTemplate.objects.create(facility=facility, name="Solo", field_type=FieldTemplate.FieldType.TEXT)
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         client.force_login(admin_user)
@@ -435,7 +433,7 @@ class TestConditionBoardRefresh:
 
     def test_empty_state_toggle_after_field_board_mutations(self, client, admin_user, facility, field_template):
         """Empty-State ↔ Regel-Editor-Karte kippt in BEIDE Richtungen über den Refresh-Endpoint."""
-        dt = DocumentType.objects.create(facility=facility, category=DocumentType.Category.CONTACT, name="Kipp-Typ")
+        dt = DocumentType.objects.create(facility=facility, name="Kipp-Typ")
         ft_a = FieldTemplate.objects.create(facility=facility, name="Feld A", field_type=FieldTemplate.FieldType.TEXT)
         first = DocumentTypeField.objects.create(document_type=dt, field_template=ft_a, sort_order=0)
         client.force_login(admin_user)

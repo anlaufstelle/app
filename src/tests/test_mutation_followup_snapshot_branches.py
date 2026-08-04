@@ -163,7 +163,6 @@ class TestCreateOrUpdateSnapshotBranches:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Kontakt-JG",
-            category=DocumentType.Category.CONTACT,
             system_type=DocumentType.SystemType.CONTACT,
         )
         jan = datetime(2025, 1, 15, 10, 0)
@@ -186,7 +185,6 @@ class TestCreateOrUpdateSnapshotBranches:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Begleitung",
-            category=DocumentType.Category.SERVICE,
             system_type=DocumentType.SystemType.ACCOMPANIMENT,
         )
         jan = datetime(2025, 1, 15, 10, 0)

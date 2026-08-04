@@ -33,7 +33,6 @@ def doc_type_kontakt(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
     )
 
 
@@ -42,7 +41,6 @@ def doc_type_beratung(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Beratungsgespräch",
-        category=DocumentType.Category.SERVICE,
     )
 
 

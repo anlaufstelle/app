@@ -208,7 +208,6 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     #    ``core_client.data_json``-Klassifizierung waere dann unbelegt.
     dt_person = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Residue-Personenprofil",
     )
@@ -223,7 +222,6 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     #     Refs #1058) — gleiche Begruendung wie ``dt_person`` oben.
     dt_case = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Residue-Fallformular",
     )
@@ -313,7 +311,6 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     #    aufnimmt (erhoehte/encrypted Felder werden absichtlich uebersprungen).
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         name="Residue-Kontakt",
     )
     ft_notiz = FieldTemplate.objects.create(

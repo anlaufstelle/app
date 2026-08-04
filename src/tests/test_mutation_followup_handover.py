@@ -39,7 +39,6 @@ from core.services.case import _collect_highlights, _collect_stats, build_handov
 def _make_doc_type(facility, *, system_type: str | None = None, name: str = "Doc") -> DocumentType:
     kwargs = dict(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         name=name,
     )
     if system_type:
@@ -422,7 +421,6 @@ class TestBuildHandoverSummaryMutations:
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
         dt_ban = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.ADMIN,
             name="Hausverbot",
             system_type="ban",
         )

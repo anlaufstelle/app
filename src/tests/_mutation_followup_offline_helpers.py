@@ -49,7 +49,6 @@ def _make_doc_type(
 ) -> DocumentType:
     return DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         sensitivity=sensitivity,
         name=name,
         icon=icon,

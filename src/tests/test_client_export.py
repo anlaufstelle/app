@@ -77,7 +77,6 @@ def doc_type(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
         system_type=DocumentType.SystemType.CONTACT,
     )
 
@@ -770,7 +769,6 @@ class TestClientExportDeletedEvents:
         high_type = DocumentType.objects.create(
             facility=facility,
             name="Krise",
-            category=DocumentType.Category.CONTACT,
             system_type=DocumentType.SystemType.CRISIS,
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
@@ -1342,7 +1340,6 @@ class TestClientExportAttachments:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Personenprofil-Datei",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
         )
         DocumentTypeField.objects.create(document_type=dt, field_template=file_field_template, sort_order=0)

@@ -62,7 +62,6 @@ def doc_type_client_high(facility):
     """Personen-Typ mit HIGH-Sensitivitaet — fuer Staff unsichtbar (Rolle max ELEVATED)."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Personen-Hochsensibel",
@@ -81,7 +80,6 @@ def doc_type_client_mixed(facility):
     """Personen-Typ (NORMAL) mit einem HIGH-Feld — Staff darf genau dieses Feld nicht sehen."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personenakte",
     )
@@ -106,7 +104,6 @@ def doc_type_client_select(facility):
     """Personen-Typ mit SELECT + BOOLEAN — fuer die Anzeige-/Export-Formatierung."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personen-Auswahl",
     )
@@ -134,7 +131,6 @@ def doc_type_client_conditional(facility):
     """Personen-Typ mit Bedingung TEXT->TEXTAREA (Payload-Smoke-Test)."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personen-Bedingt",
     )
@@ -170,7 +166,6 @@ def doc_type_client_file_condition(facility):
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personen-Dateibedingt",
     )

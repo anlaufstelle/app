@@ -33,7 +33,6 @@ class TestAttachmentAtomicity:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Doc mit Anhang",
-            category=DocumentType.Category.NOTE,
         )
         ft_file = FieldTemplate.objects.create(
             facility=facility,
@@ -161,7 +160,6 @@ class TestAttachmentVersioning:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Doc mit Anhang",
-            category=DocumentType.Category.NOTE,
         )
         ft_file = FieldTemplate.objects.create(
             facility=facility,
@@ -360,7 +358,6 @@ class TestEventEditScannerUnavailable:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Doc mit Anhang",
-            category=DocumentType.Category.NOTE,
         )
         ft_file = FieldTemplate.objects.create(
             facility=facility,

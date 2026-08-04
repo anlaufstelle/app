@@ -140,7 +140,6 @@ def normal_doc_type(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Normal",
-        category=DocumentType.Category.CONTACT,
     )
 
 
@@ -150,7 +149,6 @@ def ban_doc_type(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Hausverbot",
-        category=DocumentType.Category.ADMIN,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         system_type=DocumentType.SystemType.BAN,
     )
@@ -534,7 +532,6 @@ class TestEnrichEventsPreviewLimit:
         dt = DocumentType.objects.create(
             facility=facility,
             name="VierFelder",
-            category=DocumentType.Category.CONTACT,
         )
         for i in range(4):
             ft = FieldTemplate.objects.create(
@@ -567,7 +564,6 @@ class TestEnrichEventsPreviewLimit:
         dt = DocumentType.objects.create(
             facility=facility,
             name="DreiFelder",
-            category=DocumentType.Category.CONTACT,
         )
         for i in range(3):
             ft = FieldTemplate.objects.create(
@@ -636,7 +632,7 @@ class TestBuildEventPreviewFieldsHelper:
     """
 
     def _dt_with_fields(self, facility, specs):
-        dt = DocumentType.objects.create(facility=facility, name="PreviewDT", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="PreviewDT")
         fts = []
         for i, spec in enumerate(specs):
             ft = FieldTemplate.objects.create(facility=facility, **spec)

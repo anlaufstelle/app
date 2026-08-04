@@ -70,7 +70,6 @@ class TestInactiveDocTypePreview:
     def test_inactive_doctype_shows_hint_not_preview(self, client, admin_user, facility):
         inactive = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name="Inaktiver Typ",
             is_active=False,
         )

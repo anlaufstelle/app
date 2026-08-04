@@ -83,7 +83,7 @@ def _publish_document_types(facility, world: dict[str, int]) -> dict[str, Any]:
             "by_contact_stage": {},
             "persons_by_contact_stage": {},
             "by_document_type": sorted(
-                ({"name": name, "category": "contact", "count": count} for name, count in world.items()),
+                ({"name": name, "count": count} for name, count in world.items()),
                 key=lambda row: -row["count"],
             ),
             "by_age_cluster": [],
@@ -370,9 +370,9 @@ def _swapped_worlds() -> tuple[dict[str, Any], dict[str, Any]]:
             # Query-Ordnung: absteigend nach Anzahl.
             "by_document_type": sorted(
                 [
-                    {"name": "Notiz", "category": "note", "count": 30},
-                    {"name": "Kontakt", "category": "contact", "count": kontakt},
-                    {"name": "Beratung", "category": "service", "count": beratung},
+                    {"name": "Notiz", "count": 30},
+                    {"name": "Kontakt", "count": kontakt},
+                    {"name": "Beratung", "count": beratung},
                 ],
                 key=lambda row: -row["count"],
             ),
@@ -525,7 +525,7 @@ _KOLLAPS_STATS = {
     "unique_clients": 20,
     "by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
     "persons_by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
-    "by_document_type": [{"name": f"T{index}", "category": "contact", "count": 1} for index in range(15)],
+    "by_document_type": [{"name": f"T{index}", "count": 1} for index in range(15)],
     "by_age_cluster": [],
 }
 
@@ -656,9 +656,9 @@ class TestFailSafePfadIstNichtIrrefuehrend:
                 "by_contact_stage": {},
                 "persons_by_contact_stage": {},
                 "by_document_type": [
-                    {"name": "Notiz", "category": "note", "count": 20},
-                    {"name": "Kontakt", "category": "contact", "count": 4},
-                    {"name": "Beratung", "category": "service", "count": 1},
+                    {"name": "Notiz", "count": 20},
+                    {"name": "Kontakt", "count": 4},
+                    {"name": "Beratung", "count": 1},
                 ],
                 "by_age_cluster": [],
             },

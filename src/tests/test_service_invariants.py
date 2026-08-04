@@ -80,7 +80,6 @@ class TestCreateEventRejectsAnonymousOnClientCase:
         # A contact-style doc type without a min_contact_stage allows anonymous.
         anon_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Anonymer Kontakt",
         )
@@ -144,7 +143,6 @@ class TestAssignEventInvariants:
     def test_hidden_event_rejected_for_staff(self, facility, staff_user, client_identified, case_open):
         high_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.HIGH,
             name="Hoch",
         )

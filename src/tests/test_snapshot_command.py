@@ -142,7 +142,6 @@ def test_facility_filter(
     )
     other_doc = DocumentType.objects.create(
         facility=other_facility,
-        category=DocumentType.Category.CONTACT,
         name="Kontakt",
     )
     Event.objects.create(
@@ -214,7 +213,6 @@ def test_create_snapshot_is_not_n_plus_1(facility, client_identified, staff_user
         for i in range(n):
             dt = DocumentType.objects.create(
                 facility=facility,
-                category=DocumentType.Category.CONTACT,
                 name=f"M{month}-Kontakt-{i}",
             )
             Event.objects.create(

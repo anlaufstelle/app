@@ -45,7 +45,6 @@ def doc_type_with_options(facility, ft_select, ft_multi):
     """DocumentType mit SELECT und MULTI_SELECT Feldern."""
     dt = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         name="Kontakt mit Optionen",
     )
     DocumentTypeField.objects.create(document_type=dt, field_template=ft_select, sort_order=0)

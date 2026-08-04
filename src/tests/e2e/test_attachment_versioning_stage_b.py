@@ -30,8 +30,7 @@ def _create_doc_type_with_file(e2e_env, name_suffix):
     script = (
         "from core.models import DocumentType, DocumentTypeField, FieldTemplate, Facility;"
         " f = Facility.objects.get(name='Hauptstelle');"
-        f" dt, _ = DocumentType.objects.get_or_create(facility=f, name='{dt_name}',"
-        "  defaults={'category': 'note'});"
+        f" dt, _ = DocumentType.objects.get_or_create(facility=f, name='{dt_name}');"
         f" ft, _ = FieldTemplate.objects.get_or_create(facility=f, name='{ft_name}',"
         "  defaults={'field_type': 'file'});"
         " DocumentTypeField.objects.get_or_create(document_type=dt, field_template=ft);"

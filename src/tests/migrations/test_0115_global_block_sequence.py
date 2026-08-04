@@ -27,7 +27,7 @@ class TestMigrate0115GlobalBlockSequence(MigratorTestCase):
 
         org = Organization.objects.create(name="Org")
         fac = Facility.objects.create(organization=org, name="Stelle")
-        dt = DocumentType.objects.create(facility=fac, name="Kontakt", category="contact")
+        dt = DocumentType.objects.create(facility=fac, name="Kontakt")
 
         # Zwei Gruppen mit alter, getrennter Sequenz — bewusst „krumm" (10/20),
         # damit die Kompaktierung auf 0/1 sichtbar wird. B vor A per sort_order.

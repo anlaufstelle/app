@@ -38,7 +38,7 @@ def _snapshot_data(total=5, anonym=1, identifiziert=3, qualifiziert=1, unique=3)
             "qualifiziert": qualifiziert,
         },
         "by_document_type": [
-            {"name": "Kontakt", "category": "contact", "count": total},
+            {"name": "Kontakt", "count": total},
         ],
         "by_age_cluster": [
             {"cluster": "18_26", "label": "18–26", "count": total},

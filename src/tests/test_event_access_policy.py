@@ -18,7 +18,6 @@ from core.models import Case, DocumentType, DocumentTypeField, Event, FieldTempl
 def doc_type_high(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Hochsensibel",
     )
@@ -35,7 +34,6 @@ def doc_type_high(facility):
 def doc_type_elevated(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         name="ErhoehtSensibel",
     )

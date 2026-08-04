@@ -36,7 +36,6 @@ def normal_doc_type(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
         sensitivity=DocumentType.Sensitivity.NORMAL,
     )
 

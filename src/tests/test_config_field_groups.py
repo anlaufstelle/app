@@ -101,7 +101,7 @@ class TestFieldAdd:
     ):
         # Gruppe eines ANDEREN doc_type (gleiche Einrichtung) → 400 (Service-Semantik).
         client.force_login(admin_user)
-        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ", category="contact")
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremde Gruppe")
         url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"field_template": str(field_template.pk), "field_group": str(foreign_grp.pk)})

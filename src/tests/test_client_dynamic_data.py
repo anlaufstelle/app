@@ -120,7 +120,6 @@ class TestClientDataJsonEncryption:
 
         other_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
             name="Personenprofil (B)",
         )
@@ -341,7 +340,6 @@ class TestClientDataJsonWhitelist:
 
         other_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
             name="Personenprofil (anderes)",
         )

@@ -47,7 +47,7 @@ class TestMigrate0128BackfillSnapshotPersonCounts(MigratorTestCase):
         org = Organization.objects.create(name="Org")
         fac = Facility.objects.create(organization=org, name="Stelle")
         user = User.objects.create(username="mig-0128", facility=fac, role="staff")
-        doc_type = DocumentType.objects.create(facility=fac, name="Kontakt", category="contact")
+        doc_type = DocumentType.objects.create(facility=fac, name="Kontakt")
 
         # Zwei Personen, drei Ereignisse im Januar 2025 — die Personenzahl des
         # Buckets ist damit 2, die Ereigniszahl 3.

@@ -118,7 +118,6 @@ class TestAddFormSlugNotRequired:
             data={
                 "facility": facility.pk,
                 "name": "Admin-Angelegt",
-                "category": DocumentType.Category.SERVICE,
                 "sensitivity": DocumentType.Sensitivity.NORMAL,
                 "entity_type": DocumentType.EntityType.EVENT,
                 "sort_order": 0,

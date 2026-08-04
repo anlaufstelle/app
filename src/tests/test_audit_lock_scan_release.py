@@ -76,7 +76,6 @@ def _doc_type_with_file(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Doc mit Anhang",
-        category=DocumentType.Category.NOTE,
     )
     ft_file = FieldTemplate.objects.create(
         facility=facility,

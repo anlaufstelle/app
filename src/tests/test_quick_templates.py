@@ -68,7 +68,6 @@ def doc_type_with_all(facility, ft_bemerkung, ft_priority_select, ft_sensitive, 
     dt = DocumentType.objects.create(
         facility=facility,
         name="Mit-Mix-Felder",
-        category=DocumentType.Category.CONTACT,
     )
     DocumentTypeField.objects.create(document_type=dt, field_template=ft_bemerkung, sort_order=0)
     DocumentTypeField.objects.create(document_type=dt, field_template=ft_priority_select, sort_order=1)
@@ -83,7 +82,6 @@ def doc_type_elevated(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Erhöht-sensibel",
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
     )
     ft = FieldTemplate.objects.create(

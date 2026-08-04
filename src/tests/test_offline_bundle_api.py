@@ -27,7 +27,6 @@ from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bun
 def doc_type_high(facility):
     dt = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Hochsensibel",
     )
@@ -45,7 +44,6 @@ def doc_type_normal_with_high_field(facility):
     """NORMAL document type but with a HIGH-sensitivity field override."""
     dt = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         sensitivity=DocumentType.Sensitivity.NORMAL,
         name="NormalMitHighField",
     )
@@ -378,7 +376,6 @@ class TestBuildClientOfflineBundleService:
         offline nicht anlegbar. Die Person hat hier gar keine Events."""
         unused = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="NieGenutzt",
         )
@@ -392,7 +389,6 @@ class TestBuildClientOfflineBundleService:
         den kein Event nutzt, wird nicht zur Offline-Erfassung angeboten."""
         inactive = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Stillgelegt",
             is_active=False,
@@ -407,7 +403,6 @@ class TestBuildClientOfflineBundleService:
         (Vereinigung: aktiver Katalog ∪ referenzierte Typen)."""
         dt = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="AlterTyp",
             is_active=False,
@@ -437,14 +432,12 @@ class TestBuildClientOfflineBundleService:
         ans Ende gehaengt zu werden."""
         dt_c = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Charlie",
             sort_order=10,
         )
         dt_a = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Alpha",
             sort_order=5,
@@ -453,7 +446,6 @@ class TestBuildClientOfflineBundleService:
         # sort_order zwischen dt_a und dt_c einsortiert werden, nicht ans Ende.
         dt_b_inactive = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Bravo",
             sort_order=7,
@@ -580,7 +572,6 @@ class TestBuildClientOfflineBundleService:
         """
         dt = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="MitAuswahl",
         )

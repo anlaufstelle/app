@@ -46,7 +46,6 @@ def doc_type_all_encrypted(facility):
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Hochsensibel",
     )
@@ -299,7 +298,6 @@ class TestEventCreationValidationWithoutClient:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Nur Qualifiziert Test",
-            category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
         )
         with pytest.raises(ValidationError):

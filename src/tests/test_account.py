@@ -120,7 +120,6 @@ class TestAccountProfileView:
         """Staff darf eigene HIGH-Events auf der Profilseite nicht sehen."""
         doc_type_high = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.SERVICE,
             sensitivity=DocumentType.Sensitivity.HIGH,
             name="Hochsensibel",
         )

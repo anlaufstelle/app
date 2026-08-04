@@ -36,7 +36,7 @@ class TestEnrichEventsWithPreview:
 
     def test_max_three_fields(self, facility, staff_user, client_identified):
         # Create doc type with 5 non-textarea fields
-        dt = DocumentType.objects.create(facility=facility, name="Multi", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="Multi")
         for i in range(5):
             ft = FieldTemplate.objects.create(facility=facility, name=f"Feld{i}", field_type="text")
             DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=i)
@@ -91,7 +91,7 @@ class TestEnrichEventsWithPreview:
 
     def test_expanded_fields_no_three_field_limit(self, facility, staff_user, client_identified):
         """Refs #707: expanded_fields hat kein Limit von 3 (anders als preview_fields)."""
-        dt = DocumentType.objects.create(facility=facility, name="MultiExpand", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="MultiExpand")
         for i in range(5):
             ft = FieldTemplate.objects.create(facility=facility, name=f"Feld{i}", field_type="text")
             DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=i)
@@ -114,7 +114,6 @@ class TestEnrichEventsWithPreview:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Sensitive",
-            category="service",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
         )
         ft = FieldTemplate.objects.create(
@@ -140,7 +139,6 @@ class TestEnrichEventsWithPreview:
         dt = DocumentType.objects.create(
             facility=facility,
             name="SensitiveAdmin",
-            category="service",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
         )
         ft = FieldTemplate.objects.create(
@@ -164,7 +162,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["label"] == "Geheim"
 
     def test_boolean_formatting(self, facility, staff_user, client_identified):
-        dt = DocumentType.objects.create(facility=facility, name="BoolTest", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="BoolTest")
         ft = FieldTemplate.objects.create(facility=facility, name="Aktiv", field_type="boolean")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         event = Event.objects.create(
@@ -180,7 +178,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["value"] == "Ja"
 
     def test_select_label_resolved(self, facility, staff_user, client_identified):
-        dt = DocumentType.objects.create(facility=facility, name="SelectTest", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="SelectTest")
         ft = FieldTemplate.objects.create(
             facility=facility,
             name="Art",
@@ -204,7 +202,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["value"] == "Beta"
 
     def test_multi_select_labels(self, facility, staff_user, client_identified):
-        dt = DocumentType.objects.create(facility=facility, name="MultiTest", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="MultiTest")
         ft = FieldTemplate.objects.create(
             facility=facility,
             name="Leistungen",
@@ -231,7 +229,7 @@ class TestEnrichEventsWithPreview:
         """Stufe-A-File-Marker (`{"__file__": True, ...}`) ist im Preview ein
         sprechender Hinweis statt rohes Dict-Repr (Refs #670).
         """
-        dt = DocumentType.objects.create(facility=facility, name="StageA", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="StageA")
         ft = FieldTemplate.objects.create(facility=facility, name="Scan", field_type="file")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         event = Event.objects.create(
@@ -248,7 +246,7 @@ class TestEnrichEventsWithPreview:
 
     def test_file_marker_stage_b_singular(self, facility, staff_user, client_identified):
         """Stufe-B-Marker (`__files__` mit 1 Entry) → `[1 Datei]`."""
-        dt = DocumentType.objects.create(facility=facility, name="StageB1", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="StageB1")
         ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         event = Event.objects.create(
@@ -270,7 +268,7 @@ class TestEnrichEventsWithPreview:
 
     def test_file_marker_stage_b_plural(self, facility, staff_user, client_identified):
         """Stufe-B-Marker (`__files__` mit 3 Entries) → `[3 Dateien]`."""
-        dt = DocumentType.objects.create(facility=facility, name="StageB3", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="StageB3")
         ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         event = Event.objects.create(
@@ -435,7 +433,6 @@ class TestActivitySensitivityFilter:
         dt_high = DocumentType.objects.create(
             facility=facility,
             name="Vertraulich",
-            category="service",
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
         event = Event.objects.create(
@@ -604,7 +601,7 @@ class TestPreviewOrderMatchesBlockSequence:
         from core.models import FieldGroup
         from core.services.config import iter_fields_in_block_order
 
-        dt = DocumentType.objects.create(facility=facility, name="FeedInterleaved", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="FeedInterleaved")
 
         def _ft(name):
             return FieldTemplate.objects.create(facility=facility, name=name, field_type="text")

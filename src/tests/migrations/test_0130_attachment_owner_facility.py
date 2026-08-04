@@ -147,7 +147,7 @@ class TestMigrate0130Backfill(MigratorTestCase):
             person = Client.objects.create(
                 facility=fac, pseudonym=f"Mig-0130-{suffix}", contact_stage="identified", created_by=user
             )
-            doc_type = DocumentType.objects.create(facility=fac, name=f"Kontakt {suffix}", category="contact")
+            doc_type = DocumentType.objects.create(facility=fac, name=f"Kontakt {suffix}")
             event = Event.objects.create(
                 facility=fac,
                 client=person,

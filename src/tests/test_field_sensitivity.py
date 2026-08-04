@@ -12,7 +12,6 @@ def doc_type_high(facility):
     """DocumentType mit HIGH-Sensibilität und einem verschlüsselten Feld."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Hochsensibel",
     )
@@ -38,7 +37,6 @@ def doc_type_elevated(facility):
     """DocumentType mit ELEVATED-Sensibilität."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         name="ErhoehtSensibel",
     )

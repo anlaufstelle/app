@@ -224,7 +224,6 @@ class TestRetentionTrashAnonymization:
         """Event + Klartext-EventHistory für einen Klienten."""
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name=f"DT-{client_obj.pseudonym}",
         )
         event = Event.objects.create(

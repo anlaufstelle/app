@@ -11,7 +11,6 @@ def test_document_type_str_includes_facility(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
     )
     assert str(dt) == f"{facility.name} — Kontakt"
 

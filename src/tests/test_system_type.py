@@ -17,7 +17,6 @@ def doc_type_ban(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
         name="Hausverbot",
-        category=DocumentType.Category.ADMIN,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         system_type=DocumentType.SystemType.BAN,
     )
@@ -40,7 +39,6 @@ def doc_type_contact(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt_st",
-        category=DocumentType.Category.CONTACT,
         system_type=DocumentType.SystemType.CONTACT,
     )
 
@@ -58,7 +56,6 @@ class TestSystemTypeImmutability:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Benutzerdefiniert",
-            category=DocumentType.Category.NOTE,
             system_type=None,
         )
         dt.system_type = "note"
@@ -129,7 +126,6 @@ class TestSystemTypeNone:
         dt_custom = DocumentType.objects.create(
             facility=facility,
             name="Custom",
-            category=DocumentType.Category.SERVICE,
             system_type=None,
         )
         Event.objects.create(
@@ -223,7 +219,6 @@ class TestSystemTypeWertelisteEingefroren:
             doc_type = DocumentType.objects.create(
                 facility=facility,
                 name=name,
-                category=DocumentType.Category.NOTE,
                 system_type=system_type,
             )
             Event.objects.create(

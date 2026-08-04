@@ -64,7 +64,6 @@ def _doc_type(facility, name, entity_type, *, sensitivity=DocumentType.Sensitivi
     dt = DocumentType.objects.create(
         facility=facility,
         name=name,
-        category=DocumentType.Category.ADMIN,
         entity_type=entity_type,
         sensitivity=sensitivity,
     )

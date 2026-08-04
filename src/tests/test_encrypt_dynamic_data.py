@@ -35,7 +35,6 @@ def doc_type_with_file_field(facility):
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         name="Mit Anhang",
     )
     ft_anhang = FieldTemplate.objects.create(
@@ -146,7 +145,6 @@ def test_encrypt_dynamic_data_used_by_bulk_create_path(facility, client_identifi
 
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         name="Bulk mit Anhang",
     )
     ft_anhang = FieldTemplate.objects.create(

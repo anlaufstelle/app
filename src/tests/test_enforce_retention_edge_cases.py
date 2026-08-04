@@ -78,7 +78,6 @@ class TestDocumentTypeRetention:
         # DocumentType mit retention_days=30
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name="Kurzlebig",
             retention_days=30,
         )
@@ -120,7 +119,6 @@ class TestDocumentTypeRetention:
 
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name="Hält",
             retention_days=30,
         )
@@ -157,7 +155,6 @@ class TestDocumentTypeRetention:
 
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name="Hält (Client-Hold)",
             retention_days=30,
         )

@@ -56,7 +56,6 @@ def person_with_file(facility, staff_user):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Anzeige-Personentyp",
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
     )
     ft = FieldTemplate.objects.create(facility=facility, name="Nachweis", field_type=FieldTemplate.FieldType.FILE)
@@ -78,7 +77,6 @@ def case_with_file(facility, staff_user, client_identified):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Anzeige-Falltyp",
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
     )
     ft = FieldTemplate.objects.create(facility=facility, name="Fallbeleg", field_type=FieldTemplate.FieldType.FILE)

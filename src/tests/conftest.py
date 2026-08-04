@@ -183,7 +183,6 @@ def client_qualified(facility, staff_user):
 def doc_type_contact(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         name="Kontakt",
     )
 
@@ -216,7 +215,6 @@ def doc_type_client_profile(facility):
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personenprofil",
     )
@@ -252,7 +250,6 @@ def doc_type_case_form(facility):
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Fallformular",
     )
@@ -279,7 +276,6 @@ def doc_type_case_form(facility):
 def doc_type_crisis(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.SERVICE,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         name="Krisengespräch",
     )
@@ -595,7 +591,6 @@ def foreign_case_closed(second_facility, foreign_client, foreign_staff):
 def foreign_doc_type(second_facility):
     return DocumentType.objects.create(
         facility=second_facility,
-        category=DocumentType.Category.CONTACT,
         name="Kontakt (fremd)",
     )
 
@@ -610,7 +605,6 @@ def foreign_doc_type_client(second_facility):
     """
     return DocumentType.objects.create(
         facility=second_facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
         name="Personenprofil (fremd)",
     )
@@ -626,7 +620,6 @@ def foreign_doc_type_case(second_facility):
     """
     return DocumentType.objects.create(
         facility=second_facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Fallformular (fremd)",
     )

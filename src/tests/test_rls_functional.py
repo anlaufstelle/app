@@ -150,7 +150,6 @@ def facility_a_with_data(facility, admin_user):
     dt = DocumentType.objects.create(
         facility=facility,
         name="A-Doc",
-        category=DocumentType.Category.CONTACT,
         sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     Event.objects.create(
@@ -188,7 +187,6 @@ def facility_b_with_data(second_facility, admin_user):
     dt = DocumentType.objects.create(
         facility=second_facility,
         name="B-Doc",
-        category=DocumentType.Category.CONTACT,
         sensitivity=DocumentType.Sensitivity.NORMAL,
     )
     Event.objects.create(

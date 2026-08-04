@@ -52,7 +52,6 @@ def doc_type_kontakt(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
         system_type=DocumentType.SystemType.CONTACT,
     )
 
@@ -62,7 +61,6 @@ def doc_type_notiz(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Notiz",
-        category=DocumentType.Category.NOTE,
         system_type=DocumentType.SystemType.NOTE,
     )
 
@@ -72,7 +70,6 @@ def doc_type_hausverbot(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Hausverbot",
-        category=DocumentType.Category.ADMIN,
         system_type=DocumentType.SystemType.BAN,
     )
 
@@ -201,7 +198,6 @@ class TestCSVExportVisibilityFilter:
         high_dt = DocumentType.objects.create(
             facility=facility,
             name="HighSecret-RF779",
-            category=DocumentType.Category.NOTE,
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
         return Event.objects.create(
@@ -439,7 +435,6 @@ class TestSampleReport1PdfKAnonSuppression:
         dt = DocumentType.objects.create(
             facility=facility,
             name=f"DT-{system_type}",
-            category=DocumentType.Category.CONTACT,
             system_type=system_type,
         )
         for _ in range(n):
@@ -575,7 +570,6 @@ class TestReportPdfKAnonSuppression:
         dt = DocumentType.objects.create(
             facility=facility,
             name=doc_name,
-            category=DocumentType.Category.CONTACT,
         )
         for _ in range(n):
             Event.objects.create(
@@ -656,8 +650,8 @@ class TestReportPdfKAnonSuppression:
                     "unique_clients": None,
                     "by_contact_stage": {"anonym": 10, "identifiziert": None, "qualifiziert": None},
                     "by_document_type": [
-                        {"name": "Haeufig", "category": "contact", "count": 10, "suppressed": False},
-                        {"name": "Selten", "category": "contact", "count": None, "suppressed": True},
+                        {"name": "Haeufig", "count": 10, "suppressed": False},
+                        {"name": "Selten", "count": None, "suppressed": True},
                     ],
                     "by_age_cluster": [],
                     "top_clients": [],

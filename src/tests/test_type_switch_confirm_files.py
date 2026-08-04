@@ -49,7 +49,6 @@ def client_type_file_only(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Nur-Datei-Typ",
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CLIENT,
     )
     ft = FieldTemplate.objects.create(facility=facility, name="Anlage", field_type=FieldTemplate.FieldType.FILE)
@@ -62,7 +61,6 @@ def case_type_file_and_text(facility):
     dt = DocumentType.objects.create(
         facility=facility,
         name="Fall-Datei-Typ",
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
     )
     ft_text = FieldTemplate.objects.create(facility=facility, name="Notizfeld", field_type=FieldTemplate.FieldType.TEXT)
@@ -189,7 +187,6 @@ class TestClientConfirmCounts:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Nur-Text-Typ",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
         )
         ft_text = FieldTemplate.objects.create(

@@ -960,7 +960,6 @@ def test_seed_adopts_existing_document_type_without_system_type(facility):
     existing = DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
     )
     assert existing.slug == "kontakt"
     assert existing.system_type is None
@@ -986,7 +985,6 @@ def test_seed_is_atomic_when_the_package_cannot_be_applied(facility):
         facility=facility,
         name="Alt-Kontakt",
         slug="kontakt",
-        category=DocumentType.Category.CONTACT,
         entity_type=DocumentType.EntityType.CLIENT,
     )
 

@@ -49,8 +49,8 @@ class TestSlugGeneration:
 @pytest.mark.django_db
 class TestSlugCollision:
     def test_different_names_same_slug_gets_suffix(self, facility):
-        dt1 = DocumentType.objects.create(facility=facility, name="Test Typ", category=DocumentType.Category.SERVICE)
-        dt2 = DocumentType.objects.create(facility=facility, name="Test-Typ", category=DocumentType.Category.ADMIN)
+        dt1 = DocumentType.objects.create(facility=facility, name="Test Typ")
+        dt2 = DocumentType.objects.create(facility=facility, name="Test-Typ")
         assert dt1.slug == "test-typ"
         assert dt2.slug == "test-typ-2"
 
@@ -87,9 +87,7 @@ class TestExplicitSlug:
     def test_duplicate_explicit_slug_same_facility_raises(self, facility):
         DocumentType.objects.create(facility=facility, name="A", slug="same-slug")
         with pytest.raises(IntegrityError), transaction.atomic():
-            DocumentType.objects.create(
-                facility=facility, name="B", slug="same-slug", category=DocumentType.Category.ADMIN
-            )
+            DocumentType.objects.create(facility=facility, name="B", slug="same-slug")
 
 
 @pytest.mark.django_db
@@ -211,7 +209,7 @@ class TestBackfillFunction:
         DocumentType.objects.bulk_create(
             [
                 DocumentType(facility=facility, name="Alpha", slug=""),
-                DocumentType(facility=facility, name="Beta", slug="", category=DocumentType.Category.SERVICE),
+                DocumentType(facility=facility, name="Beta", slug=""),
                 DocumentType(facility=other_facility, name="Alpha", slug=""),
             ]
         )
@@ -232,8 +230,8 @@ class TestBackfillFunction:
         self._drop_constraint_and_disable_trigger()
         DocumentType.objects.bulk_create(
             [
-                DocumentType(facility=facility, name="Test Typ", slug="", category=DocumentType.Category.SERVICE),
-                DocumentType(facility=facility, name="Test-Typ", slug="", category=DocumentType.Category.ADMIN),
+                DocumentType(facility=facility, name="Test Typ", slug=""),
+                DocumentType(facility=facility, name="Test-Typ", slug=""),
             ]
         )
 
@@ -255,15 +253,15 @@ class TestBackfillFunction:
         self._drop_constraint_and_disable_trigger()
         DocumentType.objects.bulk_create(
             [
-                DocumentType(facility=facility, name="Zeta", slug="", category=DocumentType.Category.SERVICE),
-                DocumentType(facility=facility, name="Zeta", slug="", category=DocumentType.Category.ADMIN),
+                DocumentType(facility=facility, name="Zeta", slug=""),
+                DocumentType(facility=facility, name="Zeta", slug=""),
             ]
         )
 
         self._run_backfill()
 
-        admin_row = DocumentType.objects.get(facility=facility, name="Zeta", category=DocumentType.Category.ADMIN)
-        service_row = DocumentType.objects.get(facility=facility, name="Zeta", category=DocumentType.Category.SERVICE)
+        admin_row = DocumentType.objects.get(facility=facility, name="Zeta")
+        service_row = DocumentType.objects.get(facility=facility, name="Zeta")
         assert admin_row.slug == "zeta"
         assert service_row.slug == "zeta-2"
 
@@ -283,8 +281,8 @@ class TestBackfillFunction:
         long_name = "A" * 200
         DocumentType.objects.bulk_create(
             [
-                DocumentType(facility=facility, name=long_name, slug="", category=DocumentType.Category.SERVICE),
-                DocumentType(facility=facility, name=long_name, slug="", category=DocumentType.Category.ADMIN),
+                DocumentType(facility=facility, name=long_name, slug=""),
+                DocumentType(facility=facility, name=long_name, slug=""),
             ]
         )
 
@@ -339,7 +337,7 @@ class TestE16SeedSlugTable:
 
     def test_seed_names_produce_expected_slugs(self, facility):
         for name, expected_slug in self.EXPECTED.items():
-            dt = DocumentType.objects.create(facility=facility, name=name, category=DocumentType.Category.SERVICE)
+            dt = DocumentType.objects.create(facility=facility, name=name)
             assert dt.slug == expected_slug, f"{name} → {dt.slug} (erwartet {expected_slug})"
             dt.delete()
 
@@ -389,8 +387,8 @@ class TestSlugNormalization:
 
     def test_counter_suffix_never_produces_double_hyphen(self, facility):
         long_name = "A" * 119 + " xy"
-        first = DocumentType.objects.create(facility=facility, name=long_name, category=DocumentType.Category.SERVICE)
-        second = DocumentType.objects.create(facility=facility, name=long_name, category=DocumentType.Category.ADMIN)
+        first = DocumentType.objects.create(facility=facility, name=long_name)
+        second = DocumentType.objects.create(facility=facility, name=long_name)
         assert first.slug != second.slug
         for slug in (first.slug, second.slug):
             assert len(slug) <= 120
@@ -446,10 +444,7 @@ class TestBackfillSlugNormalization:
         neun E16-Seed-Namen ergeben exakt dieselben Slugs wie zuvor."""
         self._drop_constraint_and_disable_trigger()
         DocumentType.objects.bulk_create(
-            [
-                DocumentType(facility=facility, name=name, slug="", category=DocumentType.Category.SERVICE)
-                for name in TestE16SeedSlugTable.EXPECTED
-            ]
+            [DocumentType(facility=facility, name=name, slug="") for name in TestE16SeedSlugTable.EXPECTED]
         )
 
         self._run_backfill()

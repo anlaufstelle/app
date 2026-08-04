@@ -71,7 +71,6 @@ def doc_type_with_high_field(facility):
     """
     dt = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.CONTACT,
         sensitivity=DocumentType.Sensitivity.NORMAL,
         name="NormalMitHighField",
     )

@@ -52,7 +52,6 @@ class TestFieldTemplateDeleteProtection:
         """Events ohne Wert unter dem Slug blockieren nicht."""
         doc_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.CONTACT,
             name="Andere Doku",
         )
         ft_unused = FieldTemplate.objects.create(
@@ -120,7 +119,6 @@ class TestFieldTemplateDeleteProtection:
         )
         other_doc = DocumentType.objects.create(
             facility=other_facility,
-            category=DocumentType.Category.CONTACT,
             name="OtherKontakt",
         )
         other_ft = FieldTemplate.objects.create(

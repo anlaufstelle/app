@@ -92,12 +92,10 @@ def _make_doc_type(
     name: str,
     system_type: str | None = None,
     sensitivity: str = DocumentType.Sensitivity.NORMAL,
-    category: str = DocumentType.Category.CONTACT,
 ) -> DocumentType:
     return DocumentType.objects.create(
         facility=facility,
         name=name,
-        category=category,
         sensitivity=sensitivity,
         system_type=system_type,
     )

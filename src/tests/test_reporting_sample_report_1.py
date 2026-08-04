@@ -154,7 +154,7 @@ def user(facility):
 
 @pytest.fixture
 def make_doc_type(facility):
-    def _make(name, system_type, category=DocumentType.Category.SERVICE, *, slug="", doc_facility=None):
+    def _make(name, system_type, *, slug="", doc_facility=None):
         """``slug=""`` laesst ``save()`` den Slug aus dem Namen ableiten (Bestand).
 
         Der explizite Slug ist fuer den Zweitschluessel aus #1741 noetig: dort
@@ -164,7 +164,6 @@ def make_doc_type(facility):
         return DocumentType.objects.create(
             facility=doc_facility or facility,
             name=name,
-            category=category,
             system_type=system_type,
             slug=slug,
         )
@@ -209,15 +208,15 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
     still uebersprungene (nicht gemappte) Typen, Ereignisse ohne Person,
     Zeitraum-/``is_deleted``-/Facility-Filter.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     krise = make_doc_type("Krisengespräch", DocumentType.SystemType.CRISIS)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
     medizin = make_doc_type("Medizinische Versorgung", DocumentType.SystemType.MEDICAL)
     spritzen = make_doc_type("Spritzentausch", DocumentType.SystemType.NEEDLE_EXCHANGE)
     begleitung = make_doc_type("Begleitung", DocumentType.SystemType.ACCOMPANIMENT)
     vermittlung = make_doc_type("Vermittlung", DocumentType.SystemType.REFERRAL)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
-    ohne_typ = make_doc_type("Freitext", None, DocumentType.Category.NOTE)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+    ohne_typ = make_doc_type("Freitext", None)
 
     jung = make_client("JA-01", Client.AgeCluster.U18)
     mittel = make_client("JA-02", Client.AgeCluster.AGE_18_26)
@@ -251,7 +250,6 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
     fremder_typ = DocumentType.objects.create(
         facility=fremde_facility,
         name="Kontakt",
-        category=DocumentType.Category.CONTACT,
         system_type=DocumentType.SystemType.CONTACT,
     )
     make_event(fremder_typ, None, event_facility=fremde_facility)
@@ -267,9 +265,9 @@ def kleine_daten(facility, make_doc_type, make_client, make_event):
     ohne Personenbezug) mit Rohzahl 1 — beide muessen im Export ohne Zahl
     erscheinen.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
     person = make_client("JA-50", Client.AgeCluster.U18)
 
     make_event(kontakt, person)
@@ -284,7 +282,7 @@ def kleine_daten(facility, make_doc_type, make_client, make_event):
 @pytest.fixture
 def grosse_daten(facility, make_doc_type, make_client, make_event):
     """Datensatz vollstaendig **ab** der Schwelle — nichts wird unterdrueckt."""
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
     personen = [make_client(f"JA-6{index}", Client.AgeCluster.AGE_18_26) for index in range(5)]
 
@@ -303,7 +301,7 @@ def sekundaer_daten(facility, make_doc_type, make_client, make_event):
     Kontakte 6 (>= k), Beratung 2 (< k): waere nur Beratung unterdrueckt, liesse
     sie sich aus der Randsumme zurueckrechnen, also faellt auch Kontakte.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
     personen = [make_client(f"JA-7{index}", Client.AgeCluster.AGE_18_26) for index in range(5)]
 
@@ -324,7 +322,7 @@ def rueckrechnungs_daten(facility, make_doc_type, make_client, make_event):
     sie ueber ``9 − 5`` exakt zurueck. Sekundaer-Suppression greift bei nur
     einer Cluster-Zeile nicht.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     person = make_client("JA-80", Client.AgeCluster.U18)
 
     for _index in range(4):
@@ -342,8 +340,8 @@ def unterdrueckte_randsumme_daten(facility, make_doc_type, make_client, make_eve
     Bliebe die Unmapped-Zahl stehen, waere die unterdrueckte Randsumme als
     ``events_in_period − 5`` ablesbar.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
     person = make_client("JA-90", Client.AgeCluster.AGE_18_26)
 
     for _index in range(3):
@@ -365,9 +363,9 @@ def identitaet_a_daten(facility, make_doc_type, make_client, make_event):
     Personen ⇒ ``unique_clients`` < k bleibt unterdrueckt und faellt als
     Rechengroesse weg.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
 
     jung = make_client("JA-A1", Client.AgeCluster.U18)
     mittel = make_client("JA-A2", Client.AgeCluster.AGE_18_26)
@@ -394,9 +392,9 @@ def identitaet_b_daten(facility, make_doc_type, make_client, make_event):
     Zahlen kollisionsfrei: keine ±-Kombination aus bis zu drei veroeffentlichten
     Zahlen (23, 15, 8, 9, 8, 7 + Records) ergibt 4 oder 5.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
 
     jung = make_client("JA-B1", Client.AgeCluster.U18)
     mittel = make_client("JA-B2", Client.AgeCluster.AGE_18_26)
@@ -518,8 +516,8 @@ class TestBuildDataset:
         self, backend, facility, make_doc_type, make_client, make_event
     ):
         """Bestandsverhalten: Notiz/Hausverbot zaehlen in Altersgruppen und Personen mit."""
-        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
-        hausverbot = make_doc_type("Hausverbot", DocumentType.SystemType.BAN, DocumentType.Category.ADMIN)
+        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+        hausverbot = make_doc_type("Hausverbot", DocumentType.SystemType.BAN)
         person = make_client("JA-40", Client.AgeCluster.UNKNOWN)
         make_event(notiz, person)
         make_event(hausverbot, person)
@@ -555,7 +553,7 @@ class TestBuildDataset:
 
 class TestValidateCompleteness:
     def test_ohne_luecken_keine_issues(self, backend, facility, make_doc_type, make_client, make_event):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
         person = make_client("JA-10", Client.AgeCluster.AGE_18_26)
         make_event(kontakt, person)
         make_event(kontakt, person)
@@ -573,16 +571,16 @@ class TestValidateCompleteness:
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
 
         # Gegenprobe: Hausverbot ist bewusst nicht zugeordnet.
-        make_event(make_doc_type("Hausverbot", DocumentType.SystemType.BAN, DocumentType.Category.ADMIN), person)
+        make_event(make_doc_type("Hausverbot", DocumentType.SystemType.BAN), person)
         issues = backend.validate_completeness(facility, DATE_FROM, DATE_TO)
         assert [issue.code for issue in issues] == ["unmapped_system_types"]
 
     def test_nicht_gemappte_system_types_erzeugen_warnung(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
-        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
-        ohne_typ = make_doc_type("Freitext", None, DocumentType.Category.NOTE)
+        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+        ohne_typ = make_doc_type("Freitext", None)
         person = make_client("JA-20", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
@@ -605,8 +603,8 @@ class TestValidateCompleteness:
         self, backend, facility, make_doc_type, make_client, make_event
     ):
         """``system_type=""`` (blank speicherbar) ist wie NULL nicht zugeordnet."""
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
-        leer = make_doc_type("Leerer Systemtyp", "", DocumentType.Category.NOTE)
+        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        leer = make_doc_type("Leerer Systemtyp", "")
         person = make_client("JA-22", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
@@ -628,8 +626,8 @@ class TestValidateCompleteness:
     def test_nicht_gemappte_ereignisse_ausserhalb_des_zeitraums_zaehlen_nicht(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
-        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE)
+        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
         person = make_client("JA-21", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
@@ -642,7 +640,7 @@ class TestValidateCompleteness:
     def test_ereignisse_ohne_person_erzeugen_info_hinweis(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, DocumentType.Category.CONTACT)
+        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
         person = make_client("JA-30", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
@@ -688,7 +686,6 @@ class TestValidateCompleteness:
         fremder_typ = DocumentType.objects.create(
             facility=fremde_facility,
             name="Notiz",
-            category=DocumentType.Category.NOTE,
             system_type=DocumentType.SystemType.NOTE,
         )
         make_event(fremder_typ, None, event_facility=fremde_facility)
@@ -773,7 +770,7 @@ class TestSlugZweitschluessel:
         """Gegenprobe: ohne Slug-Treffer bleibt die Meldung wie im Bestand."""
         person = make_client("JA-81", Client.AgeCluster.AGE_18_26)
         make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
-        make_event(make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE), person)
+        make_event(make_doc_type("Notiz", DocumentType.SystemType.NOTE), person)
 
         issues = backend.validate_completeness(facility, DATE_FROM, DATE_TO)
 
@@ -812,7 +809,7 @@ class TestSlugZweitschluessel:
         """
         person = make_client("JA-82", Client.AgeCluster.U18)
         make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
-        make_event(make_doc_type("Notiz", DocumentType.SystemType.NOTE, DocumentType.Category.NOTE), person)
+        make_event(make_doc_type("Notiz", DocumentType.SystemType.NOTE), person)
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 

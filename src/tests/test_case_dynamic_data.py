@@ -244,7 +244,6 @@ class TestCaseDataJsonWhitelist:
 
         other_type = DocumentType.objects.create(
             facility=facility,
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CASE,
             name="Fallformular (anderes)",
         )

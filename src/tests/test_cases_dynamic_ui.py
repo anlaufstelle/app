@@ -70,7 +70,6 @@ def doc_type_case_high(facility):
     """Fall-Typ mit HIGH-Sensitivitaet — fuer Staff unsichtbar (Rolle max ELEVATED)."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Fall-Hochsensibel",
@@ -89,7 +88,6 @@ def doc_type_case_mixed(facility):
     """Fall-Typ (NORMAL) mit einem HIGH-Feld — Staff darf genau dieses Feld nicht sehen."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Fallakte",
     )
@@ -114,7 +112,6 @@ def doc_type_case_select(facility):
     """Fall-Typ mit SELECT + BOOLEAN — fuer die Anzeige-/Export-Formatierung."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Fall-Auswahl",
     )
@@ -142,7 +139,6 @@ def doc_type_case_conditional(facility):
     """Fall-Typ mit Bedingung TEXT->TEXTAREA (Payload-Smoke-Test)."""
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Fall-Bedingt",
     )
@@ -177,7 +173,6 @@ def doc_type_case_file_condition(facility):
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
-        category=DocumentType.Category.ADMIN,
         entity_type=DocumentType.EntityType.CASE,
         name="Fall-Dateibedingt",
     )

@@ -50,7 +50,6 @@ class TestEventCreateDefaultDocType:
         inactive_dt = DocumentType.objects.create(
             facility=facility,
             name="Inaktiv",
-            category=DocumentType.Category.CONTACT,
             is_active=False,
         )
         Settings.objects.create(facility=facility, default_document_type=inactive_dt)
