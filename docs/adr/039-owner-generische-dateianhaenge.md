@@ -30,6 +30,8 @@ Zwänge: RLS-Umbau ist nach Prod-Deploy praktisch irreversibel (DDL + Datenbesta
 
 Direkte Policy nach der Vorlage `0127_rls_offline_client_revocation.py` (inkl. `is_super_admin`-Bypass-Branch). Defense-in-Depth-Gewinn: unter der Join-Policy wäre eine Zeile ohne Ereignis policy-los gewesen. Neue Leak-Verantwortung des Service-Layers: `facility` wird IMMER aus `owner.facility` abgeleitet, nie als freier Parameter entgegengenommen (Unit-Test pinnt `attachment.facility_id == owner.facility_id`). Composite-FK-Härtung `(event_id, facility_id)` ist bewusst NICHT Teil dieses Umbaus → eigenes Härtungs-Issue.
 
+**Update 2026-08-04:** Härtung nachgezogen (#1780, Migration [`0133`](../../src/core/migrations/0133_attachment_composite_fk.py)) — UNIQUE-Begleitindizes `(id, facility_id)` auf `core_event`/`core_client`/`core_case` plus je ein zusammengesetzter FK `core_attachment (owner_fk, facility_id)` → Zieltabelle `(id, facility_id)`. Die divergente Kombination ist damit ein DB-Constraint, nicht mehr nur Konvention. `MATCH SIMPLE` (Default) lässt die beiden ungenutzten Owner-Spalten je Zeile passieren; `DEFERRABLE INITIALLY DEFERRED` wie im übrigen Schema. Der Reverse trägt bewusst **keinen** Rollback-Guard — er nimmt nur Härtung zurück.
+
 ### 3. Manager
 
 `AttachmentQuerySet(FacilityScopedQuerySet)` + `AttachmentManager(FacilityScopedManager)` mit `active()`/`deleted()`-Override auf `deleted_at` — der nackte `FacilityScopedManager` vererbt `is_deleted`-basierte Methoden auf den Reverse-Manager und liefe auf einen `FieldError`. Keine `AlterModelManagers`-Migration nötig (vorher Default-Manager).
@@ -89,9 +91,9 @@ Lückenlosigkeit: das Rename lässt die Join-Policy aktiv; nach 0130 sind alle Z
 - Datei-Felder sind an Personen- und Fall-Typen konfigurierbar; Formulare, Download-Routen, Datei-Übersicht, DSGVO-Lösch- und Auskunftspfade werden owner-generisch.
 - Die K-Anonymisierungs-Bridge-Invariante („Anhänge sind beim Bridge-Lauf immer schon weg") gilt nur noch für Event-Anhänge; client-/fall-eigene Anhänge löscht die Bridge über denselben Helfer wie `anonymize_client` (Paritäts-Guard erzwingt Gleichlauf).
 - Audit-Auswertungen müssen zwei `target_type`-Strings und zwei Detail-Schemata kennen (Betreiberhinweis in der Admin-Doku).
-- Der Service-Layer trägt die Facility-Ableitung als Sicherheitsverantwortung (Pin-Test); eine falsche Owner-Facility-Kombination ist kein DB-Constraint, sondern Konvention + Test (Composite-FK-Härtung folgt separat).
+- Der Service-Layer trägt die Facility-Ableitung als Sicherheitsverantwortung (Pin-Test); eine falsche Owner-Facility-Kombination war zunächst kein DB-Constraint, sondern Konvention + Test — seit #1780/Migration `0133` zusätzlich per Composite-FK auf DB-Ebene gepinnt (§2, Update).
 - Rollback der Migrationskette wird mit den ersten client-/case-Anhängen unmöglich (bewusst, Reverse-Guard).
-- Folgearbeiten: Composite-FK-Härtung `(event_id, facility_id)`; B4 (superseded-Anzeige der Übersicht) nur notiert; Offline-Queuebarkeit der Client-/Fall-Formulare bleibt aus.
+- Folgearbeiten: Composite-FK-Härtung `(event_id, facility_id)` — erledigt, #1780; B4 (superseded-Anzeige der Übersicht) nur notiert; Offline-Queuebarkeit der Client-/Fall-Formulare bleibt aus.
 
 ## Alternatives considered
 

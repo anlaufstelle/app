@@ -144,18 +144,20 @@ docker compose -f docker-compose.prod.yml exec web \
 
 **Wichtig:** Nicht alle Migrationen sind rueckwaerts-kompatibel. `RunPython`-Operationen ohne `reverse_code` koennen nicht zurueckgerollt werden. Vor einem Update immer das Changelog auf irreversible Migrationen pruefen.
 
-#### Sonderfall: Attachment-Kette `0129`–`0131` (owner-generische Dateianhaenge)
+#### Sonderfall: Attachment-Kette `0129`–`0131` (owner-generische Dateianhaenge) + Haertung `0133`
 
 Milestone 24 (#1738,
 [ADR-039](adr/039-owner-generische-dateianhaenge.md)) baut die Anhang-Tabelle um.
 Drei Migrationen gehoeren zwingend zusammen — **`0130` und `0131` duerfen nie in
-getrennten Releases ausgeliefert werden**:
+getrennten Releases ausgeliefert werden**; `0133` reicht die Composite-FK-Haertung
+nach und ist unabhaengig davon rueckrollbar:
 
 | Migration | Was sie tut |
 |---|---|
 | `0129_rename_eventattachment_to_attachment` | Reines `RenameModel` (`core_eventattachment` → `core_attachment`). Policies, RLS-Flags und GRANTs haengen an der Tabellen-OID und **ueberleben** das Rename — hier wird nichts an der Policy angefasst. |
 | `0130_attachment_owner_facility` | Neue Spalte `facility_id` (nullable → Backfill aus `event.facility` unter der **Admin-/Owner-Rolle**, BYPASSRLS → NOT NULL), `event_id` wird nullable, `client_id`/`case_id` kommen dazu, CheckConstraint `attachment_exactly_one_owner`, Index. **Reverse-Guard als letzte Operation** (rueckwaerts also als erste). |
 | `0131_rls_attachment` | Policy-Swap auf `core_attachment`: **direkte** facility-Klausel statt Join ueber `core_event`, inkl. `is_super_admin`-Branch. Der Reverse stellt die Join-Policy wieder her und laesst RLS bewusst **aktiv**; er traegt einen eigenen Rollback-Guard. |
+| `0133_attachment_composite_fk` | Nachgereichte Haertung (#1780): UNIQUE-Begleitindizes `(id, facility_id)` auf `core_event`/`core_client`/`core_case` + je ein zusammengesetzter FK `core_attachment (owner_fk, facility_id)`. **Kann an Bestandsdaten scheitern** — ein Vorwaerts-Preflight meldet divergente Zeilen (Owner in Einrichtung A, Zeile mit `facility_id` von B) je Owner-Sorte mit Anzahl, bevor das `ALTER TABLE` laeuft. Solche Zeilen vor dem erneuten Migrieren angleichen oder samt `.enc`-Datei entfernen. Der Reverse ist vollstaendig und **ohne** Rollback-Guard (er nimmt nur Haertung zurueck). |
 
 > ⚠️ **Rollback-Einschraenkung.** `migrate core 0128` (bzw. der Einzelschritt
 > `migrate core 0130`) ist **nur zulaessig, solange keine personen- oder

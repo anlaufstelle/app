@@ -47,13 +47,19 @@ class TestSchema0130:
             pytest.skip("Schema-Introspektion braucht PostgreSQL")
 
     def test_facility_not_null_mit_fk(self):
+        """``array_length(conkey, 1) = 1``: gemeint ist der EINSPALTIGE
+        ``facility_id``-FK. Seit 0133 (Refs #1780) tragen ``core_attachment``
+        zusaetzlich drei ZWEIspaltige ``(owner_fk, facility_id)``-FKs auf die
+        Owner-Tabellen — die matchen den Namensfilter ebenfalls und sind hier
+        nicht gemeint (eigene Pins in ``test_0133_attachment_composite_fk.py``).
+        """
         assert _column_meta("facility_id") == "NO"
         with connection.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT DISTINCT confrelid::regclass::text FROM pg_constraint
                 WHERE conrelid = 'core_attachment'::regclass AND contype = 'f'
-                  AND conname LIKE '%facility%'
+                  AND conname LIKE '%facility%' AND array_length(conkey, 1) = 1
                 """
             )
             targets = [row[0] for row in cursor.fetchall()]
