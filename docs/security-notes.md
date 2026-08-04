@@ -506,10 +506,12 @@ beruht). Sperrvermerke blockieren seit #1756
 
 ### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
 
-**Status:** Analyse abgeschlossen; Umsetzung läuft — **K5 mitigiert**
-(#1767), **K0 per Fail-safe (a) mitigiert**
-(#1768; das Zellkriterium (b) bleibt offen),
-die übrigen Kanäle sind offen bzw. akzeptiert (Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
+**Status:** Analyse abgeschlossen; Umsetzung begonnen — **K5**
+(#1767), **K0 (a, Fail-safe)**
+(#1768) und **K6**
+(#1769) sind **mitigiert**; K0 (b, Zellkriterium)
+sowie K2, K1, K3 und K4b bleiben offen, K4a/K4c sind akzeptiert bzw. abgewertet (Spalte „Status" in der
+Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
 Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
@@ -542,7 +544,7 @@ Betriebskennzahl.
 |---|---|---|---|---|---|
 | **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | **(a) mitigiert** (#1768), (b) offen |
 | **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 | **mitigiert** (#1767) |
-| **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | offen |
+| **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | **mitigiert** (#1769) |
 | **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | offen |
 | **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | offen |
 | **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | offen |
@@ -678,6 +680,22 @@ es keine gibt — genau das ist für `_hide_term` bereits als gewollt dokumentie
 Definitionsgrenze:** der Kanal entsteht nicht aus der unvermeidbaren Arithmetik publizierter
 Randsummen, sondern aus einer selbst eingeführten, **datenabhängigen Verzweigung** im Suppressionscode.
 
+*Status: **mitigiert*** (#1769).
+`SampleReport1Backend.prepare_export` baut den Vollständigkeits-Block aus der festen Codeliste
+`_EXPORT_ISSUE_CODES` statt aus `result.completeness`: **beide** Meldungen immer, **nie** mit Zahl, in
+fester Reihenfolge — weder Gestalt noch Inhalt des Blocks hängen noch an einem Datum.
+`_prepare_issue`, `complements`, `_known_terms`, `_term_status`, `_hide_term` und
+`_close_identity_leak` sind samt der bezifferten Export-Vorlagen (`_EXPORT_MESSAGES`) und des
+Fallback-Texts **ersatzlos gelöscht**, ihre msgids aus beiden Katalogen entfernt. Als Nebeneffekt
+ist die Vier-Term-Identität ohne jede Nachbesserung geschlossen: beide Meldungs-Terme sind
+grundsätzlich verborgen, es bleiben nie weniger als zwei Unbekannte. **Kosten (bewusst):** der Bericht
+meldet die Lücke auch dann unbeziffert, wenn es keine gibt, und ein künftiger `validate_completeness`-Check
+erreicht den Export erst, wenn sein Code in `_EXPORT_ISSUE_CODES` und `_SUPPRESSED_MESSAGES` aufgenommen
+wird (fail-safe: lieber eine Meldung zu wenig als eine Kleinstfallzahl zu viel). Test-gepinnt in
+`test_reporting_sample_report_1.py::TestVollstaendigkeitsblockIstDatenunabhaengig` (inkl. „zwei Welten mit
+verschiedenen Lücken liefern denselben Block") und `test_reporting_views.py`
+(`test_completeness_block_ist_datenunabhaengig`).
+
 #### K2 — Auslösekriterium der Sekundär-Suppression
 
 `_apply_secondary_suppression` ist an die **Zellenzahl** gekoppelt (`if len(suppressed) != 1: return`)
@@ -758,8 +776,11 @@ Mehrdeutigkeit *nach oben* erzeugt) nichts ausrichtet.
 *Beleg:* Sweep über 76 910 Welten — die zweite Grundgesamtheit erhöht die Fälle mit exakt bestimmtem
 Stufenvektor um **+89 %**; über 15 728 distinkte Publikationen ist W fast durchweg exakt bestimmbar, in
 **8 820** davon mit 0 < W < k, also als echte Kleinstfallzahl, **ohne dass eine Suppressionsregel
-angesprochen hätte**. Der M5-Schutz `_close_identity_leak` verhindert im Export-Pfad das exakte
-Pinning, die Differenz bleibt aber invariant; im PDF-Pfad läuft `prepare_export` überhaupt nicht.
+angesprochen hätte**. Der M5-Schutz `_close_identity_leak` verhinderte im Export-Pfad das exakte
+Pinning, die Differenz blieb aber invariant; im PDF-Pfad läuft `prepare_export` überhaupt nicht.
+*(Seit #1769 ist `_close_identity_leak`
+entfallen — der Schutz ist stärker geworden, nicht schwächer: die Meldungs-Terme sind jetzt
+**grundsätzlich** verborgen statt nur situativ.)*
 
 *Severity-Korrektur (geprüft, nicht tragfähig):* Die Lesart „ungemappte Ereignisse ⇒ mindestens ein
 Hausverbot/eine Notiz" ist **falsch** — `_UNMAPPED_Q` umfasst auch `system_type IS NULL`, und jeder

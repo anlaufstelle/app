@@ -341,7 +341,7 @@ The "View" column says nothing about the **source**: panel and download read liv
 
 **Yes, as soon as your backend produces numbers that leave the building** — and they do as soon as the backend is registered, because download and panel then become available automatically. The default (`return result`) is only defensible for backends whose cells cannot be small counts by construction.
 
-The threshold *k* comes per facility from `Settings.k_anonymity_threshold` (default 5) and is read via `_get_threshold(facility)` from [`core.services.dashboard.external_report`](../../src/core/services/dashboard/external_report.py) — the same module that provides `_suppress_small` and `suppress_sample_report_1_stats` for the PDF path and the external report. Set `summary["k_anonymity_threshold"] = threshold` if your backend suppresses: the CSV renderer then appends a note to the metadata line, and the panel shows the suppression notice.
+The threshold *k* comes per facility from `Settings.k_anonymity_threshold` (default 5) and is read via `_get_threshold(facility)` from [`core.services.dashboard.external_report`](../../src/core/services/dashboard/external_report.py) — the same module that provides `_suppress_small` and `suppress_sample_report_1_stats` for the PDF path and the external report. `_suppress_small` additionally establishes a **value-independent output order** (#1767): suppressed rows move to the end of the list as a block in canonical order, so that the position does not reveal which cell is the smallest. Set `summary["k_anonymity_threshold"] = threshold` if your backend suppresses: the CSV renderer then appends a note to the metadata line, and the panel shows the suppression notice.
 
 ### Minimal example — `ExampleBackend`
 
@@ -355,22 +355,16 @@ One metric per row plus a marginal total. Exactly one back-calculation risk has 
 Several interrelated metrics plus completeness notices. Cell suppression alone is not enough here:
 
 1. **Report body:** the same machinery as in the PDF (`suppress_sample_report_1_stats`) — category and age-group cells `< k` are dropped including secondary suppression, `unique_clients` and the marginal total `total < k` become `None`. `records` is re-projected from the **already suppressed** rows; without that step the CSV would have kept showing the raw numbers.
-2. **Completeness notices** are **always** reworded for the export: without the reference quantity and without a percentage (the reference quantity would be the lever for complementary back-calculation). The number is dropped entirely if it is itself `< k`, if its **complement** is `< k`, or if there is no vetted low-digit wording for that `code` (fail-safe for future checks). The notice about the gap always remains — a report that conceals gaps would be misleadingly complete.
-3. **Four-term identity.** By construction,
+2. **Person-derived breakdowns are dropped as a whole** as soon as `unique_clients < k` (#1768): the k threshold is checked against event counts, so an age cell may well come from a single person. `_drop_person_derived_breakdowns` then removes `by_age_cluster` (and, in the statistics report, `by_contact_stage`) from the artefact entirely — key gone, not merely values set to `None`, because a nulled row would still assert "this age group occurs". Event-derived aggregates remain untouched.
+3. **Completeness notices are data-independent** (#1769): **both** notices always appear in the export and **never carry a number**. The problem was not how large a stated number is but that it was stated at all — a quantified notice implicitly publishes "my complement is ≥ k", i.e. a lower bound, and the decision about it ran over a disjunction on raw data and was therefore informative in itself. The block is therefore built from fixed codes rather than derived from `result.completeness`. The notice about the gap always remains — a report that conceals gaps would be misleadingly complete; conversely the notice also stands when there is no gap at all (if the two cases were distinguishable, the mere shape of the block would reveal the raw data again).
 
- ```
-   total + unmapped_events  =  Σ by_age_cluster + events_without_client
-   ```
-
- — both sides are "all visible events in the period". If **three** terms are known and the fourth is hidden, the fourth is exactly determined and the suppression would run empty. `_close_identity_leak` then degrades one further term, and always via the *notices*: preferably the number of a quantified notice is dropped; only when none is quantified any more is a **missing** notice replaced by a suppression hint — because `validate_completeness` only reports gaps > 0, so a missing notice deterministically means zero and is itself a known term. The placeholder text and the degradation text are **word-for-word identical**; if the wording were distinguishable, it would reveal whether the gap is > 0.
-
-**Remember:** a `rows` backend with *one* metric per row has no such identity — the pattern from `example.py` is sufficient there. Anyone emitting several interrelated metrics or quantified notices should follow `SampleReport1Backend.prepare_export` and examine the relationships between them **as a whole**, not pairwise.
+**Remember:** what makes a backend dangerous are **relationships between metrics** — by construction, for instance, `total + unmapped_events = Σ by_age_cluster + events_without_client` (both sides are "all visible events in the period"). If three terms are known, the fourth is exactly determined and the suppression would run empty. Since (2) and (3), both notice terms are hidden by default and Σ age groups disappears entirely for small person counts — never fewer than two unknowns remain, without any data-dependent post-correction. A `rows` backend with *one* metric per row has no such identity; the pattern from `example.py` is sufficient there. Anyone emitting several interrelated metrics should examine the relationships between them **as a whole**, not pairwise.
 
 ### Boundary behaviour you need to know
 
 - **`prepare_export` is not idempotent.** The hook expects the **raw** `build_dataset` result (`SampleReport1Backend`, for instance, converts `by_category` from tuples into dict rows). Calling it twice is not a meaningful call; transform exactly once.
 - **An empty period looks like suppression.** `0 < k`, so an honest zero is suppressed as well. That is the behaviour of the shared suppression function and the safe direction, but it can confuse recipients.
-- **Over-suppression at the edges.** With empty age-group lists or a very small *k*, closing the identity can degrade more than strictly necessary. The direction is safe, the loss of informative value is real.
+- **Over-suppression is priced in.** The completeness notices stand there unquantified even when there is no gap at all, and the age distribution disappears completely for just a few persons — both are intended (the alternative would be a data-dependent branch, i.e. exactly the channel that was closed). The direction is safe, the loss of informative value is real.
 - **Suppression never belongs in `build_dataset`.** Otherwise snapshots would be trimmed too — and with them the basis of every later analysis and of the unchanged PDF path.
 
 ---
@@ -530,4 +524,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 13282584f75dfcbfe475b620e22921fdbf1bcdaf -->
+<!-- source-hash: d2b38459b082391bea6abaca6d53757cd04a4d46 -->

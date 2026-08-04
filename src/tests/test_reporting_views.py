@@ -82,8 +82,15 @@ class TestDatasetReportPanelView:
         assert "ohne Berichtszuordnung" in content
         assert "bg-amber-100 text-amber-800" in content
 
-    def test_completeness_ohne_luecken_zeigt_gruenen_hinweis(self, client, lead_user, doc_type_contact, sample_event):
-        """Gegenprobe: keine Luecken -> gruener Hinweis, keine Warnung."""
+    def test_completeness_block_ist_datenunabhaengig(self, client, lead_user, doc_type_contact, sample_event):
+        """K6 (Refs #1769): auch ohne jede Luecke stehen beide Meldungen im Panel.
+
+        Frueher zeigte das Panel hier den gruenen Hinweis „Keine
+        Vollstaendigkeitsprobleme erkannt" — und genau diese Fallunterscheidung
+        war der Kanal: ihre bloße Gestalt sagte, ob es eine Luecke gibt. Der
+        gruene Zweig des Templates bleibt fuer Backends ohne
+        Vollstaendigkeitspruefung erhalten (z. B. ``example``).
+        """
         _mapped(doc_type_contact)
         # Grosse Fallzahl, damit nichts unterdrueckt wird und keine Luecken entstehen.
         from core.models import Client, Event
@@ -106,6 +113,20 @@ class TestDatasetReportPanelView:
         client.force_login(lead_user)
 
         response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Keine Vollständigkeitsprobleme erkannt" not in content
+        assert "ohne Berichtszuordnung im Zeitraum unterdrückt" in content
+        assert "ohne Personenbezug im Zeitraum unterdrückt" in content
+
+    def test_example_backend_ohne_pruefung_zeigt_gruenen_hinweis(self, client, lead_user, doc_type_contact):
+        """Gegenprobe: das Referenz-Backend hat keine Vollstaendigkeits-Checks —
+        dort steht weiterhin der gruene Hinweis.
+        """
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "example"})
 
         assert response.status_code == 200
         assert "Keine Vollständigkeitsprobleme erkannt" in response.content.decode()

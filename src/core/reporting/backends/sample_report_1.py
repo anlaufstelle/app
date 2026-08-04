@@ -75,40 +75,25 @@ _AGE_LABELS = {
 # haelt die Absicht unabhaengig von diesem ORM-Detail fest.
 _UNMAPPED_Q = Q(document_type__system_type__isnull=True) | ~Q(document_type__system_type__in=tuple(CATEGORY_MAP))
 
-# Export-Fassung der Vollstaendigkeits-Meldungen: **nur** die eigene Zahl der
-# Meldung, ohne Bezugsgroesse und ohne Prozentanteil. Die internen Fassungen in
-# ``validate_completeness`` duerfen beides nennen (Snapshot-/Rohpfad hat keinen
-# externen Konsumenten) — im Export waere die Bezugsgroesse dagegen der Hebel
-# fuer die komplementaere Rueckrechnung (siehe ``prepare_export``).
+# Export-Fassung der Vollstaendigkeits-Meldungen (K6, Refs #1769). Sie ist die
+# EINZIGE Fassung, die ein externer Empfaenger je zu sehen bekommt: der Block
+# wird **datenunabhaengig** gebaut — beide Meldungen immer, nie mit Zahl.
 #
-# Die Vorlagen sind ``gettext_lazy`` (Refs #1744) und werden mit ``format_lazy``
-# gefuellt — nicht mit ``.format()``: auf einem Lazy-Proxy waere ``.format()``
-# eine **eager** Auswertung, die die Uebersetzung schon in
-# ``prepare_export`` festschriebe statt erst beim Rendern. Der Platzhalter
-# ``{count}`` ist Teil der msgid und muss in jeder Uebersetzung stehen bleiben.
-_EXPORT_MESSAGES = {
-    "unmapped_system_types": _("{count} Ereignisse ohne Berichtszuordnung im Zeitraum"),
-    "events_without_client": _(
-        "{count} Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten"
-    ),
-}
-
-# Ersatztexte fuer Vollstaendigkeits-Meldungen, deren Zahl faellt: die Luecke
-# bleibt sichtbar (sonst waere der Bericht irrefuehrend vollstaendig), die Zahl
-# verschwindet. Bewusst ohne jede Ziffer — auch Anteile/Bezugsgroessen lassen
-# die unterdrueckte Zahl zurueckrechnen.
+# Die frueheren bezifferten Export-Vorlagen sind ersatzlos entfallen. Tragend war
+# nicht, wie gross eine genannte Zahl ist, sondern dass sie ueberhaupt genannt
+# wird: eine bezifferte Meldung publiziert implizit „mein Komplement >= k", also
+# eine untere Schranke — selbst wenn jede Alterszelle unterdrueckt ist. Die
+# Entscheidung darueber lief ueber eine Disjunktion auf Rohdaten und war damit
+# selbst informativ.
 #
-# Die Formulierung sagt bewusst **nicht**, dass es solche Ereignisse gibt: der
-# gleiche Text steht auch dann, wenn die Meldung nur als Unterdrueckungs-Hinweis
-# fuer einen Wert eingesetzt wird, den es gar nicht gibt (``_hide_term``).
-# Waeren beide Faelle unterscheidbar, verriete der Wortlaut selbst, ob die
-# Luecke > 0 ist — und damit genau das, was unterdrueckt werden soll.
+# Die Formulierung sagt bewusst **nicht**, dass es solche Ereignisse gibt — der
+# gleiche Text steht auch dann, wenn es gar keine Luecke gibt. Waeren beide
+# Faelle unterscheidbar, verriete der Wortlaut selbst, ob die Luecke > 0 ist,
+# und der Kanal waere durch die Hintertuer zurueck.
 #
-# **Uebersetzungshinweis (Refs #1744):** Die Ununterscheidbarkeit gilt je
-# ``code`` und muss in **jeder** Sprache halten. Weil Platzhalter- und
-# Degradations-Fassung dieselbe Konstante benutzen, ist das strukturell
-# gesichert — eine Uebersetzung kann sie nicht auseinanderziehen, solange sie
-# keine Ziffer und keine Bezugsgroesse ergaenzt.
+# **Uebersetzungshinweis (Refs #1744):** Die Ziffernfreiheit gilt je ``code`` und
+# muss in **jeder** Sprache halten; eine Uebersetzung darf weder eine Zahl noch
+# eine Bezugsgroesse ergaenzen.
 _SUPPRESSED_MESSAGES = {
     "unmapped_system_types": _("Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-Anonymität)"),
     "events_without_client": _(
@@ -117,124 +102,16 @@ _SUPPRESSED_MESSAGES = {
     ),
 }
 
-# Severity der beiden Identitaets-Terme — noetig, wenn ein Unterdrueckungs-
-# Hinweis fuer eine *fehlende* Meldung erzeugt wird (dann gibt es kein Original).
+# Severity der beiden Meldungen — im Export gibt es kein Original mehr, aus dem
+# sie uebernommen werden koennte.
 _ISSUE_SEVERITIES: dict[str, Literal["info", "warning"]] = {
     "unmapped_system_types": "warning",
     "events_without_client": "info",
 }
 
-# Meldungs-Terme der Vier-Term-Identitaet, in Degradations-Reihenfolge:
-# ``events_without_client`` faellt zuerst (siehe ``_close_identity_leak``).
-_IDENTITY_CODES = ("events_without_client", "unmapped_system_types")
-
-# Fail-safe fuer kuenftige Checks ohne eigenen Ersatztext: lieber unspezifisch
-# als eine Kleinstfallzahl im Export.
-_SUPPRESSED_FALLBACK = _("Angabe unterdrückt (k-Anonymität)")
-
-
-def _prepare_issue(issue: CompletenessIssue, threshold: int, complements: dict[str, int]) -> CompletenessIssue:
-    """Export-Fassung einer Vollstaendigkeits-Meldung (K-Anon).
-
-    Die Zahl faellt, wenn sie selbst unter der Schwelle liegt, wenn ihr
-    Komplement unter der Schwelle liegt (Differenz-Rueckrechnung) oder wenn es
-    fuer den Code keine geprueft ziffernarme Export-Formulierung gibt
-    (Fail-safe fuer kuenftige Checks). Sonst wird die Meldung ohne
-    Bezugsgroesse/Prozentanteil neu formuliert. Meldungen ohne ``count``
-    bleiben unangetastet — ihnen fehlt die Transformationsgrundlage.
-    """
-    if issue.count is None:
-        return issue
-
-    template = _EXPORT_MESSAGES.get(issue.code)
-    complement = complements.get(issue.code)
-    drop_number = template is None or issue.count < threshold or (complement is not None and complement < threshold)
-    if drop_number:
-        return dataclasses.replace(
-            issue,
-            message=_SUPPRESSED_MESSAGES.get(issue.code, _SUPPRESSED_FALLBACK),
-            count=None,
-        )
-    return dataclasses.replace(issue, message=format_lazy(template, count=issue.count))
-
-
-def _term_status(issues: list[CompletenessIssue], code: str) -> str:
-    """``"quantified"`` | ``"hidden"`` | ``"missing"`` fuer einen Meldungs-Term.
-
-    ``"missing"`` heisst **bekannt**: ``validate_completeness`` meldet nur Luecken
-    > 0, eine fehlende Meldung ist also deterministisch die Zahl 0.
-    """
-    for issue in issues:
-        if issue.code == code:
-            return "quantified" if issue.count is not None else "hidden"
-    return "missing"
-
-
-def _known_terms(summary: dict, issues: list[CompletenessIssue]) -> int:
-    """Wie viele der vier Identitaets-Terme ein Empfaenger bestimmen kann."""
-    known = 0
-    if summary.get("total") is not None:
-        known += 1
-    # Σ der Altersgruppen ist nur ohne unterdrueckte Zelle bestimmbar; die leere
-    # Liste ist bestimmbar (= 0). Fehlt die Tabelle ganz (K0-Fail-safe,
-    # Refs #1768), ist Σ **unbestimmt** — nicht 0: sonst zaehlte der Fail-safe
-    # als bekannter Term und liesse ohne Not eine weitere Meldung fallen.
-    age_rows = summary.get("by_age_cluster")
-    if age_rows is not None and not any(row.get("suppressed") for row in age_rows):
-        known += 1
-    known += sum(1 for code in _IDENTITY_CODES if _term_status(issues, code) != "hidden")
-    return known
-
-
-def _hide_term(issues: list[CompletenessIssue], code: str) -> list[CompletenessIssue]:
-    """Nimmt einem Meldungs-Term seine Aussagekraft fuer die Identitaet.
-
-    Bei bezifferter Meldung faellt die Zahl. Fehlt die Meldung, wird ein
-    Unterdrueckungs-Hinweis **eingefuegt** — sonst bliebe die Abwesenheit selbst
-    die Information „dieser Term ist 0".
-    """
-    replacement_text = _SUPPRESSED_MESSAGES[code]
-    for index, issue in enumerate(issues):
-        if issue.code == code:
-            replaced = dataclasses.replace(issue, message=replacement_text, count=None)
-            return [*issues[:index], replaced, *issues[index + 1 :]]
-
-    placeholder = CompletenessIssue(code, replacement_text, _ISSUE_SEVERITIES[code], count=None)
-    # Kanonische Reihenfolge der Meldungen beibehalten (unmapped zuerst).
-    position = 0 if code == "unmapped_system_types" else len(issues)
-    return [*issues[:position], placeholder, *issues[position:]]
-
-
-def _close_identity_leak(summary: dict, issues: list[CompletenessIssue]) -> list[CompletenessIssue]:
-    """Schliesst die Rueckrechnung ueber die Vier-Term-Identitaet.
-
-    Konstruktionsbedingt gilt ``total + unmapped_events = Σ by_age_cluster +
-    without_client`` (beide Seiten = alle sichtbaren Ereignisse im Zeitraum).
-    Sind drei Terme bekannt und der vierte verborgen, ist der vierte exakt
-    bestimmt — die Suppression liefe leer. Dann faellt ein weiterer Term, und
-    zwar **immer** ueber die Meldungen: ``total`` und die Altersgruppen-Zellen
-    gehoeren dem Report-Koerper (``suppress_sample_report_1_stats``), an dem hier
-    nicht nachgebessert wird.
-
-    Bevorzugt faellt eine bezifferte Meldung (sichtbarer Informationsverlust,
-    aber kein neuer Hinweis); erst wenn keine beziffert ist, wird eine fehlende
-    Meldung durch einen Unterdrueckungs-Hinweis ersetzt. Jede Runde verwandelt
-    einen bekannten Term in einen verborgenen, die Schleife terminiert also
-    spaetestens nach zwei Runden (mehr Meldungs-Terme gibt es nicht).
-    """
-    updated = list(issues)
-    # Bewusst durch die Zahl der Meldungs-Terme begrenzt statt ``while``: jede
-    # Runde verbirgt einen Term, mehr als zwei kann es nicht geben.
-    for _round in _IDENTITY_CODES:
-        if _known_terms(summary, updated) != 3:
-            break
-        candidate = next(
-            (code for code in _IDENTITY_CODES if _term_status(updated, code) == "quantified"), None
-        ) or next((code for code in _IDENTITY_CODES if _term_status(updated, code) == "missing"), None)
-        if candidate is None:  # pragma: no cover - bei drei bekannten Termen unerreichbar
-            break
-        updated = _hide_term(updated, candidate)
-    return updated
+# Kanonische Reihenfolge des Export-Blocks (unmapped zuerst) — Single Source of
+# Truth fuer den datenunabhaengigen Aufbau in ``prepare_export``.
+_EXPORT_ISSUE_CODES = ("unmapped_system_types", "events_without_client")
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -396,13 +273,13 @@ class SampleReport1Backend(DatasetBackend):
         suppressierten Kategorie-Zeilen neu projiziert — sonst haette der
         CSV-Export die Rohzahlen weiterhin gezeigt.
 
-        Vollstaendigkeits-Meldungen werden fuer den Export **immer** neu
-        formuliert (``_prepare_issue``): ohne Bezugsgroesse und Prozentanteil,
-        und ganz ohne Zahl, sobald die Zahl selbst oder ihr Komplement unter
-        der Schwelle liegt. Anschliessend prueft
-        ``_close_identity_leak`` die Vier-Term-Identitaet als Ganzes.
-        Der Hinweis auf die Luecke bleibt in jedem Fall stehen.
-        ``build_dataset`` bleibt roh (Snapshot-Payload).
+        Der Vollstaendigkeits-Block ist **datenunabhaengig** (K6, Refs #1769):
+        beide Meldungen immer, nie mit Zahl, in fester Reihenfolge — er wird
+        aus ``_EXPORT_ISSUE_CODES`` gebaut und nicht aus ``result.completeness``
+        abgeleitet. Damit sagt weder seine Gestalt noch sein Inhalt etwas ueber
+        die Rohdaten aus. Der Hinweis auf die Luecke bleibt in jedem Fall
+        stehen; ``build_dataset`` bleibt roh (Snapshot-Payload) und behaelt die
+        bezifferten Fassungen fuer die interne Pruefung.
 
         Erwartet das **rohe** ``build_dataset``-Ergebnis: ``by_category``
         kommt als ``(name, count)``-Tupel herein und geht als Dict-Zeilen
@@ -418,24 +295,14 @@ class SampleReport1Backend(DatasetBackend):
 
         records = [{"category": row["name"], "count": row["count"]} for row in summary["by_category"]]
 
-        # Konstruktionsbedingte Komplementbeziehungen zwischen Meldungszahl und
-        # Aggregat (``events_in_period`` = alle sichtbaren Ereignisse im Zeitraum):
-        #
-        #   Σ by_age_cluster = events_in_period − without_client
-        #   summary["total"] = events_in_period − unmapped_events
-        #
-        # Bleibt eine Meldungszahl stehen, waehrend ihre Gegenmenge unterdrueckt
-        # ist, laesst sich die Gegenmenge als Differenz exakt zurueckrechnen —
-        # deshalb faellt die Zahl auch dann, wenn *das Komplement* klein ist.
-        # Die Komplemente **vor** der Suppression aus dem rohen Aggregat ziehen:
-        # in ``summary`` sind die Zellen an dieser Stelle ggf. schon ``None``.
-        complements = {
-            "events_without_client": sum(row.get("count") or 0 for row in result.summary.get("by_age_cluster", [])),
-            "unmapped_system_types": result.summary.get("total") or 0,
-        }
-        completeness = [_prepare_issue(issue, threshold, complements) for issue in result.completeness]
-        # Zweiter Durchgang gegen die Rueckrechnung ueber die Identitaet als
-        # Ganzes — die paarweise Komplementregel oben deckt nur eine Richtung ab.
-        completeness = _close_identity_leak(summary, completeness)
+        # K6 (Refs #1769): fest verdrahtet statt aus ``result.completeness``
+        # abgeleitet — jede Ableitung waere wieder eine datenabhaengige
+        # Verzweigung. Codes, die ``validate_completeness`` kuenftig ergaenzt,
+        # erreichen den Export damit nicht ungeprueft (fail-safe: lieber eine
+        # Meldung zu wenig als eine Kleinstfallzahl zu viel).
+        completeness = [
+            CompletenessIssue(code, _SUPPRESSED_MESSAGES[code], _ISSUE_SEVERITIES[code], count=None)
+            for code in _EXPORT_ISSUE_CODES
+        ]
 
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

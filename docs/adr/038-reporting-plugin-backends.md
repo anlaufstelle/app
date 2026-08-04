@@ -194,6 +194,14 @@ Zwei Punkte, die die Bauform tragen:
 
 Die **bekannten Divergenzen bleiben unverändert und dokumentiert**: mehrmonatige `unique_clients` (hybrid summiert Monatswerte und zählt Personen mehrfach, live macht einen echten DISTINCT-Count) und Zeiträume jenseits der Aufbewahrungsfristen (Snapshots überdauern die Event-Retention, die Live-Abfrage sieht soft-gelöschte Ereignisse nicht mehr) — siehe Konsequenz 8 und [docs/reporting-plugins.md § 5](../reporting-plugins.md). Neu ist allein, dass ein Empfänger die Divergenz am Artefakt erkennen kann, statt sie für einen Fehler zu halten.
 
+## Update 2026-08-04: Disclosure-Fixes K5/K0/K6 — § 5 teilweise überholt (Refs #1767, #1768, #1769)
+
+Die Disclosure-Analyse #1742 hat drei Kanäle in der oben beschriebenen Suppression nachgewiesen; die Korrekturen ändern § 5 (K-Anon-Invariante) an drei Stellen. Herleitung, Belege und Restrisiken stehen in [`docs/security-notes.md` § Disclosure-Analyse](../security-notes.md) — Security-Härtungen werden dort geführt, nicht als eigener ADR.
+
+1. **Wertunabhängige Zeilenreihenfolge** (#1767): `_suppress_small` schiebt unterdrückte Zeilen als Block in kanonischer Ordnung ans Listenende. Die Position war zuvor eine Rangaussage — die unterdrückte Kleinstzelle stand ausnahmslos zuletzt.
+2. **Personenabgeleitete Aufschlüsselungen fallen als Ganzes** (#1768): bei `unique_clients < k` entfernt `_drop_person_derived_breakdowns` `by_age_cluster` und `by_contact_stage` vollständig aus dem Artefakt. Die Schwelle prüft Ereigniszahlen; eine Alterszelle konnte von einer einzigen Person stammen.
+3. **Der Vollständigkeits-Block ist datenunabhängig** (#1769): beide Meldungen erscheinen **immer** und **nie mit Zahl**. Die oben beschriebene Vier-Term-Identitäts-Schließung samt `_close_identity_leak` ist damit **ersatzlos entfallen** — sie war die datenabhängige Verzweigung, die den Kanal überhaupt erst erzeugte. Der Absatz zu § 5 („bevorzugt fällt die Zahl einer bezifferten Meldung …") beschreibt Code, den es nicht mehr gibt; die aktuelle Fassung steht in [`docs/reporting-plugins.md` § 6](../reporting-plugins.md).
+
 ## References
 
 - [`src/core/reporting/base.py`](../../src/core/reporting/base.py) — Vertrag (`DatasetBackend`, `DatasetResult`, `FieldSpec`, `CompletenessIssue`, `snapshot_enabled`-Zusage)

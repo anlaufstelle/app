@@ -192,21 +192,18 @@ class TestBackendStringsUnterOverride:
         """K-Anon-Invariante gilt je Sprache: keine Ziffer, keine Bezugsgroesse.
 
         Eine Uebersetzung, die die unterdrueckte Zahl oder ihr Komplement wieder
-        nennt, haette die Unterdrueckung ausgehebelt.
+        nennt, haette die Unterdrueckung ausgehebelt. Seit K6
+        (#1769) sind das
+        die **einzigen** Meldungstexte, die ein externer Empfaenger je sieht —
+        die frueheren bezifferten Export-Vorlagen (mit ``{count}``-Platzhalter)
+        sind ersatzlos entfallen.
         """
-        from core.reporting.backends.sample_report_1 import _SUPPRESSED_FALLBACK, _SUPPRESSED_MESSAGES
+        from core.reporting.backends.sample_report_1 import _EXPORT_ISSUE_CODES, _SUPPRESSED_MESSAGES
 
         with override("en"):
-            texts = [str(_SUPPRESSED_FALLBACK)] + [str(msg) for msg in _SUPPRESSED_MESSAGES.values()]
+            texts = [str(_SUPPRESSED_MESSAGES[code]) for code in _EXPORT_ISSUE_CODES]
 
+        assert len(texts) == 2
         for text in texts:
             assert not _de_stems_in(text), text
             assert not re.search(r"\d", text), f"Ziffer im k-Anon-Ersatztext: {text!r}"
-
-    def test_platzhalter_ueberleben_die_uebersetzung(self):
-        """``format_lazy`` bricht, sobald eine Uebersetzung einen Platzhalter verliert."""
-        from core.reporting.backends.sample_report_1 import _EXPORT_MESSAGES
-
-        with override("en"):
-            for text in (str(msg) for msg in _EXPORT_MESSAGES.values()):
-                assert "{count}" in text, text

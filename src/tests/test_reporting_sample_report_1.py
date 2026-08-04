@@ -21,12 +21,11 @@ from django.utils.functional import Promise
 from core.models import Client, DocumentType, Event, Facility, Organization, User
 from core.reporting import registry
 from core.reporting.backends.sample_report_1 import (
-    _IDENTITY_CODES,
+    _EXPORT_ISSUE_CODES,
     _ISSUE_SEVERITIES,
+    _SUPPRESSED_MESSAGES,
     CATEGORY_MAP,
     SampleReport1Backend,
-    _hide_term,
-    _prepare_issue,
 )
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
@@ -35,18 +34,6 @@ pytestmark = pytest.mark.django_db
 
 DATE_FROM = date(2025, 5, 1)
 DATE_TO = date(2025, 5, 31)
-
-# Aggregat-Geruest fuer Tests, die nur die Completeness-Transformation pruefen.
-# Bewusst so gewaehlt, dass **alle vier** Terme der Identitaet bekannt sind
-# (total 10, Σ Altersgruppen 10, beide Meldungen fehlen = 0): dann ist kein Term
-# verborgen und die Identitaets-Absicherung degradiert nichts zusaetzlich — die
-# Tests bleiben auf die Meldungs-Transformation fokussiert.
-_NEUTRALES_SUMMARY = {
-    "total": 10,
-    "by_category": [("Kontakte", 10)],
-    "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 10}],
-    "unique_clients": 5,
-}
 
 
 def _veroeffentlichte_zahlen(value):
@@ -699,6 +686,109 @@ class TestValidateCompleteness:
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
 
 
+class TestVollstaendigkeitsblockIstDatenunabhaengig:
+    """K6 (Refs #1769): der Vollstaendigkeits-Block haengt an KEINEM Datum mehr.
+
+    Bisher entschied ``_prepare_issue`` ueber eine Disjunktion auf Rohdaten
+    (``template is None or count < k or complement < k``), ob die Zahl einer
+    Meldung faellt. Tragend war dabei nicht die Disjunktion, sondern: eine
+    **bezifferte** Meldung publiziert implizit „mein Komplement >= k", also eine
+    untere Schranke — selbst wenn jede Alterszelle unterdrueckt ist. Der Kanal
+    entstand damit nicht aus der unvermeidbaren Arithmetik publizierter
+    Randsummen, sondern aus einer selbst eingefuehrten, datenabhaengigen
+    Verzweigung im Suppressionscode.
+
+    Beide Meldungen erscheinen deshalb **immer** und **nie mit Zahl**. Kosten:
+    der Bericht meldet die Luecke auch dann unbeziffert, wenn es keine gibt —
+    genau das war fuer den frueheren Platzhalter-Pfad bereits als gewollt
+    dokumentiert (waeren die Faelle unterscheidbar, verriete der Wortlaut
+    selbst, ob die Luecke > 0 ist).
+    """
+
+    ERWARTETE_CODES = ["unmapped_system_types", "events_without_client"]
+
+    def _prepared(self, backend, facility, threshold=None):
+        if threshold is not None:
+            from core.models import Settings
+
+            Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": threshold})
+        return backend.prepare_export(facility, backend.build_dataset(facility, DATE_FROM, DATE_TO))
+
+    @pytest.mark.parametrize(
+        "fixture_name",
+        ["kleine_daten", "grosse_daten", "parity_daten", "rueckrechnungs_daten", "unterdrueckte_randsumme_daten"],
+    )
+    def test_immer_beide_meldungen_immer_ohne_zahl(self, backend, request, fixture_name):
+        einrichtung = request.getfixturevalue(fixture_name)
+
+        issues = self._prepared(backend, einrichtung).completeness
+
+        assert [issue.code for issue in issues] == self.ERWARTETE_CODES
+        assert [issue.severity for issue in issues] == ["warning", "info"]
+        for issue in issues:
+            assert issue.count is None
+            assert not any(char.isdigit() for char in str(issue.message))
+
+    def test_zwei_welten_mit_verschiedenen_luecken_liefern_denselben_block(self, backend, kleine_daten):
+        """Mai: beide Luecken (je 1 Ereignis). Januar: gar keine Daten, also auch
+        keine Luecke. Die Bloecke muessen wortgleich sein — sonst ist ihre bloße
+        Gestalt schon eine Aussage ueber die Rohdaten.
+        """
+
+        def block(date_from, date_to):
+            result = backend.prepare_export(kleine_daten, backend.build_dataset(kleine_daten, date_from, date_to))
+            return [(issue.code, str(issue.message), issue.severity) for issue in result.completeness]
+
+        assert block(DATE_FROM, DATE_TO) == block(date(2025, 1, 1), date(2025, 1, 31))
+
+    def test_auch_bei_schwelle_1_bleiben_die_meldungen_unbeziffert(self, backend, kleine_daten):
+        """Die Schwelle steuert die Zell-Suppression, nicht mehr den Meldungsblock."""
+        issues = self._prepared(backend, kleine_daten, threshold=1).completeness
+
+        assert [issue.code for issue in issues] == self.ERWARTETE_CODES
+        for issue in issues:
+            assert issue.count is None
+            assert not any(char.isdigit() for char in str(issue.message))
+
+    def test_fremde_meldungscodes_erreichen_den_export_nicht(self, backend, facility):
+        """Fail-safe: ein kuenftiger Check ohne geprueft ziffernarme
+        Export-Formulierung wuerde sonst eine Rohzahl in das Artefakt tragen.
+        Der Block wird deshalb aus festen Codes gebaut, nicht aus der Eingabe.
+        """
+        result = DatasetResult(
+            mode="aggregate",
+            records=[],
+            summary={"total": 10, "by_category": [], "by_age_cluster": [], "unique_clients": 9},
+            completeness=[CompletenessIssue("kuenftiger_check", "40 Ereignisse mit Luecke", "warning", count=40)],
+        )
+
+        issues = backend.prepare_export(facility, result).completeness
+
+        assert [issue.code for issue in issues] == self.ERWARTETE_CODES
+
+    def test_json_und_xml_tragen_denselben_ziffernfreien_block(self, backend, kleine_daten):
+        payload = json.loads(export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="json").content)
+        assert [issue["code"] for issue in payload["completeness"]] == self.ERWARTETE_CODES
+
+        # Begruendung fuers folgende noqa: eigener, gerade erst generierter
+        # Output (kein Fremddaten-Parsing).
+        root = ET.fromstring(export_dataset(backend, kleine_daten, DATE_FROM, DATE_TO, format="xml").content)  # noqa: S314
+        issues = root.find("completeness").findall("issue")
+
+        assert [issue.get("code") for issue in issues] == self.ERWARTETE_CODES
+        assert [issue.text for issue in issues] == [i["message"] for i in payload["completeness"]]
+        for issue in issues:
+            assert not any(char.isdigit() for char in issue.text)
+
+    def test_rohpfad_bleibt_beziffert(self, backend, kleine_daten):
+        """Snapshot-/Rohpfad hat keinen externen Konsumenten und behaelt die Zahlen —
+        sonst waere die interne Vollstaendigkeitspruefung wertlos.
+        """
+        raw = backend.build_dataset(kleine_daten, DATE_FROM, DATE_TO)
+
+        assert [issue.count for issue in raw.completeness] == [1, 1]
+
+
 class TestPrepareExport:
     """Refs #1278 (T1) / Security R4+R14: jedes extern zirkulierende Berichts-
     Artefakt unterdrueckt Kleinstfallzahlen. Der Export (CSV/JSON/XML) und die
@@ -814,117 +904,6 @@ class TestPrepareExport:
         exportiert = self._prepared(backend, parity_daten).summary
         assert set(exportiert) == (set(raw) | {"k_anonymity_threshold"}) - {"by_age_cluster"}
 
-    def test_export_meldung_verliert_bezugsgroesse_und_prozent(self, backend, facility):
-        """Review C1: die Bezugsgroesse ``events_in_period`` erlaubt zusammen mit
-        der Meldungszahl die exakte Rueckrechnung der unterdrueckten Gegenmenge
-        (Σ by_age_cluster = events_in_period − without_client). Die exportierte
-        Fassung nennt deshalb nur noch die eigene Zahl der Meldung.
-        """
-        issue = CompletenessIssue(
-            "events_without_client",
-            "6 von 16 Ereignissen im Zeitraum ohne Personenbezug (38 %) — nicht in "
-            "Altersgruppen/Personenzahl enthalten",
-            "info",
-            count=6,
-        )
-        summary = {
-            "total": 10,
-            "by_category": [],
-            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 10}],
-            "unique_clients": 5,
-        }
-        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
-
-        assert backend.prepare_export(facility, result).completeness == [
-            CompletenessIssue(
-                "events_without_client",
-                "6 Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten",
-                "info",
-                count=6,
-            )
-        ]
-
-    def test_export_meldung_unmapped_nennt_nur_die_eigene_zahl(self, backend, facility):
-        issue = CompletenessIssue(
-            "unmapped_system_types",
-            "7 Ereignisse in 2 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
-            "warning",
-            count=7,
-        )
-        summary = {
-            "total": 10,
-            "by_category": [],
-            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 10}],
-            "unique_clients": 5,
-        }
-        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
-
-        assert backend.prepare_export(facility, result).completeness == [
-            CompletenessIssue(
-                "unmapped_system_types",
-                "7 Ereignisse ohne Berichtszuordnung im Zeitraum",
-                "warning",
-                count=7,
-            )
-        ]
-
-    def test_meldung_faellt_wenn_die_komplementmenge_klein_ist(self, backend, facility):
-        """Review C1: ``count`` (5) liegt ueber der Schwelle, die Gegenmenge
-        (4 personenbezogene Ereignisse) darunter — bliebe die Zahl stehen, waere
-        die unterdrueckte Altersgruppen-Zelle als Differenz ablesbar.
-        """
-        issue = CompletenessIssue("events_without_client", "5 von 9 …", "info", count=5)
-        summary = {
-            "total": 9,
-            "by_category": [],
-            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4}],
-            "unique_clients": 1,
-        }
-        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
-
-        transformiert = backend.prepare_export(facility, result).completeness[0]
-        assert transformiert.count is None
-        assert not any(char.isdigit() for char in transformiert.message)
-
-    def test_unmapped_meldung_faellt_wenn_die_randsumme_unterdrueckt_ist(self, backend, facility):
-        """Review C1: ``total`` < k wird zu ``None`` — bliebe die Unmapped-Zahl
-        stehen, waere die Randsumme als ``events_in_period − unmapped`` ablesbar,
-        sobald die Gesamtzahl anderweitig bekannt wird.
-        """
-        issue = CompletenessIssue("unmapped_system_types", "6 Ereignisse in 2 …", "warning", count=6)
-        summary = {
-            "total": 3,
-            "by_category": [("Kontakte", 3)],
-            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 9}],
-            "unique_clients": 6,
-        }
-        result = DatasetResult(mode="aggregate", records=[], summary=summary, completeness=[issue])
-
-        transformiert = backend.prepare_export(facility, result).completeness[0]
-        assert transformiert.count is None
-        assert not any(char.isdigit() for char in transformiert.message)
-
-    def test_completeness_ohne_rohzahl_bleibt_unveraendert(self, backend, facility):
-        """Ohne ``count`` fehlt die Transformationsgrundlage — Meldung bleibt stehen."""
-        issue = CompletenessIssue("strukturhinweis", "Keine Zahl in dieser Meldung.", "info")
-        result = DatasetResult(mode="aggregate", records=[], summary=_NEUTRALES_SUMMARY, completeness=[issue])
-
-        assert backend.prepare_export(facility, result).completeness == [issue]
-
-    @pytest.mark.parametrize("count", [2, 40])
-    def test_unbekannter_code_faellt_auf_generische_meldung_zurueck(self, backend, facility, count):
-        """Fail-safe: fuer einen kuenftigen Check gibt es keine geprueft
-        ziffernarme Export-Formulierung — dann faellt die Zahl, egal wie gross
-        sie ist (auch ohne bekannte Komplementbeziehung).
-        """
-        issue = CompletenessIssue("kuenftiger_check", f"{count} Ereignisse mit Luecke", "warning", count=count)
-        result = DatasetResult(mode="aggregate", records=[], summary=_NEUTRALES_SUMMARY, completeness=[issue])
-
-        transformiert = backend.prepare_export(facility, result).completeness[0]
-        assert transformiert.count is None
-        assert not any(char.isdigit() for char in transformiert.message)
-        assert transformiert.code == "kuenftiger_check"
-
     def test_schwelle_aus_den_facility_settings(self, backend, kleine_daten):
         from core.models import Settings
 
@@ -937,22 +916,11 @@ class TestPrepareExport:
             {"name": "Beratung", "count": 1, "suppressed": False},
         ]
         assert summary["total"] == 4
-        # Bei k=1 bleiben die Vollstaendigkeits-Meldungen beziffert — aber
-        # weiterhin ohne Bezugsgroesse/Prozentanteil (Review C1).
-        assert self._prepared(backend, kleine_daten).completeness == [
-            CompletenessIssue(
-                "unmapped_system_types",
-                "1 Ereignisse ohne Berichtszuordnung im Zeitraum",
-                "warning",
-                count=1,
-            ),
-            CompletenessIssue(
-                "events_without_client",
-                "1 Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/Personenzahl enthalten",
-                "info",
-                count=1,
-            ),
-        ]
+        # Die Schwelle steuert nur noch die Zell-Suppression: der
+        # Vollstaendigkeits-Block ist seit K6 (Refs #1769) datenunabhaengig und
+        # bleibt auch bei k=1 unbeziffert (eigene Klasse
+        # ``TestVollstaendigkeitsblockIstDatenunabhaengig``).
+        assert [issue.count for issue in self._prepared(backend, kleine_daten).completeness] == [None, None]
 
     def test_build_dataset_bleibt_roh(self, backend, kleine_daten):
         """Snapshot-Paritaet: die Suppression darf nicht in den Roh-Pfad lecken."""
@@ -1042,7 +1010,8 @@ class TestExportDatasetIntegration:
         # Seit dem K0-Fail-safe (Refs #1768) faellt die Zelle nicht nur auf
         # ``None``, sondern die ganze Tabelle — die Person ist eine einzige.
         assert "by_age_cluster" not in payload["summary"]
-        assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
+        # Seit K6 (Refs #1769) stehen immer beide Meldungen — immer unbeziffert.
+        assert [issue["code"] for issue in payload["completeness"]] == list(_EXPORT_ISSUE_CODES)
         for issue in payload["completeness"]:
             assert not any(char.isdigit() for char in issue["message"])
 
@@ -1070,9 +1039,11 @@ class TestExportDatasetIntegration:
         )
 
         assert payload["summary"]["total"] is None
-        # Der Hinweis auf die Luecke bleibt erhalten — nur seine Zahl faellt.
-        assert [issue["code"] for issue in payload["completeness"]] == ["unmapped_system_types"]
-        assert not any(char.isdigit() for char in payload["completeness"][0]["message"])
+        # Der Hinweis auf die Luecke bleibt erhalten — nur seine Zahl faellt
+        # (seit K6, Refs #1769, gilt das fuer beide Meldungen ausnahmslos).
+        assert [issue["code"] for issue in payload["completeness"]] == list(_EXPORT_ISSUE_CODES)
+        for issue in payload["completeness"]:
+            assert not any(char.isdigit() for char in issue["message"])
 
         # Seit dem K0-Fail-safe (Refs #1768) faellt auch die Altersgruppen-Zelle
         # (8, >= k) weg — sie beschrieb die Verteilung einer einzigen Person.
@@ -1107,9 +1078,15 @@ class TestVierTermIdentitaet:
 
     Sind drei der vier Terme bekannt — veroeffentlicht **oder** deterministisch
     (fehlende Meldung = 0) — bestimmt die Identitaet den vierten exakt, auch
-    wenn er gerade unterdrueckt wurde. Der Export muss deshalb einen weiteren
-    Term verbergen, und zwar ueber die Meldungszahlen: ``total`` und die
-    Altersgruppen-Zellen gehoeren dem Report-Koerper (``suppress_sample_report_1_stats``).
+    wenn er gerade unterdrueckt wurde.
+
+    Seit K6 (Refs #1769) sind die **beiden Meldungs-Terme grundsaetzlich**
+    verborgen: der Vollstaendigkeits-Block ist datenunabhaengig, beide Meldungen
+    erscheinen immer und nie mit Zahl. Damit gibt es nie weniger als zwei
+    Unbekannte, und die frueher noetige nachtraegliche Degradation
+    (``_close_identity_leak``) ist ersatzlos entfallen. Die Klasse bleibt als
+    Regressionsschutz: sie prueft die *Aussage* (nicht rueckrechenbar) gegen die
+    Artefakte, nicht mehr die Mechanik.
     """
 
     def _payload(self, backend, facility):
@@ -1118,11 +1095,9 @@ class TestVierTermIdentitaet:
     def test_szenario_a_ohne_meldung_ist_nicht_aufloesbar(self, backend, identitaet_a_daten):
         """(a) 27 − 25 = 2 waere die unterdrueckte Unmapped-Zahl.
 
-        Seit dem K0-Fail-safe (Refs #1768) traegt schon der Report-Koerper den
-        Schutz: drei Personen liegen unter der Schwelle, die Altersgruppen-Tabelle
-        faellt komplett — Σ Altersgruppen ist damit gar nicht mehr publiziert und
-        der Ausgangsterm der Rueckrechnung fehlt. Zusammen mit der unterdrueckten
-        Unmapped-Zahl bleiben zwei Unbekannte.
+        Doppelt abgesichert: der K0-Fail-safe (Refs #1768) nimmt bei drei
+        Personen die Altersgruppen-Tabelle ganz heraus (Σ unbekannt), und beide
+        Meldungs-Terme sind seit K6 (Refs #1769) grundsaetzlich unbeziffert.
         """
         payload = self._payload(backend, identitaet_a_daten)
         terme = _identitaets_terme(payload)
@@ -1130,26 +1105,27 @@ class TestVierTermIdentitaet:
         assert terme["total"] == 25
         assert terme["altersgruppen"] is None
         assert terme["unmapped"] is None
+        assert terme["ohne_person"] is None
         assert not _exakt_rueckrechenbar(terme)
         assert 2 not in _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
 
-    def test_szenario_b_bezifferte_meldung_wird_degradiert(self, backend, identitaet_b_daten):
+    def test_szenario_b_meldungszahlen_stehen_gar_nicht_mehr_im_artefakt(self, backend, identitaet_b_daten):
         """(b) 23 + 5 − 24 = 4 waere die unterdrueckte Zahl ohne Personenbezug.
 
-        Auch hier faellt Σ Altersgruppen mit der Tabelle weg (drei Personen), die
-        Meldung „ohne Personenbezug" bleibt zusaetzlich unbeziffert. Die
-        Unmapped-Zahl (5) darf sichtbar bleiben: ihr Komplement (``total`` = 23)
-        liegt ueber der Schwelle, und ohne Σ Altersgruppen laesst sich aus ihr
-        nichts zurueckrechnen.
+        Die Rechnung braucht die bezifferte Unmapped-Meldung (5). Die gibt es
+        seit K6 (Refs #1769) nicht mehr — weder 4 noch 5 sind ableitbar.
         """
         payload = self._payload(backend, identitaet_b_daten)
         terme = _identitaets_terme(payload)
 
         assert terme["total"] == 23
         assert terme["altersgruppen"] is None
+        assert terme["unmapped"] is None
         assert terme["ohne_person"] is None
         assert not _exakt_rueckrechenbar(terme)
-        assert 4 not in _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
+        ableitbar = _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
+        assert 4 not in ableitbar
+        assert 5 not in ableitbar
 
     @pytest.mark.parametrize("fixture_name", ["identitaet_a_daten", "identitaet_b_daten"])
     def test_unterdrueckte_meldungstexte_im_xml_sind_ziffernfrei(self, backend, request, fixture_name):
@@ -1165,22 +1141,25 @@ class TestVierTermIdentitaet:
         for issue in unterdrueckt:
             assert not any(char.isdigit() for char in issue.text)
 
-    def test_ohne_verborgenen_term_keine_zusatzmeldung(self, backend, grosse_daten):
-        """Alle vier Terme bekannt (beide Meldungen fehlen) ⇒ nichts zu verbergen."""
+    def test_ohne_luecke_bleiben_die_meldungs_terme_trotzdem_verborgen(self, backend, grosse_daten):
+        """Gegenprobe zu K6: auch wenn es gar keine Luecke gibt (beide Rohzahlen 0),
+        stehen beide Meldungen unbeziffert im Artefakt — sonst waere ihre
+        Abwesenheit die Aussage „dieser Term ist 0".
+        """
         payload = self._payload(backend, grosse_daten)
 
-        assert payload["completeness"] == []
+        assert [issue["code"] for issue in payload["completeness"]] == list(_EXPORT_ISSUE_CODES)
         assert _identitaets_terme(payload) == {
             "total": 11,
             "altersgruppen": 11,
-            "unmapped": 0,
-            "ohne_person": 0,
+            "unmapped": None,
+            "ohne_person": None,
         }
 
     def test_leerer_zeitraum_bleibt_unaufloesbar(self, backend, parity_daten):
         """Leerer Zeitraum: ``total``=0 wird unterdrueckt, die Altersgruppen-Tabelle
         faellt ueber den K0-Fail-safe (Refs #1768, null Personen), beide Meldungen
-        fehlen mangels Luecke — zwei Unbekannte, nichts rueckrechenbar.
+        stehen unbeziffert — nichts rueckrechenbar.
         """
         payload = json.loads(
             export_dataset(backend, parity_daten, date(2025, 1, 1), date(2025, 1, 31), format="json").content
@@ -1190,46 +1169,35 @@ class TestVierTermIdentitaet:
         assert "by_age_cluster" not in payload["summary"]
         assert not _exakt_rueckrechenbar(_identitaets_terme(payload))
 
-    def test_unbekannte_altersgruppen_summe_braucht_keine_degradation(self, backend, rueckrechnungs_daten):
+    def test_unbekannte_altersgruppen_summe_bleibt_unbestimmt(self, backend, rueckrechnungs_daten):
         """Fehlt die Altersgruppen-Tabelle (K0-Fail-safe, Refs #1768: eine Person),
-        ist Σ unbekannt — dann sind hoechstens zwei Terme bekannt und es muss
-        nichts zusaetzlich fallen.
+        ist Σ unbekannt — zusammen mit den beiden verborgenen Meldungs-Termen
+        bleiben drei Unbekannte.
         """
         payload = self._payload(backend, rueckrechnungs_daten)
         terme = _identitaets_terme(payload)
 
         assert terme["altersgruppen"] is None
-        assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
-        assert sum(1 for wert in terme.values() if wert is None) == 2
+        assert [issue["code"] for issue in payload["completeness"]] == list(_EXPORT_ISSUE_CODES)
+        assert sum(1 for wert in terme.values() if wert is None) == 3
 
 
-class TestGuardPlatzhalterUndDegradierteMeldungGleich:
-    """Fable-Re-Review (Punkt 8, Welle-A-Polish): die eingefuegte Platzhalter-
-    Meldung fuer eine *fehlende* Meldung (``_hide_term``) und die
-    degradierte Fassung einer tatsaechlich *vorhandenen* Meldung
-    (``_prepare_issue``) muessen wortgleich und severity-gleich sein — heute
-    nur ueber die gemeinsamen Konstanten ``_SUPPRESSED_MESSAGES``/
-    ``_ISSUE_SEVERITIES`` sichergestellt, nicht durch einen eigenen Test
-    eingefroren. Driftet eine der beiden Konstanten unbemerkt auseinander,
-    unterscheiden sich Platzhalter- und degradierte Meldung fuer denselben
-    Code — genau das faengt dieser Test.
+class TestGuardExportTexteSindZiffernfrei:
+    """Fable-Re-Review (Punkt 8, Welle-A-Polish), fortgeschrieben mit K6
+    (Refs #1769): frueher musste ein Test sichern, dass Platzhalter- und
+    degradierte Fassung derselben Meldung wortgleich sind — sonst verriete der
+    Wortlaut, ob die Luecke > 0 ist. Seit der Block datenunabhaengig gebaut wird,
+    gibt es je ``code`` nur noch **einen** Text; die Ununterscheidbarkeit ist
+    damit strukturell und dieser Test pinnt die verbleibende Zusicherung: der
+    Text traegt keine Ziffer, und zu jedem exportierten Code gibt es Text und
+    Severity.
     """
 
-    @pytest.mark.parametrize("code", list(_IDENTITY_CODES))
-    def test_platzhalter_und_degradierte_meldung_sind_identisch(self, code):
-        # (a) Platzhalter: die Meldung fehlt komplett (deterministisch 0) —
-        # ``_hide_term`` FUEGT einen Unterdrueckungs-Hinweis EIN.
-        platzhalter = _hide_term([], code)[0]
-
-        # (b) Degradation: dieselbe Meldung existiert bereits (bezifferte
-        # Rohfassung, Zahl unter der Schwelle) — ``_prepare_issue`` degradiert sie.
-        rohfassung = CompletenessIssue(code, "Beliebiger Rohtext mit 3 Ereignissen", _ISSUE_SEVERITIES[code], count=3)
-        degradiert = _prepare_issue(rohfassung, threshold=100, complements={})
-
-        assert platzhalter.message == degradiert.message
-        assert platzhalter.severity == degradiert.severity
-        assert platzhalter.count is None
-        assert degradiert.count is None
+    @pytest.mark.parametrize("code", list(_EXPORT_ISSUE_CODES))
+    def test_je_code_genau_ein_ziffernfreier_text(self, code):
+        assert code in _SUPPRESSED_MESSAGES
+        assert code in _ISSUE_SEVERITIES
+        assert not any(char.isdigit() for char in str(_SUPPRESSED_MESSAGES[code]))
 
 
 class TestDiscovery:
@@ -1277,14 +1245,13 @@ class TestBackendStringsSindUebersetzbar:
         for issue in issues:
             assert isinstance(issue.message, Promise), f"Meldung {issue.code!r} ist ein eager f-String"
 
-    def test_export_und_unterdrueckungsfassung_sind_lazy(self, backend, parity_daten):
-        """Beide Transformationsfassungen aus ``prepare_export`` ebenfalls."""
-        result = backend.build_dataset(parity_daten, DATE_FROM, DATE_TO)
-        beziffert = _prepare_issue(result.completeness[0], threshold=1, complements={})
-        unterdrueckt = _prepare_issue(result.completeness[0], threshold=1000, complements={})
+    def test_exportfassungen_sind_lazy(self, backend, parity_daten):
+        """Auch die (seit K6 einzige) Export-Fassung aus ``prepare_export``."""
+        result = backend.prepare_export(parity_daten, backend.build_dataset(parity_daten, DATE_FROM, DATE_TO))
 
-        assert isinstance(beziffert.message, Promise)
-        assert isinstance(unterdrueckt.message, Promise)
+        assert result.completeness
+        for issue in result.completeness:
+            assert isinstance(issue.message, Promise), f"Meldung {issue.code!r} ist ein eager String"
 
     def test_category_map_bleibt_bewusst_unuebersetzt(self):
         """Gegenprobe: die Berichtskategorien duerfen NICHT lazy werden.
@@ -1299,23 +1266,17 @@ class TestBackendStringsSindUebersetzbar:
             assert isinstance(kategorie, str) and not isinstance(kategorie, Promise)
 
 
-class TestGuardUnterscheidbarkeitUnterLazyStrings:
-    """Refs #1744 + #1743-Vorarbeit: die Ununterscheidbarkeits-Invariante
-    (Platzhalter-Meldung ≡ degradierte Meldung, siehe
-    ``TestGuardPlatzhalterUndDegradierteMeldungGleich``) muss auch **nach dem
-    Rendern** halten. Der bestehende Guard vergleicht Promise-Objekte; deren
-    ``__eq__`` castet zwar, aber der Vergleich der gerenderten Zeichenketten
-    ist die Aussage, auf die es ankommt: Was ein Empfaenger liest, darf nicht
-    verraten, ob die Luecke > 0 ist.
+class TestGuardZiffernfreiheitNachDemRendern:
+    """Refs #1744 + #1743-Vorarbeit: die Ziffernfreiheit muss auch **nach dem
+    Rendern** halten. Der Guard oben prueft die Konstanten (Promise-Objekte);
+    hier zaehlt, was ein Empfaenger tatsaechlich im Artefakt liest — eine
+    Uebersetzung, die eine Zahl oder Bezugsgroesse ergaenzt, haette die
+    Unterdrueckung ausgehebelt.
     """
 
-    @pytest.mark.parametrize("code", list(_IDENTITY_CODES))
-    def test_gerenderte_texte_sind_wortgleich(self, code):
-        platzhalter = _hide_term([], code)[0]
-        rohfassung = CompletenessIssue(code, "Beliebiger Rohtext mit 3 Ereignissen", _ISSUE_SEVERITIES[code], count=3)
-        degradiert = _prepare_issue(rohfassung, threshold=100, complements={})
+    @pytest.mark.parametrize("code", list(_EXPORT_ISSUE_CODES))
+    def test_gerenderte_texte_sind_ziffernfrei(self, code):
+        gerendert = str(_SUPPRESSED_MESSAGES[code])
 
-        assert str(platzhalter.message) == str(degradiert.message)
-        # Und weiterhin ohne jede Ziffer — sonst liesse sich die unterdrueckte
-        # Zahl aus dem Wortlaut zurueckrechnen.
-        assert not any(char.isdigit() for char in str(platzhalter.message))
+        assert gerendert
+        assert not any(char.isdigit() for char in gerendert)

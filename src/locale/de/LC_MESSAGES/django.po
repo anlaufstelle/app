@@ -1297,7 +1297,7 @@ msgstr ""
 
 #: src/core/models/document_type.py:161 src/core/models/retention.py:52
 #: src/core/reporting/backends/example.py:45
-#: src/core/reporting/backends/sample_report_1.py:260
+#: src/core/reporting/backends/sample_report_1.py:140
 #: src/templates/core/config/document_types/detail.html:34
 #: src/templates/core/config/document_types/partials/table.html:9
 #: src/templates/core/export/client_data_pdf.html:367
@@ -2531,7 +2531,7 @@ msgid "System-Typ"
 msgstr "System-Typ"
 
 #: src/core/reporting/backends/example.py:47
-#: src/core/reporting/backends/sample_report_1.py:261
+#: src/core/reporting/backends/sample_report_1.py:141
 #: src/templates/core/export/report_pdf.html:66
 #: src/templates/core/export/report_pdf.html:89
 #: src/templates/core/export/sample_report_1_pdf.html:56
@@ -2545,21 +2545,7 @@ msgstr "System-Typ"
 msgid "Anzahl"
 msgstr "Anzahl"
 
-#: src/core/reporting/backends/sample_report_1.py:90
-#, python-brace-format
-msgid "{count} Ereignisse ohne Berichtszuordnung im Zeitraum"
-msgstr "{count} Ereignisse ohne Berichtszuordnung im Zeitraum"
-
-#: src/core/reporting/backends/sample_report_1.py:92
-#, python-brace-format
-msgid ""
-"{count} Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/"
-"Personenzahl enthalten"
-msgstr ""
-"{count} Ereignisse ohne Personenbezug im Zeitraum — nicht in Altersgruppen/"
-"Personenzahl enthalten"
-
-#: src/core/reporting/backends/sample_report_1.py:113
+#: src/core/reporting/backends/sample_report_1.py:98
 msgid ""
 "Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-"
 "Anonymität)"
@@ -2567,7 +2553,7 @@ msgstr ""
 "Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-"
 "Anonymität)"
 
-#: src/core/reporting/backends/sample_report_1.py:115
+#: src/core/reporting/backends/sample_report_1.py:99
 msgid ""
 "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-"
 "Anonymität) — nicht in Altersgruppen/Personenzahl enthalten"
@@ -2581,18 +2567,14 @@ msgstr ""
 msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 msgstr "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 
-#: src/core/reporting/backends/sample_report_1.py:133
-msgid "Angabe unterdrückt (k-Anonymität)"
-msgstr "Angabe unterdrückt (k-Anonymität)"
-
-#: src/core/reporting/backends/sample_report_1.py:254
+#: src/core/reporting/backends/sample_report_1.py:134
 #: src/templates/core/export/sample_report_1_pdf.html:6
 #: src/templates/core/export/sample_report_1_pdf.html:29
 #: src/templates/core/statistics/partials/dashboard_content.html:229
 msgid "Beispiel-Sachbericht"
 msgstr "Beispiel-Sachbericht"
 
-#: src/core/reporting/backends/sample_report_1.py:353
+#: src/core/reporting/backends/sample_report_1.py:233
 #, python-brace-format
 msgid ""
 "{events} Ereignisse in {types} Dokumenttypen ohne Berichtszuordnung im "
@@ -2601,7 +2583,7 @@ msgstr ""
 "{events} Ereignisse in {types} Dokumenttypen ohne Berichtszuordnung im "
 "Zeitraum"
 
-#: src/core/reporting/backends/sample_report_1.py:371
+#: src/core/reporting/backends/sample_report_1.py:250
 #, python-brace-format
 msgid ""
 "{without_client} von {events_in_period} Ereignissen im Zeitraum ohne "
