@@ -373,9 +373,25 @@ class TestZentraleSuppressionsfunktion:
     _SUPPRESSION_CALLS = ("_suppress_small", "_suppress_stage_dict")
     # Pflicht-Keywords je Suppressionsfunktion.
     _REQUIRED_KEYWORDS = {"_suppress_small": {"margin", "order"}, "_suppress_stage_dict": {"margin", "persons"}}
-    # Erlaubte Werte fuer ``order`` — eine neue Ordnung muss im zentralen Modul
-    # definiert werden, nicht an der Aufrufstelle erfunden.
-    _KNOWN_ORDERS = {"ORDER_AGE_CLUSTER", "ORDER_DOCUMENT_TYPE", "ORDER_INPUT"}
+
+    @property
+    def _KNOWN_ORDERS(self) -> set[str]:  # noqa: N802 — Konstantenname bleibt, Herkunft wird abgeleitet
+        """Erlaubte Werte fuer ``order`` — **abgeleitet** aus ``_CANONICAL_ORDERS``.
+
+        Eine neue Ordnung muss im zentralen Modul definiert **und** dort
+        registriert werden, nicht an der Aufrufstelle erfunden. Die Ableitung
+        (statt einer zweiten Liste hier) verhindert genau die Drift, die eine
+        handgepflegte Kopie erzeugt: eine registrierte Ordnung, die der Guard
+        nicht kennt, oder umgekehrt.
+        """
+        from core.services.dashboard import external_report
+
+        registriert = set(external_report._CANONICAL_ORDERS)
+        return {
+            name
+            for name in dir(external_report)
+            if name.startswith("ORDER_") and getattr(external_report, name) in registriert
+        }
 
     @staticmethod
     def _calls(path: Path, name: str) -> list[ast.Call]:

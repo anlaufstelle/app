@@ -809,11 +809,18 @@ class TestPrepareExport:
         assert rows["Beratung"]["count"] is None and rows["Beratung"]["suppressed"] is True
 
     def test_records_spiegeln_die_suppressierten_zellen(self, backend, kleine_daten):
+        """Beide Zellen fallen; die ``records``-Projektion traegt das mit.
+
+        Die Reihenfolge ist die kanonische Namensordnung (``ORDER_CATEGORY``,
+        K5/Refs #1770) — unterdrueckte Kategoriezeilen stehen als Block am Ende
+        und duerfen nicht mehr in der datenabhaengigen Konsolidierungsordnung
+        stehen (die verriete den ``system_type`` hinter der Kleinstzelle).
+        """
         result = self._prepared(backend, kleine_daten)
 
         assert result.records == [
-            {"category": "Kontakte", "count": None},
             {"category": "Beratung", "count": None},
+            {"category": "Kontakte", "count": None},
         ]
 
     def test_by_age_cluster_faellt_bei_personenzahl_unter_der_schwelle_ganz_weg(self, backend, kleine_daten):
@@ -881,13 +888,14 @@ class TestPrepareExport:
         """
         result = self._prepared(backend, sekundaer_daten)
 
+        # Beide unterdrueckt ⇒ kanonische Namensordnung (ORDER_CATEGORY, K5).
         assert result.summary["by_category"] == [
-            {"name": "Kontakte", "count": None, "suppressed": True},
             {"name": "Beratung", "count": None, "suppressed": True},
+            {"name": "Kontakte", "count": None, "suppressed": True},
         ]
         assert result.records == [
-            {"category": "Kontakte", "count": None},
             {"category": "Beratung", "count": None},
+            {"category": "Kontakte", "count": None},
         ]
         # Die Randsumme selbst liegt ueber der Schwelle und bleibt sichtbar.
         assert result.summary["total"] == 8
@@ -969,7 +977,8 @@ class TestExportDatasetIntegration:
         rows = list(csv.reader(content.splitlines()[1:]))
 
         assert rows[0] == ["Kategorie", "Anzahl"]
-        assert rows[1:] == [["Kontakte", ""], ["Beratung", ""]]
+        # Kanonische Namensordnung unterdrueckter Zeilen (ORDER_CATEGORY, K5).
+        assert rows[1:] == [["Beratung", ""], ["Kontakte", ""]]
         assert "None" not in content
 
     def test_csv_metadatenzeile_weist_die_suppression_aus(self, backend, kleine_daten):
@@ -990,16 +999,17 @@ class TestExportDatasetIntegration:
         summary = root.find("summary")
 
         kategorien = [{child.tag: child.text for child in item} for item in summary.find("by_category")]
+        # Kanonische Namensordnung unterdrueckter Zeilen (ORDER_CATEGORY, K5).
         assert kategorien == [
-            {"name": "Kontakte", "count": None, "suppressed": "True"},
             {"name": "Beratung", "count": None, "suppressed": "True"},
+            {"name": "Kontakte", "count": None, "suppressed": "True"},
         ]
         assert summary.find("k_anonymity_threshold").text == "5"
         assert not summary.find("total").text
         assert not summary.find("unique_clients").text
 
         records = root.find("records").findall("record")
-        assert [record.find("category").text for record in records] == ["Kontakte", "Beratung"]
+        assert [record.find("category").text for record in records] == ["Beratung", "Kontakte"]
         assert all(not record.find("count").text for record in records)
         assert b"None" not in response.content
 

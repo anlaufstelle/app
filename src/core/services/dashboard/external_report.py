@@ -129,6 +129,17 @@ def _document_type_key(row: dict[str, Any]) -> tuple[str, str]:
     return (str(row.get("category") or ""), str(row.get("name") or ""))
 
 
+def _category_key(row: dict[str, Any]) -> tuple[str]:
+    """Berichtskategorien nach ``name`` — wertunabhaengig UND datenunabhaengig.
+
+    Die Kategoriennamen sind deutscher Klartext aus ``CATEGORY_MAP``
+    (``backends/sample_report_1.py``) und gerade **nicht** uebersetzt, damit sie
+    ueber Snapshots und Merges stabil bleiben; die Ordnung haengt also auch
+    nicht an der Sprache des rendernden Prozesses.
+    """
+    return (str(row.get("name") or ""),)
+
+
 # Kanonische Ausgabeordnungen (K5, Refs #1767/#1770). Jede Aufrufstelle von
 # :func:`_suppress_small` **muss** eine davon benennen (``order`` ist ein
 # Pflicht-Keyword) — die frueher formbasierte Erkennung war fail-open: eine
@@ -140,14 +151,24 @@ def _document_type_key(row: dict[str, Any]) -> tuple[str, str]:
 # ``TestZentraleSuppressionsfunktion`` prueft, dass sie es tut.
 #
 # ``ORDER_INPUT`` heisst: die Eingabeordnung ist bereits **wertunabhaengig**
-# (feste Kategorien-Ordnung, alphabetische Query-Sortierung) — es gibt keinen
-# Rangkanal, den eine Umsortierung schliessen koennte.
+# (feste Schluesselordnung) — es gibt keinen Rangkanal, den eine Umsortierung
+# schliessen koennte. Das gilt fuer ``by_contact_stage`` (feste Stufenfolge aus
+# dem Modell) und fuer ``ExampleBackend.records`` (Eingabeordnung des Backends).
+#
+# NICHT mehr fuer ``by_category``: dessen Einfuegereihenfolge ist die Position
+# des alphabetisch **ersten im Zeitraum tatsaechlich vorhandenen**
+# ``system_type`` je Kategorie (``order_by("document_type__system_type")`` in
+# ``backends/sample_report_1.py``) und damit datenabhaengig — zwei Welten mit
+# identischen publizierten Werten, aber verschiedenen Quelltypen hinter der
+# Kleinstzelle lieferten verschiedene Zeilenpositionen. Deshalb ORDER_CATEGORY.
 ORDER_AGE_CLUSTER = "age_cluster"
+ORDER_CATEGORY = "category"
 ORDER_DOCUMENT_TYPE = "document_type"
 ORDER_INPUT = "input"
 
 _CANONICAL_ORDERS: dict[str, Callable[[dict[str, Any]], tuple] | None] = {
     ORDER_AGE_CLUSTER: _age_cluster_key,
+    ORDER_CATEGORY: _category_key,
     ORDER_DOCUMENT_TYPE: _document_type_key,
     ORDER_INPUT: None,
 }
@@ -555,7 +576,7 @@ _EXTERNAL_REPORT_BREAKDOWNS = (
 )
 
 _SAMPLE_REPORT_1_BREAKDOWNS = (
-    _Breakdown("by_category", "total", ORDER_INPUT),
+    _Breakdown("by_category", "total", ORDER_CATEGORY),
     # K3-A2 (Refs #1770) — **bewusst ohne** Randsumme und ohne Restzeile: Hier
     # zaehlt ``total`` nur die **gemappten** Ereignisse, die Alterstabelle die
     # Ereignisse **mit Personenbezug** — zwei verschiedene Grundgesamtheiten.
@@ -893,8 +914,13 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
     # ``total`` akkumuliert exakt dieselben Zeilen wie ``by_category`` (die
     # Konsolidierung ueber ``system_type`` zaehlt nur gemappte Ereignisse) —
     # eine exakte Partition und damit eine echte Rueckrechnungs-Gleichung.
-    # Die Kategorie-Ordnung ist wertunabhaengig (feste Konsolidierungsordnung).
-    by_category = _suppress_small(category_rows, threshold, margin=published_total, order=ORDER_INPUT)
+    #
+    # ``ORDER_CATEGORY`` (K5, Refs #1770): die Einfuegereihenfolge der
+    # Konsolidierung ist **datenabhaengig** — eine Kategorie steht dort, wo ihr
+    # alphabetisch erster im Zeitraum vorhandener ``system_type`` steht. Ohne
+    # kanonische Ordnung verriete die Zeilenposition, welcher system_type hinter
+    # einer unterdrueckten Kleinstzelle steckt.
+    by_category = _suppress_small(category_rows, threshold, margin=published_total, order=ORDER_CATEGORY)
     age_rows = require_person_counts(list(stats.get("by_age_cluster", [])))
     # K3-A2 (Refs #1770): HIER bleibt es bei ``margin=None`` und **ohne**
     # Restzeile. ``total`` zaehlt nur gemappte Ereignisse, die Alterstabelle

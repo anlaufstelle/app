@@ -277,24 +277,59 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
 
         assert [row["cluster"] for row in result] == ["27_plus", "u18", "18_26"]
 
-    def test_by_category_zeilen_ohne_kanonische_ordnung_bleiben_unberuehrt(self):
-        """Dokumentierte Grenze: ``by_category`` traegt keinen Rangkanal.
+    # Zwei Welten mit **identischen publizierten Werten**, die sich nur darin
+    # unterscheiden, aus welchem ``system_type`` die Kleinstzelle „Vermittlung"
+    # stammt: ``accompaniment`` (alphabetisch vor ``contact``) bzw. ``referral``
+    # (alphabetisch nach allen anderen). ``SampleReport1Backend.build_dataset``
+    # aggregiert mit ``order_by("document_type__system_type")`` und fuellt
+    # ``by_category`` in der Reihenfolge des **alphabetisch ersten im Zeitraum
+    # tatsaechlich vorhandenen** system_type je Kategorie — die Zeilenposition
+    # ist damit datenabhaengig.
+    WELT_ACCOMPANIMENT = [
+        {"name": "Vermittlung", "count": 2},
+        {"name": "Kontakte", "count": 12},
+        {"name": "Beratung", "count": 8},
+    ]
+    WELT_REFERRAL = [
+        {"name": "Kontakte", "count": 12},
+        {"name": "Beratung", "count": 8},
+        {"name": "Vermittlung", "count": 2},
+    ]
 
-        Die Kategoriezeilen des Beispiel-Sachberichts entstehen in fester
-        Kategorien-Ordnung (Konsolidierung ueber ``system_type``), nicht nach
-        Anzahl — ihre Position ist keine Rangaussage. Sie werden deshalb
-        bewusst NICHT umsortiert (sonst braeche der Bestandstest
-        ``test_records_spiegeln_die_suppressierten_zellen`` ohne Sicherheitsgewinn).
+    def test_by_category_vertauschte_system_types_erzeugen_dieselbe_ausgabe(self):
+        """K5 (Refs #1770): ``by_category`` trug einen Zeilenpositions-Kanal.
 
-        Seit #1770 sagt die **Aufrufstelle** das mit ``order=ORDER_INPUT``
-        ausdruecklich, statt dass eine Formheuristik es errät.
+        ``ORDER_INPUT`` sicherte fuer diese Tabelle „die Eingabeordnung ist
+        bereits wertunabhaengig" zu — das stimmt nicht: die Einfuegereihenfolge
+        einer Kategorie haengt daran, welche ``system_type`` im Zeitraum
+        ueberhaupt vorkommen. Bei identischen publizierten Werten stand
+        „Vermittlung" in Welt A an Position 1 und in Welt B an Position 3; der
+        Empfaenger las daran ab, welcher system_type hinter der unterdrueckten
+        Kleinstzelle steckt.
+        """
+        from core.services.dashboard.external_report import ORDER_CATEGORY, _suppress_small
+
+        aus_a = _suppress_small(list(self.WELT_ACCOMPANIMENT), threshold=5, margin=22, order=ORDER_CATEGORY)
+        aus_b = _suppress_small(list(self.WELT_REFERRAL), threshold=5, margin=22, order=ORDER_CATEGORY)
+
+        assert aus_a == aus_b
+        # Sichtbare Zeile behaelt ihre Position, die beiden unterdrueckten
+        # folgen als Block in Namensordnung (derselbe K5-Mechanismus wie bei
+        # ``by_document_type``).
+        assert [row["name"] for row in aus_a] == ["Kontakte", "Beratung", "Vermittlung"]
+
+    def test_by_category_ohne_kanonische_ordnung_haette_den_kanal_offen_gelassen(self):
+        """Gegenprobe: mit ``ORDER_INPUT`` unterscheiden sich beide Welten.
+
+        Pinnt, dass der Fix aus :meth:`test_by_category_vertauschte_system_types_erzeugen_dieselbe_ausgabe`
+        wirkt und nicht schon durch die Suppression selbst erfuellt waere.
         """
         from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
 
-        rows = [{"name": "Kontakte", "count": 12}, {"name": "Beratung", "count": 3}, {"name": "Versorgung", "count": 2}]
-        result = _suppress_small(rows, threshold=5, margin=17, order=ORDER_INPUT)
+        aus_a = _suppress_small(list(self.WELT_ACCOMPANIMENT), threshold=5, margin=22, order=ORDER_INPUT)
+        aus_b = _suppress_small(list(self.WELT_REFERRAL), threshold=5, margin=22, order=ORDER_INPUT)
 
-        assert [row["name"] for row in result] == ["Kontakte", "Beratung", "Versorgung"]
+        assert [row["name"] for row in aus_a] != [row["name"] for row in aus_b]
 
 
 @pytest.mark.django_db
@@ -350,6 +385,29 @@ class TestKanonischeOrdnungInDenWrappern:
         out = suppress_sample_report_1_stats(facility, stats)
 
         assert [row["cluster"] for row in out["by_age_cluster"]] == ["27_plus", "18_26", "unknown"]
+
+    def test_suppress_sample_report_1_stats_ordnet_auch_die_kategorien_kanonisch(self, facility):
+        """Der Wrapper erbt den K5-Eingriff auch fuer ``by_category``.
+
+        Beide Welten liefern dieselben publizierten Werte; sie unterscheiden
+        sich nur in der Reihenfolge, in der ``build_dataset`` die Kategorien
+        eingefuegt hat (system_type-abhaengig, siehe
+        ``TestKanonischeOrdnungUnterdrueckterZeilen``).
+        """
+        from core.services.dashboard import suppress_sample_report_1_stats
+
+        def _stats(by_category):
+            return {"total": 22, "unique_clients": 9, "by_category": by_category, "by_age_cluster": []}
+
+        aus_a = suppress_sample_report_1_stats(
+            facility, _stats([("Vermittlung", 2), ("Kontakte", 12), ("Beratung", 8)])
+        )
+        aus_b = suppress_sample_report_1_stats(
+            facility, _stats([("Kontakte", 12), ("Beratung", 8), ("Vermittlung", 2)])
+        )
+
+        assert aus_a["by_category"] == aus_b["by_category"]
+        assert [row["name"] for row in aus_a["by_category"]] == ["Kontakte", "Beratung", "Vermittlung"]
 
     def test_externer_bericht_publiziert_die_kleinstzelle_nicht_mehr_als_letzte_zeile(
         self, facility, client_qualified, doc_type_contact, doc_type_crisis, staff_user, report_period

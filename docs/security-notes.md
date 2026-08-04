@@ -801,8 +801,17 @@ läuft als **einziger** Eingriffspunkt am Ende von `_suppress_small` — nach de
 damit der Snapshot-/Hybrid-Pfad nicht driftet. Sichtbare Zeilen behalten ihre count-sortierte
 Reihenfolge, unterdrückte folgen als Block in kanonischer Ordnung (Altersgruppen aus
 `Client.AgeCluster` abgeleitet, Dokumenttypen nach `(category, name)`); Templates, JSON und XML erben
-das ohne eigene Anpassung. Die Zuordnung läuft über die **Zeilenform**, nicht über die Aufrufstelle
-`by_category` bleibt bewusst unberührt (feste Kategorien-Ordnung, kein Rangkanal). Test-gepinnt in
+das ohne eigene Anpassung. Die Ordnung benennt seit
+#1770 die **Aufrufstelle** über das
+Pflicht-Keyword `order` (die frühere Formheuristik war fail-open)
+`by_category` fällt seit #1770 unter
+`ORDER_CATEGORY` (Namensordnung): die Einfügereihenfolge der Konsolidierung ist **datenabhängig**
+eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `system_type` steht.
+Ohne kanonische Ordnung verriet die Zeilenposition, welcher `system_type` hinter einer unterdrückten
+Kleinstzelle steckt (zwei Welten mit identischen publizierten Werten, „Vermittlung" aus
+`accompaniment` bzw. aus `referral`, ergaben verschiedene Positionen). `ORDER_INPUT` gilt danach nur
+noch für Tabellen mit **fester Schlüsselordnung**: `by_contact_stage` und `ExampleBackend.records`.
+Test-gepinnt in
 `test_external_report_service.py::TestKanonischeOrdnungUnterdrueckterZeilen` (inkl. des geforderten
 Ordnungstests „zwei Welten mit vertauschten Zellwerten erzeugen dieselbe Ausgabe") und
 `::TestKanonischeOrdnungInDenWrappern`. **Unverändert gültig:** das oben ausgewiesene Restrisiko
