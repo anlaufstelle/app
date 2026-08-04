@@ -121,7 +121,7 @@ Release v0.10.0 sharpens the low-threshold fit and strengthens the privacy archi
 - **File vault.** Attachments on events are no longer stored in the clear. They are scanned by ClamAV before acceptance and encrypted at rest, extending field-level encryption to binary material.
 - **Two-factor authentication.** TOTP-based second factor, configurable per user or enforced facility-wide, hardens login for facilities handling qualified data.
 - **Fuzzy search.** Pseudonyms are often misremembered or misspelled. A typo-tolerant search based on PostgreSQL `pg_trgm` trigrams, with a per-facility similarity threshold, helps staff find known persons without resorting to broader disclosures.
-- **Row Level Security.** PostgreSQL RLS policies on all facility-scoped tables (23 as of v0.10.2, including transitive scopes such as `OutcomeGoal`, `Milestone`, and `DocumentTypeField`) add a database-level safety net beneath the middleware filter. A session variable carries the current facility identity into the database, set per request and explicitly cleared on anonymous requests, so even a bypassed ORM layer cannot cross tenants.
+- **Row Level Security.** PostgreSQL RLS policies on all facility-scoped tables (25 as of v0.23, including transitive scopes such as `OutcomeGoal`, `Milestone`, and `DocumentTypeField`) add a database-level safety net beneath the middleware filter. A session variable carries the current facility identity into the database, set per request and explicitly cleared on anonymous requests, so even a bypassed ORM layer cannot cross tenants.
 - **Optimistic locking.** Client, Case, WorkItem, Settings, and Event records use version counters to prevent silent overwrites when two users edit the same record concurrently -- a realistic scenario in shift-based work.
 - **Retention dashboard and legal hold.** The automated retention workflow gains a review surface: leads bulk approve, defer, or reject deletion proposals. A Legal Hold flag excludes individual records from deletion when investigations or disputes require preservation. K-anonymization is available as an alternative to hard deletion, preserving statistics while removing identifying detail.
 - **Quick templates.** Admins maintain pre-filled event templates for recurring situations; templates are filtered by the user's role and the sensitivity of their fields so that assistants never see templates containing qualified-level content.
@@ -208,5 +208,5 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 63306f8f8999ee7c5c93d7ee775529588daa6270 -->
+<!-- translation-date: 2026-08-04 -->
+<!-- source-hash: aff7129d8adbba6b0cf613b9180005fae08c0af0 -->

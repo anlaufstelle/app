@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760).
 
 # Anlaufstelle -- Admin Guide
 
@@ -1316,11 +1316,13 @@ Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, faci
 |---|---|---|
 | `auditlog_retention_months` | 24 months | Every `enforce_retention` run deletes entries older than this period (exact calendar-month arithmetic, not a 30-day approximation). `0` = **disabled**, the log then grows without bound. |
 
-Three actions are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_ACTIONS` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)):
+Four classes are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Three of them depend on the action (`PRUNE_EXEMPT_ACTIONS`):
 
 - `SECURITY_VIOLATION` — forensic evidence from breach detection,
 - `RETENTION_RUN_COMPLETED` — the marker the compliance dashboard reads to show the last successful retention run,
 - `AUDIT_PRUNE_CHECKPOINT` — the tombstone of the pruning itself.
+
+On top of that — **regardless of the action** — comes the fourth class: entries about a **released report file carrying a reporting period** (CSV/PDF/JSON/XML). Without that exemption the release overview would feign completeness. Such entries hold the period, the format, the acting person and the recorded recipient/purpose fields (unvalidated free text), and are kept indefinitely. Plain on-screen views of the external report and subject access requests without a reporting period run under the same audit action but stay subject to the period — the distinction is documented in [§ 8 "Releasing Reports"](#releasing-reports-what-you-need-to-know).
 
 **Checkpoint mechanics:** the audit log is chained via HMAC (every entry references the previous one). Pruning necessarily tears that chain. So that the integrity check does not report the gap as tampering, every prune run writes an `AUDIT_PRUNE_CHECKPOINT` entry recording the chain boundaries of the deleted rows, which legitimises the discontinuity. The chain itself is **never** rewritten — the log stays append-only.
 
@@ -1436,7 +1438,7 @@ To protect against **silent overwrites** when two users edit the same record in 
 
 ### 7.9 Row Level Security (RLS)
 
-In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **all facility-scoped tables** (currently 22, enforced derivation-based via a test) as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS. Refs #542, #586.
+In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **all facility-scoped tables** (currently 25, enforced derivation-based via a test) as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS. Refs #542, #586.
 
 #### How It Works
 
@@ -1595,4 +1597,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 3a7446e9f05600d5bf4ca9e7b74ad2769c8ce211 -->
+<!-- source-hash: 9e740542e620271d77ace801a2d2c0ada52eb027 -->

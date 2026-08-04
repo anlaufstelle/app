@@ -1318,11 +1318,13 @@ Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrich
 |---|---|---|
 | `auditlog_retention_months` | 24 Monate | Bei jedem `enforce_retention`-Lauf werden Einträge gelöscht, die älter als diese Frist sind (kalendergenaue Monatsrechnung, keine 30-Tage-Näherung). `0` = **deaktiviert**, dann wächst das Log unbegrenzt. |
 
-Drei Aktionen sind von dieser Frist **ausgenommen** und bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_ACTIONS` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)):
+Von dieser Frist **ausgenommen** sind vier Klassen; sie bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Drei davon hängen an der Aktion (`PRUNE_EXEMPT_ACTIONS`):
 
 - `SECURITY_VIOLATION` — Forensik-Nachweise der Breach-Detection,
 - `RETENTION_RUN_COMPLETED` — der Marker, aus dem das Compliance-Dashboard den letzten erfolgreichen Retention-Lauf liest,
 - `AUDIT_PRUNE_CHECKPOINT` — der Tombstone des Prunings selbst.
+
+Hinzu kommt — **unabhängig von der Aktion** — die vierte Klasse: Einträge über eine **herausgegebene Berichtsdatei mit Berichtszeitraum** (CSV/PDF/JSON/XML). Ohne diese Ausnahme täuschte die Freigabe-Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, die auslösende Person und die erfassten Empfänger-/Zweckangaben (ungeprüfter Freitext) und werden dauerhaft aufbewahrt. Reine Bildschirm-Ansichten des externen Berichts und Auskünfte ohne Berichtszeitraum laufen zwar unter derselben Audit-Aktion, bleiben aber der Frist unterworfen — die Abgrenzung steht in [§ 8 „Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 **Checkpoint-Mechanik:** Das Audit-Log ist über eine HMAC-Kette verkettet (jeder Eintrag verweist auf den vorherigen). Ein Pruning reißt diese Kette zwangsläufig auf. Damit die Integritätsprüfung diese Lücke nicht als Manipulation meldet, schreibt jeder Prune-Lauf einen `AUDIT_PRUNE_CHECKPOINT`-Eintrag, der die Kettengrenzen der gelöschten Einträge festhält und die Diskontinuität legitimiert. Die Kette selbst wird dabei **nie** umgeschrieben — das Log bleibt append-only.
 
@@ -1438,7 +1440,7 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 
 ### 7.9 Row Level Security (RLS)
 
-Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **allen facility-scoped Tabellen** (derzeit 22, per Test ableitungsbasiert erzwungen) als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
+Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **allen facility-scoped Tabellen** (derzeit 25, per Test ableitungsbasiert erzwungen) als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
 
 #### Funktionsweise
 
