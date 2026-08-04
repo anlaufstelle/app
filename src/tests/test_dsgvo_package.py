@@ -145,6 +145,48 @@ class TestDsfaExtendedRetentionPlaceholders:
         # Kein Dokumentationstyp mit eigener Frist konfiguriert -> "keine".
         assert "keine" in content
 
+
+class TestVerarbeitungsverzeichnisAuditLogFrist:
+    """Refs #1762: VVT und DSFA liegen im **selben** ausgelieferten ZIP.
+
+    § 3.4 der VVT nannte hart „1 Jahr" Audit-Log-Aufbewahrung, waehrend die
+    Schwester-Vorlage im selben Download den echten Wert rendert
+    (``auditlog_retention_months``, Default 24, ``0`` = unbegrenzt) und die
+    In-App-VVT es ohnehin richtig sagt. Ergebnis waren zwei sich
+    widersprechende Art.-30-/Art.-35-Aussagen in einem Paket.
+    """
+
+    def test_frist_kommt_aus_den_settings(self, facility):
+        settings_obj = facility.settings
+        settings_obj.auditlog_retention_months = 36
+        settings_obj.save()
+
+        content, _ = render_document("verarbeitungsverzeichnis", facility)
+
+        assert "36 Monate" in content
+        assert "1 Jahr" not in content
+        assert "{{ auditlog_retention_months }}" not in content
+
+    def test_dauerhafte_ausnahmen_stehen_wortgleich_zur_dsfa(self, facility):
+        vvt, _ = render_document("verarbeitungsverzeichnis", facility)
+        dsfa, _ = render_document("dsfa", facility)
+
+        for begriff in ("Sicherheitsverstöße", "Berichtszeiträume", "ungeprüfter Freitext"):
+            assert begriff in vvt, f"VVT nennt die Ausnahme nicht: {begriff}"
+            assert begriff in dsfa
+
+    def test_beide_dokumente_nennen_dieselbe_frist(self, facility):
+        """Der eigentliche Befund: ein ZIP, zwei Aussagen."""
+        settings_obj = facility.settings
+        settings_obj.auditlog_retention_months = 18
+        settings_obj.save()
+
+        vvt, _ = render_document("verarbeitungsverzeichnis", facility)
+        dsfa, _ = render_document("dsfa", facility)
+
+        assert "18 Monate" in vvt
+        assert "18 Monate" in dsfa
+
     def test_document_type_override_shows_real_configured_type(self, facility):
         from core.models import DocumentType
 

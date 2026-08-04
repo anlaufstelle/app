@@ -87,4 +87,5 @@ Siehe separates TOM-Dokument.
 - Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an Sicherheit)
 
 ### 3.4 Löschfristen
-- Aufbewahrung: 1 Jahr, danach automatische Löschung
+- Aufbewahrung: {{ auditlog_retention_months }} Monate rollierend, danach automatische Löschung (`0` schaltet die Löschung **ab**)
+- Dauerhaft ausgenommen (wortgleich zur DSFA § 2.3, Frist 7): protokollierte Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs und der Nachweis herausgegebener Berichtszeiträume. Letzterer enthält Zeitraum, Format und die auslösende Person; Empfänger und Zweck sind ungeprüfter Freitext (organisatorische Vorgabe: Organisation statt Ansprechperson eintragen)
