@@ -142,3 +142,37 @@ class TestDropdownSensitivityFilter:
         client.force_login(assistant_user)
         response = client.get(reverse(LIST_URL_NAME))
         assert dt.pk in [d.pk for d in response.context["doc_types"]]
+
+
+# ---------------------------------------------------------------------------
+# B3 — Nicht-UUID im Personen-Filter
+# ---------------------------------------------------------------------------
+
+
+class TestClientFilterGuard:
+    """B3 (Refs #1738): ``?client=keine-uuid`` erzeugte HTTP 500.
+
+    Das Eingabefeld ist ein freies Textfeld mit ``hx-trigger="keyup"`` — jeder
+    Tastendruck vor der vollstaendigen UUID schickte einen Request. Postgres
+    lehnt den Vergleich mit ``ValidationError`` ab, Django gab 500 zurueck.
+    Fail-closed: unbrauchbarer Filter ⇒ leere Ergebnismenge.
+    """
+
+    def test_non_uuid_client_filter_returns_empty_result(self, client, staff_user, event_attachment):
+        client.force_login(staff_user)
+        response = client.get(reverse(LIST_URL_NAME), {"client": "keine-uuid"})
+        assert response.status_code == 200
+        assert response.context["attachments"] == []
+        assert "ereignis.pdf" not in response.content.decode()
+
+    def test_empty_client_filter_lists_everything(self, client, staff_user, event_attachment):
+        client.force_login(staff_user)
+        response = client.get(reverse(LIST_URL_NAME), {"client": ""})
+        assert response.status_code == 200
+        assert "ereignis.pdf" in response.content.decode()
+
+    def test_matching_client_filter_still_works(self, client, staff_user, event_attachment, client_identified):
+        client.force_login(staff_user)
+        response = client.get(reverse(LIST_URL_NAME), {"client": str(client_identified.pk)})
+        assert response.status_code == 200
+        assert "ereignis.pdf" in response.content.decode()

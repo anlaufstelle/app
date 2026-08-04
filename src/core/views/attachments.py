@@ -1,6 +1,7 @@
 """Views for the central file attachment overview and download."""
 
 import logging
+import uuid
 
 from django.db.models import Q
 from django.http import Http404
@@ -100,7 +101,18 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
 
         client_id = request.GET.get("client")
         if client_id:
-            attachments = attachments.filter(event__client_id=client_id)
+            # B3 (M24/AP4, Refs #1738): Das Personen-Filterfeld ist ein freies
+            # Textfeld mit ``hx-trigger="keyup"`` — JEDER Tastendruck vor der
+            # vollstaendigen UUID schickte einen Request, Postgres lehnte den
+            # Vergleich mit ValidationError ab, Django antwortete 500 (und der
+            # Fehler landete im Error-Tracking). Fail-closed: ein unbrauchbarer
+            # Filter liefert eine leere Ergebnismenge, keine ungefilterte Liste.
+            try:
+                uuid.UUID(client_id)
+            except (ValueError, AttributeError, TypeError):
+                attachments = attachments.none()
+            else:
+                attachments = attachments.filter(event__client_id=client_id)
 
         # Build display list from pre-filtered queryset
         visible = []
