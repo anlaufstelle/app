@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 17:18+0200\n"
+"POT-Creation-Date: 2026-08-04 20:03+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1119,7 +1119,7 @@ msgstr ""
 #: src/core/models/client.py:52 src/core/services/system/export.py:109
 #: src/templates/core/export/client_data_pdf.html:38
 #: src/templates/core/export/report_pdf.html:97
-#: src/templates/core/export/sample_report_1_pdf.html:82
+#: src/templates/core/export/sample_report_1_pdf.html:85
 #: src/templates/core/statistics/external_report.html:120
 #: src/templates/core/statistics/partials/dashboard_content.html:182
 msgid "Altersgruppe"
@@ -2549,7 +2549,7 @@ msgstr "System-Typ"
 #: src/templates/core/export/report_pdf.html:71
 #: src/templates/core/export/report_pdf.html:98
 #: src/templates/core/export/sample_report_1_pdf.html:60
-#: src/templates/core/export/sample_report_1_pdf.html:83
+#: src/templates/core/export/sample_report_1_pdf.html:86
 #: src/templates/core/statistics/external_report.html:82
 #: src/templates/core/statistics/external_report.html:121
 #: src/templates/core/statistics/partials/dashboard_content.html:141
@@ -2649,22 +2649,27 @@ msgstr "Personen mit mindestens einem Ereignis im Zeitraum"
 msgid "Grundgesamtheit: {population} · Quelle: {source}"
 msgstr "Grundgesamtheit: {population} · Quelle: {source}"
 
-#: src/core/reporting/export.py:142
+#: src/core/reporting/export.py:133
+#: src/templates/core/statistics/partials/full_content.html:107
+msgid "Bericht"
+msgstr "Bericht"
+
+#: src/core/reporting/export.py:147
 #: src/templates/core/export/report_pdf.html:140
-#: src/templates/core/export/sample_report_1_pdf.html:108
+#: src/templates/core/export/sample_report_1_pdf.html:111
 #: src/templates/core/statistics/external_report.html:36
 #: src/templates/core/statistics/partials/report_panel.html:74
 msgid "Datenquelle"
 msgstr "Datenquelle"
 
-#: src/core/reporting/export.py:158
+#: src/core/reporting/export.py:152
+msgid "Grundgesamtheit"
+msgstr "Grundgesamtheit"
+
+#: src/core/reporting/export.py:165
 #, python-format
 msgid "k-Anonymität: Zellen < %(threshold)s unterdrückt"
 msgstr "k-Anonymität: Zellen < %(threshold)s unterdrückt"
-
-#: src/core/reporting/export.py:147
-msgid "Grundgesamtheit"
-msgstr "Grundgesamtheit"
 
 #: src/core/services/case/cases.py:38 src/core/services/client/main.py:45
 msgid "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
@@ -4093,24 +4098,24 @@ msgstr "Keine Vorschläge ausgewählt."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "Keine gültigen Vorschläge gefunden."
 
-#: src/core/views/statistics.py:202 src/core/views/statistics.py:244
-#: src/core/views/statistics.py:290 src/core/views/statistics.py:538
+#: src/core/views/statistics.py:201 src/core/views/statistics.py:243
+#: src/core/views/statistics.py:289 src/core/views/statistics.py:533
 msgid "date_from und date_to erforderlich"
 msgstr "date_from und date_to erforderlich"
 
-#: src/core/views/statistics.py:425
+#: src/core/views/statistics.py:424
 msgid "backend erforderlich"
 msgstr "backend erforderlich"
 
-#: src/core/views/statistics.py:429 src/core/views/statistics.py:549
+#: src/core/views/statistics.py:428 src/core/views/statistics.py:544
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unbekanntes Berichts-Backend."
 
-#: src/core/views/statistics.py:435 src/core/views/statistics.py:552
+#: src/core/views/statistics.py:434 src/core/views/statistics.py:547
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Bericht für diese Einrichtung nicht verfügbar."
 
-#: src/core/views/statistics.py:556
+#: src/core/views/statistics.py:551
 msgid "Unbekanntes Export-Format."
 msgstr "Unbekanntes Export-Format."
 
@@ -7251,7 +7256,7 @@ msgstr "Keine protokollierten Zugriffe vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:509
 #: src/templates/core/export/report_pdf.html:148
-#: src/templates/core/export/sample_report_1_pdf.html:116
+#: src/templates/core/export/sample_report_1_pdf.html:119
 #, python-format
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Erstellt am %(date)s · Anlaufstelle"
@@ -7280,7 +7285,7 @@ msgstr "Zusammenfassung"
 #: src/templates/core/export/sample_report_1_pdf.html:47
 #: src/templates/core/export/sample_report_1_pdf.html:49
 #: src/templates/core/export/sample_report_1_pdf.html:67
-#: src/templates/core/export/sample_report_1_pdf.html:90
+#: src/templates/core/export/sample_report_1_pdf.html:93
 #: src/templates/core/statistics/external_report.html:55
 #: src/templates/core/statistics/external_report.html:65
 #: src/templates/core/statistics/external_report.html:91
@@ -7322,7 +7327,7 @@ msgid "Kontakte nach Altersgruppe"
 msgstr "Kontakte nach Altersgruppe"
 
 #: src/templates/core/export/report_pdf.html:112
-#: src/templates/core/export/sample_report_1_pdf.html:97
+#: src/templates/core/export/sample_report_1_pdf.html:100
 #: src/templates/core/statistics/external_report.html:141
 msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 msgstr "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
@@ -7332,14 +7337,14 @@ msgid "Top 5 Personen"
 msgstr "Top 5 Personen"
 
 #: src/templates/core/export/report_pdf.html:143
-#: src/templates/core/export/sample_report_1_pdf.html:111
+#: src/templates/core/export/sample_report_1_pdf.html:114
 #: src/templates/core/statistics/partials/dashboard_content.html:213
 #, python-format
 msgid "Stand der Monats-Aggregate: %(date)s"
 msgstr "Stand der Monats-Aggregate: %(date)s"
 
 #: src/templates/core/export/report_pdf.html:146
-#: src/templates/core/export/sample_report_1_pdf.html:114
+#: src/templates/core/export/sample_report_1_pdf.html:117
 msgid ""
 "* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig "
 "gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. "
@@ -7371,19 +7376,23 @@ msgstr "Gesamtkontakte (ohne Notizen/Hausverbote):"
 msgid "Leistungen nach Kategorie"
 msgstr "Leistungen nach Kategorie"
 
-#: src/templates/core/export/sample_report_1_pdf.html:73
+#: src/templates/core/export/sample_report_1_pdf.html:74
+msgid "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)."
+msgstr "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)."
+
+#: src/templates/core/export/sample_report_1_pdf.html:76
 msgid "Keine relevanten Kontakte im Berichtszeitraum."
 msgstr "Keine relevanten Kontakte im Berichtszeitraum."
 
-#: src/templates/core/export/sample_report_1_pdf.html:76
+#: src/templates/core/export/sample_report_1_pdf.html:79
 msgid "Altersverteilung"
 msgstr "Altersverteilung"
 
-#: src/templates/core/export/sample_report_1_pdf.html:99
+#: src/templates/core/export/sample_report_1_pdf.html:102
 msgid "Keine Altersdaten vorhanden."
 msgstr "Keine Altersdaten vorhanden."
 
-#: src/templates/core/export/sample_report_1_pdf.html:103
+#: src/templates/core/export/sample_report_1_pdf.html:106
 msgid "Ort, Datum, Unterschrift"
 msgstr "Ort, Datum, Unterschrift"
 
@@ -7759,27 +7768,27 @@ msgid "Altersgruppen"
 msgstr "Altersgruppen"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:236
-#: src/templates/core/statistics/partials/full_content.html:117
+#: src/templates/core/statistics/partials/full_content.html:128
 msgid "Empfänger (optional)"
 msgstr "Empfänger (optional)"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:238
-#: src/templates/core/statistics/partials/full_content.html:119
+#: src/templates/core/statistics/partials/full_content.html:130
 msgid "z. B. Stadt Musterstadt"
 msgstr "z. B. Stadt Musterstadt"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:242
-#: src/templates/core/statistics/partials/full_content.html:127
+#: src/templates/core/statistics/partials/full_content.html:134
 msgid "Zweck (optional)"
 msgstr "Zweck (optional)"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:244
-#: src/templates/core/statistics/partials/full_content.html:129
+#: src/templates/core/statistics/partials/full_content.html:136
 msgid "z. B. Verwendungsnachweis 2026"
 msgstr "z. B. Verwendungsnachweis 2026"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:252
-#: src/templates/core/statistics/partials/report_panel.html:85
+#: src/templates/core/statistics/partials/report_panel.html:97
 #: src/templates/core/system/auditlog_list.html:16
 msgid "CSV-Export"
 msgstr "CSV-Export"
@@ -7837,11 +7846,7 @@ msgstr "Nächstes Jahr"
 msgid "Berichte"
 msgstr "Berichte"
 
-#: src/templates/core/statistics/partials/full_content.html:97
-msgid "Bericht"
-msgstr "Bericht"
-
-#: src/templates/core/statistics/partials/full_content.html:104
+#: src/templates/core/statistics/partials/full_content.html:114
 msgid "Bericht wählen …"
 msgstr "Bericht wählen …"
 
@@ -7865,12 +7870,12 @@ msgid ""
 msgstr ""
 "Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)."
 
-#: src/templates/core/statistics/partials/report_panel.html:90
+#: src/templates/core/statistics/partials/report_panel.html:102
 #: src/templates/core/system/auditlog_list.html:21
 msgid "JSON-Export"
 msgstr "JSON-Export"
 
-#: src/templates/core/statistics/partials/report_panel.html:95
+#: src/templates/core/statistics/partials/report_panel.html:107
 msgid "XML-Export"
 msgstr "XML-Export"
 
@@ -7937,7 +7942,11 @@ msgid ""
 "Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als "
 "Herausgabe erkennen und erscheinen deshalb nicht hier — nachträglich "
 "nachtragen lässt sich das nicht, weil das Audit-Log unveränderlich ist."
-msgstr "Die Übersicht zeigt Herausgaben ab Einführung dieser Protokollierung. Ältere Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als Herausgabe erkennen und erscheinen deshalb nicht hier — nachträglich nachtragen lässt sich das nicht, weil das Audit-Log unveränderlich ist."
+msgstr ""
+"Die Übersicht zeigt Herausgaben ab Einführung dieser Protokollierung. Ältere "
+"Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als "
+"Herausgabe erkennen und erscheinen deshalb nicht hier — nachträglich "
+"nachtragen lässt sich das nicht, weil das Audit-Log unveränderlich ist."
 
 #: src/templates/core/statistics/report_releases.html:73
 msgid ""
@@ -7945,7 +7954,11 @@ msgid ""
 "eines Berichts am Bildschirm ist keine Herausgabe. Weitergaben auf anderem "
 "Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — "
 "erscheinen hier ebenfalls nicht."
-msgstr "Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten eines Berichts am Bildschirm ist keine Herausgabe. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier ebenfalls nicht."
+msgstr ""
+"Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten "
+"eines Berichts am Bildschirm ist keine Herausgabe. Weitergaben auf anderem "
+"Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — "
+"erscheinen hier ebenfalls nicht."
 
 #: src/templates/core/statistics/report_releases.html:77
 msgid "Zurück zur Statistik"

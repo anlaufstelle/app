@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 17:18+0200\n"
+"POT-Creation-Date: 2026-08-04 20:03+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1110,7 +1110,7 @@ msgstr "Identified = pseudonym known, Qualified = full identity known"
 #: src/core/models/client.py:52 src/core/services/system/export.py:109
 #: src/templates/core/export/client_data_pdf.html:38
 #: src/templates/core/export/report_pdf.html:97
-#: src/templates/core/export/sample_report_1_pdf.html:82
+#: src/templates/core/export/sample_report_1_pdf.html:85
 #: src/templates/core/statistics/external_report.html:120
 #: src/templates/core/statistics/partials/dashboard_content.html:182
 msgid "Altersgruppe"
@@ -2530,7 +2530,7 @@ msgstr "System type"
 #: src/templates/core/export/report_pdf.html:71
 #: src/templates/core/export/report_pdf.html:98
 #: src/templates/core/export/sample_report_1_pdf.html:60
-#: src/templates/core/export/sample_report_1_pdf.html:83
+#: src/templates/core/export/sample_report_1_pdf.html:86
 #: src/templates/core/statistics/external_report.html:82
 #: src/templates/core/statistics/external_report.html:121
 #: src/templates/core/statistics/partials/dashboard_content.html:141
@@ -2629,22 +2629,27 @@ msgstr "people with at least one event in the period"
 msgid "Grundgesamtheit: {population} · Quelle: {source}"
 msgstr "Population: {population} · Source: {source}"
 
-#: src/core/reporting/export.py:142
+#: src/core/reporting/export.py:133
+#: src/templates/core/statistics/partials/full_content.html:107
+msgid "Bericht"
+msgstr "Report"
+
+#: src/core/reporting/export.py:147
 #: src/templates/core/export/report_pdf.html:140
-#: src/templates/core/export/sample_report_1_pdf.html:108
+#: src/templates/core/export/sample_report_1_pdf.html:111
 #: src/templates/core/statistics/external_report.html:36
 #: src/templates/core/statistics/partials/report_panel.html:74
 msgid "Datenquelle"
 msgstr "Data source"
 
-#: src/core/reporting/export.py:158
+#: src/core/reporting/export.py:152
+msgid "Grundgesamtheit"
+msgstr "Population"
+
+#: src/core/reporting/export.py:165
 #, python-format
 msgid "k-Anonymität: Zellen < %(threshold)s unterdrückt"
 msgstr "k-anonymity: cells < %(threshold)s suppressed"
-
-#: src/core/reporting/export.py:147
-msgid "Grundgesamtheit"
-msgstr "Population"
 
 #: src/core/services/case/cases.py:38 src/core/services/client/main.py:45
 msgid "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
@@ -4059,24 +4064,24 @@ msgstr "No proposals selected."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No valid proposals found."
 
-#: src/core/views/statistics.py:202 src/core/views/statistics.py:244
-#: src/core/views/statistics.py:290 src/core/views/statistics.py:538
+#: src/core/views/statistics.py:201 src/core/views/statistics.py:243
+#: src/core/views/statistics.py:289 src/core/views/statistics.py:533
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
 
-#: src/core/views/statistics.py:425
+#: src/core/views/statistics.py:424
 msgid "backend erforderlich"
 msgstr "backend required"
 
-#: src/core/views/statistics.py:429 src/core/views/statistics.py:549
+#: src/core/views/statistics.py:428 src/core/views/statistics.py:544
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unknown report backend."
 
-#: src/core/views/statistics.py:435 src/core/views/statistics.py:552
+#: src/core/views/statistics.py:434 src/core/views/statistics.py:547
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Report is not available for this facility."
 
-#: src/core/views/statistics.py:556
+#: src/core/views/statistics.py:551
 msgid "Unbekanntes Export-Format."
 msgstr "Unknown export format."
 
@@ -7181,7 +7186,7 @@ msgstr "No logged accesses available."
 
 #: src/templates/core/export/client_data_pdf.html:509
 #: src/templates/core/export/report_pdf.html:148
-#: src/templates/core/export/sample_report_1_pdf.html:116
+#: src/templates/core/export/sample_report_1_pdf.html:119
 #, python-format
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Generated on %(date)s · Anlaufstelle"
@@ -7210,7 +7215,7 @@ msgstr "Summary"
 #: src/templates/core/export/sample_report_1_pdf.html:47
 #: src/templates/core/export/sample_report_1_pdf.html:49
 #: src/templates/core/export/sample_report_1_pdf.html:67
-#: src/templates/core/export/sample_report_1_pdf.html:90
+#: src/templates/core/export/sample_report_1_pdf.html:93
 #: src/templates/core/statistics/external_report.html:55
 #: src/templates/core/statistics/external_report.html:65
 #: src/templates/core/statistics/external_report.html:91
@@ -7252,7 +7257,7 @@ msgid "Kontakte nach Altersgruppe"
 msgstr "Contacts by Age Group"
 
 #: src/templates/core/export/report_pdf.html:112
-#: src/templates/core/export/sample_report_1_pdf.html:97
+#: src/templates/core/export/sample_report_1_pdf.html:100
 #: src/templates/core/statistics/external_report.html:141
 msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 msgstr "Age group figures suppressed (k-anonymity)."
@@ -7262,14 +7267,14 @@ msgid "Top 5 Personen"
 msgstr "Top 5 people"
 
 #: src/templates/core/export/report_pdf.html:143
-#: src/templates/core/export/sample_report_1_pdf.html:111
+#: src/templates/core/export/sample_report_1_pdf.html:114
 #: src/templates/core/statistics/partials/dashboard_content.html:213
 #, python-format
 msgid "Stand der Monats-Aggregate: %(date)s"
 msgstr "Monthly aggregates as of: %(date)s"
 
 #: src/templates/core/export/report_pdf.html:146
-#: src/templates/core/export/sample_report_1_pdf.html:114
+#: src/templates/core/export/sample_report_1_pdf.html:117
 msgid ""
 "* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig "
 "gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. "
@@ -7300,19 +7305,23 @@ msgstr "Total contacts (excluding notes/bans):"
 msgid "Leistungen nach Kategorie"
 msgstr "Services by Category"
 
-#: src/templates/core/export/sample_report_1_pdf.html:73
+#: src/templates/core/export/sample_report_1_pdf.html:74
+msgid "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)."
+msgstr "Service category figures suppressed (k-anonymity)."
+
+#: src/templates/core/export/sample_report_1_pdf.html:76
 msgid "Keine relevanten Kontakte im Berichtszeitraum."
 msgstr "No relevant contacts in the reporting period."
 
-#: src/templates/core/export/sample_report_1_pdf.html:76
+#: src/templates/core/export/sample_report_1_pdf.html:79
 msgid "Altersverteilung"
 msgstr "Age Distribution"
 
-#: src/templates/core/export/sample_report_1_pdf.html:99
+#: src/templates/core/export/sample_report_1_pdf.html:102
 msgid "Keine Altersdaten vorhanden."
 msgstr "No age data available."
 
-#: src/templates/core/export/sample_report_1_pdf.html:103
+#: src/templates/core/export/sample_report_1_pdf.html:106
 msgid "Ort, Datum, Unterschrift"
 msgstr "Place, date, signature"
 
@@ -7687,27 +7696,27 @@ msgid "Altersgruppen"
 msgstr "Age groups"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:236
-#: src/templates/core/statistics/partials/full_content.html:117
+#: src/templates/core/statistics/partials/full_content.html:128
 msgid "Empfänger (optional)"
 msgstr "Recipient (optional)"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:238
-#: src/templates/core/statistics/partials/full_content.html:119
+#: src/templates/core/statistics/partials/full_content.html:130
 msgid "z. B. Stadt Musterstadt"
 msgstr "e.g. City of Anytown"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:242
-#: src/templates/core/statistics/partials/full_content.html:127
+#: src/templates/core/statistics/partials/full_content.html:134
 msgid "Zweck (optional)"
 msgstr "Purpose (optional)"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:244
-#: src/templates/core/statistics/partials/full_content.html:129
+#: src/templates/core/statistics/partials/full_content.html:136
 msgid "z. B. Verwendungsnachweis 2026"
 msgstr "e.g. 2026 funding report"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:252
-#: src/templates/core/statistics/partials/report_panel.html:85
+#: src/templates/core/statistics/partials/report_panel.html:97
 #: src/templates/core/system/auditlog_list.html:16
 msgid "CSV-Export"
 msgstr "CSV export"
@@ -7765,11 +7774,7 @@ msgstr "Next year"
 msgid "Berichte"
 msgstr "Reports"
 
-#: src/templates/core/statistics/partials/full_content.html:97
-msgid "Bericht"
-msgstr "Report"
-
-#: src/templates/core/statistics/partials/full_content.html:104
+#: src/templates/core/statistics/partials/full_content.html:114
 msgid "Bericht wählen …"
 msgstr "Select report …"
 
@@ -7793,12 +7798,12 @@ msgid ""
 msgstr ""
 "Values below the minimum case-count threshold are suppressed (k-anonymity)."
 
-#: src/templates/core/statistics/partials/report_panel.html:90
+#: src/templates/core/statistics/partials/report_panel.html:102
 #: src/templates/core/system/auditlog_list.html:21
 msgid "JSON-Export"
 msgstr "JSON export"
 
-#: src/templates/core/statistics/partials/report_panel.html:95
+#: src/templates/core/statistics/partials/report_panel.html:107
 msgid "XML-Export"
 msgstr "XML export"
 
@@ -7865,7 +7870,11 @@ msgid ""
 "Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als "
 "Herausgabe erkennen und erscheinen deshalb nicht hier — nachträglich "
 "nachtragen lässt sich das nicht, weil das Audit-Log unveränderlich ist."
-msgstr "The overview shows releases from the point this logging was introduced. Older releases are still in the audit log but cannot be recognised as releases there, so they do not appear here — and they cannot be added retroactively, because the audit log is immutable."
+msgstr ""
+"The overview shows releases from the point this logging was introduced. "
+"Older releases are still in the audit log but cannot be recognised as "
+"releases there, so they do not appear here — and they cannot be added "
+"retroactively, because the audit log is immutable."
 
 #: src/templates/core/statistics/report_releases.html:73
 msgid ""
@@ -7873,7 +7882,10 @@ msgid ""
 "eines Berichts am Bildschirm ist keine Herausgabe. Weitergaben auf anderem "
 "Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — "
 "erscheinen hier ebenfalls nicht."
-msgstr "Only what was released as a file is recorded. Viewing a report on screen is not a release. Disclosures by other means — a forwarded PDF file, a photographed screen — do not appear here either."
+msgstr ""
+"Only what was released as a file is recorded. Viewing a report on screen is "
+"not a release. Disclosures by other means — a forwarded PDF file, a "
+"photographed screen — do not appear here either."
 
 #: src/templates/core/statistics/report_releases.html:77
 msgid "Zurück zur Statistik"
