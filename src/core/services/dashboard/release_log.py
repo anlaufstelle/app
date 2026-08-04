@@ -211,9 +211,19 @@ def _overlaps(first: Release, second: Release) -> bool:
     """
     if not (first.has_period and second.has_period):
         return False
-    if (first.date_from, first.date_to) == (second.date_from, second.date_to):
+    first_from, first_to, second_from, second_to = (
+        first.date_from,
+        first.date_to,
+        second.date_from,
+        second.date_to,
+    )
+    if first_from is None or first_to is None or second_from is None or second_to is None:
+        # Kann bei erfuellter has_period-Pruefung nicht eintreten — hier nur,
+        # damit mypy die None-Faelle beweisbar ausschliesst.
         return False
-    return first.date_from <= second.date_to and second.date_from <= first.date_to
+    if (first_from, first_to) == (second_from, second_to):
+        return False
+    return first_from <= second_to and second_from <= first_to
 
 
 def build_release_overview(facility, limit: int = RELEASE_LOG_LIMIT) -> list[Release]:

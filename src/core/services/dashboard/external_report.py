@@ -57,7 +57,13 @@ _AGE_CLUSTER_ORDER[NO_PERSON_CLUSTER] = len(_AGE_CLUSTER_ORDER)
 def _age_cluster_key(row: dict[str, Any]) -> tuple[int, str]:
     """Altersgruppen in Modellreihenfolge; Unbekanntes stabil ans Ende."""
     cluster = row.get("cluster")
-    return (_AGE_CLUSTER_ORDER.get(cluster, len(_AGE_CLUSTER_ORDER)), str(cluster or ""))
+    # ``_AGE_CLUSTER_ORDER`` hat ausschliesslich str-Schluessel — ein
+    # Nicht-str-``cluster`` (inkl. ``None``) faende ohnehin nie einen Treffer
+    # und faellt auf den Default zurueck; die isinstance-Pruefung macht das
+    # fuer mypy beweisbar, ohne das Verhalten zu aendern.
+    fallback = len(_AGE_CLUSTER_ORDER)
+    index = _AGE_CLUSTER_ORDER.get(cluster, fallback) if isinstance(cluster, str) else fallback
+    return (index, str(cluster or ""))
 
 
 def with_no_person_row(
@@ -693,11 +699,11 @@ def _suppress_smallest_visible(report: dict[str, Any], spec: _Breakdown) -> bool
             return False
         report[spec.key] = {**data, min(sorted(visible), key=lambda key: visible[key]): None}
         return True
-    visible = [index for index, row in enumerate(data) if not row.get("suppressed")]
-    if not visible:
+    visible_indices = [index for index, row in enumerate(data) if not row.get("suppressed")]
+    if not visible_indices:
         return False
     tiebreak = _order_tiebreak(data, spec.order)
-    victim = min(visible, key=lambda index: (data[index][spec.count_key], tiebreak(index)))
+    victim = min(visible_indices, key=lambda index: (data[index][spec.count_key], tiebreak(index)))
     data[victim][spec.count_key] = None
     data[victim]["suppressed"] = True
     # Der Guard laeuft NACH der Kanonisierung — die neue Unterdrueckung muss
