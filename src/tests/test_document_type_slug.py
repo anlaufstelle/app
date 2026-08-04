@@ -241,29 +241,33 @@ class TestBackfillFunction:
         assert slugs == ["test-typ", "test-typ-2"]
 
     @pytest.mark.django_db
-    def test_backfill_orders_by_name_category_not_physical_insert_order(self, facility):
+    def test_backfill_orders_by_name_not_physical_insert_order(self, facility):
         """B-2 (Fix-Runde 1): pinnt, WELCHE Zeile bei einer Kollision den
-        Basis-Slug bekommt — waere ``order_by("facility_id","name","category",
-        "id")`` im Backfill entfernt/veraendert, wuerde dieser Test kippen.
-        Bewusst in der zur order_by-Zielreihenfolge UMGEKEHRTEN physischen
-        Einfuege-Reihenfolge angelegt (SERVICE zuerst, ADMIN zweitens) —
-        "admin" < "service" alphabetisch, die ADMIN-Zeile muss trotz spaeterer
-        Einfuegung den Basis-Slug bekommen, nicht die zuerst eingefuegte
-        SERVICE-Zeile."""
+        Basis-Slug bekommt — waere ``order_by("facility_id", "name", "id")``
+        im Backfill entfernt/veraendert, wuerde dieser Test kippen. Beide Namen
+        slugifizieren zu "zeta-typ"; bewusst in der zur order_by-Zielreihenfolge
+        UMGEKEHRTEN physischen Einfuege-Reihenfolge angelegt ("Zeta-Typ" zuerst)
+        — Leerzeichen sortiert vor Bindestrich, "Zeta Typ" muss trotz spaeterer
+        Einfuegung den Basis-Slug bekommen.
+
+        Refs #1749: frueher stand ``category`` als Tie-Break zwischen zwei
+        Zeilen mit identischem Namen — den Fall gibt es nicht mehr (die
+        ``(facility, name)``-Constraint verbietet ihn), die Ordnung ueber
+        ``name`` ist derselbe Mechanismus an der Stelle, an der er noch
+        beobachtbar ist.
+        """
         self._drop_constraint_and_disable_trigger()
         DocumentType.objects.bulk_create(
             [
-                DocumentType(facility=facility, name="Zeta", slug=""),
-                DocumentType(facility=facility, name="Zeta", slug=""),
+                DocumentType(facility=facility, name="Zeta-Typ", slug=""),
+                DocumentType(facility=facility, name="Zeta Typ", slug=""),
             ]
         )
 
         self._run_backfill()
 
-        admin_row = DocumentType.objects.get(facility=facility, name="Zeta")
-        service_row = DocumentType.objects.get(facility=facility, name="Zeta")
-        assert admin_row.slug == "zeta"
-        assert service_row.slug == "zeta-2"
+        assert DocumentType.objects.get(facility=facility, name="Zeta Typ").slug == "zeta-typ"
+        assert DocumentType.objects.get(facility=facility, name="Zeta-Typ").slug == "zeta-typ-2"
 
     @pytest.mark.django_db
     def test_backfill_empty_name_gets_typ_fallback(self, facility):
@@ -278,11 +282,14 @@ class TestBackfillFunction:
     @pytest.mark.django_db
     def test_backfill_truncates_before_counter_suffix(self, facility):
         self._drop_constraint_and_disable_trigger()
+        # Refs #1749: zwei gleiche Namen sind nicht mehr zulaessig — das
+        # Ausrufezeichen faellt beim Slugifizieren weg, der Basis-Slug ist also
+        # weiterhin identisch und die Kollisionsaufloesung wird geprueft.
         long_name = "A" * 200
         DocumentType.objects.bulk_create(
             [
                 DocumentType(facility=facility, name=long_name, slug=""),
-                DocumentType(facility=facility, name=long_name, slug=""),
+                DocumentType(facility=facility, name="A" * 199 + "!", slug=""),
             ]
         )
 
@@ -303,9 +310,9 @@ class TestBackfillFunction:
         Monkeypatch), um den Fail-loud-Assert-Pfad direkt zu pinnen."""
         self._drop_constraint_and_disable_trigger()
         # Beide Namen slugifizieren identisch zu "alpha" — die (facility,
-        # name, category)-Constraint bleibt unberührt (Namen sind
-        # unterschiedliche Strings), aber die (praeparierte) Kollisions-
-        # Aufloesung soll hier eigentlich einen Counter-Suffix vergeben.
+        # name)-Constraint bleibt unberührt (Namen sind unterschiedliche
+        # Strings), aber die (praeparierte) Kollisions-Aufloesung soll hier
+        # eigentlich einen Counter-Suffix vergeben.
         DocumentType.objects.bulk_create(
             [
                 DocumentType(facility=facility, name="Alpha", slug=""),
@@ -386,9 +393,12 @@ class TestSlugNormalization:
         assert _SLUG_RE.fullmatch(dt.slug)
 
     def test_counter_suffix_never_produces_double_hyphen(self, facility):
+        # Refs #1749: der zweite Typ braucht einen anderen ``name`` (die
+        # ``(facility, name)``-Constraint) — das Ausrufezeichen faellt beim
+        # Slugifizieren weg, die Slug-Kollision bleibt also erhalten.
         long_name = "A" * 119 + " xy"
         first = DocumentType.objects.create(facility=facility, name=long_name)
-        second = DocumentType.objects.create(facility=facility, name=long_name)
+        second = DocumentType.objects.create(facility=facility, name=long_name + "!")
         assert first.slug != second.slug
         for slug in (first.slug, second.slug):
             assert len(slug) <= 120

@@ -78,7 +78,13 @@ def backfill_document_type_slugs(apps, schema_editor):
     # innerhalb einer Facility bekommt Counter-Suffixe in stabiler
     # Reihenfolge — sonst waere das Backfill-Ergebnis von der physischen
     # Zeilenreihenfolge in der DB abhaengig.
-    qs = DocumentType.objects.all().order_by("facility_id", "name", "category", "id")
+    #
+    # Refs #1749: frueher stand ``category`` als drittes Sortierfeld zwischen
+    # ``name`` und ``id``. Es unterschied ausschliesslich Zeilen mit
+    # IDENTISCHEM ``(facility, name)`` — genau die Konstellation, die 0134
+    # verbietet und deren Migration hart abbricht. Das Feld gibt es nicht mehr;
+    # ``id`` (UUID, eindeutig) bleibt als Tie-Break und haelt die Ordnung total.
+    qs = DocumentType.objects.all().order_by("facility_id", "name", "id")
     for dt in qs:
         used = used_by_facility.setdefault(dt.facility_id, set())
         slug = _next_free_slug(_base_slug(dt.name), used)
