@@ -666,3 +666,64 @@ class TestReportPdfKAnonSuppression:
         )
         assert "unterdrückt" in html
         assert "None" not in html
+
+
+@pytest.mark.django_db
+class TestReportPdfQuellenausweis:
+    """Refs #1743 / Review #1755: Auch der Halbjahres-Sachbericht (``PDFExportView``)
+    liest ueber ``get_statistics_hybrid`` aus den Monats-Snapshots — derselbe
+    hybride Pfad wie das Beispiel-Sachbericht-PDF. Er muss seine Quelle daher
+    genauso ausweisen, sonst stehen seine Zahlen und die des live gelesenen
+    Panels/CSV unkommentiert nebeneinander (Fusszeile).
+    """
+
+    def test_pdf_kontext_traegt_den_hybrid_quellenausweis(self, facility, monkeypatch):
+        from core.services.system import export as sys_export
+
+        captured = {}
+
+        def fake_render(template_name, context):
+            captured.update(context)
+            return "<html></html>"
+
+        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
+        monkeypatch.setattr(sys_export.weasyprint, "HTML", _CaptureHTML)
+
+        today = date.today()
+        # Standard-(Extern-)Modus: genau das zirkulierende Artefakt.
+        sys_export.generate_report_pdf(facility, today - timedelta(days=2), today, {}, internal_mode=False)
+
+        assert str(captured["data_source_note"]) == "Monats-Aggregate"
+        assert "nach Ablauf der Löschfristen erhalten" in str(captured["data_source_explanation"])
+
+    def test_template_zeigt_den_quellenausweis_sichtbar(self):
+        from datetime import datetime
+
+        from django.template.loader import render_to_string
+
+        from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, SNAPSHOT_HYBRID
+
+        html = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "facility_name": "Teststelle",
+                "date_from": date(2025, 8, 1),
+                "date_to": date(2025, 8, 31),
+                "internal_mode": False,
+                "generated_at": timezone.make_aware(datetime(2025, 9, 1, 9, 0)),
+                "stats": {
+                    "total_contacts": 17,
+                    "unique_clients": 9,
+                    "by_contact_stage": {"anonym": 5, "identifiziert": 7, "qualifiziert": 5},
+                    "by_document_type": [],
+                    "by_age_cluster": [],
+                    "top_clients": [],
+                },
+                "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
+                "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
+            },
+        )
+
+        assert "Datenquelle" in html
+        assert "Monats-Aggregate" in html
+        assert "nach Ablauf der Löschfristen erhalten" in html

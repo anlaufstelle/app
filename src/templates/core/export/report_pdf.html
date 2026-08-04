@@ -18,6 +18,7 @@
         th { background: #f5f5f5; font-weight: 600; }
         td.num { text-align: right; }
         .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
+        .footer p { margin: 0 0 4px 0; }
         .internal-banner {
             background: #fff3cd; border: 1px solid #ffc107; color: #664d03;
             padding: 10px 12px; border-radius: 4px; margin-bottom: 20px;
@@ -123,8 +124,10 @@
     </table>
     {% endif %}
 
+    {# Quellenausweis (Refs #1743): dieses PDF liest hybrid ueber Monats-Snapshots (PDFExportView/get_statistics_hybrid). #}
     <div class="footer">
-        {% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}
+        <p class="data-source">{% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}</p>
+        <p>{% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}</p>
     </div>
 </body>
 </html>

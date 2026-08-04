@@ -238,6 +238,8 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     wird das Ranking gerendert und der Report mit einem ``INTERN``-Banner
     markiert.
     """
+    from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, SNAPSHOT_HYBRID
+
     # Security R4: Standard-Modus ist das externe Artefakt (Traeger/Foerderer)
     # — Kleinstfallzahlen unterdruecken wie Sachbericht-PDF/On-Screen-Bericht.
     # Der Internal-Mode (Lead/Admin, INTERN-Banner, Refs #792) bleibt roh.
@@ -255,6 +257,12 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
             "stats": stats,
             "internal_mode": internal_mode,
             "generated_at": timezone.now(),
+            # Quellenausweis (Refs #1743): Der Aufrufer ``PDFExportView`` liest
+            # ueber ``get_statistics_hybrid`` aus den Monats-Snapshots — derselbe
+            # hybride Pfad wie das Sachbericht-PDF. Auch dieses extern
+            # zirkulierende PDF weist seine Quelle daher in der Fusszeile aus.
+            "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
+            "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
         },
     )
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()
