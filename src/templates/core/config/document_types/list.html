@@ -27,26 +27,15 @@
                hx-get="{% url 'core:config_doctype_list' %}"
                hx-trigger="keyup changed delay:300ms"
                hx-target="#doctype-table"
-               hx-include="[name='category'],[name='is_active']"
+               hx-include="[name='is_active']"
                hx-indicator="#doctype-table-spinner">
         {% include "components/_htmx_spinner.html" with spinner_id="doctype-table-spinner" position_class="absolute right-2.5 top-1/2 -translate-y-1/2" %}
     </div>
-    <select name="category" aria-label="{% trans 'Kategorie filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
-            hx-get="{% url 'core:config_doctype_list' %}"
-            hx-trigger="change"
-            hx-target="#doctype-table"
-            hx-include="[name='q'],[name='is_active']"
-            hx-indicator="#doctype-table-spinner">
-        <option value="">{% trans "Alle Kategorien" %}</option>
-        {% for value, label in categories %}
-        <option value="{{ value }}" {% if value == selected_category %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-    </select>
     <select name="is_active" aria-label="{% trans 'Status filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
             hx-get="{% url 'core:config_doctype_list' %}"
             hx-trigger="change"
             hx-target="#doctype-table"
-            hx-include="[name='q'],[name='category']"
+            hx-include="[name='q']"
             hx-indicator="#doctype-table-spinner">
         <option value="">{% trans "Alle Status" %}</option>
         <option value="true" {% if selected_active == "true" %}selected{% endif %}>{% trans "Nur aktive" %}</option>

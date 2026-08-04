@@ -9,7 +9,7 @@ Was sich dadurch **verhält**:
 
 * **Properties sind update-sicher.** Der alte Katalog lief über
   ``DocumentType.objects.get_or_create(facility, name)`` — Defaults griffen
-  nur beim Anlegen, ein per Admin verstelltes Icon/``sort_order``/``category``
+  nur beim Anlegen, ein per Admin verstelltes Icon/``sort_order``/``sensitivity``
   blieb für immer stehen. Der Loader diffed und schreibt zurück.
 * **Lookup-Key ist der Slug, nicht der Name.** Eine Bestands-Einrichtung
   findet ihre Typen über den (in Migration 0117 backgefüllten) Slug wieder;

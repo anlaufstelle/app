@@ -251,8 +251,8 @@ class TestDocumentTypeEntityScopedFields:
     **rein visuell**: die Eingabefelder bleiben im DOM und aktiviert, ihre Werte
     werden unverändert mitgepostet. Genau das ist der kritische Teil: fiele ein
     ausgeblendetes Feld aus dem POST, landete es auf dem Modell-Default (bei
-    ``category`` — Teil des Natural Keys ``(facility, name, category)`` — wäre
-    das ein stiller Datenschaden; ``category`` wird deshalb nie ausgeblendet).
+    ``sensitivity`` wäre das ein stiller Absturz der Zugriffsschranke;
+    ``sensitivity`` wird deshalb nie ausgeblendet).
     """
 
     def test_scoped_fields_toggle_and_values_survive_saving(self, authenticated_page, base_url):
@@ -271,7 +271,7 @@ class TestDocumentTypeEntityScopedFields:
             expect(page.locator("input#id_retention_days")).to_be_visible()
 
             # Werte setzen, SOLANGE die Felder sichtbar sind.
-            page.select_option("select#id_category", value="admin")
+            page.select_option("select#id_sensitivity", value="elevated")
             page.fill("input#id_retention_days", "30")
 
             # Auf „Person" umstellen: die drei Felder verschwinden …
@@ -279,10 +279,10 @@ class TestDocumentTypeEntityScopedFields:
             expect(page.locator("select#id_system_type")).to_be_hidden(timeout=10000)
             expect(page.locator("select#id_min_contact_stage")).to_be_hidden()
             expect(page.locator("input#id_retention_days")).to_be_hidden()
-            # … alles Übrige bleibt stehen (``category`` ist Teil des Natural Keys).
+            # … alles Übrige bleibt stehen (``sensitivity`` steuert den Zugriff).
             expect(page.locator("input#id_name")).to_be_visible()
             expect(page.locator("select#id_entity_type")).to_be_visible()
-            expect(page.locator("select#id_category")).to_be_visible()
+            expect(page.locator("select#id_sensitivity")).to_be_visible()
             expect(page.locator("textarea#id_description")).to_be_visible()
 
             # „Fall" verhält sich gleich, „Ereignis" holt die Felder zurück —
@@ -305,11 +305,11 @@ class TestDocumentTypeEntityScopedFields:
             # Gegenprobe am Bearbeiten-Formular: beide Werte stehen am Datensatz,
             # der Entitätstyp ist fest, die Felder bleiben ausgeblendet.
             page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")
-            expect(page.locator("select#id_category")).to_have_value("admin", timeout=10000)
+            expect(page.locator("select#id_sensitivity")).to_have_value("elevated", timeout=10000)
             expect(page.locator("input#id_retention_days")).to_have_value("30")
             expect(page.locator("select#id_entity_type")).to_be_disabled()
             expect(page.locator("input#id_retention_days")).to_be_hidden()
-            expect(page.locator("select#id_category")).to_be_visible()
+            expect(page.locator("select#id_sensitivity")).to_be_visible()
 
             assert errors == [], f"Konsolen-Errors/CSP-Verstöße im Entitätstyp-Formular: {errors}"
         finally:

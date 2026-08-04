@@ -78,7 +78,6 @@ def _serialize_document_type(user, doc_type) -> dict[str, Any]:
         # (wie EventMetaForm); inaktiv-referenzierte Typen bleiben im Bundle
         # nur zum Rendern bestehender Events.
         "is_active": doc_type.is_active,
-        "category": doc_type.category,
         "sensitivity": doc_type.sensitivity,
         # Refs #1518 (#1499): Mindest-Kontaktstufe (leer = keine) fuer den
         # weichen Picker-Vorfilter der Offline-Create-Shell — Typen mit einer

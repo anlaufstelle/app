@@ -23,7 +23,7 @@ import dataclasses
 from django.db.models import Count
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
+from core.models import Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -48,7 +48,6 @@ class ExampleBackend(DatasetBackend):
         # Backend deutschen Klartext in seine Spaltenkoepfe.
         return [
             FieldSpec("document_type", _("Dokumenttyp")),
-            FieldSpec("category", _("Kategorie")),
             FieldSpec("system_type", _("System-Typ")),
             FieldSpec("count", _("Anzahl")),
         ]
@@ -64,7 +63,7 @@ class ExampleBackend(DatasetBackend):
             )
             # document_type_id in der Gruppierung: eine Aggregation liefert
             # damit robust genau eine Zeile je DocumentType, kein N+1.
-            .values("document_type_id", "document_type__name", "document_type__category", "document_type__system_type")
+            .values("document_type_id", "document_type__name", "document_type__system_type")
             .annotate(count=Count("id"))
             .order_by("document_type__name")
         )
@@ -72,7 +71,6 @@ class ExampleBackend(DatasetBackend):
         records = [
             {
                 "document_type": row["document_type__name"],
-                "category": str(DocumentType.Category(row["document_type__category"]).label),
                 "system_type": row["document_type__system_type"] or "",
                 "count": row["count"],
             }

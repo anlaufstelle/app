@@ -112,7 +112,7 @@ def board_response(request, doc_type, *, add_form=None, group_form=None, retarge
 
 
 class ConfigDocumentTypeListView(FacilityAdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
-    """Liste der Dokumentationstypen mit Suche (Name) + Filter (Kategorie/aktiv)."""
+    """Liste der Dokumentationstypen mit Suche (Name) + Filter (aktiv)."""
 
     template_name = "core/config/document_types/list.html"
     partial_template_name = "core/config/document_types/partials/table.html"
@@ -124,10 +124,6 @@ class ConfigDocumentTypeListView(FacilityAdminRequiredMixin, PaginatedListMixin,
         if q:
             qs = qs.filter(name__icontains=q)
 
-        category = request.GET.get("category", "")
-        if category:
-            qs = qs.filter(category=category)
-
         active = request.GET.get("is_active", "")
         if active == "true":
             qs = qs.filter(is_active=True)
@@ -137,13 +133,11 @@ class ConfigDocumentTypeListView(FacilityAdminRequiredMixin, PaginatedListMixin,
         qs = qs.annotate(event_count=Count("events")).order_by("sort_order", "name")
         doc_types = self.paginate(qs, request)
 
-        params = {k: v for k, v in (("q", q), ("category", category), ("is_active", active)) if v}
+        params = {k: v for k, v in (("q", q), ("is_active", active)) if v}
         context = {
             "doc_types": doc_types,
             "q": q,
-            "selected_category": category,
             "selected_active": active,
-            "categories": DocumentType.Category.choices,
             "pagination_params": urlencode(params),
         }
         return self.render_htmx_or_full(context)

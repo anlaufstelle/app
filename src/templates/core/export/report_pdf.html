@@ -67,7 +67,6 @@
         <thead>
             <tr>
                 <th>{% trans "Typ" %}</th>
-                <th>{% trans "Kategorie" %}</th>
                 <th style="text-align:right">{% trans "Anzahl" %}</th>
             </tr>
         </thead>
@@ -75,7 +74,6 @@
             {% for row in stats.by_document_type %}
             <tr>
                 <td>{{ row.name }}</td>
-                <td>{{ row.category }}</td>
                 <td class="num">{% if row.suppressed %}{% trans "unterdrückt" %}{% else %}{{ row.count }}{% endif %}</td>
             </tr>
             {% endfor %}

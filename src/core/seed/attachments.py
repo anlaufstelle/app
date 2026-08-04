@@ -179,7 +179,6 @@ def _owner_doc_type(facility: Facility, name: str, entity_type: str, field_templ
         facility=facility,
         name=name,
         defaults={
-            "category": DocumentType.Category.ADMIN,
             "entity_type": entity_type,
             "sensitivity": DocumentType.Sensitivity.NORMAL,
             "icon": "paperclip",

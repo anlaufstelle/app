@@ -137,7 +137,6 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
             <thead class="bg-canvas">
                 <tr>
                     <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</th>
-                    <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Kategorie" %}</th>
                     <th class="px-4 py-2.5 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Anzahl" %}</th>
                 </tr>
             </thead>
@@ -145,7 +144,6 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
                 {% for row in stats.by_document_type %}
                 <tr>
                     <td class="px-4 py-2.5 text-[13px] text-ink">{{ row.name }}</td>
-                    <td class="px-4 py-2.5 text-[13px] text-ink-muted">{{ row.category }}</td>
                     <td class="px-4 py-2.5 text-[13px] text-ink text-right font-mono">{{ row.count }}</td>
                 </tr>
                 {% endfor %}
@@ -160,7 +158,6 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
                 <span class="text-[13px] font-semibold text-ink">{{ row.name }}</span>
                 <span class="text-[13px] font-bold text-ink font-mono">{{ row.count }}</span>
             </div>
-            <p class="text-[12px] text-ink-muted mt-0.5">{{ row.category }}</p>
         </div>
         {% endfor %}
     </div>

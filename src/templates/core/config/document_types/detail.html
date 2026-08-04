@@ -31,10 +31,6 @@
         <h2 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Stammdaten" %}</h2>
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-[13px]">
             <div>
-                <dt class="text-ink-muted">{% trans "Kategorie" %}</dt>
-                <dd class="text-ink font-medium">{{ doc_type.get_category_display }}</dd>
-            </div>
-            <div>
                 <dt class="text-ink-muted">{% trans "Sensibilität" %}</dt>
                 <dd class="text-ink font-medium">{{ doc_type.get_sensitivity_display }}</dd>
             </div>

@@ -24,7 +24,6 @@ from core.models import AuditLog, DocumentType, Event, QuickTemplate
 def _valid_post(**overrides):
     data = {
         "name": "Neuer Typ",
-        "category": DocumentType.Category.CONTACT,
         "sensitivity": DocumentType.Sensitivity.NORMAL,
         "is_active": "on",
     }
@@ -70,26 +69,34 @@ class TestList:
         assert foreign_doc_type.name not in body
 
     def test_search_filters_by_name(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Alpha", category="contact")
-        DocumentType.objects.create(facility=facility, name="Beta", category="contact")
+        DocumentType.objects.create(facility=facility, name="Alpha")
+        DocumentType.objects.create(facility=facility, name="Beta")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"), {"q": "Alph"})
         body = response.content.decode()
         assert "Alpha" in body
         assert "Beta" not in body
 
-    def test_category_filter(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Kontaktart", category="contact")
-        DocumentType.objects.create(facility=facility, name="Leistungsart", category="service")
+    def test_kein_kategorie_filter_mehr(self, client, admin_user, facility):
+        """Refs #1749: Der Filter ist mit dem Feld entfallen.
+
+        Ein unbekannter GET-Parameter darf die Liste nicht mehr einschränken
+        (und schon gar nicht mit einem 500er quittieren) — sonst bliebe ein
+        alter Bookmark/Link als stiller, wirkungsloser Filter stehen.
+        """
+        DocumentType.objects.create(facility=facility, name="Kontaktart")
+        DocumentType.objects.create(facility=facility, name="Leistungsart")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"), {"category": "service"})
         body = response.content.decode()
+        assert response.status_code == 200
         assert "Leistungsart" in body
-        assert "Kontaktart" not in body
+        assert "Kontaktart" in body
+        assert 'name="category"' not in body
 
     def test_is_active_filter(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Aktiver", category="contact", is_active=True)
-        DocumentType.objects.create(facility=facility, name="Inaktiver", category="contact", is_active=False)
+        DocumentType.objects.create(facility=facility, name="Aktiver", is_active=True)
+        DocumentType.objects.create(facility=facility, name="Inaktiver", is_active=False)
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"), {"is_active": "false"})
         body = response.content.decode()
@@ -151,44 +158,50 @@ class TestCreate:
         assert not DocumentType.objects.filter(name="").exists()
 
     def test_unique_collision_is_form_error_not_500(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Doppel", category="contact")
+        DocumentType.objects.create(facility=facility, name="Doppel")
         client.force_login(admin_user)
-        response = client.post(reverse("core:config_doctype_create"), _valid_post(name="Doppel", category="contact"))
+        response = client.post(reverse("core:config_doctype_create"), _valid_post(name="Doppel"))
         assert response.status_code == 200
-        assert DocumentType.objects.filter(facility=facility, name="Doppel", category="contact").count() == 1
+        assert DocumentType.objects.filter(facility=facility, name="Doppel").count() == 1
         assert b"bereits" in response.content
 
 
 # ---------------------------------------------------------------------------
-# Update — system_type-Immutabilität, category editierbar
+# Update — system_type-Immutabilität
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
 class TestUpdate:
     def test_system_type_immutable_on_edit(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(
-            facility=facility, name="Bann", category="admin", system_type=DocumentType.SystemType.BAN
-        )
+        dt = DocumentType.objects.create(facility=facility, name="Bann", system_type=DocumentType.SystemType.BAN)
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
-            _valid_post(name="Bann", category="admin", system_type=DocumentType.SystemType.CRISIS),
+            _valid_post(name="Bann", system_type=DocumentType.SystemType.CRISIS),
         )
         assert response.status_code == 302
         dt.refresh_from_db()
         assert dt.system_type == DocumentType.SystemType.BAN
 
-    def test_category_is_editable(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wandel", category="contact")
+    def test_kein_kategorie_feld_im_formular(self, client, admin_user, facility):
+        """Refs #1749: Das Formularfeld ist mit dem Modellfeld entfallen."""
+        dt = DocumentType.objects.create(facility=facility, name="Wandel")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_update", kwargs={"pk": dt.pk}))
+        assert "category" not in DocumentTypeForm(facility=facility).fields
+        assert b'id="id_category"' not in response.content
+
+    def test_umbenennen_bleibt_moeglich(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Wandel")
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
-            _valid_post(name="Wandel", category="service"),
+            _valid_post(name="Gewandelt"),
         )
         assert response.status_code == 302
         dt.refresh_from_db()
-        assert dt.category == "service"
+        assert dt.name == "Gewandelt"
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(dt.pk)).exists()
 
 
@@ -222,7 +235,7 @@ class TestDelete:
         ).exists()
 
     def test_delete_without_references(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="Wegwerf")
         pk = str(dt.pk)
         client.force_login(admin_user)
         response = client.post(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
@@ -260,7 +273,7 @@ class TestDelete:
         assert b"doctype-delete-quicktemplates" in response.content
 
     def test_confirm_page_hides_quick_template_hint_when_none(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Ohne Vorlagen", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="Ohne Vorlagen")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
         assert response.status_code == 200
@@ -382,8 +395,8 @@ class TestEntityScopedFieldVisibility:
       Template; die Alpine-Komponente haelt keinen zweiten Katalog.
     * Ausgeblendete Felder bleiben echte, aktivierte Eingabefelder im DOM —
       ihr Wert wird also unveraendert mitgepostet. Kein Feld darf durchs
-      Ausblenden auf den Modell-Default zurueckfallen (``category`` ist Teil des
-      Natural Keys ``(facility, name, category)`` und wird ohnehin nie versteckt).
+      Ausblenden auf den Modell-Default zurueckfallen (``sensitivity`` steuert
+      die Zugriffsschranke und wird ohnehin nie versteckt).
     * Ohne JavaScript bleibt alles sichtbar (progressive enhancement) — der
       Server rendert nichts versteckt.
     """
@@ -454,10 +467,11 @@ class TestEntityScopedFieldVisibility:
         assert 'data-entity-scoped-fields="system_type min_contact_stage retention_days"' in content
 
     def test_hiding_never_drops_a_value_from_the_post(self, client, admin_user):
-        """Regressionsschutz POST-Semantik: ``category`` faellt nie auf den Modell-Default.
+        """Regressionsschutz POST-Semantik: ``sensitivity`` faellt nie auf den Modell-Default.
 
-        Der Default waere ``CONTACT``; hier wird bewusst ``ADMIN`` gepostet —
-        ``category`` ist Teil des Natural Keys ``(facility, name, category)``.
+        Der Default waere ``NORMAL``; hier wird bewusst ``ELEVATED`` gepostet.
+        (Bis Refs #1749 stand hier ``category`` als Zeuge — das Feld gibt es
+        nicht mehr, die Invariante schon.)
         """
         client.force_login(admin_user)
         response = client.post(
@@ -465,12 +479,12 @@ class TestEntityScopedFieldVisibility:
             _valid_post(
                 name="Personenbogen POST",
                 entity_type=DocumentType.EntityType.CLIENT,
-                category=DocumentType.Category.ADMIN,
+                sensitivity=DocumentType.Sensitivity.ELEVATED,
             ),
         )
         assert response.status_code == 302
         obj = DocumentType.objects.get(name="Personenbogen POST")
-        assert obj.category == DocumentType.Category.ADMIN
+        assert obj.sensitivity == DocumentType.Sensitivity.ELEVATED
         assert obj.entity_type == DocumentType.EntityType.CLIENT
 
     def test_scoped_values_survive_a_roundtrip_on_an_event_type(self, client, admin_user, facility):
@@ -587,14 +601,13 @@ class TestSystemTypeOnlyForEventTypes:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Alt-Inkonsistent",
-            category=DocumentType.Category.ADMIN,
             entity_type=DocumentType.EntityType.CLIENT,
             system_type=DocumentType.SystemType.BAN,
         )
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
-            _valid_post(name="Alt-Inkonsistent", category=DocumentType.Category.ADMIN),
+            _valid_post(name="Alt-Inkonsistent"),
         )
         assert response.status_code == 302
 

@@ -93,7 +93,7 @@ class TestBuildDataset:
         result = backend.build_dataset(facility, date_from, date_to)
 
         assert result.mode == "rows"
-        assert result.records == [{"document_type": "Kontakt", "category": "Kontakt", "system_type": "", "count": 1}]
+        assert result.records == [{"document_type": "Kontakt", "system_type": "", "count": 1}]
         assert result.summary == {"total": 1}
         assert result.completeness == []
 
@@ -111,11 +111,10 @@ class TestBuildDataset:
         nach ``document_type__name`` (nicht nach Anlage- oder Kategorie-Reihenfolge).
         """
         date_from, date_to = date_range
-        zeta = DocumentType.objects.create(facility=facility, name="Zeta-Typ", category=DocumentType.Category.SERVICE)
+        zeta = DocumentType.objects.create(facility=facility, name="Zeta-Typ")
         ambulanz = DocumentType.objects.create(
             facility=facility,
             name="Ambulanz",
-            category=DocumentType.Category.CONTACT,
             system_type=DocumentType.SystemType.CONTACT,
         )
         for _index in range(3):
@@ -130,8 +129,8 @@ class TestBuildDataset:
 
         # order_by("document_type__name"): "Ambulanz" vor "Zeta-Typ".
         assert result.records == [
-            {"document_type": "Ambulanz", "category": "Kontakt", "system_type": "contact", "count": 1},
-            {"document_type": "Zeta-Typ", "category": "Leistung", "system_type": "", "count": 3},
+            {"document_type": "Ambulanz", "system_type": "contact", "count": 1},
+            {"document_type": "Zeta-Typ", "system_type": "", "count": 3},
         ]
         assert result.summary == {"total": 4}
 
@@ -176,9 +175,7 @@ class TestJsonExport:
 
         payload = json.loads(export_dataset(backend, facility, date_from, date_to, format="json").content)
 
-        assert payload["records"] == [
-            {"document_type": "Kontakt", "category": "Kontakt", "system_type": "", "count": None}
-        ]
+        assert payload["records"] == [{"document_type": "Kontakt", "system_type": "", "count": None}]
 
 
 _SELECT_BACKEND_RE = re.compile(r'<select name="backend".*?</select>', re.DOTALL)
@@ -232,7 +229,7 @@ class TestPrepareExport:
         """
         result = DatasetResult(
             mode="rows",
-            records=[{"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2}],
+            records=[{"document_type": "A", "system_type": "", "count": 2}],
             summary={"total": 2},
             completeness=[],
         )
@@ -244,7 +241,7 @@ class TestPrepareExport:
         # Backend): pinnt zugleich die Rueckprojektion auf die FieldSpec-Keys —
         # das interne ``suppressed``-Flag aus ``_suppress_small`` darf nicht in
         # den Records ueberleben.
-        assert prepared.records == [{"document_type": "A", "category": "Kontakt", "system_type": "", "count": None}]
+        assert prepared.records == [{"document_type": "A", "system_type": "", "count": None}]
         assert prepared.summary["total"] is None
         assert prepared.summary["k_anonymity_threshold"] == 5
 
@@ -260,8 +257,8 @@ class TestPrepareExport:
         result = DatasetResult(
             mode="rows",
             records=[
-                {"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2},
-                {"document_type": "B", "category": "Kontakt", "system_type": "", "count": 9},
+                {"document_type": "A", "system_type": "", "count": 2},
+                {"document_type": "B", "system_type": "", "count": 9},
             ],
             summary={"total": 11},
             completeness=[],
@@ -270,8 +267,8 @@ class TestPrepareExport:
         prepared = backend.prepare_export(facility, result)
 
         assert prepared.records == [
-            {"document_type": "A", "category": "Kontakt", "system_type": "", "count": None},
-            {"document_type": "B", "category": "Kontakt", "system_type": "", "count": None},
+            {"document_type": "A", "system_type": "", "count": None},
+            {"document_type": "B", "system_type": "", "count": None},
         ]
         # ``total`` bleibt stehen: mit zwei unterdrueckten Zellen aus [1, 10]
         # und Summe 11 ist keine davon zurueckrechenbar. Die fruehere
@@ -283,7 +280,7 @@ class TestPrepareExport:
     def test_zelle_ab_schwelle_bleibt_unveraendert(self, backend, facility):
         result = DatasetResult(
             mode="rows",
-            records=[{"document_type": "A", "category": "Kontakt", "system_type": "", "count": 9}],
+            records=[{"document_type": "A", "system_type": "", "count": 9}],
             summary={"total": 9},
             completeness=[],
         )
@@ -297,7 +294,7 @@ class TestPrepareExport:
         """Randsummen-Regel R14: die Gesamtzahl selbst ist eine Kleinstfallzahl."""
         result = DatasetResult(
             mode="rows",
-            records=[{"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2}],
+            records=[{"document_type": "A", "system_type": "", "count": 2}],
             summary={"total": 2},
             completeness=[],
         )
@@ -312,7 +309,7 @@ class TestPrepareExport:
         Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
         result = DatasetResult(
             mode="rows",
-            records=[{"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2}],
+            records=[{"document_type": "A", "system_type": "", "count": 2}],
             summary={"total": 2},
             completeness=[],
         )

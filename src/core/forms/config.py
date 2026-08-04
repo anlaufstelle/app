@@ -83,7 +83,7 @@ class DocumentTypeForm(forms.ModelForm):
       füllt eine leere Auswahl auf den Bestandswert ``EntityType.EVENT`` auf
       (identisch zum bisherigen, impliziten Modell-Default) statt eine
       „Pflichtfeld"-Fehlermeldung zu zeigen.
-    * Die zusammengesetzte Unique-Regel ``(facility, name, category)`` wird als
+    * Die zusammengesetzte Unique-Regel ``(facility, name)`` wird als
       freundlicher Formfehler gemeldet statt als ``IntegrityError`` (facility ist
       kein Formfeld, daher greift Djangos ModelForm-Unique-Check hier nicht).
     * ``EVENT_ONLY_FIELDS`` (Refs #1757, Option C aus #1731) ist die EINE
@@ -115,7 +115,6 @@ class DocumentTypeForm(forms.ModelForm):
         fields = [
             "name",
             "entity_type",
-            "category",
             "sensitivity",
             "system_type",
             "min_contact_stage",
@@ -126,7 +125,6 @@ class DocumentTypeForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": INPUT_CSS}),
             "entity_type": forms.Select(attrs={"class": INPUT_CSS}),
-            "category": forms.Select(attrs={"class": INPUT_CSS}),
             "sensitivity": forms.Select(attrs={"class": INPUT_CSS}),
             "system_type": forms.Select(attrs={"class": INPUT_CSS}),
             "min_contact_stage": forms.Select(attrs={"class": INPUT_CSS}),
@@ -247,18 +245,16 @@ class DocumentTypeForm(forms.ModelForm):
         if entity_type and entity_type != DocumentType.EntityType.EVENT:
             cleaned["retention_days"] = None
 
+        # Refs #1749 (ADR-040): Vorpruefung der Unique-Regel, seit dem Wegfall
+        # von ``category`` auf ``(facility, name)``.
         name = cleaned.get("name")
-        category = cleaned.get("category")
-        if name and category and self.facility is not None:
-            qs = DocumentType.objects.for_facility(self.facility).filter(name=name, category=category)
+        if name and self.facility is not None:
+            qs = DocumentType.objects.for_facility(self.facility).filter(name=name)
             if self.instance.pk:
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
                 raise ValidationError(
-                    _(
-                        "Ein Dokumentationstyp mit diesem Namen und dieser Kategorie "
-                        "existiert in dieser Einrichtung bereits."
-                    )
+                    _("Ein Dokumentationstyp mit diesem Namen existiert in dieser Einrichtung bereits.")
                 )
         return cleaned
 

@@ -58,7 +58,6 @@ def req(staff_user, facility):
 def _valid_post(**overrides):
     data = {
         "name": "Neuer Typ",
-        "category": DocumentType.Category.CONTACT,
         "sensitivity": DocumentType.Sensitivity.NORMAL,
         "is_active": "on",
     }
@@ -140,7 +139,6 @@ class TestEditEntityTypeImmutable:
             reverse("core:config_doctype_update", kwargs={"pk": doc_type_client_profile.pk}),
             _valid_post(
                 name=doc_type_client_profile.name,
-                category=doc_type_client_profile.category,
                 entity_type=DocumentType.EntityType.EVENT,
             ),
         )
@@ -154,7 +152,6 @@ class TestEditEntityTypeImmutable:
             reverse("core:config_doctype_update", kwargs={"pk": doc_type_case_form.pk}),
             _valid_post(
                 name=doc_type_case_form.name,
-                category=doc_type_case_form.category,
                 entity_type=DocumentType.EntityType.CLIENT,
             ),
         )
@@ -521,7 +518,7 @@ class TestDeleteConfirmClientCaseCounters:
         assert 'disabled aria-disabled="true"' in body
 
     def test_confirm_page_no_references_button_enabled(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Frisch ohne Refs", category="contact")
+        dt = DocumentType.objects.create(facility=facility, name="Frisch ohne Refs")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
         assert response.status_code == 200
