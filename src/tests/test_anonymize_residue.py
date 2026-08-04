@@ -222,6 +222,64 @@ class TestAnonymizeResidueMatrix:
         # DB-Cleanup muss aber durchgehen.
         assert Attachment.objects.filter(event=event).count() == 0
 
+    def test_owner_attachments_deleted(self, client_with_full_history, facility, admin_user):
+        """M24 (Refs #1738, ADR-039 §7): personen- UND falleigene Anhaenge fallen mit.
+
+        Seit dem Owner-Umbau haengen Anhaenge nicht mehr nur am Ereignis. Ohne
+        einen eigenen Loeschpfad ueberlebten die verschluesselten Dateien einer
+        anonymisierten Person als ``.enc`` samt DB-Zeile — eine Art.-17-Luecke,
+        die kein Bestandstest gesehen haette (der Event-Pfad bleibt gruen).
+        """
+        from core.models import Attachment, FieldTemplate
+
+        cli, case, _ = client_with_full_history
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Anlage-Owner",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        for owner_kwargs in ({"client": cli}, {"case": case}):
+            Attachment.objects.create(
+                facility=facility,
+                field_template=ft,
+                storage_filename="owner.enc",
+                original_filename_encrypted={"ct": "x", "iv": "y"},
+                file_size=42,
+                mime_type="text/plain",
+                created_by=admin_user,
+                **owner_kwargs,
+            )
+        assert Attachment.objects.filter(client=cli).count() == 1  # Positiv-Kontrolle
+        assert Attachment.objects.filter(case=case).count() == 1
+
+        cli.anonymize()
+
+        assert Attachment.objects.filter(client=cli).count() == 0
+        assert Attachment.objects.filter(case=case).count() == 0
+
+    def test_file_markers_gone_from_owner_data_json(self, client_with_full_history):
+        """Invariante I-M1 (ADR-039 §7): kein ``__files__``-Marker ueberlebt.
+
+        Der physische Loeschpfad und die Marker-Bereinigung muessen in
+        derselben Transaktion liegen — sonst zeigen Marker in ``data_json``
+        auf Attachment-Zeilen, die es nicht mehr gibt (Detail-Anzeige und
+        Auskunft wuerden sie weiter als vorhandene Datei ausweisen).
+        """
+        cli, case, _ = client_with_full_history
+        marker = {"__files__": True, "entries": [{"id": "11111111-1111-1111-1111-111111111111", "sort": 0}]}
+        cli.data_json = {**cli.data_json, "anlage": marker}
+        cli.save(update_fields=["data_json"])
+        case.data_json = {**case.data_json, "anlage": marker}
+        case.save(update_fields=["data_json"])
+
+        cli.anonymize()
+
+        cli.refresh_from_db()
+        case.refresh_from_db()
+        for haystack in (cli.data_json, case.data_json):
+            assert "__files__" not in str(haystack)
+            assert "__file__" not in str(haystack)
+
     def test_deletion_request_reason_redacted(self, client_with_full_history):
         cli, _, event = client_with_full_history
         cli.anonymize()

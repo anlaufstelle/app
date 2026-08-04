@@ -70,10 +70,14 @@ class TestClientAnonymizeCharacterization:
         with patch("core.services.file_vault.delete_attachments_for") as del_files:
             anonymize_client(client_identified, user=staff_user)
 
-        # Charakterisierung: pro betroffenem Event genau ein Aufruf an
-        # ``delete_attachments_for`` — der Service entfernt die Disk-Dateien.
-        del_files.assert_called_once()
-        assert del_files.call_args.args[0].pk == event.pk
+        # Charakterisierung: ein Aufruf je Anhang-Owner — der Service entfernt
+        # die Disk-Dateien. Anforderung geaendert mit M24 (Refs #1738,
+        # ADR-039 §7): vorher pinnte dieser Test GENAU EINEN Aufruf (nur das
+        # Ereignis). Seit dem Owner-Umbau traegt auch die Person selbst
+        # Anhaenge, also kommt ihr Aufruf hinzu; Faelle hat diese Fixture
+        # keine, deshalb bleibt es bei zwei.
+        deleted_pks = [call.args[0].pk for call in del_files.call_args_list]
+        assert deleted_pks == [event.pk, client_identified.pk]
 
     def test_client_with_deletion_request_redacts_reason(
         self, facility, staff_user, lead_user, doc_type_contact, client_identified

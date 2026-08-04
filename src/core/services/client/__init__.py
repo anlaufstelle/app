@@ -53,6 +53,7 @@ from core.services.client.export import (
 )
 from core.services.client.main import (
     _delete_event_attachments_for_client,
+    _delete_owned_attachments_for_client,
     _delete_recent_visits,
     _redact_activities,
     _redact_case_goals,
@@ -87,6 +88,7 @@ __all__ = [
     "_build_export_meta",
     "_build_footer",
     "_delete_event_attachments_for_client",
+    "_delete_owned_attachments_for_client",
     "_delete_recent_visits",
     "_document_type_retention_overrides",
     "_format_document_type_overrides",

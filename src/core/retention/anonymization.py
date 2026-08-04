@@ -37,6 +37,7 @@ from core.models import AuditLog, Client, Event, Settings
 from core.retention.legal_holds import exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
 from core.services.client import (
+    _delete_owned_attachments_for_client,
     _delete_recent_visits,
     _redact_activities,
     _redact_case_goals,
@@ -63,9 +64,19 @@ def _k_anonymize_with_cascade(client, k):
 
     ``event_ids`` werden hier selbst gesammelt: im Hard-Pfad fallen sie als
     Nebenprodukt von ``_delete_event_attachments_for_client`` an, das in der
-    Bridge nicht laeuft (die Anhaenge sind zum Bridge-Zeitpunkt bereits vom
-    Event-Soft-Delete entfernt — Invariante gepinnt in
-    ``tests/test_pii_residue_sweep.py``).
+    Bridge nicht laeuft.
+
+    **Anhang-Invariante seit M24 (Refs #1738, ADR-039):** „die Anhaenge sind
+    zum Bridge-Zeitpunkt ohnehin schon weg" gilt nur noch fuer
+    **Ereignis**-Anhaenge — dort raeumt der Event-Soft-Delete
+    (``soft_delete_event`` bzw. ``retention.enforcement``) vor, weil die
+    Eintrittsbedingung ``active_events == 0`` das erzwingt. Personen- und
+    falleigene Anhaenge haben keinen solchen Vorlaeufer (es gibt keinen
+    Fall-Loeschworkflow, ADR-039 §6); sie werden hier ueber denselben Helfer
+    wie im Hard-Pfad geloescht — sonst blieben verschluesselte Klientendateien
+    samt ``.enc`` liegen (Art. 17). Beide Haelften der Invariante sind in
+    ``tests/test_pii_residue_sweep.py``
+    (``test_attachments_gone_after_retention_k_anonymization``) gepinnt.
 
     Bewusst NICHT aufgerufen — beide Ausnahmen haengen an der
     Eintrittsbedingung ``active_events == 0`` bzw. am k-Anon-Vertrag:
@@ -95,6 +106,10 @@ def _k_anonymize_with_cascade(client, k):
         _redact_activities(client, event_ids)
         _delete_recent_visits(client)
         _revoke_offline_bundles(client)
+        # Refs #1344/#1738: Datei-Block spaet in der Transaktion — der
+        # ``.enc``-Unlink ist nicht rollback-bar (Begruendung wie im Hard-Pfad
+        # ``anonymize_client``).
+        _delete_owned_attachments_for_client(client, case_ids)
 
 
 def anonymize_clients(facility, dry_run):

@@ -359,6 +359,26 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     upload = SimpleUploadedFile("RESIDUEPROBE-Anhang.pdf", PDF_MINIMAL, content_type="application/pdf")
     attachment = store_encrypted_file(facility, upload, ft_anhang, event, admin_user)
 
+    # 5b') Personen- und falleigener Anhang (M24, Refs #1738 / ADR-039). Seit dem
+    #      Owner-Umbau haengen Anhaenge nicht mehr zwangslaeufig am Ereignis — die
+    #      Loeschpfade muessen alle drei Owner erfassen, sonst ueberleben
+    #      verschluesselte Dateien die Anonymisierung (Art. 17). Bewusst ueber den
+    #      echten Vault-Pfad, damit auch eine ``.enc``-Datei auf Disk entsteht.
+    client_attachment = store_encrypted_file(
+        facility,
+        SimpleUploadedFile("RESIDUEPROBE-Personenakte.pdf", PDF_MINIMAL, content_type="application/pdf"),
+        ft_anhang,
+        client,
+        admin_user,
+    )
+    case_attachment = store_encrypted_file(
+        facility,
+        SimpleUploadedFile("RESIDUEPROBE-Fallakte.pdf", PDF_MINIMAL, content_type="application/pdf"),
+        ft_anhang,
+        case,
+        admin_user,
+    )
+
     # 5c) Loeschvorschlag zum Event (core_retentionproposal.details). Ueber den
     #     echten Builder, damit das Pseudonym so im JSON landet wie im Betrieb
     #     (Refs #1751, Punkt 3). Die Tabelle war als ``pii`` klassifiziert,
@@ -398,9 +418,12 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     return SimpleNamespace(
         facility=facility,
         client=client,
+        case=case,
         event=event,
         doc_type=doc_type,
         attachment=attachment,
+        client_attachment=client_attachment,
+        case_attachment=case_attachment,
     )
 
 
@@ -450,12 +473,21 @@ def test_no_residue_after_anonymize(maximal_pii_graph, table):
 
 @pytest.mark.django_db
 def test_attachments_deleted_after_anonymize(maximal_pii_graph):
+    """Hard-Pfad: alle drei Owner-Sorten fallen — DB-Zeile UND ``.enc`` (Refs #1738)."""
     from core.models import Attachment
+    from core.services.file_vault import get_attachment_path
 
     g = maximal_pii_graph
     assert Attachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
+    paths = [get_attachment_path(a) for a in (g.attachment, g.client_attachment, g.case_attachment)]
+    assert all(path.exists() for path in paths), "Positiv-Kontrolle: .enc-Dateien muessen vorher liegen"
+
     g.client.anonymize()
+
     assert Attachment.objects.filter(event=g.event).count() == 0
+    assert Attachment.objects.filter(client=g.client).count() == 0
+    assert Attachment.objects.filter(case=g.case).count() == 0
+    assert not [path for path in paths if path.exists()], "verwaiste .enc-Dateien nach anonymize_client"
 
 
 # --------------------------------------------------------------------------
@@ -832,20 +864,32 @@ def test_no_residue_after_retention_k_anonymization(maximal_pii_graph, admin_use
 
 @pytest.mark.django_db
 def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, admin_user, lead_user):
-    """Invariante: nach dem K-Anon-Retention-Lauf existiert kein Anhang mehr (Refs #1750).
+    """Invariante: nach dem K-Anon-Retention-Lauf existiert kein Anhang mehr (Refs #1750, #1738).
 
-    Die Bridge loescht Anhaenge NICHT selbst — sie verlaesst sich darauf, dass
-    ihre Eintrittsbedingung (``active_events == 0``) nur Klienten erfasst, deren
-    Events der Soft-Delete-Pfad bereits entladen hat. Diese implizite Kopplung
-    wird hier explizit gepinnt: aendert jemand die Eintrittsbedingung (oder
-    haengen Anhaenge nach dem Attachment-Umbau [#1738] nicht mehr am Event),
-    reisst dieser Test, statt dass verschluesselte Klientendateien still
-    ueberleben.
+    Zwei verschiedene Mechanismen, ein gemeinsames Ergebnis:
+
+    * **Ereignis-Anhaenge** loescht die Bridge NICHT selbst — sie verlaesst sich
+      darauf, dass ihre Eintrittsbedingung (``active_events == 0``) nur Klienten
+      erfasst, deren Events der Soft-Delete-Pfad bereits entladen hat. Diese
+      implizite Kopplung ist hier explizit gepinnt: aendert jemand die
+      Eintrittsbedingung, reisst dieser Test.
+    * **Personen-/falleigene Anhaenge** (M24, ADR-039) kennen keinen solchen
+      Vorlaeufer — kein Event-Soft-Delete raeumt sie ab, und
+      ``cleanup_orphan_storage_files`` verschont Dateien MIT Record. Die Bridge
+      muss sie ueber denselben Helfer wie der Hard-Pfad selbst loeschen, sonst
+      bleiben verschluesselte Klientendateien dauerhaft liegen (Art. 17).
+
+    Geprueft wird beides: DB-Zeile UND ``.enc``-Datei auf Disk — eine geloeschte
+    Zeile ohne Unlink waere die schlimmere Haelfte des Befunds (die Datei fiele
+    danach durch jedes Waisen-Raster).
     """
     from core.models import Attachment
+    from core.services.file_vault import get_attachment_path
 
     g = maximal_pii_graph
     assert Attachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
+    owner_paths = [get_attachment_path(g.client_attachment), get_attachment_path(g.case_attachment)]
+    assert all(path.exists() for path in owner_paths), "Positiv-Kontrolle: .enc-Dateien muessen vorher liegen"
 
     _arm_retention_k_anonymization(g, admin_user, lead_user)
     from core.retention.anonymization import anonymize_clients
@@ -855,3 +899,6 @@ def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, adm
     g.client.refresh_from_db()
     assert g.client.k_anonymized is True
     assert Attachment.objects.filter(event=g.event).count() == 0
+    assert Attachment.objects.filter(client=g.client).count() == 0
+    assert Attachment.objects.filter(case=g.case).count() == 0
+    assert not [path for path in owner_paths if path.exists()], "verwaiste .enc-Dateien nach K-Anon-Bridge"

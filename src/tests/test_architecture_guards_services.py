@@ -266,9 +266,15 @@ class TestKAnonBridgeRedactionParity:
             "hat ``data_json``/``search_text`` bereits geleert."
         ),
         "_delete_event_attachments_for_client": (
-            "Anhaenge sind zum Bridge-Zeitpunkt bereits geloescht: beide "
-            "Soft-Delete-Pfade (``soft_delete_event`` und ``retention.enforcement``) "
-            "rufen ``delete_attachments_for``. Die Invariante ist in "
+            "Nur der EREIGNIS-Zweig ist entbehrlich: Ereignis-Anhaenge sind zum "
+            "Bridge-Zeitpunkt bereits geloescht, weil beide Soft-Delete-Pfade "
+            "(``soft_delete_event`` und ``retention.enforcement``) "
+            "``delete_attachments_for`` rufen und die Eintrittsbedingung "
+            "``active_events == 0`` genau das erzwingt. Seit M24 (Refs #1738, "
+            "ADR-039) traegt die Bridge die personen-/falleigenen Anhaenge "
+            "dagegen selbst ab — ueber ``_delete_owned_attachments_for_client``, "
+            "denselben Helfer wie der Hard-Pfad (fuer sie gibt es keinen "
+            "vorgelagerten Loeschpfad). Beide Haelften sind in "
             "``test_pii_residue_sweep.py`` "
             "(``test_attachments_gone_after_retention_k_anonymization``) gepinnt, "
             "damit eine geaenderte Eintrittsbedingung nicht still zur Luecke wird."

@@ -206,6 +206,37 @@ def _delete_event_attachments_for_client(client) -> list:
     return event_ids
 
 
+def _delete_owned_attachments_for_client(client, case_ids: list) -> None:
+    """Loescht personen- und falleigene Anhaenge (Dateien + DB-Zeilen).
+
+    M24 (Refs #1738, ADR-039 §7): Seit dem Owner-Umbau haengt ein Anhang an
+    genau einem Owner — Ereignis, **Person** oder **Fall**. Die beiden neuen
+    Owner-Sorten haben keinen Vorlaeufer-Loeschpfad: es gibt keinen
+    Fall-Loeschworkflow (ADR-039 §6) und der Personen-Soft-Delete raeumt keine
+    Dateien ab. Ohne diesen Helfer ueberlebten die verschluesselten Dateien die
+    Anonymisierung dauerhaft — ``cleanup_orphan_storage_files`` verschont
+    Dateien MIT Record, also faenden sie auch keine Waisen-Raster (Art. 17).
+
+    Gegenstueck zu :func:`_delete_event_attachments_for_client`, bewusst als
+    **zweiter** Helfer: der Ereignis-Zweig liefert nebenbei die ``event_ids``
+    fuer die nachgelagerten Redaktionen und ist in der K-Anon-Bridge
+    entbehrlich (dort sind Ereignis-Anhaenge per Eintrittsbedingung schon weg),
+    dieser hier ist in **beiden** Pfaden Pflicht.
+
+    ``case_ids`` stammt aus :func:`_redact_cases_and_episodes` — die Faelle
+    sind zu diesem Zeitpunkt bereits redigiert (``data_json = {}``), womit die
+    Marker-Bereinigung der Invariante I-M1 im selben ``atomic`` erledigt ist.
+    """
+    from core.models.case import Case
+    from core.services.file_vault import delete_attachments_for
+
+    delete_attachments_for(client)
+    if not case_ids:
+        return
+    for case in Case.objects.filter(pk__in=case_ids).iterator():
+        delete_attachments_for(case)
+
+
 def _redact_live_events(client) -> None:
     """Leere ``data_json`` + ``search_text`` der noch nicht soft-deleteten Events.
 
@@ -462,7 +493,10 @@ def anonymize_client(client, user=None):
       Klienten — append-only-Trigger (Migration 0012) wird transaktional
       umgangen, sonst blockt das ``UPDATE``.
     - ``Attachment``: Disk-Files + DB-Zeilen via
-      :func:`core.services.file_vault.delete_attachments_for`.
+      :func:`core.services.file_vault.delete_attachments_for` — seit M24
+      (Refs #1738) fuer **alle drei** Owner-Sorten: Ereignis-Anhaenge ueber
+      :func:`_delete_event_attachments_for_client`, personen- und falleigene
+      ueber :func:`_delete_owned_attachments_for_client`.
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
@@ -497,6 +531,14 @@ def anonymize_client(client, user=None):
     _redact_activities(client, event_ids)
     _delete_recent_visits(client)
     _revoke_offline_bundles(client)
+    # Refs #1344/#1738: Der Datei-Block steht bewusst SPAET. Der ``.enc``-Unlink
+    # ist nicht rollback-bar — schlaegt eine der Redaktionen oben fehl, rollt die
+    # umgebende Transaktion zurueck und es sind noch keine Dateien verschwunden;
+    # der naechste Lauf holt die Anonymisierung vollstaendig nach. Umgekehrt
+    # waeren geloeschte Dateien bei erhaltenem Klartext-Bestand der schlechtere
+    # Halbzustand. (Der Ereignis-Zweig oben kann nicht nach hinten wandern: seine
+    # ``event_ids`` speisen die nachgelagerten Redaktionen.)
+    _delete_owned_attachments_for_client(client, case_ids)
 
     logger.info(
         "client_anonymized",
