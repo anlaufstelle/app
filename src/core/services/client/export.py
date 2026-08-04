@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from core.models import (
     Activity,
+    Attachment,
     AuditLog,
     DeletionRequest,
     Episode,
@@ -21,6 +22,7 @@ from core.models import (
     WorkItem,
 )
 from core.models import Case as CaseModel
+from core.models.attachment import owner_field_name
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -58,12 +60,63 @@ def _soft_delete_meta(obj):
 ATTACHMENT_FIELD_PLACEHOLDER = "[Dateianhang – Angaben unter „Dateianhänge“]"
 
 
-def _gather_attachments(owner):
+def _ordered_attachments(queryset):
+    """Anhang-Zeilen in Auskunfts-Reihenfolge, mit den Joins der Serialisierung.
+
+    Eine Stelle fuer Sortierung und ``select_related`` — die Einzel-Abfrage
+    (:func:`_gather_attachments` ohne Index) und der Sammel-Aufbau
+    (:func:`_build_attachment_index`) muessen dieselbe Reihenfolge liefern,
+    sonst haengt das Auskunftsdokument vom Eintrittspunkt ab.
+    """
+    return queryset.select_related("field_template", "created_by").order_by(
+        "field_template__name",
+        "sort_order",
+        "created_at",
+        "pk",
+    )
+
+
+def _build_attachment_index(client, user):
+    """Anhaenge der Person, ihrer Faelle und ihrer Ereignisse in **drei** Queries (Refs #1738).
+
+    Rueckgabe: ``{(owner_field, owner_pk): [Attachment, ...]}`` — der Schluessel
+    ist derselbe Owner-Dispatch wie im Service-Layer
+    (:func:`~core.models.attachment.owner_field_name`).
+
+    Vorher lief pro Fall und pro Ereignis eine eigene ``owner.attachments``-
+    Abfrage; bei einer Person mit langer Historie skalierte die Auskunft linear
+    mit der Zahl ihrer Datensaetze (G4-Befund). Die Ausgabe bleibt bitgleich:
+    sortiert wird zentral in :func:`_ordered_attachments`, die Gruppierung
+    erhaelt die Reihenfolge je Owner.
+
+    Der Ereignis-Zweig traegt die **Sensitivity-Filterung** in der Query
+    (``visible_to``) — ohne sie laege Anhang-Metadatum eines fuer diesen
+    Nutzer unsichtbaren Ereignisses im Speicher, auch wenn es die
+    Serialisierung nie erreicht. Der Zugriff bleibt damit deckungsgleich mit
+    :func:`_gather_events`; ``is_deleted`` wird bewusst nicht gefiltert, weil
+    die Auskunft Live-Bestand **und** Papierkorb ausweist.
+    """
+    index = {}
+    sources = (
+        ("client", Attachment.objects.filter(client=client)),
+        ("case", Attachment.objects.filter(case__client=client)),
+        ("event", Attachment.objects.filter(event__in=Event.objects.visible_to(user).filter(client=client))),
+    )
+    for owner_field, queryset in sources:
+        for attachment in _ordered_attachments(queryset):
+            index.setdefault((owner_field, getattr(attachment, f"{owner_field}_id")), []).append(attachment)
+    return index
+
+
+def _gather_attachments(owner, attachment_index=None):
     """Anhang-**Metadaten** eines Owners als ``[{field, filename, ...}, ...]`` (Refs #1738).
 
-    Owner-generisch: ``owner`` ist ein ``Client``, ``Case`` oder ``Event`` —
-    der Zugriff laeuft ueber den geteilten Reverse-Accessor
-    ``owner.attachments`` und ist damit automatisch owner-gescopt (ADR-039 §1).
+    Owner-generisch: ``owner`` ist ein ``Client``, ``Case`` oder ``Event``.
+    Mit ``attachment_index`` (aus :func:`_build_attachment_index`) kommen die
+    Zeilen aus der gebuendelten Sammel-Abfrage, sonst aus dem geteilten
+    Reverse-Accessor ``owner.attachments`` — beide Wege sind owner-gescopt
+    (ADR-039 §1) und liefern dieselbe Reihenfolge. Der indexlose Weg bleibt fuer
+    Einzelaufrufe erhalten (ein Owner = eine Query, kein N+1).
 
     **Keine Binaerinhalte** (Produktentscheid M24, konsistent mit
     M4/#1060): die
@@ -97,12 +150,10 @@ def _gather_attachments(owner):
     Namens-Blob) bleiben draussen: sie sind keine Auskunft ueber die Person,
     sondern Ablage-Technik.
     """
-    attachments = owner.attachments.select_related("field_template", "created_by").order_by(
-        "field_template__name",
-        "sort_order",
-        "created_at",
-        "pk",
-    )
+    if attachment_index is None:
+        attachments = _ordered_attachments(owner.attachments.all())
+    else:
+        attachments = attachment_index.get((owner_field_name(owner), owner.pk), ())
     return [
         {
             "field": attachment.field_template.name,
@@ -270,7 +321,7 @@ def _gather_client_fields(client):
     return fields
 
 
-def _serialize_event(event):
+def _serialize_event(event, attachment_index=None):
     """Serialize a single Event instance, decrypting encrypted data_json values.
 
     Refs #1738 (M24): ``attachments`` kommt hinzu — **nur wenn nicht leer**,
@@ -319,13 +370,13 @@ def _serialize_event(event):
         "created_at": event.created_at.isoformat(),
         "updated_at": event.updated_at.isoformat(),
     }
-    attachments = _gather_attachments(event)
+    attachments = _gather_attachments(event, attachment_index)
     if attachments:
         entry["attachments"] = attachments
     return entry
 
 
-def _gather_events(client, user, *, is_deleted=False):
+def _gather_events(client, user, attachment_index=None, *, is_deleted=False):
     """Return (events_data, event_ids) for events visible to ``user``.
 
     Refs #734: ``user`` ist Pflicht, damit ``visible_to(user)`` greift.
@@ -351,11 +402,11 @@ def _gather_events(client, user, *, is_deleted=False):
     event_ids = []
     for event in events:
         event_ids.append(event.pk)
-        events_data.append(_serialize_event(event))
+        events_data.append(_serialize_event(event, attachment_index))
     return events_data, event_ids
 
 
-def _gather_cases(client):
+def _gather_cases(client, attachment_index=None):
     """Serialize all cases linked to the client."""
     cases = (
         CaseModel.objects.filter(client=client)
@@ -389,7 +440,7 @@ def _gather_cases(client):
             entry["dynamic_data_orphaned"] = orphaned
         # Refs #1738 (M24): fall-eigene Anhaenge, Key nur wenn nicht leer
         # (Bestandsformat bleibt bitgleich fuer Faelle ohne Dateien).
-        attachments = _gather_attachments(case)
+        attachments = _gather_attachments(case, attachment_index)
         if attachments:
             entry["attachments"] = attachments
         entries.append(entry)
@@ -856,8 +907,12 @@ def export_client_data(client, facility, user):
     — sonst fiele die Historie eines geloeschten Ereignisses stillschweigend
     weg, obwohl sie bis zum Hard-Purge gespeichert bleibt.
     """
-    events_data, event_ids = _gather_events(client, user)
-    deleted_events_data, deleted_event_ids = _gather_events(client, user, is_deleted=True)
+    # Refs #1738 (G4): Anhaenge einmal gebuendelt holen (drei Queries), statt je
+    # Fall und je Ereignis eine eigene — der Index wird an alle drei
+    # Serialisierungs-Pfade durchgereicht.
+    attachment_index = _build_attachment_index(client, user)
+    events_data, event_ids = _gather_events(client, user, attachment_index)
+    deleted_events_data, deleted_event_ids = _gather_events(client, user, attachment_index, is_deleted=True)
     all_event_ids = [*event_ids, *deleted_event_ids]
     return {
         "client": _gather_client_fields(client),
@@ -870,8 +925,8 @@ def export_client_data(client, facility, user):
         # Fall- und ereignis-eigene Anhaenge haengen dagegen sinnvollerweise am
         # jeweiligen Datensatz (``cases[i]``/``events[i]``) und haben dort
         # eigene PDF-Nadeln.
-        "attachments": _gather_attachments(client),
-        "cases": _gather_cases(client),
+        "attachments": _gather_attachments(client, attachment_index),
+        "cases": _gather_cases(client, attachment_index),
         "episodes": _gather_episodes(client),
         "outcome_goals": _gather_outcome_goals(client),
         "event_history": _gather_event_history(all_event_ids),

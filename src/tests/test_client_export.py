@@ -1241,6 +1241,59 @@ class TestClientExportAttachments:
         # Positiv-Kontrolle: das Feld faellt nicht weg, es wird nur lesbar.
         assert data["events"][0]["data"][file_field_template.slug] == ATTACHMENT_FIELD_PLACEHOLDER
 
+    def test_attachments_are_fetched_per_owner_kind_not_per_owner(
+        self, sample_client, facility, doc_type, file_field_template, admin_user
+    ):
+        """N+1-Pin: drei Anhang-Queries, unabhaengig von der Zahl der Owner (Refs #1738).
+
+        Die Auskunft sammelte pro Fall und pro Ereignis eine eigene Query
+        (``owner.attachments``). Bei einer Person mit langer Historie skaliert
+        das linear — ausgerechnet auf dem Pfad, der ohnehin den gesamten
+        Datenbestand einer Person zusammentraegt. Gebuendelt sind es genau drei:
+        je eine pro Owner-Sorte.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        for i in range(3):
+            case = CaseModel.objects.create(
+                facility=facility,
+                client=sample_client,
+                title=f"Fall {i}",
+                created_by=admin_user,
+            )
+            _make_attachment(facility, case, file_field_template, admin_user, filename=f"Fall-{i}.pdf")
+            event = Event.objects.create(
+                facility=facility,
+                client=sample_client,
+                document_type=doc_type,
+                occurred_at=timezone.now() - timedelta(days=i + 1),
+                data_json={},
+                created_by=admin_user,
+            )
+            _make_attachment(facility, event, file_field_template, admin_user, filename=f"Ereignis-{i}.pdf")
+        _make_attachment(facility, sample_client, file_field_template, admin_user)
+
+        with CaptureQueriesContext(connection) as ctx:
+            data = export_client_data(sample_client, facility, admin_user)
+
+        attachment_queries = [q["sql"] for q in ctx.captured_queries if "core_attachment" in q["sql"]]
+        assert len(attachment_queries) == 3, f"{len(attachment_queries)} Anhang-Queries:\n" + "\n".join(
+            attachment_queries
+        )
+        # Positiv-Kontrolle: die Buendelung darf nichts verlieren.
+        assert [a["filename"] for a in data["attachments"]] == ["Mietvertrag.pdf"]
+        assert sorted(a["filename"] for case in data["cases"] for a in case["attachments"]) == [
+            "Fall-0.pdf",
+            "Fall-1.pdf",
+            "Fall-2.pdf",
+        ]
+        assert sorted(a["filename"] for event in data["events"] for a in event["attachments"]) == [
+            "Ereignis-0.pdf",
+            "Ereignis-1.pdf",
+            "Ereignis-2.pdf",
+        ]
+
     def test_undecryptable_filename_is_named_as_encrypted_not_as_download(
         self, sample_client, facility, file_field_template, admin_user
     ):
