@@ -95,6 +95,16 @@ def attach_files_to_counseling_events(facility: Facility, users: list[User], cfg
     if ratio <= 0:
         return 0
 
+    # Idempotenz-Guard (Refs #1784): ohne ihn zieht ein erneuter Seed-Lauf
+    # (ohne --flush) sein Kontingent erneut aus den Beratungs-Events OHNE
+    # Anhang -- die Auswahl unten filtert zwar "noch ohne Anhang", das gilt
+    # aber je Lauf, nicht je Einrichtung/Kategorie. Ein zweiter Lauf haengte
+    # so immer weitere Anhaenge an bislang unberuehrte Events. Muster wie
+    # attach_files_to_client_and_case: EIN Existenz-Check je Einrichtung/
+    # Kategorie statt einer Ziel-Quote je Lauf.
+    if Attachment.objects.filter(facility=facility, event__document_type__system_type="counseling").exists():
+        return 0
+
     # Find counseling events without existing attachments
     counseling_events = list(
         Event.objects.filter(

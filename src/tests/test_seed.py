@@ -1075,10 +1075,10 @@ def test_seeded_owner_attachments_are_downloadable_for_staff():
 def test_seed_owner_attachments_are_idempotent():
     """Ein zweiter Lauf legt keine zweite Person-/Fall-Datei nach.
 
-    Bewusst nur auf die owner-generischen Zeilen gepinnt: die
-    Ereignis-Anhänge (``attach_files_to_counseling_events``) legen bei jedem
-    Lauf welche nach (Bestandsverhalten — die Funktion zieht ihr Kontingent aus
-    den Events OHNE Anhang), das ist hier nicht Gegenstand.
+    Ereignis-Anhänge (``attach_files_to_counseling_events``) prüft
+    ``test_seed_counseling_event_attachments_are_idempotent`` separat
+    (Refs #1784) — seit dort ist auch diese Kategorie idempotent gepinnt,
+    beide Tests bleiben aber getrennt (unterschiedliche Owner-Art).
     """
     call_command("seed")
     call_command("seed")
@@ -1088,3 +1088,24 @@ def test_seed_owner_attachments_are_idempotent():
     assert Attachment.objects.filter(facility=facility, case__isnull=False).count() == 1
     assert DocumentType.objects.filter(facility=facility, name="Personenakte").count() == 1
     assert DocumentType.objects.filter(facility=facility, name="Fallakte").count() == 1
+
+
+@pytest.mark.django_db
+def test_seed_counseling_event_attachments_are_idempotent():
+    """Ein zweiter Seed-Lauf haengt keine weiteren Ereignis-Anhaenge an (Refs #1784).
+
+    Vorher zog ``attach_files_to_counseling_events`` ihr Kontingent bei JEDEM
+    Lauf erneut aus den Beratungs-Events OHNE Anhang — ein zweiter Lauf (ohne
+    ``--flush``) haengte also weitere Anhaenge an bislang unberuehrte Events,
+    obwohl diese Kategorie fuer die Einrichtung laengst geseedet war. Muster
+    wie die owner-generischen Zeilen (``attach_files_to_client_and_case``):
+    EIN Existenz-Check je Einrichtung/Kategorie statt einer Ziel-Quote je Lauf.
+    """
+    call_command("seed")
+    facility = Facility.objects.get(name="Hauptstelle")
+    first_count = Attachment.objects.filter(facility=facility, event__isnull=False).count()
+    assert first_count > 0, "Vorbedingung: der erste Lauf muss Ereignis-Anhaenge anlegen."
+
+    call_command("seed")
+    second_count = Attachment.objects.filter(facility=facility, event__isnull=False).count()
+    assert second_count == first_count
