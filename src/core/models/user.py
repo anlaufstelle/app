@@ -6,6 +6,7 @@ import secrets
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
 
@@ -128,13 +129,22 @@ class User(AbstractUser):
     def is_assistant_or_above(self):
         return self.role in (self.Role.FACILITY_ADMIN, self.Role.LEAD, self.Role.STAFF, self.Role.ASSISTANT)
 
-    @property
+    @cached_property
     def has_open_deletion_requests(self):
         """True, wenn diese Person einen noch offenen Löschantrag gestellt hat.
 
         Refs #1736 (B): Rückkanal für die Antragstellerin. Ohne ihn verschwand
         ein gestellter Antrag für sie spurlos — die Löschanträge-Liste war auf
         Leitung/Admin bzw. Genehmiger:innen gegated.
+
+        ``cached_property`` (Refs #1755, Perf): Beide Navigationsleisten
+        (_navigation_desktop/_mobile) werten das Gate auf JEDER Seite aus — für
+        Fachkraft/Assistenz (ohne is_lead_or_admin/can_confirm_deletion) lief so
+        pro Request ein ungecachtes ``EXISTS`` **doppelt**. Die Nav teilt sich
+        eine Request-``User``-Instanz, der Cache reduziert das auf eine Query.
+        Ein Löschantrag wird per POST-Redirect-GET gestellt (``ClientDelete
+        RequestView`` → ``redirect`` auf die Detailseite) — die Folge-Seite lädt
+        eine frische Instanz, es gibt also kein Stale-Read nach dem Schreiben.
         """
         from core.models.workitem import DeletionRequest
 
