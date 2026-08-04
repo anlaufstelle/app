@@ -36,6 +36,7 @@ from core.services.dashboard.quick_templates import (
     list_templates_for_user,
 )
 from core.services.dashboard.release_log import (
+    EXTERNAL_REPORT_TARGET,
     RELEASE_FIELD_MAX_LENGTH,
     Release,
     build_release_overview,
@@ -78,6 +79,7 @@ from core.services.dashboard.statistics import (
 __all__ = [
     "InvalidStatisticsPeriodError",
     "PERSONS_KEY",
+    "EXTERNAL_REPORT_TARGET",
     "RELEASE_FIELD_MAX_LENGTH",
     "Release",
     "PeriodState",

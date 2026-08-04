@@ -25,6 +25,7 @@ from core.reporting.export import SUPPORTED_FORMATS, export_dataset
 from core.reporting.registry import get_available_backends, get_backend
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
+    EXTERNAL_REPORT_TARGET,
     InvalidStatisticsPeriodError,
     _merge_stats,
     build_external_report,
@@ -348,22 +349,27 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
         # Audit-Log: jeder externe Bericht ist ein DSGVO-relevanter Export.
         #
         # K4a (Refs #1770): Eine **Freigabe** ist nur der Abruf, bei dem ein
-        # Artefakt das Haus verlaesst — hier ``?format=json``. Die HTML-Ansicht
-        # wird bei JEDEM Aufruf auditiert, auch bei jedem Reload; sie als
-        # Herausgabe zu fuehren liesse den Log unbegrenzt und dauerhaft
-        # (prune-exempt) wachsen und verdraengte in der Freigabe-Uebersicht die
-        # echten Downloads aus dem Auswertungsfenster. Die Audit-Zeile bleibt,
-        # sie ist nur eine normale, befristete Zeile.
+        # Artefakt das Haus verlaesst. Diese View ist in **beiden** Formaten
+        # keiner (Refs #1772): ``?format=json`` liefert Maschinen-Text, aber es
+        # ist dieselbe Bildschirmseite — kein Empfaenger-/Zweckformular, keine
+        # Download-Geste, und wie die HTML-Fassung wird sie bei JEDEM Aufruf
+        # auditiert, auch bei jedem Reload. Als Herausgabe gefuehrt liesse sie
+        # den Log unbegrenzt und dauerhaft (prune-exempt) wachsen und
+        # verdraengte in der Freigabe-Uebersicht die echten Downloads aus dem
+        # Auswertungsfenster. Die Audit-Zeile bleibt, sie ist nur eine normale,
+        # befristete Zeile. Wer den Datensatz als Datei herausgibt, nimmt den
+        # generischen Berichts-Download (``DatasetExportView``) — dort gibt es
+        # die Freigabe-Felder.
         log_audit_event(
             request,
             AuditLog.Action.EXPORT,
-            target_type="ExternalReport",
+            target_type=EXTERNAL_REPORT_TARGET,
             detail={
                 "format": output_format,
                 "date_from": str(period_state.date_from),
                 "date_to": str(period_state.date_to),
                 "k_threshold": report["metadata"]["k_anonymity_threshold"],
-                **release_detail(request.GET, artifact_released=output_format == "json"),
+                **release_detail(request.GET, artifact_released=False),
             },
         )
 

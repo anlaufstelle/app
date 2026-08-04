@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from core.models import AuditLog
 from core.services.dashboard.release_log import (
+    EXTERNAL_REPORT_TARGET,
     RELEASE_FIELD_MAX_LENGTH,
     build_release_overview,
     release_detail,
@@ -66,18 +67,37 @@ def _alt_zeile_vor_marker_einfuehrung(facility, user, date_from, date_to):
     )
 
 
-def _bildschirm_aufruf(facility, user, date_from, date_to):
+def _bildschirm_aufruf(facility, user, date_from, date_to, fmt="html"):
     """Ein On-Screen-Aufruf des externen Berichts — **keine** Herausgabe.
 
     Dieselbe Aktion, derselbe Zeitraum im ``detail``, aber kein Artefakt hat das
-    Haus verlassen. Jeder Reload erzeugt so eine Zeile.
+    Haus verlassen. Jeder Reload erzeugt so eine Zeile. ``fmt="json"`` ist
+    dieselbe Ansicht in maschinenlesbar (Refs #1772).
     """
     return AuditLog.objects.create(
         facility=facility,
         user=user,
         action=AuditLog.Action.EXPORT,
-        target_type="ExternalReport",
-        detail={"format": "html", "date_from": date_from, "date_to": date_to},
+        target_type=EXTERNAL_REPORT_TARGET,
+        detail={"format": fmt, "date_from": date_from, "date_to": date_to},
+    )
+
+
+def _json_ansicht_vor_der_abwertung(facility, user, date_from, date_to):
+    """Eine ``?format=json``-Zeile aus der Zeit **vor** der Abwertung (#1772).
+
+    Sie traegt den Freigabe-Marker, weil die View ihn damals gesetzt hat.
+    Nachtraeglich entfernen laesst er sich nicht (append-only + HMAC-Kette) —
+    die Abwertung muss also am **Lesepfad** greifen.
+    """
+    from core.services.dashboard.release_log import RELEASE_ARTIFACT_KEY
+
+    return AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.EXPORT,
+        target_type=EXTERNAL_REPORT_TARGET,
+        detail={"format": "json", RELEASE_ARTIFACT_KEY: True, "date_from": date_from, "date_to": date_to},
     )
 
 
@@ -160,9 +180,11 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
             ("core:statistics_pdf_export", {}, True),
             ("core:statistics_sample_report_1_export", {}, True),
             ("core:statistics_report_export", {"backend": "sample-report-1", "format": "csv"}, True),
-            # Der externe Bericht ist BEIDES: ``?format=json`` liefert ein
-            # maschinenlesbares Artefakt, die HTML-Ansicht ist nur eine Ansicht.
-            ("core:statistics_external_report", {"period": "custom", "format": "json"}, True),
+            # Refs #1772 (Punkt 2): der externe Bericht ist in BEIDEN Formaten
+            # nur eine Ansicht — ``?format=json`` hat keine Empfaenger-/
+            # Zweckfelder und keine Download-Geste, sondern ist die
+            # maschinenlesbare Fassung derselben Bildschirmseite.
+            ("core:statistics_external_report", {"period": "custom", "format": "json"}, False),
             ("core:statistics_external_report", {"period": "custom"}, False),
         ],
     )
@@ -181,10 +203,12 @@ class TestExportViewsSchreibenEmpfaengerUndZweck:
         detail = self._letzter_export(facility).detail
         assert detail.get(RELEASE_ARTIFACT_KEY, False) is ist_freigabe, detail
 
-    def test_bildschirmaufruf_landet_nicht_in_der_uebersicht(self, client, lead_user, facility):
+    @pytest.mark.parametrize("params", [{}, {"format": "json"}])
+    def test_bildschirmaufruf_landet_nicht_in_der_uebersicht(self, client, lead_user, facility, params):
+        """Beide Formate der externen Ansicht bleiben draussen (Refs #1772)."""
         client.force_login(lead_user)
 
-        client.get(reverse("core:statistics_external_report"), {"period": "custom"})
+        client.get(reverse("core:statistics_external_report"), {"period": "custom", **params})
 
         assert build_release_overview(facility) == []
 
@@ -296,6 +320,67 @@ class TestUeberlappungswarnung:
         assert len(releases) == 1
         assert releases[0].date_from == date(2026, 3, 1)
         assert not releases[0].overlaps, "ein Bildschirmaufruf darf keine Ueberlappung ausloesen"
+
+    def test_json_ansicht_ist_keine_freigabe(self, facility, lead_user):
+        """Refs #1772 (Punkt 2): ``?format=json`` ist Ansicht, nicht Herausgabe.
+
+        Die Route hat weder Empfaenger-/Zweckfelder noch eine Download-Geste;
+        sie ist die maschinenlesbare Fassung derselben Bildschirmseite und wird
+        wie diese bei **jedem** Aufruf auditiert. Als Freigabe gefuehrt haette
+        sie dieselben zwei Folgen wie die HTML-Ansicht: unbegrenztes,
+        prune-exemptes Wachstum und Verdraengung echter Downloads aus dem
+        ``RELEASE_LOG_LIMIT``-Fenster.
+        """
+        _bildschirm_aufruf(facility, lead_user, "2026-01-01", "2026-12-31", fmt="json")
+        _export(facility, lead_user, "2026-03-01", "2026-03-31")
+
+        releases = build_release_overview(facility)
+
+        assert len(releases) == 1
+        assert releases[0].date_from == date(2026, 3, 1)
+        assert not releases[0].overlaps, "eine JSON-Ansicht darf keine Ueberlappung ausloesen"
+
+    def test_json_altzeilen_mit_marker_sind_nicht_mehr_gelistet(self, facility, lead_user):
+        """Die Uebersicht zeigt kuenftig **nur echte** Freigaben — auch rueckwirkend.
+
+        Zeilen aus der Zeit vor der Abwertung tragen den Marker; entfernen
+        laesst er sich nicht (append-only + HMAC-Kette). Die Abwertung greift
+        deshalb am Lesepfad: ``RELEASE_EXPORT_Q`` schliesst die eindeutig
+        erkennbare Gestalt dieser Zeilen aus (Ziel ``ExternalReport`` +
+        ``format="json"``). Die Zeilen selbst bleiben im Log — als normale,
+        befristete Audit-Zeilen.
+        """
+        _json_ansicht_vor_der_abwertung(facility, lead_user, "2026-01-01", "2026-12-31")
+        _export(facility, lead_user, "2026-03-01", "2026-03-31")
+
+        releases = build_release_overview(facility)
+
+        assert len(releases) == 1
+        assert releases[0].date_from == date(2026, 3, 1)
+
+    def test_json_export_der_backend_pipeline_bleibt_eine_freigabe(self, facility, lead_user):
+        """Abgrenzung: der generische Berichts-Download ist ein Artefakt.
+
+        Er traegt dasselbe ``format="json"``, aber ein anderes Ziel — die
+        Ausnahme haengt an BEIDEM, sonst nimmt sie echte Downloads mit.
+        """
+        AuditLog.objects.create(
+            facility=facility,
+            user=lead_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="DatasetExport",
+            detail={
+                "backend": "sample-report-1",
+                "format": "json",
+                "artifact_released": True,
+                "date_from": "2026-01-01",
+                "date_to": "2026-12-31",
+            },
+        )
+
+        releases = build_release_overview(facility)
+
+        assert [release.date_from for release in releases] == [date(2026, 1, 1)]
 
     def test_altzeilen_vor_der_marker_einfuehrung_sind_nicht_gelistet(self, facility, lead_user):
         """**Rollout-Grenze, bewusst so und offengelegt.** Der Artefakt-Marker
@@ -447,6 +532,35 @@ class TestExportUeberlebtDieAuditRetention:
 
         assert result["count"] == 1
         assert not AuditLog.objects.filter(pk=ansicht.pk).exists(), "Bildschirmaufrufe bleiben befristet"
+        assert AuditLog.objects.filter(pk=download.pk).exists(), "das herausgegebene Artefakt bleibt"
+
+    def test_json_ansicht_ist_nicht_prune_exempt(self, facility, settings_obj, lead_user):
+        """Refs #1772: die Abwertung nimmt der JSON-Ansicht auch die Ausnahme.
+
+        Die Alt-Zeile mit Marker faellt mit — sie ist keine Freigabe und war
+        nie eine; die Dauer-Aufbewahrung war an eine Klassifikation gebunden,
+        die es nicht mehr gibt.
+        """
+        from django.db import connection
+
+        from core.retention.audit_pruning import prune_auditlog
+
+        if connection.vendor != "postgresql":
+            pytest.skip("prune_auditlog erfordert PostgreSQL")
+
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        now = timezone.now()
+        ansicht = _bildschirm_aufruf(facility, lead_user, "2020-01-01", "2020-12-31", fmt="json")
+        altzeile = _json_ansicht_vor_der_abwertung(facility, lead_user, "2020-01-01", "2020-12-31")
+        download = _export(facility, lead_user, "2020-01-01", "2020-12-31")
+        self._veralten(now, ansicht, altzeile, download)
+
+        result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        assert result["count"] == 2
+        assert not AuditLog.objects.filter(pk=ansicht.pk).exists()
+        assert not AuditLog.objects.filter(pk=altzeile.pk).exists()
         assert AuditLog.objects.filter(pk=download.pk).exists(), "das herausgegebene Artefakt bleibt"
 
     def test_altzeilen_vor_der_marker_einfuehrung_bleiben_befristet(self, facility, settings_obj, lead_user):

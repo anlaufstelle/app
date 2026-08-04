@@ -27,12 +27,15 @@ Berichts. Eine Berichts-Freigabe erkennt man deshalb an zwei Dingen, die beide i
 ``detail`` stehen müssen und beide ihren eigenen Grund haben:
 
 * :data:`RELEASE_ARTIFACT_KEY` — **ein Artefakt hat das Haus verlassen.** Ohne
-  diese Grenze zählte jeder Reload der HTML-Ansicht als Herausgabe: der Log
-  wüchse mit jedem Seitenaufruf unbegrenzt (prune-exempt, mit
+  diese Grenze zählte jeder Reload der Bildschirm-Ansicht als Herausgabe: der
+  Log wüchse mit jedem Seitenaufruf unbegrenzt (prune-exempt, mit
   Beschäftigten-Username), und die Ansichten verdrängten bei
   :data:`RELEASE_LOG_LIMIT` die echten Downloads aus dem Auswertungsfenster —
   ein stiller falscher Negativ in genau der Warnung, die die Retention-Ausnahme
-  rechtfertigt.
+  rechtfertigt. Das gilt seit #1772
+  für **beide** Formate des externen Berichts: ``?format=json`` liefert
+  Maschinen-Text, ist aber dieselbe Seite ohne Empfänger-/Zweckfelder und ohne
+  Download-Geste. Alt-Zeilen mit Marker schließt :data:`_LEGACY_VIEW_Q` aus.
 * :data:`RELEASE_PERIOD_KEY` — **es gibt einen Berichtszeitraum.** Ohne ihn ist
   keine Überlappung berechenbar; das ist die Grenze gegen die Klienten-/
   DSGVO-Exportpfade.
@@ -109,10 +112,41 @@ RELEASE_PERIOD_KEY = "date_from"
 # Listen-Update stillschweigend eine zu werden.
 RELEASE_ARTIFACT_KEY = "artifact_released"
 
+# ``AuditLog.target_type`` der externen Berichts-Ansicht. Hier und nicht in der
+# View, weil beide Seiten denselben Wert brauchen: die View schreibt ihn, der
+# Alt-Zeilen-Ausschluss unten liest ihn.
+EXTERNAL_REPORT_TARGET = "ExternalReport"
+
+# Alt-Zeilen der externen **Ansicht**, die den Freigabe-Marker noch tragen
+# (Refs #1772). Bis zu dieser Welle galt ``?format=json`` als Herausgabe: das
+# Format liefert zwar Maschinen-Text, aber es ist dieselbe Bildschirmseite —
+# ohne Empfänger-/Zweckfelder, ohne Download-Geste, bei jedem Aufruf neu
+# auditiert. Die Klassifikation ist damit dieselbe wie bei der HTML-Ansicht.
+#
+# **Warum am Lesepfad und nicht per Backfill:** der Marker steht in ``detail``,
+# ``detail`` geht in den Ketten-Hash ein — nachträglich entfernen hieße, die
+# HMAC-Kette neu zu schreiben (siehe Modul-Docstring, dieselbe Doktrin wie beim
+# Nachtragen). Die Übersicht zeigt deshalb künftig **nur echte Freigaben**, und
+# die Alt-Zeilen verlieren zugleich die Retention-Ausnahme: sie werden wieder
+# das, was sie immer waren — normale, befristete Audit-Zeilen. Gelöscht wird
+# dabei nichts vorzeitig; sie laufen wie jede andere Ansicht nach
+# ``auditlog_retention_months`` aus.
+#
+# Die Ausnahme hängt an **beidem** — Ziel UND Format. Der generische
+# Berichts-Download (``target_type="DatasetExport"``) liefert ebenfalls JSON,
+# ist aber ein herausgegebenes Artefakt und muss in der Übersicht bleiben.
+# ``has_key`` vor dem Wertvergleich, weil ein fehlender JSON-Schlüssel in SQL
+# NULL ergibt und die Negation dann weder wahr noch falsch wäre (dieselbe Falle
+# wie beim Marker unten).
+_LEGACY_VIEW_Q = Q(target_type=EXTERNAL_REPORT_TARGET) & Q(detail__has_key="format") & Q(detail__format="json")
+
 # **Die** Definition einer Berichts-Freigabe (siehe Modul-Docstring). Bewusst ein
 # ``Q`` statt einer Aktionsliste: die Aktion allein ist zu grob.
 RELEASE_EXPORT_Q = (
-    Q(action=AuditLog.Action.EXPORT) & Q(detail__has_key=RELEASE_PERIOD_KEY) & Q(detail__has_key=RELEASE_ARTIFACT_KEY)
+    Q(action=AuditLog.Action.EXPORT)
+    & Q(detail__has_key=RELEASE_PERIOD_KEY)
+    & Q(detail__has_key=RELEASE_ARTIFACT_KEY)
+    & ~_LEGACY_VIEW_Q
 )
 
 # **Warum ``has_key`` und nicht ``detail__artifact_released=True``:** Der
