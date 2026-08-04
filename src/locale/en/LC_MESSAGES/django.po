@@ -1440,7 +1440,6 @@ msgid ""
 "unveränderbar."
 msgstr ""
 "Stable identifier — used as key in data_json. Cannot be changed after "
-"creation.Stable identifier — used as key in data_json. Immutable after "
 "creation."
 
 #: src/core/models/document_type.py:325 src/core/packages/loader.py:413
@@ -2461,7 +2460,7 @@ msgstr "Deletion request"
 #: src/templates/partials/_navigation_desktop.html:117
 #: src/templates/partials/_navigation_mobile.html:80
 msgid "Löschanträge"
-msgstr "Deletion Requests"
+msgstr "Deletion requests"
 
 #: src/core/packages/loader.py:311
 msgid "Feldvorlage konnte nicht angelegt werden — Zuordnung übersprungen."
@@ -3438,8 +3437,7 @@ msgid ""
 "Mindest-Kontaktstufe vorausgesetzt wird."
 msgstr ""
 "Anonymous contacts are not permitted for this document type because a "
-"minimum contact stage is required.Anonymous contacts are not allowed for "
-"this document type, as a minimum contact stage is required."
+"minimum contact stage is required."
 
 #: src/core/services/events/crud.py:210
 msgid ""
@@ -3550,7 +3548,7 @@ msgstr "The submitted version token is invalid."
 msgid ""
 "Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
 "neu."
-msgstr "This event has been modified in the meantime. Please reload the page."
+msgstr "This record has been modified in the meantime. Please reload the page."
 
 #: src/core/services/system/field_types.py:126
 msgid "Default-Wert muss eine ganze Zahl sein."
@@ -4139,7 +4137,7 @@ msgstr "No tasks selected."
 #: src/tests/test_i18n_de_msgstr_drift.py:37
 #: src/tests/test_i18n_de_msgstr_drift.py:49
 msgid "Keine gültigen Aufgaben gefunden."
-msgstr "No clients found"
+msgstr "No valid tasks found."
 
 #: src/core/views/workitem_bulk.py:176
 #, python-format
@@ -4536,8 +4534,7 @@ msgid ""
 "tippen"
 msgstr ""
 "Share <span class=\"inline-block\">&#x2191;</span> → tap \"Add to Home "
-"Screen\"Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to "
-"Home Screen\""
+"Screen\""
 
 #: src/templates/auth/login.html:117 src/templates/base.html:142
 msgid "Quellcode"
@@ -4979,8 +4976,6 @@ msgid ""
 "        "
 msgstr ""
 "\n"
-"        %(start)s–%(end)s of %(total)s entries\n"
-"        \n"
 "        %(start)s–%(end)s of %(total)s entries\n"
 "        "
 
@@ -5959,7 +5954,7 @@ msgstr "Deletion request awaiting confirmation"
 
 #: src/templates/core/clients/partials/table.html:103
 msgid "Mitnehmen"
-msgstr "Accept"
+msgstr "Take offline"
 
 #: src/templates/core/clients/trash.html:4
 #: src/templates/core/clients/trash.html:8
@@ -6607,9 +6602,7 @@ msgid ""
 "Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten "
 "befüllt."
 msgstr ""
-"GDPR compliance templates, automatically filled with your facility's "
-"data.Compliance templates per GDPR, automatically filled with your facility "
-"data."
+"GDPR compliance templates, automatically filled with your facility's data."
 
 #: src/templates/core/dsgvo/package.html:17
 msgid ""
@@ -6618,8 +6611,6 @@ msgid ""
 "Verwendung."
 msgstr ""
 "These templates are automatically filled with your facility's data (name, "
-"retention periods). Please review and complete the documents before "
-"use.These templates are automatically filled with your facility data (name, "
 "retention periods). Please review and complete the documents before use."
 
 #: src/templates/core/dsgvo/package.html:25
@@ -6794,7 +6785,7 @@ msgstr "Basic data"
 #: src/templates/core/events/create.html:153
 msgid ""
 "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
-msgstr "Not available: This document type requires a minimum contact stage."
+msgstr "Required: this document type requires a minimum contact stage."
 
 #: src/templates/core/events/create.html:156
 msgid "Ohne Person wird der Kontakt als anonym gespeichert."
@@ -6831,9 +6822,7 @@ msgstr ""
 msgid ""
 "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht "
 "rückgängig gemacht werden."
-msgstr ""
-"Do you really want to delete this event? This action cannot be undone.Are "
-"you sure you want to delete this event? This action cannot be undone."
+msgstr "Do you really want to delete this event? This action cannot be undone."
 
 #: src/templates/core/events/delete_confirm.html:48
 msgid "Grund für die Löschung..."
@@ -7550,7 +7539,7 @@ msgid ""
 msgstr ""
 "\n"
 "        Aggregates with fewer than %(threshold)s records are suppressed to "
-"protect anonymity (shown as „suppressed“).\n"
+"protect anonymity (shown as \"suppressed\").\n"
 "        "
 
 #: src/templates/core/statistics/external_report.html:49
@@ -8761,9 +8750,8 @@ msgid ""
 "Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem "
 "neuen Passwort anmelden."
 msgstr ""
-"Your password has been changed successfully. You can now sign in with your "
-"new password.Your password has been changed successfully. You can now log in "
-"with your new password."
+"Your password has been changed successfully. You can now log in with your "
+"new password."
 
 #: src/templates/registration/password_reset_complete.html:21
 msgid "Zur Anmeldung"
@@ -8783,8 +8771,7 @@ msgid ""
 "Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte "
 "fordern Sie einen neuen Link an."
 msgstr ""
-"The password reset link is invalid or expired. Please request a new link.The "
-"password reset link is invalid or has expired. Please request a new link."
+"The password reset link is invalid or has expired. Please request a new link."
 
 #: src/templates/registration/password_reset_done.html:7
 #: src/templates/registration/password_reset_done.html:12
@@ -8797,8 +8784,7 @@ msgid ""
 "mit einem Link zum Zurücksetzen des Passworts gesendet."
 msgstr ""
 "If an account with this email address exists, a message with a password "
-"reset link has been sent.If an account with this email address exists, a "
-"message with a password reset link has been sent."
+"reset link has been sent."
 
 #: src/templates/registration/password_reset_done.html:18
 msgid "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
@@ -8810,8 +8796,7 @@ msgid ""
 "Ihr Konto bei Anlaufstelle angefordert hat."
 msgstr ""
 "You are receiving this email because someone requested a password reset for "
-"your Anlaufstelle account.You are receiving this email because someone has "
-"requested a password reset for your account."
+"your Anlaufstelle account."
 
 #: src/templates/registration/password_reset_email.html:6
 msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
@@ -8833,9 +8818,7 @@ msgid ""
 "Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen "
 "Ihres Passworts."
 msgstr ""
-"Enter your email address. You will receive a link to reset your "
-"password.Enter your email address. You will receive a link to reset your "
-"password."
+"Enter your email address. You will receive a link to reset your password."
 
 #: src/tests/test_pwa_views.py:1194
 msgid "Keine Person für die Offline-Nutzung mitgenommen."
