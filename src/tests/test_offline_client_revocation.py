@@ -254,6 +254,47 @@ class TestRevocationEndpoint:
         assert json.loads(client.get(self.url).content)["revocations"] == [str(client_identified.pk)]
 
 
+def _per_hour(rate: str) -> int:
+    """``"600/h"`` -> 600. Nur die in diesem Projekt genutzten ``/h``-Raten."""
+    count, _, period = rate.partition("/")
+    assert period == "h", f"Unerwartete Rate-Periode in {rate!r}"
+    return int(count)
+
+
+class TestRevocationEndpointRateLimit:
+    """Refs #1760 (Fix-Runde 1, Befund 2b): eigenes, grosszuegiges Limit.
+
+    Der Widerrufs-Poll laeuft pro Seitenaufbau (die App nutzt kein hx-boost),
+    client-seitig gedrosselt auf einen Lauf pro Minute — also bis zu 60/h allein
+    aus dem Boot-Check, dazu der Sync-Pfad. Das an die Bundle-Fetches angelehnte
+    ``RATELIMIT_OFFLINE_BUNDLE`` (120/h) war dafuer zu knapp bemessen. Ein
+    eigenes Constant sorgt zudem dafuer, dass ein spaeteres Nachschaerfen des
+    Bundle-Limits den Sicherheitskanal nicht als Seiteneffekt mitdrosselt.
+    """
+
+    def test_has_its_own_more_generous_constant(self):
+        from core.constants import RATELIMIT_OFFLINE_BUNDLE, RATELIMIT_OFFLINE_REVOCATIONS
+
+        assert RATELIMIT_OFFLINE_REVOCATIONS != RATELIMIT_OFFLINE_BUNDLE
+        assert _per_hour(RATELIMIT_OFFLINE_REVOCATIONS) > _per_hour(RATELIMIT_OFFLINE_BUNDLE)
+
+    def test_budget_covers_the_throttled_boot_poll_with_headroom(self):
+        from core.constants import RATELIMIT_OFFLINE_REVOCATIONS
+
+        # 60/h Boot-Poll (1/min-Drossel) + Sync-Pfad; mit deutlichem Puffer.
+        assert _per_hour(RATELIMIT_OFFLINE_REVOCATIONS) >= 300
+
+    def test_view_does_not_hang_on_the_bundle_budget(self):
+        import inspect
+
+        from core.views.offline import OfflineClientRevocationsView
+
+        source = inspect.getsource(OfflineClientRevocationsView)
+        assert "RATELIMIT_OFFLINE_REVOCATIONS" in source
+        assert "RATELIMIT_OFFLINE_BUNDLE" not in source
+        assert hasattr(OfflineClientRevocationsView.get, "__wrapped__"), "get() muss ratelimit-gewrappt bleiben"
+
+
 @pytest.mark.django_db
 class TestRetentionRunPrunes:
     """Der naechtliche Lauf raeumt abgelaufene Revoke-Eintraege ab."""

@@ -22,7 +22,7 @@ from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import RATELIMIT_OFFLINE_BUNDLE
+from core.constants import RATELIMIT_OFFLINE_BUNDLE, RATELIMIT_OFFLINE_REVOCATIONS
 from core.models import AuditLog, Client
 from core.services.audit import log_audit_event
 from core.services.scoping import get_scoped_object
@@ -187,14 +187,18 @@ class OfflineClientRevocationsView(AssistantOrAboveRequiredMixin, View):
     einen Datenabfluss zu dokumentieren (gleiche Abwaegung wie beim
     audit-freien 304-Zweig der Bundle-Views).
 
-    Rate-Limit und ``no-store`` wie bei den Bundle-Endpoints. Die
-    Facility-Grenze zieht ``for_facility(request.current_facility)`` (plus RLS,
-    Migration 0127).
+    Fix-Runde 1 (Befund 2b): **eigenes**, grosszuegiges Rate-Limit
+    (``RATELIMIT_OFFLINE_REVOCATIONS``) statt der Bundle-Rate. Der Poll laeuft
+    bei jedem Seitenaufbau (kein hx-boost) und vor jedem Sync — mit 120/h waere
+    eine intensive Dokumentationsstunde am Limit, und ein abgewiesener (429)
+    Widerruf haelt den nachfolgenden Replay NICHT auf. Begruendung im Detail an
+    der Konstante. ``no-store`` wie bei den Bundle-Endpoints; die Facility-Grenze
+    zieht ``for_facility(request.current_facility)`` (plus RLS, Migration 0127).
     """
 
     http_method_names = ["get"]
 
-    @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_BUNDLE, method="GET", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_REVOCATIONS, method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
         now = timezone.now()

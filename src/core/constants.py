@@ -61,6 +61,25 @@ RATELIMIT_FREQUENT = "120/h"
 # naechsten Online-Event = 40 GETs/h bestimmungsgemaesser Gebrauch — das
 # vorher geteilte RATELIMIT_BULK_ACTION (30/h) war zu knapp.
 RATELIMIT_OFFLINE_BUNDLE = "120/h"
+# Refs #1760 (Fix-Runde 1): eigenes Limit fuer die Offline-Widerrufsliste.
+# Bewusst NICHT ``RATELIMIT_OFFLINE_BUNDLE`` mitbenutzt, aus zwei Gruenden:
+#
+# (a) **Anderes Lastprofil.** Der Bundle-Fetch ist eine bewusste Nutzeraktion
+#     ("Person mitnehmen") plus Revalidierung; der Widerrufs-Poll laeuft dagegen
+#     bei JEDEM Seitenaufbau (die App nutzt kein hx-boost) und zusaetzlich vor
+#     jedem Sync. Client-seitig ist der Boot-Poll auf einen Lauf pro Minute
+#     gedrosselt (``sync-orchestrator.js``) — also bis zu 60/h allein daraus. Mit
+#     120/h waere eine intensive Dokumentationsstunde am Limit.
+# (b) **Der Kanal ist sicherheitskritisch und darf nicht als Seiteneffekt
+#     mitgedrosselt werden.** Wird der Widerruf abgewiesen (429), laeuft der
+#     Replay trotzdem weiter — ein spaeteres Nachschaerfen des Bundle-Limits
+#     duerfte diesen Pfad nicht stillschweigend treffen.
+#
+# Die Antwort ist PII-frei (opake UUIDs bereits anonymisierter Personen) und
+# winzig, ein grosszuegiges Limit kostet also nichts. Der Bucket ist ohnehin
+# eigenstaendig (django-ratelimit leitet die Gruppe aus Modul + Qualname der
+# View-Methode ab) — hier geht es um den WERT, nicht um die Trennung.
+RATELIMIT_OFFLINE_REVOCATIONS = "600/h"
 
 # Retention — Schwellen (in Tagen) für Urgency-Markierung
 # `red`: Löschung in <= RETENTION_URGENCY_RED_DAYS Tagen fällig
