@@ -244,6 +244,64 @@ class TestAlpineCspCompatibilityGuard:
             f"Betroffen: {violations}"
         )
 
+    # Event-Handler (``@click``/``x-on:click`` inkl. Modifiern) und ``x-init``
+    # duerfen unter @alpinejs/csp nur EINEN Ausdruck enthalten. Anders als bei
+    # ``_ALPINE_VALUE_DIRECTIVE`` sind Methodenaufrufe MIT Argumenten hier
+    # erlaubt (z. B. ``retryQueueEntry(item.id)``) — verboten sind nur echte
+    # Mehrfach-Statements: ``;``-Verkettung und Zuweisungen. Refs #1763
+    # (Nachzuegler zu #1747, das nur wertbindende Direktiven wie x-text/
+    # x-show erfasste, keine Event-Handler).
+    _ALPINE_EVENT_HANDLER = re.compile(
+        r"""(?:^|\s)
+            (?:@[a-zA-Z][\w.\-]*          # @click, @click.away, @keydown.enter.prevent, ...
+            |x-on:[a-zA-Z][\w.\-]*
+            |x-init
+            )
+            \s*=\s*
+            "(?P<value>[^"]*)"
+        """,
+        re.VERBOSE,
+    )
+    # Zuweisung ``=`` ausserhalb von Vergleichen (``==``, ``===``, ``!=``,
+    # ``!==``, ``<=``, ``>=``) und Arrow-Defaults (``=>``): kein ``=``/``!``/
+    # ``<``/``>`` unmittelbar davor, kein ``=``/``>`` unmittelbar danach.
+    _ASSIGNMENT_OUTSIDE_COMPARISON = re.compile(r"(?<![=!<>])=(?!=|>)")
+
+    def test_no_statement_expressions_in_event_handlers(self):
+        """Event-Handler-Statements (``;``-Verkettung, Zuweisung) brechen den
+        @alpinejs/csp-Build silent, genau wie bei den bereits erfassten
+        wertbindenden Direktiven (Refs #693). Methodenaufrufe mit Argumenten,
+        ``$dispatch(...)`` und ternaere Ausdruecke bleiben erlaubt — sie sind
+        ein einzelner Ausdruck. Refs #1763.
+        """
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._ALPINE_EVENT_HANDLER.finditer(source):
+                value = match.group("value")
+                line = source[: match.start()].count("\n") + 1
+                if ";" in value:
+                    violations.append(
+                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
+                        f"Mehrfach-Statement (';') in Event-Handler: {value!r}"
+                    )
+                    continue
+                if self._ASSIGNMENT_OUTSIDE_COMPARISON.search(value):
+                    violations.append(
+                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} Zuweisung in Event-Handler: {value!r}"
+                    )
+        assert not violations, (
+            "Event-Handler (@..., x-on:..., x-init) enthalten echte Statements "
+            "(';'-Verkettung oder Zuweisung). Der @alpinejs/csp-Build wertet nur "
+            "einen einzelnen Ausdruck aus (Methodenaufrufe mit Argumenten sind "
+            "erlaubt) — bitte in eine benannte Component-Methode "
+            "(Alpine.data(...)) auslagern, die intern beide Schritte ausfuehrt.\n"
+            "Refs #1763, #1747, #693.\n"
+            f"Betroffen: {violations}"
+        )
+
     def test_no_htmx_inline_handlers_in_templates(self):
         """``hx-on::evt`` Inline-Handler werden intern per ``Function()``
         evaluiert und brauchen ``script-src 'unsafe-eval'``. Refs #692.

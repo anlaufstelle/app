@@ -77,6 +77,19 @@ document.addEventListener("alpine:init", () => {
         close() {
             this.mobileMenu = false;
         },
+        // Refs #1763: ersetzt das Inline-Statement-Paar
+        // ``@click="close(); toggleOffline()"`` im mobilen Overflow-Menue von
+        // clients/detail.html — der @alpinejs/csp-Build wertet Event-Handler
+        // nur als EINEN Ausdruck aus, ``;``-Verkettung bricht dort silent
+        // (der Button blieb wirkungslos). ``toggleOffline()`` ist keine
+        // eigene Methode dieser Komponente, sondern loest ueber Alpines
+        // verschachtelte Scope-Aufloesung zur umschliessenden
+        // ``offlineClientBadge``-Komponente auf (gleiches Muster wie zuvor
+        // im Inline-Ausdruck).
+        closeAndToggleOffline() {
+            this.close();
+            this.toggleOffline();
+        },
     }));
 
     /** Generisches Open/Close-Toggle (Dropdowns ohne Spezialverhalten). */

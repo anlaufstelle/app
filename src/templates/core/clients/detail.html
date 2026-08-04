@@ -129,7 +129,7 @@
                         {% trans "Neuer Kontakt" %}
                     </a>
                     <button type="button"
-                            @click="close(); toggleOffline()"
+                            @click="closeAndToggleOffline"
                             :disabled="busy"
                             class="w-full text-left flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas disabled:opacity-50"
                             data-testid="mobile-take-offline-btn">
