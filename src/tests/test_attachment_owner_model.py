@@ -50,13 +50,19 @@ class TestExactlyOneOwner:
         with pytest.raises(IntegrityError), transaction.atomic():
             Attachment.objects.create(**_attachment_kwargs(facility))
 
-    def test_zwei_owner_verboten(self, facility, sample_event, client_identified):
+    @pytest.mark.parametrize("owner_combo", ["event_client", "event_case", "client_case", "alle_drei"])
+    def test_mehrfach_owner_verboten(self, facility, sample_event, client_identified, case_open, owner_combo):
+        """Alle vier illegalen Mehrfach-Kombinationen (G2-Befund: die drei
+        Disjunkte des Constraints sind copy-paste-anfaellig — faellt ein
+        ``__isnull=True``-Term weg, muss genau eine dieser Zeilen rot werden)."""
+        combos = {
+            "event_client": {"event": sample_event, "client": client_identified},
+            "event_case": {"event": sample_event, "case": case_open},
+            "client_case": {"client": client_identified, "case": case_open},
+            "alle_drei": {"event": sample_event, "client": client_identified, "case": case_open},
+        }
         with pytest.raises(IntegrityError), transaction.atomic():
-            Attachment.objects.create(
-                event=sample_event,
-                client=client_identified,
-                **_attachment_kwargs(facility),
-            )
+            Attachment.objects.create(**combos[owner_combo], **_attachment_kwargs(facility))
 
 
 @pytest.mark.django_db

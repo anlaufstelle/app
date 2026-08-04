@@ -515,3 +515,51 @@ class TestAttachmentRLSIsolation:
             cur.execute("SELECT COUNT(*) FROM core_attachment")
             count = cur.fetchone()[0]
         assert count == 0, f"Ohne facility-Setting hat RLS {count} Attachment-Zeilen geliefert. Erwartet: 0."
+
+    def test_positivkontrolle_client_owned_eigene_facility_sichtbar(
+        self, rls_test_role, facility_a_with_data, facility_b_with_data, attachments_a_b
+    ):
+        """Diskriminator zur alten Join-Policy (G2-Befund: die Negativproben
+        oben bestehen auch unter 0047/0085): eine client-eigene Zeile der
+        EIGENEN Facility ist unter der direkten Policy sichtbar — unter der
+        Join-Policy waere sie es nicht (``event_id IS NULL`` ⇒ NULL ⇒ nicht
+        true). Wird die Policy versehentlich zurueckgedreht, wird dieser Test
+        rot, nicht erst die Produktion."""
+        _att_a, att_b = attachments_a_b
+        with as_rls_role(rls_test_role, facility_id=facility_b_with_data.pk) as cur:
+            cur.execute("SELECT count(*) FROM core_attachment WHERE storage_filename = %s", [att_b.storage_filename])
+            count = cur.fetchone()[0]
+        assert count == 1, (
+            "client-eigene Zeile der eigenen Facility unsichtbar — die Policy verhaelt sich wie die alte Join-Policy."
+        )
+
+    def test_positivkontrolle_insert_eigene_facility_erlaubt(self, rls_test_role, facility_a_with_data):
+        import uuid as _uuid
+
+        from core.models import Client
+        from core.models.document_type import FieldTemplate
+
+        client_a = Client.objects.get(facility=facility_a_with_data)
+        ft_a = FieldTemplate.objects.create(
+            facility=facility_a_with_data, name="RLS-Own-Insert", field_type=FieldTemplate.FieldType.FILE
+        )
+        marker = f"own-insert-{_uuid.uuid4().hex}.enc"
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            cur.execute(
+                "INSERT INTO core_attachment "
+                "(id, entry_id, sort_order, facility_id, client_id, field_template_id, "
+                " storage_filename, original_filename_encrypted, file_size, mime_type, "
+                " detected_mime, is_current, created_at) "
+                "VALUES (%s, %s, 0, %s, %s, %s, %s, '{}'::jsonb, 1, 'x/y', '', true, NOW())",
+                [
+                    str(_uuid.uuid4()),
+                    str(_uuid.uuid4()),
+                    str(facility_a_with_data.pk),
+                    str(client_a.pk),
+                    str(ft_a.pk),
+                    marker,
+                ],
+            )
+            cur.execute("SELECT count(*) FROM core_attachment WHERE storage_filename = %s", [marker])
+            count = cur.fetchone()[0]
+        assert count == 1, "INSERT mit eigener facility_id muss unter der direkten Policy gelingen."

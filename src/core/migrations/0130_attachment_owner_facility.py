@@ -7,31 +7,34 @@ Backfill aus ``event.facility``), ``client``/``case`` als weitere Owner,
 - ``atomic = True`` ist PFLICHT: Backfill + NOT-NULL + Constraint muessen als
   Einheit landen — die waehrend 0130 noch aktive Join-Policy (0047/0085) haelt
   die Tabelle solange fail-closed.
-- Der Backfill laeuft unter GUC-Bypass (``app.is_super_admin``): FORCE ROW
-  LEVEL SECURITY bindet auch den Table-Owner, ohne Facility-GUC saehe das
-  UPDATE schlicht 0 Zeilen. Rest-NULL-Verifikation VOR dem GUC-Reset,
-  fail-loud.
+- Beide ``RunPython``-Funktionen beginnen mit
+  ``assert_migration_role_bypasses_rls`` (Konvention seit 0123, Refs #1746):
+  Migrationen laufen laut ADR-020 als BYPASSRLS-Admin-Rolle; liefe der Lauf
+  faelschlich unter der App-Rolle, traefe das UPDATE unter der Join-Policy
+  still 0 Zeilen. Der Guard bricht dann fail-loud ab — die Session-GUC
+  ``app.is_super_admin`` ist bewusst NICHT der Migrationspfad.
+- Rest-NULL-Verifikation nach dem Backfill, fail-loud.
 - Reverse-Guard als LETZTE Operation: beim Rollback laeuft sie damit als
   ERSTE und bricht ab, sobald client-/case-eigene Zeilen existieren — deren
   Owner-Spalten wuerden sonst kommentarlos weggeworfen (Rollback nur auf
-  event-only-Bestand zulaessig, ADR-039 §11).
+  event-only-Bestand zulaessig, ADR-039 §11). Position gepinnt in
+  ``tests/migrations/test_0130_attachment_owner_facility.py``.
 """
 
 import django.db.models.deletion
 from django.db import migrations, models
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def backfill_facility(apps, schema_editor):
-    """``facility_id`` aus ``event.facility`` befuellen (GUC-Bypass, fail-loud)."""
+    """``facility_id`` aus ``event.facility`` befuellen (BYPASSRLS-Rolle, fail-loud)."""
+    assert_migration_role_bypasses_rls(schema_editor)
     with schema_editor.connection.cursor() as cursor:
-        # is_local=true: Reset spaetestens am Transaktionsende (atomic=True).
-        cursor.execute("SELECT set_config('app.is_super_admin', 'true', true)")
         cursor.execute(
             "UPDATE core_attachment a SET facility_id = e.facility_id "
             "FROM core_event e WHERE a.event_id = e.id AND a.facility_id IS NULL"
         )
-        # Verifikation VOR dem GUC-Reset — mit zurueckgesetztem GUC waere die
-        # Zaehlung unter FORCE RLS wieder blind (immer 0, false negative).
         cursor.execute("SELECT count(*) FROM core_attachment WHERE facility_id IS NULL")
         (remaining,) = cursor.fetchone()
         if remaining:
@@ -39,21 +42,20 @@ def backfill_facility(apps, schema_editor):
                 f"Attachment-Backfill unvollstaendig: {remaining} Zeilen ohne facility_id "
                 "(Attachment ohne aufloesbares Event?) — Migration abgebrochen."
             )
-        cursor.execute("SELECT set_config('app.is_super_admin', '', true)")
 
 
 def guard_no_owner_rows(apps, schema_editor):
     """Reverse-Guard: Rollback nur solange KEINE client-/case-Zeilen existieren.
 
-    GUC-Bypass auch hier: beim Reverse ist die Join-Policy (0131-Reverse)
-    bereits wieder aktiv — client-/case-eigene Zeilen (``event_id IS NULL``)
-    waeren unter ihr unsichtbar und der Guard zaehlte faelschlich 0.
+    ``assert_migration_role_bypasses_rls`` auch hier: beim Reverse ist die
+    Join-Policy (0131-Reverse) bereits wieder aktiv — unter der App-Rolle
+    waeren client-/case-eigene Zeilen (``event_id IS NULL``) unsichtbar und
+    der Guard zaehlte faelschlich 0.
     """
+    assert_migration_role_bypasses_rls(schema_editor)
     with schema_editor.connection.cursor() as cursor:
-        cursor.execute("SELECT set_config('app.is_super_admin', 'true', true)")
         cursor.execute("SELECT count(*) FROM core_attachment WHERE event_id IS NULL")
         (owned,) = cursor.fetchone()
-        cursor.execute("SELECT set_config('app.is_super_admin', '', true)")
     if owned:
         raise RuntimeError(
             f"Rollback blockiert: {owned} client-/case-eigene Attachment-Zeilen vorhanden — "
@@ -153,6 +155,8 @@ class Migration(migrations.Migration):
             model_name="attachment",
             index=models.Index(fields=["facility", "-created_at"], name="attachment_facility_ca_idx"),
         ),
-        # Reverse-Guard: forward noop, rueckwaerts ERSTE ausgefuehrte Operation.
+        # Reverse-Guard: forward noop; MUSS die letzte Operation bleiben, damit
+        # sie rueckwaerts als ERSTE laeuft (Operationen laufen im Reverse in
+        # umgekehrter Reihenfolge) — Position per Test gepinnt.
         migrations.RunPython(migrations.RunPython.noop, guard_no_owner_rows),
     ]

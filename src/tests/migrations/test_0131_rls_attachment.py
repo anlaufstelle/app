@@ -11,6 +11,7 @@ import importlib
 
 import pytest
 from django.db import connection
+from django_test_migrations.contrib.unittest_case import MigratorTestCase
 
 MIGRATION = importlib.import_module("core.migrations.0131_rls_attachment")
 
@@ -58,3 +59,45 @@ class TestReversePins0131:
 
     def test_forward_ist_idempotent_droppt_altpolicy(self):
         assert "DROP POLICY IF EXISTS" in MIGRATION.ENABLE_SQL
+
+
+class TestMigrate0131ReverseExecution(MigratorTestCase):
+    """Fuehrt den 0131-Reverse ECHT aus (G2-Befund: Substring-Pins koennen eine
+    kaputte Reverse-Policy nicht sehen). Rueckwaerts 0131→0130: die Join-Policy
+    muss in der 0085-Variante (inkl. Bypass-Branch) wiederhergestellt sein und
+    RLS aktiv bleiben."""
+
+    migrate_from = ("core", "0131_rls_attachment")
+    migrate_to = ("core", "0130_attachment_owner_facility")
+
+    def prepare(self):
+        # Leerer Bestand: der Rollback-Guard (nur event-owned zulaessig) laesst
+        # den Reverse damit durch.
+        pass
+
+    def test_reverse_stellt_join_policy_wieder_her(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT qual FROM pg_policies WHERE tablename = 'core_attachment' AND policyname = 'facility_isolation'"
+            )
+            row = cursor.fetchone()
+        assert row is not None, "Nach dem Reverse existiert keine Policy — Tabelle waere default-deny"
+        qual = row[0] or ""
+        assert "core_event" in qual, f"erwartet Join-Klausel nach Reverse, gefunden: {qual}"
+        assert "is_super_admin" in qual, "Reverse ohne Bypass-Branch = 0047-Variante (falsch)"
+
+    def test_reverse_laesst_rls_aktiv(self):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'core_attachment'")
+            row_security, force_security = cursor.fetchone()
+        assert row_security and force_security, "Reverse hat RLS deaktiviert — verboten (ADR-039 §11)"
+
+
+class TestOperationOrder0131:
+    def test_rollback_guard_ist_letzte_operation(self):
+        from django.db import migrations as dj_migrations
+
+        last = MIGRATION.Migration.operations[-1]
+        assert isinstance(last, dj_migrations.RunPython)
+        assert last.reverse_code is MIGRATION.guard_no_owner_rows
+        assert last.code is dj_migrations.RunPython.noop

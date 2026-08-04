@@ -25,6 +25,8 @@ implizit als WITH CHECK — unter der Join-Policy lehnt die DB INSERTs mit
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 ENABLE_SQL = """
 ALTER TABLE core_attachment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core_attachment FORCE ROW LEVEL SECURITY;
@@ -49,6 +51,25 @@ CREATE POLICY facility_isolation ON core_attachment
 """
 
 
+def guard_no_owner_rows(apps, schema_editor):
+    """Reverse-Guard AUCH hier (Doppel zu 0130, bewusst): ein legaler
+    Einzelschritt-Rollback ``migrate core 0130`` stellte sonst die Join-Policy
+    wieder her, waehrend client-/case-eigene Zeilen (``event_id IS NULL``)
+    existieren — genau der policy-lose Zustand, den ADR-039 §2 als
+    Defense-in-Depth-Luecke benennt (Zeilen fuer Nicht-Superadmins unsichtbar,
+    Uploads/Downloads inkonsistent). Mechanik wie in 0130 (Refs #1746).
+    """
+    assert_migration_role_bypasses_rls(schema_editor)
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("SELECT count(*) FROM core_attachment WHERE event_id IS NULL")
+        (owned,) = cursor.fetchone()
+    if owned:
+        raise RuntimeError(
+            f"Rollback blockiert: {owned} client-/case-eigene Attachment-Zeilen vorhanden — "
+            "unter der wiederhergestellten Join-Policy waeren sie policy-verdeckt (ADR-039 §11)."
+        )
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("core", "0130_attachment_owner_facility"),
@@ -59,4 +80,7 @@ class Migration(migrations.Migration):
             sql=ENABLE_SQL,
             reverse_sql=REVERSE_SQL,
         ),
+        # MUSS letzte Operation bleiben: rueckwaerts laeuft sie damit VOR dem
+        # Policy-Swap — Position per Test gepinnt.
+        migrations.RunPython(migrations.RunPython.noop, guard_no_owner_rows),
     ]
