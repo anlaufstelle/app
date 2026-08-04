@@ -2847,13 +2847,14 @@
 </details>
 
 <details open>
-<summary><strong>📎 ATT — Datei-Anhänge / File-Vault (9 Cases)</strong></summary>
+<summary><strong>📎 ATT — Datei-Anhänge / File-Vault (16 Cases)</strong></summary>
 
-**Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/` 
-**Views:** `src/core/views/attachments.py` (`AttachmentListView`, `AttachmentDownloadView`) 
-**Services:** `src/core/services/file_vault.py` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet) 
-**E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_file_vault.py`, `test_crypto_session.py` 
-**Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben.
+**Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/`, `/clients/<client-uuid>/attachments/<attachment-uuid>/download/`, `/cases/<case-uuid>/attachments/<attachment-uuid>/download/` 
+**Views:** `src/core/views/attachments.py` (`AttachmentListView`, `BaseAttachmentDownloadView` → `AttachmentDownloadView`, `ClientAttachmentDownloadView`, `CaseAttachmentDownloadView`) 
+**Services:** `src/core/services/file_vault/` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan` — alle owner-generisch), `src/core/services/attachments/` (`finalize_staged_files`, `apply_attachment_changes`, `discard_type_switch_file_chains`, `build_attachment_context`, `attachment_download_url`), `src/core/services/compliance` (`get_visible_attachment_for_owner_or_404`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet) 
+**Modell:** `Attachment` (bis M24 `EventAttachment`, Refs #1738) — eigene `facility_id`, genau **ein** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`), direkte RLS-Policy (Migrationen `0129`–`0131`, [ADR-039](../adr/039-owner-generische-dateianhaenge.md)) 
+**E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_attachments_client_case.py`, `test_file_vault.py`, `test_crypto_session.py` 
+**Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben — seit M24 auch an Typen mit `entity_type` **Person** oder **Fall** (der Seed liefert dort keine mit, Wegwerf-Typen anlegen; Konvention `E2E-M24-*`).
 
 ---
 
@@ -2875,7 +2876,7 @@
 4. Detail-View → Anhang-Liste prüfen.
 
 **Erwartetes Ergebnis:**
-- `EventAttachment`-Record mit `is_current=True`, `entry_id=<uuid>`, `sort_order=0`.
+- `Attachment`-Record mit `event_id=<event-uuid>` (`client_id`/`case_id` NULL), eigener `facility_id`, `is_current=True`, `entry_id=<uuid>`, `sort_order=0`.
 - Datei liegt als `<uuid>.enc` unter `MEDIA_ROOT/<facility-id>/` (Fernet-verschlüsselt).
 - `original_filename_encrypted` ist Fernet-Token (kein Klartext-Filename auf Disk).
 - `event.data_json[<slug>] = {"__files__": True, "entries": [{"id": <uuid>, "sort": 0}]}`.
@@ -2910,7 +2911,7 @@
 **Erwartetes Ergebnis:**
 - Antwort 200 mit korrektem `Content-Type` (z.B. `application/pdf`).
 - `Content-Length` = `attachment.file_size`.
-- AuditLog `download` mit `target_type=EventAttachment`, `target_id=<att-uuid>`, `detail={event_id, field}`.
+- AuditLog `download` mit `target_type=Attachment`, `target_id=<att-uuid>`, `detail={owner_type: "event", owner_id, event_id, field}` — `event_id` steht bei Ereignis-Anhängen **zusätzlich** weiter drin, damit Bestandsauswertungen nicht brechen (Refs #1738).
 - Datei wird via `decrypt_file_stream` chunkweise dekodiert (kein Memory-Spike bei großen Dateien).
 - Inline-Whitelist: `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `application/pdf`, `text/plain`. Andere Typen (z.B. `text/html`, `image/svg+xml`) → forced `attachment` (XSS-Schutz, Issue #508).
 
@@ -3002,9 +3003,10 @@
 - Nach REMOVE: `soft_delete_attachment_chain(event, E1, user)` setzt `deleted_at=now` auf alle Versionen der Kette E1.
 - `event.data_json[<slug>]["entries"]` enthält nur noch nicht-gelöschte Heads.
 - Disk-Datei der alten Version bleibt liegen (Versionshistorie) bis Event-Anonymize/Delete.
+- Identische Mechanik an Person und Fall (ENT-ATT-10/11) — die Versionskette ist owner-agnostisch.
 
 **DSGVO/Security-Note:**
-- Versionshistorie ist Audit-relevant — physisches Löschen erst beim Event-Delete via `delete_event_attachments`.
+- Versionshistorie ist Audit-relevant — physisches Löschen erst beim Event-Delete via `delete_attachments_for(owner)` (bis M24 `delete_event_attachments(event)`).
 
 **Status:** ☐ Offen
 
@@ -3104,7 +3106,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C/F/S | ✓ | `test_file_vault.py` |
+| Attachments | fachkraft | C/F/S | ✓ | `test_file_vault.py`, `test_attachment_overview.py` |
 
 **Voraussetzung:** mehrere Events mit Anhängen (mind. 5).
 
@@ -3116,14 +3118,224 @@
 5. HTMX-Request (Header `HX-Request: true`) → liefert nur Partial `attachment_table.html`.
 
 **Erwartetes Ergebnis:**
-- Sensitivity-Filter VOR Slicing: nur Anhänge, deren `event.document_type.sensitivity` UND `field_template.sensitivity` in der Allow-List der Rolle liegen.
+- Basis-Queryset scopt **direkt** über `Attachment.facility` (nicht mehr über den Join `event__facility`) — sonst wären personen-/falleigene Zeilen unsichtbar (Refs #1738).
+- Sensitivity-Filter VOR Slicing: nur Anhänge, deren Owner-`document_type.sensitivity` (Coalesce über alle drei Owner) UND `field_template.sensitivity` in der Allow-List der Rolle liegen. Owner **ohne** Dokumentationstyp ⇒ Zeile für jede Rolle unsichtbar (fail-closed, Sentinel).
 - Cap auf 200 Einträge — größere Mengen via Filter erreichbar.
-- Spalten: Filename (entschlüsselt via `get_original_filename`), Dateigröße (`format_file_size`), DocumentType-Name, Pseudonym oder „—" bei anonym.
-- Soft-deleted Events ausgeblendet (`event__is_deleted=False`).
-- `select_related` für Event/Client/FieldTemplate/CreatedBy → keine N+1.
+- Spalten: Filename (entschlüsselt via `get_original_filename`), Dateigröße (`format_file_size`), DocumentType-Name, **„Zugeordnet zu"** (Ereignis/Person/Fall, verlinkt), Pseudonym oder „—" bei anonym.
+- Soft-deleted Owner ausgeblendet — je Owner-Typ `NULL`-tolerant (`event__is_deleted=False`, `client__is_deleted=False`, `case__is_deleted=False`).
+- **B1 (Refs #1738):** vom Benutzer entfernte (soft-deletete) Anhänge sind **nicht** gelistet — vorher standen sie mit Name, Größe und aktivem Download-Link da, obwohl der Download-View sie mit 404 abweist.
+- **B3 (Refs #1738):** `?client=<nicht-uuid>` (entsteht im Normalbetrieb durch das keyup-getriggerte Freitextfeld) liefert **keine HTTP 500** mehr, sondern eine leere Liste — fail-closed, nicht die ungefilterte Gesamtliste.
+- `select_related` für Event/Client/Case/FieldTemplate/CreatedBy → keine N+1.
 
 **DSGVO/Security-Note:**
 - Sensitivity-Filter in einer einzigen Query (`Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed)`) — vermeidet Loop-basierte Filterung (Memory-effizient bei großen Facilities).
+- **B2 (Refs #1738):** das Dropdown „Dokumentationstyp" ist an dieselbe Sensitivitätsgrenze gebunden wie die Zeilen. Vorher standen dort **alle** Typnamen im HTML jeder Rolle — ein Typname („Krisengespräch") ist selbst eine Information. Siehe ENT-ATT-13.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-10 — Datei an einer Person: hochladen, ersetzen, entfernen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | fachkraft (`miriam`) | C/F | ✓ | `test_attachments_client_case.py`, `test_client_case_attachments_ui.py` |
+
+**Voraussetzung:** Als `admin` ein Personen-Dokumentationstyp (`entity_type` = Person) mit einem Datei-Feld (`field_type: file`) angelegt — seit M24 zulässig (vorher dreischichtig gesperrt, „E8").
+
+**Vorbereitung:**
+- Zwei Test-PDFs `v1.pdf` und `v2.pdf` (< 1 MB) bereithalten.
+- Eine Person existiert bzw. wird in Schritt 1 neu angelegt.
+
+**Schritte:**
+1. `/clients/new/` (oder `/clients/<uuid>/edit/`) öffnen, den Personen-Typ wählen — die Zusatzfelder laden per HTMX nach und enthalten das **Datei-Feld**.
+2. `v1.pdf` wählen, Person speichern.
+3. Detailseite der Person öffnen — Dateiname, Größe und Download-Link sind sichtbar.
+4. Auf den Dateinamen klicken → Download.
+5. Person erneut bearbeiten, `v1.pdf` durch `v2.pdf` ersetzen, speichern.
+6. Detailseite: Vorversion im aufklappbaren Akkordeon prüfen.
+7. Person erneut bearbeiten, die Datei **entfernen**, speichern.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Das Formular trägt `enctype="multipart/form-data"`; das Datei-Feld erscheint (kein stiller Skip, keine Log-Warnung mehr).
+- Schritt 2: `Attachment`-Record mit `client_id=<person-uuid>`, `event_id`/`case_id` = NULL, `facility_id` = Facility der Person, `is_current=True`. Die Datei liegt als `<uuid>.enc` unter `MEDIA_ROOT/<facility-id>/` — **derselbe Pfad-Aufbau wie bei Ereignis-Anhängen**, keine Datei-Moves.
+- Schritt 4: URL ist `/clients/<person-uuid>/attachments/<att-uuid>/download/`; Antwort 200 mit korrektem `Content-Type`, AuditLog `download` mit `target_type=Attachment`, `detail={owner_type: "client", owner_id, field}` (**kein** `event_id`).
+- Schritt 5: alter Record `is_current=False` + `superseded_at` gesetzt, neuer Record trägt dieselbe `entry_id`.
+- Schritt 6: Vorversion bleibt herunterladbar.
+- Schritt 7: die Kette ist soft-deletet (`deleted_at`), verschwindet aus Detailansicht, Formular und `/attachments/`; der Download antwortet 404.
+
+**DSGVO/Security-Note:**
+- Die `facility` des Anhangs wird **immer** aus `owner.facility` abgeleitet, nie aus dem Request — Cross-Facility-Ablage ist damit kein erreichbarer Zustand (Pin-Test, [ADR-039](../adr/039-owner-generische-dateianhaenge.md) §2).
+- Personen-Dateien haben **keine** eigene Aufbewahrungsfrist (`DocumentType.retention_days` ist event-only); sie fallen mit der Anonymisierung der Person.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-11 — Datei an einem Fall: hochladen und herunterladen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | fachkraft (`miriam`) | C/F | ✓ | `test_attachments_client_case.py`, `test_client_case_attachments_ui.py` |
+
+**Voraussetzung:** Fall-Dokumentationstyp (`entity_type` = Fall) mit Datei-Feld; eine Person mit mindestens einem Fall.
+
+**Schritte:**
+1. `/cases/<uuid>/edit/` öffnen, den Fall-Typ wählen, eine PDF im Datei-Feld auswählen, speichern.
+2. Fall-Detailseite öffnen, auf den Dateinamen klicken.
+3. Die Attachment-UUID notieren und die **Ereignis**-Download-URL mit derselben UUID versuchen (`/events/<beliebige-event-uuid>/attachments/<att-uuid>/download/`).
+
+**Erwartetes Ergebnis:**
+- Schritt 1: `Attachment` mit `case_id=<fall-uuid>`, `event_id`/`client_id` = NULL; `facility_id` = Facility des Falls.
+- Schritt 2: Download über `/cases/<fall-uuid>/attachments/<att-uuid>/download/`, AuditLog-`detail` trägt `owner_type: "case"`.
+- Schritt 3: **404** — das Gate prüft „Anhang **an diesem Owner**"; eine Anhang-UUID an einer fremden Owner-Route ist keine gültige Kombination (IDOR-Probe).
+
+**DSGVO/Security-Note:**
+- Es gibt keinen Fall-Löschworkflow; falleigene Dateien fallen mit der Anonymisierung der Person, ein Legal Hold auf der Person schützt sie transitiv ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) §6).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-12 — Download-Gate der Owner-Routen: 404-Semantik bei Typ-, 403 bei Feld-Sensitivität
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | fachkraft (`miriam`) + leitung (`emma`) | C || `test_attachment_download_owner_routes.py`, `test_compliance_attachment_gate.py` |
+
+**Voraussetzung:** zwei Personen-Typen — einer mit Sensibilität **hoch** (Typ-Ebene) und ein normaler Typ mit einem Datei-**Feld** der Sensibilität **hoch**. Je eine Person mit Datei anlegen (Upload als `emma`, weil Fachkräfte maximal `elevated` sehen).
+
+**Schritte:**
+1. Als `miriam` die Download-URL des Anhangs am **HIGH-Typ** direkt aufrufen.
+2. Als `miriam` die Download-URL des Anhangs am **HIGH-Feld** (normaler Typ) direkt aufrufen.
+3. Als `miriam` die Download-URL eines Anhangs einer Person aus einer **fremden Einrichtung** aufrufen.
+4. Als `miriam` einen Anhang aufrufen, dessen Person im **Papierkorb** liegt.
+5. Als `emma` beide Downloads aus 1 und 2 wiederholen.
+
+**Erwartetes Ergebnis:**
+- Schritt 1 → **404**, nicht 403: die Zusatzfelder-Sektion eines für die Rolle unsichtbaren Typs ist komplett abwesend; ein 403 bestätigte die Existenz des Anhangs. Dasselbe gilt, wenn der Owner **gar keinen** Dokumentationstyp hat (fail-closed).
+- Schritt 2 → **403**: das Feld existiert innerhalb eines sichtbaren Typs, die Rolle darf nur dieses Feld nicht sehen.
+- Schritte 3 und 4 → **404** (Facility-Scope bzw. `is_deleted`).
+- Schritt 5 → beide **200**.
+- Fehlt die Datei auf der Platte, ist die Antwort **404** plus `logger.error` — keine halb übertragene Connection.
+- Alle drei Download-Routen teilen **einen** Ratelimit-Eimer (`attachment_download`): wiederholte Aufrufe über verschiedene Owner-Routen zählen auf dasselbe Budget.
+
+**DSGVO/Security-Note:**
+- Fünfstufiges Gate, fail-closed in jeder Stufe ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) §12): Owner-Lookup → Typ-Sensitivität → Anhang am Owner → Feld-Sensitivität → Datei auf Disk.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-13 — Assistenz-Negativprobe: keine Fall-Dateien, kein Fall-Typname
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | assistenz (`lena`) | C | ✓ | `test_attachments_client_case.py`, `test_attachment_overview.py`, `test_attachment_mutation_authz.py` |
+
+**Voraussetzung:** ENT-ATT-11 (Fall mit Datei) und mindestens ein HIGH-Dokumentationstyp mit Anhang.
+
+**Schritte:**
+1. Als `lena` `/attachments/` aufrufen.
+2. Das Dropdown „Dokumentationstyp" öffnen und zusätzlich den HTML-Quelltext der Seite durchsuchen.
+3. Die Fall-Download-URL aus ENT-ATT-11 direkt aufrufen.
+4. Die Personen-Download-URL aus ENT-ATT-10 direkt aufrufen (Gegenprobe).
+
+**Erwartetes Ergebnis:**
+- Schritt 1: **keine** fall-eigene Zeile in der Liste — Fälle sind für die Assistenz unsichtbar, ihre Dateien folgerichtig auch. Ohne diesen Filter wäre die Übersicht ein Nebeneingang in die Fall-Dokumentation.
+- Schritt 2: das Dropdown enthält **keine** Typen oberhalb ihrer Sensitivitätsstufe und keine Fall-Typen — auch nicht im rohen HTML (**B2**, Refs #1738). Normale Typen bleiben wählbar.
+- Schritt 3: **403/Redirect** durch `StaffRequiredMixin` — der Fall-Download verlangt Fachkraft-Rechte, ein Assistenz-Download wäre eine Gate-Umgehung.
+- Schritt 4: **200** — der Personen-Download steht ab Assistenz offen (`AssistantOrAboveRequiredMixin`).
+
+**DSGVO/Security-Note:**
+- Der B2-Befund war ein Leck auf der Konfigurations-Metaebene: die Ergebniszeilen waren korrekt gegated, der **Typname** stand trotzdem im HTML jeder Assistenz. Die Existenz eines Dokumentationstyps „Krisengespräch" darf eine Rolle, die keine Zeile davon sehen darf, nicht ableiten können.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-14 — Übersicht: Spalte „Zugeordnet zu" und Personen-Filter über drei Quellen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | fachkraft (`miriam`) | C/F | ✓ | `test_attachments_client_case.py`, `test_attachment_overview.py` |
+
+**Voraussetzung:** **Dieselbe** Person trägt drei Dateien: eine an einem ihrer Ereignisse, eine direkt an der Person (ENT-ATT-10) und eine an einem ihrer Fälle (ENT-ATT-11).
+
+**Schritte:**
+1. `/attachments/` aufrufen und die Spalte „Zugeordnet zu" ansehen.
+2. Je einen Link dieser Spalte anklicken.
+3. Den Personen-Filter mit dem Pseudonym dieser Person setzen.
+4. Zusätzlich den Dokumentationstyp-Filter setzen (kombiniert).
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Die Spalte weist je Zeile **Ereignis**, **Person** oder **Fall** aus.
+- Schritt 2: Der Link führt auf die jeweilige Detailseite (`/events/<uuid>/`, `/clients/<uuid>/`, `/cases/<uuid>/`); für Rollen ohne Fall-Zugriff ist der Fall-Eintrag nicht verlinkt.
+- Schritt 3: **Alle drei** Dateien erscheinen — der Filter greift über die drei Wege, auf denen eine Datei zu einer Person gehört (`event__client_id`, `client_id`, `case__client_id`). Fände er nur den Ereignis-Weg, wären zwei Dateien unauffindbar.
+- Schritt 4: Beide Filter sind kombinierbar; die Liste aktualisiert sich per HTMX ohne Seitenreload.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-15 — Typwechsel-Rückfrage beziffert Feldwerte **und** Dateien
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | fachkraft (`miriam`) | C/F | ✓ | `test_attachments_client_case.py`, `test_type_switch_confirm_files.py` |
+
+**Voraussetzung:** Person mit einem Personen-Typ, der **beides** trägt: mindestens ein befülltes Textfeld und mindestens eine hinterlegte Datei. Ein zweiter Personen-Typ mit anderem Feldset existiert.
+
+**Schritte:**
+1. `/clients/<uuid>/edit/` öffnen — über dem Feldblock steht die amber Warnbox.
+2. Den Dokumentationstyp auf den zweiten Typ wechseln, „Speichern" klicken.
+3. Im Rückfrage-Dialog **„Abbrechen"** wählen.
+4. Erneut „Speichern", diesmal **„OK"**.
+5. Detailseite und `/attachments/` prüfen.
+6. Dasselbe am Fall (`/cases/<uuid>/edit/`).
+
+**Erwartetes Ergebnis:**
+- Schritt 2: Der Dialogtext nennt **beides** — die Anzahl der verworfenen **Zusatzfeld-Werte** und, als zweiter Satz, die Anzahl der entfernten **Dateien** (Singular/Plural korrekt).
+- Schritt 3: nichts wird gespeichert, das Formular bleibt bedienbar (kein Dauerhaft-Sperren des Speichern-Buttons).
+- Schritt 4: `data_json` enthält nur noch Slugs des neuen Typs; die betroffenen Datei-Ketten sind **soft-deletet**, nicht physisch gelöscht.
+- Schritt 5: die Dateien sind aus Detailansicht und Übersicht verschwunden, ihre Downloads antworten 404.
+- Trägt die Person **keine** Datei, nennt der Dialog nur die Feldwerte (kein leerer Zusatzsatz).
+
+**DSGVO/Security-Note:**
+- Soft-Delete statt Hard-Delete ist Absicht: der Typwechsel ist eine Konfigurationsentscheidung, keine Löschentscheidung. Physisch entfernt werden die Dateien erst über die Löschpfade des Owners ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) §7, Marker-Invariante I-M1).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-ATT-16 — Art.-15-Auskunft: Anhang-Metadaten in JSON und PDF
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Attachments | leitung (`emma`) oder facility_admin | C | ⚪ | `test_client_export.py` |
+
+**Voraussetzung:** Eine Person mit Dateien an **allen drei** Owner-Typen (ENT-ATT-10/11 plus ein Ereignis-Anhang); zusätzlich eine ersetzte Vorversion und eine im Formular entfernte Datei, damit die Versionskette Zustände zeigt. Der Export verlangt Re-Authentifizierung (Sudo-Mode).
+
+**Schritte:**
+1. `/clients/<uuid>/export/json/` ziehen.
+2. Die Schlüssel `attachments`, `cases[i].attachments`, `events[i].attachments` und `deleted_events[i].attachments` prüfen.
+3. Die Zusatzfeld-Werte im JSON prüfen (Feld vom Typ Datei).
+4. `/clients/<uuid>/export/pdf/` ziehen und den Abschnitt „Dateianhänge" sowie die Spalte „Dateianhänge" in Fall- und Ereignistabelle prüfen.
+5. Gegenprobe: eine Person **ohne** jede Datei exportieren.
+
+**Erwartetes Ergebnis:**
+- Jeder Eintrag trägt genau: `field`, `field_slug`, `filename`, `file_size`, `mime_type`, `uploaded_at`, `uploaded_by`, `is_current`, `superseded_at`, `removed_at`. **Keine** Binärinhalte, kein `storage_filename`, keine Attachment-UUID.
+- `attachments` (personen-eigen) ist **immer** vorhanden — bei der Person aus Schritt 5 als leere Liste `[]`.
+- `cases[i].attachments` / `events[i].attachments` erscheinen **nur, wenn nicht leer** (Bestandsformat bleibt bitgleich); gelöschte Ereignisse tragen sie ebenso.
+- Die **vollständige Versionskette** ist enthalten: ersetzte Glieder mit `is_current=false` + `superseded_at`, entfernte mit gesetztem `removed_at`.
+- `filename` ist **entschlüsselt**; ist das Token unlesbar, steht dort `[verschlüsselt]` — **nicht** `download` und kein erfundener Name.
+- `mime_type` ist der beim Upload verifizierte Typ (libmagic); nur Bestandszeilen ohne Erkennung fallen auf den browser-gemeldeten zurück.
+- Schritt 3: Datei-Felder tragen den Platzhalter `[Dateianhang – Angaben unter „Dateianhänge"]` — **nicht** das rohe `__file__`/`__files__`-Marker-Dict samt Attachment-UUIDs.
+- Schritt 4: Das PDF führt dieselben Angaben; der Hinweiskasten oben nennt als Ausschlüsse nur noch die Beschäftigten-Identität im Zugriffsprotokoll und die Binärinhalte der Dateien.
+
+**DSGVO/Security-Note:**
+- Der Ereignis-Zweig der Sammel-Abfrage filtert nach Sensitivität (`visible_to`) — Anhang-Metadaten eines für diese Rolle unsichtbaren Ereignisses liegen erst gar nicht im Speicher.
+- Soft-deletete Anhänge sind bis zum physischen Löschen weiterhin **gespeicherte Daten der betroffenen Person**: sie zu verschweigen wäre eine unvollständige Auskunft, sie unmarkiert zu listen ebenso irreführend — daher `removed_at`.
 
 **Status:** ☐ Offen
 
@@ -7023,14 +7235,14 @@
 
 **Routen:** `/clients/new/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/` (Abschnitt „Zusatzfelder"), `/partials/clients/fields/`; `/cases/new/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/`, `/partials/cases/fields/`; Konfiguration unter `/config/document-types/` (Typ mit `entity_type` Person/Fall anlegen) 
 **Views:** `src/core/views/clients.py` (`ClientCreateView`, `ClientUpdateView`, `ClientDetailView`, `ClientFieldsPartialView`); `src/core/views/cases.py` (`CaseCreateView`, `CaseUpdateView`, `CaseDetailView`, `CaseFieldsPartialView`) 
-**Forms:** `src/core/forms/dynamic.py` (`DynamicDataForm` — entity-neutrale Basis, `exclude_file_fields`, `grouped_fields()`); `src/core/forms/clients.py` (`DynamicClientDataForm`, `ClientForm` mit hx-get-Typ-Select); `src/core/forms/cases.py` (Fall-Pendant) 
+**Forms:** `src/core/forms/dynamic.py` (`DynamicDataForm` — entity-neutrale Basis, `grouped_fields()`; das Flag `exclude_file_fields` ist mit M24 ersatzlos entfallen); `src/core/forms/clients.py` (`DynamicClientDataForm`, `ClientForm` mit hx-get-Typ-Select); `src/core/forms/cases.py` (Fall-Pendant) 
 **Services:** `src/core/services/dynamic_data.py` (`merge_dynamic_data` — E11-Typwechsel-Policy, `validate_data_json`, `remove_restricted_fields`, `decrypt_dynamic_text_data`); `src/core/services/client/main.py` (`_check_client_document_type`), `src/core/services/case/cases.py` (`_check_case_document_type`) 
 **Models:** `Client.document_type`/`Client.data_json`, `Case.document_type`/`Case.data_json` (Migrationen `0118`/`0119`, `on_delete=PROTECT`); Verschlüsselung über `DynamicDataEncryptionMixin` (Cache an `document_type_id` gebunden) 
 **E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über Unit-/View-Suiten `test_clients_dynamic_ui.py`, `test_cases_dynamic_ui.py`, `test_client_dynamic_data.py`, `test_case_dynamic_data.py`, `test_forms_dynamic.py`, `test_client_export.py` 
-**Hintergrund:** [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) (entity_type, E11-Typwechsel, dreischichtiger FILE-Ausschluss), [`docs/packages.md`](../packages.md) 
+**Hintergrund:** [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) (entity_type, E11-Typwechsel; der dort in §9 beschriebene mehrschichtige FILE-Ausschluss „E8" ist seit M24 abgelöst), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) (Datei-Felder an allen drei Entitäten), [`docs/packages.md`](../packages.md) 
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) legt die Wegwerf-Typen an, die eigentlichen Fälle laufen als **fachkraft** (`miriam`); für die Sensitivitäts-Probe zusätzlich **assistenz** (`lena`).
-- Wegwerf-Typen nach Konvention `E2E-ClientDyn-<uuid4>` (`entity_type` = Person) und `E2E-CaseDyn-<uuid4>` (`entity_type` = Fall) mit mindestens: einem normalen Textfeld, einem Feld mit Sensibilität **hoch** (verschlüsselt) und — nur für CLIENT-DYN-04 — einem zweiten Person-Typ mit **anderem** Feldset.
+- Wegwerf-Typen nach Konvention `E2E-ClientDyn-<uuid4>` (`entity_type` = Person) und `E2E-CaseDyn-<uuid4>` (`entity_type` = Fall) mit mindestens: einem normalen Textfeld, einem Feld mit Sensibilität **hoch** (verschlüsselt) und — nur für CLIENT-DYN-04 — einem zweiten Person-Typ mit **anderem** Feldset. Für CLIENT-DYN-03 zusätzlich ein **Datei**-Feld (seit M24 zulässig, Refs #1738); die Dateipfade selbst prüft die ATT-Sektion (ENT-ATT-10 ff.).
 - Der Seed bringt **keine** Person-/Fall-Typen mit (`default.yaml` ist durchgehend `entity_type: event`) — die Typen müssen für diese Cases angelegt werden.
 
 ---
@@ -7092,7 +7304,7 @@
 
 ---
 
-### TC-ID: ENT-CLIENT-DYN-03 — Datei-Felder erscheinen an der Person nicht
+### TC-ID: ENT-CLIENT-DYN-03 — Datei-Felder sind an Person und Fall konfigurierbar (E8-Sperre gefallen)
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -7102,13 +7314,17 @@
 - Eine Feldvorlage vom Typ **Datei** existiert (der Seed liefert `Anhang` mit).
 
 **Schritte:**
-1. Im Feld-Board des Person-Wegwerf-Typs versuchen, die Datei-Feldvorlage zuzuordnen.
-2. Gegenprobe (falls die Zuordnung auf einem anderen Weg doch entstanden ist, z. B. per Admin/Shell): `/clients/new/` mit diesem Typ öffnen.
+1. Im Feld-Board des Person-Wegwerf-Typs die Datei-Feldvorlage zuordnen; dasselbe am Fall-Wegwerf-Typ.
+2. `/clients/new/` mit diesem Typ öffnen.
+3. Unter `/config/field-templates/` eine **neue** Feldvorlage mit Feldtyp „Datei" anlegen.
+4. Ein Paket mit `field_type: file` an einem `entity_type: client`-Typ per `manage.py load_package --dry-run` einspielen (siehe DEV-PKG-03).
 
 **Erwartetes Ergebnis:**
-- Schritt 1: die Zuordnung wird mit einer deutschen Fehlermeldung abgewiesen — Datei-Felder sind nur an Ereignis-Typen zulässig.
-- Schritt 2: das Formular lädt **ohne 500er**; das Datei-Feld wird stillschweigend ausgelassen und im Server-Log als Warnung vermerkt.
-- Ein Paket, das dieselbe Zuordnung deklariert, wird bereits beim Import als Schema-Fehler mit Pfad abgewiesen (`manage.py load_package --dry-run`, siehe DEV-PKG-03).
+- Schritt 1: die Zuordnung gelingt — die frühere Fehlermeldung „nur an Ereignis-Typen zulässig" gibt es nicht mehr (alle vier Sperr-Schichten sind mit M24 ersatzlos entfallen, Refs #1738, [ADR-039](../adr/039-owner-generische-dateianhaenge.md) §9).
+- Schritt 2: das Formular trägt `enctype="multipart/form-data"` und rendert das Datei-Feld — **kein** stiller Skip, **keine** Warnung im Server-Log mehr.
+- Schritt 3: Der Feldtyp „Datei" ist an jedem Entitätstyp wählbar; der frühere Typwechsel-Guard im Formular ist weg.
+- Schritt 4: das Paket wird **akzeptiert** (kein Schema-Fehler mehr). `schema_version` bleibt bei `1` — eine Restriktions-Lockerung ist abwärtskompatibel.
+- Gegenprobe Auslieferung: `src/core/packages/default.yaml` ordnet weiterhin **kein** Datei-Feld an einem Personen-/Fall-Typ zu — das bleibt Trägerentscheidung.
 
 **Status:** ☐ Offen
 
