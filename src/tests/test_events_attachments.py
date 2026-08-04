@@ -13,10 +13,10 @@ from core.services.events import (
 
 
 @pytest.mark.django_db
-class TestEventAttachmentAtomicity:
+class TestAttachmentAtomicity:
     """Event + Attachment müssen atomar angelegt werden (Refs #584, Refs #591 WP2).
 
-    Scheitert der Attachment-Teil (DB-Insert des ``EventAttachment``), muss die
+    Scheitert der Attachment-Teil (DB-Insert des ``Attachment``), muss die
     Event-Row zurückgerollt werden — sonst verweist die DB auf einen Anhang,
     der nie persistiert wurde. Der View-Layer umschließt ``create_event()`` +
     ``finalize_staged_files()`` bewusst mit ``transaction.atomic()``. Refs #1345:
@@ -93,13 +93,13 @@ class TestEventAttachmentAtomicity:
         assert EventHistory.objects.count() == history_before
 
     def test_attachment_save_failure_rolls_back_event_creation(self, client, staff_user, facility, doc_type_with_file):
-        """Alternative: Patch direkt auf ``EventAttachment.save`` — der Save
+        """Alternative: Patch direkt auf ``Attachment.save`` — der Save
         läuft innerhalb von ``store_encrypted_file``. Erfordert allerdings,
         dass ``encrypt_file`` und Virus-Scan vorher laufen — im Testumfeld
         ist CLAMAV_ENABLED=False, aber der Encryption-Key muss gesetzt sein.
 
         Hinweis: Benötigt seit #610 die libmagic-Bibliothek, weil
-        ``store_encrypted_file`` vor ``EventAttachment.save`` eine Magic-Bytes-
+        ``store_encrypted_file`` vor ``Attachment.save`` eine Magic-Bytes-
         Prüfung ausführt.
         """
         # Skip, wenn libmagic nicht lauffähig (z.B. Host ohne libmagic1).
@@ -110,7 +110,7 @@ class TestEventAttachmentAtomicity:
         except Exception as exc:  # noqa: BLE001
             pytest.skip(f"libmagic nicht lauffähig: {exc}")
 
-        from core.models.attachment import EventAttachment
+        from core.models.attachment import Attachment
 
         client.force_login(staff_user)
         events_before = Event.objects.count()
@@ -128,7 +128,7 @@ class TestEventAttachmentAtomicity:
         )
         uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
 
-        with patch.object(EventAttachment, "save", side_effect=RuntimeError("DB-Save-Fehler")):
+        with patch.object(Attachment, "save", side_effect=RuntimeError("DB-Save-Fehler")):
             with pytest.raises(RuntimeError, match="DB-Save-Fehler"):
                 client.post(
                     reverse("core:event_create"),
@@ -141,11 +141,11 @@ class TestEventAttachmentAtomicity:
 
         # Rollback-Garantie: weder Event noch Attachment in der DB.
         assert Event.objects.count() == events_before
-        assert EventAttachment.objects.count() == 0
+        assert Attachment.objects.count() == 0
 
 
 @pytest.mark.django_db
-class TestEventAttachmentVersioning:
+class TestAttachmentVersioning:
     """Attachment-Versionierung beim Ersetzen (Refs #587, Stufe A).
 
     Upload einer neuen Datei in ein Feld mit bestehender Datei darf die
@@ -192,7 +192,7 @@ class TestEventAttachmentVersioning:
         """
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        from core.models.attachment import EventAttachment
+        from core.models.attachment import Attachment
 
         doc_type, _ft = doc_type_with_file
         client.force_login(staff_user)
@@ -225,7 +225,7 @@ class TestEventAttachmentVersioning:
         )
         assert resp.status_code == 302
 
-        attachments = list(EventAttachment.objects.filter(event=event).order_by("created_at"))
+        attachments = list(Attachment.objects.filter(event=event).order_by("created_at"))
         assert len(attachments) == 2
         old, new = attachments
         old.refresh_from_db()
@@ -312,7 +312,7 @@ class TestEventAttachmentVersioning:
     def test_soft_delete_removes_all_versions(self, client, staff_user, facility, doc_type_with_file):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        from core.models.attachment import EventAttachment
+        from core.models.attachment import Attachment
 
         doc_type, _ft = doc_type_with_file
         client.force_login(staff_user)
@@ -337,10 +337,10 @@ class TestEventAttachmentVersioning:
                 ),
             },
         )
-        assert EventAttachment.objects.filter(event=event).count() == 2
+        assert Attachment.objects.filter(event=event).count() == 2
 
         soft_delete_event(event, staff_user)
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
 
 @pytest.mark.django_db
@@ -385,7 +385,7 @@ class TestEventEditScannerUnavailable:
         from django.contrib.messages import get_messages
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        from core.models.attachment import EventAttachment
+        from core.models.attachment import Attachment
         from core.services.file_vault import VirusScannerUnavailableError
 
         client.force_login(staff_user)
@@ -403,7 +403,7 @@ class TestEventEditScannerUnavailable:
         assert resp.status_code == 302
         event = Event.objects.get(document_type=doc_type_with_file)
         entry_id = event.attachments.get().entry_id
-        count_before = EventAttachment.objects.filter(event=event).count()
+        count_before = Attachment.objects.filter(event=event).count()
 
         # Replace, während der Scanner unerreichbar ist → fail-closed, kein 500.
         replacement = SimpleUploadedFile("b.pdf", self._pdf(b"v2"), content_type="application/pdf")
@@ -424,4 +424,4 @@ class TestEventEditScannerUnavailable:
         msgs = [str(m) for m in get_messages(resp.wsgi_request)]
         assert any("Virenscanner" in m for m in msgs), msgs
         # fail-closed: keine neue Attachment-Version gespeichert.
-        assert EventAttachment.objects.filter(event=event).count() == count_before
+        assert Attachment.objects.filter(event=event).count() == count_before

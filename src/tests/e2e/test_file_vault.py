@@ -165,7 +165,7 @@ class TestFileUploadAndDownload:
             text=True,
             env=e2e_env,
         )
-        assert "download|EventAttachment" in result.stdout.strip()
+        assert "download|Attachment" in result.stdout.strip()
 
 
 class TestFileEdit:

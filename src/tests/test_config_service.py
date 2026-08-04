@@ -19,13 +19,13 @@ from django.test import RequestFactory
 from django.utils import timezone
 
 from core.models import (
+    Attachment,
     AuditLog,
     Case,
     Client,
     DocumentType,
     DocumentTypeField,
     Event,
-    EventAttachment,
     Facility,
     FieldGroup,
     FieldTemplate,
@@ -94,7 +94,7 @@ def _make_case_with_data(facility, client, staff_user, data_json):
 
 
 def _make_attachment(event, field_template):
-    return EventAttachment.objects.create(
+    return Attachment.objects.create(
         event=event,
         field_template=field_template,
         storage_filename="abcd1234.enc",

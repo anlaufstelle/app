@@ -18,7 +18,7 @@ from core.admin.documents import (
     QuickTemplateAdmin,
     TimeFilterAdmin,
 )
-from core.admin.events import EventAdmin, EventAttachmentAdmin, EventHistoryAdmin
+from core.admin.events import AttachmentAdmin, EventAdmin, EventHistoryAdmin
 from core.admin.mixins import FacilityScopedAdminMixin, RoleBasedPermissionMixin, SuperAdminOnlyAdminMixin
 from core.admin.organization import FacilityAdmin, OrganizationAdmin
 from core.admin.system import AuditLogAdmin, SettingsAdmin, StatisticsSnapshotAdmin
@@ -33,7 +33,7 @@ __all__ = [
     "DocumentTypeAdmin",
     "DocumentTypeFieldInline",
     "EventAdmin",
-    "EventAttachmentAdmin",
+    "AttachmentAdmin",
     "EventHistoryAdmin",
     "FacilityAdmin",
     "FacilityScopedAdminMixin",

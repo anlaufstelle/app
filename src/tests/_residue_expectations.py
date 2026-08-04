@@ -204,14 +204,12 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     pii("core_eventhistory", "data_after"),
     pii("core_eventhistory", "field_metadata"),
     non_pii("core_eventhistory", "action", reason="Enum (create/update/delete), kein Freitext."),
-    # ---- core_eventattachment --------------------------------------------
-    pii("core_eventattachment", "original_filename_encrypted"),
+    # ---- core_attachment --------------------------------------------
+    pii("core_attachment", "original_filename_encrypted"),
+    non_pii("core_attachment", "storage_filename", reason="UUID-basierter Disk-Dateiname (abc.enc), kein Klartext."),
+    non_pii("core_attachment", "mime_type", reason="MIME-Typ (z.B. application/pdf), kein Freitext."),
     non_pii(
-        "core_eventattachment", "storage_filename", reason="UUID-basierter Disk-Dateiname (abc.enc), kein Klartext."
-    ),
-    non_pii("core_eventattachment", "mime_type", reason="MIME-Typ (z.B. application/pdf), kein Freitext."),
-    non_pii(
-        "core_eventattachment",
+        "core_attachment",
         "detected_mime",
         reason="Verifizierter MIME-Typ (libmagic, z.B. application/pdf), kein Freitext (Refs #1274).",
     ),

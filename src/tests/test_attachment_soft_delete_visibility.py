@@ -1,6 +1,6 @@
 """L5 (Refs #1375) — soft-gelöschte Anhänge dürfen nicht mehr ausgeliefert werden.
 
-``EventAttachment`` trägt ein ``deleted_at`` (User-seitiges Soft-Delete), aber
+``Attachment`` trägt ein ``deleted_at`` (User-seitiges Soft-Delete), aber
 KEINEN Soft-Delete-Manager. ``get_visible_attachment_or_404`` filterte nur nach
 ``pk`` + ``event`` — ein soft-gelöschter Anhang blieb also per Direkt-URL
 (Download-View) abrufbar (innerhalb Facility+Sensitivität, kein Cross-Tenant,

@@ -9,7 +9,7 @@ Drei Charakterisierungs-Cases plus Trigger-State-Snapshot:
 
 1. Plain — Client ohne Events/Cases/Workitems; nur Klient-Felder werden
    redigiert.
-2. With attachments — Client mit Event + EventAttachment auf Disk; die
+2. With attachments — Client mit Event + Attachment auf Disk; die
    Disk-Datei wird geloescht (RF-005-Vermeidung).
 3. With deletion request — Client mit DeletionRequest fuer Event-Target;
    ``DeletionRequest.reason`` wird redigiert, die Antrags-Meta bleibt.

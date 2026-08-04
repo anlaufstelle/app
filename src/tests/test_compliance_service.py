@@ -422,7 +422,7 @@ class TestAuditEventChecks:
                 facility=facility,
                 user=staff_user,
                 action=AuditLog.Action.SECURITY_VIOLATION,
-                target_type="EventAttachment",
+                target_type="Attachment",
             )
         checks = compliance._audit_event_checks()
         assert checks[0].status == compliance.ComplianceStatus.CRITICAL

@@ -11,7 +11,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.services.audit import log_audit_event
 from core.services.compliance import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
 from core.services.file_vault import get_attachment_path, get_decrypted_file_stream, get_original_filename
@@ -62,7 +62,7 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
 
         # Get all attachments for this facility via event__facility
         attachments = (
-            EventAttachment.objects.filter(event__facility=facility, event__is_deleted=False)
+            Attachment.objects.filter(event__facility=facility, event__is_deleted=False)
             .select_related(
                 "event",
                 "event__document_type",

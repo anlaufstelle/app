@@ -9,7 +9,7 @@ geforderten Tabellen ab:
 - core_client (Stamm)
 - core_case + core_episode + core_workitem (linked)
 - core_eventhistory (history) — neu mit #715
-- core_eventattachment (Anhaenge) — neu mit #715
+- core_attachment (Anhaenge) — neu mit #715
 - core_deletionrequest (4-Augen-Antraege) — neu mit #715
 """
 
@@ -198,7 +198,7 @@ class TestAnonymizeResidueMatrix:
                 assert pii not in str(entry.data_after)
 
     def test_event_attachments_deleted(self, client_with_full_history, facility, admin_user):
-        from core.models import EventAttachment, FieldTemplate
+        from core.models import Attachment, FieldTemplate
 
         cli, _, event = client_with_full_history
         ft = FieldTemplate.objects.create(
@@ -206,7 +206,7 @@ class TestAnonymizeResidueMatrix:
             name="Anlage",
             field_type=FieldTemplate.FieldType.FILE,
         )
-        EventAttachment.objects.create(
+        Attachment.objects.create(
             event=event,
             field_template=ft,
             storage_filename="abc.enc",
@@ -219,7 +219,7 @@ class TestAnonymizeResidueMatrix:
         cli.anonymize()
         # Disk-Loeschen kann in Tests fehlschlagen (kein MEDIA_ROOT-File),
         # DB-Cleanup muss aber durchgehen.
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_deletion_request_reason_redacted(self, client_with_full_history):
         cli, _, event = client_with_full_history

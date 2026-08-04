@@ -13,7 +13,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from core.models import DocumentType, Event, EventAttachment, EventHistory, FieldTemplate
+from core.models import Attachment, DocumentType, Event, EventHistory, FieldTemplate
 from core.retention import enforcement as enforcement_mod
 from core.services.events import build_redacted_delete_history, soft_delete_event
 from core.services.file_vault import store_encrypted_file
@@ -247,7 +247,7 @@ class TestRetentionAttachmentCleanupSelfHeals:
     AUSSERHALB der Event/History-Transaktion, war das Event bei einem Crash
     mitten im Unlink bereits ``is_deleted=True`` committet: Re-Runs uebersprangen
     es (``is_deleted``-Filter), die ``.enc``-Datei blieb MIT ihrem
-    ``EventAttachment``-Record liegen, und ``cleanup_orphan_storage_files``
+    ``Attachment``-Record liegen, und ``cleanup_orphan_storage_files``
     ueberspringt Dateien MIT Record -> PII bliebe dauerhaft auf Platte. Der Fix
     zieht den Cleanup in dieselbe Transaktion: ein Crash rollt das Event zurueck
     (``is_deleted=False``), der naechste Lauf raeumt selbstheilend auf
@@ -295,7 +295,7 @@ class TestRetentionAttachmentCleanupSelfHeals:
             assert event.is_deleted is False
             assert event.data_json == {"freitext": "sensibler Klartext", "ort": "Ort X"}
             assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).count() == 0
-            assert EventAttachment.objects.filter(event=event).exists()
+            assert Attachment.objects.filter(event=event).exists()
             assert path.exists()
 
             # Selbstheilung: der naechste Lauf (2. Aufruf ist real) raeumt vollstaendig auf.
@@ -304,7 +304,7 @@ class TestRetentionAttachmentCleanupSelfHeals:
         event.refresh_from_db()
         assert event.is_deleted is True
         assert event.data_json == {}
-        assert not EventAttachment.objects.filter(event=event).exists()
+        assert not Attachment.objects.filter(event=event).exists()
         assert not path.exists()
         # Genau EIN DELETE-Nachweis trotz Crash + Re-Run.
         assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).count() == 1

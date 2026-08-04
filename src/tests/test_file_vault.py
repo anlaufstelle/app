@@ -24,7 +24,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
     )
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
-from core.models.attachment import EventAttachment  # noqa: E402
+from core.models.attachment import Attachment  # noqa: E402
 from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import (  # noqa: E402  # noqa: E402
     EncryptionError,
@@ -255,7 +255,7 @@ class TestFileVaultService:
 
         delete_event_attachments(event)
         assert not path.exists()
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_file_field_forces_encrypted(self, facility):
         ft = FieldTemplate.objects.create(
@@ -296,7 +296,7 @@ class TestFileUploadView:
         assert marker.get("__files__") is True
         assert len(marker["entries"]) == 1
 
-        attachment = EventAttachment.objects.get(event=event)
+        attachment = Attachment.objects.get(event=event)
         assert attachment.field_template == ft_file
         assert attachment.file_size == len(PDF_HEADER)
 
@@ -333,7 +333,7 @@ class TestFileUploadView:
         assert attachment.detected_mime == "application/pdf"
         # Browser-gemeldeten Typ auf einen aktiv-renderbaren Wert verbiegen
         # (lügender Client / Bestandsdaten) — der Download darf ihn ignorieren.
-        EventAttachment.objects.filter(pk=attachment.pk).update(mime_type="text/html")
+        Attachment.objects.filter(pk=attachment.pk).update(mime_type="text/html")
 
         client.force_login(staff_user)
         url = reverse("core:attachment_download", kwargs={"pk": event.pk, "attachment_pk": attachment.pk})
@@ -445,7 +445,7 @@ class TestFileUploadView:
         client.get(url)
 
         log = AuditLog.objects.filter(action=AuditLog.Action.DOWNLOAD).latest("timestamp")
-        assert log.target_type == "EventAttachment"
+        assert log.target_type == "Attachment"
         assert log.target_id == str(attachment.pk)
 
     def test_download_rate_limited_after_120_requests(self, client, staff_user, event_with_file, settings):
@@ -629,7 +629,7 @@ class TestFileValidation:
         )
         # Should stay on the form (not redirect)
         assert response.status_code == 200
-        assert EventAttachment.objects.count() == 0
+        assert Attachment.objects.count() == 0
 
     def test_oversized_file_rejected(self, client, staff_user, facility, doc_type_with_file):
         dt, _, _ = doc_type_with_file
@@ -649,7 +649,7 @@ class TestFileValidation:
             },
         )
         assert response.status_code == 200
-        assert EventAttachment.objects.count() == 0
+        assert Attachment.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -684,7 +684,7 @@ class TestVirusScanIntegration:
 
         assert "Eicar-Test-Signature" in str(exc_info.value)
         # Keine Attachment-Zeile, keine verschlüsselte Datei auf Platte.
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_infected_file_creates_security_violation_audit_log(self, facility, staff_user, doc_type_with_file):
         event, ft_file = self._event(facility, staff_user, doc_type_with_file)
@@ -721,7 +721,7 @@ class TestVirusScanIntegration:
         ):
             store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "virus_scanner_unavailable"
 
@@ -736,12 +736,12 @@ class TestVirusScanIntegration:
             attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         assert attachment.pk is not None
-        assert EventAttachment.objects.filter(event=event).count() == 1
+        assert Attachment.objects.filter(event=event).count() == 1
 
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
-class TestEventAttachmentAtomicity:
+class TestAttachmentAtomicity:
     """Event-ORM und Dateioperationen müssen atomar sein (Refs #584).
 
     Scheitert `store_encrypted_file`, darf weder das Event noch der
@@ -769,7 +769,7 @@ class TestEventAttachmentAtomicity:
         uploaded = SimpleUploadedFile("infected.pdf", PDF_HEADER, content_type="application/pdf")
 
         events_before = Event.objects.count()
-        attachments_before = EventAttachment.objects.count()
+        attachments_before = Attachment.objects.count()
 
         with patch(
             "core.views.events.prepare_encrypted_upload",
@@ -788,7 +788,7 @@ class TestEventAttachmentAtomicity:
         # Formular rendert, Event- und Attachment-Zählung unverändert.
         assert response.status_code == 200
         assert Event.objects.count() == events_before
-        assert EventAttachment.objects.count() == attachments_before
+        assert Attachment.objects.count() == attachments_before
 
     def test_update_preserves_old_file_when_new_upload_fails(
         self, client, staff_user, event_with_file, doc_type_with_file
@@ -819,10 +819,10 @@ class TestEventAttachmentAtomicity:
             )
 
         # Alter Attachment-Record unverändert, alte Datei noch auf Platte.
-        assert EventAttachment.objects.filter(pk=old_attachment.pk).exists()
+        assert Attachment.objects.filter(pk=old_attachment.pk).exists()
         assert old_path.exists()
         # Kein neuer Attachment-Record (Rollback).
-        assert EventAttachment.objects.filter(event=event).count() == 1
+        assert Attachment.objects.filter(event=event).count() == 1
         # Response: Redirect oder Form-Rerender, nie 500 — das Formular muss
         # in jedem Fall gnadenvoll wieder ins UI kommen.
         assert response.status_code in (200, 302)
@@ -834,7 +834,7 @@ class TestStorageOrphanCleanup:
     """Direct-Cleanup beim Service + periodisches Orphan-Cleanup (#662)."""
 
     def test_db_save_failure_removes_just_written_file(self, facility, staff_user, doc_type_with_file):
-        """Schlaegt EventAttachment.objects.create fehl, wird die ``.enc``-Datei
+        """Schlaegt Attachment.objects.create fehl, wird die ``.enc``-Datei
         in derselben Service-Funktion wieder geloescht — kein Orphan."""
         dt, _, ft_file = doc_type_with_file
         event = Event.objects.create(
@@ -852,7 +852,7 @@ class TestStorageOrphanCleanup:
             {p.name for p in fv._facility_dir(facility).glob("*.enc")} if fv._facility_dir(facility).exists() else set()
         )
 
-        with patch.object(EventAttachment.objects, "create", side_effect=RuntimeError("DB down")):
+        with patch.object(Attachment.objects, "create", side_effect=RuntimeError("DB down")):
             with pytest.raises(RuntimeError):
                 store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
@@ -864,11 +864,11 @@ class TestStorageOrphanCleanup:
     def test_cleanup_orphan_storage_files_removes_unreferenced(
         self, facility, staff_user, doc_type_with_file, settings
     ):
-        """Eine ``.enc``-Datei ohne ``EventAttachment``-Record und aelter als
+        """Eine ``.enc``-Datei ohne ``Attachment``-Record und aelter als
         ``min_age_seconds`` wird vom Cleanup-Helper entfernt."""
         from core.services.file_vault import cleanup_orphan_storage_files
 
-        # Echte EventAttachment-Datei legen (referenziert)
+        # Echte Attachment-Datei legen (referenziert)
         dt, _, ft_file = doc_type_with_file
         event = Event.objects.create(
             facility=facility,

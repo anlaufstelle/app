@@ -1,5 +1,5 @@
 from .activity import Activity
-from .attachment import EventAttachment
+from .attachment import Attachment
 from .audit import AuditLog
 from .case import Case
 from .client import Client
@@ -24,7 +24,7 @@ from .workitem import DeletionRequest, WorkItem
 __all__ = [
     "Activity",
     "AuditLog",
-    "EventAttachment",
+    "Attachment",
     "Case",
     "Client",
     "DeletionRequest",

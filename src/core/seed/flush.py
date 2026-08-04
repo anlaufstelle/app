@@ -4,6 +4,7 @@ from django.db import connection, transaction
 
 from core.models import (
     Activity,
+    Attachment,
     AuditLog,
     Case,
     Client,
@@ -12,7 +13,6 @@ from core.models import (
     DocumentTypeField,
     Episode,
     Event,
-    EventAttachment,
     EventHistory,
     Facility,
     FieldTemplate,
@@ -39,7 +39,7 @@ def flush_seed_data() -> None:
     nicht committed zurück. Refs #1040 (S1).
     """
     with transaction.atomic():
-        EventAttachment.objects.all().delete()
+        Attachment.objects.all().delete()
         Activity.objects.all().delete()
         LegalHold.objects.all().delete()
         RetentionProposal.objects.all().delete()

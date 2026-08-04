@@ -5,7 +5,7 @@
   unlinken, dann DB-Records loeschen.
 - :func:`cleanup_orphan_storage_files` ist der periodische Cron-Helper,
   der ``.enc``-Dateien ohne DB-Referenz findet (Race-Conditions zwischen
-  ``encrypt_file`` und ``EventAttachment.create`` koennen Orphans
+  ``encrypt_file`` und ``Attachment.create`` koennen Orphans
   hinterlassen — #662).
 """
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from django.conf import settings as django_settings
 
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.services.file_vault.storage import delete_attachment_file
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def delete_event_attachments(event):
 
 
 def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
-    """Loesche ``.enc``-Dateien ohne ``EventAttachment``-Record.
+    """Loesche ``.enc``-Dateien ohne ``Attachment``-Record.
 
     Auch nach dem Direct-Cleanup in :func:`store_encrypted_file` bleibt
     ein Restrisiko: schlaegt eine spaetere Operation in der umgebenden
@@ -52,7 +52,7 @@ def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
     if not media_root.exists():
         return 0
     cutoff = time.time() - min_age_seconds
-    known = set(EventAttachment.objects.values_list("storage_filename", flat=True))
+    known = set(Attachment.objects.values_list("storage_filename", flat=True))
     deleted = 0
     for enc_file in media_root.rglob("*.enc"):
         try:

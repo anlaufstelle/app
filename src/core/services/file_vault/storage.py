@@ -16,7 +16,7 @@ from pathlib import Path
 from django.conf import settings as django_settings
 from django.utils import timezone
 
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.file_vault.policy import (
     enforce_allowed_file_types,
@@ -38,7 +38,7 @@ def _facility_dir(facility):
 @dataclass
 class StagedUpload:
     """Ergebnis von :func:`prepare_encrypted_upload` — eine bereits verschluesselt
-    auf Disk liegende, aber noch NICHT als ``EventAttachment`` persistierte Datei.
+    auf Disk liegende, aber noch NICHT als ``Attachment`` persistierte Datei.
 
     Traegt alle Werte, die :func:`commit_staged_upload` fuer den reinen DB-Write
     braucht, sodass zwischen Scan/Encrypt (teuer, synchron) und dem DB-Insert
@@ -122,7 +122,7 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, event=None):
 
 def commit_staged_upload(event, field_template, staged, user, *, supersedes=None, sort_order=None):
     """Persistiere eine per :func:`prepare_encrypted_upload` gestagte Datei als
-    ``EventAttachment`` — reiner DB-Write (Refs #1345).
+    ``Attachment`` — reiner DB-Write (Refs #1345).
 
     Sicher innerhalb der Aufrufer-``transaction.atomic()`` aufzurufen: hier faellt
     kein ClamAV-Scan und keine Verschluesselung mehr an, nur der schnelle Insert.
@@ -147,7 +147,7 @@ def commit_staged_upload(event, field_template, staged, user, *, supersedes=None
             entry_id = uuid.uuid4()
             effective_sort = sort_order if sort_order is not None else 0
 
-        new_attachment = EventAttachment.objects.create(
+        new_attachment = Attachment.objects.create(
             event=event,
             field_template=field_template,
             storage_filename=staged.storage_name,
@@ -184,7 +184,7 @@ def store_encrypted_file(
     supersedes=None,
     sort_order=None,
 ):
-    """Encrypt and store an uploaded file. Returns EventAttachment instance.
+    """Encrypt and store an uploaded file. Returns Attachment instance.
 
     Duenner Wrapper um :func:`prepare_encrypted_upload` + :func:`commit_staged_upload`
     (Refs #1345). Fuer Aufrufer, die Scan/Encrypt und DB-Write NICHT trennen

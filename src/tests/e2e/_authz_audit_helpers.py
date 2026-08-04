@@ -178,7 +178,7 @@ _CONFORMABLE_EVENT = f"""
     LEFT JOIN core_client cl ON cl.id = e.client_id
     WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
     ORDER BY EXISTS (
-        SELECT 1 FROM core_eventattachment a WHERE a.event_id = e.id AND a.is_current
+        SELECT 1 FROM core_attachment a WHERE a.event_id = e.id AND a.is_current
     ) DESC, e.id
     LIMIT 1
 """  # noqa: S608 — nur statische Fragmente, keine Userdaten.
@@ -237,15 +237,15 @@ def prepare_audit_objects(conn, fac_id):
     #    der Guard prüft inkl. lead-Owner, der in Schritt 2 gesetzt wurde).
     cur.execute(
         f"""
-        UPDATE core_eventattachment SET event_id = ({_CONFORMABLE_EVENT})
+        UPDATE core_attachment SET event_id = ({_CONFORMABLE_EVENT})
         WHERE id = (
-            SELECT a.id FROM core_eventattachment a
+            SELECT a.id FROM core_attachment a
             JOIN core_event ae ON ae.id = a.event_id
             WHERE ae.facility_id = %(fac)s AND a.is_current
             ORDER BY a.id LIMIT 1
         )
         AND NOT EXISTS (
-            SELECT 1 FROM core_eventattachment a2
+            SELECT 1 FROM core_attachment a2
             JOIN core_event e ON e.id = a2.event_id
             JOIN core_documenttype dt ON dt.id = e.document_type_id
             LEFT JOIN core_client cl ON cl.id = e.client_id
@@ -322,7 +322,7 @@ def prepare_audit_objects(conn, fac_id):
         f"""
         UPDATE core_fieldtemplate SET sensitivity = ''
         WHERE id IN (
-            SELECT a.field_template_id FROM core_eventattachment a
+            SELECT a.field_template_id FROM core_attachment a
             WHERE a.is_current AND a.event_id = ({_CONFORMABLE_EVENT})
         )
         """,  # noqa: S608
@@ -384,7 +384,7 @@ HARVEST_SQL = {
         WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
           AND e.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s)
         ORDER BY EXISTS (
-            SELECT 1 FROM core_eventattachment a WHERE a.event_id = e.id AND a.is_current
+            SELECT 1 FROM core_attachment a WHERE a.event_id = e.id AND a.is_current
         ) DESC, e.id
         LIMIT 1
     """,  # noqa: S608
@@ -409,7 +409,7 @@ HARVEST_SQL = {
     # Attachment am selben Event, das die sample_event-Query liefert —
     # attachment_download kombiniert sample_event.pk + authz_attachment.pk.
     "authz_attachment": f"""
-        SELECT a.id FROM core_eventattachment a
+        SELECT a.id FROM core_attachment a
         WHERE a.is_current AND a.event_id = (
             SELECT e.id FROM core_event e
             JOIN core_documenttype dt ON dt.id = e.document_type_id
@@ -417,7 +417,7 @@ HARVEST_SQL = {
             WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
               AND e.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s)
             ORDER BY EXISTS (
-                SELECT 1 FROM core_eventattachment a2 WHERE a2.event_id = e.id AND a2.is_current
+                SELECT 1 FROM core_attachment a2 WHERE a2.event_id = e.id AND a2.is_current
             ) DESC, e.id
             LIMIT 1
         )

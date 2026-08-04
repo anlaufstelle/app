@@ -39,7 +39,7 @@ from tests.test_rls_functional import (  # noqa: F401
 JOIN_SCOPED_TABLES = frozenset(
     {
         "core_eventhistory",
-        "core_eventattachment",
+        "core_attachment",
         "core_episode",
         "core_outcomegoal",
         "core_milestone",

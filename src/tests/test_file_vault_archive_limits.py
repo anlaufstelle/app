@@ -22,7 +22,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.services.audit.hash import hmac_hash_value
 from core.services.file_vault import store_encrypted_file
 from core.services.file_vault.policy import enforce_archive_limits
@@ -246,7 +246,7 @@ class TestArchiveExpansionGuard:
 @pytest.mark.usefixtures("_encryption_key")
 class TestArchiveGuardWiring:
     """Der Guard ist in ``store_encrypted_file`` verdrahtet und greift VOR der
-    Verschlüsselung (kein EventAttachment, keine Datei auf der Disk)."""
+    Verschlüsselung (kein Attachment, keine Datei auf der Disk)."""
 
     def test_zip_bomb_rejected_end_to_end(self, facility_with_settings, staff_user, doc_type_with_file, settings):
         settings.FILE_VAULT_MAX_ARCHIVE_RATIO = 10
@@ -264,6 +264,6 @@ class TestArchiveGuardWiring:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, upload, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "archive_bomb"

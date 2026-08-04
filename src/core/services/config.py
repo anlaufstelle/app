@@ -35,13 +35,13 @@ from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
 from core.models import (
+    Attachment,
     AuditLog,
     Case,
     Client,
     DocumentType,
     DocumentTypeField,
     Event,
-    EventAttachment,
     FieldCondition,
     FieldGroup,
     FieldTemplate,
@@ -221,7 +221,7 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
 
     a) **DocumentTypeField-Zuordnungen** (``CASCADE``) — würden beim Delete
        still mitgelöscht, daher **vor** dem Delete prüfen.
-    b) **EventAttachment-Referenzen** (``PROTECT``).
+    b) **Attachment-Referenzen** (``PROTECT``).
     c) **Daten unter dem Slug** in ``Event``, ``Client`` **und** ``Case`` — das
        ``pre_delete``-Signal (#356) würfe sonst eine ``ProtectedError``.
        Personen/Fälle tragen seit M2 (Refs #1058) dieselben — auch
@@ -237,7 +237,7 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
             % {"n": dtf_count}
         )
 
-    attachment_count = EventAttachment.objects.filter(field_template=field_template).count()
+    attachment_count = Attachment.objects.filter(field_template=field_template).count()
     if attachment_count:
         reasons.append(_("%(n)d Dateianhang/-anhänge sind an diese Feldvorlage gebunden.") % {"n": attachment_count})
 

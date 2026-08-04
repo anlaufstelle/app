@@ -461,7 +461,7 @@ def anonymize_client(client, user=None):
     - ``EventHistory.data_before``/``data_after`` für alle Events des
       Klienten — append-only-Trigger (Migration 0012) wird transaktional
       umgangen, sonst blockt das ``UPDATE``.
-    - ``EventAttachment``: Disk-Files + DB-Zeilen via
+    - ``Attachment``: Disk-Files + DB-Zeilen via
       :func:`core.services.file_vault.delete_event_attachments`.
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta

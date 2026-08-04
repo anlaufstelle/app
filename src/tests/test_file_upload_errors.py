@@ -41,7 +41,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001
 from cryptography.fernet import Fernet  # noqa: E402
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
-from core.models.attachment import EventAttachment  # noqa: E402
+from core.models.attachment import Attachment  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
 
 VALID_PDF_BYTES = (
@@ -196,7 +196,7 @@ class TestEmptyFile:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
 
 @pytest.mark.django_db
@@ -217,7 +217,7 @@ class TestServiceSizeCap:
         oversize = SimpleUploadedFile("big.pdf", VALID_PDF_BYTES + b"a" * 2048, content_type="application/pdf")
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, oversize, ft_file, event, staff_user)
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_service_accepts_file_within_cap(
         self, facility_with_settings, staff_user, doc_type_with_file, event, settings
@@ -271,7 +271,7 @@ class TestImageDecompressionBomb:
         uploaded = SimpleUploadedFile("bomb.png", buf.getvalue(), content_type="image/png")
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_small_image_within_cap_accepted(
         self, facility_with_settings, staff_user, doc_type_with_file, event, settings

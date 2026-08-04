@@ -16,7 +16,7 @@ from core.models import (
     WorkItem,
 )
 from core.models.activity import Activity
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 
 # Felder mit eigenem Format-Validator, die nicht über reine CharField-Länge
 # getestet werden sollen (würde an Format-Checks scheitern und vom Längen-
@@ -277,7 +277,7 @@ class TestMaxLengthActivity:
 
 
 # ---------------------------------------------------------------------------
-# EventAttachment
+# Attachment
 # ---------------------------------------------------------------------------
 
 
@@ -286,8 +286,8 @@ class TestMaxLengthAttachment:
     def test_charfields_respect_max_length(self, sample_event, staff_user):
         from core.models import FieldTemplate
 
-        fields = _textfields_with_maxlength(EventAttachment)
-        assert fields, "Kein passendes max_length-CharField an EventAttachment gefunden"
+        fields = _textfields_with_maxlength(Attachment)
+        assert fields, "Kein passendes max_length-CharField an Attachment gefunden"
 
         # Ein FieldTemplate aus dem doc_type des sample_event ziehen.
         field_template = FieldTemplate.objects.filter(facility=sample_event.facility).first()
@@ -304,7 +304,7 @@ class TestMaxLengthAttachment:
                 "created_by": staff_user,
             }
             defaults.update(overrides)
-            return EventAttachment(**defaults)
+            return Attachment(**defaults)
 
         for name, n in fields:
             _assert_length_boundary(make, name, n)

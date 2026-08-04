@@ -409,7 +409,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             # Refs #1345: JEDE Nicht-Commit-Ausgang (Rollback, Duplikat-Redirect,
             # unerwartete Exception) laesst die pre-tx verschluesselten ``.enc``
             # verwaisen — restlos entfernen. Bei erfolgreichem Commit sind sie
-            # ueber gueltige ``EventAttachment``-Zeilen erreichbar und bleiben.
+            # ueber gueltige ``Attachment``-Zeilen erreichbar und bleiben.
             if not committed:
                 for staged in staged_all:
                     staged.output_path.unlink(missing_ok=True)

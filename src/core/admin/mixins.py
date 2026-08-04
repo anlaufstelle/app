@@ -171,7 +171,7 @@ class ReadOnlyDomainAdminMixin(FacilityScopedAdminMixin):
     Service-Schicht. Ein direkter Admin-Save würde all das umgehen. Deshalb ist
     Schreiben (Add/Change/Delete) gesperrt; die Read-Only-Sicht (View) bleibt
     erhalten — konsistent mit den bereits append-only gestellten Admins
-    (EventHistory/EventAttachment/AuditLog/DeletionRequest).
+    (EventHistory/Attachment/AuditLog/DeletionRequest).
 
     Erbt das Facility-Scoping (get_queryset) aus
     :class:`FacilityScopedAdminMixin`; die Write-Pfade (save_model,

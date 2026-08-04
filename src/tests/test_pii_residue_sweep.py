@@ -158,7 +158,7 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
 #   - create_event      -> core_event.search_text (aus data_json/Field-Slug)
 #                          + core_eventhistory.data_after (CREATE) + Activity
 #   - EventHistory.create-> core_eventhistory.{data_before,data_after} (UPDATE)
-#   - store_encrypted_file-> core_eventattachment (Name Fernet-verschluesselt:
+#   - store_encrypted_file-> core_attachment (Name Fernet-verschluesselt:
 #                          strukturell geprueft, NICHT per Needle-Scan)
 #   - request_deletion   -> core_deletionrequest.reason
 #   - approve_deletion   -> seit #1093 KEINE Klienten-PII mehr in
@@ -347,7 +347,7 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         data_after={ft_notiz.slug: "RESIDUEPROBE-Verlauf neu"},
     )
 
-    # 5b) Verschluesselter Dateianhang (core_eventattachment). Der Klartext-
+    # 5b) Verschluesselter Dateianhang (core_attachment). Der Klartext-
     #     Dateiname wird Fernet-verschluesselt abgelegt — der Needle erscheint
     #     NICHT in der DB. Das Attachment wird daher strukturell (Loeschung)
     #     geprueft, nicht per Needle-Scan.
@@ -450,12 +450,12 @@ def test_no_residue_after_anonymize(maximal_pii_graph, table):
 
 @pytest.mark.django_db
 def test_attachments_deleted_after_anonymize(maximal_pii_graph):
-    from core.models import EventAttachment
+    from core.models import Attachment
 
     g = maximal_pii_graph
-    assert EventAttachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
+    assert Attachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
     g.client.anonymize()
-    assert EventAttachment.objects.filter(event=g.event).count() == 0
+    assert Attachment.objects.filter(event=g.event).count() == 0
 
 
 # --------------------------------------------------------------------------
@@ -478,7 +478,7 @@ def test_attachments_deleted_after_anonymize(maximal_pii_graph):
 
 @pytest.mark.django_db
 def test_event_content_gone_after_soft_delete(maximal_pii_graph, admin_user, lead_user):
-    from core.models import EventAttachment
+    from core.models import Attachment
     from core.services.events import approve_deletion, request_deletion
 
     g = maximal_pii_graph
@@ -494,7 +494,7 @@ def test_event_content_gone_after_soft_delete(maximal_pii_graph, admin_user, lea
     assert not event_hits, f"Event-Inhalt nach Soft-Delete nicht entfernt:\n{_fmt(event_hits)}"
 
     # Anhaenge des Events geloescht.
-    assert EventAttachment.objects.filter(event=g.event).count() == 0
+    assert Attachment.objects.filter(event=g.event).count() == 0
 
 
 # --------------------------------------------------------------------------
@@ -842,10 +842,10 @@ def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, adm
     reisst dieser Test, statt dass verschluesselte Klientendateien still
     ueberleben.
     """
-    from core.models import EventAttachment
+    from core.models import Attachment
 
     g = maximal_pii_graph
-    assert EventAttachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
+    assert Attachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
 
     _arm_retention_k_anonymization(g, admin_user, lead_user)
     from core.retention.anonymization import anonymize_clients
@@ -854,4 +854,4 @@ def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, adm
 
     g.client.refresh_from_db()
     assert g.client.k_anonymized is True
-    assert EventAttachment.objects.filter(event=g.event).count() == 0
+    assert Attachment.objects.filter(event=g.event).count() == 0

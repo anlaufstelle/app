@@ -303,7 +303,7 @@ def test_reencrypt_output_line_includes_client_and_case_counts(
 @pytest.mark.django_db
 class TestReencryptFieldsRlsBypassGuard:
     """Final-Review A/Split (Refs #1058): ``reencrypt_fields`` iteriert
-    ``Event``/``EventHistory``/``EventAttachment``/``Client``/``Case`` — alles
+    ``Event``/``EventHistory``/``Attachment``/``Client``/``Case`` — alles
     FORCE-RLS-Tabellen. Als App-Rolle (NOBYPASSRLS, kein
     ``app.current_facility_id``) sähe der Lauf 0 Zeilen, meldete aber Erfolg;
     die Rotations-Prozedur im Admin-Guide würde daraufhin den Alt-Schlüssel

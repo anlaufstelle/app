@@ -33,7 +33,7 @@ def test_all_core_models_registered_with_custom_site():
         User,
         WorkItem,
     )
-    from core.models.attachment import EventAttachment
+    from core.models.attachment import Attachment
 
     expected_models = {
         User,
@@ -45,7 +45,7 @@ def test_all_core_models_registered_with_custom_site():
         QuickTemplate,
         Event,
         EventHistory,
-        EventAttachment,
+        Attachment,
         TimeFilter,
         WorkItem,
         DeletionRequest,

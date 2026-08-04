@@ -1,4 +1,4 @@
-"""Re-encrypt all encrypted Event/EventHistory/EventAttachment/Client/Case fields
+"""Re-encrypt all encrypted Event/EventHistory/Attachment/Client/Case fields
 with the current primary key.
 
 A4.4 (Refs #1024): Für ``Event.data_json`` werden zusätzlich Plaintext-PII-Felder
@@ -17,7 +17,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from core.models import Case, Client, Event, EventHistory
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.services.file_vault import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import bypass_replication_triggers
 
@@ -49,7 +49,7 @@ class Command(BaseCommand):
     help = (
         "Re-encrypt all encrypted fields with the current primary encryption key — "
         "Event.data_json, EventHistory.data_before/data_after, "
-        "EventAttachment.original_filename_encrypted (Refs #783), TOTP-Secrets "
+        "Attachment.original_filename_encrypted (Refs #783), TOTP-Secrets "
         "(Refs #1362), Client.data_json, Case.data_json (Refs #1058). Heilt zusätzlich "
         "Plaintext-PII in Event/Client/Case.data_json (Refs #1024 A4.4, #1058)."
     )
@@ -58,7 +58,7 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true", help="Show what would be re-encrypted without saving.")
 
     def handle(self, *args, **options):
-        # Final-Review A/Split (Refs #1058): Event/EventHistory/EventAttachment/
+        # Final-Review A/Split (Refs #1058): Event/EventHistory/Attachment/
         # Client/Case stehen unter FORCE RLS. Als App-Rolle ohne Bypass-Kontext
         # liefen alle Schleifen ueber 0 Zeilen und der Command meldete trotzdem
         # Erfolg — die Rotations-Prozedur (docs/admin-guide.md § Schluessel-
@@ -281,12 +281,12 @@ class Command(BaseCommand):
         return "contended"
 
     def _reencrypt_attachments(self, dry_run: bool) -> int:
-        """``EventAttachment.original_filename_encrypted`` ist ein Fernet-
+        """``Attachment.original_filename_encrypted`` ist ein Fernet-
         verschluesseltes JSON-Marker-Dict. Hier reicht ein normales Save —
         keine append-only-Trigger schuetzen die Tabelle.
         """
         updated = 0
-        for att in EventAttachment.objects.iterator(chunk_size=500):
+        for att in Attachment.objects.iterator(chunk_size=500):
             value = att.original_filename_encrypted
             if not is_encrypted_value(value):
                 continue

@@ -99,7 +99,7 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
             )
             # Refs #1344: Anhang-Cleanup MUSS in DERSELBEN Transaktion liegen.
             # Der physische ``.enc``-Unlink ist zwar nicht rollback-bar, aber die
-            # zugehoerigen ``EventAttachment``-Record-Deletes UND der Event-Commit
+            # zugehoerigen ``Attachment``-Record-Deletes UND der Event-Commit
             # rollen bei einem Crash gemeinsam zurueck: das Event bleibt dann
             # ``is_deleted=False`` und der naechste Lauf raeumt selbstheilend auf
             # (``delete_attachment_file`` ist ``unlink(missing_ok)`` -> idempotent).

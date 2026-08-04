@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.services.events import (
     is_multi_file_marker,
     is_singleton_file_marker,
@@ -235,7 +235,7 @@ class TestUpdateFlowAddReplaceRemove:
         entries = event.data_json["anhang"]["entries"]
         assert len(entries) == 1
         # Gesoft-gedeleted — nicht mehr in current.
-        assert EventAttachment.objects.filter(event=event, is_current=True, deleted_at__isnull=True).count() == 1
+        assert Attachment.objects.filter(event=event, is_current=True, deleted_at__isnull=True).count() == 1
 
     def test_remove_all_files_removes_marker(self, client, staff_user, facility, doc_type_with_file):
         dt, _ft = doc_type_with_file
@@ -469,18 +469,18 @@ class TestApplyAttachmentChangesQueryCount:
             )
 
         # Vor dem Fix lief je Entry ein eigenes ``filter(pk=...).first()``-SELECT —
-        # also mind. 5 SELECTs auf ``core_eventattachment``. Nach dem Fix bleibt
+        # also mind. 5 SELECTs auf ``core_attachment``. Nach dem Fix bleibt
         # die Lookup-Phase konstant: 1 Bulk-SELECT (``pk__in=ids``).
         # Die UPDATEs aus ``soft_delete_attachment_chain`` sind unabhaengig
         # davon und sind nicht Teil des N+1.
         attachment_selects = [
             q["sql"]
             for q in ctx.captured_queries
-            if "core_eventattachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
+            if "core_attachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
         ]
         assert len(attachment_selects) <= 2, (
             f"REMOVE darf keinen SELECT-N+1 verursachen — gemessen: "
-            f"{len(attachment_selects)} SELECTs auf core_eventattachment bei 5 Entries.\n"
+            f"{len(attachment_selects)} SELECTs auf core_attachment bei 5 Entries.\n"
             f"Queries: {attachment_selects}"
         )
 
@@ -489,7 +489,7 @@ class TestApplyAttachmentChangesQueryCount:
 class TestBuildAttachmentContextQueryCount:
     """Refs #894: ``build_attachment_context`` lud pro File-Marker
     eine eigene ``event.attachments.filter(pk=...).first()``-Query — N+1.
-    Nach dem Fix laeuft ein einziger Bulk-SELECT auf ``core_eventattachment``,
+    Nach dem Fix laeuft ein einziger Bulk-SELECT auf ``core_attachment``,
     egal wie viele Entries das Event hat.
     """
 
@@ -516,12 +516,12 @@ class TestBuildAttachmentContextQueryCount:
         return [
             q["sql"]
             for q in ctx.captured_queries
-            if "core_eventattachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
+            if "core_attachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
         ]
 
     def test_constant_select_count_regardless_of_entries(self, facility, staff_user, doc_type_with_file):
         """Egal ob 1 oder 5 File-Entries — die Anzahl SELECTs auf
-        ``core_eventattachment`` bleibt konstant (1 Bulk-Load)."""
+        ``core_attachment`` bleibt konstant (1 Bulk-Load)."""
         dt, ft = doc_type_with_file
         small = self._build_event_with_entries(facility, staff_user, dt, ft, entries=1)
         large = self._build_event_with_entries(facility, staff_user, dt, ft, entries=5)
@@ -538,7 +538,7 @@ class TestBuildAttachmentContextQueryCount:
         )
         assert len(large_selects) <= 1, (
             f"build_attachment_context sollte einen einzigen SELECT auf "
-            f"core_eventattachment ausloesen — gemessen: {len(large_selects)}.\n"
+            f"core_attachment ausloesen — gemessen: {len(large_selects)}.\n"
             f"Queries: {large_selects}"
         )
 

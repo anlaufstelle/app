@@ -42,8 +42,8 @@ class TestLogAttachmentViolationTarget:
         - ``mutmut_2``: ``getattr(event, "pk", None)`` → ``getattr(None, "pk", None)``
           (immer ``None`` → ``target_id`` fällt auf ``None``).
         - ``mutmut_18``: ``target_id=target_id`` am Aufruf entfernt (Default ``None``).
-        - ``mutmut_11``: ``target_type="EventAttachment"`` → ``target_type=None``.
-        - ``mutmut_22``: ``"EventAttachment"`` → ``"XXEventAttachmentXX"``.
+        - ``mutmut_11``: ``target_type="Attachment"`` → ``target_type=None``.
+        - ``mutmut_22``: ``"Attachment"`` → ``"XXAttachmentXX"``.
 
         Der SECURITY_VIOLATION-Eintrag ist die forensische Spur eines
         abgewiesenen Uploads — Ziel-Typ und die Event-Zuordnung müssen exakt
@@ -59,7 +59,7 @@ class TestLogAttachmentViolationTarget:
             filename="schaden.exe",
         )
         assert entry is not None
-        assert entry.target_type == "EventAttachment"  # mutmut_11 (None) + mutmut_22 (XX…XX)
+        assert entry.target_type == "Attachment"  # mutmut_11 (None) + mutmut_22 (XX…XX)
         assert entry.target_id == str(4242)  # mutmut_1 + mutmut_2 + mutmut_18
 
     def test_target_id_none_when_event_has_no_pk(self, facility, staff_user):
@@ -76,5 +76,5 @@ class TestLogAttachmentViolationTarget:
             filename="virus.pdf",
         )
         assert entry is not None
-        assert entry.target_type == "EventAttachment"
+        assert entry.target_type == "Attachment"
         assert entry.target_id in ("", None)

@@ -40,7 +40,7 @@ from core.models import (  # noqa: E402
     FieldTemplate,
     Settings,
 )
-from core.models.attachment import EventAttachment  # noqa: E402
+from core.models.attachment import Attachment  # noqa: E402
 from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
 
@@ -123,7 +123,7 @@ class TestFileVaultFailClosed:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, self._exe_upload(), ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "extension_not_allowed"
         assert "filename" not in log.detail  # Refs #1751: write-time minimiert
@@ -141,7 +141,7 @@ class TestFileVaultFailClosed:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, self._exe_upload(), ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_whitespace_only_allowed_file_types_rejects_exe(self, facility, staff_user, doc_type_with_file, event):
         """Case 3: Settings.allowed_file_types == ' , , ' → Default-Whitelist greift."""
@@ -154,7 +154,7 @@ class TestFileVaultFailClosed:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, self._exe_upload(), ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_no_settings_row_accepts_pdf_via_default(self, facility, staff_user, doc_type_with_file, event):
         """Default-Whitelist erlaubt legitime Uploads (pdf), damit der Operator

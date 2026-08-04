@@ -2,7 +2,7 @@
 ``core.services.file_vault.cleanup`` (Refs #1388).
 
 ``cleanup_orphan_storage_files`` ist der periodische Cron-Helfer, der
-verwaiste ``.enc``-Dateien (ohne ``EventAttachment``-Record) löscht (#662).
+verwaiste ``.enc``-Dateien (ohne ``Attachment``-Record) löscht (#662).
 Sicherheitsrelevant, weil er direkt Dateien im Vault ``unlink``t: ein Fehler
 im Altersschutz oder im Zähler löscht entweder frische, noch nicht
 registrierte Uploads (Datenverlust) oder meldet eine falsche Bilanz.

@@ -8,7 +8,7 @@ sensitivity override.
 from django.http import Http404
 
 from core.models import DocumentType, Event
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 from core.models.user import User
 
 # Ordered sensitivity levels for comparison
@@ -102,10 +102,10 @@ def get_visible_attachment_or_404(user, facility, event_pk, attachment_pk):
     """
     event = get_visible_event_or_404(user, facility, event_pk, select_related=("document_type",))
     # L5 (Refs #1375): ``deleted_at__isnull=True`` schliesst soft-geloeschte
-    # Anhaenge aus. ``EventAttachment`` hat ein ``deleted_at``, aber keinen
+    # Anhaenge aus. ``Attachment`` hat ein ``deleted_at``, aber keinen
     # Soft-Delete-Manager — ohne diesen Filter blieb ein vom User entfernter
     # Anhang per Direkt-URL (Download-View) weiter abrufbar.
-    attachment = EventAttachment.objects.filter(pk=attachment_pk, event=event, deleted_at__isnull=True).first()
+    attachment = Attachment.objects.filter(pk=attachment_pk, event=event, deleted_at__isnull=True).first()
     if attachment is None:
         raise Http404("Attachment not found")
     return event, attachment

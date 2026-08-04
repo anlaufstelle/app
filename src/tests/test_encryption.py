@@ -466,10 +466,10 @@ def test_reencrypt_command_key_rotation(facility, client_identified, doc_type_cr
 def test_reencrypt_command_rotates_event_history_and_attachments(
     facility, client_identified, doc_type_crisis, staff_user
 ):
-    """Refs #783: reencrypt_fields rotiert auch EventHistory + EventAttachment.
+    """Refs #783: reencrypt_fields rotiert auch EventHistory + Attachment.
 
     Vor dem Fix iterierte das Command nur Event.data_json. EventHistory.data_before/
-    data_after und EventAttachment.original_filename_encrypted blieben unter dem
+    data_after und Attachment.original_filename_encrypted blieben unter dem
     alten Schluessel verschluesselt — Key-Rotation effektiv unmoeglich, weil der
     alte Key fuer immer in ENCRYPTION_KEYS bleiben musste.
     """
@@ -478,7 +478,7 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
     from django.core.management import call_command
 
     from core.models import Event, EventHistory
-    from core.models.attachment import EventAttachment
+    from core.models.attachment import Attachment
 
     old_key = generate_key()
     new_key = generate_key()
@@ -503,9 +503,9 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
             data_after={"notiz-krise": encrypt_field("Nachher")},
             field_metadata=_snapshot_field_metadata(doc_type_crisis),
         )
-        # EventAttachment mit verschluesseltem Originalfilename
+        # Attachment mit verschluesseltem Originalfilename
         ft_crisis = doc_type_crisis.fields.first().field_template
-        att = EventAttachment.objects.create(
+        att = Attachment.objects.create(
             event=event,
             field_template=ft_crisis,
             storage_filename="test.enc",

@@ -182,11 +182,11 @@ class TestReadOnlyAdminPermissions:
         assert admin_cls.has_delete_permission(request) is False
 
     def test_event_attachment_admin_forbids_all_mutations(self, rf, admin_user):
-        from core.admin import EventAttachmentAdmin
-        from core.models import EventAttachment
+        from core.admin import AttachmentAdmin
+        from core.models import Attachment
 
         request = _make_admin_request(rf, admin_user, method="GET")
-        admin_cls = self._make_admin(EventAttachmentAdmin, EventAttachment)
+        admin_cls = self._make_admin(AttachmentAdmin, Attachment)
 
         assert admin_cls.has_add_permission(request) is False
         assert admin_cls.has_change_permission(request) is False

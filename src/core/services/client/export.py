@@ -614,7 +614,7 @@ def _gather_retention_proposals(facility, client, event_ids):
 
 
 # Refs #1752: Lesbare Kategorie je Audit-Zeile. Der rohe ``target_type``
-# („Client-JSON", „EventAttachment") ist interne Technik-Sprache; die Auskunft
+# („Client-JSON", „Attachment") ist interne Technik-Sprache; die Auskunft
 # soll sagen, *worauf* sich der Zugriff bezog.
 AUDIT_CATEGORY_OTHER = "Sonstiges"
 AUDIT_CATEGORIES = (

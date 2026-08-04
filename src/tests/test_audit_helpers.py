@@ -154,7 +154,7 @@ class TestAuditSecurityViolation:
         entry = audit_security_violation(
             facility,
             staff_user,
-            target_type="EventAttachment",
+            target_type="Attachment",
             target_id=sample_event.pk,
             reason="virus_detected",
             filename="malware.pdf",

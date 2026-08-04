@@ -47,7 +47,7 @@ damit vom Fehllauf betroffen gewesen waeren:
 ===========  ==========================================================
 Migration    Beruehrte RLS-Tabellen
 ===========  ==========================================================
-``0068``     ``core_eventattachment`` (JOIN-Policy)
+``0068``     ``core_attachment`` (JOIN-Policy)
 ``0071``     ``core_fieldtemplate``
 ``0074``     ``core_eventhistory`` (JOIN-Policy)
 ``0080``     ``core_case``

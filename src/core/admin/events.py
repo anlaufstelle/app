@@ -1,6 +1,6 @@
-"""Admin fuer Event, EventHistory, EventAttachment (Refs #785, #958).
+"""Admin fuer Event, EventHistory, Attachment (Refs #785, #958).
 
-EventHistory und EventAttachment sind append-only (Audit-Trail-Charakter):
+EventHistory und Attachment sind append-only (Audit-Trail-Charakter):
 keine Add/Change/Delete-Permissions. Facility-Scoping ueber event__facility,
 weil weder History noch Attachment ein direktes facility-FK haben.
 """
@@ -11,7 +11,7 @@ from unfold.admin import ModelAdmin
 from core.admin.mixins import AdminReadAuditMixin, ReadOnlyDomainAdminMixin, RoleBasedPermissionMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Event, EventHistory
-from core.models.attachment import EventAttachment
+from core.models.attachment import Attachment
 
 
 @admin.register(Event, site=anlaufstelle_admin_site)
@@ -46,8 +46,8 @@ class EventHistoryAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmi
         return False
 
 
-@admin.register(EventAttachment, site=anlaufstelle_admin_site)
-class EventAttachmentAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmin):
+@admin.register(Attachment, site=anlaufstelle_admin_site)
+class AttachmentAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmin):
     list_display = (
         "storage_filename",
         "event",
@@ -72,7 +72,7 @@ class EventAttachmentAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelA
     search_fields = ("storage_filename",)
 
     def get_queryset(self, request):
-        """EventAttachment hat kein direktes facility-FK -> ueber event__facility (Refs #785)."""
+        """Attachment hat kein direktes facility-FK -> ueber event__facility (Refs #785)."""
         qs = super().get_queryset(request)
         if request.user.is_super_admin:
             return qs

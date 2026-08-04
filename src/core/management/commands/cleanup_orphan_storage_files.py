@@ -1,7 +1,7 @@
 """Management command: orphan ``.enc``-Dateien aus dem Media-Root entfernen.
 
 Hintergrund (#662): :func:`store_encrypted_file` schreibt die
-verschluesselte Datei vor dem ``EventAttachment``-INSERT. Der Service
+verschluesselte Datei vor dem ``Attachment``-INSERT. Der Service
 selbst bereinigt synchrone Fehler. Wenn aber eine spaetere Operation in
 der umgebenden ``transaction.atomic``-Transaktion fehlschlaegt (z. B.
 ``EventHistory``-Save), rollt der DB-Record zurueck — die Datei bleibt
@@ -24,7 +24,7 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 
 class Command(BaseCommand):
-    help = "Loesche verschluesselte Dateien ohne EventAttachment-Record (Orphan-Cleanup)."
+    help = "Loesche verschluesselte Dateien ohne Attachment-Record (Orphan-Cleanup)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -41,7 +41,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Refs #1554 / #1016 A1.1: Wie enforce_retention/verify_audit_chain fail-loud.
         # cleanup_orphan_storage_files gleicht die ``.enc``-Dateien gegen die
-        # aktuell registrierten EventAttachment-``storage_filename`` ab. Als
+        # aktuell registrierten Attachment-``storage_filename`` ab. Als
         # RLS-gefilterte App-Rolle ohne Request-GUC sieht der Lauf 0 Zeilen — dann
         # gaelten ALLE Dateien als Orphan und wuerden geloescht. Der Cron MUSS als
         # Rolle mit BYPASSRLS (Admin) laufen — siehe dev-ops/deploy/install-timers.sh.
@@ -49,7 +49,7 @@ class Command(BaseCommand):
             raise CommandError(
                 "Orphan-Cleanup laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — "
-                "sonst saehe der Lauf 0 registrierte EventAttachments und wuerde JEDE "
+                "sonst saehe der Lauf 0 registrierte Attachments und wuerde JEDE "
                 "verschluesselte Datei als Orphan loeschen (Refs #1554 / #1016 A1.1; "
                 "ops-runbook §9)."
             )

@@ -118,7 +118,7 @@ class TestPurgeOrphanFieldData:
         uebersprungen und separat gezaehlt.
 
         Der Marker ist die einzige Bruecke zur verschluesselten
-        EventAttachment-Zeile: entfernte man ihn, verschonte
+        Attachment-Zeile: entfernte man ihn, verschonte
         cleanup_orphan_storage_files die Datei (die Attachment-Zeile existiert
         weiter) und sie waere UI-unsichtbar/unloeschbar — schlechter minimiert
         statt besser. Ein verwaister Klartext-Key faellt weiterhin.

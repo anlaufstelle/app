@@ -15,7 +15,7 @@ es werden nur Keys entfernt, keine Werte umgeschrieben.
 
 **Verwaiste FILE-Marker werden bewusst UEBERSPRUNGEN** (nur bei Ereignissen
 moeglich) und separat gezaehlt/gemeldet, statt geloescht: der ``data_json``-
-Marker ist die einzige Bruecke zur verschluesselten ``EventAttachment``-Zeile.
+Marker ist die einzige Bruecke zur verschluesselten ``Attachment``-Zeile.
 Loeschte man ihn hier, verschonte ``cleanup_orphan_storage_files`` die Datei (die
 Attachment-Zeile existiert weiter) und sie waere danach UI-unsichtbar und nur
 noch ueber die Klient-Hardloeschung erreichbar — schlechter minimiert statt
@@ -56,7 +56,7 @@ def _purge_entity_data_json(entity):
 
     ``skipped_file_keys`` sind verwaiste FILE-Marker (Refs #1725): sie werden
     bewusst NICHT entfernt (der Marker ist die einzige Bruecke zur
-    verschluesselten ``EventAttachment``-Zeile — s. Modul-Docstring) und bleiben
+    verschluesselten ``Attachment``-Zeile — s. Modul-Docstring) und bleiben
     daher in ``new_data`` erhalten; sie werden nur gezaehlt/gemeldet. ``new_data``
     enthaelt also genau die zugeordneten Keys **plus** die uebersprungenen
     FILE-Waisen — es fallen nur die verwaisten Nicht-Datei-Keys weg.

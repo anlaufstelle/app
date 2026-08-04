@@ -33,7 +33,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
-from core.models.attachment import EventAttachment  # noqa: E402
+from core.models.attachment import Attachment  # noqa: E402
 from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
 
@@ -131,7 +131,7 @@ class TestMagicBytesValidation:
         attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
         assert attachment.pk is not None
-        assert EventAttachment.objects.filter(event=event).count() == 1
+        assert Attachment.objects.filter(event=event).count() == 1
         assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
 
     def test_png_masquerading_as_pdf_rejected(self, facility_with_settings, staff_user, doc_type_with_file, event):
@@ -149,7 +149,7 @@ class TestMagicBytesValidation:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
@@ -203,7 +203,7 @@ class TestMagicBytesValidation:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "mime_mismatch"
 
@@ -220,7 +220,7 @@ class TestMagicBytesValidation:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
@@ -243,7 +243,7 @@ class TestMagicBytesValidation:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["detected"] == "application/octet-stream"
@@ -263,7 +263,7 @@ class TestMagicBytesValidation:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["detected"] == "application/pdf"
@@ -300,7 +300,7 @@ class TestAllowedFileTypesWhitelist:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "extension_not_allowed"
         assert log.detail["extension"] == "svg"
@@ -327,7 +327,7 @@ class TestAllowedFileTypesWhitelist:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         # Refs #1310 (S3): ``.pdf`` ist Strong-Magic → Reject via positive Allowlist.
         assert log.detail["reason"] == "magic_not_allowlisted"

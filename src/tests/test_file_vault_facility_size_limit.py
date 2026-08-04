@@ -35,7 +35,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
     )
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
-from core.models.attachment import EventAttachment  # noqa: E402
+from core.models.attachment import Attachment  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
 
 
@@ -104,7 +104,7 @@ class TestServiceLayerFacilySizeLimit:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, oversized, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.detail["reason"] == "file_too_large"
 
@@ -130,7 +130,7 @@ class TestServiceLayerFacilySizeLimit:
             store_encrypted_file(facility, replacement, ft_file, event, staff_user, supersedes=original_attachment)
 
         # Keine neue Version gespeichert, alte Version unangetastet.
-        assert EventAttachment.objects.filter(event=event).count() == 1
+        assert Attachment.objects.filter(event=event).count() == 1
         original_attachment.refresh_from_db()
         assert original_attachment.is_current is True
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
@@ -153,7 +153,7 @@ class TestServiceLayerFacilySizeLimit:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, oversized, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_no_settings_row_falls_back_to_default_max_mb(self, facility, staff_user, doc_type_with_file, event):
         """Fail-closed (Refs #771-Muster): fehlt die Settings-Row, greift
@@ -166,7 +166,7 @@ class TestServiceLayerFacilySizeLimit:
         with pytest.raises(ValidationError):
             store_encrypted_file(facility, oversized, ft_file, event, staff_user)
 
-        assert EventAttachment.objects.filter(event=event).count() == 0
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_replace_within_facility_limit_still_succeeds(self, facility, staff_user, doc_type_with_file, event):
         """Regressionsschutz: legitime Replace-Uploads unterhalb des
@@ -185,7 +185,7 @@ class TestServiceLayerFacilySizeLimit:
         )
 
         assert new_attachment.pk is not None
-        assert EventAttachment.objects.filter(event=event).count() == 2
+        assert Attachment.objects.filter(event=event).count() == 2
 
 
 @pytest.mark.django_db
@@ -218,7 +218,7 @@ class TestReplaceViewFacilySizeLimit:
         assert resp.status_code == 302
         event = Event.objects.get(document_type=doc_type)
         entry_id = event.attachments.get().entry_id
-        count_before = EventAttachment.objects.filter(event=event).count()
+        count_before = Attachment.objects.filter(event=event).count()
 
         replacement = SimpleUploadedFile(
             "big.pdf", _pdf_bytes(b"X" * (2 * 1024 * 1024)), content_type="application/pdf"
@@ -236,7 +236,7 @@ class TestReplaceViewFacilySizeLimit:
         msgs = [str(m) for m in get_messages(resp.wsgi_request)]
         assert any("groß" in m or "gross" in m for m in msgs), msgs
         # Keine neue Attachment-Version gespeichert (Facility-Limit hielt).
-        assert EventAttachment.objects.filter(event=event).count() == count_before
+        assert Attachment.objects.filter(event=event).count() == count_before
 
 
 @pytest.mark.django_db
@@ -267,7 +267,7 @@ class TestFormPathNoDoubleError:
         )
 
         assert resp.status_code == 200  # Formular-Re-Render, kein Redirect
-        assert EventAttachment.objects.count() == 0
+        assert Attachment.objects.count() == 0
         data_form = resp.context["data_form"]
         assert len(data_form.errors.get("anhang", [])) == 1
         # store_encrypted_file wurde nie aufgerufen -> kein service-layer

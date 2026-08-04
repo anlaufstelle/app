@@ -1,7 +1,7 @@
 """AuditLog-Sink fuer File-Vault-Sicherheitsverletzungen.
 
 Schmaler Wrapper um :func:`core.services.audit.audit_security_violation`,
-der den ``target_type="EventAttachment"`` und die ``target_id`` aus dem
+der den ``target_type="Attachment"`` und die ``target_id`` aus dem
 Event vereinheitlicht (``None`` bei Pre-Save-Rejects ohne Event-PK).
 Detail-Payload bleibt schema-stabil: ``reason``, ``filename_hash``,
 ``filename_ext`` plus optionale Extras (signature/extension/declared/
@@ -64,7 +64,7 @@ def log_attachment_violation(facility, user, event, *, reason, filename, **extra
     return audit_security_violation(
         facility,
         user,
-        target_type="EventAttachment",
+        target_type="Attachment",
         target_id=target_id,
         reason=reason,
         filename_hash=hmac_hash_value(filename),

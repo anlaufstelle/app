@@ -71,7 +71,7 @@ class TestCleanupOrphanStorageCommand:
 @pytest.mark.django_db
 class TestRlsBypassContextGuard:
     """Refs #1554 / #1016 A1.1: Der Orphan-Cleanup gleicht die ``.enc``-Dateien
-    gegen die aktuell registrierten ``EventAttachment``-``storage_filename`` ab.
+    gegen die aktuell registrierten ``Attachment``-``storage_filename`` ab.
     Als RLS-gefilterte App-Rolle ohne Request-GUC sieht der Lauf 0 Zeilen, haelt
     also ALLE Dateien fuer Orphans und wuerde jede ``.enc``-Datei > min-age
     loeschen. Deshalb **fail-loud** (CommandError, Exit != 0), statt destruktiv
