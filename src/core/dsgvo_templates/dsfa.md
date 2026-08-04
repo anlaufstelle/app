@@ -2,7 +2,7 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}
-**Version:** 1.3 (Softwarestand v0.23, 2026-08-04)
+**Version:** 1.4 (Softwarestand v0.23, 2026-08-04)
 
 ---
 
@@ -65,6 +65,16 @@ Ergänzende Regeln:
 - **4-Augen-Prinzip** für manuelle Löschungen personenbezogener Daten.
 - **Restrisiko:** Das Audit-Log ist unveränderlich (Nachweispflicht, Art. 5 Abs. 2) und wird von einer Anonymisierung **nicht** mitredigiert. Vorhandene Einträge verschwinden erst mit Frist 7 — bei `auditlog_retention_months = 0`, bei protokollierten Sicherheitsverstößen oder beim Nachweis herausgegebener Berichtszeiträume gar nicht — Letztere führen die auslösende Person und die Freitextfelder Empfänger/Zweck dauerhaft und unveränderbar mit.
 - Die Fristen werden durch den täglich laufenden Aufbewahrungs-Job durchgesetzt; ist der Job nicht eingerichtet, greift **keine** der sieben Fristen.
+
+### 2.4 Dokumentenablage an Person und Fall
+
+Dateien lassen sich nicht nur an einzelnen Ereignissen hinterlegen, sondern auch unmittelbar an einer **Person** und an einem **Fall** (z. B. Ausweiskopie, Mietvertrag, Bescheid). Datenschutzrechtlich gelten dafür dieselben Zusagen wie für Ereignis-Anhänge, mit einer eigenen Aufbewahrungslogik:
+
+- **Verschlüsselung at rest:** Der Dateiinhalt wird serverseitig verschlüsselt gespeichert (Fernet/MultiFernet, chunk-weise), der Originaldateiname ebenfalls; auf dem Datenträger liegt nur ein zufälliger Speichername. Die Datei durchläuft vor der Verschlüsselung dieselbe Prüfkette wie ein Ereignis-Anhang (Dateityp-Freigabe, Größenbegrenzung, Virenprüfung, Abgleich der Dateisignatur).
+- **Aufbewahrung nach dem Lebenszyklus der Person (Owner-Lebenszyklus):** Personen- und fallbezogene Dateien haben **keine eigene Zeitfrist**. Sie werden — Datei **und** Datenbankeintrag — mit der Anonymisierung der Person endgültig gelöscht, also nach Ablauf der Papierkorb-Frist (Frist 6) bzw. sobald alle Ereignisse der Person gelöscht sind. Das gilt auch für Dateien an den Fällen dieser Person; einen eigenen Löschlauf für Fälle gibt es nicht. Die Fristen 1–4 wirken ausschließlich auf Ereignisse und damit nur auf ereignisbezogene Anhänge.
+- **Entfernen in der Oberfläche ist noch keine Löschung:** Nimmt eine Fachkraft eine Datei aus einem Feld heraus oder ersetzt sie durch eine neuere Fassung, bleibt die bisherige Fassung als frühere Version gespeichert und wird lediglich als entfernt bzw. ersetzt gekennzeichnet. Auch ein Wechsel des Dokumentationstyps verwirft die Dateien nicht, sondern markiert sie nur.
+- **Restrisiko:** Aus beidem folgt, dass eine personen- oder fallbezogene Datei bis zur Anonymisierung der Person auf dem Server verschlüsselt vorhanden bleibt — im ungünstigsten Fall also über die Papierkorb-Frist hinweg, obwohl sie in der Oberfläche längst entfernt wurde. Wo das nicht hinnehmbar ist, bleibt die manuelle Sofort-Anonymisierung der Person durch die Anwendungsbetreuung; sie löscht alle zugehörigen Dateien physisch.
+- **Auskunftsrecht (Art. 15):** Die Datenauskunft weist zu jeder Datei die **Angaben** aus — Feld, Dateiname, Größe, Dateityp, Zeitpunkt und hochladende Person sowie den Stand (aktuell, ersetzt, entfernt), nicht jedoch den Dateiinhalt. Die Dateien selbst werden auf Anforderung über den regulären Download herausgegeben.
 
 ---
 
