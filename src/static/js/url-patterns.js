@@ -71,7 +71,9 @@
     // Refs #567). Ein Eintrag hier ergäbe einen toten Queue-Pfad — genau die
     // Falle, die #1489 im Event-Formular aufgeräumt hat. Voraussetzung für eine
     // spätere Aufnahme ist das Enctype-Downgrade (``event-form-enctype.js``),
-    // das an beiden Formularen bereits inert anliegt.
+    // das an beiden Formularen bereits anliegt und dort auch greift (ohne
+    // gewählte Datei geht der Submit als ``urlencoded`` raus) — serverseitig
+    // folgenlos, weil Django beide Kodierungen gleich parst.
     self.URL_PATTERNS.QUEUE_PATTERNS = [
         self.URL_PATTERNS.EVENT_NEW,
         self.URL_PATTERNS.EVENT_EDIT,

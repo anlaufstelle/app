@@ -726,13 +726,19 @@ class TestFormTemplatesAreMultipart:
 
 
 class TestFormTemplatesCarryOfflineDowngrade:
-    """AP5 (Refs #1738, ADR-039 §8): inertes Enctype-Downgrade an beiden Formularen.
+    """AP5 (Refs #1738, ADR-039 §8): Enctype-Downgrade an beiden Formularen.
 
-    Personen-/Fall-Formulare sind bewusst **nicht** queuebar (multipart, siehe
-    Warnkommentar an ``QUEUE_PATTERNS``). Attribut und Script liegen trotzdem
-    an, damit eine spaetere Queuebarkeit nicht an einem vergessenen Detail
-    scheitert — und damit dieses Zukunftsversprechen nicht still aus den
-    Templates verschwindet, pinnt dieser Guard es.
+    Das Script ist **aktiv**, nicht inert (Praezisierung aus dem
+    Integrations-Review): es senkt bei JEDEM Submit ohne gewaehlte Datei das
+    ``enctype`` auf ``urlencoded``. Serverseitig ist das folgenlos — Django
+    parst beide Kodierungen gleich.
+
+    Der Zweck liegt in der Zukunft: Personen-/Fall-Formulare sind bewusst
+    **nicht** queuebar (multipart, siehe Warnkommentar an ``QUEUE_PATTERNS``),
+    und genau dieser Downgrade waere die Voraussetzung dafuer, dass der Service
+    Worker einen reinen Text-Submit spaeter annehmen darf. Damit dieses
+    Zukunftsversprechen nicht still aus den Templates verschwindet, pinnt
+    dieser Guard es.
     """
 
     @pytest.mark.parametrize("template", FORM_TEMPLATES)

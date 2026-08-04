@@ -14,12 +14,13 @@
     {% comment %}M24/AP4 (Refs #1738, ADR-039): multipart — Personen-Typen dürfen
     Datei-Felder tragen.{% endcomment %}
     {% comment %}AP5 (Refs #1738, ADR-039 §8): ``data-offline-enctype-downgrade``
-    ist hier INERT — Personen-/Fall-Formulare stehen bewusst NICHT in
-    ``QUEUE_PATTERNS`` und werden offline nie gequeued. Attribut und Script
-    liegen trotzdem an, damit eine spätere Queuebarkeit nicht an einem
-    vergessenen Detail scheitert: der Downgrade auf ``urlencoded`` (wenn keine
-    Datei gewählt ist) ist die Voraussetzung dafür, dass der Service Worker
-    einen reinen Text-Submit überhaupt annehmen darf (Refs #1489).{% endcomment %}
+    ist hier AKTIV, aber wirkungslos für den Server. Das Script senkt bei JEDEM
+    Submit ohne gewählte Datei das ``enctype`` auf ``urlencoded`` — Django parst
+    beide Kodierungen gleich, am Ergebnis ändert sich nichts. Personen-/Fall-
+    Formulare stehen bewusst NICHT in ``QUEUE_PATTERNS`` und werden offline nie
+    gequeued; Attribut und Script liegen trotzdem an, weil genau dieser
+    Downgrade die Voraussetzung dafür ist, dass der Service Worker einen reinen
+    Text-Submit später überhaupt annehmen darf (Refs #1489).{% endcomment %}
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade
           {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
           data-confirm-discard="{% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} Datei entfernt.{% plural %}Außerdem werden {{ f }} Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Datei wird beim Speichern entfernt und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Dateien werden beim Speichern entfernt und lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}"{% endif %}>
@@ -72,6 +73,6 @@
 {% endblock %}
 
 {% block extra_js %}
-{# AP5 (Refs #1738): siehe Kommentar am <form> — inertes Enctype-Downgrade. #}
+{# AP5 (Refs #1738): siehe Kommentar am <form> — Enctype-Downgrade ohne gewählte Datei. #}
 <script src="{% static 'js/event-form-enctype.js' %}" defer></script>
 {% endblock %}
