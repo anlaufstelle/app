@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) and 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738).
 
 # Anlaufstelle -- User Guide
 
@@ -219,13 +219,18 @@ If your administrator has set up **quick templates** for recurring documentation
 
 A file can be attached to each event -- for example, a scanned form, a photo of a document, or a PDF.
 
-- **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual.
+> **On clients and cases as well:** File fields are no longer restricted to events. If your administrator has set up a file field on a **client** or **case type**, it appears in the client's or the case's form and works exactly as described here -- upload, replacement with previous versions, download from the detail view. Two differences: **case files** can only be seen and downloaded by social workers, leads, and administrators (assistants have no access to cases), and files on a client or a case are **deleted together with the client** -- they have no retention period of their own.
+
+- **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual. On clients and cases it works identically: pick the file in the form, save the record.
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
 - **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
 - **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your administrator can adjust this limit.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
-- **Download:** Open the detail view of the event and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
-- **Replacing (with version history):** When editing an event, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the event detail page via an expandable accordion. Previous versions are only removed when the event itself is fully deleted.
+- **Download:** Open the detail view of the event (or of the client or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
+- **Replacing (with version history):** When editing, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the detail view via an expandable accordion. Previous versions are only removed when the record itself is fully deleted. This applies to events, clients, and cases alike.
+- **Removing:** A stored file can be deselected in the form. It disappears from the detail view and can no longer be downloaded; the version chain is kept for traceability until the record itself is deleted.
+
+> **Changing the type discards values *and* files:** If you change the documentation type on a client or a case -- or remove it ("— No type —") --, the additional fields of the old type no longer apply. A confirmation prompt before saving names both: how many **field values** will be discarded **and** how many stored **files** will be removed. "Cancel" leaves everything unchanged; only "OK" carries it out.
 
 > **Offline note:** Events with file attachments currently **cannot** be saved offline. If you work offline, attaching a file shows an explicit hint. See [Section 8](#8-installing-the-pwa-and-working-offline).
 
@@ -254,7 +259,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 ## 3a. Files Overview
 
-The **Files page** (`/attachments/`, sidebar entry **Files**) shows all attachments in your facility as a searchable list -- without having to open each event individually first.
+The **Files page** (`/attachments/`, sidebar entry **Files**) shows all attachments in your facility as a searchable list -- without having to open the respective record first. It covers files on **events, clients, and cases**.
 
 ### Access
 
@@ -263,24 +268,29 @@ The **Files page** (`/attachments/`, sidebar entry **Files**) shows all attachme
 
 ### Visibility
 
-You only see files whose event **and** field reach your sensitivity role:
+You only see files whose record (event, client, or case) **and** whose field reach your sensitivity role:
 
-- Fields with "high" sensitivity remain hidden for social workers at a lower level -- the same gate as in the event detail view.
-- Attachments of deleted events are not included.
+- Fields with "high" sensitivity remain hidden for social workers at a lower level -- the same gate as in the detail view.
+- Attachments of deleted events, clients, and cases are not included; neither are files you have removed again in the form.
+- **Assistants do not see files on cases** -- cases are not visible to them at all, and consequently neither are their files.
 - Facility scoping: you only see files from your own facility.
+
+### "Assigned to" column
+
+Each row states **what** the file is attached to: **Event**, **Client**, or **Case**. The entry is a link and leads directly to the corresponding detail page (for cases only for roles that are allowed to see cases).
 
 ### Filters
 
 Two filters above the table:
 
-- **Documentation type** -- only attachments belonging to events of a specific type (e.g., "Counseling").
-- **Client** -- all attachments for a specific pseudonym.
+- **Documentation type** -- only attachments belonging to records of a specific type (e.g., "Counseling", "Intake form"). Only types you are allowed to view according to your role are offered.
+- **Client** -- all attachments for a specific pseudonym. The filter covers **all three** paths by which a file can belong to a client: via their event, directly on the client, and via one of their cases.
 
 The filters can be combined and update the list via HTMX without a full page reload.
 
 ### Download
 
-Each row shows the original filename. Clicking it delivers the decrypted file -- exactly as in the event detail view. Downloads are recorded in the audit log.
+Each row shows the original filename. Clicking it delivers the decrypted file -- exactly as in the detail view of the event, the client, or the case. Downloads are recorded in the audit log.
 
 ### Encryption
 
@@ -288,7 +298,7 @@ All files are stored encrypted on the server (Fernet, AES-128-CBC with HMAC-SHA2
 
 ### Previous versions
 
-Replaced files are preserved as previous versions (see [Section 3 -- File Attachments](#file-attachments)). The Files overview currently only shows the latest version per entry; previous versions are accessible via the entry on the event detail page.
+Replaced files are preserved as previous versions (see [Section 3 -- File Attachments](#file-attachments)). The Files overview currently only shows the latest version per entry; previous versions are accessible via the entry on the detail page of the event, the client, or the case.
 
 ---
 

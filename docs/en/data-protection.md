@@ -11,7 +11,7 @@
 | Principle | Reference | For |
 |---|---|---|
 | Art. 5(1)(c) Data minimization | [ADR-023](../adr/023-k-anonymization-statistik.md) · [`external_report.py`](../../src/core/services/dashboard/external_report.py) | [Auditor] [Dev] |
-| Art. 5(1)(e) Storage limitation | [ADR-021](../adr/021-retention-modell.md) | [Auditor] [Dev] [Operator] |
+| Art. 5(1)(e) Storage limitation | [ADR-021](../adr/021-retention-modell.md) · **Attachments:** `DocumentType.retention_days` is **event-only** — client- and case-owned files have no retention period of their own, they follow the owner's lifecycle ([ADR-039](../adr/039-owner-generische-dateianhaenge.md)) | [Auditor] [Dev] [Operator] |
 | Art. 5(1)(f) Integrity & confidentiality | [ADR-006](../adr/006-fernet-field-encryption.md) · [ADR-007](../adr/007-auditlog-append-only.md) · [ADR-014](../adr/014-encrypted-file-vault.md) · [security-notes.md](../security-notes.md) | [Auditor] [Dev] |
 | Art. 5(2) Accountability | [ADR-007](../adr/007-auditlog-append-only.md) · [Processing register](../../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | [Auditor] |
 
@@ -20,9 +20,9 @@
 | Right | Reference | For |
 |---|---|---|
 | Art. 13/14 Information duties | [Information duties](../../src/core/dsgvo_templates/informationspflichten.md) | [Operator] [Auditor] |
-| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the three deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
+| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · since #1738 it also contains **attachment metadata** for all three owners (filename, size, type, version chain; **no** binary contents) · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
 | Art. 16 Rectification | [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) — deliberately no self-service | [Auditor] [Dev] |
-| Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **residual risk:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) | [Auditor] [Dev] [Operator] |
+| Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **Attachments:** owner lifecycle — client- and case-owned files fall with the client anonymization (trash period `client_trash_days`), physically deleted including the `.enc` file on **both** anonymization paths (`anonymize_client` and the k-anon bridge, parity guard), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) · **residual risk:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) | [Auditor] [Dev] [Operator] |
 | Art. 18 Restriction | Legal Hold — [ADR-021](../adr/021-retention-modell.md) · [`legal_holds.py`](../../src/core/retention/legal_holds.py) | [Auditor] [Dev] |
 | Art. 20 Portability | via the machine-readable per-person JSON export — **same data basis as Art. 15** (same export, same exclusions, [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)); no dedicated portability workflow | [Operator] |
 
@@ -31,7 +31,7 @@
 | Measure | Reference | For |
 |---|---|---|
 | Art. 25 Privacy by design/default | [ADR-005](../adr/005-facility-scoping-and-rls.md) — facility scoping + RLS | [Auditor] [Dev] |
-| Art. 32 Encryption at rest | [ADR-006](../adr/006-fernet-field-encryption.md) (fields) · [ADR-014](../adr/014-encrypted-file-vault.md) (file vault, Fernet/AES-128) | [Auditor] [Dev] |
+| Art. 32 Encryption at rest | [ADR-006](../adr/006-fernet-field-encryption.md) (fields) · [ADR-014](../adr/014-encrypted-file-vault.md) (file vault, Fernet/AES-128) — **identical per owner**: files on events, clients and cases run through the same pipeline (virus scan → encryption → storage path), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) | [Auditor] [Dev] |
 | Art. 32 Access control | [ADR-005](../adr/005-facility-scoping-and-rls.md) (RLS) · [ADR-018](../adr/018-rollenmodell-superadmin.md)/[ADR-020](../adr/020-three-role-postgres-model.md) (roles) · [ADR-015](../adr/015-mfa-totp.md) (MFA) | [Auditor] [Dev] |
 | Art. 32 Integrity/traceability | [ADR-007](../adr/007-auditlog-append-only.md) — append-only audit log | [Auditor] [Dev] |
 | Art. 32 Offline data | [ADR-022](../adr/022-offline-snapshot-keys.md) — offline snapshot & keys, encrypted IndexedDB; [DPIA/TOM classification of the offline path](../adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
@@ -64,5 +64,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-03 -->
+<!-- translation-date: 2026-08-04 -->
 <!-- source-hash: d6966e13133067d99dc177144620a4eb10e5aab9 -->
