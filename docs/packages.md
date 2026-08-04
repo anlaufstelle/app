@@ -70,7 +70,7 @@ field_templates:
 
   - slug: anhang
     name: Anhang
-    field_type: file         # nur an entity_type: event zulässig
+    field_type: file         # an event, client und case zulässig (seit M24)
     is_required: false
     is_encrypted: true       # bei file modellseitig erzwungen
     sensitivity: ""
@@ -112,6 +112,13 @@ document_types:
     sort_order: 0
     field_refs:
       - {template_slug: alterscluster, sort_order: 0}
+      # Datei-Felder an Person und Fall (seit M24, ADR-039). Bewusst
+      # auskommentiert: der Standardkatalog liefert KEIN file-Feld an einer
+      # Personen-/Fall-Vorlage aus — ob eine Einrichtung Dokumente an der Person
+      # ablegt, ist eine Trägerentscheidung, kein Auslieferungs-Default.
+      # Zum Aktivieren die Zeile einkommentieren; die Vorlage `anhang` ist oben
+      # bereits deklariert und wird hier nur ein zweites Mal referenziert.
+      # - {template_slug: anhang, sort_order: 1}
 ```
 
 ---
@@ -135,6 +142,10 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `default_value` | String | `""` | Wird bei jedem Lauf aus dem Paket geschrieben |
 
 `options[]`-Einträge: `slug` (Pflicht, Slug-Format, eindeutig je Vorlage), `label` (Pflicht, nicht leer), `is_active` (Bool, Default `true`).
+
+> **Datei-Felder an allen drei Entitäten (seit Milestone 24, #1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)):** `field_type: file` war bis dahin **nur an `entity_type: event`** zulässig; ein `field_ref` auf ein Datei-Feld unter einem Personen- oder Fall-Typ war ein Schema-Fehler. Diese Restriktion ist **ersatzlos entfallen** — Anhänge hängen jetzt an Ereignis, Person oder Fall. Ein Beispiel steht (auskommentiert) im Paket oben unter `aufnahmebogen`.
+>
+> **Kein `schema_version`-Bump:** die Lockerung ist **abwärtskompatibel** — jedes bisher gültige Paket bleibt unverändert gültig, es wird lediglich etwas erlaubt, was vorher abgewiesen wurde. Pakete bleiben bei `schema_version: 1`. Umgekehrt gilt das nicht: ein Paket mit `file` an einem Personen-/Fall-Typ lässt sich auf einem Stand vor Milestone 24 **nicht** einspielen.
 
 > **Reservierte Slugs (#1726):** Ein `slug`, der einen festen Formularfeld-Namen trifft, wird als **Schema-Fehler** abgelehnt — das dynamische Feld würde sonst nackt unter seinem Slug im selben `<form>` das gleichnamige feste Feld überschreiben (stiller Datenverlust). Betroffen sind u. a. `pseudonym`, `notes`, `client`, `title`, `description`, `case`, `document_type`, `lead_user`, `contact_stage`, `age_cluster`, `occurred_at`; die vollständige, an allen Schichten (Paket-Schema, Config-Formular, Modell) geteilte Liste steht als `_RESERVED_SLUGS` in `core/models/document_type.py`. Dieselbe Regel gilt für das nachträgliche **Zuordnen** einer bestehenden Feldvorlage mit reserviertem Slug über die Config-UI.
 
@@ -350,7 +361,6 @@ In beiden Fällen wird **nichts** angewendet, auch nicht für die übrigen Typen
 
 **Weitere Grenzen von v1**
 
-- Datei-Felder (`field_type: file`) sind nur an `entity_type: event` zulässig — Person und Fall haben keine Upload-Pipeline. Der Verstoß fällt schon im Schema auf.
 - Der Loader schreibt **kein AuditLog**. Nachvollziehbarkeit entsteht über die Versionsverwaltung des Pakets, nicht über das Audit-Log der App.
 - Ein Paket wirkt immer auf **genau eine** Einrichtung. Für mehrere Einrichtungen den Befehl je Facility-UUID wiederholen.
 
@@ -359,6 +369,7 @@ In beiden Fällen wird **nichts** angewendet, auch nicht für die übrigen Typen
 ## Siehe auch
 
 - [ADR-037 — Konfigurationspakete und entitätsübergreifende dynamische Felder](adr/037-konfigurationspakete-dynamische-felder.md)
+- [ADR-039 — Owner-generische Dateianhänge](adr/039-owner-generische-dateianhaenge.md) — löst die Sperre „Datei-Felder nur an Ereignis-Typen" ab
 - [ADR-036 — Globale Block-Sequenz für Feldgruppen und ungruppierte Felder](adr/036-globale-block-sequenz-feldordnung.md)
 - [ADR-035 — Evaluator-Semantik der bedingten Feldlogik](adr/035-evaluator-semantik-bedingte-feldlogik.md)
 - [ADR-024 — Slug-basierte, stabile Identifikatoren](adr/024-slug-based-identifiers.md)

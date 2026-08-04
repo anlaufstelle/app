@@ -144,6 +144,48 @@ docker compose -f docker-compose.prod.yml exec web \
 
 **Wichtig:** Nicht alle Migrationen sind rueckwaerts-kompatibel. `RunPython`-Operationen ohne `reverse_code` koennen nicht zurueckgerollt werden. Vor einem Update immer das Changelog auf irreversible Migrationen pruefen.
 
+#### Sonderfall: Attachment-Kette `0129`–`0131` (owner-generische Dateianhaenge)
+
+Milestone 24 (#1738,
+[ADR-039](adr/039-owner-generische-dateianhaenge.md)) baut die Anhang-Tabelle um.
+Drei Migrationen gehoeren zwingend zusammen — **`0130` und `0131` duerfen nie in
+getrennten Releases ausgeliefert werden**:
+
+| Migration | Was sie tut |
+|---|---|
+| `0129_rename_eventattachment_to_attachment` | Reines `RenameModel` (`core_eventattachment` → `core_attachment`). Policies, RLS-Flags und GRANTs haengen an der Tabellen-OID und **ueberleben** das Rename — hier wird nichts an der Policy angefasst. |
+| `0130_attachment_owner_facility` | Neue Spalte `facility_id` (nullable → Backfill aus `event.facility` unter der **Admin-/Owner-Rolle**, BYPASSRLS → NOT NULL), `event_id` wird nullable, `client_id`/`case_id` kommen dazu, CheckConstraint `attachment_exactly_one_owner`, Index. **Reverse-Guard als letzte Operation** (rueckwaerts also als erste). |
+| `0131_rls_attachment` | Policy-Swap auf `core_attachment`: **direkte** facility-Klausel statt Join ueber `core_event`, inkl. `is_super_admin`-Branch. Der Reverse stellt die Join-Policy wieder her und laesst RLS bewusst **aktiv**; er traegt einen eigenen Rollback-Guard. |
+
+> ⚠️ **Rollback-Einschraenkung.** `migrate core 0128` (bzw. der Einzelschritt
+> `migrate core 0130`) ist **nur zulaessig, solange keine personen- oder
+> falleigenen Anhaenge existieren**. Beide Rollback-Guards brechen sonst mit
+> `RuntimeError` ab — bewusst: unter der wiederhergestellten Join-Policy waeren
+> diese Zeilen policy-verdeckt (unsichtbar, aber vorhanden). Mit dem ersten
+> personen-/falleigenen Anhang ist der Rollback der Kette damit endgueltig zu.
+> Bleibt nur der vollstaendige DB-Restore (§ 2.3) — **Backup vor der Migration
+> ist Pflicht** (DDL, keine Datei-Moves, kein Medien-Downtime-Fenster).
+
+**Post-Deploy-Checks** (als Admin-Rolle in `psql`, siehe § 9.2):
+
+```sql
+-- 1. Policy sitzt direkt auf der facility-Spalte (nicht mehr als Join ueber
+--    core_event) UND traegt den is_super_admin-Bypass-Branch:
+SELECT polname, pg_get_expr(polqual, polrelid) AS using_clause
+FROM pg_policy
+WHERE polrelid = 'core_attachment'::regclass;
+-- erwartet: current_setting('app.current_facility_id', true) gegen facility_id
+--           plus OR-Zweig auf current_setting('app.is_super_admin', true)
+--           KEIN "EXISTS (SELECT ... FROM core_event ...)"
+
+-- 2. Backfill lueckenlos (muss 0 liefern):
+SELECT count(*) FROM core_attachment WHERE facility_id IS NULL;
+```
+
+Liefert Check 2 mehr als `0` oder zeigt Check 1 noch die Join-Klausel, ist die
+Kette **nicht** vollstaendig durchgelaufen — nicht weiterdeployen, Zustand
+klaeren.
+
 ### 2.3 Vollstaendiger Rollback (DB-Restore)
 
 Letzter Ausweg, wenn Migration-Rollback nicht moeglich:
@@ -213,7 +255,7 @@ Spalte **Wo**: `Sidecar` = laeuft ab Werk im `cron`-Container ([§3.2](#32-cron-
 | `enforce_retention` | Taeglich 03:00 | Sidecar | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `verify_audit_chain` | Taeglich 03:30 (nach Retention) | Sidecar | HMAC-Integritaetskette des AuditLog verifizieren; Exit-Code != 0 bei Tamper-Verdacht (Refs #1070) |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Sidecar | Monats-Aggregate sichern bevor Events geloescht werden |
-| `cleanup_orphan_storage_files` | Taeglich 04:30 (nach Snapshots) | Sidecar | Verwaiste `.enc`-Dateien ohne `EventAttachment`-Record loeschen; MUSS als Admin-DB-Rolle (BYPASSRLS) laufen, sonst Fail-Loud (Refs #662, #1554) |
+| `cleanup_orphan_storage_files` | Taeglich 04:30 (nach Snapshots) | Sidecar | Verwaiste `.enc`-Dateien ohne `Attachment`-Record loeschen (owner-unabhaengig: Ereignis-, Personen- und Fall-Anhaenge); MUSS als Admin-DB-Rolle (BYPASSRLS) laufen, sonst Fail-Loud (Refs #662, #1554, #1738) |
 | `detect_breaches` | Stuendlich:30 | Sidecar | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `refresh_statistics_view` | Stuendlich:15 | Sidecar | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Host | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)); reine `psql`-Abfrage, der App-Container hat keinen psql-Client |
@@ -361,7 +403,8 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 
 # Orphan-Storage-Cleanup (taeglich 04:30, nach den Snapshots; verwaiste
-# .enc-Dateien ohne EventAttachment-Record entfernen, Refs #662/#1554)
+# .enc-Dateien ohne Attachment-Record entfernen — owner-unabhaengig, also
+# Ereignis-, Personen- und Fall-Anhaenge, Refs #662/#1554/#1738)
 # MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
 # fail-loud ab (§9 DB-Rollenmodell): als RLS-gefilterte App-Rolle saehe der Lauf
 # 0 registrierte Attachments und wuerde JEDE .enc-Datei als Orphan loeschen.
@@ -457,10 +500,13 @@ docker compose -f docker-compose.prod.yml exec web \
 # bleiben unangetastet; Datensaetze ohne Typ werden nur gezaehlt. MUSS mit der
 # Admin-DB-Rolle laufen (BYPASSRLS) — sonst fail-loud (§ 9 DB-Rollenmodell).
 #
-# Verwaiste FILE-Marker (nur bei Ereignissen) werden bewusst UEBERSPRUNGEN und
-# separat als "Datei-Waise(n) uebersprungen" gemeldet, NICHT geloescht: der
-# data_json-Marker ist die einzige Bruecke zur verschluesselten EventAttachment-
-# Zeile. Diese Datei-Bereinigung laeuft ueber die Attachment-Loeschpfade bzw.
+# Verwaiste FILE-Marker werden bei ALLEN drei Entitaeten bewusst UEBERSPRUNGEN
+# und separat als "Datei-Waise(n) uebersprungen" gemeldet, NICHT geloescht: der
+# data_json-Marker ist die einzige Bruecke zur verschluesselten Attachment-
+# Zeile. (Bis M24 traf die Regel faktisch nur Ereignisse — Datei-Felder waren an
+# Personen-/Fall-Typen gesperrt; seit Refs #1738 koennen auch Personen und
+# Faelle FILE-Waisen tragen und werden genauso verschont.)
+# Diese Datei-Bereinigung laeuft ueber die Attachment-Loeschpfade bzw.
 # cleanup_orphan_storage_files (nach dem Loeschen der Attachment-Zeile), nicht
 # ueber diesen Command — die uebersprungene Zaehlung gilt also nicht als
 # erledigte Datei-Minimierung.
@@ -1160,6 +1206,18 @@ eigentuemer (`FORCE ROW LEVEL SECURITY`). Bypass nur fuer Superuser-DB-
 Rollen; der Django-DB-User darf deshalb in Produktion **kein** Superuser
 sein.
 
+**Direkte statt Join-Policy auf `core_attachment` (Refs
+#1738,
+[ADR-039](adr/039-owner-generische-dateianhaenge.md)):** Dateianhaenge hingen bis
+Milestone 24 als `core_eventattachment` ohne eigene `facility_id` am Ereignis;
+ihre Policy war ein Join ueber `core_event`. Seit Migration `0131` traegt
+`core_attachment` eine eigene `facility_id` und die uebliche **direkte** Policy
+(inkl. `is_super_admin`-Branch). Gewinn: eine Anhang-Zeile ohne Ereignis war
+unter der Join-Policy policy-**los**; jetzt greift die Isolation unabhaengig vom
+Owner (Ereignis, Person oder Fall). Die Tabellenmenge aendert sich dadurch
+nicht — nur Name und Bauart der Policy. Post-Deploy-Check und
+Rollback-Einschraenkung der Kette `0129`–`0131`: [§ 2.2](#22-migration-zurueckrollen).
+
 **CI-Garantie (Refs #718):**
 [`src/tests/test_rls_functional.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls_functional.py)
 laedt eine dedizierte Postgres-Rolle ``rls_test_role`` (``NOSUPERUSER``)
@@ -1319,6 +1377,16 @@ eingerichtet (Retention-Cron § 6). Läuft ein solcher
 Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
 table core_auditlog` ab — Fail-loud, kein stiller Audit-Verlust.
 
+Dieselbe Rollen-Voraussetzung gilt fuer **RunPython-Backfills auf RLS-Tabellen**:
+sie laufen unter der Migrationsrolle und werden seit
+#1746 von
+`assert_migration_role_bypasses_rls(schema_editor)` als erster Zeile abgesichert.
+Der `facility_id`-Backfill der Attachment-Migration `0130`
+(#1738) nutzt diesen
+Guard — laeuft `migrate` versehentlich als App-Rolle, bricht er fail-loud ab,
+statt still **0 Zeilen** zu backfillen und die Migration als erfolgreich zu
+melden. `docker-migrate.sh` setzt den Admin-Override bereits automatisch.
+
 Das frühere `GRANT SET ON PARAMETER session_replication_role` wird **nicht mehr
 benötigt** und ist aus dem Init-Script entfernt. Auf Bestands-DBs kann es als
 Aufräum-Schritt entzogen werden (optional, Least Privilege):
@@ -1410,6 +1478,14 @@ Das verhindert den früheren stillen Fail-open, bei dem der Deploy trotz noch
 App-owned Tabellen grün wurde (das Attributprofil App/Admin allein bleibt beim
 Ownership-Umzug ja gleich). Nach durchgeführtem Umzug (Admin ist Owner) ist das
 Gate wieder grün.
+
+> **Reihenfolge bei Bestandsinstallationen mit ausstehendem Umzug (Refs
+> #1738):** Erst den
+> Ownership-Umzug oben fahren, **dann** deployen. Die Attachment-Kette `0129`–`0131`
+> braucht beides — Owner-Rechte fuer die DDL (`DROP`/`CREATE POLICY`, `ALTER TABLE`)
+> und BYPASSRLS fuer den `facility_id`-Backfill in `0130`. Laeuft `migrate` noch
+> unter der App-Rolle, stoppt bereits `check_db_roles` den Deploy (Exit 1); ein
+> halb angewandter Zustand zwischen `0130` und `0131` entsteht dadurch nicht.
 
 > **Hinweis `normalize_db_ownership`:** Der One-Shot-Migrate-Job ruft weiterhin
 > `normalize_db_ownership` — im neuen Modell ein **No-op**, weil `migrate` als
