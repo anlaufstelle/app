@@ -5,10 +5,10 @@ a field or event based on document-type sensitivity and field-level
 sensitivity override.
 """
 
+from django.core.exceptions import PermissionDenied
 from django.http import Http404
 
 from core.models import DocumentType, Event
-from core.models.attachment import Attachment
 from core.models.user import User
 
 # Ordered sensitivity levels for comparison
@@ -92,20 +92,58 @@ def get_visible_event_or_404(user, facility, pk, *, select_related=None):
     return event
 
 
+def get_visible_attachment_for_owner_or_404(user, owner, attachment_pk):
+    """Anhang eines **bereits autorisiert geladenen** Owners aufloesen und gaten.
+
+    Owner-generische Stufen 3+4 des fuenfstufigen Download-Gates (ADR-039 §12,
+    Refs #1738). ``owner`` ist ein ``Event``, ``Client`` oder ``Case``, den der
+    Aufrufer bereits facility-gescopt, nicht-soft-deleted und gegen die
+    **Doc-Type**-Sensitivity geprueft hat (Stufen 1+2 — sie liegen bewusst beim
+    Owner-Lookup, weil dort 404 die einzige nicht-leckende Antwort ist).
+
+    Hier laufen:
+
+    * **Stufe 3** — Anhang haengt an GENAU diesem Owner und ist nicht
+      soft-geloescht (``deleted_at IS NULL``) → sonst :class:`Http404`.
+      L5 (Refs #1375): ohne den ``deleted_at``-Filter blieb ein vom Benutzer
+      entfernter Anhang per Direkt-URL weiter abrufbar.
+    * **Stufe 4** — Feld-Sensitivity des ``field_template`` gegen die
+      Doc-Type-Sensitivity des Owners → sonst :class:`PermissionDenied` (403).
+      Die abweichende Antwortkategorie ist gewollt: dass es an diesem Owner
+      Zusatzfelder gibt, weiss der Aufrufer an dieser Stelle bereits.
+
+    **Fail-closed:** Hat der Owner keinen ``document_type``, gibt es keine
+    Bezugs-Sensitivity fuer den Feldvergleich — dann wird 404 gehoben statt
+    implizit auf NORMAL zurueckzufallen.
+
+    Returns: die ``Attachment``-Instanz.
+    """
+    attachment = (
+        owner.attachments.filter(pk=attachment_pk, deleted_at__isnull=True).select_related("field_template").first()
+    )
+    if attachment is None:
+        raise Http404("Attachment not found")
+    document_type = getattr(owner, "document_type", None)
+    if document_type is None:
+        raise Http404("Attachment not found")
+    if not user_can_see_field(user, document_type.sensitivity, attachment.field_template.sensitivity):
+        raise PermissionDenied
+    return attachment
+
+
 def get_visible_attachment_or_404(user, facility, event_pk, attachment_pk):
     """Load an event attachment only if the parent event is visible to *user*.
 
-    Event visibility is enforced first (role vs. DocumentType sensitivity).
-    Field-level sensitivity for the attachment's own field template stays a
-    caller responsibility since it may require :class:`PermissionDenied`
-    semantics rather than 404.
+    Event visibility is enforced first (role vs. DocumentType sensitivity, → 404);
+    danach uebernimmt der owner-generische
+    :func:`get_visible_attachment_for_owner_or_404` (Refs #1738) — inklusive des
+    Feld-Sensitivity-Gates, das vorher jede Aufrufstelle selbst nachziehen
+    musste. Wirkungsgleich fuer den Download-View: der hob dort denselben
+    :class:`PermissionDenied` (403).
+
+    Returns: ``(event, attachment)`` — das Paar bleibt Teil des Vertrags, weil
+    der View das Event fuer Audit-Detail und Logging braucht.
     """
     event = get_visible_event_or_404(user, facility, event_pk, select_related=("document_type",))
-    # L5 (Refs #1375): ``deleted_at__isnull=True`` schliesst soft-geloeschte
-    # Anhaenge aus. ``Attachment`` hat ein ``deleted_at``, aber keinen
-    # Soft-Delete-Manager — ohne diesen Filter blieb ein vom User entfernter
-    # Anhang per Direkt-URL (Download-View) weiter abrufbar.
-    attachment = Attachment.objects.filter(pk=attachment_pk, event=event, deleted_at__isnull=True).first()
-    if attachment is None:
-        raise Http404("Attachment not found")
+    attachment = get_visible_attachment_for_owner_or_404(user, event, attachment_pk)
     return event, attachment
