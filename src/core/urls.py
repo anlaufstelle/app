@@ -4,7 +4,12 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from core.views.account import AccountProfileView
-from core.views.attachments import AttachmentDownloadView, AttachmentListView
+from core.views.attachments import (
+    AttachmentDownloadView,
+    AttachmentListView,
+    CaseAttachmentDownloadView,
+    ClientAttachmentDownloadView,
+)
 from core.views.audit import AuditLogDetailView, AuditLogListView
 from core.views.case_episodes import (
     EpisodeCloseView,
@@ -183,6 +188,13 @@ urlpatterns = [
     path("clients/new/", ClientCreateView.as_view(), name="client_create"),
     path("clients/<uuid:pk>/", ClientDetailView.as_view(), name="client_detail"),
     path("clients/<uuid:pk>/edit/", ClientUpdateView.as_view(), name="client_update"),
+    # M24/AP4 (Refs #1738, ADR-039 §12): personen-eigene Anhaenge. Kwarg-Signatur
+    # identisch zur Bestands-Event-Route (``pk`` = Owner, ``attachment_pk`` = Anhang).
+    path(
+        "clients/<uuid:pk>/attachments/<uuid:attachment_pk>/download/",
+        ClientAttachmentDownloadView.as_view(),
+        name="client_attachment_download",
+    ),
     path("clients/<uuid:pk>/export/json/", ClientDataExportJSONView.as_view(), name="client_export_json"),
     path("clients/<uuid:pk>/export/pdf/", ClientDataExportPDFView.as_view(), name="client_export_pdf"),
     # Client-Lösch-Workflow (#626) — Vier-Augen-Antrag, Wiederherstellung, Papierkorb
@@ -195,6 +207,12 @@ urlpatterns = [
     path("cases/new/", CaseCreateView.as_view(), name="case_create"),
     path("cases/<uuid:pk>/", CaseDetailView.as_view(), name="case_detail"),
     path("cases/<uuid:pk>/edit/", CaseUpdateView.as_view(), name="case_update"),
+    # M24/AP4 (Refs #1738, ADR-039 §12): fall-eigene Anhaenge (STAFF_PLUS).
+    path(
+        "cases/<uuid:pk>/attachments/<uuid:attachment_pk>/download/",
+        CaseAttachmentDownloadView.as_view(),
+        name="case_attachment_download",
+    ),
     path("cases/<uuid:pk>/close/", CaseCloseView.as_view(), name="case_close"),
     path("cases/<uuid:pk>/reopen/", CaseReopenView.as_view(), name="case_reopen"),
     path("cases/<uuid:pk>/assign-event/", CaseAssignEventView.as_view(), name="case_assign_event"),

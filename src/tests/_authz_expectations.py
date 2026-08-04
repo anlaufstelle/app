@@ -187,6 +187,25 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "sample_event.pk"), ("attachment_pk", "authz_attachment.pk")),
         idor=(("pk", "foreign_event.pk"), ("attachment_pk", "foreign_attachment.pk")),
     ),
+    # M24/AP4 (Refs #1738, ADR-039 §12): Rollen-Gefaelle der drei
+    # Download-Routen. Personen-Anhaenge folgen der Personen-Sicht
+    # (ASSISTANT_PLUS), Fall-Anhaenge der Fall-Sicht (STAFF_PLUS) — Faelle sind
+    # fuer die Assistenz unsichtbar, ein Assistenz-Download waere eine
+    # Gate-Umgehung.
+    E(
+        "core:client_attachment_download",
+        "facility-read",
+        get=ASSISTANT_PLUS,
+        url_kwargs=(("pk", "client_identified.pk"), ("attachment_pk", "authz_client_attachment.pk")),
+        idor=(("pk", "foreign_client.pk"), ("attachment_pk", "foreign_client_attachment.pk")),
+    ),
+    E(
+        "core:case_attachment_download",
+        "facility-read",
+        get=STAFF_PLUS,
+        url_kwargs=(("pk", "case_open.pk"), ("attachment_pk", "authz_case_attachment.pk")),
+        idor=(("pk", "foreign_case.pk"), ("attachment_pk", "foreign_case_attachment.pk")),
+    ),
     E(
         "core:workitem_detail",
         "facility-read",

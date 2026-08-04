@@ -104,7 +104,11 @@ class TestRateLimitOnSensitiveGetEndpoints:
         ("clients.py", "ClientAutocompleteView"),
         # Refs #1084 (S3): teure/sensible GET-Endpoints — DSGVO-Dokument-
         # Rendering und Attachment-Entschluesselung laufen pro Request.
-        ("attachments.py", "AttachmentDownloadView"),
+        # M24/AP4 (Refs #1738): ``get`` liegt seit der Owner-Generik EINMAL in
+        # ``BaseAttachmentDownloadView``; die drei Owner-Subklassen
+        # (Ereignis/Person/Fall) erben Handler UND Decorator und teilen sich
+        # bewusst den Eimer ``group="attachment_download"``.
+        ("attachments.py", "BaseAttachmentDownloadView"),
         ("dsgvo.py", "DSGVOPackageView"),
         ("dsgvo.py", "DSGVODocumentDownloadView"),
     )

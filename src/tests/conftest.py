@@ -418,14 +418,20 @@ PDF_MINIMAL = (
 )
 
 
-def _make_attachment(fac, event, user):
+def _make_attachment(fac, owner, user, *, ft_name="Anhang (AuthZ)"):
+    """Anhang an einen beliebigen Owner (Ereignis/Person/Fall) — M24/AP4, Refs #1738.
+
+    ``ft_name`` ist nur deshalb parametrisierbar, weil ``FieldTemplate.name``
+    je Einrichtung eindeutig ist: mehrere Owner-Fixtures derselben Facility
+    brauchen jeweils eine eigene Vorlage.
+    """
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     from core.services.file_vault import store_encrypted_file
 
-    ft = FieldTemplate.objects.create(facility=fac, name="Anhang (AuthZ)", field_type=FieldTemplate.FieldType.FILE)
+    ft = FieldTemplate.objects.create(facility=fac, name=ft_name, field_type=FieldTemplate.FieldType.FILE)
     upload = SimpleUploadedFile("authz.pdf", PDF_MINIMAL, content_type="application/pdf")
-    return store_encrypted_file(fac, upload, ft, event, user)
+    return store_encrypted_file(fac, upload, ft, owner, user)
 
 
 @pytest.fixture
@@ -451,6 +457,32 @@ def case_event(case_open, sample_event):
 @pytest.fixture
 def authz_attachment(facility, sample_event, staff_user):
     return _make_attachment(facility, sample_event, staff_user)
+
+
+@pytest.fixture
+def authz_client_attachment(facility, client_identified, doc_type_client_profile, staff_user):
+    """Personen-eigener Anhang fuer AuthZ-Matrix/IDOR (M24/AP4, Refs #1738).
+
+    Die Person bekommt dafuer einen Personen-Dokumentationstyp: ohne
+    ``document_type`` antwortet das Download-Gate fail-closed mit 404
+    (ADR-039 §12, Stufe 2). ``doc_type_client_profile`` ist NORMAL, damit auch
+    die Assistenz (ASSISTANT_PLUS) den Download sehen darf.
+    """
+    client_identified.document_type = doc_type_client_profile
+    client_identified.save(update_fields=["document_type"])
+    return _make_attachment(facility, client_identified, staff_user, ft_name="Anhang (AuthZ Person)")
+
+
+@pytest.fixture
+def authz_case_attachment(facility, case_open, doc_type_case_form, staff_user):
+    """Fall-eigener Anhang fuer AuthZ-Matrix/IDOR (M24/AP4, Refs #1738).
+
+    Rollen-Gefaelle (ADR-039 §12): der Fall-Download ist STAFF_PLUS — Faelle
+    sind fuer die Assistenz unsichtbar.
+    """
+    case_open.document_type = doc_type_case_form
+    case_open.save(update_fields=["document_type"])
+    return _make_attachment(facility, case_open, staff_user, ft_name="Anhang (AuthZ Fall)")
 
 
 @pytest.fixture
@@ -659,6 +691,22 @@ def foreign_workitem(second_facility, foreign_client, foreign_staff):
 @pytest.fixture
 def foreign_attachment(second_facility, foreign_event, foreign_staff):
     return _make_attachment(second_facility, foreign_event, foreign_staff)
+
+
+@pytest.fixture
+def foreign_client_attachment(second_facility, foreign_client, foreign_doc_type_client, foreign_staff):
+    """IDOR-Spiegel zu ``authz_client_attachment`` in der zweiten Einrichtung."""
+    foreign_client.document_type = foreign_doc_type_client
+    foreign_client.save(update_fields=["document_type"])
+    return _make_attachment(second_facility, foreign_client, foreign_staff, ft_name="Anhang (AuthZ Person fremd)")
+
+
+@pytest.fixture
+def foreign_case_attachment(second_facility, foreign_case, foreign_doc_type_case, foreign_staff):
+    """IDOR-Spiegel zu ``authz_case_attachment`` in der zweiten Einrichtung."""
+    foreign_case.document_type = foreign_doc_type_case
+    foreign_case.save(update_fields=["document_type"])
+    return _make_attachment(second_facility, foreign_case, foreign_staff, ft_name="Anhang (AuthZ Fall fremd)")
 
 
 @pytest.fixture
