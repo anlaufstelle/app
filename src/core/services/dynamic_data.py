@@ -10,7 +10,14 @@ sie in ein eigenes, entity-neutrales Modul um.
 :mod:`core.services.events.fields` re-exportiert alle hier umgezogenen Namen
 (inklusive des Alt-Alias ``_validate_data_json``), damit Bestands-Importe und
 -Monkeypatches unverändert funktionieren. Event-spezifisches (Suchindex,
-File-Marker-Parsing, Delete-History) bleibt dort.
+Delete-History, Form-Splitting) bleibt dort.
+
+M24/AP2 (Refs #1738, ADR-039): Auch das **File-Marker-Parsing** ist hierher
+gezogen. Bis M24 galten Datei-Felder als event-gebunden (E8-Sperre), seit
+ADR-039 hängen Anhänge an Ereignis, Person **oder** Fall — die Marker sind
+damit ebenso entity-neutral wie der Rest dieses Moduls. Nebeneffekt: der
+funktionslokale Import-Zyklus in :func:`validate_data_json` entfällt für
+``is_file_marker`` (der Helfer ist jetzt modul-lokal).
 """
 
 from __future__ import annotations
@@ -30,6 +37,73 @@ if TYPE_CHECKING:  # pragma: no cover — nur für Typprüfung, kein Laufzeit-Im
     from core.models import DocumentType, FieldTemplate
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# File-Marker (M24/AP2, Refs #1738) — Single Source of Truth
+# ---------------------------------------------------------------------------
+#
+# Ein FILE-Feld speichert in ``data_json`` keinen Wert, sondern einen Marker auf
+# die verschlüsselte ``Attachment``-Zeile. Zwei Formate sind im Umlauf:
+#
+# * **Stufe A** (Alt, ein Anhang je Feld): ``{"__file__": True, "attachment_id": "<uuid>"}``
+# * **Stufe B** (Refs #622, mehrere Anhänge je Feld):
+#   ``{"__files__": True, "entries": [{"id": "<uuid>", "sort": 0}, ...]}``
+
+
+def is_file_marker(value: Any) -> bool:
+    """Return True if value is a Stufe-A (__file__) or Stufe-B (__files__) marker."""
+    if not isinstance(value, dict):
+        return False
+    if value.get("__file__") is True and "attachment_id" in value:
+        return True
+    return value.get("__files__") is True and isinstance(value.get("entries"), list)
+
+
+#: Alt-Alias auf den jetzt öffentlichen Namen (Muster wie ``_validate_data_json``).
+#: ``events/fields.py`` re-exportiert ihn; Bestands-Importe/-Monkeypatches auf
+#: ``_is_file_marker`` bleiben damit unverändert gültig.
+_is_file_marker = is_file_marker
+
+
+def is_singleton_file_marker(value: Any) -> bool:
+    """Alt-Format (Stufe A): ``{"__file__": True, "attachment_id": "<uuid>"}``."""
+    return isinstance(value, dict) and value.get("__file__") is True and "attachment_id" in value
+
+
+def is_multi_file_marker(value: Any) -> bool:
+    """Neu-Format (Stufe B): ``{"__files__": True, "entries": [{"id": ..., "sort": ...}]}``."""
+    return isinstance(value, dict) and value.get("__files__") is True and isinstance(value.get("entries"), list)
+
+
+def file_marker_slugs(data_json: Mapping[str, Any] | None) -> set[str]:
+    """Slugs in ``data_json``, deren Wert ein FILE-Marker ist (beide Formate).
+
+    E17 (M1, Refs #1057): Der Update-Pfad reicht diese Menge über den Form-kwarg
+    ``existing_file_slugs`` an die Datenformulare, damit ein bereits vorhandener
+    Datei-Anhang beim Bearbeiten als „gefüllt" zählt. Die Klartext-Vorbelegung
+    (:func:`decrypt_dynamic_text_data`) strippt die Marker — sie erreichen die
+    Form also nicht mehr über ``initial_data``. Reiner Lese-Helfer.
+    """
+    if not data_json:
+        return set()
+    return {slug for slug, value in data_json.items() if is_file_marker(value)}
+
+
+def normalize_file_marker(value: Any) -> list[dict[str, Any]]:
+    """Liefert eine Liste von ``{"id": <attachment_id>, "sort": <int>}``.
+
+    Akzeptiert sowohl das Stufe-A-Singleton als auch das Stufe-B-List-Format.
+    Nicht-Marker-Werte liefern eine leere Liste.
+    """
+    if is_multi_file_marker(value):
+        entries = value["entries"] or []
+        return [
+            {"id": str(e.get("id")), "sort": int(e.get("sort", i))} for i, e in enumerate(entries) if e and e.get("id")
+        ]
+    if is_singleton_file_marker(value):
+        return [{"id": str(value.get("attachment_id")), "sort": 0}]
+    return []
 
 
 def build_field_template_lookup(document_type: DocumentType, *, ordered: bool = False) -> dict[str, FieldTemplate]:
@@ -123,10 +197,11 @@ def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any]
     ``services/events/fields.py``; der private Alt-Name bleibt dort als Alias
     bestehen.
     """
-    # Funktionslokal: die Marker-/Serialisierungs-Helfer bleiben laut M2-Schnitt
-    # im Event-Modul (File-Marker sind event-gebunden, E8) — ein Modul-Level-
-    # Import wäre ein Zyklus, weil ``events/fields.py`` dieses Modul re-exportiert.
-    from core.services.events.fields import _is_file_marker, _serialize_json_value
+    # M24/AP2 (Refs #1738): ``is_file_marker`` ist jetzt modul-lokal (SSOT hier).
+    # Nur ``_serialize_json_value`` bleibt event-seitig und wird funktionslokal
+    # geholt — ein Modul-Level-Import wäre ein Zyklus, weil ``events/fields.py``
+    # dieses Modul re-exportiert.
+    from core.services.events.fields import _serialize_json_value
 
     if not data_json:
         return {}
@@ -146,7 +221,7 @@ def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any]
     for k, v in data_json.items():
         if k not in allowed_slugs:
             continue
-        if k in file_slugs and _is_file_marker(v):
+        if k in file_slugs and is_file_marker(v):
             cleaned[k] = v
         elif k in file_slugs:
             continue

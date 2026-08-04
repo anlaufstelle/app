@@ -11,9 +11,14 @@ M2 (Refs #1058): Die entity-agnostischen Helfer (``remove_restricted_fields``,
 ``_validate_data_json``) leben jetzt in :mod:`core.services.dynamic_data`, weil
 Client/Case dieselbe Feldmechanik bekommen. Sie werden hier unveraendert
 **re-exportiert**, damit alle Bestands-Importe und -Monkeypatches
-(``from core.services.events.fields import ...``) stabil bleiben. Event-
-spezifisches (Suchindex, File-Marker-Parsing, Delete-History, Form-Splitting)
-bleibt in diesem Modul.
+(``from core.services.events.fields import ...``) stabil bleiben.
+
+M24/AP2 (Refs #1738, ADR-039): Dasselbe gilt jetzt fuer das
+**File-Marker-Parsing** (``_is_file_marker``, ``is_singleton_file_marker``,
+``is_multi_file_marker``, ``file_marker_slugs``, ``normalize_file_marker``) —
+Anhaenge haengen nicht mehr nur am Ereignis. Event-spezifisches (Suchindex,
+Delete-History, Form-Splitting, JSON-Wire-Normalisierung) bleibt in diesem
+Modul.
 """
 
 from __future__ import annotations
@@ -24,7 +29,12 @@ from django.core.files.uploadedfile import UploadedFile
 
 from core.models import Client
 from core.services.dynamic_data import (
+    _is_file_marker,
     build_field_template_lookup,
+    file_marker_slugs,
+    is_multi_file_marker,
+    is_singleton_file_marker,
+    normalize_file_marker,
     remove_restricted_fields,
     validate_data_json,
 )
@@ -113,55 +123,6 @@ def stage_index(stage):
         return CONTACT_STAGE_ORDER.index(stage)
     except ValueError:
         return -1
-
-
-def _is_file_marker(value):
-    """Return True if value is a Stufe-A (__file__) or Stufe-B (__files__) marker."""
-    if not isinstance(value, dict):
-        return False
-    if value.get("__file__") is True and "attachment_id" in value:
-        return True
-    return value.get("__files__") is True and isinstance(value.get("entries"), list)
-
-
-def is_singleton_file_marker(value):
-    """Alt-Format (Stufe A): ``{"__file__": True, "attachment_id": "<uuid>"}``."""
-    return isinstance(value, dict) and value.get("__file__") is True and "attachment_id" in value
-
-
-def is_multi_file_marker(value):
-    """Neu-Format (Stufe B): ``{"__files__": True, "entries": [{"id": ..., "sort": ...}]}``."""
-    return isinstance(value, dict) and value.get("__files__") is True and isinstance(value.get("entries"), list)
-
-
-def file_marker_slugs(data_json):
-    """Slugs in ``data_json``, deren Wert ein FILE-Marker ist (beide Formate).
-
-    E17 (M1, Refs #1057): Der Update-Pfad reicht diese Menge über den Form-kwarg
-    ``existing_file_slugs`` an :class:`~core.forms.events.DynamicEventDataForm`, damit
-    ein bereits vorhandener Datei-Anhang beim Bearbeiten als „gefüllt" zählt. Die
-    Klartext-Vorbelegung (:func:`decrypt_event_text_data`) strippt die Marker — sie
-    erreichen die Form also nicht mehr über ``initial_data``. Reiner Lese-Helfer.
-    """
-    if not data_json:
-        return set()
-    return {slug for slug, value in data_json.items() if _is_file_marker(value)}
-
-
-def normalize_file_marker(value):
-    """Liefert eine Liste von ``{"id": <attachment_id>, "sort": <int>}``.
-
-    Akzeptiert sowohl das Stufe-A-Singleton als auch das Stufe-B-List-Format.
-    Nicht-Marker-Werte liefern eine leere Liste.
-    """
-    if is_multi_file_marker(value):
-        entries = value["entries"] or []
-        return [
-            {"id": str(e.get("id")), "sort": int(e.get("sort", i))} for i, e in enumerate(entries) if e and e.get("id")
-        ]
-    if is_singleton_file_marker(value):
-        return [{"id": str(value.get("attachment_id")), "sort": 0}]
-    return []
 
 
 def _serialize_json_value(value):

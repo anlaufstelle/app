@@ -2,15 +2,21 @@
 
 Aufgeteilt aus ``services/event.py``: alles, was rein lesend einen
 Template-Context oder einen filtered-Diff aufbaut. Keine DB-Writes.
+
+M24/AP2 (Refs #1738, ADR-039): Die Anhang-Bausteine (``build_attachment_context``,
+``_resolve_file_entries``, ``_build_prior_versions``) sind nach
+:mod:`core.services.attachments.context` umgezogen — owner-generisch fuer
+Ereignis, Person und Fall. Hier bleiben delegierende Aliasse, damit
+``services/events/__init__.py`` und Bestands-Tests ihre Importe behalten.
 """
 
 from __future__ import annotations
 
-import uuid
-
 from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType
+from core.services.attachments import context as attachments_context
+from core.services.attachments.context import build_prior_versions, resolve_file_entries
 from core.services.compliance import user_can_see_field
 
 # M2 (Refs #1058, P7): die Wert-Formatierung ist entity-neutral und lebt jetzt in
@@ -22,10 +28,8 @@ from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan
 from core.services.events.fields import (
     _is_file_marker,
     build_field_template_lookup,
-    normalize_file_marker,
 )
-from core.services.file_vault import get_original_filename, safe_decrypt
-from core.utils.formatting import format_file_size
+from core.services.file_vault import safe_decrypt
 
 
 def filtered_server_data_json(user, event):
@@ -69,76 +73,21 @@ def filtered_server_data_json(user, event):
     return result
 
 
-def _build_prior_versions(attachment, predecessor_index):
-    """Walk the ``superseded_by`` chain backwards for an attachment.
-
-    ``predecessor_index`` ist ``{successor_pk: predecessor}`` fuer alle
-    Attachments des Events, vorab in einem einzigen Query erstellt
-    (#662).
-    """
-    prior_versions = []
-    current_attachment = attachment
-    seen = {current_attachment.pk}
-    predecessor = predecessor_index.get(current_attachment.pk)
-    while predecessor is not None and predecessor.pk not in seen:
-        seen.add(predecessor.pk)
-        prior_versions.append(
-            {
-                "attachment_id": str(predecessor.pk),
-                "original_filename": get_original_filename(predecessor),
-                "file_size_display": format_file_size(predecessor.file_size),
-                "superseded_at": predecessor.superseded_at,
-            }
-        )
-        current_attachment = predecessor
-        predecessor = predecessor_index.get(current_attachment.pk)
-    return prior_versions
+#: M24/AP2 (Refs #1738): Umzug nach :mod:`core.services.attachments.context`
+#: (owner-generisch). Die Alt-Namen bleiben hier als Aliasse — ``services/
+#: events/__init__.py`` und Bestands-Tests importieren sie unveraendert von
+#: hier (Muster P3: Umzug + Alias-Re-Export).
+_build_prior_versions = build_prior_versions
+_resolve_file_entries = resolve_file_entries
 
 
 def build_attachment_context(event):
-    """Refs #804 (C-37): pro File-Slug eine Liste aktiver Anhaenge bauen.
+    """Alt-Einstiegspunkt fuer den Event-Pfad — delegiert owner-generisch.
 
-    Frueher inline in :class:`EventUpdateView.get` (~26 LOC). Service-Layer-
-    Move nach ADR-002 — Views sind nur Orchestrierung. Liefert ein Dict
-    ``{slug: [{entry_id, attachment_id, filename, size, sort_order}, ...]}``,
-    wobei legacy ``__file__``-Marker via :func:`normalize_file_marker` zu
-    Single-Entry-Listen aufgeloest werden. Geloeschte Anhaenge
-    (``deleted_at``) werden gefiltert.
-
-    Refs #894: Anhaenge einmalig laden und per PK-Dict
-    aufloesen — bei N File-Markern entstand vorher pro Marker eine
-    separate Query.
+    M24/AP2 (Refs #1738): Implementierung in
+    :func:`core.services.attachments.context.build_attachment_context`.
     """
-    if not event.data_json:
-        return {}
-
-    attachments_by_pk = {att.pk: att for att in event.attachments.all()}
-    existing_attachments_by_slug: dict[str, list[dict]] = {}
-    for slug, value in event.data_json.items():
-        entries_meta = normalize_file_marker(value)
-        if not entries_meta:
-            continue
-        entries = []
-        for entry in entries_meta:
-            try:
-                entry_pk = uuid.UUID(entry["id"]) if not isinstance(entry["id"], uuid.UUID) else entry["id"]
-            except (ValueError, TypeError):
-                continue
-            att = attachments_by_pk.get(entry_pk)
-            if not att or att.deleted_at is not None:
-                continue
-            entries.append(
-                {
-                    "entry_id": str(att.entry_id),
-                    "attachment_id": str(att.pk),
-                    "filename": get_original_filename(att),
-                    "size": format_file_size(att.file_size),
-                    "sort_order": att.sort_order,
-                }
-            )
-        if entries:
-            existing_attachments_by_slug[slug] = entries
-    return existing_attachments_by_slug
+    return attachments_context.build_attachment_context(event)
 
 
 def resolve_default_document_type(facility):
@@ -168,38 +117,6 @@ def resolve_default_document_type(facility):
         return None, initial
     initial["document_type"] = default_doc_type.pk
     return default_doc_type, initial
-
-
-def _resolve_file_entries(value, attachments_by_pk, predecessor_index):
-    """Refs #1160: Marker-Entries eines FILE-Felds zu Display-Dicts aufloesen.
-
-    Akzeptiert beide Marker-Formate (via :func:`normalize_file_marker`),
-    ueberspringt nicht aufloesbare/geloeschte (``deleted_at``) Anhaenge und
-    haengt pro aktivem Anhang die ``prior_versions``-Kette an. Wirkungs-
-    identisch zum frueheren Inline-Loop.
-    """
-    entries_meta = normalize_file_marker(value)
-    file_entries = []
-    for entry in entries_meta:
-        try:
-            entry_pk = uuid.UUID(entry["id"]) if not isinstance(entry["id"], uuid.UUID) else entry["id"]
-        except (ValueError, TypeError):
-            continue
-        att = attachments_by_pk.get(entry_pk)
-        if not att:
-            continue
-        if att.deleted_at is not None:
-            continue
-        prior = _build_prior_versions(att, predecessor_index)
-        file_entries.append(
-            {
-                "attachment_id": str(att.pk),
-                "original_filename": get_original_filename(att),
-                "file_size_display": format_file_size(att.file_size),
-                "prior_versions": prior,
-            }
-        )
-    return file_entries
 
 
 def _build_field_display_entry(
@@ -240,7 +157,7 @@ def _build_field_display_entry(
         }
 
     if _is_file_marker(value):
-        file_entries = _resolve_file_entries(value, attachments_by_pk, predecessor_index)
+        file_entries = resolve_file_entries(value, attachments_by_pk, predecessor_index)
         if file_entries:
             first = file_entries[0]
             return {

@@ -1,11 +1,17 @@
 """Event-CRUD-Pfade (Refs #777).
 
-``create_event``, ``update_event``, ``soft_delete_event`` plus die
-Attachment-Schreiber ``finalize_staged_files`` (Refs #1345) und
-``apply_attachment_changes``. Alles, was ein Event oder seine Anhaenge
-mutiert, lebt hier.
+``create_event``, ``update_event``, ``soft_delete_event`` und die
+Event-spezifische Update-Payload-Ergaenzung ``merge_update_payload``.
 
 Aufgeteilt aus dem alten ``services/event.py`` (#777).
+
+M24/AP2 (Refs #1738, ADR-039): Die Attachment-Schreiber
+``finalize_staged_files`` (Refs #1345) und ``apply_attachment_changes`` sind
+nach :mod:`core.services.attachments.crud` umgezogen — sie waren nie
+event-spezifisch, seit ADR-039 haengen Anhaenge auch an Person und Fall. Hier
+bleiben nur duenne, delegierende Aliasse mit dem alten ``event``-Parameter,
+damit ``core.services.events``-Importe und die Event-Views unveraendert
+gueltig bleiben.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, DocumentType, Event, EventHistory, FieldTemplate
+from core.services.attachments import crud as attachments_crud
 from core.services.audit import audit_event
 from core.services.compliance import user_can_see_document_type
 from core.services.dashboard import log_activity
@@ -24,156 +31,32 @@ from core.services.events.fields import (
     build_field_template_lookup,
     build_redacted_delete_history,
     compute_event_search_text,
-    normalize_file_marker,
     stage_index,
 )
 from core.services.file_vault import delete_attachments_for
 
 
 def finalize_staged_files(event, user, staged_by_slug, document_type):
-    """Persistiere vor-verschluesselte Uploads an ein frisch erzeugtes Event.
+    """Alt-Einstiegspunkt fuer den Event-Pfad — delegiert owner-generisch.
 
-    Refs #1345: Der teure ClamAV-Scan + Fernet-Encrypt laeuft bereits VOR der
-    Transaktion (``prepare_encrypted_upload``); hier wird pro Slug nur noch der
-    schnelle DB-Insert (``commit_staged_upload``) plus der Stufe-B-Marker
-    (``__files__``) geschrieben. Dadurch haelt der AuditLog-Hashchain-Advisory-
-    Lock (aus ``create_event``) nicht mehr ueber den Scan. Der Aufrufer ist fuer
-    den umliegenden ``transaction.atomic``-Block zustaendig (Refs #584).
-
-    ``staged_by_slug`` ist ein ``{slug: [StagedUpload, ...]}``-Dict in
-    Upload-Reihenfolge (siehe ``EventCreateView.post``).
+    M24/AP2 (Refs #1738): Die Implementierung ist nach
+    :func:`core.services.attachments.crud.finalize_staged_files` umgezogen
+    (owner-generisch: Ereignis, Person, Fall). Dieser duenne Alias haelt den
+    Bestands-Importpfad (``core.services.events``) und die Event-Views
+    unveraendert gueltig.
     """
-    from core.services.file_vault import commit_staged_upload
-
-    if not staged_by_slug:
-        return
-    field_templates = build_field_template_lookup(document_type)
-    for slug, staged_list in staged_by_slug.items():
-        ft = field_templates.get(slug)
-        if not ft or not staged_list:
-            continue
-        entries = []
-        for idx, staged in enumerate(staged_list):
-            attachment = commit_staged_upload(event, ft, staged, user, sort_order=idx)
-            entries.append({"id": str(attachment.pk), "sort": idx})
-        event.data_json[slug] = {"__files__": True, "entries": entries}
-    event.save(update_fields=["data_json"])
-
-
-def _apply_remove(slug, current_entries, attachments_by_pk, request_post, event, user):
-    """REMOVE-Schritt: hidden CSV ``<slug>__remove`` listet zu loeschende
-    ``entry_id``-Werte -> ``soft_delete_attachment_chain``. Liefert die um die
-    geloeschten Entries bereinigte Entry-Liste."""
-    from core.services.file_vault import soft_delete_attachment_chain
-
-    remove_raw = request_post.get(f"{slug}__remove", "")
-    remove_ids = {x.strip() for x in remove_raw.split(",") if x.strip()}
-    if not remove_ids:
-        return current_entries
-    filtered = []
-    for entry in current_entries:
-        att = attachments_by_pk.get(str(entry["id"]))
-        if att and str(att.entry_id) in remove_ids:
-            soft_delete_attachment_chain(event, att.entry_id, user)
-            continue
-        filtered.append(entry)
-    return filtered
-
-
-def _apply_replace(slug, current_entries, attachments_by_pk, request_files, facility, ft, event, user):
-    """REPLACE-Schritt: pro bestehendem Entry ein File-Input
-    ``<slug>__replace__<entry_id>`` -> ``store_encrypted_file(supersedes=...)``.
-    Liefert die (ggf. ersetzte) Entry-Liste."""
-    from core.services.file_vault import store_encrypted_file
-
-    updated_entries = []
-    for entry in current_entries:
-        att = attachments_by_pk.get(str(entry["id"]))
-        if not att:
-            continue
-        replace_file = request_files.get(f"{slug}__replace__{att.entry_id}")
-        if replace_file is not None:
-            new_att = store_encrypted_file(facility, replace_file, ft, event, user, supersedes=att)
-            updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
-        else:
-            updated_entries.append(entry)
-    return updated_entries
-
-
-def _apply_add(slug, updated_entries, file_fields, facility, ft, event, user):
-    """ADD-Schritt: alle Files aus dem Multi-Upload-Feld werden mit frischen
-    ``entry_id`` angehaengt. Liefert die um die neuen Entries erweiterte Liste."""
-    from core.services.file_vault import store_encrypted_file
-
-    add_files = file_fields.get(slug) or []
-    base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
-    for idx, uploaded_file in enumerate(add_files):
-        new_att = store_encrypted_file(facility, uploaded_file, ft, event, user, sort_order=base_sort + idx)
-        updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
-    return updated_entries
-
-
-def _write_file_marker(event, slug, updated_entries):
-    """Schreibt bzw. entfernt den Stufe-B-Marker im ``event.data_json``."""
-    if updated_entries:
-        event.data_json[slug] = {"__files__": True, "entries": updated_entries}
-    elif slug in event.data_json:
-        del event.data_json[slug]
+    return attachments_crud.finalize_staged_files(event, user, staged_by_slug, document_type)
 
 
 def apply_attachment_changes(event, user, request_post, request_files, file_fields, document_type):
-    """Applizieren von REMOVE/REPLACE/ADD auf die FILE-Felder eines Events.
+    """Alt-Einstiegspunkt fuer den Event-Pfad — delegiert owner-generisch.
 
-    - **REMOVE**: hidden CSV ``<slug>__remove`` listet zu loeschende
-      ``entry_id``-Werte -> ``soft_delete_attachment_chain``.
-    - **REPLACE**: pro bestehendem Entry ein File-Input
-      ``<slug>__replace__<entry_id>`` -> ``store_encrypted_file(supersedes=...)``.
-    - **ADD**: alle Files aus dem Multi-Upload-Feld werden mit frischen
-      ``entry_id`` angehaengt.
-
-    Aktualisiert anschliessend den Marker im ``event.data_json``.
+    M24/AP2 (Refs #1738): Implementierung in
+    :func:`core.services.attachments.crud.apply_attachment_changes`.
     """
-    from core.services.compliance import user_can_see_field
-
-    field_templates = build_field_template_lookup(document_type)
-    facility = event.facility
-    doc_sensitivity = document_type.sensitivity
-    for slug, ft in field_templates.items():
-        if ft.field_type != FieldTemplate.FieldType.FILE:
-            continue
-
-        # R11 (Refs #1476/#1666): Sensitivity-Gate auch auf Anhang-Mutation.
-        # Der Event-Update-Pfad entfernt Text-Felder oberhalb der Rollen-Sicht
-        # per ``remove_restricted_fields`` aus dem Form; die Anhang-Mutation
-        # liest REMOVE/REPLACE/ADD aber direkt aus ``request.POST``/``FILES``
-        # und umging dieses Gate. Ein User, der das Event sieht (Doc-Type-Gate),
-        # aber dieses FILE-Feld wegen eines feldbezogenen Sensitivity-Overrides
-        # NICHT sehen darf, darf dessen Anhaenge nicht loeschen/ersetzen/
-        # ergaenzen — der Marker bleibt dann unveraendert. (``user is None`` =
-        # System-/Service-Kontext ohne Rolle → kein Gate.)
-        if user is not None and not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
-            continue
-
-        existing_marker = (event.data_json or {}).get(slug)
-        current_entries = normalize_file_marker(existing_marker)
-
-        # Refs #782 (C-17): Bulk-Load aller Attachments des aktuellen Slugs
-        # in einer Query — vorher lud der REMOVE/REPLACE-Pfad jeden Entry
-        # einzeln (``filter(pk=entry["id"]).first()``) und produzierte N+1.
-        entry_ids = [entry["id"] for entry in current_entries]
-        attachments_by_pk = (
-            {str(att.pk): att for att in event.attachments.filter(pk__in=entry_ids)} if entry_ids else {}
-        )
-
-        current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, event, user)
-        updated_entries = _apply_replace(
-            slug, current_entries, attachments_by_pk, request_files, facility, ft, event, user
-        )
-        updated_entries = _apply_add(slug, updated_entries, file_fields, facility, ft, event, user)
-
-        _write_file_marker(event, slug, updated_entries)
-
-    event.save(update_fields=["data_json"])
+    return attachments_crud.apply_attachment_changes(
+        event, user, request_post, request_files, file_fields, document_type
+    )
 
 
 def _validate_case_assignment(facility, case, client, is_anonymous):
