@@ -1193,9 +1193,13 @@ pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
 
 ## 9. Row Level Security (RLS)
 
-Seit v0.10.0 sind **22 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
-Cross-Facility-Leaks abgesichert (Defense-in-Depth unterhalb der Django-
-Scoping-Schicht). Jede Policy vergleicht `facility_id` gegen die Session-
+Seit v0.10.0 ist PostgreSQL-RLS auf allen facility-gescopten Tabellen (derzeit
+**25**, per Test ableitungsbasiert erzwungen —
+[`test_rls.py`](../src/tests/test_rls.py)) gegen Cross-Facility-Leaks
+abgesichert (Defense-in-Depth unterhalb der Django-Scoping-Schicht). Die
+Tabellenmenge waechst mit jedem neuen facility-gescopten Model; eine feste
+Zahl hier veraltet deshalb regelmaessig — die Ableitung in `test_rls.py` ist
+die Wahrheitsquelle. Jede Policy vergleicht `facility_id` gegen die Session-
 Variable `app.current_facility_id`, die von der
 [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py) pro
 Request via `set_config(..., is_local=false)` gesetzt wird.
