@@ -31,6 +31,8 @@ from pathlib import Path
 
 import pytest
 
+from ._helpers import wait_until
+
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
 
@@ -303,14 +305,21 @@ def test_retry_dead_event_reactivates_and_next_replay_resends(browser, base_url,
         page.locator("[data-testid='dead-event-item']").first.wait_for(state="visible", timeout=10000)
         page.locator(f"[data-testid='dead-event-retry-{event_pk}']").click()
 
-        page.wait_for_function(
-            "async (pk) => {"
-            " const r = await window.offlineStore.getOfflineEvent(pk);"
-            " return !!r && r.localStatus === 'modified';"
-            "}",
-            arg=event_pk,
-            timeout=10000,
-        )
+        # Python-seitig gepollt: ``page.wait_for_function`` mit async-Callback
+        # waere hier ein sofort erfuellter False-Positive (Promise ist truthy),
+        # und die Zusicherung darunter ("Retry allein loest noch nichts aus")
+        # damit vakuum — sie haette gar keine Zeit vergehen lassen.
+        # Begruendung im Detail an ``_helpers.wait_until``.
+        assert wait_until(
+            page,
+            lambda: (
+                (page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", event_pk) or {}).get(
+                    "localStatus"
+                )
+                == "modified"
+            ),
+            timeout_ms=10000,
+        ), "Retry hat das Dead-Event nicht wieder auf localStatus='modified' gesetzt"
 
         assert hits["n"] == 0, "Retry allein darf noch KEINEN Netzwerk-Request ausloesen"
         page.evaluate("async () => { await window.offlineEdit.replayAllModifiedEvents(); }")

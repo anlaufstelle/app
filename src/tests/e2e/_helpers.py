@@ -1,6 +1,50 @@
 """Wiederverwendbare Helfer für E2E-Tests."""
 
 
+def wait_until(page, predicate, timeout_ms=15000, interval_ms=250):
+    """Python-seitig auf eine Bedingung pollen; ``True`` wenn sie eintrat.
+
+    **Warum es diesen Helfer gibt (Harness-Falle):** ``page.wait_for_function``
+    mit einer **async** Callback ist ein garantierter False-Positive.
+    ``wait_for_function`` prüft den Rückgabewert auf Truthiness und ``await``et
+    ihn NICHT — eine ``async``-Funktion liefert aber immer ein ``Promise``, und
+    ein Promise-Objekt ist immer truthy. Der Aufruf kehrt also sofort zurück
+    (gemessen: 0,006 s), egal ob die Bedingung gilt. Jede Zusicherung, die auf
+    so einer Barriere aufsetzt, ist in Wahrheit ein Rennen gegen die Uhr.
+
+    Genau daran ist ``test_reedit_of_unsynced_new_event_keeps_new_status_and_
+    replays_via_create`` gescheitert, als der Sync-Orchestrator um einen
+    Vorab-Schritt (Widerrufsliste, Refs #1760) wuchs: der zusätzliche
+    Netz-Roundtrip schob den Replay-POST hinter das bis dahin zufällig
+    gewonnene Rennen.
+
+    Alles, was im Browser ein ``await`` braucht (IndexedDB-Zählungen,
+    ``offlineStore``-Lookups), gehört deshalb hierher — ``page.evaluate``
+    ``await``et Promises korrekt, also ist die Prüfung im Predicate sicher::
+
+        assert wait_until(
+            page,
+            lambda: page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", pk) is None,
+        ), "Replay hat die lokale Row nicht aufgelöst"
+
+    Rein synchrone Bedingungen (``() => window.foo``) dürfen weiterhin direkt
+    mit ``page.wait_for_function`` geprüft werden — die Falle betrifft
+    ausschließlich ``async``-Callbacks.
+
+    ACHTUNG: Der Rückgabewert MUSS ausgewertet werden (``assert`` oder
+    ``if not ...``). Ein Aufruf als blosse Anweisung wäre wieder genau die
+    wirkungslose Barriere, die dieser Helfer ersetzt.
+    """
+    waited = 0
+    while True:
+        if predicate():
+            return True
+        if waited >= timeout_ms:
+            return False
+        page.wait_for_timeout(interval_ms)
+        waited += interval_ms
+
+
 def track_console_errors(page):
     """Sammelt Browser-Konsolen-Errors und JS-Exceptions einer Page in eine Liste.
 

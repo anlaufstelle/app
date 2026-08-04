@@ -30,6 +30,8 @@ from contextlib import suppress
 
 import pytest
 
+from ._helpers import wait_until
+
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
 
@@ -171,7 +173,14 @@ class TestSyncOrchestrator:
             page2.evaluate("() => window.dispatchEvent(new Event('online'))")
 
             # Ein Replay MUSS gelaufen sein (Record geloescht) — RED wie GREEN.
-            page1.wait_for_function("async () => (await window.offlineStore.count('queue')) === 0", timeout=15000)
+            # Python-seitig gepollt: ``wait_for_function`` mit async-Callback
+            # kehrt sofort zurueck (Promise ist truthy) und waere gar keine
+            # Barriere — siehe ``_helpers.wait_until``.
+            assert wait_until(
+                page1,
+                lambda: page1.evaluate("async () => window.offlineStore.count('queue')") == 0,
+                timeout_ms=15000,
+            ), "Queue wurde nicht leer — es lief kein Replay"
             # GREEN: beide Tabs vollstaendig zur Ruhe kommen lassen. requestSync
             # koalesziert in den ggf. noch laufenden Lauf und resolved erst nach
             # dessen Abschluss (leere Queue → kein weiterer POST). RED (kein
@@ -236,7 +245,14 @@ class TestSyncOrchestrator:
             # aufheben, damit Tab A's Lauf die Row tatsaechlich replayt.
             _clear_queue_backoff(page_a)
             page_a.evaluate("() => window.dispatchEvent(new Event('online'))")
-            page_a.wait_for_function("async () => (await window.offlineStore.count('queue')) === 0", timeout=15000)
+            # Python-seitig gepollt (siehe ``_helpers.wait_until``): mit
+            # async-Callback waere ``wait_for_function`` ein sofortiger
+            # False-Positive und ``posts["n"] == 1`` ein reines Zeitrennen.
+            assert wait_until(
+                page_a,
+                lambda: page_a.evaluate("async () => window.offlineStore.count('queue')") == 0,
+                timeout_ms=15000,
+            ), "Queue in Tab A wurde nicht leer — Replay lief nicht"
             assert posts["n"] == 1
 
             # GREEN: Tab B's Badge verschwindet OHNE eigenes Online-Event und
