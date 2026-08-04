@@ -135,8 +135,13 @@ def _pinned_small_cells(
             (value,) = values
             # Ein exakt bestimmter Wert >= k ist keine Kleinstfallzahl (das
             # Sekundaer-Opfer darf rueckrechenbar sein — es wurde nur
-            # unterdrueckt, um die Kleinstzelle zu schuetzen).
-            if value >= threshold:
+            # unterdrueckt, um die Kleinstzelle zu schuetzen). Und ein Pin auf 0
+            # ist keiner: „in diesem Bucket gab es keinen Fall" ist die
+            # Abwesenheit von Faellen, keine Kleinstfallzahl — dieselbe Ausnahme
+            # wie in ``disclosure.findings``. Relevant wird sie erst mit der
+            # K3-A1-Restzeile: GROUP-BY-Zeilen koennen gar nicht 0 sein,
+            # datenunabhaengig emittierte Zeilen sehr wohl.
+            if value == 0 or value >= threshold:
                 continue
             leaks.append(f"{observation}: {name} = {value}")
     return leaks
@@ -264,7 +269,9 @@ def _single_pass_publish(world: dict[str, int], threshold: int) -> dict[str, Any
     margin = total if total >= threshold else None
 
     if margin is not None:
-        partition = _local_partition(values, flags, victims, threshold, margin=margin, min_value=1, person_gated=False)
+        partition = _local_partition(
+            values, flags, victims, threshold, margin=margin, min_values=[1] * len(values), person_gated=False
+        )
         if findings([partition], threshold=threshold):
             candidates = [index for index, flag in enumerate(flags) if not flag]
             if candidates:
@@ -499,7 +506,9 @@ class TestOrdnungAnDerArtefaktgrenze:
         for welt in (welt_a, welt_b):
             out = suppress_report_stats(facility, welt)
             unterdrueckt = [row["cluster"] for row in out["by_age_cluster"] if row["suppressed"]]
-            assert sorted(unterdrueckt) == ["18_26", "u18"], unterdrueckt
+            # K3-A1 (Refs #1770): die Restzeile „ohne Personenbezug" laeuft mit
+            # (hier W = 35 − 35 = 0) und ist deshalb ebenfalls unterdrueckt.
+            assert sorted(unterdrueckt) == ["18_26", "__no_person__", "u18"], unterdrueckt
 
 
 # --- Fail-safe-Pfad darf nicht irrefuehren ---------------------------------
@@ -615,3 +624,211 @@ class TestFailSafePfadIstNichtIrrefuehrend:
 
         assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." not in abschnitt
         assert "Notiz" in abschnitt and "unterdrückt" in abschnitt
+
+
+# --- K3-A1: Enumeration ueber die Restzeilen-Welten ------------------------
+#
+# Die Alterstabelle traegt seit K3-A1 die Zeile „ohne Personenbezug"
+# (W = ``total_contacts`` − Σ Altersgruppen). Die Analyse warnt ausdruecklich,
+# dass eine **naive** Restzeile — emittiert, aber ohne die Randsumme, gegen die
+# sie sich summiert — einen NEUEN exakten Kanal oeffnet. Deshalb wird dieser
+# Weltraum eigens aufgezaehlt, mit zwei Positiv-Kontrollen:
+#
+# * der Stand **vor** K3-A1 (keine Restzeile): W ist aus den sichtbaren Zellen
+#   exakt ausrechenbar, ohne dass je eine Suppressionsregel angesprochen haette
+#   — das ist der Befund K3 selbst;
+# * die **naive** Restzeile (Zeile da, ``margin=None``): das
+#   Machbarkeits-Audit laeuft nicht, W bleibt exakt.
+#
+# Gewertet wird ausschliesslich W — die Groesse, die K3 benennt.
+
+_AGE_WORLD_CLUSTERS = ("u18", "27_plus")
+_NO_PERSON = "__no_person__"
+
+# Neutralisierte Personenzahlen (analog ``_publish_document_types``): gross und
+# uniform, damit die Aufzaehlung genau EINEN Kanal misst — die Ereignis-Randsumme
+# der Alterstabelle — und nicht zusaetzlich das Personenkriterium (K0-b) oder die
+# Personen-Randsumme.
+_NEUTRAL_PERSONS = 50
+
+
+def _age_worlds(limit: int = ENUMERATION_LIMIT) -> list[dict[str, int]]:
+    """Zwei nichtleere Altersgruppen (>= 1) plus W >= 0, Σ <= ``limit``.
+
+    W darf 0 sein — die Restzeile wird datenunabhaengig emittiert und ist damit
+    genau **keine** GROUP-BY-Zeile.
+    """
+    worlds = []
+    for first in range(1, limit + 1):
+        for second in range(1, limit + 1):
+            for rest in range(0, limit + 1):
+                if first + second + rest <= limit:
+                    worlds.append({"u18": first, "27_plus": second, _NO_PERSON: rest})
+    return worlds
+
+
+def _age_rows(world: dict[str, int]) -> list[dict[str, Any]]:
+    """Die Altersgruppen-Zeilen in Query-Ordnung (absteigend nach Anzahl)."""
+    return sorted(
+        (
+            {"cluster": cluster, "label": cluster, "count": world[cluster], "persons": _NEUTRAL_PERSONS}
+            for cluster in _AGE_WORLD_CLUSTERS
+        ),
+        key=lambda row: -row["count"],
+    )
+
+
+def _publish_age_table(facility, world: dict[str, int]) -> dict[str, Any]:
+    """Die publizierte Sicht des Halbjahres-Sachberichts auf die Alterstabelle."""
+    return suppress_report_stats(
+        facility,
+        {
+            "total_contacts": sum(world.values()),
+            "unique_clients": _NEUTRAL_PERSONS,
+            "by_contact_stage": {},
+            "persons_by_contact_stage": {},
+            "by_document_type": [],
+            "by_age_cluster": _age_rows(world),
+        },
+    )
+
+
+def _publish_age_table_without_margin(facility, world: dict[str, int], *, with_rest_row: bool) -> dict[str, Any]:
+    """Positiv-Kontrollen: Alterstabelle **ohne** deklarierte Randsumme.
+
+    ``with_rest_row=False`` ist der Stand vor K3-A1 (W existiert nur als
+    Differenz), ``True`` die von der Analyse verworfene **naive** Fassung (Zeile
+    da, aber kein Audit, weil keine Gleichung deklariert ist). Beide nutzen den
+    echten Suppressionskern, damit die Kontrolle die fehlende Randsumme misst
+    und nicht einen Nachbau.
+    """
+    from core.services.dashboard.external_report import (
+        ORDER_AGE_CLUSTER,
+        _get_threshold,
+        _suppress_small,
+        with_no_person_row,
+    )
+
+    threshold = _get_threshold(facility)
+    total = sum(world.values())
+    rows = _age_rows(world)
+    if with_rest_row:
+        rows = with_no_person_row(rows, total)
+    return {
+        "total_contacts": total if total >= threshold else None,
+        "by_age_cluster": _suppress_small(rows, threshold, margin=None, order=ORDER_AGE_CLUSTER),
+    }
+
+
+def _age_observation(published: dict[str, Any]) -> tuple:
+    return (
+        published["total_contacts"],
+        tuple((row["cluster"], row["count"], row["suppressed"]) for row in published.get("by_age_cluster", ()) or ()),
+    )
+
+
+def _age_preimage_groups(publish, limit: int = ENUMERATION_LIMIT) -> dict[tuple, list[dict[str, int]]]:
+    groups: dict[tuple, list[dict[str, int]]] = defaultdict(list)
+    for world in _age_worlds(limit):
+        groups[_age_observation(publish(world))].append(world)
+    return groups
+
+
+def _pinned_rest_values(
+    groups: dict[tuple, list[dict[str, int]]], threshold: int, limit: int = ENUMERATION_LIMIT
+) -> list[str]:
+    """Beobachtungen, in denen W ueber das Preimage eindeutig **und** klein ist.
+
+    Dieselbe Auflage wie in :func:`_pinned_small_cells`: nur Beobachtungen mit
+    publizierter Randsumme <= Enumerationsgrenze sind auswertbar. ``W = 0`` ist
+    kein Befund (ein leerer Bucket schuetzt niemanden — dieselbe Ausnahme wie in
+    ``disclosure.findings``), ``W >= k`` ebenfalls nicht.
+    """
+    leaks = []
+    for observation, worlds in groups.items():
+        margin = observation[0]
+        if margin is None or margin > limit:
+            continue
+        values = {world[_NO_PERSON] for world in worlds}
+        if len(values) >= 2:
+            continue
+        (value,) = values
+        if value == 0 or value >= threshold:
+            continue
+        leaks.append(f"{observation}: W = {value}")
+    return leaks
+
+
+@pytest.mark.django_db
+class TestKleinstWeltEnumerationRestzeile:
+    """K3-A1: „W ist ueber das Preimage nicht eindeutig bestimmt."
+
+    Die Analyse hat den Kanal an 8 820 Welten mit 0 < W < k belegt — ohne dass
+    dabei je eine Suppressionsregel angesprochen haette. Der Test rechnet
+    dasselbe an einem exakt aufzaehlbaren Kleinst-Weltraum nach und beweist
+    seinen eigenen Trefferfall zweimal.
+    """
+
+    def test_w_ist_nicht_eindeutig_bestimmt(self, facility):
+        groups = _age_preimage_groups(lambda world: _publish_age_table(facility, world))
+
+        leaks = _pinned_rest_values(groups, DEFAULT_K_THRESHOLD)
+
+        assert not leaks, (
+            "Die Zahl der Ereignisse ohne Personenbezug ist ueber die publizierte "
+            "Sicht exakt rueckrechenbar:\n" + "\n".join(leaks[:10])
+        )
+
+    def test_auch_die_altersgruppen_selbst_bleiben_ungepinnt(self, facility):
+        """Gegenprobe auf derselben Aufzaehlung: die neue Randsummen-Gleichung
+        darf keine Altersgruppen-Kleinstzelle pinnbar machen."""
+        groups = _age_preimage_groups(lambda world: _publish_age_table(facility, world))
+
+        # ``_pinned_small_cells`` liest Position 1 der Beobachtung als
+        # Zeilenliste — die Alterstabelle hat exakt dieselbe Form.
+        leaks = _pinned_small_cells(groups, DEFAULT_K_THRESHOLD)
+
+        assert not leaks, "\n".join(leaks[:10])
+
+    def test_die_aufzaehlung_deckt_ueberhaupt_unterdrueckte_restzeilen_ab(self, facility):
+        """Anker gegen einen still leeren Test."""
+        groups = _age_preimage_groups(lambda world: _publish_age_table(facility, world))
+
+        auswertbar = [
+            observation
+            for observation in groups
+            if observation[0] is not None and any(row[0] == _NO_PERSON and row[2] for row in observation[1])
+        ]
+
+        assert len(auswertbar) >= 20, f"nur {len(auswertbar)} auswertbare Beobachtungen mit unterdrueckter Restzeile"
+
+    def test_positivkontrolle_ohne_restzeile_reisst(self, facility):
+        """Der Stand VOR K3-A1: W steht nirgends, ist aber exakt bestimmbar.
+
+        Genau das ist der Befund K3 — „kleine Zahlen aus grossen", ohne dass
+        eine Suppressionsregel je angesprochen haette.
+        """
+        groups = _age_preimage_groups(
+            lambda world: _publish_age_table_without_margin(facility, world, with_rest_row=False)
+        )
+
+        leaks = _pinned_rest_values(groups, DEFAULT_K_THRESHOLD)
+
+        assert leaks, "Die Aufzaehlung findet den bekannten K3-Kanal nicht mehr — Harness pruefen"
+
+    def test_positivkontrolle_naive_restzeile_reisst(self, facility):
+        """Die von der Analyse verworfene naive Fassung: Zeile emittiert, aber
+        keine Randsumme deklariert ⇒ das Machbarkeits-Audit laeuft nicht und W
+        bleibt exakt zurueckrechenbar.
+
+        Damit ist belegt, dass **die Zeile allein** nichts loest — tragend ist
+        die Kombination aus datenunabhaengiger Emission, deklarierter Randsumme
+        und K1/K2-Durchlauf.
+        """
+        groups = _age_preimage_groups(
+            lambda world: _publish_age_table_without_margin(facility, world, with_rest_row=True)
+        )
+
+        leaks = _pinned_rest_values(groups, DEFAULT_K_THRESHOLD)
+
+        assert leaks, "Ohne deklarierte Randsumme muesste W exakt rueckrechenbar bleiben"
