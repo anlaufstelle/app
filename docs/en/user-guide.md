@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551) and 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) and 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759).
 
 # Anlaufstelle -- User Guide
 
@@ -167,7 +167,6 @@ Depending on your role, a different variant is shown:
 
 - **Deletion requests** -- pending requests (links to the deletion-request list)
 - **Retention proposals** -- pending retention proposals (links to the retention dashboard)
-- **Legal holds** -- active retention locks
 - **Statistics** -- month/year of the last statistics snapshot
 
 **Facility Admin** -- title "Admin Work Center", users, security, and configuration:
@@ -873,6 +872,6 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-03 -->
-<!-- source-hash: 64425e1945380788d02374625fc32de48aaad323 -->
+<!-- translation-date: 2026-08-04 -->
+<!-- source-hash: aa742144677d50c74c4c21946b2c7f2f371ac296 -->
 

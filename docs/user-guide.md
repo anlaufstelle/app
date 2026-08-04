@@ -164,7 +164,6 @@ Je nach Rolle erscheint eine andere Variante:
 
 - **Löschanträge** — ausstehende Anträge (führt zur Löschantrags-Liste)
 - **Löschvorschläge** — ausstehende Retention-Vorschläge (führt zum Retention-Dashboard)
-- **Legal Holds** — aktive Aufbewahrungssperren
 - **Statistik** — Monat/Jahr des letzten Statistik-Snapshots
 
 **Facility-Admin** — Titel „Admin-Arbeitszentrale", Benutzer, Sicherheit und Konfiguration:
