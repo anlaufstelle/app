@@ -85,7 +85,15 @@ importScripts("/static/js/url-patterns.js");
 // styles.css liegt UNGEHASHT im Precache: ohne Bump bekaeme ein bestehender
 // Client die neuen Regeln offline nie zu sehen und die Lade-Spinner blieben
 // dauerhaft eingeblendet. Bump erzwingt Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v30";
+// Refs #1738 (M24/AP5): v30 -> v31 -- url-patterns.js (precached +
+// importScripts) erweitert ATTACHMENT_DOWNLOAD auf die owner-generischen
+// Routen (/clients/<uuid>/attachments/<uuid>/download/ und die Fall-Variante).
+// Genau wie beim v17 -> v18-Bump gilt: ein laufender SW haelt seine Kopie des
+// Moduls aus dem Precache (cache-first, keine Revalidierung) und wuerde die
+// neuen Downloads weiter in die Navigations-Fallback-Kette schicken — der
+// Benutzer saehe offline eine Ersatzseite statt eines Fehlers. Der Bump
+// erzwingt Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v31";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
