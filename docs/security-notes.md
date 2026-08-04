@@ -55,7 +55,7 @@ Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemal
 
 Das Django-Admin (`/admin-mgmt/`, Custom `AnlaufstelleAdminSite`) hatte zwei Rechenschafts-Lücken:
 
-- **AUTHZ-1 — Schreibpfad umgeht die Service-Schicht.** Add/Change/Delete auf `Client`/`Case`/`Event`/`WorkItem` liefen am Service-Layer vorbei und umgingen damit das Domänen-AuditLog (`CLIENT_UPDATE`/`EVENT_CREATE`/…), die `EventHistory`-Versionierung sowie die Vier-Augen-Löschung/Legal-Hold-/Retention-Workflows. Da ein Admin-Save diese Invarianten (u. a. Feld-Verschlüsselung, History-Diff) gar nicht replizieren kann, sind diese Fachobjekte im Admin jetzt **strikt read-only** ([`ReadOnlyDomainAdminMixin`](../src/core/admin/mixins.py) → `has_add/change/delete_permission = False`) — konsistent mit den bereits append-only gestellten Admins (`EventHistory`/`EventAttachment`/`AuditLog`/`DeletionRequest`). Konfig-Objekte ohne tamper-evidente Klientel-Historie (`DocumentType`/`FieldTemplate`/`QuickTemplate`/`TimeFilter`) bleiben schreibbar; `Settings`-Änderungen sind über `SettingsAdmin.save_model` → `log_settings_change` weiterhin auditiert.
+- **AUTHZ-1 — Schreibpfad umgeht die Service-Schicht.** Add/Change/Delete auf `Client`/`Case`/`Event`/`WorkItem` liefen am Service-Layer vorbei und umgingen damit das Domänen-AuditLog (`CLIENT_UPDATE`/`EVENT_CREATE`/…), die `EventHistory`-Versionierung sowie die Vier-Augen-Löschung/Legal-Hold-/Retention-Workflows. Da ein Admin-Save diese Invarianten (u. a. Feld-Verschlüsselung, History-Diff) gar nicht replizieren kann, sind diese Fachobjekte im Admin jetzt **strikt read-only** ([`ReadOnlyDomainAdminMixin`](../src/core/admin/mixins.py) → `has_add/change/delete_permission = False`) — konsistent mit den bereits append-only gestellten Admins (`EventHistory`/`Attachment`/`AuditLog`/`DeletionRequest`). Konfig-Objekte ohne tamper-evidente Klientel-Historie (`DocumentType`/`FieldTemplate`/`QuickTemplate`/`TimeFilter`) bleiben schreibbar; `Settings`-Änderungen sind über `SettingsAdmin.save_model` → `log_settings_change` weiterhin auditiert.
 - **AUTHZ-2 — Cross-Facility-PII-Read unauditiert.** Ein `super_admin` konnte über die Admin-Listen/Change-Views facility-übergreifend Klientel-PII lesen, ohne Spur — im Gegensatz zu `/system/`, wo jeder Zugriff als `SYSTEM_VIEW` protokolliert wird. [`AdminReadAuditMixin`](../src/core/admin/mixins.py) schreibt für super_admin-Reads jetzt einen `SYSTEM_VIEW`-Eintrag (über den Helper [`audit_admin_view`](../src/core/services/audit/helpers.py), `facility=None`, RLS-GUCs via `_set_session_vars` gesetzt — exakt wie `SystemAuditMixin`). Die Changelist erzeugt genau **einen** Sammel-Audit pro Request (nicht pro Zeile). Ein same-facility-Read durch einen `facility_admin` erzeugt **keinen** Audit — sein Queryset ist bereits facility-gescopt (kein Cross-Facility-Read möglich), sodass `app.is_super_admin` nicht fälschlich in seiner Session gesetzt wird.
 
 Ein Architektur-Guard ([`TestDomainAdminReadOnlyGuard`](../src/tests/test_architecture_guards_audit.py)) lässt künftige Fach-Model-Admins ohne `ReadOnlyDomainAdminMixin` fehlschlagen; Verhaltensnachweis in [`test_admin_audit.py`](../src/tests/test_admin_audit.py).
@@ -1677,6 +1677,44 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 - Glue + Guard + Sudo-Entfernen + Prädikat: [`src/tests/test_mfa_webauthn.py`](../src/tests/test_mfa_webauthn.py)
 - AuthZ-Deklaration der neuen Endpoints (Vollständigkeits-Gate): [`src/tests/_authz_expectations.py`](../src/tests/_authz_expectations.py)
 - E2E gegen Chrome-Virtual-Authenticator: [`src/tests/e2e/test_mfa_webauthn.py`](../src/tests/e2e/test_mfa_webauthn.py)
+
+---
+
+## Attachment-Pipeline owner-generisch: direkte RLS-Policy statt Join (Issue #1738)
+
+**Status:** umgesetzt mit Milestone 24 ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Migrationen `0129`–`0131`). Die Facility-Ableitung im Service-Layer bleibt Konvention + Pin-Test, kein DB-Constraint — bewusst, mit eigenem Härtungs-Issue.
+
+### Beobachtung
+
+Bis Milestone 24 hing die gesamte Attachment-Pipeline am Ereignis: `EventAttachment` hatte einen NOT-NULL-FK auf `Event`, **keine eigene `facility_id`**, und seine RLS-Policy lief als Join über `core_event`. Zwei Konsequenzen:
+
+- **Policy-lose Zeilen waren strukturell möglich.** Eine Anhang-Zeile ohne (oder mit einem für die Session unsichtbaren) Ereignis fiel unter der Join-Policy durch *kein* `USING`-Prädikat — sie war nicht etwa gesperrt, sondern schlicht ungeschützt gegenüber der Frage, zu welcher Einrichtung sie gehört.
+- **Datei-Felder an Personen- und Fall-Typen waren gesperrt** ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md) §9 „E8"), weil ein Upload dort keinen Speicherort gehabt hätte.
+
+### Maßnahme
+
+`EventAttachment` → `Attachment` mit **eigener `facility_id`** (NOT NULL) und **genau einem** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`). Die Policy auf `core_attachment` vergleicht seit Migration `0131` **direkt** `facility_id = current_setting('app.current_facility_id', true)` — inklusive `is_super_admin`-OR-Branch, wie alle direkten Policies seit #867. Das Rename (`0129`) fasst Policies/RLS-Flags/GRANTs nicht an: sie hängen an der Tabellen-OID und überleben es.
+
+Zwei Sicherheitsflächen kommen dazu:
+
+1. **Sichtbarkeits-Gate der Downloads (5 Stufen), fail-closed.** (1) Owner facility-gescopt + nicht im Papierkorb → 404; (2) Doc-Type-Sensitivity → **404** (nicht 403: die Zusatzfelder-Sektion ist für Unterberechtigte komplett abwesend, ein 403 bestätigte die Existenz eines Anhangs an einem Typ, den die Rolle nicht sehen darf; `document_type is None` ⇒ ebenfalls 404); (3) Anhang am Owner und nicht soft-deletet → 404; (4) Feld-Sensitivity → **403**; (5) Datei auf Disk → 404 + `logger.error`. **Rollen-Gefälle:** der Fall-Download verlangt Fachkraft-Rechte (`StaffRequiredMixin`) — Fälle sind für die Assistenz unsichtbar, ein Assistenz-Download wäre eine Gate-Umgehung; der Personen-Download steht ab Assistenz offen. Alle drei Routen teilen **einen** Ratelimit-Eimer (`attachment_download`): drei getrennte Eimer wären dreifaches Budget für dieselbe Fläche.
+2. **Die zentrale Datei-Übersicht (`/attachments/`) scopt direkt über `Attachment.facility`.** Sie filtert Owner-Papierkorb, Doc-Type-Sensitivity (über eine `Coalesce`-Annotation über alle drei Owner, mit einem Sentinel für „Owner ohne Typ" ⇒ unsichtbar) und Feld-Sensitivity **vor** dem 200er-Slice, damit unsichtbare Zeilen keine sichtbaren aus dem Fenster drängen; fall-eigene Zeilen sind für die Assistenz komplett ausgeblendet.
+
+### Restrisiko (akzeptiert)
+
+**Die Facility einer Anhang-Zeile ist Service-Layer-Konvention, kein DB-Constraint.** `facility` wird immer aus `owner.facility` abgeleitet und nie als freier Parameter entgegengenommen; ein Unit-Test pinnt `attachment.facility_id == owner.facility_id`. Eine Composite-FK-Härtung `(event_id, facility_id)` — die eine falsche Owner-/Facility-Kombination auf DB-Ebene unmöglich machte — ist bewusst **nicht** Teil dieses Umbaus und als eigenes Härtungs-Issue vorgemerkt. Bis dahin gilt: ein Service-Bug könnte eine Zeile mit fremder Facility anlegen; sie wäre danach für die *richtige* Einrichtung unsichtbar und für die falsche sichtbar. Der roher-INSERT-Pfad ist abgedeckt (die `USING`-Klausel wirkt als implizites `WITH CHECK`).
+
+**Audit-Alt-Zeilen tragen `target_type="EventAttachment"`.** Das Log ist HMAC-verkettet und append-only — es wird **nie** migriert. Künftige Writes tragen `"Attachment"` und ein einheitliches Detail-Schema (`owner_type`/`owner_id`). Betreiberauswertungen müssen deshalb **beide** Strings und beide Detail-Schemata kennen; der Hinweis steht im [Admin-Guide § 7.4](admin-guide.md#74-audit-log).
+
+**Der Rollback der Migrationskette wird mit dem ersten personen-/fall-eigenen Anhang unmöglich** (Reverse-Guards in `0130` und `0131`, bewusst fail-loud statt policy-verdeckter Zeilen). Betriebsseite: [Ops-Runbook § 2.2](ops-runbook.md#22-migration-zurueckrollen).
+
+### Verifikation
+
+- Cross-Tenant-Isolation je Richtung + roher Cross-Facility-`INSERT` gegen die Policy: [`test_rls_functional.py`](../src/tests/test_rls_functional.py) (`TestAttachmentRLSIsolation`), Tabellen-Inventar in [`test_rls.py`](../src/tests/test_rls.py).
+- Migrationskette inkl. Reverse-Guard-Position: [`test_0129_rename_eventattachment_to_attachment.py`](../src/tests/migrations/test_0129_rename_eventattachment_to_attachment.py), [`test_0130_attachment_owner_facility.py`](../src/tests/migrations/test_0130_attachment_owner_facility.py), [`test_0131_rls_attachment.py`](../src/tests/migrations/test_0131_rls_attachment.py).
+- Download-Gate je Stufe und je Owner + IDOR-Proben: [`_authz_expectations.py`](../src/tests/_authz_expectations.py) (`client_attachment_download`, `case_attachment_download`), [`test_attachment_download_owner_routes.py`](../src/tests/test_attachment_download_owner_routes.py), [`test_compliance_attachment_gate.py`](../src/tests/test_compliance_attachment_gate.py).
+- Übersicht (Sensitivity vor Slice, Assistenz ohne Fall-Zeilen, gefiltertes Dropdown): [`test_attachment_overview.py`](../src/tests/test_attachment_overview.py).
+- Threat-Model: [`threat-model.md` § 2 Assets](threat-model.md#2-assets).
 
 ---
 
