@@ -20,6 +20,15 @@ seit ADR-039 an Ereignis, Person oder Fall. **Kein ``schema_version``-Bump:**
 eine gelockerte Restriktion ist abwärtskompatibel, jedes bisher gültige Paket
 bleibt gültig.
 
+Refs #1749 (ADR-040): ``category`` an einem Dokumentationstyp wird weiterhin
+**angenommen**, aber nicht mehr angewendet — das Modellfeld gibt es nicht mehr.
+Ebenfalls **kein ``schema_version``-Bump**: ein Cutover auf v2 machte jedes
+Bestands-Paket (und jede ältere Kopie von ``default.yaml``) unladbar, obwohl
+sich an allem anderen nichts ändert. Damit daraus kein Silent-Drop wird — was
+dem Strict-Design widerspräche —, vermerkt der Parser den Schlüssel in
+``DocumentTypeDef.ignored_keys`` und der Loader macht daraus eine sichtbare
+Warnung im Report.
+
 Pflicht sind nur Identität und die Werte ohne sinnvollen Modell-Default:
 ``slug``/``name`` (bzw. ``template_slug``, ``target``/``depends_on``/
 ``operator``). Alles andere ist optional und fällt auf den **Modell-Default**
@@ -54,7 +63,6 @@ SCHEMA_VERSION = 1
 
 # --- Erlaubte Werte: direkt aus den Modell-Choices, nie handgepflegt ---------
 _FIELD_TYPES: frozenset[str] = frozenset(FieldTemplate.FieldType.values)
-_CATEGORIES: frozenset[str] = frozenset(DocumentType.Category.values)
 _SENSITIVITIES: frozenset[str] = frozenset(DocumentType.Sensitivity.values)
 # FieldTemplate.sensitivity ist ``blank=True`` ("" = erbt vom Dokumentationstyp),
 # DocumentType.sensitivity nicht — daher zwei Mengen.
@@ -82,12 +90,20 @@ _FIELD_TEMPLATE_KEYS = frozenset(
     }
 )
 _OPTION_KEYS = frozenset({"slug", "label", "is_active"})
+# Refs #1749 (ADR-040): Schluessel, die v1 weiterhin ANNIMMT, aber nicht mehr
+# anwendet. ``category`` ist mit dem Wegfall von ``DocumentType.category``
+# bedeutungslos geworden; Bestands-Pakete (inkl. aelterer Kopien von
+# ``default.yaml``) bleiben trotzdem ladbar — statt eines schema_version-2-
+# Cutovers gibt es einen ignorierten Schluessel MIT sichtbarer Warnung im
+# Load-Report (kein Silent-Drop). Der Wert wird bewusst nicht mehr gegen eine
+# Werteliste geprueft: es gibt keine mehr.
+_IGNORED_DOCUMENT_TYPE_KEYS: frozenset[str] = frozenset({"category"})
 _DOCUMENT_TYPE_KEYS = frozenset(
     {
         "slug",
         "name",
         "entity_type",
-        "category",
+        *_IGNORED_DOCUMENT_TYPE_KEYS,
         "system_type",
         "sensitivity",
         "min_contact_stage",
@@ -201,12 +217,16 @@ class DocumentTypeDef:
     ``conditions is None`` bedeutet: der Schlüssel fehlte im Paket — der
     Loader lässt vorhandene Bedingungen dann **unangetastet** (E14). Eine
     leere Liste (``()``) ist dagegen die explizite Ansage "keine Bedingungen".
+
+    ``ignored_keys`` trägt die im Paket gesetzten, aber nicht mehr angewendeten
+    Schlüssel (Refs #1749) — der Loader macht daraus je Typ eine Warnung im
+    Report, damit ein Bestands-Paket zwar weiter lädt, sein toter Schlüssel
+    aber nicht stillschweigend verschwindet.
     """
 
     slug: str
     name: str
     entity_type: str = DocumentType.EntityType.EVENT.value
-    category: str = DocumentType.Category.CONTACT.value
     system_type: str | None = None
     sensitivity: str = DocumentType.Sensitivity.NORMAL.value
     min_contact_stage: str | None = None
@@ -216,6 +236,7 @@ class DocumentTypeDef:
     groups: tuple[GroupDef, ...] = ()
     field_refs: tuple[FieldRefDef, ...] = ()
     conditions: tuple[ConditionDef, ...] | None = None
+    ignored_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -518,7 +539,9 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
     entity_type = _enum_value(
         data, "entity_type", path, errors, _ENTITY_TYPES, default=DocumentType.EntityType.EVENT.value
     )
-    category = _enum_value(data, "category", path, errors, _CATEGORIES, default=DocumentType.Category.CONTACT.value)
+    # Refs #1749: angenommen, aber nicht angewendet — der Wert wird nicht
+    # einmal mehr validiert (es gibt keine Werteliste), nur vermerkt.
+    ignored_keys = tuple(sorted(key for key in _IGNORED_DOCUMENT_TYPE_KEYS if key in data))
     sensitivity = _enum_value(
         data, "sensitivity", path, errors, _SENSITIVITIES, default=DocumentType.Sensitivity.NORMAL.value
     )
@@ -549,7 +572,6 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         slug=slug,
         name=name,
         entity_type=entity_type,
-        category=category,
         system_type=system_type,
         sensitivity=sensitivity,
         min_contact_stage=min_contact_stage,
@@ -559,6 +581,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         groups=groups,
         field_refs=field_refs,
         conditions=conditions,
+        ignored_keys=ignored_keys,
     )
 
 
@@ -743,10 +766,12 @@ def _cross_check(
             names_by_template.add(template.name)
 
     seen_doc_types: set[str] = set()
-    # (c) Dokumentationstypen sind ueber (name, category) eindeutig — dieselbe
-    # Paarung waere in der Typ-Auswahl (nach Kategorie gruppiert) nicht
-    # unterscheidbar, derselbe Name in unterschiedlichen Kategorien ist ok.
-    seen_name_category: set[tuple[str, str]] = set()
+    # (c) Dokumentationstypen sind je Einrichtung ueber ``name`` eindeutig —
+    # die Pruefung nimmt die DB-Constraint ``unique_facility_documenttype_name``
+    # vorweg (Loader-Docstring), damit ein Paket mit zwei gleichnamigen Typen
+    # schon beim Validieren auffaellt statt erst am IntegrityError. Refs #1749
+    # (ADR-040): bis dahin lief die Regel ueber ``(name, category)``.
+    seen_names: set[str] = set()
     for index, doc_type in enumerate(doc_types):
         if doc_type is None:
             continue
@@ -755,11 +780,10 @@ def _cross_check(
             errors.append((f"{path}.slug", f"Doppelter Slug {doc_type.slug!r}."))
             continue
         seen_doc_types.add(doc_type.slug)
-        name_category = (doc_type.name, doc_type.category)
-        if name_category in seen_name_category:
-            errors.append((f"{path}.name", f"Doppelter Name {doc_type.name!r} in Kategorie {doc_type.category!r}."))
+        if doc_type.name in seen_names:
+            errors.append((f"{path}.name", f"Doppelter Name {doc_type.name!r}."))
         else:
-            seen_name_category.add(name_category)
+            seen_names.add(doc_type.name)
         _cross_check_document_type(doc_type, path, types_by_slug, errors)
 
 

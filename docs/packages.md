@@ -79,7 +79,6 @@ document_types:
   - slug: kontakt            # Lookup-Key — muss exakt stimmen
     name: Kontakt
     entity_type: event       # event | client | case — unveränderlich
-    category: contact
     system_type: contact     # nur bei entity_type: event; immer mitführen
     sensitivity: normal
     icon: users
@@ -107,7 +106,6 @@ document_types:
   - slug: aufnahmebogen
     name: Aufnahmebogen
     entity_type: client      # Zusatzfelder an der Person
-    category: admin
     sensitivity: normal
     sort_order: 0
     field_refs:
@@ -154,9 +152,8 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | Schlüssel | Typ | Default | Anmerkung |
 |---|---|---|---|
 | `slug` | Slug | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich |
-| `name` | nicht-leerer String | **Pflicht** | `(name, category)` muss im Paket eindeutig sein |
+| `name` | nicht-leerer String | **Pflicht** | muss im Paket eindeutig sein |
 | `entity_type` | `event`, `client`, `case` | `event` | **Unveränderlich** nach dem Anlegen |
-| `category` | `contact`, `service`, `admin`, `note` | `contact` | reine UI-Gruppierung |
 | `system_type` | `ban`, `contact`, `crisis`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert` |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
 | `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
@@ -165,6 +162,8 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `groups` | Liste | *(leer)* | additiv — siehe unten |
 | `field_refs` | Liste | *(leer)* | additiv — siehe unten |
 | `conditions` | Liste **oder Schlüssel weglassen** | *(nicht anfassen)* | Tri-State, siehe § 3 |
+
+> **Ignorierter Schlüssel `category` (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** `DocumentType.category` gibt es nicht mehr. Ein Paket darf den Schlüssel weiterhin enthalten — es bleibt gültig und ladbar, es gibt **keine** Schemaversion 2, aber der Wert wird nicht angewendet. Jeder betroffene Typ erscheint mit einer **Warnung** im Report („Diese Schlüssel gibt es im Datenmodell nicht mehr …“), damit die Zeile nicht still verschwindet. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
 ### `groups[]` · `field_refs[]` · `conditions[]`
 
@@ -340,8 +339,8 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 
 | Was | Folge eines Laufs |
 |---|---|
-| `name` des Typs | wird zurückbenannt — bei einem gleichnamigen betreiber-eigenen Typ bricht der Lauf am Unique-Constraint `(facility, name, category)` ab, bis das manuell aufgelöst ist |
-| `icon`, `color`, `category`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt |
+| `name` des Typs | wird zurückbenannt — bei einem gleichnamigen betreiber-eigenen Typ bricht der Lauf am Unique-Constraint `(facility, name)` ab, bis das manuell aufgelöst ist |
+| `icon`, `color`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt |
 | `sort_order` der Feldzuordnungen | zurückgesetzt — auch bei Typen **ohne** Gruppen; eine per Drag-and-Drop geänderte Reihenfolge geht verloren |
 | `default_value`, `help_text`, `options_json` der Vorlage | zurückgesetzt |
 | `sensitivity` der Vorlage | zurückgesetzt — eine **Absenkung** wird zusätzlich als Warnung gemeldet |
@@ -355,7 +354,7 @@ Was **nicht** angefasst wird: `is_active`, `description`, `retention_days` am Ty
 **Konflikte, die den ganzen Lauf abbrechen**
 
 1. Eine einrichtungseigene Feldvorlage auf einem Paket-Slug mit abweichendem `field_type` oder `is_encrypted`. Auflösung: eigene Vorlage auf einen anderen Slug bringen oder den Paket-Slug ändern.
-2. Ein Namens-/Kategorie-Konflikt beim Rückbenennen (siehe Tabelle oben).
+2. Ein Namenskonflikt beim Rückbenennen (siehe Tabelle oben).
 
 In beiden Fällen wird **nichts** angewendet, auch nicht für die übrigen Typen — der Report zeigt trotzdem, was ohne den Konflikt passiert wäre.
 

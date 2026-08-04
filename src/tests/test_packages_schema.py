@@ -43,7 +43,6 @@ def _valid_raw() -> dict[str, Any]:
                 "slug": "kontakt",
                 "name": "Kontakt",
                 "entity_type": "event",
-                "category": "contact",
                 "system_type": "contact",
                 "sensitivity": "normal",
                 "icon": "users",
@@ -127,8 +126,8 @@ class TestValidPackage:
         assert package.field_templates[0].field_type == FieldTemplate.FieldType.TEXT
         doc_type = package.document_types[0]
         assert doc_type.entity_type == DocumentType.EntityType.EVENT
-        assert doc_type.category == DocumentType.Category.CONTACT
         assert doc_type.sensitivity == DocumentType.Sensitivity.NORMAL
+        assert doc_type.ignored_keys == ()
         assert doc_type.system_type is None
         assert doc_type.groups == ()
         assert doc_type.field_refs == ()
@@ -242,10 +241,10 @@ class TestStructure:
     def test_all_errors_are_collected_not_only_the_first(self) -> None:
         raw = _valid_raw()
         raw["field_templates"][0]["field_type"] = "quatsch"
-        raw["document_types"][0]["category"] = "quatsch"
+        raw["document_types"][0]["sensitivity"] = "quatsch"
         paths = _paths(raw)
         assert "field_templates[0].field_type" in paths
-        assert "document_types[0].category" in paths
+        assert "document_types[0].sensitivity" in paths
 
     def test_error_message_contains_path(self) -> None:
         raw = _valid_raw()
@@ -292,16 +291,48 @@ class TestFieldTypes:
         assert "document_types[0].name" in _paths(raw)
 
 
+class TestIgnorierteSchluessel:
+    """``category`` wird angenommen, aber nicht angewendet (Refs #1749, ADR-040).
+
+    Bewusst **kein** ``schema_version``-2-Cutover: Bestands-Pakete (und ältere
+    Kopien von ``default.yaml``) müssen ladbar bleiben. Damit daraus kein
+    Silent-Drop wird — was dem Strict-Design des Formats widerspräche —,
+    vermerkt der Parser den Schlüssel, und der Loader macht daraus eine
+    Warnung (siehe ``test_packages_loader``).
+    """
+
+    def test_category_ist_kein_unbekannter_schluessel(self) -> None:
+        raw = _valid_raw()
+        raw["document_types"][0]["category"] = "contact"
+        parse_package(raw)
+
+    def test_category_wird_als_ignoriert_vermerkt(self) -> None:
+        raw = _valid_raw()
+        raw["document_types"][0]["category"] = "contact"
+        assert parse_package(raw).document_types[0].ignored_keys == ("category",)
+
+    def test_beliebiger_category_wert_ist_kein_fehler_mehr(self) -> None:
+        """Es gibt keine Werteliste mehr, gegen die geprüft werden könnte."""
+        raw = _valid_raw()
+        raw["document_types"][0]["category"] = "quatsch"
+        assert parse_package(raw).document_types[0].ignored_keys == ("category",)
+
+    def test_ohne_category_bleibt_ignored_keys_leer(self) -> None:
+        raw = _valid_raw()
+        raw["document_types"][0].pop("category", None)
+        assert parse_package(raw).document_types[0].ignored_keys == ()
+
+    def test_schema_version_bleibt_bei_1(self) -> None:
+        from core.packages.schema import SCHEMA_VERSION
+
+        assert SCHEMA_VERSION == 1
+
+
 class TestEnums:
     def test_unknown_field_type(self) -> None:
         raw = _valid_raw()
         raw["field_templates"][0]["field_type"] = "quatsch"
         assert "field_templates[0].field_type" in _paths(raw)
-
-    def test_unknown_category(self) -> None:
-        raw = _valid_raw()
-        raw["document_types"][0]["category"] = "quatsch"
-        assert "document_types[0].category" in _paths(raw)
 
     def test_unknown_document_type_sensitivity(self) -> None:
         raw = _valid_raw()
@@ -411,17 +442,16 @@ class TestCrossReferences:
         raw["field_templates"].append({"slug": "dauer-2", "name": "Dauer", "field_type": "text"})
         assert "field_templates[2].name" in _paths(raw)
 
-    def test_duplicate_document_type_name_and_category(self) -> None:
-        """(c) gleicher ``name`` + gleiche ``category`` bei zwei Dokumentationstypen."""
-        raw = _valid_raw()
-        raw["document_types"].append({"slug": "kontakt-2", "name": "Kontakt", "category": "contact"})
-        assert "document_types[1].name" in _paths(raw)
+    def test_duplicate_document_type_name(self) -> None:
+        """(c) gleicher ``name`` bei zwei Dokumentationstypen (Refs #1749).
 
-    def test_same_document_type_name_in_different_category_is_allowed(self) -> None:
-        """Gegenprobe: der Name allein ist nicht eindeutig — erst Name+Kategorie."""
+        Bis ADR-040 war das Paar ``(name, category)`` massgeblich und derselbe
+        Name in zwei Kategorien erlaubt — die Regel nimmt jetzt die
+        DB-Constraint ``(facility, name)`` vorweg.
+        """
         raw = _valid_raw()
-        raw["document_types"].append({"slug": "kontakt-2", "name": "Kontakt", "category": "service"})
-        parse_package(raw)
+        raw["document_types"].append({"slug": "kontakt-2", "name": "Kontakt"})
+        assert "document_types[1].name" in _paths(raw)
 
     # --- Blockpositions-Eindeutigkeit (Härtung Refs #1727, ADR-036) ----------
 

@@ -11,7 +11,7 @@ Loader ist bewusst als *Upsert von Hand* gebaut, nicht über
   Update ausschließen (E12).
 * Wir wollen vor dem Schreiben einen **Diff** (created/updated/unchanged für
   den Report) und ein ``full_clean()`` — letzteres verwandelt Unique-Konflikte
-  (z. B. ``(facility, name, category)``) in eine lesbare ``ValidationError``,
+  (z. B. ``(facility, name)``) in eine lesbare ``ValidationError``,
   bevor daraus ein ``IntegrityError`` wird.
 
 Transaktions-Bauform: **ein** äußeres ``transaction.atomic`` über den ganzen
@@ -217,10 +217,10 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
 
 def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: PackageReport) -> DocumentType | None:
     identifier = doc_def.slug
+    _warn_on_ignored_keys(doc_def, report, identifier)
     desired: dict[str, Any] = {
         "name": doc_def.name,
         "entity_type": doc_def.entity_type,
-        "category": doc_def.category,
         "system_type": doc_def.system_type,
         "sensitivity": doc_def.sensitivity,
         "min_contact_stage": doc_def.min_contact_stage,
@@ -506,6 +506,30 @@ def _validation_message(error: ValidationError) -> str:
             f"{field_name}: {' '.join(messages)}" for field_name, messages in sorted(error.message_dict.items())
         )
     return " ".join(error.messages)
+
+
+def _warn_on_ignored_keys(doc_def: DocumentTypeDef, report: PackageReport, identifier: str) -> None:
+    """Warnen, wenn das Paket Schlüssel setzt, die v1 nicht mehr anwendet (Refs #1749).
+
+    Kein Fehler: Bestands-Pakete sollen weiter laden (ADR-040 — bewusst kein
+    ``schema_version``-2-Cutover). Aber auch kein Silent-Drop: wer ``category``
+    im Paket pflegt, soll im Report sehen, dass der Wert nichts mehr bewirkt
+    und aus dem Paket entfernt werden kann.
+    """
+    if not doc_def.ignored_keys:
+        return
+    report.warnings.append(
+        (
+            identifier,
+            str(
+                _(
+                    "Diese Schlüssel gibt es im Datenmodell nicht mehr und sie werden ignoriert: "
+                    "%(keys)s. Sie können aus dem Paket entfernt werden."
+                )
+                % {"keys": ", ".join(doc_def.ignored_keys)}
+            ),
+        )
+    )
 
 
 def _warn_on_disappearing_options(

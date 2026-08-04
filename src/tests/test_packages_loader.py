@@ -40,7 +40,6 @@ def _raw(**overrides: Any) -> dict[str, Any]:
                 "slug": "kontakt",
                 "name": "Kontakt",
                 "entity_type": "event",
-                "category": "contact",
                 "system_type": "contact",
                 "icon": "users",
                 "color": "indigo",
@@ -147,7 +146,6 @@ class TestUpdate:
         raw["field_templates"][0]["name"] = "Dauer (Minuten)"
         raw["field_templates"][0]["is_required"] = True
         raw["document_types"][0]["name"] = "Kontakt neu"
-        raw["document_types"][0]["category"] = "service"
         raw["document_types"][0]["sensitivity"] = "elevated"
         raw["document_types"][0]["min_contact_stage"] = "qualified"
         raw["document_types"][0]["groups"][0]["name"] = "Basis"
@@ -165,7 +163,7 @@ class TestUpdate:
         assert report.field_refs.unchanged == ["kontakt/dauer"]
 
         doc_type = DocumentType.objects.get(slug="kontakt")
-        assert (doc_type.name, doc_type.category, doc_type.sensitivity) == ("Kontakt neu", "service", "elevated")
+        assert (doc_type.name, doc_type.sensitivity) == ("Kontakt neu", "elevated")
         assert doc_type.min_contact_stage == "qualified"
         assert FieldTemplate.objects.get(slug="dauer").is_required is True
         assert doc_type.fields.get(field_template__slug="notiz").field_group.slug == "basisdaten"
@@ -322,10 +320,10 @@ class TestImmutables:
 @pytest.mark.django_db
 class TestErrors:
     def test_name_unique_conflict_is_reported_cleanly(self, facility):
-        # Anderer Slug, gleicher (Name, Kategorie) → UniqueConstraint. Der Loader
-        # muss das als ValidationError aus full_clean() melden, nicht als
-        # IntegrityError die Transaktion vergiften.
-        DocumentType.objects.create(facility=facility, slug="kontakt-alt", name="Kontakt", category="contact")
+        # Anderer Slug, gleicher Name → UniqueConstraint (facility, name).
+        # Der Loader muss das als ValidationError aus full_clean() melden,
+        # nicht als IntegrityError die Transaktion vergiften.
+        DocumentType.objects.create(facility=facility, slug="kontakt-alt", name="Kontakt")
         before = _counts()
 
         with pytest.raises(PackageLoadError) as excinfo:
@@ -340,7 +338,7 @@ class TestErrors:
         assert not DocumentType.objects.filter(slug="kontakt").exists()
 
     def test_error_message_of_exception_contains_identifiers(self, facility):
-        DocumentType.objects.create(facility=facility, slug="kontakt-alt", name="Kontakt", category="contact")
+        DocumentType.objects.create(facility=facility, slug="kontakt-alt", name="Kontakt")
         with pytest.raises(PackageLoadError) as excinfo:
             _load(facility, _raw())
         assert "kontakt" in str(excinfo.value)
@@ -593,3 +591,47 @@ class TestSensitivityDowngradeWarning:
 
         assert report.errors == []
         assert [identifier for identifier, _message in report.warnings] == ["solo"]
+
+
+@pytest.mark.django_db
+class TestIgnorierteSchluessel:
+    """``category`` lädt weiter, wirkt nicht mehr und warnt (Refs #1749, ADR-040).
+
+    Der Entscheid gegen einen ``schema_version``-2-Cutover hängt genau an
+    diesen drei Eigenschaften: Bestands-Pakete bleiben ladbar (kein Fehler),
+    der Wert wird nicht angewendet (es gibt kein Feld mehr) und er
+    verschwindet nicht still (Warnung im Report).
+    """
+
+    def test_paket_mit_category_laedt_ohne_fehler(self, facility):
+        raw = _raw()
+        raw["document_types"][0]["category"] = "service"
+
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.document_types.created == ["kontakt"]
+
+    def test_category_erzeugt_eine_warnung_je_typ(self, facility):
+        raw = _raw()
+        raw["document_types"][0]["category"] = "service"
+
+        report = _load(facility, raw)
+
+        assert [identifier for identifier, _message in report.warnings] == ["kontakt"]
+        assert "category" in report.warnings[0][1]
+
+    def test_ohne_category_keine_warnung(self, facility):
+        report = _load(facility, _raw())
+        assert report.warnings == []
+
+    def test_zweiter_lauf_meldet_unveraendert_trotz_category(self, facility):
+        """Der tote Schlüssel darf keinen Dauer-Diff erzeugen (Idempotenz)."""
+        raw = _raw()
+        raw["document_types"][0]["category"] = "service"
+        _load(facility, raw)
+
+        report = _load(facility, raw)
+
+        assert report.document_types.unchanged == ["kontakt"]
+        assert report.document_types.updated == []

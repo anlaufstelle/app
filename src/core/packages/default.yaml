@@ -242,7 +242,6 @@ document_types:
   - slug: kontakt
     name: Kontakt
     entity_type: event
-    category: contact
     system_type: contact
     sensitivity: normal
     icon: users
@@ -266,7 +265,6 @@ document_types:
   - slug: krisengespraech
     name: Krisengespräch
     entity_type: event
-    category: service
     system_type: crisis
     sensitivity: elevated
     icon: alert-triangle
@@ -285,7 +283,6 @@ document_types:
   - slug: medizinische-versorgung
     name: Medizinische Versorgung
     entity_type: event
-    category: service
     system_type: medical
     sensitivity: high
     icon: heart
@@ -299,7 +296,6 @@ document_types:
   - slug: spritzentausch
     name: Spritzentausch
     entity_type: event
-    category: service
     system_type: needle_exchange
     sensitivity: normal
     icon: repeat
@@ -312,7 +308,6 @@ document_types:
   - slug: begleitung
     name: Begleitung
     entity_type: event
-    category: service
     system_type: accompaniment
     sensitivity: normal
     icon: map-pin
@@ -327,7 +322,6 @@ document_types:
   - slug: beratungsgespraech
     name: Beratungsgespräch
     entity_type: event
-    category: service
     system_type: counseling
     sensitivity: elevated
     min_contact_stage: qualified
@@ -345,7 +339,6 @@ document_types:
   - slug: vermittlung
     name: Vermittlung
     entity_type: event
-    category: service
     system_type: referral
     sensitivity: normal
     icon: share-2
@@ -355,7 +348,6 @@ document_types:
   - slug: notiz
     name: Notiz
     entity_type: event
-    category: note
     system_type: note
     sensitivity: normal
     icon: file-text
@@ -367,7 +359,6 @@ document_types:
   - slug: hausverbot
     name: Hausverbot
     entity_type: event
-    category: admin
     system_type: ban
     sensitivity: elevated
     icon: slash
