@@ -262,6 +262,153 @@ class TestKanonischeOrdnungInDenWrappern:
 
 
 @pytest.mark.django_db
+class TestPersonenabgeleiteteTabellenFailSafe:
+    """K0-Fail-safe (Refs #1768): Personenzahl < k ⇒ personenabgeleitete Tabellen weg.
+
+    Die k-Schwelle wird gegen **Ereignis**zahlen geprueft (``Count("id")``), nicht
+    gegen Personen. Eine Alterszelle „Unter 18: 7" kann damit von einer einzigen
+    Person stammen und wurde trotzdem publiziert; selbstbeweisend wurde der Fall,
+    sobald ``unique_clients`` unterdrueckt war — dann stand im Artefakt, dass die
+    Gesamtpersonenmenge < k ist, waehrend die Verteilung genau dieser Menge im
+    Klartext danebenstand.
+
+    Fail-safe: liegt ``unique_clients`` unter der Schwelle, faellt die **gesamte**
+    personenabgeleitete Aufschluesselung (``by_age_cluster``, ``by_contact_stage``),
+    nicht nur die Kennzahl. Ereignisabgeleitete Aggregate (``total_contacts``,
+    ``by_document_type``) bleiben unberuehrt — sie zaehlen Ereignisse, nicht Personen.
+    """
+
+    def _clients(self, facility, staff_user, count: int):
+        from core.models import Client
+
+        return [
+            Client.objects.create(
+                facility=facility,
+                contact_stage=Client.ContactStage.QUALIFIED,
+                pseudonym=f"K0-{index:02d}",
+                created_by=staff_user,
+            )
+            for index in range(count)
+        ]
+
+    def test_externer_bericht_laesst_personen_tabellen_ganz_fallen(
+        self, facility, client_qualified, doc_type_contact, staff_user, report_period
+    ):
+        """Eine Person, neun Ereignisse: die Ereigniszahlen liegen ueber der
+        Schwelle, die Personenmenge (1) nicht — die Altersverteilung dieser
+        einen Person darf im Artefakt nicht mehr auftauchen.
+        """
+        from core.services.dashboard import build_external_report
+
+        _make_events(facility, client_qualified, doc_type_contact, staff_user, 9)
+
+        report = build_external_report(facility, *report_period)
+
+        assert report["unique_clients"] is None
+        assert "by_age_cluster" not in report
+        assert "by_contact_stage" not in report
+        # Ereignisabgeleitete Aggregate bleiben — sie zaehlen keine Personen.
+        assert report["total_contacts"] == 9
+        assert [row["count"] for row in report["by_document_type"]] == [9]
+
+    def test_externer_bericht_behaelt_die_tabellen_ab_der_schwelle(
+        self, facility, doc_type_contact, staff_user, report_period
+    ):
+        """Gegenprobe: fuenf Personen (= Default-Schwelle) ⇒ unveraendert."""
+        from core.services.dashboard import build_external_report
+
+        for person in self._clients(facility, staff_user, 5):
+            _make_events(facility, person, doc_type_contact, staff_user, 2)
+
+        report = build_external_report(facility, *report_period)
+
+        assert report["unique_clients"] == 5
+        assert report["by_age_cluster"]
+        assert report["by_contact_stage"]
+
+    def test_suppress_report_stats_laesst_beide_personen_tabellen_fallen(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": 3,
+            "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
+        }
+        out = suppress_report_stats(facility, stats)
+
+        assert "by_age_cluster" not in out
+        assert "by_contact_stage" not in out
+        assert out["unique_clients"] is None
+        assert out["total_contacts"] == 40
+        assert out["by_document_type"][0]["count"] == 40
+
+    def test_suppress_report_stats_behaelt_die_tabellen_ab_der_schwelle(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": 5,
+            "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
+        }
+        out = suppress_report_stats(facility, stats)
+
+        assert out["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": 40, "suppressed": False}]
+        assert out["by_contact_stage"] == {"anonym": 20, "identifiziert": 12, "qualifiziert": 8}
+
+    def test_suppress_sample_report_1_stats_laesst_die_altersgruppen_fallen(self, facility):
+        from core.services.dashboard import suppress_sample_report_1_stats
+
+        stats = {
+            "total": 40,
+            "unique_clients": 4,
+            "by_category": [("Kontakte", 40)],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
+        }
+        out = suppress_sample_report_1_stats(facility, stats)
+
+        assert "by_age_cluster" not in out
+        assert out["unique_clients"] is None
+        # Die Kategorie-Aufschluesselung zaehlt Ereignisse und bleibt.
+        assert out["by_category"][0]["count"] == 40
+
+    def test_ohne_personenzahl_greift_der_fail_safe(self, facility):
+        """``unique_clients`` fehlt/ist ``None`` ⇒ wie „unter der Schwelle" behandeln."""
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": None,
+            "by_contact_stage": {"anonym": 40, "identifiziert": 0, "qualifiziert": 0},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_age_cluster": [],
+        }
+        out = suppress_report_stats(facility, stats)
+
+        assert "by_age_cluster" not in out
+        assert "by_contact_stage" not in out
+
+    def test_schwelle_1_deaktiviert_auch_den_fail_safe(
+        self, facility, client_qualified, doc_type_contact, staff_user, report_period
+    ):
+        """Bei k=1 ist jede Personenmenge >= 1 gross genug — der Guard schweigt."""
+        from core.models import Settings
+        from core.services.dashboard import build_external_report
+
+        Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
+        _make_events(facility, client_qualified, doc_type_contact, staff_user, 1)
+
+        report = build_external_report(facility, *report_period)
+
+        assert report["unique_clients"] == 1
+        assert report["by_age_cluster"]
+        assert report["by_contact_stage"]
+
+
+@pytest.mark.django_db
 class TestExternalReportContent:
     """Inhaltliche Tests: keine Pseudonyme, K-Anon-Schwelle wirkt."""
 

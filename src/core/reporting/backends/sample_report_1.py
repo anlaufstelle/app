@@ -176,8 +176,11 @@ def _known_terms(summary: dict, issues: list[CompletenessIssue]) -> int:
     if summary.get("total") is not None:
         known += 1
     # Σ der Altersgruppen ist nur ohne unterdrueckte Zelle bestimmbar; die leere
-    # Liste ist bestimmbar (= 0).
-    if not any(row.get("suppressed") for row in summary.get("by_age_cluster", [])):
+    # Liste ist bestimmbar (= 0). Fehlt die Tabelle ganz (K0-Fail-safe,
+    # Refs #1768), ist Σ **unbestimmt** — nicht 0: sonst zaehlte der Fail-safe
+    # als bekannter Term und liesse ohne Not eine weitere Meldung fallen.
+    age_rows = summary.get("by_age_cluster")
+    if age_rows is not None and not any(row.get("suppressed") for row in age_rows):
         known += 1
     known += sum(1 for code in _IDENTITY_CODES if _term_status(issues, code) != "hidden")
     return known

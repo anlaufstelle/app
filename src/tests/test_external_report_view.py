@@ -62,3 +62,51 @@ class TestExternalReportView:
         assert meta["facility"] == facility.name
         assert meta["privacy_profile"] == "external"
         assert meta["k_anonymity_threshold"] >= 1
+
+
+@pytest.mark.django_db
+class TestPersonenTabellenImArtefakt:
+    """K0-Fail-safe (Refs #1768) an der Ausgabegrenze: liegt die Personenzahl
+    unter der Schwelle, darf die Altersverteilung weder im JSON noch im HTML
+    erscheinen — und das HTML darf die Luecke nicht als „keine Daten"
+    ausgeben (das waere schlicht falsch).
+    """
+
+    @pytest.fixture
+    def eine_person_viele_ereignisse(self, facility, client_qualified, doc_type_contact, staff_user):
+        from django.utils import timezone
+
+        from core.models import Event
+
+        for _index in range(9):
+            Event.objects.create(
+                facility=facility,
+                client=client_qualified,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+        return facility
+
+    def test_json_ohne_personenabgeleitete_tabellen(self, client, lead_user, eine_person_viele_ereignisse):
+        client.force_login(lead_user)
+
+        data = json.loads(client.get("/statistics/external/?format=json").content)
+
+        assert data["unique_clients"] is None
+        assert "by_age_cluster" not in data
+        assert "by_contact_stage" not in data
+        assert data["total_contacts"] == 9
+
+    def test_html_zeigt_die_altersgruppen_als_unterdrueckt_statt_als_leer(
+        self, client, lead_user, eine_person_viele_ereignisse
+    ):
+        client.force_login(lead_user)
+
+        content = client.get("/statistics/external/").content.decode()
+
+        assert "Nach Altersgruppe" in content  # Abschnitt bleibt sichtbar
+        assert "Unbekannt" not in content  # aber ohne eine einzige Zeile
+        assert "Angaben nach Altersgruppe unterdrückt" in content
+        assert "Keine Daten im Zeitraum." not in content.split("report-age")[-1]

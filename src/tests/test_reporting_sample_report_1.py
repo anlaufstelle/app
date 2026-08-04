@@ -97,9 +97,12 @@ def _identitaets_terme(payload):
 
     Genau so, wie ein Empfaenger sie aus dem Artefakt liest: ``None`` = verborgen.
     Eine **fehlende** Meldung ist nicht verborgen, sondern deterministisch 0.
+
+    Fehlt die Altersgruppen-Tabelle **ganz** (K0-Fail-safe, Refs #1768: Personenzahl
+    unter der Schwelle), ist Σ unbestimmt — der Term zaehlt dann als verborgen.
     """
     summary = payload["summary"]
-    zeilen = summary["by_age_cluster"]
+    zeilen = summary.get("by_age_cluster")
     meldungen = {issue["code"]: issue["message"] for issue in payload["completeness"]}
 
     def meldungszahl(code):
@@ -108,9 +111,14 @@ def _identitaets_terme(payload):
         treffer = re.findall(r"\d+", meldungen[code])
         return int(treffer[0]) if treffer else None
 
+    if zeilen is None or any(zeile["suppressed"] for zeile in zeilen):
+        altersgruppen = None
+    else:
+        altersgruppen = sum(zeile["count"] for zeile in zeilen)
+
     return {
         "total": summary["total"],
-        "altersgruppen": None if any(zeile["suppressed"] for zeile in zeilen) else sum(z["count"] for z in zeilen),
+        "altersgruppen": altersgruppen,
         "unmapped": meldungszahl("unmapped_system_types"),
         "ohne_person": meldungszahl("events_without_client"),
     }
@@ -716,10 +724,18 @@ class TestPrepareExport:
             {"category": "Beratung", "count": None},
         ]
 
-    def test_by_age_cluster_zellen_unter_der_schwelle_werden_unterdrueckt(self, backend, kleine_daten):
+    def test_by_age_cluster_faellt_bei_personenzahl_unter_der_schwelle_ganz_weg(self, backend, kleine_daten):
+        """K0-Fail-safe (Refs #1768): ``kleine_daten`` hat **eine** Person — die
+        Altersverteilung ist die Verteilung genau dieser einen Person und
+        verschwindet komplett, nicht nur zellweise.
+
+        Die reine Zell-Suppression bei ausreichender Personenzahl prueft
+        ``test_external_report_service.py::TestSampleReport1StatsSuppression``.
+        """
         summary = self._prepared(backend, kleine_daten).summary
 
-        assert summary["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": None, "suppressed": True}]
+        assert "by_age_cluster" not in summary
+        assert summary["unique_clients"] is None
 
     def test_unique_clients_und_randsumme_unter_der_schwelle_werden_none(self, backend, kleine_daten):
         # Security R14: die Randsumme selbst ist eine Kleinstfallzahl.
@@ -793,8 +809,10 @@ class TestPrepareExport:
         raw = backend.build_dataset(parity_daten, DATE_FROM, DATE_TO).summary
         assert set(raw) == {"total", "by_category", "by_age_cluster", "unique_clients"}
 
+        # ``parity_daten`` hat drei Personen — der K0-Fail-safe (Refs #1768)
+        # nimmt ``by_age_cluster`` aus dem Export heraus.
         exportiert = self._prepared(backend, parity_daten).summary
-        assert set(exportiert) == set(raw) | {"k_anonymity_threshold"}
+        assert set(exportiert) == (set(raw) | {"k_anonymity_threshold"}) - {"by_age_cluster"}
 
     def test_export_meldung_verliert_bezugsgroesse_und_prozent(self, backend, facility):
         """Review C1: die Bezugsgroesse ``events_in_period`` erlaubt zusammen mit
@@ -964,7 +982,8 @@ class TestExportDatasetIntegration:
         assert payload["summary"]["unique_clients"] is None
         assert payload["summary"]["k_anonymity_threshold"] == 5
         assert all(row["count"] is None for row in payload["summary"]["by_category"])
-        assert all(row["count"] is None for row in payload["summary"]["by_age_cluster"])
+        # K0-Fail-safe (Refs #1768): eine Person -> keine Altersverteilung im Artefakt.
+        assert "by_age_cluster" not in payload["summary"]
         assert all(record["count"] is None for record in payload["records"])
         for issue in payload["completeness"]:
             assert not any(char.isdigit() for char in issue["message"])
@@ -1020,9 +1039,9 @@ class TestExportDatasetIntegration:
         """
         payload = json.loads(export_dataset(backend, rueckrechnungs_daten, DATE_FROM, DATE_TO, format="json").content)
 
-        assert payload["summary"]["by_age_cluster"] == [
-            {"cluster": "u18", "label": "Unter 18", "count": None, "suppressed": True}
-        ]
+        # Seit dem K0-Fail-safe (Refs #1768) faellt die Zelle nicht nur auf
+        # ``None``, sondern die ganze Tabelle — die Person ist eine einzige.
+        assert "by_age_cluster" not in payload["summary"]
         assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
         for issue in payload["completeness"]:
             assert not any(char.isdigit() for char in issue["message"])
@@ -1036,9 +1055,8 @@ class TestExportDatasetIntegration:
         # Output (kein Fremddaten-Parsing).
         root = ET.fromstring(response.content)  # noqa: S314
 
-        age_item = root.find("summary").find("by_age_cluster").find("item")
-        assert not age_item.find("count").text
-        assert age_item.find("suppressed").text == "True"
+        # K0-Fail-safe (Refs #1768): die Altersgruppen-Tabelle fehlt im XML ganz.
+        assert root.find("summary").find("by_age_cluster") is None
         assert not root.find("summary").find("unique_clients").text
         for issue in root.find("completeness").findall("issue"):
             assert not any(char.isdigit() for char in issue.text)
@@ -1056,8 +1074,10 @@ class TestExportDatasetIntegration:
         assert [issue["code"] for issue in payload["completeness"]] == ["unmapped_system_types"]
         assert not any(char.isdigit() for char in payload["completeness"][0]["message"])
 
+        # Seit dem K0-Fail-safe (Refs #1768) faellt auch die Altersgruppen-Zelle
+        # (8, >= k) weg — sie beschrieb die Verteilung einer einzigen Person.
         zahlen = _alle_veroeffentlichten_zahlen(payload)
-        assert zahlen == [8]  # nur die Altersgruppen-Zelle (>= k) bleibt sichtbar
+        assert zahlen == []
         ableitbar = _ableitbare_werte(zahlen)
         assert 3 not in ableitbar  # unterdrueckte Randsumme
         assert 5 not in ableitbar  # unterdrueckte Unmapped-Zahl
@@ -1098,46 +1118,51 @@ class TestVierTermIdentitaet:
     def test_szenario_a_ohne_meldung_ist_nicht_aufloesbar(self, backend, identitaet_a_daten):
         """(a) 27 − 25 = 2 waere die unterdrueckte Unmapped-Zahl.
 
-        Die fehlende Meldung „ohne Personenbezug" ist der dritte bekannte Term
-        (deterministisch 0) — sie wird durch einen ausdruecklichen
-        Unterdrueckungs-Hinweis ersetzt, damit sie nicht mehr 0 bedeutet.
+        Seit dem K0-Fail-safe (Refs #1768) traegt schon der Report-Koerper den
+        Schutz: drei Personen liegen unter der Schwelle, die Altersgruppen-Tabelle
+        faellt komplett — Σ Altersgruppen ist damit gar nicht mehr publiziert und
+        der Ausgangsterm der Rueckrechnung fehlt. Zusammen mit der unterdrueckten
+        Unmapped-Zahl bleiben zwei Unbekannte.
         """
         payload = self._payload(backend, identitaet_a_daten)
         terme = _identitaets_terme(payload)
 
         assert terme["total"] == 25
-        assert terme["altersgruppen"] == 27
-        assert not _exakt_rueckrechenbar(terme)
+        assert terme["altersgruppen"] is None
         assert terme["unmapped"] is None
-        assert terme["ohne_person"] is None
+        assert not _exakt_rueckrechenbar(terme)
         assert 2 not in _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
 
     def test_szenario_b_bezifferte_meldung_wird_degradiert(self, backend, identitaet_b_daten):
-        """(b) 23 + 5 − 24 = 4 waere die unterdrueckte Zahl ohne Personenbezug."""
+        """(b) 23 + 5 − 24 = 4 waere die unterdrueckte Zahl ohne Personenbezug.
+
+        Auch hier faellt Σ Altersgruppen mit der Tabelle weg (drei Personen), die
+        Meldung „ohne Personenbezug" bleibt zusaetzlich unbeziffert. Die
+        Unmapped-Zahl (5) darf sichtbar bleiben: ihr Komplement (``total`` = 23)
+        liegt ueber der Schwelle, und ohne Σ Altersgruppen laesst sich aus ihr
+        nichts zurueckrechnen.
+        """
         payload = self._payload(backend, identitaet_b_daten)
         terme = _identitaets_terme(payload)
 
         assert terme["total"] == 23
-        assert terme["altersgruppen"] == 24
-        assert not _exakt_rueckrechenbar(terme)
-        # Die bezifferte Meldung wird bevorzugt degradiert (Report-Koerper bleibt).
-        assert terme["unmapped"] is None
+        assert terme["altersgruppen"] is None
         assert terme["ohne_person"] is None
-        ableitbar = _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
-        assert 4 not in ableitbar
-        assert 5 not in ableitbar
+        assert not _exakt_rueckrechenbar(terme)
+        assert 4 not in _ableitbare_werte(_alle_veroeffentlichten_zahlen(payload))
 
     @pytest.mark.parametrize("fixture_name", ["identitaet_a_daten", "identitaet_b_daten"])
-    def test_meldungstexte_im_xml_sind_ziffernfrei(self, backend, request, fixture_name):
+    def test_unterdrueckte_meldungstexte_im_xml_sind_ziffernfrei(self, backend, request, fixture_name):
+        """Der XML-Renderer traegt dieselben ziffernfreien Ersatztexte wie JSON."""
         einrichtung = request.getfixturevalue(fixture_name)
         response = export_dataset(backend, einrichtung, DATE_FROM, DATE_TO, format="xml")
         # Begruendung fuers folgende noqa: eigener, gerade erst generierter
         # Output (kein Fremddaten-Parsing).
         root = ET.fromstring(response.content)  # noqa: S314
 
-        issues = root.find("completeness").findall("issue")
-        assert {issue.get("code") for issue in issues} == {"unmapped_system_types", "events_without_client"}
-        for issue in issues:
+        unterdrueckt = [issue for issue in root.find("completeness").findall("issue") if "k-Anonymität" in issue.text]
+        assert unterdrueckt, "Erwartet mindestens eine unterdrueckte Meldung"
+        for issue in unterdrueckt:
             assert not any(char.isdigit() for char in issue.text)
 
     def test_ohne_verborgenen_term_keine_zusatzmeldung(self, backend, grosse_daten):
@@ -1152,23 +1177,23 @@ class TestVierTermIdentitaet:
             "ohne_person": 0,
         }
 
-    def test_leerer_zeitraum_degradiert_genau_einmal(self, backend, parity_daten):
-        """Terminierung: ``total``=0 wird unterdrueckt, beide Meldungen fehlen —
-        ein einziger Unterdrueckungs-Hinweis bringt die Zahl bekannter Terme
-        von drei auf zwei, danach greift die Regel nicht mehr.
+    def test_leerer_zeitraum_bleibt_unaufloesbar(self, backend, parity_daten):
+        """Leerer Zeitraum: ``total``=0 wird unterdrueckt, die Altersgruppen-Tabelle
+        faellt ueber den K0-Fail-safe (Refs #1768, null Personen), beide Meldungen
+        fehlen mangels Luecke — zwei Unbekannte, nichts rueckrechenbar.
         """
         payload = json.loads(
             export_dataset(backend, parity_daten, date(2025, 1, 1), date(2025, 1, 31), format="json").content
         )
 
         assert payload["summary"]["total"] is None
-        assert [issue["code"] for issue in payload["completeness"]] == ["events_without_client"]
-        assert not any(char.isdigit() for char in payload["completeness"][0]["message"])
+        assert "by_age_cluster" not in payload["summary"]
         assert not _exakt_rueckrechenbar(_identitaets_terme(payload))
 
     def test_unbekannte_altersgruppen_summe_braucht_keine_degradation(self, backend, rueckrechnungs_daten):
-        """Ist eine Altersgruppen-Zelle unterdrueckt, ist Σ unbekannt — dann sind
-        hoechstens zwei Terme bekannt und es muss nichts zusaetzlich fallen.
+        """Fehlt die Altersgruppen-Tabelle (K0-Fail-safe, Refs #1768: eine Person),
+        ist Σ unbekannt — dann sind hoechstens zwei Terme bekannt und es muss
+        nichts zusaetzlich fallen.
         """
         payload = self._payload(backend, rueckrechnungs_daten)
         terme = _identitaets_terme(payload)

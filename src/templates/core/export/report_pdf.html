@@ -42,15 +42,15 @@
             <div class="kpi-label">{% trans "Gesamtkontakte" %}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">{% if stats.by_contact_stage.anonym is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.anonym }}{% endif %}</div>
+            <div class="kpi-value">{% if not stats.by_contact_stage or stats.by_contact_stage.anonym is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.anonym }}{% endif %}</div>
             <div class="kpi-label">{% trans "Anonym" %}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">{% if stats.by_contact_stage.identifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.identifiziert }}{% endif %}</div>
+            <div class="kpi-value">{% if not stats.by_contact_stage or stats.by_contact_stage.identifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.identifiziert }}{% endif %}</div>
             <div class="kpi-label">{% trans "Identifiziert" %}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">{% if stats.by_contact_stage.qualifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.qualifiziert }}{% endif %}</div>
+            <div class="kpi-value">{% if not stats.by_contact_stage or stats.by_contact_stage.qualifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.qualifiziert }}{% endif %}</div>
             <div class="kpi-label">{% trans "Qualifiziert" %}</div>
         </div>
     </div>
@@ -99,6 +99,10 @@
             {% endfor %}
         </tbody>
     </table>
+    {% elif stats.unique_clients is None %}
+    {# K0-Fail-safe (Refs #1768): Personenzahl < k -> die ganze personenabgeleitete
+       Aufschluesselung faellt; "keine Daten" waere hier irrefuehrend. #}
+    <p>{% trans "Angaben nach Altersgruppe unterdrückt (k-Anonymität)." %}</p>
     {% else %}
     <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
     {% endif %}

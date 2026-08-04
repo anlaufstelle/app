@@ -133,6 +133,39 @@ def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str =
     return _canonicalize_suppressed_order(result)
 
 
+# Aufschluesselungen, deren Aequivalenzklassen **Personen** sind (nicht
+# Ereignisse) — sie fallen gemeinsam mit der Personenzahl (K0, Refs #1768).
+_PERSON_DERIVED_KEYS = ("by_age_cluster", "by_contact_stage")
+
+
+def _drop_person_derived_breakdowns(report: dict[str, Any], unique_clients: int | None, threshold: int) -> None:
+    """K0-Fail-safe (Refs #1768): Personenzahl < k ⇒ Personen-Tabellen ganz weg.
+
+    Die Zell-Suppression prueft die Schwelle gegen **Ereignis**zahlen
+    (``Count("id")``), nicht gegen Personen: eine Alterszelle „Unter 18: 7" kann
+    von einer einzigen Person stammen und passierte den Filter trotzdem.
+    Selbstbeweisend wurde der Fall, sobald ``unique_clients`` unterdrueckt war —
+    dann stand im Artefakt, dass die Gesamtpersonenmenge < k ist, waehrend die
+    Verteilung genau dieser Menge im Klartext danebenstand.
+
+    Bis das Zellkriterium selbst auf die DISTINCT-Personenzahl je Bucket
+    umgestellt ist (K0-b, eigenes Paket), greift dieser Fail-safe: liegt die
+    Personenzahl unter der Schwelle, faellt die **gesamte** personenabgeleitete
+    Aufschluesselung, nicht nur die Kennzahl. Ereignisabgeleitete Aggregate
+    (``total_contacts``/``total``, ``by_document_type``, ``by_category``) bleiben
+    unberuehrt — sie zaehlen Ereignisse, nicht Personen.
+
+    Bewusst **ein** benannter Guard mit **einer** Bedingung (kein verstreutes
+    Inline-``if``): K0-b ersetzt bzw. ergaenzt genau diese Stelle. Mutiert
+    ``report`` in place; fehlende Keys werden still uebergangen (nicht jeder
+    Wrapper fuehrt beide Tabellen).
+    """
+    if unique_clients is not None and unique_clients >= threshold:
+        return
+    for key in _PERSON_DERIVED_KEYS:
+        report.pop(key, None)
+
+
 def _suppress_stage_dict(stage_dict: dict[str, int], threshold: int) -> dict[str, Any]:
     """Suppress-Variante fuer den by_contact_stage-Dict (mit sekundaerer
     Suppression analog ``_apply_secondary_suppression``, A6.1)."""
@@ -159,7 +192,7 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     by_age_cluster = _suppress_small(raw["by_age_cluster"], threshold)
     by_contact_stage = _suppress_stage_dict(raw["by_contact_stage"], threshold)
 
-    return {
+    report = {
         # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
         "total_contacts": raw["total_contacts"] if raw["total_contacts"] >= threshold else None,
         "unique_clients": raw["unique_clients"] if raw["unique_clients"] >= threshold else None,
@@ -183,6 +216,10 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
             "data_source_note": str(DATA_SOURCE_NOTES[LIVE]),
         },
     }
+    # K0-Fail-safe (Refs #1768) — nach dem Aufbau, damit der Guard genau eine
+    # Stelle hat und beide Personen-Tabellen gemeinsam trifft.
+    _drop_person_derived_breakdowns(report, raw["unique_clients"], threshold)
+    return report
 
 
 def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
@@ -215,14 +252,18 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
 
     unique = stats.get("unique_clients", 0)
     total = stats.get("total", 0)
-    return {
+    out = {
         **stats,
         "by_category": by_category,
         "by_age_cluster": by_age_cluster,
-        "unique_clients": unique if unique >= threshold else None,
+        "unique_clients": unique if unique is not None and unique >= threshold else None,
         # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
         "total": total if total is not None and total >= threshold else None,
     }
+    # K0-Fail-safe (Refs #1768): hier gibt es nur ``by_age_cluster`` — der
+    # Beispiel-Sachbericht fuehrt keine Kontaktstufen.
+    _drop_person_derived_breakdowns(out, unique, threshold)
+    return out
 
 
 def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
@@ -246,4 +287,7 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
     total = stats.get("total_contacts", 0)
     out["total_contacts"] = total if total is not None and total >= threshold else None
+    # K0-Fail-safe (Refs #1768): Altersgruppen UND Kontaktstufen sind
+    # personenabgeleitet und fallen gemeinsam mit der Personenzahl.
+    _drop_person_derived_breakdowns(out, unique, threshold)
     return out

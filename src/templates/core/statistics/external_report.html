@@ -123,8 +123,16 @@
                 </td>
             </tr>
             {% empty %}
+            {# K0-Fail-safe (Refs #1768): liegt die Personenzahl unter der Schwelle,
+               faellt die ganze Tabelle — dann waere „keine Daten" schlicht falsch. #}
             <tr>
-                <td colspan="2" class="px-4 py-2 text-muted italic">{% trans "Keine Daten im Zeitraum." %}</td>
+                <td colspan="2" class="px-4 py-2 text-muted italic">
+                    {% if report.unique_clients is None %}
+                        {% trans "Angaben nach Altersgruppe unterdrückt (k-Anonymität)." %}
+                    {% else %}
+                        {% trans "Keine Daten im Zeitraum." %}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

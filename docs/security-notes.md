@@ -507,8 +507,9 @@ beruht). Sperrvermerke blockieren seit #1756
 ### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
 
 **Status:** Analyse abgeschlossen; Umsetzung läuft — **K5 mitigiert**
-(#1767), die übrigen Kanäle sind offen bzw.
-akzeptiert (Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
+(#1767), **K0 per Fail-safe (a) mitigiert**
+(#1768; das Zellkriterium (b) bleibt offen),
+die übrigen Kanäle sind offen bzw. akzeptiert (Spalte „Status" in der Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
 Berichts-Exporte ([ADR-038 § 5](adr/038-reporting-plugin-backends.md)); die dort geschlossenen Kanäle
@@ -539,7 +540,7 @@ Betriebskennzahl.
 
 | # | Kanal | Empfehlung | Aufwand | Priorität | Status |
 |---|---|---|---|---|---|
-| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | offen |
+| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | **(a) mitigiert** (#1768), (b) offen |
 | **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 | **mitigiert** (#1767) |
 | **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | offen |
 | **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | offen |
@@ -586,6 +587,25 @@ zeitraum-skopierte Variante, und die Snapshot-Payload muss `persons` je Cluster 
 (Formatänderung, kollidiert mit #1741).
 **Nebenwirkung:** nach (b) gilt „unterdrückt ⇒ Wert ≤ k−1" nicht mehr — das entschärft K1, bricht
 aber die Annahme, auf der der Guard aus K1/K2 rechnet. Beide Maßnahmen gemeinsam modellieren.
+
+*Status: **(a) mitigiert***, **(b) offen**
+(#1768). `_drop_person_derived_breakdowns`
+in [`external_report.py`](../src/core/services/dashboard/external_report.py) ist ein einzelner,
+benannter Guard mit **einer** Bedingung (`unique_clients < k`), den alle drei Wrapper aufrufen; er
+entfernt dann `by_age_cluster` **und** `by_contact_stage` vollständig aus dem Artefakt — Key weg, nicht
+nur Werte auf `None`. Eine bloß genullte Alterszeile wäre selbst noch die Aussage „in dieser
+Altersgruppe gibt es mindestens ein Ereignis". Ereignisabgeleitete Aggregate (`total_contacts`/`total`,
+`by_document_type`, `by_category`) bleiben unberührt. Die Templates weisen die Lücke aus, statt sie als
+„keine Daten" auszugeben (Nichtirreführung). **Bewusst grob:** der Guard greift auch, wenn nur
+`by_contact_stage.anonym` betroffen wäre — die feinere Lösung ist (b), die Umstellung des
+Zellkriteriums auf die DISTINCT-Personenzahl je Bucket; diese Stelle ist dafür der vorgesehene
+Ersatz-/Ergänzungspunkt. Test-gepinnt in
+`test_external_report_service.py::TestPersonenabgeleiteteTabellenFailSafe` und
+`test_external_report_view.py::TestPersonenTabellenImArtefakt` (JSON + HTML).
+
+**Damit korrigiert:** die frühere Zusicherung, Merkmalskombinationen mit weniger als *k* **Personen**
+würden unterdrückt, gilt für die personenabgeleiteten Aufschlüsselungen wieder — allerdings nur auf
+Tabellen-, noch nicht auf Zellebene.
 
 #### K5 — Zeilensortierung nach Anzahl als Rangkanal
 
