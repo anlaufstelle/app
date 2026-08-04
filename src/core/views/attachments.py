@@ -68,7 +68,12 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
 
         # Get all attachments for this facility via event__facility
         attachments = (
-            Attachment.objects.filter(event__facility=facility, event__is_deleted=False)
+            # B1 (M24/AP4, Refs #1738): ``deleted_at`` blendet einen Anhang
+            # ueberall aus — der Download antwortet seit L5 (Refs #1375) mit
+            # 404, nur diese Liste zeigte ihn weiter samt Dateiname und
+            # Download-Link. Wer einen Anhang entfernt hat, darf ihn hier nicht
+            # wiederfinden.
+            Attachment.objects.filter(event__facility=facility, event__is_deleted=False, deleted_at__isnull=True)
             .select_related(
                 "event",
                 "event__document_type",
