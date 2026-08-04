@@ -12,6 +12,9 @@ hier je mit eigenem Failing-Test fixiert werden:
 
 from __future__ import annotations
 
+import re
+from types import SimpleNamespace
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -32,6 +35,20 @@ PDF_HEADER = (
 )
 
 LIST_URL_NAME = "core:attachment_list"
+
+
+def _title_hrefs(content: str, filename: str) -> list[str]:
+    """``href``-Werte aller Links, deren Beschriftung den Dateinamen traegt.
+
+    Trennt die TITEL-Links (Dateiname als Text, Desktop-Zeile + Mobil-Karte)
+    von der dedizierten Download-Aktion — die traegt nur ein Icon und keinen
+    Dateinamen.
+    """
+    return [
+        match.group(1)
+        for match in re.finditer(r'<a href="([^"]*)"[^>]*>(.*?)</a>', content, re.DOTALL)
+        if filename in match.group(2)
+    ]
 
 
 def _file_template(facility, name, *, sensitivity=""):
@@ -237,6 +254,52 @@ class TestOwnerGenericOverview:
         assert rows["aus_person.pdf"]["owner_url"] == reverse("core:client_detail", kwargs={"pk": person.pk})
         assert rows["aus_fall.pdf"]["owner_url"] == reverse("core:case_detail", kwargs={"pk": case.pk})
         assert {row["owner_type"] for row in rows.values()} == {"event", "client", "case"}
+
+    def test_row_title_links_to_the_owner_record(self, client, staff_user, three_owner_attachments):
+        """Der Zeilentitel fuehrt zum Datensatz, nicht ein zweites Mal zum Download.
+
+        Integrations-Review (Refs #1738): Beim Owner-Umbau bekamen Desktop-Zeile
+        und Mobil-Karte ``download_url`` als Titel-Link — die Zeile hatte damit
+        zwei Links auf dieselbe Datei und keinen Weg mehr zum Kontext (Person,
+        Fall, Ereignis). Ein Klick auf den Dateinamen entschluesselte die Datei,
+        statt den Datensatz zu oeffnen.
+        """
+        client.force_login(staff_user)
+        response = client.get(reverse(LIST_URL_NAME))
+        content = response.content.decode()
+        rows = {item["original_filename"]: item for item in response.context["attachments"]}
+
+        for filename, row in rows.items():
+            hrefs = _title_hrefs(content, filename)
+            assert hrefs, f"Kein Titel-Link fuer {filename} gefunden"
+            assert set(hrefs) == {row["owner_url"]}, f"{filename}: Titel zeigt auf {set(hrefs)}"
+            # Der dedizierte Download-Link bleibt bestehen.
+            assert row["download_url"] in content
+
+    def test_row_title_without_owner_url_renders_as_plain_text(self):
+        """Fallback: ohne ``owner_url`` bleibt der Titel unverlinkt (kein toter Link)."""
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            "core/attachments/partials/attachment_table.html",
+            {
+                "attachments": [
+                    {
+                        "attachment": SimpleNamespace(mime_type="application/pdf", created_at=timezone.now()),
+                        "owner_type": "case",
+                        "owner_label": "Fall",
+                        "owner_url": "",
+                        "original_filename": "ohne_ziel.pdf",
+                        "file_size_display": "1 KB",
+                        "doc_type_name": "F-Typ",
+                        "client_pseudonym": "—",
+                        "download_url": "/attachments/x/download/",
+                    }
+                ]
+            },
+        )
+        assert "ohne_ziel.pdf" in html
+        assert _title_hrefs(html, "ohne_ziel.pdf") == []
 
     def test_download_links_point_to_the_owner_route(self, client, staff_user, three_owner_attachments):
         client.force_login(staff_user)
