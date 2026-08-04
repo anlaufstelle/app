@@ -26,6 +26,7 @@ from core.reporting.registry import get_available_backends, get_backend
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
     EXTERNAL_REPORT_TARGET,
+    RELEASE_LOG_LIMIT,
     InvalidStatisticsPeriodError,
     _merge_stats,
     build_external_report,
@@ -518,6 +519,11 @@ class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):
             {
                 "releases": releases,
                 "overlap_count": sum(1 for release in releases if release.overlaps),
+                # Refs #1772 (Punkt 3): die Auswertung endet bei den N juengsten
+                # Freigaben. Der Hinweistext nennt die Zahl, statt sie im Code
+                # zu verstecken — sonst ist sie ein blinder Fleck genau in der
+                # Warnung, um derentwillen die Seite existiert.
+                "release_limit": RELEASE_LOG_LIMIT,
             },
         )
 

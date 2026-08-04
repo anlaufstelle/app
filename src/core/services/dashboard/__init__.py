@@ -38,6 +38,7 @@ from core.services.dashboard.quick_templates import (
 from core.services.dashboard.release_log import (
     EXTERNAL_REPORT_TARGET,
     RELEASE_FIELD_MAX_LENGTH,
+    RELEASE_LOG_LIMIT,
     Release,
     build_release_overview,
     release_detail,
@@ -81,6 +82,7 @@ __all__ = [
     "PERSONS_KEY",
     "EXTERNAL_REPORT_TARGET",
     "RELEASE_FIELD_MAX_LENGTH",
+    "RELEASE_LOG_LIMIT",
     "Release",
     "PeriodState",
     "STATISTICS_MAX_CUSTOM_RANGE_DAYS",
