@@ -15,9 +15,27 @@ from core.services.audit import audit_security_violation, hmac_hash_value
 
 
 def _extension(filename: str) -> str:
-    """Kleingeschriebene Dateiendung ohne Punkt (``""`` wenn keine da ist)."""
+    """Kleingeschriebene Dateiendung als Typmarker, sonst ``""``.
+
+    Refs #1755 (Review): Ohne Begrenzung landete bei Dateinamen ohne echte
+    Endung der komplette Namensrest nach dem letzten Punkt im append-only
+    ``SECURITY_VIOLATION``-``detail`` — genau die Klienten-PII, die die
+    Hash-Minimierung (Refs #1751 P5) tilgen soll (``"Attest Dr.Meier"`` →
+    ``"meier"``, ``".Bericht-Max-Mustermann"`` → der ganze Name). Ein echter
+    Typmarker ist kurz und rein alphanumerisch; alles darueber (lange oder
+    zeichenhaltige Reste) ist eher ein Namensfragment und wird verworfen. Die
+    Laengenschranke (<= 4) deckt alle ``DEFAULT_ALLOWED_FILE_TYPES``
+    (pdf/jpg/jpeg/png/docx/odt) ab; sie ist bewusst enger als der zunaechst
+    vorgeschlagene Richtwert (<= 8), damit auch das kurze Beispiel ``"meier"``
+    (5 Zeichen) nicht mehr durchrutscht.
+    """
     name = filename or ""
-    return name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if "." not in name:
+        return ""
+    ext = name.rsplit(".", 1)[-1]
+    if ext.isalnum() and len(ext) <= 4:
+        return ext.lower()
+    return ""
 
 
 def log_attachment_violation(facility, user, event, *, reason, filename, **extra):

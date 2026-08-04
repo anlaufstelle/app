@@ -102,6 +102,40 @@ class TestAttachmentViolationFilenameMinimized:
         assert entry.detail["filename_ext"] == ""
 
 
+class TestExtensionMarkerIsBounded:
+    """Refs #1755 (Review): ``_extension`` schnitt frueher ALLES nach dem letzten
+    Punkt ab — ohne Laengen-/Zeichengrenze. Bei Dateinamen ohne echte Endung
+    landete so ein beliebig langer Namensrest im append-only ``detail`` (genau
+    die Klienten-PII, die die Hash-Minimierung entfernen soll). Der Marker ist
+    jetzt auf einen kurzen, rein alphanumerischen Typmarker begrenzt.
+    """
+
+    def test_real_extensions_are_preserved(self):
+        from core.services.file_vault.audit import _extension
+
+        assert _extension("bericht.pdf") == "pdf"
+        assert _extension("foto.JPEG") == "jpeg"
+        assert _extension("scan.PNG") == "png"
+        assert _extension("vorlage.docx") == "docx"
+        assert _extension("schaden.exe") == "exe"
+
+    def test_name_remainder_after_dot_is_dropped(self):
+        """Die im Review genannten Beispiele: kein Namensfragment mehr im Marker."""
+        from core.services.file_vault.audit import _extension
+
+        # Langer, zeichenhaltiger Rest (Bindestriche) -> raus.
+        assert _extension(".Bericht-Max-Mustermann") == ""
+        assert _extension("Foto von Familie Mueller-Schmidt") == ""
+        # Kurz, aber laenger als ein realer Typmarker -> ebenfalls raus (5 Zeichen).
+        assert _extension("Attest Dr.Meier") == ""
+
+    def test_no_dot_stays_empty(self):
+        from core.services.file_vault.audit import _extension
+
+        assert _extension("ohne-endung") == ""
+        assert _extension("") == ""
+
+
 class TestMilestoneDeleteDetailMinimized:
     """``MILESTONE_DELETE`` schrieb den Meilenstein-Titel woertlich ins ``detail``.
 
