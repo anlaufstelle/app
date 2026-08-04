@@ -332,3 +332,185 @@ class TestKAnonBridgeRedactionParity:
         assert not stale, (
             f"_BRIDGE_EXEMPT nennt Helfer, die ``{self._HARD_PATH_FUNC}`` gar nicht (mehr) aufruft: {sorted(stale)}"
         )
+
+
+class TestZentraleSuppressionsfunktion:
+    """Jedes Berichts-Artefakt mit Randsumme + Aufschluesselung benutzt DIESELBE
+    Suppressionsmaschinerie (K1/K2-Regressionsschutz, Refs #1770).
+
+    Die Disclosure-Analyse zu #1742
+    hat drei Fehlerklassen belegt, die ein statischer Guard und nur ein
+    statischer Guard zuverlaessig ausschliesst:
+
+    1. **Eigenbau-Suppression.** ``ExampleBackend`` trug eine zweite,
+       pauschalere Regel („faellt eine Zelle, faellt auch ``total``") neben der
+       zentralen. Solange jede Kopie fuer sich richtig ist, faellt das nie auf —
+       bis eine Haertung nur in einer Kopie landet (genau die Parity-Drift, die
+       #1750 erzeugt hat).
+    2. **Fail-open bei neuer Zeilenform (K5).** Die kanonische Ordnung wurde
+       frueher an der Zeilen*form* erkannt. Eine kuenftige count-sortierte
+       Tabelle mit anderer Form waere still unkanonisiert geblieben — kein Test
+       waere rot geworden, weil kein Test die neue Tabelle kannte. Deshalb ist
+       ``order`` heute ein Pflicht-Keyword, und dieser Guard prueft, dass jede
+       Aufrufstelle es setzt.
+    3. **Fehlende Randsummen-Deklaration (K2).** Ohne ``margin`` weiss das
+       Machbarkeits-Audit nicht, ob es eine Gleichung gibt, an der es rechnen
+       kann. Ein Default waere in beide Richtungen falsch: ``None`` liesse eine
+       echte Randsumme ungeschuetzt, ein geratener Wert wuerde ohne Not
+       unterdruecken.
+
+    Der Guard ist AST-basiert und deshalb unabhaengig von Formatierung und
+    Argument-Reihenfolge; er nennt bei jedem Verstoss Datei und Zeile.
+    """
+
+    _CENTRAL_MODULE = Path("src/core/services/dashboard/external_report.py")
+    _BACKEND_DIR = Path("src/core/reporting/backends")
+    # Fuer die Eigenbau-Suche: der ganze Anwendungsbaum, nicht nur die
+    # Backends. Ein neues Artefakt entsteht genauso gut in ``views/`` oder
+    # ``services/`` — die Fehlerklasse haengt am Marker, nicht am Verzeichnis.
+    _APP_DIR = Path("src/core")
+    # Aufrufstellen ausserhalb des zentralen Moduls, die suppressieren duerfen.
+    _SUPPRESSION_CALLS = ("_suppress_small", "_suppress_stage_dict")
+    # Pflicht-Keywords je Suppressionsfunktion.
+    _REQUIRED_KEYWORDS = {"_suppress_small": {"margin", "order"}, "_suppress_stage_dict": {"margin", "persons"}}
+    # Erlaubte Werte fuer ``order`` — eine neue Ordnung muss im zentralen Modul
+    # definiert werden, nicht an der Aufrufstelle erfunden.
+    _KNOWN_ORDERS = {"ORDER_AGE_CLUSTER", "ORDER_DOCUMENT_TYPE", "ORDER_INPUT"}
+
+    @staticmethod
+    def _calls(path: Path, name: str) -> list[ast.Call]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        return [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+        ]
+
+    def _suppression_modules(self) -> list[Path]:
+        """Zentrales Modul + alle Reporting-Backends (die Artefakt-Erzeuger)."""
+        return [self._CENTRAL_MODULE, *sorted(self._BACKEND_DIR.glob("*.py"))]
+
+    def test_jede_aufrufstelle_deklariert_randsumme_und_ordnung(self):
+        violations = []
+        for module in self._suppression_modules():
+            for function, required in self._REQUIRED_KEYWORDS.items():
+                for call in self._calls(module, function):
+                    given = {keyword.arg for keyword in call.keywords if keyword.arg}
+                    missing = required - given
+                    if missing:
+                        violations.append(f"{module}:{call.lineno} {function}() ohne {sorted(missing)}")
+        assert not violations, (
+            "Diese Aufrufstellen der zentralen Suppression lassen ein Pflicht-Keyword weg. "
+            "``margin`` sagt, ob es eine publizierte Randsumme gibt, an der das "
+            "Machbarkeits-Audit rechnen kann (K2); ``order`` benennt die kanonische "
+            "Ausgabeordnung unterdrueckter Zeilen (K5). Beides fail-closed, damit eine "
+            "neue Tabelle nicht still ungeschuetzt bleibt:\n" + "\n".join(violations)
+        )
+
+    def test_order_kommt_aus_der_zentralen_liste(self):
+        violations = []
+        for module in self._suppression_modules():
+            for call in self._calls(module, "_suppress_small"):
+                for keyword in call.keywords:
+                    if keyword.arg != "order":
+                        continue
+                    if not isinstance(keyword.value, ast.Name) or keyword.value.id not in self._KNOWN_ORDERS:
+                        violations.append(f"{module}:{call.lineno} order={ast.unparse(keyword.value)}")
+        assert not violations, (
+            "``order`` muss eine der zentral definierten Ordnungen sein "
+            f"({sorted(self._KNOWN_ORDERS)}) — eine an der Aufrufstelle erfundene "
+            "Ordnung entzieht sich dem K5-Schutz:\n" + "\n".join(violations)
+        )
+
+    def test_kein_artefakt_baut_eigene_unterdrueckung(self):
+        """Ausserhalb des zentralen Moduls darf niemand ``suppressed`` setzen.
+
+        Geprueft wird das Setzen des Markers (``row["suppressed"] = ...`` bzw.
+        ``suppressed=...`` in einem Dict-Literal) — Lesen ist erlaubt und
+        ueblich (Templates, Rueckprojektion der Records).
+        """
+        violations = []
+        for module in sorted(self._APP_DIR.rglob("*.py")):
+            if module == self._CENTRAL_MODULE or "migrations" in module.parts:
+                continue
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if (
+                            isinstance(target, ast.Subscript)
+                            and isinstance(target.slice, ast.Constant)
+                            and target.slice.value == "suppressed"
+                        ):
+                            violations.append(f"{module}:{node.lineno} setzt den Unterdrueckungs-Marker selbst")
+                if isinstance(node, ast.Dict):
+                    for key in node.keys:
+                        if isinstance(key, ast.Constant) and key.value == "suppressed":
+                            violations.append(f"{module}:{node.lineno} baut eine Zeile mit eigenem ``suppressed``")
+        assert not violations, (
+            "Nur core/services/dashboard/external_report.py darf ueber Unterdrueckung "
+            "entscheiden. Eine zweite Kopie der Regel driftet garantiert — genau das "
+            "war der Befund hinter K2 (``_suppress_stage_dict`` trug eine eigene "
+            "Sekundaer-Heuristik):\n" + "\n".join(violations)
+        )
+
+    def test_jedes_backend_mit_randsumme_ruft_den_residual_guard(self):
+        """Ein ``prepare_export``, das eine Randsumme publiziert, muss den
+        Fixpunkt-Guard aufrufen — sonst bleibt die Rueckrechnung offen.
+
+        Erkannt wird die Randsumme daran, dass ``prepare_export`` ein
+        ``summary`` schreibt; die Ausnahme fuer Backends ohne Randsumme
+        (``summary`` unveraendert durchgereicht) faellt damit automatisch heraus.
+        """
+        violations = []
+        for module in sorted(self._BACKEND_DIR.glob("*.py")):
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.FunctionDef) and node.name == "prepare_export"):
+                    continue
+                source = ast.unparse(node)
+                if '"summary"' not in source and "summary=" not in source and "summary[" not in source:
+                    continue
+                calls = {
+                    child.func.id
+                    for child in ast.walk(node)
+                    if isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+                }
+                if "apply_residual_guard" in calls:
+                    continue
+                # Wrapper, die die zentrale Suppression komplett delegieren
+                # (``suppress_sample_report_1_stats`` ruft den Guard intern),
+                # sind erfuellt.
+                if calls & {"suppress_sample_report_1_stats", "suppress_report_stats", "build_external_report"}:
+                    continue
+                violations.append(f"{module}:{node.lineno} prepare_export ohne Residual-Guard")
+        assert not violations, (
+            "Diese Backends publizieren eine Randsumme neben ihrer Aufschluesselung, "
+            "ohne den zentralen Fixpunkt-Guard (K1) zu durchlaufen:\n" + "\n".join(violations)
+        )
+
+    def test_synthetischer_verstoss_wird_erkannt(self):
+        """Positiv-Kontrolle: der Guard muss seinen eigenen Trefferfall zeigen.
+
+        Ohne diesen Anker koennte eine spaetere Refaktorierung die AST-Suche
+        leerlaufen lassen (z. B. wenn die Suppression ueber ein Modul-Alias
+        aufgerufen wird) und der Guard waere still gruen.
+        """
+        tree = ast.parse("rows = _suppress_small(rows, threshold)\n")
+        calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_suppress_small"
+        ]
+        assert calls, "AST-Suche findet den Aufruf nicht mehr"
+        assert {keyword.arg for keyword in calls[0].keywords if keyword.arg} != {"margin", "order"}
+
+    def test_die_suche_findet_die_bekannten_aufrufstellen(self):
+        """Zweiter Anker: die Menge der gefundenen Aufrufstellen darf nicht
+        stillschweigend auf null schrumpfen."""
+        total = sum(
+            len(self._calls(module, function))
+            for module in self._suppression_modules()
+            for function in self._SUPPRESSION_CALLS
+        )
+        assert total >= 6, f"nur {total} Aufrufstellen gefunden — AST-Suche pruefen"
