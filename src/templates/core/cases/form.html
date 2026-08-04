@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n core_tags %}
+{% load i18n core_tags static %}
 
 {% block title %}{% if is_edit %}{% trans "Fall bearbeiten" %}{% else %}{% trans "Neuer Fall" %}{% endif %} – Anlaufstelle{% endblock %}
 
@@ -12,7 +12,14 @@
     Zusatzfeld-Werte verwerfen wuerde.{% endcomment %}
     {% comment %}M24/AP4 (Refs #1738, ADR-039): multipart — Fall-Typen dürfen
     Datei-Felder tragen.{% endcomment %}
-    <form method="post" enctype="multipart/form-data" class="space-y-4"
+    {% comment %}AP5 (Refs #1738, ADR-039 §8): ``data-offline-enctype-downgrade``
+    ist hier INERT — Personen-/Fall-Formulare stehen bewusst NICHT in
+    ``QUEUE_PATTERNS`` und werden offline nie gequeued. Attribut und Script
+    liegen trotzdem an, damit eine spätere Queuebarkeit nicht an einem
+    vergessenen Detail scheitert: der Downgrade auf ``urlencoded`` (wenn keine
+    Datei gewählt ist) ist die Voraussetzung dafür, dass der Service Worker
+    einen reinen Text-Submit überhaupt annehmen darf (Refs #1489).{% endcomment %}
+    <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade
           {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
           data-confirm-discard="{% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %} {% endif %}{% if dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} Datei entfernt.{% plural %}Außerdem werden {{ f }} Dateien entfernt.{% endblocktrans %}{% endif %}"{% endif %}>
         {% csrf_token %}
@@ -123,4 +130,9 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{# AP5 (Refs #1738): siehe Kommentar am <form> — inertes Enctype-Downgrade. #}
+<script src="{% static 'js/event-form-enctype.js' %}" defer></script>
 {% endblock %}

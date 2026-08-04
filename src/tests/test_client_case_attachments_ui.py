@@ -394,14 +394,33 @@ class TestCaseAttachmentForm:
         assert [e["id"] for e in _entries(case, "bescheid")] == entry_ids
 
 
+FORM_TEMPLATES = ["src/templates/core/clients/form.html", "src/templates/core/cases/form.html"]
+
+
 class TestFormTemplatesAreMultipart:
     """Ohne ``enctype="multipart/form-data"`` kaeme keine Datei am Server an."""
 
-    @pytest.mark.parametrize(
-        "template",
-        ["src/templates/core/clients/form.html", "src/templates/core/cases/form.html"],
-    )
+    @pytest.mark.parametrize("template", FORM_TEMPLATES)
     def test_form_declares_multipart(self, template):
         from pathlib import Path
 
         assert 'enctype="multipart/form-data"' in Path(template).read_text()
+
+
+class TestFormTemplatesCarryOfflineDowngrade:
+    """AP5 (Refs #1738, ADR-039 §8): inertes Enctype-Downgrade an beiden Formularen.
+
+    Personen-/Fall-Formulare sind bewusst **nicht** queuebar (multipart, siehe
+    Warnkommentar an ``QUEUE_PATTERNS``). Attribut und Script liegen trotzdem
+    an, damit eine spaetere Queuebarkeit nicht an einem vergessenen Detail
+    scheitert — und damit dieses Zukunftsversprechen nicht still aus den
+    Templates verschwindet, pinnt dieser Guard es.
+    """
+
+    @pytest.mark.parametrize("template", FORM_TEMPLATES)
+    def test_form_carries_downgrade_attribute(self, template):
+        from pathlib import Path
+
+        body = Path(template).read_text()
+        assert "data-offline-enctype-downgrade" in body
+        assert "js/event-form-enctype.js" in body

@@ -48,8 +48,15 @@
         // durch die HTML-Offline-Fallback-Kette ersetzt werden (sonst sieht
         // der User die /offline/-Seite statt einer Datei oder eines
         // Berechtigungs-/404-Fehlers).
+        //
+        // M24/AP5 (Refs #1738, ADR-039 §8): Anhänge hängen seit dem
+        // Owner-Umbau an Ereignis, Person ODER Fall — es gibt drei
+        // Download-Routen mit identischem Zuschnitt. Ohne die Erweiterung um
+        // ``clients|cases`` fielen genau die neuen Downloads in die
+        // Fallback-Kette und der Benutzer sähe offline eine Ersatzseite statt
+        // eines Fehlers.
         ATTACHMENT_DOWNLOAD: new RegExp(
-            "/events/" + UUID + "/attachments/" + UUID + "/download/",
+            "/(?:events|clients|cases)/" + UUID + "/attachments/" + UUID + "/download/",
             "i"
         ),
         // Auch Datenauskunft-Exporte (Art. 15 PDF / Art. 20 JSON) und
@@ -57,6 +64,14 @@
         // ersetzbar sind.
         EXPORT_DOWNLOAD: /\/(?:export|statistics\/export|clients\/[^/]+\/export)/i,
     };
+    // WARNUNG (M24/AP5, Refs #1738, ADR-039 §8): Personen- und Fall-Formulare
+    // gehören hier bewusst NICHT hinein. Beide sind seit dem Owner-Umbau
+    // ``multipart/form-data`` (Datei-Felder an Personen-/Fall-Typen), und der
+    // Service Worker queued multipart-POSTs grundsätzlich nicht (binäre Blobs,
+    // Refs #567). Ein Eintrag hier ergäbe einen toten Queue-Pfad — genau die
+    // Falle, die #1489 im Event-Formular aufgeräumt hat. Voraussetzung für eine
+    // spätere Aufnahme ist das Enctype-Downgrade (``event-form-enctype.js``),
+    // das an beiden Formularen bereits inert anliegt.
     self.URL_PATTERNS.QUEUE_PATTERNS = [
         self.URL_PATTERNS.EVENT_NEW,
         self.URL_PATTERNS.EVENT_EDIT,
