@@ -281,9 +281,11 @@ class TestFileFieldEntityTypeNoLongerGuarded:
     ``TestFileFieldEntityTypeGuard`` und pruefte das Gegenteil — die Umkehrung
     ist eine bewusste Anforderungsaenderung, kein Regressionsfund.
 
-    Bewusst NICHT hier: der Formular-Skip ``DynamicDataForm.exclude_file_fields``
-    und der Typwechsel-Guard ``FieldTemplateForm.clean_field_type``. Beide
-    fallen zusammen mit dem UI-Pfad (AP4) und sind bis dahin weiter aktiv.
+    Die beiden UI-Schichten — der Formular-Skip
+    ``DynamicDataForm.exclude_file_fields`` und der Typwechsel-Guard
+    ``FieldTemplateForm.clean_field_type`` — sind mit AP4 ebenfalls gefallen;
+    getestet werden sie dort (``test_forms_dynamic.py`` bzw.
+    ``test_config_field_templates.py``).
     """
 
     def test_file_field_on_client_type_is_assigned(self, req, facility, doc_type_client_profile):

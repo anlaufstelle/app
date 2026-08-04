@@ -305,42 +305,12 @@ class FieldTemplateForm(forms.ModelForm):
                 raise ValidationError(_("Eine Feldvorlage mit diesem Namen existiert in dieser Einrichtung bereits."))
         return name
 
-    def clean_field_type(self):
-        """Final-Review F (Refs #1058): Wechsel auf ``file`` blockieren, solange
-        die Vorlage einem Personen-/Fall-Typ zugeordnet ist.
-
-        Der E8-Guard („Datei-Felder nur an Ereignis-Typen") sitzt bislang nur an
-        der ZUORDNUNG (``add_field_to_doctype``). Wird der Feldtyp nachträglich
-        umgestellt, fällt das Feld still aus der Personen-/Fall-Maske
-        (``exclude_file_fields``) und sein Bestandswert wird beim nächsten
-        Speichern verworfen — ohne Meldung. Der Paket-Loader behandelt
-        ``field_type`` ohnehin als unveränderlich.
-        """
-        field_type = self.cleaned_data["field_type"]
-        if (
-            field_type != FieldTemplate.FieldType.FILE
-            or self.instance._state.adding
-            or self.instance.field_type == FieldTemplate.FieldType.FILE
-        ):
-            return field_type
-
-        blocking = list(
-            DocumentType.objects.filter(fields__field_template=self.instance)
-            .exclude(entity_type=DocumentType.EntityType.EVENT)
-            .order_by("name")
-            .values_list("name", flat=True)
-            .distinct()
-        )
-        if blocking:
-            raise ValidationError(
-                _(
-                    "Der Feldtyp kann nicht auf „Datei“ geändert werden — die Vorlage ist "
-                    "folgenden Dokumentationstypen für Personen/Fälle zugeordnet: %(types)s. "
-                    "Bitte dort zuerst die Zuordnung entfernen."
-                )
-                % {"types": ", ".join(blocking)}
-            )
-        return field_type
+    # M24/AP4 (Refs #1738, ADR-039 §9): Der Typwechsel-Guard ``clean_field_type``
+    # („Wechsel auf ``file`` blockieren, solange die Vorlage einem Personen-/
+    # Fall-Typ zugeordnet ist", Final-Review F/Refs #1058) ist **ersatzlos
+    # entfallen** — er war die vierte Schicht der E8-Sperre. Seit ADR-039 haengt
+    # ein Anhang an Ereignis, Person oder Fall; ein FILE-Feld an einem
+    # Personen-/Fall-Typ ist keine Sackgasse mehr, sondern der Regelfall.
 
     def clean_options_json(self):
         # JSONField liefert bei leerem Textarea ``None``; das Model-Feld ist

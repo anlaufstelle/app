@@ -367,11 +367,21 @@ class TestReservedSlug:
 
 @pytest.mark.django_db
 class TestFieldTypeSwitchToFile:
-    """Final-Review F (Refs #1058): der E8-Guard („Datei-Felder nur an
-    Ereignis-Typen") sitzt nur an der ZUORDNUNG. ``field_type`` blieb danach
-    editierbar — ein Wechsel auf ``file`` liess das Feld still aus der
-    Personen-/Fall-Maske fallen und verwarf den Bestandswert beim naechsten
-    Speichern."""
+    """Feldtyp-Wechsel auf ``file`` — **Anforderungsaenderung M24/AP4**
+    (Refs #1738, ADR-039 §9).
+
+    **Vorher (Final-Review F, Refs #1058):** ``FieldTemplateForm.clean_field_type``
+    blockierte den Wechsel auf ``file``, solange die Vorlage einem Personen-
+    oder Fall-Typ zugeordnet war. Begruendung damals: das Feld waere still aus
+    der Maske gefallen (``exclude_file_fields``) und sein Bestandswert beim
+    naechsten Speichern verworfen worden — der Guard war die vierte Schicht der
+    E8-Sperre.
+
+    **Jetzt:** Anhaenge haengen an Ereignis, Person oder Fall. Ein FILE-Feld an
+    einem Personen-/Fall-Typ ist kein stiller Datenverlust mehr, sondern ein
+    regulaeres Upload-Feld mit Download-Route und Versionskette. Der Guard ist
+    ersatzlos entfallen; der Wechsel ist an ALLEN Entitaetsarten erlaubt.
+    """
 
     def _template_on_client_type(self, facility):
         doc_type = DocumentType.objects.create(
@@ -384,17 +394,34 @@ class TestFieldTypeSwitchToFile:
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
         return doc_type, ft
 
-    def test_switch_to_file_on_client_type_is_form_error(self, client, admin_user, facility):
-        doc_type, ft = self._template_on_client_type(facility)
+    def test_switch_to_file_on_client_type_is_allowed(self, client, admin_user, facility):
+        _doc_type, ft = self._template_on_client_type(facility)
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}),
             _valid_post(name="Notiz F", field_type=FieldTemplate.FieldType.FILE),
         )
-        assert response.status_code == 200
-        assert doc_type.name in response.content.decode()
+        assert response.status_code == 302
         ft.refresh_from_db()
-        assert ft.field_type == FieldTemplate.FieldType.TEXT
+        assert ft.field_type == FieldTemplate.FieldType.FILE
+
+    def test_switch_to_file_on_case_type_is_allowed(self, client, admin_user, facility):
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Fallbogen F",
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CASE,
+        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Notiz Fall F", field_type="text")
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}),
+            _valid_post(name="Notiz Fall F", field_type=FieldTemplate.FieldType.FILE),
+        )
+        assert response.status_code == 302
+        ft.refresh_from_db()
+        assert ft.field_type == FieldTemplate.FieldType.FILE
 
     def test_switch_to_file_on_event_type_stays_allowed(self, client, admin_user, facility, doc_type_contact):
         ft = FieldTemplate.objects.create(facility=facility, name="Nachweis F", field_type="text")

@@ -29,6 +29,8 @@ import pytest
 from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from core.forms.cases import DynamicCaseDataForm
+from core.forms.clients import DynamicClientDataForm
 from core.forms.dynamic import DynamicDataForm
 from core.forms.events import DynamicEventDataForm, MultipleFileField
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
@@ -58,12 +60,6 @@ def _assign(doc_type, field_template, sort_order=0):
 
 def _options(*slugs):
     return [{"slug": s, "label": s.upper(), "is_active": True} for s in slugs]
-
-
-class _NoFileDynamicDataForm(DynamicDataForm):
-    """Subklasse für den E8-Pfad: FILE-Felder werden nicht aufgebaut."""
-
-    exclude_file_fields = True
 
 
 @pytest.fixture
@@ -198,40 +194,41 @@ class TestDynamicDataFormFieldBuild:
 
 
 @pytest.mark.django_db
-class TestExcludeFileFields:
-    """E8: FILE ist event-gebunden — die Basis darf FILE-Felder überspringen."""
+class TestFileFieldsAreBuiltForEveryEntity:
+    """**Anforderungsaenderung M24/AP4** (Refs #1738, ADR-039 §9).
 
-    def test_default_keeps_file_fields(self, facility, all_types_doctype):
-        form = DynamicDataForm(document_type=all_types_doctype, facility=facility)
-        assert DynamicDataForm.exclude_file_fields is False
+    **Vorher (E8):** ``DynamicDataForm.exclude_file_fields`` liess Personen-/
+    Fall-Formulare FILE-Felder ueberspringen und protokollierte den Skip als
+    Warnung — begruendet damit, dass nur der Event-Pfad eine Attachment-/
+    File-Vault-Pipeline hatte und ein Upload sonst nirgends gelandet waere.
+
+    **Jetzt:** Die Pipeline ist owner-generisch. Das Flag ist ersatzlos
+    entfernt; die drei Auspraegungen (Event/Person/Fall) bauen identische
+    Felder. Getestet wird genau das: FILE ist in jeder Auspraegung da, und der
+    Skip-Warnungspfad existiert nicht mehr.
+    """
+
+    @pytest.mark.parametrize("form_class", [DynamicDataForm, DynamicClientDataForm, DynamicCaseDataForm])
+    def test_every_form_flavour_builds_the_file_field(self, form_class, facility, all_types_doctype):
+        form = form_class(document_type=all_types_doctype, facility=facility)
         assert "anhang" in form.fields
+        assert len(form.fields) == 9
 
-    def test_exclude_file_fields_drops_file_and_warns(self, facility, all_types_doctype, caplog):
-        """FILE fehlt im Formular und der Skip wird geloggt (kein 500er, letzte Verteidigungslinie)."""
+    def test_flag_is_gone_from_the_api(self):
+        """Totes Konfigurations-Flag: kein Restattribut, das ein Aufrufer noch
+        hoffnungsvoll setzen koennte."""
+        assert not hasattr(DynamicDataForm, "exclude_file_fields")
+        assert not hasattr(DynamicClientDataForm, "exclude_file_fields")
+        assert not hasattr(DynamicCaseDataForm, "exclude_file_fields")
+
+    def test_no_skip_warning_is_logged(self, facility, all_types_doctype, caplog):
         module_logger = logging.getLogger("core.forms.dynamic")
         caplog.set_level(logging.WARNING)
         module_logger.addHandler(caplog.handler)
         try:
-            form = _NoFileDynamicDataForm(document_type=all_types_doctype, facility=facility)
+            DynamicClientDataForm(document_type=all_types_doctype, facility=facility)
         finally:
             module_logger.removeHandler(caplog.handler)
-
-        assert "anhang" not in form.fields
-        # Alle übrigen acht Feldtypen bleiben unangetastet.
-        assert len(form.fields) == 8
-        messages = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
-        assert any("anhang" in message for message in messages), messages
-
-    def test_exclude_file_fields_without_file_field_logs_nothing(self, facility, cond_doctype, caplog):
-        module_logger = logging.getLogger("core.forms.dynamic")
-        caplog.set_level(logging.WARNING)
-        module_logger.addHandler(caplog.handler)
-        try:
-            form = _NoFileDynamicDataForm(document_type=cond_doctype, facility=facility)
-        finally:
-            module_logger.removeHandler(caplog.handler)
-
-        assert set(form.fields) == {"dauer", "notiz"}
         assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 

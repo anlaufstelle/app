@@ -8,13 +8,15 @@ M2-Phasen ebenfalls bekommen. Der Body zieht daher unveraendert hierher um;
 ``DynamicEventDataForm`` erbt nur noch (leerer Body), sodass sich der Event-Pfad
 in keinem beobachtbaren Verhalten aendert.
 
-Einzige Erweiterung: :attr:`DynamicDataForm.exclude_file_fields`.
+M24/AP4 (Refs #1738, ADR-039 §9): Mit der owner-generischen Attachment-Pipeline
+ist auch die letzte Auspraegungs-Differenz (das Flag ``exclude_file_fields``)
+entfallen — Event-, Personen- und Fall-Form sind jetzt vollstaendig identisch.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, ClassVar
+from typing import Any
 
 from django import forms
 from django.conf import settings as django_settings
@@ -251,18 +253,15 @@ class DynamicDataForm(forms.Form):
     (``initial_data``, deaktivierte Options) zugreifen.
 
     Traegerentitaet ist allein der ``document_type``; ``facility`` dient nur der
-    Upload-Validierung. Event-, Client- und Case-Formulare unterscheiden sich
-    lediglich in :attr:`exclude_file_fields` (Entscheid E8).
-    """
+    Upload-Validierung.
 
-    #: Entscheid E8 (Refs #1058): FILE-Felder sind event-gebunden — nur Events
-    #: haben einen Attachment-/File-Vault-Pfad. Setzen Client-/Case-Formulare
-    #: dieses Flag auf ``True``, werden FILE-Felder beim Aufbau uebersprungen
-    #: statt ein Feld zu erzeugen, dessen Upload nirgendwo landet. Die Form ist
-    #: hier die letzte Verteidigungslinie: ein per Konfiguration doch
-    #: zugeordnetes FILE-Feld darf keinen 500er ausloesen, sondern wird
-    #: geloggt und ignoriert.
-    exclude_file_fields: ClassVar[bool] = False
+    M24/AP4 (Refs #1738, ADR-039 §9): Das Flag ``exclude_file_fields`` ist
+    **ersatzlos entfallen** — mit der owner-generischen Attachment-Pipeline gibt
+    es keinen Grund mehr, FILE-Felder je nach Entitaet zu ueberspringen. Event-,
+    Personen- und Fall-Formulare unterscheiden sich damit in gar nichts mehr;
+    die drei Unterklassen bleiben als leere Huellen fuer stabile Importpfade und
+    Lognamen (``type(form).__name__``).
+    """
 
     def __init__(self, *args, document_type=None, initial_data=None, facility=None, existing_file_slugs=None, **kwargs):
         self.facility = facility
@@ -308,17 +307,6 @@ class DynamicDataForm(forms.Form):
 
         for dtf in dtf_qs:
             ft = dtf.field_template
-            # E8 (Refs #1058): FILE gehoert zum Event-Pfad. Ohne Attachment-
-            # Pipeline waere das Feld eine Sackgasse — ueberspringen statt
-            # aufbauen; der Log macht die Fehlkonfiguration sichtbar.
-            if self.exclude_file_fields and ft.field_type == FILE:
-                logger.warning(
-                    "FILE-Feld %r wird in %s uebersprungen (exclude_file_fields) — "
-                    "Datei-Felder werden nur im Event-Pfad unterstuetzt.",
-                    ft.slug,
-                    type(self).__name__,
-                )
-                continue
             self.fields[ft.slug] = _build_dynamic_field(ft, initial_data)
             self._field_group_of[ft.slug] = dtf.field_group
             self._field_templates[ft.slug] = ft
