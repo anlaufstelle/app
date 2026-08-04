@@ -2940,7 +2940,7 @@
 
 **Erwartetes Ergebnis:**
 - Form rendert mit ValidationError „Datei wurde von Virenscanner abgewiesen: Eicar-Test-Signature".
-- KEIN `EventAttachment` angelegt, KEINE `.enc`-Datei auf Disk (rollback durch fehlgeschlagene Validation, bevor `encrypt_file` läuft).
+- KEIN `Attachment` angelegt, KEINE `.enc`-Datei auf Disk (rollback durch fehlgeschlagene Validation, bevor `encrypt_file` läuft).
 - AuditLog `security_violation` mit `detail={reason: "virus_detected", filename_hash: "<64-stelliger HMAC>", filename_ext: "txt", signature: "Eicar-Test-Signature"}` — der Original-Dateiname steht **nicht** im Detail (Refs #1751; das Audit-Log ist append-only und `SECURITY_VIOLATION` von der Aufbewahrungsfrist ausgenommen).
 - Atomare Transaktion: Auch das Event wird NICHT angelegt (Rollback durch `transaction.atomic` in `EventCreateView.post`, Refs #584).
 
@@ -3711,7 +3711,7 @@
 
 **Erwartetes Ergebnis:**
 - `approve_deletion(dr, reviewer)` (atomar):
- - `soft_delete_event(event, reviewer)` → `event.is_deleted=True`, `event.data_json={}`, alle Attachments via `delete_event_attachments` (Disk-Cleanup), `EventHistory(action=DELETE, data_before=<redacted>)`, AuditLog `delete`.
+ - `soft_delete_event(event, reviewer)` → `event.is_deleted=True`, `event.data_json={}`, alle Attachments via `delete_attachments_for(event)` (Disk-Cleanup), `EventHistory(action=DELETE, data_before=<redacted>)`, AuditLog `delete`.
  - `dr.status=APPROVED`, `dr.reviewed_by=reviewer`, `dr.reviewed_at=now`.
 - Flash „Löschantrag wurde genehmigt."
 - Redirect → `/` (Event) bzw. `/deletion-requests/` (Client).
