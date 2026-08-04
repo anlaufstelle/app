@@ -30,8 +30,10 @@ class TestEmptyStats:
     def test_total_contacts_zero(self):
         assert _empty_stats()["total_contacts"] == 0
 
-    def test_unique_clients_zero(self):
-        assert _empty_stats()["unique_clients"] == 0
+    def test_unique_clients_ist_unbekannt(self):
+        """K4b (Refs #1770): der Merge liefert nie eine (summierte) Personenzahl —
+        ``None`` = unbekannt, den Wert setzt allein der Hybrid-Live-Term."""
+        assert _empty_stats()["unique_clients"] is None
 
     def test_by_contact_stage_three_keys_zero(self):
         stage = _empty_stats()["by_contact_stage"]
@@ -50,12 +52,19 @@ class TestEmptyStats:
         assert _empty_stats()["by_age_cluster"] == []
         assert isinstance(_empty_stats()["by_age_cluster"], list)
 
-    def test_returns_dict_with_exactly_five_top_level_keys(self):
+    def test_persons_by_contact_stage_ist_unbekannt(self):
+        """K0-b (Refs #1770): ohne Segmentdaten sind die Personenzahlen unbekannt
+        (``None``) — spaeter fail-safe unterdrueckt, nicht als 0 geraten."""
+        persons = _empty_stats()["persons_by_contact_stage"]
+        assert persons == {"anonym": None, "identifiziert": None, "qualifiziert": None}
+
+    def test_returns_dict_with_exactly_six_top_level_keys(self):
         """Mutation würde einen Key droppen oder hinzufügen."""
         keys = set(_empty_stats().keys())
         assert keys == {
             "total_contacts",
             "by_contact_stage",
+            "persons_by_contact_stage",
             "by_document_type",
             "by_age_cluster",
             "unique_clients",
@@ -68,8 +77,9 @@ class TestEmptySampleReport1Stats:
     def test_total_zero(self):
         assert _empty_sample_report_1_stats()["total"] == 0
 
-    def test_unique_clients_zero(self):
-        assert _empty_sample_report_1_stats()["unique_clients"] == 0
+    def test_unique_clients_ist_unbekannt(self):
+        """K4b (Refs #1770): siehe ``_empty_stats`` — nie eine Summe."""
+        assert _empty_sample_report_1_stats()["unique_clients"] is None
 
     def test_by_category_empty_list(self):
         assert _empty_sample_report_1_stats()["by_category"] == []

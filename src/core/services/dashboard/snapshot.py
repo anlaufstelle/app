@@ -9,29 +9,37 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 
 from core.models import DocumentType, StatisticsSnapshot
+from core.reporting.data_source import LIVE
 
 # Zyklusfrei: ``core.reporting.registry`` importiert nur ``core.reporting.base``
 # (keine Services, keine Models) und laedt das ``backends``-Package erst lazy
 # beim ersten ``get_*``-Aufruf.
 from core.reporting.registry import get_backend, get_backends
-from core.services.dashboard.statistics import get_statistics
+from core.services.dashboard.statistics import PERSONS_KEY, count_unique_clients, get_statistics
 
 logger = logging.getLogger(__name__)
 
+_STAGE_KEYS = ("anonym", "identifiziert", "qualifiziert")
 
-def is_multi_month_range(date_from, date_to):
-    """Return True if the given date range spans more than one month.
 
-    The hybrid statistics merge sums ``unique_clients`` over monthly snapshots,
-    which double-counts clients seen in multiple months. The number is
-    therefore an approximation as soon as the range spans more than ~31 days.
-    Callers use this flag to render a "ca." prefix and tooltip in the UI
-    (#533). A range fully within a calendar month — even if it covers exactly
-    31 days — does not trigger approximation.
+def _merge_person_count(current: int | None, value: int | None) -> int | None:
+    """Fuegt zwei Segment-Personenzahlen fail-safe zusammen (K0-b/K4b, Refs #1770).
+
+    **Nie summieren:** Personen sind ueber Monatssegmente nicht additiv — genau
+    dieser Fehler ist K4b (3 Personen x 6 Monate ergaben "18"). Das Maximum
+    ueber die Segmente ist dagegen immer eine gueltige *Untergrenze* der wahren
+    DISTINCT-Zahl (jede Segmentmenge ist Teilmenge der Gesamtmenge) und damit
+    als Suppressionskriterium in der sicheren Richtung falsch: hoechstens wird
+    zu viel unterdrueckt, nie zu wenig.
+
+    ``None`` bedeutet "unbekannt" und dominiert: sobald ein Segment keine
+    Personenzahl mitbringt (Alt-Snapshot vor der Payload-Erweiterung, oder
+    Migration ``0128`` konnte sie nicht rekonstruieren), gilt der Bucket als
+    unbekannt und wird spaeter fail-safe unterdrueckt.
     """
-    if date_from is None or date_to is None:
-        return False
-    return (date_to - date_from).days > 31
+    if current is None or value is None:
+        return None
+    return max(current, value)
 
 
 def create_or_update_snapshot(facility, year, month):
@@ -158,9 +166,13 @@ def _empty_stats():
     return {
         "total_contacts": 0,
         "by_contact_stage": {"anonym": 0, "identifiziert": 0, "qualifiziert": 0},
+        "persons_by_contact_stage": dict.fromkeys(_STAGE_KEYS),
         "by_document_type": [],
         "by_age_cluster": [],
-        "unique_clients": 0,
+        # K4b (Refs #1770): der Merge liefert strukturell KEINE Personenzahl —
+        # sie ist nicht additiv. Den Wert setzt allein der Hybrid-Pfad als
+        # eigenen Live-Term ueber den Gesamtzeitraum.
+        "unique_clients": None,
     }
 
 
@@ -172,7 +184,11 @@ def _merge_stats(stats_list):
     - ``by_contact_stage`` – sum per key
     - ``by_document_type`` – merge by ``(name, category)`` composite key, sum ``count``
     - ``by_age_cluster`` – merge by ``cluster`` key, sum ``count``, keep labels
-    - ``unique_clients`` – sum (approximation)
+    - ``persons`` je Cluster und ``persons_by_contact_stage`` – Maximum, nie
+      Summe; unbekannt sobald ein Segment die Zahl nicht mitbringt (K0-b)
+    - ``unique_clients`` – **immer** ``None`` (K4b, Refs #1770): Personen sind
+      nicht additiv, eine summierte Personenzahl waere ein Suppressions-Bypass.
+      Der Hybrid-Pfad setzt stattdessen einen eigenen Live-Term.
     """
     if not stats_list:
         return _empty_stats()
@@ -182,14 +198,17 @@ def _merge_stats(stats_list):
     # Accumulators for list-based fields
     doc_type_map = {}  # (name, category) → count
     age_cluster_map = {}  # cluster → {label, count}
+    age_persons = {}  # cluster → int | None (Maximum, None = unbekannt)
+    stage_persons = dict.fromkeys(_STAGE_KEYS, 0)
 
     for stats in stats_list:
         merged["total_contacts"] += stats.get("total_contacts", 0)
-        merged["unique_clients"] += stats.get("unique_clients", 0)
 
         # by_contact_stage
-        for key in ("anonym", "identifiziert", "qualifiziert"):
+        segment_stage_persons = stats.get("persons_by_contact_stage") or {}
+        for key in _STAGE_KEYS:
             merged["by_contact_stage"][key] += stats.get("by_contact_stage", {}).get(key, 0)
+            stage_persons[key] = _merge_person_count(stage_persons[key], segment_stage_persons.get(key))
 
         # by_document_type – merge by (name, category)
         for entry in stats.get("by_document_type", []):
@@ -202,15 +221,31 @@ def _merge_stats(stats_list):
         # by_age_cluster – merge by cluster
         for entry in stats.get("by_age_cluster", []):
             cluster = entry["cluster"]
+            age_persons[cluster] = _merge_person_count(age_persons.get(cluster, 0), entry.get(PERSONS_KEY))
             if cluster in age_cluster_map:
                 age_cluster_map[cluster]["count"] += entry["count"]
             else:
                 age_cluster_map[cluster] = {**entry}
 
+    merged["persons_by_contact_stage"] = stage_persons
     merged["by_document_type"] = sorted(doc_type_map.values(), key=lambda e: e["count"], reverse=True)
-    merged["by_age_cluster"] = sorted(age_cluster_map.values(), key=lambda e: e["count"], reverse=True)
+    merged["by_age_cluster"] = _with_merged_persons(age_cluster_map, age_persons)
 
     return merged
+
+
+def _with_merged_persons(cluster_map, persons):
+    """Altersgruppen-Zeilen mit der zusammengefuehrten Personenzahl (K0-b, Refs #1770).
+
+    Setzt ``persons`` auf **jeder** Zeile — auch wenn kein Segment eine Zahl
+    lieferte (dann ``None`` = unbekannt). Die Zeile darf den Merge nie ohne das
+    Feld verlassen, sonst faellt der Suppressionspfad still auf das alte,
+    ereignisbasierte Kriterium zurueck (fail-open).
+    """
+    rows = []
+    for cluster, row in cluster_map.items():
+        rows.append({**row, PERSONS_KEY: persons.get(cluster)})
+    return sorted(rows, key=lambda e: e["count"], reverse=True)
 
 
 def _empty_sample_report_1_stats():
@@ -219,7 +254,8 @@ def _empty_sample_report_1_stats():
         "total": 0,
         "by_category": [],
         "by_age_cluster": [],
-        "unique_clients": 0,
+        # K4b (Refs #1770): siehe ``_empty_stats`` — nie eine Summe.
+        "unique_clients": None,
     }
 
 
@@ -230,8 +266,10 @@ def _merge_sample_report_1_stats(stats_list):
     - ``total`` – sum
     - ``by_category`` – merge by category name, sum count.
       Normalizes both tuples and lists from JSON to output tuples.
-    - ``by_age_cluster`` – merge by ``cluster`` key, sum ``count``
-    - ``unique_clients`` – sum (approximation)
+    - ``by_age_cluster`` – merge by ``cluster`` key, sum ``count``;
+      ``persons`` per Maximum (K0-b, Refs #1770)
+    - ``unique_clients`` – **immer** ``None`` (K4b, Refs #1770), der Hybrid-Pfad
+      setzt einen eigenen Live-Term ueber den Gesamtzeitraum
     """
     if not stats_list:
         return _empty_sample_report_1_stats()
@@ -239,10 +277,10 @@ def _merge_sample_report_1_stats(stats_list):
     merged = _empty_sample_report_1_stats()
     category_map = {}  # name → count
     age_cluster_map = {}  # cluster → {label, count}
+    age_persons = {}  # cluster → int | None
 
     for stats in stats_list:
         merged["total"] += stats.get("total", 0)
-        merged["unique_clients"] += stats.get("unique_clients", 0)
 
         # by_category – normalize tuples/lists from JSON snapshots
         for entry in stats.get("by_category", []):
@@ -252,13 +290,14 @@ def _merge_sample_report_1_stats(stats_list):
         # by_age_cluster
         for entry in stats.get("by_age_cluster", []):
             cluster = entry["cluster"]
+            age_persons[cluster] = _merge_person_count(age_persons.get(cluster, 0), entry.get(PERSONS_KEY))
             if cluster in age_cluster_map:
                 age_cluster_map[cluster]["count"] += entry["count"]
             else:
                 age_cluster_map[cluster] = {**entry}
 
     merged["by_category"] = [(name, count) for name, count in category_map.items()]
-    merged["by_age_cluster"] = sorted(age_cluster_map.values(), key=lambda e: e["count"], reverse=True)
+    merged["by_age_cluster"] = _with_merged_persons(age_cluster_map, age_persons)
 
     return merged
 
@@ -268,8 +307,9 @@ def get_statistics_hybrid(facility, date_from, date_to):
 
     Segments that cover a complete past calendar month are served from
     pre-computed snapshots (if available), all others fall back to a live
-    database query.  ``top_clients`` is always computed live over the full
-    range because it cannot be meaningfully merged from monthly snapshots.
+    database query.  ``top_clients`` und ``unique_clients`` werden **immer**
+    live ueber den Gesamtzeitraum berechnet — beide lassen sich aus
+    Monats-Aggregaten nicht sinnvoll zusammenfuehren.
     """
     segments = _split_into_segments(date_from, date_to)
     segment_stats = []
@@ -289,6 +329,21 @@ def get_statistics_hybrid(facility, date_from, date_to):
     # top_clients always from a live full-range query
     live_full = get_statistics(facility, date_from, date_to)
     merged["top_clients"] = live_full["top_clients"]
+
+    # K4b (Refs #1770): ``unique_clients`` ist als einziges Feld nicht additiv
+    # und wurde bisher ueber die Monatssegmente summiert — 3 Personen mit je
+    # einem Kontakt in 6 Monaten ergaben "18", waehrend der Live-Export mit
+    # distinct = 3 < k unterdrueckte. Die k-Pruefung lief damit gegen eine
+    # aufgeblaehte Zahl (Personen-Monate): ein Suppressions-Bypass. Statt der
+    # Summe steht hier ein eigener Live-Term ueber den **Gesamtzeitraum**, und
+    # das Artefakt weist genau fuer diesen Term seine abweichende Quelle aus
+    # (#1743, Option c: Lesepfade bleiben, Quellen werden ausgewiesen).
+    #
+    # Bewusst kein Rueckfall auf die Snapshot-Summe fuer retention-bereinigte
+    # Alt-Zeitraeume: dort faellt der Live-Wert niedriger aus (bis auf 0), was
+    # der Quellen-Ausweis kenntlich macht. Fail-safe-Richtung.
+    merged["unique_clients"] = live_full["unique_clients"]
+    merged["unique_clients_data_source"] = LIVE
 
     return merged
 
@@ -356,4 +411,11 @@ def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
             stats = get_backend("sample-report-1").build_dataset(facility, seg_from, seg_to).summary
         segment_stats.append(stats)
 
-    return _merge_sample_report_1_stats(segment_stats)
+    merged = _merge_sample_report_1_stats(segment_stats)
+    # K4b (Refs #1770): identisch zu ``get_statistics_hybrid`` — eigener
+    # Live-Term ueber den Gesamtzeitraum statt der Summe der Monatswerte. Die
+    # Grundgesamtheit ist dieselbe wie im Backend (sichtbare Ereignisse der
+    # Einrichtung im Zeitraum mit Personenbezug), daher derselbe Zaehler.
+    merged["unique_clients"] = count_unique_clients(facility, date_from, date_to)
+    merged["unique_clients_data_source"] = LIVE
+    return merged

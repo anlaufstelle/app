@@ -310,67 +310,31 @@ class TestStatisticsAlpineCspCompatibility:
 
 
 @pytest.mark.django_db
-class TestUniqueClientsApproximationFlag:
-    """Issue #533: unique_clients ist über mehrere Monate eine Approximation
-    (Sum statt echtem distinct count). Multi-Monats-Bereiche müssen das im UI
-    kennzeichnen."""
+class TestPersonenzahlOhneApproximationshinweis:
+    """K4b (Refs #1770): der „ca."-Hinweis aus #533 ist entfallen.
 
-    def test_helper_returns_false_for_short_range(self):
-        from datetime import date as _date
+    #533 kennzeichnete ``unique_clients`` fuer Mehrmonats-Zeitraeume als
+    Approximation, weil der Hybrid-Merge die Monatswerte **summierte** und
+    Personen mit Kontakten in mehreren Monaten mehrfach zaehlte. Genau diese
+    Summe war der Suppressions-Bypass K4b; sie ist durch einen Live-DISTINCT
+    ueber den Gesamtzeitraum ersetzt. Der Hinweis waere jetzt sachlich falsch —
+    er behauptete eine Ueberzaehlung, die es nicht mehr gibt.
+    """
 
-        from core.services.dashboard import is_multi_month_range
-
-        assert is_multi_month_range(_date(2026, 1, 1), _date(2026, 1, 31)) is False
-        assert is_multi_month_range(_date(2026, 3, 1), _date(2026, 3, 30)) is False
-
-    def test_helper_returns_true_for_quarter_range(self):
-        from datetime import date as _date
-
-        from core.services.dashboard import is_multi_month_range
-
-        assert is_multi_month_range(_date(2026, 1, 1), _date(2026, 4, 1)) is True
-
-    def test_helper_returns_true_for_full_year_range(self):
-        from datetime import date as _date
-
-        from core.services.dashboard import is_multi_month_range
-
-        assert is_multi_month_range(_date(2026, 1, 1), _date(2026, 12, 31)) is True
-
-    def test_helper_handles_none_inputs(self):
-        from core.services.dashboard import is_multi_month_range
-
-        assert is_multi_month_range(None, None) is False
-
-    def test_view_context_has_approximation_false_for_month(self, client, admin_user):
+    @pytest.mark.parametrize("period", ["month", "quarter", "year"])
+    def test_dashboard_zeigt_kein_ca_praefix_mehr(self, client, admin_user, period):
         client.force_login(admin_user)
-        response = client.get(reverse("core:statistics"), {"period": "month"})
-        assert response.context["unique_clients_is_approximation"] is False
-
-    def test_view_context_has_approximation_true_for_quarter(self, client, admin_user):
-        client.force_login(admin_user)
-        response = client.get(reverse("core:statistics"), {"period": "quarter"})
-        assert response.context["unique_clients_is_approximation"] is True
-
-    def test_view_context_has_approximation_true_for_year(self, client, admin_user):
-        client.force_login(admin_user)
-        response = client.get(reverse("core:statistics"), {"period": "year"})
-        assert response.context["unique_clients_is_approximation"] is True
-
-    def test_dashboard_template_shows_ca_prefix_for_quarter(self, client, admin_user):
-        client.force_login(admin_user)
-        response = client.get(reverse("core:statistics"), {"period": "quarter"})
+        response = client.get(reverse("core:statistics"), {"period": period})
         content = response.content.decode()
-        # ca.-Präfix vor der Zahl der einzigartigen Klientel
-        assert "ca." in content
-        assert "Approximation" in content
 
-    def test_dashboard_template_omits_ca_prefix_for_month(self, client, admin_user):
-        client.force_login(admin_user)
-        response = client.get(reverse("core:statistics"), {"period": "month"})
-        content = response.content.decode()
-        # Bei single month: kein Approximations-Hinweis im Einzigartige-Klientel-Block
         assert "Approximation" not in content
+        assert "unique_clients_is_approximation" not in response.context
+
+    def test_dashboard_weist_die_live_zaehlung_aus(self, client, admin_user):
+        client.force_login(admin_user)
+        response = client.get(reverse("core:statistics"), {"period": "quarter"})
+
+        assert "eindeutig gezählt (Live-Abfrage)" in response.content.decode()
 
 
 @pytest.mark.django_db

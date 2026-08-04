@@ -1,11 +1,14 @@
 """Mutation-Followup-Tests für ``core.services.snapshot`` — Branches/Boundaries.
 
 Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
-enthält die Test-Klassen für die ``is_multi_month_range``-/Boundary-/
-Datums-Helfer:
-``TestIsMultiMonthRange``, ``TestCreateOrUpdateSnapshotBranches``,
-``TestEnsureSnapshotsForMonthsBranches``, ``TestGetSnapshot`` und
-``TestSplitIntoSegmentsBoundaries``.
+enthält die Test-Klassen für die Boundary-/Datums-Helfer:
+``TestCreateOrUpdateSnapshotBranches``, ``TestEnsureSnapshotsForMonthsBranches``,
+``TestGetSnapshot`` und ``TestSplitIntoSegmentsBoundaries``.
+
+``TestIsMultiMonthRange`` ist mit ``is_multi_month_range`` entfallen (K4b,
+Refs #1770): der Helfer trug allein den "ca."-Approximationshinweis aus #533,
+und die Approximation gibt es nicht mehr — der Hybrid-Pfad summiert die
+Personenzahl nicht laenger, sondern zaehlt sie live ueber den Gesamtzeitraum.
 
 Constraint: Tests gegen Verify-DB (``POSTGRES_DB=anlaufstelle_verify``).
 """
@@ -29,73 +32,8 @@ from core.services.dashboard import (
     create_or_update_snapshot,
     ensure_snapshots_for_months,
     get_snapshot,
-    is_multi_month_range,
 )
 from tests._mutation_followup_snapshot_helpers import _make_event
-
-# ---------------------------------------------------------------------------
-# is_multi_month_range — Boundary an 31 Tagen
-# ---------------------------------------------------------------------------
-
-
-class TestIsMultiMonthRange:
-    """Refs ``is_multi_month_range`` (Line 18).
-
-    Boundary ``(date_to - date_from).days > 31``. Mutationen:
-    - ``> 31`` → ``>= 31`` würde 31-Tage-Range falsch als multi-month melden.
-    - ``> 31`` → ``> 30`` würde 31-Tage-Range fälschlich auf True flippen.
-    - ``> 31`` → ``< 31`` würde alle Vorzeichen invertieren.
-    - ``or`` → ``and`` würde die None-Kurzschluss-Logik kippen.
-    """
-
-    def test_both_none_returns_false(self):
-        """Mutation am ``or`` würde diesen Kurzschluss-Branch kippen."""
-        assert is_multi_month_range(None, None) is False
-
-    def test_from_none_returns_false(self):
-        """Mutation am ``date_from is None`` würde diesen Branch killen."""
-        assert is_multi_month_range(None, date(2025, 3, 1)) is False
-
-    def test_to_none_returns_false(self):
-        """Mutation am ``date_to is None`` würde diesen Branch killen."""
-        assert is_multi_month_range(date(2025, 3, 1), None) is False
-
-    def test_same_day_returns_false(self):
-        """0 Tage Diff → False (eindeutig sub-month)."""
-        d = date(2025, 3, 1)
-        assert is_multi_month_range(d, d) is False
-
-    def test_thirty_days_returns_false(self):
-        """30-Tage-Range darf NICHT multi-month sein.
-
-        Mutation ``> 31`` → ``> 29`` würde hier auf True flippen.
-        """
-        assert is_multi_month_range(date(2025, 3, 1), date(2025, 3, 31)) is False
-
-    def test_exactly_31_days_diff_returns_false(self):
-        """Boundary: genau 31 Tage Diff (also 32 Kalendertage) — laut Doc
-        ist eine Range *fully within* einem Kalendermonat erlaubt; der Code
-        nimmt aber die naive Tagedifferenz.
-
-        Mutation ``> 31`` → ``>= 31`` würde diese 31-Tage-Range fälschlich
-        auf True flippen.
-        """
-        # 31 Tage Diff (z.B. 1. Jan bis 1. Feb)
-        assert is_multi_month_range(date(2025, 1, 1), date(2025, 2, 1)) is False
-
-    def test_32_days_diff_returns_true(self):
-        """Boundary: 32 Tage → True. Mutation ``> 31`` → ``> 32`` würde
-        diesen Test killen."""
-        assert is_multi_month_range(date(2025, 1, 1), date(2025, 2, 2)) is True
-
-    def test_full_january_within_month_returns_false(self):
-        """31-tägige Januar-Range (1.–31.) bleibt False — 30 Tage Diff."""
-        assert is_multi_month_range(date(2025, 1, 1), date(2025, 1, 31)) is False
-
-    def test_large_range_returns_true(self):
-        """Quartal: >> 31 Tage. Mutation am Vergleichsoperator wird gefangen."""
-        assert is_multi_month_range(date(2025, 1, 1), date(2025, 3, 31)) is True
-
 
 # ---------------------------------------------------------------------------
 # create_or_update_snapshot — Create vs Update + Monats-Boundaries

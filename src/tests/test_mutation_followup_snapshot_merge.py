@@ -78,8 +78,14 @@ class TestMergeStatsPerField:
         result = _merge_stats([s1, s2])
         assert result["total_contacts"] == 3, "1 + 2 = 3 (nicht -1, nicht 1, nicht 2)"
 
-    def test_unique_clients_summed_separately_from_total(self):
-        """``unique_clients`` darf NICHT mit ``total_contacts`` getauscht sein."""
+    def test_unique_clients_wird_nie_summiert(self):
+        """K4b (Refs #1770): Ereigniszahlen sind additiv, Personenzahlen nicht.
+
+        Frueher summierte der Merge ``unique_clients`` mit — 3 Personen mit je
+        einem Kontakt in 6 Monaten ergaben "18", und die k-Pruefung lief gegen
+        diese aufgeblaehte Zahl. Der Merge liefert deshalb strukturell keine
+        Personenzahl mehr; sie kommt als eigener Live-Term aus dem Hybrid-Pfad.
+        """
         s1 = _empty_stats()
         s1["total_contacts"] = 5
         s1["unique_clients"] = 3
@@ -88,9 +94,7 @@ class TestMergeStatsPerField:
         s2["unique_clients"] = 7
         result = _merge_stats([s1, s2])
         assert result["total_contacts"] == 15
-        assert result["unique_clients"] == 10
-        # Sanity: nicht vertauscht
-        assert result["total_contacts"] != result["unique_clients"]
+        assert result["unique_clients"] is None
 
     def test_anonym_summed_per_key(self):
         s1 = _empty_stats()
@@ -245,13 +249,14 @@ class TestMergeSampleReport1StatsPerField:
         result = _merge_sample_report_1_stats([s1, s2])
         assert result["total"] == 7, "2+5=7, nicht -3, nicht 5, nicht 2"
 
-    def test_unique_clients_summed(self):
+    def test_unique_clients_wird_nie_summiert(self):
+        """K4b (Refs #1770): siehe ``_merge_stats`` — nie eine Personen-Summe."""
         s1 = _empty_sample_report_1_stats()
         s1["unique_clients"] = 4
         s2 = _empty_sample_report_1_stats()
         s2["unique_clients"] = 6
         result = _merge_sample_report_1_stats([s1, s2])
-        assert result["unique_clients"] == 10
+        assert result["unique_clients"] is None
 
     def test_by_category_tuple_inputs(self):
         """Tupel-Inputs: ``("Kontakte", 5)``."""

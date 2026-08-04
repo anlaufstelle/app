@@ -45,7 +45,7 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     # Defense-in-Depth gegen wiederholtes Haemmern.
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
     def get(self, request):
-        from core.services.dashboard import is_multi_month_range, parse_statistics_period
+        from core.services.dashboard import parse_statistics_period
 
         facility = request.current_facility
         today = timezone.localdate()
@@ -70,10 +70,6 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             "document_types": DocumentType.objects.filter(
                 facility=facility, entity_type=DocumentType.EntityType.EVENT
             ).order_by("name"),
-            # #533: unique_clients is summed across monthly snapshots, so it
-            # double-counts clients seen in multiple months. Surface that fact
-            # to the template so it can render a "ca." prefix + tooltip.
-            "unique_clients_is_approximation": is_multi_month_range(period_state.date_from, period_state.date_to),
             # M5 P5 (Refs #1061): Berichts-Plugins (z. B. "Beispiel-Sachbericht")
             # fuers Dropdown der Berichte-Sektion — nur fuer diese Facility verfuegbare.
             "report_backends": get_available_backends(facility),

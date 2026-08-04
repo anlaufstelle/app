@@ -155,14 +155,16 @@ class TestMergeStats:
     def test_empty_list(self):
         result = _merge_stats([])
         assert result["total_contacts"] == 0
-        assert result["unique_clients"] == 0
+        # K4b (Refs #1770): der Merge liefert keine Personenzahl mehr — sie ist
+        # nicht additiv und kommt als eigener Live-Term aus dem Hybrid-Pfad.
+        assert result["unique_clients"] is None
         assert result["by_contact_stage"] == {"anonym": 0, "identifiziert": 0, "qualifiziert": 0}
 
     def test_single_dict(self):
         stats = _snapshot_data(total=10, anonym=2, identifiziert=5, qualifiziert=3, unique=7)
         result = _merge_stats([stats])
         assert result["total_contacts"] == 10
-        assert result["unique_clients"] == 7
+        assert result["unique_clients"] is None  # K4b (Refs #1770)
         assert result["by_contact_stage"]["identifiziert"] == 5
 
     def test_two_dicts_summed(self):
@@ -170,7 +172,8 @@ class TestMergeStats:
         s2 = _snapshot_data(total=7, anonym=2, identifiziert=3, qualifiziert=2, unique=5)
         result = _merge_stats([s1, s2])
         assert result["total_contacts"] == 10
-        assert result["unique_clients"] == 7
+        # Ereigniszahlen bleiben additiv, Personenzahlen nicht (K4b, Refs #1770).
+        assert result["unique_clients"] is None
         assert result["by_contact_stage"]["anonym"] == 3
         assert result["by_contact_stage"]["identifiziert"] == 4
         assert result["by_contact_stage"]["qualifiziert"] == 3
@@ -236,7 +239,7 @@ class TestMergeSampleReport1Stats:
     def test_empty_list(self):
         result = _merge_sample_report_1_stats([])
         assert result["total"] == 0
-        assert result["unique_clients"] == 0
+        assert result["unique_clients"] is None  # K4b (Refs #1770)
         assert result["by_category"] == []
 
     def test_normalizes_tuples_and_lists(self):
@@ -255,7 +258,7 @@ class TestMergeSampleReport1Stats:
         }
         result = _merge_sample_report_1_stats([s1, s2])
         assert result["total"] == 7
-        assert result["unique_clients"] == 5
+        assert result["unique_clients"] is None  # K4b (Refs #1770)
         cats = dict(result["by_category"])
         assert cats["Kontakte"] == 5
         assert cats["Beratung"] == 1
@@ -315,7 +318,13 @@ class TestHybridUsesSnapshotForPastMonth:
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
         assert result["total_contacts"] == 10
-        assert result["unique_clients"] == 8
+        # K4b (Refs #1770): die Personenzahl kommt NICHT mehr aus dem Snapshot,
+        # sondern aus einer Live-Abfrage ueber den Gesamtzeitraum — das Event ist
+        # soft-deleted, live bleiben 0 Personen. Bewusst akzeptiert: der
+        # Quellen-Ausweis macht die abweichende Herkunft kenntlich, ein
+        # Rueckfall auf den Snapshot-Wert waere der Suppressions-Bypass.
+        assert result["unique_clients"] == 0
+        assert result["unique_clients_data_source"] == "live"
         assert result["by_contact_stage"]["identifiziert"] == 5
 
 
@@ -367,7 +376,9 @@ class TestHybridMergesSnapshotAndLive:
 
         # Snapshot: 5 + Live March: 1 + Live Feb (empty): 0 = 6
         assert result["total_contacts"] == 6
-        assert result["unique_clients"] == 3 + 1  # sum approximation
+        # K4b (Refs #1770): kein "3 + 1" mehr — DISTINCT ueber den Gesamtzeitraum
+        # findet genau die eine Person mit dem Live-Event im Maerz.
+        assert result["unique_clients"] == 1
 
 
 @pytest.mark.django_db
@@ -413,7 +424,8 @@ class TestSampleReport1Hybrid:
 
         # Jan from snapshot (10) + Feb live (0) + Mar live (1) = 11
         assert result["total"] == 11
-        assert result["unique_clients"] == 6 + 1
+        # K4b (Refs #1770): Live-DISTINCT ueber den Gesamtzeitraum statt "6 + 1".
+        assert result["unique_clients"] == 1
 
 
 @pytest.mark.django_db
@@ -438,7 +450,8 @@ class TestSampleReport1HybridReadsBackendData:
             result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
         assert result["total"] == 10
-        assert result["unique_clients"] == 6
+        # K4b (Refs #1770): Live-Term — ohne Ereignisse in der DB bleiben 0.
+        assert result["unique_clients"] == 0
 
     def test_snapshot_ohne_backend_key_faellt_auf_live_zurueck(
         self, facility, client_identified, doc_type_contact, staff_user
@@ -559,3 +572,199 @@ class TestDashboardKAnonScopeRaw:
         assert kontakt["count"] == 2
         # Kein Suppressions-Marker im internen Dashboard-Pfad.
         assert "suppressed" not in kontakt
+
+
+# ---------------------------------------------------------------------------
+# K4b (Refs #1770) — ``unique_clients`` ist nicht additiv
+# ---------------------------------------------------------------------------
+
+
+class TestMergeSummiertPersonenzahlenNie:
+    """K4b (Refs #1770): ``unique_clients`` darf nie ueber Monate summiert werden.
+
+    ``unique_clients`` ist das einzige nicht-additive Feld: 3 Personen mit je
+    einem Kontakt in 6 Monaten ergaben summiert "18" — und die k-Pruefung lief
+    gegen diese aufgeblaehte Zahl, waehrend der Live-Export mit distinct = 3 < k
+    unterdrueckte. Das ist ein Suppressions-Bypass, kein Genauigkeitsproblem.
+
+    Der Merge liefert deshalb strukturell **keine** Personenzahl mehr
+    (``None`` = unbekannt); den Wert setzt allein der Hybrid-Pfad als eigenen
+    Live-Term ueber den Gesamtzeitraum.
+    """
+
+    def test_merge_liefert_keine_summierte_personenzahl(self):
+        segmente = [_snapshot_data(total=1, unique=3) for _ in range(6)]
+        result = _merge_stats(segmente)
+
+        assert result["unique_clients"] is None, "Merge darf keine Personen-Monate ausweisen"
+
+    def test_merge_sample_report_1_liefert_keine_summierte_personenzahl(self):
+        segmente = [_sample_report_1_snapshot_data(total=1, unique=3) for _ in range(6)]
+        result = _merge_sample_report_1_stats(segmente)
+
+        assert result["unique_clients"] is None
+
+    def test_altersgruppen_personenzahl_wird_maximiert_nicht_summiert(self):
+        """Personen sind ueber Segmente nicht additiv — das Maximum ist die
+        engste Untergrenze, die sich aus den Segmenten allein ableiten laesst."""
+        segmente = [
+            {
+                **_snapshot_data(total=4),
+                "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4, "persons": 3}],
+            },
+            {
+                **_snapshot_data(total=6),
+                "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 6, "persons": 2}],
+            },
+        ]
+        result = _merge_stats(segmente)
+
+        row = result["by_age_cluster"][0]
+        assert row["count"] == 10, "Ereigniszahlen bleiben additiv"
+        assert row["persons"] == 3
+
+    def test_alt_segment_ohne_personenzahl_macht_den_bucket_unbekannt(self):
+        """Alt-Snapshot ohne ``persons`` ⇒ unbekannt ⇒ spaeter fail-safe unterdrueckt."""
+        segmente = [
+            {
+                **_snapshot_data(total=4),
+                "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4, "persons": 3}],
+            },
+            {**_snapshot_data(total=6), "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 6}]},
+        ]
+        result = _merge_stats(segmente)
+
+        assert result["by_age_cluster"][0]["persons"] is None
+
+    def test_alt_segment_ohne_kontaktstufen_personen_macht_alle_stufen_unbekannt(self):
+        alt = _snapshot_data(total=5)
+        alt.pop("persons_by_contact_stage", None)
+        result = _merge_stats([alt])
+
+        assert result["persons_by_contact_stage"] == {"anonym": None, "identifiziert": None, "qualifiziert": None}
+
+    def test_merge_kommt_mit_alt_snapshot_json_ohne_personen_klar(self):
+        """Formatwechsel darf den Merge-Pfad nicht sprengen (Bestands-Snapshots)."""
+        alt = {
+            "total_contacts": 5,
+            "by_contact_stage": {"anonym": 1, "identifiziert": 3, "qualifiziert": 1},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 5}],
+            "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 5}],
+            "unique_clients": 3,
+        }
+        result = _merge_stats([alt])
+
+        assert result["total_contacts"] == 5
+        assert result["by_age_cluster"][0]["persons"] is None
+        assert result["unique_clients"] is None
+
+
+@pytest.mark.django_db
+class TestHybridPersonenzahlIstEigenerLiveTerm:
+    """K4b (Refs #1770): der Hybrid-Pfad rechnet die Personenzahl live nach."""
+
+    def test_drei_personen_ueber_sechs_monate_bleiben_drei(
+        self, facility, doc_type_contact, staff_user, client_identified
+    ):
+        """Der Kernfall aus der Analyse: 3 Personen x 6 Monate ⇒ nicht "18"."""
+        from core.models import Client
+
+        personen = [client_identified] + [
+            Client.objects.create(
+                facility=facility,
+                contact_stage=Client.ContactStage.IDENTIFIED,
+                pseudonym=f"K4b-{index:02d}",
+                created_by=staff_user,
+            )
+            for index in range(2)
+        ]
+        for monat in range(1, 7):
+            for person in personen:
+                _make_event(facility, person, doc_type_contact, staff_user, datetime(2025, monat, 10, 9, 0))
+            StatisticsSnapshot.objects.create(
+                facility=facility,
+                year=2025,
+                month=monat,
+                data=_snapshot_data(total=3, unique=3),
+            )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 9, 15)
+            result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 6, 30))
+
+        assert result["unique_clients"] == 3
+        assert result["unique_clients_data_source"] == "live"
+
+    def test_sample_report_1_hybrid_zaehlt_personen_live_ueber_den_gesamtzeitraum(
+        self, facility, client_identified, doc_type_contact, staff_user
+    ):
+        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
+        doc_type_contact.save()
+        for monat in (1, 2):
+            _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, monat, 10, 9, 0))
+            StatisticsSnapshot.objects.create(
+                facility=facility,
+                year=2025,
+                month=monat,
+                data=_snapshot_data(total=1),
+                backend_data={"sample-report-1": _sample_report_1_snapshot_data(total=1, unique=1)},
+            )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 9, 15)
+            result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 2, 28))
+
+        assert result["total"] == 2, "Ereigniszahlen bleiben additiv"
+        assert result["unique_clients"] == 1, "eine Person in beiden Monaten bleibt eine Person"
+        assert result["unique_clients_data_source"] == "live"
+
+
+@pytest.mark.django_db
+class TestSachberichtPdfWeistDenLiveTermAus:
+    """K4b (Refs #1770): das PDF darf keine summierte Personenzahl mehr zeigen —
+    und muss die abweichende Quelle dieses einen Terms ausweisen (#1743, Option c).
+    """
+
+    def _pdf_context(self, facility, date_from, date_to):
+        from core.services.dashboard import get_statistics_hybrid, suppress_report_stats
+
+        stats = get_statistics_hybrid(facility, date_from, date_to)
+        return suppress_report_stats(facility, stats)
+
+    def test_summierte_personenzahl_erscheint_nicht_im_pdf_pfad(
+        self, facility, client_identified, doc_type_contact, staff_user
+    ):
+        for monat in range(1, 7):
+            _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, monat, 10, 9, 0))
+            StatisticsSnapshot.objects.create(
+                facility=facility,
+                year=2025,
+                month=monat,
+                data=_snapshot_data(total=1, anonym=0, identifiziert=1, qualifiziert=0, unique=3),
+            )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 9, 15)
+            stats = self._pdf_context(facility, date(2025, 1, 1), date(2025, 6, 30))
+
+        # Live-DISTINCT = 1 Person < k ⇒ unterdrueckt statt "18".
+        assert stats["unique_clients"] is None
+        assert stats["unique_clients_data_source"] == "live"
+
+    def test_pdf_template_setzt_die_fussnote_am_term(self, facility, client_identified, doc_type_contact, staff_user):
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "facility_name": facility.name,
+                "date_from": date(2025, 1, 1),
+                "date_to": date(2025, 6, 30),
+                "stats": {"total_contacts": 30, "unique_clients": 9, "unique_clients_data_source": "live"},
+                "generated_at": timezone.now(),
+                "data_source_note": "Monats-Aggregate",
+                "data_source_explanation": "…",
+            },
+        )
+
+        assert "unique-clients-note" in html

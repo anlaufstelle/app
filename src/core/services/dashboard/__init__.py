@@ -50,7 +50,6 @@ from core.services.dashboard.snapshot import (
     get_snapshot,
     get_statistics_hybrid,
     get_statistics_trend,
-    is_multi_month_range,
 )
 from core.services.dashboard.statistics import (
     PERSONS_KEY,
@@ -100,7 +99,6 @@ __all__ = [
     "get_statistics_trend",
     "get_template_for_user",
     "get_templates_for_document_type",
-    "is_multi_month_range",
     "lead_dashboard_context",
     "list_templates_for_user",
     "log_activity",

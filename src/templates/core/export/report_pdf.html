@@ -55,7 +55,8 @@
         </div>
     </div>
 
-    <p><strong>{% trans "Einzigartige Personen:" %}</strong> {% if stats.unique_clients is None %}{% trans "unterdrückt" %}{% else %}{{ stats.unique_clients }}{% endif %}</p>
+    {# K4b (Refs #1770): Dieser eine Term stammt NICHT aus den Monats-Aggregaten (Personen sind nicht additiv), sondern aus einer Live-Abfrage ueber den Gesamtzeitraum — Fussnote weist die abweichende Quelle aus. #}
+    <p><strong>{% trans "Einzigartige Personen:" %}</strong> {% if stats.unique_clients is None %}{% trans "unterdrückt" %}{% else %}{{ stats.unique_clients }}{% endif %}{% if stats.unique_clients_data_source %}<sup>*</sup>{% endif %}</p>
 
     <h2>{% trans "Kontakte nach Dokumentationstyp" %}</h2>
     {% if stats.by_document_type %}
@@ -130,6 +131,9 @@
     {# Quellenausweis (Refs #1743): dieses PDF liest hybrid ueber Monats-Snapshots (PDFExportView/get_statistics_hybrid). #}
     <div class="footer">
         <p class="data-source">{% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}</p>
+        {% if stats.unique_clients_data_source %}
+        <p class="unique-clients-note">{% trans "* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, sind darin nicht enthalten." %}</p>
+        {% endif %}
         <p>{% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}</p>
     </div>
 </body>
