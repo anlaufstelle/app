@@ -1224,3 +1224,53 @@ class TestOfflineI18nTranslationLocks:
 
         with override("en"):
             assert gettext("dauerhafter Speicher: nicht unterstützt") == "persistent storage: not supported"
+
+
+class TestAttachmentDownloadUrlPattern:
+    """M24/AP5 (Refs #1738, ADR-039 §8): ATTACHMENT_DOWNLOAD matcht die drei
+    owner-generischen Download-Routen (Ereignis, Person, Fall) und NUR sie.
+
+    Integrations-Review-Befund: die vitest-Datei zu diesem Regex laeuft in
+    keinem Gate (``make ci`` hat keinen npm-Schritt) — der Pin gehoert deshalb
+    zusaetzlich hierher, ins Muster von ``TestClientListUrlPattern``
+    (Refs #1533/#1543): ECHTE RegExp-Quelle aus url-patterns.js lesen, kein
+    Python-Nachbau. Faellt ``clients|cases`` spaeter aus der Alternation,
+    fiele der Download offline in die HTML-Fallback-Kette (Ersatzseite statt
+    Datei/Fehler, Refs #751) — und dieser Test wird rot.
+    """
+
+    _UUID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427"
+
+    def _attachment_download_re(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        src = (Path(settings.BASE_DIR) / "static" / "js" / "url-patterns.js").read_text()
+        uuid_m = re.search(r'var UUID = "([^"]*)";', src)
+        assert uuid_m, "UUID-Konstante in url-patterns.js nicht gefunden (Quell-Drift?)."
+        m = re.search(
+            r'ATTACHMENT_DOWNLOAD: new RegExp\(\s*"([^"]*)" \+ UUID \+ "([^"]*)" \+ UUID \+ "([^"]*)",\s*"i"',
+            src,
+        )
+        assert m, "ATTACHMENT_DOWNLOAD-Definition in url-patterns.js nicht gefunden (Quell-Drift?)."
+        uuid_source = uuid_m.group(1).replace("\\\\", "\\")
+        js_source = "".join((m.group(1), uuid_source, m.group(2), uuid_source, m.group(3))).replace("\\\\", "\\")
+        return re.compile(js_source, re.IGNORECASE)
+
+    def test_matcht_alle_drei_owner_routen(self):
+        pattern = self._attachment_download_re()
+        for owner_segment in ("events", "clients", "cases"):
+            url = f"https://host/{owner_segment}/{self._UUID}/attachments/{self._UUID}/download/"
+            assert pattern.search(url), f"ATTACHMENT_DOWNLOAD muss {url} matchen."
+
+    def test_matcht_keine_nachbarrouten(self):
+        pattern = self._attachment_download_re()
+        for url in (
+            f"https://host/workitems/{self._UUID}/attachments/{self._UUID}/download/",
+            f"https://host/clients/{self._UUID}/",
+            f"https://host/clients/{self._UUID}/attachments/{self._UUID}/",
+            f"https://host/events/{self._UUID}/attachments/nicht-uuid/download/",
+            f"https://host/clients/{self._UUID}/export/",
+        ):
+            assert not pattern.search(url), f"ATTACHMENT_DOWNLOAD darf {url} nicht matchen."

@@ -419,8 +419,14 @@ class TestFormTemplatesCarryOfflineDowngrade:
 
     @pytest.mark.parametrize("template", FORM_TEMPLATES)
     def test_form_carries_downgrade_attribute(self, template):
+        # Integrations-Review-Befund: der Substring steht AUCH im erklaerenden
+        # {% comment %}-Block — ein Ganzdatei-Check bliebe gruen, wenn das
+        # Attribut nur noch dort stuende. Deshalb gezielt im <form ...>-Tag
+        # pruefen (der Kommentar wird beim Rendern gestrippt).
         from pathlib import Path
 
         body = Path(template).read_text()
-        assert "data-offline-enctype-downgrade" in body
+        form_start = body.index("<form")
+        form_tag = body[form_start : body.index(">", form_start)]
+        assert "data-offline-enctype-downgrade" in form_tag
         assert "js/event-form-enctype.js" in body
