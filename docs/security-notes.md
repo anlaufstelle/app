@@ -826,6 +826,22 @@ Ordnungstests „zwei Welten mit vertauschten Zellwerten erzeugen dieselbe Ausga
 deckt der Fixpunkt-Guard (K1, seit #1770
 mitigiert).
 
+*Nachtrag (#1772, Punkt 1): sichtbare
+Kategoriezeilen ebenfalls kanonisch.* Die Freistellung „sichtbare Zeilen dürfen count-sortiert
+bleiben" trägt nur, solange die sichtbare Ordnung aus den publizierten Werten **folgt**. Für
+`by_category` tut sie das nicht: dort ordnet die Konsolidierung datenabhängig, und die Position einer
+**sichtbaren** „Vermittlung"-Zeile verriet weiterhin, ob sie aus `accompaniment` oder aus `referral`
+stammt — bei identischen publizierten Werten. Der Kanal ist klein (er betrifft nur die zwei
+Kategorien mit mehreren Quell-`system_type`s und sagt nichts über Fallzahlen), aber er ist derselbe
+Kanaltyp, den K5 schließt, und kostenlos zu schließen. `_ORDERS_CANONICAL_FOR_VISIBLE` in
+[`external_report.py`](../src/core/services/dashboard/external_report.py) benennt die Ordnungen, deren
+sichtbare Zeilen mitsortiert werden — heute genau `ORDER_CATEGORY`. `ORDER_DOCUMENT_TYPE` und
+`ORDER_AGE_CLUSTER` bleiben bewusst draußen: deren `-count`-Ordnung ist aus den Werten ablesbar, und
+die Tabellen werden als Rangliste gelesen. Test-gepinnt in
+`test_external_report_service.py::TestKanonischeOrdnungUnterdrueckterZeilen::test_by_category_sichtbare_zeilen_sind_ebenfalls_kanonisch_geordnet`
+(plus Gegenprobe an `by_document_type`) und Ende-zu-Ende in
+`test_reporting_sample_report_1.py::TestZeilenpositionIstDatenunabhaengig`.
+
 #### K6 — Die Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen
 
 M5 hat die **Zahlen** aus den Vollständigkeitsmeldungen entfernt, wenn sie klein sind — nicht aber die
@@ -1286,6 +1302,29 @@ der Analyse sind erfüllt:
  Wertvergleich — ein fehlender JSON-Schlüssel ergibt in SQL NULL, und `exclude(NULL)` hätte die
  markerlosen Zeilen aus der Löschmenge genommen statt sie hineinzunehmen.
 
+ *Nachtrag (#1772, Punkt 2):
+ `?format=json` **gehört zur Ansichts-Klasse**.* Die erste Fassung zählte den JSON-Abruf des externen
+ Berichts zu den Freigaben („maschinenlesbares Artefakt"). Das trägt nicht: die Route ist dieselbe
+ Bildschirmseite in einem anderen Serialisierungsformat — kein Empfänger-/Zweckformular, keine
+ Download-Geste, und wie die HTML-Fassung wird sie bei **jedem** Aufruf auditiert. Genau die zwei
+ Folgen, um derentwillen die HTML-Ansicht ausgenommen wurde (unbegrenztes prune-exemptes Wachstum,
+ Verdrängung echter Downloads aus dem `RELEASE_LOG_LIMIT`-Fenster), galten damit unverändert. Wer den
+ Datensatz als Datei herausgibt, nimmt den generischen Berichts-Download — der trägt die
+ Freigabe-Felder und bleibt Freigabe, obwohl er ebenfalls JSON liefert.
+
+ **Alt-Zeilen ehrlich behandelt.** Zeilen aus der Zeit vor der Abwertung tragen den Marker; entfernen
+ lässt er sich so wenig wie nachtragen (`detail` geht in den Ketten-Hash ein). Die Abwertung greift
+ deshalb am **Lesepfad**: `_LEGACY_VIEW_Q` schließt die eindeutig erkennbare Gestalt dieser Zeilen aus
+ (`target_type="ExternalReport"` **und** `detail.format="json"`), sodass die Übersicht künftig nur
+ echte Freigaben zeigt und die Alt-Zeilen zugleich die Retention-Ausnahme verlieren — sie laufen wie
+ jede andere Ansicht nach `auditlog_retention_months` aus, nichts wird vorzeitig gelöscht. Die
+ Ausnahme hängt an **beidem**, Ziel und Format, sonst nähme sie die echten JSON-Downloads mit;
+ `has_key` steht wieder vor dem Wertvergleich (dieselbe NULL-Falle wie oben). Test-gepinnt in
+ `test_report_release_log.py::TestUeberlappungswarnung::test_json_ansicht_ist_keine_freigabe`,
+ `::test_json_altzeilen_mit_marker_sind_nicht_mehr_gelistet`,
+ `::test_json_export_der_backend_pipeline_bleibt_eine_freigabe` und
+ `TestExportUeberlebtDieAuditRetention::test_json_ansicht_ist_nicht_prune_exempt`.
+
  Ohne die Ausnahme täuschte die Übersicht Vollständigkeit vor: eine im vierten Jahr herausgegebene
  Jahresauswertung überschnitte sich mit Monatsberichten, die der Log nicht mehr kennt, und die Warnung
  bliebe stumm — ein stiller falscher Negativ, schlechter als längere Aufbewahrung.
@@ -1323,6 +1362,16 @@ produzierte die Übersicht Alarme ohne Aussage. **Zweiter blinder Fleck (neben d
 Übersicht endet beim Download — eine weitergeleitete PDF-Datei oder ein abfotografierter
 Bildschirm erscheinen nicht darin. Das ist eine organisatorische, keine technische Grenze und steht so
 auf der Seite selbst. Test-gepinnt in `test_report_release_log.py`.
+
+**Dritter blinder Fleck: das Auswertungsfenster** (#1772,
+Punkt 3). `build_release_overview` liest die `RELEASE_LOG_LIMIT = 500` jüngsten Freigaben — die
+Überlappungsprüfung ist quadratisch und braucht auf einer append-only wachsenden Tabelle eine Grenze.
+Ältere Freigaben können damit keine Überschneidung mehr auslösen, und das ist derselbe stille falsche
+Negativ wie bei der Rollout-Grenze. Der Seiten-Hinweis nennt die Zahl jetzt ausdrücklich (Kontext
+`release_limit` aus der Konstanten, nicht im Text dupliziert); test-gepinnt in
+`test_report_release_log.py::TestFreigabeUebersichtView::test_seite_nennt_die_mengen_grenze_der_auswertung`.
+Die Abwertung der JSON-Ansicht (Punkt 2 oben) entlastet dasselbe Fenster: Ansichten verdrängen dort
+keine Downloads mehr.
 
 #### Akzeptierte Definitionsgrenzen
 
