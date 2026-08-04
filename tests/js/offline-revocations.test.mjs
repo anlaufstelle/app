@@ -237,6 +237,13 @@ describe("#1760 — Entwuerfe zu einer widerrufenen Person", () => {
         expect(await store.db.drafts.count()).toBe(1);
     });
 
+    // ACHTUNG, Abdeckungsgrenze: dieser Entwurf ist KONSTRUIERT. ``autosave.js``
+    // erzeugt fuer ``/events/new/`` real keinen ``client``-Schluessel — der
+    // ``formKey`` bildet nur ``user`` + ``pathname``, und ``getFormData``
+    // ueberspringt versteckte Felder (das Client-Feld ist genau eines). Der Test
+    // pinnt also die FAEHIGKEIT von ``_mentionsRevoked``, den verschluesselten
+    // Umschlag zu durchsuchen, NICHT die Abdeckung des realen Autosave-Falls —
+    // die ist offen (#1771).
     it("verwirft Entwuerfe, die die Person nur im verschluesselten Inhalt nennen", async () => {
         await store.putEncrypted("drafts", {
             formKey: "autosave_u1_/events/new/",

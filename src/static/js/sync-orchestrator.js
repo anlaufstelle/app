@@ -286,10 +286,17 @@
     // GATE: alle VIER Bestaende zaehlen, die ``applyClientRevocations``
     // tatsaechlich tilgt (Fix-Runde 1, Befund 1 — vorher nur clients+queue).
     // Die beiden fehlenden Faelle waren real erreichbar und dauerhaft blind:
-    //   * ``drafts``-only — ``autosave.js`` legt fuer jedes Formular einen
-    //     Entwurf an; der ``formKey`` traegt die Personen-UUID, der Inhalt liegt
-    //     im entschluesselbaren Umschlag. Ein Entwurf ueberlebt das Entfernen
-    //     der Person aus dem Offline-Cache.
+    //   * ``drafts``-only — ein Autosave-Entwurf ueberlebt sowohl den
+    //     TTL-Purge als auch "Person aus Offline entfernen"; deshalb zaehlt das
+    //     Gate ihn mit. ACHTUNG, frueherer Kommentar war falsch: der
+    //     ``formKey`` traegt die Personen-UUID gerade NICHT. ``getStorageKey``
+    //     bildet nur ``user`` + ``pathname`` (der ``?client=``-Querystring geht
+    //     nicht ein), und ``getFormData`` ueberspringt versteckte Felder — das
+    //     Client-Feld von ``/events/new/`` ist genau so eines. Der Entwurf
+    //     traegt damit weder UUID noch Pseudonym, ``_mentionsRevoked`` kann ihn
+    //     nie treffen. Das Gate startet den Lauf also fuer die uebrigen
+    //     Bestaende; der fehlende Personenbezug im Entwurf selbst ist die
+    //     offene Luecke (Folge-Ticket #1771).
     //   * ``events``-only — ungesyncte Ereignisse ueberleben TTL-Ablauf und
     //     "Person aus Offline entfernen" bewusst (#1353). Stehen sie auf
     //     ``conflict``/``dead``, greift ausserdem der Startup-Drain nicht
