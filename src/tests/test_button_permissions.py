@@ -399,19 +399,31 @@ class TestActionTargetGuards:
         assert case_open.title in content
 
     def test_lead_dashboard_has_no_legal_hold_card(self, client, lead_user):
-        """``system_legal_hold_list`` ist super_admin-only; das Lead-Dashboard
-        rendert ausschliesslich für LEAD (``views/dashboard.py``)."""
+        """Refs #1759: die Legal-Holds-Kachel ist aus dem Lead-Dashboard
+        entfernt (nicht nur geguardet) — ``system_legal_hold_list`` ist
+        super_admin-only, das Lead-Dashboard rendert ausschliesslich für
+        LEAD (``views/dashboard.py``), sah die Kachel also nie wirklich."""
         client.force_login(lead_user)
         content = client.get(reverse("core:dashboard")).content.decode()
         assert reverse("core:system_legal_hold_list") not in content
         assert 'data-testid="card-legal-holds"' not in content
 
     def test_lead_dashboard_keeps_the_other_cards(self, client, lead_user):
-        """Gegenprobe: der Guard ist nicht zu breit."""
+        """Gegenprobe: die Entfernung ist nicht zu breit."""
         client.force_login(lead_user)
         content = client.get(reverse("core:dashboard")).content.decode()
         assert reverse("core:retention_dashboard") in content
         assert reverse("core:statistics") in content
+
+    def test_lead_dashboard_grid_has_no_fourth_column(self, client, lead_user):
+        """Refs #1759: das Grid hatte mit der entfernten Legal-Holds-Kachel
+        nie mehr als 3 echte Karten fuer die Leitung — es soll deshalb kein
+        leerer 4. Slot (``lg:grid-cols-4``) im Markup uebrig bleiben, und
+        genau 3 Karten rendern."""
+        client.force_login(lead_user)
+        content = client.get(reverse("core:dashboard")).content.decode()
+        assert "lg:grid-cols-4" not in content
+        assert content.count('data-testid="card-') == 3
 
     def test_assistant_event_create_has_no_cases_fetch_url(self, client, assistant_user):
         """``cases_for_client`` ist STAFF_PLUS — der Fetch lief für die Assistenz

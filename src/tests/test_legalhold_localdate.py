@@ -1,20 +1,24 @@
 """Near-midnight TZ edge case for LegalHold active/expired classification (#1191).
 
-``LegalHold.is_active`` (model property) and the Dashboard-SQL filter from #1171
-classified holds by the naive, server-local ``date.today()`` although the
-project runs with ``USE_TZ=True`` / ``TIME_ZONE="Europe/Berlin"``. Near
-midnight the UTC date and the Berlin local date differ, so the naive code could
-shift the active/expired boundary by a full day. Both sites must instead use
-``django.utils.timezone.localdate()`` and agree on the SAME boundary date.
+``LegalHold.is_active`` (model property) classified holds by the naive,
+server-local ``date.today()`` although the project runs with ``USE_TZ=True`` /
+``TIME_ZONE="Europe/Berlin"``. Near midnight the UTC date and the Berlin
+local date differ, so the naive code could shift the active/expired boundary
+by a full day. The fix uses ``django.utils.timezone.localdate()``.
 
-The test pins an instant where the UTC calendar date and the Berlin calendar
-date diverge and asserts the Berlin local date decides — for BOTH the model
-property and the dashboard SQL. ``freezegun`` is not installed in this venv, so
-the boundary is built by patching ``timezone.now`` (which ``localdate()``
-derives from). The genuine TZ boundary — not a tautology — is that the naive
-``date.today()`` would return the UTC date here (the container runs in UTC),
-which classifies the boundary hold as still active, whereas the Berlin local
-date classifies it as expired.
+Historical note: until #1759 removed the Lead-Dashboard's Legal-Holds tile
+(dead query — the tile was hidden behind the #1735 super_admin-only guard for
+every role that ever saw this dashboard), the dashboard-SQL filter from #1171
+mirrored the same classification and was covered here too. That coverage went
+with the tile; only the model property remains under test below.
+
+The test pins an instant where the UTC calendar date and the Berlin local
+date differ and asserts the Berlin local date decides. ``freezegun`` is not
+installed in this venv, so the boundary is built by patching ``timezone.now``
+(which ``localdate()`` derives from). The genuine TZ boundary — not a
+tautology — is that the naive ``date.today()`` would return the UTC date here
+(the container runs in UTC), which classifies the boundary hold as still
+active, whereas the Berlin local date classifies it as expired.
 """
 
 from datetime import UTC, date, datetime
@@ -24,7 +28,6 @@ import pytest
 from django.utils import timezone
 
 from core.models import LegalHold
-from core.services.dashboard.main import lead_dashboard_context
 
 # Instant where the UTC calendar date and the Europe/Berlin calendar date differ:
 #   2026-06-21 22:30 UTC  ==  2026-06-22 00:30 Europe/Berlin (CEST, +02:00)
@@ -67,44 +70,3 @@ class TestLegalHoldLocaldateBoundary:
         with mock.patch("django.utils.timezone.now", return_value=BOUNDARY_INSTANT):
             assert timezone.localdate() == BERLIN_DATE  # guard: lever is wired
             assert hold.is_active is False
-
-    def test_dashboard_sql_uses_berlin_local_date_near_midnight(self, facility, lead_user):
-        """The dashboard SQL filter must agree: boundary hold is NOT active."""
-        _assert_boundary_really_diverges()
-        LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=lead_user.pk,
-            reason="Boundary hold",
-            expires_at=EXPIRES_ON_UTC_DATE,
-            created_by=lead_user,
-        )
-
-        with mock.patch("django.utils.timezone.now", return_value=BOUNDARY_INSTANT):
-            ctx = lead_dashboard_context(lead_user, facility)
-
-        # Berlin "today" 2026-06-22; expires_at 2026-06-21 is in the past =>
-        # the hold is expired and must not be counted as active.
-        assert ctx["active_legal_holds"] == 0
-
-    def test_both_sites_agree_on_the_same_boundary_date(self, facility, lead_user):
-        """Lockstep: property and SQL classify the SAME hold identically."""
-        _assert_boundary_really_diverges()
-        hold = LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=lead_user.pk,
-            reason="Boundary hold",
-            expires_at=EXPIRES_ON_UTC_DATE,
-            created_by=lead_user,
-        )
-
-        with mock.patch("django.utils.timezone.now", return_value=BOUNDARY_INSTANT):
-            property_active = hold.is_active
-            ctx = lead_dashboard_context(lead_user, facility)
-            sql_active = ctx["active_legal_holds"] == 1
-
-        # Both must say "not active" (Berlin date), i.e. they stay in lockstep.
-        assert property_active is False
-        assert sql_active is False
-        assert property_active == sql_active

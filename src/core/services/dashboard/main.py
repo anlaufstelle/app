@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from django.db.models import F, Q
+from django.db.models import F
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -20,7 +20,6 @@ from core.models import (
     DeletionRequest,
     Event,
     Facility,
-    LegalHold,
     RetentionProposal,
     Settings,
     StatisticsSnapshot,
@@ -66,8 +65,11 @@ def staff_dashboard_context(user, facility) -> dict:
 def lead_dashboard_context(user, facility) -> dict:
     """Daten fuer die Leitungs-Arbeitszentrale.
 
-    Karten: ausstehende Loeschantraege, Retention-Vorschlaege, aktive
-    Legal Holds, juengste Statistik-Snapshots.
+    Karten: ausstehende Loeschantraege, Retention-Vorschlaege, juengste
+    Statistik-Snapshots. Legal Holds bleiben reines Superadmin-Werkzeug
+    (``system_legal_hold_list``, ``SuperAdminRequiredMixin``) — die frueher
+    hier mitgelieferte ``active_legal_holds``-Kachel war fuer die Leitung
+    hinter dem #1735-Guard immer unsichtbar und ist entfernt (Refs #1759).
     """
     pending_deletion_requests = DeletionRequest.objects.filter(
         facility=facility,
@@ -79,24 +81,11 @@ def lead_dashboard_context(user, facility) -> dict:
         status=RetentionProposal.Status.PENDING,
     ).count()
 
-    # Spiegelt LegalHold.is_active 1:1 in SQL: nicht aufgehoben UND
-    # (kein Ablaufdatum ODER Ablaufdatum >= heute). is_active nutzt
-    # timezone.localdate() (Europe/Berlin) mit striktem "<", daher hier
-    # timezone.localdate()/__gte. Beide Stellen müssen dasselbe
-    # (lokale) Grenzdatum verwenden, sonst driften sie nahe Mitternacht
-    # (UTC vs. Berlin) auseinander (Refs #1166, #1191).
-    active_legal_holds = (
-        LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True)
-        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=timezone.localdate()))
-        .count()
-    )
-
     last_snapshot = StatisticsSnapshot.objects.filter(facility=facility).order_by("-year", "-month").first()
 
     return {
         "pending_deletion_requests": pending_deletion_requests,
         "pending_retention_proposals": pending_retention_proposals,
-        "active_legal_holds": active_legal_holds,
         "last_snapshot": last_snapshot,
     }
 

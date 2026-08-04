@@ -14,7 +14,6 @@ from django.utils import timezone
 from core.models import (
     DeletionRequest,
     Event,
-    LegalHold,
     RetentionProposal,
     Settings,
     User,
@@ -149,73 +148,14 @@ class TestLeadDashboardContext:
 
         assert ctx["pending_retention_proposals"] == 1
 
-    def test_counts_active_legal_holds(self, facility, lead_user, client_identified):
-        LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=client_identified.pk,
-            reason="Test",
-            created_by=lead_user,
-        )
-        # Aufgehobener Hold zählt nicht
-        LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=client_identified.pk,
-            reason="Test 2",
-            created_by=lead_user,
-            dismissed_at=timezone.now(),
-        )
-
+    def test_active_legal_holds_not_in_context(self, facility, lead_user):
+        """Refs #1759: Die Legal-Holds-Kachel ist aus dem Lead-Dashboard entfernt
+        (Legal Holds bleiben reines Superadmin-Werkzeug hinter dem #1735-Guard,
+        ``system_legal_hold_list``/``SuperAdminRequiredMixin``) — die tote
+        Aggregation darf nicht mehr laufen."""
         ctx = lead_dashboard_context(lead_user, facility)
 
-        assert ctx["active_legal_holds"] == 1
-
-    def test_legal_hold_expiring_today_counts_as_active(self, facility, lead_user, client_identified):
-        """Grenzfall: Ablaufdatum == heute zählt noch als aktiv (is_active nutzt striktes <)."""
-        LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=client_identified.pk,
-            reason="Läuft heute ab",
-            created_by=lead_user,
-            expires_at=timezone.localdate(),
-        )
-
-        ctx = lead_dashboard_context(lead_user, facility)
-
-        assert ctx["active_legal_holds"] == 1
-
-    def test_legal_hold_expired_yesterday_does_not_count(self, facility, lead_user, client_identified):
-        """Grenzfall: gestern abgelaufener Hold zählt nicht mehr als aktiv."""
-        LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=client_identified.pk,
-            reason="Gestern abgelaufen",
-            created_by=lead_user,
-            expires_at=timezone.localdate() - timedelta(days=1),
-        )
-
-        ctx = lead_dashboard_context(lead_user, facility)
-
-        assert ctx["active_legal_holds"] == 0
-
-    def test_legal_hold_dismissed_does_not_count(self, facility, lead_user, client_identified):
-        """Aufgehobener Hold zählt nicht, auch wenn das Ablaufdatum in der Zukunft liegt."""
-        LegalHold.objects.create(
-            facility=facility,
-            target_type="Event",
-            target_id=client_identified.pk,
-            reason="Aufgehoben trotz Zukunfts-Ablauf",
-            created_by=lead_user,
-            expires_at=timezone.localdate() + timedelta(days=30),
-            dismissed_at=timezone.now(),
-        )
-
-        ctx = lead_dashboard_context(lead_user, facility)
-
-        assert ctx["active_legal_holds"] == 0
+        assert "active_legal_holds" not in ctx
 
 
 @pytest.mark.django_db

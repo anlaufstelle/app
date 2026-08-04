@@ -38,9 +38,11 @@ class TestRoleDashboardLanding:
         expect(page.locator("[data-testid='card-deletion-requests']")).to_be_visible()
         expect(page.locator("[data-testid='card-retention-proposals']")).to_be_visible()
         expect(page.locator("[data-testid='card-last-snapshot']")).to_be_visible()
-        # Refs #1735: Die Legal-Holds-Kachel verlinkte eine super_admin-only-Seite
-        # (``SystemAuditMixin``) — für die Leitung endete der Klick im 403. Sie ist
-        # deshalb hinter demselben Rollen-Guard wie überall und hier nicht sichtbar.
+        # Refs #1759: Die Legal-Holds-Kachel verlinkte eine super_admin-only-Seite
+        # (``SystemAuditMixin``) — für die Leitung endete der Klick im 403 (#1735-
+        # Guard). Da super_admin nie dieses Template sieht, war die Kachel fuer
+        # jede Rolle tot und ist seit #1759 vollstaendig entfernt (nicht nur
+        # geguardet).
         expect(page.locator("[data-testid='card-legal-holds']")).to_have_count(0)
 
     @pytest.mark.smoke
