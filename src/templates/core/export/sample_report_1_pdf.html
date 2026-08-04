@@ -69,6 +69,9 @@
             {% endfor %}
         </tbody>
     </table>
+    {% elif stats.total is None %}
+    {# R14/K1-Fail-safe (Refs #1770): ``by_category`` ist genau dann leer, wenn ``total = 0`` — "keine Kontakte" publizierte damit die Randsumme, die R14 verbirgt. Analog report_pdf.html/external_report.html. #}
+    <p>{% trans "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." %}</p>
     {% else %}
     <p>{% trans "Keine relevanten Kontakte im Berichtszeitraum." %}</p>
     {% endif %}

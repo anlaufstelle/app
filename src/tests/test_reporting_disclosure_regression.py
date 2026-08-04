@@ -597,6 +597,50 @@ class TestFailSafePfadIstNichtIrrefuehrend:
 
         assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
 
+    def test_beispiel_sachbericht_pdf_leerfall_publiziert_die_randsumme_nicht(self, facility):
+        """Dieselbe Fehlklasse im dritten Artefakt (Refs #1770).
+
+        ``stats.by_category`` ist genau dann leer, wenn ``total = 0`` — beides
+        akkumuliert dieselben Zeilen (``backends/sample_report_1.py``). R14
+        nullt ``total < k`` zu ``published_total = None``; der Leerfall-Text
+        „Keine relevanten Kontakte im Berichtszeitraum." unterschied damit
+        ``total = 0`` von ``total ∈ {1..k-1}`` (dort steht eine Tabelle mit
+        „unterdrückt"-Zeilen) und publizierte die Randsumme, die R14 verbirgt.
+        """
+        from django.template.loader import render_to_string
+
+        from core.services.dashboard import suppress_sample_report_1_stats
+
+        leer = suppress_sample_report_1_stats(
+            facility, {"total": 0, "unique_clients": 0, "by_category": [], "by_age_cluster": []}
+        )
+        assert leer["total"] is None, "Vorbedingung: R14 hat die Randsumme genullt"
+
+        seite = render_to_string("core/export/sample_report_1_pdf.html", {"stats": leer})
+        abschnitt = seite.split("Leistungen nach Kategorie")[-1].split("Altersverteilung")[0]
+
+        assert "Keine relevanten Kontakte im Berichtszeitraum." not in abschnitt
+        assert "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." in abschnitt
+
+    def test_beispiel_sachbericht_pdf_zeigt_den_leerfall_bei_sichtbarer_randsumme(self, facility):
+        """Gegenprobe: bleibt die Randsumme sichtbar, ist „keine Kontakte" eine
+        zulaessige Aussage — der Fail-safe-Zweig darf ihn nicht verdraengen.
+
+        Konstruktion: ``total`` ueber der Schwelle, aber keine gemappten
+        Kategoriezeilen (alle Ereignisse liegen auf nicht zugeordneten
+        system_types) — dann ist der Leerfall echt.
+        """
+        from django.template.loader import render_to_string
+
+        seite = render_to_string(
+            "core/export/sample_report_1_pdf.html",
+            {"stats": {"total": 25, "unique_clients": 20, "by_category": [], "by_age_cluster": []}},
+        )
+        abschnitt = seite.split("Leistungen nach Kategorie")[-1].split("Altersverteilung")[0]
+
+        assert "Keine relevanten Kontakte im Berichtszeitraum." in abschnitt
+        assert "Angaben nach Leistungskategorie unterdrückt (k-Anonymität)." not in abschnitt
+
     def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(self, facility):
         """Gegenprobe: solange die Tabelle da ist, aendert sich nichts — weder
         der Marker je Zeile noch die sichtbaren Zahlen."""
