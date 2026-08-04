@@ -918,6 +918,19 @@ eine Brute-Force-Aufzählung nachgeprüft). Sechs Eigenschaften tragen das Ergeb
 Test-gepinnt in `test_external_report_service.py::TestSecondarySuppression`,
 `test_disclosure_inference.py` und `test_reporting_disclosure_regression.py`.
 
+*Trigger für Re-Evaluation der Opferwahl (Utility, nicht Sicherheit):* Die Messung „kleinste fällt
+= 2,5 % Rest-Leak, größte fällt = 0,2 %" stammt aus einem **einmalig** laufenden Audit. Die Umsetzung
+iteriert dagegen bis zum Fixpunkt, und **an einem Fixpunkt sind beide Opferregeln im Modell leakfrei**
+— sie unterscheiden sich dann nur noch darin, welche und wie viele Zellen fallen. In einem typischen
+Bericht (Randsumme 100; 60/30/8/2) verschwindet mit „größte fällt" die 60, mit „kleinste fällt" nur
+die 8, in beiden Fällen ohne Rest-Pin. Wer die Utility-Kosten neu bewertet, kann die Regel deshalb
+umstellen, ohne die Zusicherung zu schwächen — der Enumerationstest ist die Gegenprobe, und der
+Bestandstest `test_list_single_suppression_triggers_secondary` würde dann wieder „größte bleibt
+sichtbar" zusichern. Bis zu einem solchen Entscheid gilt die Empfehlung der Analyse: **größte fällt**,
+weil sie das Residuum und damit die Mehrdeutigkeit maximiert und die Regel nach oben statt nach unten
+begrenzt (die publizierte Zusatzinformation ist „das Opfer ist mindestens so groß wie jede sichtbare
+Zelle" statt „höchstens so klein wie die kleinste").
+
 #### K1 — Struktur-Kollaps / Residuum bei publizierter Randsumme
 
 Randsumme und teilsupprimierte Aufschlüsselung stehen im selben Artefakt, und die Aufschlüsselung ist
