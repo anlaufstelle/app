@@ -902,3 +902,36 @@ def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, adm
     assert Attachment.objects.filter(client=g.client).count() == 0
     assert Attachment.objects.filter(case=g.case).count() == 0
     assert not [path for path in owner_paths if path.exists()], "verwaiste .enc-Dateien nach K-Anon-Bridge"
+
+
+@pytest.mark.django_db
+def test_file_markers_gone_after_retention_k_anonymization(maximal_pii_graph, admin_user, lead_user):
+    """Invariante I-M1 (ADR-039 §7) auch in der K-Anon-Bridge (Refs #1738).
+
+    Der Hard-Pfad-Pin liegt in ``test_anonymize_residue.py``. In der Bridge
+    haengt die Invariante an einer anderen Mechanik: die Client-Zeile redigiert
+    ``k_anonymize_client`` selbst (``_redact_client_identity`` ist dort bewusst
+    ausgenommen), die Fall-Zeile ``_redact_cases_and_episodes``. Da die Bridge
+    seit M24 personen-/falleigene Anhaenge physisch loescht, muessen beide
+    Marker-Quellen im selben Lauf leer sein — sonst zeigten Marker auf
+    Attachment-Zeilen, die es nicht mehr gibt.
+    """
+    from core.models import Case, Client
+    from core.retention.anonymization import anonymize_clients
+
+    g = maximal_pii_graph
+    marker = {"__files__": True, "entries": [{"id": "55555555-5555-5555-5555-555555555555", "sort": 0}]}
+    g.client.data_json = {**(g.client.data_json or {}), "anlage": marker}
+    g.client.save(update_fields=["data_json"])
+    g.case.data_json = {**(g.case.data_json or {}), "anlage": marker}
+    g.case.save(update_fields=["data_json"])
+
+    _arm_retention_k_anonymization(g, admin_user, lead_user)
+    anonymize_clients(g.facility, dry_run=False)
+
+    client = Client.objects.get(pk=g.client.pk)
+    case = Case.objects.get(pk=g.case.pk)
+    assert client.k_anonymized is True
+    for haystack in (client.data_json, case.data_json):
+        assert "__files__" not in str(haystack)
+        assert "__file__" not in str(haystack)
