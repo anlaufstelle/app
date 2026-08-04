@@ -814,8 +814,9 @@ noch für Tabellen mit **fester Schlüsselordnung**: `by_contact_stage` und `Exa
 Test-gepinnt in
 `test_external_report_service.py::TestKanonischeOrdnungUnterdrueckterZeilen` (inkl. des geforderten
 Ordnungstests „zwei Welten mit vertauschten Zellwerten erzeugen dieselbe Ausgabe") und
-`::TestKanonischeOrdnungInDenWrappern`. **Unverändert gültig:** das oben ausgewiesene Restrisiko
-K5 senkt die Pin-Rate, der Residual-Guard (K1) bleibt offen.
+`::TestKanonischeOrdnungInDenWrappern`. K5 senkt für sich genommen nur die Pin-Rate; die Restfälle
+deckt der Fixpunkt-Guard (K1, seit #1770
+mitigiert).
 
 #### K6 — Die Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen
 
@@ -894,7 +895,7 @@ das ist K1, nicht K2.
 **Produktentscheid: Variante „Spanne ≥ 2"**). `_audit_feasible_span` in
 [`external_report.py`](../src/core/services/dashboard/external_report.py) misst die Machbarkeitsspanne
 statt der Zellenzahl: solange eine unterdrückte Zelle **exakt** zurückrechenbar ist, fällt die
-**größte** sichtbare Zelle, danach wird neu gerechnet — bis zum Fixpunkt. Die Spanne kommt aus
+**kleinste** sichtbare Zelle, danach wird neu gerechnet — bis zum Fixpunkt. Die Spanne kommt aus
 [`disclosure.py`](../src/core/services/dashboard/disclosure.py) (geschlossene Intervallformel, gegen
 eine Brute-Force-Aufzählung nachgeprüft). Sechs Eigenschaften tragen das Ergebnis:
 
@@ -952,10 +953,19 @@ damit unverändert gültig.
 > Test-gepinnt in `test_external_report_service.py::TestSecondarySuppression::test_opferwahl_und_a_priori_schranke_sind_gekoppelt`
 > (plus der Fall ohne sichtbare Zelle, in dem es keine ableitbare Obergrenze gibt).
 
-Dieselbe Opferregel und derselbe wertunabhängige Zweitschlüssel gelten im tabellenlokalen Audit
+Dieselbe Opferregel und ein **wertunabhängiger** Zweitschlüssel gelten im tabellenlokalen Audit
 (`_audit_feasible_span`) **und** im Fixpunkt-Guard (`_suppress_smallest_visible`): beide nehmen das
-Minimum über `(Wert, kanonische K5-Ordnung)`. Zwei verschiedene Opferregeln in derselben Suppression
-wären zwei Angreifermodelle, von denen mindestens eines nicht modelliert ist.
+Minimum über `(Wert, Zweitschlüssel)`. Zwei verschiedene Opferregeln in derselben Suppression wären
+zwei Angreifermodelle, von denen mindestens eines nicht modelliert ist.
+
+Welcher Zweitschlüssel das konkret ist, hängt am Aufrufer — wertunabhängig sind beide:
+
+* **Zeilenpfad und Fixpunkt-Guard** (`_suppress_small` → `_order_tiebreak`) nehmen die kanonische
+ K5-Ordnung; bei Wertgleichheit fällt die kanonisch **erste** Zelle.
+* **Stufenpfad** (`_suppress_stage_dict`, `by_contact_stage`) nimmt `(-index,)` über die **feste**
+ Schlüsselordnung des Modells; bei Wertgleichheit fällt dort also die **letzte** Stufe. Die
+ K5-Ordnung kommt hier gar nicht zum Einsatz — die Eingabeordnung ist selbst schon wertunabhängig
+ (`ORDER_INPUT`), es gibt keinen Rang, den sie verraten könnte.
 
 #### K1 — Struktur-Kollaps / Residuum bei publizierter Randsumme
 

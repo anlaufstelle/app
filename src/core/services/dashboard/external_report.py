@@ -230,7 +230,11 @@ def _audit_feasible_span(
     **je Zelle** (1 fuer GROUP-BY-Zeilen, 0 fuer datenunabhaengig emittierte
     Zellen — feste Schluessel wie ``by_contact_stage`` und die K3-A1-Restzeile),
     ``tiebreak`` liefert bei wertgleichen Kandidaten eine wertunabhaengige,
-    deterministische Reihenfolge (kanonische K5-Ordnung).
+    deterministische Reihenfolge. WELCHE, entscheidet der Aufrufer: der
+    Zeilenpfad uebergibt die kanonische K5-Ordnung (:func:`_order_tiebreak`),
+    der Stufenpfad (:func:`_suppress_stage_dict`) die Position ueber der festen
+    Schluesselordnung des Modells. Wertunabhaengig sind beide — nur die
+    Reihenfolge unterscheidet sich.
     """
     if margin is None:
         return
@@ -442,6 +446,13 @@ def _order_tiebreak(rows: Sequence[dict[str, Any]], order: str) -> Callable[[int
     Beide Opferwahlen nehmen das **Minimum** ueber ``(Wert, tiebreak)``; damit
     faellt bei Wertgleichheit die kanonisch **erste** Zelle, in
     :func:`_audit_feasible_span` wie in :func:`_suppress_smallest_visible`.
+
+    Gilt fuer den **Zeilenpfad**. Der Stufenpfad
+    (:func:`_suppress_stage_dict`, ``by_contact_stage``) baut seinen
+    Zweitschluessel selbst — ``(-index,)`` ueber der festen Schluesselordnung,
+    dort faellt bei Gleichstand also die **letzte** Stufe. Auch das ist
+    wertunabhaengig; die Zusicherung lautet „wertunabhaengiger Zweitschluessel",
+    nicht „ueberall dieselbe Ordnung".
     """
     key = _CANONICAL_ORDERS[order]
     if key is None:

@@ -252,8 +252,10 @@ class TestPrepareExport:
         """Mehrzeilig: eine Zelle < k, eine >= k — nach der primaeren
         Suppression waere die verbliebene unterdrueckte Zelle aus ``total`` und
         der sichtbaren Zeile exakt rueckrechenbar (Spanne 1). Das
-        Machbarkeits-Audit (K2, Refs #1770) laesst deshalb die **groesste**
-        sichtbare Zelle mitfallen; die Records spiegeln das.
+        Machbarkeits-Audit (K2, Refs #1770) laesst deshalb die **kleinste**
+        sichtbare Zelle mitfallen; die Records spiegeln das. Hier gibt es nur
+        eine sichtbare Zelle — die Opferwahl ist also nicht unterscheidbar, die
+        Begruendung nennt trotzdem die geltende Regel.
         """
         result = DatasetResult(
             mode="rows",

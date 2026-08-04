@@ -46,8 +46,12 @@ class TestSecondarySuppression:
     damit das Residuum.
 
     Jetzt wird die Spanne gemessen: solange eine unterdrückte Zelle exakt
-    zurückrechenbar ist, fällt die **größte** sichtbare Zelle (maximiert das
-    Residuum), danach wird neu gerechnet — bis zum Fixpunkt.
+    zurückrechenbar ist, fällt die **kleinste** sichtbare Zelle, danach wird neu
+    gerechnet — bis zum Fixpunkt. Die Analyse hatte die *größte* empfohlen
+    (maximiert das Residuum); der User-Entscheid verwarf das zugunsten der
+    Zusicherung „die Spitzenkategorie bleibt sichtbar" — sicherheitsneutral nur
+    zusammen mit Bedingung X (``hi = min(sichtbare)`` in ``_local_partition``),
+    siehe ``docs/security-notes.md``.
     """
 
     def test_list_single_suppression_triggers_secondary(self):
