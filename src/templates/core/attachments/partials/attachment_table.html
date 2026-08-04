@@ -37,6 +37,14 @@
                         <span class="truncate max-w-[200px]">{{ item.original_filename }}</span>
                     </span>
                     {% endif %}
+                    {% comment %} B4 (Refs #1781): Die Liste zeigt nur Ketten-Spitzen. Der Badge
+                    macht sichtbar, dass es aeltere Versionen gibt — erst ab 2, darunter waere er
+                    nur Rauschen. {% endcomment %}
+                    {% if item.version_count > 1 %}
+                    <span data-testid="attachment-version-count"
+                          class="mt-0.5 inline-flex items-center rounded-full bg-canvas border border-subtle px-2 py-0.5 text-[12px] font-medium text-ink-muted"
+                          title="{% blocktrans with count=item.version_count %}{{ count }} Versionen dieser Datei — angezeigt wird die aktuelle{% endblocktrans %}">{% blocktrans with count=item.version_count %}{{ count }} Versionen{% endblocktrans %}</span>
+                    {% endif %}
                 </td>
                 <td class="px-4 py-3 text-sm text-ink-muted">{{ item.file_size_display }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden md:table-cell">{{ item.attachment.mime_type }}</td>
@@ -84,6 +92,10 @@
         </div>
         <div class="mt-1 text-xs text-ink-muted">
             {{ item.file_size_display }} · {{ item.doc_type_name }} · {{ item.client_pseudonym }}
+            {# Siehe Desktop-Zeile (B4, Refs #1781); eigener testid, damit der Selektor eindeutig bleibt. #}
+            {% if item.version_count > 1 %}
+            · <span data-testid="mobile-attachment-version-count" class="font-medium">{% blocktrans with count=item.version_count %}{{ count }} Versionen{% endblocktrans %}</span>
+            {% endif %}
         </div>
         <div class="mt-0.5 text-xs text-ink-muted">
             {% trans "Zugeordnet zu" %}: {% if item.owner_url %}<a href="{{ item.owner_url }}" class="text-accent hover:text-accent hover:underline">{{ item.owner_label }}</a>{% else %}{{ item.owner_label }}{% endif %}

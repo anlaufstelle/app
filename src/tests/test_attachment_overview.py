@@ -413,3 +413,135 @@ class TestOwnerGenericOverview:
     def test_cross_facility_attachment_is_never_listed(self, client, staff_user, foreign_client_attachment):
         client.force_login(staff_user)
         assert "authz.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
+
+
+# ---------------------------------------------------------------------------
+# B4 — Versionsketten in der Uebersicht (Refs #1781)
+# ---------------------------------------------------------------------------
+
+
+def _replace(facility, owner, ft, user, filename, previous):
+    """Ersetzt ``previous`` durch eine neue Version derselben Kette."""
+    upload = SimpleUploadedFile(filename, PDF_HEADER + filename.encode(), content_type="application/pdf")
+    return store_encrypted_file(facility, upload, ft, owner, user, supersedes=previous)
+
+
+@pytest.fixture
+def versioned_client_attachment(facility, staff_user, client_identified):
+    """Personen-eigene Kette mit drei Versionen (v3 ist die Spitze)."""
+    ft = _file_template(facility, "Versionierte Datei")
+    dt = _doc_type(facility, "P-Typ versioniert", DocumentType.EntityType.CLIENT, file_field=ft)
+    client_identified.document_type = dt
+    client_identified.save(update_fields=["document_type"])
+    v1 = _attach(facility, client_identified, ft, staff_user, "vertrag_v1.pdf")
+    v2 = _replace(facility, client_identified, ft, staff_user, "vertrag_v2.pdf", v1)
+    v3 = _replace(facility, client_identified, ft, staff_user, "vertrag_v3.pdf", v2)
+    return SimpleNamespace(owner=client_identified, field_template=ft, doc_type=dt, versions=[v1, v2, v3])
+
+
+class TestOverviewShowsChainHeadsOnly:
+    """B4 (Refs #1781):
+    Die Uebersicht listete jede nicht-soft-geloeschte Zeile — also auch jede
+    ersetzte Vorversion. Eine dreifach ersetzte Datei erschien viermal, mit
+    identischem Owner und fast identischem Namen; welche davon die aktuelle war,
+    stand nirgends. Maintainer-Entscheid (Refs #1785): nur Ketten-Spitzen
+    (``is_current=True``) zeigen, die Kettenlaenge als Badge.
+
+    Der Soft-Delete-Filter aus B1 bleibt daneben bestehen — beide Bedingungen
+    sind unabhaengig (eine Spitze kann soft-geloescht sein).
+    """
+
+    def test_superseded_versions_disappear_from_the_list(self, client, staff_user, versioned_client_attachment):
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "vertrag_v3.pdf" in content
+        assert "vertrag_v2.pdf" not in content
+        assert "vertrag_v1.pdf" not in content
+
+    def test_only_the_head_row_reaches_the_context(self, client, staff_user, versioned_client_attachment):
+        client.force_login(staff_user)
+        rows = client.get(reverse(LIST_URL_NAME)).context["attachments"]
+        assert [row["attachment"].pk for row in rows] == [versioned_client_attachment.versions[-1].pk]
+
+    def test_soft_deleted_head_stays_hidden(self, client, staff_user, versioned_client_attachment):
+        """B1 und B4 greifen unabhaengig voneinander."""
+        head = versioned_client_attachment.versions[-1]
+        head.deleted_at = timezone.now()
+        head.save(update_fields=["deleted_at"])
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "vertrag_v3.pdf" not in content
+        assert "vertrag_v2.pdf" not in content
+
+
+class TestOverviewVersionBadge:
+    def test_badge_counts_every_version_of_the_chain(self, client, staff_user, versioned_client_attachment):
+        client.force_login(staff_user)
+        response = client.get(reverse(LIST_URL_NAME))
+        assert [row["version_count"] for row in response.context["attachments"]] == [3]
+        assert 'data-testid="attachment-version-count"' in response.content.decode()
+
+    def test_badge_is_absent_for_a_single_version(self, client, staff_user, event_attachment):
+        """Bei genau einer Version ist der Badge nur Rauschen."""
+        client.force_login(staff_user)
+        response = client.get(reverse(LIST_URL_NAME))
+        assert [row["version_count"] for row in response.context["attachments"]] == [1]
+        assert "attachment-version-count" not in response.content.decode()
+
+    def test_badge_query_count_is_independent_of_row_count(
+        self, client, staff_user, django_assert_max_num_queries, three_owner_attachments, versioned_client_attachment
+    ):
+        """Kein N+1: die Kettenlaenge kommt als Annotation mit, nicht pro Zeile."""
+        client.force_login(staff_user)
+        with django_assert_max_num_queries(25):
+            response = client.get(reverse(LIST_URL_NAME))
+        assert len(response.context["attachments"]) >= 4
+
+    def test_soft_deleted_versions_do_not_inflate_the_badge(self, client, staff_user, versioned_client_attachment):
+        """Eine soft-geloeschte Kette verschwindet ganz; eine Teil-Loeschung der
+        Historie darf die Zaehlung der sichtbaren Spitze nicht verfaelschen."""
+        v1 = versioned_client_attachment.versions[0]
+        v1.deleted_at = timezone.now()
+        v1.save(update_fields=["deleted_at"])
+        client.force_login(staff_user)
+        rows = client.get(reverse(LIST_URL_NAME)).context["attachments"]
+        assert [row["version_count"] for row in rows] == [2]
+
+
+class TestOtherViewsKeepTheFullChain:
+    """Gegenprobe: der Filter gilt NUR fuer die Uebersicht."""
+
+    def test_art15_export_still_lists_every_version(self, facility, staff_user, versioned_client_attachment):
+        from core.services.client import export_client_data
+
+        payload = export_client_data(versioned_client_attachment.owner, facility, staff_user)
+        entries = payload["attachments"]
+        assert sorted(entry["filename"] for entry in entries) == [
+            "vertrag_v1.pdf",
+            "vertrag_v2.pdf",
+            "vertrag_v3.pdf",
+        ]
+        assert sum(1 for entry in entries if entry["is_current"]) == 1
+
+    def test_owner_field_view_still_resolves_the_head(self, versioned_client_attachment):
+        """Die Eigner-Ansicht (Datei-Feld am Datensatz) zeigt seit jeher nur
+        Ketten-Spitzen — sie war nie betroffen und bleibt es."""
+        from core.services.file_vault import get_current_entries_for_field
+
+        entries = get_current_entries_for_field(
+            versioned_client_attachment.owner, versioned_client_attachment.field_template
+        )
+        assert [entry.pk for entry in entries] == [versioned_client_attachment.versions[-1].pk]
+
+    def test_download_of_a_superseded_version_still_works(self, client, staff_user, versioned_client_attachment):
+        """Der Download bleibt owner-gebunden, nicht spitzen-gebunden: ein Link
+        aus der Art.-15-Auskunft auf eine Vorversion darf nicht ins Leere gehen."""
+        client.force_login(staff_user)
+        old = versioned_client_attachment.versions[0]
+        response = client.get(
+            reverse(
+                "core:client_attachment_download",
+                kwargs={"pk": versioned_client_attachment.owner.pk, "attachment_pk": old.pk},
+            )
+        )
+        assert response.status_code == 200

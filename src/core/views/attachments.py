@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from django.db.models import CharField, Q, Value
+from django.db.models import CharField, Count, IntegerField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404
 from django.urls import reverse
@@ -88,6 +88,12 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     * Feld-Sensitivity des ``field_template`` (Override oder Erbe),
     * Assistenz sieht keine fall-eigenen Zeilen (ADR-039 §12: Faelle sind fuer
       sie unsichtbar) — und im Dropdown auch keine Fall-Typnamen.
+
+    B4 (Refs #1781, Maintainer-Entscheid #1785): die Liste zeigt nur
+    **Ketten-Spitzen** (``is_current=True``). Ersetzte Vorversionen erschienen
+    bis dahin als eigene Zeilen — dieselbe Datei mehrfach, mit identischem
+    Owner und ohne Hinweis darauf, welche die aktuelle ist. Die Kettenlaenge
+    kommt stattdessen als Badge mit (``version_count``).
     """
 
     template_name = "core/attachments/list.html"
@@ -115,6 +121,10 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             # B1 (Refs #1738): ``deleted_at`` blendet einen Anhang ueberall aus.
             Attachment.objects.for_facility(facility)
             .active()
+            # B4 (Refs #1781): nur Ketten-Spitzen. Unabhaengig vom
+            # Soft-Delete-Filter — eine Spitze kann soft-geloescht sein, eine
+            # Vorversion muss auch ohne ``deleted_at`` draussen bleiben.
+            .filter(is_current=True)
             # Owner im Papierkorb liefert keine Dateien mehr aus. Je Owner-Typ
             # ``NULL``-tolerant formuliert: pro Zeile ist genau EIN Owner
             # gesetzt (CheckConstraint), die beiden anderen Klauseln sind dann
@@ -149,6 +159,17 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
                     "case__document_type__sensitivity",
                     Value(NO_DOC_TYPE_SENTINEL),
                     output_field=CharField(),
+                ),
+                # B4 (Refs #1781): Laenge der Versionskette als aggregierte
+                # Subquery — EINE korrelierte Unterabfrage im selben Statement
+                # statt einer Zaehl-Query je Zeile (kein N+1). ``Coalesce`` auf
+                # 1: die Zeile selbst zaehlt immer mit, die Subquery kann durch
+                # den ``active()``-Filter nur dann leer sein, wenn die Spitze
+                # selbst soft-geloescht ist — dann ist sie ohnehin schon aus der
+                # Liste gefiltert.
+                version_count=Coalesce(
+                    Subquery(self._chain_version_counts(facility), output_field=IntegerField()),
+                    Value(1),
                 ),
             )
             # Sensitivity-Filter VOR dem Slice: die effektive Sensitivitaet ist
@@ -197,6 +218,29 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         }
 
         return self.render_htmx_or_full(context)
+
+    @staticmethod
+    def _chain_version_counts(facility):
+        """Aggregat-Subquery: Anzahl noch vorhandener Versionen je ``entry_id``.
+
+        B4 (Refs #1781). Gezaehlt werden die nicht soft-geloeschten Zeilen der
+        Kette — der Badge beziffert, was noch da ist, nicht, was es einmal gab.
+        Der Facility-Scope steht explizit hier, statt sich auf die RLS-Policy zu
+        verlassen: eine Auswertung, die nur unter RLS korrekt zaehlt, waere im
+        Superadmin-Kontext (Bypass-Branch) still falsch.
+        """
+        return (
+            Attachment.objects.for_facility(facility)
+            .active()
+            .filter(entry_id=OuterRef("entry_id"))
+            # ``order_by()`` loescht ``Meta.ordering`` — sonst landet
+            # ``created_at`` im GROUP BY und die Subquery liefert je Version
+            # eine eigene Zeile.
+            .order_by()
+            .values("entry_id")
+            .annotate(total=Count("pk"))
+            .values("total")
+        )
 
     @staticmethod
     def _filter_by_uuid(queryset, raw_value, condition):
@@ -275,6 +319,9 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "doc_type_name": document_type.name if document_type is not None else "—",
             "client_pseudonym": person.pseudonym if person is not None else "—",
             "download_url": attachment_download_url(attachment),
+            # B4 (Refs #1781): kommt als Annotation mit; das Template zeigt den
+            # Badge erst ab 2 — bei genau einer Version waere er nur Rauschen.
+            "version_count": attachment.version_count,
         }
 
 
