@@ -492,6 +492,57 @@ class TestEntityScopedFieldVisibility:
 
 
 @pytest.mark.django_db
+class TestRetentionDaysClearedForNonEventTypes:
+    """#1776 Punkt 5 (Bereinigen, ADR-039 Event-only-Doktrin): ``retention_days``
+    wirkt ausschließlich an Ereignis-Typen (``enforce_document_type_retention``
+    zählt nur ``Event``). Ein an einem Personen-/Fall-Typ gesetzter Wert blieb
+    bisher dauerhaft gespeichert und war über die UI nicht mehr korrigierbar
+    (``entity_type`` ist nach dem Anlegen unveränderbar) — toter, irreführender
+    Datenbestand. ``DocumentTypeForm.clean`` NULLt ihn deshalb beim Speichern
+    für ``entity_type != event`` (Bestand: Migration `0132`).
+    """
+
+    def test_create_client_type_with_retention_days_is_stored_as_none(self, client, admin_user, facility):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(
+                name="Personenbogen mit Frist",
+                entity_type=DocumentType.EntityType.CLIENT,
+                retention_days="30",
+            ),
+        )
+        assert response.status_code == 302
+        obj = DocumentType.objects.get(name="Personenbogen mit Frist")
+        assert obj.retention_days is None
+
+    def test_create_case_type_with_retention_days_is_stored_as_none(self, client, admin_user, facility):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(
+                name="Fallbogen mit Frist",
+                entity_type=DocumentType.EntityType.CASE,
+                retention_days="14",
+            ),
+        )
+        assert response.status_code == 302
+        obj = DocumentType.objects.get(name="Fallbogen mit Frist")
+        assert obj.retention_days is None
+
+    def test_event_type_retention_days_is_unaffected(self, client, admin_user, facility):
+        """Regressionsschutz (Gegenprobe): Ereignis-Typen behalten ihre Frist."""
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(name="Ereignisbogen mit Frist", retention_days="90"),
+        )
+        assert response.status_code == 302
+        obj = DocumentType.objects.get(name="Ereignisbogen mit Frist")
+        assert obj.retention_days == 90
+
+
+@pytest.mark.django_db
 class TestSystemTypeOnlyForEventTypes:
     """Final-Review E (Refs #1058): das Paketschema verbietet ``system_type`` an
     ``client``/``case``-Typen hart. Beide Felder sind nach dem Anlegen

@@ -235,6 +235,18 @@ class DocumentTypeForm(forms.ModelForm):
                     "system_type",
                     _("Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."),
                 )
+        # #1776 Punkt 5 (Bereinigen, ADR-039 Event-only-Doktrin): ``retention_days``
+        # wirkt ausschliesslich an Ereignis-Typen (``enforce_document_type_retention``
+        # zaehlt nur ``Event``). Ein an einem Personen-/Fall-Typ gesetzter Wert blieb
+        # bisher dauerhaft gespeichert und war ueber die UI nicht mehr korrigierbar
+        # (``entity_type`` ist nach dem Anlegen unveraenderbar) — toter, irrefuehrender
+        # Datenbestand. NULLen statt Formfehler: das UI blendet das Feld fuer diesen
+        # Entitaetstyp bereits aus (Refs #1757), ein Fehler waere fuer die Nutzerin
+        # unsichtbar. Bestandswerte raeumt Migration 0132 auf.
+        entity_type = cleaned.get("entity_type")
+        if entity_type and entity_type != DocumentType.EntityType.EVENT:
+            cleaned["retention_days"] = None
+
         name = cleaned.get("name")
         category = cleaned.get("category")
         if name and category and self.facility is not None:
