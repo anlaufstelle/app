@@ -506,6 +506,7 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
         # Attachment mit verschluesseltem Originalfilename
         ft_crisis = doc_type_crisis.fields.first().field_template
         att = Attachment.objects.create(
+            facility=event.facility,
             event=event,
             field_template=ft_crisis,
             storage_filename="test.enc",

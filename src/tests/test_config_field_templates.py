@@ -53,6 +53,7 @@ def _make_event(facility, client_obj, doc_type, user):
 
 def _make_attachment(event, field_template):
     return Attachment.objects.create(
+        facility=event.facility,
         event=event,
         field_template=field_template,
         storage_filename="abcd1234.enc",

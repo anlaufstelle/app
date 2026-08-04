@@ -45,6 +45,30 @@ class FacilityScopedManager(models.Manager):
         return self.get_queryset().deleted()
 
 
+class AttachmentQuerySet(FacilityScopedQuerySet):
+    """QuerySet fuer ``Attachment`` — Soft-Delete via ``deleted_at``.
+
+    ``Attachment`` hat kein ``is_deleted``-Feld (SoftDeletableModel), sondern
+    den Versionsketten-Marker ``deleted_at`` (Refs #622). Ohne diese Overrides
+    vererbte ``FacilityScopedQuerySet.active()`` den ``is_deleted``-Filter auch
+    auf den Reverse-Manager (``event.attachments.active()``) → ``FieldError``
+    (ADR-039 §3).
+    """
+
+    def active(self):
+        return self.filter(deleted_at__isnull=True)
+
+    def deleted(self):
+        return self.filter(deleted_at__isnull=False)
+
+
+class AttachmentManager(FacilityScopedManager):
+    """Manager fuer ``Attachment`` (facility-Scoping + ``deleted_at``-Semantik)."""
+
+    def get_queryset(self):
+        return AttachmentQuerySet(self.model, using=self._db)
+
+
 class EventQuerySet(FacilityScopedQuerySet):
     """QuerySet with sensitivity-based visibility filter for events."""
 

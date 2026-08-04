@@ -1,4 +1,15 @@
-"""Encrypted file attachments for events."""
+"""Encrypted file attachments — owner-generisch (Event, Person, Fall).
+
+Bis M24 (Refs #1738) hingen Anhaenge als ``EventAttachment`` ausschliesslich am
+Ereignis. Seit ADR-039 traegt ``Attachment`` eine eigene ``facility`` und genau
+EINEN Owner (``event`` | ``client`` | ``case``, DB-gepinnt via CheckConstraint);
+die RLS-Policy ist der direkte Spaltenvergleich (Migration 0131) statt des
+frueheren Joins ueber ``core_event``.
+
+Sicherheitskontrakt (ADR-039 §2): ``facility`` wird IMMER aus ``owner.facility``
+abgeleitet — nie als freier Parameter entgegengenommen. Durchgesetzt im
+Service-Layer (``file_vault``), gepinnt per Unit-Test.
+"""
 
 import uuid
 
@@ -6,16 +17,59 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.models.managers import AttachmentManager
+
+#: Reihenfolge = Anzeige-/Dispatch-Reihenfolge (Event zuerst: Bestandspfad).
+OWNER_FIELDS = ("event", "client", "case")
+
+
+def owner_field_name(owner):
+    """FK-Feldname fuer eine Owner-Instanz (``Event``/``Client``/``Case``).
+
+    Zentraler Dispatch-Helfer fuer den owner-generischen Service-Layer —
+    ``ValueError`` fuer alles, was kein zulaessiger Owner ist (fail-loud statt
+    stillem Fehlscoping).
+    """
+    model_name = owner._meta.model_name
+    if model_name not in OWNER_FIELDS:
+        raise ValueError(f"Kein zulaessiger Attachment-Owner: {owner._meta.label} (erwartet: {OWNER_FIELDS})")
+    return model_name
+
 
 class Attachment(models.Model):
-    """An encrypted file attached to a specific field of an event."""
+    """An encrypted file attached to a dynamic FILE field of its owner."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    facility = models.ForeignKey(
+        "core.Facility",
+        on_delete=models.CASCADE,
+        related_name="attachments",
+        verbose_name=_("Einrichtung"),
+    )
+    # Genau EIN Owner-FK ist gesetzt (CheckConstraint ``attachment_exactly_one_owner``).
     event = models.ForeignKey(
         "core.Event",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="attachments",
         verbose_name=_("Event"),
+    )
+    client = models.ForeignKey(
+        "core.Client",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+        verbose_name=_("Person"),
+    )
+    case = models.ForeignKey(
+        "core.Case",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="attachments",
+        verbose_name=_("Fall"),
     )
     # Versions-Kette (Stufe B, Refs #622): Ein ``entry_id`` identifiziert eine
     # Kette von Attachments, die dieselbe logische Datei über ihre Replace-
@@ -35,7 +89,7 @@ class Attachment(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Soft-deleted am"),
-        help_text=_("Markiert den Eintrag als vom User entfernt. Physischer Delete erst beim Event-Delete/Anonymize."),
+        help_text=_("Markiert den Eintrag als vom User entfernt. Physischer Delete erst beim Owner-Delete/Anonymize."),
     )
     field_template = models.ForeignKey(
         "core.FieldTemplate",
@@ -80,10 +134,10 @@ class Attachment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
 
     # Versionierung (Refs #587, Stufe A): statt eine alte Datei beim Ersetzen
-    # zu löschen, markieren wir sie als superseded. Pro (event, field_template)
+    # zu löschen, markieren wir sie als superseded. Pro (owner, field_template)
     # bleibt die jeweils neueste Version `is_current=True`; Vorgänger zeigen
     # per `superseded_by` auf ihren Nachfolger und zusammen bilden sie die
-    # Versionskette. Disk-Cleanup erst beim Event-Delete/Anonymize.
+    # Versionskette. Disk-Cleanup erst beim Owner-Delete/Anonymize.
     is_current = models.BooleanField(
         default=True,
         verbose_name=_("Aktuelle Version"),
@@ -102,10 +156,48 @@ class Attachment(models.Model):
         verbose_name=_("Ersetzt am"),
     )
 
+    objects = AttachmentManager()
+
     class Meta:
         verbose_name = _("Dateianhang")
         verbose_name_plural = _("Dateianhänge")
         ordering = ["-created_at"]
+        constraints = [
+            # Genau ein Owner — DB-Backstop zusaetzlich zur Service-Ebene;
+            # greift auch bei direktem .save() und Roh-SQL (ADR-039 §1).
+            models.CheckConstraint(
+                condition=(
+                    (models.Q(event__isnull=False) & models.Q(client__isnull=True) & models.Q(case__isnull=True))
+                    | (models.Q(event__isnull=True) & models.Q(client__isnull=False) & models.Q(case__isnull=True))
+                    | (models.Q(event__isnull=True) & models.Q(client__isnull=True) & models.Q(case__isnull=False))
+                ),
+                name="attachment_exactly_one_owner",
+            ),
+        ]
+        indexes = [
+            # Uebersichts-Query (Datei-Liste je Facility, neueste zuerst);
+            # FK-Indexe legt Django automatisch an (ADR-039 §4).
+            models.Index(fields=["facility", "-created_at"], name="attachment_facility_ca_idx"),
+        ]
+
+    @property
+    def owner_type(self):
+        """``"event"`` | ``"client"`` | ``"case"`` — Branch auf ``*_id`` (kein Fetch)."""
+        for name in OWNER_FIELDS:
+            if getattr(self, f"{name}_id") is not None:
+                return name
+        return None  # nur waehrend Konstruktion moeglich; DB-Zeilen haben immer einen Owner
+
+    @property
+    def owner_id(self):
+        owner_type = self.owner_type
+        return getattr(self, f"{owner_type}_id") if owner_type else None
+
+    @property
+    def owner(self):
+        """Owner-Instanz — laedt erst hier (Branch vorher via ``*_id``, kein N+1)."""
+        owner_type = self.owner_type
+        return getattr(self, owner_type) if owner_type else None
 
     def __str__(self):
-        return f"Attachment {self.storage_filename} → Event {self.event_id}"
+        return f"Attachment {self.storage_filename} → {self.owner_type} {self.owner_id}"

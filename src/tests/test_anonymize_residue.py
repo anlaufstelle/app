@@ -207,6 +207,7 @@ class TestAnonymizeResidueMatrix:
             field_type=FieldTemplate.FieldType.FILE,
         )
         Attachment.objects.create(
+            facility=event.facility,
             event=event,
             field_template=ft,
             storage_filename="abc.enc",

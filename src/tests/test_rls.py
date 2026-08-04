@@ -39,7 +39,8 @@ from tests.test_rls_functional import (  # noqa: F401
 JOIN_SCOPED_TABLES = frozenset(
     {
         "core_eventhistory",
-        "core_attachment",
+        # core_attachment: bis M24 (Refs #1738) join-gescopt via core_event;
+        # seit Migration 0130/0131 direkter facility-FK → auto-erkannt.
         "core_episode",
         "core_outcomegoal",
         "core_milestone",

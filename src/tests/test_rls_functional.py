@@ -405,3 +405,113 @@ class TestRLSCrossTenantIsolation:
             cur.execute("SELECT COUNT(*) FROM core_client")
             count = cur.fetchone()[0]
         assert count == 0, f"Ohne facility-Setting hat RLS {count} Client-Zeilen geliefert. Erwartet: 0 (NULL-Compare)."
+
+
+@pytest.mark.django_db(transaction=True)
+class TestAttachmentRLSIsolation:
+    """Direkte facility-Policy auf ``core_attachment`` (M24, Migration 0131,
+    Refs #1738): Cross-Tenant je Richtung, INSERT-Seite (USING wirkt implizit
+    als WITH CHECK) und der GUC-los-Fall — vorher war die Tabelle join-gescopt
+    ueber ``core_event`` (0047/0085), Zeilen ohne Event waren policy-los.
+    """
+
+    @staticmethod
+    def _make_attachment_row(facility, marker, **owner):
+        import uuid as _uuid
+
+        from core.models import Attachment
+        from core.models.document_type import FieldTemplate
+
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name=f"RLS-Anhang {marker}",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        return Attachment.objects.create(
+            facility=facility,
+            field_template=ft,
+            storage_filename=f"rls-{marker}-{_uuid.uuid4().hex}.enc",
+            original_filename_encrypted={"v": 1},
+            file_size=1,
+            mime_type="application/pdf",
+            **owner,
+        )
+
+    @pytest.fixture
+    def attachments_a_b(self, facility_a_with_data, facility_b_with_data):
+        from core.models import Client, Event
+
+        event_a = Event.objects.get(facility=facility_a_with_data)
+        client_b = Client.objects.get(facility=facility_b_with_data)
+        att_a = self._make_attachment_row(facility_a_with_data, "a", event=event_a)
+        # B-Seite bewusst client-owned: unter der alten Join-Policy waere die
+        # Zeile policy-los gewesen — genau der Defense-in-Depth-Gewinn von 0131.
+        att_b = self._make_attachment_row(facility_b_with_data, "b", client=client_b)
+        return att_a, att_b
+
+    def test_cross_tenant_a_sieht_b_nicht(
+        self, rls_test_role, facility_a_with_data, facility_b_with_data, attachments_a_b
+    ):
+        att_a, att_b = attachments_a_b
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            cur.execute(
+                "SELECT storage_filename FROM core_attachment WHERE storage_filename = %s", [att_b.storage_filename]
+            )
+            leaked = cur.fetchall()
+            cur.execute(
+                "SELECT storage_filename FROM core_attachment WHERE storage_filename = %s", [att_a.storage_filename]
+            )
+            own = cur.fetchall()
+        assert leaked == [], "Cross-Tenant-Read auf core_attachment hat B's (client-owned) Anhang geliefert."
+        assert len(own) == 1, f"Eigener Anhang unter facility_a-Setting nicht sichtbar (false negative). Rows: {own}"
+
+    def test_cross_tenant_b_sieht_a_nicht(
+        self, rls_test_role, facility_a_with_data, facility_b_with_data, attachments_a_b
+    ):
+        att_a, _att_b = attachments_a_b
+        with as_rls_role(rls_test_role, facility_id=facility_b_with_data.pk) as cur:
+            cur.execute(
+                "SELECT storage_filename FROM core_attachment WHERE storage_filename = %s", [att_a.storage_filename]
+            )
+            leaked = cur.fetchall()
+        assert leaked == [], "Cross-Tenant-Read auf core_attachment hat A's Anhang geliefert."
+
+    def test_cross_facility_insert_violates_policy(self, rls_test_role, facility_a_with_data, facility_b_with_data):
+        import uuid as _uuid
+
+        from django.db import Error as _DjangoDBError
+
+        from core.models import Client
+        from core.models.document_type import FieldTemplate
+
+        client_b = Client.objects.get(facility=facility_b_with_data)
+        ft_b = FieldTemplate.objects.create(
+            facility=facility_b_with_data, name="RLS-Injected", field_type=FieldTemplate.FieldType.FILE
+        )
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            with pytest.raises(_DjangoDBError) as exc:
+                cur.execute(
+                    "INSERT INTO core_attachment "
+                    "(id, entry_id, sort_order, facility_id, client_id, field_template_id, "
+                    " storage_filename, original_filename_encrypted, file_size, mime_type, "
+                    " detected_mime, is_current, created_at) "
+                    "VALUES (%s, %s, 0, %s, %s, %s, %s, '{}'::jsonb, 1, 'x/y', '', true, NOW())",
+                    [
+                        str(_uuid.uuid4()),
+                        str(_uuid.uuid4()),
+                        str(facility_b_with_data.pk),
+                        str(client_b.pk),
+                        str(ft_b.pk),
+                        f"injected-{_uuid.uuid4().hex}.enc",
+                    ],
+                )
+        assert "row-level security" in str(exc.value).lower(), (
+            f"Cross-Facility-INSERT auf core_attachment wurde nicht durch die RLS-Policy "
+            f"abgelehnt (USING-only greift nicht als WITH CHECK?). Fehler: {exc.value!r}"
+        )
+
+    def test_ohne_guc_keine_zeilen(self, rls_test_role, facility_a_with_data, attachments_a_b):
+        with as_rls_role(rls_test_role, facility_id="") as cur:
+            cur.execute("SELECT COUNT(*) FROM core_attachment")
+            count = cur.fetchone()[0]
+        assert count == 0, f"Ohne facility-Setting hat RLS {count} Attachment-Zeilen geliefert. Erwartet: 0."

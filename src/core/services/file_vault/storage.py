@@ -148,6 +148,9 @@ def commit_staged_upload(event, field_template, staged, user, *, supersedes=None
             effective_sort = sort_order if sort_order is not None else 0
 
         new_attachment = Attachment.objects.create(
+            # ADR-039 §2: facility IMMER aus dem Owner abgeleitet, nie als
+            # freier Parameter (owner-generisch ab AP2, Refs #1738).
+            facility=event.facility,
             event=event,
             field_template=field_template,
             storage_filename=staged.storage_name,
