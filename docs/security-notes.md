@@ -1114,10 +1114,26 @@ Zwei Details, ohne die die Umsetzung fail-open wäre:
 **Damit überholt:** der Eintrag unter „Geprüft und nicht tragfähig", `by_age_cluster` publiziere keine
 Ereignis-Randsumme — er hatte genau diese Umsetzung als seinen Auslöser benannt.
 
-*Status (A2): **bewusst nicht umgesetzt***. Im Beispiel-Sachbericht bleibt es bei `margin=None` und
-**ohne** Restzeile; die Begründung steht an `_SAMPLE_REPORT_1_BREAKDOWNS` im Code. Gangbar wäre dort
-nur eine **umgestellte Randsumme** (`total` = alle Ereignisse statt nur der gemappten) — ein
-Produktentscheid über die Kernkennzahl des Berichts, kein Nebeneffekt einer Sicherheitsmaßnahme.
+*Status (A2): **offener Produktentscheid, bewusst nicht umgesetzt***
+(#1770, Status quo). Im Beispiel-Sachbericht
+bleibt es bei `margin=None` und **ohne** Restzeile; die Begründung steht an
+`_SAMPLE_REPORT_1_BREAKDOWNS` im Code.
+
+**Wichtig für die Wiedervorlage:** Das ist *keine* technische Unmöglichkeit. Die Analyse nennt **zwei**
+gangbare Routen, und beide stehen weiterhin offen:
+
+1. **Umgestellte Randsumme** — `total` zählt alle Ereignisse statt nur der gemappten; die Zeilen
+ summieren sich dann wieder exakt auf die publizierte Randsumme. Kosten: ein Produktentscheid über
+ die Kernkennzahl „Gesamtkontakte" des Berichts.
+2. **Teilmengenbewusste Sekundärsuppression** — die Suppression lernt, dass eine Aufschlüsselung ihre
+ Randsumme nur *teilweise* partitioniert, und rechnet mit `Σ Zeilen ≤ Randsumme` statt `=`. Kosten:
+ ein zweites Inferenzmodell neben dem bestehenden Partitions-Modell in `disclosure.py`.
+
+Nicht gangbar ist allein die **naive** Variante (Zeile bei unveränderter Randsumme): sie erzeugte
+485 von 840 durchgerechneten Kleinzell-Welten als pinnbar (heute 0), weil die Sekundärsuppression
+voraussetzt, dass die Zeilen sich auf die publizierte Randsumme summieren. Der W-Kanal aus K3 selbst
+existiert im Beispiel-Sachbericht nicht — er hat keine Ereignis-Gesamtsumme, aus der W ableitbar wäre;
+die Nicht-Umsetzung kostet dort also keine Schutzwirkung, sondern nur die Vollständigkeitsangabe.
 
 *Verifikation:* `test_reporting_disclosure_regression.py::TestKleinstWeltEnumerationRestzeile` zählt den
 Weltraum „zwei Altersgruppen ≥ 1 plus W ≥ 0, Σ ≤ 14" exakt auf und prüft, dass W über sein Preimage

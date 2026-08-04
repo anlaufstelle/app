@@ -817,13 +817,21 @@ class TestKleinstWeltEnumerationRestzeile:
         assert leaks, "Die Aufzaehlung findet den bekannten K3-Kanal nicht mehr — Harness pruefen"
 
     def test_positivkontrolle_naive_restzeile_reisst(self, facility):
-        """Die von der Analyse verworfene naive Fassung: Zeile emittiert, aber
-        keine Randsumme deklariert ⇒ das Machbarkeits-Audit laeuft nicht und W
-        bleibt exakt zurueckrechenbar.
+        """Zeile emittiert, aber **keine Randsumme deklariert** ⇒ das
+        Machbarkeits-Audit laeuft nicht und W bleibt exakt zurueckrechenbar.
 
         Damit ist belegt, dass **die Zeile allein** nichts loest — tragend ist
         die Kombination aus datenunabhaengiger Emission, deklarierter Randsumme
         und K1/K2-Durchlauf.
+
+        **Was dieser Test NICHT belegt:** Er prueft einen anderen Fehlermodus
+        als die 485/840-Falle aus K3-A2. Dort ist eine Randsumme deklariert, die
+        Zeilen summieren sich aber **nicht** exakt darauf (die Restzeile liegt
+        ausserhalb der Randsummen-Definition) — das Audit rechnet dann mit einer
+        falschen Gleichung, statt gar nicht zu rechnen. Dieser Test hat keine
+        Randsumme und trifft damit den harmloseren der beiden Faelle. Die
+        A2-Aussage ("naive Restzeile im Beispiel-Sachbericht oeffnet einen neuen
+        Kanal") ist durch die Analyse belegt, nicht durch diese Aufzaehlung.
         """
         groups = _age_preimage_groups(
             lambda world: _publish_age_table_without_margin(facility, world, with_rest_row=True)

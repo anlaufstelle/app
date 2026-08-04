@@ -553,13 +553,19 @@ _SAMPLE_REPORT_1_BREAKDOWNS = (
     # K3-A2 (Refs #1770) — **bewusst ohne** Randsumme und ohne Restzeile: Hier
     # zaehlt ``total`` nur die **gemappten** Ereignisse, die Alterstabelle die
     # Ereignisse **mit Personenbezug** — zwei verschiedene Grundgesamtheiten.
-    # Eine Restzeile bei unveraenderter Randsumme oeffnete nachweislich einen
-    # neuen exakten Kanal (485 von 840 durchgerechneten Kleinzell-Welten
-    # pinnbar, heute 0), weil die Sekundaersuppression voraussetzt, dass die
-    # Zeilen sich auf die publizierte Randsumme summieren. Gangbar waere sie
-    # nur mit **umgestellter** Randsumme (``total`` = alle Ereignisse) — ein
-    # Produktentscheid ueber die Kernkennzahl des Berichts, kein Nebeneffekt
-    # einer Sicherheitsmassnahme.
+    # Die **naive** Variante (Zeile bei unveraenderter Randsumme) oeffnete
+    # nachweislich einen neuen exakten Kanal (485 von 840 durchgerechneten
+    # Kleinzell-Welten pinnbar, heute 0), weil die Sekundaersuppression
+    # voraussetzt, dass die Zeilen sich auf die publizierte Randsumme summieren.
+    #
+    # Das ist **keine technische Unmoeglichkeit**, sondern ein offener
+    # Produktentscheid. Die Analyse nennt ZWEI gangbare Routen, beide stehen
+    # weiterhin offen: (1) umgestellte Randsumme (``total`` = alle Ereignisse)
+    # oder (2) teilmengenbewusste Sekundaersuppression (Rechnen mit
+    # ``Σ Zeilen <= Randsumme`` statt ``=``, also ein zweites Inferenzmodell
+    # neben dem Partitions-Modell in ``disclosure.py``). Status quo, weil der
+    # W-Kanal aus K3 hier ohnehin nicht existiert: es gibt keine
+    # Ereignis-Gesamtsumme, aus der W ableitbar waere.
     _Breakdown("by_age_cluster", None, ORDER_AGE_CLUSTER, reveals_person_gap=True),
 )
 
