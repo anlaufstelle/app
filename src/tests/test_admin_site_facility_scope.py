@@ -69,3 +69,68 @@ class TestSuperAdminScope:
         # Beide Clients sichtbar:
         assert client_qualified.pseudonym.encode() in response.content
         assert client_in_other_facility.pseudonym.encode() in response.content
+
+
+# ---------------------------------------------------------------------------
+# Attachment-Admin (M24/AP2, Refs #1738)
+# ---------------------------------------------------------------------------
+
+
+def _attachment(facility, owner_kwargs):
+    """Anhang-Zeile ohne File-Vault (kein libmagic/Encryption-Key noetig)."""
+    import uuid
+
+    from core.models import Attachment, FieldTemplate
+
+    ft = FieldTemplate.objects.create(
+        facility=facility,
+        name=f"Anhang {uuid.uuid4().hex[:6]}",
+        field_type=FieldTemplate.FieldType.FILE,
+    )
+    return Attachment.objects.create(
+        facility=facility,
+        field_template=ft,
+        storage_filename=f"{uuid.uuid4().hex}.enc",
+        original_filename_encrypted={"v": 1, "data": "x"},
+        file_size=1,
+        mime_type="application/pdf",
+        **owner_kwargs,
+    )
+
+
+@pytest.mark.django_db
+class TestAttachmentAdminScope:
+    """G2-Befund (Refs #1738): das frueher genutzte ``event__facility``-Scoping
+    haette personen-/falleigene Anhaenge komplett verborgen — der Admin scopt
+    seit ADR-039 ueber die eigene ``facility``-Spalte."""
+
+    def test_facility_admin_sieht_personen_eigenen_anhang(self, client, admin_user, facility, client_identified):
+        attachment = _attachment(facility, {"client": client_identified})
+        client.force_login(admin_user)
+        response = client.get("/admin-mgmt/core/attachment/", follow=False)
+        assert response.status_code == 200
+        assert attachment.storage_filename.encode() in response.content
+
+    def test_facility_admin_sieht_fall_eigenen_anhang(self, client, admin_user, facility, case_open):
+        attachment = _attachment(facility, {"case": case_open})
+        client.force_login(admin_user)
+        response = client.get("/admin-mgmt/core/attachment/", follow=False)
+        assert response.status_code == 200
+        assert attachment.storage_filename.encode() in response.content
+        # Owner-Spalte weist die Zuordnung aus, ohne die Instanz nachzuladen.
+        assert str(case_open.pk).encode() in response.content
+
+    def test_fremde_facility_bleibt_unsichtbar(self, client, admin_user, other_facility, staff_user):
+        from core.models import Client as ClientModel
+
+        foreign_person = ClientModel.objects.create(
+            facility=other_facility,
+            contact_stage=ClientModel.ContactStage.IDENTIFIED,
+            pseudonym="Fremd-AT-01",
+            created_by=staff_user,
+        )
+        attachment = _attachment(other_facility, {"client": foreign_person})
+        client.force_login(admin_user)
+        response = client.get("/admin-mgmt/core/attachment/", follow=False)
+        assert response.status_code == 200
+        assert attachment.storage_filename.encode() not in response.content

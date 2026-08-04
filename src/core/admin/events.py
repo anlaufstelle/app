@@ -1,8 +1,12 @@
-"""Admin fuer Event, EventHistory, Attachment (Refs #785, #958).
+"""Admin fuer Event + EventHistory (Refs #785, #958).
 
-EventHistory und Attachment sind append-only (Audit-Trail-Charakter):
-keine Add/Change/Delete-Permissions. Facility-Scoping ueber event__facility,
-weil weder History noch Attachment ein direktes facility-FK haben.
+EventHistory ist append-only (Audit-Trail-Charakter): keine Add/Change/Delete-
+Permissions, Facility-Scoping ueber ``event__facility``, weil die History kein
+direktes facility-FK hat.
+
+M24/AP2 (Refs #1738): ``AttachmentAdmin`` ist nach :mod:`core.admin.attachments`
+umgezogen — ``Attachment`` traegt seit ADR-039 eine eigene ``facility`` und
+haengt nicht mehr zwingend an einem Ereignis.
 """
 
 from django.contrib import admin
@@ -11,7 +15,6 @@ from unfold.admin import ModelAdmin
 from core.admin.mixins import AdminReadAuditMixin, ReadOnlyDomainAdminMixin, RoleBasedPermissionMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Event, EventHistory
-from core.models.attachment import Attachment
 
 
 @admin.register(Event, site=anlaufstelle_admin_site)
@@ -31,48 +34,6 @@ class EventHistoryAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmi
 
     def get_queryset(self, request):
         """EventHistory hat kein direktes facility-FK -> ueber event__facility (Refs #785)."""
-        qs = super().get_queryset(request)
-        if request.user.is_super_admin:
-            return qs
-        return qs.filter(event__facility=request.current_facility)
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-
-@admin.register(Attachment, site=anlaufstelle_admin_site)
-class AttachmentAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmin):
-    list_display = (
-        "storage_filename",
-        "event",
-        "field_template",
-        "mime_type",
-        "file_size",
-        "created_by",
-        "created_at",
-    )
-    list_filter = ("mime_type",)
-    readonly_fields = (
-        "id",
-        "event",
-        "field_template",
-        "storage_filename",
-        "original_filename_encrypted",
-        "file_size",
-        "mime_type",
-        "created_by",
-        "created_at",
-    )
-    search_fields = ("storage_filename",)
-
-    def get_queryset(self, request):
-        """Attachment hat kein direktes facility-FK -> ueber event__facility (Refs #785)."""
         qs = super().get_queryset(request)
         if request.user.is_super_admin:
             return qs

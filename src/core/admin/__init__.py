@@ -10,6 +10,7 @@ Registrierungen an der Custom-AdminSite. Re-Exports erhalten den
 ``from core.admin import X``-Import-Pfad fuer Tests und Drittstellen.
 """
 
+from core.admin.attachments import AttachmentAdmin
 from core.admin.clients import CaseAdmin, ClientAdmin
 from core.admin.documents import (
     DocumentTypeAdmin,
@@ -18,7 +19,7 @@ from core.admin.documents import (
     QuickTemplateAdmin,
     TimeFilterAdmin,
 )
-from core.admin.events import AttachmentAdmin, EventAdmin, EventHistoryAdmin
+from core.admin.events import EventAdmin, EventHistoryAdmin
 from core.admin.mixins import FacilityScopedAdminMixin, RoleBasedPermissionMixin, SuperAdminOnlyAdminMixin
 from core.admin.organization import FacilityAdmin, OrganizationAdmin
 from core.admin.system import AuditLogAdmin, SettingsAdmin, StatisticsSnapshotAdmin
@@ -26,6 +27,7 @@ from core.admin.users import UserAdmin, unlock_selected_users
 from core.admin.workflow import DeletionRequestAdmin, WorkItemAdmin
 
 __all__ = [
+    "AttachmentAdmin",
     "AuditLogAdmin",
     "CaseAdmin",
     "ClientAdmin",
@@ -33,7 +35,6 @@ __all__ = [
     "DocumentTypeAdmin",
     "DocumentTypeFieldInline",
     "EventAdmin",
-    "AttachmentAdmin",
     "EventHistoryAdmin",
     "FacilityAdmin",
     "FacilityScopedAdminMixin",
