@@ -206,7 +206,12 @@ def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client
         return 0
 
     to_create_count = target - existing_count
-    doc_types = list(DocumentType.objects.filter(facility=facility))
+    # M24 (Refs #1738): ``entity_type`` explizit einschraenken. Seit ADR-039
+    # legt der Seed auch Personen-/Fall-Typen an (``attach_files_to_client_and_case``);
+    # laeuft der Seed ein zweites Mal mit groesserer Skala, laegen sie ohne
+    # diesen Filter im Ziehungstopf und ein Ereignis bekaeme einen Typ, den die
+    # Ereignis-Maske gar nicht anbietet.
+    doc_types = list(DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT))
     if not doc_types or not clients:
         return 0
 

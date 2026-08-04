@@ -13,6 +13,7 @@ from django.urls.resolvers import URLPattern, URLResolver
 
 from tests._authz_expectations import EXPECTATIONS, ROLES
 from tests._rbac_helpers import resolve_fixture_kwargs
+from tests.e2e import _authz_audit_helpers as helpers
 
 # Django-Admin-Site (obfuskierter Pfad, eigene Permission-Maschinerie,
 # abgedeckt durch test_admin_site_permissions.py) und Debug-Toolbar sind
@@ -23,6 +24,47 @@ EXCLUDED_NAMESPACES = {"admin", "djdt"}
 EXCLUDED_ROUTE_PREFIXES = ("i18n/",)
 # Permanente Redirects ohne eigene AuthZ-Logik (RedirectView, Refs core/urls.py).
 UNNAMED_ALLOWLIST = {"aktivitaetslog/", "timeline/"}
+
+# Fixture-Namen, die der Live-Audit (tests/e2e/test_authz_audit.py) BEWUSST
+# nicht erntet — ihre Zellen laufen dort als SETUP-ERROR (Refs #1738).
+#
+# Es sind ausschliesslich die Konfigurations-Endpoints (Dokumentationstyp,
+# Feldvorlage, Feldgruppe, Feldbedingung). Diese Luecke ist **Bestand** und
+# aelter als M24; sie wird hier nur sichtbar gemacht, nicht geschlossen — jede
+# der Queries braucht eine eigene Vertragsentscheidung (welcher Typ, welche
+# Sensitivitaet, welches Kind am selben Elternteil), das gehoert in ein eigenes
+# Ticket. Neue Namen gehoeren NICHT hierher, sondern in HARVEST_SQL /
+# FOREIGN_ALIASES; ``test_unharvested_allowlist_is_not_stale`` haelt die Liste
+# sauber.
+LIVE_AUDIT_UNHARVESTED = frozenset(
+    {
+        "doc_type_contact",
+        "doc_type_field",
+        "field_condition",
+        "field_group",
+        "field_template",
+        "foreign_doc_type",
+        "foreign_doc_type_field",
+        "foreign_field_condition",
+        "foreign_field_group",
+        "foreign_field_template",
+    }
+)
+
+
+def _referenced_fixture_names():
+    """Fixture-Namen aus ``url_kwargs``/``idor`` aller Erwartungen.
+
+    Disambiguierung wie in ``_authz_expectations`` dokumentiert: ein Wert MIT
+    Punkt ist ein Fixture-Attributpfad, ein Wert ohne Punkt ein URL-Literal.
+    """
+    return {
+        ref.split(".", 1)[0]
+        for exp in EXPECTATIONS
+        for pairs in (exp.url_kwargs, exp.idor)
+        for _kwarg, ref in pairs
+        if "." in ref
+    }
 
 
 def _collect_patterns():
@@ -98,6 +140,43 @@ class TestCompletenessGate:
         assert not both, f"Einträge mit idor UND idor_exempt (widersprüchlich): {sorted(both)}"
         no_kwargs = [e.url_name for e in EXPECTATIONS if e.idor and not e.url_kwargs]
         assert not no_kwargs, f"Einträge mit idor ohne url_kwargs: {sorted(no_kwargs)}"
+
+    def test_every_fixture_reference_is_live_harvestable(self):
+        """Kein Fixture-Name der Erwartungs-Tabelle darf im Live-Audit ins Leere zeigen.
+
+        Refs #1738 (Integrations-Review): ``client_attachment_download`` und
+        ``case_attachment_download`` kamen mit vier neuen Fixture-Namen, fuer die
+        es in ``tests/e2e/_authz_audit_helpers.py`` weder eine ``HARVEST_SQL``-
+        Query noch einen ``FOREIGN_ALIASES``-Eintrag gab. ``_path_for`` liefert
+        fuer einen unbekannten Namen ``None``; der Live-Audit schreibt daraufhin
+        still eine SETUP-ERROR-Zelle. Die bleibt unter der 10%-Schwelle des
+        Struktur-Asserts — die Route war damit **ungeprueft**, ohne dass
+        irgendetwas rot wurde.
+
+        Dieser Guard schliesst die Blindstellen-Klasse: jeder Fixture-Name aus
+        ``url_kwargs``/``idor`` (Literale ohne Punkt sind keine Fixture-Refs)
+        muss entweder direkt geerntet werden oder ueber einen Foreign-Alias
+        aufloesbar sein.
+        """
+        referenced = _referenced_fixture_names()
+        resolvable = set(helpers.HARVEST_SQL) | set(helpers.FOREIGN_ALIASES)
+        missing = referenced - resolvable - LIVE_AUDIT_UNHARVESTED
+        assert not missing, (
+            "Fixture-Namen ohne HARVEST_SQL/FOREIGN_ALIASES-Eintrag — der Live-Audit "
+            f"wuerde diese Endpoints still als SETUP-ERROR ueberspringen: {sorted(missing)}"
+        )
+
+    def test_unharvested_allowlist_is_not_stale(self):
+        """Die Allowlist darf nicht verrotten (Refs #1738).
+
+        Wird ein bislang blinder Name spaeter doch geerntet oder faellt sein
+        Endpoint aus der Tabelle, muss der Eintrag hier verschwinden — sonst
+        verdeckt die Allowlist irgendwann echte neue Blindstellen.
+        """
+        referenced = _referenced_fixture_names()
+        resolvable = set(helpers.HARVEST_SQL) | set(helpers.FOREIGN_ALIASES)
+        stale = {name for name in LIVE_AUDIT_UNHARVESTED if name not in referenced or name in resolvable}
+        assert not stale, f"LIVE_AUDIT_UNHARVESTED-Eintraege ohne Blindstelle (Drift): {sorted(stale)}"
 
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------

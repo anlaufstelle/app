@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Case, Client
 from core.seed.activities import seed_activities
-from core.seed.attachments import attach_files_to_counseling_events
+from core.seed.attachments import attach_files_to_client_and_case, attach_files_to_counseling_events
 from core.seed.cases import assign_events_to_cases, seed_cases, seed_episodes, seed_goals
 from core.seed.clients import seed_clients_bulk, seed_clients_small
 from core.seed.deletions import seed_deletion_requests, seed_retention_proposals
@@ -102,6 +102,15 @@ class Command(BaseCommand):
             created_attachments = attach_files_to_counseling_events(facility, users, cfg)
             if created_attachments:
                 self.stdout.write(f"  {created_attachments} Dateianhänge für {facility.name} erstellt.")
+
+            # M24 (Refs #1738): owner-generische Beispielanhänge. Muss NACH
+            # ``seed_cases`` laufen (beide Zweige oben legen die Fälle an) —
+            # sonst gäbe es keinen Fall, an dem eine Datei hängen könnte.
+            created_owner_attachments = attach_files_to_client_and_case(facility, users)
+            if created_owner_attachments:
+                self.stdout.write(
+                    f"  {created_owner_attachments} Personen-/Fall-Dateianhänge für {facility.name} erstellt."
+                )
 
             proposals, holds = seed_retention_proposals(facility, users, cfg)
             if proposals or holds:

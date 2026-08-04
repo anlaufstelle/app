@@ -20,6 +20,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
     )
 
 from core.models import (  # noqa: E402
+    Attachment,
     Case,
     Client,
     DocumentType,
@@ -809,6 +810,11 @@ def test_seed_document_type_catalog_matches_expected():
     call_command("seed")
 
     facility = Facility.objects.get(name="Hauptstelle")
+    # M24 (Refs #1738): Der PAKET-Katalog ist weiterhin rein ereignisbezogen.
+    # Die beiden owner-generischen Beispieltypen kommen nicht aus
+    # ``default.yaml``, sondern aus ``core/seed/attachments.py`` — sie werden
+    # unten getrennt gepinnt, damit dieser Vergleich der Paket-Vertrag bleibt.
+    package_types = DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT)
     actual = {
         dt.slug: (
             dt.name,
@@ -820,11 +826,16 @@ def test_seed_document_type_catalog_matches_expected():
             dt.sort_order,
             dt.min_contact_stage,
         )
-        for dt in DocumentType.objects.filter(facility=facility)
+        for dt in package_types
     }
 
     assert actual == EXPECTED_DOCUMENT_TYPES
-    assert all(dt.entity_type == "event" for dt in DocumentType.objects.filter(facility=facility))
+    non_event = set(
+        DocumentType.objects.filter(facility=facility)
+        .exclude(entity_type=DocumentType.EntityType.EVENT)
+        .values_list("name", "entity_type")
+    )
+    assert non_event == {("Personenakte", "client"), ("Fallakte", "case")}
 
 
 @pytest.mark.django_db
@@ -1015,3 +1026,65 @@ def test_seed_aborts_on_conflicting_facility_owned_field_template(facility):
     conflicting = FieldTemplate.objects.get(facility=facility, slug="dauer")
     assert conflicting.name == "Eigene Dauer"
     assert conflicting.field_type == FieldTemplate.FieldType.TEXT
+
+
+# ---------------------------------------------------------------------------
+# M24 (Refs #1738): owner-generische Beispielanhänge
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_seed_creates_one_client_and_one_case_attachment():
+    """Der Seed legt je einen personen- und fall-eigenen Anhang an.
+
+    Ohne sie ist die owner-generische Hälfte von ADR-039 im Seed unsichtbar —
+    und der Live-AuthZ-Audit findet für ``client_attachment_download`` /
+    ``case_attachment_download`` nichts zu ernten (er schreibt dann still
+    SETUP-ERROR-Zellen unterhalb der 10%-Schwelle).
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    assert Attachment.objects.filter(facility=facility, client__isnull=False).count() == 1
+    assert Attachment.objects.filter(facility=facility, case__isnull=False).count() == 1
+
+
+@pytest.mark.django_db
+def test_seeded_owner_attachments_are_downloadable_for_staff():
+    """Vertrag der Audit-Zellen: NORMAL-Typ + Feldvorlage ohne Sensitivität.
+
+    Das Download-Gate nimmt ``max(Typ, Feld)`` — hinge der Beispielanhang wie
+    die Ereignis-Anhänge an ``scan-bescheid`` (``high``), antworteten die
+    Routen für Fachkraft/Assistenz 403 und die Audit-Zeile wäre nichtssagend.
+    """
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    for owner_filter in ({"client__isnull": False}, {"case__isnull": False}):
+        attachment = Attachment.objects.get(facility=facility, **owner_filter)
+        assert attachment.field_template.sensitivity == ""
+        assert attachment.owner.document_type is not None
+        assert attachment.owner.document_type.sensitivity == DocumentType.Sensitivity.NORMAL
+        # Stufe-B-Marker: die Datei ist über das ``data_json`` des Owners
+        # auffindbar (sonst wäre die Zeile eine UI-unsichtbare Waise).
+        marker = (attachment.owner.data_json or {}).get(attachment.field_template.slug)
+        assert marker == {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}
+
+
+@pytest.mark.django_db
+def test_seed_owner_attachments_are_idempotent():
+    """Ein zweiter Lauf legt keine zweite Person-/Fall-Datei nach.
+
+    Bewusst nur auf die owner-generischen Zeilen gepinnt: die
+    Ereignis-Anhänge (``attach_files_to_counseling_events``) legen bei jedem
+    Lauf welche nach (Bestandsverhalten — die Funktion zieht ihr Kontingent aus
+    den Events OHNE Anhang), das ist hier nicht Gegenstand.
+    """
+    call_command("seed")
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    assert Attachment.objects.filter(facility=facility, client__isnull=False).count() == 1
+    assert Attachment.objects.filter(facility=facility, case__isnull=False).count() == 1
+    assert DocumentType.objects.filter(facility=facility, name="Personenakte").count() == 1
+    assert DocumentType.objects.filter(facility=facility, name="Fallakte").count() == 1

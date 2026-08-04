@@ -183,6 +183,51 @@ _CONFORMABLE_EVENT = f"""
     LIMIT 1
 """  # noqa: S608 — nur statische Fragmente, keine Userdaten.
 
+# Owner-Unterabfragen der beiden neuen Download-Routen (M24, Refs #1738).
+# EINE Quelle für Harvesting UND Nachbesserung: die Erwartungs-Tabelle baut
+# ``client_attachment_download`` aus client_identified.pk + Anhang-PK (bzw.
+# ``case_attachment_download`` aus case_open.pk + Anhang-PK) zusammen — zeigen
+# Owner-Query und Anhang-Query auf verschiedene Owner, antwortet die Route für
+# JEDEN Akteur 404 und die Zeile wäre eine stille Falschmeldung.
+_FIRST_CLIENT = "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = false ORDER BY id LIMIT 1"
+
+# Episode/Goal/Milestone-URLs kombinieren case_open.pk mit den Kind-PKs — die
+# Views lookup-en strikt get_object_or_404(..., case=case) (case_episodes.py,
+# case_goals.py). Daher: offenen Fall bevorzugen, der Episode UND Milestone
+# (impliziert Goal) hat; die Kind-Queries pinnen sich per %(case_open)s auf
+# genau diesen Fall (harvest_ids).
+_CASE_OPEN = """
+    SELECT c.id FROM core_case c
+    WHERE c.facility_id = %(fac)s AND c.status = 'open' AND c.is_deleted = false
+    ORDER BY (
+        EXISTS (SELECT 1 FROM core_episode ep WHERE ep.case_id = c.id AND ep.is_deleted = false)
+        AND EXISTS (
+            SELECT 1 FROM core_milestone m JOIN core_outcomegoal g ON g.id = m.goal_id WHERE g.case_id = c.id
+        )
+    ) DESC, c.id
+    LIMIT 1
+"""
+
+
+def _owner_attachment_source(owner_column):
+    """Erster owner-eigener Anhang der Facility (``client``/``case``)."""
+    return f"""
+        SELECT a.id FROM core_attachment a
+        WHERE a.facility_id = %(fac)s AND a.is_current AND a.deleted_at IS NULL
+          AND a.{owner_column} IS NOT NULL
+        ORDER BY a.id LIMIT 1
+    """  # noqa: S608 — owner_column ist ein Literal aus diesem Modul.
+
+
+def _owner_doc_type_source(owner_table, owner_column):
+    """``document_type_id`` des Owners, an dem der Seed-Anhang aktuell hängt."""
+    return f"""
+        SELECT src.document_type_id FROM {owner_table} src
+        JOIN core_attachment a ON a.{owner_column} = src.id
+        WHERE a.facility_id = %(fac)s AND a.is_current AND a.deleted_at IS NULL
+        ORDER BY a.id LIMIT 1
+    """  # noqa: S608 — beide Argumente sind Literale aus diesem Modul.
+
 
 def prepare_audit_objects(conn, fac_id):
     """Idempotente Seed-Nachbesserungen je Facility (Refs #1055):
@@ -209,6 +254,17 @@ def prepare_audit_objects(conn, fac_id):
     5. Vertragskonformes sample_workitem (core:workitem_update LEAD_PLUS):
        erstes WorkItem auf created_by = lead, assigned_to = NULL setzen —
        weder created_by noch assigned_to dürfen staff/assistant sein.
+    7./8. Vertragskonforme authz_client_attachment/authz_case_attachment
+       (M24, Refs #1738): Der Seed hängt seine beiden owner-generischen
+       Beispielanhänge an den ERSTEN Client bzw. Fall der Facility
+       (core/seed/attachments.py) — das ist nicht zwingend derselbe Owner, den
+       die Erwartungs-Tabelle in die URL setzt (Schritt 1 schiebt genau den
+       ersten Client in den Papierkorb; case_open bevorzugt einen Fall mit
+       Episode + Milestone). Deshalb je Owner-Art: erst den Dokumentationstyp
+       auf den Ziel-Owner übertragen (ohne Typ antwortet das Download-Gate
+       fail-closed 404, ADR-039 §12 Stufe 2), dann den Anhang umhängen —
+       Muster von Schritt 3. Idempotent: nach dem ersten Lauf sind Quelle und
+       Ziel identisch, beide UPDATEs werden zu No-ops.
     """
     cur = _superuser_cursor(conn)
     params = {"fac": fac_id}
@@ -328,6 +384,27 @@ def prepare_audit_objects(conn, fac_id):
         """,  # noqa: S608
         params,
     )
+    # 7a./8a. Dokumentationstyp des Seed-Owners auf den Ziel-Owner übertragen.
+    for owner_table, owner_column, target_sql in (
+        ("core_client", "client_id", _FIRST_CLIENT),
+        ("core_case", "case_id", _CASE_OPEN),
+    ):
+        source_sql = _owner_doc_type_source(owner_table, owner_column)
+        cur.execute(
+            f"""
+            UPDATE {owner_table} SET document_type_id = ({source_sql})
+            WHERE id = ({target_sql}) AND EXISTS ({source_sql})
+            """,  # noqa: S608
+            params,
+        )
+        # 7b./8b. Anhang auf den Ziel-Owner umhängen.
+        cur.execute(
+            f"""
+            UPDATE core_attachment SET {owner_column} = ({target_sql})
+            WHERE id = ({_owner_attachment_source(owner_column)})
+            """,  # noqa: S608
+            params,
+        )
 
 
 # SQL pro Fixture-Name aus der Erwartungs-Tabelle. %(fac)s = Facility-ID.
@@ -342,28 +419,12 @@ def prepare_audit_objects(conn, fac_id):
 # (Owner = lead, NORMAL-Sensitivität, kein QUALIFIED-Client) — siehe
 # prepare_audit_objects, das je ein solches Objekt garantiert.
 HARVEST_SQL = {
-    "client_identified": (
-        "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = false ORDER BY id LIMIT 1"
-    ),
+    # Geteilt mit prepare_audit_objects (Schritte 7/8) — siehe dort.
+    "client_identified": _FIRST_CLIENT,
     "client_trashed": (
         "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true ORDER BY id LIMIT 1"
     ),
-    # Episode/Goal/Milestone-URLs kombinieren case_open.pk mit den Kind-PKs —
-    # die Views lookup-en strikt get_object_or_404(..., case=case)
-    # (case_episodes.py, case_goals.py). Daher: offenen Fall bevorzugen, der
-    # Episode UND Milestone (impliziert Goal) hat; die Kind-Queries unten
-    # pinnen sich per %(case_open)s auf genau diesen Fall (harvest_ids).
-    "case_open": """
-        SELECT c.id FROM core_case c
-        WHERE c.facility_id = %(fac)s AND c.status = 'open' AND c.is_deleted = false
-        ORDER BY (
-            EXISTS (SELECT 1 FROM core_episode ep WHERE ep.case_id = c.id AND ep.is_deleted = false)
-            AND EXISTS (
-                SELECT 1 FROM core_milestone m JOIN core_outcomegoal g ON g.id = m.goal_id WHERE g.case_id = c.id
-            )
-        ) DESC, c.id
-        LIMIT 1
-    """,
+    "case_open": _CASE_OPEN,
     "case_closed": (
         "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false "
         "ORDER BY id LIMIT 1"
@@ -423,6 +484,29 @@ HARVEST_SQL = {
         )
         ORDER BY a.id LIMIT 1
     """,  # noqa: S608
+    # M24 (Refs #1738): personen-/fall-eigene Anhaenge. Beide Downloads
+    # kombinieren Owner-PK + Anhang-PK, die Query muss also den Anhang GENAU
+    # des Owners liefern, den die Erwartungs-Tabelle in die URL setzt:
+    # client_identified bzw. case_open (identische Unterabfragen wie oben).
+    # ``prepare_audit_objects`` haengt die Seed-Anhaenge vorher auf genau diese
+    # beiden Owner um (Schritte 7/8) — analog zu Schritt 3 fuer Ereignisse.
+    "authz_client_attachment": """
+        SELECT a.id FROM core_attachment a
+        WHERE a.facility_id = %(fac)s AND a.is_current AND a.deleted_at IS NULL
+          AND a.client_id = (
+              SELECT id FROM core_client
+              WHERE facility_id = %(fac)s AND is_deleted = false ORDER BY id LIMIT 1
+          )
+        ORDER BY a.id LIMIT 1
+    """,
+    # %(case_open)s: an den bereits geernteten case_open gepinnt (case_open
+    # steht in dieser Dict-Reihenfolge davor, siehe _HARVEST_ORDER-Guard).
+    "authz_case_attachment": """
+        SELECT a.id FROM core_attachment a
+        WHERE a.facility_id = %(fac)s AND a.is_current AND a.deleted_at IS NULL
+          AND a.case_id = %(case_open)s
+        ORDER BY a.id LIMIT 1
+    """,
     "audit_entry": "SELECT id FROM core_auditlog WHERE facility_id = %(fac)s ORDER BY id LIMIT 1",
     "retention_proposal": (
         "SELECT id FROM core_retentionproposal WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
@@ -439,8 +523,9 @@ HARVEST_SQL = {
 # liegen, die %(case_open)s referenzieren (harvest_ids füllt es on-the-fly).
 _HARVEST_ORDER = list(HARVEST_SQL)
 assert all(
-    _HARVEST_ORDER.index("case_open") < _HARVEST_ORDER.index(name) for name in ("episode", "outcome_goal", "milestone")
-), "HARVEST_SQL: case_open muss vor episode/outcome_goal/milestone stehen"
+    _HARVEST_ORDER.index("case_open") < _HARVEST_ORDER.index(name)
+    for name in ("episode", "outcome_goal", "milestone", "authz_case_attachment")
+), "HARVEST_SQL: case_open muss vor episode/outcome_goal/milestone/authz_case_attachment stehen"
 
 # Audit-Pendants der Unit-Fixture-Namen für IDOR (foreign_X in Facility 2 = X-SQL dort).
 FOREIGN_ALIASES = {
@@ -455,6 +540,8 @@ FOREIGN_ALIASES = {
     "foreign_milestone": "milestone",
     "foreign_workitem": "sample_workitem",
     "foreign_attachment": "authz_attachment",
+    "foreign_client_attachment": "authz_client_attachment",
+    "foreign_case_attachment": "authz_case_attachment",
     "foreign_audit_entry": "audit_entry",
     "foreign_retention_proposal": "retention_proposal",
     "foreign_legal_hold": "legal_hold",
