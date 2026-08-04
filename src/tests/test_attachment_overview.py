@@ -234,6 +234,37 @@ def three_owner_attachments(facility, staff_user, client_identified):
     }
 
 
+class TestRevokedClientOwnerBoundary:
+    """Die Loeschgrenze der Person greift auf ALLEN Owner-Flaechen (Refs #1777).
+
+    Fuer eine Person im Papierkorb (``is_deleted=True``) liefern Personen-Detail,
+    -Bearbeiten und Fall-Detail seit #1737/#1777 404. Die Datei-Uebersicht darf
+    dieselben Anhaenge dann nicht mehr listen — weder die personen-eigenen noch
+    die fall-eigenen. ``Case.is_deleted`` wird nie gesetzt (die Grenze verlaeuft
+    ueber ``case.client``), daher fing der bisherige ``case__is_deleted=False``-
+    Filter die Fall-Datei nicht.
+    """
+
+    def test_trashed_client_hides_own_and_case_attachments(self, client, staff_user, three_owner_attachments):
+        person, _ = three_owner_attachments["client"]
+        person.is_deleted = True
+        person.deleted_at = timezone.now()
+        person.save(update_fields=["is_deleted", "deleted_at"])
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "aus_person.pdf" not in content
+        assert "aus_fall.pdf" not in content
+
+    def test_anonymized_client_hides_case_attachment(self, client, staff_user, three_owner_attachments):
+        person, _ = three_owner_attachments["client"]
+        person.is_active = False
+        person.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "aus_fall.pdf" not in content
+        assert "aus_person.pdf" not in content
+
+
 class TestOwnerGenericOverview:
     def test_all_three_owners_are_listed(self, client, staff_user, three_owner_attachments):
         client.force_login(staff_user)

@@ -246,6 +246,28 @@ class TestCaseAttachmentDownload:
         client.force_login(staff_user)
         assert client.get(_case_url(case, attachment)).status_code == 404
 
+    def test_trashed_client_case_attachment_is_404(self, client, staff_user, case_owner, client_identified):
+        """Stufe 1 ueber die Person (Refs #1777): der Fall selbst kennt keinen
+        Loeschworkflow — die Loeschgrenze verlaeuft ueber ``case.client``. Eine
+        Person im Papierkorb macht Fall-Detail/-Bearbeiten 404, die Fall-Datei
+        muss demselben Schnitt folgen."""
+        case, attachment, _ft = case_owner
+        client_identified.is_deleted = True
+        client_identified.deleted_at = timezone.now()
+        client_identified.save(update_fields=["is_deleted", "deleted_at"])
+        client.force_login(staff_user)
+        assert client.get(_case_url(case, attachment)).status_code == 404
+
+    def test_anonymized_client_case_attachment_is_404(self, client, staff_user, case_owner, client_identified):
+        """Stufe 1 ueber die Person (Refs #1777): anonymisiert (``is_active=False``)
+        ohne Papierkorb — der K-Anon-Bridge-Zustand, den ein ``is_deleted``-Gate
+        nicht faengt."""
+        case, attachment, _ft = case_owner
+        client_identified.is_active = False
+        client_identified.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        assert client.get(_case_url(case, attachment)).status_code == 404
+
     def test_attachment_of_other_case_is_404(self, client, staff_user, facility, client_identified, case_owner):
         """Stufe 3: Owner-Bindung — der Anhang muss an GENAU diesem Fall haengen."""
         _case, attachment, _ft = case_owner

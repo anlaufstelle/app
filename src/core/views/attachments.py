@@ -18,6 +18,7 @@ from core.models import Case as CaseModel
 from core.models.attachment import Attachment
 from core.services.attachments import attachment_download_url
 from core.services.audit import log_audit_event
+from core.services.case import cases_with_live_client
 from core.services.compliance import (
     allowed_sensitivities_for_user,
     get_visible_attachment_for_owner_or_404,
@@ -128,12 +129,31 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             # Owner im Papierkorb liefert keine Dateien mehr aus. Je Owner-Typ
             # ``NULL``-tolerant formuliert: pro Zeile ist genau EIN Owner
             # gesetzt (CheckConstraint), die beiden anderen Klauseln sind dann
-            # per ``isnull`` erfuellt. ``Case`` erbt ``is_deleted`` von
-            # ``SoftDeletableModel`` (es gibt keinen Fall-Loeschworkflow, das
-            # Feld existiert aber und wird hier respektiert).
-            .filter(Q(event__isnull=True) | Q(event__is_deleted=False))
-            .filter(Q(client__isnull=True) | Q(client__is_deleted=False))
-            .filter(Q(case__isnull=True) | Q(case__is_deleted=False))
+            # per ``isnull`` erfuellt.
+            #
+            # Refs #1777: Fuer Person und Fall verlaeuft die Loeschgrenze ueber
+            # die PERSON, nicht ueber ``is_deleted`` der Owner-Zeile. ``Case``
+            # kennt keinen Loeschworkflow (``case.is_deleted`` wird nie gesetzt),
+            # und eine anonymisierte Person (``is_active=False``) liegt nicht
+            # zwingend im Papierkorb (K-Anon-Bridge). Der Fall-Zweig muss deshalb
+            # ueber ``case__client`` filtern, der Personen-Zweig zusaetzlich
+            # ``is_active`` pruefen — analog zum Ereignis-Zweig ueber
+            # ``event__client`` und konsistent mit ``cases_with_live_client()``.
+            .filter(
+                Q(event__isnull=True)
+                | (
+                    Q(event__is_deleted=False)
+                    & (
+                        Q(event__client__isnull=True)
+                        | Q(event__client__is_deleted=False, event__client__is_active=True)
+                    )
+                )
+            )
+            .filter(Q(client__isnull=True) | Q(client__is_deleted=False, client__is_active=True))
+            .filter(
+                Q(case__isnull=True)
+                | Q(case__is_deleted=False, case__client__is_deleted=False, case__client__is_active=True)
+            )
             .select_related(
                 "event",
                 "event__document_type",
@@ -480,10 +500,16 @@ class ClientAttachmentDownloadView(AssistantOrAboveRequiredMixin, BaseAttachment
     owner_type = "client"
 
     def get_owner(self, request, pk):
-        # ``is_deleted=False`` wie in Detail-/Bearbeiten-View (Refs #1737): der
-        # ``FacilityScopedManager`` filtert Papierkorb-Zeilen ausdruecklich
-        # NICHT, der Scope muss hier explizit stehen.
-        return get_scoped_object(Client.objects.select_related("document_type"), request, pk=pk, is_deleted=False)
+        # Papierkorb (``is_deleted=False``) wie in Detail-/Bearbeiten-View
+        # (Refs #1737) UND anonymisiert (``is_active=True``, Refs #1771/#1777):
+        # der ``FacilityScopedManager`` filtert keinen der beiden Zustaende, der
+        # Scope muss hier explizit stehen. Ohne ``is_active`` liefe der Download
+        # zwar meist schon in das fail-closed Stufe-2-404 (Anonymisierung setzt
+        # ``document_type=NULL``), aber die Grenze gehoert an dieselbe Stelle wie
+        # bei den Fall-Anhaengen sichtbar gezogen.
+        return get_scoped_object(
+            Client.objects.select_related("document_type"), request, pk=pk, is_deleted=False, is_active=True
+        )
 
 
 class CaseAttachmentDownloadView(StaffRequiredMixin, BaseAttachmentDownloadView):
@@ -497,4 +523,15 @@ class CaseAttachmentDownloadView(StaffRequiredMixin, BaseAttachmentDownloadView)
     owner_type = "case"
 
     def get_owner(self, request, pk):
-        return get_scoped_object(CaseModel.objects.select_related("document_type"), request, pk=pk, is_deleted=False)
+        # Refs #1777: Die Loeschgrenze der Fall-Domaene verlaeuft ueber die
+        # Person, nicht ueber ``case.is_deleted`` (das nie gesetzt wird).
+        # ``cases_with_live_client()`` schliesst Faelle papierkorb-geloeschter
+        # UND anonymisierter Personen aus — derselbe Schnitt, den Fall-Detail/
+        # -Bearbeiten seit diesem Lauf ziehen. Ohne ihn blieb die Fall-Datei der
+        # letzte offene Deep-Link auf den Bestand einer widerrufenen Person.
+        # ``is_deleted=False`` bleibt zusaetzlich als defensiver Pin gegen ein
+        # kuenftiges Fall-Soft-Delete (die Invariante haelt heute, aber der
+        # Egress-Pfad soll nicht allein davon abhaengen).
+        return get_scoped_object(
+            cases_with_live_client().select_related("document_type"), request, pk=pk, is_deleted=False
+        )
