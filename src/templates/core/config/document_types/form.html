@@ -11,10 +11,34 @@
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
 
-        <div class="card p-5 space-y-4">
-            {% for field in form %}
-            {% include "components/_form_field.html" %}
-            {% endfor %}
+        {% comment %}
+        Refs #1757 (Option C aus #1731): Die Felder werden EINZELN gerendert (kein
+        generischer Feld-Loop über das Formular mehr), damit die Komponente
+        ``documentTypeEntityFields`` einzelne Feldblöcke ein-/ausblenden kann.
+
+        Reihenfolge = ``DocumentTypeForm.Meta.fields``; ``entity_type`` steht
+        direkt hinter ``name`` (Refs #1731, Option A).
+
+        Die Zuordnung Entitätstyp→sichtbare Felder kommt aus dem Formular
+        (``DocumentTypeForm.EVENT_ONLY_FIELDS``) — hier steht kein zweiter
+        Katalog, im JavaScript auch nicht. Ohne Alpine bleiben alle Felder
+        sichtbar (progressive enhancement: der Server rendert nichts versteckt),
+        und ausgeblendete Felder bleiben echte, aktivierte Eingabefelder — ihr
+        Wert wird unverändert mitgepostet.
+        {% endcomment %}
+        <div class="card p-5 space-y-4"
+             x-data="documentTypeEntityFields"
+             data-entity-scope-value="{{ form.event_entity_type_value }}"
+             data-entity-scoped-fields="{{ form.event_only_fields_attr }}">
+            {% include "components/_form_field.html" with field=form.name %}
+            {% include "components/_form_field.html" with field=form.entity_type %}
+            {% include "components/_form_field.html" with field=form.category %}
+            {% include "components/_form_field.html" with field=form.sensitivity %}
+            {% include "components/_form_field.html" with field=form.system_type %}
+            {% include "components/_form_field.html" with field=form.min_contact_stage %}
+            {% include "components/_form_field.html" with field=form.retention_days %}
+            {% include "components/_form_field.html" with field=form.description %}
+            {% include "components/_form_field.html" with field=form.is_active %}
             {% if is_edit %}
             <p class="text-[12px] text-ink-muted">{% trans "Der Systemtyp und der Entitätstyp sind nach dem Anlegen unveränderbar." %}</p>
             {% endif %}

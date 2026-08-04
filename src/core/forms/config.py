@@ -86,16 +86,32 @@ class DocumentTypeForm(forms.ModelForm):
     * Die zusammengesetzte Unique-Regel ``(facility, name, category)`` wird als
       freundlicher Formfehler gemeldet statt als ``IntegrityError`` (facility ist
       kein Formfeld, daher greift Djangos ModelForm-Unique-Check hier nicht).
+    * ``EVENT_ONLY_FIELDS`` (Refs #1757, Option C aus #1731) ist die EINE
+      Wahrheitsquelle dafür, welche Felder ausschließlich an
+      ``entity_type=event``-Typen wirken: das Formular hängt daran die
+      Hinweistexte, das Template gibt sie als ``data``-Attribut an die
+      Alpine-Komponente weiter. Weder Template noch JavaScript führen einen
+      zweiten Katalog.
     """
+
+    #: Felder, die nur an ``entity_type=event``-Typen etwas bewirken.
+    #: ``min_contact_stage`` greift ausschließlich in der Ereignis-Anlage
+    #: (``services/events/crud.py``), ``retention_days`` löscht ausschließlich
+    #: ``Event`` (``retention/enforcement.py``), und ``system_type`` ist laut
+    #: Paketschema nur bei ``entity_type=event`` zulässig (``clean()``).
+    #: Rein visuell — an der serverseitigen Validierung/Semantik ändert das
+    #: Ausblenden nichts, die Werte werden unverändert mitgepostet.
+    EVENT_ONLY_FIELDS = ("system_type", "min_contact_stage", "retention_days")
 
     class Meta:
         model = DocumentType
         # Refs #1731: ``entity_type`` steht bewusst direkt hinter ``name``. Das
-        # Template rendert generisch (``{% for field in form %}``), diese Liste
-        # IST also die Anzeigereihenfolge — und der Entitätstyp ist die
-        # folgenreichste, nach dem Anlegen unveränderbare Entscheidung: er
-        # bestimmt, ob ``system_type``/``min_contact_stage``/``retention_days``
-        # überhaupt wirken. Er darf nicht hinter den Feldern stehen, die er regiert.
+        # Template rendert die Felder einzeln in genau dieser Reihenfolge
+        # (Refs #1757), diese Liste IST also die Anzeigereihenfolge — und der
+        # Entitätstyp ist die folgenreichste, nach dem Anlegen unveränderbare
+        # Entscheidung: er bestimmt, ob
+        # ``system_type``/``min_contact_stage``/``retention_days`` überhaupt
+        # wirken. Er darf nicht hinter den Feldern stehen, die er regiert.
         fields = [
             "name",
             "entity_type",
@@ -141,10 +157,16 @@ class DocumentTypeForm(forms.ModelForm):
         # Final-Review H (Refs #1058): beide Felder werden ausschliesslich im
         # Ereignis-Pfad ausgewertet (``enforce_document_type_retention`` zaehlt
         # ``Event``; ``min_contact_stage`` greift nur in der Ereignis-Anlage).
-        # An Personen-/Fall-Typen sind sie wirkungslos — das steht hier, weil
-        # das Formular sie fuer alle Entitaetstypen anbietet.
+        # An Personen-/Fall-Typen sind sie wirkungslos. Der Hinweis bleibt auch
+        # nach #1757 stehen: das Ausblenden ist reines JavaScript-Komfort, ohne
+        # Alpine (und in jedem serverseitigen Re-Render) stehen die Felder da.
         entity_hint = _("Wirkt nur bei Dokumentationstypen für Ereignisse.")
-        for field_name in ("retention_days", "min_contact_stage"):
+        for field_name in self.EVENT_ONLY_FIELDS:
+            # ``system_type`` traegt gleich unten einen eigenen, schaerferen
+            # Hinweis (dort ist ein gesetzter Wert ein harter Formfehler, keine
+            # blosse Wirkungslosigkeit).
+            if field_name == "system_type":
+                continue
             self._append_help_text(field_name, entity_hint)
         # Refs #1731: ``system_type`` ist der schaerfere Fall — das Select
         # bietet alle Werte an, ``clean()`` weist jeden gesetzten Wert bei
@@ -160,6 +182,24 @@ class DocumentTypeForm(forms.ModelForm):
         """Haengt ``hint`` an den (Modell-)``help_text`` des Feldes an."""
         existing = self.fields[field_name].help_text
         self.fields[field_name].help_text = f"{existing} {hint}".strip() if existing else hint
+
+    # -- Template-Brücke für die Alpine-Komponente (Refs #1757) --------------
+    #
+    # Beide Werte kommen aus dem Formular, damit die Zuordnung
+    # Entitätstyp→sichtbare Felder genau EINMAL gepflegt wird. Das Template
+    # schreibt sie als ``data``-Attribute an den Feld-Container, die Komponente
+    # (``static/js/alpine/config.js``) liest sie dort aus — sie kennt weder
+    # Feldnamen noch Entitätstypen.
+
+    @property
+    def event_only_fields_attr(self) -> str:
+        """Feldnamen für ``data-entity-scoped-fields`` (leerzeichengetrennt)."""
+        return " ".join(self.EVENT_ONLY_FIELDS)
+
+    @property
+    def event_entity_type_value(self) -> str:
+        """Entitätstyp-Wert, bei dem diese Felder sichtbar bleiben."""
+        return str(DocumentType.EntityType.EVENT)
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]

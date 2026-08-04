@@ -10,6 +10,8 @@ die IDOR-404-Semantik. Mutations-/Audit-Feinheiten selbst prüft
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
@@ -318,9 +320,10 @@ class TestNonSlugifiableName:
 class TestFormFieldOrderAndHints:
     """Refs #1731: ``entity_type`` steuert, welche der übrigen Felder überhaupt
     wirken, und ist nach dem Anlegen unveränderbar — es muss deshalb ganz vorne
-    abgefragt werden (das Template rendert generisch ``{% for field in form %}``,
-    die Formularreihenfolge IST die Anzeigereihenfolge). ``system_type`` erklärt
-    seine Entitätstyp-Bindung vorab statt erst als Absende-Fehler."""
+    abgefragt werden. Seit Refs #1757 rendert das Template die Felder einzeln in
+    genau der ``Meta.fields``-Reihenfolge; diese Liste bleibt damit die
+    Anzeigereihenfolge. ``system_type`` erklärt seine Entitätstyp-Bindung vorab
+    statt erst als Absende-Fehler."""
 
     def test_entity_type_is_rendered_directly_after_name(self, facility):
         order = list(DocumentTypeForm(facility=facility).fields)
@@ -352,7 +355,7 @@ class TestFormFieldOrderAndHints:
         assert "Notiz" in help_text
 
     def test_form_page_shows_the_system_type_hint(self, client, admin_user, facility):
-        """Der Hinweis muss auch wirklich gerendert werden (generischer Feld-Loop)."""
+        """Der Hinweis muss auch wirklich gerendert werden (einzeln gerenderte Felder)."""
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_create"))
         assert response.status_code == 200
@@ -360,6 +363,132 @@ class TestFormFieldOrderAndHints:
         assert "Entitätstyp" in content
         # Das Entitätstyp-Select steht im Markup vor dem Systemtyp-Select.
         assert content.index('name="entity_type"') < content.index('name="system_type"')
+
+
+@pytest.mark.django_db
+class TestEntityScopedFieldVisibility:
+    """Refs #1757 (Option C aus #1731): nur-für-Ereignisse-Felder dynamisch ausblenden.
+
+    ``system_type``, ``min_contact_stage`` und ``retention_days`` wirken
+    ausschliesslich an ``entity_type=event``-Typen. Bislang bot das Formular sie
+    fuer jeden Entitaetstyp vollwertig an — bei ``retention_days`` mit
+    datenschutzrechtlicher Fehlannahme („Loeschfrist gesetzt"), bei
+    ``system_type`` mit einem erst beim Absenden sichtbaren Fehler.
+
+    Umgesetzt als reines UI-Ausblenden:
+
+    * Die Zuordnung Entitaetstyp→Felder steht EINMAL in
+      ``DocumentTypeForm.EVENT_ONLY_FIELDS`` und kommt als ``data``-Attribut ins
+      Template; die Alpine-Komponente haelt keinen zweiten Katalog.
+    * Ausgeblendete Felder bleiben echte, aktivierte Eingabefelder im DOM —
+      ihr Wert wird also unveraendert mitgepostet. Kein Feld darf durchs
+      Ausblenden auf den Modell-Default zurueckfallen (``category`` ist Teil des
+      Natural Keys ``(facility, name, category)`` und wird ohnehin nie versteckt).
+    * Ohne JavaScript bleibt alles sichtbar (progressive enhancement) — der
+      Server rendert nichts versteckt.
+    """
+
+    _TEMPLATE = Path("src/templates/core/config/document_types/form.html")
+
+    def test_template_renders_every_field_individually(self):
+        """Der generische Feld-Loop ist weg — sonst gibt es keine Wrapper zum Ausblenden."""
+        source = self._TEMPLATE.read_text()
+        assert "for field in form" not in source
+        for field_name in DocumentTypeForm.Meta.fields:
+            assert f"field=form.{field_name}" in source, f"{field_name} wird nicht einzeln gerendert"
+
+    def test_form_page_still_renders_all_nine_fields(self, client, admin_user):
+        """Der Umbau darf kein Feld verlieren (Anlage-Formular, alle editierbar)."""
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_create")).content.decode()
+        for field_name in DocumentTypeForm.Meta.fields:
+            assert f'name="{field_name}"' in content, f"{field_name} fehlt im Markup"
+
+    def test_field_order_is_unchanged(self, client, admin_user):
+        """Reihenfolge = ``Meta.fields`` (Refs #1731, A): Entitaetstyp direkt hinter Name."""
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_create")).content.decode()
+        positions = [content.index(f'name="{name}"') for name in DocumentTypeForm.Meta.fields]
+        assert positions == sorted(positions), f"Feldreihenfolge im Markup: {positions}"
+
+    def test_card_registers_the_alpine_component(self, client, admin_user):
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_create")).content.decode()
+        assert 'x-data="documentTypeEntityFields"' in content
+
+    def test_scope_attributes_come_from_the_form_constant(self, client, admin_user):
+        """EINE Wahrheitsquelle: die Feldliste steht im Formular, nicht im JS/Template."""
+        assert DocumentTypeForm.EVENT_ONLY_FIELDS == ("system_type", "min_contact_stage", "retention_days")
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_create")).content.decode()
+        assert 'data-entity-scoped-fields="system_type min_contact_stage retention_days"' in content
+        assert 'data-entity-scope-value="event"' in content
+
+    def test_scoped_fields_stay_real_inputs(self, client, admin_user):
+        """Ausblenden heisst NICHT ``<input type="hidden">`` — sonst waere der Wert
+        nicht mehr editierbar, sobald der Entitaetstyp wieder passt."""
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_create")).content.decode()
+        for field_name in DocumentTypeForm.EVENT_ONLY_FIELDS:
+            assert f'type="hidden" name="{field_name}"' not in content
+            assert f'name="{field_name}" type="hidden"' not in content
+
+    def test_nothing_is_hidden_server_side(self, client, admin_user):
+        """Kein-JS-Fallback: ohne Alpine bleiben alle Felder sichtbar."""
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_create")).content.decode()
+        assert "<div hidden" not in content
+        assert "display:none" not in content
+        assert "display: none" not in content
+
+    def test_edit_form_carries_the_same_scope_attributes(self, client, admin_user, facility):
+        """Auch beim Bearbeiten (entity_type disabled) greift die Sichtbarkeitsregel."""
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Personenbogen 1757",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_update", args=[doc_type.pk])).content.decode()
+        assert 'x-data="documentTypeEntityFields"' in content
+        assert 'data-entity-scoped-fields="system_type min_contact_stage retention_days"' in content
+
+    def test_hiding_never_drops_a_value_from_the_post(self, client, admin_user):
+        """Regressionsschutz POST-Semantik: ``category`` faellt nie auf den Modell-Default.
+
+        Der Default waere ``CONTACT``; hier wird bewusst ``ADMIN`` gepostet —
+        ``category`` ist Teil des Natural Keys ``(facility, name, category)``.
+        """
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(
+                name="Personenbogen POST",
+                entity_type=DocumentType.EntityType.CLIENT,
+                category=DocumentType.Category.ADMIN,
+            ),
+        )
+        assert response.status_code == 302
+        obj = DocumentType.objects.get(name="Personenbogen POST")
+        assert obj.category == DocumentType.Category.ADMIN
+        assert obj.entity_type == DocumentType.EntityType.CLIENT
+
+    def test_scoped_values_survive_a_roundtrip_on_an_event_type(self, client, admin_user, facility):
+        """Ein Ereignis-Typ behaelt seine ausblendbaren Werte ueber Bearbeiten hinweg."""
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Ereignisbogen 1757",
+            entity_type=DocumentType.EntityType.EVENT,
+            retention_days=90,
+        )
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_update", args=[doc_type.pk]),
+            _valid_post(name="Ereignisbogen 1757", retention_days="90"),
+        )
+        assert response.status_code == 302
+        doc_type.refresh_from_db()
+        assert doc_type.retention_days == 90
 
 
 @pytest.mark.django_db

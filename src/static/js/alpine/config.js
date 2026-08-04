@@ -32,4 +32,61 @@ document.addEventListener("alpine:init", () => {
             return this.open ? "rotate-180" : "";
         },
     }));
+
+    /**
+     * Blendet die nur für Ereignis-Typen wirksamen Felder des Dokumentationstyp-
+     * Formulars aus, sobald ein anderer Entitätstyp gewählt ist (Refs #1757,
+     * Option C aus #1731).
+     *
+     * Die Komponente kennt WEDER Feldnamen NOCH Entitätstypen — beides kommt
+     * als data-Attribut vom Wurzelelement und stammt dort aus
+     * ``DocumentTypeForm.EVENT_ONLY_FIELDS``:
+     *
+     *   data-entity-scope-value    Entitätstyp, bei dem die Felder sichtbar sind
+     *   data-entity-scoped-fields  Feldnamen (leerzeichengetrennt)
+     *
+     * Reines UI-Ausblenden: die Eingabefelder bleiben im DOM und aktiviert,
+     * ihre Werte werden also unverändert mitgepostet. Kein Feld fällt durchs
+     * Ausblenden auf den Modell-Default zurück (``category`` — Teil des Natural
+     * Keys — ist ohnehin nie betroffen). Ohne JavaScript bleibt alles sichtbar.
+     *
+     * Der ``change``-Listener wird hier in ``init()`` gesetzt statt per
+     * ``@change`` im Template: das Select kommt aus ``components/_form_field.html``
+     * (kein Ort für ein Alpine-Attribut), und so bleibt das Markup komplett frei
+     * von Alpine-Ausdrücken — CSP-Guard-fest, auch bei künftigen Verschärfungen.
+     */
+    Alpine.data("documentTypeEntityFields", () => ({
+        select: null,
+        scopeValue: "",
+        wrappers: [],
+        init() {
+            const root = this.$el;
+            this.select = root.querySelector("select[name='entity_type']");
+            this.scopeValue = root.dataset.entityScopeValue || "";
+            const names = (root.dataset.entityScopedFields || "").split(/\s+/).filter(Boolean);
+            this.wrappers = names
+                .map((name) => root.querySelector("#id_" + name))
+                .filter((el) => el !== null)
+                .map((el) => el.closest("div"))
+                .filter((el) => el !== null && el !== root);
+            if (!this.select) {
+                // Bearbeiten-Formular ohne Select (theoretisch) oder fremdes
+                // Markup: nichts ausblenden — sichtbar ist der sichere Zustand.
+                return;
+            }
+            this.select.addEventListener("change", () => this.applyScope());
+            this.applyScope();
+        },
+        applyScope() {
+            const inScope = this.select.value === this.scopeValue;
+            this.wrappers.forEach((wrapper) => {
+                // Ein Feld mit Fehlermeldung bleibt IMMER sichtbar: eine
+                // unsichtbare Validierungsmeldung blockierte das Formular sonst
+                // ohne erkennbaren Grund (z. B. „Aufbewahrungsfrist >= 1" nach
+                // einem Wechsel auf Person/Fall).
+                const hasError = wrapper.querySelector("[role='alert']") !== null;
+                wrapper.hidden = !inScope && !hasError;
+            });
+        },
+    }));
 });
