@@ -1,5 +1,7 @@
 """Tests for button/link visibility based on user role and ownership (Refs #457)."""
 
+from html.parser import HTMLParser
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
@@ -7,6 +9,65 @@ from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, User, WorkItem
 from core.services.events import create_event
+
+
+class _ContainerInhalt(HTMLParser):
+    """Klassen und ``data-testid``s INNERHALB eines Containers (Refs #1775).
+
+    Eine seitenweite Suche (``"lg:grid-cols-4" not in content``,
+    ``content.count('data-testid="card-')``) beantwortet nicht die Frage, die
+    gestellt wird — sie trifft jedes Element der Seite, inklusive Basis-Layout
+    und Navigation. Belegt per Probe: ein ``lg:grid-cols-4`` in ``base.html``
+    machte den Test rot, obwohl das geprueftes Grid unveraendert war.
+    """
+
+    _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+    def __init__(self, container_testid: str):
+        super().__init__(convert_charrefs=True)
+        self._gesucht = container_testid
+        self._stack: list[str] = []
+        self._eintritt: int | None = None
+        self.gefunden = False
+        self.klassen: list[str] = []
+        self.testids: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        attribute = dict(attrs)
+        if self._eintritt is None and attribute.get("data-testid") == self._gesucht:
+            self._eintritt = len(self._stack)
+            self.gefunden = True
+            self._erfasse(attribute)
+        elif self._eintritt is not None:
+            self._erfasse(attribute)
+        if tag not in self._VOID:
+            self._stack.append(tag)
+
+    def handle_startendtag(self, tag, attrs):
+        if self._eintritt is not None:
+            self._erfasse(dict(attrs))
+
+    def handle_endtag(self, tag):
+        if tag in self._VOID:
+            return
+        while self._stack and self._stack.pop() != tag:
+            pass
+        if self._eintritt is not None and len(self._stack) <= self._eintritt:
+            self._eintritt = None
+
+    def _erfasse(self, attribute):
+        if attribute.get("class"):
+            self.klassen.append(attribute["class"])
+        if attribute.get("data-testid"):
+            self.testids.append(attribute["data-testid"])
+
+
+def _container(html: str, container_testid: str) -> _ContainerInhalt:
+    parser = _ContainerInhalt(container_testid)
+    parser.feed(html)
+    assert parser.gefunden, f'Container data-testid="{container_testid}" nicht im HTML'
+    return parser
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -417,11 +478,21 @@ class TestActionTargetGuards:
         """Refs #1759: das Grid hatte mit der entfernten Legal-Holds-Kachel
         nie mehr als 3 echte Karten fuer die Leitung — es soll deshalb kein
         leerer 4. Slot (``lg:grid-cols-4``) im Markup uebrig bleiben, und
-        genau 3 Karten rendern."""
+        genau 3 Karten rendern.
+
+        Refs #1775: am Grid-Container gemessen statt seitenweit. Die alte
+        Fassung sprach ueber das ganze Dokument und wurde von einem
+        ``lg:grid-cols-4`` oder einer ``card-``-Testid irgendwo im
+        Basis-Layout rot — Befund und Fundstelle waren entkoppelt.
+        """
         client.force_login(lead_user)
         content = client.get(reverse("core:dashboard")).content.decode()
-        assert "lg:grid-cols-4" not in content
-        assert content.count('data-testid="card-') == 3
+
+        grid = _container(content, "lead-dashboard-cards")
+
+        assert not [k for k in grid.klassen if "lg:grid-cols-4" in k], grid.klassen
+        karten = [t for t in grid.testids if t.startswith("card-")]
+        assert len(karten) == 3, karten
 
     def test_assistant_event_create_has_no_cases_fetch_url(self, client, assistant_user):
         """``cases_for_client`` ist STAFF_PLUS — der Fetch lief für die Assistenz
