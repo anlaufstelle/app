@@ -1,6 +1,7 @@
 """Views for statistics dashboard and exports."""
 
 import logging
+from urllib.parse import quote
 
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -28,8 +29,10 @@ from core.services.dashboard import (
     InvalidStatisticsPeriodError,
     _merge_stats,
     build_external_report,
+    build_release_overview,
     get_statistics_hybrid,
     get_statistics_trend,
+    release_detail,
     validate_statistics_range,
 )
 from core.services.system import export_events_csv, generate_report_pdf, generate_sample_report_1_pdf
@@ -214,7 +217,16 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
             request,
             AuditLog.Action.EXPORT,
             target_type="CSV",
-            detail={"format": "CSV", "date_from": str(date_from), "date_to": str(date_to)},
+            # K4a (Refs #1770): Empfaenger/Zweck wandern ins bestehende
+            # ``detail``-JSON (kein Schema-Eingriff auf dem append-only,
+            # hash-verketteten Audit-Log). Ohne sie erzeugt die
+            # Freigabe-Uebersicht Alarme, die niemand bewerten kann.
+            detail={
+                "format": "CSV",
+                "date_from": str(date_from),
+                "date_to": str(date_to),
+                **release_detail(request.GET),
+            },
         )
 
         return response
@@ -255,7 +267,12 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
             request,
             AuditLog.Action.EXPORT,
             target_type="PDF",
-            detail={"format": "PDF", "date_from": str(date_from), "date_to": str(date_to)},
+            detail={
+                "format": "PDF",
+                "date_from": str(date_from),
+                "date_to": str(date_to),
+                **release_detail(request.GET),
+            },
         )
 
         return response
@@ -290,7 +307,12 @@ class SampleReport1ExportView(LeadOrAdminRequiredMixin, View):
             request,
             AuditLog.Action.EXPORT,
             target_type="Sachbericht-PDF",
-            detail={"format": "Sachbericht-PDF", "date_from": str(date_from), "date_to": str(date_to)},
+            detail={
+                "format": "Sachbericht-PDF",
+                "date_from": str(date_from),
+                "date_to": str(date_to),
+                **release_detail(request.GET),
+            },
         )
 
         return response
@@ -333,6 +355,7 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
                 "date_from": str(period_state.date_from),
                 "date_to": str(period_state.date_to),
                 "k_threshold": report["metadata"]["k_anonymity_threshold"],
+                **release_detail(request.GET),
             },
         )
 
@@ -437,8 +460,45 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             # ``backend.population`` ist der vom Backend deklarierte Code
             # (Default: alle Ereignisse des Zeitraums).
             "population_note": table_note(backend.population, LIVE),
+            # K4a (Refs #1770): Empfaenger/Zweck aus dem Berichte-Formular in die
+            # Export-Links durchreichen — nur so erreichen sie das
+            # EXPORT-Audit-Detail. ``quote`` verhindert, dass ein Ampersand in
+            # "Stadt X & Kreis Y" den Querystring zerlegt; das Ergebnis geht als
+            # **fertiges** Fragment ins Template, damit dort keine
+            # Escaping-Entscheidung mehr zu treffen ist.
+            "release_query": "".join(f"&{key}={quote(value)}" for key, value in release_detail(request.GET).items()),
         }
         return render(request, self.template_name, context)
+
+
+class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):
+    """Freigabe-Uebersicht herausgegebener Berichtszeitraeume (K4a, Refs #1770).
+
+    Flankierende Massnahme zu einer **akzeptierten Definitionsgrenze**: die
+    k-Anonymitaets-Zusicherung gilt je Artefakt und je Zeitraum, und aus
+    verschachtelten Freigaben (Monatsberichte plus Jahresbericht) laesst sich
+    jede unterdrueckte Zelle exakt zurueckrechnen — artefakt-lokal gibt es dagegen
+    nichts zu unterdruecken. Die Uebersicht kann das nicht verhindern, sie macht
+    es **sichtbar**.
+
+    Rollen-Guard wie das Berichts-Panel selbst (``LeadOrAdminRequiredMixin``):
+    die Seite zeigt Zeitraeume, Formate und die frei erfassten Empfaenger-/Zweck-
+    Angaben — keine Personendaten, aber Herausgabe-Metadaten der Einrichtung.
+    """
+
+    template_name = "core/statistics/report_releases.html"
+
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
+    def get(self, request):
+        releases = build_release_overview(request.current_facility)
+        return render(
+            request,
+            self.template_name,
+            {
+                "releases": releases,
+                "overlap_count": sum(1 for release in releases if release.overlaps),
+            },
+        )
 
 
 class DatasetExportView(LeadOrAdminRequiredMixin, View):
@@ -481,7 +541,13 @@ class DatasetExportView(LeadOrAdminRequiredMixin, View):
             request,
             AuditLog.Action.EXPORT,
             target_type="DatasetExport",
-            detail={"backend": slug, "format": fmt, "date_from": str(date_from), "date_to": str(date_to)},
+            detail={
+                "backend": slug,
+                "format": fmt,
+                "date_from": str(date_from),
+                "date_to": str(date_to),
+                **release_detail(request.GET),
+            },
         )
 
         return response

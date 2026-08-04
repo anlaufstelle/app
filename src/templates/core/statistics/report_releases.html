@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% comment %}
+Freigabe-Übersicht (K4a, Refs #1770): flankierende Maßnahme zu einer akzeptierten
+Definitionsgrenze — die k-Anonymitäts-Zusicherung gilt je Artefakt und je
+Zeitraum. Die Seite verhindert nichts, sie macht überlappende Herausgaben
+sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
+{% endcomment %}
+
+{% block title %}{% trans "Freigabe-Übersicht" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Freigabe-Übersicht" %}</h1>
+<p class="text-[13px] text-ink-muted mb-6 max-w-3xl">
+    {% blocktrans %}Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, wenn in keinem der beiden etwas unterdrückt wurde.{% endblocktrans %}
+</p>
+
+{% if overlap_count %}
+<div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-6">
+    <p class="text-[13px] text-amber-900 font-semibold mb-1">
+        {% blocktrans count count=overlap_count %}{{ count }} Herausgabe mit überschneidendem Zeitraum{% plural %}{{ count }} Herausgaben mit überschneidendem Zeitraum{% endblocktrans %}
+    </p>
+    <p class="text-[12px] text-amber-800">
+        {% blocktrans %}Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet.{% endblocktrans %}
+    </p>
+</div>
+{% endif %}
+
+<div class="bg-surface rounded-[10px] border border-subtle overflow-x-auto">
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Herausgegeben am" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Artefakt" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Berichtszeitraum" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Empfänger" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zweck" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Ausgelöst von" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for release in releases %}
+            <tr>
+                <td class="px-4 py-2.5 text-[13px] text-ink whitespace-nowrap font-mono">{{ release.timestamp|date:"d.m.Y H:i" }}</td>
+                <td class="px-4 py-2.5 text-[13px] text-ink">{{ release.artifact }}</td>
+                <td class="px-4 py-2.5 text-[13px] text-ink">
+                    {% if release.has_period %}
+                        <span class="font-mono">{{ release.date_from }} – {{ release.date_to }}</span>
+                        {% if release.overlaps %}
+                        <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 release-overlap"
+                              title="{{ release.overlaps|join:' · ' }}">{% trans "Überschneidung" %}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-ink-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-[13px] text-ink-soft">{{ release.recipient|default:"—" }}</td>
+                <td class="px-4 py-2.5 text-[13px] text-ink-soft">{{ release.purpose|default:"—" }}</td>
+                <td class="px-4 py-2.5 text-[13px] text-ink-muted">{{ release.user|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="px-4 py-2.5 text-[13px] text-ink-muted">{% trans "Noch keine Herausgabe protokolliert." %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<p class="text-[12px] text-ink-muted mt-4 max-w-3xl">
+    {% blocktrans %}Die Übersicht ist genau so vollständig wie die Audit-Spur. Weitergaben auf anderem Weg — eine weitergeleitete PDF-Datei, ein abfotografierter Bildschirm — erscheinen hier nicht.{% endblocktrans %}
+</p>
+
+<p class="mt-6">
+    <a href="{% url 'core:statistics' %}" class="text-link underline text-[13px]">{% trans "Zurück zur Statistik" %}</a>
+</p>
+{% endblock %}

@@ -24,10 +24,27 @@ from core.services.system import bypass_replication_triggers
 # protokolliert die ``boundary_hash``-Grenzen geloeschter Zeilen und darf nie
 # gepruned werden, sonst verloere ``verify_chain`` die Legitimation der
 # Diskontinuitaet.
+# Refs #1770 (K4a): EXPORT ist der Nachweis, **welche Statistik-Zeitraeume wann
+# an wen herausgegeben wurden** — die Datenbasis der Freigabe-Uebersicht
+# (``core.services.dashboard.release_log``). Wuerde die Routine-Frist sie
+# kappen, taeuschte die Uebersicht Vollstaendigkeit vor: eine im vierten Jahr
+# herausgegebene Jahresauswertung ueberschnitte sich mit Monatsberichten, die
+# der Log nicht mehr kennt, und die Ueberlappungswarnung bliebe stumm. Ein
+# stiller falscher Negativ ist hier schlechter als laengere Aufbewahrung.
+#
+# **DSGVO-Begruendung** (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2): Der
+# Zweck ist der Nachweis herausgegebener **Statistiken**, nicht die Beobachtung
+# von Beschaeftigten. Das ``detail`` traegt Zeitraum, Format und die frei
+# erfassten Empfaenger-/Zweckangaben — **keine** Klient-PII, keine Pseudonyme,
+# keine Personenzeilen (die Artefakte selbst sind k-anonymisiert). Die
+# handelnde Person steht wie in jedem Audit-Eintrag drin; die Aufbewahrung
+# folgt damit derselben Rechenschaftslogik wie SECURITY_VIOLATION. Festgehalten
+# in ``docs/security-notes.md`` § Disclosure-Analyse (K4a).
 PRUNE_EXEMPT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.RETENTION_RUN_COMPLETED,
     AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
+    AuditLog.Action.EXPORT,
 )
 
 

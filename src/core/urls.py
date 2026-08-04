@@ -132,6 +132,7 @@ from core.views.statistics import (
     DatasetReportPanelView,
     ExternalReportView,
     PDFExportView,
+    ReportReleaseLogView,
     SampleReport1ExportView,
     StatisticsView,
 )
@@ -382,6 +383,8 @@ urlpatterns = [
     # M5 P5 (Refs #1061): Berichts-Plugin-Panel + generischer Export.
     path("statistics/reports/panel/", DatasetReportPanelView.as_view(), name="statistics_report_panel"),
     path("statistics/reports/export/", DatasetExportView.as_view(), name="statistics_report_export"),
+    # K4a (Refs #1770): Freigabe-Uebersicht herausgegebener Berichtszeitraeume.
+    path("statistics/reports/releases/", ReportReleaseLogView.as_view(), name="statistics_report_releases"),
     # DSGVO
     path("dsgvo/", DSGVOPackageView.as_view(), name="dsgvo_package"),
     path("dsgvo/<slug:document>/", DSGVODocumentDownloadView.as_view(), name="dsgvo_document"),

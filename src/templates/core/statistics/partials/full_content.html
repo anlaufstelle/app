@@ -105,6 +105,33 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
                 {% for b in report_backends %}<option value="{{ b.slug }}">{{ b.name }}</option>{% endfor %}
             </select>
         </div>
+        {% comment %}
+        K4a (Refs #1770): Empfänger/Zweck der Herausgabe. Sie stecken in
+        demselben Formular, das hx-include an das Panel schickt — das Panel
+        reicht sie in die Export-Links weiter, von dort landen sie im
+        EXPORT-Audit-Detail und tragen die Freigabe-Übersicht. Der
+        change-Trigger baut das Panel neu auf, damit die Links aktuell sind.
+        {% endcomment %}
+        <div>
+            <label for="report-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
+            <input type="text" id="report-recipient" name="recipient" maxlength="200"
+                   placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
+                   hx-get="{% url 'core:statistics_report_panel' %}"
+                   hx-trigger="change"
+                   hx-include="closest form"
+                   hx-target="#report-panel"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
+        </div>
+        <div>
+            <label for="report-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
+            <input type="text" id="report-purpose" name="purpose" maxlength="200"
+                   placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
+                   hx-get="{% url 'core:statistics_report_panel' %}"
+                   hx-trigger="change"
+                   hx-include="closest form"
+                   hx-target="#report-panel"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
+        </div>
     </form>
     <div id="report-panel"></div>
 </section>

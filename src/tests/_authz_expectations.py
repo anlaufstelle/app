@@ -388,6 +388,11 @@ EXPECTATIONS = (
     E("core:statistics_chart_data", "lead-admin", get=LEAD_PLUS),
     E("core:statistics_external_report", "lead-admin", get=LEAD_PLUS),
     E("core:statistics_report_panel", "lead-admin", get=LEAD_PLUS),
+    # K4a (Refs #1770): Freigabe-Uebersicht — Rollen-Guard wie das Panel selbst.
+    # Zeigt Herausgabe-Metadaten (Zeitraum, Format, Empfaenger/Zweck), keine
+    # Personendaten; Leitung und Einrichtungsverwaltung verantworten die
+    # Herausgabe und muessen ihre Historie sehen.
+    E("core:statistics_report_releases", "lead-admin", get=LEAD_PLUS),
     # ---- deletion (Vier-Augen-Löschworkflow, Refs #1053) -------------------
     # Rollen-Soll = LEAD_PLUS (Seed-Zustand ``CONFIRMER`` ist eine Teilmenge).
     # Refs #1736 (B): das View-Gate (``User.can_access_deletion_requests``) ist

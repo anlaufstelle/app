@@ -11,6 +11,7 @@ Module:
 - :mod:`.activity`        — Activity-Logging fuer Zeitstrom.
 - :mod:`.search`          — Globale Suche (Klienten + Events).
 - :mod:`.external_report` — Externe Berichte mit K-Anon-Schutz.
+- :mod:`.release_log`     — Freigabe-Uebersicht herausgegebener Berichtszeitraeume.
 - :mod:`.quick_templates` — Quick-Template-Dropdown-Daten fuer Event-Form.
 """
 
@@ -33,6 +34,12 @@ from core.services.dashboard.quick_templates import (
     get_template_for_user,
     get_templates_for_document_type,
     list_templates_for_user,
+)
+from core.services.dashboard.release_log import (
+    RELEASE_FIELD_MAX_LENGTH,
+    Release,
+    build_release_overview,
+    release_detail,
 )
 from core.services.dashboard.search import (
     search_clients_and_events,
@@ -71,6 +78,8 @@ from core.services.dashboard.statistics import (
 __all__ = [
     "InvalidStatisticsPeriodError",
     "PERSONS_KEY",
+    "RELEASE_FIELD_MAX_LENGTH",
+    "Release",
     "PeriodState",
     "STATISTICS_MAX_CUSTOM_RANGE_DAYS",
     "STATISTICS_MV_NAME",
@@ -85,6 +94,7 @@ __all__ = [
     "apply_template",
     "build_external_report",
     "build_focus_box",
+    "build_release_overview",
     "count_unique_clients",
     "create_or_update_snapshot",
     "ensure_snapshots_for_months",
@@ -103,6 +113,7 @@ __all__ = [
     "list_templates_for_user",
     "log_activity",
     "parse_statistics_period",
+    "release_detail",
     "search_clients_and_events",
     "search_similar_clients",
     "staff_dashboard_context",
