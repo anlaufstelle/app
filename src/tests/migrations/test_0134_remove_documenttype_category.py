@@ -14,8 +14,13 @@ Drei Zusagen der Migration werden hier gepinnt:
    (bis 0134 zulässig, wenn die Kategorie abwich), bricht der Guard HART ab,
    statt still einen der beiden zu verlieren. Kein Auto-Dedupe.
 
-Muster: ``test_0130_attachment_owner_facility`` (MigratorTestCase + direkter
-Guard-Aufruf).
+Muster durchgehend ``MigratorTestCase`` (wie ``test_0130_attachment_owner_
+facility``) — auch für den Rückweg, der schlicht ein ``MigratorTestCase`` mit
+umgekehrtem ``migrate_from``/``migrate_to`` ist. Ein direkt instanziierter
+``Migrator`` wäre hier die falsche Wahl: er lässt die ``post_migrate``-Receiver
+laufen bzw. stellt sie nicht wieder her und hinterlässt die Test-DB ohne
+``django_content_type``-Zeilen — nachfolgende Tests derselben Session fielen
+dann mit fremd aussehenden FK-Fehlern um.
 """
 
 import importlib
@@ -23,12 +28,18 @@ import importlib
 import pytest
 from django.db import IntegrityError, connection, transaction
 from django_test_migrations.contrib.unittest_case import MigratorTestCase
-from django_test_migrations.migrator import Migrator
 
 MIGRATION = importlib.import_module("core.migrations.0134_remove_documenttype_category")
 
 _VORHER = ("core", "0131_rls_attachment")
 _NACHHER = ("core", "0134_remove_documenttype_category")
+
+
+class _SchemaEditorStub:
+    """Reicht nur ``connection`` durch — mehr nutzt der Guard nicht."""
+
+    def __init__(self, conn):
+        self.connection = conn
 
 
 def _spalten(tabelle="core_documenttype"):
@@ -43,22 +54,11 @@ def _constraints(tabelle="core_documenttype"):
         return {row[0] for row in cursor.fetchall()}
 
 
-def _basisdaten(apps, *, kategorien=("contact",), name="Notiz"):
-    """Eine Einrichtung mit je einem Typ ``name`` pro übergebener Kategorie."""
+def _facility(apps, suffix=""):
     Organization = apps.get_model("core", "Organization")
     Facility = apps.get_model("core", "Facility")
-    DocumentType = apps.get_model("core", "DocumentType")
-
-    org = Organization.objects.create(name="Mig-0134-Org")
-    fac = Facility.objects.create(organization=org, name="Mig-0134-Stelle")
-    for index, kategorie in enumerate(kategorien):
-        DocumentType.objects.create(
-            facility=fac,
-            name=name,
-            slug=f"mig-0134-{index}",
-            category=kategorie,
-        )
-    return fac
+    org = Organization.objects.create(name=f"Mig-0134-Org{suffix}")
+    return Facility.objects.create(organization=org, name=f"Mig-0134-Stelle{suffix}")
 
 
 class TestMigrate0134Vorwaerts(MigratorTestCase):
@@ -68,7 +68,12 @@ class TestMigrate0134Vorwaerts(MigratorTestCase):
     def prepare(self):
         # Kollisionsfrei: EIN Typ je Name — der Regelfall, den die Migration
         # unverändert durchlassen muss.
-        self.facility_pk = _basisdaten(self.old_state.apps, kategorien=("service",)).pk
+        apps = self.old_state.apps
+        facility = _facility(apps)
+        apps.get_model("core", "DocumentType").objects.create(
+            facility=facility, name="Notiz", slug="mig-0134-0", category="service"
+        )
+        self.facility_pk = facility.pk
 
     def test_spalte_category_ist_weg(self):
         assert "category" not in _spalten()
@@ -88,61 +93,75 @@ class TestMigrate0134Vorwaerts(MigratorTestCase):
             DocumentType.objects.create(facility_id=self.facility_pk, name="Notiz", slug="mig-0134-neu")
 
 
-@pytest.mark.django_db(transaction=True)
-class TestMigrate0134Rueckwaerts:
+class TestMigrate0134Rueckwaerts(MigratorTestCase):
     """Rollback 0134 → 0131 — strukturell vollständig, inhaltlich nicht."""
 
-    def test_reverse_stellt_spalte_und_alte_constraint_her(self, request):
-        migrator = Migrator()
-        request.addfinalizer(migrator.reset)
+    migrate_from = _NACHHER
+    migrate_to = _VORHER
 
-        alt_state = migrator.apply_initial_migration(_VORHER)
-        facility_pk = _basisdaten(alt_state.apps, kategorien=("admin",)).pk
-        migrator.apply_tested_migration(_NACHHER)
-        assert "category" not in _spalten()
+    def prepare(self):
+        apps = self.old_state.apps
+        facility = _facility(apps, suffix="-rev")
+        apps.get_model("core", "DocumentType").objects.create(facility=facility, name="Notiz", slug="mig-0134-rev")
+        self.facility_pk = facility.pk
 
-        zurueck = migrator.apply_tested_migration(_VORHER)
-
+    def test_spalte_und_alte_constraint_sind_zurueck(self):
         assert "category" in _spalten()
         namen = _constraints()
         assert "unique_facility_documenttype_name_category" in namen
         assert "unique_facility_documenttype_name" not in namen
 
-        # Ehrlichkeit des Rückwegs: die ursprüngliche Kategorie ``admin`` ist
-        # verloren, jede Zeile steht auf dem Modell-Default ``contact``.
-        DocumentType = zurueck.apps.get_model("core", "DocumentType")
-        wieder = DocumentType.objects.get(facility_id=facility_pk, name="Notiz")
-        assert wieder.category == "contact"
+    def test_reverse_setzt_alles_auf_den_modell_default(self):
+        """Ehrlichkeit des Rückwegs: historische Kategorien sind verloren."""
+        DocumentType = self.new_state.apps.get_model("core", "DocumentType")
+        assert DocumentType.objects.get(facility_id=self.facility_pk, name="Notiz").category == "contact"
 
 
-@pytest.mark.django_db(transaction=True)
-class TestMigrate0134GuardBrichtAb:
-    """Gleichnamige Typen einer Einrichtung ⇒ harter Abbruch, kein Auto-Dedupe."""
+class TestGuard0134(MigratorTestCase):
+    """Der Duplikat-Guard, direkt gegen den Stand VOR 0134 aufgerufen.
 
-    def test_duplikate_brechen_die_migration_ab(self, request):
-        migrator = Migrator()
-        request.addfinalizer(migrator.reset)
+    Der Guard kann nicht am Endzustand geprüft werden: dort verbietet die neue
+    Constraint die Konstellation, die er finden soll. Deshalb bleibt die DB auf
+    ``0131`` stehen (Muster ``TestReverseGuard0130``).
+    """
 
-        alt_state = migrator.apply_initial_migration(_VORHER)
+    migrate_from = ("core", "0130_attachment_owner_facility")
+    migrate_to = _VORHER
+
+    def prepare(self):
+        pass
+
+    def _doc_types(self, *kategorien, name="Notiz"):
+        apps = self.new_state.apps
+        facility = _facility(apps, suffix=f"-guard-{len(kategorien)}-{name}")
+        DocumentType = apps.get_model("core", "DocumentType")
+        for index, kategorie in enumerate(kategorien):
+            DocumentType.objects.create(
+                facility=facility, name=name, slug=f"mig-0134-guard-{name}-{index}", category=kategorie
+            )
+        return apps
+
+    def test_guard_bricht_bei_gleichnamigen_typen_ab(self):
         # Bis 0134 zulässig: derselbe Name in zwei Kategorien.
-        _basisdaten(alt_state.apps, kategorien=("note", "admin"))
-        DocumentType = alt_state.apps.get_model("core", "DocumentType")
-
+        apps = self._doc_types("note", "admin")
+        DocumentType = apps.get_model("core", "DocumentType")
         try:
             with pytest.raises(RuntimeError) as excinfo:
-                migrator.apply_tested_migration(_NACHHER)
-
+                MIGRATION.guard_no_duplicate_names(apps, _SchemaEditorStub(connection))
             meldung = str(excinfo.value)
             assert "Notiz" in meldung, meldung
             assert "umbenennen" in meldung, meldung
-            # Nichts angefasst: die Spalte steht noch, es wurde nichts gemergt.
-            assert "category" in _spalten()
-            assert DocumentType.objects.filter(name="Notiz").count() == 2
+            assert DocumentType.objects.filter(name="Notiz").count() == 2, "Guard hat Zeilen angefasst"
         finally:
-            # Der Konflikt muss weg, bevor ``migrator.reset()`` im Finalizer die
-            # Migrationskette bis zum Kopf nachzieht — sonst bricht der Guard
-            # dort erneut ab und der (bestandene) Test stirbt im Teardown.
-            DocumentType.objects.filter(slug="mig-0134-1").delete()
+            # ``TransactionTestCase`` rollt nicht zurück: der Konflikt muss weg,
+            # bevor ``tearDown`` die Migrationskette bis zum Kopf nachzieht —
+            # sonst bricht der Guard dort erneut ab und der (bestandene) Test
+            # stirbt im Teardown.
+            DocumentType.objects.filter(name="Notiz").delete()
+
+    def test_guard_laesst_eindeutige_namen_durch(self):
+        apps = self._doc_types("note", name="Eindeutig")
+        MIGRATION.guard_no_duplicate_names(apps, _SchemaEditorStub(connection))
 
     def test_guard_ist_die_erste_operation(self):
         """Tragend: läuft der Guard nach dem RemoveField, prüfte er zu spät."""

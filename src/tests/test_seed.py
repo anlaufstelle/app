@@ -750,14 +750,13 @@ def test_reseed_does_not_touch_field_groups_of_doctype_without_groups_key():
 # sind exakt das Ergebnis des 0117-Backfills (E16) — eine Abweichung würde in
 # jeder Bestands-Einrichtung einen Duplikat-Typ erzeugen.
 EXPECTED_DOCUMENT_TYPES = {
-    "kontakt": ("Kontakt", "contact", "contact", "normal", "users", "indigo", 0, None),
-    "krisengespraech": ("Krisengespräch", "service", "crisis", "elevated", "alert-triangle", "amber", 1, None),
-    "medizinische-versorgung": ("Medizinische Versorgung", "service", "medical", "high", "heart", "rose", 2, None),
-    "spritzentausch": ("Spritzentausch", "service", "needle_exchange", "normal", "repeat", "teal", 3, None),
-    "begleitung": ("Begleitung", "service", "accompaniment", "normal", "map-pin", "green", 4, None),
+    "kontakt": ("Kontakt", "contact", "normal", "users", "indigo", 0, None),
+    "krisengespraech": ("Krisengespräch", "crisis", "elevated", "alert-triangle", "amber", 1, None),
+    "medizinische-versorgung": ("Medizinische Versorgung", "medical", "high", "heart", "rose", 2, None),
+    "spritzentausch": ("Spritzentausch", "needle_exchange", "normal", "repeat", "teal", 3, None),
+    "begleitung": ("Begleitung", "accompaniment", "normal", "map-pin", "green", 4, None),
     "beratungsgespraech": (
         "Beratungsgespräch",
-        "service",
         "counseling",
         "elevated",
         "message-circle",
@@ -765,9 +764,9 @@ EXPECTED_DOCUMENT_TYPES = {
         5,
         "qualified",
     ),
-    "vermittlung": ("Vermittlung", "service", "referral", "normal", "share-2", "blue", 6, None),
-    "notiz": ("Notiz", "note", "note", "normal", "file-text", "gray", 7, None),
-    "hausverbot": ("Hausverbot", "admin", "ban", "elevated", "slash", "red", 8, None),
+    "vermittlung": ("Vermittlung", "referral", "normal", "share-2", "blue", 6, None),
+    "notiz": ("Notiz", "note", "normal", "file-text", "gray", 7, None),
+    "hausverbot": ("Hausverbot", "ban", "elevated", "slash", "red", 8, None),
 }
 
 
@@ -818,7 +817,6 @@ def test_seed_document_type_catalog_matches_expected():
     actual = {
         dt.slug: (
             dt.name,
-            dt.category,
             dt.system_type,
             dt.sensitivity,
             dt.icon,

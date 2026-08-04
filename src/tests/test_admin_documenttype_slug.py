@@ -87,7 +87,6 @@ class TestChangeFormSlugEntityTypeReadonly:
             data={
                 "facility": doc_type_contact.facility_id,
                 "name": "Umbenannt",
-                "category": doc_type_contact.category,
                 "sensitivity": doc_type_contact.sensitivity,
                 "sort_order": 0,
                 "slug": "tampered-value",  # existiert im Form nicht -> wird ignoriert

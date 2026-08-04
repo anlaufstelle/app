@@ -225,7 +225,6 @@ class TestBackendStringsUnterOverride:
         with override("en"):
             assert [str(spec.label) for spec in backend.get_field_specs()] == [
                 "Document type",
-                "Category",
                 "System type",
                 "Count",
             ]

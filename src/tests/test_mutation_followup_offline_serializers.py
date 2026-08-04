@@ -523,7 +523,6 @@ class TestSerializeDocumentType:
             "name",
             # Refs #1397: Aktiv-Flag fuer den Offline-Create-Dropdown-Filter.
             "is_active",
-            "category",
             "sensitivity",
             # Refs #1518 (#1499): Mindest-Kontaktstufe fuer den Offline-Create-
             # Picker-Vorfilter (weicher Filter „ohne Person").
@@ -544,11 +543,9 @@ class TestSerializeDocumentType:
         dt = _make_doc_type(facility, name="X")
         assert _serialize_document_type(lead_user, dt)["pk"] == str(dt.pk)
 
-    def test_dt_name_and_category(self, facility, lead_user):
+    def test_dt_name(self, facility, lead_user):
         dt = _make_doc_type(facility, name="N")
-        out = _serialize_document_type(lead_user, dt)
-        assert out["name"] == "N"
-        assert out["category"] == "contact"
+        assert _serialize_document_type(lead_user, dt)["name"] == "N"
 
     def test_dt_sensitivity_passes_through_value_not_display(self, facility, lead_user):
         """Mutation ``doc_type.sensitivity`` → ``.get_sensitivity_display()``

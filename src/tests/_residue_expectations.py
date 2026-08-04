@@ -100,7 +100,6 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     ),
     # ---- core_documenttype (Konfiguration: Dokumentationstyp-Schema) -----
     non_pii("core_documenttype", "name", reason="Admin-konfigurierter Typ-Name (Label), keine Klientendaten."),
-    non_pii("core_documenttype", "category", reason="Enum (contact/service/admin/note)."),
     non_pii("core_documenttype", "sensitivity", reason="Enum (normal/elevated/high)."),
     non_pii("core_documenttype", "min_contact_stage", reason="Enum-Kontaktstufe (Marker), kein Freitext."),
     non_pii("core_documenttype", "system_type", reason="Stabile System-Kennung (Enum) fuer Bann/Export."),

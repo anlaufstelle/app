@@ -215,9 +215,7 @@ class TestZeitstromView:
 
     def test_facility_scoping(self, client, staff_user, facility, other_facility, doc_type_contact):
         """Events from other facilities are not shown."""
-        other_doc = doc_type_contact.__class__.objects.create(
-            facility=other_facility, name="Kontakt", category="contact"
-        )
+        other_doc = doc_type_contact.__class__.objects.create(facility=other_facility, name="Kontakt")
         Event.objects.create(
             facility=other_facility,
             document_type=other_doc,

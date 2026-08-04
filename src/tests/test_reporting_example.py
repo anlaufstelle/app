@@ -71,7 +71,6 @@ class TestBackendMetadaten:
     def test_field_specs(self, backend):
         assert backend.get_field_specs() == [
             FieldSpec("document_type", "Dokumenttyp"),
-            FieldSpec("category", "Kategorie"),
             FieldSpec("system_type", "System-Typ"),
             FieldSpec("count", "Anzahl"),
         ]
@@ -147,7 +146,7 @@ class TestBuildDataset:
 class TestCsvExport:
     """Pflichtfall 3: CSV-Export ueber ``export_dataset`` liefert 4 Spalten."""
 
-    def test_vier_spalten_header_aus_labels(self, backend, facility, doc_type_contact, sample_event, date_range):
+    def test_drei_spalten_header_aus_labels(self, backend, facility, doc_type_contact, sample_event, date_range):
         date_from, date_to = date_range
 
         response = export_dataset(backend, facility, date_from, date_to, format="csv")
@@ -155,10 +154,10 @@ class TestCsvExport:
         lines = content.splitlines()
         rows = list(csv.reader(lines[1:]))
 
-        assert rows[0] == ["Dokumenttyp", "Kategorie", "System-Typ", "Anzahl"]
+        assert rows[0] == ["Dokumenttyp", "System-Typ", "Anzahl"]
         # ``export_dataset`` wendet ``prepare_export`` an — die einzelne Zeile
         # (Anzahl 1) liegt unter der Default-Schwelle (5) und wird suppressiert.
-        assert rows[1] == ["Kontakt", "Kontakt", "", ""]
+        assert rows[1] == ["Kontakt", "", ""]
         assert lines[0].endswith(" | k-Anonymität: Zellen < 5 unterdrückt")
 
 

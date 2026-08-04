@@ -113,7 +113,7 @@ def _make_attachment(event, field_template):
 @pytest.mark.django_db
 class TestSaveDocumentType:
     def _form_cls(self):
-        return modelform_factory(DocumentType, fields=["facility", "name", "category"])
+        return modelform_factory(DocumentType, fields=["facility", "name", "description"])
 
     def test_create_writes_config_create_audit(self, req, facility):
         form = self._form_cls()(data={"facility": facility.pk, "name": "Neuer Typ"})
@@ -127,7 +127,7 @@ class TestSaveDocumentType:
     def test_update_writes_config_update_audit_with_changed_fields(self, req, doc_type_contact, facility):
         form = self._form_cls()(
             instance=doc_type_contact,
-            data={"facility": facility.pk, "name": "Umbenannt", "category": doc_type_contact.category},
+            data={"facility": facility.pk, "name": "Umbenannt", "description": doc_type_contact.description},
         )
         assert form.is_valid(), form.errors
         save_document_type(req, form, creating=False)
