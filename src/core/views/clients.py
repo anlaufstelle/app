@@ -335,7 +335,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         # (entschluesseln, Labels, ``[Eingeschraenkt]``, Sensitivity-Gate auf
         # Typ- UND Feldebene) macht der Service — im Template wird nicht
         # gerechnet.
-        context.update(build_dynamic_data_context(client.document_type, client.data_json, request.user))
+        context.update(build_dynamic_data_context(client.document_type, client.data_json, request.user, owner=client))
         return render(request, "core/clients/detail.html", context)
 
 

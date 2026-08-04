@@ -369,16 +369,75 @@ def format_dynamic_display_value(value: Any, ft: FieldTemplate | None) -> Any:
     return value
 
 
+def owner_attachment_index(owner: Any) -> tuple[dict, dict]:
+    """``(attachments_by_pk, predecessor_index)`` eines Owners (M24/AP4, Refs #1738).
+
+    Beide Indizes stammen aus EINEM Query (Refs #894/#662) — die Anzeige loest
+    damit sowohl die Marker-Entries als auch die ``superseded_by``-Ketten ohne
+    N+1 auf. ``owner=None`` (kein Traeger, z. B. Konfigurations-Vorschau)
+    liefert leere Indizes; der FILE-Zweig zeigt dann gar nichts an, statt das
+    rohe Marker-Dict zu rendern.
+    """
+    if owner is None:
+        return {}, {}
+    all_attachments = list(owner.attachments.all())
+    return (
+        {att.pk: att for att in all_attachments},
+        {att.superseded_by_id: att for att in all_attachments if att.superseded_by_id is not None},
+    )
+
+
+def _file_display_entry(
+    label: str,
+    value: Any,
+    *,
+    field_sensitivity: str,
+    is_encrypted: bool,
+    attachments_by_pk: Mapping[Any, Any],
+    predecessor_index: Mapping[Any, Any],
+    orphaned: bool = False,
+) -> dict[str, Any] | None:
+    """Anzeige-Dict eines FILE-Feldes — oder ``None``, wenn nichts aufloesbar ist.
+
+    M24/AP4 (Refs #1738, ADR-039): Schluessel-identisch zum Event-Detail
+    (:func:`core.services.events.context._build_field_display_entry`), damit
+    Ereignis-, Personen- und Fall-Detail dieselbe Darstellung bekommen —
+    ``entries`` mit Dateiname, Groesse, ``download_url`` und den
+    ``prior_versions`` je Kette.
+
+    ``None`` (⇒ Aufrufer ueberspringt das Feld) bei geloeschten, nicht
+    aufloesbaren oder ownerlosen Markern. Das ist die einzig sichere Antwort:
+    ein durchgereichter Marker landete sonst als rohes ``{"__files__": …}``-Dict
+    im HTML.
+    """
+    # Funktionslokal: ``services/attachments/context`` importiert dieses Modul
+    # (``normalize_file_marker``) — ein Modul-Level-Import waere ein Zyklus.
+    from core.services.attachments import resolve_file_entries
+
+    file_entries = resolve_file_entries(value, attachments_by_pk, predecessor_index)
+    if not file_entries:
+        return None
+    return {
+        "label": label,
+        "is_file": True,
+        "entries": file_entries,
+        "is_sensitive": bool(field_sensitivity),
+        "is_encrypted": is_encrypted,
+        "restricted": False,
+        "orphaned": orphaned,
+    }
+
+
 def build_dynamic_fields_display(
     document_type: DocumentType,
     data_json: Mapping[str, Any] | None,
     user: Any,
+    owner: Any = None,
 ) -> list[dict[str, Any]]:
     """Read-only Anzeige-Dicts der dynamischen Felder (M2 P7, Refs #1058).
 
     Entity-neutrales Pendant zu
-    :func:`core.services.events.context.build_event_detail_context` — **ohne**
-    jede Attachment-Logik (FILE ist event-gebunden, E8). Je Feld:
+    :func:`core.services.events.context.build_event_detail_context`. Je Feld:
 
     * ``label``     — Name des ``FieldTemplate``,
     * ``value``     — entschlüsselt (:func:`~core.services.file_vault.safe_decrypt`)
@@ -388,6 +447,15 @@ def build_dynamic_fields_display(
     Felder, die *user* wegen seiner Rolle nicht sehen darf, erscheinen mit dem
     Platzhalter ``[Eingeschränkt]`` — der Wert wird gar nicht erst
     entschlüsselt.
+
+    **M24/AP4 (Refs #1738, ADR-039):** ``owner`` (Person/Fall/Ereignis) ist
+    optional und schaltet den **FILE-Zweig** frei: Marker-Slugs werden über
+    :func:`~core.services.attachments.resolve_file_entries` zu Datei-Einträgen
+    (Name, Größe, ``download_url``, Vorversionen) aufgelöst, statt als rohes
+    ``{"__files__": …}``-Dict im HTML zu landen. Das Sensitivity-Gate läuft
+    unverändert **davor**: ein restringiertes FILE-Feld nennt keinen
+    Dateinamen. Ohne ``owner`` — und bei nicht auflösbaren oder soft-gelöschten
+    Anhängen — wird das Feld übersprungen.
 
     **Reihenfolge:** iteriert wird über die konfigurierte Feldreihenfolge des
     ``DocumentType`` (nicht über die ``data_json``-Schlüssel). PostgreSQL
@@ -401,6 +469,7 @@ def build_dynamic_fields_display(
     values = data_json or {}
     doc_sensitivity = document_type.sensitivity
     field_templates = build_field_template_lookup(document_type, ordered=True)
+    attachments_by_pk, predecessor_index = owner_attachment_index(owner)
 
     entries: list[dict[str, Any]] = []
     for slug, ft in field_templates.items():
@@ -418,7 +487,20 @@ def build_dynamic_fields_display(
                 }
             )
             continue
-        decrypted = safe_decrypt(values[slug], default=_("[verschlüsselt]"))
+        value = values[slug]
+        if is_file_marker(value):
+            file_entry = _file_display_entry(
+                ft.name,
+                value,
+                field_sensitivity=field_sensitivity,
+                is_encrypted=ft.is_encrypted,
+                attachments_by_pk=attachments_by_pk,
+                predecessor_index=predecessor_index,
+            )
+            if file_entry is not None:
+                entries.append(file_entry)
+            continue
+        decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
         entries.append(
             {
                 "label": ft.name,
@@ -435,6 +517,7 @@ def build_orphan_fields_display(
     document_type: DocumentType,
     data_json: Mapping[str, Any] | None,
     user: Any,
+    owner: Any = None,
 ) -> list[dict[str, Any]]:
     """Anzeige-Dicts der **verwaisten** dynamischen Felder (Refs #1725(a)).
 
@@ -467,6 +550,7 @@ def build_orphan_fields_display(
 
     doc_sensitivity = document_type.sensitivity
     resolved = resolve_orphan_field_templates(document_type, orphan_slugs)
+    attachments_by_pk, predecessor_index = owner_attachment_index(owner)
 
     entries: list[dict[str, Any]] = []
     for slug in orphan_slugs:
@@ -488,6 +572,21 @@ def build_orphan_fields_display(
                 }
             )
             continue
+        # M24/AP4 (Refs #1738): derselbe FILE-Zweig wie für zugeordnete Felder —
+        # ein verwaister Datei-Slug darf ebenso wenig als Roh-Dict erscheinen.
+        if is_file_marker(values[slug]):
+            file_entry = _file_display_entry(
+                label,
+                values[slug],
+                field_sensitivity=field_sensitivity,
+                is_encrypted=is_encrypted,
+                attachments_by_pk=attachments_by_pk,
+                predecessor_index=predecessor_index,
+                orphaned=True,
+            )
+            if file_entry is not None:
+                entries.append(file_entry)
+            continue
         decrypted = safe_decrypt(values[slug], default=_("[verschlüsselt]"))
         entries.append(
             {
@@ -506,6 +605,7 @@ def build_dynamic_data_context(
     document_type: DocumentType | None,
     data_json: Mapping[str, Any] | None,
     user: Any,
+    owner: Any = None,
 ) -> dict[str, Any]:
     """Kontext für ``core/partials/dynamic_data_display.html`` (E18, Refs #1058).
 
@@ -520,11 +620,15 @@ def build_dynamic_data_context(
     * ``dynamic_fields`` — Liste aus :func:`build_dynamic_fields_display`,
     * ``dynamic_orphan_fields`` — Liste aus :func:`build_orphan_fields_display`
       (verwaiste Slugs, Refs #1725(a); leer, wenn keine existieren).
+
+    ``owner`` (M24/AP4, Refs #1738): Träger der ``data_json`` (Person oder
+    Fall). Nur mit ihm lassen sich Datei-Marker zu Anhängen auflösen; ohne ihn
+    bleibt der FILE-Zweig stumm (kein Roh-Dict im HTML).
     """
     if document_type is None or not user_can_see_document_type(user, document_type):
         return {"dynamic_document_type": None, "dynamic_fields": [], "dynamic_orphan_fields": []}
     return {
         "dynamic_document_type": document_type,
-        "dynamic_fields": build_dynamic_fields_display(document_type, data_json, user),
-        "dynamic_orphan_fields": build_orphan_fields_display(document_type, data_json, user),
+        "dynamic_fields": build_dynamic_fields_display(document_type, data_json, user, owner=owner),
+        "dynamic_orphan_fields": build_orphan_fields_display(document_type, data_json, user, owner=owner),
     }

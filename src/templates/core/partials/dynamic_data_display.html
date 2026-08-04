@@ -3,10 +3,12 @@
 {% comment %}
 Read-only-Anzeige dynamischer ``data_json``-Felder (M2/P7, Refs #1058, E18).
 
-Gemeinsames Partial fuer Personen- (P7) und Fall-Detail (P8). Bewusst OHNE
-Attachment-/Datei-Logik: FILE-Felder sind event-gebunden (Entscheid E8), das
-Event-Detail rendert seine Felder deshalb weiterhin selbst
-(``core/events/detail.html`` mit ``fields_display``).
+Gemeinsames Partial fuer Personen- (P7) und Fall-Detail (P8). M24/AP4
+(Refs #1738, ADR-039): FILE-Felder sind nicht mehr event-gebunden — der
+Service liefert fuer sie ``is_file``/``entries`` (Dateiname, Groesse,
+``download_url``, Vorversionen), hier wird nur gerendert. Das Event-Detail
+rendert seine Felder weiterhin selbst (``core/events/detail.html`` mit
+``fields_display``, gleiche Schluessel).
 
 Kontext-Keys (gebaut von
 ``core.services.dynamic_data.build_dynamic_data_context``):
@@ -35,7 +37,33 @@ Service.
         {% for field in dynamic_fields %}
         <div>
             <dt class="text-[12px] text-ink-muted">{{ field.label }}</dt>
+            {% if field.is_file %}
+            <dd class="text-[13px] text-ink-soft">
+                <ul class="space-y-1" data-testid="dynamic-attachment-list">
+                    {% for entry in field.entries %}
+                    <li class="flex flex-wrap items-center gap-2" data-attachment-id="{{ entry.attachment_id }}">
+                        <a href="{{ entry.download_url }}" class="text-accent hover:text-accent hover:underline">{{ entry.original_filename }}</a>
+                        <span class="text-[12px] text-ink-muted">({{ entry.file_size_display }})</span>
+                        {% if entry.prior_versions %}
+                        <details data-testid="dynamic-attachment-prior-versions">
+                            <summary class="text-[12px] text-ink-muted cursor-pointer hover:text-ink-soft">{% blocktrans count count=entry.prior_versions|length %}{{ count }} Vorversion{% plural %}{{ count }} Vorversionen{% endblocktrans %}</summary>
+                            <ul class="mt-1 ml-4 space-y-1 text-[12px]">
+                                {% for prev in entry.prior_versions %}
+                                <li class="flex items-center gap-2">
+                                    <a href="{{ prev.download_url }}" class="text-accent hover:text-accent hover:underline">{{ prev.original_filename }}</a>
+                                    <span class="text-ink-muted">({{ prev.file_size_display }})</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </dd>
+            {% else %}
             <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value }}</dd>
+            {% endif %}
         </div>
         {% endfor %}
     </dl>
@@ -52,7 +80,20 @@ Service.
             {% for field in dynamic_orphan_fields %}
             <div>
                 <dt class="text-[12px] text-amber-800">{{ field.label }}</dt>
+                {% if field.is_file %}
+                <dd class="text-[13px] text-ink-soft">
+                    <ul class="space-y-1" data-testid="dynamic-orphan-attachment-list">
+                        {% for entry in field.entries %}
+                        <li class="flex flex-wrap items-center gap-2" data-attachment-id="{{ entry.attachment_id }}">
+                            <a href="{{ entry.download_url }}" class="text-accent hover:text-accent hover:underline">{{ entry.original_filename }}</a>
+                            <span class="text-[12px] text-ink-muted">({{ entry.file_size_display }})</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </dd>
+                {% else %}
                 <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value }}</dd>
+                {% endif %}
             </div>
             {% endfor %}
         </dl>

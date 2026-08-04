@@ -405,7 +405,7 @@ class CaseDetailView(StaffRequiredMixin, View):
         # (entschluesseln, Labels, ``[Eingeschraenkt]``, Sensitivity-Gate auf
         # Typ- UND Feldebene) macht der Service; im Template wird nicht
         # gerechnet.
-        context.update(build_dynamic_data_context(case.document_type, case.data_json, request.user))
+        context.update(build_dynamic_data_context(case.document_type, case.data_json, request.user, owner=case))
         return render(request, "core/cases/detail.html", context)
 
 
