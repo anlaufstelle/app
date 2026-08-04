@@ -123,8 +123,7 @@
                 </td>
             </tr>
             {% empty %}
-            {# K0-Fail-safe (Refs #1768): liegt die Personenzahl unter der Schwelle,
-               faellt die ganze Tabelle — dann waere „keine Daten" schlicht falsch. #}
+            {# K0-Fail-safe (Refs #1768): Personenzahl < k -> Tabelle faellt ganz; "keine Daten" waere falsch. #}
             <tr>
                 <td colspan="2" class="px-4 py-2 text-muted italic">
                     {% if report.unique_clients is None %}

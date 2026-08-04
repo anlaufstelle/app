@@ -100,8 +100,7 @@
         </tbody>
     </table>
     {% elif stats.unique_clients is None %}
-    {# K0-Fail-safe (Refs #1768): Personenzahl < k -> die ganze personenabgeleitete
-       Aufschluesselung faellt; "keine Daten" waere hier irrefuehrend. #}
+    {# K0-Fail-safe (Refs #1768): Personenzahl < k -> Tabelle faellt ganz; "keine Daten" waere irrefuehrend. #}
     <p>{% trans "Angaben nach Altersgruppe unterdrückt (k-Anonymität)." %}</p>
     {% else %}
     <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
