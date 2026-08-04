@@ -523,10 +523,16 @@ class ClientUpdateView(StaffRequiredMixin, View):
             return render(request, "core/clients/form.html", context)
 
         fields = dict(form.cleaned_data)
-        doc_type = None
+        doc_type = None if type_locked else form.cleaned_data.get("document_type")
         file_fields: dict[str, list] = {}
+        # ADR-039 §7: Ein Typwechsel (auch das Entfernen des Typs) verwirft das
+        # ``data_json`` komplett — die Versionsketten blieben sonst als
+        # UI-unsichtbare Waisen liegen. Bewusst SOFT-Delete, im selben atomic
+        # wie der Update und VOR ``apply_attachment_changes`` (Uploads des
+        # NEUEN Typs sollen nicht mit verworfen werden). Der Wert steht hier
+        # oben, weil schon der Merge ihn braucht (``preserve_file_markers``).
+        type_switched = not type_locked and (doc_type.pk if doc_type is not None else None) != old_doc_type_id
         if not type_locked:
-            doc_type = form.cleaned_data.get("document_type")
             data_form, restricted = _client_data_form(
                 request,
                 doc_type,
@@ -566,15 +572,18 @@ class ClientUpdateView(StaffRequiredMixin, View):
             # Wert IST der Marker auf die ``Attachment``-Zeilen. Ohne diese
             # Re-Injektion wuerde bereits der erste reine Text-Edit still ALLE
             # Bestandsanhaenge aus dem ``data_json`` werfen.
-            preserve_file_markers(client, merged, old_data, _file_field_slugs(doc_type))
+            #
+            # Beim TYPWECHSEL bleibt sie aus (Integrations-Review Refs #1738):
+            # Feldvorlagen sind mehrfach zuordenbar — traegt der Ziel-Typ
+            # dieselbe FILE-Vorlage, stuende ihr Slug in
+            # ``_file_field_slugs(doc_type)`` und der Marker des ALTEN Typs
+            # kaeme zurueck, waehrend ``discard_type_switch_file_chains`` im
+            # selben atomic alle Ketten soft-loescht. Das ``data_json`` zeigte
+            # dann dauerhaft auf ``deleted_at``-Zeilen — Widerspruch zu
+            # ADR-039 §7 („Typwechsel verwirft das data_json").
+            if not type_switched:
+                preserve_file_markers(client, merged, old_data, _file_field_slugs(doc_type))
             fields["data_json"] = merged
-
-        # ADR-039 §7: Ein Typwechsel (auch das Entfernen des Typs) verwirft das
-        # ``data_json`` komplett — die Versionsketten blieben sonst als
-        # UI-unsichtbare Waisen liegen. Bewusst SOFT-Delete, im selben atomic
-        # wie der Update und VOR ``apply_attachment_changes`` (Uploads des
-        # NEUEN Typs sollen nicht mit verworfen werden).
-        type_switched = not type_locked and (doc_type.pk if doc_type is not None else None) != old_doc_type_id
 
         expected_updated_at = request.POST.get("expected_updated_at") or None
         try:

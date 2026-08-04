@@ -299,6 +299,60 @@ class TestClientAttachmentForm:
         assert attachment.deleted_at is not None
         assert "ausweis" not in person.data_json
 
+    def test_type_switch_to_a_type_sharing_the_file_template_leaves_no_marker(
+        self, client, staff_user, facility, client_doc_type_with_file
+    ):
+        """Geteilte FILE-Vorlage: kein Marker auf soft-geloeschte Ketten.
+
+        Integrations-Review (Refs #1738): Feldvorlagen sind mehrfach
+        zuordenbar. Traegt der ZIEL-Typ dieselbe FILE-Vorlage, stand ihr Slug
+        in ``_file_field_slugs(doc_type)`` — ``preserve_file_markers`` holte den
+        Marker des alten Typs also zurueck, waehrend
+        ``discard_type_switch_file_chains`` im selben ``atomic`` alle Ketten
+        soft-loeschte. Ergebnis war ein ``data_json``, das dauerhaft auf
+        ``deleted_at``-Zeilen zeigt — und damit ein Widerspruch zu ADR-039 §7
+        („Typwechsel verwirft das data_json").
+        """
+        dt, _ft_text, ft_file = client_doc_type_with_file
+        shared = DocumentType.objects.create(
+            facility=facility,
+            name="Personenakte C",
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        # Dieselbe Vorlage, zweite Zuordnung — derselbe Slug in beiden Typen.
+        DocumentTypeField.objects.create(document_type=shared, field_template=ft_file, sort_order=0)
+
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Geteilte-Vorlage",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=dt,
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        base = {
+            "pseudonym": "Geteilte-Vorlage",
+            "contact_stage": Client.ContactStage.IDENTIFIED,
+            "age_cluster": Client.AgeCluster.UNKNOWN,
+            "notes": "",
+        }
+        client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {**base, "document_type": str(dt.pk), "vermerk": "Text", "ausweis": _pdf("geteilt.pdf")},
+        )
+        attachment = Attachment.objects.get(client=person)
+
+        response = client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {**base, "document_type": str(shared.pk)},
+        )
+        assert response.status_code == 302
+        person.refresh_from_db()
+        attachment.refresh_from_db()
+        assert attachment.deleted_at is not None, "Kette haette soft-geloescht werden muessen"
+        assert ft_file.slug not in person.data_json, f"Marker-Leiche im data_json: {person.data_json}"
+
 
 class TestCaseAttachmentForm:
     def test_create_case_with_file(self, client, staff_user, facility, client_identified, case_doc_type_with_file):
@@ -392,6 +446,49 @@ class TestCaseAttachmentForm:
         )
         case.refresh_from_db()
         assert [e["id"] for e in _entries(case, "bescheid")] == entry_ids
+
+    def test_type_switch_to_a_type_sharing_the_file_template_leaves_no_marker(
+        self, client, staff_user, facility, client_identified, case_doc_type_with_file
+    ):
+        """Spiegel zum Personen-Fall: auch am Fall darf keine Marker-Leiche bleiben."""
+        dt, _ft_text, ft_file = case_doc_type_with_file
+        shared = DocumentType.objects.create(
+            facility=facility,
+            name="Fallakte B",
+            category=DocumentType.Category.ADMIN,
+            entity_type=DocumentType.EntityType.CASE,
+        )
+        DocumentTypeField.objects.create(document_type=shared, field_template=ft_file, sort_order=0)
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Fall-Geteilt",
+            document_type=dt,
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        base = {
+            "client": str(client_identified.pk),
+            "title": "Fall-Geteilt",
+            "description": "",
+            "lead_user": "",
+        }
+        client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {**base, "document_type": str(dt.pk), "sachstand": "Text", "bescheid": _pdf("fall_geteilt.pdf")},
+        )
+        attachment = Attachment.objects.get(case=case)
+
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {**base, "document_type": str(shared.pk)},
+        )
+        assert response.status_code == 302
+        case.refresh_from_db()
+        attachment.refresh_from_db()
+        assert attachment.deleted_at is not None, "Kette haette soft-geloescht werden muessen"
+        assert ft_file.slug not in case.data_json, f"Marker-Leiche im data_json: {case.data_json}"
 
 
 FORM_TEMPLATES = ["src/templates/core/clients/form.html", "src/templates/core/cases/form.html"]

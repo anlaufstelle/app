@@ -492,10 +492,14 @@ class CaseUpdateView(StaffRequiredMixin, View):
             return render(request, "core/cases/form.html", context)
 
         fields = dict(form.cleaned_data)
-        doc_type = None
+        doc_type = None if type_locked else form.cleaned_data.get("document_type")
         file_fields: dict[str, list] = {}
+        # ADR-039 §7: Typwechsel/-entfernen verwirft das ``data_json`` — die
+        # Versionsketten werden im selben atomic soft-geloescht, VOR den
+        # Neu-Uploads des gewaehlten Typs. Der Wert steht hier oben, weil schon
+        # der Merge ihn braucht (``preserve_file_markers``).
+        type_switched = not type_locked and (doc_type.pk if doc_type is not None else None) != old_doc_type_id
         if not type_locked:
-            doc_type = form.cleaned_data.get("document_type")
             data_form, restricted = _case_data_form(
                 request,
                 doc_type,
@@ -536,13 +540,16 @@ class CaseUpdateView(StaffRequiredMixin, View):
             # M24/AP4 (Refs #1738): FILE-Marker des aktuellen Typs re-injizieren
             # — sonst wirft der erste reine Text-Edit alle Bestandsanhaenge aus
             # dem ``data_json``.
-            preserve_file_markers(case, merged, old_data, _file_field_slugs(doc_type))
+            #
+            # Beim TYPWECHSEL bleibt sie aus (Integrations-Review Refs #1738):
+            # teilen alter und neuer Typ dieselbe FILE-Feldvorlage, kaeme der
+            # Marker des alten Typs zurueck, waehrend
+            # ``discard_type_switch_file_chains`` im selben atomic alle Ketten
+            # soft-loescht — das ``data_json`` zeigte dauerhaft auf
+            # ``deleted_at``-Zeilen (ADR-039 §7).
+            if not type_switched:
+                preserve_file_markers(case, merged, old_data, _file_field_slugs(doc_type))
             fields["data_json"] = merged
-
-        # ADR-039 §7: Typwechsel/-entfernen verwirft das ``data_json`` — die
-        # Versionsketten werden im selben atomic soft-geloescht, VOR den
-        # Neu-Uploads des gewaehlten Typs.
-        type_switched = not type_locked and (doc_type.pk if doc_type is not None else None) != old_doc_type_id
 
         expected_updated_at = request.POST.get("expected_updated_at") or None
         try:
