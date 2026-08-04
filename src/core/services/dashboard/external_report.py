@@ -14,6 +14,8 @@ konsistent mit der K-Anon-Strategie aus #780.
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Callable, Sequence
 from datetime import date
 from typing import Any
 
@@ -21,6 +23,7 @@ from django.utils import timezone
 
 from core.models import Client, Settings
 from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
+from core.services.dashboard.disclosure import MAX_GUARD_ITERATIONS, Cell, Partition, findings
 from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
 
 DEFAULT_K_THRESHOLD = 5
@@ -43,19 +46,28 @@ def _document_type_key(row: dict[str, Any]) -> tuple[str, str]:
     return (str(row.get("category") or ""), str(row.get("name") or ""))
 
 
-# Erkennungsfeld -> kanonischer Sortierschluessel. Die Zuordnung laeuft ueber die
-# **Zeilenform**, nicht ueber die Aufrufstelle: so erbt jedes Artefakt, das
-# dieselben Zeilen durch ``_suppress_small`` schickt (Templates, JSON, XML,
-# PDF-Pfad, Hybrid-/Snapshot-Pfad), die Ordnung automatisch.
+# Kanonische Ausgabeordnungen (K5, Refs #1767/#1770). Jede Aufrufstelle von
+# :func:`_suppress_small` **muss** eine davon benennen (``order`` ist ein
+# Pflicht-Keyword) — die frueher formbasierte Erkennung war fail-open: eine
+# kuenftige count-sortierte Tabelle mit neuer Zeilenform waere still
+# unkanonisiert geblieben, und Zeilen mit ``category`` ohne ``name``
+# (``ExampleBackend``) liefen ueber einen Teilschluessel ``(category, "")``,
+# dessen ``category`` dort ein **uebersetztes** Label ist (locale-abhaengige
+# Blockordnung). Jetzt entscheidet die Aufrufstelle, und der Architektur-Guard
+# ``TestZentraleSuppressionsfunktion`` prueft, dass sie es tut.
 #
-# Bewusst NICHT erfasst: ``by_category`` des Beispiel-Sachberichts (Zeilen mit
-# ``name``/``count``). Diese Liste entsteht in fester Kategorien-Ordnung
-# (Konsolidierung ueber ``system_type``), nicht nach Anzahl — ihre Position ist
-# keine Rangaussage, eine Umsortierung braechte keinen Schutz.
-_CANONICAL_ROW_KEYS = (
-    ("cluster", _age_cluster_key),
-    ("category", _document_type_key),
-)
+# ``ORDER_INPUT`` heisst: die Eingabeordnung ist bereits **wertunabhaengig**
+# (feste Kategorien-Ordnung, alphabetische Query-Sortierung) — es gibt keinen
+# Rangkanal, den eine Umsortierung schliessen koennte.
+ORDER_AGE_CLUSTER = "age_cluster"
+ORDER_DOCUMENT_TYPE = "document_type"
+ORDER_INPUT = "input"
+
+_CANONICAL_ORDERS: dict[str, Callable[[dict[str, Any]], tuple] | None] = {
+    ORDER_AGE_CLUSTER: _age_cluster_key,
+    ORDER_DOCUMENT_TYPE: _document_type_key,
+    ORDER_INPUT: None,
+}
 
 
 def _get_threshold(facility) -> int:
@@ -67,27 +79,104 @@ def _get_threshold(facility) -> int:
         return DEFAULT_K_THRESHOLD
 
 
-def _apply_secondary_suppression(rows: list[dict[str, Any]], count_key: str) -> None:
-    """A6.1 (Refs #1024 / #1016): komplementaere Offenlegung verhindern.
+def _audit_feasible_span(
+    values: Sequence[int],
+    flags: list[bool],
+    threshold: int,
+    *,
+    margin: int | None,
+    min_value: int,
+    person_gated: bool,
+    tiebreak: Callable[[int], tuple],
+) -> None:
+    """K2 (Refs #1770): Sekundaer-Suppression an der **Machbarkeitsspanne**.
 
-    Ist nach der primaeren k-Anon-Unterdrueckung genau EINE Zelle unterdrueckt,
-    laesst sie sich aus der publizierten Randsumme (z.B. ``total_contacts``) und
-    den sichtbaren Zellen zurueckrechnen. Dann zusaetzlich die naechstkleinere
-    sichtbare Zelle unterdruecken, sodass mindestens zwei Unbekannte bleiben.
-    Mutiert ``rows`` in place.
+    Loest die alte Heuristik ab, die an der *Zellenzahl* haengte
+    (``if len(suppressed) != 1: return``, A6.1 aus #1024/#1016). Die schuetzte
+    in 27,5 % ihrer Einsaetze gar nicht: bei >= 2 primaer unterdrueckten Zellen
+    lief sie **nie**, obwohl gerade dann R = s (alle = 1) die Zellen vollstaendig
+    bestimmt — und wenn sie lief, opferte sie mit ``min(visible)`` die
+    **kleinste** sichtbare Zelle, minimierte damit das Residuum und verriet
+    zusaetzlich eine Obergrenze.
+
+    Stattdessen wird die Spanne selbst gemessen (siehe
+    :mod:`core.services.dashboard.disclosure`): solange irgendeine unterdrueckte
+    Zelle rueckrechenbar ist, faellt die **groesste** sichtbare Zelle — sie
+    maximiert das Residuum und damit die Mehrdeutigkeit (gemessen:
+    „kleinste faellt" hinterlaesst 2,5 % Rest-Leak, „groesste faellt" 0,2 %).
+    Danach wird neu gerechnet, bis zum Fixpunkt.
+
+    Ohne publizierte Randsumme (``margin is None``) argumentiert das Audit ins
+    Leere und laeuft gar nicht — ohne die Gleichung R = Randsumme − Σ sichtbare
+    Zellen gibt es nichts zurueckzurechnen.
+
+    Mutiert ``flags`` in place. ``min_value`` ist die Zeilen-Existenz-Untergrenze
+    (1 fuer GROUP-BY-Zeilen, 0 fuer Aufschluesselungen mit festen Schluesseln),
+    ``tiebreak`` liefert bei wertgleichen Kandidaten eine wertunabhaengige,
+    deterministische Reihenfolge (kanonische K5-Ordnung).
     """
-    suppressed = [r for r in rows if r.get("suppressed")]
-    if len(suppressed) != 1:
+    if margin is None:
         return
-    visible = [r for r in rows if not r.get("suppressed")]
-    if not visible:
-        return
-    smallest = min(visible, key=lambda r: r[count_key])
-    smallest[count_key] = None
-    smallest["suppressed"] = True
+    victims = [False] * len(values)
+    for _ in range(MAX_GUARD_ITERATIONS):
+        partition = _local_partition(
+            values, flags, victims, threshold, margin=margin, min_value=min_value, person_gated=person_gated
+        )
+        if not findings([partition], threshold=threshold):
+            return
+        candidates = [index for index, flag in enumerate(flags) if not flag]
+        if not candidates:
+            # Keine sichtbare Zelle mehr — auf Tabellenebene ist nichts mehr zu
+            # holen. Die Eskalation (Randsumme fallen lassen) gehoert dem
+            # Report-Guard, der die Randsumme ueberhaupt in der Hand hat.
+            return
+        victim = max(candidates, key=lambda index: (values[index], tiebreak(index)))
+        flags[victim] = True
+        victims[victim] = True
 
 
-def _canonicalize_suppressed_order(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _local_partition(
+    values: Sequence[int],
+    flags: Sequence[bool],
+    victims: Sequence[bool],
+    threshold: int,
+    *,
+    margin: int,
+    min_value: int,
+    person_gated: bool,
+) -> Partition:
+    """Die Sicht des Empfaengers auf **eine** Tabelle — mit echter Herkunft.
+
+    Innerhalb der Suppression ist bekannt, warum eine Zelle gefallen ist; die
+    a-priori-Schranken werden deshalb aus der tatsaechlichen Herkunft gebildet
+    (konservativ, siehe Angreifermodell in
+    :mod:`core.services.dashboard.disclosure`):
+
+    * Wert < *k* ⇒ ereignisbedingt primaer unterdrueckt ⇒ ``[min_value, k-1]``.
+    * Wert >= *k* und Sekundaer-Opfer ⇒ die Regel opfert immer die **groesste**
+      sichtbare Zelle, der Wert liegt also nicht unter jeder verbliebenen
+      sichtbaren Zelle ⇒ ``[max(k, groesste sichtbare Zelle), ∞)``.
+    * Wert >= *k* ohne Opfer-Eigenschaft ⇒ personenbedingt unterdrueckt (K0-b)
+      ⇒ ``[k, ∞)``. Genau hier ist die alte Guard-Annahme
+      „unterdrueckt ⇒ Wert <= k-1" gebrochen.
+    """
+    visible_max = max((values[index] for index, flag in enumerate(flags) if not flag), default=threshold)
+    cells = []
+    for index, value in enumerate(values):
+        if not flags[index]:
+            cells.append(Cell(key=str(index), published=value, lo=min_value, hi=None))
+        elif value < threshold:
+            cells.append(Cell(key=str(index), published=None, lo=min_value, hi=threshold - 1))
+        elif victims[index]:
+            cells.append(Cell(key=str(index), published=None, lo=max(threshold, visible_max), hi=None))
+        else:
+            cells.append(Cell(key=str(index), published=None, lo=threshold, hi=None))
+    return Partition(
+        name="local", margin_key="local", margin=margin, cells=tuple(cells), reveals_person_gap=person_gated
+    )
+
+
+def _canonicalize_suppressed_order(rows: list[dict[str, Any]], order: str) -> list[dict[str, Any]]:
     """K5 (Refs #1767): unterdrueckte Zeilen wertunabhaengig ans Listenende.
 
     ``by_age_cluster``/``by_document_type`` entstehen absteigend nach Anzahl
@@ -104,17 +193,15 @@ def _canonicalize_suppressed_order(rows: list[dict[str, Any]]) -> list[dict[str,
     Wrapper und damit alle Artefakte ihn erben, ohne dass ein Template oder ein
     Renderer etwas davon wissen muss.
 
-    Zeilenformen ohne definierte kanonische Ordnung bleiben unveraendert (siehe
-    ``_CANONICAL_ROW_KEYS``).
+    ``order`` benennt die Ordnung explizit (siehe ``_CANONICAL_ORDERS``); ein
+    unbekannter Wert ist ein ``KeyError`` und damit fail-closed.
     """
-    if not rows:
+    key = _CANONICAL_ORDERS[order]
+    if key is None or not rows:
         return rows
-    for field, key in _CANONICAL_ROW_KEYS:
-        if all(field in row for row in rows):
-            visible = [row for row in rows if not row.get("suppressed")]
-            hidden = sorted((row for row in rows if row.get("suppressed")), key=key)
-            return [*visible, *hidden]
-    return rows
+    visible = [row for row in rows if not row.get("suppressed")]
+    hidden = sorted((row for row in rows if row.get("suppressed")), key=key)
+    return [*visible, *hidden]
 
 
 def _below_threshold(value: int | None, threshold: int) -> bool:
@@ -165,7 +252,14 @@ def require_person_counts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row if PERSONS_KEY in row else {**row, PERSONS_KEY: None} for row in rows]
 
 
-def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str = "count") -> list[dict[str, Any]]:
+def _suppress_small(
+    rows: list[dict[str, Any]],
+    threshold: int,
+    count_key: str = "count",
+    *,
+    margin: int | None,
+    order: str,
+) -> list[dict[str, Any]]:
     """Markiert Aggregate < threshold als unterdrueckt (count=None, suppressed=True).
 
     Das Kriterium ist seit K0-b (Refs #1770) personenbasiert, wo die Zeile eine
@@ -175,20 +269,51 @@ def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str =
     sie ueber JSON-/XML-Export selbst ein Kleinstfallzahl-Kanal (eine Zelle
     „27+: 30 Ereignisse, 6 Personen" publiziert eine Personenzahl, die nie
     durch eine Suppressionsregel gelaufen ist).
+
+    ``margin`` ist die **publizierte** Randsumme, die diese Zeilen exakt
+    partitionieren — oder ``None``, wenn das Artefakt keine solche Randsumme
+    zeigt. Das Keyword ist Pflicht (fail-closed): ohne bewusste Angabe an der
+    Aufrufstelle liefe das Machbarkeits-Audit (K2) entweder ins Leere oder gegen
+    eine Gleichung, die es gar nicht gibt.
+
+    ``order`` benennt die kanonische Ausgabeordnung unterdrueckter Zeilen (K5)
+    und ist aus demselben Grund Pflicht.
     """
+    raw = [dict(row) for row in rows]
+    values = [row.get(count_key) or 0 for row in raw]
+    flags = [_is_below_threshold(row, count_key, threshold) for row in raw]
+    _audit_feasible_span(
+        values,
+        flags,
+        threshold,
+        margin=margin,
+        # GROUP-BY-Zeilen entstehen nur fuer nichtleere Buckets: jede gelistete
+        # Zeile traegt >= 1 Ereignis (Zeilen-Existenz-Kanal).
+        min_value=1,
+        person_gated=any(PERSONS_KEY in row for row in raw),
+        tiebreak=_order_tiebreak(raw, order),
+    )
     result = []
-    for row in rows:
-        row_copy = dict(row)
-        below = _is_below_threshold(row_copy, count_key, threshold)
-        row_copy.pop(PERSONS_KEY, None)
-        if below:
-            row_copy[count_key] = None
-            row_copy["suppressed"] = True
-        else:
-            row_copy["suppressed"] = False
-        result.append(row_copy)
-    _apply_secondary_suppression(result, count_key)
-    return _canonicalize_suppressed_order(result)
+    for row, suppressed in zip(raw, flags, strict=True):
+        row.pop(PERSONS_KEY, None)
+        if suppressed:
+            row[count_key] = None
+        row["suppressed"] = suppressed
+        result.append(row)
+    return _canonicalize_suppressed_order(result, order)
+
+
+def _order_tiebreak(rows: Sequence[dict[str, Any]], order: str) -> Callable[[int], tuple]:
+    """Wertunabhaengiger Zweitschluessel fuer die Opferwahl des K2-Audits.
+
+    Bei wertgleichen Kandidaten darf nicht die Eingabeordnung entscheiden (sie
+    ist count-sortiert und damit selbst eine Rangaussage) — es entscheidet die
+    kanonische K5-Ordnung, sonst die Position als letzter, stabiler Anker.
+    """
+    key = _CANONICAL_ORDERS[order]
+    if key is None:
+        return lambda index: (-index,)
+    return lambda index: (key(rows[index]), -index)
 
 
 # Aufschluesselungen, deren Aequivalenzklassen **Personen** sind (nicht
@@ -225,28 +350,290 @@ def _drop_person_derived_breakdowns(report: dict[str, Any], unique_clients: int 
 
 
 def _suppress_stage_dict(
-    stage_dict: dict[str, int], threshold: int, *, persons: dict[str, int | None] | None
+    stage_dict: dict[str, int], threshold: int, *, persons: dict[str, int | None] | None, margin: int | None
 ) -> dict[str, Any]:
-    """Suppress-Variante fuer den by_contact_stage-Dict (mit sekundaerer
-    Suppression analog ``_apply_secondary_suppression``, A6.1).
+    """Suppress-Variante fuer den by_contact_stage-Dict — dasselbe K2-Audit.
 
     ``persons`` ist die DISTINCT-Personenzahl je Stufe (K0-b, Refs #1770) und
     bewusst ein **Pflicht**-Keyword ohne brauchbaren Default: ein fehlender
     Eintrag — oder ein ``persons=None`` insgesamt — bedeutet „unbekannt" und
     unterdrueckt die Stufe fail-safe. Ein optionaler Parameter haette genau die
     Alt-Format-Luecke offen gelassen, die er schliessen soll.
+
+    ``margin`` ist die publizierte Randsumme (``total_contacts``): die drei
+    Stufen partitionieren sie exakt, weil ``anonym`` als „``is_anonymous`` ODER
+    ``client IS NULL``" definiert ist und ``Client.ContactStage`` genau zwei
+    weitere Werte hat. Die frueher hier duplizierte Sekundaer-Heuristik
+    (``len(suppressed_keys) == 1`` + kleinste sichtbare Stufe) ist entfallen —
+    es gibt nur noch :func:`_audit_feasible_span`.
+
+    Zwei Unterschiede zur Zeilenvariante, beide strukturell:
+    die Stufen haben **feste** Schluessel und werden auch mit 0 emittiert
+    (Untergrenze 0 statt 1, es gibt keinen Zeilen-Existenz-Kanal), und sie sind
+    personen-gegatet — ein exakt zurueckrechenbarer Ereigniswert verraet dort,
+    dass die Stufe personenbedingt gefallen ist, also < *k* Personen traegt.
     """
     person_counts = persons or {}
-    suppressed_keys = {
-        key
-        for key, value in stage_dict.items()
-        if _below_threshold(value, threshold) or _below_threshold(person_counts.get(key), threshold)
-    }
-    if len(suppressed_keys) == 1:
-        visible = {key: value for key, value in stage_dict.items() if key not in suppressed_keys}
-        if visible:
-            suppressed_keys.add(min(visible, key=lambda k: visible[k]))
-    return {key: (None if key in suppressed_keys else value) for key, value in stage_dict.items()}
+    keys = list(stage_dict)
+    values = [stage_dict[key] or 0 for key in keys]
+    flags = [
+        _below_threshold(stage_dict[key], threshold) or _below_threshold(person_counts.get(key), threshold)
+        for key in keys
+    ]
+    _audit_feasible_span(
+        values,
+        flags,
+        threshold,
+        margin=margin,
+        min_value=0,
+        person_gated=True,
+        # Feste Schluesselordnung — wertunabhaengig, deshalb reicht die Position.
+        tiebreak=lambda index: (-index,),
+    )
+    return {key: (None if suppressed else stage_dict[key]) for key, suppressed in zip(keys, flags, strict=True)}
+
+
+# --- K1: Fixpunkt-Guard ueber die fertige, publizierte Sicht ----------------
+#
+# Der Guard laeuft als **letzter** Schritt der Artefakt-Erzeugung. Er sieht nur
+# noch, was der Empfaenger sieht (Randsummen, sichtbare Zellen, Zeilenlabels)
+# und ist damit die zweite, unabhaengige Verteidigungslinie hinter dem
+# tabellenlokalen K2-Audit: er rechnet **ueber Tabellen hinweg** — zwei
+# Aufschluesselungen derselben Randsumme informieren sich gegenseitig, und die
+# Personen-Randsumme Σ persons(by_age_cluster) = unique_clients ist eine
+# Partition wie jede andere.
+
+# Name der Personen-Partition in Guard-Befunden. Sie hat keine publizierten
+# Zellen (``persons`` verlaesst die Suppression nie) — ihre einzige Eskalation
+# ist deshalb das Fallenlassen der Randsumme ``unique_clients``.
+_PERSON_PARTITION = "by_age_cluster:persons"
+
+PERSON_MARGIN_KEY = "unique_clients"
+
+
+@dataclasses.dataclass(frozen=True)
+class _Breakdown:
+    """Deklaration einer Aufschluesselung im Artefakt fuer den K1-Guard."""
+
+    key: str
+    margin_key: str | None
+    order: str
+    kind: str = "rows"  # "rows" (Liste von Zeilen) | "stages" (Dict fester Schluessel)
+    count_key: str = "count"
+    reveals_person_gap: bool = False
+
+
+# Die drei Artefakt-Familien. Sie stehen hier und nicht in den Wrappern, damit
+# der Architektur-Guard sie statisch findet und ein neues Artefakt mit
+# Randsumme + Aufschluesselung sich hier eintragen muss.
+_EXTERNAL_REPORT_BREAKDOWNS = (
+    _Breakdown("by_document_type", "total_contacts", ORDER_DOCUMENT_TYPE),
+    _Breakdown("by_contact_stage", "total_contacts", ORDER_INPUT, kind="stages", reveals_person_gap=True),
+    # by_age_cluster zaehlt nur Ereignisse MIT Personenbezug — kein Artefakt
+    # publiziert eine Randsumme = Σ Altersgruppen (K3/„Geprueft und nicht
+    # tragfaehig"). Der tragfaehige Kanal dieser Tabelle laeuft ueber die
+    # **Personen**-Randsumme und steht als eigene Partition daneben.
+    _Breakdown("by_age_cluster", None, ORDER_AGE_CLUSTER, reveals_person_gap=True),
+)
+
+_SAMPLE_REPORT_1_BREAKDOWNS = (
+    _Breakdown("by_category", "total", ORDER_INPUT),
+    _Breakdown("by_age_cluster", None, ORDER_AGE_CLUSTER, reveals_person_gap=True),
+)
+
+
+def _person_partition_cells(age_rows: Sequence[dict[str, Any]], threshold: int) -> tuple[Cell, ...]:
+    """Zellen der Personen-Partition Σ ``persons`` = ``unique_clients``.
+
+    Die Personenzahlen werden **nie** publiziert, alle Zellen sind also
+    unbekannt. Bekannt ist dem Empfaenger dennoch etwas: jede gelistete
+    Altersgruppe traegt mindestens eine Person (Zeilen-Existenz), und aus der
+    Sichtbarkeit bzw. dem Unterdrueckungsgrund folgt die Schranke gegen *k*.
+    """
+    cells = []
+    for index, row in enumerate(age_rows):
+        persons = row.get(PERSONS_KEY)
+        if persons is None:
+            # Unbekannte Personenzahl (Alt-Snapshot, retention-bereinigt) —
+            # keine Schranke ausser der Zeilen-Existenz.
+            cells.append(Cell(key=str(index), published=None, lo=1, hi=None))
+        elif persons < threshold:
+            cells.append(Cell(key=str(index), published=None, lo=1, hi=threshold - 1))
+        else:
+            cells.append(Cell(key=str(index), published=None, lo=threshold, hi=None))
+    return tuple(cells)
+
+
+def drop_person_margin_on_person_suppression(
+    report: dict[str, Any], age_rows: Sequence[dict[str, Any]], threshold: int
+) -> None:
+    """total-Doktrin fuer die Personen-Randsumme (Auflage 1 zu K0-b, Refs #1770).
+
+    K0-b hat eine neue Identitaet erzeugt: ``by_age_cluster`` partitioniert
+    dieselbe Personenmenge, die ``unique_clients`` zaehlt, also gilt
+    Σ ``persons`` = ``unique_clients`` — eine publizierte Randsumme ueber
+    **Personen** mit derselben Rueckrechenbarkeit wie K1 ueber Ereignisse, nur
+    ohne die Unschaerfe der Ereignis-/Personen-Ungleichung. Da eine
+    personenbedingt unterdrueckte Zelle zusaetzlich ``persons`` <= *k*−1 verraet
+    und jede gelistete Zeile ``persons`` >= 1 traegt, kollabiert die Partition an
+    den Raendern (bei *k* = 5, ``unique_clients`` = 5 und vier gelisteten,
+    saemtlich unterdrueckten Altersgruppen ist (2, 1, 1, 1) die **einzige**
+    konsistente Partition — drei Gruppen mit exakt einer Person).
+
+    Deshalb faellt ``unique_clients``, sobald **eine** Altersgruppe
+    personenbedingt unterdrueckt ist — analog zur bestehenden Randsummen-Regel
+    R14 (``total`` < k ⇒ Randsumme selbst unterdruecken). Ohne publizierte
+    Randsumme ist die Partition nicht mehr aufloesbar.
+
+    Bewusst schaerfer als der Fixpunkt-Guard: dessen Kriterium ist der exakte
+    Pin, waehrend hier schon die *Einengung* auf ein k-schmales Intervall
+    genuegt — in der Konstruktion oben hat jede Zelle noch zwei moegliche Werte
+    (1 oder 2) und trotzdem steht fest, dass jede Altersgruppe weniger als *k*
+    Personen umfasst. Der Guard ist die zweite Linie, nicht der Ersatz.
+    """
+    if any(_below_threshold(row.get(PERSONS_KEY), threshold) for row in age_rows):
+        report[PERSON_MARGIN_KEY] = None
+
+
+def _published_partitions(
+    report: dict[str, Any],
+    breakdowns: Sequence[_Breakdown],
+    person_cells: tuple[Cell, ...],
+) -> list[Partition]:
+    """Die Sicht des Empfaengers auf das fertige Artefakt.
+
+    Bewusst **ohne** Rohdaten: unterdrueckte Zellen tragen hier nur noch die
+    Zeilen-Existenz als Untergrenze und keine Obergrenze — genau das, was ein
+    Empfaenger sicher weiss, der Primaer- und Sekundaer-Unterdrueckung nicht
+    auseinanderhalten kann. Die schaerferen Schranken hat das tabellenlokale
+    K2-Audit bereits ausgewertet; hier zaehlt, was **zwischen** den Tabellen
+    passiert.
+    """
+    partitions: list[Partition] = []
+    for spec in breakdowns:
+        data = report.get(spec.key)
+        if data is None:
+            continue
+        margin = report.get(spec.margin_key) if spec.margin_key else None
+        if spec.kind == "stages":
+            cells = tuple(Cell(key=str(key), published=value, lo=0, hi=None) for key, value in sorted(data.items()))
+        else:
+            cells = tuple(
+                Cell(key=str(index), published=None if row.get("suppressed") else row.get(spec.count_key), lo=1)
+                for index, row in enumerate(data)
+            )
+        partitions.append(
+            Partition(
+                name=spec.key,
+                margin_key=spec.margin_key,
+                margin=margin,
+                cells=cells,
+                reveals_person_gap=spec.reveals_person_gap,
+            )
+        )
+    if person_cells:
+        partitions.append(
+            Partition(
+                name=_PERSON_PARTITION,
+                margin_key=PERSON_MARGIN_KEY,
+                margin=report.get(PERSON_MARGIN_KEY),
+                cells=person_cells,
+            )
+        )
+    return partitions
+
+
+def _suppress_largest_visible(report: dict[str, Any], spec: _Breakdown) -> bool:
+    """Opfert die groesste sichtbare Zelle einer Aufschluesselung. Erfolg?"""
+    data = report.get(spec.key)
+    if not data:
+        return False
+    if spec.kind == "stages":
+        visible = {key: value for key, value in data.items() if value is not None}
+        if not visible:
+            return False
+        report[spec.key] = {**data, max(sorted(visible), key=lambda key: visible[key]): None}
+        return True
+    visible = [index for index, row in enumerate(data) if not row.get("suppressed")]
+    if not visible:
+        return False
+    tiebreak = _order_tiebreak(data, spec.order)
+    victim = max(visible, key=lambda index: (data[index][spec.count_key], tiebreak(index)))
+    data[victim][spec.count_key] = None
+    data[victim]["suppressed"] = True
+    # Der Guard laeuft NACH der Kanonisierung — die neue Unterdrueckung muss
+    # sonst als letzte Zeile stehen bleiben und waere selbst eine Rangaussage.
+    report[spec.key] = _canonicalize_suppressed_order(data, spec.order)
+    return True
+
+
+def apply_residual_guard(
+    report: dict[str, Any],
+    threshold: int,
+    breakdowns: Sequence[_Breakdown],
+    *,
+    age_rows: Sequence[dict[str, Any]] = (),
+) -> None:
+    """K1 (Refs #1770): Fixpunkt-Guard gegen Randsummen-Rueckrechnung.
+
+    Fuehrt die Empfaenger-Inferenz selbst aus und unterdrueckt nach, solange
+    sich eine unterdrueckte Zelle exakt rekonstruieren laesst. Eskalationsleiter
+    je Befund:
+
+    1. die **groesste** sichtbare Zelle der betroffenen Aufschluesselung fallen
+       lassen (maximiert das Residuum, siehe :func:`_audit_feasible_span`),
+    2. ist keine sichtbare Zelle mehr da: die **Randsumme** fallen lassen —
+       ohne sie gibt es keine Gleichung mehr,
+    3. hilft auch das nicht (oder ist die harte Iterationsgrenze erreicht):
+       fail-safe die **ganze Aufschluesselung** fallen lassen.
+
+    Terminierung: jeder Schritt der Leiter unterdrueckt mindestens eine weitere
+    Zelle oder Randsumme und ist monoton; zusaetzlich begrenzt
+    ``MAX_GUARD_ITERATIONS`` die Schleife hart.
+
+    **Nur wirksam gemeinsam mit K5** (kanonische Ordnung unterdrueckter Zeilen):
+    ohne sie ist der Guard zirkulaer validiert, weil die Zeilenposition selbst
+    eine Ordnungsaussage bleibt — Ground-Truth der Analyse: 24 von 853 Sichten
+    behalten mit Guard **allein** einen exakten Pin, mit K5 davor 0 von 516.
+    """
+    person_cells = _person_partition_cells(age_rows, threshold) if report.get("by_age_cluster") is not None else ()
+    specs = {spec.key: spec for spec in breakdowns}
+    for _ in range(MAX_GUARD_ITERATIONS):
+        partitions = _published_partitions(report, breakdowns, person_cells)
+        current = findings(partitions, threshold=threshold)
+        if not current:
+            return
+        if not _escalate(report, specs, current):
+            break
+    _drop_breakdowns(report, breakdowns)
+
+
+def _escalate(report: dict[str, Any], specs: dict[str, _Breakdown], current: list[tuple[str, str]]) -> bool:
+    """Ein Schritt der Eskalationsleiter. Gibt zurueck, ob etwas passiert ist."""
+    for partition_name, _cell in current:
+        spec = specs.get(partition_name)
+        if spec is not None and _suppress_largest_visible(report, spec):
+            return True
+        margin_key = spec.margin_key if spec is not None else PERSON_MARGIN_KEY
+        if margin_key and report.get(margin_key) is not None:
+            report[margin_key] = None
+            return True
+    return False
+
+
+def _drop_breakdowns(report: dict[str, Any], breakdowns: Sequence[_Breakdown]) -> None:
+    """Fail-safe: im Zweifel faellt die ganze Aufschluesselung samt Randsumme.
+
+    Key weg, nicht nur Werte auf ``None`` — eine bloss genullte Zeile ist selbst
+    noch die Aussage „in dieser Gruppe gibt es mindestens einen Fall" (dieselbe
+    Begruendung wie in :func:`_drop_person_derived_breakdowns`).
+    """
+    for spec in breakdowns:
+        report.pop(spec.key, None)
+        if spec.margin_key:
+            report[spec.margin_key] = None
+    if PERSON_MARGIN_KEY in report:
+        report[PERSON_MARGIN_KEY] = None
 
 
 def build_external_report(facility, date_from: date, date_to: date) -> dict[str, Any]:
@@ -259,16 +646,26 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     threshold = _get_threshold(facility)
     raw = get_statistics(facility, date_from, date_to)
 
+    # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl — und was
+    # nicht publiziert wird, kann das K2-Audit auch nicht als Gleichung nutzen.
+    published_total = raw["total_contacts"] if raw["total_contacts"] >= threshold else None
+
     # by_document_type + by_age_cluster durch K-Anon-Filter
-    by_document_type = _suppress_small(raw["by_document_type"], threshold)
-    by_age_cluster = _suppress_small(require_person_counts(raw["by_age_cluster"]), threshold)
+    by_document_type = _suppress_small(
+        raw["by_document_type"], threshold, margin=published_total, order=ORDER_DOCUMENT_TYPE
+    )
+    age_rows = require_person_counts(raw["by_age_cluster"])
+    # margin=None: kein Artefakt publiziert eine Ereignis-Randsumme
+    # = Σ Altersgruppen (die Tabelle zaehlt nur Ereignisse MIT Personenbezug).
+    # Der tragfaehige Kanal laeuft ueber die Personen-Randsumme und wird von
+    # ``drop_person_margin_on_person_suppression`` + K1-Guard behandelt.
+    by_age_cluster = _suppress_small(age_rows, threshold, margin=None, order=ORDER_AGE_CLUSTER)
     by_contact_stage = _suppress_stage_dict(
-        raw["by_contact_stage"], threshold, persons=raw.get("persons_by_contact_stage")
+        raw["by_contact_stage"], threshold, persons=raw.get("persons_by_contact_stage"), margin=published_total
     )
 
     report = {
-        # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-        "total_contacts": raw["total_contacts"] if raw["total_contacts"] >= threshold else None,
+        "total_contacts": published_total,
         "unique_clients": raw["unique_clients"] if raw["unique_clients"] >= threshold else None,
         "by_contact_stage": by_contact_stage,
         "by_document_type": by_document_type,
@@ -293,6 +690,8 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     # K0-Fail-safe (Refs #1768) — nach dem Aufbau, damit der Guard genau eine
     # Stelle hat und beide Personen-Tabellen gemeinsam trifft.
     _drop_person_derived_breakdowns(report, raw["unique_clients"], threshold)
+    drop_person_margin_on_person_suppression(report, age_rows, threshold)
+    apply_residual_guard(report, threshold, _EXTERNAL_REPORT_BREAKDOWNS, age_rows=age_rows)
     return report
 
 
@@ -320,25 +719,35 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
     """
     threshold = _get_threshold(facility)
 
-    category_rows = [{"name": name, "count": count} for name, count in stats.get("by_category", [])]
-    by_category = _suppress_small(category_rows, threshold, count_key="count")
-    by_age_cluster = _suppress_small(
-        require_person_counts(list(stats.get("by_age_cluster", []))), threshold, count_key="count"
-    )
-
     unique = stats.get("unique_clients", 0)
     total = stats.get("total", 0)
+    # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+    published_total = total if total is not None and total >= threshold else None
+
+    category_rows = [{"name": name, "count": count} for name, count in stats.get("by_category", [])]
+    # ``total`` akkumuliert exakt dieselben Zeilen wie ``by_category`` (die
+    # Konsolidierung ueber ``system_type`` zaehlt nur gemappte Ereignisse) —
+    # eine exakte Partition und damit eine echte Rueckrechnungs-Gleichung.
+    # Die Kategorie-Ordnung ist wertunabhaengig (feste Konsolidierungsordnung).
+    by_category = _suppress_small(category_rows, threshold, margin=published_total, order=ORDER_INPUT)
+    age_rows = require_person_counts(list(stats.get("by_age_cluster", [])))
+    # margin=None wie im externen Bericht: keine Ereignis-Randsumme ueber die
+    # Altersgruppen (``total`` zaehlt gemappte Ereignisse, die Alterstabelle
+    # Ereignisse mit Personenbezug — zwei verschiedene Grundgesamtheiten, K3).
+    by_age_cluster = _suppress_small(age_rows, threshold, margin=None, order=ORDER_AGE_CLUSTER)
+
     out = {
         **stats,
         "by_category": by_category,
         "by_age_cluster": by_age_cluster,
         "unique_clients": unique if unique is not None and unique >= threshold else None,
-        # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-        "total": total if total is not None and total >= threshold else None,
+        "total": published_total,
     }
     # K0-Fail-safe (Refs #1768): hier gibt es nur ``by_age_cluster`` — der
     # Beispiel-Sachbericht fuehrt keine Kontaktstufen.
     _drop_person_derived_breakdowns(out, unique, threshold)
+    drop_person_margin_on_person_suppression(out, age_rows, threshold)
+    apply_residual_guard(out, threshold, _SAMPLE_REPORT_1_BREAKDOWNS, age_rows=age_rows)
     return out
 
 
@@ -355,20 +764,30 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     """
     threshold = _get_threshold(facility)
     out = dict(stats)
-    out["by_document_type"] = _suppress_small(list(stats.get("by_document_type", [])), threshold)
-    out["by_age_cluster"] = _suppress_small(require_person_counts(list(stats.get("by_age_cluster", []))), threshold)
+    total = stats.get("total_contacts", 0)
+    # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+    published_total = total if total is not None and total >= threshold else None
+    out["by_document_type"] = _suppress_small(
+        list(stats.get("by_document_type", [])), threshold, margin=published_total, order=ORDER_DOCUMENT_TYPE
+    )
+    age_rows = require_person_counts(list(stats.get("by_age_cluster", [])))
+    # margin=None — siehe ``build_external_report``.
+    out["by_age_cluster"] = _suppress_small(age_rows, threshold, margin=None, order=ORDER_AGE_CLUSTER)
     out["by_contact_stage"] = _suppress_stage_dict(
-        dict(stats.get("by_contact_stage", {})), threshold, persons=stats.get("persons_by_contact_stage")
+        dict(stats.get("by_contact_stage", {})),
+        threshold,
+        persons=stats.get("persons_by_contact_stage"),
+        margin=published_total,
     )
     # Die Personenzahlen sind Suppressions-Eingabe, kein Berichtsinhalt — sie
     # duerfen den Wrapper nicht verlassen (K0-b, Refs #1770).
     out.pop("persons_by_contact_stage", None)
     unique = stats.get("unique_clients", 0)
     out["unique_clients"] = unique if unique is not None and unique >= threshold else None
-    # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-    total = stats.get("total_contacts", 0)
-    out["total_contacts"] = total if total is not None and total >= threshold else None
+    out["total_contacts"] = published_total
     # K0-Fail-safe (Refs #1768): Altersgruppen UND Kontaktstufen sind
     # personenabgeleitet und fallen gemeinsam mit der Personenzahl.
     _drop_person_derived_breakdowns(out, unique, threshold)
+    drop_person_margin_on_person_suppression(out, age_rows, threshold)
+    apply_residual_guard(out, threshold, _EXTERNAL_REPORT_BREAKDOWNS, age_rows=age_rows)
     return out

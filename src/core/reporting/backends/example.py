@@ -26,7 +26,13 @@ from django.utils.translation import gettext_lazy as _
 from core.models import DocumentType, Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import _get_threshold, _suppress_small
+from core.services.dashboard.external_report import (
+    ORDER_INPUT,
+    _Breakdown,
+    _get_threshold,
+    _suppress_small,
+    apply_residual_guard,
+)
 
 
 @register_backend("example")
@@ -80,22 +86,35 @@ class ExampleBackend(DatasetBackend):
             completeness=[],  # bewusst minimal — Lehrbeispiel ohne eigene Datenqualitaets-Checks
         )
 
+    # Deklaration fuer den zentralen Residual-Guard (K1, Refs #1770): ``total``
+    # ist die Summe aller Zeilen-``count``s, ``records`` also die exakte
+    # Partition dieser Randsumme. ``ORDER_INPUT``: die Query sortiert nach
+    # ``document_type__name`` — die Zeilenposition ist bereits wertunabhaengig
+    # und traegt keinen Rangkanal (K5).
+    _EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
+
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        """K-Anon-Lehrbeispiel (Refs #1278): Zeilen-Suppression inkl. A6.1-Schutz.
+        """K-Anon-Lehrbeispiel (Refs #1278/#1770): so und nicht anders.
 
-        Nutzt ``_suppress_small`` — dieselbe Primaer-/Sekundaer-Suppression wie
-        ``SampleReport1Backend``/``build_external_report`` (A6.1, Refs #1024/#1016):
-        eine Zelle < Schwelle wird ``count=None``; bleibt danach genau EINE
-        Zelle unterdrueckt, faellt zusaetzlich die naechstkleinere sichtbare
-        Zelle (``_apply_secondary_suppression``) — sonst waere sie aus den
-        sichtbaren Zellen und ``total`` rueckrechenbar.
+        Die einzige Rueckrechnungs-Gefahr dieses Backends ist die Identitaet
+        ``total`` = Σ Zeilen-``count``: bliebe ``total`` nach einer
+        Zeilen-Suppression roh stehen, waere eine unterdrueckte Zelle exakt als
+        Differenz zu den sichtbaren Zeilen rueckrechenbar. Genau dafuer gibt es
+        die **zentrale** Maschinerie, und dieses Backend zeigt ihre Benutzung:
 
-        ``total`` (= Σ aller Zeilen-``count``) faellt, wenn es selbst unter der
-        Schwelle liegt (R14) ODER wenn ueberhaupt eine Zeile unterdrueckt ist:
-        die Sekundaer-Suppression schuetzt nur GENAU EINE unterdrueckte Zelle
-        gegen Rueckrechnung ueber die sichtbaren Zellen — bleiben mehrere
-        unterdrueckt, waere ``total`` weiterhin ein Rueckrechnungs-Hebel.
-        Konservativ fuers Lehrbeispiel: faellt eine Zelle, faellt auch ``total``.
+        * :func:`_suppress_small` mit ``margin`` (die publizierte Randsumme, an
+          der das Machbarkeits-Audit rechnet) und ``order`` (kanonische
+          Ausgabeordnung unterdrueckter Zeilen, K5) — beides Pflicht-Keywords,
+          damit eine neue Aufrufstelle nicht still fail-open laeuft.
+        * :func:`apply_residual_guard` als letzter Schritt: er fuehrt die
+          Empfaenger-Inferenz aus und laesst notfalls die Randsumme oder die
+          ganze Aufschluesselung fallen.
+
+        Die fruehere Eigenbau-Regel „faellt eine Zelle, faellt auch ``total``"
+        ist damit entfallen (Refs #1770): sie war eine zweite, pauschalere
+        Suppressionslogik neben der zentralen — genau das, was der
+        Architektur-Guard heute verbietet. Der Spannen-Audit erreicht dieselbe
+        Leakfreiheit und behaelt die Randsumme, wo sie ungefaehrlich ist.
 
         ``records`` wird auf die deklarierten FieldSpec-Keys zurueckprojiziert
         (wie ``SampleReport1Backend.prepare_export``) — das interne
@@ -103,15 +122,19 @@ class ExampleBackend(DatasetBackend):
         wuerde sonst ungefiltert in CSV/JSON/XML landen.
         """
         threshold = _get_threshold(facility)
-        suppressed_rows = _suppress_small(result.records, threshold, count_key="count")
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in suppressed_rows]
-
         total = result.summary["total"]
-        any_row_suppressed = any(row["suppressed"] for row in suppressed_rows)
-        drop_total = total < threshold or any_row_suppressed
+        # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+        published_total = None if total < threshold else total
+        view = {
+            "total": published_total,
+            "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
+        }
+        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
+
+        field_keys = [spec.key for spec in self.get_field_specs()]
+        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
 
         summary = dict(result.summary)
-        summary["total"] = None if drop_total else total
+        summary["total"] = view["total"]
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)

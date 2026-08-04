@@ -37,41 +37,81 @@ def _make_events(facility, client, doc_type, user, count: int):
 
 
 class TestSecondarySuppression:
-    """A6.1 (Refs #1024 / #1016): komplementäre/Randsummen-Offenlegung.
+    """K2 (Refs #1770): Sekundär-Suppression an der **Machbarkeitsspanne**.
 
-    Ist in einer Gruppe genau EINE Zelle k-anon-unterdrückt, lässt sie sich aus
-    der publizierten Randsumme (z.B. total_contacts) und den sichtbaren Zellen
-    zurückrechnen. Sekundäre Suppression unterdrückt dann zusätzlich die
-    nächstkleinere sichtbare Zelle, sodass mindestens zwei Unbekannte bleiben.
+    Löst die Heuristik aus A6.1 (Refs #1024 / #1016) ab, die an der *Zellenzahl*
+    hing (`len(suppressed) != 1`): bei ≥ 2 unterdrückten Zellen lief sie nie —
+    obwohl gerade dann R = s (alle = 1) die Zellen vollständig bestimmt —, und
+    wenn sie lief, opferte sie die *kleinste* sichtbare Zelle und minimierte
+    damit das Residuum.
+
+    Jetzt wird die Spanne gemessen: solange eine unterdrückte Zelle exakt
+    zurückrechenbar ist, fällt die **größte** sichtbare Zelle (maximiert das
+    Residuum), danach wird neu gerechnet — bis zum Fixpunkt.
     """
 
     def test_list_single_suppression_triggers_secondary(self):
-        from core.services.dashboard.external_report import _suppress_small
+        """Geändert mit dem Produktentscheid zu K2 (#1770): die Regel opfert die
+        **größte** statt der kleinsten sichtbaren Zelle.
+
+        Vorher zeigte dieser Test „größte bleibt sichtbar" — das war die
+        Heuristik, die 2,5 % Rest-Leak hinterließ (gegen 0,2 % bei „größte
+        fällt"): wer die kleinste sichtbare Zelle opfert, minimiert das
+        Residuum und verrät zusätzlich eine Obergrenze für die Kleinstzelle.
+        Die Spitzenkategorie verschwindet damit aus Träger-/Förderberichten,
+        sobald überhaupt unterdrückt wird — bewusst in Kauf genommen.
+        """
+        from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
 
         rows = [{"name": "A", "count": 10}, {"name": "B", "count": 8}, {"name": "C", "count": 3}]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=21, order=ORDER_INPUT)
         by_name = {r["name"]: r for r in result}
         assert by_name["C"]["suppressed"] is True  # primär (<5)
-        assert by_name["B"]["suppressed"] is True  # sekundär (nächstkleinere sichtbare)
-        assert by_name["B"]["count"] is None
-        assert by_name["A"]["suppressed"] is False  # größte bleibt sichtbar
+        assert by_name["A"]["suppressed"] is True  # sekundär: die größte fällt
+        assert by_name["A"]["count"] is None
+        assert by_name["B"]["suppressed"] is False  # Residuum 13 auf zwei Zellen: nichts gepinnt
 
     def test_list_two_already_suppressed_no_secondary(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
 
         rows = [{"name": "A", "count": 10}, {"name": "B", "count": 3}, {"name": "C", "count": 2}]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=15, order=ORDER_INPUT)
         by_name = {r["name"]: r for r in result}
-        # Zwei sind ohnehin unterdrückt -> keine zusätzliche, A bleibt sichtbar.
+        # Residuum 5 auf zwei Zellen aus [1, 4] -> beide offen, A bleibt sichtbar.
         assert by_name["A"]["suppressed"] is False
         assert by_name["B"]["suppressed"] is True
         assert by_name["C"]["suppressed"] is True
 
+    def test_zwei_unterdrueckte_zellen_am_minimum_loesen_die_regel_aus(self):
+        """Die Lücke der alten Heuristik: zwei unterdrückte Zellen, die sich
+        beide aus dem Residuum ergeben (R = 2, also 1 + 1). `len(suppressed)
+        != 1` ließ genau das durchgehen."""
+        from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
+
+        rows = [{"name": "A", "count": 20}, {"name": "B", "count": 1}, {"name": "C", "count": 1}]
+        result = _suppress_small(rows, threshold=5, margin=22, order=ORDER_INPUT)
+        by_name = {r["name"]: r for r in result}
+        assert by_name["A"]["suppressed"] is True, "die Randsumme pinnt B und C auf je 1"
+        assert by_name["B"]["suppressed"] is True
+        assert by_name["C"]["suppressed"] is True
+
+    def test_ohne_publizierte_randsumme_laeuft_das_audit_nicht(self):
+        """`margin=None`: kein Artefakt publiziert eine Randsumme über diese
+        Zeilen (`by_age_cluster`) — ohne Gleichung gibt es nichts
+        zurückzurechnen, und jede zusätzliche Unterdrückung wäre reiner
+        Utility-Verlust."""
+        from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
+
+        rows = [{"name": "A", "count": 20}, {"name": "B", "count": 1}, {"name": "C", "count": 1}]
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_INPUT)
+        by_name = {r["name"]: r for r in result}
+        assert by_name["A"]["suppressed"] is False
+
     def test_list_no_suppression_below_count_leaves_all_visible(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
 
         rows = [{"name": "A", "count": 10}, {"name": "B", "count": 8}]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=18, order=ORDER_INPUT)
         assert all(r["suppressed"] is False for r in result)
 
     def test_stage_dict_single_suppression_triggers_secondary(self):
@@ -79,11 +119,24 @@ class TestSecondarySuppression:
 
         stages = {"anonym": 10, "identifiziert": 8, "qualifiziert": 3}
         result = _suppress_stage_dict(
-            stages, threshold=5, persons={"anonym": 10, "identifiziert": 8, "qualifiziert": 3}
+            stages, threshold=5, persons={"anonym": 10, "identifiziert": 8, "qualifiziert": 3}, margin=21
         )
         assert result["qualifiziert"] is None  # primär
-        assert result["identifiziert"] is None  # sekundär (nächstkleinere sichtbare)
-        assert result["anonym"] == 10
+        assert result["anonym"] is None  # sekundär: die größte fällt
+        assert result["identifiziert"] == 8
+
+    def test_stage_dict_leere_stufe_loest_keine_sekundaersuppression_aus(self):
+        """Eine Stufe, die exakt auf 0 zurückrechenbar ist, schützt niemanden —
+        ein leerer Bucket ist die Abwesenheit von Fällen, keine
+        Kleinstfallzahl. Sonst fiele in jeder Einrichtung ohne anonyme Kontakte
+        dauerhaft die gesamte Stufenverteilung."""
+        from core.services.dashboard.external_report import _suppress_stage_dict
+
+        stages = {"anonym": 0, "identifiziert": 0, "qualifiziert": 31}
+        result = _suppress_stage_dict(
+            stages, threshold=5, persons={"anonym": 0, "identifiziert": 0, "qualifiziert": 8}, margin=31
+        )
+        assert result == {"anonym": None, "identifiziert": None, "qualifiziert": 31}
 
 
 class TestKanonischeOrdnungUnterdrueckterZeilen:
@@ -115,10 +168,10 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         return sorted(rows, key=lambda row: row["count"], reverse=True)
 
     def test_unterdrueckte_altersgruppen_stehen_als_block_in_modellreihenfolge(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = self._age_rows({"27_plus": 20, "unknown": 9, "18_26": 3, "u18": 2})
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
 
         assert [row["cluster"] for row in result] == ["27_plus", "unknown", "u18", "18_26"]
         assert [row["suppressed"] for row in result] == [False, False, True, True]
@@ -129,16 +182,17 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         dieselbe Publikationsreihenfolge erzeugen — sonst ist die Position selbst
         die Aussage, welche Zelle die kleinere ist.
         """
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
-        welt_a = _suppress_small(self._age_rows({"27_plus": 20, "18_26": 4, "u18": 1}), threshold=5)
-        welt_b = _suppress_small(self._age_rows({"27_plus": 20, "18_26": 1, "u18": 4}), threshold=5)
+        kwargs = {"threshold": 5, "margin": None, "order": ORDER_AGE_CLUSTER}
+        welt_a = _suppress_small(self._age_rows({"27_plus": 20, "18_26": 4, "u18": 1}), **kwargs)
+        welt_b = _suppress_small(self._age_rows({"27_plus": 20, "18_26": 1, "u18": 4}), **kwargs)
 
         assert [row["cluster"] for row in welt_a] == [row["cluster"] for row in welt_b]
         assert [row["count"] for row in welt_a] == [row["count"] for row in welt_b]
 
     def test_unterdrueckte_dokumenttypen_nach_kategorie_und_name(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
 
         rows = self._doc_rows(
             {
@@ -148,13 +202,13 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
                 ("contact", "Aufnahme"): 2,
             }
         )
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=34, order=ORDER_DOCUMENT_TYPE)
 
         assert [row["name"] for row in result] == ["Kontakt", "Notiz", "Aufnahme", "Beratung"]
         assert [row["suppressed"] for row in result] == [False, False, True, True]
 
     def test_sichtbare_zeilen_bleiben_count_sortiert(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
 
         rows = self._doc_rows(
             {
@@ -165,16 +219,16 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
                 ("service", "Vermittlung"): 2,
             }
         )
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=52, order=ORDER_DOCUMENT_TYPE)
 
         sichtbar = [row["name"] for row in result if not row["suppressed"]]
         assert sichtbar == ["Notiz", "Beratung", "Aufnahme"]
 
     def test_ohne_unterdrueckung_bleibt_die_reihenfolge_unveraendert(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = self._age_rows({"27_plus": 20, "u18": 9, "18_26": 7})
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
 
         assert [row["cluster"] for row in result] == ["27_plus", "u18", "18_26"]
 
@@ -186,11 +240,14 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         Anzahl — ihre Position ist keine Rangaussage. Sie werden deshalb
         bewusst NICHT umsortiert (sonst braeche der Bestandstest
         ``test_records_spiegeln_die_suppressierten_zellen`` ohne Sicherheitsgewinn).
+
+        Seit #1770 sagt die **Aufrufstelle** das mit ``order=ORDER_INPUT``
+        ausdruecklich, statt dass eine Formheuristik es errät.
         """
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_INPUT, _suppress_small
 
         rows = [{"name": "Kontakte", "count": 12}, {"name": "Beratung", "count": 3}, {"name": "Versorgung", "count": 2}]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=17, order=ORDER_INPUT)
 
         assert [row["name"] for row in result] == ["Kontakte", "Beratung", "Versorgung"]
 
@@ -742,72 +799,72 @@ class TestPersonenbasiertesZellkriterium:
     """
 
     def test_zelle_mit_vielen_ereignissen_einer_person_wird_unterdrueckt(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = [
             {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
             {"cluster": "u18", "label": "Unter 18", "count": 7, "persons": 1},
         ]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
         by_cluster = {row["cluster"]: row for row in result}
 
         assert by_cluster["u18"]["suppressed"] is True
         assert by_cluster["u18"]["count"] is None
 
     def test_ereigniszahl_bleibt_das_strengere_kriterium_wenn_sie_kleiner_ist(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = [
             {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
             {"cluster": "u18", "label": "Unter 18", "count": 3, "persons": 3},
         ]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
         by_cluster = {row["cluster"]: row for row in result}
 
         assert by_cluster["u18"]["suppressed"] is True
 
     def test_zelle_mit_genug_personen_bleibt_sichtbar(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = [
             {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
             {"cluster": "u18", "label": "Unter 18", "count": 8, "persons": 6},
         ]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
 
         assert all(row["suppressed"] is False for row in result)
 
     def test_unbekannte_personenzahl_wird_unterdrueckt(self):
         """``persons=None`` = nicht rekonstruierbar ⇒ fail-safe unterdruecken."""
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = [
             {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
             {"cluster": "u18", "label": "Unter 18", "count": 20, "persons": None},
         ]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
         by_cluster = {row["cluster"]: row for row in result}
 
         assert by_cluster["u18"]["suppressed"] is True
 
     def test_personenzahl_verlaesst_die_suppression_nie(self):
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_AGE_CLUSTER, _suppress_small
 
         rows = [
             {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
             {"cluster": "u18", "label": "Unter 18", "count": 7, "persons": 1},
         ]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=None, order=ORDER_AGE_CLUSTER)
 
         assert all("persons" not in row for row in result)
 
     def test_ereignisabgeleitete_zeilen_ohne_personenfeld_bleiben_ereignisbasiert(self):
         """``by_document_type``/``by_category`` zaehlen Ereignisse — kein Personenfeld,
         keine Personenpruefung (sonst waere jede Dokumenttyp-Zeile unterdrueckt)."""
-        from core.services.dashboard.external_report import _suppress_small
+        from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
 
         rows = [{"name": "Kontakt", "category": "contact", "count": 30}]
-        result = _suppress_small(rows, threshold=5)
+        result = _suppress_small(rows, threshold=5, margin=30, order=ORDER_DOCUMENT_TYPE)
 
         assert result[0]["suppressed"] is False
 
@@ -816,20 +873,21 @@ class TestPersonenbasiertesZellkriterium:
 
         stages = {"anonym": 40, "identifiziert": 30, "qualifiziert": 20}
         result = _suppress_stage_dict(
-            stages, threshold=5, persons={"anonym": 40, "identifiziert": 30, "qualifiziert": 2}
+            stages, threshold=5, persons={"anonym": 40, "identifiziert": 30, "qualifiziert": 2}, margin=90
         )
 
         assert result["qualifiziert"] is None
-        # Sekundaersuppression trifft zusaetzlich die kleinste sichtbare Stufe.
-        assert result["identifiziert"] is None
-        assert result["anonym"] == 40
+        # Das Machbarkeits-Audit opfert zusaetzlich die GROESSTE sichtbare Stufe
+        # (K2, Refs #1770) — vorher fiel die kleinste.
+        assert result["anonym"] is None
+        assert result["identifiziert"] == 30
 
     def test_stage_dict_ohne_personenzahlen_unterdrueckt_alles(self):
         """Alt-Format ohne ``persons_by_contact_stage`` ⇒ unbekannt ⇒ fail-safe."""
         from core.services.dashboard.external_report import _suppress_stage_dict
 
         stages = {"anonym": 40, "identifiziert": 30, "qualifiziert": 20}
-        result = _suppress_stage_dict(stages, threshold=5, persons=None)
+        result = _suppress_stage_dict(stages, threshold=5, persons=None, margin=90)
 
         assert result == {"anonym": None, "identifiziert": None, "qualifiziert": None}
 
@@ -844,9 +902,11 @@ class TestPersonenkriteriumInDenWrappern:
         """Acht Personen (⇒ ``unique_clients`` >= k, der #1768-Guard schweigt),
         aber zwei Altersgruppen mit vielen Ereignissen je EINER Person.
 
-        Zwei Einzelpersonen-Cluster, damit die Sekundaer-Suppression
-        (``len(suppressed) != 1``) nicht anspringt und der Test allein das
-        Personenkriterium misst.
+        Die Alterstabelle bleibt stehen (die Gesamtpersonenmenge ist gross
+        genug), ihre Einzelpersonen-Zeilen fallen. Die **Personen-Randsumme**
+        faellt dabei mit (Auflage 1 zu K0-b, Refs #1770): Σ ``persons`` =
+        ``unique_clients`` ist eine publizierte Partition, und sichtbar bliebe
+        sie nur, solange keine Zeile personenbedingt unterdrueckt ist.
         """
         from core.models import Client
         from core.services.dashboard import build_external_report
@@ -879,7 +939,7 @@ class TestPersonenkriteriumInDenWrappern:
 
         report = build_external_report(facility, *report_period)
 
-        assert report["unique_clients"] == 8
+        assert report["unique_clients"] is None, "Personen-Randsumme faellt mit der ersten Personen-Zelle"
         by_cluster = {row["cluster"]: row for row in report["by_age_cluster"]}
         assert by_cluster["u18"]["suppressed"] is True, "Altersgruppe mit nur einer Person muss fallen"
         assert by_cluster["unknown"]["suppressed"] is True

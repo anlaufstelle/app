@@ -222,12 +222,18 @@ class TestPrepareExport:
     """Pflichtfall 5: count < k -> None + k_anonymity_threshold gesetzt; >= k unveraendert."""
 
     def test_zelle_unter_schwelle_wird_none_und_total_faellt_mit(self, backend, facility):
-        """A6.1 (Refs #1024/#1016): faellt eine Zelle, faellt auch die Randsumme —
-        sonst waere die unterdrueckte 2 als 9-... rueckrechenbar (I1-Regression)."""
+        """Einzige Zeile unter der Schwelle: die Zelle faellt — und mit ihr die
+        Randsumme, denn ``total`` = Σ Zeilen ist hier die Zelle selbst
+        (Randsummen-Regel R14, I1-Regression).
+
+        ``total`` traegt bewusst die konsistente Summe der Zeilen (Refs #1770):
+        ``total`` = Σ ``count`` ist die Invariante des Backends, und das
+        Machbarkeits-Audit rechnet an genau dieser Gleichung.
+        """
         result = DatasetResult(
             mode="rows",
             records=[{"document_type": "A", "category": "Kontakt", "system_type": "", "count": 2}],
-            summary={"total": 9},
+            summary={"total": 2},
             completeness=[],
         )
 
@@ -243,11 +249,11 @@ class TestPrepareExport:
         assert prepared.summary["k_anonymity_threshold"] == 5
 
     def test_mehrzeilig_sekundaere_suppression_laesst_beide_zellen_fallen(self, backend, facility):
-        """A6.1 mehrzeilig: eine Zelle < k, eine >= k — nach der primaeren
-        Suppression bliebe genau EINE Zelle unterdrueckt und waere aus
-        ``total`` und der sichtbaren Zeile exakt rueckrechenbar. Die
-        Sekundaer-Suppression in ``_suppress_small`` laesst deshalb die
-        naechstkleinere sichtbare Zelle mitfallen; die Records spiegeln das.
+        """Mehrzeilig: eine Zelle < k, eine >= k — nach der primaeren
+        Suppression waere die verbliebene unterdrueckte Zelle aus ``total`` und
+        der sichtbaren Zeile exakt rueckrechenbar (Spanne 1). Das
+        Machbarkeits-Audit (K2, Refs #1770) laesst deshalb die **groesste**
+        sichtbare Zelle mitfallen; die Records spiegeln das.
         """
         result = DatasetResult(
             mode="rows",
@@ -265,9 +271,12 @@ class TestPrepareExport:
             {"document_type": "A", "category": "Kontakt", "system_type": "", "count": None},
             {"document_type": "B", "category": "Kontakt", "system_type": "", "count": None},
         ]
-        # Mit zwei unterdrueckten Zellen bleibt ``total`` ein Rueckrechnungs-
-        # Hebel — es faellt mit (konservative Regel des Lehrbeispiels).
-        assert prepared.summary["total"] is None
+        # ``total`` bleibt stehen: mit zwei unterdrueckten Zellen aus [1, 10]
+        # und Summe 11 ist keine davon zurueckrechenbar. Die fruehere
+        # Eigenbau-Regel „faellt eine Zelle, faellt auch total" ist mit dem
+        # zentralen Residual-Guard entfallen (Refs #1770) — dieselbe
+        # Leakfreiheit, mehr Utility.
+        assert prepared.summary["total"] == 11
 
     def test_zelle_ab_schwelle_bleibt_unveraendert(self, backend, facility):
         result = DatasetResult(
