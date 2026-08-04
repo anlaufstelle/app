@@ -20,6 +20,7 @@ Drei Charakterisierungs-Cases plus Trigger-State-Snapshot:
 from __future__ import annotations
 
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -274,7 +275,32 @@ class TestAnonymizeClientHelpers:
             assert wi.title == "Aufgabe (anonymisiert)"
             assert wi.description == ""
 
-    def test_delete_event_attachments_for_client_returns_event_ids(
+    def test_event_ids_for_client_collects_the_event_ids(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        """Refs #1782: das Einsammeln der ``event_ids`` ist ein eigener,
+        rein lesender Helfer geworden — bis dahin fielen sie als Nebenprodukt
+        von ``_delete_event_attachments_for_client`` an und zwangen dessen
+        Datei-Loeschung damit an den Anfang der Kaskade."""
+        from core.services.client import _event_ids_for_client
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5},
+            created_by=staff_user,
+        )
+
+        assert event.pk in _event_ids_for_client(client_identified)
+
+    def test_event_ids_for_client_returns_empty_when_no_events(self, client_identified):
+        from core.services.client import _event_ids_for_client
+
+        assert _event_ids_for_client(client_identified) == []
+
+    def test_delete_event_attachments_for_client_deletes_per_given_event(
         self, facility, staff_user, doc_type_contact, client_identified
     ):
         from core.services.client import _delete_event_attachments_for_client
@@ -288,15 +314,17 @@ class TestAnonymizeClientHelpers:
             created_by=staff_user,
         )
         with patch("core.services.file_vault.delete_attachments_for") as del_files:
-            event_ids = _delete_event_attachments_for_client(client_identified)
+            _delete_event_attachments_for_client(client_identified, [event.pk])
 
-        assert event.pk in event_ids
         del_files.assert_called_once()
+        assert del_files.call_args.args[0].pk == event.pk
 
-    def test_delete_event_attachments_for_client_returns_empty_when_no_events(self, client_identified):
+    def test_delete_event_attachments_for_client_is_a_no_op_without_event_ids(self, client_identified):
         from core.services.client import _delete_event_attachments_for_client
 
-        assert _delete_event_attachments_for_client(client_identified) == []
+        with patch("core.services.file_vault.delete_attachments_for") as del_files:
+            assert _delete_event_attachments_for_client(client_identified, []) is None
+        del_files.assert_not_called()
 
     def test_redact_event_history_is_no_op_without_event_ids(self):
         from core.services.client import _redact_event_history
@@ -699,3 +727,160 @@ class TestAnonymizeClientHelpers:
 
         foreign_hold.refresh_from_db()
         assert foreign_hold.reason == "Fremde Begruendung"
+
+
+# ---------------------------------------------------------------------------
+# Datei-Loeschungen am Transaktionsende (Refs #1782, #1344)
+# ---------------------------------------------------------------------------
+
+PDF_MINIMAL = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+    b"xref\n0 3\n0000000000 65535 f\n"
+    b"trailer<</Size 3/Root 1 0 R>>\n"
+    b"startxref\n9\n%%EOF\n"
+)
+
+
+def _attach_real_file(facility, owner, user, name):
+    """Echter Upload durch den Vault — DB-Zeile UND ``.enc`` auf der Platte."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from core.models import FieldTemplate
+    from core.services.file_vault import store_encrypted_file
+
+    ft = FieldTemplate.objects.create(facility=facility, name=name, field_type=FieldTemplate.FieldType.FILE)
+    upload = SimpleUploadedFile(f"{name}.pdf", PDF_MINIMAL, content_type="application/pdf")
+    return store_encrypted_file(facility, upload, ft, owner, user)
+
+
+@pytest.fixture
+def anonymize_file_fixture(facility, staff_user, doc_type_contact, client_identified):
+    """Person mit Ereignis-, Personen- und Fall-eigenem Anhang (echte Dateien)."""
+    from core.models import Case
+    from core.services.file_vault import get_attachment_path
+
+    event = Event.objects.create(
+        facility=facility,
+        client=client_identified,
+        document_type=doc_type_contact,
+        occurred_at=timezone.now(),
+        data_json={"dauer": 5, "notiz": "x"},
+        created_by=staff_user,
+    )
+    case = Case.objects.create(
+        facility=facility,
+        client=client_identified,
+        title="Datei-Fall",
+        created_by=staff_user,
+    )
+    attachments = {
+        "event": _attach_real_file(facility, event, staff_user, "Ereignisdatei"),
+        "client": _attach_real_file(facility, client_identified, staff_user, "Personendatei"),
+        "case": _attach_real_file(facility, case, staff_user, "Falldatei"),
+    }
+    paths = {key: get_attachment_path(att) for key, att in attachments.items()}
+    assert all(path.exists() for path in paths.values()), "Setup: .enc-Dateien fehlen"
+    return SimpleNamespace(event=event, case=case, client=client_identified, attachments=attachments, paths=paths)
+
+
+@pytest.mark.django_db
+class TestAnonymizeDeletesFilesAtTransactionEnd:
+    """Refs #1782 (+#1344).
+
+    ``_delete_event_attachments_for_client`` lief bis hierher FRUEH in der
+    Kaskade — sein Rueckgabewert (``event_ids``) speiste die nachgelagerten
+    Redaktionen. Ab diesem Punkt waren Ereignis-Dateien von der Platte entfernt,
+    ihre DB-Zeilen aber noch in der offenen Transaktion: brach eine spaetere
+    Redaktion ab, rollten die Zeilen zurueck und zeigten auf nicht mehr
+    existierende Dateien (Download → 500 statt 404).
+
+    Der ``.enc``-Unlink ist nicht rollback-bar. Die Kaskade sammelt die
+    ``event_ids`` deshalb jetzt getrennt ein (``_event_ids_for_client``) und
+    fuehrt ALLE physischen Loeschungen — DB-Zeilen wie Disk-Unlinks — gebuendelt
+    am Transaktionsende aus.
+    """
+
+    def test_successful_run_removes_rows_and_files_for_every_owner(self, staff_user, anonymize_file_fixture):
+        from core.models import Attachment
+
+        anonymize_client(anonymize_file_fixture.client, user=staff_user)
+
+        assert not Attachment.objects.filter(
+            pk__in=[att.pk for att in anonymize_file_fixture.attachments.values()]
+        ).exists()
+        for owner_type, path in anonymize_file_fixture.paths.items():
+            assert not path.exists(), f"{owner_type}: .enc-Datei ueberlebt die Anonymisierung"
+
+    def test_abort_mid_cascade_leaves_rows_and_files_consistent(self, staff_user, anonymize_file_fixture):
+        """Der Kern von #1782: bricht eine spaetere Redaktion ab, darf KEINE
+        Datei fehlen, deren DB-Zeile zurueckgerollt wurde."""
+        from core.models import Attachment
+
+        boom = RuntimeError("Redaktion abgebrochen")
+        with patch("core.services.client.main._redact_activities", side_effect=boom):
+            with pytest.raises(RuntimeError, match="Redaktion abgebrochen"):
+                anonymize_client(anonymize_file_fixture.client, user=staff_user)
+
+        for owner_type, attachment in anonymize_file_fixture.attachments.items():
+            assert Attachment.objects.filter(pk=attachment.pk).exists(), f"{owner_type}: Zeile fehlt nach Rollback"
+            assert anonymize_file_fixture.paths[owner_type].exists(), (
+                f"{owner_type}: .enc-Datei geloescht, obwohl die DB-Zeile zurueckgerollt wurde — "
+                "die Zeile zeigt jetzt ins Leere (Download 500 statt 404)"
+            )
+
+    def test_event_ids_survive_the_split_and_still_feed_the_redactions(
+        self, facility, staff_user, anonymize_file_fixture
+    ):
+        """Die Redaktionen haengen an denselben ``event_ids`` wie vorher — auch
+        wenn die IDs jetzt getrennt vom Loeschen eingesammelt werden."""
+        from core.models import DeletionRequest
+
+        dr = DeletionRequest.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=str(anonymize_file_fixture.event.pk),
+            reason="Klartext im Antrag",
+            requested_by=staff_user,
+        )
+
+        anonymize_client(anonymize_file_fixture.client, user=staff_user)
+
+        dr.refresh_from_db()
+        assert dr.reason == "[Anonymisiert]"
+
+
+@pytest.mark.django_db
+class TestKAnonBridgeDeletesFilesAtTransactionEnd:
+    """Paritaets-Gegenprobe (Refs #1782): der Bridge-Pfad nutzt dieselben Helfer.
+
+    Sein Datei-Block stand seit M24 schon am Ende — hier als Charakterisierung
+    gepinnt, damit die Umstellung des Hard-Pfads die Bridge nicht unbemerkt in
+    die andere Richtung zieht.
+    """
+
+    def test_successful_bridge_run_removes_owned_rows_and_files(self, staff_user, anonymize_file_fixture):
+        from core.models import Attachment
+        from core.retention.anonymization import _k_anonymize_with_cascade
+
+        _k_anonymize_with_cascade(anonymize_file_fixture.client, k=5)
+
+        for owner_type in ("client", "case"):
+            attachment = anonymize_file_fixture.attachments[owner_type]
+            assert not Attachment.objects.filter(pk=attachment.pk).exists()
+            assert not anonymize_file_fixture.paths[owner_type].exists()
+
+    def test_bridge_abort_mid_cascade_leaves_rows_and_files_consistent(self, staff_user, anonymize_file_fixture):
+        from core.models import Attachment
+        from core.retention.anonymization import _k_anonymize_with_cascade
+
+        boom = RuntimeError("Bridge-Redaktion abgebrochen")
+        with patch("core.retention.anonymization._redact_activities", side_effect=boom):
+            with pytest.raises(RuntimeError, match="Bridge-Redaktion abgebrochen"):
+                _k_anonymize_with_cascade(anonymize_file_fixture.client, k=5)
+
+        for owner_type in ("client", "case"):
+            attachment = anonymize_file_fixture.attachments[owner_type]
+            assert Attachment.objects.filter(pk=attachment.pk).exists(), f"{owner_type}: Zeile fehlt nach Rollback"
+            assert anonymize_file_fixture.paths[owner_type].exists(), f"{owner_type}: .enc-Datei fehlt nach Rollback"

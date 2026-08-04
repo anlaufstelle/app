@@ -195,15 +195,38 @@ def _redact_workitems(client) -> None:
     )
 
 
-def _delete_event_attachments_for_client(client) -> list:
-    """Loescht Attachments aller Events des Klienten. Returns event_ids."""
+def _event_ids_for_client(client) -> list:
+    """PKs aller Ereignisse des Klienten — reine Lese-Operation.
+
+    Refs #1782: bis dahin fielen die ``event_ids`` als Nebenprodukt von
+    :func:`_delete_event_attachments_for_client` an. Genau das zwang den
+    Datei-Loeschschritt an den ANFANG der Kaskade, weil alle nachgelagerten
+    Redaktionen die IDs brauchen. Getrennt eingesammelt darf das Loeschen ans
+    Transaktionsende — dorthin, wo ein Rollback keine Dateiluecke mehr
+    hinterlaesst.
+
+    Auch die K-Anon-Bridge (``core/retention/anonymization.py``) nutzt diesen
+    Helfer, statt die Query ein zweites Mal zu schreiben.
+    """
+    from core.models.event import Event
+
+    return list(Event.objects.filter(client=client).values_list("pk", flat=True))
+
+
+def _delete_event_attachments_for_client(client, event_ids: list) -> None:
+    """Loescht Attachments der uebergebenen Ereignisse (Dateien + DB-Zeilen).
+
+    Refs #1782: ``event_ids`` kommt jetzt von aussen (siehe
+    :func:`_event_ids_for_client`) statt hier nebenbei zu entstehen — der
+    Aufrufer bestimmt damit den Zeitpunkt der physischen Loeschung.
+    """
     from core.models.event import Event
     from core.services.file_vault import delete_attachments_for
 
-    event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
+    if not event_ids:
+        return
     for event in Event.objects.filter(pk__in=event_ids).iterator():
         delete_attachments_for(event)
-    return event_ids
 
 
 def _delete_owned_attachments_for_client(client, case_ids: list) -> None:
@@ -218,10 +241,10 @@ def _delete_owned_attachments_for_client(client, case_ids: list) -> None:
     Dateien MIT Record, also faenden sie auch keine Waisen-Raster (Art. 17).
 
     Gegenstueck zu :func:`_delete_event_attachments_for_client`, bewusst als
-    **zweiter** Helfer: der Ereignis-Zweig liefert nebenbei die ``event_ids``
-    fuer die nachgelagerten Redaktionen und ist in der K-Anon-Bridge
-    entbehrlich (dort sind Ereignis-Anhaenge per Eintrittsbedingung schon weg),
-    dieser hier ist in **beiden** Pfaden Pflicht.
+    **zweiter** Helfer: der Ereignis-Zweig ist in der K-Anon-Bridge entbehrlich
+    (dort sind Ereignis-Anhaenge per Eintrittsbedingung schon weg), dieser hier
+    ist in **beiden** Pfaden Pflicht. Seit #1782 stehen beide unmittelbar
+    nebeneinander am Transaktionsende.
 
     ``case_ids`` stammt aus :func:`_redact_cases_and_episodes` — die Faelle
     sind zu diesem Zeitpunkt bereits redigiert (``data_json = {}``), womit die
@@ -496,7 +519,8 @@ def anonymize_client(client, user=None):
       :func:`core.services.file_vault.delete_attachments_for` — seit M24
       (Refs #1738) fuer **alle drei** Owner-Sorten: Ereignis-Anhaenge ueber
       :func:`_delete_event_attachments_for_client`, personen- und falleigene
-      ueber :func:`_delete_owned_attachments_for_client`.
+      ueber :func:`_delete_owned_attachments_for_client`. Beide laufen seit
+      Refs #1782 gebuendelt als LETZTER Schritt (Begruendung am Aufruf).
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
@@ -521,7 +545,9 @@ def anonymize_client(client, user=None):
     case_ids = _redact_cases_and_episodes(client)
     _redact_case_goals(case_ids)
     _redact_workitems(client)
-    event_ids = _delete_event_attachments_for_client(client)
+    # Nur LESEN (Refs #1782) — die physische Loeschung dieser Ereignis-Anhaenge
+    # steht am Ende dieser Funktion.
+    event_ids = _event_ids_for_client(client)
     _redact_live_events(client)
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
@@ -531,24 +557,24 @@ def anonymize_client(client, user=None):
     _redact_activities(client, event_ids)
     _delete_recent_visits(client)
     _revoke_offline_bundles(client)
-    # Refs #1344/#1738: Der ``.enc``-Unlink ist nicht rollback-bar. Diese Kaskade
-    # kennt deshalb ZWEI Datei-Zeitpunkte, und nur einer davon ist neu:
+    # Refs #1344/#1738/#1782: EIN Datei-Zeitpunkt, ganz am Ende der Kaskade.
+    # Der ``.enc``-Unlink ist nicht rollback-bar — jede physische Loeschung, die
+    # vor einer noch ausstehenden Redaktion laeuft, kann eine Dateiluecke
+    # hinterlassen: die Transaktion rollt die Attachment-Zeilen zurueck, die
+    # Dateien bleiben weg, und die wiederhergestellte Zeile zeigt ins Leere
+    # (Download 500 statt 404).
     #
-    # * ``_delete_event_attachments_for_client`` laeuft frueh (oben) — Bestands-
-    #   verhalten, weil seine ``event_ids`` die nachgelagerten Redaktionen
-    #   speisen. Ab diesem Punkt SIND Ereignis-Dateien bereits von der Platte
-    #   entfernt: scheitert eine spaetere Redaktion, rollt die Transaktion die
-    #   Zeilen zurueck, die Dateien aber nicht. Der naechste Lauf holt die
-    #   Anonymisierung nach; die Dateien sind dann bereits weg (Loeschrichtung —
-    #   kein Datenschutz-, sondern ein Nachweis-Restrisiko, dokumentiert unter
-    #   Refs #1344).
-    # * Dieser Block steht bewusst SPAET und ist damit der rollback-schonendere
-    #   Teil: schlaegt eine Redaktion fehl, sind personen- und falleigene Dateien
-    #   noch unberuehrt. Umgekehrt waeren geloeschte Dateien bei erhaltenem
-    #   Klartext-Bestand der schlechtere Halbzustand.
+    # Bis #1782 lief der Ereignis-Zweig frueh, weil seine ``event_ids`` die
+    # nachgelagerten Redaktionen speisten; die IDs sammelt jetzt
+    # ``_event_ids_for_client`` getrennt ein. Damit steht der gesamte physische
+    # Block hier: schlaegt eine Redaktion fehl, ist NICHTS geloescht — weder
+    # Zeilen noch Dateien — und der naechste Lauf faengt sauber von vorne an.
     #
-    # Eine Zusammenlegung beider Zeitpunkte waere eine Verhaltensaenderung an
-    # einem DSGVO-Pfad und gehoert in ein eigenes Ticket, nicht in diesen Fix.
+    # Bleibendes Restrisiko: schlaegt ein Unlink INNERHALB dieses Blocks fehl,
+    # sind die bereits entfernten Dateien weg. Das ist die Loeschrichtung (kein
+    # Datenschutz-, sondern ein Nachweis-Restrisiko) und betrifft nur noch
+    # dieses eine, letzte Fenster.
+    _delete_event_attachments_for_client(client, event_ids)
     _delete_owned_attachments_for_client(client, case_ids)
 
     logger.info(

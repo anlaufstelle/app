@@ -33,12 +33,13 @@ from django.db import transaction
 from django.db.models import Count, Q
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
-from core.models import AuditLog, Client, Event, Settings
+from core.models import AuditLog, Client, Settings
 from core.retention.legal_holds import exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
 from core.services.client import (
     _delete_owned_attachments_for_client,
     _delete_recent_visits,
+    _event_ids_for_client,
     _redact_activities,
     _redact_case_goals,
     _redact_cases_and_episodes,
@@ -62,9 +63,10 @@ def _k_anonymize_with_cascade(client, k):
     ``DeletionRequest.reason`` und ``Activity.summary`` blieben Klartext,
     obwohl der Datensatz als ``k_anonymized=True`` gilt (Art. 17).
 
-    ``event_ids`` werden hier selbst gesammelt: im Hard-Pfad fallen sie als
-    Nebenprodukt von ``_delete_event_attachments_for_client`` an, das in der
-    Bridge nicht laeuft.
+    ``event_ids`` kommen aus demselben Helfer wie im Hard-Pfad
+    (``_event_ids_for_client``, Refs #1782) — bis dahin stand die Query hier
+    ein zweites Mal, weil der Hard-Pfad seine IDs als Nebenprodukt der
+    Anhang-Loeschung bekam.
 
     **Anhang-Invariante seit M24 (Refs #1738, ADR-039):** „die Anhaenge sind
     zum Bridge-Zeitpunkt ohnehin schon weg" gilt nur noch fuer
@@ -93,7 +95,7 @@ def _k_anonymize_with_cascade(client, k):
     Kaskade fehlschlugen.
     """
     with transaction.atomic():
-        event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
+        event_ids = _event_ids_for_client(client)
         k_anonymize_client(client, k=k)
         case_ids = _redact_cases_and_episodes(client)
         _redact_case_goals(case_ids)
