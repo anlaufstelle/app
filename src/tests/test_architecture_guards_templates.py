@@ -279,10 +279,32 @@ class TestAlpineCspCompatibilityGuard:
         Operator-Sequenz wie ``a(), b()``) — Argument-Kommas innerhalb eines
         einzelnen Aufrufs (``foo(a, b)``) bleiben erlaubt, weil sie zu genau
         einem Ausdruck gehoeren. Refs #1763 Review Fix-Runde 1.
+
+        Refs #1775: String-Literale werden uebersprungen. Ohne das meldete
+        ``$dispatch('toast', 'a, b')`` — Komma IM Literal, Klammer-Tiefe egal —
+        einen Verstoss, den es nicht gibt: ein False Positive dieses Guards
+        blockiert einen korrekten Handler und ist nur durch Umformulieren des
+        UI-Textes zu umgehen. Der Attributwert ist doppelt gequotet, Literale
+        darin sind also ``'``/`````; ``"`` wird der Vollstaendigkeit halber
+        mitgefuehrt.
         """
         depth = 0
+        quote: str | None = None
+        escaped = False
         for ch in value:
-            if ch in "([{":
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if quote is not None:
+                if ch == quote:
+                    quote = None
+                continue
+            if ch in "'\"`":
+                quote = ch
+            elif ch in "([{":
                 depth += 1
             elif ch in ")]}":
                 depth = max(0, depth - 1)
@@ -367,6 +389,44 @@ class TestAlpineCspCompatibilityGuard:
 
     def test_comma_sequence_in_event_handler_is_a_violation(self):
         assert self._event_handler_violation("retryQueueEntry(item.id), discardQueueEntry(item.id)") is not None
+
+    # Refs #1775: String-Literal-Bewusstsein von ``_has_top_level_comma``.
+    # Die Klammer-Zaehlung sah in Literale hinein: eine Klammer IM Text
+    # verschob die Tiefe und liess ein Argument-Komma als Komma-Operator
+    # erscheinen (False Positive) bzw. ein echtes Komma verschwinden
+    # (False Negative). Beide Faelle sind unten belegt — ohne das Tracking
+    # liefert die alte Fassung genau das falsche Ergebnis.
+    @pytest.mark.parametrize(
+        "value",
+        [
+            # Schliessende Klammer im UI-Text: alte Fassung sah Tiefe 0 am
+            # Argument-Komma und meldete einen Verstoss, den es nicht gibt.
+            "notify('Smiley :) im Text', item.id)",
+            "setMessage('Bitte pruefen :)', true)",
+            "$dispatch('toast', 'Gespeichert, bitte pruefen')",
+            "setMessage(`Ja, gern`)",
+            "notify('a\\', b')",  # maskiertes Quote im Literal
+        ],
+    )
+    def test_comma_inside_string_literal_is_not_a_violation(self, value):
+        assert self._has_top_level_comma(value) is False, value
+        assert self._event_handler_violation(value) is None, value
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            # Oeffnende Klammer im Literal: alte Fassung stand am echten
+            # Komma auf Tiefe 2 und uebersah den Verstoss.
+            "emit('('), reset()",
+            "setMessage('a'), other()",
+            "notify('a, b'), other()",
+            "a, b",
+        ],
+    )
+    def test_comma_outside_string_literal_stays_a_violation(self, value):
+        """Gegenprobe: das Tracking darf die Erkennung nicht abschalten."""
+        assert self._has_top_level_comma(value) is True, value
+        assert self._event_handler_violation(value) is not None, value
 
     def test_ternary_in_event_handler_remains_allowed(self):
         assert self._event_handler_violation("open ? close() : toggle()") is None
