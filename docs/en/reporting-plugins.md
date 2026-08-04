@@ -9,7 +9,7 @@ The practical consequence: **a new report is a single file.** A module under [`s
 
 - **Why the system looks the way it does:** [ADR-038](../adr/038-reporting-plugin-backends.md).
 - **Why small cell counts are suppressed:** [ADR-023](../adr/023-k-anonymization-statistik.md) and #1278.
-- **Why the mapping uses `system_type` and never `category`:** [ADR-034](../adr/034-config-ui-category-system-type.md).
+- **Why the mapping uses `system_type` (and the `slug`) and never `category`:** [ADR-034](../adr/034-config-ui-category-system-type.md), [ADR-038 § 4](../adr/038-reporting-plugin-backends.md).
 
 > **The most important rule up front.** Everything a backend returns from `build_dataset()` is **raw**. Everything that leaves the building (download **and** panel preview) passes through `prepare_export()` first. If you produce numbers that circulate externally, you must implement that hook — see [§ 6](#6-k-anonymity--the-prepare_export-hook).
 
@@ -242,6 +242,26 @@ Three points that are easy to miss:
 - **`is_deleted=False`**, otherwise soft-deleted events are counted.
 - **Aggregate instead of iterating.** `.values(...).annotate(Count(...))` returns one row per group in **one** query; a Python loop over events becomes unusably slow for year-long periods.
 
+#### If your report maps documentation types onto categories
+
+The example activity report shows the pattern: **two keys, in a fixed order, and `category` never** ([ADR-038](../adr/038-reporting-plugin-backends.md), #1741).
+
+```python
+CATEGORY_MAP = {"contact": "Kontakte", "counseling": "Beratung", ...}   # system_type
+SLUG_MAP = {"kontakt": "Kontakte", "beratungsgespraech": "Beratung", ...}  # slug
+
+
+def resolve_category(system_type, slug):
+    return CATEGORY_MAP.get(system_type or "") or SLUG_MAP.get(slug or "")
+```
+
+- **`system_type` first.** The system identifier is stable, immutable after creation and the stronger statement. If a type carries a mapped `system_type`, it wins — even against a slug that says something else.
+- **`slug` as the secondary key.** The `system_type` value list is frozen; a facility's own types often have none (or `note`, which equals `NULL` as far as the export is concerned). The slug brings exactly those types into the report. The convention is the **package slugs** from [`core/packages/default.yaml`](../../src/core/packages/default.yaml): that is where the meaning of a slug is defined. Matching happens on the slug string alone, **regardless of facility** — a facility's own type with the slug `beratungsgespraech` *is* a counselling session. If you do not want that, choose a different slug (slugs are immutable after creation).
+- **`category` never.** It is pure UI grouping, freely editable — regrouping in the config UI must never move report figures ([ADR-034](../adr/034-config-ui-category-system-type.md)).
+- **Keep both maps conservative.** Only add what unambiguously belongs to a category. Whatever the primary key deliberately leaves out (`note`, `ban`) must not be pulled in through the back door by the secondary key.
+- **The unmapped filter must give the same answer.** `validate_completeness` counts "no report category" in the database — that predicate is the SQL equivalent of the same resolution (no hit in **either** map). Two truths here mean the notice counts events as missing that are in fact in the report.
+- **No backfill for snapshots.** Extending a mapping takes effect from the next `build_dataset` onwards; stored `backend_data` stays as it was (see [§ 5](#5-snapshot-integration)).
+
 ### Step 4 — Guarantee k-anonymity
 
 As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1):
@@ -470,7 +490,7 @@ Examples from the activity report:
 
 | `code` | `severity` | Reports |
 |---|---|---|
-| `unmapped_system_types` | `warning` | Events whose documentation type maps to no report category (including `system_type` NULL/empty) — they are missing from the report entirely. |
+| `unmapped_system_types` | `warning` | Events whose documentation type maps to no report category — neither via `system_type` (including NULL/empty) nor via the slug. They are missing from the report entirely. |
 | `events_without_client` | `info` | Events without a person reference — they count towards the categories but are missing from age groups and the number of persons. |
 
 **Severity semantics:** `warning` = data missing from the report (numbers are too low). `info` = data included but unevenly distributed (partial analyses differ). The panel renders `warning` as a yellow "Hinweis" badge and `info` in grey.
@@ -492,8 +512,8 @@ Examples from the activity report:
 - **No external plugin packages.** Discovery scans `core/reporting/backends/` only; `entry_points` from third-party packages are not provided for. A foreign package with read access to social-services data is a trust decision of its own kind (signing, approval, sandboxing) — conceivable as a later extension, and then with a security concept of its own.
 - **No generic PDF pipeline.** The pipeline formats are CSV, JSON and XML; the activity report PDF remains a separate, unchanged path.
 - **`core/reporting` lies outside the mypy strict zone and outside the mutmut paths.** The code is annotated strict-compatibly; adding it to those gates changes build configuration and is an open maintainer decision.
-- **Mapping v1 uses `system_type`.** `DocumentType.slug` is the documented secondary key and follow-up work ([ADR-038](../adr/038-reporting-plugin-backends.md)); `DocumentType.category` is never used for reporting.
-- **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new values without real application logic** — an additional report category is no reason to extend a core data-model enum; such mappings belong in your report's backend mapping. Of the nine values only `ban` and `crisis` carry application logic; the six values in `CATEGORY_MAP` are pure report opt-ins (and at the same time the only way to get a facility's own documentation type into the activity report), and `note` is identical to `NULL` as far as the export is concerned. A freeze guard pins the list and that role split (`src/tests/test_system_type.py`). Reducing it to `ban`/`crisis` has been evaluated and is **not** planned — it would depend on the open slug product decision (#1741).
+- **The mapping is hard-coded.** Both maps (`CATEGORY_MAP` over `system_type`, `SLUG_MAP` over `slug`) live in the backend module; there is **no** configuration field for them. That is a decision, not a transitional state ([ADR-038](../adr/038-reporting-plugin-backends.md), update of 2026-08-04): a config UI would make report figures movable by a click. Changing a mapping is therefore a code change with review — and `DocumentType.category` is never used for reporting.
+- **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new values without real application logic** — an additional report category is no reason to extend a core data-model enum; such mappings belong in your report's backend mapping. Of the nine values only `ban` and `crisis` carry application logic; the six values in `CATEGORY_MAP` are pure report opt-ins, and `note` is identical to `NULL` as far as the export is concerned. A freeze guard pins the list and that role split (`src/tests/test_system_type.py`). Since the slug secondary key (#1741), `system_type` is **no longer the only way** to get a facility's own documentation type into the activity report — the slug does it too. Reducing the value list to `ban`/`crisis` has been evaluated and is **not** planned; its precondition (the slug product decision) has been met since 2026-08-04, the rest is up to the RFC.
 
 ---
 
@@ -551,4 +571,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 5706e1fdecfe6aceeb69d78f1d17717e12ba63b0 -->
+<!-- source-hash: 6d7cdd2d2328b20877c3e793ff458c0d8f25a5cd -->

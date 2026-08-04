@@ -6,7 +6,7 @@ Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/co
 
 - **Warum das System so aussieht, wie es aussieht:** [ADR-038](adr/038-reporting-plugin-backends.md).
 - **Warum Kleinstfallzahlen unterdrückt werden:** [ADR-023](adr/023-k-anonymization-statistik.md) und #1278.
-- **Warum das Mapping über `system_type` läuft und nie über `category`:** [ADR-034](adr/034-config-ui-category-system-type.md).
+- **Warum das Mapping über `system_type` (und den `slug`) läuft und nie über `category`:** [ADR-034](adr/034-config-ui-category-system-type.md), [ADR-038 § 4](adr/038-reporting-plugin-backends.md).
 
 > **Die wichtigste Regel vorweg.** Alles, was ein Backend über `build_dataset()` liefert, ist **roh**. Alles, was das Haus verlässt (Download **und** Panel-Vorschau), läuft vorher durch `prepare_export()`. Wer Zahlen produziert, die extern zirkulieren, muss diesen Hook implementieren — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook).
 
@@ -239,6 +239,26 @@ Drei Punkte, die leicht untergehen:
 - **`is_deleted=False`**, sonst zählen soft-gelöschte Ereignisse mit.
 - **Aggregieren statt iterieren.** `.values(...).annotate(Count(...))` liefert eine Zeile je Gruppe in **einer** Query; eine Python-Schleife über Ereignisse wird bei Jahreszeiträumen unbrauchbar langsam.
 
+#### Wenn dein Bericht Dokumentationstypen auf Kategorien abbildet
+
+Der Beispiel-Sachbericht zeigt das Muster: **zwei Schlüssel, in fester Reihenfolge, `category` nie** ([ADR-038](adr/038-reporting-plugin-backends.md), #1741).
+
+```python
+CATEGORY_MAP = {"contact": "Kontakte", "counseling": "Beratung", ...}   # system_type
+SLUG_MAP = {"kontakt": "Kontakte", "beratungsgespraech": "Beratung", ...}  # slug
+
+
+def resolve_category(system_type, slug):
+    return CATEGORY_MAP.get(system_type or "") or SLUG_MAP.get(slug or "")
+```
+
+- **`system_type` zuerst.** Die Systemkennung ist stabil, nach Erstellung unveränderlich und die stärkere Aussage. Trägt ein Typ einen gemappten `system_type`, gewinnt er — auch gegen einen anderslautenden Slug.
+- **`slug` als Zweitschlüssel.** Die `system_type`-Werteliste ist eingefroren; einrichtungseigene Typen haben oft keinen (oder `note`, exportseitig = `NULL`). Der Slug holt genau diese Typen in den Bericht. Konvention sind die **Paket-Slugs** aus [`core/packages/default.yaml`](../src/core/packages/default.yaml): dort steht, was ein Slug bedeutet. Gematcht wird der Slug-String **facility-agnostisch** — ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` ist ein Beratungsgespräch. Wer das nicht will, vergibt einen anderen Slug (Slugs sind nach Erstellung unveränderlich).
+- **`category` nie.** Reine UI-Gruppierung, frei editierbar — eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben ([ADR-034](adr/034-config-ui-category-system-type.md)).
+- **Beide Maps konservativ halten.** Nimm nur auf, was eindeutig in eine Kategorie gehört. Was der Erstschlüssel bewusst auslässt (`note`, `ban`), darf der Zweitschlüssel nicht durch die Hintertür hereinholen.
+- **Der Unmapped-Filter muss dieselbe Antwort geben.** `validate_completeness` zählt „ohne Berichtszuordnung" auf der Datenbank — das Prädikat ist die SQL-Entsprechung derselben Auflösung (kein Treffer in **beiden** Maps). Zwei Wahrheiten hier heißen: der Hinweis zählt Ereignisse als fehlend, die im Bericht stehen.
+- **Kein Backfill für Snapshots.** Eine Mapping-Erweiterung wirkt ab dem nächsten `build_dataset`; gespeicherte `backend_data` bleiben auf ihrem Stand (siehe [§ 5](#5-snapshot-integration)).
+
 ### Schritt 4 — K-Anonymität sicherstellen
 
 Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtlektüre**, nicht Kür. Details in [§ 6](#6-k-anonymität--der-prepare_export-hook); der Minimalfall aus `example.py` (Imports wie in Schritt 1):
@@ -467,7 +487,7 @@ Beispiele aus dem Sachbericht:
 
 | `code` | `severity` | Meldet |
 |---|---|---|
-| `unmapped_system_types` | `warning` | Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist (inkl. `system_type` NULL/leer) — sie fehlen im Bericht vollständig. |
+| `unmapped_system_types` | `warning` | Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist — weder über `system_type` (inkl. NULL/leer) noch über den Slug. Sie fehlen im Bericht vollständig. |
 | `events_without_client` | `info` | Ereignisse ohne Personenbezug — sie zählen in den Kategorien mit, fehlen aber in Altersgruppen und Personenzahl. |
 
 **Semantik der Severity:** `warning` = im Bericht fehlende Daten (Zahlen sind zu niedrig). `info` = enthaltene, aber ungleich verteilte Daten (Teilauswertungen weichen ab). Das Panel rendert `warning` als gelbes „Hinweis"-Badge, `info` grau.
@@ -489,8 +509,8 @@ Beispiele aus dem Sachbericht:
 - **Keine externen Plugin-Pakete.** Discovery scannt ausschließlich `core/reporting/backends/`; `entry_points` von Drittpaketen sind nicht vorgesehen. Ein fremdes Paket mit Lesezugriff auf Sozialdaten wäre eine Vertrauensentscheidung eigener Güte (Signatur, Freigabe, Sandbox) — als spätere Erweiterung denkbar, dann mit eigenem Sicherheitskonzept.
 - **Keine generische PDF-Pipeline.** Die Formate der Pipeline sind CSV, JSON und XML; der Sachbericht-PDF bleibt ein eigener, unveränderter Pfad.
 - **`core/reporting` liegt außerhalb der mypy-strict-Zone und der mutmut-Pfade.** Der Code ist strict-kompatibel annotiert; die Aufnahme in die Gates ändert Build-Konfiguration und ist ein offener Maintainer-Entscheid.
-- **Mapping v1 über `system_type`.** `DocumentType.slug` ist der dokumentierte Zweitschlüssel und Folgearbeit ([ADR-038](adr/038-reporting-plugin-backends.md)); `DocumentType.category` wird fürs Reporting nie verwendet.
-- **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). **Keine neuen Werte ohne echte App-Logik** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; solche Zuordnungen gehören ins Backend-Mapping deines Berichts. Von den neun Werten tragen nur `ban` und `crisis` App-Logik; die sechs Werte in `CATEGORY_MAP` sind reine Bericht-Opt-ins (und zugleich der einzige Weg, einen einrichtungseigenen Dokumentationstyp in den Sachbericht zu bekommen), `note` ist exportseitig identisch mit `NULL`. Ein Freeze-Guard pinnt die Liste und diese Rollenaufteilung (`src/tests/test_system_type.py`). Eine Reduktion auf `ban`/`crisis` ist geprüft und **nicht** geplant — sie hinge am offenen Slug-Produktentscheid (#1741).
+- **Das Mapping ist hart kodiert.** Beide Maps (`CATEGORY_MAP` über `system_type`, `SLUG_MAP` über `slug`) stehen im Backend-Modul; es gibt **kein** Konfigurationsfeld dafür. Das ist ein Entscheid, kein Übergangszustand ([ADR-038](adr/038-reporting-plugin-backends.md), Update 2026-08-04): eine Config-UI machte Berichtszahlen per Klick verschiebbar. Eine Mapping-Änderung ist damit ein Code-Change mit Review — und `DocumentType.category` wird fürs Reporting nie verwendet.
+- **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). **Keine neuen Werte ohne echte App-Logik** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; solche Zuordnungen gehören ins Backend-Mapping deines Berichts. Von den neun Werten tragen nur `ban` und `crisis` App-Logik; die sechs Werte in `CATEGORY_MAP` sind reine Bericht-Opt-ins, `note` ist exportseitig identisch mit `NULL`. Ein Freeze-Guard pinnt die Liste und diese Rollenaufteilung (`src/tests/test_system_type.py`). Seit dem Slug-Zweitschlüssel (#1741) ist `system_type` **nicht mehr der einzige Weg**, einen einrichtungseigenen Dokumentationstyp in den Sachbericht zu bekommen — der Slug tut es auch. Eine Reduktion der Werteliste auf `ban`/`crisis` ist geprüft und **nicht** geplant; ihre Vorbedingung (der Slug-Produktentscheid) ist seit 2026-08-04 erfüllt, der Rest bleibt Sache des RFC.
 
 ---
 

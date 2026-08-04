@@ -67,7 +67,7 @@ Backfill [`0122`](../../src/core/migrations/0122_backfill_backend_data.py) hebt 
 
 Das Reporting-Mapping läuft über **`DocumentType.system_type`** — die stabile, nach Erstellung unveränderliche Systemkennung. **`DocumentType.category` wird fürs Reporting nie verwendet**: es ist laut Feld-`help_text` eine reine UI-Gruppierung, frei editierbar, und eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben. Das löst die in [ADR-034](034-config-ui-category-system-type.md) beschriebene Überlappung der beiden Klassifikationsfelder für den Reporting-Kontext auf.
 
-**`DocumentType.slug`** (seit M2, [ADR-037](037-konfigurationspakete-dynamische-felder.md)) ist der **dokumentierte Zweitschlüssel** und bleibt Folgearbeit: Er ist ebenfalls stabil und unveränderlich, deckt aber auch einrichtungseigene Typen ohne `system_type` ab — genau die, die heute als „ohne Zuordnung" im Vollständigkeitshinweis auftauchen. Der Integrationspunkt ist im Code an `CATEGORY_MAP` ([`backends/jugendamt.py`](../../src/core/reporting/backends/jugendamt.py)) markiert.
+**`DocumentType.slug`** (seit M2, [ADR-037](037-konfigurationspakete-dynamische-felder.md)) ist der **dokumentierte Zweitschlüssel** und bleibt Folgearbeit: Er ist ebenfalls stabil und unveränderlich, deckt aber auch einrichtungseigene Typen ohne `system_type` ab — genau die, die heute als „ohne Zuordnung" im Vollständigkeitshinweis auftauchen. Der Integrationspunkt ist im Code an `CATEGORY_MAP` markiert (damals `backends/jugendamt.py`, heute [`backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py)). *Eingelöst am 2026-08-04 — siehe Update unten (#1741).*
 
 ### 5. K-Anon-Invariante: der `prepare_export`-Hook
 
@@ -171,7 +171,7 @@ Der **Anzeigename bleibt „Beispiel-Sachbericht"** (#1279); zusätzlich sind di
 - **Der Rückweg ist ab `0124` datenverlustbehaftet.** `RemoveField` legt die Spalte beim Rückwärtsmigrieren zwar wieder an, aber leer und **ohne DB-Default** (`0032` setzte nur einen Python-Default). Wer zurück muss, migriert auf `0122_backfill_backend_data` — erst dort benennt der Reverse von `0123` den Schlüssel auf `jugendamt` zurück und `backend_data["jugendamt"]` existiert wieder als Refill-Quelle — und füllt das Feld daraus neu, oder spielt ein Backup ein. `migrate core 0123` genügt **nicht** (es nimmt nur `0125`/`0124` zurück, der Schlüssel bleibt `sample-report-1`). Im Zwischenzustand mit wieder existierender, aber leerer Spalte scheitern Snapshot-INSERTs von HEAD-Code an der `NOT NULL`-Constraint, bis die Spalte per SQL auf `DEFAULT '{}'` gesetzt oder wieder entfernt wird.
 - **`0123` prüft die Roll-Forward-Kante fail-loud.** Weicht ein befülltes Altfeld vom `backend_data`-Eintrag ab (Symptom: zwischenzeitlich lief Alt-Code, der nur das Altfeld fortschrieb), bricht die Migration mit Fundstellen und Behebungshinweis ab, statt den veralteten Stand festzuschreiben. Welcher Stand gilt, entscheidet der Betrieb — Behebung: `jugendamt_data` der betroffenen Monate per SQL an `backend_data['jugendamt']` angleichen bzw. leeren, dann erneut migrieren. `manage.py create_statistics_snapshots` heilt die Divergenz seit #1740 **nicht** mehr, weil der HEAD-Code `jugendamt_data` gar nicht mehr schreibt.
 
-Unberührt bleiben die übrigen Entscheide, insbesondere der sachberichtspezifische Monats-Merge (Konsequenz 5/Entscheid 8), die Live-vs-Hybrid-Divergenz (Konsequenz 8, #1743) und der `DocumentType.slug`-Zweitschlüssel als offene Folgearbeit (#1741).
+Unberührt bleiben die übrigen Entscheide, insbesondere der sachberichtspezifische Monats-Merge (Konsequenz 5/Entscheid 8) und die Live-vs-Hybrid-Divergenz (Konsequenz 8, #1743). Der `DocumentType.slug`-Zweitschlüssel war hier noch offene Folgearbeit — er ist seit dem 2026-08-04 umgesetzt (#1741, Update unten).
 
 ## Update 2026-08-03: Zielsemantik der Lesepfade — Divergenz bewusst, Quelle ausgewiesen (Refs #1743)
 
@@ -204,6 +204,30 @@ Die Disclosure-Analyse #1742 hat mehrere Kanäle in der oben beschriebenen Suppr
 4. **Die Schwelle prüft nicht mehr nur Ereigniszahlen** (#1770, K0-b): `_is_below_threshold` unterdrückt personenabgeleitete Zeilen, sobald die **strengere** aus Ereignis- und DISTINCT-Personenzahl unter der Schwelle liegt (`PERSONS_KEY`, Bestand per Migration `0128` nachgetragen). Der Satz „Die Schwelle prüft Ereigniszahlen" aus Punkt 2 und § 5 ist damit überholt; ereignisabgeleitete Tabellen (`by_document_type`, `by_category`) zählen weiterhin Ereignisse.
 5. **Rückrechnung aus der Randsumme** (#1770, K1/K2): `_audit_feasible_span` misst die Machbarkeitsspanne statt der Zellenzahl und unterdrückt bis zum Fixpunkt (die kleinste sichtbare Zelle zuerst); `apply_residual_guard` lässt notfalls Randsumme oder Aufschlüsselung ganz fallen. Beides ist Pflicht für jedes `prepare_export` mit publizierter Randsumme — Eigenbau-Suppression ist per Architektur-Guard verboten.
 6. **Grundgesamtheit und Restzeile** (#1770, K3/K4c): jede Tabelle weist ihre Basismenge aus, die Alterstabelle führt die datenunabhängig emittierte Restzeile „Ohne Personenbezug"; hybride Artefakte nennen zusätzlich den Stand der Monats-Aggregate.
+
+## Update 2026-08-04: Der `slug`-Zweitschlüssel ist da — hart kodiert, global, facility-agnostisch (Refs #1741, #1785)
+
+**Entscheid 4 („`system_type` zuerst, `slug` als Zweitschlüssel, `category` nie") ist damit vollständig umgesetzt.** Der oben als Folgearbeit markierte Integrationspunkt an `CATEGORY_MAP` ist eingelöst; die Auflösung läuft in [`backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py) über `resolve_category(system_type, slug)`: erst `CATEGORY_MAP[system_type]`, dann `SLUG_MAP[slug]`, sonst „ohne Zuordnung". `category` bleibt außen vor.
+
+**Wofür der Zweitschlüssel da ist.** `system_type` ist ein Kern-Datenmodell-Enum und seit [RFC #1748](https://github.com/anlaufstelle/app/issues/1748) eingefroren. Ein einrichtungseigener Dokumentationstyp hat deshalb oft gar keinen — oder `note`, was exportseitig identisch mit `NULL` ist. Genau diese Typen fielen bisher ausnahmslos in den Vollständigkeitshinweis „ohne Berichtszuordnung", obwohl ihr Slug sie eindeutig benennt. Mit dem Zweitschlüssel ist ein passend geschnittener Typ auch ohne Systemtyp im Bericht — und `validate_completeness` zieht mit: ein per Slug gemappter Typ gilt nicht mehr als Lücke (`_UNMAPPED_Q` ist die SQL-Entsprechung derselben Auflösung; zwei Wahrheiten hier hießen, dass der Hinweis Ereignisse als fehlend zählt, die im Bericht stehen).
+
+**Die drei Entscheide des Maintainers (2026-08-04), jeder mit seiner Alternative:**
+
+| Frage | Entscheid | Verworfene Alternative |
+|---|---|---|
+| Woher kommt das Mapping? | **Hart kodiert im Backend** (`SLUG_MAP` neben `CATEGORY_MAP`) | Config-UI/Einstellungsfeld — machte Berichtszahlen per Klick verschiebbar, dasselbe Argument, mit dem `category` fürs Reporting ausgeschlossen ist ([ADR-034](034-config-ui-category-system-type.md)). Bleibt als Ausbaupfad denkbar, nicht als Bestand |
+| Welche Slugs gelten? | **Die Paket-Slugs aus [`core/packages/default.yaml`](../../src/core/packages/default.yaml)** als globale Konvention | Ein eigenes, frei erfundenes Vokabular — es gäbe keinen Ort, an dem die Bedeutung eines Slugs steht, und keine Erwartung, der ein Paket folgen könnte |
+| Facility-Slug oder globaler Slug? | **Rein per Slug-String, facility-agnostisch** | Eine Herkunftsprüfung „stammt aus dem Paket" — es gibt am Datensatz keine Herkunftsangabe (der Loader schreibt keine), und ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` **ist** ein Beratungsgespräch |
+
+**Bewusst konservativ:** `SLUG_MAP` enthält nur die sieben Paket-Slugs, deren `system_type` ohnehin in `CATEGORY_MAP` steht. `notiz` und `hausverbot` fehlen aus demselben Grund, aus dem `note`/`ban` dort fehlen — der Zweitschlüssel darf keine Kategorie hereinholen, die der Erstschlüssel bewusst auslässt. Die Werte sind dieselben deutschen Klartext-Kategorien (Snapshot-Stabilität, siehe Entscheid 4 und § 5).
+
+**Konsequenzen:**
+
+1. **Der Erstschlüssel gewinnt immer.** Ein Typ mit gemapptem `system_type` und anderslautendem Slug wird über den `system_type` gezählt — die Systemkennung ist die stärkere Aussage, der Slug nur eine Konvention.
+2. **Slug-Kollisionen sind eine Zuordnung, kein Fehler.** Wer einen Typ `beratungsgespraech` nennt und ihn *nicht* im Bericht haben will, gibt ihm einen anderen Slug. Slugs sind je Einrichtung eindeutig und nach Erstellung unveränderlich ([ADR-037](037-konfigurationspakete-dynamische-felder.md)) — die Zuordnung ist damit so stabil wie die über `system_type`, aber sie wird **bei der Anlage** entschieden.
+3. **Bestandszahlen ändern sich nur dort, wo bisher nichts gezählt wurde.** Alle Paket-Typen tragen ihren `system_type`; für sie ist die Auflösung unverändert. Verschoben wird ausschließlich, was vorher unter „ohne Berichtszuordnung" lief. Snapshots werden **nicht** rückwirkend neu gerechnet (kein Backfill): `backend_data` bleibt der Stand seines Aufnahmezeitpunkts, hybride Zeiträume mischen also alten und neuen Stand — dieselbe bekannte Live-vs-Hybrid-Divergenz wie in Konsequenz 8.
+4. **Die Altersgruppen bleiben mapping-agnostisch.** `by_age_cluster`/`unique_clients` zählen weiterhin **alle** Ereignisse mit Personenbezug, zugeordnet oder nicht; der Zweitschlüssel verschiebt nur `by_category`/`total`.
+5. **`RFC #1748`-Vorbedingung 1 ist beantwortet.** Der dort als offen geführte Produktentscheid „hardcodiert vs. konfigurierbar" ist entschieden; ob daraus eine Reduktion der `system_type`-Werteliste folgt, bleibt Sache des RFC.
 
 ## References
 
