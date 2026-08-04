@@ -39,8 +39,7 @@ from core.services.dashboard.statistics import PERSONS_KEY
 
 # Mapping: DocumentType.system_type -> Berichtskategorie (fehlend = ausgeschlossen).
 # ``ban``/``note``/NULL fehlen bewusst — sie gehoeren nicht in den Bericht.
-# Zweitschlüssel ``DocumentType.slug`` (seit M2 vorhanden) folgt als eigenes
-# Folge-Issue — Integrationspunkt.
+# Zweitschluessel ist ``DocumentType.slug`` (:data:`SLUG_MAP`, Refs #1741).
 #
 # Die Kategoriennamen bleiben bewusst **deutscher Klartext** und werden NICHT
 # ``gettext_lazy`` (Refs #1744): sie landen als Schluessel in
@@ -59,6 +58,63 @@ CATEGORY_MAP = {
     "referral": "Vermittlung",
 }
 
+# Zweitschluessel: DocumentType.slug -> Berichtskategorie (Refs #1741, Entscheid
+# in #1785).
+#
+# **Wofuer er da ist.** ``system_type`` ist ein Kern-Datenmodell-Enum und
+# eingefroren (RFC #1748): ein einrichtungseigener Dokumentationstyp hat oft
+# gar keinen — oder ``note``, was exportseitig identisch mit NULL ist. Genau
+# diese Typen tauchten bisher ausnahmslos als „ohne Berichtszuordnung" im
+# Vollstaendigkeitshinweis auf, obwohl ihr Slug sie eindeutig benennt.
+#
+# **Warum hart kodiert.** Das Mapping ist Fachlogik *dieses* Berichts und
+# gehoert damit ins Backend, nicht in eine Einrichtungs-Einstellung: eine
+# Config-UI machte Berichtszahlen per Klick verschiebbar (dasselbe Argument,
+# mit dem ``category`` fuers Reporting ausgeschlossen ist, ADR-034/ADR-038).
+# Eine spaetere Konfigurierbarkeit bleibt Ausbaupfad, nicht Bestand.
+#
+# **Globale Slug-Konvention, facility-agnostisch.** Die Schluessel sind die
+# Paket-Slugs aus ``core/packages/default.yaml`` — dort tragen sie die
+# Bedeutung, die dieses Mapping annimmt. Gematcht wird ausschliesslich der
+# Slug-String, unabhaengig davon, ob der Typ aus dem Paket stammt oder in der
+# Config-UI entstanden ist: es gibt am Datensatz keine Herkunftsangabe, und ein
+# einrichtungseigener Typ mit dem Slug ``beratungsgespraech`` IST ein
+# Beratungsgespraech. Die Slugs sind je Einrichtung eindeutig und nach
+# Erstellung unveraenderlich (M2, ADR-037) — dieselbe Stabilitaetszusage wie
+# bei ``system_type``.
+#
+# **Bewusst konservativ.** Nur die sieben Paket-Slugs, deren ``system_type``
+# ohnehin in ``CATEGORY_MAP`` steht. ``notiz`` und ``hausverbot`` fehlen aus
+# demselben Grund, aus dem ``note``/``ban`` oben fehlen — der Zweitschluessel
+# darf keine Kategorie hereinholen, die der Erstschluessel bewusst auslaesst.
+# Werte sind dieselben deutschen Klartext-Kategorien wie oben (Snapshot-
+# Stabilitaet, siehe Kommentar an ``CATEGORY_MAP``).
+SLUG_MAP = {
+    "kontakt": "Kontakte",
+    "krisengespraech": "Beratung",
+    "beratungsgespraech": "Beratung",
+    "medizinische-versorgung": "Versorgung",
+    "spritzentausch": "Versorgung",
+    "begleitung": "Vermittlung",
+    "vermittlung": "Vermittlung",
+}
+
+
+def resolve_category(system_type: str | None, slug: str | None) -> str | None:
+    """Berichtskategorie eines Dokumentationstyps — ``None`` = ohne Zuordnung.
+
+    Auflösungsordnung (Refs #1741): erst :data:`CATEGORY_MAP` ueber
+    ``system_type``, dann :data:`SLUG_MAP` ueber ``slug``. Der Erstschluessel
+    gewinnt immer — er ist die Systemkennung, der Slug nur eine Konvention.
+
+    Einzige Auflösungsstelle des Backends: ``build_dataset`` und der
+    Unmapped-Filter (:data:`_UNMAPPED_Q`) muessen dieselbe Antwort geben, sonst
+    zaehlt der Vollstaendigkeitshinweis Ereignisse als fehlend, die im Bericht
+    stehen (oder umgekehrt).
+    """
+    return CATEGORY_MAP.get(system_type or "") or SLUG_MAP.get(slug or "")
+
+
 # Anzeigelabels der Altersgruppen — lazy wie bisher, damit der Snapshot-Payload
 # byte-gleich zum Bestand bleibt.
 _AGE_LABELS = {
@@ -75,7 +131,16 @@ _AGE_LABELS = {
 # als ``NOT (x IN (...) AND x IS NOT NULL)`` und faengt NULL-Zeilen damit
 # bereits mit ein. Blankes SQL-``NOT IN`` tut das nicht — der explizite Zweig
 # haelt die Absicht unabhaengig von diesem ORM-Detail fest.
-_UNMAPPED_Q = Q(document_type__system_type__isnull=True) | ~Q(document_type__system_type__in=tuple(CATEGORY_MAP))
+#
+# Seit dem Slug-Zweitschluessel (Refs #1741) ist „ohne Zuordnung" eine
+# **Konjunktion**: kein Treffer in ``CATEGORY_MAP`` UND keiner in ``SLUG_MAP``
+# — die SQL-Entsprechung von :func:`resolve_category`. ``slug`` ist nicht
+# NULL-bar (``blank=True``, aber ``NOT NULL``) und ``document_type`` ein
+# PROTECT-FK ohne ``null=True``, es gibt hier also keine Outer-Join-NULLs; der
+# Negations-Zweig braucht deshalb kein ``isnull``-Pendant.
+_UNMAPPED_Q = (
+    Q(document_type__system_type__isnull=True) | ~Q(document_type__system_type__in=tuple(CATEGORY_MAP))
+) & ~Q(document_type__slug__in=tuple(SLUG_MAP))
 
 # Export-Fassung der Vollstaendigkeits-Meldungen (K6, Refs #1769). Sie ist die
 # EINZIGE Fassung, die ein externer Empfaenger je zu sehen bekommt: der Block
@@ -152,19 +217,23 @@ class SampleReport1Backend(DatasetBackend):
         """Aggregiert Ereignisse zu Berichtskategorien und Altersgruppen."""
         base_qs = _base_queryset(facility, date_from, date_to)
 
-        # Aggregation ueber DocumentType.system_type
+        # Aggregation ueber DocumentType.system_type UND .slug — beide Schluessel
+        # der Auflösung (Refs #1741) muessen in der Gruppierung stehen, sonst
+        # koennte der Zweitschluessel nicht greifen. Die Ordnung bleibt
+        # system_type-fuehrend (Bestandsformat des Snapshot-Payloads); die
+        # publizierte Zeilenordnung stellt ohnehin die Artefaktgrenze her
+        # (``ORDER_CATEGORY``, Refs #1767/#1772).
         by_dt = (
-            base_qs.values("document_type__system_type")
+            base_qs.values("document_type__system_type", "document_type__slug")
             .annotate(count=Count("id"))
-            .order_by("document_type__system_type")
+            .order_by("document_type__system_type", "document_type__slug")
         )
 
         # Konsolidierung auf die Berichtskategorien
         category_counts: OrderedDict[str, int] = OrderedDict()
         total = 0
         for row in by_dt:
-            system_type = row["document_type__system_type"]
-            cat = CATEGORY_MAP.get(system_type)
+            cat = resolve_category(row["document_type__system_type"], row["document_type__slug"])
             if cat is None:
                 # Nicht zugeordnete Typen still ueberspringen — auch ``total``
                 # zaehlt sie nicht mit (Bestandsverhalten). Sichtbar werden sie
@@ -183,9 +252,11 @@ class SampleReport1Backend(DatasetBackend):
         # (Formataenderung; Bestand per Migration 0128 nachgetragen) und
         # verlaesst den Suppressionspfad nie (``_suppress_small`` entfernt sie).
         #
-        # Die Buckets entstehen bewusst weiterhin allein aus
-        # ``system_type``/``age_cluster`` — mapping-agnostisch, damit der
-        # Slug-Zweitschluessel aus #1741 hier konfliktfrei aufsetzen kann.
+        # Die Buckets entstehen bewusst allein aus ``age_cluster`` —
+        # **mapping-agnostisch**: sie zaehlen jedes Ereignis mit Personenbezug,
+        # zugeordnet oder nicht. Der Slug-Zweitschluessel (Refs #1741) aendert
+        # daran nichts; er verschiebt nur, was in ``by_category``/``total``
+        # landet.
         by_age_cluster = [
             {
                 "cluster": row["client__age_cluster"],
