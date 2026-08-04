@@ -532,10 +532,15 @@ Row-Level-Zugriff auf die Rohdaten haben.
 - **Randsummen** (`total_contacts`/`total`) unterhalb der Schwelle sind selbst Kleinstfallzahlen und werden ebenfalls unterdrückt — Security-Review R14.
 
 Gemeinsame Logik (Single Source of Truth): `_suppress_small` / `_suppress_stage_dict` /
-`_apply_secondary_suppression` in [`external_report.py`](../src/core/services/dashboard/external_report.py);
-die drei Public-Wrapper (`build_external_report`, `suppress_sample_report_1_stats`,
-`suppress_report_stats`) normalisieren nur die jeweilige Datenform — kein Copy-Paste
-der Suppression selbst.
+`_audit_feasible_span` / `apply_residual_guard` in
+[`external_report.py`](../src/core/services/dashboard/external_report.py), gestützt auf den reinen
+Inferenz-Rechenkern [`disclosure.py`](../src/core/services/dashboard/disclosure.py); die drei
+Public-Wrapper (`build_external_report`, `suppress_sample_report_1_stats`, `suppress_report_stats`)
+normalisieren nur die jeweilige Datenform — kein Copy-Paste der Suppression selbst. Seit
+#1770 erzwingt das ein Architektur-Guard
+(`TestZentraleSuppressionsfunktion`), und die beiden sicherheitsrelevanten Entscheidungen jeder
+Aufrufstelle — gibt es eine publizierte **Randsumme** (`margin`) und welche kanonische
+**Ausgabeordnung** gilt (`order`) — sind Pflicht-Keywords statt geratener Defaults.
 
 **Suppression BEWUSST NICHT aktiv:**
 
@@ -583,12 +588,12 @@ beruht). Sperrvermerke blockieren seit #1756
 
 ### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
 
-**Status:** Analyse abgeschlossen; Umsetzung begonnen — **K5**
+**Status:** Analyse abgeschlossen; Umsetzung weitgehend abgeschlossen — **K5**
 (#1767), **K0 (a, Fail-safe)**
 (#1768), **K6**
-(#1769) sowie **K0 (b, Zellkriterium)** und
-**K4b** (#1770) sind **mitigiert**; K2, K1 und K3
-bleiben offen, K4a/K4c sind akzeptiert bzw. abgewertet (Spalte „Status" in der
+(#1769) sowie **K0 (b, Zellkriterium)**,
+**K4b**, **K2** und **K1** (#1770) sind
+**mitigiert**; K3 bleibt offen, K4a/K4c sind akzeptiert bzw. abgewertet (Spalte „Status" in der
 Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
@@ -623,9 +628,9 @@ Betriebskennzahl.
 | **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | **mitigiert** — (a) (#1768), (b) (#1770) |
 | **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 | **mitigiert** (#1767) |
 | **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | **mitigiert** (#1769) |
-| **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | offen |
+| **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | **mitigiert** (#1770, Variante „Spanne ≥ 2") |
 | **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | **mitigiert** (#1770) |
-| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | offen — **erweitert** um die Personen-Randsumme Σ `persons` = `unique_clients` (Auflage aus K0-b, s. dort) |
+| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | **mitigiert** (#1770) — Fixpunkt-Guard inkl. der Personen-Randsumme Σ `persons` = `unique_clients` |
 | **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | offen |
 | **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | offen |
 | **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert |
@@ -732,20 +737,31 @@ sichtbar, vier gelistete Altersgruppen, sämtlich unterdrückt ⇒ die einzige m
 mit exakt einer Person** sind zeilenscharf bestimmt. Die frühere Fassung dieses Absatzes nannte nur die
 „Existenz der Zeilen" und übersah die Kopplung an `unique_clients`.
 
-**Verbindliche Auflage (offen — wird in derselben Umsetzungswelle von K1/K2 geschlossen):**
+**Verbindliche Auflage — GESCHLOSSEN** (#1770,
+in derselben Umsetzungswelle wie K1/K2):
 
-1. **total-Doktrin auf die Personen-Randsumme ausdehnen:** `unique_clients` **fällt**, sobald
+1. **total-Doktrin auf die Personen-Randsumme ausgedehnt:** `unique_clients` **fällt**, sobald
  mindestens eine `by_age_cluster`-Zeile **personenbedingt** unterdrückt ist — analog zur
  bestehenden Randsummen-Regel R14 (`total < k` ⇒ Randsumme selbst unterdrücken) und zur
  Sekundär-Suppression A6.1. Ohne die publizierte Randsumme ist die Partition nicht mehr
- auflösbar.
-2. **K1-Fixpunkt-Guard erweitern:** Die Identität Σ `persons` = `unique_clients` gehört in sein
- Inferenzmodell — der Guard muss sie wie jede andere publizierte Partition behandeln, sonst
- validiert er gegen ein zu schwaches Angreifermodell (dieselbe Zirkularitätsfalle wie in der
- Kopplungs-Warnung oben).
-
-Bis beide umgesetzt sind, gilt der Kanal als **offen**; (b) erhöht seine Häufigkeit, weil mehr Zellen
-unterdrückt werden.
+ auflösbar. Umgesetzt als `drop_person_margin_on_person_suppression` in
+ [`external_report.py`](../src/core/services/dashboard/external_report.py), aufgerufen von allen
+ Wrappern; test-gepinnt in
+ `test_external_report_service.py::TestPersonenkriteriumInDenWrappern::test_externer_bericht_unterdrueckt_zelle_einer_einzelnen_person`.
+ Die Regel ist bewusst **schärfer** als der Fixpunkt-Guard: dessen Kriterium ist der exakte Pin,
+ während hier schon die *Einengung* auf ein k-schmales Intervall genügt — in der Konstruktion oben
+ hat jede Zelle noch zwei mögliche Werte (1 oder 2), und trotzdem steht fest, dass **jede**
+ Altersgruppe weniger als *k* Personen umfasst. Der Guard ist die zweite Linie, nicht der Ersatz.
+2. **K1-Fixpunkt-Guard erweitert:** Die Identität Σ `persons` = `unique_clients` ist Teil seines
+ Inferenzmodells — `apply_residual_guard` führt sie als eigene Partition (`by_age_cluster:persons`)
+ mit, deren Zellen nie publiziert werden und deren einzige Eskalation deshalb das Fallenlassen von
+ `unique_clients` ist. Die a-priori-Schranken folgen aus der Zeilen-Existenz (jede gelistete
+ Altersgruppe trägt ≥ 1 Person) und dem Unterdrückungsgrund (personenbedingt ⇒ ≤ *k*−1, sonst ≥ *k*).
+3. **Restkanal Zeilen-Existenz** (bei der Übergabe ausgewiesen): dass ein Artefakt auch bei
+ unterdrückten Zellen publiziert, **welche** Altersgruppen-Labels vorkommen, ist als Untergrenze
+ `lo = 1` in beiden Inferenzstufen modelliert — bei Aufschlüsselungen mit **festen** Schlüsseln
+ (`by_contact_stage`) dagegen `lo = 0`, denn dort wird auch eine Nullzeile emittiert und die bloße
+ Existenz sagt nichts.
 
 #### K5 — Zeilensortierung nach Anzahl als Rangkanal
 
@@ -864,6 +880,44 @@ Variante mit denselben 0 Leaks im geprüften Raum: Audit-Schwelle „Spanne ≥ 
 braucht es die eigene Regel „Tabellenkörper unterdrücken, wenn die Randsumme selbst unterdrückt ist"
 das ist K1, nicht K2.
 
+*Status: **mitigiert*** (#1770,
+**Produktentscheid: Variante „Spanne ≥ 2"**). `_audit_feasible_span` in
+[`external_report.py`](../src/core/services/dashboard/external_report.py) misst die Machbarkeitsspanne
+statt der Zellenzahl: solange eine unterdrückte Zelle **exakt** zurückrechenbar ist, fällt die
+**größte** sichtbare Zelle, danach wird neu gerechnet — bis zum Fixpunkt. Die Spanne kommt aus
+[`disclosure.py`](../src/core/services/dashboard/disclosure.py) (geschlossene Intervallformel, gegen
+eine Brute-Force-Aufzählung nachgeprüft). Sechs Eigenschaften tragen das Ergebnis:
+
+* **Schwelle „Spanne ≥ 2" statt „≥ k−1".** Die strengere Variante unterdrückt in 13,5 % der Welten
+ mehr Zellen, ohne im geprüften Raum weniger Leaks zu hinterlassen. „Spanne ≥ 2" heißt genau: kein
+ exakter Pin.
+* **Die größte statt der kleinsten sichtbaren Zelle fällt.** Das maximiert das Residuum und damit die
+ Mehrdeutigkeit (gemessen 0,2 % statt 2,5 % Rest-Leak). **Produktkosten, bewusst getragen:** die
+ Spitzenkategorie verschwindet aus Träger-/Förderberichten, sobald überhaupt unterdrückt wird. Der
+ Bestandstest `test_list_single_suppression_triggers_secondary` sicherte bis dahin das Gegenteil zu
+ („größte bleibt sichtbar") und ist mit dem Produktentscheid umgeschrieben.
+* **Eine Funktion statt zweier Kopien.** `_suppress_stage_dict` trug eine zweite Fassung derselben
+ Heuristik; sie ist ersatzlos entfallen und ruft dasselbe Audit. Der Architektur-Guard hält das offen
+ nachprüfbar.
+* **Die alte Guard-Annahme ist ersetzt.** Nach K0-b gilt „unterdrückt ⇒ Wert ≤ *k*−1" **nicht** mehr
+ (eine Zelle kann personenbedingt bei beliebig großer Ereigniszahl fallen). Das Audit bildet die
+ tatsächliche Semantik ab: Wert < *k* ⇒ [1, *k*−1]; personenbedingt oder als Sekundär-Opfer gefallen
+ ⇒ [*k*, ∞) bzw. [größte verbliebene sichtbare Zelle, ∞).
+* **Randsumme ist ein Pflicht-Keyword.** Jede Aufrufstelle sagt, ob es eine publizierte Randsumme
+ gibt, an der das Audit rechnen kann — der von der Analyse benannte **Restfall** (unterdrückte
+ Randsumme ⇒ Audit läuft ins Leere) ist damit kein Sonderpfad, sondern der Normalfall
+ `margin=None`. Dasselbe gilt für `by_age_cluster`: dort publiziert kein Artefakt eine
+ Ereignis-Randsumme (siehe „Geprüft und nicht tragfähig"), das Audit läuft dort also nicht — der
+ tragfähige Kanal dieser Tabelle ist die **Personen**-Randsumme (K0-b-Auflage 1).
+* **Drei begründete Ausnahmen vom Befund-Kriterium** (in `disclosure.findings` dokumentiert): leeres
+ Intervall (die Aufschlüsselung partitioniert ihre Randsumme nicht exakt — bei konsistenten Daten
+ unmöglich), Pin auf 0 (ein leerer Bucket schützt niemanden) und Pin auf ≥ *k* **ohne**
+ Personenkriterium (kein Kleinstwert, keine Personenlücke). Ohne die letzte Ausnahme würde der Guard
+ ein Sekundär-Opfer mit 20 Ereignissen endlos nachunterdrücken.
+
+Test-gepinnt in `test_external_report_service.py::TestSecondarySuppression`,
+`test_disclosure_inference.py` und `test_reporting_disclosure_regression.py`.
+
 #### K1 — Struktur-Kollaps / Residuum bei publizierter Randsumme
 
 Randsumme und teilsupprimierte Aufschlüsselung stehen im selben Artefakt, und die Aufschlüsselung ist
@@ -897,6 +951,43 @@ Testmodell von 403 auf 151 zurück; K5 **vor** dem Guard ist auch utility-seitig
 *Zusätzliche Invariante für Guard/Test:* Die Identität anonym + identifiziert + qualifiziert =
 `total_contacts` hängt allein daran, dass `Client.ContactStage` genau zwei Werte hat. Ein dritter Wert
 bräche sie **still** und verschöbe die Disclosure-Fläche.
+
+*Status: **mitigiert*** (#1770).
+`apply_residual_guard` in [`external_report.py`](../src/core/services/dashboard/external_report.py)
+läuft als **letzter** Schritt jeder Artefakt-Erzeugung, führt die Empfänger-Inferenz über die fertige
+Sicht selbst aus und eskaliert deterministisch, bis kein Befund mehr bleibt:
+
+1. die **größte** sichtbare Zelle der betroffenen Aufschlüsselung fällt (Auswahl bei Wertgleichheit
+ über die kanonische K5-Ordnung, nie über die Eingabeordnung),
+2. ist keine sichtbare Zelle mehr da, fällt die **Randsumme** — ohne sie gibt es keine Gleichung,
+3. hilft auch das nicht oder ist die harte Iterationsgrenze erreicht, fällt fail-safe die **ganze
+ Aufschlüsselung** (Key weg, nicht nur Werte auf `None` — eine genullte Zeile wäre selbst noch die
+ Aussage „hier gibt es mindestens einen Fall").
+
+Terminierung: jeder Schritt unterdrückt mindestens eine weitere Zelle oder Randsumme und ist damit
+monoton und endlich; `MAX_GUARD_ITERATIONS` ist die zweite Sicherung gegen eine künftige Erweiterung,
+die diese Monotonie verliert.
+
+Drei Eigenschaften unterscheiden ihn vom tabellenlokalen Audit (K2) und sind der Grund, warum es
+beide braucht:
+
+* **Er rechnet über Tabellen hinweg.** `by_document_type` und `by_contact_stage` teilen sich
+ `total_contacts`; und eine *vollständig sichtbare* Aufschlüsselung stellt eine unterdrückte
+ Randsumme wieder her (ihre Summe **ist** die Randsumme) — ohne diesen Schritt hielte der Guard das
+ Fallenlassen der Randsumme für wirksam, während der Empfänger sie nebenan addiert.
+* **Er kennt die Personen-Randsumme.** Σ `persons`(`by_age_cluster`) = `unique_clients` ist eine
+ Partition wie jede andere (Auflage 2 aus K0-b).
+* **Er rechnet nur mit publizierten Größen.** Innerhalb der Suppression ist die Herkunft jeder
+ Unterdrückung bekannt und die Schranken sind entsprechend eng; hier zählt, was ein Empfänger sicher
+ weiß, der Primär- und Sekundär-Unterdrückung nicht auseinanderhalten kann.
+
+**Die Kopplungs-Warnung ist eingehalten:** K5 ist seit
+#1767 ausgeliefert, der Guard kommt danach.
+Der Enumerationstest belegt beides empirisch — mit voll aktivem Audit und Guard, aber wieder
+count-sortierter Ausgabe, pinnt die Aufzählung 250 Kleinstzellen; mit kanonischer Ordnung 0.
+
+Test-gepinnt in `test_reporting_disclosure_regression.py` und
+`test_architecture_guards_services.py::TestZentraleSuppressionsfunktion`.
 
 #### K3 — Zwei Grundgesamtheiten nebeneinander
 
@@ -1034,8 +1125,17 @@ Betriebshinweis: Berichtszeiträume nicht unter einem Monat wählen.
 
 Damit diese Punkte nicht erneut untersucht werden:
 
-- **`by_age_cluster` als Residuum-Kanal (K1):** widerlegt — kein Artefakt publiziert heute eine
- Randsumme = Σ Altersgruppen. *Wird* tragfähig, sobald K3-A1 die Restzeile einführt.
+- **`by_age_cluster` als Residuum-Kanal (K1):** widerlegt **für die Ereignis-Randsumme** — kein
+ Artefakt publiziert eine Randsumme = Σ Altersgruppen (die Tabelle zählt nur Ereignisse *mit*
+ Personenbezug, `total_contacts` alle). Deshalb läuft das Machbarkeits-Audit dort mit `margin=None`,
+ also gar nicht; jede Zusatzunterdrückung wäre reiner Utility-Verlust ohne Schutzgewinn. *Wird*
+ tragfähig, sobald K3-A1 die Restzeile „ohne Personenbezug" einführt — dann ist die Tabelle eine
+ exakte Partition von `total_contacts` und muss eine Randsumme deklarieren.
+ **Nicht widerlegt ist die Personen-Randsumme:** seit K0-b gilt Σ `persons`(`by_age_cluster`) =
+ `unique_clients`, und über *diese* Gleichung ist der Kanal tragfähig — geschlossen durch die
+ total-Doktrin (`unique_clients` fällt bei der ersten personenbedingt unterdrückten Zeile) und
+ zusätzlich im Inferenzmodell des Fixpunkt-Guards, siehe K0-b § Verbindliche Auflage. Der Eintrag
+ hier bezieht sich also **ausschließlich** auf die Ereignis-Randsumme.
 - **Primär/Sekundär allein an der Zeilenposition unterscheidbar (K5):** widerlegt in der generischen
  Form — in 40 % der Zwei-Zellen-Fälle sind beide primär; der Schluss braucht eine publizierte
  Untergrenze für die Summe.
@@ -1048,19 +1148,56 @@ Damit diese Punkte nicht erneut untersucht werden:
 - Frühere Zwischenstände nannten Rest-Pins, die sich bei vollständiger Preimage-Auswertung auflösten.
  Verbindlich ist nur das Kriterium „publizierte Randsumme ≤ Enumerationsgrenze".
 
-#### Regressionsschutz (bei Umsetzung erforderlich)
+#### Regressionsschutz
 
-Einzelfall-Asserts haben diese Kanalklasse jahrelang nicht gefunden. Erforderlich sind: **(1)** ein
-Kleinst-Welt-Enumerationstest über die publizierte Sicht mit der Invariante „keine unterdrückte Zelle
-ist über das Preimage eindeutig bestimmt" — **Auflage:** nur Beobachtungen werten, deren publizierte
-Randsumme ≤ Enumerationsgrenze ist; **(2)** ein Ordnungstest (zwei Welten mit vertauschten Zellwerten
-müssen dieselbe Ausgabe erzeugen); **(3)** ein Architektur-Guard, der neue Artefakte mit Randsumme +
-Aufschlüsselung durch dieselbe Suppressionsfunktion zwingt; **(4)** ein K0-Test (4 Personen à 5
-Kontakte in 4 Clustern ⇒ keine sichtbare Alterszelle; 3 Personen × 6 Monate ⇒ keine Personenzahl ≥ k
-im PDF) — *umgesetzt* in `test_external_report_service.py::TestPersonenkriteriumInDenWrappern` und
-`test_statistics_hybrid.py::TestSachberichtPdfWeistDenLiveTermAus`
-(#1770); **(5)** ein Invarianten-Test, dass
-`Client.ContactStage` genau zwei Werte hat.
+Einzelfall-Asserts haben diese Kanalklasse jahrelang nicht gefunden — jede einzelne Zusicherung war
+für sich erfüllt, und trotzdem ließ die *Kombination* aus Randsumme, Zeilenordnung und
+Suppressionsentscheidung Kleinstfallzahlen exakt zurückrechnen. Erforderlich und
+(#1770) **umgesetzt**:
+
+**(1) Kleinst-Welt-Enumerationstest** über die publizierte Sicht mit der Invariante „keine
+unterdrückte Zelle ist über das Preimage eindeutig bestimmt" — in
+`test_reporting_disclosure_regression.py::TestKleinstWeltEnumeration` (und dieselbe Invariante am
+zweiten Wrapper, dem Beispiel-Sachbericht). Präzisierungen, die die Umsetzung nötig gemacht hat:
+
+* **Auflage eingehalten:** gewertet werden nur Beobachtungen, deren publizierte Randsumme ≤
+ **Enumerationsgrenze** ist. Die Grenze ist die benannte Konstante `ENUMERATION_LIMIT = 14` (drei
+ nichtleere Zeilen, 364 Welten — eine *exakte* Aufzählung, keine Stichprobe, und alle interessanten
+ Fälle um die Default-Schwelle 5 liegen darin). Ist die Randsumme unterdrückt, kennt der Empfänger
+ sie nicht; dann sind auch Welten jenseits der Grenze konsistent, und ein hier „eindeutiges"
+ Preimage wäre ein Artefakt der Aufzählung (Schein-Pin).
+* **Die Invariante ist auf Kleinstfallzahlen geschärft:** ein exakt bestimmter Wert ≥ *k* ist kein
+ Befund — das Sekundär-Opfer *darf* rückrechenbar sein, es wurde nur unterdrückt, um die Kleinstzelle
+ zu schützen. Die Begründung steht bei den drei Ausnahmen in `disclosure.findings`.
+* **Zwei Positiv-Kontrollen**, damit der Test seinen eigenen Trefferfall beweist: der K2-Stand vor
+ #1770 erzeugt an derselben Aufzählung **54** gepinnte Kleinstzellen, derselbe *neue*
+ Suppressionsstand mit count-sortierter Ausgabe (Stand vor #1767) **250** — letzteres ist der
+ empirische Beleg der Kopplungs-Warnung.
+
+**(2) Ordnungstest** (zwei Welten mit vertauschten Zellwerten müssen dieselbe Ausgabe erzeugen) — auf
+Service-Ebene seit #1767
+(`TestKanonischeOrdnungUnterdrueckterZeilen`), **zusätzlich an der Artefaktgrenze** in
+`test_reporting_disclosure_regression.py::TestOrdnungAnDerArtefaktgrenze`: externer Bericht (HTML),
+beide PDF-Datenpfade sowie JSON- und XML-Renderer. Der Service-Test allein hätte ein künftiges
+`dictsort` im Template oder ein `sorted(...)` im Renderer nicht bemerkt.
+
+**(3) Architektur-Guard** in
+`test_architecture_guards_services.py::TestZentraleSuppressionsfunktion` (AST-basiert): keine
+Eigenbau-Unterdrückung im ganzen Anwendungsbaum (nur `external_report.py` darf den
+`suppressed`-Marker setzen), jede Aufrufstelle der zentralen Suppression deklariert `margin` **und**
+`order`, `order` stammt aus der zentralen Ordnungsliste, und jedes `prepare_export` mit Randsumme
+durchläuft den Fixpunkt-Guard. Damit ist auch die **Fail-open-Klasse aus K5** geschlossen: die
+frühere formbasierte Ordnungserkennung hätte eine künftige count-sortierte Tabelle mit neuer
+Zeilenform still unkanonisiert gelassen. Zwei Anker halten den Guard davor, selbst leerzulaufen.
+
+**(4) K0-Test** (4 Personen à 5 Kontakte in 4 Clustern ⇒ keine sichtbare Alterszelle; 3 Personen ×
+6 Monate ⇒ keine Personenzahl ≥ k im PDF) — in
+`test_external_report_service.py::TestPersonenkriteriumInDenWrappern` und
+`test_statistics_hybrid.py::TestSachberichtPdfWeistDenLiveTermAus`.
+
+**(5) Offen:** ein Invarianten-Test, dass `Client.ContactStage` genau zwei Werte hat — die Identität
+anonym + identifiziert + qualifiziert = `total_contacts` hängt allein daran, und ein dritter Wert
+bräche sie **still**.
 
 ---
 
