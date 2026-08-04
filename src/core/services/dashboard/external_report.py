@@ -156,11 +156,13 @@ def _category_key(row: dict[str, Any]) -> tuple[str]:
 # dem Modell) und fuer ``ExampleBackend.records`` (Eingabeordnung des Backends).
 #
 # NICHT mehr fuer ``by_category``: dessen Einfuegereihenfolge ist die Position
-# des alphabetisch **ersten im Zeitraum tatsaechlich vorhandenen**
-# ``system_type`` je Kategorie (``order_by("document_type__system_type")`` in
-# ``backends/sample_report_1.py``) und damit datenabhaengig — zwei Welten mit
+# des alphabetisch **ersten im Zeitraum tatsaechlich vorhandenen** Quell-Typs je
+# Kategorie (``order_by("document_type__system_type", "document_type__slug")``
+# in ``backends/sample_report_1.py``) und damit datenabhaengig — zwei Welten mit
 # identischen publizierten Werten, aber verschiedenen Quelltypen hinter der
-# Kleinstzelle lieferten verschiedene Zeilenpositionen. Deshalb ORDER_CATEGORY.
+# Kleinstzelle lieferten verschiedene Zeilenpositionen. Deshalb ORDER_CATEGORY,
+# und seit Refs #1772 auch fuer die **sichtbaren** Zeilen dieser Ordnung
+# (``_ORDERS_CANONICAL_FOR_VISIBLE``).
 ORDER_AGE_CLUSTER = "age_cluster"
 ORDER_CATEGORY = "category"
 ORDER_DOCUMENT_TYPE = "document_type"
@@ -172,6 +174,22 @@ _CANONICAL_ORDERS: dict[str, Callable[[dict[str, Any]], tuple] | None] = {
     ORDER_DOCUMENT_TYPE: _document_type_key,
     ORDER_INPUT: None,
 }
+
+# Ordnungen, deren **sichtbare** Zeilen ebenfalls kanonisch sortiert werden
+# (Refs #1772, Punkt 1). Kriterium ist nicht der Geschmack, sondern die Frage,
+# ob die Eingabeordnung aus den publizierten Werten folgt:
+#
+# * ``by_document_type``/``by_age_cluster`` kommen ``-count``-sortiert — wer die
+#   Werte liest, kennt die Ordnung ohnehin; sie zu kanonisieren kostete
+#   Nutzwert (die Tabellen werden als Rangliste gelesen) ohne Schutzgewinn.
+# * ``by_category`` kommt in der Reihenfolge der Konsolidierung, und die haengt
+#   an den **Rohdaten**: eine Kategorie steht dort, wo ihr alphabetisch erster
+#   im Zeitraum vorhandener ``system_type`` steht. Zwei Welten mit identischen
+#   publizierten Werten — „Vermittlung" aus ``accompaniment`` bzw. aus
+#   ``referral`` — lieferten verschiedene Positionen, auch wenn die Zelle
+#   sichtbar ist. Das ist ein Kanal ueber die Rohdaten, kein Nebenprodukt der
+#   Werte.
+_ORDERS_CANONICAL_FOR_VISIBLE = frozenset({ORDER_CATEGORY})
 
 
 def _get_threshold(facility) -> int:
@@ -325,6 +343,14 @@ def _canonicalize_suppressed_order(rows: list[dict[str, Any]], order: str) -> li
     Wrapper und damit alle Artefakte ihn erben, ohne dass ein Template oder ein
     Renderer etwas davon wissen muss.
 
+    **Ausnahme ``_ORDERS_CANONICAL_FOR_VISIBLE`` (Refs #1772, Punkt 1):** die
+    Freistellung sichtbarer Zeilen gilt nur, solange deren Ordnung aus den
+    publizierten Werten folgt (``-count``). Bei ``by_category`` tut sie das
+    nicht — dort ordnet die Konsolidierung **datenabhaengig**, und die Position
+    einer sichtbaren Zeile verriet den Quell-``system_type``. Diese Ordnungen
+    werden vollstaendig kanonisiert; unterdrueckte Zeilen bleiben auch dann der
+    Block am Ende, damit derselbe Mechanismus greift wie ueberall sonst.
+
     ``order`` benennt die Ordnung explizit (siehe ``_CANONICAL_ORDERS``); ein
     unbekannter Wert ist ein ``KeyError`` und damit fail-closed.
     """
@@ -332,6 +358,8 @@ def _canonicalize_suppressed_order(rows: list[dict[str, Any]], order: str) -> li
     if key is None or not rows:
         return rows
     visible = [row for row in rows if not row.get("suppressed")]
+    if order in _ORDERS_CANONICAL_FOR_VISIBLE:
+        visible = sorted(visible, key=key)
     hidden = sorted((row for row in rows if row.get("suppressed")), key=key)
     return [*visible, *hidden]
 

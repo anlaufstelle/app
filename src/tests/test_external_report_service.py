@@ -322,6 +322,53 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         # ``by_document_type``).
         assert [row["name"] for row in aus_a] == ["Kontakte", "Beratung", "Vermittlung"]
 
+    # Dieselben zwei Welten **ohne** Kleinstzelle: alle drei Kategorien liegen
+    # ueber der Schwelle und bleiben sichtbar.
+    WELT_ACCOMPANIMENT_SICHTBAR = [
+        {"name": "Vermittlung", "count": 7},
+        {"name": "Kontakte", "count": 12},
+        {"name": "Beratung", "count": 8},
+    ]
+    WELT_REFERRAL_SICHTBAR = [
+        {"name": "Kontakte", "count": 12},
+        {"name": "Beratung", "count": 8},
+        {"name": "Vermittlung", "count": 7},
+    ]
+
+    def test_by_category_sichtbare_zeilen_sind_ebenfalls_kanonisch_geordnet(self):
+        """Refs #1772 (Punkt 1): ORDER_CATEGORY deckte nur unterdrueckte Zeilen.
+
+        Die Position **sichtbarer** Kategoriezeilen folgte weiter der
+        datenabhaengigen Konsolidierungsordnung — bei identischen publizierten
+        Werten stand „Vermittlung" je nach Quell-``system_type``
+        (``accompaniment`` vs. ``referral``) an Position 1 oder 3. Anders als
+        bei ``by_document_type``/``by_age_cluster`` ist die sichtbare Ordnung
+        hier **nicht** aus den publizierten Werten ableitbar (sie ist nicht
+        count-sortiert), sondern aus den Rohdaten — also ein eigener Kanal.
+        """
+        from core.services.dashboard.external_report import ORDER_CATEGORY, _suppress_small
+
+        aus_a = _suppress_small(list(self.WELT_ACCOMPANIMENT_SICHTBAR), threshold=5, margin=27, order=ORDER_CATEGORY)
+        aus_b = _suppress_small(list(self.WELT_REFERRAL_SICHTBAR), threshold=5, margin=27, order=ORDER_CATEGORY)
+
+        assert aus_a == aus_b
+        assert not any(row["suppressed"] for row in aus_a)
+        assert [row["name"] for row in aus_a] == ["Beratung", "Kontakte", "Vermittlung"]
+
+    def test_sichtbare_dokumenttypen_bleiben_count_sortiert(self):
+        """Gegenprobe zur Abgrenzung: ``ORDER_DOCUMENT_TYPE`` ist nicht betroffen.
+
+        Dort ist die sichtbare Ordnung ``-count`` und damit aus den ohnehin im
+        Klartext stehenden Werten ableitbar — sie zu kanonisieren kostete
+        Nutzwert ohne Schutzgewinn (K5-Begruendung, Refs #1767).
+        """
+        from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
+
+        rows = self._doc_rows({("note", "Notiz"): 30, ("service", "Beratung"): 12, ("contact", "Aufnahme"): 7})
+        result = _suppress_small(rows, threshold=5, margin=49, order=ORDER_DOCUMENT_TYPE)
+
+        assert [row["name"] for row in result] == ["Notiz", "Beratung", "Aufnahme"]
+
     def test_by_category_ohne_kanonische_ordnung_haette_den_kanal_offen_gelassen(self):
         """Gegenprobe: mit ``ORDER_INPUT`` unterscheiden sich beide Welten.
 

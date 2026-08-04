@@ -997,11 +997,17 @@ class TestPrepareExport:
         assert [issue.severity for issue in issues] == ["warning", "info"]
 
     def test_werte_ab_der_schwelle_bleiben_exakt_erhalten(self, backend, grosse_daten):
+        """Werte unveraendert — die **Reihenfolge** ist kanonisch (Refs #1772).
+
+        Konsolidierungsordnung waere ``Kontakte`` (contact) vor ``Beratung``
+        (counseling); publiziert wird seit Punkt 1 die Namensordnung, auch fuer
+        sichtbare Zeilen.
+        """
         result = self._prepared(backend, grosse_daten)
 
         assert result.summary["by_category"] == [
-            {"name": "Kontakte", "count": 6, "suppressed": False},
             {"name": "Beratung", "count": 5, "suppressed": False},
+            {"name": "Kontakte", "count": 6, "suppressed": False},
         ]
         assert result.summary["by_age_cluster"] == [
             {"cluster": "18_26", "label": "18–26", "count": 11, "suppressed": False}
@@ -1009,8 +1015,8 @@ class TestPrepareExport:
         assert result.summary["total"] == 11
         assert result.summary["unique_clients"] == 5
         assert result.records == [
-            {"category": "Kontakte", "count": 6},
             {"category": "Beratung", "count": 5},
+            {"category": "Kontakte", "count": 6},
         ]
 
     def test_sekundaersuppression_schlaegt_auf_die_records_durch(self, backend, sekundaer_daten):
@@ -1053,9 +1059,10 @@ class TestPrepareExport:
 
         summary = self._prepared(backend, kleine_daten).summary
         assert summary["k_anonymity_threshold"] == 1
+        # Kanonische Namensordnung auch fuer sichtbare Zeilen (Refs #1772).
         assert summary["by_category"] == [
-            {"name": "Kontakte", "count": 3, "suppressed": False},
             {"name": "Beratung", "count": 1, "suppressed": False},
+            {"name": "Kontakte", "count": 3, "suppressed": False},
         ]
         assert summary["total"] == 4
         # Die Schwelle steuert nur noch die Zell-Suppression: der
@@ -1077,6 +1084,54 @@ class TestPrepareExport:
         }
         assert raw.records == [{"category": "Kontakte", "count": 3}, {"category": "Beratung", "count": 1}]
         assert [issue.count for issue in raw.completeness] == [1, 1]
+
+
+class TestZeilenpositionIstDatenunabhaengig:
+    """Refs #1772 (Punkt 1): die Position **sichtbarer** Kategoriezeilen darf
+    nichts ueber die Rohdaten sagen.
+
+    ``by_category`` entsteht in der Reihenfolge der Konsolidierung, und die
+    haengt am alphabetisch ersten im Zeitraum vorhandenen ``system_type`` je
+    Kategorie. „Vermittlung" aus ``accompaniment`` stand damit vor „Kontakte",
+    dieselbe Kategorie aus ``referral`` dahinter — bei identischen publizierten
+    Werten. Der Kanal war auf unterdrueckte Zeilen beschraenkt geschlossen
+    (K5/Refs #1770); sichtbare Zeilen trugen ihn weiter.
+    """
+
+    def _welt(self, backend, fixtures, name, system_type):
+        """Ein Artefakt ueber einer frischen Einrichtung: 12/8/7 Ereignisse."""
+        make_doc_type, make_event, organization = fixtures
+        fac = Facility.objects.create(organization=organization, name=f"Welt-{system_type}")
+        typen = [
+            (make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, doc_facility=fac), 12),
+            (make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING, doc_facility=fac), 8),
+            (make_doc_type(name, system_type, doc_facility=fac), 7),
+        ]
+        for typ, anzahl in typen:
+            for _ in range(anzahl):
+                make_event(typ, event_facility=fac)
+        return fac
+
+    def test_vermittlung_steht_unabhaengig_vom_quelltyp_an_derselben_stelle(
+        self, backend, facility, make_doc_type, make_event
+    ):
+        fixtures = (make_doc_type, make_event, facility.organization)
+        welt_a = self._welt(backend, fixtures, "Begleitung", DocumentType.SystemType.ACCOMPANIMENT)
+        welt_b = self._welt(backend, fixtures, "Vermittlung", DocumentType.SystemType.REFERRAL)
+
+        roh_a = backend.build_dataset(welt_a, DATE_FROM, DATE_TO)
+        roh_b = backend.build_dataset(welt_b, DATE_FROM, DATE_TO)
+        # Gegenprobe: die Rohordnung unterscheidet sich tatsaechlich — der Test
+        # prueft also den Eingriff und nicht eine Eigenschaft der Daten.
+        assert [name for name, _count in roh_a.summary["by_category"]] == ["Vermittlung", "Kontakte", "Beratung"]
+        assert [name for name, _count in roh_b.summary["by_category"]] == ["Kontakte", "Beratung", "Vermittlung"]
+
+        aus_a = backend.prepare_export(welt_a, roh_a).summary["by_category"]
+        aus_b = backend.prepare_export(welt_b, roh_b).summary["by_category"]
+
+        assert aus_a == aus_b
+        assert not any(row["suppressed"] for row in aus_a)
+        assert [row["name"] for row in aus_a] == ["Beratung", "Kontakte", "Vermittlung"]
 
 
 class TestExportDatasetIntegration:
