@@ -99,10 +99,12 @@ def _document_type_retention_overrides(facility) -> list[tuple[str, int]]:
     Standardreihenfolge (``sort_order``, ``name``); leer, wenn kein Typ eine
     eigene Frist hat.
     """
-    return [
-        (dt.name, dt.retention_days)
-        for dt in DocumentType.objects.filter(facility=facility, retention_days__isnull=False)
-    ]
+    overrides: list[tuple[str, int]] = []
+    for dt in DocumentType.objects.filter(facility=facility, retention_days__isnull=False):
+        if dt.retention_days is None:
+            continue
+        overrides.append((dt.name, dt.retention_days))
+    return overrides
 
 
 def _format_document_type_overrides(overrides) -> str:
