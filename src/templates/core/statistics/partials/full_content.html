@@ -89,7 +89,16 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
 {% if report_backends %}
 <section id="report-section" class="mt-8 no-print">
     <h2 class="text-[15px] font-bold text-ink mb-3">{% trans "Berichte" %}</h2>
-    <form class="flex flex-wrap gap-3 items-end mb-4">
+    {% comment %}
+    Das Formular umschließt das Panel (K4a, Refs #1770): die Export-Schaltflächen
+    liegen im nachgeladenen Panel und nennen ihr Ziel per `formaction` — beim
+    Submit serialisiert der Browser Backend, Zeitraum, Empfänger und Zweck aus
+    diesem einen Formular. Kein `action` am Formular selbst (jede Schaltfläche
+    nennt ihr Ziel) und `method="get"`, weil alle Ziele GET sind; dasselbe Muster
+    wie der Dashboard-Export in `dashboard_content.html`.
+    {% endcomment %}
+    <form method="get">
+    <div class="flex flex-wrap gap-3 items-end mb-4">
         <input type="hidden" name="period" value="custom">
         <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
         <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
@@ -106,33 +115,27 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
             </select>
         </div>
         {% comment %}
-        K4a (Refs #1770): Empfänger/Zweck der Herausgabe. Sie stecken in
-        demselben Formular, das hx-include an das Panel schickt — das Panel
-        reicht sie in die Export-Links weiter, von dort landen sie im
-        EXPORT-Audit-Detail und tragen die Freigabe-Übersicht. Der
-        change-Trigger baut das Panel neu auf, damit die Links aktuell sind.
+        K4a (Refs #1770): Empfänger/Zweck der Herausgabe. Sie tragen bewusst
+        KEINEN hx-Trigger: das Panel braucht sie nicht (es baut keine Links mehr
+        daraus), und ein change-Trigger auf ein noch leeres Backend-Select
+        quittierte das Panel mit `400 backend erforderlich` — von
+        `htmx-errors.js` als roter Fehler-Toast gerendert. Die Werte gehen beim
+        Submit der Export-Schaltflächen mit, race-frei und ohne JavaScript.
         {% endcomment %}
         <div>
             <label for="report-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
             <input type="text" id="report-recipient" name="recipient" maxlength="200"
                    placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
-                   hx-get="{% url 'core:statistics_report_panel' %}"
-                   hx-trigger="change"
-                   hx-include="closest form"
-                   hx-target="#report-panel"
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
         </div>
         <div>
             <label for="report-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
             <input type="text" id="report-purpose" name="purpose" maxlength="200"
                    placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
-                   hx-get="{% url 'core:statistics_report_panel' %}"
-                   hx-trigger="change"
-                   hx-include="closest form"
-                   hx-target="#report-panel"
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
         </div>
-    </form>
+    </div>
     <div id="report-panel"></div>
+    </form>
 </section>
 {% endif %}

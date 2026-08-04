@@ -1,7 +1,6 @@
 """Views for statistics dashboard and exports."""
 
 import logging
-from urllib.parse import quote
 
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -468,17 +467,13 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             # ``backend.population`` ist der vom Backend deklarierte Code
             # (Default: alle Ereignisse des Zeitraums).
             "population_note": table_note(backend.population, LIVE),
-            # K4a (Refs #1770): Empfaenger/Zweck aus dem Berichte-Formular in die
-            # Export-Links durchreichen — nur so erreichen sie das
-            # EXPORT-Audit-Detail. ``quote`` verhindert, dass ein Ampersand in
-            # "Stadt X & Kreis Y" den Querystring zerlegt; das Ergebnis geht als
-            # **fertiges** Fragment ins Template, damit dort keine
-            # Escaping-Entscheidung mehr zu treffen ist.
-            # ``artifact_released=False``: hier wird nichts herausgegeben, die
-            # Vorschau reicht nur Empfaenger/Zweck an die Download-Links weiter.
-            "release_query": "".join(
-                f"&{key}={quote(value)}" for key, value in release_detail(request.GET, artifact_released=False).items()
-            ),
+            # K4a (Refs #1770): KEIN ``release_query`` mehr. Empfaenger/Zweck zur
+            # Renderzeit in die Export-Ziele zu backen war ein Race: der Klick auf
+            # einen Link blurrte zuerst das Freitextfeld (change → Panel-Neubau),
+            # folgte dann aber synchron dem alten ``href`` — die Angabe fehlte
+            # still im append-only EXPORT-Audit. Das Panel liegt jetzt im
+            # GET-Formular der Berichte-Sektion, dessen Submit die Felder selbst
+            # serialisiert (report_panel.html, formaction je Schaltflaeche).
         }
         return render(request, self.template_name, context)
 

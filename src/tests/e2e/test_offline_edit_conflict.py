@@ -29,8 +29,7 @@ import uuid
 from contextlib import suppress
 
 import pytest
-
-from ._helpers import wait_until
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 pytestmark = pytest.mark.e2e
 
@@ -407,18 +406,13 @@ class TestOfflineReeditOfNewEvent:
             # "kein Replay gelaufen" (z.B. set_offline feuerte in dieser
             # Browser-Version gar kein online-Event) — mit klarer Meldung
             # statt spaeter kryptisch leerlaufender Zaehler-Asserts.
-            #
-            # Python-seitig gepollt (``wait_until``), NICHT via
-            # ``page.wait_for_function`` mit async-Callback: das waere ein
-            # sofort erfuellter False-Positive (Promise ist truthy) — die
-            # Barriere faellt weg und die Zaehler-Asserts darunter laufen ins
-            # Leere, sobald der Replay auch nur Millisekunden braucht.
-            # Begruendung im Detail an ``_helpers.wait_until``.
-            if not wait_until(
-                page,
-                lambda: page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", new_pk) is None,
-                timeout_ms=20000,
-            ):
+            try:
+                page.wait_for_function(
+                    "async (pk) => (await window.offlineStore.getOfflineEvent(pk)) === null",
+                    arg=new_pk,
+                    timeout=20000,
+                )
+            except PlaywrightTimeoutError:
                 pytest.fail(
                     "Replay hat die lokale new-Row nicht aufgeloest (nach 20s noch in "
                     "IndexedDB). Wahrscheinlichste Ursachen: das online-Event hat nicht "

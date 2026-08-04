@@ -7,11 +7,12 @@ laufen ueber ``test_authz_matrix.py`` (Eintraege in ``_authz_expectations.py``).
 """
 
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from core.models import AuditLog, DocumentType
 from core.reporting import registry
@@ -260,7 +261,11 @@ class TestBerichteFormZeitraumDurchreichung:
     Panel-Request ein — genau das, was ``hx-include`` real einsammeln würde.
     Vor dem Fix schlägt bereits die erste Assertion fehl (kein ``period``-Feld
     im Formular); nach dem Fix propagieren die im Dashboard gewählten Daten
-    unverändert bis in den Panel-Header und die drei Export-Link-Query-Strings.
+    unverändert bis in den Panel-Header.
+
+    Seit K4a (Refs #1770) tragen die Export-Schaltflächen den Zeitraum nicht
+    mehr selbst: sie liegen im selben GET-Formular und erben dessen
+    Hidden-Felder beim Submit (siehe ``TestPanelExportOhneRoundtrip``).
     """
 
     def test_extrahierte_form_felder_liefern_den_gewaehlten_zeitraum_im_panel(self, client, lead_user):
@@ -286,10 +291,111 @@ class TestBerichteFormZeitraumDurchreichung:
         panel = client.get(reverse("core:statistics_report_panel"), query)
         panel_html = panel.content.decode()
 
-        assert "2020-01-01" in panel_html
-        assert "2020-01-31" in panel_html
-        assert panel_html.count("date_from=2020-01-01") == 3
-        assert panel_html.count("date_to=2020-01-31") == 3
+        # Der Panel-Header weist den aufgeloesten Zeitraum aus (lokalisiert).
+        assert date_format(date(2020, 1, 1)) in panel_html
+        assert date_format(date(2020, 1, 31)) in panel_html
+        # Die drei Export-Schaltflaechen erben ihn ueber dasselbe Formular.
+        assert panel_html.count("formaction=") == 3
+
+
+class TestPanelExportOhneRoundtrip:
+    """K4a (Refs #1770): Empfaenger/Zweck duerfen nicht ueber einen HTMX-
+    Roundtrip in die Export-Ziele gebacken werden.
+
+    Vorher buk ``report_panel.html`` ``{{ release_query }}`` zur **Renderzeit**
+    ins ``href``. Ein Mousedown auf den Link blurrt das Freitextfeld, der
+    ``change``-Trigger startet den Panel-Neubau — der Klick folgt aber synchron
+    dem ALTEN ``href``, also ohne ``&recipient=…``. Das EXPORT-Audit ist
+    append-only: die Angabe ist dann dauerhaft verloren, die Freigabe-Uebersicht
+    zeigt „—/—", und nichts weist auf den Verlust hin.
+
+    Zweite Folge derselben Ursache: die beiden Freitextfelder trugen
+    ``hx-get``+``hx-trigger="change"``; bei noch leerem Backend-Select antwortet
+    ``DatasetReportPanelView`` mit ``400 backend erforderlich``, was
+    ``htmx-errors.js`` als roten Fehler-Toast rendert.
+
+    Loesung wie im Dashboard-Export (``dashboard_content.html``): ein
+    GET-Formular, das das Panel umschliesst, mit ``formaction`` je
+    Schaltflaeche. Die Werte werden erst beim Submit serialisiert.
+    """
+
+    def _panel(self, client, lead_user):
+        client.force_login(lead_user)
+        response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_panel_exportiert_ueber_submit_buttons_statt_links(self, client, lead_user):
+        panel_html = self._panel(client, lead_user)
+        export_url = reverse("core:statistics_report_export")
+
+        assert export_url not in panel_html.split("<a ", 1)[-1] or "<a " not in panel_html, (
+            "Die Export-Ziele duerfen keine <a href>-Links mehr sein — ihr href traegt den Race."
+        )
+        assert panel_html.count(f'formaction="{export_url}"') == 3
+        for fmt in ("csv", "json", "xml"):
+            assert f'name="format" value="{fmt}"' in panel_html
+
+    def test_panel_backt_keinen_release_query_mehr_ein(self, client, lead_user):
+        """``release_query`` war der Traeger des Race — er darf ganz verschwinden."""
+        client.force_login(lead_user)
+        response = client.get(
+            reverse("core:statistics_report_panel"),
+            {"backend": "sample-report-1", "recipient": "Stadt Musterstadt", "purpose": "Verwendungsnachweis"},
+        )
+
+        assert "release_query" not in response.context
+        assert "Musterstadt" not in response.content.decode()
+
+    def test_berichte_formular_umschliesst_das_panel(self, client, lead_user):
+        """Sonst serialisiert der Submit die Freitextfelder gar nicht mit."""
+        client.force_login(lead_user)
+        section = _extract_report_section(client.get(reverse("core:statistics")).content.decode())
+
+        assert section.index("<form") < section.index('id="report-panel"') < section.index("</form>")
+        assert 'method="get"' in section[section.index("<form") : section.index(">", section.index("<form"))]
+
+    def test_freitextfelder_loesen_keinen_panel_request_mehr_aus(self, client, lead_user):
+        """Ohne gewaehltes Backend antwortet das Panel 400 → roter Fehler-Toast."""
+        client.force_login(lead_user)
+        section = _extract_report_section(client.get(reverse("core:statistics")).content.decode())
+
+        for feld in ("recipient", "purpose"):
+            start = section.index(f'name="{feld}"')
+            tag = section[section.rindex("<input", 0, start) : section.index(">", start)]
+            assert "hx-get" not in tag, f"{feld} triggert weiterhin einen Panel-Roundtrip: {tag}"
+            assert "hx-trigger" not in tag
+
+    def test_empfaenger_erreicht_ueber_den_panel_pfad_das_audit_detail(
+        self, client, lead_user, facility, doc_type_contact, sample_event
+    ):
+        """Ende-zu-Ende: exakt das, was der Browser beim Submit serialisiert."""
+        _mapped(doc_type_contact)
+        client.force_login(lead_user)
+        section = _extract_report_section(
+            client.get(
+                reverse("core:statistics"),
+                {"period": "custom", "date_from": "2026-01-01", "date_to": "2026-01-31"},
+            ).content.decode()
+        )
+        felder = dict(_HIDDEN_INPUT_RE.findall(section))
+
+        client.get(
+            reverse("core:statistics_report_export"),
+            {
+                **felder,
+                "backend": "sample-report-1",
+                "recipient": "Stadt Musterstadt",
+                "purpose": "Verwendungsnachweis 2026",
+                # Submitter-name/value der angeklickten Schaltflaeche.
+                "format": "csv",
+            },
+        )
+
+        entry = AuditLog.objects.filter(facility=facility, action=AuditLog.Action.EXPORT).latest("timestamp")
+        assert entry.detail["recipient"] == "Stadt Musterstadt"
+        assert entry.detail["purpose"] == "Verwendungsnachweis 2026"
+        assert entry.detail["date_from"] == "2026-01-01"
 
 
 class TestDatasetExportView:

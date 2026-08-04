@@ -101,7 +101,7 @@ class TestReportSectionVisibility:
         panel = _select_backend(page, "sample-report-1")
 
         with page.expect_download() as download_info:
-            panel.locator("a:has-text('CSV-Export')").click()
+            panel.locator("button:has-text('CSV-Export')").click()
         assert download_info.value.suggested_filename.startswith("sample-report-1_")
 
 
@@ -187,17 +187,17 @@ class TestReportDownloads:
     """Format-Downloads aus dem Panel (CSV/JSON/XML)."""
 
     @pytest.mark.parametrize(
-        ("link_text", "suffix"),
+        ("button_text", "suffix"),
         [("CSV-Export", ".csv"), ("JSON-Export", ".json"), ("XML-Export", ".xml")],
     )
-    def test_sample_report_1_download_per_format(self, authenticated_page, base_url, link_text, suffix):
-        """Jeder Format-Link liefert eine Datei ``sample-report-1_<von>_<bis>.<ext>``."""
+    def test_sample_report_1_download_per_format(self, authenticated_page, base_url, button_text, suffix):
+        """Jede Format-Schaltflaeche liefert ``sample-report-1_<von>_<bis>.<ext>``."""
         page = authenticated_page
         _open_statistics(page, base_url)
         panel = _select_backend(page, "sample-report-1")
 
         with page.expect_download() as download_info:
-            panel.locator(f"a:has-text('{link_text}')").click()
+            panel.locator(f"button:has-text('{button_text}')").click()
         filename = download_info.value.suggested_filename
 
         assert filename.startswith("sample-report-1_"), filename
@@ -210,7 +210,7 @@ class TestReportDownloads:
         panel = _select_backend(page, "example")
 
         with page.expect_download() as download_info:
-            panel.locator("a:has-text('CSV-Export')").click()
+            panel.locator("button:has-text('CSV-Export')").click()
         filename = download_info.value.suggested_filename
 
         assert filename.startswith("example_"), filename
@@ -220,8 +220,14 @@ class TestReportDownloads:
 class TestReportPeriodPassthrough:
     """Zeitraum-Durchreichung: der oben gewaehlte Zeitraum gilt auch fuer Bericht + Export."""
 
-    def test_period_switch_reaches_panel_and_export_links(self, authenticated_page, base_url):
-        """Wechsel auf "Jahr" → Panel und Export-Links tragen den Jahresbeginn."""
+    def test_period_switch_reaches_panel_and_export(self, authenticated_page, base_url):
+        """Wechsel auf "Jahr" → Panel UND heruntergeladene Datei tragen den Jahresbeginn.
+
+        Seit K4a (Refs #1770) steht der Zeitraum nicht mehr im ``href`` der
+        Export-Ziele, sondern in den Hidden-Feldern des umschliessenden
+        GET-Formulars; gepruefft wird deshalb das Ergebnis (Dateiname) statt
+        eines Attributs.
+        """
         page = authenticated_page
         _open_statistics(page, base_url)
 
@@ -239,10 +245,11 @@ class TestReportPeriodPassthrough:
         panel = _select_backend(page, "sample-report-1")
 
         expect(panel.locator("p").first).to_contain_text("1. Januar")
-        for link_text in ("CSV-Export", "JSON-Export", "XML-Export"):
-            expect(panel.locator(f"a:has-text('{link_text}')")).to_have_attribute(
-                "href", re.compile(rf"date_from={re.escape(year_start)}(&|$)")
-            )
+        with page.expect_download() as download_info:
+            panel.locator("button:has-text('CSV-Export')").click()
+        assert download_info.value.suggested_filename.startswith(f"sample-report-1_{year_start}_"), (
+            download_info.value.suggested_filename
+        )
 
 
 class TestReportPanelConsoleHygiene:
