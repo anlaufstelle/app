@@ -10,16 +10,58 @@
  * If the session key is not available (logout, session timeout, password
  * change, unsupported browser), autosave silently disables itself instead of
  * falling back to plaintext storage. Refs #573, #576.
+ *
+ * Refs #1774 (Personenbezug des Entwurfs): Der ``formKey`` bildet nur
+ * ``user`` + ``pathname`` — fuer /events/new/ also keinerlei Personenbezug —
+ * und ``getFormData`` ueberspringt versteckte Eingabefelder, worunter genau
+ * das ``client``-Feld der Personenauswahl faellt. Der Entwurf trug damit
+ * Klartext-Notizen ZU einer Person, ohne dass der personen-genaue
+ * Offline-Widerruf (#1760) ihn dieser Person zuordnen konnte. Ein Feld kann
+ * sich jetzt per ``data-autosave-person`` als Traeger des Personenbezugs
+ * ausweisen; sein Wert wandert unter dem reservierten Schluessel
+ * ``__personPk`` IN den verschluesselten Umschlag (nie als Plaintext-Row-Feld
+ * — das waeren unverschluesselte PII-Verknuepfungsmetadaten, Refs #1476/R9).
  */
 (function () {
     "use strict";
 
     var INTERVAL_MS = 5000;
     var KEY_PREFIX = "autosave_";
+    // Refs #1774: reserviert, kollidiert bewusst mit keinem Feldnamen —
+    // ``restoreFormData`` iteriert ueber Formularelemente und laesst den
+    // Schluessel damit unangetastet (er ist Purge-Metadatum, kein Formularwert).
+    var PERSON_KEY = "__personPk";
 
     function getStorageKey() {
         var userId = document.body.dataset.userId || "";
         return KEY_PREFIX + userId + "_" + window.location.pathname;
+    }
+
+    /*
+     * Refs #1774: Die aktuell gewaehlte Person des Formulars (leerer String,
+     * solange keine gewaehlt ist). Das Feld ist versteckt und Alpine-gebunden
+     * (``:value="selectedId"``) — gelesen wird die DOM-Property, nicht das
+     * Attribut.
+     */
+    function getPersonPk(form) {
+        var el = form.querySelector("[data-autosave-person]");
+        return (el && el.value) || "";
+    }
+
+    /*
+     * Refs #1774: Entwurfs-Payload = Formularwerte + (falls bekannt) der
+     * Personenbezug. ``knownPersonPk`` ist der zuletzt gesehene Bezug: nach
+     * einem Wiederherstellen ist die Alpine-Auswahl zurueckgesetzt und das
+     * versteckte Feld leer, der Entwurfsinhalt betrifft aber weiter dieselbe
+     * Person — der Bezug darf nicht still verloren gehen, sonst waere der
+     * wiederhergestellte Entwurf fuer den Widerruf erneut unsichtbar. Eine
+     * NEUE Auswahl gewinnt dagegen immer.
+     */
+    function buildDraftPayload(form, knownPersonPk) {
+        var data = getFormData(form);
+        var personPk = getPersonPk(form) || knownPersonPk || "";
+        if (personPk) data[PERSON_KEY] = personPk;
+        return data;
     }
 
     function getFormData(form) {
@@ -180,6 +222,8 @@
 
         var storageKey = getStorageKey();
         var lastSavedJson = "";
+        // Refs #1774: zuletzt bekannter Personenbezug des Entwurfs.
+        var lastKnownPersonPk = "";
         // If the server rendered this form with an intentional prefill
         // (e.g. a Quick-Template), the server state wins over any older
         // autosaved draft for the same path: drop the draft and skip restore
@@ -199,6 +243,9 @@
                 if (existing && existing.data) {
                     var wasRestored = restoreFormData(form, existing.data);
                     if (wasRestored) showRestoredBanner(form, storageKey);
+                    // Refs #1774: Alt-Entwuerfe ohne den Schluessel werden
+                    // tolerant gelesen (undefined -> "", keine Migration).
+                    lastKnownPersonPk = existing.data[PERSON_KEY] || "";
                     lastSavedJson = JSON.stringify(existing.data);
                 } else {
                     await _migrateLegacyLocalStorage(storageKey, form);
@@ -211,7 +258,8 @@
         setInterval(async function () {
             if (!isOfflineReady()) return;
             try {
-                var currentData = getFormData(form);
+                var currentData = buildDraftPayload(form, lastKnownPersonPk);
+                if (currentData[PERSON_KEY]) lastKnownPersonPk = currentData[PERSON_KEY];
                 var json = JSON.stringify(currentData);
                 if (json !== lastSavedJson) {
                     await window.offlineStore.putEncrypted("drafts", {
@@ -255,6 +303,16 @@
             }
         });
     }
+
+    // Refs #1774: schmale Test-Oberflaeche (wie bei sync-orchestrator.js) —
+    // der Personenbezug des Entwurfs ist DSGVO-relevant und muss ohne
+    // Timer-/DOM-Choreografie pruefbar sein.
+    window.autosave = {
+        _PERSON_KEY: PERSON_KEY,
+        _getFormData: getFormData,
+        _getPersonPk: getPersonPk,
+        _buildDraftPayload: buildDraftPayload,
+    };
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init);

@@ -124,7 +124,8 @@
                            aria-controls="client-autocomplete-list"
                            class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                            autocomplete="off">
-                    <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
+                    {# Refs #1774: data-autosave-person — der Autosave-Entwurf schreibt diesen Wert als Personenbezug in seinen verschluesselten Umschlag, damit der Offline-Widerruf (#1760) den Entwurf der Person zuordnen und tilgen kann. #}
+                    <input type="hidden" name="client" :value="selectedId" @input="setSelectedId" data-autosave-person>
 
                     {# Dropdown mit Tastatur-Hervorhebung #}
                     <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
