@@ -19,11 +19,11 @@ Handrunde, nicht vorab. Abgedeckt sind zwei Flüsse:
       und **zurück** liefert vom Partial ``200`` mit den eigenen Feldern (vor dem Fix:
       404 → HTMX swapt bei 4xx nicht → im DOM blieben die Felder des anderen Typs →
       der folgende, völlig plausible Submit leerte die Bestandswerte still).
-      Bewusst NICHT geprüft wird, ob das zurückgeholte Feldset die Bestandswerte
-      vorbefüllt: das Partial rendert per Entwurf ein leeres Feldset (kein
-      ``initial_data``, konsistent zur E11-„Typwechsel verwirft"-Policy) — der Test
-      trägt den Wert daher wie eine Bearbeiterin erneut ein und belegt, dass Typ **und**
-      Werte den Umweg überstehen.
+      Seit Refs #1758 prüft derselbe Test zusätzlich, dass das zurückgeholte Feldset
+      die Bestandswerte **vorbefüllt** zeigt: der Rückweg auf den gespeicherten Typ
+      ist kein Typwechsel, das Partial liefert dafür ``initial_data`` mit (E11
+      „Typwechsel verwirft" gilt unverändert für einen echten Wechsel). Damit
+      überstehen Typ **und** Werte den Umweg auch ohne erneute Eingabe.
 
   (3) **Rückfrage vor dem Verwerfen** ``test_confirm_only_when_values_are_at_risk_and_dismiss_keeps_data``
       (Refs #1733): Anlage und Speichern ohne Typwechsel fragen nicht nach; das
@@ -426,11 +426,13 @@ class TestInactiveAssignedClientType:
             expect(page.locator(f"input[name='{slug_own}']")).to_be_visible(timeout=10000)
             expect(page.locator(f"input[name='{slug_away}']")).to_have_count(0)
 
-            # Das nachgeladene Feldset ist per Entwurf leer (E11: der Typwechsel
-            # verwirft Werte, das Partial kennt kein ``initial_data``) — die
-            # Bearbeiterin trägt den Wert wieder ein. Entscheidend ist, dass das
-            # eigene Feld überhaupt zurückkommt: nur so landet sein Slug im POST.
-            fill_dynamic_field(page, f"input[name='{slug_own}']", value_own)
+            # Refs #1758: Der Rückweg auf den GESPEICHERTEN Typ ist kein
+            # Typwechsel — das Feldset kommt mit den Bestandswerten zurück.
+            # Vorher rendete das Partial hier leer, und der folgende Submit
+            # überschrieb den Wert still mit einem Leerstring (der #1733-Confirm
+            # warnte zwar, behob die Ursache aber nicht). Kein erneutes Eintippen
+            # mehr: genau das ist der Regressionsschutz.
+            expect(page.locator(f"input[name='{slug_own}']")).to_have_value(value_own, timeout=10000)
             # Refs #1733: Das Feldset wurde zweimal nachgeladen — die Rückfrage
             # hängt bewusst am Nachladen, nicht am Select-Wert, und kommt
             # deshalb auch bei diesem Weg-und-Zurück (genau hier drohte der

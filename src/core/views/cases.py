@@ -544,10 +544,18 @@ class CaseFieldsPartialView(StaffRequiredMixin, View):
     Bestandswerte. Alle uebrigen Grenzen bleiben unveraendert hart; ein
     unsichtbarer Ist-Typ bleibt 403 (dort existiert das Select ohnehin nicht,
     ``_lock_invisible_document_type``).
+
+    **Vorbefuellung beim Rueckweg** (Refs #1758, Spiegel aus
+    :class:`~core.views.clients.ClientFieldsPartialView`): Ist der angefragte
+    Typ genau der am Fall gespeicherte, ist das *kein* Typwechsel — das Feldset
+    kommt mit ``initial_data`` (entschluesselt) zurueck, sonst leer. Damit
+    ueberschreibt der Submit nach einem Weg-und-zurueck-Wechsel die
+    Bestandswerte nicht mehr mit Leerstrings. E11 („Typwechsel verwirft") und
+    der #1733-Confirm bleiben unveraendert.
     """
 
-    def _assigned_document_type_pk(self, request):
-        """PK des Typs, der dem bearbeiteten Fall bereits zugewiesen ist.
+    def _assigned_case(self, request):
+        """Der bearbeitete Fall aus ``?case=<pk>`` — oder ``None``.
 
         ``None``, wenn kein ``case``-Parameter mitkam (Anlage-Formular oder
         Konfigurations-Vorschau). Der Lookup ist facility-gescoped wie ueberall:
@@ -559,17 +567,17 @@ class CaseFieldsPartialView(StaffRequiredMixin, View):
         if not case_id:
             return None
         try:
-            case_obj = get_scoped_object(Case, request, pk=case_id)
+            return get_scoped_object(Case, request, pk=case_id)
         except ValidationError as exc:
             raise Http404(_("Fall nicht gefunden.")) from exc
-        return case_obj.document_type_id
 
     def get(self, request):
         doc_type_id = request.GET.get("document_type")
         if not doc_type_id:
             return render(request, "core/partials/dynamic_fields.html", {"data_form": None})
 
-        assigned_pk = self._assigned_document_type_pk(request)
+        assigned_case = self._assigned_case(request)
+        assigned_pk = assigned_case.document_type_id if assigned_case else None
 
         try:
             doc_type = get_scoped_object(
@@ -591,7 +599,13 @@ class CaseFieldsPartialView(StaffRequiredMixin, View):
         if not user_can_see_document_type(request.user, doc_type):
             raise PermissionDenied
 
-        data_form, _restricted = _case_data_form(request, doc_type)
+        # Refs #1758: nur der Rueckweg auf den GESPEICHERTEN Typ ist vorbefuellt
+        # (s. Klassen-Docstring) — jeder andere Typ bleibt leer.
+        initial_data = None
+        if assigned_case is not None and doc_type.pk == assigned_pk:
+            initial_data = decrypt_dynamic_text_data(assigned_case.data_json)
+
+        data_form, _restricted = _case_data_form(request, doc_type, initial_data=initial_data)
         return render(request, "core/partials/dynamic_fields.html", {"data_form": data_form})
 
 

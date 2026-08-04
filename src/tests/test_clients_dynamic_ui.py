@@ -1069,6 +1069,137 @@ class TestPartialAcceptsAssignedInactiveType:
 
 
 # ---------------------------------------------------------------------------
+# Partial + Rueckweg auf den bereits zugewiesenen Typ (Refs #1758)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestPartialPrefillsAssignedType:
+    """Der Rueckweg auf den gespeicherten Typ ist KEIN Typwechsel.
+
+    Bislang rendert das Partial immer ein leeres Feldset. Wechselt man im
+    Select weg und wieder zurueck, kommen die Felder des Ist-Typs leer zurueck
+    — der anschliessende, voellig plausible Submit ueberschreibt die
+    Bestandswerte mit Leerstrings. Der ``#1733``-Confirm haengt am erfolgten
+    Nachladen und warnt zwar, behebt die Ursache aber nicht.
+
+    Entscheid: ``initial_data`` genau dann mitliefern, wenn der angefragte Typ
+    dem am Objekt gespeicherten entspricht. Bei echtem Typwechsel bleibt das
+    Feldset leer (E11-Policy „Typwechsel verwirft" unveraendert).
+    """
+
+    @pytest.fixture
+    def client_with_values(self, facility, staff_user, doc_type_client_profile, fernet_key):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            yield Client.objects.create(
+                facility=facility,
+                pseudonym="P7-Prefill-01",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"wohnsituation": "WG im Nordviertel", "diagnose": "vertraulicher Klartext"},
+            )
+
+    def test_assigned_type_comes_back_prefilled(
+        self, client, staff_user, client_with_values, doc_type_client_profile, fernet_key
+    ):
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:client_fields_partial"),
+                {"document_type": str(doc_type_client_profile.pk), "client": str(client_with_values.pk)},
+            )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "WG im Nordviertel" in content
+        # Verschluesselte Slugs kommen entschluesselt zurueck (Muster
+        # ``ClientUpdateView.get``) — nie als Fernet-Token.
+        assert "vertraulicher Klartext" in content
+        assert "gAAAAA" not in content
+
+    def test_real_type_switch_stays_empty(
+        self, client, staff_user, client_with_values, doc_type_client_mixed, fernet_key
+    ):
+        """E11 bleibt: ein echter Wechsel liefert weiterhin ein leeres Feldset."""
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:client_fields_partial"),
+                {"document_type": str(doc_type_client_mixed.pk), "client": str(client_with_values.pk)},
+            )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'name="sprache"' in content
+        assert "WG im Nordviertel" not in content
+
+    def test_without_client_param_stays_empty(
+        self, client, staff_user, client_with_values, doc_type_client_profile, fernet_key
+    ):
+        """Anlage-Formular/Config-Vorschau haben kein Objekt — nichts vorbefuellen."""
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:client_fields_partial"),
+                {"document_type": str(doc_type_client_profile.pk)},
+            )
+        assert response.status_code == 200
+        assert "WG im Nordviertel" not in response.content.decode()
+
+    def test_restricted_field_value_does_not_leak(self, client, staff_user, facility, doc_type_client_mixed):
+        """Sensitivity-Grenze bleibt hart: das HIGH-Feld wird entfernt, sein Wert erscheint nie."""
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Prefill-02",
+            created_by=staff_user,
+            document_type=doc_type_client_mixed,
+            data_json={"sprache": "DE", "gefaehrdung": "nur fuer Leitung"},
+        )
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_fields_partial"),
+            {"document_type": str(doc_type_client_mixed.pk), "client": str(target.pk)},
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'value="DE"' in content
+        assert 'name="gefaehrdung"' not in content
+        assert "nur fuer Leitung" not in content
+
+    def test_switch_away_and_back_then_submit_keeps_values(
+        self, client, staff_user, client_with_values, doc_type_client_profile, doc_type_client_mixed, fernet_key
+    ):
+        """Regression: der Rueckweg + unveraenderter Submit verliert nichts mehr.
+
+        Der Submit traegt genau das, was das zurueckgeholte Feldset rendert —
+        vor dem Fix waren das Leerstrings.
+        """
+        client.force_login(staff_user)
+        partial = reverse("core:client_fields_partial")
+        client_pk = str(client_with_values.pk)
+
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            away = client.get(partial, {"document_type": str(doc_type_client_mixed.pk), "client": client_pk})
+            assert away.status_code == 200
+
+            back = client.get(partial, {"document_type": str(doc_type_client_profile.pk), "client": client_pk})
+            assert back.status_code == 200
+            back_form = back.context["data_form"]
+            posted = {slug: field.initial or "" for slug, field in back_form.fields.items()}
+
+            response = client.post(
+                reverse("core:client_update", args=[client_with_values.pk]),
+                _client_post_data(
+                    "P7-Prefill-01",
+                    document_type=str(doc_type_client_profile.pk),
+                    **posted,
+                ),
+            )
+            assert response.status_code == 302
+            client_with_values.refresh_from_db()
+            assert client_with_values.data_json["wohnsituation"] == "WG im Nordviertel"
+            assert safe_decrypt(client_with_values.data_json["diagnose"]) == "vertraulicher Klartext"
+
+
+# ---------------------------------------------------------------------------
 # Detailansicht
 # ---------------------------------------------------------------------------
 

@@ -1216,6 +1216,128 @@ class TestPartialAcceptsAssignedInactiveType:
 
 
 # ---------------------------------------------------------------------------
+# Partial + Rueckweg auf den bereits zugewiesenen Typ (Refs #1758)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestPartialPrefillsAssignedType:
+    """Spiegel zu ``test_clients_dynamic_ui.TestPartialPrefillsAssignedType``.
+
+    Der Rueckweg auf den gespeicherten Typ ist kein Typwechsel — das Partial
+    liefert dafuer ``initial_data`` mit. Bei echtem Typwechsel bleibt das
+    Feldset leer (E11).
+    """
+
+    @pytest.fixture
+    def case_with_values(self, facility, client_identified, staff_user, doc_type_case_form, fernet_key):
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            yield Case.objects.create(
+                facility=facility,
+                client=client_identified,
+                title="P8-Prefill-01",
+                created_by=staff_user,
+                document_type=doc_type_case_form,
+                data_json={"anlass": "Mietschulden Q3", "verlauf": "vertraulicher Klartext"},
+            )
+
+    def test_assigned_type_comes_back_prefilled(
+        self, client, staff_user, case_with_values, doc_type_case_form, fernet_key
+    ):
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:case_fields_partial"),
+                {"document_type": str(doc_type_case_form.pk), "case": str(case_with_values.pk)},
+            )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Mietschulden Q3" in content
+        assert "vertraulicher Klartext" in content
+        assert "gAAAAA" not in content
+
+    def test_real_type_switch_stays_empty(self, client, staff_user, case_with_values, doc_type_case_mixed, fernet_key):
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:case_fields_partial"),
+                {"document_type": str(doc_type_case_mixed.pk), "case": str(case_with_values.pk)},
+            )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'name="zielsetzung"' in content
+        assert "Mietschulden Q3" not in content
+
+    def test_without_case_param_stays_empty(self, client, staff_user, case_with_values, doc_type_case_form, fernet_key):
+        client.force_login(staff_user)
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            response = client.get(
+                reverse("core:case_fields_partial"),
+                {"document_type": str(doc_type_case_form.pk)},
+            )
+        assert response.status_code == 200
+        assert "Mietschulden Q3" not in response.content.decode()
+
+    def test_restricted_field_value_does_not_leak(
+        self, client, staff_user, facility, client_identified, doc_type_case_mixed
+    ):
+        target = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="P8-Prefill-02",
+            created_by=staff_user,
+            document_type=doc_type_case_mixed,
+            data_json={"zielsetzung": "Wohnung", "risikoeinschaetzung": "nur fuer Leitung"},
+        )
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:case_fields_partial"),
+            {"document_type": str(doc_type_case_mixed.pk), "case": str(target.pk)},
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'value="Wohnung"' in content
+        assert 'name="risikoeinschaetzung"' not in content
+        assert "nur fuer Leitung" not in content
+
+    def test_switch_away_and_back_then_submit_keeps_values(
+        self,
+        client,
+        staff_user,
+        client_identified,
+        case_with_values,
+        doc_type_case_form,
+        doc_type_case_mixed,
+        fernet_key,
+    ):
+        client.force_login(staff_user)
+        partial = reverse("core:case_fields_partial")
+        case_pk = str(case_with_values.pk)
+
+        with override_settings(ENCRYPTION_KEY=fernet_key):
+            away = client.get(partial, {"document_type": str(doc_type_case_mixed.pk), "case": case_pk})
+            assert away.status_code == 200
+
+            back = client.get(partial, {"document_type": str(doc_type_case_form.pk), "case": case_pk})
+            assert back.status_code == 200
+            posted = {slug: field.initial or "" for slug, field in back.context["data_form"].fields.items()}
+
+            response = client.post(
+                reverse("core:case_update", args=[case_with_values.pk]),
+                _case_post_data(
+                    "P8-Prefill-01",
+                    client_identified,
+                    document_type=str(doc_type_case_form.pk),
+                    **posted,
+                ),
+            )
+            assert response.status_code == 302
+            case_with_values.refresh_from_db()
+            assert case_with_values.data_json["anlass"] == "Mietschulden Q3"
+            assert safe_decrypt(case_with_values.data_json["verlauf"]) == "vertraulicher Klartext"
+
+
+# ---------------------------------------------------------------------------
 # Detailansicht
 # ---------------------------------------------------------------------------
 

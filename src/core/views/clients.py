@@ -474,10 +474,23 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
     Bestandswerte. Alle uebrigen Grenzen bleiben unveraendert hart; ein
     unsichtbarer Ist-Typ bleibt 403 (dort existiert das Select ohnehin nicht,
     ``_lock_invisible_document_type``).
+
+    **Vorbefuellung beim Rueckweg** (Refs #1758): Ist der angefragte Typ genau
+    der am Objekt gespeicherte, ist das *kein* Typwechsel — das Feldset kommt
+    mit ``initial_data`` (entschluesselt, Muster ``ClientUpdateView.get``)
+    zurueck. Ohne das lieferte der Weg-und-zurueck-Wechsel leere Felder, und
+    der anschliessende, voellig plausible Submit ueberschrieb die
+    Bestandswerte mit Leerstrings. Bei einem ECHTEN Typwechsel bleibt das
+    Feldset leer — die E11-Policy „Typwechsel verwirft" ist unberuehrt. Der
+    Confirm aus #1733 haengt am erfolgten Nachladen und bleibt ebenfalls
+    unveraendert; er warnt, behob die Ursache aber nicht. Die
+    Sensitivity-Grenze bleibt hart: ``remove_restricted_fields`` laeuft nach
+    wie vor unmittelbar nach der Konstruktion, ein Wert zu einem entfernten
+    Feld wird also nie gerendert.
     """
 
-    def _assigned_document_type_pk(self, request):
-        """PK des Typs, der der bearbeiteten Person bereits zugewiesen ist.
+    def _assigned_client(self, request):
+        """Die bearbeitete Person aus ``?client=<pk>`` — oder ``None``.
 
         ``None``, wenn kein ``client``-Parameter mitkam (Anlage-Formular oder
         Konfigurations-Vorschau). Der Lookup ist facility-gescoped wie ueberall:
@@ -489,17 +502,17 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
         if not client_id:
             return None
         try:
-            client_obj = get_scoped_object(Client, request, pk=client_id)
+            return get_scoped_object(Client, request, pk=client_id)
         except ValidationError as exc:
             raise Http404(_("Person nicht gefunden.")) from exc
-        return client_obj.document_type_id
 
     def get(self, request):
         doc_type_id = request.GET.get("document_type")
         if not doc_type_id:
             return render(request, "core/partials/dynamic_fields.html", {"data_form": None})
 
-        assigned_pk = self._assigned_document_type_pk(request)
+        assigned_client = self._assigned_client(request)
+        assigned_pk = assigned_client.document_type_id if assigned_client else None
 
         try:
             doc_type = get_scoped_object(
@@ -521,7 +534,13 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
         if not user_can_see_document_type(request.user, doc_type):
             raise PermissionDenied
 
-        data_form, _restricted = _client_data_form(request, doc_type)
+        # Refs #1758: nur der Rueckweg auf den GESPEICHERTEN Typ ist vorbefuellt
+        # (s. Klassen-Docstring) — jeder andere Typ bleibt leer.
+        initial_data = None
+        if assigned_client is not None and doc_type.pk == assigned_pk:
+            initial_data = decrypt_dynamic_text_data(assigned_client.data_json)
+
+        data_form, _restricted = _client_data_form(request, doc_type, initial_data=initial_data)
         return render(request, "core/partials/dynamic_fields.html", {"data_form": data_form})
 
 
