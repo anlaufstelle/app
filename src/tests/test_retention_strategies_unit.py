@@ -23,6 +23,7 @@ from core.retention.enforcement import (
     enforce_identified,
     enforce_qualified,
 )
+from core.retention.proposals import create_proposals_for_facility
 
 
 def _at(days_ago: int):
@@ -223,7 +224,14 @@ class TestEnforceDocumentTypeRetention:
         assert enforce_document_type_retention(facility, timezone.now(), dry_run=True)["count"] == 0
 
     def test_neg_client_entity_doctype_is_an_explicit_noop(
-        self, facility, staff_user, admin_user, client_identified, doc_type_client_profile
+        self,
+        facility,
+        staff_user,
+        admin_user,
+        client_identified,
+        doc_type_client_profile,
+        doc_type_contact,
+        settings_obj,
     ):
         """``retention_days`` bleibt event-only (Produktentscheid M24, Refs #1738).
 
@@ -273,12 +281,81 @@ class TestEnforceDocumentTypeRetention:
 
         assert result == {"count": 0}
         assert Attachment.objects.filter(pk=attachment.pk).exists()
-        assert not RetentionProposal.objects.filter(facility=facility).exists()
         # psycopg rendert UUID-Parameter ohne Bindestriche — beide Schreibweisen
         # pruefen, sonst laeuft die Probe still ins Leere.
         needles = (str(doc_type_client_profile.pk), doc_type_client_profile.pk.hex)
         touching = [q["sql"] for q in ctx.captured_queries if any(n in q["sql"] for n in needles)]
         assert not touching, f"Personen-Typ wurde trotz Event-only-Frist abgefragt:\n{touching}"
+
+        # Refs #1738 (G4): Die fruehere Zeile ``assert not RetentionProposal…exists()``
+        # bewies nichts — ``enforce_document_type_retention`` legt gar keine
+        # Vorschlaege an und es waren auch keine geseedet. Der Vorschlags-Pfad
+        # haengt an ``iter_strategies``; dort wird er hier tatsaechlich
+        # angestossen, mit Positiv-Kontrolle im selben Lauf.
+        now = timezone.now()
+        assert create_proposals_for_facility(facility, settings_obj, now) == {"count": 0}
+        assert not RetentionProposal.objects.filter(facility=facility).exists()
+
+        doc_type_contact.retention_days = doc_type_client_profile.retention_days
+        doc_type_contact.save(update_fields=["retention_days"])
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=_at(10),
+            data_json={},
+            created_by=staff_user,
+        )
+        assert create_proposals_for_facility(facility, settings_obj, now) == {"count": 1}, (
+            "Positiv-Kontrolle: dieselbe Frist an einem EREIGNIS-Typ muss sehr wohl "
+            "einen Loeschvorschlag erzeugen — sonst pinnt der Negativ-Teil nur eine "
+            "kaputte Vorschlags-Pipeline."
+        )
+
+    def test_neg_client_entity_doctype_yields_no_strategy(
+        self, facility, staff_user, client_identified, doc_type_client_profile, doc_type_contact, settings_obj
+    ):
+        """Der Event-only-Filter gehoert in ``iter_strategies`` (Refs #1738, G4).
+
+        ``iter_strategies`` ist die gemeinsame Quelle von Dry-Run/Vorschau
+        (``collect_doomed_events``) und Loeschvorschlaegen
+        (``create_proposals_for_facility``). Seit AP3 filtert
+        ``enforce_document_type_retention`` auf ``entity_type=EVENT``, die
+        Strategie-Quelle aber nicht — die Frist eines Personen-/Fall-Typs lief
+        dort weiter mit und blieb nur deshalb folgenlos, weil ein Ereignis nie
+        einen Personen-Typ traegt. Genau diese stille Kopplung ist die
+        Sollbruchstelle (Muster
+        ``test_neg_client_entity_doctype_is_an_explicit_noop``): Der Filter macht
+        die Regel explizit, an der einzigen Quelle statt nur am Durchsetzungslauf.
+
+        Positiv-Kontrolle mit identischer Frist an einem EREIGNIS-Typ: Strategie,
+        doomed Event und Vorschlag entstehen dort sehr wohl.
+        """
+        from core.retention.enforcement import collect_doomed_events
+        from core.retention.strategies import iter_strategies
+
+        now = timezone.now()
+        doc_type_client_profile.retention_days = 1
+        doc_type_client_profile.save(update_fields=["retention_days"])
+
+        assert "document_type" not in [s.category for s in iter_strategies(facility, settings_obj, now)]
+        assert collect_doomed_events(facility, settings_obj, now).count() == 0
+        assert create_proposals_for_facility(facility, settings_obj, now) == {"count": 0}
+
+        doc_type_contact.retention_days = 1
+        doc_type_contact.save(update_fields=["retention_days"])
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=_at(10),
+            data_json={},
+            created_by=staff_user,
+        )
+        categories = [s.category for s in iter_strategies(facility, settings_obj, now)]
+        assert categories.count("document_type") == 1
+        assert collect_doomed_events(facility, settings_obj, now).count() == 1
+        assert create_proposals_for_facility(facility, settings_obj, now) == {"count": 1}
 
 
 @pytest.mark.django_db

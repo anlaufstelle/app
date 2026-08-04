@@ -271,6 +271,12 @@ def enforce_document_type_retention(facility, now, dry_run):
     traegt — eine stille Kopplung statt einer erklaerten Regel (Negativtest:
     ``test_neg_client_entity_doctype_is_an_explicit_noop``).
 
+    Derselbe Filter steht zusaetzlich in
+    :func:`core.retention.strategies.iter_strategies` (Vorschau- und
+    Vorschlags-Pfad). Die Dopplung ist **gewollt** (Defense in Depth): dieser
+    Loeschpfad baut seinen QuerySet selbst und darf sich nicht darauf verlassen,
+    dass die Regel in einem Modul steht, das er gar nicht aufruft.
+
     Returns ``{"count": N}``.
     """
 

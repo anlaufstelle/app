@@ -50,6 +50,13 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
     ein Event, das mehrere Kategorien matcht, in der hoechstpriorisierten
     (anonymous schlaegt identified usw.) — wichtig fuer die deterministische
     Categorisierung im Audit-Log.
+
+    Die ``document_type``-Strategie ist **event-only** (Refs #1738, s. u.).
+    Denselben ``entity_type``-Filter fuehrt
+    :func:`core.retention.enforcement.enforce_document_type_retention` noch
+    einmal fuer sich — bewusst doppelt (Defense in Depth): der direkte
+    Loeschpfad laeuft nicht ueber dieses Modul und darf sich nicht darauf
+    verlassen, dass die Regel anderswo steht.
     """
     # Security N8 (Refs #1445): 0/negative Fristen erzeugen einen Cutoff
     # >= jetzt (``now - timedelta(days=-5) == now + 5d``) und wuerden den
@@ -110,11 +117,22 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
             ),
         )
 
+    # Refs #1738 (M24, ADR-039): ``retention_days`` ist **event-only** — fuer
+    # Personen- und Fall-Typen gilt der Owner-Lebenszyklus (ihre Daten und
+    # Anhaenge fallen mit der Klienten-Anonymisierung), eine eigene Zeitfrist
+    # gibt es in v1 nicht. Der Filter gehoert an DIESE Quelle: ``iter_strategies``
+    # speist ``collect_doomed_events`` (Dry-Run/Vorschau) UND
+    # ``create_proposals_for_facility`` (RetentionProposal). Ohne ihn blieb die
+    # Frist eines Personen-Typs nur deshalb folgenlos, weil ein ``Event`` nie
+    # einen Personen-Typ traegt — eine stille Kopplung statt einer erklaerten
+    # Regel (Negativtest: ``test_neg_client_entity_doctype_yields_no_strategy``).
+    #
     # Security N8 (Refs #1445): retention_days >= 1 defensiv erzwingen (der
     # Filter greift beim DB-Lesen — In-Memory nicht testbar; die eigentliche
     # Absicherung ist der DB-CheckConstraint documenttype_retention_days_min_1).
     doc_types_with_retention = DocumentType.objects.filter(
         facility=facility,
+        entity_type=DocumentType.EntityType.EVENT,
         retention_days__isnull=False,
         retention_days__gte=1,
     )
