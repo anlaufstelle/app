@@ -274,7 +274,7 @@
     /* ─── Boot-Check der Widerrufsliste (Refs #1760) ─────────────────────── */
     // Der Widerruf laeuft zwar als erster Schritt jeder Sync-Sequenz — die wird
     // aber nur durch ein ``online``-Event oder den bedarfsgesteuerten
-    // Startup-Drain ausgeloest. Ein Geraet, das ohne ungesyncte Arbeit einfach
+    // Startup-Drain ausgeloest. Ein Geraet, das ohne replaybare Arbeit einfach
     // wieder benutzt wird (typischer Fall: App auf, Netz da, nichts zu
     // replayen), traefe damit nie auf die Liste und zeigte die anonymisierte
     // Person bis zum TTL-Ablauf weiter. Der Boot-Check schliesst genau diese
@@ -283,28 +283,70 @@
     // ungegatetes ``requestSync``: das zoege bei jeder Navigation Replay UND
     // Revalidierung aller Klienten nach sich.
     //
-    // Gate: nur wenn es ueberhaupt lokalen Bestand gibt, den ein Widerruf
-    // treffen koennte (gecachte Personen ODER Queue-Rows). Beides sind reine
-    // Zaehlungen auf Klartext-Index-Spalten — kein Session-Key noetig.
-    function _startupRevocationCheck() {
-        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-        const store = window.offlineStore;
-        if (!store || typeof store.applyClientRevocations !== "function") return;
-        Promise.resolve()
-            .then(function () {
-                return Promise.all([store.countOfflineClients(), store.count("queue")]);
-            })
-            .then(function (counts) {
-                if (counts[0] > 0 || counts[1] > 0) {
-                    return runExclusive(function () {
-                        return store.applyClientRevocations();
-                    });
+    // GATE: alle VIER Bestaende zaehlen, die ``applyClientRevocations``
+    // tatsaechlich tilgt (Fix-Runde 1, Befund 1 — vorher nur clients+queue).
+    // Die beiden fehlenden Faelle waren real erreichbar und dauerhaft blind:
+    //   * ``drafts``-only — ``autosave.js`` legt fuer jedes Formular einen
+    //     Entwurf an; der ``formKey`` traegt die Personen-UUID, der Inhalt liegt
+    //     im entschluesselbaren Umschlag. Ein Entwurf ueberlebt das Entfernen
+    //     der Person aus dem Offline-Cache.
+    //   * ``events``-only — ungesyncte Ereignisse ueberleben TTL-Ablauf und
+    //     "Person aus Offline entfernen" bewusst (#1353). Stehen sie auf
+    //     ``conflict``/``dead``, greift ausserdem der Startup-Drain nicht
+    //     (``hasReplayableWork`` schliesst genau diese Status aus) — ein
+    //     dauerhaft online genutztes Geraet haette den Widerruf NIE angewandt.
+    // Alle vier sind Zaehlungen auf Klartext-Index-Spalten — kein Session-Key
+    // noetig.
+    //
+    // DROSSEL (Fix-Runde 1, Befund 2a): Die App nutzt kein hx-boost, jede
+    // Navigation ist ein voller Seitenaufbau — ungedrosselt feuerte der Poll
+    // also pro Klick gegen das Rate-Limit des Endpoints. Ein Zeitstempel in
+    // ``meta`` (Klartext, kein PII, ohne Session-Key lesbar) deckelt den
+    // BOOT-Poll auf einen Lauf pro Minute. Der Zeitstempel wird auch nach einem
+    // Fehlversuch gesetzt — ein 429 oder Netzfehler soll gerade NICHT sofort
+    // erneut anklopfen. Der SYNC-Pfad (``_runSyncSequence``) bleibt bewusst
+    // ungedrosselt: dort ist der Widerruf die Vorbedingung jedes Replays.
+    const BOOT_REVOCATION_META_KEY = "revocationCheckedAt";
+    const BOOT_REVOCATION_MIN_INTERVAL_MS = 60 * 1000;
+
+    async function _bootRevocationDue(store) {
+        if (typeof store.getMetaValue !== "function") return true;
+        const last = await store.getMetaValue(BOOT_REVOCATION_META_KEY);
+        const checkedAt = last && last.checkedAt;
+        if (!checkedAt) return true;
+        return Date.now() - checkedAt >= BOOT_REVOCATION_MIN_INTERVAL_MS;
+    }
+
+    async function _startupRevocationCheck() {
+        try {
+            if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+            const store = window.offlineStore;
+            if (!store || typeof store.applyClientRevocations !== "function") return;
+            const counts = await Promise.all([
+                store.countOfflineClients(),
+                store.count("queue"),
+                store.count("drafts"),
+                store.count("events"),
+            ]);
+            if (!counts.some(function (n) {
+                return n > 0;
+            })) {
+                return;
+            }
+            if (!(await _bootRevocationDue(store))) return;
+            try {
+                await runExclusive(function () {
+                    return store.applyClientRevocations();
+                });
+            } finally {
+                // Immer stempeln — auch bei error/ratelimited (siehe DROSSEL oben).
+                if (typeof store.setMetaValue === "function") {
+                    await store.setMetaValue(BOOT_REVOCATION_META_KEY, { checkedAt: Date.now() });
                 }
-                return null;
-            })
-            .catch(function () {
-                /* still — Seitenstart nie an der Widerrufs-Pruefung scheitern lassen */
-            });
+            }
+        } catch (_e) {
+            /* still — Seitenstart nie an der Widerrufs-Pruefung scheitern lassen */
+        }
     }
 
     function _onBoot() {
@@ -326,5 +368,13 @@
         isLockHeld: isLockHeld,
         broadcast: broadcast,
         onMessage: onMessage,
+        // Refs #1760 (Muster offline-queue.js): reine Export-Oberflaeche fuer den
+        // JS-Unit-Runner (vitest) — der Boot-Check traegt das Gate ueber die vier
+        // vom Purge betroffenen Tabellen und die Poll-Drossel und wird deshalb
+        // isoliert getestet, statt sich auf den einmaligen Import-Zeit-Lauf zu
+        // verlassen. Kein Verhaltens-Refactor.
+        _startupRevocationCheck: _startupRevocationCheck,
+        _BOOT_REVOCATION_META_KEY: BOOT_REVOCATION_META_KEY,
+        _BOOT_REVOCATION_MIN_INTERVAL_MS: BOOT_REVOCATION_MIN_INTERVAL_MS,
     };
 })();

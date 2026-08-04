@@ -411,6 +411,26 @@
     }
 
     /*
+     * Refs #1760 (Fix-Runde 1): winziger, UNVERSCHLUESSELTER Key-Value-Zugriff auf
+     * die `meta`-Tabelle — wie `storagePersist` bewusst im Klartext: die Werte
+     * sind reine Steuer-Metadaten (Booleans/Zeitstempel) ohne jeden Personenbezug,
+     * dafuer lohnt sich kein Crypto-Overhead, und sie muessen auch OHNE
+     * Session-Key lesbar sein (der Boot-Drossel-Zeitstempel wird gelesen, bevor
+     * feststeht, ob ein Schluessel vorliegt).
+     *
+     * `purgeAll` (Logout/Passwortwechsel) leert `meta` mit — gewollt: nach einem
+     * Logout soll der naechste Boot wieder pruefen duerfen.
+     */
+    async function getMetaValue(key) {
+        const row = await db.meta.get(key);
+        return row ? row.value : null;
+    }
+
+    async function setMetaValue(key, value) {
+        return db.meta.put({ key: key, value: value });
+    }
+
+    /*
      * Refs #1414: True, wenn `e` ein QuotaExceededError ist (Chromium:
      * `DOMException` mit `name === 'QuotaExceededError'`). Dexie reicht den
      * Fehler beim Transaktions-Abbruch weiter; je nach Pfad steht der Name
@@ -2054,6 +2074,9 @@
         purgeExpired: purgeExpired,
         purgeExpiredBundles: purgeExpiredBundles,
         count: count,
+        // Refs #1760 — unverschluesselte Steuer-Metadaten (kein PII, kein Key noetig)
+        getMetaValue: getMetaValue,
+        setMetaValue: setMetaValue,
         saveClientBundle: saveClientBundle,
         getOfflineClient: getOfflineClient,
         listOfflineClients: listOfflineClients,
