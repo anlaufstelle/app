@@ -3,16 +3,20 @@
 import logging
 import uuid
 
-from django.db.models import Q
+from django.db.models import CharField, Q, Value
+from django.db.models.functions import Coalesce
 from django.http import Http404
+from django.urls import reverse
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
-from core.models import AuditLog, Client, DocumentType
+from core.models import AuditLog, Client, DocumentType, FieldTemplate
 from core.models import Case as CaseModel
 from core.models.attachment import Attachment
+from core.services.attachments import attachment_download_url
 from core.services.audit import log_audit_event
 from core.services.compliance import (
     allowed_sensitivities_for_user,
@@ -27,6 +31,15 @@ from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
+
+
+#: Sentinel fuer „Owner ohne ``document_type``" in der Sensitivity-Coalesce
+#: (M24/AP4, Refs #1738). Bewusst ein Wert, der in KEINER Sensitivity-Liste
+#: vorkommt: die Zeile faellt damit fuer JEDE Rolle aus der Uebersicht — genau
+#: wie das Download-Gate, das ``document_type is None`` fail-closed mit 404
+#: beantwortet (ADR-039 §12). Ein Default auf „normal" waere die
+#: entgegengesetzte, offene Richtung.
+NO_DOC_TYPE_SENTINEL = "__kein_dokumentationstyp__"
 
 
 # MIME types that may be rendered inline in the browser without XSS risk
@@ -58,100 +71,211 @@ def _attachment_disposition(mime_type, force_download):
 
 
 class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
-    """Central file attachment overview for a facility."""
+    """Zentrale Datei-Uebersicht einer Einrichtung — owner-generisch.
+
+    M24/AP4 (Refs #1738, ADR-039): Anhaenge haengen an Ereignis, Person ODER
+    Fall. Das Basis-Queryset scopt deshalb **direkt** ueber
+    ``Attachment.facility`` (nicht mehr ueber den Join ``event__facility``) —
+    eine personen-/falleigene Zeile waere ueber den Event-Join unsichtbar
+    gewesen.
+
+    Sichtbarkeit (alles VOR dem ``[:200]``-Slice, damit unsichtbare Zeilen
+    keine sichtbaren aus dem Fenster draengen):
+
+    * Owner nicht im Papierkorb (je Owner-Typ, ``NULL``-tolerant),
+    * Doc-Type-Sensitivity des Owners ueber eine ``Coalesce``-Annotation ueber
+      alle drei Owner — **fail-closed**, wenn der Owner keinen Typ hat,
+    * Feld-Sensitivity des ``field_template`` (Override oder Erbe),
+    * Assistenz sieht keine fall-eigenen Zeilen (ADR-039 §12: Faelle sind fuer
+      sie unsichtbar) — und im Dropdown auch keine Fall-Typnamen.
+    """
 
     template_name = "core/attachments/list.html"
     partial_template_name = "core/attachments/partials/attachment_table.html"
 
+    #: Beschriftung der Spalte „Zugeordnet zu" je Owner-Typ.
+    OWNER_LABELS = {
+        "event": _("Ereignis"),
+        "client": _("Person"),
+        "case": _("Fall"),
+    }
+    #: Detail-Route je Owner-Typ (Ziel des Links in derselben Spalte).
+    OWNER_DETAIL_ROUTES = {
+        "event": "core:event_detail",
+        "client": "core:client_detail",
+        "case": "core:case_detail",
+    }
+
     def get(self, request):
         facility = request.current_facility
-        allowed = allowed_sensitivities_for_user(request.user)
+        user = request.user
+        allowed = allowed_sensitivities_for_user(user)
 
-        # Get all attachments for this facility via event__facility
         attachments = (
-            # B1 (M24/AP4, Refs #1738): ``deleted_at`` blendet einen Anhang
-            # ueberall aus — der Download antwortet seit L5 (Refs #1375) mit
-            # 404, nur diese Liste zeigte ihn weiter samt Dateiname und
-            # Download-Link. Wer einen Anhang entfernt hat, darf ihn hier nicht
-            # wiederfinden.
-            Attachment.objects.filter(event__facility=facility, event__is_deleted=False, deleted_at__isnull=True)
+            # B1 (Refs #1738): ``deleted_at`` blendet einen Anhang ueberall aus.
+            Attachment.objects.for_facility(facility)
+            .active()
+            # Owner im Papierkorb liefert keine Dateien mehr aus. Je Owner-Typ
+            # ``NULL``-tolerant formuliert: pro Zeile ist genau EIN Owner
+            # gesetzt (CheckConstraint), die beiden anderen Klauseln sind dann
+            # per ``isnull`` erfuellt. ``Case`` erbt ``is_deleted`` von
+            # ``SoftDeletableModel`` (es gibt keinen Fall-Loeschworkflow, das
+            # Feld existiert aber und wird hier respektiert).
+            .filter(Q(event__isnull=True) | Q(event__is_deleted=False))
+            .filter(Q(client__isnull=True) | Q(client__is_deleted=False))
+            .filter(Q(case__isnull=True) | Q(case__is_deleted=False))
             .select_related(
                 "event",
                 "event__document_type",
                 "event__client",
+                "client",
+                "client__document_type",
+                "case",
+                "case__document_type",
+                "case__client",
                 "field_template",
                 "created_by",
             )
-            # Sensitivity filter BEFORE slicing: effective sensitivity is
-            # max(doc_type, field_template). Both must be within the user's
-            # allowed range for the attachment to be visible.
-            .filter(
-                event__document_type__sensitivity__in=allowed,
+            .annotate(
+                # Sensitivity des Owner-Typs, egal an welchem Owner die Zeile
+                # haengt. Der Default ist ein Sentinel, der in KEINER
+                # ``allowed``-Liste vorkommt: ein Owner ohne ``document_type``
+                # hat keine Bezugs-Sensitivitaet, die Zeile bleibt damit fuer
+                # jede Rolle unsichtbar — exakt wie das Download-Gate, das
+                # ``document_type is None`` mit 404 beantwortet (ADR-039 §12).
+                owner_sensitivity=Coalesce(
+                    "event__document_type__sensitivity",
+                    "client__document_type__sensitivity",
+                    "case__document_type__sensitivity",
+                    Value(NO_DOC_TYPE_SENTINEL),
+                    output_field=CharField(),
+                ),
             )
-            .filter(
-                Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed),
-            )
+            # Sensitivity-Filter VOR dem Slice: die effektive Sensitivitaet ist
+            # max(doc_type, field_template) — beide muessen in der Rollen-Sicht
+            # liegen.
+            .filter(owner_sensitivity__in=allowed)
+            .filter(Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed))
             .order_by("-created_at")
         )
 
-        # Apply filters from query params
+        # ADR-039 §12: Faelle sind fuer die Assistenz unsichtbar — fall-eigene
+        # Dateien folglich auch. Ohne diesen Filter waere die Uebersicht ein
+        # Nebeneingang in die Fall-Dokumentation.
+        if not user.is_staff_or_above:
+            attachments = attachments.filter(case__isnull=True)
+
         doc_type_id = request.GET.get("document_type")
         if doc_type_id:
-            attachments = attachments.filter(event__document_type_id=doc_type_id)
+            attachments = self._filter_by_uuid(
+                attachments,
+                doc_type_id,
+                lambda value: (
+                    Q(event__document_type_id=value)
+                    | Q(client__document_type_id=value)
+                    | Q(case__document_type_id=value)
+                ),
+            )
 
         client_id = request.GET.get("client")
         if client_id:
-            # B3 (M24/AP4, Refs #1738): Das Personen-Filterfeld ist ein freies
-            # Textfeld mit ``hx-trigger="keyup"`` — JEDER Tastendruck vor der
-            # vollstaendigen UUID schickte einen Request, Postgres lehnte den
-            # Vergleich mit ValidationError ab, Django antwortete 500 (und der
-            # Fehler landete im Error-Tracking). Fail-closed: ein unbrauchbarer
-            # Filter liefert eine leere Ergebnismenge, keine ungefilterte Liste.
-            try:
-                uuid.UUID(client_id)
-            except (ValueError, AttributeError, TypeError):
-                attachments = attachments.none()
-            else:
-                attachments = attachments.filter(event__client_id=client_id)
-
-        # Build display list from pre-filtered queryset
-        visible = []
-        for att in attachments[:200]:
-            visible.append(
-                {
-                    "attachment": att,
-                    "event": att.event,
-                    "original_filename": get_original_filename(att),
-                    "file_size_display": format_file_size(att.file_size),
-                    "doc_type_name": att.event.document_type.name,
-                    "client_pseudonym": att.event.client.pseudonym if att.event.client else "—",
-                }
+            # Die Person haengt je nach Owner an drei verschiedenen Stellen:
+            # am Ereignis, direkt am Anhang (personen-eigen) oder am Fall.
+            attachments = self._filter_by_uuid(
+                attachments,
+                client_id,
+                lambda value: Q(event__client_id=value) | Q(client_id=value) | Q(case__client_id=value),
             )
 
-        # Document types for filter dropdown. M2 (Refs #1058): nur event-Typen
-        # — Attachments haengen immer an einem Event, client-/case-Typen
-        # gehoeren nicht in den Filter (Entscheid E21).
-        #
-        # B2 (M24/AP4, Refs #1738, Security): Das Dropdown listete bis hierher
-        # ALLE aktiven Ereignistypen — auch solche, deren Sensitivitaet die
-        # Rolle gar nicht sehen darf. Die Ergebniszeilen waren korrekt
-        # gefiltert, der TYPNAME stand trotzdem im HTML jeder Assistenz — und
-        # ein Typname ist selbst eine Information („Krisengespraech"). Derselbe
-        # ``allowed``-Filter wie auf den Zeilen schliesst das.
-        doc_types = DocumentType.objects.for_facility(facility).filter(
-            is_active=True,
-            entity_type=DocumentType.EntityType.EVENT,
-            sensitivity__in=allowed,
-        )
+        visible = [self._build_row(user, att) for att in attachments[:200]]
 
         context = {
             "attachments": visible,
-            "doc_types": doc_types,
+            "doc_types": self._filter_doc_types(facility, user, allowed),
             "selected_doc_type": doc_type_id or "",
             "selected_client": client_id or "",
         }
 
         return self.render_htmx_or_full(context)
+
+    @staticmethod
+    def _filter_by_uuid(queryset, raw_value, condition):
+        """B3 (Refs #1738): UUID-Guard vor jedem pk-Filter aus der Query.
+
+        Das Personen-Filterfeld ist ein freies Textfeld mit
+        ``hx-trigger="keyup changed delay:300ms"`` — JEDER Tastendruck vor der
+        vollstaendigen UUID schickte einen Request, Postgres lehnte den
+        Vergleich mit ``ValidationError`` ab, Django antwortete 500. Der
+        Typ-Filter kommt zwar aus einem ``<select>``, ist per Query aber
+        genauso frei setzbar.
+
+        Fail-closed: ein unbrauchbarer Filter liefert eine LEERE Ergebnismenge,
+        nicht die ungefilterte Gesamtliste.
+        """
+        try:
+            uuid.UUID(raw_value)
+        except (ValueError, AttributeError, TypeError):
+            return queryset.none()
+        return queryset.filter(condition(raw_value))
+
+    def _filter_doc_types(self, facility, user, allowed):
+        """Dokumentationstypen fuer das Filter-Dropdown.
+
+        E21-Revision (Refs #1738): Der Filter ist ein DATEI-Filter, kein
+        Ereignis-Filter. Angeboten werden aktive Typen ALLER drei
+        Entitaetsarten, aber nur solche **mit einem FILE-Feld** — ein Typ ohne
+        Datei-Feld kann hier nie ein Ergebnis liefern. Die uebrigen fuenf
+        E21-Stellen (Event-Dropdowns) bleiben unveraendert event-only.
+
+        B2 (Refs #1738, Security): Sensitivity-Filter wie auf den Zeilen — der
+        Typname ist selbst eine Information. Und ohne den Fall-Ausschluss
+        erfuehre die Assistenz hier die Namen der Fall-Typen, deren Zeilen sie
+        gerade nicht sehen darf.
+        """
+        doc_types = (
+            DocumentType.objects.for_facility(facility)
+            .filter(
+                is_active=True,
+                sensitivity__in=allowed,
+                fields__field_template__field_type=FieldTemplate.FieldType.FILE,
+            )
+            .distinct()
+            .order_by("name")
+        )
+        if not user.is_staff_or_above:
+            doc_types = doc_types.exclude(entity_type=DocumentType.EntityType.CASE)
+        return doc_types
+
+    def _build_row(self, user, attachment):
+        """Anzeige-Dict einer Zeile inklusive Owner-Spalte „Zugeordnet zu".
+
+        ``attachment.owner`` branch't auf die ``*_id``-Spalten und greift erst
+        dann auf die Relation zu — die steht durch das ``select_related`` oben
+        bereits im Speicher (kein N+1).
+        """
+        owner_type = attachment.owner_type
+        owner = attachment.owner
+        document_type = getattr(owner, "document_type", None)
+        # Person je Owner-Typ: am Ereignis und am Fall haengt sie als FK, bei
+        # einem personen-eigenen Anhang IST der Owner die Person.
+        person = owner if owner_type == "client" else getattr(owner, "client", None)
+        # Fall-Detail ist STAFF_PLUS. Fall-Zeilen sind fuer die Assistenz zwar
+        # schon aus dem Queryset gefiltert — ein toter Link waere hier trotzdem
+        # der falsche Default.
+        may_open_owner = owner_type != "case" or user.is_staff_or_above
+        return {
+            "attachment": attachment,
+            "owner_type": owner_type,
+            "owner_label": self.OWNER_LABELS.get(owner_type, ""),
+            "owner_url": (
+                reverse(self.OWNER_DETAIL_ROUTES[owner_type], kwargs={"pk": owner.pk}) if may_open_owner else ""
+            ),
+            "original_filename": get_original_filename(attachment),
+            "file_size_display": format_file_size(attachment.file_size),
+            "doc_type_name": document_type.name if document_type is not None else "—",
+            "client_pseudonym": person.pseudonym if person is not None else "—",
+            "download_url": attachment_download_url(attachment),
+        }
 
 
 class BaseAttachmentDownloadView(View):

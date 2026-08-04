@@ -10,6 +10,8 @@
                 <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Größe" %}</th>
                 <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Typ" %}</th>
                 <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Dokumentationstyp" %}</th>
+                {# M24/AP4 (Refs #1738): Anhänge hängen an Ereignis, Person oder Fall — die Spalte macht den Owner sichtbar. #}
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Zugeordnet zu" %}</th>
                 <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden lg:table-cell">{% trans "Person" %}</th>
                 <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden lg:table-cell">{% trans "Datum" %}</th>
                 <th class="px-4 py-3 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
@@ -19,7 +21,7 @@
             {% for item in attachments %}
             <tr class="hover:bg-canvas">
                 <td class="px-4 py-3">
-                    <a href="{% url 'core:event_detail' item.event.pk %}" class="text-sm font-medium text-accent hover:text-accent flex items-center">
+                    <a href="{{ item.download_url }}" class="text-sm font-medium text-accent hover:text-accent flex items-center">
                         <svg aria-hidden="true" class="w-4 h-4 mr-1.5 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                         <span class="truncate max-w-[200px]">{{ item.original_filename }}</span>
                     </a>
@@ -27,10 +29,13 @@
                 <td class="px-4 py-3 text-sm text-ink-muted">{{ item.file_size_display }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden md:table-cell">{{ item.attachment.mime_type }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden md:table-cell">{{ item.doc_type_name }}</td>
+                <td class="px-4 py-3 text-sm text-ink-muted hidden md:table-cell">
+                    {% if item.owner_url %}<a href="{{ item.owner_url }}" class="text-accent hover:text-accent hover:underline">{{ item.owner_label }}</a>{% else %}{{ item.owner_label }}{% endif %}
+                </td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell">{{ item.client_pseudonym }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell"><span class="font-mono">{{ item.attachment.created_at|date:"DATETIME_FORMAT" }}</span></td>
                 <td class="px-4 py-3 text-right">
-                    <a href="{% url 'core:attachment_download' item.event.pk item.attachment.pk %}"
+                    <a href="{{ item.download_url }}"
                        class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-accent hover:text-accent"
                        title="{% trans 'Herunterladen' %}">
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -47,11 +52,11 @@
     {% for item in attachments %}
     <div class="bg-surface border border-subtle rounded-[10px] p-3">
         <div class="flex items-center justify-between">
-            <a href="{% url 'core:event_detail' item.event.pk %}" class="text-sm font-medium text-accent hover:text-accent flex items-center min-w-0">
+            <a href="{{ item.download_url }}" class="text-sm font-medium text-accent hover:text-accent flex items-center min-w-0">
                 <svg aria-hidden="true" class="w-4 h-4 mr-1.5 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                 <span class="truncate">{{ item.original_filename }}</span>
             </a>
-            <a href="{% url 'core:attachment_download' item.event.pk item.attachment.pk %}"
+            <a href="{{ item.download_url }}"
                class="ml-2 flex-shrink-0 text-accent hover:text-accent"
                title="{% trans 'Herunterladen' %}">
                 <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -59,6 +64,9 @@
         </div>
         <div class="mt-1 text-xs text-ink-muted">
             {{ item.file_size_display }} · {{ item.doc_type_name }} · {{ item.client_pseudonym }}
+        </div>
+        <div class="mt-0.5 text-xs text-ink-muted">
+            {% trans "Zugeordnet zu" %}: {% if item.owner_url %}<a href="{{ item.owner_url }}" class="text-accent hover:text-accent hover:underline">{{ item.owner_label }}</a>{% else %}{{ item.owner_label }}{% endif %}
         </div>
         <div class="mt-0.5 text-xs text-ink-muted">
             <span class="font-mono">{{ item.attachment.created_at|date:"DATETIME_FORMAT" }}</span>

@@ -16,7 +16,7 @@ Deckt das neue Paket ``core.services.attachments`` ab:
 import pytest
 from cryptography.fernet import Fernet
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.urls import NoReverseMatch, reverse
+from django.urls import reverse
 
 try:
     import magic
@@ -160,18 +160,25 @@ class TestAttachmentDownloadUrl:
         expected = reverse("core:attachment_download", kwargs={"pk": sample_event.pk, "attachment_pk": attachment.pk})
         assert attachment_download_url(attachment) == expected
 
-    def test_personen_anhang_bis_ap4_ohne_route(self, staff_user, client_identified, ft_file):
-        """ERWARTET bis AP4: ``core:client_attachment_download`` existiert noch
-        nicht. AP2 legt nur den Dispatch an — die Routen kommen mit den
-        Download-Views in AP4 (ADR-039 §12)."""
-        attachment = _attach(client_identified, ft_file, staff_user)
-        with pytest.raises(NoReverseMatch):
-            attachment_download_url(attachment)
+    def test_personen_anhang_loest_die_ap4_route_auf(self, staff_user, client_identified, ft_file):
+        """AP4 hat die Route angelegt (Refs #1738, ADR-039 §12).
 
-    def test_fall_anhang_bis_ap4_ohne_route(self, staff_user, case_open, ft_file):
+        Bis AP4 pinnte dieser Test bewusst ``NoReverseMatch`` — fail-loud statt
+        eines stillen ``None``, das im Template als toter Link gelandet waere.
+        Mit ``core:client_attachment_download`` loest der Dispatch jetzt auf.
+        """
+        attachment = _attach(client_identified, ft_file, staff_user)
+        assert attachment_download_url(attachment) == reverse(
+            "core:client_attachment_download",
+            kwargs={"pk": client_identified.pk, "attachment_pk": attachment.pk},
+        )
+
+    def test_fall_anhang_loest_die_ap4_route_auf(self, staff_user, case_open, ft_file):
         attachment = _attach(case_open, ft_file, staff_user)
-        with pytest.raises(NoReverseMatch):
-            attachment_download_url(attachment)
+        assert attachment_download_url(attachment) == reverse(
+            "core:case_attachment_download",
+            kwargs={"pk": case_open.pk, "attachment_pk": attachment.pk},
+        )
 
 
 @pytest.mark.django_db

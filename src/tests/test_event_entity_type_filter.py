@@ -72,16 +72,55 @@ class TestStatisticsDropdownEntityTypeFilter:
 
 
 @pytest.mark.django_db
-class TestAttachmentsDropdownEntityTypeFilter:
-    """Brief-Punkt 5: Attachments-Filter-Dropdown."""
+class TestAttachmentsDropdownFileFieldFilter:
+    """Brief-Punkt 5 (Attachments-Filter-Dropdown), E21-REVIDIERT.
 
-    def test_client_type_excluded(self, client, staff_user, doc_type_client, doc_type_contact):
+    **Anforderungsaenderung M24/AP4 (Refs #1738, ADR-039):** P2 hatte hier
+    ``entity_type=event`` gepinnt, ausdruecklich begruendet mit „Attachments
+    haengen immer an einem Event". Genau diese Praemisse ist mit ADR-039
+    hinfaellig — Anhaenge haengen an Ereignis, Person ODER Fall, und die
+    Uebersicht listet alle drei.
+
+    Das Dropdown ist damit ein **Datei**-Filter, kein Ereignis-Filter: das
+    Auswahlkriterium ist „aktiver Typ MIT FILE-Feld" (plus Sensitivity, plus
+    Fall-Ausschluss fuer die Assistenz), nicht mehr die Entitaetsart. Ein Typ
+    ohne Datei-Feld — egal welcher Entitaet — kann dort nie ein Ergebnis
+    liefern und faellt raus.
+
+    Die uebrigen fuenf E21-Stellen (Event-Dropdowns in Zeitstrom, Statistik,
+    EventMetaForm, Partial, Strichliste) bleiben unveraendert event-only.
+    """
+
+    def test_type_without_file_field_is_excluded(self, client, staff_user, doc_type_client, doc_type_contact):
+        """Weder der Personen- noch der Ereignistyp hat ein FILE-Feld."""
         client.force_login(staff_user)
         response = client.get(reverse("core:attachment_list"))
         assert response.status_code == 200
         pks = [dt.pk for dt in response.context["doc_types"]]
         assert doc_type_client.pk not in pks
-        assert doc_type_contact.pk in pks
+        assert doc_type_contact.pk not in pks
+
+    def test_client_type_with_file_field_is_offered(self, client, staff_user, facility, doc_type_client):
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Personen-Anlage",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        DocumentTypeField.objects.create(document_type=doc_type_client, field_template=ft, sort_order=0)
+        client.force_login(staff_user)
+        response = client.get(reverse("core:attachment_list"))
+        assert doc_type_client.pk in [dt.pk for dt in response.context["doc_types"]]
+
+    def test_event_type_with_file_field_is_offered(self, client, staff_user, facility, doc_type_contact):
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Ereignis-Anlage",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft, sort_order=9)
+        client.force_login(staff_user)
+        response = client.get(reverse("core:attachment_list"))
+        assert doc_type_contact.pk in [dt.pk for dt in response.context["doc_types"]]
 
 
 @pytest.mark.django_db

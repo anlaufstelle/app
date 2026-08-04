@@ -17,7 +17,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.file_vault import store_encrypted_file
 
 pytestmark = pytest.mark.django_db
@@ -176,3 +176,148 @@ class TestClientFilterGuard:
         response = client.get(reverse(LIST_URL_NAME), {"client": str(client_identified.pk)})
         assert response.status_code == 200
         assert "ereignis.pdf" in response.content.decode()
+
+
+# ---------------------------------------------------------------------------
+# Owner-Generik
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def three_owner_attachments(facility, staff_user, client_identified):
+    """Je ein Anhang an Ereignis, Person und Fall — derselben Person zugeordnet."""
+    ft_event = _file_template(facility, "E-Datei")
+    ft_client = _file_template(facility, "P-Datei")
+    ft_case = _file_template(facility, "F-Datei")
+    dt_event = _doc_type(facility, "E-Typ", DocumentType.EntityType.EVENT, file_field=ft_event)
+    dt_client = _doc_type(facility, "P-Typ", DocumentType.EntityType.CLIENT, file_field=ft_client)
+    dt_case = _doc_type(facility, "F-Typ", DocumentType.EntityType.CASE, file_field=ft_case)
+
+    event = Event.objects.create(
+        facility=facility,
+        client=client_identified,
+        document_type=dt_event,
+        occurred_at=timezone.now(),
+        data_json={},
+        created_by=staff_user,
+    )
+    client_identified.document_type = dt_client
+    client_identified.save(update_fields=["document_type"])
+    case = Case.objects.create(
+        facility=facility,
+        client=client_identified,
+        title="Owner-Fall",
+        document_type=dt_case,
+        created_by=staff_user,
+    )
+    return {
+        "event": (event, _attach(facility, event, ft_event, staff_user, "aus_ereignis.pdf")),
+        "client": (client_identified, _attach(facility, client_identified, ft_client, staff_user, "aus_person.pdf")),
+        "case": (case, _attach(facility, case, ft_case, staff_user, "aus_fall.pdf")),
+        "types": (dt_event, dt_client, dt_case),
+    }
+
+
+class TestOwnerGenericOverview:
+    def test_all_three_owners_are_listed(self, client, staff_user, three_owner_attachments):
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "aus_ereignis.pdf" in content
+        assert "aus_person.pdf" in content
+        assert "aus_fall.pdf" in content
+
+    def test_owner_column_labels_and_links(self, client, staff_user, three_owner_attachments):
+        """Spalte „Zugeordnet zu": Owner-Typ + Link dorthin, wo die Rolle darf."""
+        client.force_login(staff_user)
+        rows = {item["original_filename"]: item for item in client.get(reverse(LIST_URL_NAME)).context["attachments"]}
+        event, _ = three_owner_attachments["event"]
+        person, _ = three_owner_attachments["client"]
+        case, _ = three_owner_attachments["case"]
+        assert rows["aus_ereignis.pdf"]["owner_url"] == reverse("core:event_detail", kwargs={"pk": event.pk})
+        assert rows["aus_person.pdf"]["owner_url"] == reverse("core:client_detail", kwargs={"pk": person.pk})
+        assert rows["aus_fall.pdf"]["owner_url"] == reverse("core:case_detail", kwargs={"pk": case.pk})
+        assert {row["owner_type"] for row in rows.values()} == {"event", "client", "case"}
+
+    def test_download_links_point_to_the_owner_route(self, client, staff_user, three_owner_attachments):
+        client.force_login(staff_user)
+        rows = {item["original_filename"]: item for item in client.get(reverse(LIST_URL_NAME)).context["attachments"]}
+        person, person_attachment = three_owner_attachments["client"]
+        assert rows["aus_person.pdf"]["download_url"] == reverse(
+            "core:client_attachment_download",
+            kwargs={"pk": person.pk, "attachment_pk": person_attachment.pk},
+        )
+
+    def test_client_filter_matches_all_three_owner_sources(self, client, staff_user, three_owner_attachments):
+        person, _ = three_owner_attachments["client"]
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME), {"client": str(person.pk)}).content.decode()
+        assert "aus_ereignis.pdf" in content
+        assert "aus_person.pdf" in content
+        assert "aus_fall.pdf" in content
+
+    def test_doc_type_filter_matches_all_three_owner_sources(self, client, staff_user, three_owner_attachments):
+        _dt_event, dt_client, _dt_case = three_owner_attachments["types"]
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME), {"document_type": str(dt_client.pk)}).content.decode()
+        assert "aus_person.pdf" in content
+        assert "aus_ereignis.pdf" not in content
+        assert "aus_fall.pdf" not in content
+
+    def test_assistant_never_sees_case_owned_rows(self, client, assistant_user, three_owner_attachments):
+        """Rollen-Gefaelle (ADR-039 §12): Faelle sind fuer die Assistenz
+        unsichtbar — auch ihre Dateien und ihre Typnamen."""
+        _dt_event, _dt_client, dt_case = three_owner_attachments["types"]
+        client.force_login(assistant_user)
+        response = client.get(reverse(LIST_URL_NAME))
+        content = response.content.decode()
+        assert "aus_fall.pdf" not in content
+        assert "aus_ereignis.pdf" in content
+        assert "aus_person.pdf" in content
+        assert dt_case.pk not in [dt.pk for dt in response.context["doc_types"]]
+
+    def test_trashed_client_owner_is_hidden(self, client, staff_user, three_owner_attachments):
+        person, _ = three_owner_attachments["client"]
+        person.is_deleted = True
+        person.deleted_at = timezone.now()
+        person.save(update_fields=["is_deleted", "deleted_at"])
+        client.force_login(staff_user)
+        content = client.get(reverse(LIST_URL_NAME)).content.decode()
+        assert "aus_person.pdf" not in content
+
+    def test_owner_without_document_type_is_hidden_fail_closed(self, client, staff_user, facility, client_identified):
+        """Ohne ``document_type`` gibt es keine Bezugs-Sensitivitaet — die Zeile
+        bleibt fuer JEDE Rolle unsichtbar (fail-closed), statt still als NORMAL
+        durchzurutschen."""
+        ft = _file_template(facility, "Typlos-Datei")
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Typlos",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=staff_user,
+        )
+        _attach(facility, person, ft, staff_user, "typlos.pdf")
+        client.force_login(staff_user)
+        assert "typlos.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
+
+    def test_field_sensitivity_still_filters(self, client, staff_user, facility, client_identified):
+        ft_high = _file_template(facility, "Feld-HIGH", sensitivity=DocumentType.Sensitivity.HIGH)
+        dt = _doc_type(facility, "P-Typ-Feldsens", DocumentType.EntityType.CLIENT, file_field=ft_high)
+        client_identified.document_type = dt
+        client_identified.save(update_fields=["document_type"])
+        _attach(facility, client_identified, ft_high, staff_user, "feld_high.pdf")
+        client.force_login(staff_user)
+        assert "feld_high.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
+
+    def test_dropdown_only_offers_types_with_a_file_field(self, client, staff_user, three_owner_attachments, facility):
+        """E21-Revision (Refs #1738): das Dropdown ist ein DATEI-Filter — Typen
+        ohne FILE-Feld koennen dort nie ein Ergebnis liefern."""
+        without_file = _doc_type(facility, "Ohne Datei", DocumentType.EntityType.EVENT)
+        dt_event, dt_client, dt_case = three_owner_attachments["types"]
+        client.force_login(staff_user)
+        offered = [dt.pk for dt in client.get(reverse(LIST_URL_NAME)).context["doc_types"]]
+        assert without_file.pk not in offered
+        assert {dt_event.pk, dt_client.pk, dt_case.pk} <= set(offered)
+
+    def test_cross_facility_attachment_is_never_listed(self, client, staff_user, foreign_client_attachment):
+        client.force_login(staff_user)
+        assert "authz.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
