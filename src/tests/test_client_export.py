@@ -1049,6 +1049,20 @@ class TestClientExportPdfCoverage:
     Das PDF darf zusammenfassen, muss aber jede Kategorie enthalten.
     """
 
+    # Top-Level-Keys aus ``export_client_data``, die im PDF-Template legitim
+    # KEINEN eigenen Abschnitt haben (Refs #1765). Jeder Eintrag traegt eine
+    # am Code verifizierbare Begruendung — siehe
+    # ``test_every_category_has_its_own_pdf_section``.
+    _PDF_SECTION_EXEMPT = {
+        "export_meta": (
+            "export_client_data_pdf() (core/services/client/export.py) "
+            "entpackt export_meta NICHT als eigenen Abschnitt, sondern in "
+            "facility_name/generated_at des Template-Kontexts — beide "
+            "fliessen in Kopf- bzw. Fusszeile des PDFs, nicht in einen "
+            "eigenen nummerierten Abschnitt."
+        ),
+    }
+
     @pytest.mark.parametrize(
         "needle",
         [
@@ -1093,6 +1107,44 @@ class TestClientExportPdfCoverage:
         """Die Auskunft muss ihre bewussten Ausschluesse benennen statt Vollstaendigkeit zu behaupten."""
         html = _render_export_html(fully_populated_client, facility, admin_user)
         assert "Dateianhänge" in html
+
+    def test_every_category_has_its_own_pdf_section(self, fully_populated_client, facility, admin_user):
+        """Abgeleiteter Guard (Refs #1765) — Vorbild ``TestKAnonBridgeRedactionParity``.
+
+        Der obige parametrisierte Test prueft 14 fest verdrahtete Nadeln gegen
+        das PDF; erweitert ``export_client_data`` (core/services/client/export.py)
+        eine bestehende oder neue Kategorie, ohne dass jemand eine passende
+        Nadel ergaenzt, bleibt dieser Test blind gruen (genau das Risiko aus
+        #1765).
+
+        Dieser Guard iteriert stattdessen ueber die tatsaechlichen Top-Level-
+        Keys aus ``export_client_data(fully_populated_client, ...)`` — die
+        Ist-Menge, kein Hardcode — und rendert das Template zweimal: einmal
+        mit den vollen Daten, einmal mit GENAU EINER auf "leer" gesetzten
+        Kategorie (``[]`` fuer Listen, ``{}`` fuer den ``client``-Block).
+        Aendert sich das gerenderte HTML dabei nicht, hat die Kategorie keine
+        eigene Repraesentation im Template — sie lief am PDF vorbei.
+        """
+        from django.template.loader import render_to_string
+
+        data = export_client_data(fully_populated_client, facility, admin_user)
+        context = {key: value for key, value in data.items() if key != "export_meta"}
+        context["facility_name"] = data["export_meta"]["facility_name"]
+        context["generated_at"] = timezone.now()
+        baseline_html = render_to_string("core/export/client_data_pdf.html", context)
+
+        for key, value in data.items():
+            if key in self._PDF_SECTION_EXEMPT:
+                continue
+            emptied_context = dict(context)
+            emptied_context[key] = [] if isinstance(value, list) else {}
+            emptied_html = render_to_string("core/export/client_data_pdf.html", emptied_context)
+            assert emptied_html != baseline_html, (
+                f"Kategorie {key!r} veraendert das gerenderte PDF nicht, wenn sie geleert wird "
+                "— sie hat vermutlich keinen eigenen Abschnitt im Template "
+                "(core/export/client_data_pdf.html). Entweder das Template ergaenzen oder die "
+                "Kategorie in _PDF_SECTION_EXEMPT mit nachpruefbarer Begruendung eintragen."
+            )
 
 
 @pytest.mark.django_db
