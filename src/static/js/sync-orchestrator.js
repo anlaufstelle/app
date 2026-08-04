@@ -143,13 +143,28 @@
     /* ─── Sync-Sequenz + Pro-Tab-Koaleszenz ───────────────────────────────── */
 
     async function _runSyncSequence() {
-        // Reihenfolge FIX: erst die Writes rausspielen, dann re-validieren. Jeder
-        // Schritt ist isoliert (try/catch) — so bleibt die Unabhaengigkeit der
-        // frueheren drei getrennten online-Listener erhalten (ein Fehler in der
-        // Queue darf den Edit-Replay nicht verhindern).
+        // Reihenfolge FIX: erst die Widerrufe anwenden, dann die Writes
+        // rausspielen, dann re-validieren. Jeder Schritt ist isoliert
+        // (try/catch) — so bleibt die Unabhaengigkeit der frueheren drei
+        // getrennten online-Listener erhalten (ein Fehler in der Queue darf den
+        // Edit-Replay nicht verhindern).
         const q = window.offlineQueue;
         const ed = window.offlineEdit;
         const st = window.offlineStore;
+        // Refs #1760: Der Widerrufs-Schritt steht bewusst VOR den Replays und
+        // erweitert damit die bisherige "Writes RAUS vor Revalidierung"-Regel um
+        // eine strengere Vorstufe. Liefe er danach, spielte der Replay noch die
+        // gequeuten Schreibzugriffe zu einer gerade anonymisierten Person aus —
+        // frische Klartext-PII zurueck auf den Server, die Art.-17-Loeschung
+        // liefe rueckwaerts. Fehler sind wie ueberall geschluckt: ohne
+        // verlaessliche Liste wird nichts geloescht, der naechste Lauf holt nach.
+        if (st && st.applyClientRevocations) {
+            try {
+                await st.applyClientRevocations();
+            } catch (_e) {
+                /* naechster Schritt trotzdem */
+            }
+        }
         if (q && q.replayQueue) {
             try {
                 await q.replayQueue();
@@ -256,11 +271,52 @@
                 /* still — Startup nie blockieren */
             });
     }
+    /* ─── Boot-Check der Widerrufsliste (Refs #1760) ─────────────────────── */
+    // Der Widerruf laeuft zwar als erster Schritt jeder Sync-Sequenz — die wird
+    // aber nur durch ein ``online``-Event oder den bedarfsgesteuerten
+    // Startup-Drain ausgeloest. Ein Geraet, das ohne ungesyncte Arbeit einfach
+    // wieder benutzt wird (typischer Fall: App auf, Netz da, nichts zu
+    // replayen), traefe damit nie auf die Liste und zeigte die anonymisierte
+    // Person bis zum TTL-Ablauf weiter. Der Boot-Check schliesst genau diese
+    // Luecke — als EIGENER, minimaler Lauf unter demselben Lock (die
+    // ADR-030-Invariante "hoechstens EINE Sequenz pro Origin" bleibt), nicht als
+    // ungegatetes ``requestSync``: das zoege bei jeder Navigation Replay UND
+    // Revalidierung aller Klienten nach sich.
+    //
+    // Gate: nur wenn es ueberhaupt lokalen Bestand gibt, den ein Widerruf
+    // treffen koennte (gecachte Personen ODER Queue-Rows). Beides sind reine
+    // Zaehlungen auf Klartext-Index-Spalten — kein Session-Key noetig.
+    function _startupRevocationCheck() {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+        const store = window.offlineStore;
+        if (!store || typeof store.applyClientRevocations !== "function") return;
+        Promise.resolve()
+            .then(function () {
+                return Promise.all([store.countOfflineClients(), store.count("queue")]);
+            })
+            .then(function (counts) {
+                if (counts[0] > 0 || counts[1] > 0) {
+                    return runExclusive(function () {
+                        return store.applyClientRevocations();
+                    });
+                }
+                return null;
+            })
+            .catch(function () {
+                /* still — Seitenstart nie an der Widerrufs-Pruefung scheitern lassen */
+            });
+    }
+
+    function _onBoot() {
+        _startupDrain();
+        _startupRevocationCheck();
+    }
+
     if (typeof document !== "undefined" && typeof window !== "undefined") {
         if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", _startupDrain);
+            document.addEventListener("DOMContentLoaded", _onBoot);
         } else {
-            _startupDrain();
+            _onBoot();
         }
     }
 

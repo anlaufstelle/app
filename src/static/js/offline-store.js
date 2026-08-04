@@ -1346,6 +1346,141 @@
         return "error";
     }
 
+    /* ─── #1760 — personen-genaue Widerrufsliste (Offline-Revocations) ────── */
+
+    /*
+     * Refs #1760 (#1476/R20, #1493): Der Server fuehrt eine Liste anonymisierter
+     * Personen; dieser Pfad wendet sie auf den lokalen Bestand an.
+     *
+     * WARUM ein eigener Kanal neben `revalidateCachedClient`: dessen Purge
+     * haengt an 401/404/410. Eine ANONYMISIERTE Person existiert aber weiter und
+     * liefert 200 — und selbst dieses 200 ueberschreibt den lokalen Klartext
+     * NICHT, solange zu ihr ungesyncte Aenderungen offen sind (`"skipped"`).
+     * Der lokale 48h-Klartext ueberlebte damit die Loeschung. Die Revoke-Liste
+     * ist die positive Gegenrichtung: sie sagt, was WEG MUSS, unabhaengig von
+     * der Antwort des Bundle-Endpoints.
+     *
+     * FAIL-SAFE-ENTSCHEID zu ungesyncter Arbeit: Bundle-Spiegel UND ungesyncte
+     * Eintraege (events mit localStatus modified/new/conflict/dead, queue-Rows,
+     * Entwuerfe) der Person werden VERWORFEN — nicht als Dead-Letter erhalten.
+     * Zwei Gruende:
+     *   1. Ein Replay schriebe frische Klartext-PII ueber eine Person, deren
+     *      Datensatz gerade nach Art. 17 getilgt wurde — die Loeschung liefe
+     *      rueckwaerts. Auf dem Server wuerde er ohnehin auf einen
+     *      anonymisierten Datensatz treffen.
+     *   2. Ein Dead-Letter behielte den entschluesselbaren Klartext genau dort
+     *      liegen, wo der Widerruf ihn entfernen soll.
+     * Das ist derselbe Loeschgrund wie der Sicherheits-Purge bei 401/404/410
+     * (F-10/#1110, `removeOfflineClient`s `force`-Vertrag) und nutzt bewusst
+     * DIESELBE Primitive — kein zweiter Purge-Pfad.
+     *
+     * SCHLUESSEL-GATE: Der Bundle-Purge braucht keinen Session-Key (planer
+     * Dexie-Delete). Queue-/Entwurfs-Rows muessen dagegen entschluesselt werden,
+     * um den Personenbezug zu erkennen; ohne Key bleiben sie liegen (sie sind
+     * dann ohnehin unlesbarer Chiffretext) und der naechste Lauf holt es nach —
+     * die Liste ist ohne Cursor idempotent und deckt das volle Retention-
+     * Fenster ab (2x Bundle-TTL).
+     */
+    function _revocationsUrl() {
+        return "/api/v1/offline/revocations/";
+    }
+
+    /*
+     * True, wenn `haystack` (URL, Formular-Key oder serialisierter Payload) eine
+     * der widerrufenen UUIDs nennt. Case-insensitiv: die Server-UUID ist
+     * kanonisch klein geschrieben, ein handgeschriebener Formular-Key koennte
+     * es nicht sein.
+     */
+    function _mentionsRevoked(haystack, revokedLower) {
+        if (!haystack) return false;
+        const text = String(haystack).toLowerCase();
+        for (const pk of revokedLower) {
+            if (text.indexOf(pk) !== -1) return true;
+        }
+        return false;
+    }
+
+    async function _purgeRevokedQueueAndDrafts(revokedLower) {
+        let purgedQueueEntries = 0;
+        let purgedDrafts = 0;
+        // `listDecrypted` ueberspringt Rows, die ohne Session-Key nicht lesbar
+        // sind (TRANSIENT, Refs #1352) — sie bleiben unangetastet, statt blind
+        // geloescht zu werden. Ein permanenter Decrypt-Fehler entwertet sie
+        // ohnehin bereits (Auto-Discard/Tombstone).
+        const queueRows = await listDecrypted("queue");
+        for (const row of queueRows) {
+            const payload = JSON.stringify(row.data || {});
+            if (_mentionsRevoked(row.url, revokedLower) || _mentionsRevoked(payload, revokedLower)) {
+                await db.queue.delete(row.id);
+                purgedQueueEntries += 1;
+            }
+        }
+        const draftRows = await listDecrypted("drafts");
+        for (const row of draftRows) {
+            const payload = JSON.stringify(row.data || {});
+            if (_mentionsRevoked(row.formKey, revokedLower) || _mentionsRevoked(payload, revokedLower)) {
+                await db.drafts.delete(row.formKey);
+                purgedDrafts += 1;
+            }
+        }
+        return { purgedQueueEntries: purgedQueueEntries, purgedDrafts: purgedDrafts };
+    }
+
+    /*
+     * Holt die Widerrufsliste und wendet sie an. Rueckgabe:
+     *   {status: "ok"|"error"|"ratelimited", purgedClients, purgedQueueEntries,
+     *    purgedDrafts}
+     * `error`/`ratelimited` lassen den Bestand UNANGETASTET (fail-open beim
+     * Transport — ohne verlaessliche Liste darf nichts geloescht werden; der
+     * naechste Sync/Boot wiederholt den Abruf, und die 48h-TTL bleibt fuer ein
+     * dauerhaft offline gebliebenes Geraet die letzte Verteidigungslinie).
+     */
+    async function applyClientRevocations() {
+        const empty = { purgedClients: 0, purgedQueueEntries: 0, purgedDrafts: 0 };
+        let response;
+        try {
+            response = await fetch(_revocationsUrl(), {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { Accept: "application/json" },
+            });
+        } catch (_e) {
+            return { status: "error", ...empty };
+        }
+        if (response.status === 429) {
+            return { status: "ratelimited", ...empty };
+        }
+        if (!response.ok) {
+            return { status: "error", ...empty };
+        }
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (_e) {
+            // Login-Redirect (der `fetch` folgt ihm) liefert eine HTML-Seite —
+            // kein Widerrufssignal, also nichts loeschen.
+            return { status: "error", ...empty };
+        }
+        const pks = (payload && payload.revocations) || [];
+        if (!Array.isArray(pks) || pks.length === 0) {
+            return { status: "ok", ...empty };
+        }
+        const revokedLower = pks.map((p) => String(p).toLowerCase());
+
+        let purgedClients = 0;
+        for (const pk of pks) {
+            const key = String(pk);
+            const known = await db.clients.where("pk").equals(key).count();
+            // `force: true`: ungesyncte Arbeit dieser Person faellt bewusst mit
+            // (siehe Fail-Safe-Entscheid im Abschnitts-Kommentar oben).
+            await removeOfflineClient(key, { force: true });
+            if (known) purgedClients += 1;
+        }
+
+        const extra = await _purgeRevokedQueueAndDrafts(revokedLower);
+        return { status: "ok", purgedClients: purgedClients, ...extra };
+    }
+
     /* ─── Stage 3 (#575) — Local-Status-Tracking on events ───────────────── */
 
     /*
@@ -1937,6 +2072,8 @@
         saveFacilityBundle: saveFacilityBundle,
         getOfflineFacility: getOfflineFacility,
         revalidateCachedFacility: revalidateCachedFacility,
+        // Refs #1760 — personen-genaue Widerrufsliste (Sync + Boot-Check)
+        applyClientRevocations: applyClientRevocations,
         // Stage 3 (#575) — offline edit + conflict tracking
         saveOfflineEdit: saveOfflineEdit,
         getOfflineEvent: getOfflineEvent,
@@ -2011,6 +2148,11 @@
                 // gueltigem Schluessel holt beides nach.
                 if (hasKey) {
                     await purgeExpired(Date.now());
+                    // Refs #1760: auch im Orchestrator-losen Fallback zuerst die
+                    // Widerrufe anwenden — sonst haette eine Offline-Shell
+                    // (ohne base.html) keinen Zugang zum Signal und zeigte eine
+                    // anonymisierte Person bis zum TTL-Ablauf weiter.
+                    await applyClientRevocations();
                     await revalidateCachedClients();
                 }
             } catch (_e) {
