@@ -461,10 +461,12 @@ class TestBuildDataset:
                 ("Beratung", 3),
                 ("Versorgung", 3),
             ],
+            # K0-b (Refs #1770): jede Zeile traegt zusaetzlich die
+            # DISTINCT-Personenzahl ihres Buckets (Snapshot-Payload-Format).
             "by_age_cluster": [
-                {"cluster": "18_26", "label": "18–26", "count": 7},
-                {"cluster": "u18", "label": "Unter 18", "count": 2},
-                {"cluster": "27_plus", "label": "27+", "count": 1},
+                {"cluster": "18_26", "label": "18–26", "count": 7, "persons": 1},
+                {"cluster": "u18", "label": "Unter 18", "count": 2, "persons": 1},
+                {"cluster": "27_plus", "label": "27+", "count": 1, "persons": 1},
             ],
             "unique_clients": 3,
         }
@@ -518,7 +520,7 @@ class TestBuildDataset:
 
         assert summary["total"] == 0
         assert summary["by_category"] == []
-        assert summary["by_age_cluster"] == [{"cluster": "unknown", "label": "Unbekannt", "count": 2}]
+        assert summary["by_age_cluster"] == [{"cluster": "unknown", "label": "Unbekannt", "count": 2, "persons": 1}]
         assert summary["unique_clients"] == 1
 
     def test_genau_vier_queries(self, backend, parity_daten, django_assert_num_queries):
@@ -930,7 +932,7 @@ class TestPrepareExport:
         assert raw.summary == {
             "total": 4,
             "by_category": [("Kontakte", 3), ("Beratung", 1)],
-            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4}],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 4, "persons": 1}],
             "unique_clients": 1,
         }
         assert raw.records == [{"category": "Kontakte", "count": 3}, {"category": "Beratung", "count": 1}]

@@ -53,6 +53,7 @@ from core.services.dashboard.snapshot import (
     is_multi_month_range,
 )
 from core.services.dashboard.statistics import (
+    PERSONS_KEY,
     STATISTICS_MAX_CUSTOM_RANGE_DAYS,
     STATISTICS_MV_NAME,
     InvalidStatisticsPeriodError,
@@ -60,6 +61,8 @@ from core.services.dashboard.statistics import (
     _flat_view_enabled,
     _parse_year,
     _query_statistics_mv,
+    count_unique_clients,
+    event_queryset_for_period,
     get_event_counts_by_month,
     get_statistics,
     parse_statistics_period,
@@ -68,6 +71,7 @@ from core.services.dashboard.statistics import (
 
 __all__ = [
     "InvalidStatisticsPeriodError",
+    "PERSONS_KEY",
     "PeriodState",
     "STATISTICS_MAX_CUSTOM_RANGE_DAYS",
     "STATISTICS_MV_NAME",
@@ -82,8 +86,10 @@ __all__ = [
     "apply_template",
     "build_external_report",
     "build_focus_box",
+    "count_unique_clients",
     "create_or_update_snapshot",
     "ensure_snapshots_for_months",
+    "event_queryset_for_period",
     "facility_admin_dashboard_context",
     "filter_prefilled_data",
     "get_event_counts_by_month",

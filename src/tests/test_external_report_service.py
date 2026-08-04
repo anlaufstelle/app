@@ -78,7 +78,9 @@ class TestSecondarySuppression:
         from core.services.dashboard.external_report import _suppress_stage_dict
 
         stages = {"anonym": 10, "identifiziert": 8, "qualifiziert": 3}
-        result = _suppress_stage_dict(stages, threshold=5)
+        result = _suppress_stage_dict(
+            stages, threshold=5, persons={"anonym": 10, "identifiziert": 8, "qualifiziert": 3}
+        )
         assert result["qualifiziert"] is None  # primär
         assert result["identifiziert"] is None  # sekundär (nächstkleinere sichtbare)
         assert result["anonym"] == 10
@@ -211,10 +213,11 @@ class TestKanonischeOrdnungInDenWrappern:
                 {"name": "Beratung", "category": "service", "count": 4},
                 {"name": "Aufnahme", "category": "contact", "count": 3},
             ],
+            "persons_by_contact_stage": {"anonym": 12, "identifiziert": 9, "qualifiziert": 6},
             "by_age_cluster": [
-                {"cluster": "27_plus", "label": "27+", "count": 30},
-                {"cluster": "unknown", "label": "Unbekannt", "count": 4},
-                {"cluster": "u18", "label": "Unter 18", "count": 3},
+                {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 11},
+                {"cluster": "unknown", "label": "Unbekannt", "count": 4, "persons": 4},
+                {"cluster": "u18", "label": "Unter 18", "count": 3, "persons": 3},
             ],
         }
         out = suppress_report_stats(facility, stats)
@@ -230,9 +233,9 @@ class TestKanonischeOrdnungInDenWrappern:
             "unique_clients": 12,
             "by_category": [("Kontakte", 30), ("Beratung", 4), ("Versorgung", 3)],
             "by_age_cluster": [
-                {"cluster": "27_plus", "label": "27+", "count": 30},
-                {"cluster": "unknown", "label": "Unbekannt", "count": 4},
-                {"cluster": "18_26", "label": "18–26", "count": 3},
+                {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 11},
+                {"cluster": "unknown", "label": "Unbekannt", "count": 4, "persons": 4},
+                {"cluster": "18_26", "label": "18–26", "count": 3, "persons": 3},
             ],
         }
         out = suppress_sample_report_1_stats(facility, stats)
@@ -351,8 +354,9 @@ class TestPersonenabgeleiteteTabellenFailSafe:
             "total_contacts": 40,
             "unique_clients": 5,
             "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
+            "persons_by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
             "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
-            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40, "persons": 5}],
         }
         out = suppress_report_stats(facility, stats)
 
@@ -589,9 +593,9 @@ class TestSampleReport1StatsSuppression:
             "total": 20,
             "by_category": [],
             "by_age_cluster": [
-                {"cluster": "u18", "label": "Unter 18", "count": 3},
-                {"cluster": "18_26", "label": "18–26", "count": 2},
-                {"cluster": "27_plus", "label": "27+", "count": 15},
+                {"cluster": "u18", "label": "Unter 18", "count": 3, "persons": 3},
+                {"cluster": "18_26", "label": "18–26", "count": 2, "persons": 2},
+                {"cluster": "27_plus", "label": "27+", "count": 15, "persons": 6},
             ],
             "unique_clients": 11,
         }
@@ -720,3 +724,240 @@ class TestMarginTotalSuppression:
         }
         out = suppress_report_stats(facility, stats)
         assert out["total_contacts"] == total_contacts
+
+
+class TestPersonenbasiertesZellkriterium:
+    """K0-b (Refs #1770): die k-Schwelle prueft die DISTINCT-Personenzahl.
+
+    Bis #1770 verglich ``_suppress_small`` die Schwelle ausschliesslich gegen
+    eine **Ereignis**zahl (``Count("id")``). Eine Alterszelle „Unter 18: 7"
+    konnte damit von einer einzigen Person stammen und wurde trotzdem
+    publiziert — die Aequivalenzklasse, die k-Anonymitaet schuetzen soll, hatte
+    Groesse 1. Personenabgeleitete Zeilen tragen deshalb die DISTINCT-
+    Personenzahl ihres Buckets mit; unterdrueckt wird, sobald die **strengere**
+    der beiden Zahlen unter der Schwelle liegt (min-Logik).
+
+    Die Personenzahl ist reine Suppressions-*Eingabe* und darf nie in einem
+    Artefakt landen — sonst waere sie selbst ein neuer Kleinstfallzahl-Kanal.
+    """
+
+    def test_zelle_mit_vielen_ereignissen_einer_person_wird_unterdrueckt(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [
+            {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
+            {"cluster": "u18", "label": "Unter 18", "count": 7, "persons": 1},
+        ]
+        result = _suppress_small(rows, threshold=5)
+        by_cluster = {row["cluster"]: row for row in result}
+
+        assert by_cluster["u18"]["suppressed"] is True
+        assert by_cluster["u18"]["count"] is None
+
+    def test_ereigniszahl_bleibt_das_strengere_kriterium_wenn_sie_kleiner_ist(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [
+            {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
+            {"cluster": "u18", "label": "Unter 18", "count": 3, "persons": 3},
+        ]
+        result = _suppress_small(rows, threshold=5)
+        by_cluster = {row["cluster"]: row for row in result}
+
+        assert by_cluster["u18"]["suppressed"] is True
+
+    def test_zelle_mit_genug_personen_bleibt_sichtbar(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [
+            {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
+            {"cluster": "u18", "label": "Unter 18", "count": 8, "persons": 6},
+        ]
+        result = _suppress_small(rows, threshold=5)
+
+        assert all(row["suppressed"] is False for row in result)
+
+    def test_unbekannte_personenzahl_wird_unterdrueckt(self):
+        """``persons=None`` = nicht rekonstruierbar ⇒ fail-safe unterdruecken."""
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [
+            {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
+            {"cluster": "u18", "label": "Unter 18", "count": 20, "persons": None},
+        ]
+        result = _suppress_small(rows, threshold=5)
+        by_cluster = {row["cluster"]: row for row in result}
+
+        assert by_cluster["u18"]["suppressed"] is True
+
+    def test_personenzahl_verlaesst_die_suppression_nie(self):
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [
+            {"cluster": "27_plus", "label": "27+", "count": 30, "persons": 9},
+            {"cluster": "u18", "label": "Unter 18", "count": 7, "persons": 1},
+        ]
+        result = _suppress_small(rows, threshold=5)
+
+        assert all("persons" not in row for row in result)
+
+    def test_ereignisabgeleitete_zeilen_ohne_personenfeld_bleiben_ereignisbasiert(self):
+        """``by_document_type``/``by_category`` zaehlen Ereignisse — kein Personenfeld,
+        keine Personenpruefung (sonst waere jede Dokumenttyp-Zeile unterdrueckt)."""
+        from core.services.dashboard.external_report import _suppress_small
+
+        rows = [{"name": "Kontakt", "category": "contact", "count": 30}]
+        result = _suppress_small(rows, threshold=5)
+
+        assert result[0]["suppressed"] is False
+
+    def test_stage_dict_unterdrueckt_bei_zu_wenigen_personen(self):
+        from core.services.dashboard.external_report import _suppress_stage_dict
+
+        stages = {"anonym": 40, "identifiziert": 30, "qualifiziert": 20}
+        result = _suppress_stage_dict(
+            stages, threshold=5, persons={"anonym": 40, "identifiziert": 30, "qualifiziert": 2}
+        )
+
+        assert result["qualifiziert"] is None
+        # Sekundaersuppression trifft zusaetzlich die kleinste sichtbare Stufe.
+        assert result["identifiziert"] is None
+        assert result["anonym"] == 40
+
+    def test_stage_dict_ohne_personenzahlen_unterdrueckt_alles(self):
+        """Alt-Format ohne ``persons_by_contact_stage`` ⇒ unbekannt ⇒ fail-safe."""
+        from core.services.dashboard.external_report import _suppress_stage_dict
+
+        stages = {"anonym": 40, "identifiziert": 30, "qualifiziert": 20}
+        result = _suppress_stage_dict(stages, threshold=5, persons=None)
+
+        assert result == {"anonym": None, "identifiziert": None, "qualifiziert": None}
+
+
+@pytest.mark.django_db
+class TestPersonenkriteriumInDenWrappern:
+    """K0-b wirkt in allen drei Wrappern — und Alt-Format ist fail-safe."""
+
+    def test_externer_bericht_unterdrueckt_zelle_einer_einzelnen_person(
+        self, facility, doc_type_contact, doc_type_crisis, staff_user, report_period
+    ):
+        """Acht Personen (⇒ ``unique_clients`` >= k, der #1768-Guard schweigt),
+        aber zwei Altersgruppen mit vielen Ereignissen je EINER Person.
+
+        Zwei Einzelpersonen-Cluster, damit die Sekundaer-Suppression
+        (``len(suppressed) != 1``) nicht anspringt und der Test allein das
+        Personenkriterium misst.
+        """
+        from core.models import Client
+        from core.services.dashboard import build_external_report
+
+        solo_a = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.QUALIFIED,
+            age_cluster=Client.AgeCluster.U18,
+            pseudonym="K0b-solo-a",
+            created_by=staff_user,
+        )
+        _make_events(facility, solo_a, doc_type_contact, staff_user, 7)
+        solo_b = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.QUALIFIED,
+            age_cluster=Client.AgeCluster.UNKNOWN,
+            pseudonym="K0b-solo-b",
+            created_by=staff_user,
+        )
+        _make_events(facility, solo_b, doc_type_contact, staff_user, 6)
+        for index in range(6):
+            person = Client.objects.create(
+                facility=facility,
+                contact_stage=Client.ContactStage.QUALIFIED,
+                age_cluster=Client.AgeCluster.AGE_27_PLUS,
+                pseudonym=f"K0b-{index:02d}",
+                created_by=staff_user,
+            )
+            _make_events(facility, person, doc_type_crisis, staff_user, 3)
+
+        report = build_external_report(facility, *report_period)
+
+        assert report["unique_clients"] == 8
+        by_cluster = {row["cluster"]: row for row in report["by_age_cluster"]}
+        assert by_cluster["u18"]["suppressed"] is True, "Altersgruppe mit nur einer Person muss fallen"
+        assert by_cluster["unknown"]["suppressed"] is True
+        assert by_cluster["27_plus"]["suppressed"] is False, "6 Personen/18 Ereignisse bleiben sichtbar"
+        assert all("persons" not in row for row in report["by_age_cluster"])
+
+    def test_suppress_report_stats_behandelt_alt_format_ohne_personenzahlen_fail_safe(self, facility):
+        """Alt-Snapshot-Format: ``by_age_cluster`` ohne ``persons``,
+        kein ``persons_by_contact_stage`` ⇒ alles unterdrueckt."""
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": 12,
+            "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
+        }
+        out = suppress_report_stats(facility, stats)
+
+        assert out["by_age_cluster"][0]["suppressed"] is True
+        assert out["by_contact_stage"] == {"anonym": None, "identifiziert": None, "qualifiziert": None}
+        # Ereignisabgeleitete Aggregate bleiben unberuehrt.
+        assert out["by_document_type"][0]["count"] == 40
+
+    def test_suppress_report_stats_gibt_die_personenzahlen_nicht_weiter(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 40,
+            "unique_clients": 12,
+            "by_contact_stage": {"anonym": 20, "identifiziert": 12, "qualifiziert": 8},
+            "persons_by_contact_stage": {"anonym": 9, "identifiziert": 7, "qualifiziert": 6},
+            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40, "persons": 12}],
+        }
+        out = suppress_report_stats(facility, stats)
+
+        assert "persons_by_contact_stage" not in out
+        assert out["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": 40, "suppressed": False}]
+
+    def test_suppress_sample_report_1_stats_behandelt_alt_format_fail_safe(self, facility):
+        from core.services.dashboard import suppress_sample_report_1_stats
+
+        stats = {
+            "total": 40,
+            "unique_clients": 12,
+            "by_category": [("Kontakte", 40)],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 40}],
+        }
+        out = suppress_sample_report_1_stats(facility, stats)
+
+        assert out["by_age_cluster"][0]["suppressed"] is True
+        assert out["by_category"][0]["count"] == 40
+
+    def test_sample_report_1_backend_liefert_personenzahlen(
+        self, facility, doc_type_contact, staff_user, report_period
+    ):
+        """Der Snapshot-Payload traegt ``persons`` je Cluster (Formatänderung).
+
+        Bewusst mapping-agnostisch: die Buckets entstehen weiterhin allein aus
+        ``system_type``/``age_cluster``, damit der Slug-Zweitschluessel aus
+        #1741 hier konfliktfrei aufsetzen kann.
+        """
+        from core.models import Client, DocumentType
+        from core.reporting.registry import get_backend
+
+        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
+        doc_type_contact.save()
+        person = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.QUALIFIED,
+            age_cluster=Client.AgeCluster.U18,
+            pseudonym="K0b-payload",
+            created_by=staff_user,
+        )
+        _make_events(facility, person, doc_type_contact, staff_user, 4)
+
+        summary = get_backend("sample-report-1").build_dataset(facility, *report_period).summary
+
+        assert summary["by_age_cluster"] == [{"cluster": "u18", "label": "Unter 18", "count": 4, "persons": 1}]

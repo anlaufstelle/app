@@ -670,3 +670,109 @@ class TestStatisticsRateLimit:
         for _i in range(limit):
             assert client.get(url).status_code == 200
         assert client.get(url).status_code == 429
+
+
+@pytest.mark.django_db
+class TestPersonenzaehlungImZeitraum:
+    """K0-b (Refs #1770): DISTINCT-Personenzahlen je Suppressions-Bucket.
+
+    Die k-Schwelle lief bis #1770 gegen **Ereignis**zahlen (``Count("id")``) —
+    eine Alterszelle „Unter 18: 7" konnte von einer einzigen Person stammen und
+    passierte den Filter trotzdem. ``get_statistics`` liefert deshalb je
+    personenabgeleitetem Bucket zusaetzlich die DISTINCT-Personenzahl, und zwar
+    **zeitraum-skopiert** — ``count_clients_in_bucket`` aus dem Retention-Pfad
+    ist dafuer bewusst nicht verwendbar (kein Zeitraumfilter, fail-open).
+    """
+
+    def _create_event(self, facility, admin_user, doc_type, client=None, is_anonymous=False, days_ago=0):
+        return Event.objects.create(
+            facility=facility,
+            client=client,
+            document_type=doc_type,
+            occurred_at=timezone.now() - timedelta(days=days_ago),
+            data_json={},
+            is_anonymous=is_anonymous,
+            created_by=admin_user,
+        )
+
+    def test_altersgruppe_traegt_distinct_personenzahl(self, facility, admin_user, doc_type_kontakt, clients):
+        """Viele Ereignisse EINER Person ⇒ Ereigniszahl hoch, Personenzahl 1."""
+        c1, _, _ = clients
+        for _ in range(7):
+            self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today)
+
+        row = next(r for r in stats["by_age_cluster"] if r["cluster"] == "18_26")
+        assert row["count"] == 7
+        assert row["persons"] == 1
+
+    def test_personenzahl_je_altersgruppe_ist_bucket_scharf(self, facility, admin_user, doc_type_kontakt, clients):
+        c1, c2, _ = clients  # 18_26, 27_plus
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c2)
+
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today)
+
+        persons = {r["cluster"]: r["persons"] for r in stats["by_age_cluster"]}
+        assert persons == {"18_26": 1, "27_plus": 1}
+
+    def test_personenzahl_beachtet_den_zeitraumfilter(self, facility, admin_user, doc_type_kontakt, clients):
+        """Ereignisse ausserhalb des Zeitraums duerfen den Bucket nicht fuellen."""
+        c1, c2, _ = clients
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c2, days_ago=90)
+
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today)
+
+        persons = {r["cluster"]: r["persons"] for r in stats["by_age_cluster"]}
+        assert persons == {"18_26": 1}
+
+    def test_kontaktstufen_tragen_distinct_personenzahlen(self, facility, admin_user, doc_type_kontakt, clients):
+        c1, c2, c3 = clients  # identified, qualified, identified
+        for _ in range(4):
+            self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c3)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c2)
+
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today)
+
+        assert stats["by_contact_stage"]["identifiziert"] == 5
+        assert stats["persons_by_contact_stage"]["identifiziert"] == 2
+        assert stats["persons_by_contact_stage"]["qualifiziert"] == 1
+
+    def test_anonyme_stufe_zaehlt_ereignisse_ohne_personenbezug_je_einzeln(
+        self, facility, admin_user, doc_type_kontakt, clients
+    ):
+        """Ereignisse ohne Klienten-FK sind nicht verknuepfbar — jedes zaehlt als
+        eigenes Individuum, sonst waere die Stufe „anonym" dauerhaft unterdrueckt
+        (Personenzahl 0), ohne dass irgendjemand geschuetzt wuerde."""
+        c1, _, _ = clients
+        for _ in range(3):
+            self._create_event(facility, admin_user, doc_type_kontakt, client=None)
+        for _ in range(4):
+            self._create_event(facility, admin_user, doc_type_kontakt, client=c1, is_anonymous=True)
+
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today)
+
+        assert stats["by_contact_stage"]["anonym"] == 7
+        # 3 unverknuepfte Ereignisse + 1 anonym markierte Person
+        assert stats["persons_by_contact_stage"]["anonym"] == 4
+
+    def test_count_unique_clients_ist_zeitraum_skopiert(self, facility, admin_user, doc_type_kontakt, clients):
+        from core.services.dashboard import count_unique_clients
+
+        c1, c2, _ = clients
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._create_event(facility, admin_user, doc_type_kontakt, client=c2, days_ago=90)
+
+        today = date.today()
+        assert count_unique_clients(facility, today - timedelta(days=1), today) == 1
+        assert count_unique_clients(facility, today - timedelta(days=120), today) == 2

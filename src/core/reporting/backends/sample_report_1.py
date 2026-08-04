@@ -34,6 +34,7 @@ from core.reporting.registry import register_backend
 # nirgends zur Importzeit auf ``core.reporting`` — der einzige Rueckverweis
 # (``core.services.system.export``) ist ein lokaler Import in der Funktion.
 from core.services.dashboard.external_report import _get_threshold, suppress_sample_report_1_stats
+from core.services.dashboard.statistics import PERSONS_KEY
 
 # Mapping: DocumentType.system_type -> Berichtskategorie (fehlend = ausgeschlossen).
 # ``ban``/``note``/NULL fehlen bewusst — sie gehoeren nicht in den Bericht.
@@ -168,16 +169,27 @@ class SampleReport1Backend(DatasetBackend):
 
         by_category = [(name, count) for name, count in category_counts.items()]
 
-        # Altersgruppen (nur Ereignisse mit Personenbezug)
+        # Altersgruppen (nur Ereignisse mit Personenbezug).
+        #
+        # K0-b (Refs #1770): jede Zeile traegt zusaetzlich die DISTINCT-
+        # Personenzahl ihres Buckets — die Groesse, gegen die die k-Schwelle im
+        # Export-/PDF-Pfad prueft. Sie ist Teil des **Snapshot-Payloads**
+        # (Formataenderung; Bestand per Migration 0128 nachgetragen) und
+        # verlaesst den Suppressionspfad nie (``_suppress_small`` entfernt sie).
+        #
+        # Die Buckets entstehen bewusst weiterhin allein aus
+        # ``system_type``/``age_cluster`` — mapping-agnostisch, damit der
+        # Slug-Zweitschluessel aus #1741 hier konfliktfrei aufsetzen kann.
         by_age_cluster = [
             {
                 "cluster": row["client__age_cluster"],
                 "label": _AGE_LABELS.get(row["client__age_cluster"], ""),
                 "count": row["count"],
+                PERSONS_KEY: row["persons"],
             }
             for row in base_qs.exclude(client__isnull=True)
             .values("client__age_cluster")
-            .annotate(count=Count("id"))
+            .annotate(count=Count("id"), persons=Count("client", distinct=True))
             .order_by("-count")
         ]
 

@@ -107,37 +107,103 @@ def parse_statistics_period(query_params, today: date) -> PeriodState:
     return PeriodState(period=period, date_from=date_from, date_to=date_to, selected_year=selected_year)
 
 
-def get_statistics(facility, date_from, date_to):
-    """Statistics data for a facility in the given period.
+# K0-b (Refs #1770): Schluesselname der DISTINCT-Personenzahl in
+# personenabgeleiteten Aufschluesselungszeilen (``by_age_cluster``). Der
+# Suppressionspfad erkennt personenabgeleitete Zeilen an genau diesem Feld —
+# siehe ``core.services.dashboard.external_report``.
+PERSONS_KEY = "persons"
 
-    Returns dict with: total_contacts, by_contact_stage, by_document_type,
-    by_age_cluster, top_clients, unique_clients.
+# Filterbedingungen der drei Kontaktstufen — als Modulkonstanten, damit
+# Ereignis- und Personenzaehlung garantiert dieselbe Grundgesamtheit treffen
+# (K0-b, Refs #1770). Anonym ist bewusst „is_anonymous ODER client IS NULL".
+_STAGE_ANONYM_Q = Q(is_anonymous=True) | Q(client__isnull=True)
+_STAGE_IDENTIFIED_Q = ~Q(is_anonymous=True) & Q(client__isnull=False) & Q(client__contact_stage="identified")
+_STAGE_QUALIFIED_Q = ~Q(is_anonymous=True) & Q(client__isnull=False) & Q(client__contact_stage="qualified")
+
+
+def event_queryset_for_period(facility, date_from, date_to):
+    """Sichtbare Ereignisse der Einrichtung im Zeitraum — Basis aller Aggregate.
+
+    Einziger Ort, an dem der Zeitraumfilter der Statistik-/Berichtspfade
+    entsteht: Ereigniszahlen und Personenzahlen muessen ueber **dieselbe**
+    Grundgesamtheit laufen, sonst vergleicht die k-Schwelle Aepfel mit Birnen
+    (K0-b, Refs #1770).
     """
-    base_qs = Event.objects.filter(
+    return Event.objects.filter(
         facility=facility,
         is_deleted=False,
         occurred_at__date__gte=date_from,
         occurred_at__date__lte=date_to,
     )
 
+
+def count_unique_clients(facility, date_from, date_to) -> int:
+    """DISTINCT-Personenzahl der Einrichtung **im Zeitraum** (K0-b/K4b, Refs #1770).
+
+    Bewusst **nicht** ``core.services.compliance.count_clients_in_bucket``: jene
+    Funktion gehoert dem Retention-/Anonymisierungspfad, zaehlt **alle** Klienten
+    der Einrichtung und kennt keinen Zeitraumfilter. Als Suppressionskriterium
+    waere sie *fail-open* — sie meldet einen Bucket gross, dessen Personenmenge
+    im Berichtszeitraum aus einer einzigen Person besteht. Fuer den
+    Berichtspfad gilt deshalb ausschliesslich diese zeitraum-skopierte Variante.
+
+    Zaehlt Personen, nicht Ereignisse, und ist damit **nicht additiv**: die
+    Zahl darf nie ueber Monatssegmente summiert werden (K4b) — der Hybrid-Pfad
+    ruft sie stattdessen einmal ueber den Gesamtzeitraum auf.
+    """
+    return (
+        event_queryset_for_period(facility, date_from, date_to)
+        .exclude(client__isnull=True)
+        .values("client")
+        .distinct()
+        .count()
+    )
+
+
+def get_statistics(facility, date_from, date_to):
+    """Statistics data for a facility in the given period.
+
+    Returns dict with: total_contacts, by_contact_stage, persons_by_contact_stage,
+    by_document_type, by_age_cluster (inkl. ``persons``), top_clients,
+    unique_clients.
+
+    K0-b (Refs #1770): Jede personenabgeleitete Aufschluesselung traegt
+    zusaetzlich zur Ereigniszahl die **DISTINCT-Personenzahl** ihres Buckets —
+    die Groesse, gegen die die k-Schwelle im Export-/PDF-Pfad prueft. Sie ist
+    Suppressions-*Eingabe*, kein publizierter Wert: ``_suppress_small``
+    entfernt sie, bevor eine Zeile in ein Artefakt geht.
+    """
+    base_qs = event_queryset_for_period(facility, date_from, date_to)
+
     total_contacts = base_qs.count()
 
-    # Contact stages: anonymous = is_anonymous OR client IS NULL
+    # Contact stages: anonymous = is_anonymous OR client IS NULL.
+    # Ereignis- und Personenzahlen in EINER Aggregation — dieselben Filter,
+    # damit Zaehler und k-Kriterium nicht auseinanderlaufen koennen.
     stage_qs = base_qs.aggregate(
-        anonym=Count("id", filter=Q(is_anonymous=True) | Q(client__isnull=True)),
-        identifiziert=Count(
-            "id",
-            filter=~Q(is_anonymous=True) & Q(client__isnull=False) & Q(client__contact_stage="identified"),
-        ),
-        qualifiziert=Count(
-            "id",
-            filter=~Q(is_anonymous=True) & Q(client__isnull=False) & Q(client__contact_stage="qualified"),
-        ),
+        anonym=Count("id", filter=_STAGE_ANONYM_Q),
+        identifiziert=Count("id", filter=_STAGE_IDENTIFIED_Q),
+        qualifiziert=Count("id", filter=_STAGE_QUALIFIED_Q),
+        anonym_persons=Count("client", filter=_STAGE_ANONYM_Q, distinct=True),
+        anonym_ohne_person=Count("id", filter=Q(client__isnull=True)),
+        identifiziert_persons=Count("client", filter=_STAGE_IDENTIFIED_Q, distinct=True),
+        qualifiziert_persons=Count("client", filter=_STAGE_QUALIFIED_Q, distinct=True),
     )
     by_contact_stage = {
         "anonym": stage_qs["anonym"],
         "identifiziert": stage_qs["identifiziert"],
         "qualifiziert": stage_qs["qualifiziert"],
+    }
+    # Ereignisse ohne Klienten-FK tragen ueberhaupt keinen Personenbezug: sie
+    # sind untereinander nicht verknuepfbar, also zaehlt jedes als eigenes
+    # Individuum. Wuerde man sie mit 0 Personen bewerten, waere die Stufe
+    # „anonym" in einer niedrigschwelligen Einrichtung dauerhaft unterdrueckt,
+    # ohne dass irgendjemand geschuetzt wuerde — es gibt dort keine
+    # Aequivalenzklasse, die eine Person heraussingularisieren koennte.
+    persons_by_contact_stage = {
+        "anonym": stage_qs["anonym_persons"] + stage_qs["anonym_ohne_person"],
+        "identifiziert": stage_qs["identifiziert_persons"],
+        "qualifiziert": stage_qs["qualifiziert_persons"],
     }
 
     # By document type
@@ -163,7 +229,7 @@ def get_statistics(facility, date_from, date_to):
     by_age_cluster_qs = (
         base_qs.exclude(client__isnull=True)
         .values("client__age_cluster")
-        .annotate(count=Count("id"))
+        .annotate(count=Count("id"), persons=Count("client", distinct=True))
         .order_by("-count")
     )
     by_age_cluster = [
@@ -171,6 +237,8 @@ def get_statistics(facility, date_from, date_to):
             "cluster": row["client__age_cluster"],
             "label": age_labels.get(row["client__age_cluster"], row["client__age_cluster"]),
             "count": row["count"],
+            # K0-b (Refs #1770): DISTINCT-Personenzahl des Buckets im Zeitraum.
+            PERSONS_KEY: row["persons"],
         }
         for row in by_age_cluster_qs
     ]
@@ -185,11 +253,12 @@ def get_statistics(facility, date_from, date_to):
     top_clients = [{"pseudonym": row["client__pseudonym"], "count": row["count"]} for row in top_clients]
 
     # Unique clients
-    unique_clients = base_qs.exclude(client__isnull=True).values("client").distinct().count()
+    unique_clients = count_unique_clients(facility, date_from, date_to)
 
     return {
         "total_contacts": total_contacts,
         "by_contact_stage": by_contact_stage,
+        "persons_by_contact_stage": persons_by_contact_stage,
         "by_document_type": by_document_type,
         "by_age_cluster": by_age_cluster,
         "top_clients": top_clients,

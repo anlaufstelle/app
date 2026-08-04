@@ -85,6 +85,15 @@ def count_clients_in_bucket(facility, age_cluster, contact_stage=None) -> int:
     ``contact_stage`` is ``None`` only ``age_cluster`` is matched.
     Used as input for the k-anonymity check.
 
+    **Nicht fuer den Berichtspfad verwenden** (K0-b, Refs #1770): Diese
+    Funktion gehoert dem Retention-/Anonymisierungspfad und zaehlt **alle**
+    Klienten der Einrichtung — sie kennt keinen Zeitraumfilter. Als
+    Suppressionskriterium fuer Berichts-Artefakte waere sie *fail-open*: sie
+    meldet einen Bucket gross, dessen Personenmenge im Berichtszeitraum aus
+    einer einzigen Person besteht. Die zeitraum-skopierten Personenzahlen der
+    Berichte liefert ``core.services.dashboard.statistics`` (``get_statistics``
+    je Bucket, ``count_unique_clients`` fuer den Gesamtzeitraum).
+
     Hart-anonymisierte ``Gelöscht-``-Tombstones werden bewusst AUSGESCHLOSSEN
     (Refs #1442): ``Client.anonymize`` setzt ihren ``age_cluster`` auf
     ``UNKNOWN`` zurueck und vergibt ein am Praefix erkennbares Pseudonym. Sie
