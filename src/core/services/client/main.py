@@ -531,13 +531,24 @@ def anonymize_client(client, user=None):
     _redact_activities(client, event_ids)
     _delete_recent_visits(client)
     _revoke_offline_bundles(client)
-    # Refs #1344/#1738: Der Datei-Block steht bewusst SPAET. Der ``.enc``-Unlink
-    # ist nicht rollback-bar — schlaegt eine der Redaktionen oben fehl, rollt die
-    # umgebende Transaktion zurueck und es sind noch keine Dateien verschwunden;
-    # der naechste Lauf holt die Anonymisierung vollstaendig nach. Umgekehrt
-    # waeren geloeschte Dateien bei erhaltenem Klartext-Bestand der schlechtere
-    # Halbzustand. (Der Ereignis-Zweig oben kann nicht nach hinten wandern: seine
-    # ``event_ids`` speisen die nachgelagerten Redaktionen.)
+    # Refs #1344/#1738: Der ``.enc``-Unlink ist nicht rollback-bar. Diese Kaskade
+    # kennt deshalb ZWEI Datei-Zeitpunkte, und nur einer davon ist neu:
+    #
+    # * ``_delete_event_attachments_for_client`` laeuft frueh (oben) — Bestands-
+    #   verhalten, weil seine ``event_ids`` die nachgelagerten Redaktionen
+    #   speisen. Ab diesem Punkt SIND Ereignis-Dateien bereits von der Platte
+    #   entfernt: scheitert eine spaetere Redaktion, rollt die Transaktion die
+    #   Zeilen zurueck, die Dateien aber nicht. Der naechste Lauf holt die
+    #   Anonymisierung nach; die Dateien sind dann bereits weg (Loeschrichtung —
+    #   kein Datenschutz-, sondern ein Nachweis-Restrisiko, dokumentiert unter
+    #   Refs #1344).
+    # * Dieser Block steht bewusst SPAET und ist damit der rollback-schonendere
+    #   Teil: schlaegt eine Redaktion fehl, sind personen- und falleigene Dateien
+    #   noch unberuehrt. Umgekehrt waeren geloeschte Dateien bei erhaltenem
+    #   Klartext-Bestand der schlechtere Halbzustand.
+    #
+    # Eine Zusammenlegung beider Zeitpunkte waere eine Verhaltensaenderung an
+    # einem DSGVO-Pfad und gehoert in ein eigenes Ticket, nicht in diesen Fix.
     _delete_owned_attachments_for_client(client, case_ids)
 
     logger.info(

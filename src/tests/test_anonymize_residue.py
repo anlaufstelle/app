@@ -258,12 +258,20 @@ class TestAnonymizeResidueMatrix:
         assert Attachment.objects.filter(case=case).count() == 0
 
     def test_file_markers_gone_from_owner_data_json(self, client_with_full_history):
-        """Invariante I-M1 (ADR-039 §7): kein ``__files__``-Marker ueberlebt.
+        """Marker-Haelfte der Invariante I-M1 (ADR-039 §7): kein ``__files__``
+        ueberlebt in ``data_json`` von Person und Fall.
 
-        Der physische Loeschpfad und die Marker-Bereinigung muessen in
-        derselben Transaktion liegen — sonst zeigen Marker in ``data_json``
-        auf Attachment-Zeilen, die es nicht mehr gibt (Detail-Anzeige und
-        Auskunft wuerden sie weiter als vorhandene Datei ausweisen).
+        **Was dieser Test pinnt:** ausschliesslich die Marker-Residue — sie faellt
+        hier mit der Redaktion (``_redact_client_identity`` /
+        ``_redact_cases_and_episodes`` leeren ``data_json``), auch ganz ohne
+        Anhang-Zeilen. Ein bestandener Lauf beweist also **nicht**, dass Zeilen
+        und Dateien geloescht wurden.
+
+        **Wo die andere Haelfte haengt:** ``test_owner_attachments_deleted``
+        (DB-Zeilen, dieselbe Klasse) und
+        ``test_pii_residue_sweep.test_attachments_gone_after_retention_k_anonymization``
+        (Zeilen **und** ``.enc`` auf Platte). Erst beide zusammen ergeben die
+        Invariante: kein Marker ohne Zeile, keine Zeile ohne Datei-Unlink.
         """
         cli, case, _ = client_with_full_history
         marker = {"__files__": True, "entries": [{"id": "11111111-1111-1111-1111-111111111111", "sort": 0}]}

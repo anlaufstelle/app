@@ -906,15 +906,22 @@ def test_attachments_gone_after_retention_k_anonymization(maximal_pii_graph, adm
 
 @pytest.mark.django_db
 def test_file_markers_gone_after_retention_k_anonymization(maximal_pii_graph, admin_user, lead_user):
-    """Invariante I-M1 (ADR-039 §7) auch in der K-Anon-Bridge (Refs #1738).
+    """Marker-Haelfte der Invariante I-M1 (ADR-039 §7) in der K-Anon-Bridge (Refs #1738).
 
-    Der Hard-Pfad-Pin liegt in ``test_anonymize_residue.py``. In der Bridge
-    haengt die Invariante an einer anderen Mechanik: die Client-Zeile redigiert
-    ``k_anonymize_client`` selbst (``_redact_client_identity`` ist dort bewusst
-    ausgenommen), die Fall-Zeile ``_redact_cases_and_episodes``. Da die Bridge
-    seit M24 personen-/falleigene Anhaenge physisch loescht, muessen beide
-    Marker-Quellen im selben Lauf leer sein — sonst zeigten Marker auf
-    Attachment-Zeilen, die es nicht mehr gibt.
+    **Was dieser Test pinnt:** nur die Marker-Residue in ``data_json`` von
+    Person und Fall — und zwar an einer anderen Mechanik als im Hard-Pfad: die
+    Client-Zeile redigiert ``k_anonymize_client`` selbst
+    (``_redact_client_identity`` ist in der Bridge bewusst ausgenommen), die
+    Fall-Zeile ``_redact_cases_and_episodes``. Beide leeren ``data_json`` auch
+    dann, wenn ueberhaupt keine Anhaenge existieren; ein gruener Lauf beweist
+    also **nicht**, dass Zeilen oder Dateien geloescht wurden.
+
+    **Wo die andere Haelfte haengt:**
+    ``test_attachments_gone_after_retention_k_anonymization`` (oben — DB-Zeilen
+    **und** ``.enc`` auf Platte) sowie im Hard-Pfad
+    ``test_anonymize_residue.TestAnonymizeResidueMatrix.test_owner_attachments_deleted``.
+    Erst beide zusammen ergeben die Invariante: kein Marker ohne Zeile, keine
+    Zeile ohne Datei-Unlink.
     """
     from core.models import Case, Client
     from core.retention.anonymization import anonymize_clients

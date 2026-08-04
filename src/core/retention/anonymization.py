@@ -108,7 +108,11 @@ def _k_anonymize_with_cascade(client, k):
         _revoke_offline_bundles(client)
         # Refs #1344/#1738: Datei-Block spaet in der Transaktion — der
         # ``.enc``-Unlink ist nicht rollback-bar (Begruendung wie im Hard-Pfad
-        # ``anonymize_client``).
+        # ``anonymize_client``). Hier ist er zugleich der EINZIGE Datei-Zugriff
+        # der Kaskade: Ereignis-Anhaenge sind per Eintrittsbedingung
+        # (``active_events == 0``) laengst im Soft-Delete-Pfad geloescht. Bis zu
+        # dieser Zeile ist also tatsaechlich keine Datei verschwunden — anders
+        # als im Hard-Pfad, wo der Ereignis-Zweig frueh laeuft.
         _delete_owned_attachments_for_client(client, case_ids)
 
 
