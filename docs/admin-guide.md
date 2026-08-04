@@ -732,11 +732,11 @@ Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://gi
 
 ### 2.9 Encrypted File Vault & Virus-Scanning
 
-Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py). Refs #524.
+Dateianhänge (Fotos, Scans, Dokumente) an **Ereignissen, Personen und Fällen** ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Refs #1738 — je Datei genau ein Owner) werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py). Refs #524.
 
 #### Upload-Flow
 
-1. Fachkraft wählt Datei im Event-Formular aus ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)).
+1. Fachkraft wählt Datei im Formular aus — Ereignis ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)), Person oder Fall ([`clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/clients.py)/[`cases.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/cases.py)).
 2. Server prüft Dateityp und Größe (siehe `allowed_file_types` und `max_file_size_mb` in den Einrichtungseinstellungen — Default **10 MB**).
 3. **ClamAV-Scan** vor Verschlüsselung:
  - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
@@ -781,7 +781,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 |---|---|
 | **`Event.data_json`** | **vollständig — inklusive soft-gelöschter Ereignisse** (#1724) |
 | `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass) |
-| `EventAttachment.original_filename_encrypted` | vollständig |
+| `Attachment.original_filename_encrypted` | vollständig — Anhänge an Ereignis, Person und Fall (das Modell hieß bis #1738 `EventAttachment`) |
 | TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
 | **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen** |
 | **`Case.data_json`** | **vollständig — inklusive soft-gelöschter Fälle** |
@@ -1312,6 +1312,14 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 
 Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrichtung, Benutzer und Zeitraum gefiltert werden. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung. Pre-Auth-AuditLogs ohne Facility-Bezug (z. B. `LOGIN_FAILED` bei unbekanntem Username) sind ausschließlich für die Systemadministration (`super_admin`) im `/system/`-Bereich sichtbar — siehe [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md).
 
+> ⚠️ **Betreiberhinweis für eigene Auswertungen: Anhänge tragen zwei `target_type`-Strings** (Refs #1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)). Mit Milestone 24 wurde das Modell `EventAttachment` zu `Attachment` umbenannt. Das Audit-Log ist append-only und über eine HMAC-Kette gesichert — **Alt-Zeilen werden deshalb nie migriert**. Wer Anhang-Aktionen (Downloads, abgewiesene Uploads, Löschungen) auswertet, muss beide Strings abfragen:
+>
+> ```sql
+> SELECT * FROM core_auditlog WHERE target_type IN ('Attachment', 'EventAttachment');
+> ```
+>
+> Dasselbe gilt für das `detail`-Feld: neue Zeilen tragen `owner_type` + `owner_id` (Werte `event`/`client`/`case`), Alt-Zeilen nur `event_id`. Download-Einträge zu **Ereignis**-Anhängen führen `event_id` zusätzlich weiter, damit Bestandsauswertungen nicht brechen. Ein Filter allein auf `Attachment` oder allein auf `detail->>'event_id'` liefert eine **stillschweigend unvollständige** Auswertung.
+
 **Aufbewahrung des Audit-Logs:** Das Audit-Log **hat** eine eigene automatische Löschfrist innerhalb der Anwendung — sie ist bewusst länger als alle Fach-Fristen, damit Forensik nach einem spät bemerkten Vorfall noch Spuren findet ([ADR-021](adr/021-retention-modell.md)).
 
 | Einstellung in `Settings` | Standard | Wirkung |
@@ -1403,14 +1411,16 @@ Enthalten sind (Refs #1752):
 | Aktivitäten | Zeitstrom-Einträge zur Person, ihren Fällen, Ereignissen und Aufgaben |
 | Merkliste | Zeitpunkte, zu denen die Personenakte aufgerufen bzw. als Favorit markiert wurde |
 | Zugriffsprotokoll | Audit-Einträge zur Person und ihren Ereignissen: Aktion, Zeitpunkt, Bezug |
+| Dateianhänge | **Metadaten** je Anhang der Person, ihrer Fälle und ihrer Ereignisse (Refs #1738): Feldname und Feld-Slug, entschlüsselter Dateiname, Dateigröße, MIME-Typ, Zeitpunkt und hochladende Person, sowie der Zustand in der Versionskette (aktuell ja/nein, ersetzt am, entfernt am) — **vollständige Kette inklusive ersetzter und entfernter Glieder** |
+
+**Zur Struktur der Anhang-Angaben (JSON):** personen-eigene Anhänge stehen unter dem Top-Level-Schlüssel `attachments` — er ist **immer** vorhanden, ggf. als leere Liste. Fall- und Ereignis-Anhänge stehen als `attachments` **im jeweiligen Eintrag** unter `cases[i]` bzw. `events[i]` und erscheinen dort nur, wenn nicht leer (das Bestandsformat für Datensätze ohne Dateien bleibt damit unverändert); gelöschte Ereignisse (`deleted_events`) tragen sie ebenso. Lässt sich ein Dateiname nicht entschlüsseln, steht dort `[verschlüsselt]` — die Auskunft erfindet keinen Namen. Der MIME-Typ ist der beim Upload **verifizierte** Typ; nur für Bestandszeilen ohne Erkennung fällt er auf den vom Browser gemeldeten zurück. In den Zusatzfeldern selbst erscheint statt des technischen Datei-Markers der Platzhalter `[Dateianhang – Angaben unter „Dateianhänge"]`. **Im PDF** stehen die personen-eigenen Anhänge als eigener Abschnitt „Dateianhänge"; Fall- und Ereignis-Anhänge stehen als Spalte „Dateianhänge" in der jeweiligen Tabelle.
 
 **Bewusst nicht enthalten — als manueller Ergänzungsschritt zu prüfen:**
 
-1. **Angaben zu Dateianhängen** (Dateiname, Größe, Versionskette, entfernte Anhänge) und deren Inhalte. Bis zur Umsetzung von #1738 bleiben sie außen vor. Fragt die betroffene Person danach oder sind Anhänge zu ihren Ereignissen erfasst, ergänzen Sie die Angaben manuell aus der Ereignis-Detailansicht.
-2. **Namen der zugreifenden Beschäftigten im Zugriffsprotokoll.** Das Protokoll führt Aktion, Zeitpunkt und Bezug, aber keine Actor-Identität: „wer griff wann zu" ist zugleich ein Zugriffsprotokoll über Beschäftigte und damit ein Datum Dritter (Art. 15 Abs. 4 DSGVO). Dasselbe gilt für die Merkliste. Verlangt die betroffene Person auch diese Angaben, ist eine Abwägung im Einzelfall nötig — die Rohdaten stehen der Anwendungsbetreuung unter `/audit/` zur Verfügung.
-3. **Binärinhalte** jeder Art (Dateien, Bilder). Diese sind bei Bedarf gesondert über die Ereignis-Detailansicht herauszugeben.
+1. **Namen der zugreifenden Beschäftigten im Zugriffsprotokoll.** Das Protokoll führt Aktion, Zeitpunkt und Bezug, aber keine Actor-Identität: „wer griff wann zu" ist zugleich ein Zugriffsprotokoll über Beschäftigte und damit ein Datum Dritter (Art. 15 Abs. 4 DSGVO). Dasselbe gilt für die Merkliste. Verlangt die betroffene Person auch diese Angaben, ist eine Abwägung im Einzelfall nötig — die Rohdaten stehen der Anwendungsbetreuung unter `/audit/` zur Verfügung.
+2. **Binärinhalte** jeder Art (Dateien, Bilder). Die Auskunft benennt jede Datei, liefert sie aber nicht mit; die Datei selbst geben Sie bei Bedarf über den regulären Download aus der Detailansicht heraus.
 
-Der PDF-Hinweiskasten benennt die Punkte 1 und 2 gegenüber der betroffenen Person ausdrücklich — die Auskunft behauptet keine Vollständigkeit, die sie nicht hat.
+Der PDF-Hinweiskasten benennt beide Punkte gegenüber der betroffenen Person ausdrücklich — die Auskunft behauptet keine Vollständigkeit, die sie nicht hat.
 
 ### 7.7 Empfohlene organisatorische Maßnahmen
 

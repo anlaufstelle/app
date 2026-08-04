@@ -731,11 +731,11 @@ Quick templates are filtered per user using [`user_can_see_document_type`](https
 
 ### 2.9 Encrypted File Vault & Virus Scanning
 
-File attachments (photos, scans, documents) on events are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM. Refs #524.
+File attachments (photos, scans, documents) on **events, clients and cases** ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) (German), Refs #1738 -- exactly one owner per file) are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM. Refs #524.
 
 #### Upload Flow
 
-1. A staff member picks a file in the event form ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)).
+1. A staff member picks a file in the form -- event ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)), client or case ([`clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/clients.py)/[`cases.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/cases.py)).
 2. The server validates file type and size (see `allowed_file_types` and `max_file_size_mb` in the facility settings -- default **10 MB**).
 3. **ClamAV scan** before encryption:
  - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
@@ -780,7 +780,7 @@ MultiFernet accepts a list of keys. To rotate:
 |---|---|
 | **`Event.data_json`** | **complete -- including soft-deleted events** (#1724) |
 | `EventHistory.data_before` / `data_after` | complete (append-only, updated through the replication bypass) |
-| `EventAttachment.original_filename_encrypted` | complete |
+| `Attachment.original_filename_encrypted` | complete -- attachments on events, clients and cases (the model was named `EventAttachment` until #1738) |
 | TOTP secrets (`otp_totp_totpdevice.key`) | complete, per device with a row lock and compare-and-swap |
 | **`Client.data_json`** | **complete -- including soft-deleted persons** |
 | **`Case.data_json`** | **complete -- including soft-deleted cases** |
@@ -1310,6 +1310,14 @@ The audit log is **append-only** and immutable. It automatically records:
 
 Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, facility, user, and time period. The application manager (`facility_admin`) has access for their own facility. Pre-auth audit logs without a facility reference (e.g. `LOGIN_FAILED` for an unknown username) are visible exclusively to the system administration (`super_admin`) in the `/system/` area -- see [ADR-007 Update 2026-05-10](../adr/007-auditlog-append-only.md).
 
+> ⚠️ **Operator note for your own queries: attachments carry two `target_type` strings** (Refs #1738, [ADR-039](../adr/039-owner-generische-dateianhaenge.md), German). Milestone 24 renamed the model `EventAttachment` to `Attachment`. The audit log is append-only and secured by an HMAC chain — **existing rows are therefore never migrated**. Anyone evaluating attachment actions (downloads, rejected uploads, deletions) must query both strings:
+>
+> ```sql
+> SELECT * FROM core_auditlog WHERE target_type IN ('Attachment', 'EventAttachment');
+> ```
+>
+> The same applies to the `detail` field: new rows carry `owner_type` + `owner_id` (values `event`/`client`/`case`), older rows only `event_id`. Download entries for **event** attachments keep `event_id` in addition, so existing queries do not break. Filtering on `Attachment` alone, or on `detail->>'event_id'` alone, yields a **silently incomplete** result.
+
 **Audit log retention:** The audit log **does** have its own automatic retention period inside the application — deliberately longer than every domain retention period, so that forensics still finds traces after an incident that was noticed late ([ADR-021](../adr/021-retention-modell.md), German).
 
 | Setting in `Settings` | Default | Effect |
@@ -1401,14 +1409,16 @@ Included (Refs #1752):
 | Activities | Activity feed entries about the client, their cases, events and tasks |
 | Recently viewed | Timestamps at which the client record was opened or bookmarked |
 | Access log | Audit entries about the client and their events: action, timestamp, reference |
+| File attachments | **Metadata** for every attachment on the client, their cases and their events (Refs #1738): field name and field slug, decrypted filename, file size, MIME type, timestamp and uploading user, plus the state within the version chain (current yes/no, superseded at, removed at) -- **the complete chain including superseded and removed links** |
+
+**On the structure of the attachment data (JSON):** client-owned attachments live under the top-level key `attachments` -- it is **always** present, possibly as an empty list. Case- and event-owned attachments appear as `attachments` **inside the respective entry** under `cases[i]` or `events[i]`, and only when non-empty (so the existing format for records without files stays unchanged); deleted events (`deleted_events`) carry them too. If a filename cannot be decrypted, the value reads `[verschlüsselt]` -- the record does not invent a name. The MIME type is the type **verified** at upload time; only legacy rows without detection fall back to the browser-reported one. In the custom fields themselves, the technical file marker is replaced by the placeholder `[Dateianhang – Angaben unter „Dateianhänge"]`. **In the PDF**, client-owned attachments form their own section "Dateianhänge"; case- and event-owned attachments appear as a "Dateianhänge" column in the respective table.
 
 **Deliberately excluded -- review as a manual supplementary step:**
 
-1. **File attachment metadata** (filename, size, version chain, removed attachments) and their contents. They remain out of scope until #1738 is implemented. If the data subject asks for them, or if attachments exist on their events, add the details manually from the event detail view.
-2. **Names of the accessing staff members in the access log.** The log carries action, timestamp and reference, but no actor identity: "who accessed what and when" is simultaneously an access log about employees and therefore third-party data (Art. 15(4) GDPR). The same applies to the recently-viewed list. If the data subject requests these details as well, a case-by-case assessment is required -- the raw data is available to the application manager under `/audit/`.
-3. **Binary contents** of any kind (files, images). Release these separately via the event detail view if required.
+1. **Names of the accessing staff members in the access log.** The log carries action, timestamp and reference, but no actor identity: "who accessed what and when" is simultaneously an access log about employees and therefore third-party data (Art. 15(4) GDPR). The same applies to the recently-viewed list. If the data subject requests these details as well, a case-by-case assessment is required -- the raw data is available to the application manager under `/audit/`.
+2. **Binary contents** of any kind (files, images). The record names every file but does not ship it; release the file itself via the regular download from the detail view if required.
 
-The PDF notice box states points 1 and 2 explicitly to the data subject -- the record does not claim a completeness it does not have.
+The PDF notice box states both points explicitly to the data subject -- the record does not claim a completeness it does not have.
 
 ### 7.7 Recommended Organizational Measures
 
@@ -1597,4 +1607,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 9e740542e620271d77ace801a2d2c0ada52eb027 -->
+<!-- source-hash: cc67bdec01108652a27b2d6d1e50830cbb35c42d -->

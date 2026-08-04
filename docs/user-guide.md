@@ -216,13 +216,18 @@ Wenn Ihre Administration für wiederkehrende Dokumentationsmuster **Schnell-Vorl
 
 An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes Formular, ein Foto eines Dokuments oder ein PDF.
 
-- **Hochladen:** Im Kontakt-Formular gibt es ein Feld für den Datei-Upload. Wählen Sie eine Datei von Ihrem Gerät aus und speichern Sie das Ereignis wie gewohnt.
+> **Auch an Personen und Fällen:** Datei-Felder sind nicht mehr auf Ereignisse beschränkt. Hat Ihre Administration ein Datei-Feld an einem **Personen-** oder **Fall-Typ** hinterlegt, erscheint es im Formular der Person bzw. des Falls und funktioniert dort genauso wie hier beschrieben — Hochladen, Ersetzen mit Vorversionen, Herunterladen aus der Detailansicht. Zwei Unterschiede: **Fall-Dateien** sehen und laden nur Fachkräfte, Leitungen und Administration (Assistenzen haben keinen Zugriff auf Fälle), und Dateien an Person oder Fall werden **zusammen mit der Person gelöscht** — sie haben keine eigene Aufbewahrungsfrist.
+
+- **Hochladen:** Im Kontakt-Formular gibt es ein Feld für den Datei-Upload. Wählen Sie eine Datei von Ihrem Gerät aus und speichern Sie das Ereignis wie gewohnt. An Person und Fall läuft es identisch: Datei im Formular wählen, Datensatz speichern.
 - **Virenscan:** Vor dem Speichern wird jede Datei automatisch durch einen Virenscanner (ClamAV) geprüft. Infizierte Dateien werden abgelehnt — Sie erhalten eine Fehlermeldung und das Ereignis wird nicht gespeichert.
 - **Verschlüsselung:** Alle Anhänge werden verschlüsselt gespeichert (AES-GCM). Das bedeutet: Die Datei ist auf dem Server nicht im Klartext lesbar, sondern nur über Anlaufstelle selbst abrufbar.
 - **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Administration kann diesen Wert anpassen.
 - **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
-- **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
-- **Ersetzen (mit Versionshistorie):** Beim Bearbeiten eines Ereignisses können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird **nicht** gelöscht — sie bleibt als **Vorversion** erhalten und ist in der Ereignis-Detailansicht über ein aufklappbares Akkordeon weiterhin herunterladbar. Vorversionen werden erst beim vollständigen Löschen des Ereignisses entfernt.
+- **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses (bzw. der Person oder des Falls) und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
+- **Ersetzen (mit Versionshistorie):** Beim Bearbeiten können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird **nicht** gelöscht — sie bleibt als **Vorversion** erhalten und ist in der Detailansicht über ein aufklappbares Akkordeon weiterhin herunterladbar. Vorversionen werden erst beim vollständigen Löschen des Datensatzes entfernt. Das gilt an Ereignis, Person und Fall gleichermaßen.
+- **Entfernen:** Im Formular lässt sich eine hinterlegte Datei abwählen. Sie verschwindet aus der Detailansicht und ist nicht mehr herunterladbar; die Versionskette bleibt für die Nachvollziehbarkeit bestehen, bis der Datensatz selbst gelöscht wird.
+
+> **Typwechsel verwirft Werte *und* Dateien:** Wechseln Sie an einer Person oder einem Fall den Dokumentationstyp — oder entfernen ihn („— Kein Typ —"), gelten die Zusatzfelder des alten Typs nicht mehr. Eine Rückfrage vor dem Speichern nennt beides: wie viele **Feldwerte** verworfen werden **und** wie viele hinterlegte **Dateien** entfernt werden. „Abbrechen" lässt alles unverändert stehen; erst „OK" führt es aus.
 
 > **Offline-Hinweis:** Ereignisse mit Datei-Anhängen können aktuell **nicht offline** gespeichert werden. Wenn Sie offline arbeiten, erscheint beim Anhängen einer Datei ein deutlicher Hinweis. Siehe [Abschnitt 8](#8-pwa-installieren-und-offline-arbeiten).
 
@@ -251,7 +256,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 
 ## 3a. Dateien-Übersicht
 
-Die **Dateien-Seite** (`/attachments/`, Sidebar-Eintrag **Dateien**) zeigt alle Anhänge Ihrer Einrichtung in einer durchsuchbaren Liste — ohne vorher das jeweilige Ereignis öffnen zu müssen.
+Die **Dateien-Seite** (`/attachments/`, Sidebar-Eintrag **Dateien**) zeigt alle Anhänge Ihrer Einrichtung in einer durchsuchbaren Liste — ohne vorher den jeweiligen Datensatz öffnen zu müssen. Sie umfasst Dateien an **Ereignissen, Personen und Fällen**.
 
 ### Zugriff
 
@@ -260,24 +265,29 @@ Die **Dateien-Seite** (`/attachments/`, Sidebar-Eintrag **Dateien**) zeigt alle 
 
 ### Sichtbarkeit
 
-Sie sehen nur Dateien, deren Ereignis **und** Feld Ihre Sensitivitätsrolle erreicht:
+Sie sehen nur Dateien, deren Datensatz (Ereignis, Person oder Fall) **und** dessen Feld Ihre Sensitivitätsrolle erreicht:
 
-- Felder mit „hoher" Sensitivität bleiben für Fachkräfte einer niedrigeren Stufe verborgen — gleiches Gate wie im Ereignis-Detail.
-- Anhänge gelöschter Ereignisse sind nicht enthalten.
+- Felder mit „hoher" Sensitivität bleiben für Fachkräfte einer niedrigeren Stufe verborgen — gleiches Gate wie in der Detailansicht.
+- Anhänge gelöschter Ereignisse, Personen und Fälle sind nicht enthalten; ebenso wenig Dateien, die Sie im Formular wieder entfernt haben.
+- **Assistenzen sehen keine Dateien an Fällen** — Fälle sind für sie generell nicht sichtbar, ihre Dateien folgerichtig auch nicht.
 - Facility-Scoping: Sie sehen ausschließlich Dateien Ihrer eigenen Einrichtung.
+
+### Spalte „Zugeordnet zu"
+
+Jede Zeile weist aus, **woran** die Datei hängt: **Ereignis**, **Person** oder **Fall**. Der Eintrag ist verlinkt und führt direkt auf die zugehörige Detailseite (bei Fällen nur für Rollen, die Fälle sehen dürfen).
 
 ### Filter
 
 Zwei Filter oberhalb der Tabelle:
 
-- **Dokumentationstyp** — nur Anhänge zu Ereignissen eines bestimmten Typs (z. B. „Beratungsgespräch").
-- **Personen** — alle Anhänge zu einem bestimmten Pseudonym.
+- **Dokumentationstyp** — nur Anhänge zu Datensätzen eines bestimmten Typs (z. B. „Beratungsgespräch", „Aufnahmebogen"). Angeboten werden nur Typen, die Sie laut Ihrer Rolle einsehen dürfen.
+- **Personen** — alle Anhänge zu einem bestimmten Pseudonym. Der Filter greift über **alle drei** Wege, auf denen eine Datei zu einer Person gehört: über ihr Ereignis, direkt an der Person und über einen ihrer Fälle.
 
 Die Filter sind kombinierbar und aktualisieren die Liste via HTMX ohne kompletten Seitenreload.
 
 ### Herunterladen
 
-Jede Zeile zeigt den Originaldateinamen. Ein Klick darauf liefert die entschlüsselte Datei — exakt wie in der Ereignis-Detailansicht. Downloads werden im Audit-Log protokolliert.
+Jede Zeile zeigt den Originaldateinamen. Ein Klick darauf liefert die entschlüsselte Datei — exakt wie in der Detailansicht des Ereignisses, der Person oder des Falls. Downloads werden im Audit-Log protokolliert.
 
 ### Verschlüsselung
 
@@ -285,7 +295,7 @@ Alle Dateien liegen auf dem Server verschlüsselt (AES-GCM). Entschlüsselt wird
 
 ### Vorversionen
 
-Ersetzte Dateien bleiben als Vorversionen erhalten (siehe [Abschnitt 3 – Dateianhänge](#dateianhänge)). Die Dateien-Übersicht zeigt aktuell nur die jeweils aktuelle Version eines Eintrags; Vorversionen sind über den Eintrag in der Ereignis-Detailseite einsehbar.
+Ersetzte Dateien bleiben als Vorversionen erhalten (siehe [Abschnitt 3 – Dateianhänge](#dateianhänge)). Die Dateien-Übersicht zeigt aktuell nur die jeweils aktuelle Version eines Eintrags; Vorversionen sind über den Eintrag in der Detailseite des Ereignisses, der Person oder des Falls einsehbar.
 
 ---
 
