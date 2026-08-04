@@ -2596,6 +2596,11 @@ msgstr ""
 msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 msgstr "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 
+#: src/templates/core/export/report_pdf.html:83
+#: src/templates/core/statistics/external_report.html:99
+msgid "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."
+msgstr "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."
+
 #: src/core/reporting/backends/sample_report_1.py:134
 #: src/templates/core/export/sample_report_1_pdf.html:6
 #: src/templates/core/export/sample_report_1_pdf.html:29

@@ -994,6 +994,25 @@ Sicht selbst aus und eskaliert deterministisch, bis kein Befund mehr bleibt:
  Aufschlüsselung** (Key weg, nicht nur Werte auf `None` — eine genullte Zeile wäre selbst noch die
  Aussage „hier gibt es mindestens einen Fall").
 
+**Nichtirreführung auch im Fail-safe:** Fällt eine Aufschlüsselung ganz, weisen die Templates das
+**aus** („Angaben nach Dokumentationstyp unterdrückt (k-Anonymität).") statt in ihren
+„keine Daten"-Zweig zu laufen — dieselbe Regel, die
+#1768 für die Alterstabelle gesetzt hat.
+„Keine Daten im Zeitraum" ist eine Aussage über die **Rohdaten** und wäre hier schlicht falsch; sie
+publiziert obendrein die Randsumme 0, die R14 gerade verbirgt. Die Kehrseite ist bewusst gleich
+gehandhabt wie bei der Alterstabelle: ein wirklich leerer Zeitraum bekommt denselben Hinweis, weil
+`total_contacts` dort ebenfalls unterdrückt ist. Test-gepinnt in
+`test_reporting_disclosure_regression.py::TestFailSafePfadIstNichtIrrefuehrend` (inkl. Gegenprobe,
+dass eine vorhandene Tabelle unverändert ihre Zeilen zeigt).
+
+*Erreichbar, nicht theoretisch:* 15 Dokumenttypen mit je einem Ereignis und drei gleich große
+Kontaktstufen lassen `suppress_report_stats` auf `{'total_contacts': None, 'unique_clients': None}`
+kollabieren — jede Zeile ist bei Randsumme 15 zwingend „1", und die vollständig sichtbare
+Stufentabelle hält die Randsumme rekonstruierbar. Der Fall ist als Utility-Reserve notiert: eine
+gezieltere Eskalation (statt der Randsumme eine Zelle der *rekonstruierenden* Schwestertabelle
+opfern) würde die Dokumenttyp-Zeilen erhalten; sie ist nicht umgesetzt, weil die Fail-safe-Richtung
+Vorrang hatte.
+
 Terminierung: jeder Schritt unterdrückt mindestens eine weitere Zelle oder Randsumme und ist damit
 monoton und endlich; `MAX_GUARD_ITERATIONS` ist die zweite Sicherung gegen eine künftige Erweiterung,
 die diese Monotonie verliert.

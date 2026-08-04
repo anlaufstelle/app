@@ -93,8 +93,15 @@
                 </td>
             </tr>
             {% empty %}
+            {# K1-Fail-safe (Refs #1770): laesst der Residual-Guard die Tabelle fallen, waere "keine Daten" eine falsche Aussage ueber die Rohdaten — dieselbe Nichtirrefuehrungs-Regel wie bei der Alterstabelle (#1768). #}
             <tr>
-                <td colspan="2" class="px-4 py-2 text-muted italic">{% trans "Keine Daten im Zeitraum." %}</td>
+                <td colspan="2" class="px-4 py-2 text-muted italic">
+                    {% if report.total_contacts is None %}
+                        {% trans "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." %}
+                    {% else %}
+                        {% trans "Keine Daten im Zeitraum." %}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

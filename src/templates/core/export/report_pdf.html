@@ -78,6 +78,9 @@
             {% endfor %}
         </tbody>
     </table>
+    {% elif stats.total_contacts is None %}
+    {# K1-Fail-safe (Refs #1770): laesst der Residual-Guard die Tabelle fallen, waere "keine Daten" eine falsche Aussage ueber die Rohdaten — analog zur Alterstabelle (#1768). #}
+    <p>{% trans "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." %}</p>
     {% else %}
     <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
     {% endif %}

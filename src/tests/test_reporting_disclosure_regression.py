@@ -500,3 +500,118 @@ class TestOrdnungAnDerArtefaktgrenze:
             out = suppress_report_stats(facility, welt)
             unterdrueckt = [row["cluster"] for row in out["by_age_cluster"] if row["suppressed"]]
             assert sorted(unterdrueckt) == ["18_26", "u18"], unterdrueckt
+
+
+# --- Fail-safe-Pfad darf nicht irrefuehren ---------------------------------
+#
+# ``_drop_breakdowns`` entfernt im Fail-safe auch ``by_document_type`` — der
+# Key ist dann weg, und die Templates liefen in ihren „keine Daten"-Zweig. Das
+# ist genau die Irrefuehrung, die #1768
+# fuer die Alterstabelle bereits verworfen hat: „Keine Daten im Zeitraum" ist
+# eine **Aussage ueber die Rohdaten**, und sie ist hier falsch — es gab Daten,
+# sie sind nur unterdrueckt.
+
+_KOLLAPS_STATS = {
+    "total_contacts": 15,
+    "unique_clients": 20,
+    "by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
+    "persons_by_contact_stage": {"anonym": 5, "identifiziert": 5, "qualifiziert": 5},
+    "by_document_type": [{"name": f"T{index}", "category": "contact", "count": 1} for index in range(15)],
+    "by_age_cluster": [],
+}
+
+
+@pytest.mark.django_db
+class TestFailSafePfadIstNichtIrrefuehrend:
+    """Nichtirreführung (#1768-Doktrin) auch fuer den K1-Fail-safe (#1770).
+
+    Der Zustand ist ueber den echten Wrapper erreichbar: 15 Dokumenttypen mit je
+    einem Ereignis und drei gleich grosse Kontaktstufen. Jede Zeile ist dann
+    zwingend „1" (Randsumme 15, Zeilen-Existenz), und die vollstaendig sichtbare
+    Stufentabelle haelt die Randsumme rekonstruierbar — der Guard laesst deshalb
+    beide Aufschluesselungen fallen.
+    """
+
+    def _stats(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        out = suppress_report_stats(facility, dict(_KOLLAPS_STATS))
+        assert "by_document_type" not in out, "Vorbedingung: der Fail-safe hat die Tabelle fallen lassen"
+        return out
+
+    def test_externer_bericht_html_weist_die_unterdrueckung_aus(self, facility):
+        from django.template.loader import render_to_string
+
+        seite = render_to_string("core/statistics/external_report.html", {"report": self._stats(facility)})
+        abschnitt = seite.split("report-document-types")[-1].split("report-age")[0]
+
+        assert "Keine Daten im Zeitraum." not in abschnitt
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
+
+    def test_sachbericht_pdf_weist_die_unterdrueckung_aus(self, facility):
+        from django.template.loader import render_to_string
+
+        seite = render_to_string("core/export/report_pdf.html", {"stats": self._stats(facility)})
+        abschnitt = seite.split("Kontakte nach Dokumentationstyp")[-1].split("Kontakte nach Altersgruppe")[0]
+
+        assert "Keine Daten im gewählten Zeitraum." not in abschnitt
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
+
+    def test_leerer_zeitraum_bekommt_denselben_hinweis(self, facility):
+        """Bewusste Kehrseite, nicht Zufall: bei **leerem** Zeitraum ist
+        ``total_contacts`` ebenfalls ``None`` (Randsummen-Regel R14 auf 0), also
+        greift derselbe Zweig.
+
+        Der Alternativtext waere „Keine Daten im Zeitraum" — und der publiziert
+        genau die Zahl, die R14 verbirgt (Gesamtkontakte = 0). Von zwei
+        unscharfen Aussagen ist die k-anonyme die richtige, und die Alterstabelle
+        verhaelt sich seit #1768
+        in derselben Lage identisch.
+        """
+        from django.template.loader import render_to_string
+
+        from core.services.dashboard import suppress_report_stats
+
+        leer = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 0,
+                "unique_clients": 0,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                "by_age_cluster": [],
+            },
+        )
+        seite = render_to_string("core/statistics/external_report.html", {"report": leer})
+        abschnitt = seite.split("report-document-types")[-1].split("report-age")[0]
+
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." in abschnitt
+
+    def test_gefuellte_tabelle_zeigt_weiterhin_ihre_zeilen(self, facility):
+        """Gegenprobe: solange die Tabelle da ist, aendert sich nichts — weder
+        der Marker je Zeile noch die sichtbaren Zahlen."""
+        from django.template.loader import render_to_string
+
+        from core.services.dashboard import suppress_report_stats
+
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 25,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [
+                    {"name": "Notiz", "category": "note", "count": 20},
+                    {"name": "Kontakt", "category": "contact", "count": 4},
+                    {"name": "Beratung", "category": "service", "count": 1},
+                ],
+                "by_age_cluster": [],
+            },
+        )
+        seite = render_to_string("core/statistics/external_report.html", {"report": out})
+        abschnitt = seite.split("report-document-types")[-1].split("report-age")[0]
+
+        assert "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)." not in abschnitt
+        assert "Notiz" in abschnitt and "unterdrückt" in abschnitt
