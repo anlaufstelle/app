@@ -482,19 +482,35 @@ pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/sett
 > #1770):** Welche Einheit gezählt wird,
 > hängt am **Bucket-Typ**:
 >
-> * **Personenabgeleitete** Aufschlüsselungen (`by_age_cluster`, `by_contact_stage`, `unique_clients`)
-> werden gegen die **DISTINCT-Personenzahl** des Buckets im Berichtszeitraum geprüft — zusätzlich zur
-> Ereigniszahl, und es gilt die strengere der beiden. Eine sichtbare Zelle „Unter 18: 7" bedeutet
-> seither 7 *Kontakte* von **mindestens *k* Personen**; ist die Personenzahl unbekannt (Alt-Snapshot,
-> retention-bereinigter Monat), wird unterdrückt.
+> * **Personenabgeleitete** Aufschlüsselungen — `by_age_cluster`, `by_contact_stage.identifiziert`,
+> `by_contact_stage.qualifiziert` und `unique_clients` — werden gegen die **DISTINCT-Personenzahl**
+> des Buckets im Berichtszeitraum geprüft, zusätzlich zur Ereigniszahl, und es gilt die strengere der
+> beiden. Eine sichtbare Zelle „Unter 18: 7" bedeutet seither 7 *Kontakte* von **mindestens *k*
+> Personen**; ist die Personenzahl unbekannt (Alt-Snapshot, retention-bereinigter Monat), wird
+> unterdrückt.
+> * **Ausnahme `by_contact_stage.anonym`** — hier ist die Prüfgröße **keine** Personenzahl, sondern
+> „DISTINCT *verknüpfte* Personen **+** Anzahl der *unverknüpften* Ereignisse". Die Stufe ist als
+> „`is_anonymous` ODER `client IS NULL`" definiert; Ereignisse ohne Klienten-FK tragen überhaupt
+> keinen Personenbezug und sind untereinander nicht verknüpfbar, weshalb jedes als eigenes
+> Individuum zählt (`statistics.py`, `persons_by_contact_stage`; gepinnt in
+> `test_statistics.py::TestPersonenzaehlungImZeitraum::test_anonyme_stufe_zaehlt_ereignisse_ohne_personenbezug_je_einzeln`).
+> **Konsequenz, die die Zusicherung einschränkt:** die dahinterliegende Personen-Äquivalenzklasse
+> kann *kleiner* als *k* sein. Konstruktion bei *k* = 5: eine Person mit 12 `is_anonymous`-Ereignissen
+> plus 4 unverknüpfte Ereignisse ergibt Prüfgröße 1 + 4 = 5 ≥ *k* — „anonym: 16" bleibt sichtbar,
+> obwohl nur **eine** identifizierbare Person dahintersteht. Bewusst akzeptiert: die unverknüpften
+> Ereignisse tragen keine identifizierenden Attribute, an denen eine Re-Identifikation ansetzen
+> könnte; die Alternative (unverknüpfte Ereignisse mit 0 Personen bewerten) hätte die Stufe in jeder
+> niedrigschwelligen Einrichtung dauerhaft unterdrückt, ohne jemanden zu schützen. Wer die
+> Zusicherung zitiert, muss diese Stufe ausnehmen.
 > * **Ereignisabgeleitete** Aufschlüsselungen (`by_document_type`, `by_category`, `total_contacts`)
 > zählen weiterhin **Ereignisse** (`Count("id")`). Ihre Buckets sind Dokumenttypen, keine
 > Personenmengen — eine Personenschwelle hätte dort keine Äquivalenzklasse, auf die sie sich bezöge.
 >
 > Frühere Fassungen dieses Abschnitts sprachen pauschal von „weniger als *k* **Personen**"; das galt
 > bis #1770 für **keine** Zelle und gilt jetzt
-> für die personenabgeleiteten. Die verbleibende Ungleichung zwischen Personen- und Ereigniszählung ist
-> als akzeptierte Definitionsgrenze (2) unten dokumentiert.
+> für `by_age_cluster` und `unique_clients` (sowie die beiden nicht-anonymen Kontaktstufen) — **nicht**
+> für `by_contact_stage.anonym`, siehe die Ausnahme oben. Die verbleibende Ungleichung zwischen
+> Personen- und Ereigniszählung ist als akzeptierte Definitionsgrenze (2) unten dokumentiert.
 
 Verdrahtet in den datenschutzfreundlichen externen Berichten
 ([`external_report.py`](../src/core/services/dashboard/external_report.py), Refs #921)
@@ -609,7 +625,7 @@ Betriebskennzahl.
 | **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | **mitigiert** (#1769) |
 | **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | offen |
 | **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | **mitigiert** (#1770) |
-| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | offen |
+| **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | offen — **erweitert** um die Personen-Randsumme Σ `persons` = `unique_clients` (Auflage aus K0-b, s. dort) |
 | **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | offen |
 | **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | offen |
 | **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert |
@@ -699,10 +715,37 @@ Test-gepinnt in `test_external_report_service.py::TestPersonenbasiertesZellkrite
 würden unterdrückt, gilt für die personenabgeleiteten Aufschlüsselungen wieder — jetzt auf Tabellen-
 **und** Zellebene.
 
-**Restrisiko, ehrlich ausgewiesen:** Fallen durch (b) *alle* Zellen einer Alterstabelle, während
-`unique_clients` ≥ *k* bleibt, publiziert das Artefakt weiterhin die **Existenz** der Zeilen (jedes
-gelistete Label trägt ≥ 1 Ereignis). Das ist K1/K2-Terrain (Residual-Guard bzw. Machbarkeits-Audit) und
-bleibt dort offen; (b) erhöht die Häufigkeit dieser Konstellation, weil mehr Zellen unterdrückt werden.
+**Restrisiko, ehrlich ausgewiesen — und eine neue Identität.** Fallen durch (b) *alle* Zellen einer
+Alterstabelle, während `unique_clients` ≥ *k* bleibt, publiziert das Artefakt weiterhin die
+**Existenz** der Zeilen (jedes gelistete Label trägt ≥ 1 Ereignis). Das allein wäre K1/K2-Terrain
+(Residual-Guard bzw. Machbarkeits-Audit). Gravierender ist jedoch eine Identität, die **erst durch (b)
+entsteht**: `by_age_cluster` partitioniert dieselbe Personenmenge, die `unique_clients` zählt, also gilt
+
+> Σ `persons`(`by_age_cluster`) = `unique_clients`
+
+— eine publizierte Randsumme über **Personen**, mit derselben Rückrechenbarkeit wie K1 über
+Ereignisse, nur ohne die Unschärfe der Ereignis-/Personen-Ungleichung. Da eine personenbedingt
+unterdrückte Zelle zusätzlich `persons` ≤ *k*−1 verrät und jede gelistete Zeile `persons` ≥ 1 trägt,
+kollabiert die Partition an den Rändern auf eine Welt. *Konstruktion bei k = 5:* `unique_clients` = 5
+sichtbar, vier gelistete Altersgruppen, sämtlich unterdrückt ⇒ die einzige mit
+1 ≤ `persons` ≤ 4 konsistente Partition von 5 auf vier Zeilen ist (2, 1, 1, 1) ⇒ **drei Altersgruppen
+mit exakt einer Person** sind zeilenscharf bestimmt. Die frühere Fassung dieses Absatzes nannte nur die
+„Existenz der Zeilen" und übersah die Kopplung an `unique_clients`.
+
+**Verbindliche Auflage (offen — wird in derselben Umsetzungswelle von K1/K2 geschlossen):**
+
+1. **total-Doktrin auf die Personen-Randsumme ausdehnen:** `unique_clients` **fällt**, sobald
+ mindestens eine `by_age_cluster`-Zeile **personenbedingt** unterdrückt ist — analog zur
+ bestehenden Randsummen-Regel R14 (`total < k` ⇒ Randsumme selbst unterdrücken) und zur
+ Sekundär-Suppression A6.1. Ohne die publizierte Randsumme ist die Partition nicht mehr
+ auflösbar.
+2. **K1-Fixpunkt-Guard erweitern:** Die Identität Σ `persons` = `unique_clients` gehört in sein
+ Inferenzmodell — der Guard muss sie wie jede andere publizierte Partition behandeln, sonst
+ validiert er gegen ein zu schwaches Angreifermodell (dieselbe Zirkularitätsfalle wie in der
+ Kopplungs-Warnung oben).
+
+Bis beide umgesetzt sind, gilt der Kanal als **offen**; (b) erhöht seine Häufigkeit, weil mehr Zellen
+unterdrückt werden.
 
 #### K5 — Zeilensortierung nach Anzahl als Rangkanal
 
