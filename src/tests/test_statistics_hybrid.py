@@ -43,7 +43,7 @@ def _snapshot_data(total=5, anonym=1, identifiziert=3, qualifiziert=1, unique=3)
             "qualifiziert": qualifiziert,
         },
         "by_document_type": [
-            {"name": "Kontakt", "category": "contact", "count": total},
+            {"name": "Kontakt", "count": total},
         ],
         "by_age_cluster": [
             {"cluster": "18_26", "label": "18–26", "count": total},
@@ -178,13 +178,13 @@ class TestMergeStats:
         assert result["by_contact_stage"]["identifiziert"] == 4
         assert result["by_contact_stage"]["qualifiziert"] == 3
 
-    def test_by_document_type_merged_by_composite_key(self):
+    def test_by_document_type_merged_by_name(self):
         s1 = {
             "total_contacts": 3,
             "by_contact_stage": {"anonym": 0, "identifiziert": 3, "qualifiziert": 0},
             "by_document_type": [
-                {"name": "Kontakt", "category": "contact", "count": 2},
-                {"name": "Notiz", "category": "note", "count": 1},
+                {"name": "Kontakt", "count": 2},
+                {"name": "Notiz", "count": 1},
             ],
             "by_age_cluster": [],
             "unique_clients": 2,
@@ -193,17 +193,17 @@ class TestMergeStats:
             "total_contacts": 4,
             "by_contact_stage": {"anonym": 0, "identifiziert": 4, "qualifiziert": 0},
             "by_document_type": [
-                {"name": "Kontakt", "category": "contact", "count": 3},
-                {"name": "Beratung", "category": "service", "count": 1},
+                {"name": "Kontakt", "count": 3},
+                {"name": "Beratung", "count": 1},
             ],
             "by_age_cluster": [],
             "unique_clients": 3,
         }
         result = _merge_stats([s1, s2])
-        doc_types = {(e["name"], e["category"]): e["count"] for e in result["by_document_type"]}
-        assert doc_types[("Kontakt", "contact")] == 5
-        assert doc_types[("Notiz", "note")] == 1
-        assert doc_types[("Beratung", "service")] == 1
+        # Refs #1749 (ADR-040): Merge-Schluessel ist der blosse Name — er ist
+        # je Einrichtung eindeutig, seit ``category`` entfallen ist.
+        doc_types = {e["name"]: e["count"] for e in result["by_document_type"]}
+        assert doc_types == {"Kontakt": 5, "Notiz": 1, "Beratung": 1}
 
     def test_by_age_cluster_merged(self):
         s1 = {
@@ -648,7 +648,7 @@ class TestMergeSummiertPersonenzahlenNie:
         alt = {
             "total_contacts": 5,
             "by_contact_stage": {"anonym": 1, "identifiziert": 3, "qualifiziert": 1},
-            "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 5}],
+            "by_document_type": [{"name": "Kontakt", "count": 5}],
             "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 5}],
             "unique_clients": 3,
         }

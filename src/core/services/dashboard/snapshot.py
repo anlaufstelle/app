@@ -64,21 +64,21 @@ def create_or_update_snapshot(facility, year, month):
     stats.pop("top_clients", None)
 
     # Enrich by_document_type with system_type and document_type_id.
-    # Bulk-Lookup statt N+1-Loop (Refs #598): eine einzige Query
-    # holt alle relevanten DocumentTypes, das Dict-Composite-Key (name,
-    # category) stellt sicher, dass nur exakte Treffer zugeordnet werden.
+    # Bulk-Lookup statt N+1-Loop (Refs #598): eine einzige Query holt alle
+    # relevanten DocumentTypes. Refs #1749 (ADR-040): Schluessel ist der blosse
+    # ``name`` — er ist je Einrichtung eindeutig, seit ``category`` als
+    # Zweitschluessel entfallen ist.
     entries = stats.get("by_document_type", [])
     if entries:
         dt_lookup = {
-            (dt.name, dt.category): dt
+            dt.name: dt
             for dt in DocumentType.objects.filter(
                 facility=facility,
                 name__in=[e["name"] for e in entries],
-                category__in=[e["category"] for e in entries],
             )
         }
         for entry in entries:
-            dt = dt_lookup.get((entry["name"], entry["category"]))
+            dt = dt_lookup.get(entry["name"])
             entry["system_type"] = dt.system_type if dt and dt.system_type else ""
             entry["document_type_id"] = str(dt.id) if dt else ""
 
@@ -199,7 +199,7 @@ def _merge_stats(stats_list):
     Merge logic per field:
     - ``total_contacts`` – sum
     - ``by_contact_stage`` – sum per key
-    - ``by_document_type`` – merge by ``(name, category)`` composite key, sum ``count``
+    - ``by_document_type`` – merge by ``name``, sum ``count`` (Refs #1749)
     - ``by_age_cluster`` – merge by ``cluster`` key, sum ``count``, keep labels
     - ``persons`` je Cluster und ``persons_by_contact_stage`` – Maximum, nie
       Summe; unbekannt sobald ein Segment die Zahl nicht mitbringt (K0-b)
@@ -213,7 +213,7 @@ def _merge_stats(stats_list):
     merged = _empty_stats()
 
     # Accumulators for list-based fields
-    doc_type_map = {}  # (name, category) → count
+    doc_type_map = {}  # name → entry
     age_cluster_map = {}  # cluster → {label, count}
     age_persons = {}  # cluster → int | None (Maximum, None = unbekannt)
     stage_persons = dict.fromkeys(_STAGE_KEYS, 0)
@@ -227,13 +227,26 @@ def _merge_stats(stats_list):
             merged["by_contact_stage"][key] += stats.get("by_contact_stage", {}).get(key, 0)
             stage_persons[key] = _merge_person_count(stage_persons[key], segment_stage_persons.get(key))
 
-        # by_document_type – merge by (name, category)
+        # by_document_type – merge by name (Refs #1749, ADR-040)
+        #
+        # Alt-Snapshots tragen weiter einen ``category``-Schluessel: sie sind
+        # persistierter JSON und werden nicht migriert (der Wert waere fuer die
+        # Anzeige ohnehin bedeutungslos). Deshalb (a) ``.get`` statt
+        # Index-Zugriff — ein fehlender Schluessel darf nie ein ``KeyError``
+        # sein — und (b) ``category`` wird beim Merge **verworfen**: Segmente,
+        # die sich nur darin unterschieden, kollabieren deterministisch auf
+        # EINE Zeile mit summierten Werten statt als Doppelzeile im Bericht zu
+        # erscheinen. Bei den Zusatzfeldern (``system_type``,
+        # ``document_type_id``) gewinnt das erste beitragende Segment; sie
+        # haengen am Namen, nicht an der Kategorie, und sind ueber die
+        # Segmente eines Namens daher ohnehin gleich.
         for entry in stats.get("by_document_type", []):
-            composite = (entry["name"], entry["category"])
-            if composite in doc_type_map:
-                doc_type_map[composite]["count"] += entry["count"]
+            name = entry.get("name")
+            existing = doc_type_map.get(name)
+            if existing is not None:
+                existing["count"] += entry["count"]
             else:
-                doc_type_map[composite] = {**entry}
+                doc_type_map[name] = {key: value for key, value in entry.items() if key != "category"}
 
         # by_age_cluster – merge by cluster
         for entry in stats.get("by_age_cluster", []):

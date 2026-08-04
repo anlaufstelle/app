@@ -12,6 +12,7 @@ from core.services.dashboard import (
     create_or_update_snapshot,
     ensure_snapshots_for_months,
 )
+from core.services.dashboard.snapshot import _merge_stats
 
 
 class _DummyBackend(DatasetBackend):
@@ -147,7 +148,6 @@ class TestSampleReport1DataStored:
         dt_contact = DocumentType.objects.create(
             facility=facility,
             name="Kontaktaufnahme",
-            category=DocumentType.Category.CONTACT,
             system_type="contact",
         )
 
@@ -179,7 +179,6 @@ class TestBackendData:
         dt_contact = DocumentType.objects.create(
             facility=facility,
             name="Kontaktaufnahme",
-            category=DocumentType.Category.CONTACT,
             system_type="contact",
         )
         jan = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
@@ -254,3 +253,63 @@ class TestTopClientsExcluded:
 
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert "top_clients" not in snap.data
+
+
+class TestAltSnapshotCategoryTolerance:
+    """Persistierte Alt-Snapshots tragen weiter ``category`` (Refs #1749, ADR-040).
+
+    Migration ``0134`` entfernt nur die **Spalte**; die JSON-Payloads in
+    ``core_statisticssnapshot`` werden bewusst nicht umgeschrieben (der Wert
+    wäre für die Anzeige ohnehin bedeutungslos, und ein Rewrite über alle
+    Bestands-Snapshots hätte keinen Nutzen). Der Lesepfad muss das aushalten:
+    kein ``KeyError`` beim Merge, keine Doppelzeile im Bericht, und ein
+    Mischbetrieb aus alten und neuen Segmenten muss deterministisch
+    kollabieren.
+    """
+
+    #: Alt-Format: zwei Zeilen desselben Namens, die sich nur in ``category``
+    #: unterschieden — genau die Konstellation, die es nach 0134 nicht mehr
+    #: geben kann, aus einem Monat, in dem es sie gab.
+    ALT_SEGMENT = {
+        "total_contacts": 9,
+        "by_contact_stage": {"anonym": 9, "identifiziert": 0, "qualifiziert": 0},
+        "persons_by_contact_stage": {"anonym": 3, "identifiziert": 0, "qualifiziert": 0},
+        "by_document_type": [
+            {"name": "Notiz", "category": "note", "count": 6, "system_type": "note", "document_type_id": "alt-1"},
+            {"name": "Notiz", "category": "admin", "count": 3, "system_type": "", "document_type_id": "alt-2"},
+        ],
+        "by_age_cluster": [],
+        "unique_clients": 3,
+    }
+
+    NEUES_SEGMENT = {
+        "total_contacts": 4,
+        "by_contact_stage": {"anonym": 4, "identifiziert": 0, "qualifiziert": 0},
+        "persons_by_contact_stage": {"anonym": 2, "identifiziert": 0, "qualifiziert": 0},
+        "by_document_type": [{"name": "Notiz", "count": 4, "system_type": "note", "document_type_id": "neu-1"}],
+        "by_age_cluster": [],
+        "unique_clients": 2,
+    }
+
+    def test_alt_segment_allein_kollabiert_auf_eine_zeile(self):
+        merged = _merge_stats([self.ALT_SEGMENT])
+        assert merged["by_document_type"] == [
+            {"name": "Notiz", "count": 9, "system_type": "note", "document_type_id": "alt-1"}
+        ]
+
+    def test_mischbetrieb_alt_und_neu_summiert_ohne_doppelzeile(self):
+        merged = _merge_stats([self.ALT_SEGMENT, self.NEUES_SEGMENT])
+        assert merged["by_document_type"] == [
+            {"name": "Notiz", "count": 13, "system_type": "note", "document_type_id": "alt-1"}
+        ]
+
+    def test_reihenfolge_der_segmente_aendert_die_summe_nicht(self):
+        vorwaerts = _merge_stats([self.ALT_SEGMENT, self.NEUES_SEGMENT])["by_document_type"]
+        rueckwaerts = _merge_stats([self.NEUES_SEGMENT, self.ALT_SEGMENT])["by_document_type"]
+        assert [(row["name"], row["count"]) for row in vorwaerts] == [("Notiz", 13)]
+        assert [(row["name"], row["count"]) for row in rueckwaerts] == [("Notiz", 13)]
+
+    def test_kein_category_key_ueberlebt_den_merge(self):
+        """Sonst zeigte der Bericht eine Kategorie, die es nicht mehr gibt."""
+        merged = _merge_stats([self.ALT_SEGMENT, self.NEUES_SEGMENT])
+        assert all("category" not in row for row in merged["by_document_type"])

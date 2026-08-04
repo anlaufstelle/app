@@ -131,29 +131,29 @@ class TestMergeStatsPerField:
         assert result["by_contact_stage"]["identifiziert"] == 22
         assert result["by_contact_stage"]["qualifiziert"] == 33
 
-    def test_doc_type_composite_key_merge(self):
-        """Composite-Key ``(name, category)``. Mutation ``entry["name"],
-        entry["category"]`` → nur name würde Kategorien zusammenwerfen.
+    def test_doc_type_key_ist_der_name(self):
+        """Merge-Schlüssel ist ``name`` (Refs #1749, ADR-040).
+
+        Mutation ``doc_type_map.get(name)`` → z. B. ``pk``/Konstante würde
+        Segmente desselben Typs entweder verschmelzen lassen, die nicht
+        zusammengehören, oder zusammengehörige auseinanderreißen.
         """
         s1 = _empty_stats()
-        s1["by_document_type"] = [{"name": "Kontakt", "category": "contact", "count": 2}]
+        s1["by_document_type"] = [{"name": "Kontakt", "count": 2}]
         s2 = _empty_stats()
         s2["by_document_type"] = [
-            {"name": "Kontakt", "category": "contact", "count": 3},
-            {"name": "Kontakt", "category": "service", "count": 5},  # andere category
+            {"name": "Kontakt", "count": 3},
+            {"name": "Beratung", "count": 5},
         ]
         result = _merge_stats([s1, s2])
-        # Same composite key merged
-        by_dt = {(e["name"], e["category"]): e["count"] for e in result["by_document_type"]}
-        assert by_dt[("Kontakt", "contact")] == 5
-        # Different category-key stays separate
-        assert by_dt[("Kontakt", "service")] == 5
+        by_dt = {e["name"]: e["count"] for e in result["by_document_type"]}
+        assert by_dt == {"Kontakt": 5, "Beratung": 5}
 
     def test_doc_type_first_occurrence_creates_entry(self):
-        """``else: doc_type_map[composite] = {**entry}`` — neue Composite-Keys
-        landen mit shallow-copy im Result."""
+        """``else: doc_type_map[name] = {…}`` — neue Namen landen als Kopie
+        im Result."""
         s1 = _empty_stats()
-        s1["by_document_type"] = [{"name": "Neu", "category": "cat", "count": 7}]
+        s1["by_document_type"] = [{"name": "Neu", "count": 7}]
         result = _merge_stats([s1])
         assert len(result["by_document_type"]) == 1
         assert result["by_document_type"][0]["count"] == 7
@@ -163,9 +163,9 @@ class TestMergeStatsPerField:
         die kleinsten zuerst liefern."""
         s1 = _empty_stats()
         s1["by_document_type"] = [
-            {"name": "Klein", "category": "x", "count": 1},
-            {"name": "Gross", "category": "y", "count": 100},
-            {"name": "Mittel", "category": "z", "count": 10},
+            {"name": "Klein", "count": 1},
+            {"name": "Gross", "count": 100},
+            {"name": "Mittel", "count": 10},
         ]
         result = _merge_stats([s1])
         counts = [e["count"] for e in result["by_document_type"]]

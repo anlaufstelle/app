@@ -124,9 +124,16 @@ def _row_min_value(row: dict[str, Any]) -> int:
     return 0 if row.get("cluster") == NO_PERSON_CLUSTER else 1
 
 
-def _document_type_key(row: dict[str, Any]) -> tuple[str, str]:
-    """Dokumenttypen nach ``(category, name)`` — beides wertunabhaengig."""
-    return (str(row.get("category") or ""), str(row.get("name") or ""))
+def _document_type_key(row: dict[str, Any]) -> tuple[str]:
+    """Dokumenttypen nach ``name`` — wertunabhaengig.
+
+    Refs #1749 (ADR-040): frueher ``(category, name)``. Mit dem Wegfall von
+    ``DocumentType.category`` traegt keine Zeile mehr einen Kategoriewert (auch
+    nicht aus Alt-Snapshots — ``_merge_stats`` verwirft ihn), und der Name ist
+    je Einrichtung eindeutig. Die Ordnung bleibt damit total und
+    wertunabhaengig (K5).
+    """
+    return (str(row.get("name") or ""),)
 
 
 def _category_key(row: dict[str, Any]) -> tuple[str]:

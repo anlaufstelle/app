@@ -207,13 +207,14 @@ def get_statistics(facility, date_from, date_to):
     }
 
     # By document type
-    by_document_type = list(
-        base_qs.values("document_type__name", "document_type__category").annotate(count=Count("id")).order_by("-count")
-    )
+    # Refs #1749 (ADR-040): Gruppierung allein ueber ``name`` — seit dem Wegfall
+    # von ``category`` ist der Name je Einrichtung eindeutig (UniqueConstraint
+    # ``unique_facility_documenttype_name``), das Paar war nur dessen
+    # Zweitschluessel.
+    by_document_type = list(base_qs.values("document_type__name").annotate(count=Count("id")).order_by("-count"))
     by_document_type = [
         {
             "name": row["document_type__name"],
-            "category": row["document_type__category"],
             "count": row["count"],
         }
         for row in by_document_type
