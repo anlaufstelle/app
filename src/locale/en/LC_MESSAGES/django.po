@@ -2558,6 +2558,18 @@ msgstr ""
 "Figure for events without a person reference in the period suppressed (k-"
 "anonymity) — not included in age groups/number of persons"
 
+#: src/templates/core/export/report_pdf.html:135
+#: src/templates/core/export/sample_report_1_pdf.html:106
+msgid ""
+"* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig "
+"gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. "
+"Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, "
+"sind darin nicht enthalten."
+msgstr ""
+"* Unique people are counted distinctly across the whole reporting period "
+"(live query) rather than summed from the monthly aggregates. Periods whose "
+"events were removed after the retention deadlines are not included."
+
 #: src/templates/core/export/report_pdf.html:105
 #: src/templates/core/export/sample_report_1_pdf.html:92
 #: src/templates/core/statistics/external_report.html:131
@@ -7590,12 +7602,12 @@ msgstr "With extended details"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:37
 msgid ""
-"Approximation: Für Zeiträume über einen Monat hinaus werden Personen über "
-"Monatssnapshots summiert. Personen, die in mehreren Monaten erscheinen, "
-"werden mehrfach gezählt."
+"Über den gesamten Zeitraum eindeutig gezählt (Live-Abfrage). Zeiträume, deren "
+"Ereignisse nach Ablauf der Löschfristen entfernt wurden, sind darin nicht "
+"enthalten."
 msgstr ""
-"Approximation: for ranges beyond one month, people are summed across monthly "
-"snapshots. People appearing in multiple months are counted multiple times."
+"Counted distinctly across the whole period (live query). Periods whose events "
+"were removed after the retention deadlines are not included."
 
 #: src/templates/core/statistics/partials/dashboard_content.html:44
 msgid "Personen mit mindestens einem Kontakt im Zeitraum"
