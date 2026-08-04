@@ -19,13 +19,20 @@ noch an diesen beiden Stellen:
 
 **Der Rueckweg ist ab hier datenverlustbehaftet.** ``RemoveField`` ist zwar
 reversibel — Django legt die Spalte beim Rueckwaertsmigrieren mit ihrem Default
-(``{}``) wieder an —, aber die Inhalte sind fort. Ein Rueckweg unter ``0123``
-liefert also leere Sonderfelder, waehrend die Aggregate weiterhin vollstaendig
-in ``backend_data`` stehen; Alt-Code, der nur das Sonderfeld liest, saehe leere
-Berichte, bis der naechste Monatslauf laeuft. Wer wirklich zurueck muss,
-migriert auf ``0123`` (das den Schluessel dabei auf ``jugendamt``
-zurueckbenennt) und fuellt das Feld aus ``backend_data["jugendamt"]`` neu — oder
-spielt ein Backup ein.
+(``{}``) wieder an —, aber die Inhalte sind fort. Der Reverse legt die Spalte
+zudem **ohne DB-Default** wieder an (``0032`` setzte nur einen Python-Default;
+anders als ``0121`` fuer ``backend_data`` gibt es kein ``db_default``). Solange
+HEAD-Code gegen ein Schema mit wieder existierender Spalte laeuft — genau der
+Zwischenzustand zwischen angewandtem ``0122`` und ``0124`` —, laesst
+``create_or_update_snapshot`` das Feld im INSERT weg (kein Modellfeld) und ein
+neuer Snapshot scheitert an der ``NOT NULL``-Constraint. Ein sauberer Rollback
+setzt also entweder Alt-Code voraus oder legt die Spalte per SQL auf
+``DEFAULT '{}'``. Wer wirklich zurueck muss, migriert auf
+``0122_backfill_backend_data`` (erst dort benennt der Reverse von ``0123`` den
+Schluessel auf ``jugendamt`` zurueck und ``backend_data["jugendamt"]``
+existiert wieder als Refill-Quelle) — oder spielt ein Backup ein. **``migrate
+core 0123`` genuegt nicht:** es nimmt nur ``0125``/``0124`` zurueck, ``0123``
+bleibt angewandt und der Schluessel heisst weiter ``sample-report-1``.
 """
 
 from django.db import migrations, models

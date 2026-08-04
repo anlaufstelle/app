@@ -17,9 +17,13 @@ neuen Schluessel festschreiben und den frischeren Wert im Altfeld
 zuruecklassen, das ``0124`` unmittelbar danach entfernt. Deshalb bricht die
 Migration bei jeder Abweichung ``jugendamt_data`` != ``backend_data["jugendamt"]``
 mit :class:`StaleSnapshotError` ab (statt zu ueberschreiben): die Entscheidung,
-welcher Stand gilt, gehoert dem Betrieb, nicht der Migration. Behebung:
-betroffene Monate mit ``manage.py create_statistics_snapshots`` neu berechnen
-(schreibt beide Felder aus derselben Quelle) und erneut migrieren.
+welcher Stand gilt, gehoert dem Betrieb, nicht der Migration. Behebung: pro
+betroffenem Monat entscheiden, welcher Stand gilt, und ``jugendamt_data`` per
+SQL an ``backend_data['jugendamt']`` angleichen bzw. leeren (``'{}'``), wenn der
+``backend_data``-Stand gelten soll — danach erneut migrieren. **Wichtig:**
+``manage.py create_statistics_snapshots`` taugt dafuer seit #1740 nicht mehr,
+weil der HEAD-Code ``jugendamt_data`` nicht mehr schreibt (kein Modellfeld) und
+den stale Altstand daher unveraendert liesse.
 
 Nur ein **befuelltes** ``jugendamt_data`` gilt als Vergleichsquelle: ein leeres
 Altfeld ist kein Stand, der verloren gehen koennte (so hat schon ``0122``
@@ -89,8 +93,10 @@ def _assert_no_stale_snapshots(StatisticsSnapshot):
         f"Umzug abgebrochen: {total} Statistik-Snapshot(s) tragen ein befuelltes 'jugendamt_data', das von "
         f"backend_data['{_OLD_KEY}'] abweicht (facility_id Jahr-Monat: {sample}{suffix}). Das Altfeld ist dort "
         "der frischere Stand — ein stiller Umzug wuerde ihn verlieren, sobald Migration 0124 die Spalte "
-        "entfernt. Betroffene Monate mit 'manage.py create_statistics_snapshots' neu berechnen (schreibt "
-        "beide Felder aus derselben Quelle) und erneut migrieren."
+        "entfernt. Behebung: pro Monat 'jugendamt_data' per SQL an backend_data['jugendamt'] angleichen bzw. "
+        "leeren ('{}'), wenn der backend_data-Stand gelten soll, dann erneut migrieren. Hinweis: "
+        "'manage.py create_statistics_snapshots' schreibt 'jugendamt_data' seit #1740 nicht mehr und heilt "
+        "die Divergenz daher nicht."
     )
 
 
