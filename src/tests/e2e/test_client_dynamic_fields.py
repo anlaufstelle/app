@@ -530,24 +530,34 @@ class TestTypeChangeDiscardConfirm:
             page.wait_for_url(CLIENT_DETAIL_RE)
             assert dialogs == [], f"Speichern ohne Typwechsel darf nicht nachfragen: {dialogs}"
 
-            # --- Typ entfernen + Abbrechen: nichts passiert -------------------
+            # --- Typ entfernen + Abbrechen: kein Submit, Formular bleibt bedienbar
             mode["accept"] = False
             page.goto(edit_url, wait_until="domcontentloaded")
             switch_document_type(page, value="")
-            page.locator(ENTITY_SUBMIT).click()
+            submit = page.locator(ENTITY_SUBMIT)
+            submit.click()
             _wait_for_dialogs(page, dialogs, 1)
             assert "1" in dialogs[0], f"Rückfrage ohne Feldanzahl: {dialogs[0]!r}"
             # Abbruch heisst: kein Submit — wir stehen weiter im Formular.
             expect(page).to_have_url(re.compile(r"/clients/[0-9a-f-]+/edit/$"))
-            # Der Wert steht unverändert am Datensatz.
-            page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
-            expect(page.locator(DYNAMIC_SECTION)).to_contain_text(value_own, timeout=10000)
 
-            # --- Dasselbe bestätigt: jetzt greift der Verwurf ------------------
+            # Regressionsschutz (Review #1755): Der Doppel-Submit-Guard
+            # (double-submit.js) läuft in der Capture-Phase VOR dem Alpine-
+            # ``@submit="confirmDiscard"`` (Target-Phase) und plante das Disablen
+            # der Submit-Buttons per setTimeout. Ohne die ``defaultPrevented``-
+            # Prüfung im Guard bliebe der Speichern-Button nach dem Abbrechen
+            # dauerhaft disabled und ``data-submitting`` scharf — jeder weitere
+            # Submit geblockt, ungespeicherte Eingaben beim Reload verloren.
+            # Deshalb OHNE Neuladen der Seite prüfen, dass der Button wieder
+            # bedienbar ist ...
+            expect(submit).to_be_enabled()
+
+            # --- ... und dass ein erneutes Abschicken (diesmal bestätigt) auf
+            # demselben, weiter bedienten Formular tatsächlich speichert und den
+            # Altwert verwirft. Kein ``page.goto`` dazwischen — eine Navigation
+            # würde die Sperre ohnehin zurücksetzen und den Bug maskieren.
             mode["accept"] = True
-            page.goto(edit_url, wait_until="domcontentloaded")
-            switch_document_type(page, value="")
-            page.locator(ENTITY_SUBMIT).click()
+            submit.click()
             page.wait_for_url(CLIENT_DETAIL_RE)
             _wait_for_dialogs(page, dialogs, 2)
             expect(page.locator("#main-content")).not_to_contain_text(value_own)

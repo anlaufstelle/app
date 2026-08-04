@@ -13,6 +13,16 @@
  * Erst nach einem Tick (setTimeout 0), wenn die Formulardaten bereits gebildet
  * sind, blenden wir die Buttons aus. Der eigentliche Schutz ist die Flag-Prüfung
  * (data-submitting) — sie blockt den 2. Submit unabhängig vom Button-State.
+ *
+ * WICHTIG — Target-Phase-Abbruch (Refs #1755): Ein Listener am ``<form>``
+ * selbst (Target-Phase, z.B. Alpine ``@submit="confirmDiscard"`` aus #1733)
+ * läuft NACH diesem Capture-Handler und kann den Submit noch abbrechen
+ * (Nutzerin wählt „Abbrechen" in der Zusatzfeld-Rückfrage → ``preventDefault``).
+ * Dann bleibt das Formular auf DERSELBEN Seite — es gibt kein ``pageshow``, das
+ * die Sperre löst. Der setTimeout-Callback prüft deshalb ``defaultPrevented``
+ * und gibt die Sperre wieder frei, statt die Buttons zu disablen; sonst bliebe
+ * das Formular dauerhaft blockiert und ungespeicherte Eingaben gingen beim
+ * Reload verloren.
  */
 (function () {
     "use strict";
@@ -43,6 +53,17 @@
             // Erst nach der Serialisierung disablen, sonst geht der Button-name
             // verloren. Rein visuelles Feedback; der Schutz greift schon oben.
             window.setTimeout(function () {
+                // Ein Target-Phase-Listener (z.B. @submit="confirmDiscard", #1733)
+                // hat den Submit nach uns abgebrochen — das ``event``-Objekt
+                // bleibt im setTimeout gültig, ``defaultPrevented`` ist dann true.
+                // Sperre lösen statt disablen, sonst bliebe das Formular auf
+                // derselben Seite dauerhaft gesperrt (Refs #1755). Bei
+                // erfolgreichem Submit ist ``defaultPrevented`` false → Verhalten
+                // wie bisher.
+                if (event.defaultPrevented) {
+                    form.dataset.submitting = "0";
+                    return;
+                }
                 var buttons = form.querySelectorAll(
                     'button[type="submit"], input[type="submit"], button:not([type])'
                 );
