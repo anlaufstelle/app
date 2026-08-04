@@ -150,15 +150,14 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v31"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v32"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1738/M24-AP5: url-patterns.js ist precached UND per "
-            "importScripts geladen; ATTACHMENT_DOWNLOAD deckt jetzt auch die "
-            "owner-generischen Download-Routen von Person und Fall. Ohne Bump "
-            "haelt ein laufender SW seine alte Kopie aus dem Precache "
-            "(cache-first, keine Revalidierung) und schickt die neuen "
-            "Downloads weiter in die Navigations-Fallback-Kette — der Benutzer "
-            "saehe offline eine Ersatzseite statt eines Fehlers)."
+            "(#1774: offline-store.js ist precached und traegt die erweiterte "
+            "Reichweite des Offline-Widerrufs — die Ereignis->Person-Aufloesung "
+            "fuer gequeute /events/<uuid>/edit/-POSTs. Ohne Bump haelt ein "
+            "laufender SW seine alte Kopie aus dem Precache (cache-first, keine "
+            "Revalidierung); der Widerruf liesse den gequeuten POST weiter "
+            "stehen und der Replay schriebe nach der Loeschung PII zurueck)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -604,7 +603,7 @@ class TestPrecachedShellBumpGuard:
     # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
     # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
     # dem neuen Inhalt neu berechnen).
-    _PINNED_CACHE_NAME = "anlaufstelle-v31"
+    _PINNED_CACHE_NAME = "anlaufstelle-v32"
     _PINNED_SHELL_HASH = "30d7c4a14e97e193f3b5f43e5063f764a02c03ac3fa31b482a1e06d620da401b"
 
     @staticmethod

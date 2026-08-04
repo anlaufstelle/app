@@ -93,7 +93,15 @@ importScripts("/static/js/url-patterns.js");
 // neuen Downloads weiter in die Navigations-Fallback-Kette schicken — der
 // Benutzer saehe offline eine Ersatzseite statt eines Fehlers. Der Bump
 // erzwingt Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v31";
+// Refs #1774: v31 -> v32 -- offline-store.js (im APP_SHELL, cache-first ohne
+// Revalidierung) traegt die erweiterte Reichweite des Offline-Widerrufs
+// (Ereignis->Person-Aufloesung fuer gequeute Edit-POSTs). Ohne Bump behielten
+// Bestandsnutzer ihre alte Kopie aus dem Precache — der Widerruf liesse den
+// gequeuten POST weiter stehen und der Replay schriebe nach der Loeschung.
+// Genau wie beim v25 -> v26-Bump (crypto.js/sync-orchestrator.js) erzwingt der
+// Bump Re-Install + Re-Precache und raeumt zugleich den SWR-Runtime-Cache
+// (autosave.js liegt dort) weg.
+const CACHE_NAME = "anlaufstelle-v32";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

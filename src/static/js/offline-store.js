@@ -1411,16 +1411,60 @@
      * kanonisch klein geschrieben, ein handgeschriebener Formular-Key koennte
      * es nicht sein.
      */
-    function _mentionsRevoked(haystack, revokedLower) {
+    function _mentionsRevoked(haystack, needlesLower) {
         if (!haystack) return false;
         const text = String(haystack).toLowerCase();
-        for (const pk of revokedLower) {
+        for (const pk of needlesLower) {
             if (text.indexOf(pk) !== -1) return true;
         }
         return false;
     }
 
-    async function _purgeRevokedQueueAndDrafts(revokedLower) {
+    /*
+     * Refs #1774: Die URL eines gequeuten `POST /events/<uuid>/edit/` (analog
+     * `/workitems/<uuid>/edit/`, `/partials/workitems/<uuid>/status/`) traegt
+     * die EREIGNIS-pk, nicht die Personen-UUID; der Body eines Edit-POSTs nennt
+     * die Person ebenfalls nicht (nur CSRF, `expected_updated_at`, Feld-Slugs).
+     * Ueber `_mentionsRevoked` allein blieb er darum nach einem Widerruf stehen
+     * und der naechste Replay schrieb frische Klartext-PII zu einer nach
+     * Art. 17 getilgten Person.
+     *
+     * Die lokale `events`-Tabelle kennt die Zuordnung: `pk` und `clientPk`
+     * liegen dort als PLAINTEXT-Indexfelder (kein Decrypt, kein Session-Key
+     * noetig — der Purge greift damit auch im Idle-Lock). Diese Aufloesung
+     * liefert die Record-pks aller lokal bekannten Ereignisse/Aufgaben der
+     * widerrufenen Personen; sie werden dem Suchbegriff-Satz des Queue-/
+     * Entwurfs-Purges hinzugefuegt.
+     *
+     * REIHENFOLGE (kritisch): Der Aufruf MUSS vor dem Bundle-Purge stehen —
+     * `removeOfflineClient(pk, {force: true})` loescht genau die events-Rows,
+     * aus denen die Zuordnung stammt. Danach aufgeloest, waere die Tabelle
+     * leer und die Luecke wieder offen.
+     *
+     * REST-GRENZE (bewusst): Ein Edit-POST, dessen Ereignis lokal NICHT (mehr)
+     * bekannt ist UND dessen Payload die Personen-UUID nicht traegt, bleibt
+     * stehen. Ohne jeden Personenbezug waere sein Verwurf ein Breitband-Purge
+     * fremder Arbeit; die serverseitige zweite Linie (#1771) faengt ihn ab.
+     */
+    async function _localRecordPksOfRevoked(revokedLower) {
+        const rows = await db.events.toArray();
+        const out = [];
+        for (const row of rows) {
+            const owner = row && row.clientPk ? String(row.clientPk).toLowerCase() : "";
+            if (owner && revokedLower.indexOf(owner) !== -1 && row.pk) {
+                out.push(String(row.pk).toLowerCase());
+            }
+        }
+        return out;
+    }
+
+    /*
+     * `needlesLower` = widerrufene Personen-UUIDs PLUS die lokal aufgeloesten
+     * Record-pks ihrer Ereignisse/Aufgaben (siehe `_localRecordPksOfRevoked`).
+     * Beide Kanaele zaehlen fuer URL/Formular-Key UND Payload: eine Queue-Row
+     * oder ein Entwurf, der eines von beiden nennt, ist Arbeit AN dieser Person.
+     */
+    async function _purgeRevokedQueueAndDrafts(needlesLower) {
         let purgedQueueEntries = 0;
         let purgedDrafts = 0;
         // `listDecrypted` ueberspringt Rows, die ohne Session-Key nicht lesbar
@@ -1430,7 +1474,7 @@
         const queueRows = await listDecrypted("queue");
         for (const row of queueRows) {
             const payload = JSON.stringify(row.data || {});
-            if (_mentionsRevoked(row.url, revokedLower) || _mentionsRevoked(payload, revokedLower)) {
+            if (_mentionsRevoked(row.url, needlesLower) || _mentionsRevoked(payload, needlesLower)) {
                 await db.queue.delete(row.id);
                 purgedQueueEntries += 1;
             }
@@ -1438,7 +1482,7 @@
         const draftRows = await listDecrypted("drafts");
         for (const row of draftRows) {
             const payload = JSON.stringify(row.data || {});
-            if (_mentionsRevoked(row.formKey, revokedLower) || _mentionsRevoked(payload, revokedLower)) {
+            if (_mentionsRevoked(row.formKey, needlesLower) || _mentionsRevoked(payload, needlesLower)) {
                 await db.drafts.delete(row.formKey);
                 purgedDrafts += 1;
             }
@@ -1487,6 +1531,10 @@
         }
         const revokedLower = pks.map((p) => String(p).toLowerCase());
 
+        // Refs #1774: Ereignis->Person ZUERST aufloesen — der Bundle-Purge
+        // unten loescht genau die events-Rows, die diese Zuordnung tragen.
+        const recordPksLower = await _localRecordPksOfRevoked(revokedLower);
+
         let purgedClients = 0;
         for (const pk of pks) {
             const key = String(pk);
@@ -1497,7 +1545,7 @@
             if (known) purgedClients += 1;
         }
 
-        const extra = await _purgeRevokedQueueAndDrafts(revokedLower);
+        const extra = await _purgeRevokedQueueAndDrafts(revokedLower.concat(recordPksLower));
         return { status: "ok", purgedClients: purgedClients, ...extra };
     }
 
