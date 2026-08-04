@@ -253,6 +253,66 @@ class TestClientConfirmCounts:
         assert "data-confirm-discard=" not in response.content.decode()
 
 
+class TestOriginalDocumentTypeAttribute:
+    """Refs #1776: der Confirm haengt seit dem #1758-Fix faelschlich am blossen
+    Nachladen des Feldsets statt am tatsaechlichen Wertverlust — ein Weg-und-
+    wieder-zurueck-Wechsel des Dokumentationstyps loeste die Rueckfrage aus,
+    obwohl der Rueckweg das Feldset (seit #1758) wieder mit den Original-
+    Werten befuellt und nichts verworfen wird.
+
+    Die Behebung sitzt in ``confirmDynamicDataLoss``
+    (``static/js/alpine/forms.js``): sie vergleicht den Select-Wert beim
+    Submit mit dem hier gepinnten ``data-original-document-type``-Attribut
+    und laesst den Confirm nur, wenn beide voneinander abweichen. Pytest kann
+    die JS-Laufzeitlogik nicht ausfuehren (kein Browser) — hier wird nur der
+    Markup-Vertrag gepinnt, den die Komponente liest.
+    """
+
+    def test_client_form_carries_the_stored_type_as_original_value(
+        self, client, staff_user, facility, client_type_file_only
+    ):
+        dt, ft = client_type_file_only
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Original-Wert",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=dt,
+            created_by=staff_user,
+        )
+        _set_marker(person, "anlage", [_attach(facility, person, ft, staff_user, "original.pdf")])
+
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_update", kwargs={"pk": person.pk}))
+        content = response.content.decode()
+
+        assert f'data-original-document-type="{dt.pk}"' in content
+
+    def test_case_form_carries_the_stored_type_as_original_value(
+        self, client, staff_user, facility, case_type_file_and_text
+    ):
+        dt, _ft_text, ft_file = case_type_file_and_text
+        case = Case.objects.create(
+            facility=facility,
+            client=Client.objects.create(
+                facility=facility,
+                pseudonym="Original-Wert-Fall",
+                contact_stage=Client.ContactStage.IDENTIFIED,
+                created_by=staff_user,
+            ),
+            title="Fall mit Original-Attribut",
+            document_type=dt,
+            data_json={"notizfeld": "Text"},
+            created_by=staff_user,
+        )
+        _set_marker(case, "beleg", [_attach(facility, case, ft_file, staff_user, "beleg.pdf")])
+
+        client.force_login(staff_user)
+        response = client.get(reverse("core:case_update", kwargs={"pk": case.pk}))
+        content = response.content.decode()
+
+        assert f'data-original-document-type="{dt.pk}"' in content
+
+
 class TestCaseConfirmCounts:
     def test_case_counts_values_and_files_separately(self, client, staff_user, facility, case_type_file_and_text):
         dt, _ft_text, ft_file = case_type_file_and_text

@@ -9,8 +9,11 @@
 
     {% comment %}Refs #1733: Bedingte Rueckfrage vor dem Speichern — nur wenn ein
     Typwechsel/-entfernen tatsaechlich befuellte Zusatzfeld-Werte verwerfen wuerde
-    (``dynamic_values_at_risk``, aus der View). Der Confirm haengt am erfolgten
-    Nachladen des Feldsets, nicht am Select-Wert (s. Komponente).{% endcomment %}
+    (``dynamic_values_at_risk``, aus der View). Refs #1776: der Confirm haengt am
+    erfolgten Nachladen des Feldsets UND daran, dass der Select-Wert beim Submit
+    vom ``data-original-document-type`` (dem gespeicherten Ausgangstyp) abweicht —
+    ein Weg-und-wieder-zurueck-Wechsel verwirft seit #1758 nichts mehr und darf
+    die Rueckfrage deshalb nicht mehr ausloesen (s. Komponente).{% endcomment %}
     {% comment %}M24/AP4 (Refs #1738, ADR-039): multipart — Personen-Typen dürfen
     Datei-Felder tragen.{% endcomment %}
     {% comment %}AP5 (Refs #1738, ADR-039 §8): ``data-offline-enctype-downgrade``
@@ -23,6 +26,7 @@
     Text-Submit später überhaupt annehmen darf (Refs #1489).{% endcomment %}
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade
           {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
+          data-original-document-type="{{ client.document_type_id|default_if_none:'' }}"
           data-confirm-discard="{% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} Datei entfernt.{% plural %}Außerdem werden {{ f }} Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Datei wird beim Speichern entfernt und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Dateien werden beim Speichern entfernt und lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}"{% endif %}>
         {% csrf_token %}
         {% include "core/_form_errors.html" %}

@@ -99,13 +99,17 @@ document.addEventListener("alpine:init", () => {
      * Template (``data-confirm-discard``); fehlt das Attribut, wird lieber
      * abgeschickt als blockiert.
      *
-     * Ausloeser ist bewusst das **erfolgte Nachladen** des Zusatzfeld-Blocks
-     * (htmx-Swap auf ``#dynamic-fields``), nicht ein Vergleich des
-     * Select-Werts mit dem Ausgangswert: das Partial kommt ohne
-     * ``initial_data`` zurueck, ein Weg-und-wieder-zurueck landet also
-     * ebenfalls bei leeren Feldern und wuerde beim Speichern genauso Werte
-     * verwerfen — der Select-Wert waere dann unveraendert und die Rueckfrage
-     * bliebe aus.
+     * Ausloeser ist das **erfolgte Nachladen** des Zusatzfeld-Blocks
+     * (htmx-Swap auf ``#dynamic-fields``) UND ein tatsaechlich vom
+     * gespeicherten Ausgangstyp abweichender Select-Wert beim Submit (Refs
+     * #1776 — vorher haengte die Rueckfrage NUR am Nachladen: ein
+     * Weg-und-wieder-zurueck-Wechsel setzte ``_fieldsReloaded``, obwohl der
+     * Rueckweg auf den gespeicherten Typ das Feldset seit #1758 wieder mit
+     * den Original-Werten befuellt und dabei nichts verworfen wird — die
+     * Rueckfrage feuerte trotzdem faelschlich). Der Ausgangswert kommt aus
+     * ``data-original-document-type`` am Formular (vom Template aus dem
+     * Server-Objekt gesetzt, nicht aus dem DOM zum Init-Zeitpunkt gelesen —
+     * das waere bei einem sehr fruehen User-Wechsel vor Alpine-Init fragil).
      *
      * M24/AP4 (Refs #1738, ADR-039 §7): Seit Personen und Faelle Datei-
      * Anhaenge tragen koennen, verwirft derselbe Typwechsel zusaetzlich deren
@@ -117,7 +121,9 @@ document.addEventListener("alpine:init", () => {
      */
     Alpine.data("confirmDynamicDataLoss", () => ({
         _fieldsReloaded: false,
+        _originalDocType: null,
         init() {
+            this._originalDocType = this.$el.dataset.originalDocumentType ?? "";
             // htmx ersetzt den *Inhalt* von #dynamic-fields (hx-swap
             // innerHTML), das Element selbst ueberlebt jeden Wechsel — der
             // Listener bleibt also ueber beliebig viele Swaps gueltig.
@@ -131,6 +137,12 @@ document.addEventListener("alpine:init", () => {
             if (!this._fieldsReloaded) return;
             const form = event && event.target;
             if (!form || typeof form.getAttribute !== "function") return;
+            // Refs #1776: zurueck auf den gespeicherten Ausgangstyp (Select-
+            // Wert unveraendert) verwirft nichts — kein Grund fuer die
+            // Rueckfrage. Fehlt das Select (theoretisch, z. B. gesperrter
+            // Typ), bleibt das Verhalten wie zuvor (fail-safe: fragen).
+            const select = form.querySelector("select[name='document_type']");
+            if (select && select.value === this._originalDocType) return;
             const msg = form.getAttribute("data-confirm-discard");
             if (msg && !window.confirm(msg)) {
                 event.preventDefault();
