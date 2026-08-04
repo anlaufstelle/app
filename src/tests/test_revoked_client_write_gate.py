@@ -69,7 +69,6 @@ def _file_doc_type(facility, entity_type, name, field_name):
     doc_type = DocumentType.objects.create(
         facility=facility,
         name=name,
-        category=DocumentType.Category.ADMIN,
         entity_type=entity_type,
     )
     ft_file = FieldTemplate.objects.create(facility=facility, name=field_name, field_type=FieldTemplate.FieldType.FILE)
