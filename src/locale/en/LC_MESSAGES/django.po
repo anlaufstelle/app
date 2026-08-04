@@ -649,31 +649,31 @@ msgstr "Case created"
 
 #: src/core/models/audit.py:47
 msgid "Fall aktualisiert"
-msgstr "Case has been updated."
+msgstr "Case updated"
 
 #: src/core/models/audit.py:48
 msgid "Fall geschlossen"
-msgstr "closed"
+msgstr "Case closed"
 
 #: src/core/models/audit.py:49
 msgid "Fall wiedereröffnet"
-msgstr "reopened"
+msgstr "Case reopened"
 
 #: src/core/models/audit.py:50
 msgid "Meilenstein gelöscht"
-msgstr "Delete Milestone"
+msgstr "Milestone deleted"
 
 #: src/core/models/audit.py:51
 msgid "Ereignis angelegt"
-msgstr "Edit Event"
+msgstr "Event created"
 
 #: src/core/models/audit.py:52
 msgid "Aufgabe angelegt"
-msgstr "Total tasks"
+msgstr "Task created"
 
 #: src/core/models/audit.py:53
 msgid "Aufgabe aktualisiert"
-msgstr "Task has been updated."
+msgstr "Task updated"
 
 #: src/core/models/audit.py:54
 msgid "Benutzerrolle geändert"
@@ -689,7 +689,7 @@ msgstr "Deletion-confirmation right changed"
 
 #: src/core/models/audit.py:57
 msgid "Passwort-Reset angefordert"
-msgstr "Password changed"
+msgstr "Password reset requested"
 
 #: src/core/models/audit.py:58
 msgid "Sicherheitsverletzung"
@@ -697,15 +697,15 @@ msgstr "Security violation"
 
 #: src/core/models/audit.py:59
 msgid "2FA aktiviert"
-msgstr "updated"
+msgstr "2FA enabled"
 
 #: src/core/models/audit.py:60
 msgid "2FA deaktiviert"
-msgstr "Case has been updated."
+msgstr "2FA disabled"
 
 #: src/core/models/audit.py:61
 msgid "2FA-Verifikation fehlgeschlagen"
-msgstr "Login failed"
+msgstr "2FA verification failed"
 
 #: src/core/models/audit.py:62
 msgid "2FA Backup-Codes generiert"
