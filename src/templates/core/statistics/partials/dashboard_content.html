@@ -231,16 +231,22 @@ seit #1770 mit (GET-Semantik); sie sind nicht ausgenommen.
 <form method="get" class="no-print mb-4">
     <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
     <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
-    <div class="flex flex-wrap gap-3 items-end mb-3">
+    {% comment %}Refs #1776: Enter in Empfänger/Zweck löste als implizite
+    Formularübermittlung den ERSTEN Submit-Button aus (CSV-Export, inkl.
+    unwiderruflichem Audit-Eintrag) — ``suppressEnterSubmit`` fängt Enter in
+    beiden Feldern ab, Submit bleibt ausschließlich über einen Klick möglich.{% endcomment %}
+    <div class="flex flex-wrap gap-3 items-end mb-3" x-data="suppressEnterSubmit">
         <div>
             <label for="export-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
             <input type="text" id="export-recipient" name="recipient" maxlength="200"
+                   @keydown.enter="suppress"
                    placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
                    class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
         </div>
         <div>
             <label for="export-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
             <input type="text" id="export-purpose" name="purpose" maxlength="200"
+                   @keydown.enter="suppress"
                    placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
                    class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
         </div>

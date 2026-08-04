@@ -98,7 +98,7 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
     wie der Dashboard-Export in `dashboard_content.html`.
     {% endcomment %}
     <form method="get">
-    <div class="flex flex-wrap gap-3 items-end mb-4">
+    <div class="flex flex-wrap gap-3 items-end mb-4" x-data="suppressEnterSubmit">
         <input type="hidden" name="period" value="custom">
         <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
         <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
@@ -117,20 +117,30 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
         {% comment %}
         K4a (Refs #1770): Empfänger/Zweck der Herausgabe. Sie tragen bewusst
         KEINEN hx-Trigger: das Panel braucht sie nicht (es baut keine Links mehr
-        daraus), und ein change-Trigger auf ein noch leeres Backend-Select
-        quittierte das Panel mit `400 backend erforderlich` — von
-        `htmx-errors.js` als roter Fehler-Toast gerendert. Die Werte gehen beim
-        Submit der Export-Schaltflächen mit, race-frei und ohne JavaScript.
+        daraus). Die Werte gehen beim Submit der Export-Schaltflächen mit,
+        race-frei und ohne JavaScript.
+        {% endcomment %}
+        {% comment %}
+        Refs #1776: Der change-Trigger des Bericht-Selects SELBST bleibt davon
+        unberührt — auch das Zurückstellen auf den Platzhalter „Bericht
+        wählen …" (Wert "") löst ihn aus. `statistics-charts.js` fängt genau
+        diesen Fall vor dem Request ab (kein 400-Toast mehr); siehe dort. Enter
+        in Empfänger/Zweck löst außerdem keine implizite Übermittlung mehr aus
+        (`suppressEnterSubmit`, Refs #1776) — sonst würde Enter den ersten
+        Submit-Button (CSV-Export) auslösen, inkl. unwiderruflichem
+        Audit-Eintrag.
         {% endcomment %}
         <div>
             <label for="report-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
             <input type="text" id="report-recipient" name="recipient" maxlength="200"
+                   @keydown.enter="suppress"
                    placeholder="{% trans 'z. B. Stadt Musterstadt' %}"
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
         </div>
         <div>
             <label for="report-purpose" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zweck (optional)" %}</label>
             <input type="text" id="report-purpose" name="purpose" maxlength="200"
+                   @keydown.enter="suppress"
                    placeholder="{% trans 'z. B. Verwendungsnachweis 2026' %}"
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
         </div>

@@ -151,6 +151,25 @@ document.addEventListener("alpine:init", () => {
     }));
 
     /**
+     * Faengt Enter-Submits in einzelnen Text-Eingaben ab (Refs #1776).
+     *
+     * Die Statistik-Exportformulare (Dashboard- UND Panel-Export) tragen
+     * mehrere gleichrangige Submit-Buttons mit unterschiedlichem
+     * ``formaction`` (CSV/PDF/JSON/XML/Sachbericht) im selben ``<form>``.
+     * Ohne diesen Schutz loest die Enter-Taste in „Empfänger"/„Zweck" die
+     * implizite Formularuebermittlung aus — der Browser waehlt dafuer den
+     * ERSTEN Submit-Button im Formular, praktisch immer den CSV-Export,
+     * inkl. eines unwiderruflichen, prune-exemptem Audit-Eintrags. Submit
+     * bleibt damit ausschliesslich ueber einen expliziten Klick moeglich;
+     * andere Tasten/Felder sind unberuehrt.
+     */
+    Alpine.data("suppressEnterSubmit", () => ({
+        suppress(event) {
+            event.preventDefault();
+        },
+    }));
+
+    /**
      * Klientel-Autocomplete-Basis. Verwendet in cases/form.html und
      * workitems/form.html (zweite Stelle ohne Cases-Anbindung).
      * Initial-Werte (Pseudonym, Client-ID) und die Autocomplete-URL

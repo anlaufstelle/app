@@ -21,6 +21,27 @@ document.addEventListener("htmx:beforeSwap", function (evt) {
   });
 });
 
+// Refs #1776: Zurückstellen des Berichts-Selects auf den Platzhalter
+// ("Bericht wählen …", Wert "") feuert weiterhin dessen hx-trigger="change"
+// (report_panel.html) -- DatasetReportPanelView antwortet fail-closed mit
+// 400 "backend erforderlich", htmx-errors.js zeigt das als roten
+// Fehler-Toast. Ein hx-trigger-Filter (z.B. "change[target.value]") würde
+// das verhindern, braucht unter htmx aber `unsafe-eval` -- unter der CSP
+// verboten. Capture-Phase-Listener (Muster confirm-action.js) läuft VOR
+// htmx's eigenem (Bubble-Phase-)Listener auf demselben <select> und stoppt
+// die Propagation, bevor htmx den Request überhaupt baut -- kein Request,
+// kein Toast. Nicht-leere Auswahl ist unberührt (Event läuft normal weiter).
+document.addEventListener(
+  "change",
+  function (evt) {
+    var el = evt.target;
+    if (el && el.matches && el.matches("select[name='backend']") && el.value === "") {
+      evt.stopPropagation();
+    }
+  },
+  true
+);
+
 /* statisticsCharts wird per Alpine.data() registriert (CSP-friendly, Refs #672). */
 function buildStatisticsCharts() {
   return {

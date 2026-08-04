@@ -310,6 +310,70 @@ class TestStatisticsAlpineCspCompatibility:
 
 
 @pytest.mark.django_db
+class TestStatisticsEnterSubmitGuard:
+    """Refs #1776: Enter in „Empfänger"/„Zweck" darf keine implizite
+    Formularübermittlung mehr auslösen.
+
+    Beide Exportformulare (Dashboard- und Panel-Export) tragen mehrere
+    gleichrangige Submit-Buttons mit unterschiedlichem ``formaction`` im
+    selben ``<form>`` — ohne Gegenmaßnahme wählt der Browser bei Enter den
+    ERSTEN Button (CSV-Export), inkl. unwiderruflichem, prune-exemptem
+    Audit-Eintrag. Die Komponente ``suppressEnterSubmit``
+    (``static/js/alpine/forms.js``) fängt das serverseitig nicht prüfbar ab —
+    hier wird nur das Markup-Vertrag gepinnt: Komponente + Handler sitzen an
+    den richtigen Feldern.
+    """
+
+    def test_dashboard_export_fields_carry_the_guard(self, client, admin_user):
+        client.force_login(admin_user)
+        content = client.get(reverse("core:statistics")).content.decode()
+
+        # Die Empfänger-/Zweck-Felder des Dashboard-Exportformulars sitzen in
+        # einem gemeinsamen x-data-Container mit dem Enter-Handler an beiden.
+        recipient_pos = content.index('id="export-recipient"')
+        purpose_pos = content.index('id="export-purpose"')
+        container_start = content.rindex('x-data="suppressEnterSubmit"', 0, recipient_pos)
+        assert container_start < recipient_pos < purpose_pos
+        assert content.count('@keydown.enter="suppress"') >= 2
+
+    def test_panel_export_fields_carry_the_guard(self, client, admin_user):
+        """Panel-Exportformular (Berichte-Sektion) braucht denselben Schutz."""
+        client.force_login(admin_user)
+        content = client.get(reverse("core:statistics")).content.decode()
+
+        # Sanity: die Berichte-Sektion ist ueberhaupt gerendert (sample-report-1
+        # ist immer registriert, s. TestStatisticsRangeGuardViews).
+        assert 'id="report-recipient"' in content
+        recipient_pos = content.index('id="report-recipient"')
+        purpose_pos = content.index('id="report-purpose"')
+        container_start = content.rindex('x-data="suppressEnterSubmit"', 0, recipient_pos)
+        assert container_start < recipient_pos < purpose_pos
+        # Beide Formulare zusammen: 2 (Dashboard) + 2 (Panel).
+        assert content.count('@keydown.enter="suppress"') == 4
+
+
+class TestStatisticsBackendPlaceholderNoRequestGuard:
+    """Refs #1776: statistics-charts.js muss den change-Request fuer den
+    Bericht-Select unterdruecken, wenn der Wert auf den Platzhalter ("")
+    zurueckgesetzt wird — sonst quittiert ``DatasetReportPanelView`` mit 400
+    und ``htmx-errors.js`` zeigt einen Fehler-Toast (Refs #1770-Kommentar in
+    ``full_content.html``, der faelschlich behauptete, dieser Pfad sei weg).
+
+    Reiner Source-Pin (kein Browser im Testlauf verfuegbar, keine E2E in
+    dieser Aufgabe zulaessig) — Handverifikation/E2E folgt separat.
+    """
+
+    _JS_FILE = "src/static/js/statistics-charts.js"
+
+    def test_change_guard_targets_the_backend_select(self):
+        from pathlib import Path
+
+        source = Path(self._JS_FILE).read_text()
+        assert "select[name='backend']" in source
+        assert "stopPropagation" in source
+
+
+@pytest.mark.django_db
 class TestPersonenzahlOhneApproximationshinweis:
     """K4b (Refs #1770): der „ca."-Hinweis aus #533 ist entfallen.
 
