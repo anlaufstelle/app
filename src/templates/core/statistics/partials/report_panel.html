@@ -70,9 +70,11 @@ Vorschau eines Reporting-Backends. Rendert das Ergebnis von
 {% endif %}
 
 {# Quellenausweis (Refs #1743): Vorschau und Download lesen live, das Sachbericht-PDF hybrid. #}
-<p class="text-[12px] text-ink-muted mb-4">
+<p class="text-[12px] text-ink-muted mb-1">
     {% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}
 </p>
+{# K3-A3 (Refs #1770): Grundgesamtheit der Vorschau-/Export-Tabelle — vom Backend deklariert. #}
+<p class="text-[12px] text-ink-muted mb-4 report-population">{{ population_note }}</p>
 
 {# Export-Links: Server erzwingt LEAD_PLUS auf core:statistics_report_export — keine eigene Rollenprüfung hier nötig. #}
 <div class="flex flex-wrap gap-2.5 no-print">

@@ -23,6 +23,7 @@
         .signature-line { border-top: 1px solid #333; width: 250px; margin-top: 40px; padding-top: 4px; font-size: 10px; color: #666; }
         .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
         .footer p { margin: 0 0 4px 0; }
+        .population { font-size: 10px; color: #666; margin: -4px 0 8px 0; }
     </style>
 </head>
 <body>
@@ -49,6 +50,8 @@
     </div>
 
     <h2>{% trans "Leistungen nach Kategorie" %}</h2>
+    {# K3-A3 (Refs #1770): Die beiden Tabellen zaehlen wirklich Verschiedenes — gemappte Ereignisse gegen Ereignisse mit Personenbezug. #}
+    <p class="population">{{ population_notes.by_category }}</p>
     {% if stats.by_category %}
     <table>
         <thead>
@@ -71,6 +74,7 @@
     {% endif %}
 
     <h2>{% trans "Altersverteilung" %}</h2>
+    <p class="population">{{ population_notes.by_age_cluster }}</p>
     {% if stats.by_age_cluster %}
     <table>
         <thead>
@@ -102,6 +106,10 @@
     {# Quellenausweis (Refs #1743): dieses PDF liest hybrid ueber Monats-Snapshots. #}
     <div class="footer">
         <p class="data-source">{% trans "Datenquelle" %}: {{ data_source_note }} — {{ data_source_explanation }}</p>
+        {# K4c (Refs #1770): Herkunfts-Stempel um den Stand ergaenzt. #}
+        {% if stats.snapshot_as_of %}
+        <p class="snapshot-as-of">{% blocktrans with date=stats.snapshot_as_of|date:"d.m.Y H:i" %}Stand der Monats-Aggregate: {{ date }}{% endblocktrans %}</p>
+        {% endif %}
         {% if stats.unique_clients_data_source %}
         <p class="unique-clients-note">{% trans "* Einzigartige Personen werden über den gesamten Berichtszeitraum eindeutig gezählt (Live-Abfrage) und nicht aus den Monats-Aggregaten summiert. Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, sind darin nicht enthalten." %}</p>
         {% endif %}

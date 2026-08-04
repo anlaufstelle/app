@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy
 
 from core.models import Client, Settings
-from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE
+from core.reporting.data_source import ALL_EVENTS, DATA_SOURCE_NOTES, LIVE, PERSONS
 from core.services.dashboard.disclosure import MAX_GUARD_ITERATIONS, Cell, Partition, findings
 from core.services.dashboard.statistics import PERSONS_KEY, get_statistics
 
@@ -826,6 +826,18 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
             # JSON-Pfad frei von Lazy-Proxys.
             "data_source": LIVE,
             "data_source_note": str(DATA_SOURCE_NOTES[LIVE]),
+            # K3-A3 (Refs #1770): Grundgesamtheit je Tabelle, als **stabiler
+            # Code** — die uebersetzte Fassung steht im HTML, der Code hier ist
+            # das, worauf ein JSON-Konsument sich verlassen kann (dieselbe
+            # Trennung wie bei ``data_source``). ``by_age_cluster`` zaehlt seit
+            # der K3-A1-Restzeile ebenfalls alle Ereignisse des Zeitraums.
+            "populations": {
+                "total_contacts": ALL_EVENTS,
+                "unique_clients": PERSONS,
+                "by_contact_stage": ALL_EVENTS,
+                "by_document_type": ALL_EVENTS,
+                "by_age_cluster": ALL_EVENTS,
+            },
         },
     }
     # K0-Fail-safe (Refs #1768) — nach dem Aufbau, damit der Guard genau eine

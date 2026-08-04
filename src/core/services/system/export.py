@@ -238,7 +238,13 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     wird das Ranking gerendert und der Report mit einem ``INTERN``-Banner
     markiert.
     """
-    from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, SNAPSHOT_HYBRID
+    from core.reporting.data_source import (
+        ALL_EVENTS,
+        DATA_SOURCE_EXPLANATIONS,
+        DATA_SOURCE_NOTES,
+        SNAPSHOT_HYBRID,
+        table_note,
+    )
 
     # Security R4: Standard-Modus ist das externe Artefakt (Traeger/Foerderer)
     # — Kleinstfallzahlen unterdruecken wie Sachbericht-PDF/On-Screen-Bericht.
@@ -263,6 +269,15 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
             # zirkulierende PDF weist seine Quelle daher in der Fusszeile aus.
             "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
             "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
+            # K3-A3 (Refs #1770): Jede Tabelle benennt ihre Grundgesamtheit.
+            # Beide zaehlen hier **alle** Ereignisse des Zeitraums — die
+            # Alterstabelle erst, seit die Restzeile "ohne Personenbezug"
+            # mitlaeuft (K3-A1); ohne sie waeren es zwei verschiedene
+            # Basismengen ohne jeden Hinweis darauf.
+            "population_notes": {
+                "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
+                "by_age_cluster": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
+            },
         },
     )
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()
@@ -275,7 +290,14 @@ def generate_sample_report_1_pdf(facility, date_from, date_to):
     wird daher durch dieselbe k-Anon-Kleinstfallzahl-Suppression geleitet wie
     der externe On-Screen-Bericht — Zellen < Schwelle werden unterdrueckt.
     """
-    from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, SNAPSHOT_HYBRID
+    from core.reporting.data_source import (
+        DATA_SOURCE_EXPLANATIONS,
+        DATA_SOURCE_NOTES,
+        EVENTS_WITH_PERSON,
+        MAPPED_EVENTS,
+        SNAPSHOT_HYBRID,
+        table_note,
+    )
     from core.services.dashboard import get_sample_report_1_statistics_hybrid, suppress_sample_report_1_stats
 
     stats = get_sample_report_1_statistics_hybrid(facility, date_from, date_to)
@@ -293,6 +315,15 @@ def generate_sample_report_1_pdf(facility, date_from, date_to):
             # und ueberdauern die Loeschfristen.
             "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
             "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
+            # K3-A3 (Refs #1770): Hier stehen wirklich zwei verschiedene
+            # Grundgesamtheiten nebeneinander — "total"/by_category zaehlen nur
+            # die gemappten Ereignisse, die Altersverteilung nur die mit
+            # Personenbezug. Genau diese Differenz ist K3, und ohne den Ausweis
+            # ist der Bericht nicht nur undicht, sondern irrefuehrend.
+            "population_notes": {
+                "by_category": table_note(MAPPED_EVENTS, SNAPSHOT_HYBRID),
+                "by_age_cluster": table_note(EVENTS_WITH_PERSON, SNAPSHOT_HYBRID),
+            },
         },
     )
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

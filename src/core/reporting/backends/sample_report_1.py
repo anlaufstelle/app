@@ -28,6 +28,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
 
 # Modul-Ebenen-Import ist zyklusfrei: ``core.services.dashboard`` verweist
@@ -134,6 +135,11 @@ class SampleReport1Backend(DatasetBackend):
     # anpassbare Beispielvorlage, kein Formular einer bestimmten Behoerde.
     name = _("Beispiel-Sachbericht")
     snapshot_enabled = True
+    # K3-A3 (Refs #1770): Die ``records``-Projektion sind die Berichtskategorien
+    # — sie zaehlen nur Ereignisse mit Berichtszuordnung (``CATEGORY_MAP``),
+    # nicht alle Ereignisse des Zeitraums. Ohne diesen Ausweis liest sich
+    # "Gesamtkontakte" wie eine Gesamtzahl, die es nicht ist.
+    population = MAPPED_EVENTS
 
     def get_field_specs(self) -> list[FieldSpec]:
         """Spalten der tabellarischen Projektion (eine Zeile je Kategorie)."""

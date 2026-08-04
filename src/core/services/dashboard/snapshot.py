@@ -122,6 +122,23 @@ def get_snapshot(facility, year, month):
     return snap.data if snap else None
 
 
+# K4c (Refs #1770): Schluessel des Herkunfts-/Stand-Stempels. #1743 hat die
+# **Quelle** jedes Artefakts ausgewiesen (live vs. Monats-Aggregate) — nicht
+# aber deren **Stand**. Genau der fehlte: „Monats-Aggregate" beantwortet nicht,
+# von wann sie sind, und die Differenz zwischen einem eingefrorenen Aggregat und
+# einer Live-Abfrage desselben Zeitraums ist ein Fingerabdruck des Geloeschten.
+# Ohne Datum kann eine Empfaengerin nicht einmal erkennen, dass sie zwei
+# Artefakte verschiedenen Standes vergleicht.
+SNAPSHOT_AS_OF_KEY = "snapshot_as_of"
+
+
+def _newer(current, candidate):
+    """Juengster Snapshot-Stand ueber alle beitragenden Monatssegmente."""
+    if candidate is None:
+        return current
+    return candidate if current is None else max(current, candidate)
+
+
 # ---------------------------------------------------------------------------
 # Hybrid query helpers
 # ---------------------------------------------------------------------------
@@ -313,11 +330,18 @@ def get_statistics_hybrid(facility, date_from, date_to):
     """
     segments = _split_into_segments(date_from, date_to)
     segment_stats = []
+    as_of = None
 
     for seg_from, seg_to, use_snapshot in segments:
         stats = None
         if use_snapshot:
-            stats = get_snapshot(facility, seg_from.year, seg_from.month)
+            snap = StatisticsSnapshot.objects.filter(
+                facility=facility, year=seg_from.year, month=seg_from.month
+            ).first()
+            if snap is not None:
+                stats = snap.data
+                # K4c (Refs #1770): Stand des juengsten beitragenden Aggregats.
+                as_of = _newer(as_of, snap.updated_at)
         if stats is None:
             stats = get_statistics(facility, seg_from, seg_to)
             # Remove top_clients from segment stats (merged separately)
@@ -325,6 +349,10 @@ def get_statistics_hybrid(facility, date_from, date_to):
         segment_stats.append(stats)
 
     merged = _merge_stats(segment_stats)
+    # ``None`` = kein Segment kam aus einem Snapshot, das Artefakt ist trotz
+    # hybridem Lesepfad vollstaendig live. Der Stempel bleibt dann weg statt
+    # eine Herkunft zu behaupten, die es nicht gibt.
+    merged[SNAPSHOT_AS_OF_KEY] = as_of
 
     # top_clients always from a live full-range query
     live_full = get_statistics(facility, date_from, date_to)
@@ -392,6 +420,7 @@ def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
     """
     segments = _split_into_segments(date_from, date_to)
     segment_stats = []
+    as_of = None
 
     for seg_from, seg_to, use_snapshot in segments:
         stats = None
@@ -407,11 +436,17 @@ def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
                 # Uebergangsphase entfallen. ``or None`` normalisiert das leere
                 # Dict, damit der Live-Zweig unten wirklich greift.
                 stats = snap.backend_data.get("sample-report-1") or None
+                if stats is not None:
+                    # K4c (Refs #1770): Stand nur fuer Segmente, die wirklich
+                    # aus einem Aggregat kamen — ein leerer Payload faellt unten
+                    # auf live zurueck und darf keinen Stand behaupten.
+                    as_of = _newer(as_of, snap.updated_at)
         if stats is None:
             stats = get_backend("sample-report-1").build_dataset(facility, seg_from, seg_to).summary
         segment_stats.append(stats)
 
     merged = _merge_sample_report_1_stats(segment_stats)
+    merged[SNAPSHOT_AS_OF_KEY] = as_of
     # K4b (Refs #1770): identisch zu ``get_statistics_hybrid`` — eigener
     # Live-Term ueber den Gesamtzeitraum statt der Summe der Monatswerte. Die
     # Grundgesamtheit ist dieselbe wie im Backend (sichtbare Ereignisse der

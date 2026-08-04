@@ -23,6 +23,7 @@ Das Modul importiert bewusst nichts aus der App — es wird sowohl von
 und dem PDF-Pfad genutzt und darf keine Importzyklen aufziehen.
 """
 
+from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 # Live-Abfrage gegen die Ereignisse (Panel, CSV/JSON/XML, externer Bericht).
@@ -49,3 +50,43 @@ DATA_SOURCE_EXPLANATIONS = {
         "der Löschfristen erhalten; live erzeugte Berichte desselben Zeitraums können deshalb abweichen."
     ),
 }
+
+# --- K3-A3 (Refs #1770): Grundgesamtheit je Tabelle -------------------------
+#
+# In jedem Artefakt stehen Aggregate ueber **verschiedenen Basismengen**
+# nebeneinander, und bis hierher benannte kein Artefakt, welche Tabelle welche
+# meint. Das ist nicht nur ein Leck (die Differenz zweier Grundgesamtheiten ist
+# K3), sondern inhaltlich irrefuehrend: „Kontakte nach Altersgruppe" und
+# „Kontakte nach Dokumentationstyp" summieren sich zu verschiedenen Zahlen, und
+# eine Leserin hat keine Chance zu erkennen, warum.
+#
+# Stabile Codes fuer die Maschinenformate (JSON/XML), uebersetzte Nominalphrasen
+# fuer die sichtbaren Artefakte — dieselbe Trennung wie bei ``data_source``.
+ALL_EVENTS = "all_events"
+EVENTS_WITH_PERSON = "events_with_person"
+MAPPED_EVENTS = "mapped_events"
+PERSONS = "persons"
+
+POPULATION_NOTES = {
+    ALL_EVENTS: _("alle Ereignisse im Zeitraum"),
+    EVENTS_WITH_PERSON: _("Ereignisse mit Personenbezug im Zeitraum"),
+    MAPPED_EVENTS: _("Ereignisse mit Berichtszuordnung im Zeitraum"),
+    PERSONS: _("Personen mit mindestens einem Ereignis im Zeitraum"),
+}
+
+
+def table_note(population: str, data_source: str):
+    """Ein Satzfragment „Grundgesamtheit: … · Quelle: …" je Tabelle.
+
+    Setzt bewusst auf der ``data_source``-Infrastruktur aus
+    #1743 auf statt sie
+    zu duplizieren: Herkunft und Grundgesamtheit sind zusammen die Antwort auf
+    „welche Zahlen sehe ich hier eigentlich", und getrennte Ausweise waeren zwei
+    Halbaussagen. Lazy (``format_lazy``), damit der Ausdruck der Sprache der
+    Empfaengerin folgt und nicht der des schreibenden Prozesses.
+    """
+    return format_lazy(
+        _("Grundgesamtheit: {population} · Quelle: {source}"),
+        population=POPULATION_NOTES[population],
+        source=DATA_SOURCE_NOTES[data_source],
+    )

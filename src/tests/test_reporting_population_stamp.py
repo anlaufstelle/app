@@ -1,0 +1,235 @@
+"""Grundgesamtheit + Herkunfts-/Stand-Stempel der Berichts-Artefakte.
+
+K3-A3 und K4c der Disclosure-Analyse (Refs #1770, Analyse
+#1742):
+
+* **K3-A3** — In jedem Artefakt stehen Aggregate ueber **verschiedenen
+  Basismengen** nebeneinander, und bis hierher benannte kein Artefakt, welche
+  Tabelle welche meint. Das ist nicht nur ein Leck (die Differenz zweier
+  Grundgesamtheiten ist K3 selbst), sondern inhaltlich irrefuehrend.
+* **K4c** — #1743 wies
+  die **Quelle** jedes Artefakts aus (live vs. Monats-Aggregate), nicht aber
+  deren **Stand**. Ohne Datum kann eine Empfaengerin nicht erkennen, dass sie
+  zwei Artefakte verschiedenen Standes vergleicht — und genau die Differenz
+  zwischen eingefrorenem Aggregat und Live-Abfrage ist der Fingerabdruck des
+  Geloeschten.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from django.template.loader import render_to_string
+
+from core.reporting.data_source import (
+    ALL_EVENTS,
+    EVENTS_WITH_PERSON,
+    LIVE,
+    MAPPED_EVENTS,
+    SNAPSHOT_HYBRID,
+    table_note,
+)
+
+
+class TestGrundgesamtheitsAusweis:
+    """Der Ausweis setzt auf der #1743-Infrastruktur auf, statt sie zu duplizieren."""
+
+    def test_note_nennt_grundgesamtheit_und_quelle(self):
+        note = str(table_note(ALL_EVENTS, LIVE))
+
+        assert "Grundgesamtheit" in note
+        assert "alle Ereignisse im Zeitraum" in note
+        assert "Live-Abfrage zum Erstellungszeitpunkt" in note
+
+    def test_verschiedene_grundgesamtheiten_sind_unterscheidbar(self):
+        """Der Ausweis muss die Differenz benennen, um die es in K3 geht."""
+        assert str(table_note(MAPPED_EVENTS, SNAPSHOT_HYBRID)) != str(table_note(EVENTS_WITH_PERSON, SNAPSHOT_HYBRID))
+
+    def test_unbekannter_code_ist_fail_closed(self):
+        with pytest.raises(KeyError):
+            table_note("gibt-es-nicht", LIVE)
+
+
+@pytest.mark.django_db
+class TestGrundgesamtheitInDenArtefakten:
+    """Jede Tabelle der sichtbaren Artefakte traegt ihren Ausweis."""
+
+    def test_externer_bericht_html(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        seite = render_to_string(
+            "core/statistics/external_report.html",
+            {
+                "report": suppress_report_stats(
+                    facility,
+                    {
+                        "total_contacts": 40,
+                        "unique_clients": 20,
+                        "by_contact_stage": {},
+                        "persons_by_contact_stage": {},
+                        "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+                        "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 30, "persons": 20}],
+                    },
+                ),
+                "population_notes": {
+                    "by_document_type": table_note(ALL_EVENTS, LIVE),
+                    "by_age_cluster": table_note(ALL_EVENTS, LIVE),
+                },
+            },
+        )
+
+        assert seite.count("Grundgesamtheit:") == 2, "beide Tabellen brauchen den Ausweis"
+
+    def test_externer_bericht_json_traegt_stabile_codes(self, facility):
+        """Fuer Maschinen der Code, fuer Menschen der uebersetzte Text — dieselbe
+        Trennung wie bei ``data_source`` (#1743)."""
+        from core.services.dashboard import build_external_report
+
+        report = build_external_report(facility, date(2026, 1, 1), date(2026, 12, 31))
+
+        populations = report["metadata"]["populations"]
+        assert populations["by_document_type"] == ALL_EVENTS
+        # Seit der K3-A1-Restzeile zaehlt die Alterstabelle ebenfalls ALLE
+        # Ereignisse des Zeitraums — das ist der Punkt der Restzeile.
+        assert populations["by_age_cluster"] == ALL_EVENTS
+
+    def test_halbjahres_sachbericht_pdf_datenpfad(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        seite = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "stats": suppress_report_stats(
+                    facility,
+                    {
+                        "total_contacts": 40,
+                        "unique_clients": 20,
+                        "by_contact_stage": {},
+                        "persons_by_contact_stage": {},
+                        "by_document_type": [{"name": "Kontakt", "category": "contact", "count": 40}],
+                        "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 30, "persons": 20}],
+                    },
+                ),
+                "population_notes": {
+                    "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
+                    "by_age_cluster": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
+                },
+            },
+        )
+
+        assert seite.count("Grundgesamtheit:") == 2
+
+    def test_beispiel_sachbericht_pdf_nennt_zwei_verschiedene_mengen(self, facility):
+        """Hier ist der Ausweis nicht Kosmetik: ``total``/``by_category``
+        zaehlen die **gemappten** Ereignisse, die Altersverteilung die mit
+        **Personenbezug** — zwei verschiedene Basismengen im selben Bericht."""
+        from core.services.dashboard import suppress_sample_report_1_stats
+
+        seite = render_to_string(
+            "core/export/sample_report_1_pdf.html",
+            {
+                "stats": suppress_sample_report_1_stats(
+                    facility,
+                    {
+                        "total": 30,
+                        "unique_clients": 20,
+                        "by_category": [("Kontakte", 30)],
+                        "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 25, "persons": 20}],
+                    },
+                ),
+                "population_notes": {
+                    "by_category": table_note(MAPPED_EVENTS, SNAPSHOT_HYBRID),
+                    "by_age_cluster": table_note(EVENTS_WITH_PERSON, SNAPSHOT_HYBRID),
+                },
+            },
+        )
+
+        assert "Ereignisse mit Berichtszuordnung im Zeitraum" in seite
+        assert "Ereignisse mit Personenbezug im Zeitraum" in seite
+
+    def test_backend_deklariert_seine_grundgesamtheit(self):
+        from core.reporting.base import DatasetBackend
+        from core.reporting.registry import get_backend
+
+        assert get_backend("sample-report-1").population == MAPPED_EVENTS
+        assert DatasetBackend.population == ALL_EVENTS, "weiteste Menge als Default, engere muessen ueberschreiben"
+
+
+@pytest.mark.django_db
+class TestSnapshotStandStempel:
+    """K4c: Der Stand der Monats-Aggregate, nicht nur ihre Existenz."""
+
+    def _snapshot(self, facility, year, month):
+        from core.services.dashboard.snapshot import create_or_update_snapshot
+
+        create_or_update_snapshot(facility, year, month)
+
+    def test_hybrid_pfad_stempelt_den_snapshot_stand(self, facility, doc_type_contact, staff_user):
+        from core.models import StatisticsSnapshot
+        from core.services.dashboard import get_statistics_hybrid
+        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
+
+        self._snapshot(facility, 2026, 1)
+        stand = StatisticsSnapshot.objects.get(facility=facility, year=2026, month=1).updated_at
+
+        merged = get_statistics_hybrid(facility, date(2026, 1, 1), date(2026, 1, 31))
+
+        assert merged[SNAPSHOT_AS_OF_KEY] == stand
+
+    def test_ohne_beitragenden_snapshot_bleibt_der_stempel_leer(self, facility):
+        """Kein Segment kam aus einem Aggregat ⇒ keine behauptete Herkunft."""
+        from core.services.dashboard import get_statistics_hybrid
+        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
+
+        merged = get_statistics_hybrid(facility, date(2026, 1, 1), date(2026, 1, 31))
+
+        assert merged[SNAPSHOT_AS_OF_KEY] is None
+
+    def test_beispiel_sachbericht_hybrid_stempelt_ebenfalls(self, facility):
+        from core.models import StatisticsSnapshot
+        from core.services.dashboard import get_sample_report_1_statistics_hybrid
+        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
+
+        self._snapshot(facility, 2026, 1)
+        stand = StatisticsSnapshot.objects.get(facility=facility, year=2026, month=1).updated_at
+
+        merged = get_sample_report_1_statistics_hybrid(facility, date(2026, 1, 1), date(2026, 1, 31))
+
+        assert merged[SNAPSHOT_AS_OF_KEY] == stand
+
+    def test_stempel_ueberlebt_die_suppression(self, facility):
+        """Der Stempel ist Metadatum, kein Aggregat — die Suppression darf ihn
+        nicht mitnehmen, sonst waere das Artefakt wieder herkunftslos."""
+        from django.utils import timezone
+
+        from core.services.dashboard import suppress_report_stats
+        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
+
+        moment = timezone.now()
+        out = suppress_report_stats(
+            facility,
+            {
+                "total_contacts": 40,
+                "unique_clients": 20,
+                "by_contact_stage": {},
+                "persons_by_contact_stage": {},
+                "by_document_type": [],
+                "by_age_cluster": [],
+                SNAPSHOT_AS_OF_KEY: moment,
+            },
+        )
+
+        assert out[SNAPSHOT_AS_OF_KEY] == moment
+
+    def test_pdf_rendert_den_stand(self, facility):
+        from django.utils import timezone
+
+        from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
+
+        seite = render_to_string(
+            "core/export/report_pdf.html",
+            {"stats": {SNAPSHOT_AS_OF_KEY: timezone.now(), "by_document_type": [], "by_age_cluster": []}},
+        )
+
+        assert "Stand der Monats-Aggregate:" in seite

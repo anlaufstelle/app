@@ -12,7 +12,15 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
-from core.reporting.data_source import DATA_SOURCE_EXPLANATIONS, DATA_SOURCE_NOTES, LIVE
+from core.reporting.data_source import (
+    ALL_EVENTS,
+    DATA_SOURCE_EXPLANATIONS,
+    DATA_SOURCE_NOTES,
+    EVENTS_WITH_PERSON,
+    LIVE,
+    SNAPSHOT_HYBRID,
+    table_note,
+)
 from core.reporting.export import SUPPORTED_FORMATS, export_dataset
 from core.reporting.registry import get_available_backends, get_backend
 from core.services.audit import log_audit_event
@@ -73,6 +81,18 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             # M5 P5 (Refs #1061): Berichts-Plugins (z. B. "Beispiel-Sachbericht")
             # fuers Dropdown der Berichte-Sektion — nur fuer diese Facility verfuegbare.
             "report_backends": get_available_backends(facility),
+            # K3-A3 (Refs #1770): Auch das interne Dashboard benennt seine
+            # Grundgesamtheiten. Es liest hybrid (Monats-Aggregate mit
+            # Live-Fallback) und zeigt die Alterstabelle **ohne** die
+            # K3-A1-Restzeile — sie zaehlt hier also nur Ereignisse mit
+            # Personenbezug, anders als im Artefakt. Genau diese Abweichung
+            # muss dastehen, sonst liest jemand dieselbe Tabelle in zwei
+            # Bedeutungen. Unterdrueckt wird hier bewusst nichts (interner
+            # Rohpfad, RLS-Scope, #1311).
+            "population_notes": {
+                "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
+                "by_age_cluster": table_note(EVENTS_WITH_PERSON, SNAPSHOT_HYBRID),
+            },
         }
 
         return self.render_htmx_or_full(context)
@@ -150,6 +170,18 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
             "document_types": aggregated.get("by_document_type", []),
             "age_clusters": aggregated.get("by_age_cluster", []),
             "sources": sources,
+            # K3-A3 (Refs #1770): Auch das interne Dashboard-JSON benennt seine
+            # Grundgesamtheiten — als stabile Codes, wie das Artefakt-JSON.
+            # Hier wird bewusst **nicht** unterdrueckt (interner Rohpfad,
+            # RLS-Scope, #1311); die Tabellen haben aber dieselbe Bedeutungs-
+            # frage, und ``age_clusters`` zaehlt hier — anders als im Artefakt —
+            # nur Ereignisse MIT Personenbezug: die K3-A1-Restzeile entsteht
+            # erst an der Artefaktgrenze. Genau diese Abweichung muss benannt
+            # sein, sonst liest jemand dieselbe Tabelle in zwei Bedeutungen.
+            "populations": {
+                "document_types": ALL_EVENTS,
+                "age_clusters": EVENTS_WITH_PERSON,
+            },
         }
 
         return JsonResponse(data)
@@ -321,6 +353,13 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
                 # Darstellung, der Code/die Kurzform stehen in
                 # ``report["metadata"]`` und damit auch im JSON-Format.
                 "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
+                # K3-A3 (Refs #1770): uebersetzter Grundgesamtheits-/Quellen-
+                # Ausweis je Tabelle; die stabilen Codes stehen in
+                # ``report["metadata"]["populations"]`` und damit im JSON.
+                "population_notes": {
+                    "by_document_type": table_note(ALL_EVENTS, LIVE),
+                    "by_age_cluster": table_note(ALL_EVENTS, LIVE),
+                },
             },
         )
 
@@ -393,6 +432,11 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
             # liest also live — anders als das hybrid gespeiste Sachbericht-PDF.
             "data_source_note": DATA_SOURCE_NOTES[LIVE],
             "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
+            # K3-A3 (Refs #1770): Die Vorschau zeigt die tabellarische
+            # Projektion des Backends — ihre Grundgesamtheit gehoert dazu.
+            # ``backend.population`` ist der vom Backend deklarierte Code
+            # (Default: alle Ereignisse des Zeitraums).
+            "population_note": table_note(backend.population, LIVE),
         }
         return render(request, self.template_name, context)
 

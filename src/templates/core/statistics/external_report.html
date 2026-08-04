@@ -73,6 +73,8 @@
 
 <section aria-labelledby="report-document-types" class="mb-6">
     <h2 id="report-document-types" class="text-lg font-semibold text-ink mb-2">{% trans "Nach Dokumentationstyp" %}</h2>
+    {# K3-A3 (Refs #1770): Grundgesamtheit + Herkunft je Tabelle. #}
+    <p class="text-xs text-muted mb-2 report-population">{{ population_notes.by_document_type }}</p>
     <table class="w-full text-sm bg-white border border-line rounded-lg">
         <thead class="bg-line/50">
             <tr>
@@ -110,6 +112,8 @@
 
 <section aria-labelledby="report-age" class="mb-6">
     <h2 id="report-age" class="text-lg font-semibold text-ink mb-2">{% trans "Nach Altersgruppe" %}</h2>
+    {# Seit der K3-A1-Restzeile zaehlt auch diese Tabelle alle Ereignisse des Zeitraums. #}
+    <p class="text-xs text-muted mb-2 report-population">{{ population_notes.by_age_cluster }}</p>
     <table class="w-full text-sm bg-white border border-line rounded-lg">
         <thead class="bg-line/50">
             <tr>

@@ -127,7 +127,9 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
 
 {# Tabelle: Kontakte nach Dokumentationstyp #}
 <div class="mb-7">
-    <h2 class="text-[15px] font-bold text-ink mb-3">{% trans "Kontakte nach Dokumentationstyp" %}</h2>
+    <h2 class="text-[15px] font-bold text-ink mb-1">{% trans "Kontakte nach Dokumentationstyp" %}</h2>
+    {# K3-A3 (Refs #1770): Grundgesamtheit + Herkunft je Tabelle — dieselbe Angabe wie im Artefakt, damit dieselbe Tabelle nicht in zwei Bedeutungen gelesen wird. #}
+    <p class="text-[12px] text-ink-muted mb-3 report-population">{{ population_notes.by_document_type }}</p>
     {% if stats.by_document_type %}
     {# Desktop table #}
     <div class="hidden sm:block bg-surface rounded-[10px] border border-subtle overflow-hidden">
@@ -169,7 +171,8 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
 
 {# Tabelle: Kontakte nach Alterscluster #}
 <div class="mb-7">
-    <h2 class="text-[15px] font-bold text-ink mb-3">{% trans "Kontakte nach Altersgruppe" %}</h2>
+    <h2 class="text-[15px] font-bold text-ink mb-1">{% trans "Kontakte nach Altersgruppe" %}</h2>
+    <p class="text-[12px] text-ink-muted mb-3 report-population">{{ population_notes.by_age_cluster }}</p>
     {% if stats.by_age_cluster %}
     {# Desktop table #}
     <div class="hidden sm:block bg-surface rounded-[10px] border border-subtle overflow-hidden">
@@ -203,6 +206,13 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
     <p class="text-[13px] text-ink-muted">{% trans "Keine Daten im gewählten Zeitraum." %}</p>
     {% endif %}
 </div>
+
+{# K4c (Refs #1770): Stand der Monats-Aggregate — ohne Datum ist "Monats-Aggregate" nur eine halbe Herkunftsangabe. #}
+{% if stats.snapshot_as_of %}
+<p class="text-[12px] text-ink-muted mb-4 snapshot-as-of">
+    {% blocktrans with date=stats.snapshot_as_of|date:"d.m.Y H:i" %}Stand der Monats-Aggregate: {{ date }}{% endblocktrans %}
+</p>
+{% endif %}
 
 {# Export-Buttons #}
 {% if can_export %}

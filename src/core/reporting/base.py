@@ -26,6 +26,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Literal
 
+from core.reporting.data_source import ALL_EVENTS
+
 
 @dataclass(frozen=True)
 class FieldSpec:
@@ -104,6 +106,14 @@ class DatasetBackend(ABC):
     # nicht halten kann, bleibt ``snapshot_enabled = False``; sonst wandert PII
     # an der Klassifikation vorbei in den Snapshot.
     snapshot_enabled: bool = False  # True → summary landet in StatisticsSnapshot.backend_data
+    # K3-A3 (Refs #1770): Grundgesamtheit der ``records``-Projektion — der Code
+    # aus :mod:`core.reporting.data_source`. Panel und Export weisen ihn aus
+    # ("Grundgesamtheit: … · Quelle: …"), weil ein Bericht ohne diese Angabe
+    # nicht nur undicht, sondern **irrefuehrend** ist: mehrere Tabellen ueber
+    # verschiedenen Basismengen summieren sich zu verschiedenen Zahlen, und eine
+    # Leserin hat keine Chance zu erkennen, warum. Der Default ist die weiteste
+    # und haeufigste Menge; ein Backend, das enger zaehlt, MUSS ihn ueberschreiben.
+    population: str = ALL_EVENTS
 
     def is_available(self, facility) -> bool:  # Hook für facility-abhängige Backends
         """Ob dieses Backend fuer die gegebene Einrichtung waehlbar ist (Default: immer)."""
