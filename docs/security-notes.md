@@ -478,13 +478,23 @@ gezählten Einheiten werden unterdrückt (`count=None`, `suppressed=True`). Schw
 pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/settings.py)
 (Default **5**).
 
-> **Präzisierung (Refs #1742):** Die
-> gezählte Einheit ist heute in **allen** suppressionsbewehrten Zellen das **Ereignis**
-> (`Count("id")`), nicht die Person. Eine sichtbare Zelle „Unter 18: 7" bedeutet 7 *Kontakte*
-> und kann von **einer** Person stammen. Die einzige personenbasierte Größe ist
-> `unique_clients`. Frühere Fassungen dieses Abschnitts sprachen von „weniger als *k*
-> **Personen**" — das liefert der Code nicht; die Lücke ist als **K0** unten dokumentiert
-> und offen.
+> **Präzisierung (Refs #1742,
+> #1770):** Welche Einheit gezählt wird,
+> hängt am **Bucket-Typ**:
+>
+> * **Personenabgeleitete** Aufschlüsselungen (`by_age_cluster`, `by_contact_stage`, `unique_clients`)
+> werden gegen die **DISTINCT-Personenzahl** des Buckets im Berichtszeitraum geprüft — zusätzlich zur
+> Ereigniszahl, und es gilt die strengere der beiden. Eine sichtbare Zelle „Unter 18: 7" bedeutet
+> seither 7 *Kontakte* von **mindestens *k* Personen**; ist die Personenzahl unbekannt (Alt-Snapshot,
+> retention-bereinigter Monat), wird unterdrückt.
+> * **Ereignisabgeleitete** Aufschlüsselungen (`by_document_type`, `by_category`, `total_contacts`)
+> zählen weiterhin **Ereignisse** (`Count("id")`). Ihre Buckets sind Dokumenttypen, keine
+> Personenmengen — eine Personenschwelle hätte dort keine Äquivalenzklasse, auf die sie sich bezöge.
+>
+> Frühere Fassungen dieses Abschnitts sprachen pauschal von „weniger als *k* **Personen**"; das galt
+> bis #1770 für **keine** Zelle und gilt jetzt
+> für die personenabgeleiteten. Die verbleibende Ungleichung zwischen Personen- und Ereigniszählung ist
+> als akzeptierte Definitionsgrenze (2) unten dokumentiert.
 
 Verdrahtet in den datenschutzfreundlichen externen Berichten
 ([`external_report.py`](../src/core/services/dashboard/external_report.py), Refs #921)
@@ -559,9 +569,10 @@ beruht). Sperrvermerke blockieren seit #1756
 
 **Status:** Analyse abgeschlossen; Umsetzung begonnen — **K5**
 (#1767), **K0 (a, Fail-safe)**
-(#1768) und **K6**
-(#1769) sind **mitigiert**; K0 (b, Zellkriterium)
-sowie K2, K1, K3 und K4b bleiben offen, K4a/K4c sind akzeptiert bzw. abgewertet (Spalte „Status" in der
+(#1768), **K6**
+(#1769) sowie **K0 (b, Zellkriterium)** und
+**K4b** (#1770) sind **mitigiert**; K2, K1 und K3
+bleiben offen, K4a/K4c sind akzeptiert bzw. abgewertet (Spalte „Status" in der
 Übersicht). Sieben Kanäle untersucht, alle
 **bestätigt**; drei sind Implementierungsfehler mit kleinem Aufwand, drei Teilaspekte sind als
 k-Anonymitäts-**Definitionsgrenze** akzeptiert. Anlass war die M5-Erweiterung der Suppression auf die
@@ -593,11 +604,11 @@ Betriebskennzahl.
 
 | # | Kanal | Empfehlung | Aufwand | Priorität | Status |
 |---|---|---|---|---|---|
-| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | **(a) mitigiert** (#1768), (b) offen |
+| **K0** | Schwelle auf Ereignis- statt Personenzahlen | **schließen** | S (Fail-safe) / M (Zellkriterium) | 1 | **mitigiert** — (a) (#1768), (b) (#1770) |
 | **K5** | Zeilensortierung nach Anzahl als Rangkanal | **schließen** | S | 1 | **mitigiert** (#1767) |
 | **K6** | Unterdrückungs-*Entscheidung* der Vollständigkeitsmeldungen | **schließen** | S | 2 | **mitigiert** (#1769) |
 | **K2** | Auslösekriterium der Sekundär-Suppression (`len(suppressed) != 1`) | **schließen** | M | 2 | offen |
-| **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | offen |
+| **K4b** | `unique_clients`-Inflation über Monatssegmente | **schließen** | S–M | 2 | **mitigiert** (#1770) |
 | **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | offen |
 | **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | offen |
 | **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | offen |
@@ -656,9 +667,42 @@ Ersatz-/Ergänzungspunkt. Test-gepinnt in
 `test_external_report_service.py::TestPersonenabgeleiteteTabellenFailSafe` und
 `test_external_report_view.py::TestPersonenTabellenImArtefakt` (JSON + HTML).
 
+*Status (b): **mitigiert*** (#1770). Das
+Zellkriterium prüft personenabgeleitete Zellen gegen die **DISTINCT-Personenzahl ihres Buckets im
+Berichtszeitraum**: `get_statistics` liefert `by_age_cluster[].persons` und
+`persons_by_contact_stage`, `_suppress_small`/`_suppress_stage_dict` unterdrücken, sobald die
+**strengere** von Ereignis- und Personenzahl unter *k* liegt (min-Logik). Die Ereignisprüfung bleibt
+bestehen — sie ist in Sonderfällen die schärfere Bedingung. Vier Eigenschaften tragen das Ergebnis:
+
+* **Zeitraum-skopiert und fail-safe.** `count_clients_in_bucket` bleibt wie angekündigt unbenutzt (kein
+ Zeitraumfilter ⇒ fail-open); es behält seinen Verwender im Retention-Pfad und trägt jetzt eine
+ Warnung. Der Berichtspfad zählt ausschließlich über die Ereignis-Grundgesamtheit des Zeitraums.
+* **Die Personenzahl verlässt die Suppression nie.** `_suppress_small` entfernt `persons` aus **jeder**
+ Ausgabezeile — sichtbar wie unterdrückt. Bliebe sie stehen, wäre eine Zelle „27+: 30 Ereignisse,
+ 6 Personen" selbst eine publizierte Kleinstfallzahl, die nie durch eine Regel gelaufen ist.
+* **Unbekannt ⇒ unterdrückt.** Alt-Snapshots ohne `persons` und Monate, deren historische Personenzahl
+ nach Ablauf der Löschfristen nicht mehr rekonstruierbar ist, tragen `None`. `require_person_counts`
+ normalisiert jede `by_age_cluster`-Liste auf diesen Zustand, damit keine Zeile still auf das alte,
+ ereignisbasierte Kriterium zurückfällt; die Backfill-Migration `0128` rät nicht, sondern markiert.
+ Im Merge über Monatssegmente wird die Personenzahl **maximiert, nie summiert** (das Maximum ist eine
+ gültige Untergrenze der wahren DISTINCT-Zahl; eine Summe wäre K4b in klein).
+* **Der Tabellen-Drop aus (a) bleibt.** Er ist keine Redundanz: das Zellkriterium nullt nur Werte, und
+ eine genullte Alterszeile ist selbst noch die Aussage „in dieser Altersgruppe gibt es mindestens ein
+ Ereignis". Nur `_drop_person_derived_breakdowns` entfernt den Key.
+
+Test-gepinnt in `test_external_report_service.py::TestPersonenbasiertesZellkriterium` und
+`::TestPersonenkriteriumInDenWrappern`, `test_statistics.py::TestPersonenzaehlungImZeitraum`,
+`test_statistics_hybrid.py::TestMergeSummiertPersonenzahlenNie` sowie
+`src/tests/migrations/test_0128_backfill_snapshot_person_counts.py`.
+
 **Damit korrigiert:** die frühere Zusicherung, Merkmalskombinationen mit weniger als *k* **Personen**
-würden unterdrückt, gilt für die personenabgeleiteten Aufschlüsselungen wieder — allerdings nur auf
-Tabellen-, noch nicht auf Zellebene.
+würden unterdrückt, gilt für die personenabgeleiteten Aufschlüsselungen wieder — jetzt auf Tabellen-
+**und** Zellebene.
+
+**Restrisiko, ehrlich ausgewiesen:** Fallen durch (b) *alle* Zellen einer Alterstabelle, während
+`unique_clients` ≥ *k* bleibt, publiziert das Artefakt weiterhin die **Existenz** der Zeilen (jedes
+gelistete Label trägt ≥ 1 Ereignis). Das ist K1/K2-Terrain (Residual-Guard bzw. Machbarkeits-Audit) und
+bleibt dort offen; (b) erhöht die Häufigkeit dieser Konstellation, weil mehr Zellen unterdrückt werden.
 
 #### K5 — Zeilensortierung nach Anzahl als Rangkanal
 
@@ -866,24 +910,37 @@ feste Zeitraum-Partition; `date_from`/`date_to` sind frei wählbar (nur Spannen-
  Juni = genau ein Ereignis): in **beiden** Artefakten ist keine einzige Zelle unterdrückt, und die
  Konsistenzklassen für den Juni schrumpfen über mehrere Freigaben auf **eine** — effektives k = 1 bei
  nominellem k = 5.
-- **K4b — `unique_clients`-Inflation.** `unique_clients` ist als einziges Feld nicht additiv, wird im
- Hybrid-Pfad aber summiert. Die k-Prüfung läuft damit gegen eine aufgeblähte Zahl (Personen-Monate):
- 3 Personen × 6 Monate à 1 Kontakt ⇒ PDF publiziert „Einzigartige Personen: 18", während der
- Live-Export mit distinct = 3 < k unterdrückt. **Ursache ist die monatsweise Segmentierung**, nicht
- der Snapshot-Inhalt; der „ca."-Hinweis existiert nur im internen Dashboard, in **keinem**
+- **K4b — `unique_clients`-Inflation.** `unique_clients` ist als einziges Feld nicht additiv, wurde im
+ Hybrid-Pfad aber summiert. Die k-Prüfung lief damit gegen eine aufgeblähte Zahl (Personen-Monate):
+ 3 Personen × 6 Monate à 1 Kontakt ⇒ PDF publizierte „Einzigartige Personen: 18", während der
+ Live-Export mit distinct = 3 < k unterdrückte. **Ursache ist die monatsweise Segmentierung**, nicht
+ der Snapshot-Inhalt; der „ca."-Hinweis existierte nur im internen Dashboard, in **keinem**
  exportierten Artefakt.
+
+ *Status: **mitigiert*** (#1770).
+ `_merge_stats`/`_merge_sample_report_1_stats` liefern **strukturell keine** Personenzahl mehr
+ (`None` = unbekannt) — die Summe ist nicht abgeschaltet, sondern nicht mehr bildbar. Beide
+ Hybrid-Pfade setzen stattdessen einen eigenen **Live-DISTINCT-Term über den Gesamtzeitraum** und
+ weisen dessen Quelle getrennt aus (`unique_clients_data_source = live`, Fußnote am Wert in beiden
+ PDFs — der Rest des Artefakts bleibt `snapshot_hybrid`; Muster aus
+ #1743, Option c). Für retention-bereinigte
+ Alt-Zeiträume fällt der Live-Wert niedriger aus als die Snapshot-Zeilen desselben PDF — bewusst
+ akzeptiert und durch die Fußnote kenntlich; ein Rückfall auf die Summe wäre der Bypass. Der
+ „ca."-Hinweis des internen Dashboards ist mit der Approximation entfallen (er beschrieb genau die
+ Überzählung, die es nicht mehr gibt). Test-gepinnt in
+ `test_statistics_hybrid.py::TestHybridPersonenzahlIstEigenerLiveTerm` und
+ `::TestSachberichtPdfWeistDenLiveTermAus`.
 - **K4c — Lesequellen-Divergenz.** PDFs lesen Snapshot-Hybrid, externer Bericht und Export live;
  `enforce_retention` friert Snapshots bewusst **vor** dem Soft-Delete ein. PDF minus Export ist damit
  ein Fingerabdruck des Gelöschten (Brute-Force über 45 Einzel-Löschkandidaten: genau 2 konsistent,
  beide derselben Kategorie).
 
-*Empfehlung:* **K4b schließen (S–M, Priorität 1)** — in keinem extern zirkulierenden Artefakt darf eine
-über Monate summierte Personenzahl als „Einzigartige Personen" erscheinen, und die k-Prüfung darf nie
-gegen die Summe laufen; bevorzugt Full-Range-**distinct** als eigener Term (dasselbe Muster, das der
-Hybrid-Pfad für `top_clients` schon verwendet). Gemeinsam mit
-#1743 lösen, das den Punkt heute als
-Genauigkeitsfrage führt — er ist ein Suppressions-Bypass; K4b ist außerdem **Voraussetzung** für jede
-Vereinheitlichung der Lesequelle. **K4c (S, abgewertet)** ist ein Spezialfall generischer
+*Empfehlung (umgesetzt):* **K4b schließen (S–M, Priorität 1)** — in keinem extern zirkulierenden
+Artefakt darf eine über Monate summierte Personenzahl als „Einzigartige Personen" erscheinen, und die
+k-Prüfung darf nie gegen die Summe laufen; umgesetzt als Full-Range-**distinct** als eigener Term
+(dasselbe Muster, das der Hybrid-Pfad für `top_clients` schon verwendet), gemeinsam mit dem
+Quellen-Ausweis aus #1743. K4b bleibt
+**Voraussetzung** für jede Vereinheitlichung der Lesequelle — die ist weiterhin nicht geplant. **K4c (S, abgewertet)** ist ein Spezialfall generischer
 Snapshot-Staleness; belastbar sind (i) Quelle + Snapshot-Stand in jedes extern zirkulierende Artefakt
 **stempeln** (die CSV-Metazeile ist das Muster), (ii) im Löschkonzept festhalten, dass eingefrorene
 Aggregate die Löschung überleben, (iii) Handlungsanweisung „PDF und Live-Export desselben Zeitraums
@@ -957,7 +1014,10 @@ Randsumme ≤ Enumerationsgrenze ist; **(2)** ein Ordnungstest (zwei Welten mit 
 müssen dieselbe Ausgabe erzeugen); **(3)** ein Architektur-Guard, der neue Artefakte mit Randsumme +
 Aufschlüsselung durch dieselbe Suppressionsfunktion zwingt; **(4)** ein K0-Test (4 Personen à 5
 Kontakte in 4 Clustern ⇒ keine sichtbare Alterszelle; 3 Personen × 6 Monate ⇒ keine Personenzahl ≥ k
-im PDF); **(5)** ein Invarianten-Test, dass `Client.ContactStage` genau zwei Werte hat.
+im PDF) — *umgesetzt* in `test_external_report_service.py::TestPersonenkriteriumInDenWrappern` und
+`test_statistics_hybrid.py::TestSachberichtPdfWeistDenLiveTermAus`
+(#1770); **(5)** ein Invarianten-Test, dass
+`Client.ContactStage` genau zwei Werte hat.
 
 ---
 
