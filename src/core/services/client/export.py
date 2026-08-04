@@ -617,8 +617,15 @@ def _gather_retention_proposals(facility, client, event_ids):
 # („Client-JSON", „Attachment") ist interne Technik-Sprache; die Auskunft
 # soll sagen, *worauf* sich der Zugriff bezog.
 AUDIT_CATEGORY_OTHER = "Sonstiges"
+# ADR-039 §5: Die Anhang-Domaene schreibt seit M24 (Refs #1738)
+# ``target_type="Attachment"``; Alt-Zeilen tragen unmigrierbar (HMAC-Kette)
+# weiter ``"EventAttachment"`` — die Zuordnung muss BEIDE Strings kennen.
+# Die Reihenfolge ist ordnungssicher — "EventAttachment".startswith("Attachment")
+# ist False, der Alt-String kann also nie in den neuen Praefix rutschen; beide
+# Eintraege muenden ohnehin im selben Label.
 AUDIT_CATEGORIES = (
     ("EventAttachment", "Anhang"),
+    ("Attachment", "Anhang"),
     ("Event", "Ereignis"),
     ("Client", "Person"),
 )

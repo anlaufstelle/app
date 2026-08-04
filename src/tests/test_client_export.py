@@ -853,6 +853,23 @@ class TestClientExportAuditTrail:
         assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
         assert data["audit_trail"][0]["action"] == "Download"
 
+    def test_download_rows_neues_attachment_schema_kategorisiert_als_anhang(
+        self, sample_client, facility, sample_event, admin_user
+    ):
+        """Seit M24 (ADR-039 §5) schreibt die Anhang-Domaene ``target_type="Attachment"``
+        — die Kategorie-Zuordnung muss BEIDE Schemata kennen; ohne den neuen
+        Praefix fiele jede neue Zeile auf „Sonstiges" (G2-Befund, Refs #1738)."""
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="Attachment",
+            target_id="11111111-1111-1111-1111-111111111111",
+            detail={"event_id": str(sample_event.pk), "field": "datei"},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
+
     def test_entries_carry_no_employee_identity(self, sample_client, facility, admin_user):
         AuditLog.objects.create(
             facility=facility,
