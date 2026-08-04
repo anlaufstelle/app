@@ -125,9 +125,11 @@ class DynamicEventDataForm(DynamicDataForm):
     """Event-Auspraegung der dynamischen ``data_json``-Form (M2, Refs #1058).
 
     Bewusst ohne eigenen Body: der komplette Aufbau liegt in
-    :class:`~core.forms.dynamic.DynamicDataForm`. FILE-Felder bleiben aktiv
-    (``exclude_file_fields = False``), denn nur der Event-Pfad hat die
-    Attachment-/File-Vault-Pipeline (Entscheid E8). Die eigene Klasse bleibt
-    bestehen, weil Importpfad, Klassenname und ``type(form).__name__``
-    (Logs/Tests) stabil bleiben muessen.
+    :class:`~core.forms.dynamic.DynamicDataForm`. M24/AP4 (Refs #1738,
+    ADR-039 §9): Das Flag ``exclude_file_fields`` gibt es nicht mehr — die
+    Attachment-/File-Vault-Pipeline haengt seit ADR-039 am Owner (Ereignis,
+    Person oder Fall), nicht mehr am Ereignis allein, und der Event-Pfad ist
+    damit kein Sonderfall mehr. Die eigene Klasse bleibt bestehen, weil
+    Importpfad, Klassenname und ``type(form).__name__`` (Logs/Tests) stabil
+    bleiben muessen.
     """

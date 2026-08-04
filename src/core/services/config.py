@@ -497,7 +497,9 @@ def add_field_to_doctype(
     Anhänge hängen seit ADR-039 an Ereignis, Person oder Fall, die Sperre hatte
     damit keinen Gegenstand mehr. Der Formular-Skip
     ``DynamicDataForm.exclude_file_fields`` und der Typwechsel-Guard
-    ``FieldTemplateForm.clean_field_type`` fallen mit dem UI-Pfad (AP4).
+    ``FieldTemplateForm.clean_field_type`` sind mit dem UI-Pfad (AP4) ebenfalls
+    entfallen — es gibt heute **keine** Schicht mehr, die FILE-Feldvorlagen an
+    Personen-/Fall-Typen abweist.
     """
     # Befund A (Refs #1056): Zugehörigkeit der Ziel-Gruppe hier prüfen, weil
     # .create() den Modell-clean()-Guard umgeht. Fehlerklasse konsistent zu
@@ -512,7 +514,8 @@ def add_field_to_doctype(
     # Slugs nur, benennt sie NICHT um) liesse sich sonst hier zuordnen, und das
     # dynamische Feld würde nackt unter seinem Slug im selben ``<form>`` das
     # gleichnamige feste Formularfeld überschreiben (stiller Datenverlust — genau
-    # der Effekt, den #1726 verhindern soll). Fehlerklasse wie der FILE-Guard:
+    # der Effekt, den #1726 verhindern soll). Fehlerklasse wie beim frueheren
+    # FILE-Guard (Refs #1738: ersatzlos entfallen, s. Docstring):
     # ValidationError (View → Formfehler statt 500).
     if field_template.slug in _RESERVED_SLUGS:
         raise ValidationError(
