@@ -103,12 +103,6 @@ def generate_unique_slug(name: str, siblings_qs: models.QuerySet, max_length: in
 class DocumentType(models.Model):
     """Configurable document type (e.g. contact, crisis intervention)."""
 
-    class Category(models.TextChoices):
-        CONTACT = "contact", _("Kontakt")
-        SERVICE = "service", _("Leistung")
-        ADMIN = "admin", _("Verwaltung")
-        NOTE = "note", _("Notiz")
-
     class Sensitivity(models.TextChoices):
         NORMAL = "normal", _("Normal")
         ELEVATED = "elevated", _("Erhöht")
@@ -152,17 +146,6 @@ class DocumentType(models.Model):
         verbose_name=_("Slug"),
         help_text=_(
             "Stabiler Identifier — wird als Lookup-Key im M2-Paketformat verwendet. Nach Erstellung unveränderbar."
-        ),
-    )
-    category = models.CharField(
-        max_length=20,
-        choices=Category.choices,
-        default=Category.CONTACT,
-        verbose_name=_("Kategorie"),
-        help_text=_(
-            "Reine UI-Gruppierung für Statistik-Anzeige und Admin-Filter. "
-            "Beeinflusst weder Export noch Bann-/Krisen-Logik — dafür ist "
-            "der Systemtyp zuständig."
         ),
     )
     sensitivity = models.CharField(
@@ -224,14 +207,16 @@ class DocumentType(models.Model):
         verbose_name_plural = _("Dokumentationstypen")
         ordering = ["sort_order", "name"]
         constraints = [
-            # Snapshot-Lookup in services/snapshot.py rekonstruiert
-            # DocumentType ueber (facility, name, category) — ohne
-            # UniqueConstraint koennten zwei DocumentTypes mit gleichem
-            # Tripel den Lookup mit MultipleObjectsReturned auf einen
-            # 500er fallen lassen. Refs #434, Refs #733.
+            # Snapshot-Lookup in services/dashboard/snapshot.py rekonstruiert
+            # DocumentType ueber (facility, name) — ohne UniqueConstraint
+            # koennten zwei gleichnamige DocumentTypes den Lookup mit
+            # MultipleObjectsReturned auf einen 500er fallen lassen.
+            # Refs #434, Refs #733; seit #1749 (ADR-040) ohne den frueheren
+            # Zweitschluessel ``category``: gleichnamige Typen einer
+            # Einrichtung sind fuer Nutzerinnen ohnehin nicht unterscheidbar.
             models.UniqueConstraint(
-                fields=["facility", "name", "category"],
-                name="unique_facility_documenttype_name_category",
+                fields=["facility", "name"],
+                name="unique_facility_documenttype_name",
             ),
             # M2 (Refs #1058): slug ist der M2-Paketformat-Lookup-Key —
             # DocumentType ist nicht soft-deletable, daher ohne Condition
