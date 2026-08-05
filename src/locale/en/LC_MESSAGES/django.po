@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-05 01:04+0200\n"
+"POT-Creation-Date: 2026-08-05 11:52+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -22,7 +22,7 @@ msgstr "Event"
 #: src/core/models/workitem.py:53 src/core/models/workitem.py:190
 #: src/core/services/system/export.py:107 src/core/views/attachments.py:105
 #: src/templates/core/attachments/partials/attachment_table.html:15
-#: src/templates/core/cases/form.html:48
+#: src/templates/core/cases/form.html:51 src/templates/core/cases/form.html:66
 #: src/templates/core/cases/partials/table.html:10
 #: src/templates/core/events/create.html:106
 #: src/templates/core/events/delete_confirm.html:32
@@ -30,7 +30,8 @@ msgstr "Event"
 #: src/templates/core/events/detail.html:58
 #: src/templates/core/events/edit.html:22
 #: src/templates/core/workitems/detail.html:136
-#: src/templates/core/workitems/form.html:74
+#: src/templates/core/workitems/form.html:76
+#: src/templates/core/workitems/form.html:91
 #: src/templates/core/workitems/offline_workitem_list.html:41
 msgid "Person"
 msgstr "Person"
@@ -73,16 +74,20 @@ msgstr "Identified"
 msgid "Qualifiziert"
 msgstr "Qualified"
 
-#: src/core/forms/cases.py:36 src/core/forms/cases.py:135
+#: src/core/forms/cases.py:36 src/core/forms/cases.py:155
 msgid ""
 "Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."
 msgstr "Please select a person — cases must be assigned to a person."
 
-#: src/core/forms/cases.py:93 src/core/forms/clients.py:79
+#: src/core/forms/cases.py:101 src/core/forms/clients.py:79
 msgid "— Kein Typ —"
 msgstr "— No type —"
 
-#: src/core/forms/cases.py:147 src/core/forms/events.py:134
+#: src/core/forms/cases.py:148 src/core/forms/workitems.py:153
+msgid "Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."
+msgstr "The person assignment cannot be changed after creation."
+
+#: src/core/forms/cases.py:167 src/core/forms/events.py:134
 msgid "Person existiert nicht."
 msgstr "Person does not exist."
 
@@ -267,38 +272,38 @@ msgstr "Timestamp"
 msgid "– Keinem Fall zuordnen –"
 msgstr "– Do not assign to any case –"
 
-#: src/core/forms/workitems.py:133
+#: src/core/forms/workitems.py:138
 #, python-format
 msgid "Das Datum darf höchstens am %(max)s liegen."
 msgstr "The date must be on or before %(max)s."
 
-#: src/core/forms/workitems.py:134
+#: src/core/forms/workitems.py:139
 msgid "Das Datum darf nicht in der Vergangenheit liegen."
 msgstr "The date must not be in the past."
 
-#: src/core/forms/workitems.py:156
+#: src/core/forms/workitems.py:172
 msgid "Ungültige Person-ID"
 msgstr "Invalid person ID"
 
-#: src/core/forms/workitems.py:164
+#: src/core/forms/workitems.py:180
 msgid "Die Erinnerung muss vor oder am Fälligkeitstag liegen."
 msgstr "The reminder must be on or before the due date."
 
-#: src/core/forms/workitems.py:170
+#: src/core/forms/workitems.py:186
 #, python-format
 msgid "Das Fälligkeitsdatum darf höchstens am %(max)s liegen."
 msgstr "The due date must be on or before %(max)s."
 
-#: src/core/forms/workitems.py:174
+#: src/core/forms/workitems.py:190
 #, python-format
 msgid "Die Erinnerung darf höchstens am %(max)s liegen."
 msgstr "The reminder must be on or before %(max)s."
 
-#: src/core/forms/workitems.py:182
+#: src/core/forms/workitems.py:198
 msgid "Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen."
 msgstr "The due date must not be in the past."
 
-#: src/core/forms/workitems.py:184
+#: src/core/forms/workitems.py:200
 msgid "Die Erinnerung darf nicht in der Vergangenheit liegen."
 msgstr "The reminder must not be in the past."
 
@@ -1059,28 +1064,28 @@ msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episodes can only be created for open cases."
 
 #: src/core/models/client.py:22
-#: src/core/reporting/backends/sample_report_1.py:121
+#: src/core/reporting/backends/sample_report_1.py:131
 #: src/core/services/dashboard/statistics.py:225
 #: src/templates/core/clients/offline_list.html:53
 msgid "Unter 18"
 msgstr "Under 18"
 
 #: src/core/models/client.py:23
-#: src/core/reporting/backends/sample_report_1.py:122
+#: src/core/reporting/backends/sample_report_1.py:132
 #: src/core/services/dashboard/statistics.py:226
 #: src/templates/core/clients/offline_list.html:54
 msgid "18–26"
 msgstr "18–26"
 
 #: src/core/models/client.py:24
-#: src/core/reporting/backends/sample_report_1.py:123
+#: src/core/reporting/backends/sample_report_1.py:133
 #: src/core/services/dashboard/statistics.py:227
 #: src/templates/core/clients/offline_list.html:55
 msgid "27+"
 msgstr "27+"
 
 #: src/core/models/client.py:25
-#: src/core/reporting/backends/sample_report_1.py:124
+#: src/core/reporting/backends/sample_report_1.py:134
 #: src/core/services/dashboard/statistics.py:228
 #: src/templates/core/clients/offline_list.html:56
 #: src/templates/core/system/compliance.html:37
@@ -1113,7 +1118,9 @@ msgid ""
 "bekannt"
 msgstr "Identified = pseudonym known, Qualified = full identity known"
 
-#: src/core/models/client.py:52 src/core/services/system/export.py:109
+#: src/core/models/client.py:52
+#: src/core/reporting/backends/client_metrics.py:166
+#: src/core/services/system/export.py:109
 #: src/templates/core/export/client_data_pdf.html:39
 #: src/templates/core/export/report_pdf.html:95
 #: src/templates/core/export/sample_report_1_pdf.html:85
@@ -1175,7 +1182,9 @@ msgstr ""
 "Indicates whether the record has been generalized via K-anonymization "
 "(alternative to hard delete for long-term statistics)."
 
-#: src/core/models/client.py:103 src/templates/core/clients/detail.html:11
+#: src/core/models/client.py:103
+#: src/core/reporting/backends/client_metrics.py:167
+#: src/templates/core/clients/detail.html:11
 #: src/templates/core/clients/list.html:4
 #: src/templates/core/clients/list.html:9
 #: src/templates/core/clients/offline_list.html:4
@@ -1576,6 +1585,8 @@ msgid "Gelöscht"
 msgstr "Deleted"
 
 #: src/core/models/event.py:89
+#: src/core/reporting/backends/counseling_hours.py:179
+#: src/core/reporting/backends/needle_exchange_balance.py:162
 #: src/templates/core/config/document_types/detail.html:69
 #: src/templates/core/config/document_types/partials/table.html:11
 #: src/templates/core/search/partials/results.html:25
@@ -1855,7 +1866,9 @@ msgid "Löschfrist"
 msgstr "Deletion due date"
 
 #: src/core/models/retention.py:52
-#: src/core/reporting/backends/sample_report_1.py:212
+#: src/core/reporting/backends/counseling_hours.py:178
+#: src/core/reporting/backends/monthly_trend.py:163
+#: src/core/reporting/backends/sample_report_1.py:230
 #: src/templates/core/export/client_data_pdf.html:430
 #: src/templates/core/export/sample_report_1_pdf.html:59
 #: src/tests/test_reporting_export.py:676
@@ -2476,8 +2489,8 @@ msgid ""
 "Diese Schlüssel gibt es im Datenmodell nicht mehr und sie werden ignoriert: "
 "%(keys)s. Sie können aus dem Paket entfernt werden."
 msgstr ""
-"These keys no longer exist in the data model and are ignored: %(keys)s. "
-"They can be removed from the package."
+"These keys no longer exist in the data model and are ignored: %(keys)s. They "
+"can be removed from the package."
 
 #: src/core/packages/loader.py:555
 #, python-format
@@ -2501,6 +2514,53 @@ msgstr ""
 "\"%(desired)s\". Values already recorded therefore become visible to "
 "additional roles."
 
+#: src/core/reporting/backends/ban_overview.py:124
+msgid ""
+"Die Zahl der aktuell geltenden Hausverbote ist eine Momentaufnahme zum "
+"Zeitpunkt der Erstellung und bezieht sich nicht auf den Berichtszeitraum"
+msgstr "The number of currently valid facility bans is a snapshot taken at creation time and does not refer to the reporting period"
+
+#: src/core/reporting/backends/ban_overview.py:164
+msgid "Beispiel: Hausverbots-Übersicht"
+msgstr "Example: facility ban overview"
+
+#: src/core/reporting/backends/ban_overview.py:177
+#: src/core/reporting/backends/case_metrics.py:142
+msgid "Kennzahl"
+msgstr "Key figure"
+
+#: src/core/reporting/backends/ban_overview.py:178
+#: src/core/reporting/backends/case_metrics.py:143
+msgid "Wert"
+msgstr "Value"
+
+#: src/core/reporting/backends/case_metrics.py:105
+msgid ""
+"Die Zahl der aktuell offenen Fälle ist eine Momentaufnahme zum Zeitpunkt der "
+"Erstellung und bezieht sich nicht auf den Berichtszeitraum"
+msgstr "The number of currently open cases is a snapshot taken at creation time and does not refer to the reporting period"
+
+#: src/core/reporting/backends/case_metrics.py:128
+msgid "Beispiel: Fall-Kennzahlen"
+msgstr "Example: case key figures"
+
+#: src/core/reporting/backends/client_metrics.py:156
+msgid "Beispiel: Klienten-Kennzahlen"
+msgstr "Example: person key figures"
+
+#: src/core/reporting/backends/counseling_hours.py:132
+msgid ""
+"Ereignisse ohne verwertbare Dauer sind in den Minutensummen nicht enthalten"
+msgstr "Events without a usable duration are not included in the minute totals"
+
+#: src/core/reporting/backends/counseling_hours.py:168
+msgid "Beispiel: Beratungsstunden"
+msgstr "Example: counseling hours"
+
+#: src/core/reporting/backends/counseling_hours.py:180
+msgid "Minuten"
+msgstr "Minutes"
+
 #: src/core/reporting/backends/example.py:42
 msgid "Beispiel: Ereignisse je Dokumenttyp"
 msgstr "Example: events per document type"
@@ -2514,7 +2574,9 @@ msgid "System-Typ"
 msgstr "System type"
 
 #: src/core/reporting/backends/example.py:52
-#: src/core/reporting/backends/sample_report_1.py:213
+#: src/core/reporting/backends/monthly_trend.py:164
+#: src/core/reporting/backends/sample_report_1.py:231
+#: src/core/reporting/backends/service_distribution.py:200
 #: src/templates/core/export/report_pdf.html:70
 #: src/templates/core/export/report_pdf.html:96
 #: src/templates/core/export/sample_report_1_pdf.html:60
@@ -2528,7 +2590,8 @@ msgstr "System type"
 msgid "Anzahl"
 msgstr "Count"
 
-#: src/core/reporting/backends/sample_report_1.py:165
+#: src/core/reporting/backends/monthly_trend.py:136
+#: src/core/reporting/backends/sample_report_1.py:183
 msgid ""
 "Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-"
 "Anonymität)"
@@ -2536,7 +2599,43 @@ msgstr ""
 "Figure for events with no report category in the period suppressed (k-"
 "anonymity)"
 
-#: src/core/reporting/backends/sample_report_1.py:167
+#: src/core/reporting/backends/monthly_trend.py:153
+msgid "Beispiel: Monatsverlauf nach Kategorie"
+msgstr "Example: monthly trend by category"
+
+#: src/core/reporting/backends/monthly_trend.py:162
+#: src/templates/core/statistics/partials/full_content.html:10
+msgid "Monat"
+msgstr "Month"
+
+#: src/core/reporting/backends/monthly_trend.py:226
+#, python-brace-format
+msgid "{count} Ereignisse ohne Berichtszuordnung im Zeitraum"
+msgstr "{count} events with no report category in the period"
+
+#: src/core/reporting/backends/needle_exchange_balance.py:85
+msgid ""
+"Ereignisse ohne verwertbare Zahlenwerte in „Ausgabe“/„Rückgabe“ sind in den "
+"Summen nicht enthalten"
+msgstr "Events without usable numeric values in \"Issued\"/\"Returned\" are not included in the totals"
+
+#: src/core/reporting/backends/needle_exchange_balance.py:150
+msgid "Beispiel: Spritzentausch-Bilanz"
+msgstr "Example: needle exchange balance"
+
+#: src/core/reporting/backends/needle_exchange_balance.py:163
+msgid "Ausgabe gesamt"
+msgstr "Total issued"
+
+#: src/core/reporting/backends/needle_exchange_balance.py:164
+msgid "Rückgabe gesamt"
+msgstr "Total returned"
+
+#: src/core/reporting/backends/needle_exchange_balance.py:165
+msgid "Saldo"
+msgstr "Balance"
+
+#: src/core/reporting/backends/sample_report_1.py:185
 msgid ""
 "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-"
 "Anonymität) — nicht in Altersgruppen/Personenzahl enthalten"
@@ -2544,14 +2643,14 @@ msgstr ""
 "Figure for events without a person reference in the period suppressed (k-"
 "anonymity) — not included in age groups/number of persons"
 
-#: src/core/reporting/backends/sample_report_1.py:201
+#: src/core/reporting/backends/sample_report_1.py:219
 #: src/templates/core/export/sample_report_1_pdf.html:6
 #: src/templates/core/export/sample_report_1_pdf.html:30
 #: src/templates/core/statistics/partials/dashboard_content.html:267
 msgid "Beispiel-Sachbericht"
 msgstr "Example Activity Report"
 
-#: src/core/reporting/backends/sample_report_1.py:322
+#: src/core/reporting/backends/sample_report_1.py:340
 #, python-brace-format
 msgid ""
 "{events} Ereignisse in {types} Dokumenttypen ohne Berichtszuordnung im "
@@ -2560,7 +2659,7 @@ msgstr ""
 "{events} events in {types} document types with no report category in the "
 "period"
 
-#: src/core/reporting/backends/sample_report_1.py:340
+#: src/core/reporting/backends/sample_report_1.py:358
 #, python-brace-format
 msgid ""
 "{without_client} von {events_in_period} Ereignissen im Zeitraum ohne "
@@ -2568,6 +2667,25 @@ msgid ""
 msgstr ""
 "{without_client} of {events_in_period} events in the period without a person "
 "reference ({share} %) — not included in age groups/number of persons"
+
+#: src/core/reporting/backends/service_distribution.py:115
+msgid "Ereignisse ohne Auswahlwert sind in der Verteilung nicht enthalten"
+msgstr "Events without a selected value are not included in the distribution"
+
+#: src/core/reporting/backends/service_distribution.py:189
+msgid "Beispiel: Leistungs- und Krisenarten-Verteilung"
+msgstr "Example: distribution of services and crisis types"
+
+#: src/core/reporting/backends/service_distribution.py:198
+#: src/templates/core/events/conflict_review.html:51
+#: src/templates/core/events/detail.html:195
+#: src/templates/core/export/client_data_pdf.html:81
+msgid "Feld"
+msgstr "Field"
+
+#: src/core/reporting/backends/service_distribution.py:199
+msgid "Option"
+msgstr "Option"
 
 #: src/core/reporting/data_source.py:36
 msgid "Live-Abfrage zum Erstellungszeitpunkt"
@@ -2596,23 +2714,38 @@ msgstr ""
 "after the retention deadlines expire; live-generated reports for the same "
 "period can therefore differ."
 
-#: src/core/reporting/data_source.py:71
+#: src/core/reporting/data_source.py:105
 msgid "alle Ereignisse im Zeitraum"
 msgstr "all events in the period"
 
-#: src/core/reporting/data_source.py:72
+#: src/core/reporting/data_source.py:106
 msgid "Ereignisse mit Personenbezug im Zeitraum"
 msgstr "events linked to a person in the period"
 
-#: src/core/reporting/data_source.py:73
+#: src/core/reporting/data_source.py:107
 msgid "Ereignisse mit Berichtszuordnung im Zeitraum"
 msgstr "events with a report category in the period"
 
-#: src/core/reporting/data_source.py:74
+#: src/core/reporting/data_source.py:108
 msgid "Personen mit mindestens einem Ereignis im Zeitraum"
 msgstr "people with at least one event in the period"
 
-#: src/core/reporting/data_source.py:89
+#: src/core/reporting/data_source.py:109
+msgid "Ereignisse der im Bericht ausgewiesenen Dokumentationstypen im Zeitraum"
+msgstr "events of the document types shown in the report, in the period"
+
+#: src/core/reporting/data_source.py:110
+msgid ""
+"Fälle mit Anlage oder Abschluss im Zeitraum, dazu der Fallbestand am Stichtag"
+msgstr "cases opened or closed in the period, plus the case stock on the reference date"
+
+#: src/core/reporting/data_source.py:111
+msgid ""
+"Hausverbote mit Ausspruch oder Ablauf im Zeitraum, dazu der Bestand am "
+"Stichtag"
+msgstr "facility bans issued or expiring in the period, plus the stock on the reference date"
+
+#: src/core/reporting/data_source.py:126
 #, python-brace-format
 msgid "Grundgesamtheit: {population} · Quelle: {source}"
 msgstr "Population: {population} · Source: {source}"
@@ -2664,21 +2797,21 @@ msgstr "Person does not belong to this facility."
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Case manager does not belong to the facility."
 
-#: src/core/services/case/cases.py:247
+#: src/core/services/case/cases.py:257
 msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgstr "Event does not belong to the same facility as the case."
 
-#: src/core/services/case/cases.py:249
+#: src/core/services/case/cases.py:259
 msgid "Ereignis ist für diese Rolle nicht sichtbar."
 msgstr "Event is not visible to this role."
 
-#: src/core/services/case/cases.py:252
+#: src/core/services/case/cases.py:262
 msgid ""
 "Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
 "werden."
 msgstr "Anonymous events cannot be attached to a client-bound case."
 
-#: src/core/services/case/cases.py:254 src/core/services/events/crud.py:70
+#: src/core/services/case/cases.py:264 src/core/services/events/crud.py:70
 msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Event person does not match case person."
 
@@ -3697,28 +3830,28 @@ msgstr "Episode has been completed."
 msgid "Fall wurde erstellt."
 msgstr "Case has been created."
 
-#: src/core/views/cases.py:596
+#: src/core/views/cases.py:621
 msgid "Fall wurde aktualisiert."
 msgstr "Case has been updated."
 
-#: src/core/views/cases.py:610
+#: src/core/views/cases.py:635
 msgid "Fall wurde geschlossen."
 msgstr "Case has been closed."
 
-#: src/core/views/cases.py:624
+#: src/core/views/cases.py:649
 msgid "Fall wurde wiedereröffnet."
 msgstr "Case has been reopened."
 
-#: src/core/views/cases.py:640
+#: src/core/views/cases.py:665
 msgid "Kein Ereignis ausgewählt."
 msgstr "No event selected."
 
-#: src/core/views/cases.py:722
+#: src/core/views/cases.py:747
 msgid "Fall nicht gefunden."
 msgstr "Case not found."
 
-#: src/core/views/cases.py:742 src/core/views/cases.py:747
-#: src/core/views/clients.py:744 src/core/views/clients.py:749
+#: src/core/views/cases.py:767 src/core/views/cases.py:772
+#: src/core/views/clients.py:756 src/core/views/clients.py:761
 #: src/core/views/events.py:150
 msgid "Dokumentationstyp nicht gefunden."
 msgstr "Document type not found."
@@ -3758,11 +3891,11 @@ msgstr "Person has been permanently anonymized."
 msgid "Person wurde angelegt."
 msgstr "Person has been created."
 
-#: src/core/views/clients.py:642
+#: src/core/views/clients.py:654
 msgid "Person wurde aktualisiert."
 msgstr "Person has been updated."
 
-#: src/core/views/clients.py:724
+#: src/core/views/clients.py:736
 msgid "Person nicht gefunden."
 msgstr "Person not found."
 
@@ -3921,15 +4054,15 @@ msgstr "Contact has been documented."
 msgid "Dieser Dokumentationstyp erfordert eine Person."
 msgstr "This document type requires a person."
 
-#: src/core/views/events.py:655
+#: src/core/views/events.py:678
 msgid "Ereignis wurde aktualisiert."
 msgstr "Event has been updated."
 
-#: src/core/views/events.py:714
+#: src/core/views/events.py:737
 msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
 msgstr "Deletion request has been submitted and must be approved by a manager."
 
-#: src/core/views/events.py:717
+#: src/core/views/events.py:740
 msgid "Ereignis wurde gelöscht."
 msgstr "Event has been deleted."
 
@@ -4143,7 +4276,7 @@ msgstr "Invalid status"
 
 #: src/core/views/workitem_actions.py:219
 #: src/core/views/workitem_actions.py:418
-#: src/core/views/workitem_actions.py:435
+#: src/core/views/workitem_actions.py:438
 msgid "Keine Berechtigung für diese Aufgabe."
 msgstr "No permission for this task."
 
@@ -4155,7 +4288,7 @@ msgstr "Status updated."
 msgid "Aufgabe wurde erstellt."
 msgstr "Task has been created."
 
-#: src/core/views/workitem_actions.py:486
+#: src/core/views/workitem_actions.py:503
 msgid "Aufgabe wurde aktualisiert."
 msgstr "Task has been updated."
 
@@ -5304,7 +5437,7 @@ msgid "Neue Episode"
 msgstr "New Episode"
 
 #: src/templates/core/cases/episode_form.html:33
-#: src/templates/core/cases/form.html:134
+#: src/templates/core/cases/form.html:153
 #: src/templates/core/cases/partials/goals_section.html:42
 #: src/templates/core/clients/form.html:72
 #: src/templates/core/clients/offline_detail.html:162
@@ -5316,7 +5449,7 @@ msgstr "New Episode"
 #: src/templates/core/config/field_templates/form.html:30
 #: src/templates/core/events/create.html:192
 #: src/templates/core/events/offline_create.html:103
-#: src/templates/core/workitems/form.html:105
+#: src/templates/core/workitems/form.html:123
 #: src/templates/core/workitems/offline_create.html:96
 msgid "Speichern"
 msgstr "Save"
@@ -5326,8 +5459,8 @@ msgid "Episode erstellen"
 msgstr "Create Episode"
 
 #: src/templates/core/cases/episode_form.html:35
-#: src/templates/core/cases/form.html:137
-#: src/templates/core/cases/form.html:139
+#: src/templates/core/cases/form.html:156
+#: src/templates/core/cases/form.html:158
 #: src/templates/core/cases/partials/goals_section.html:45
 #: src/templates/core/clients/delete_request_confirm.html:65
 #: src/templates/core/clients/form.html:75
@@ -5345,7 +5478,7 @@ msgstr "Create Episode"
 #: src/templates/core/events/delete_confirm.html:62
 #: src/templates/core/events/edit.html:49
 #: src/templates/core/retention/partials/proposal_card.html:78
-#: src/templates/core/workitems/form.html:107
+#: src/templates/core/workitems/form.html:125
 msgid "Abbrechen"
 msgstr "Cancel"
 
@@ -5403,18 +5536,23 @@ msgstr[1] ""
 "Switch or remove the document type? %(f)s stored files will be removed on "
 "save and cannot be restored."
 
-#: src/templates/core/cases/form.html:59
+#: src/templates/core/cases/form.html:53
+#: src/templates/core/workitems/form.html:78
+msgid "Die Personenzuordnung ist nach dem Anlegen festgelegt."
+msgstr "The person assignment is fixed after creation."
+
+#: src/templates/core/cases/form.html:77
 #: src/templates/core/events/create.html:119
-#: src/templates/core/workitems/form.html:81
+#: src/templates/core/workitems/form.html:98
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
 
-#: src/templates/core/cases/form.html:60
+#: src/templates/core/cases/form.html:78
 #: src/templates/core/events/create.html:120
 msgid "Person suchen"
 msgstr "Search person"
 
-#: src/templates/core/cases/form.html:115
+#: src/templates/core/cases/form.html:134
 #: src/templates/core/clients/form.html:53
 #, python-format
 msgid ""
@@ -5431,7 +5569,7 @@ msgstr[1] ""
 "Caution: if the type is switched or removed, the saved values of %(n)s "
 "additional fields are discarded — they cannot be restored."
 
-#: src/templates/core/cases/form.html:115
+#: src/templates/core/cases/form.html:134
 #: src/templates/core/clients/form.html:53
 #, python-format
 msgid "Außerdem wird %(f)s hinterlegte Datei entfernt."
@@ -5439,7 +5577,7 @@ msgid_plural "Außerdem werden %(f)s hinterlegte Dateien entfernt."
 msgstr[0] "In addition, %(f)s stored file will be removed."
 msgstr[1] "In addition, %(f)s stored files will be removed."
 
-#: src/templates/core/cases/form.html:115
+#: src/templates/core/cases/form.html:134
 #: src/templates/core/clients/form.html:53
 #, python-format
 msgid ""
@@ -5455,7 +5593,7 @@ msgstr[1] ""
 "Caution: if the type is switched or removed, %(f)s stored files will be "
 "removed — they cannot be restored."
 
-#: src/templates/core/cases/form.html:134
+#: src/templates/core/cases/form.html:153
 msgid "Fall erstellen"
 msgstr "Create Case"
 
@@ -6814,12 +6952,6 @@ msgstr "Field-by-field comparison"
 msgid "Vergleichen Sie Ihre lokale Version mit dem aktuellen Server-Stand."
 msgstr "Compare your local version with the current server state."
 
-#: src/templates/core/events/conflict_review.html:51
-#: src/templates/core/events/detail.html:195
-#: src/templates/core/export/client_data_pdf.html:81
-msgid "Feld"
-msgstr "Field"
-
 #: src/templates/core/events/conflict_review.html:52
 msgid "Meine Version"
 msgstr "My version"
@@ -7853,10 +7985,6 @@ msgstr "Release overview"
 #: src/templates/core/statistics/partials/dashboard_content.html:273
 msgid "welche Berichtszeiträume wurden bereits herausgegeben?"
 msgstr "which reporting periods have already been released?"
-
-#: src/templates/core/statistics/partials/full_content.html:10
-msgid "Monat"
-msgstr "Month"
 
 #: src/templates/core/statistics/partials/full_content.html:16
 msgid "Quartal"
