@@ -1035,6 +1035,35 @@ class TestClientExportAuditTrail:
         data = export_client_data(sample_client, facility, admin_user)
         assert data["audit_trail"] == []
 
+    def test_rectification_rows_are_listed_as_own_category(self, sample_client, facility, staff_user, admin_user):
+        """Refs #1796: ``target_type="RectificationRequest"`` zeigt auf die ANTRAGS-PK.
+
+        Die matchte bisher keinen einzigen Zweig — weder Personen-, Fall- noch
+        Ereignis-PK —, also fiel der komplette Art.-16-Vorgang aus dem
+        Zugriffsprotokoll der betroffenen Person heraus (Muster des Fall-Zweigs
+        aus Refs #1738).
+        """
+        from core.services.client.rectification import request_rectification
+
+        request_rectification(sample_client, staff_user, "pseudonym", "Neu-Pseudonym", "Schreibfehler")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Berichtigung"]
+        assert data["audit_trail"][0]["action"] == "Berichtigung beantragt"
+
+    def test_rectification_rows_of_other_client_excluded(self, sample_client, facility, staff_user, admin_user):
+        """Gegenprobe: fremde Antrags-PKs duerfen nicht mitmatchen."""
+        from core.services.client.rectification import request_rectification
+
+        other = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Berichtigung-Audit",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=admin_user,
+        )
+        request_rectification(other, staff_user, "pseudonym", "Fremd-Wunsch", "Fremd-Grund")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["audit_trail"] == []
+
 
 @pytest.fixture
 def file_field_template(facility):

@@ -907,11 +907,16 @@ AUDIT_CATEGORY_OTHER = "Sonstiges"
 # Die Reihenfolge ist ordnungssicher — "EventAttachment".startswith("Attachment")
 # ist False, der Alt-String kann also nie in den neuen Praefix rutschen; beide
 # Eintraege muenden ohnehin im selben Label.
+#
+# Refs #1796: ``RectificationRequest`` (ADR-041) kollidiert mit keinem der
+# uebrigen Praefixe — die Reihenfolge bleibt damit unerheblich, der Eintrag
+# steht am Ende.
 AUDIT_CATEGORIES = (
     ("EventAttachment", "Anhang"),
     ("Attachment", "Anhang"),
     ("Event", "Ereignis"),
     ("Client", "Person"),
+    ("RectificationRequest", "Berichtigung"),
 )
 
 
@@ -953,7 +958,9 @@ def _gather_audit_trail(facility, client, event_ids):
     Owner-Sorten: Person, Fall und Ereignis. Der Fall-Zweig gehoert seit M24
     dazu, weil die Anhang-Domaene ``target_id`` auf die Owner-PK setzt
     (ADR-039 §5) — ein ``SECURITY_VIOLATION`` an einem fall-eigenen Upload
-    traegt also die Fall-PK.
+    traegt also die Fall-PK. Aus demselben Grund kommen seit Refs #1796 die
+    **Berichtigungsantraege** dazu: ``RECTIFICATION_REQUESTED/APPROVED/REJECTED``
+    zeigen auf die Antrags-PK (ADR-041), die vorher keinen Zweig traf.
 
     Download-Zeilen zeigen auf den Anhang, nicht auf seinen Owner; sie werden
     ueber ``detail`` zugeordnet. Das kommt ohne Lesen der Attachment-Tabelle aus
@@ -970,6 +977,20 @@ def _gather_audit_trail(facility, client, event_ids):
     case_id_strings = [str(pk) for pk in client.cases.values_list("pk", flat=True)]
     owner_id_strings = [str(client.pk), *case_id_strings, *event_id_strings]
     targets = Q(target_id=str(client.pk))
+    # Refs #1796: Der Art.-16-Workflow (ADR-041) setzt ``target_id`` auf die
+    # ANTRAGS-PK, nicht auf die Person — genau wie die Anhang-Domaene auf die
+    # Owner-PK zeigt. Ohne diesen Zweig fiel der komplette Berichtigungsvorgang
+    # (beantragt/genehmigt/abgelehnt) aus dem Zugriffsprotokoll der betroffenen
+    # Person heraus. Ueber-Matching ist ausgeschlossen, weil die IDs ueber
+    # ``target_client`` gezogen werden (plus ``for_facility`` + RLS).
+    rectification_id_strings = [
+        str(pk)
+        for pk in RectificationRequest.objects.for_facility(facility)
+        .filter(target_client=client)
+        .values_list("pk", flat=True)
+    ]
+    if rectification_id_strings:
+        targets |= Q(target_id__in=rectification_id_strings)
     if case_id_strings:
         # Refs #1738 (G4): Die Anhang-Domaene setzt ``target_id`` auf die
         # **Owner**-PK (ADR-039 §5, AP2) — bei fall-eigenen Uploads also auf den
