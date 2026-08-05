@@ -1,0 +1,363 @@
+"""Tests fuer das Beispiel-Backend ``counseling-hours`` (Refs #1754).
+
+Zweites Feldwert-Backend, aber die erste **Zeilen**-Tabelle ueber Feldwerten —
+und damit der Fall, an dem die Suppressions-Kaskade sichtbar wird: eine
+unterdrueckte Zeile zieht ihre Minuten mit, und die Minuten-Randsumme faellt,
+sobald ueberhaupt eine Zeilen-Minutenzahl fehlt (sonst waere sie die Differenz).
+"""
+
+from datetime import timedelta
+
+import pytest
+from django.utils import timezone
+from django.utils.functional import Promise
+
+from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.reporting import registry
+from core.reporting.backends.counseling_hours import BEITRAGENDE_KEY, CounselingHoursBackend
+from core.reporting.base import DatasetResult
+from core.reporting.data_source import ALL_EVENTS
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _isolated_registry(monkeypatch):
+    """Registry je Test isolieren, echte Backends bleiben verfuegbar (Doku § 10)."""
+    registry._discover()
+    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
+    monkeypatch.setattr(registry, "_discovered", True)
+    yield
+
+
+@pytest.fixture
+def backend():
+    return registry.get_backend("counseling-hours")
+
+
+@pytest.fixture
+def date_range():
+    today = timezone.localdate()
+    return today - timedelta(days=1), today + timedelta(days=1)
+
+
+def _typ_mit_dauer(facility, name, *, system_type, encrypted=False, mit_dauer=True):
+    """Dokumentationstyp mit der geteilten Paket-Feldvorlage ``dauer``.
+
+    Die Vorlage ist je Einrichtung eindeutig (``unique_facility_fieldtemplate_name``)
+    und haengt im Standardpaket an allen drei Gespraechstypen — sie wird deshalb
+    einmal je Einrichtung angelegt und wiederverwendet.
+    """
+    doc_type = DocumentType.objects.create(facility=facility, name=name, system_type=system_type)
+    if mit_dauer:
+        feld, _created = FieldTemplate.objects.get_or_create(
+            facility=facility,
+            name="Dauer",
+            defaults={"field_type": FieldTemplate.FieldType.NUMBER, "is_encrypted": encrypted},
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
+    return doc_type
+
+
+def _events(facility, doc_type, user, anzahl, dauer):
+    for _index in range(anzahl):
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={} if dauer is None else {"dauer": dauer},
+            created_by=user,
+        )
+
+
+class TestDiscoveryUndMetadaten:
+    def test_discovery_findet_das_backend(self):
+        assert "counseling-hours" in [b.slug for b in registry.get_backends()]
+
+    def test_registriert_unter_slug(self, backend):
+        assert isinstance(backend, CounselingHoursBackend)
+        assert backend.slug == "counseling-hours"
+
+    def test_snapshot_bleibt_aus(self, backend):
+        assert backend.snapshot_enabled is False
+
+    def test_grundgesamtheit_alle_ereignisse(self, backend):
+        assert backend.population == ALL_EVENTS
+
+    def test_field_specs(self, backend):
+        assert [spec.key for spec in backend.get_field_specs()] == ["kategorie", "events", "minuten"]
+
+    def test_labels_sind_lazy(self, backend):
+        for spec in backend.get_field_specs():
+            assert isinstance(spec.label, Promise), f"FieldSpec {spec.key!r} traegt Klartext statt gettext_lazy"
+
+    def test_name_ist_lazy(self, backend):
+        assert isinstance(CounselingHoursBackend.name, Promise)
+
+
+class TestBuildDataset:
+    def test_kategorien_aufteilung_in_fester_ordnung(self, backend, facility, admin_user, date_range):
+        """Drei Paket-Typen, eine Zeile je Kategorie — die Ordnung ist fest und
+        damit wertunabhaengig (K5), nicht nach Anzahl sortiert.
+        """
+        krise = _typ_mit_dauer(facility, "Krisengespräch", system_type=DocumentType.SystemType.CRISIS)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        beratung = _typ_mit_dauer(facility, "Beratungsgespräch", system_type=DocumentType.SystemType.COUNSELING)
+        _events(facility, krise, admin_user, 1, 90)
+        _events(facility, kontakt, admin_user, 2, 15)
+        _events(facility, beratung, admin_user, 3, 60)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.mode == "rows"
+        assert [(row["kategorie"], row["events"], row["minuten"]) for row in result.records] == [
+            ("contact", 2, 30),
+            ("counseling", 3, 180),
+            ("crisis", 1, 90),
+        ]
+        assert result.summary["events_gesamt"] == 6
+        assert result.summary["minuten_gesamt"] == 300
+
+    def test_leere_kategorien_erzeugen_keine_zeile(self, backend, facility, admin_user, date_range):
+        """Nur nichtleere Buckets — sonst waere die Zeilen-Existenz-Untergrenze
+        des Inferenzmodells (``lo = 1``) falsch und der Guard liefe fail-open.
+        """
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(facility, kontakt, admin_user, 2, 15)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert [row["kategorie"] for row in result.records] == ["contact"]
+
+    def test_events_ohne_dauer_zaehlen_als_event(self, backend, facility, admin_user, date_range):
+        """Entscheid (Brief D2): ein Ereignis ohne ``dauer`` ist trotzdem ein
+        Ereignis — es zaehlt in ``events``, traegt 0 Minuten bei und erscheint
+        als Vollstaendigkeits-Befund.
+        """
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(facility, kontakt, admin_user, 2, 15)
+        _events(facility, kontakt, admin_user, 3, None)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records[0]["events"] == 5
+        assert result.records[0]["minuten"] == 30
+        assert result.records[0][BEITRAGENDE_KEY] == 2
+        assert [issue.code for issue in result.completeness] == ["missing_field_values"]
+        assert result.completeness[0].count == 3
+
+    def test_muell_in_dauer_ist_ausschuss(self, backend, facility, admin_user, date_range):
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(facility, kontakt, admin_user, 1, "eine Stunde")
+        _events(facility, kontakt, admin_user, 1, "45")
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records[0]["events"] == 2
+        assert result.records[0]["minuten"] == 45
+        assert result.records[0][BEITRAGENDE_KEY] == 1
+
+    def test_verschluesselte_dauer_roundtrip(self, backend, facility, admin_user, date_range):
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT, encrypted=True)
+        _events(facility, kontakt, admin_user, 1, 45)
+        event = Event.objects.get(document_type=kontakt)
+        assert event.data_json["dauer"]["__encrypted__"] is True
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records[0]["minuten"] == 45
+        assert result.completeness == []
+
+    def test_ohne_luecke_keine_meldung(self, backend, facility, admin_user, date_range):
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(facility, kontakt, admin_user, 2, 15)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.completeness == []
+
+    def test_leerer_zeitraum(self, backend, facility, admin_user):
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(facility, kontakt, admin_user, 2, 15)
+        vorher = timezone.localdate() - timedelta(days=100)
+
+        result = backend.build_dataset(facility, vorher, vorher + timedelta(days=1))
+
+        assert result.records == []
+        assert result.summary == {"events_gesamt": 0, "minuten_gesamt": 0}
+
+    def test_soft_geloeschte_events_zaehlen_nicht(self, backend, facility, admin_user, date_range):
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(facility, kontakt, admin_user, 1, 15)
+        Event.objects.update(is_deleted=True)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
+
+    def test_fremde_einrichtung_zaehlt_nicht(
+        self, backend, facility, second_facility, second_facility_user, date_range
+    ):
+        fremd = _typ_mit_dauer(second_facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _events(second_facility, fremd, second_facility_user, 3, 15)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
+
+
+class TestTypaufloesung:
+    def test_slug_zweitschluessel_ohne_system_type(self, backend, facility, admin_user, sample_event, date_range):
+        """``doc_type_contact`` aus der conftest: kein ``system_type``, Slug
+        ``kontakt``, Feldvorlage ``dauer`` — genau der Zweitschluessel-Fall.
+        """
+        result = backend.build_dataset(facility, *date_range)
+
+        assert [(row["kategorie"], row["events"], row["minuten"]) for row in result.records] == [("contact", 1, 15)]
+
+    def test_gesetzter_system_type_sperrt_den_zweitschluessel(self, backend, facility, admin_user, date_range):
+        """Refs #1785: ein gesetzter, aber ausgeschlossener ``system_type``
+        (hier ``note``) wird vom Slug NICHT gerettet.
+        """
+        typ = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.NOTE)
+        assert typ.slug == "kontakt"
+        _events(facility, typ, admin_user, 3, 15)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
+
+    def test_fremder_system_type_zaehlt_nicht(self, backend, facility, admin_user, date_range):
+        typ = _typ_mit_dauer(facility, "Spritzentausch", system_type=DocumentType.SystemType.NEEDLE_EXCHANGE)
+        _events(facility, typ, admin_user, 3, 15)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
+
+
+def _zeile(kategorie, events, minuten, beitragende=None):
+    return {
+        "kategorie": kategorie,
+        "events": events,
+        "minuten": minuten,
+        BEITRAGENDE_KEY: events if beitragende is None else beitragende,
+    }
+
+
+def _result(zeilen):
+    return DatasetResult(
+        mode="rows",
+        records=zeilen,
+        summary={
+            "events_gesamt": sum(row["events"] for row in zeilen),
+            "minuten_gesamt": sum(row["minuten"] for row in zeilen),
+        },
+        completeness=[],
+    )
+
+
+class TestPrepareExport:
+    def test_alles_ueber_der_schwelle_bleibt_stehen(self, backend, facility):
+        prepared = backend.prepare_export(facility, _result([_zeile("contact", 9, 135), _zeile("crisis", 7, 420)]))
+
+        assert prepared.records == [
+            {"kategorie": "contact", "events": 9, "minuten": 135},
+            {"kategorie": "crisis", "events": 7, "minuten": 420},
+        ]
+        assert prepared.summary["events_gesamt"] == 16
+        assert prepared.summary["minuten_gesamt"] == 555
+        assert prepared.summary["k_anonymity_threshold"] == 5
+
+    def test_kleine_zeile_zieht_ihre_minuten_und_die_minuten_randsumme_mit(self, backend, facility):
+        """Suppressions-Kaskade: ``events`` < k -> auch ``minuten`` der Zeile weg,
+        und ``minuten_gesamt`` faellt, weil es sonst die Differenz preisgaebe.
+        """
+        prepared = backend.prepare_export(
+            facility, _result([_zeile("contact", 20, 300), _zeile("counseling", 9, 540), _zeile("crisis", 2, 120)])
+        )
+
+        zeilen = {row["kategorie"]: row for row in prepared.records}
+        assert zeilen["crisis"] == {"kategorie": "crisis", "events": None, "minuten": None}
+        assert prepared.summary["minuten_gesamt"] is None
+        # Die Ereignis-Randsumme bleibt: mit zwei unterdrueckten Zellen ist
+        # keine davon exakt rueckrechenbar (der zentrale Guard entscheidet das,
+        # nicht das Backend).
+        assert prepared.summary["events_gesamt"] == 31
+
+    def test_zu_wenige_beitragende_events_lassen_nur_die_minuten_fallen(self, backend, facility):
+        """Summen-Regel: die Bezugsgroesse der Minuten ist die Zahl der Events
+        MIT ``dauer``, nicht die Zeilen-Ereigniszahl.
+        """
+        prepared = backend.prepare_export(
+            facility, _result([_zeile("contact", 20, 300, beitragende=3), _zeile("crisis", 11, 660)])
+        )
+
+        zeilen = {row["kategorie"]: row for row in prepared.records}
+        assert zeilen["contact"]["events"] == 20
+        assert zeilen["contact"]["minuten"] is None
+        assert zeilen["crisis"]["minuten"] == 660
+        assert prepared.summary["minuten_gesamt"] is None
+
+    def test_randsumme_unter_schwelle_faellt(self, backend, facility):
+        prepared = backend.prepare_export(facility, _result([_zeile("contact", 2, 30)]))
+
+        assert prepared.records == [{"kategorie": "contact", "events": None, "minuten": None}]
+        assert prepared.summary["events_gesamt"] is None
+        assert prepared.summary["minuten_gesamt"] is None
+
+    def test_leerer_zeitraum_faellt_vollstaendig(self, backend, facility):
+        prepared = backend.prepare_export(facility, _result([]))
+
+        assert prepared.records == []
+        assert prepared.summary["events_gesamt"] is None
+        assert prepared.summary["minuten_gesamt"] is None
+
+    def test_records_tragen_nur_die_field_spec_keys(self, backend, facility):
+        """Weder das interne ``suppressed``-Flag noch der Suppressions-Eingabewert
+        ``beitragende`` duerfen in CSV/JSON/XML landen.
+        """
+        prepared = backend.prepare_export(facility, _result([_zeile("contact", 9, 135)]))
+
+        assert set(prepared.records[0]) == {"kategorie", "events", "minuten"}
+
+    def test_completeness_ist_datenunabhaengig_und_unbeziffert(self, backend, facility):
+        ohne = backend.prepare_export(facility, _result([_zeile("contact", 9, 135)]))
+        mit = backend.prepare_export(facility, _result([_zeile("contact", 9, 135, beitragende=6)]))
+
+        assert [issue.code for issue in ohne.completeness] == ["missing_field_values"]
+        assert str(ohne.completeness[0].message) == str(mit.completeness[0].message)
+        assert ohne.completeness[0].count is None
+
+    def test_schwelle_aus_den_facility_settings(self, backend, facility):
+        Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 2})
+
+        prepared = backend.prepare_export(facility, _result([_zeile("contact", 2, 30), _zeile("crisis", 3, 90)]))
+
+        assert prepared.summary["events_gesamt"] == 5
+        assert prepared.summary["minuten_gesamt"] == 120
+
+
+class TestIsAvailable:
+    def test_passender_typ_mit_dauer(self, backend, facility, doc_type_contact):
+        assert backend.is_available(facility) is True
+
+    def test_passender_typ_ohne_dauer(self, backend, facility):
+        _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT, mit_dauer=False)
+
+        assert backend.is_available(facility) is False
+
+    def test_dauer_an_unpassendem_typ(self, backend, facility):
+        _typ_mit_dauer(facility, "Spritzentausch", system_type=DocumentType.SystemType.NEEDLE_EXCHANGE)
+
+        assert backend.is_available(facility) is False
+
+    def test_inaktiver_typ_zaehlt_nicht(self, backend, facility, doc_type_contact):
+        DocumentType.objects.filter(pk=doc_type_contact.pk).update(is_active=False)
+
+        assert backend.is_available(facility) is False
+
+    def test_fremde_einrichtung_macht_nicht_verfuegbar(self, backend, facility, second_facility):
+        _typ_mit_dauer(second_facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+
+        assert backend.is_available(facility) is False
