@@ -14,7 +14,6 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, Client, DocumentType, FieldTemplate
-from core.models import Case as CaseModel
 from core.models.attachment import Attachment
 from core.services.attachments import attachment_download_url
 from core.services.audit import log_audit_event
