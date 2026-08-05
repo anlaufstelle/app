@@ -62,7 +62,7 @@ def _cleanup_task_by_title(title: str, e2e_env) -> None:
 class TestWorkItemEdit:
     """WorkItem-Edit-Formular: Laden, Bearbeiten, Speichern."""
 
-    def test_edit_form_loads_with_existing_data(self, authenticated_page, base_url):
+    def test_edit_form_loads_with_existing_data(self, authenticated_page, base_url, e2e_env):
         """Edit-Formular zeigt aktuellen Titel vorausgefüllt.
 
         Refs #1788: Vorher navigierte der Test über die erste Aufgabe der
@@ -75,23 +75,28 @@ class TestWorkItemEdit:
         """
         page = authenticated_page
         unique_title = f"E2E-Edit-{uuid.uuid4().hex[:6]}"
-        page.goto(f"{base_url}/workitems/new/")
-        page.fill('input[name="title"]', unique_title)
-        page.select_option('select[name="item_type"]', index=1)
-        page.locator("#main-content button[type='submit']").click()
-        page.wait_for_url(f"{base_url}/workitems/")
+        try:
+            page.goto(f"{base_url}/workitems/new/")
+            page.fill('input[name="title"]', unique_title)
+            page.select_option('select[name="item_type"]', index=1)
+            page.locator("#main-content button[type='submit']").click()
+            page.wait_for_url(f"{base_url}/workitems/")
 
-        page.locator(f"a:has-text('{unique_title}')").click()
-        page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
-        page.click("a:has-text('Bearbeiten')")
-        page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
+            page.locator(f"a:has-text('{unique_title}')").click()
+            page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
+            page.click("a:has-text('Bearbeiten')")
+            page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
 
-        # Titel-Feld ist mit dem eigenen Titel vorausgefüllt.
-        title_value = page.locator('input[name="title"]').input_value()
-        assert title_value == unique_title, "Titel-Feld sollte vorausgefüllt sein"
+            # Titel-Feld ist mit dem eigenen Titel vorausgefüllt.
+            title_value = page.locator('input[name="title"]').input_value()
+            assert title_value == unique_title, "Titel-Feld sollte vorausgefüllt sein"
 
-        # Priorität-Dropdown ist sichtbar
-        assert page.locator('select[name="priority"]').is_visible()
+            # Priorität-Dropdown ist sichtbar
+            assert page.locator('select[name="priority"]').is_visible()
+        finally:
+            # Refs #1788 (Review-Befund): keine Zustands-Akkumulation in der
+            # geteilten E2E-DB zuruecklassen — wie die Nachbartests.
+            _cleanup_task_by_title(unique_title, e2e_env)
 
     def test_edit_title_and_priority_saves(self, authenticated_page, base_url):
         """Titel + Priorität ändern → Speichern → Inbox/Detail zeigt neue Werte."""

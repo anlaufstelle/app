@@ -44,10 +44,14 @@ assert kontakt_dt is not None, "Kontakt-DocumentType fehlt in der E2E-DB"
 
 # Kein Personenbezug noetig (client ist nullable, core/models/event.py) —
 # das Event ist reiner Traeger fuer den deaktivierten Leistungen-Wert, ohne
-# Kopplung an Seed-/Fremdklienten (Refs #1788).
+# Kopplung an Seed-/Fremdklienten (Refs #1788). ``is_anonymous=True`` haelt
+# die Service-Invariante aus ``create_event`` ein: client=None ohne
+# Anonym-Flag ist eine Zeilenform, die kein Anwendungspfad je schreibt
+# (Review-Befund #1788).
 event = Event.objects.create(
     facility=facility,
     client=None,
+    is_anonymous=True,
     document_type=kontakt_dt,
     created_by=admin,
     occurred_at=timezone.now(),
