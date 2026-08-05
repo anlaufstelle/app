@@ -619,4 +619,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-05 -->
-<!-- source-hash: bada2df9fae881e2f6cefc01182510fc35c7d71b -->
+<!-- source-hash: b178af7f203ff108b1b3d11603718693c4474d66 -->

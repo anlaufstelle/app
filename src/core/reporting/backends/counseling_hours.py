@@ -47,27 +47,54 @@ weggeworfen. Daraus folgt die Kaskade in :meth:`CounselingHoursBackend.prepare_e
 
 **Grenze dieser Begruendung: sie gilt artefakt-LOKAL** (K4a, Refs #1770/#1754).
 Alles oben rechnet innerhalb *dieses* Berichts. Zwischen Artefakten gibt es
-Kanaele, die kein Backend allein schliessen kann, und dieser hier hat einen
-konkreten:
+Kanaele, die kein Backend allein schliessen kann, und dieser hier hat **zwei**
+konkrete:
 
-Die ``contact``-Zeile zaehlt dieselbe Ereignismenge wie
-``events_leistungen`` in :mod:`core.reporting.backends.service_distribution`
-(beide: Kontakt-Ereignisse des Zeitraums; der Slug-Zweitschluessel ist
-derselbe). Ihre **Differenz** ist die Zahl der Kontakte **ohne**
-Leistungs-Eintrag — eine Groesse, die in keinem der beiden Berichte steht und
-deshalb durch keine Suppressionsregel laeuft. Fuer ``crisis`` und
-``events_art_der_krise`` gilt dasselbe. Wer beide Berichte desselben Zeitraums
-herausgibt, publiziert damit implizit eine dritte, ungeprueft kleine Zahl.
+**(1) Differenz zur Auswahlfeld-Verteilung.** Die ``contact``-Zeile zaehlt
+**alle** Kontakt-Ereignisse des Zeitraums, ``events_leistungen`` in
+:mod:`core.reporting.backends.service_distribution` nur die **mit** Auswahlwert
+(die Ereignismenge ist also nicht dieselbe, wohl aber die Obermenge — der
+Erstschluessel ``system_type`` und der Slug-Zweitschluessel sind dieselben).
+Ihre **Differenz** ist die Zahl der Kontakte **ohne** Leistungs-Eintrag — eine
+Groesse, die in keinem der beiden Berichte steht und deshalb durch keine
+Suppressionsregel laeuft. Fuer ``crisis`` und ``events_art_der_krise`` gilt
+dasselbe. Wer beide Berichte desselben Zeitraums herausgibt, publiziert damit
+implizit eine dritte, ungeprueft kleine Zahl.
 
-Das ist **keine offene Baustelle, sondern die akzeptierte Definitionsgrenze**
-der k-Anonymitaets-Zusicherung: sie gilt je Artefakt und je Zeitraum. Ein
-artefaktuebergreifender Guard muesste wissen, welche Berichte an denselben
-Empfaenger gegangen sind — Wissen, das im Erzeugungspfad nicht existiert.
-Flankierend gibt es die **Freigabe-Uebersicht**
+**(2) Reproduktion der Sachbericht-Kategorien — inklusive Aufhebung von dessen
+Sekundaer-Suppression** (Refs #1754, finale Fix-Welle). Die Kategorien dieses
+Berichts sind die Kategorien des Sachberichts
+(:mod:`core.reporting.backends.sample_report_1`): dieselbe Aufloesungsordnung,
+dieselben Slugs, dieselbe Basismenge (sichtbare Ereignisse des Zeitraums je
+Typ). ``events`` je Zeile ist damit **dieselbe Zaehlgroesse** wie die
+Kategoriezahl dort, nur um die Minutenspalte verfeinert. Es ist also eine
+Verfeinerung im Sinne der Auflage aus :mod:`core.reporting.backends.monthly_trend`
+— und sie hat eine Folge, die ueber „mehr Detail" hinausgeht:
+
+Die **Sekundaer**-Suppression des Sachberichts ist tabellenlokal konstruiert.
+Faellt dort eine Kategorie nur deshalb, damit die primaer unterdrueckte
+Nachbarzelle nicht als Differenz zur Randsumme rueckrechenbar wird, dann ist
+ihre eigene Zahl >= *k* — und genau die steht hier im Klartext. Der Empfaenger
+beider Artefakte kann die Sachbericht-Randsumme also wieder aufloesen, obwohl
+dort korrekt unterdrueckt wurde. Der ``events``-Wert dieses Berichts hat seine
+eigene k-Pruefung bestanden; es ist keine Kleinstfallzahl, die sichtbar wird,
+sondern eine Suppressions**begruendung**, die ihre Wirkung verliert.
+
+Beide Kanaele sind **keine offene Baustelle, sondern die akzeptierte
+Definitionsgrenze** der k-Anonymitaets-Zusicherung: sie gilt je Artefakt und je
+Zeitraum. Ein artefaktuebergreifender Guard muesste wissen, welche Berichte an
+denselben Empfaenger gegangen sind — Wissen, das im Erzeugungspfad nicht
+existiert. Flankierend gibt es die **Freigabe-Uebersicht**
 (:class:`core.views.statistics.ReportReleaseLogView`, K4a): sie verhindert den
 Kanal nicht, macht ueberlappende Herausgaben aber sichtbar. Die Konsequenz
 gehoert damit zur organisatorischen Ebene ("nicht beliebig viele Zuschnitte an
 denselben Empfaenger"), nicht in dieses Modul.
+
+**Vollstaendigkeit dieser Aufzaehlung** ist eine Momentaufnahme, keine
+Zusicherung: sie nennt die Kanaele, die beim Bau und in den Reviews zu #1754
+gefunden wurden. Wer den Bericht erweitert, prueft die drei Fragen aus der
+Nachahmer-Auflage (dieselben Maps? dieselbe Basismenge? dieselbe Zaehlgroesse?)
+gegen **jedes** Bestandsartefakt neu.
 """
 
 import dataclasses
