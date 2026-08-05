@@ -9,6 +9,7 @@ Die Erwartungswerte sind **hart kodiert** und nicht gegen die alte
 import csv
 import itertools
 import json
+import pkgutil
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -19,7 +20,7 @@ from django.utils import timezone
 from django.utils.functional import Promise
 
 from core.models import Client, DocumentType, Event, Facility, Organization, User
-from core.reporting import registry
+from core.reporting import backends, registry
 from core.reporting.backends.sample_report_1 import (
     _EXPORT_ISSUE_CODES,
     _ISSUE_SEVERITIES,
@@ -1409,33 +1410,41 @@ class TestGuardExportTexteSindZiffernfrei:
 
 
 class TestDiscovery:
-    def test_echte_discovery_findet_beide_backends(self, monkeypatch):
-        """Ohne Vorab-Registrierung: BEIDE Module werden ueber ``backends/`` gefunden.
+    def test_echte_discovery_findet_alle_backends(self, monkeypatch):
+        """Ohne Vorab-Registrierung: ALLE Module werden ueber ``backends/`` gefunden.
 
-        ``sys.modules``-Eintraege BEIDER Backend-Module entfernen, damit die
+        ``sys.modules``-Eintraege der Backend-Module entfernen, damit die
         Decorators wirklich noch einmal laufen — sonst haette der Test nur
         bewiesen, dass ein frueherer Import die Registry gefuellt hat
-        (monkeypatch stellt beides zurueck). Seit M5 P6 (Refs #1061) gehoert
-        ``example`` (Referenz-Plugin) zu den real registrierten Backends — die
-        Discovery-Assertion pinnt jetzt beide.
+        (monkeypatch stellt alles zurueck).
 
-        Refs #1754: Entfernt werden **alle** Backend-Module, nicht mehr zwei
-        namentlich genannte, und die Assertion ist eine Teilmengen-Pruefung.
-        Beides aus demselben Grund: mit weiteren Beispiel-Backends im Paket
-        haette die namentliche Liste stumm gemacht, was der Test belegen soll
-        (ein nicht entferntes Modul registriert sich nicht neu und fehlte in der
-        Gleichheits-Assertion **erwartungsgemaess** — der Fall waere gruen
-        geblieben, ohne noch etwas zu pruefen).
+        **Die Liste wird per ``pkgutil`` ermittelt, nicht aufgezaehlt**
+        (Refs #1754): Als hier nur ``sample_report_1`` und ``example`` geloescht
+        wurden, blieb jedes spaeter hinzugekommene Backend importgecacht — sein
+        Decorator lief nie wieder, es fehlte in der frisch gefuellten Registry,
+        und die Assertion ``== ["example", "sample-report-1"]`` blieb gruen,
+        OHNE noch irgendetwas ueber die Vollstaendigkeit der Discovery zu sagen.
+        Ein Vollstaendigkeits-Pin, der mit jedem neuen Backend leiser wird, ist
+        keiner. Die erwartete Liste bleibt dagegen bewusst ein **Literal**: sie
+        aus derselben ``pkgutil``-Quelle abzuleiten, gegen die geprueft wird,
+        machte den Test tautologisch.
         """
-        for name in [name for name in sys.modules if name.startswith("core.reporting.backends.")]:
-            monkeypatch.delitem(sys.modules, name, raising=False)
+        for _finder, modul, _is_pkg in pkgutil.iter_modules(backends.__path__):
+            monkeypatch.delitem(sys.modules, f"{backends.__name__}.{modul}", raising=False)
         monkeypatch.setattr(registry, "_REGISTRY", {})
         monkeypatch.setattr(registry, "_discovered", False)
 
-        slugs = [b.slug for b in registry.get_backends()]
-
-        assert {"example", "sample-report-1"} <= set(slugs)
-        assert slugs == sorted(slugs)
+        assert [b.slug for b in registry.get_backends()] == [
+            "ban-overview",
+            "case-metrics",
+            "client-metrics",
+            "counseling-hours",
+            "example",
+            "monthly-trend",
+            "needle-exchange-balance",
+            "sample-report-1",
+            "service-distribution",
+        ]
 
 
 class TestBackendStringsSindUebersetzbar:
