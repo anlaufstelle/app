@@ -76,6 +76,18 @@ class TestCaseService:
         with pytest.raises(ValueError, match="client"):
             update_case(case_open, staff_user, client=case_open.client)
 
+    def test_update_case_erhaelt_parallele_redaktion(self, case_open, staff_user, lead_user):
+        """#1789-Folge (Review-Befund): Die Redaktions-Kaskade schreibt
+        title/description per Queryset-Update ohne ``updated_at``-Bump — ein
+        staler Save, der nur andere Felder aktualisiert, darf den Klartext
+        nicht re-publizieren."""
+        Case.objects.filter(pk=case_open.pk).update(title="Fall (anonymisiert)", description="")
+        update_case(case_open, staff_user, lead_user=lead_user)
+        refreshed = Case.objects.get(pk=case_open.pk)
+        assert refreshed.title == "Fall (anonymisiert)"
+        assert refreshed.description == ""
+        assert refreshed.lead_user == lead_user
+
     def test_close_case(self, facility, staff_user, case_open):
         from core.models import AuditLog
 

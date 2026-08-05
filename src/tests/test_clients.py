@@ -284,6 +284,34 @@ class TestUpdateClientService:
         assert result.pk == client_identified.pk
         assert result.notes == "Test"
 
+    def test_update_client_erhaelt_parallelen_soft_delete(self, client_identified, staff_user):
+        """#1789-Folge (Review-Befund): Ein staler Save darf eine parallel
+        committete Loeschung nicht reaktivieren — Soft-Delete-Spalten liegen
+        ausserhalb der Allowlist und bumpen ``updated_at`` nicht, das
+        optimistische Locking sieht sie daher nicht."""
+        from django.utils import timezone
+
+        stale = Client._base_manager.get(pk=client_identified.pk)
+        Client._base_manager.filter(pk=client_identified.pk).update(
+            is_deleted=True, deleted_at=timezone.now(), is_active=False
+        )
+        update_client(stale, staff_user, notes="Nur Notiz")
+        refreshed = Client._base_manager.get(pk=client_identified.pk)
+        assert refreshed.is_deleted is True
+        assert refreshed.deleted_at is not None
+        assert refreshed.is_active is False
+        assert refreshed.notes == "Nur Notiz"
+
+    def test_update_client_erhaelt_parallele_redaktion(self, client_identified, staff_user):
+        """Ein parallel redigiertes Pseudonym uebersteht einen stalen Save,
+        der nur andere Felder aktualisiert."""
+        stale = Client._base_manager.get(pk=client_identified.pk)
+        Client._base_manager.filter(pk=client_identified.pk).update(pseudonym="Geloescht-a1b2c3")
+        update_client(stale, staff_user, age_cluster=Client.AgeCluster.AGE_18_26)
+        refreshed = Client._base_manager.get(pk=client_identified.pk)
+        assert refreshed.pseudonym == "Geloescht-a1b2c3"
+        assert refreshed.age_cluster == Client.AgeCluster.AGE_18_26
+
 
 @pytest.mark.django_db
 class TestOptimisticLockingClient:

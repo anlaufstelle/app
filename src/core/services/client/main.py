@@ -724,7 +724,12 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     changed_fields = changed_fields_vs_db(client, fields)
     for key, value in fields.items():
         setattr(client, key, value)
-    client.save()
+    # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
+    # Save wuerde parallel committete, token-unsichtbare Writes (Soft-Delete,
+    # Redaktions-Kaskade — beide bumpen ``updated_at`` nicht) mit dem stalen
+    # Instanz-Stand ueberschreiben. ``updated_at`` explizit, da ``auto_now``
+    # bei ``update_fields`` sonst nicht schreibt.
+    client.save(update_fields=[*fields.keys(), "updated_at"])
 
     new_stage = client.contact_stage
     update_client_stage(client, old_stage, new_stage, client.facility, user)

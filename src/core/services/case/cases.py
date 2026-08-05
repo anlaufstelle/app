@@ -186,7 +186,10 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
     changed_fields = changed_fields_vs_db(case, fields)
     for key, value in fields.items():
         setattr(case, key, value)
-    case.save()
+    # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
+    # Save wuerde die parallel laufende Redaktions-Kaskade (Queryset-Update
+    # ohne ``updated_at``-Bump) mit dem stalen Klartext ueberschreiben.
+    case.save(update_fields=[*fields.keys(), "updated_at"])
 
     if changed_fields:
         audit_event(
