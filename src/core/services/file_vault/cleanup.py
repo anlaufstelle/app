@@ -19,6 +19,7 @@ from pathlib import Path
 from django.conf import settings as django_settings
 
 from core.models.attachment import Attachment
+from core.models.import_job import ImportJob
 from core.services.file_vault.storage import delete_attachment_file
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ def delete_attachments_for(owner):
 
 
 def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
-    """Loesche ``.enc``-Dateien ohne ``Attachment``-Record.
+    """Loesche ``.enc``-Dateien ohne ``Attachment``- UND ohne ``ImportJob``-Record.
 
     Auch nach dem Direct-Cleanup in :func:`store_encrypted_file` bleibt
     ein Restrisiko: schlaegt eine spaetere Operation in der umgebenden
@@ -62,6 +63,15 @@ def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
     frisch geschrieben wird, hat eventuell noch keinen DB-Eintrag (Default 1h
     ist konservativ).
 
+    **Zweite Referenzquelle: ``ImportJob.storage_filename`` (Refs #1060).** Der
+    CSV-Import legt seinen verschluesselten Upload unter
+    ``MEDIA_ROOT/<facility>/imports/`` ab — bewusst OHNE ``Attachment``-Zeile,
+    denn er haengt an keinem Owner. Der Wizard laeuft ueber mehrere Requests und
+    darf bis zu ``import_engine.STALE_DAYS`` offen bleiben; ohne diesen Abgleich
+    raeumte der naechtliche Cron-Lauf die Quelldatei jedes offenen Laufs ab.
+    Bewusst KEINE Verzeichnis-Ausnahme: ``commit_import``/``abort_import``
+    leeren ``storage_filename``, echte Import-Waisen bleiben damit abraeumbar.
+
     Vorgesehen fuer einen periodischen Management-Command/Cron, nicht
     fuer den Hot-Path. Returns: Anzahl der geloeschten Dateien.
     """
@@ -70,6 +80,17 @@ def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
         return 0
     cutoff = time.time() - min_age_seconds
     known = set(Attachment.objects.values_list("storage_filename", flat=True))
+    # Nur OFFENE Importlaeufe schuetzen: nach commit/abort leeren die
+    # Uebergaenge storage_filename selbst — traegt eine FINALE Zeile das Feld
+    # trotzdem noch (Prozess-Crash zwischen Datei-Loeschung und save()), soll
+    # der Sweep die referenzlose PII-Datei holen, nicht ewig verschonen.
+    known |= {
+        name
+        for name in ImportJob.objects.exclude(storage_filename="")
+        .exclude(status__in=ImportJob.FINAL_STATUSES)
+        .values_list("storage_filename", flat=True)
+        if name
+    }
     deleted = 0
     for enc_file in media_root.rglob("*.enc"):
         try:

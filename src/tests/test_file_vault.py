@@ -898,3 +898,97 @@ class TestStorageOrphanCleanup:
         assert deleted >= 1
         assert not orphan_path.exists()
         assert ref_path.exists()
+
+    def test_cleanup_spares_the_upload_of_an_open_import_job(self, facility, admin_user, settings, tmp_path):
+        """Refs #1060: Import-Uploads liegen unter ``MEDIA_ROOT/<fac>/imports/``
+        und haben bewusst KEINEN ``Attachment``-Record — der Abgleich muss sie
+        ueber ``ImportJob.storage_filename`` kennen.
+
+        Ohne diesen Zweig raeumte der naechtliche Cron-Lauf (taeglich 04:30) die
+        Quelldatei jedes offenen Wizard-Laufs ab; der Mehr-Request-Wizard und
+        ``STALE_DAYS=7`` waeren in Produktion wirkungslos.
+        """
+        import os
+
+        from core.models import ImportJob
+        from core.services.file_vault import cleanup_orphan_storage_files
+        from core.services.import_engine import _import_dir
+
+        settings.MEDIA_ROOT = str(tmp_path)
+        import_dir = _import_dir(facility)
+        import_dir.mkdir(parents=True, exist_ok=True)
+        job = ImportJob.objects.create(
+            facility=facility,
+            created_by=admin_user,
+            target_type=ImportJob.TargetType.CLIENT,
+            storage_filename="11111111-2222-3333-4444-555555555555.enc",
+        )
+        upload_path = import_dir / job.storage_filename
+        upload_path.write_bytes(b"ciphertext")
+        old = upload_path.stat().st_mtime - 7200
+        os.utime(upload_path, (old, old))
+
+        assert cleanup_orphan_storage_files(min_age_seconds=3600) == 0
+        assert upload_path.exists()
+
+    def test_cleanup_removes_an_import_upload_without_job_reference(self, facility, admin_user, settings, tmp_path):
+        """Gegenprobe: echte Import-Waisen bleiben abraeumbar.
+
+        ``commit_import``/``abort_import`` leeren ``storage_filename`` — bleibt
+        die Datei durch einen fehlgeschlagenen ``unlink`` liegen, ist sie ab
+        dann referenzlos und muss fallen. Bewusst KEINE Verzeichnis-Ausnahme.
+        """
+        import os
+
+        from core.models import ImportJob
+        from core.services.file_vault import cleanup_orphan_storage_files
+        from core.services.import_engine import _import_dir
+
+        settings.MEDIA_ROOT = str(tmp_path)
+        import_dir = _import_dir(facility)
+        import_dir.mkdir(parents=True, exist_ok=True)
+        ImportJob.objects.create(
+            facility=facility,
+            created_by=admin_user,
+            target_type=ImportJob.TargetType.CLIENT,
+            storage_filename="",
+        )
+        upload_path = import_dir / "99999999-8888-7777-6666-555555555555.enc"
+        upload_path.write_bytes(b"ciphertext")
+        old = upload_path.stat().st_mtime - 7200
+        os.utime(upload_path, (old, old))
+
+        assert cleanup_orphan_storage_files(min_age_seconds=3600) == 1
+
+    def test_cleanup_removes_upload_of_a_final_job_with_leftover_filename(
+        self, facility, admin_user, settings, tmp_path
+    ):
+        """S5-Restluecke N1 (Refs #1060): stirbt der Prozess zwischen
+        Datei-Loeschung und ``save()`` des Uebergangs, traegt eine COMMITTED-/
+        ABORTED-Zeile noch ihren ``storage_filename``. Finale Laeufe duerfen
+        die referenzlose PII-Datei nicht dauerhaft vor dem Sweep schuetzen."""
+        import os
+
+        from core.models import ImportJob
+        from core.services.file_vault import cleanup_orphan_storage_files
+        from core.services.import_engine import _import_dir
+
+        settings.MEDIA_ROOT = str(tmp_path)
+        import_dir = _import_dir(facility)
+        import_dir.mkdir(parents=True, exist_ok=True)
+        job = ImportJob.objects.create(
+            facility=facility,
+            created_by=admin_user,
+            target_type=ImportJob.TargetType.CLIENT,
+            status=ImportJob.Status.COMMITTED,
+            storage_filename="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.enc",
+        )
+        upload_path = import_dir / job.storage_filename
+        upload_path.write_bytes(b"ciphertext")
+        old = upload_path.stat().st_mtime - 7200
+        os.utime(upload_path, (old, old))
+
+        assert cleanup_orphan_storage_files(min_age_seconds=3600) == 1
+        assert not upload_path.exists()
+        assert not upload_path.exists()
+        assert ImportJob.objects.filter(pk=job.pk).exists()

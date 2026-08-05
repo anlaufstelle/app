@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Neuer Import" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <h1 class="text-[22px] font-bold text-ink mb-1">{% trans "Neuer Import" %}</h1>
+    <p class="text-sm text-ink-muted mb-6">{% trans "Schritt 1 von 4: Datei hochladen" %}</p>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-4" data-testid="import-upload-form">
+        {% csrf_token %}
+        {% include "core/_form_errors.html" %}
+
+        <div class="card p-5 space-y-4">
+            {% for field in form %}
+            {% include "components/_form_field.html" %}
+            {% endfor %}
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-primary px-4 py-2 hover:opacity-90"
+                    data-testid="import-upload-submit">{% trans "Hochladen und fortfahren" %}</button>
+            <a href="{% url 'core:import_list' %}"
+               class="btn-secondary px-4 py-2">{% trans "Abbrechen" %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

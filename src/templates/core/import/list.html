@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Datenimport" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Datenimport" %}</h1>
+        <p class="mt-1 text-sm text-ink-muted">{% trans "CSV-Dateien mit Personen oder Ereignissen einlesen — mit Probelauf vor der Übernahme." %}</p>
+    </div>
+    <a href="{% url 'core:import_create' %}"
+       class="btn-primary px-4 py-2 hover:opacity-90"
+       data-testid="import-new-link">{% trans "Neuer Import" %}</a>
+</div>
+
+<div class="card overflow-hidden">
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-6 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Angelegt" %}</th>
+                <th class="px-6 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zieltyp" %}</th>
+                <th class="px-6 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</th>
+                <th class="px-6 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Angelegt von" %}</th>
+                <th class="px-6 py-3 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for job in page_obj %}
+            <tr class="hover:bg-canvas" data-testid="import-row" data-job-pk="{{ job.pk }}">
+                <td class="px-6 py-4 text-sm text-ink">{{ job.created_at|date:"DATETIME_FORMAT" }}</td>
+                <td class="px-6 py-4 text-sm text-ink-muted">{{ job.get_target_type_display }}</td>
+                <td class="px-6 py-4 text-sm text-ink-muted">{{ job.get_status_display }}</td>
+                <td class="px-6 py-4 text-sm text-ink-muted">{% if job.created_by %}{{ job.created_by.get_full_name|default:job.created_by.username }}{% else %}–{% endif %}</td>
+                <td class="px-6 py-4 text-right">
+                    <a href="{% url 'core:import_detail' pk=job.pk %}"
+                       class="text-sm text-accent hover:underline font-medium"
+                       data-testid="import-detail-link">{% trans "Anzeigen" %}</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="px-6 py-6 text-sm text-ink-muted">{% trans "Noch kein Import angelegt." %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include "components/_pagination.html" with page=page_obj %}
+{% endblock %}

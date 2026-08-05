@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Spalten zuordnen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<h1 class="text-[22px] font-bold text-ink mb-1">{% trans "Spalten zuordnen" %}</h1>
+<p class="text-sm text-ink-muted mb-6">
+    {% blocktrans with total=preview.total_rows %}Schritt 2 von 4: {{ total }} Datenzeile(n) erkannt. Nicht zugeordnete Spalten werden ignoriert.{% endblocktrans %}
+</p>
+
+{% if errors %}
+<div class="bg-red-50 border border-red-200 rounded-[10px] p-3 mb-4" role="alert" data-testid="import-mapping-errors">
+    {% for error in errors %}
+    <p class="text-[13px] text-red-700">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form method="post" data-testid="import-mapping-form">
+    {% csrf_token %}
+    <div class="card overflow-x-auto mb-6">
+        <table class="min-w-full divide-y divide-subtle">
+            <thead class="bg-canvas">
+                <tr>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Spalte in der Datei" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beispielwerte" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zielfeld" %}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-subtle">
+                {% for column in columns %}
+                <tr data-testid="import-mapping-row">
+                    <td class="px-4 py-3 text-sm font-medium text-ink">{{ column.name }}</td>
+                    <td class="px-4 py-3 text-[12px] text-ink-muted" data-testid="import-mapping-samples">
+                        {% for sample in column.samples %}{% if not forloop.first %} · {% endif %}{{ sample }}{% endfor %}
+                    </td>
+                    <td class="px-4 py-3">
+                        <label class="sr-only" for="{{ column.field }}">{% trans "Zielfeld für" %} {{ column.name }}</label>
+                        <select name="{{ column.field }}"
+                                id="{{ column.field }}"
+                                class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
+                                data-testid="import-mapping-select">
+                            <option value="">{% trans "— ignorieren —" %}</option>
+                            {% for target in targets %}
+                            <option value="{{ target.key }}"{% if column.selected == target.key %} selected{% endif %}>{{ target.label }}{% if target.required %} *{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="text-[12px] text-ink-muted mb-4">{% trans "Mit * markierte Zielfelder sind Pflicht." %}</p>
+
+    <div class="flex items-center gap-3">
+        <button type="submit" class="btn-primary px-4 py-2 hover:opacity-90"
+                data-testid="import-mapping-submit">{% trans "Probelauf starten" %}</button>
+        <a href="{% url 'core:import_detail' pk=job.pk %}" class="btn-secondary px-4 py-2">{% trans "Zurück" %}</a>
+    </div>
+</form>
+{% endblock %}

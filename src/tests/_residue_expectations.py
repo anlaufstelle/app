@@ -222,4 +222,33 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     pii("core_milestone", "title"),
     # ---- core_documenttypefield ------------------------------------------
     # Keine Text-/JSON-Spalten (nur UUID/FK/Integer sort_order) — daher kein Eintrag.
+    # --- M4 Import (Refs #1060) -------------------------------------------
+    # ---- core_importjob --------------------------------------------------
+    # Der Originalname der hochgeladenen Datei kann Klientenbezug tragen
+    # ("Klientenliste Meier 2026.csv") und wird deshalb via encrypt_field
+    # abgelegt — dieselbe Einordnung wie core_attachment.original_filename_encrypted.
+    pii("core_importjob", "original_filename_encrypted"),
+    non_pii("core_importjob", "storage_filename", reason="UUID-basierter Disk-Dateiname (abc.enc), kein Klartext."),
+    non_pii("core_importjob", "target_type", reason="Enum (client/event), kein Freitext."),
+    non_pii("core_importjob", "status", reason="Enum (uploaded/mapped/validated/committed/aborted)."),
+    non_pii(
+        "core_importjob",
+        "mapping_json",
+        reason=(
+            "Spaltenüberschriften der Quelldatei + Ziel-Slugs/Delimiter/Encoding — Struktur der Datei, keine Zellwerte."
+        ),
+    ),
+    # INVARIANTE (Refs #1060): Fehlerreports tragen ausschliesslich Zeilen-/
+    # Spaltennummer, Fehlercode und einen FESTEN Meldungstext aus dem
+    # Meldungskatalog der Engine — nie einen Zellwert. Durchgesetzt in
+    # ``core.services.import_engine._pii_safe_message`` (fail-safe: eine
+    # Meldung, die einen Zellwert der Zeile enthaelt, wird durch den
+    # generischen Text ersetzt) und mit einem Negativ-Test gepinnt
+    # (``test_import_engine.py::TestErrorReportIsPiiFree``). Wer den Katalog
+    # um interpolierte Werte erweitert, muss diesen Eintrag mit aendern.
+    non_pii(
+        "core_importjob",
+        "result_json",
+        reason="Zeilen-/Spaltennummern, Fehlercodes und feste Meldungstexte — nie Zellwerte (PII-Invariante).",
+    ),
 )

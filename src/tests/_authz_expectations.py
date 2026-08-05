@@ -798,4 +798,47 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "sample_event.pk"),),
         idor_exempt="Reines Scaffold ohne DB-Lookup/PII (Docstring der View)",
     ),
+    # --- M4 Import (Refs #1060) -------------------------------------------
+    # Masseningest legt in einem Schritt hunderte Klientendatensaetze an —
+    # bewusst ADMIN_ONLY (Anwendungsbetreuung), kein Lead/Staff, kein
+    # super_admin (der hat keine Facility). Kein Sudo: Konvention ist Sudo nur
+    # bei PII-Export und Auth-Risiko, nicht beim Schreiben.
+    E("core:import_list", "import", get=ADMIN_ONLY),
+    E("core:import_create", "import", get=ADMIN_ONLY, post=ADMIN_ONLY),
+    E(
+        "core:import_detail",
+        "import",
+        get=ADMIN_ONLY,
+        url_kwargs=(("pk", "import_job.pk"),),
+        idor=(("pk", "foreign_import_job.pk"),),
+    ),
+    E(
+        "core:import_mapping",
+        "import",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "import_job.pk"),),
+        idor=(("pk", "foreign_import_job.pk"),),
+    ),
+    E(
+        "core:import_preview",
+        "import",
+        get=ADMIN_ONLY,
+        url_kwargs=(("pk", "import_job.pk"),),
+        idor=(("pk", "foreign_import_job.pk"),),
+    ),
+    E(
+        "core:import_commit",
+        "import",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "import_job.pk"),),
+        idor=(("pk", "foreign_import_job.pk"),),
+    ),
+    E(
+        "core:import_abort",
+        "import",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "import_job.pk"),),
+        idor=(("pk", "foreign_import_job.pk"),),
+    ),
 )

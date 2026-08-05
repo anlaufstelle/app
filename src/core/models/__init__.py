@@ -8,6 +8,7 @@ from .episode import Episode
 from .event import Event
 from .event_history import EventHistory
 from .field_condition import FieldCondition
+from .import_job import ImportJob
 from .mfa import EncryptedTOTPDevice
 from .offline_revocation import OfflineClientRevocation
 from .organization import Facility, Organization
@@ -37,6 +38,7 @@ __all__ = [
     "FieldCondition",
     "FieldGroup",
     "FieldTemplate",
+    "ImportJob",
     "Milestone",
     "OfflineClientRevocation",
     "Organization",

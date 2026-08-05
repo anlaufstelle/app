@@ -97,6 +97,15 @@ from core.views.events import (
     EventUpdateView,
     TallyIncrementView,
 )
+from core.views.import_wizard import (
+    ImportAbortView,
+    ImportCommitView,
+    ImportCreateView,
+    ImportDetailView,
+    ImportListView,
+    ImportMappingView,
+    ImportPreviewView,
+)
 from core.views.lockout_recovery import (
     LockoutRecoveryBackupCodeView,
     LockoutRecoveryConfirmView,
@@ -406,6 +415,14 @@ urlpatterns = [
     # DSGVO
     path("dsgvo/", DSGVOPackageView.as_view(), name="dsgvo_package"),
     path("dsgvo/<slug:document>/", DSGVODocumentDownloadView.as_view(), name="dsgvo_document"),
+    # --- M4 Import (Refs #1060) ---
+    path("import/", ImportListView.as_view(), name="import_list"),
+    path("import/neu/", ImportCreateView.as_view(), name="import_create"),
+    path("import/<uuid:pk>/", ImportDetailView.as_view(), name="import_detail"),
+    path("import/<uuid:pk>/zuordnung/", ImportMappingView.as_view(), name="import_mapping"),
+    path("import/<uuid:pk>/probelauf/", ImportPreviewView.as_view(), name="import_preview"),
+    path("import/<uuid:pk>/uebernehmen/", ImportCommitView.as_view(), name="import_commit"),
+    path("import/<uuid:pk>/abbrechen/", ImportAbortView.as_view(), name="import_abort"),
     # Account
     path("account/", AccountProfileView.as_view(), name="account_profile"),
     # Refs #869: Lockout-Recovery-Flows (Token-Mail + Backup-Code).

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Probelauf" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<h1 class="text-[22px] font-bold text-ink mb-1">{% trans "Ergebnis des Probelaufs" %}</h1>
+<p class="text-sm text-ink-muted mb-6">{% trans "Schritt 3 von 4: Es wurde noch nichts gespeichert." %}</p>
+
+<div class="card p-5 mb-6" data-testid="import-preview-summary">
+    <dl class="grid grid-cols-3 gap-4 text-sm">
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Datenzeilen" %}</dt>
+            <dd class="text-ink" data-testid="import-summary-rows">{{ result.summary.rows|default:0 }}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Würden angelegt" %}</dt>
+            <dd class="text-ink" data-testid="import-summary-created">{{ result.summary.created|default:0 }}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Fehler" %}</dt>
+            <dd class="text-ink" data-testid="import-summary-errors">{{ result.summary.errors|default:0 }}</dd>
+        </div>
+    </dl>
+</div>
+
+{% if result.errors %}
+<div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-4" role="alert">
+    <p class="text-sm text-amber-800">{% trans "Solange Fehler bestehen, kann der Import nicht übernommen werden. Bitte die Datei korrigieren und neu hochladen." %}</p>
+</div>
+{% include "core/import/partials/_error_table.html" %}
+{% endif %}
+
+<div class="flex items-center gap-3 mt-6">
+    {% if not result.errors %}
+    <form method="post" action="{% url 'core:import_commit' pk=job.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary px-4 py-2 hover:opacity-90"
+                data-testid="import-commit-submit">{% trans "Jetzt übernehmen" %}</button>
+    </form>
+    {% endif %}
+    <a href="{% url 'core:import_mapping' pk=job.pk %}" class="btn-secondary px-4 py-2">{% trans "Zuordnung ändern" %}</a>
+    <form method="post" action="{% url 'core:import_abort' pk=job.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn-secondary px-4 py-2"
+                data-testid="import-abort-submit">{% trans "Import abbrechen" %}</button>
+    </form>
+</div>
+{% endblock %}

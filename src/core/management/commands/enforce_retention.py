@@ -13,6 +13,7 @@ from django.utils import timezone
 from core.models import AuditLog, Facility, Settings
 from core.services.audit import audit_event
 from core.services.dashboard import ensure_snapshots_for_months
+from core.services.import_engine import cleanup_stale_import_jobs
 from core.services.retention import (
     anonymize_clients,
     cleanup_stale_proposals,
@@ -158,6 +159,16 @@ class Command(BaseCommand):
             stale_count = cleanup_stale_proposals(facility)
             if stale_count:
                 self.stdout.write(f"Cleaned up {stale_count} stale proposal(s) for '{facility.name}'.")
+
+            # M4 (Refs #1060): Ein liegengebliebener Importlauf haelt eine
+            # verschluesselte Datei mit Klientendaten auf der Disk. Nach
+            # IMPORT_STALE_DAYS gilt er als aufgegeben — Datei weg, Lauf auf
+            # ABORTED. Kein eigener Cron: der naechtliche Lauf ist ohnehin der
+            # Ort, an dem Aufbewahrungsfristen durchgesetzt werden. Der
+            # Dry-Run raeumt bewusst NICHT (read-only, wie die Nachbarn).
+            stale_imports = cleanup_stale_import_jobs(facility)
+            if stale_imports:
+                self.stdout.write(f"Cleaned up {stale_imports} stale import job(s) for '{facility.name}'.")
 
     def _report_enforce_summary(self, totals, facilities, dry_run):
         """Emit the run summary and (on a real pass) the RETENTION_RUN_COMPLETED marker.

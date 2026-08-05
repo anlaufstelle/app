@@ -633,6 +633,15 @@ HARVEST_SQL = {
     "deletion_request": (
         "SELECT id FROM core_deletionrequest WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
     ),
+    # --- M4 Import (Refs #1060) -------------------------------------------
+    # Ein noch nicht abgeschlossener Lauf; der Seed legt keinen an, die Query
+    # liefert dann ``None`` (SETUP-ERROR-Zelle im Live-Audit) — der Eintrag ist
+    # trotzdem Pflicht, sonst zeigen die sieben import_*-Erwartungen ins Leere
+    # (``test_every_fixture_reference_is_live_harvestable``).
+    "import_job": (
+        "SELECT id FROM core_importjob WHERE facility_id = %(fac)s "
+        "AND status NOT IN ('committed', 'aborted') ORDER BY id LIMIT 1"
+    ),
 }
 
 # Eltern-Namen, deren geerntete ID den NACHFOLGENDEN Queries als
@@ -678,6 +687,8 @@ FOREIGN_ALIASES = {
     "foreign_field_group": "field_group",
     "foreign_field_condition": "field_condition",
     "foreign_field_template": "field_template",
+    # M4 Import (Refs #1060).
+    "foreign_import_job": "import_job",
 }
 
 

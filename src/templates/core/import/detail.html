@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Importlauf" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Importlauf" %}</h1>
+        <p class="mt-1 text-sm text-ink-muted">{{ job.created_at|date:"DATETIME_FORMAT" }} · {{ job.get_target_type_display }}</p>
+    </div>
+    <a href="{% url 'core:import_list' %}" class="btn-secondary px-4 py-2">{% trans "Zur Übersicht" %}</a>
+</div>
+
+<div class="card p-5 mb-6">
+    <dl class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</dt>
+            <dd class="text-ink" data-testid="import-status">{{ job.get_status_display }}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
+            <dd class="text-ink">{% if job.document_type %}{{ job.document_type.name }}{% else %}–{% endif %}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Angelegt von" %}</dt>
+            <dd class="text-ink">{% if job.created_by %}{{ job.created_by.get_full_name|default:job.created_by.username }}{% else %}–{% endif %}</dd>
+        </div>
+        <div>
+            {# summary.created zaehlt Zeilen INNERHALB der Transaktion, die der Probelauf zurueckrollt — nur summary.committed unterscheidet Vorschau von Tatsache. #}
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% if result.summary.committed %}{% trans "Angelegte Datensätze" %}{% else %}{% trans "Würden angelegt (Probelauf)" %}{% endif %}</dt>
+            <dd class="text-ink" data-testid="import-detail-created">{{ result.summary.created|default:0 }}</dd>
+        </div>
+    </dl>
+</div>
+
+{% if result.errors %}
+<h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Fehler" %}</h2>
+{% include "core/import/partials/_error_table.html" %}
+{% endif %}
+
+<div class="flex items-center gap-3 mt-6">
+    {% if not job.is_final %}
+    <a href="{% url 'core:import_mapping' pk=job.pk %}"
+       class="btn-primary px-4 py-2 hover:opacity-90"
+       data-testid="import-continue-link">{% trans "Zuordnung fortsetzen" %}</a>
+    <form method="post" action="{% url 'core:import_abort' pk=job.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn-secondary px-4 py-2"
+                data-testid="import-abort-submit">{% trans "Import abbrechen" %}</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-ink-muted">{% trans "Der Lauf ist abgeschlossen; die hochgeladene Datei wurde gelöscht." %}</p>
+    {% endif %}
+</div>
+{% endblock %}

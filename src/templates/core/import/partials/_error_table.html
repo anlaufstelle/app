@@ -1,0 +1,28 @@
+{% load i18n %}
+{% comment %}Fehlertabelle des Probelaufs — geteilt von preview.html und detail.html.
+Erwartet: ``result`` (Inhalt von ``ImportJob.result_json``).
+
+Die Meldungen tragen bewusst KEINE Zellwerte (PII-Invariante, Refs #1060) —
+Zeile und Spalte reichen, um die Stelle in der Quelldatei zu finden.{% endcomment %}
+{% if result.errors %}
+<div class="card overflow-x-auto" data-testid="import-error-table">
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zeile" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Spalte" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Meldung" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for error in result.errors %}
+            <tr data-testid="import-error-row">
+                <td class="px-4 py-3 text-sm text-ink">{{ error.row }}</td>
+                <td class="px-4 py-3 text-sm text-ink-muted">{{ error.column|default:"–" }}</td>
+                <td class="px-4 py-3 text-sm text-ink-muted">{{ error.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

@@ -26,6 +26,7 @@ from core.models import (
     FieldCondition,
     FieldGroup,
     FieldTemplate,
+    ImportJob,
     LegalHold,
     Milestone,
     Organization,
@@ -862,4 +863,29 @@ def foreign_field_condition(foreign_doc_type, second_facility):
         operator=FieldCondition.Operator.GREATER_THAN,
         value=5,
         group_index=0,
+    )
+
+
+# --- M4 Import (Refs #1060) -------------------------------------------------
+# Beide Laeufe stehen auf UPLOADED und tragen bewusst KEINE Quelldatei: fuer die
+# URL-/IDOR-Proben der AuthZ-Matrix reicht die Zeile. Die Wizard-Views muessen
+# den fehlenden Upload als Nutzerfehler behandeln (Redirect + Meldung), nie als
+# 500er — genau das pinnt die Matrix damit mit ab.
+
+
+@pytest.fixture
+def import_job(facility, admin_user):
+    return ImportJob.objects.create(
+        facility=facility,
+        created_by=admin_user,
+        target_type=ImportJob.TargetType.CLIENT,
+    )
+
+
+@pytest.fixture
+def foreign_import_job(second_facility, foreign_staff):
+    return ImportJob.objects.create(
+        facility=second_facility,
+        created_by=foreign_staff,
+        target_type=ImportJob.TargetType.CLIENT,
     )

@@ -14,12 +14,14 @@ from datetime import timedelta
 from io import StringIO
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from core.models import DocumentType, Event, EventHistory
+from core.models import DocumentType, Event, EventHistory, ImportJob
 from core.models.audit import AuditLog
+from core.services import import_engine
 
 
 @pytest.mark.django_db
@@ -205,3 +207,48 @@ class TestRlsBypassContextGuard:
         monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: True)
         call_command("enforce_retention")
         assert AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).exists()
+
+
+@pytest.mark.django_db
+class TestStaleImportJobCleanup:
+    """M4 (Refs #1060): Ein liegengebliebener Importlauf haelt eine
+    verschluesselte Datei mit Klientendaten auf der Disk. Der naechtliche
+    Retention-Lauf raeumt ihn ab — im ``if not dry_run``-Zweig, neben
+    ``cleanup_stale_proposals``.
+    """
+
+    @pytest.fixture
+    def stale_job(self, facility, admin_user, settings, tmp_path):
+        settings.MEDIA_ROOT = str(tmp_path)
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            SimpleUploadedFile("import.csv", b"Pseudonym\nP-1\n", content_type="text/csv"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        ImportJob.objects.filter(pk=job.pk).update(
+            created_at=timezone.now() - timedelta(days=import_engine.STALE_DAYS + 1)
+        )
+        job.refresh_from_db()
+        return job
+
+    def test_stale_job_is_aborted_and_reported(self, facility, settings_obj, stale_job):
+        path = import_engine.import_file_path(stale_job)
+        stdout = StringIO()
+
+        call_command("enforce_retention", stdout=stdout)
+
+        stale_job.refresh_from_db()
+        assert stale_job.status == ImportJob.Status.ABORTED
+        assert not path.exists()
+        assert "1 stale import job(s)" in stdout.getvalue()
+        assert AuditLog.objects.filter(action=AuditLog.Action.IMPORT_ABORTED).exists()
+
+    def test_dry_run_does_not_clean_up(self, facility, settings_obj, stale_job):
+        path = import_engine.import_file_path(stale_job)
+
+        call_command("enforce_retention", "--dry-run", stdout=StringIO())
+
+        stale_job.refresh_from_db()
+        assert stale_job.status == ImportJob.Status.UPLOADED
+        assert path.exists()
