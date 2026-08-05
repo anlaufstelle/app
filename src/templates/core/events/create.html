@@ -91,9 +91,10 @@
                             interaktiv — ein in diesem Fenster geoeffneter
                             File-Chooser befuellt einen Knoten, den der Swap gleich
                             ersetzt (Datei geht still verloren). hx-disabled-elt
-                            sperrt die Altfelder fuer die Dauer des Requests; nach
-                            dem Swap sind die neuen Felder regulaer aktiv.{% endcomment %}
-                            hx-disabled-elt="#dynamic-fields input, #dynamic-fields select, #dynamic-fields textarea, #dynamic-fields button"
+                            sperrt das umschliessende fieldset (deaktiviert nativ
+                            alle enthaltenen Controls) fuer die Dauer des Requests;
+                            nach dem Swap sind die neuen Felder regulaer aktiv.{% endcomment %}
+                            hx-disabled-elt="#dynamic-fields-fence"
                             hx-include="[name='document_type']">
                         <option value="">---------</option>
                         {% for dt in meta_form.document_type.field.queryset %}
@@ -203,9 +204,17 @@
         </div>
 
         {# Sektion 2: Dynamische Felder #}
-        <div id="dynamic-fields">
-            {% include "core/events/partials/dynamic_fields.html" %}
-        </div>
+        {% comment %}Refs #1797: Das fieldset ist das Ziel von hx-disabled-elt
+        am Dokumenttyp-Select — es existiert auch bei leerem Feldblock (ein
+        Selektor ohne Treffer waere ein htmx-console.error und damit ein
+        CSP-/Konsolen-Guard-Fail), und ``disabled`` am fieldset deaktiviert
+        nativ alle enthaltenen Controls fuer die Dauer des Feld-Requests.
+        Tailwind-Preflight nullt fieldset-Margin/Border — layout-neutral.{% endcomment %}
+        <fieldset id="dynamic-fields-fence">
+            <div id="dynamic-fields">
+                {% include "core/events/partials/dynamic_fields.html" %}
+            </div>
+        </fieldset>
 
         <div class="flex flex-col sm:flex-row gap-2.5">
             <button type="submit" id="event-submit-btn"
