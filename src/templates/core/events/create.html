@@ -86,6 +86,14 @@
                             Datei-Feld, nachdem der File-Chooser es befuellt hat, und
                             der Kontakt wird ohne Anhang gespeichert.{% endcomment %}
                             hx-sync="this:replace"
+                            {% comment %}Refs #1797 (Restbefund): waehrend der
+                            Feld-Request laeuft, sind die ALTEN Feld-Knoten noch
+                            interaktiv — ein in diesem Fenster geoeffneter
+                            File-Chooser befuellt einen Knoten, den der Swap gleich
+                            ersetzt (Datei geht still verloren). hx-disabled-elt
+                            sperrt die Altfelder fuer die Dauer des Requests; nach
+                            dem Swap sind die neuen Felder regulaer aktiv.{% endcomment %}
+                            hx-disabled-elt="#dynamic-fields input, #dynamic-fields select, #dynamic-fields textarea, #dynamic-fields button"
                             hx-include="[name='document_type']">
                         <option value="">---------</option>
                         {% for dt in meta_form.document_type.field.queryset %}
