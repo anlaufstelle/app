@@ -161,7 +161,7 @@ import dataclasses
 from django.db.models import Count
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
+from core.models import Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -200,7 +200,7 @@ The order is the column order in the CSV and in the panel. The labels are `gette
 
 ### Step 3 — Build the dataset
 
-Imports as in step 1 (`Event`, `DocumentType`, `Count`):
+Imports as in step 1 (`Event`, `Count`):
 
 ```python
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
@@ -571,4 +571,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: a0479705cad0454743eb58b73b0c8fe0ecd0551a -->
+<!-- source-hash: 4e505a2a343dd363d517be328a051c192ae847f3 -->

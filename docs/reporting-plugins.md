@@ -158,7 +158,7 @@ import dataclasses
 from django.db.models import Count
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
+from core.models import Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -197,7 +197,7 @@ Die Reihenfolge ist die Spaltenreihenfolge im CSV und im Panel. Die Labels sind 
 
 ### Schritt 3 — Datensatz bauen
 
-Imports wie in Schritt 1 (`Event`, `DocumentType`, `Count`):
+Imports wie in Schritt 1 (`Event`, `Count`):
 
 ```python
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
