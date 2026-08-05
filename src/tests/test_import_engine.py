@@ -798,6 +798,15 @@ class TestConcurrentTransitionsAreSerialized:
     haelt einen Snapshot von VOR der ersten Uebernahme.
     """
 
+    #: Zuordnung der ``client_job``-Fixture — der Mapping-POST schickt sie bei
+    #: jedem Aufruf erneut mit.
+    MAPPING = {
+        "Pseudonym": "pseudonym",
+        "Kontaktstufe": "contact_stage",
+        "Altersgruppe": "age_cluster",
+        "Notizen": "notes",
+    }
+
     def _validated_job_and_stale_copy(self, client_job, admin_user):
         import_engine.run_import(client_job, admin_user, commit=False)
         return ImportJob.objects.get(pk=client_job.pk)
@@ -830,6 +839,41 @@ class TestConcurrentTransitionsAreSerialized:
             import_engine.commit_import(stale, admin_user)
 
         assert not Client.objects.filter(pseudonym__startswith="IMP-").exists()
+
+    def test_probe_after_a_commit_is_rejected(self, client_job, admin_user):
+        """Der Mapping-/Probelauf-Pfad steht unter DEMSELBEN Lock (Refs #1793).
+
+        Ohne ihn entschiede der Mapping-POST auf seinem In-Memory-Snapshot und
+        setzte den Lauf per ``job.save()`` auf MAPPED/VALIDATED zurueck.
+        """
+        stale = self._validated_job_and_stale_copy(client_job, admin_user)
+        import_engine.commit_import(client_job, admin_user)
+
+        with pytest.raises(ValidationError, match="bereits abgeschlossen"):
+            import_engine.probe_import(stale, admin_user, self.MAPPING)
+
+        client_job.refresh_from_db()
+        assert client_job.status == ImportJob.Status.COMMITTED
+
+    def test_probe_does_not_reopen_a_job_committed_in_the_meantime(self, client_job, admin_user):
+        """Das echte Rennfenster liegt INNERHALB von ``commit_import``.
+
+        Dort steht der Status bereits auf COMMITTED, waehrend die Quelldatei
+        noch auf der Disk liegt (sie wird erst nach der Lock-Klammer geloescht).
+        Genau hier hat der ungesicherte Mapping-POST alles, was er zum Weiter-
+        laufen braucht — und importierte die Datei ein zweites Mal.
+        """
+        stale = self._validated_job_and_stale_copy(client_job, admin_user)
+        import_engine.run_import(client_job, admin_user, commit=True)
+        assert client_job.status == ImportJob.Status.COMMITTED
+        assert import_engine.import_file_path(client_job).exists()
+
+        with pytest.raises(ValidationError, match="bereits abgeschlossen"):
+            import_engine.probe_import(stale, admin_user, self.MAPPING)
+
+        client_job.refresh_from_db()
+        assert client_job.status == ImportJob.Status.COMMITTED
+        assert Client.objects.filter(pseudonym__startswith="IMP-").count() == 3
 
 
 @pytest.mark.django_db

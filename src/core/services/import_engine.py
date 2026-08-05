@@ -733,9 +733,10 @@ def _lock_job(job: ImportJob) -> None:
     eigenen, in der View geladenen Instanz. Entschiede der Statusuebergang auf
     diesem In-Memory-Snapshot, importierte ein Doppelklick auf „Uebernehmen" die
     Datei zweimal, und ein spaeter eintreffendes ``abort_import`` schriebe einen
-    bereits uebernommenen Lauf auf ``ABORTED`` um. ``commit_import`` und
-    ``abort_import`` laufen deshalb ueber DENSELBEN Lock: der zweite Request
-    blockiert, liest danach den Endzustand und faellt in den Guard.
+    bereits uebernommenen Lauf auf ``ABORTED`` um. ``probe_import``,
+    ``commit_import`` und ``abort_import`` laufen deshalb ueber DENSELBEN Lock:
+    der zweite Request blockiert, liest danach den Endzustand und faellt in den
+    Guard.
 
     Muster wie ``core.services.case.workitems`` — Neuladen innerhalb der
     Transaktionsklammer, mit explizitem ``facility_id``-Filter, damit Tenant-
@@ -746,6 +747,28 @@ def _lock_job(job: ImportJob) -> None:
     job.status = locked.status
     job.result_json = locked.result_json
     job.storage_filename = locked.storage_filename
+
+
+def probe_import(job: ImportJob, user, mapping: dict[str, str]) -> dict:
+    """Zuordnung speichern und den Probelauf fahren — unter demselben Lock.
+
+    Der Mapping-Schritt schreibt den Status (``apply_mapping`` -> MAPPED,
+    ``run_import`` -> VALIDATED) und gehoert damit in dieselbe Serialisierung
+    wie :func:`commit_import`/:func:`abort_import`. Ohne den Lock entschieden
+    beide Schritte auf dem In-Memory-Snapshot der View: waehrend ein paralleler
+    Commit laeuft, sieht der Mapping-POST noch VALIDATED, laeuft durch und
+    schreibt den bereits uebernommenen Lauf auf MAPPED/VALIDATED zurueck — die
+    Datei wuerde ein zweites Mal importiert und der Endzustand waere
+    widerspruechlich (Refs #1793).
+
+    ``apply_mapping`` und ``run_import`` bleiben selbst lock-frei: die
+    Lock-Verantwortung traegt wie bei ``commit_import`` der Aufrufer, ihre
+    ``is_final``-Pruefungen sind die zweite Linie.
+    """
+    with transaction.atomic():
+        _lock_job(job)
+        apply_mapping(job, mapping)
+        return run_import(job, user, commit=False)
 
 
 def commit_import(job: ImportJob, user) -> ImportJob:

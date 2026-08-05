@@ -137,8 +137,10 @@ class ImportMappingView(FacilityAdminRequiredMixin, View):
             for index, column in enumerate(preview["columns"])
         }
         try:
-            import_engine.apply_mapping(job, mapping)
-            import_engine.run_import(job, request.user, commit=False)
+            # Zuordnen + Probelauf laufen als EIN gesperrter Uebergang; ein
+            # parallel eintreffender Commit/Abbruch darf hier nicht mehr
+            # ueberschrieben werden (Refs #1793).
+            import_engine.probe_import(job, request.user, mapping)
         except ValidationError as exc:
             context = self._context(job, preview)
             context["errors"] = list(exc.messages)
