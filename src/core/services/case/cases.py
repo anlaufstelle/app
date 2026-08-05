@@ -134,19 +134,29 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
 
 @transaction.atomic
 def update_case(case, user, *, expected_updated_at=None, **fields):
-    """Update mutable fields on a case (title, description, lead_user, client,
+    """Update mutable fields on a case (title, description, lead_user,
     document_type, data_json).
 
     Writes an AuditLog entry with the names of changed fields (no PII values).
 
     ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
     DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
+
+    Ursprungs-Pinning (Refs #1786): ``client`` ist **kein** Update-Feld mehr.
+    Die Personenzuordnung eines Falls entsteht beim Anlegen und ist danach
+    unveränderlich — ein nachträglicher Wechsel würde den kompletten
+    Fallverlauf (Titel, Beschreibung, ``data_json``, Anhänge, zugeordnete
+    Ereignisse) einer anderen Person zuschlagen, ohne dass eine der
+    bestehenden Grenzen (Facility-Scope, Widerrufsstatus) das bemerkt.
+    Strikt: JEDER ``client``-Kwarg fliegt raus, auch der unveränderte Wert —
+    die Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     """
     check_version_conflict(case, expected_updated_at)
-    # Allowlist (Refs #734): Verhindert Mass-Assignment durch versehentlich
-    # durchgereichte Felder. Läuft ZUERST — die Mass-Assignment-Prüfung darf
-    # nicht vom Diff abhängen (Muster ``update_client``, P4b).
-    allowed = {"title", "description", "lead_user", "client", "document_type", "data_json"}
+    # Allowlist (Refs #734, #1786): Verhindert Mass-Assignment durch
+    # versehentlich durchgereichte Felder. Läuft ZUERST — die
+    # Mass-Assignment-Prüfung darf nicht vom Diff abhängen (Muster
+    # ``update_client``, P4b).
+    allowed = {"title", "description", "lead_user", "document_type", "data_json"}
     for key in fields:
         if key not in allowed:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")

@@ -518,6 +518,10 @@ class CaseUpdateView(StaffRequiredMixin, View):
             return render(request, "core/cases/form.html", context)
 
         fields = dict(form.cleaned_data)
+        # Ursprungs-Pinning (Refs #1786): ``client`` ist kein Update-Feld mehr —
+        # ``update_case`` weist ihn ab. Das Formular liefert ihn beim Edit aber
+        # weiterhin mit (gemeinsames Create-/Edit-Form), also hier verwerfen.
+        fields.pop("client", None)
         doc_type = None if type_locked else form.cleaned_data.get("document_type")
         file_fields: dict[str, list] = {}
         # ADR-039 §7: Typwechsel/-entfernen verwirft das ``data_json`` — die

@@ -66,6 +66,16 @@ class TestCaseService:
         with pytest.raises(ValueError, match="Feld"):
             update_case(case_open, staff_user, status="closed")
 
+    def test_update_case_rejects_client_change(self, case_open, client_qualified, staff_user):
+        """#1786: Personenzuordnung ist nach dem Anlegen unveraenderlich (Mass-Assignment-Guard)."""
+        with pytest.raises(ValueError, match="client"):
+            update_case(case_open, staff_user, client=client_qualified)
+
+    def test_update_case_rejects_same_client_value(self, case_open, staff_user):
+        """Auch der unveraenderte Wert wird abgelehnt — client ist kein Update-Feld mehr."""
+        with pytest.raises(ValueError, match="client"):
+            update_case(case_open, staff_user, client=case_open.client)
+
     def test_close_case(self, facility, staff_user, case_open):
         from core.models import AuditLog
 
