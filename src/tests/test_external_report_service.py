@@ -201,8 +201,10 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
 
     Unterdrueckte Zeilen stehen deshalb als Block in kanonischer,
     **wertunabhaengiger** Ordnung am Listenende (Altersgruppen in
-    Modellreihenfolge, Dokumenttypen nach ``(category, name)``); sichtbare
-    Zeilen duerfen count-sortiert bleiben, ihre Werte stehen ohnehin im Klartext.
+    Modellreihenfolge, Dokumenttypen nach ``name`` — Refs #1749/ADR-040: frueher
+    ``(category, name)``, aber ``DocumentType.category`` ist entfernt);
+    sichtbare Zeilen duerfen count-sortiert bleiben, ihre Werte stehen ohnehin
+    im Klartext.
     """
 
     AGE_LABELS = {"u18": "Unter 18", "18_26": "18–26", "27_plus": "27+", "unknown": "Unbekannt"}
@@ -212,8 +214,8 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         rows = [{"cluster": key, "label": self.AGE_LABELS[key], "count": value} for key, value in counts.items()]
         return sorted(rows, key=lambda row: row["count"], reverse=True)
 
-    def _doc_rows(self, counts: dict[tuple[str, str], int]) -> list[dict]:
-        rows = [{"name": name, "category": category, "count": value} for (category, name), value in counts.items()]
+    def _doc_rows(self, counts: dict[str, int]) -> list[dict]:
+        rows = [{"name": name, "count": value} for name, value in counts.items()]
         return sorted(rows, key=lambda row: row["count"], reverse=True)
 
     def test_unterdrueckte_altersgruppen_stehen_als_block_in_modellreihenfolge(self):
@@ -240,15 +242,15 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         assert [row["cluster"] for row in welt_a] == [row["cluster"] for row in welt_b]
         assert [row["count"] for row in welt_a] == [row["count"] for row in welt_b]
 
-    def test_unterdrueckte_dokumenttypen_nach_kategorie_und_name(self):
+    def test_unterdrueckte_dokumenttypen_nach_name(self):
         from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
 
         rows = self._doc_rows(
             {
-                ("contact", "Kontakt"): 20,
-                ("note", "Notiz"): 9,
-                ("service", "Beratung"): 3,
-                ("contact", "Aufnahme"): 2,
+                "Kontakt": 20,
+                "Notiz": 9,
+                "Beratung": 3,
+                "Aufnahme": 2,
             }
         )
         result = _suppress_small(rows, threshold=5, margin=34, order=ORDER_DOCUMENT_TYPE)
@@ -261,11 +263,11 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
 
         rows = self._doc_rows(
             {
-                ("contact", "Aufnahme"): 7,
-                ("note", "Notiz"): 30,
-                ("service", "Beratung"): 12,
-                ("contact", "Kontakt"): 1,
-                ("service", "Vermittlung"): 2,
+                "Aufnahme": 7,
+                "Notiz": 30,
+                "Beratung": 12,
+                "Kontakt": 1,
+                "Vermittlung": 2,
             }
         )
         result = _suppress_small(rows, threshold=5, margin=52, order=ORDER_DOCUMENT_TYPE)
@@ -364,7 +366,7 @@ class TestKanonischeOrdnungUnterdrueckterZeilen:
         """
         from core.services.dashboard.external_report import ORDER_DOCUMENT_TYPE, _suppress_small
 
-        rows = self._doc_rows({("note", "Notiz"): 30, ("service", "Beratung"): 12, ("contact", "Aufnahme"): 7})
+        rows = self._doc_rows({"Notiz": 30, "Beratung": 12, "Aufnahme": 7})
         result = _suppress_small(rows, threshold=5, margin=49, order=ORDER_DOCUMENT_TYPE)
 
         assert [row["name"] for row in result] == ["Notiz", "Beratung", "Aufnahme"]
