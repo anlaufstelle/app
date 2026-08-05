@@ -143,6 +143,45 @@ class TestCaseCRUD:
         # Detail-Seite zeigt aktualisierten Titel
         assert page.locator("h1").inner_text() == updated_title
 
+    def test_edit_shows_client_as_text_without_input(self, staff_page, base_url):
+        """Refs #1786: Im Fall-Edit steht die Person als Text — ohne Eingabefeld.
+
+        Das Pinning ist erst dann wirksam, wenn die Fläche gar kein
+        ``client``-Feld mehr anbietet: ein disabled/hidden Feld waere weiterhin
+        ein Mass-Assignment-Ziel und liesse die Bearbeiterin glauben, sie duerfe
+        wechseln. Geprueft wird darum die Abwesenheit von Autocomplete UND
+        ``input[name='client']`` und die Anwesenheit der Klartext-Anzeige samt
+        Begruendungssatz. Der Server-Guard haengt an
+        ``src/tests/test_client_pinning_views.py``.
+        """
+        page = staff_page
+
+        unique_title = f"E2E-Pin-{uuid.uuid4().hex[:6]}"
+        page.goto(f"{base_url}/cases/new/")
+        page.fill('input[name="title"]', unique_title)
+        page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
+        pseudonym = page.locator("input[role='combobox']").input_value()
+        assert pseudonym, "Pseudonym wurde nach der Klient-Auswahl nicht im Autocomplete sichtbar."
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/$"))
+        case_pk = re.search(r"/cases/([0-9a-f-]+)/", page.url).group(1)
+
+        page.goto(f"{base_url}/cases/{case_pk}/edit/", wait_until="domcontentloaded")
+        pinned = page.locator("[data-testid='client-pinned']")
+        pinned.wait_for(state="visible", timeout=5000)
+
+        assert pinned.inner_text().strip() == pseudonym, (
+            f"Gepinnte Person soll {pseudonym!r} zeigen, zeigt {pinned.inner_text().strip()!r}."
+        )
+        assert page.locator("input[name='client']").count() == 0, (
+            "Das Fall-Edit darf kein ``client``-Feld mehr senden (Mass-Assignment-Fläche)."
+        )
+        assert page.locator("input[placeholder='Pseudonym eingeben...']").count() == 0, (
+            "Das Personen-Autocomplete gehört nicht auf die Edit-Seite eines gepinnten Falls."
+        )
+        assert page.locator("text=Die Personenzuordnung ist nach dem Anlegen festgelegt.").is_visible()
+
     @pytest.mark.smoke
     def test_close_case(self, lead_page, base_url):
         """Fall schließen (Lead-User): Status wechselt zu 'Geschlossen'."""
