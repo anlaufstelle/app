@@ -274,7 +274,7 @@ class TestE2ESelectorStabilityGuard:
         # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 4 Vorkommen.
         "test_retention_dashboard.py": 1,
         "test_workflow_complete.py": 1,
-        "test_workitem_edit.py": 2,
+        # #1788: eigene Aufgaben statt ``.first``-Griff — beide Vorkommen entfernt.
         "test_zeitstrom_enrichment.py": 1,
         "test_zeitstrom_events.py": 2,
     }
