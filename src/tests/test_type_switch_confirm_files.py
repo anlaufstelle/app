@@ -309,6 +309,53 @@ class TestOriginalDocumentTypeAttribute:
 
         assert f'data-original-document-type="{dt.pk}"' in content
 
+    def test_client_invalid_post_keeps_the_stored_type_not_the_posted_one(
+        self, client, staff_user, facility, client_type_file_only
+    ):
+        """Regression (Refs #1785, Review): im Re-Render nach ungueltigem POST
+        hat ``ModelForm._post_clean`` ``instance.document_type`` bereits auf den
+        GEPOSTETEN Typ gesetzt. Laese das Template den Ausgangswert aus der
+        Instanz, stuende dort der Versuchs-Typ — und ein B->C->B-Wechsel auf der
+        re-gerenderten Seite unterdrueckte die Verlust-Rueckfrage. Die Baseline
+        muss der gespeicherte Typ bleiben.
+        """
+        dt_old, ft = client_type_file_only
+        dt_new = DocumentType.objects.create(
+            facility=facility, name="Anderer-Typ", entity_type=DocumentType.EntityType.CLIENT
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Stammt-von-dt-old",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=dt_old,
+            created_by=staff_user,
+        )
+        # Ein Wert am alten Typ, damit die Rueckfrage (und mit ihr das
+        # ``data-original-document-type``-Attribut) ueberhaupt rendert.
+        _set_marker(person, "anlage", [_attach(facility, person, ft, staff_user, "original.pdf")])
+        # Namenskollision erzwingt den ungueltigen MAIN-Form-Zweig, waehrend das
+        # gueltige document_type=dt_new die Instanz ueber _post_clean mutiert.
+        Client.objects.create(
+            facility=facility, pseudonym="Kollision", contact_stage=Client.ContactStage.IDENTIFIED
+        )
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "Kollision",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "",
+                "document_type": str(dt_new.pk),
+            },
+        )
+        content = response.content.decode()
+
+        assert response.status_code == 200
+        assert f'data-original-document-type="{dt_old.pk}"' in content
+        assert f'data-original-document-type="{dt_new.pk}"' not in content
+
 
 class TestCaseConfirmCounts:
     def test_case_counts_values_and_files_separately(self, client, staff_user, facility, case_type_file_and_text):

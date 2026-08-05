@@ -503,6 +503,12 @@ class ClientUpdateView(StaffRequiredMixin, View):
             "client": client,
             "is_edit": True,
             "dynamic_values_at_risk": _values_at_risk(client, client.data_json, type_locked=type_locked),
+            # Refs #1785 (Review): Baseline der Verlust-Rueckfrage ist der
+            # GESPEICHERTE Typ. Im GET ist ``client.document_type_id`` unberuehrt;
+            # im POST-Re-Render darf er NICHT gelesen werden (``_post_clean`` hat
+            # ihn dann auf den geposteten Wert mutiert) — dort steht der vor
+            # ``is_valid()`` gesicherte ``old_doc_type_id``.
+            "original_document_type_id": client.document_type_id,
             # M24/AP4 (Refs #1738): bestehende Anhaenge samt Ersetzen-/Entfernen-
             # Steuerung. In JEDEM Render-Zweig noetig — sonst verschwinden die
             # Zeilen beim Re-Render eines ungueltigen Formulars aus dem Formular
@@ -548,6 +554,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 "client": client,
                 "is_edit": True,
                 "dynamic_values_at_risk": _values_at_risk(client, old_data, type_locked=type_locked),
+                # Refs #1785: gespeicherter Typ als Baseline — NICHT
+                # ``client.document_type_id`` (von ``_post_clean`` mutiert).
+                "original_document_type_id": old_doc_type_id,
                 "existing_attachments": build_attachment_context(client),
             }
             return render(request, "core/clients/form.html", context)
@@ -580,6 +589,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     "client": client,
                     "is_edit": True,
                     "dynamic_values_at_risk": _values_at_risk(client, old_data, type_locked=type_locked),
+                    # Refs #1785: gespeicherter Typ (nicht der von ``_post_clean``
+                    # mutierte ``client.document_type_id``).
+                    "original_document_type_id": old_doc_type_id,
                     "existing_attachments": build_attachment_context(client),
                 }
                 return render(request, "core/clients/form.html", context)

@@ -456,6 +456,10 @@ class CaseUpdateView(StaffRequiredMixin, View):
             "client_id": str(case.client.pk) if case.client else "",
             "client_pseudonym": case.client.pseudonym if case.client else "",
             "dynamic_values_at_risk": _values_at_risk(case, case.data_json, type_locked=type_locked),
+            # Refs #1785 (Review): Baseline der Verlust-Rueckfrage ist der
+            # gespeicherte Typ. Im GET unberuehrt; im POST-Re-Render darf
+            # ``case.document_type_id`` NICHT gelesen werden (``_post_clean``).
+            "original_document_type_id": case.document_type_id,
             # M24/AP4 (Refs #1738): in JEDEM Render-Zweig — sonst verschwinden
             # bestehende Anhang-Zeilen beim Re-Render aus dem Formular.
             "existing_attachments": build_attachment_context(case),
@@ -506,6 +510,9 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 "client_id": request.POST.get("client", ""),
                 "client_pseudonym": "",
                 "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
+                # Refs #1785: gespeicherter Typ (nicht der von ``_post_clean``
+                # mutierte ``case.document_type_id``).
+                "original_document_type_id": old_doc_type_id,
                 "existing_attachments": build_attachment_context(case),
             }
             return render(request, "core/cases/form.html", context)
@@ -538,6 +545,9 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     "client_id": request.POST.get("client", ""),
                     "client_pseudonym": "",
                     "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
+                    # Refs #1785: gespeicherter Typ (nicht der von ``_post_clean``
+                    # mutierte ``case.document_type_id``).
+                    "original_document_type_id": old_doc_type_id,
                     "existing_attachments": build_attachment_context(case),
                 }
                 return render(request, "core/cases/form.html", context)
