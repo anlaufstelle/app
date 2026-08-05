@@ -3,6 +3,8 @@
 E2E-Tests laufen gegen die echte Dev-Datenbank (nicht die Test-DB).
 Der Server wird als Subprocess gestartet, Seed-Daten werden einmalig geladen.
 Login-Sessions werden per Storage-State wiederverwendet (verhindert Rate-Limiting).
+Der Chromium-Prozess wird pro Testdatei recycelt (``browser``-Fixture, Refs #1787),
+damit der volle serielle Lauf auf RAM-knappen Hosts nicht ins OOM laeuft.
 
 Bei paralleler Ausführung (pytest-xdist) bekommt jeder Worker:
 - eigene Datenbank (anlaufstelle_e2e, anlaufstelle_e2e_1, ...)
@@ -264,48 +266,85 @@ def enforced_base_url(request, base_url):
     proc.wait(timeout=10)
 
 
-def _create_storage_state(browser, base_url, username, password="anlaufstelle2026"):
-    """Einmalig einloggen und Storage-State für einen User speichern."""
-    context = browser.new_context(locale="de-DE")
-    page = context.new_page()
-    page.goto(f"{base_url}/login/")
-    page.fill('input[name="username"]', username)
-    page.fill('input[name="password"]', password)
-    page.click('button[type="submit"]')
-    page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
-    storage = context.storage_state()
-    context.close()
+@pytest.fixture(scope="module")
+def browser(launch_browser):
+    """Ein Chromium-Prozess je Testdatei statt je Session (Refs #1787).
+
+    Der volle serielle Lauf (~760 Tests, ~21 min) killt auf 7,5-GiB-Hosts ohne
+    Swap den session-scoped Chromium per OOM im letzten Datei-Cluster — der
+    Speicherverbrauch eines Browser-Prozesses waechst ueber die Session monoton
+    (Renderer-Reste, Caches, SW-Registrierungen), auch wenn jeder Test seinen
+    Context sauber schliesst. Modul-Scope kappt dieses Wachstum: Am Dateiende
+    stirbt der Prozess und der naechste startet frisch.
+
+    Ueberschreibt bewusst die session-scoped ``browser``-Fixture von
+    pytest-playwright. Alle Consumer (``authenticated_page`` & Co., die
+    function-scoped Fixtures in den Testdateien, ``browser.new_context()`` in
+    Lockout-/MFA-/Offline-Tests) sind function-scoped und sehen davon nichts.
+    Die Storage-States bleiben session-scoped — sie sind reines Cookie-JSON und
+    haengen deshalb nicht mehr am ``browser``, sondern erzeugen sich ueber einen
+    kurzlebigen eigenen Browser (siehe ``_create_storage_state``).
+    """
+    browser = launch_browser()
+    yield browser
+    browser.close()
+
+
+def _create_storage_state(launch_browser, base_url, username, password="anlaufstelle2026"):
+    """Einmalig einloggen und Storage-State für einen User speichern.
+
+    Nutzt einen eigenen, sofort wieder geschlossenen Browser statt der
+    ``browser``-Fixture (Refs #1787): Die Storage-States sind session-scoped,
+    ``browser`` ist seit dem Browser-Recycling nur noch modul-scoped — eine
+    direkte Abhaengigkeit waere ein ScopeMismatch. Der zurueckgegebene
+    Storage-State ist reines Cookie-JSON und ueberlebt das Schliessen des
+    Browsers; die zugehoerige Server-Session bleibt ohnehin unabhaengig davon
+    gueltig.
+    """
+    browser = launch_browser()
+    try:
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', username)
+        page.fill('input[name="password"]', password)
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+        storage = context.storage_state()
+        context.close()
+    finally:
+        browser.close()
     return storage
 
 
 @pytest.fixture(scope="session")
-def _login_storage_state(base_url, browser):
+def _login_storage_state(base_url, launch_browser):
     """Einmalig einloggen und Storage-State speichern (Session-Cookies)."""
-    return _create_storage_state(browser, base_url, "admin")
+    return _create_storage_state(launch_browser, base_url, "admin")
 
 
 @pytest.fixture(scope="session")
-def _lead_storage_state(base_url, browser):
+def _lead_storage_state(base_url, launch_browser):
     """Storage-State für Lead-User (emma)."""
-    return _create_storage_state(browser, base_url, "emma")
+    return _create_storage_state(launch_browser, base_url, "emma")
 
 
 @pytest.fixture(scope="session")
-def _staff_storage_state(base_url, browser):
+def _staff_storage_state(base_url, launch_browser):
     """Storage-State für Staff-User (miriam)."""
-    return _create_storage_state(browser, base_url, "miriam")
+    return _create_storage_state(launch_browser, base_url, "miriam")
 
 
 @pytest.fixture(scope="session")
-def _assistant_storage_state(base_url, browser):
+def _assistant_storage_state(base_url, launch_browser):
     """Storage-State für Assistant-User (lena)."""
-    return _create_storage_state(browser, base_url, "lena")
+    return _create_storage_state(launch_browser, base_url, "lena")
 
 
 @pytest.fixture(scope="session")
-def _super_admin_storage_state(base_url, browser):
+def _super_admin_storage_state(base_url, launch_browser):
     """Storage-State für Super-Admin (superadmin) — Refs #867."""
-    return _create_storage_state(browser, base_url, "superadmin")
+    return _create_storage_state(launch_browser, base_url, "superadmin")
 
 
 def _setup_page(context):
