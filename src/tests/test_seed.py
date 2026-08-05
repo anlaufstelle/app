@@ -299,6 +299,40 @@ def test_seed_flush_recreates_data():
     assert User.objects.count() == 7
 
 
+@pytest.mark.django_db
+def test_seed_flush_survives_import_job_with_document_type():
+    """--flush räumt auch M4-Läufe ab (Refs #1060).
+
+    ``ImportJob`` hängt nur an ``Facility`` (CASCADE, ganz am Ende des Flush)
+    und trägt einen PROTECT-Verweis auf ``DocumentType``. Fehlte er im Flush,
+    scheiterte ``DocumentType.objects.all().delete()`` mit ``ProtectedError``
+    — und damit der komplette ``seed --flush``, den das E2E-``base_url``-
+    Fixture zum Herstellen seines Startzustands aufruft. Ein einziger
+    liegengebliebener Importlauf hätte also die gesamte E2E-Suite blockiert.
+    """
+    from core.models import ImportJob, RectificationRequest
+
+    call_command("seed")
+    facility = Facility.objects.first()
+    doc_type = DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT).first()
+    ImportJob.objects.create(
+        facility=facility,
+        target_type=ImportJob.TargetType.EVENT,
+        document_type=doc_type,
+        status=ImportJob.Status.ABORTED,
+    )
+    RectificationRequest.objects.create(
+        facility=facility,
+        target_client=Client.objects.filter(facility=facility).first(),
+        field_path="notes",
+    )
+
+    call_command("seed", flush=True)
+
+    assert ImportJob.objects.count() == 0
+    assert RectificationRequest.objects.count() == 0
+
+
 # ---------------------------------------------------------------------------
 # Invalid scale (argparse catches this)
 # ---------------------------------------------------------------------------

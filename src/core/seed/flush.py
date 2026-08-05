@@ -16,10 +16,12 @@ from core.models import (
     EventHistory,
     Facility,
     FieldTemplate,
+    ImportJob,
     LegalHold,
     Milestone,
     Organization,
     OutcomeGoal,
+    RectificationRequest,
     RetentionProposal,
     Settings,
     TimeFilter,
@@ -44,6 +46,18 @@ def flush_seed_data() -> None:
         LegalHold.objects.all().delete()
         RetentionProposal.objects.all().delete()
         DeletionRequest.objects.all().delete()
+        # M4 (Refs #1060): beide haengen NICHT am Kaskadenpfad der unten
+        # geloeschten Objekte, sondern nur an ``Facility`` — die faellt erst
+        # ganz am Ende. ``ImportJob.document_type`` ist zudem PROTECT: ein
+        # liegengebliebener Lauf laesst ``DocumentType.objects.all().delete()``
+        # weiter unten mit ``ProtectedError`` scheitern und macht damit den
+        # kompletten ``seed --flush`` unbrauchbar — inklusive des
+        # E2E-``base_url``-Fixtures, das genau darueber seinen Startzustand
+        # herstellt. ``RectificationRequest`` kaeme zwar ueber
+        # ``Client``-CASCADE mit, steht hier aber bewusst explizit: der Flush
+        # soll nicht davon abhaengen, an welcher Person ein Antrag haengt.
+        RectificationRequest.objects.all().delete()
+        ImportJob.objects.all().delete()
         WorkItem.objects.all().delete()
         Milestone.objects.all().delete()
         OutcomeGoal.objects.all().delete()
