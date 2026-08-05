@@ -250,11 +250,13 @@ SLUG_MAP = {"kontakt": "Kontakte", "beratungsgespraech": "Beratung", ...}  # slu
 
 
 def resolve_category(system_type, slug):
-    return CATEGORY_MAP.get(system_type or "") or SLUG_MAP.get(slug or "")
+    if system_type:
+        return CATEGORY_MAP.get(system_type)
+    return SLUG_MAP.get(slug or "")
 ```
 
-- **`system_type` first.** The system identifier is stable, immutable after creation and the stronger statement. If a type carries a mapped `system_type`, it wins — even against a slug that says something else.
-- **`slug` as the secondary key.** The `system_type` value list is frozen; a facility's own types often have none (or `note`, which equals `NULL` as far as the export is concerned). The slug brings exactly those types into the report. The convention is the **package slugs** from [`core/packages/default.yaml`](../../src/core/packages/default.yaml): that is where the meaning of a slug is defined. Matching happens on the slug string alone, **regardless of facility** — a facility's own type with the slug `beratungsgespraech` *is* a counselling session. If you do not want that, choose a different slug (slugs are immutable after creation).
+- **`system_type` first — and exclusively, once it is set.** The system identifier is stable, immutable after creation and the stronger statement. If a type carries a **set** `system_type`, `CATEGORY_MAP` alone decides — even against a slug that says something else, and even when that `system_type` itself is not in `CATEGORY_MAP` (`note`/`ban`, see "`category` never" below): the slug does NOT rescue a deliberately excluded `system_type` (#1785, disclosure-leak fix).
+- **`slug` as the secondary key — only while `system_type` is empty/`NULL`.** The `system_type` value list is frozen; a facility's own types often have none at all. The slug brings exactly those types into the report, but only then — a set `system_type` (including `note`) locks out the secondary key. The convention is the **package slugs** from [`core/packages/default.yaml`](../../src/core/packages/default.yaml): that is where the meaning of a slug is defined. Matching happens on the slug string alone, **regardless of facility** — a facility's own type with the slug `beratungsgespraech` *is* a counselling session. If you do not want that, choose a different slug (slugs are immutable after creation).
 - **`category` never.** It is pure UI grouping, freely editable — regrouping in the config UI must never move report figures ([ADR-034](../adr/034-config-ui-category-system-type.md)).
 - **Keep both maps conservative.** Only add what unambiguously belongs to a category. Whatever the primary key deliberately leaves out (`note`, `ban`) must not be pulled in through the back door by the secondary key.
 - **The unmapped filter must give the same answer.** `validate_completeness` counts "no report category" in the database — that predicate is the SQL equivalent of the same resolution (no hit in **either** map). Two truths here mean the notice counts events as missing that are in fact in the report.
@@ -571,4 +573,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 4e505a2a343dd363d517be328a051c192ae847f3 -->
+<!-- source-hash: 28f12c932c436220d0f854bd7836e10b98c6c766 -->

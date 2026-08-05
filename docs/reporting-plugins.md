@@ -247,11 +247,13 @@ SLUG_MAP = {"kontakt": "Kontakte", "beratungsgespraech": "Beratung", ...}  # slu
 
 
 def resolve_category(system_type, slug):
-    return CATEGORY_MAP.get(system_type or "") or SLUG_MAP.get(slug or "")
+    if system_type:
+        return CATEGORY_MAP.get(system_type)
+    return SLUG_MAP.get(slug or "")
 ```
 
-- **`system_type` zuerst.** Die Systemkennung ist stabil, nach Erstellung unveränderlich und die stärkere Aussage. Trägt ein Typ einen gemappten `system_type`, gewinnt er — auch gegen einen anderslautenden Slug.
-- **`slug` als Zweitschlüssel.** Die `system_type`-Werteliste ist eingefroren; einrichtungseigene Typen haben oft keinen (oder `note`, exportseitig = `NULL`). Der Slug holt genau diese Typen in den Bericht. Konvention sind die **Paket-Slugs** aus [`core/packages/default.yaml`](../src/core/packages/default.yaml): dort steht, was ein Slug bedeutet. Gematcht wird der Slug-String **facility-agnostisch** — ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` ist ein Beratungsgespräch. Wer das nicht will, vergibt einen anderen Slug (Slugs sind nach Erstellung unveränderlich).
+- **`system_type` zuerst — und zwar exklusiv, sobald er gesetzt ist.** Die Systemkennung ist stabil, nach Erstellung unveränderlich und die stärkere Aussage. Trägt ein Typ einen **gesetzten** `system_type`, entscheidet ausschließlich `CATEGORY_MAP` — auch gegen einen anderslautenden Slug, und auch wenn der `system_type` selbst gar nicht in `CATEGORY_MAP` steht (`note`/`ban`, siehe „`category` nie" unten): der Slug rettet einen bewusst ausgeschlossenen `system_type` NICHT (Refs #1785, Disclosure-Leck-Fix).
+- **`slug` als Zweitschlüssel — nur wenn `system_type` leer/`NULL` ist.** Die `system_type`-Werteliste ist eingefroren; einrichtungseigene Typen haben oft gar keinen. Der Slug holt genau diese Typen in den Bericht, aber nur dann — ein gesetzter `system_type` (auch `note`) sperrt den Zweitschlüssel. Konvention sind die **Paket-Slugs** aus [`core/packages/default.yaml`](../src/core/packages/default.yaml): dort steht, was ein Slug bedeutet. Gematcht wird der Slug-String **facility-agnostisch** — ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` ist ein Beratungsgespräch. Wer das nicht will, vergibt einen anderen Slug (Slugs sind nach Erstellung unveränderlich).
 - **`category` nie.** Reine UI-Gruppierung, frei editierbar — eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben ([ADR-034](adr/034-config-ui-category-system-type.md)).
 - **Beide Maps konservativ halten.** Nimm nur auf, was eindeutig in eine Kategorie gehört. Was der Erstschlüssel bewusst auslässt (`note`, `ban`), darf der Zweitschlüssel nicht durch die Hintertür hereinholen.
 - **Der Unmapped-Filter muss dieselbe Antwort geben.** `validate_completeness` zählt „ohne Berichtszuordnung" auf der Datenbank — das Prädikat ist die SQL-Entsprechung derselben Auflösung (kein Treffer in **beiden** Maps). Zwei Wahrheiten hier heißen: der Hinweis zählt Ereignisse als fehlend, die im Bericht stehen.
