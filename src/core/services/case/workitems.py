@@ -239,7 +239,18 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     changed_fields = changed_fields_vs_db(workitem, fields)
     for key, value in fields.items():
         setattr(workitem, key, value)
-    workitem.save()
+    # Refs #1789: NUR die genannten Spalten schreiben. Ein volles ``save()``
+    # schriebe alle Felder der uebergebenen Instanz zurueck — und die stammt
+    # aus einem frueheren Read. Alles ausserhalb dieser Allowlist (``status``/
+    # ``completed_at``, der Recurrence-Marker, die Soft-Delete-Felder und vor
+    # allem per ``_redact_workitems`` redigierte ``title``/``description``)
+    # waere damit auf den stalen Stand zurueckgesetzt. ``updated_at`` muss
+    # explizit mitgenannt werden: ``auto_now`` bumpt bei ``update_fields``
+    # nicht von allein (gleiches Muster wie ``bulk_update_workitem_status``).
+    # ``fields`` enthaelt nach dem ``client``-Pop exakt die zu schreibenden
+    # Spalten; Django akzeptiert dabei den Feldnamen (``assigned_to``) ebenso
+    # wie den ``attname``.
+    workitem.save(update_fields=[*fields.keys(), "updated_at"])
 
     if changed_fields:
         audit_event(

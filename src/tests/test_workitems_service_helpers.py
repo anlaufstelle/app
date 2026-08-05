@@ -156,6 +156,76 @@ class TestUpdateWorkItemService:
         assert result.pk == workitem_open.pk
         assert result.description == "Neue Beschreibung"
 
+    def test_update_workitem_erhaelt_parallelen_statuswechsel(self, workitem_open, staff_user):
+        """Lost Update (Refs #1789): der Service schreibt nur die genannten Spalten.
+
+        Die uebergebene Instanz stammt aus einem frueheren Read; zwischen Read
+        und Aufruf hat ein anderer Request den Status auf DONE gesetzt. Ein
+        volles ``save()`` schriebe den stalen ``status``/``completed_at``
+        zurueck und macht die abgeschlossene Aufgabe still wieder offen —
+        obwohl der Aufruf nur die Prioritaet aendern wollte.
+        """
+        from django.utils import timezone
+
+        completed = timezone.now()
+        WorkItem.objects.filter(pk=workitem_open.pk).update(
+            status=WorkItem.Status.DONE,
+            completed_at=completed,
+        )
+        assert workitem_open.status == WorkItem.Status.OPEN, "Instanz ist bewusst stale"
+
+        update_workitem(workitem_open, staff_user, priority=WorkItem.Priority.URGENT)
+
+        workitem_open.refresh_from_db()
+        assert workitem_open.status == WorkItem.Status.DONE
+        assert workitem_open.completed_at == completed
+        assert workitem_open.priority == WorkItem.Priority.URGENT
+
+    def test_update_workitem_erhaelt_recurrence_marker(self, workitem_open, staff_user):
+        """Derselbe Lost-Update-Pfad fuer den Idempotenz-Marker der Wiedervorlage.
+
+        ``recurrence_duplicated_at`` verhindert, dass eine wiederkehrende
+        Aufgabe zweimal dupliziert wird (Refs #596). Wird er von einem stalen
+        Save auf ``None`` zurueckgesetzt, entsteht beim naechsten
+        DONE-Uebergang ein Doppel-Duplikat.
+        """
+        from django.utils import timezone
+
+        marker = timezone.now()
+        WorkItem.objects.filter(pk=workitem_open.pk).update(recurrence_duplicated_at=marker)
+        assert workitem_open.recurrence_duplicated_at is None, "Instanz ist bewusst stale"
+
+        update_workitem(workitem_open, staff_user, priority=WorkItem.Priority.URGENT)
+
+        workitem_open.refresh_from_db()
+        assert workitem_open.recurrence_duplicated_at == marker
+
+    def test_update_workitem_ueberschreibt_redaktion_nicht(self, workitem_open, client_identified, staff_user):
+        """Der schwerste Fall des Lost Updates: ein staler Save re-publiziert
+        redigierten Klartext.
+
+        ``_redact_workitems`` laeuft aus den Anonymisierungs-Kaskaden und
+        ueberschreibt ``title``/``description`` per Queryset-``update()`` — die
+        Instanz eines parallel offenen Bearbeiten-Requests kennt danach noch
+        den Klartext. Nennt der Aufruf ``title``/``description`` gar nicht,
+        darf der Service sie auch nicht schreiben; es gibt keinen
+        nachgelagerten Prune, der das wieder einfangen wuerde
+        (docs/security-notes.md § Offline-Widerruf).
+        """
+        from core.services.client.main import _redact_workitems
+
+        workitem_open.title = "Klartext-Titel"
+        workitem_open.description = "Klartext-Beschreibung"
+        workitem_open.save(update_fields=["title", "description"])
+        _redact_workitems(client_identified)
+
+        update_workitem(workitem_open, staff_user, priority=WorkItem.Priority.URGENT)
+
+        workitem_open.refresh_from_db()
+        assert workitem_open.title == "Aufgabe (anonymisiert)"
+        assert workitem_open.description == ""
+        assert workitem_open.priority == WorkItem.Priority.URGENT
+
 
 @pytest.mark.django_db
 class TestApplyStatusTransitionHelper:
