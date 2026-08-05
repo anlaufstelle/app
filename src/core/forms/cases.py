@@ -65,10 +65,18 @@ class CaseForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, facility=None, user=None, **kwargs):
+    def __init__(self, *args, facility=None, user=None, pinned_client=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
         self.user = user
+        # Ursprungs-Pinning (Refs #1786): Beim Bearbeiten reicht die View die
+        # gespeicherte Person durch. Das Formular bietet sie dann nicht mehr
+        # als Auswahl an (Template rendert read-only, also ohne
+        # ``<input name="client">``) — deshalb darf sie hier nicht mehr
+        # ``required`` sein.
+        self.pinned_client = pinned_client
+        if pinned_client is not None:
+            self.fields["client"].required = False
         if facility:
             self.fields["lead_user"].queryset = User.objects.filter(  # type: ignore[attr-defined]
                 facility=facility,
@@ -131,6 +139,14 @@ class CaseForm(forms.ModelForm):
 
     def clean_client(self):
         client_id = self.cleaned_data.get("client")
+        # Refs #1786: Ist die Person gepinnt, gewinnt IMMER der gespeicherte
+        # Wert. Ein fehlender Wert (Read-only-Formular sendet keinen) ist
+        # kein Fehler; ein abweichender Wert ist ein manipulierter POST und
+        # wird als Formularfehler sichtbar abgewiesen, nicht still ignoriert.
+        if self.pinned_client is not None:
+            if client_id and str(client_id) != str(self.pinned_client.pk):
+                raise ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
+            return self.pinned_client
         if not client_id:
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
         # Refs #819: scoped Query — eine Person aus einer fremden

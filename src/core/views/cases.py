@@ -435,7 +435,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
     def get(self, request, pk):
         facility = request.current_facility
         case = get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk)
-        form = CaseForm(instance=case, facility=facility, user=request.user)
+        form = CaseForm(instance=case, facility=facility, user=request.user, pinned_client=case.client)
         type_locked = _lock_invisible_document_type(request, case, form)
         if case.client:
             form.fields["client"].initial = case.client.pk
@@ -453,6 +453,9 @@ class CaseUpdateView(StaffRequiredMixin, View):
             "data_form": data_form,
             "case": case,
             "is_edit": True,
+            # Refs #1786: gepinnte Person — das Template rendert sie read-only
+            # (ohne ``<input name="client">``) statt als Autocomplete.
+            "client_locked": bool(case.client),
             "client_id": str(case.client.pk) if case.client else "",
             "client_pseudonym": case.client.pseudonym if case.client else "",
             "dynamic_values_at_risk": _values_at_risk(case, case.data_json, type_locked=type_locked),
@@ -482,7 +485,13 @@ class CaseUpdateView(StaffRequiredMixin, View):
         # ``hx-get`` auch im POST-Pfad. Der Audit-Diff in ``update_case`` laeuft
         # deshalb gegen den DB-Stand (Refs #1613) statt gegen die bereits von
         # ``_post_clean`` mutierte Instanz.
-        form = CaseForm(request.POST, instance=case, facility=facility, user=request.user)
+        form = CaseForm(
+            request.POST,
+            instance=case,
+            facility=facility,
+            user=request.user,
+            pinned_client=case.client,
+        )
         type_locked = _lock_invisible_document_type(request, case, form)
 
         if not form.is_valid():
@@ -507,6 +516,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 "data_form": data_form,
                 "case": case,
                 "is_edit": True,
+                "client_locked": bool(case.client),  # Refs #1786
                 "client_id": request.POST.get("client", ""),
                 "client_pseudonym": "",
                 "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
@@ -546,6 +556,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     "data_form": data_form,
                     "case": case,
                     "is_edit": True,
+                    "client_locked": bool(case.client),  # Refs #1786
                     "client_id": request.POST.get("client", ""),
                     "client_pseudonym": "",
                     "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),

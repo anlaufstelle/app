@@ -84,9 +84,14 @@ class WorkItemForm(forms.ModelForm):
             "assigned_to": forms.Select(attrs={"class": INPUT_CSS}),
         }
 
-    def __init__(self, *args, facility=None, **kwargs):
+    def __init__(self, *args, facility=None, pinned_client=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
+        # Ursprungs-Pinning (Refs #1786): nur beim Bearbeiten einer Aufgabe,
+        # die bereits eine Person trägt. Eine personenlose Aufgabe bekommt
+        # ``pinned_client=None`` und behält die freie Auswahl (Attach-Fall,
+        # Maintainer-Entscheid 2026-08-05).
+        self.pinned_client = pinned_client
         if facility:
             # Refs #1125: ASSISTANT ist zuweisbar. Assistenzkräfte ziehen offene
             # Teamaufgaben ohnehin per "Übernehmen" auf sich (Auto-Assign auf
@@ -139,6 +144,14 @@ class WorkItemForm(forms.ModelForm):
 
     def clean_client(self):
         client_id = self.cleaned_data.get("client")
+        # Refs #1786 (Spiegel zu ``CaseForm.clean_client``): gepinnt gewinnt
+        # der gespeicherte Wert; ein abweichender POST-Wert ist ein Wechsel-
+        # Versuch und wird als Formularfehler abgewiesen. Ohne Pin bleibt das
+        # bisherige Verhalten (freie Auswahl, leer erlaubt).
+        if self.pinned_client is not None:
+            if client_id and str(client_id) != str(self.pinned_client.pk):
+                raise forms.ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
+            return self.pinned_client
         if not client_id:
             return None
         # Refs #1771: gemeinsames Widerrufs-Gate mit Event-/Fall-Formular. Der

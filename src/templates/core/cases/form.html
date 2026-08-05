@@ -37,6 +37,23 @@
             {# Titel #}
             {% include "components/_form_field.html" with field=form.title %}
 
+            {% comment %}Refs #1786: Beim Bearbeiten ist die Personenzuordnung gepinnt —
+            read-only-Anzeige statt Autocomplete, und bewusst OHNE
+            ``<input name="client">``: was nicht im DOM steht, kann auch nicht
+            versehentlich umgebogen werden. Der manipulierte POST wird zusaetzlich
+            serverseitig abgewiesen (``CaseForm.clean_client``).{% endcomment %}
+            {% if client_locked %}
+            <div>
+                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %}</label>
+                <p class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink" data-testid="client-pinned">{{ case.client.pseudonym }}</p>
+                <p class="mt-1 text-[12px] text-ink-muted">{% trans "Die Personenzuordnung ist nach dem Anlegen festgelegt." %}</p>
+                {% if form.client.errors %}
+                <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% else %}
             {# Person-Autocomplete #}
             <div x-data="clientAutocomplete"
                  data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
@@ -88,6 +105,7 @@
                 </ul>
                 {% endif %}
             </div>
+            {% endif %}
 
             {# Beschreibung #}
             {% include "components/_form_field.html" with field=form.description %}

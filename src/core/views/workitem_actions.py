@@ -416,10 +416,13 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         # innerhalb ihrer Facility.
         if not can_user_mutate_workitem(request.user, workitem):
             return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
-        form = WorkItemForm(instance=workitem, facility=request.current_facility)
+        form = WorkItemForm(instance=workitem, facility=request.current_facility, pinned_client=workitem.client)
         context = {
             "form": form,
             "workitem": workitem,
+            # Refs #1786: Nur eine bereits zugeordnete Aufgabe wird gepinnt —
+            # die personenlose behält ihr Autocomplete (Attach-Fall).
+            "client_locked": bool(workitem.client),
             "client_id": str(workitem.client.pk) if workitem.client else "",
             "client_pseudonym": workitem.client.pseudonym if workitem.client else "",
         }
@@ -433,7 +436,16 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         )
         if not can_user_mutate_workitem(request.user, workitem):
             return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
-        form = WorkItemForm(request.POST, instance=workitem, facility=request.current_facility)
+        # Refs #1786: VOR ``is_valid()`` lesen — ``_post_clean()`` mutiert die
+        # Instanz (Muster #1613). ``client`` steht zwar nicht in ``Meta.fields``,
+        # der Pin-Zustand darf aber grundsätzlich nicht vom Formular abhängen.
+        pinned_client = workitem.client
+        form = WorkItemForm(
+            request.POST,
+            instance=workitem,
+            facility=request.current_facility,
+            pinned_client=pinned_client,
+        )
 
         if form.is_valid():
             expected_updated_at = request.POST.get("expected_updated_at") or None
@@ -442,7 +454,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # (bisher personenlose Aufgabe) an den Service. Bei bereits
             # gesetzter Person weist ``update_workitem`` jeden ``client``-Kwarg
             # ab — auch das stille ``None`` eines Formulars ohne Personenfeld.
-            pin_kwargs = {} if workitem.client_id else {"client": form.cleaned_data.get("client")}
+            pin_kwargs = {} if pinned_client else {"client": form.cleaned_data.get("client")}
             try:
                 update_workitem(
                     workitem,
@@ -506,6 +518,7 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         context = {
             "form": form,
             "workitem": workitem,
+            "client_locked": bool(pinned_client),  # Refs #1786
             "client_id": request.POST.get("client", ""),
             "client_pseudonym": "",
         }
