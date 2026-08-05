@@ -32,19 +32,38 @@ Anzeigenamen braucht, schlaegt sie ueber ``FieldTemplate.options_json`` nach.
 deklariert (``margin=…`` + :class:`~core.services.dashboard.external_report._Breakdown`),
 Sekundaer-Suppression und Residual-Guard rechnen an dieser Gleichung.
 
-``leistungen`` ist **keine**: durch Mehrfachnennung gilt nur
-``Σ Options-Counts >= events_leistungen``. Eine Randsumme zu deklarieren, die
-nicht exakt partitioniert, waere schlimmer als keine — das Machbarkeits-Audit
-(``_audit_feasible_span``) und der Fixpunkt-Guard rechnen mit
-``Residuum = Randsumme − Σ sichtbare Zellen``, und dieses Residuum ist hier
-schlicht falsch. Deshalb ``margin=None``: die Helper laufen dann bewusst ins
-Leere (``_audit_feasible_span`` kehrt sofort zurueck, ``disclosure.findings``
-ueberspringt Partitionen ohne Randsumme), und es bleibt bei der
-**Primaer**-Suppression je Zelle. Das ist kein Schutzverlust, sondern die
-korrekte Aussage: ohne exakte Gleichung gibt es keinen Differenzkanal, aus dem
-sich eine unterdrueckte Zelle rekonstruieren liesse. Die Randsumme
-``events_leistungen`` durchlaeuft trotzdem R14 (< *k* ⇒ ``None``), denn sie ist
-selbst eine Ereigniszahl.
+``leistungen`` ist **keine**: durch Mehrfachnennung gilt nur die Ungleichung
+``Σ Options-Counts >= events_leistungen``. Daraus folgen ZWEI getrennte
+Konsequenzen, und die zweite ist die, die man leicht uebersieht:
+
+1. **``margin=None`` an ``_suppress_small``.** Eine Randsumme zu deklarieren,
+   die nicht exakt partitioniert, waere schlimmer als keine: das
+   Machbarkeits-Audit (``_audit_feasible_span``) und der Fixpunkt-Guard rechnen
+   mit ``Residuum = Randsumme − Σ sichtbare Zellen``, und dieses Residuum ist
+   hier schlicht falsch. Mit ``margin=None`` laufen beide bewusst ins Leere
+   (``_audit_feasible_span`` kehrt sofort zurueck, ``disclosure.findings``
+   ueberspringt Partitionen ohne Randsumme).
+2. **Total-Doktrin statt Sekundaer-Suppression**
+   (:meth:`ServiceDistributionBackend._drop_margin_on_any_suppression`).
+   ``margin=None`` ist **kein Schutz, sondern nur dessen Abschaltung** — die
+   Ungleichung bleibt ja bestehen und ist selbst ein Kanal: sie liefert fuer
+   jede unterdrueckte Zelle die **untere** Schranke
+   ``x >= events_leistungen − Σ sichtbare Zellen``, waehrend die
+   Primaer-Suppression die obere ``x <= k − 1`` liefert. Fallen beide zusammen,
+   ist die Zelle exakt bestimmt: bei *k* = 5, sichtbarer Zelle 6 und
+   publizierter Randsumme 10 ist die unterdrueckte Zelle zwingend 4. Deshalb
+   faellt ``events_leistungen``, sobald **eine** Zelle der Gruppe unterdrueckt
+   ist — ohne publizierte Randsumme gibt es die untere Schranke nicht mehr, und
+   es bleibt ``1 <= x <= k − 1``.
+
+Unabhaengig davon durchlaeuft ``events_leistungen`` R14 (< *k* ⇒ ``None``), denn
+sie ist selbst eine Ereigniszahl.
+
+**Merke fuer Nachahmer:** „meine Aufschluesselung partitioniert nicht" heisst
+nicht „hier gibt es nichts zurueckzurechnen". Es heisst: die zentrale
+Maschinerie ist nicht zustaendig, also braucht die Aufschluesselung eine eigene,
+benannte Regel. Der Reflex, ``margin=None`` als Entwarnung zu lesen, war der
+Fehler in der ersten Fassung dieses Moduls.
 
 Eine Optionszelle zaehlt **Ereignisse mit dieser Option**, nicht Nennungen:
 ein Ereignis, das dieselbe Option doppelt fuehrt (Altdaten), zaehlt einmal.
@@ -230,13 +249,53 @@ class ServiceDistributionBackend(DatasetBackend):
             ),
         )
 
+    @staticmethod
+    def _drop_margin_on_any_suppression(view: dict, gruppe: Feldgruppe) -> None:
+        """Total-Doktrin fuer die Mehrfachnennungs-Randsumme (C1, Refs #1754).
+
+        Analog :func:`~core.services.dashboard.external_report.drop_person_margin_on_person_suppression`:
+        die Randsumme faellt, sobald **eine** Zelle der Gruppe unterdrueckt ist.
+
+        **Warum es nicht ohne geht.** ``Σ Options-Counts >= events_leistungen``
+        (jedes Ereignis mit Wert traegt nach Dedup mindestens eine Option bei).
+        Diese Ungleichung liefert fuer jede unterdrueckte Zelle eine **untere**
+        Schranke ``x >= Randsumme − Σ sichtbare Zellen``, und die
+        Primaer-Suppression liefert die obere ``x <= k − 1``. Fallen beide
+        zusammen, ist die Zelle exakt bestimmt (k = 5, sichtbar 6, Randsumme 10
+        ⇒ die unterdrueckte Zelle ist genau 4). Ohne publizierte Randsumme gibt
+        es die untere Schranke nicht mehr, und es bleibt ``1 <= x <= k − 1``.
+
+        Bewusst **schaerfer** als der Fixpunkt-Guard und bewusst hier statt
+        dort: der Guard modelliert exakte Partitionen (``Σ Zellen = Randsumme``),
+        und eine Ungleichung ist kein Fall seines Inferenzmodells — sie in
+        ``disclosure.py`` nachzuruesten waere ein zweites Modell neben dem
+        bestehenden (die in ``_SAMPLE_REPORT_1_BREAKDOWNS`` als Route (2)
+        vermerkte, bewusst nicht gebaute Erweiterung). Bis dahin ist die
+        pauschale Total-Doktrin die sichere Richtung.
+
+        Setzt **nur** die Randsumme auf ``None``; der Unterdrueckungs-Marker der
+        Zeilen wird ausschliesslich gelesen (Architektur-Guard
+        ``test_kein_artefakt_baut_eigene_unterdrueckung``).
+        """
+        if any(row.get("suppressed") for row in view.get(gruppe.records_key, ())):
+            view[gruppe.summary_key] = None
+
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         """K-Anon-Suppression je Gruppe — Randsummen-Begruendung im Modul-Docstring.
 
         Die Gruppen werden strikt getrennt suppressiert: sie teilen keine
         Randsumme, und eine Zellsuppression in der einen darf in der anderen
-        nichts ausloesen. Nur die Einfachauswahl deklariert eine
-        Randsummen-Partition; die Mehrfachauswahl laeuft mit ``margin=None``.
+        nichts ausloesen.
+
+        Zwei **verschiedene** Schutzwege, je nach Partitionseigenschaft der
+        Gruppe (Begruendung im Modul-Docstring):
+
+        * Einfachauswahl — exakte Partition: ``margin`` deklariert,
+          Sekundaer-Suppression und :func:`apply_residual_guard` uebernehmen.
+        * Mehrfachauswahl — nur Ungleichung: ``margin=None`` (die zentrale
+          Maschinerie darf nicht an einer falschen Gleichung rechnen) UND
+          :meth:`_drop_margin_on_any_suppression` als Total-Doktrin. ``margin=None``
+          allein waere **kein** Schutz, sondern nur dessen Abschaltung.
         """
         threshold = _get_threshold(facility)
         view: dict = {}
@@ -251,14 +310,16 @@ class ServiceDistributionBackend(DatasetBackend):
             # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl — auch
             # dort, wo sie keine Partition traegt.
             published = events if events >= threshold else None
-            # ``margin`` NUR bei exakter Partition (siehe Modul-Docstring): eine
-            # deklarierte, aber unzutreffende Randsumme laesse das
-            # Machbarkeits-Audit an einer falschen Gleichung rechnen.
+            # ``margin`` NUR bei exakter Partition: eine deklarierte, aber
+            # unzutreffende Randsumme laesse das Machbarkeits-Audit an einer
+            # falschen Gleichung rechnen.
             margin = None if gruppe.mehrfachnennung else published
             zeilen = [row for row in result.records if row["feld"] == gruppe.feld_slug]
             view[gruppe.summary_key] = published
             view[gruppe.records_key] = _suppress_small(zeilen, threshold, margin=margin, order=ORDER_INPUT)
-            if not gruppe.mehrfachnennung:
+            if gruppe.mehrfachnennung:
+                self._drop_margin_on_any_suppression(view, gruppe)
+            else:
                 breakdowns.append(_Breakdown(gruppe.records_key, gruppe.summary_key, ORDER_INPUT))
 
         apply_residual_guard(view, threshold, tuple(breakdowns))

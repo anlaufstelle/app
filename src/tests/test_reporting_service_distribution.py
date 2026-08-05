@@ -325,10 +325,60 @@ class TestPrepareExport:
 
         zellen = {(row["feld"], row["option"]): row["count"] for row in prepared.records}
         assert zellen[(LEISTUNGEN_SLUG, "duschen")] is None
-        # Keine Sekundaer-Suppression bei Mehrfachnennung: es gibt keine
-        # Gleichung, aus der sich die unterdrueckte Zelle ableiten liesse.
+        # Keine Sekundaer-Suppression bei Mehrfachnennung: die Nachbarzelle
+        # bleibt stehen. Geschuetzt wird stattdessen ueber die Randsumme.
         assert zellen[(LEISTUNGEN_SLUG, "essen")] == 9
+        # Total-Doktrin (C1): die Randsumme der Mehrfachnennungs-Gruppe faellt
+        # mit der ersten unterdrueckten Zelle — sonst gaebe die Ungleichung
+        # ``Σ Counts >= events_leistungen`` eine untere Schranke her.
+        assert prepared.summary["events_leistungen"] is None
+        # Der Punkt dieses Tests: die Einfachauswahl bleibt davon voellig
+        # unberuehrt — die Gruppen teilen keine Randsumme.
         assert zellen[(KRISE_SLUG, "gewalt")] == 7
+        assert prepared.summary["events_art_der_krise"] == 7
+
+    def test_mehrfachnennung_randsumme_faellt_bei_jeder_unterdrueckten_zelle(self, backend, facility):
+        """C1: die Ungleichung ist auch eine Gleichung, sobald sie eng genug wird.
+
+        ``Σ Options-Counts >= events_leistungen`` (jedes Ereignis mit Wert traegt
+        nach Dedup mindestens eine Option bei). Mit ``beratung = 6`` sichtbar und
+        ``events_leistungen = 10`` publiziert folgt ``essen >= 10 − 6 = 4``, und
+        aus der Primaer-Suppression folgt ``essen <= k − 1 = 4`` — die Zelle ist
+        exakt gepinnt, obwohl sie unterdrueckt ist.
+
+        ``margin=None`` allein schliesst diesen Kanal NICHT: es schaltet nur das
+        Machbarkeits-Audit ab. Es braucht die Total-Doktrin — ohne publizierte
+        Randsumme faellt die untere Schranke, und uebrig bleibt nur noch
+        ``1 <= essen <= 4``.
+        """
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [
+                    {"feld": LEISTUNGEN_SLUG, "option": "beratung", "count": 6},
+                    {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 4},
+                ],
+                {"events_leistungen": 10},
+            ),
+        )
+
+        zellen = {row["option"]: row["count"] for row in prepared.records}
+        assert zellen == {"beratung": 6, "essen": None}
+        assert prepared.summary["events_leistungen"] is None
+
+    def test_mehrfachnennung_randsumme_bleibt_ohne_suppression(self, backend, facility):
+        """Gegenprobe: ohne unterdrueckte Zelle gibt es keine Schranke zu setzen."""
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [
+                    {"feld": LEISTUNGEN_SLUG, "option": "beratung", "count": 6},
+                    {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 7},
+                ],
+                {"events_leistungen": 10},
+            ),
+        )
+
         assert prepared.summary["events_leistungen"] == 10
 
     def test_einfachauswahl_kennt_die_sekundaer_suppression(self, backend, facility):
