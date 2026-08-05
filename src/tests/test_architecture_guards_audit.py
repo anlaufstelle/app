@@ -261,7 +261,8 @@ class TestE2ESelectorStabilityGuard:
         "test_admin_site.py": 1,
         "test_button_permissions.py": 2,
         "test_cases.py": 3,
-        "test_client_deletion_workflow.py": 6,
+        # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 3 Vorkommen.
+        "test_client_deletion_workflow.py": 3,
         "test_episodes.py": 1,
         # dbdaf3c: TestMultipleGoalsAndMilestones brachte 3 weitere
         # ``.first.click()`` (Milestone-Toggle + Goal-Toggle + Submit innerhalb
@@ -270,7 +271,8 @@ class TestE2ESelectorStabilityGuard:
         "test_goals_htmx.py": 5,
         "test_handover.py": 2,
         "test_i18n_locale.py": 2,
-        "test_retention_dashboard.py": 5,
+        # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 4 Vorkommen.
+        "test_retention_dashboard.py": 1,
         "test_workflow_complete.py": 1,
         "test_workitem_edit.py": 2,
         "test_zeitstrom_enrichment.py": 1,
