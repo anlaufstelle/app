@@ -45,6 +45,29 @@ def _next_due_date(current: date, recurrence: str) -> date | None:
     return None
 
 
+def _locked_client_id(workitem):
+    """Frischer ``client_id``-Stand der Zeile **unter Row-Lock** (Refs #1786).
+
+    Muster von ``changed_fields_vs_db``: ``_base_manager`` (kein Custom-Manager
+    verfaelscht den Low-Level-Lookup), ``values_list`` (kein Nachladen des
+    verwandten Objekts) und ``select_for_update`` in der Transaktionsklammer des
+    Callers — der Lock haelt bis zum Commit, der spaetere Diff-Read greift also
+    auf dieselbe gesperrte Zeile.
+
+    ``None`` heisst „keine Person zugeordnet"; eine nicht (mehr) vorhandene Zeile
+    liefert dasselbe. Das ist hier fail-safe genug: ``update_workitem`` arbeitet
+    ausschliesslich auf persistierten Aufgaben, und das anschliessende ``save()``
+    wuerde eine fehlende Zeile ohnehin neu schreiben.
+    """
+    return (
+        type(workitem)
+        ._base_manager.select_for_update()
+        .filter(pk=workitem.pk)
+        .values_list("client_id", flat=True)
+        .first()
+    )
+
+
 def _log_workitem_update(workitem, user, changed_fields):
     """Write a single AuditLog entry for a WorkItem bulk field update."""
     audit_event(
@@ -181,14 +204,29 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
         if key not in allowed:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
 
-    if "client" in fields and workitem.client_id is not None:
+    if "client" in fields:
+        # Refs #1786 (TOCTOU): Der Pin-Zustand wird gegen den **DB-Stand unter
+        # Row-Lock** entschieden, nicht gegen ``workitem.client_id``. Die
+        # Instanz kann in zwei Richtungen falsch liegen: veraltet (ein
+        # parallelter Attach-POST hat die Person inzwischen gesetzt — beide
+        # Requests lesen sonst „noch personenlos" und der zweite ueberschreibt
+        # den ersten) oder bereits von ``_post_clean()`` mutiert (Muster #1613).
+        # Der Lock haelt bis zum Commit dieser Transaktion, also auch ueber den
+        # Diff-Read und das ``save()`` unten.
+        db_client_id = _locked_client_id(workitem)
         new_client = fields["client"]
         new_pk = getattr(new_client, "pk", new_client)
-        if new_pk != workitem.client_id:
-            raise ValueError("Personenzuordnung einer Aufgabe kann nicht geändert oder entfernt werden.")
-        # No-op: identischer Wert. Raus aus ``fields``, damit weder ein
-        # leerer Audit-Diff noch ein unnötiger Schreibzugriff entsteht.
-        fields.pop("client")
+        if db_client_id is not None:
+            if new_pk != db_client_id:
+                raise ValueError("Personenzuordnung einer Aufgabe kann nicht geändert oder entfernt werden.")
+            # No-op: identischer Wert. Raus aus ``fields``, damit weder ein
+            # leerer Audit-Diff noch ein unnötiger Schreibzugriff entsteht —
+            # und der DB-Stand auf die Instanz, weil das volle ``save()`` unten
+            # sonst die Zuordnung einer stale (personenlosen) Instanz
+            # zurueckschriebe. Das Wegwerfen des Kwargs darf nie ein Nullen
+            # bedeuten.
+            fields.pop("client")
+            workitem.client_id = db_client_id
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``WorkItemForm(instance=workitem)`` hat die Instanz in ``_post_clean()``
     # bereits mutiert — ein ``getattr(workitem, key) != value`` sähe hier

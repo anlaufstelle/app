@@ -96,6 +96,45 @@ class TestUpdateWorkItemService:
         result = update_workitem(workitem_open, staff_user, client=workitem_open.client)
         assert result.client == workitem_open.client
 
+    def test_update_workitem_pin_prueft_den_db_stand_unter_lock(
+        self, workitem_unassigned, client_identified, client_qualified, staff_user
+    ):
+        """TOCTOU (Refs #1786): Zwischen Laden und Aufruf setzt ein Racer die Person.
+
+        Die geladene Instanz ist personenlos — nach ihr waere der Aufruf ein
+        erlaubter Attach. Der DB-Stand traegt inzwischen eine andere Person; ohne
+        Row-Lock und frischen Lesezugriff ueberschriebe der zweite Attach die
+        Zuordnung des ersten, und genau das verbietet der Maintainer-Entscheid
+        vom 2026-08-05 (Zuordnen ja, Wechseln nein).
+        """
+        WorkItem.objects.filter(pk=workitem_unassigned.pk).update(client=client_identified)
+        assert workitem_unassigned.client_id is None, "Instanz ist bewusst stale"
+
+        with pytest.raises(ValueError, match="Personenzuordnung"):
+            update_workitem(workitem_unassigned, staff_user, client=client_qualified)
+
+        workitem_unassigned.refresh_from_db()
+        assert workitem_unassigned.client == client_identified
+
+    def test_update_workitem_stale_instanz_erhaelt_die_zuordnung(
+        self, workitem_unassigned, client_identified, staff_user
+    ):
+        """Gegenrichtung derselben Race: Der Aufruf nennt **dieselbe** Person,
+        die der Racer gesetzt hat — ein No-op, kein Fehler.
+
+        Der Fall ist die Falle am Fix: das volle ``save()`` schreibt alle Felder
+        der (stale, personenlosen) Instanz zurueck. Wird ``client`` nur aus
+        ``fields`` geworfen, ohne den DB-Stand auf die Instanz zu uebernehmen,
+        nullt der Service die Zuordnung — das Gegenteil eines Pins.
+        """
+        WorkItem.objects.filter(pk=workitem_unassigned.pk).update(client=client_identified)
+
+        update_workitem(workitem_unassigned, staff_user, client=client_identified, title="Neuer Titel")
+
+        workitem_unassigned.refresh_from_db()
+        assert workitem_unassigned.client == client_identified
+        assert workitem_unassigned.title == "Neuer Titel"
+
     def test_returns_updated_workitem(self, facility, staff_user, workitem_open):
         result = update_workitem(workitem_open, staff_user, description="Neue Beschreibung")
         assert result.pk == workitem_open.pk
