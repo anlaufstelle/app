@@ -272,10 +272,10 @@ Methodik:
 | B | Audit | 5 | 5 | 0 | 100 % |
 | B | Aufbewahrung | 2 | 2 | 0 | 100 % |
 | B | Auth | 10 | 10 | 0 | 100 % |
-| B | Berichtigungen | 8 | 0 | 8 | 0 % |
+| B | Berichtigungen | 8 | 5 | 3 | 62 % |
 | B | Compliance | 4 | 0 | 4 | 0 % |
 | B | DSGVO | 8 | 8 | 0 | 100 % |
-| B | Datenimport | 9 | 0 | 9 | 0 % |
+| B | Datenimport | 9 | 6 | 3 | 67 % |
 | B | DeletionRequests | 6 | 6 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
@@ -329,10 +329,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 258 | 180 | 78 | 70 % |
+| B | 258 | 191 | 67 | 74 % |
 | C | 38 | 8 | 30 | 21 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **354** | **214** | **140** | **60 %** |
+| **Gesamt** | **354** | **225** | **129** | **64 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

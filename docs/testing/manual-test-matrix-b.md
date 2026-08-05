@@ -7417,7 +7417,7 @@
 **Services:** `src/core/services/import_engine.py` (`store_import_upload`, `apply_mapping`, `available_targets`, `run_import`, `commit_import`, `abort_import`, `cleanup_stale_import_jobs`) — schreibt ausschließlich über `create_client`/`create_event` 
 **Forms:** `src/core/forms/import_data.py` (`ImportUploadForm` — Zieltyp, Dokumentationstyp, Datei, Trennzeichen-/Zeichensatz-Auswahl) 
 **Models:** `src/core/models/import_job.py` (`ImportJob` — `Status`: uploaded → mapped → validated → committed/aborted; `storage_filename`, `original_filename_encrypted` nur verschlüsselt) 
-**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über `test_import_engine.py`, `test_import_views.py`, `test_import_job.py` 
+**E2E-Coverage:** `src/tests/e2e/test_import_wizard.py` (Wizard-Roundtrip, Fehlerpfad, `data_json`-Ereignis-Import, Rollen-Gate); ergänzend `test_import_engine.py`, `test_import_views.py`, `test_import_job.py` 
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) — alle anderen Rollen bekommen 403 (`TestRoleGate`).
 - CSV-Testdateien lokal vorbereiten: eine saubere (0-Fehler-Lauf), eine mit mind. einem defekten Datensatz (Zeilenfehler-Lauf), optional eine cp1252-kodierte (Excel-Export) für ENT-IMPORT-03.
@@ -7429,7 +7429,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin vs. emma/miriam/lena | C | ⚪ ||
+| Datenimport | admin vs. emma/miriam/lena | C | ⚪ | `src/tests/e2e/test_import_wizard.py::TestImportAccessControl` |
 
 **Voraussetzung:** keine.
 
@@ -7451,7 +7451,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C | ⚪ | `test_import_views.py`, `test_import_engine.py` |
+| Datenimport | admin | C | ⚪ | `src/tests/e2e/test_import_wizard.py::TestImportClientHappyPath`, `test_import_views.py`, `test_import_engine.py` |
 
 **Voraussetzung:** ENT-IMPORT-01 (Zugriff auf `/import/`).
 
@@ -7499,7 +7499,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `test_import_engine.py::TestAvailableTargets`, `test_import_views.py` |
+| Datenimport | admin | C || `src/tests/e2e/test_import_wizard.py::TestImportEventWithDataJson`, `test_import_engine.py::TestAvailableTargets`, `test_import_views.py` |
 
 **Voraussetzung:** Dokumentationstyp mit mind. einem normalen und einem Datei-Feld existiert; Upload mit Spalten, die auf Stammdaten **und** ein dynamisches Feld zeigen sollen.
 
@@ -7524,7 +7524,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `test_import_engine.py::TestErrorReportIsPiiFree`, `TestSavepointPerRow` |
+| Datenimport | admin | C || `src/tests/e2e/test_import_wizard.py::TestImportErrorPath`, `test_import_engine.py::TestErrorReportIsPiiFree`, `TestSavepointPerRow` |
 
 **Voraussetzung:** CSV mit mind. zwei fehlerhaften Zeilen (z.B. eine mit bereits vergebenem Pseudonym, eine mit unbekannter Kontaktstufe).
 
@@ -7550,7 +7550,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C | ⚪ | `test_import_engine.py::TestCommitRun`, `TestCommitImport` |
+| Datenimport | admin | C | ⚪ | `src/tests/e2e/test_import_wizard.py::TestImportClientHappyPath`, `test_import_engine.py::TestCommitRun`, `TestCommitImport` |
 
 **Voraussetzung:** ENT-IMPORT-05 durchgeführt (fehlerhafter Lauf liegt vor) **und** ein zweiter, fehlerfreier Lauf vorbereitet.
 
@@ -7577,7 +7577,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `test_import_engine.py::TestAbortImport` |
+| Datenimport | admin | C || `src/tests/e2e/test_import_wizard.py::TestImportErrorPath`, `test_import_engine.py::TestAbortImport` |
 
 **Voraussetzung:** ein Lauf im Status `uploaded` oder `mapped` (noch keine Übernahme).
 
@@ -7648,7 +7648,7 @@
 **Services:** `src/core/services/client/rectification.py` (`rectifiable_fields`, `request_rectification`, `approve_rectification`, `reject_rectification`) — Anwendung ausschließlich über `update_client` 
 **Models:** `src/core/models/rectification.py` (`RectificationRequest` — `field_path`, `old_value`/`new_value`/`reason`/`review_note` verschlüsselt, partieller Unique-Index `unique_pending_rectification_request`, Check-Constraint gegen Selbst-Review), Migrationen `0138`/`0139` 
 **Hintergrund:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) — ergänzt, ersetzt aber nicht [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) (kein Klientel-Self-Service) 
-**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über `test_rectification_model.py`, `test_rectification_service.py`, `test_rectification_views.py` 
+**E2E-Coverage:** `src/tests/e2e/test_rectification.py` (Antrag→Prüfung→Genehmigung, `data_json`-Fall, Selbst-Review-Sperre, Ablehnung mit Pflicht-Prüfvermerk, Rollen-Gate); ergänzend `test_rectification_model.py`, `test_rectification_service.py`, `test_rectification_views.py` 
 **Spezial-Setup:**
 - Antragstellung als **fachkraft** (`miriam`), Prüfung als **leitung** (`emma`) — Vier-Augen-Prinzip braucht zwei Sessions.
 - Für die Sichtbarkeits-Probe zusätzlich eine sensible dynamische Feldvorlage, für die Widerruf-Probe eine Person, die anschließend in den Papierkorb gelegt bzw. anonymisiert wird.
@@ -7659,7 +7659,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | emma (lead) vs. miriam/lena | C | ⚪ ||
+| Berichtigungen | emma (lead) vs. miriam/lena | C | ⚪ | `src/tests/e2e/test_rectification.py::TestRectificationAccessControl` |
 
 **Schritte:**
 1. Als `miriam` (staff) und `lena` (assistant) Desktop-Navigation + Mobile-„Mehr" sichten.
@@ -7677,7 +7677,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | fachkraft (`miriam`) | C/F | ⚪ | `test_rectification_views.py::TestCreateView` |
+| Berichtigungen | fachkraft (`miriam`) | C/F | ⚪ | `src/tests/e2e/test_rectification.py::TestRectificationApprovalWorkflow`, `TestRectificationDataJsonField`, `test_rectification_views.py::TestCreateView` |
 
 **Voraussetzung:** identifizierte Person mit Dokumentationstyp, der ein normales und ein sensibles (verschlüsseltes) dynamisches Feld sowie ein Datei-Feld trägt.
 
@@ -7722,7 +7722,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | leitung (`emma`) | C | ⚪ | `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestApproveEndToEnd` |
+| Berichtigungen | leitung (`emma`) | C | ⚪ | `src/tests/e2e/test_rectification.py::TestRectificationApprovalWorkflow`, `TestRectificationDataJsonField`, `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestApproveEndToEnd` |
 
 **Voraussetzung:** ENT-RECT-02 (offener Antrag).
 
@@ -7747,7 +7747,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | leitung (`emma`) | C || `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestReject` |
+| Berichtigungen | leitung (`emma`) | C || `src/tests/e2e/test_rectification.py::TestRejectionRequiresReviewNote`, `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestReject` |
 
 **Voraussetzung:** ein offener Antrag.
 
@@ -7769,7 +7769,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | leitung (`emma`) | C || `test_rectification_views.py::test_self_review_is_blocked_in_the_view`, `test_rectification_service.py::TestApproveGuards` |
+| Berichtigungen | leitung (`emma`) | C || `src/tests/e2e/test_rectification.py::TestSelfReviewIsBlocked`, `test_rectification_views.py::test_self_review_is_blocked_in_the_view`, `test_rectification_service.py::TestApproveGuards` |
 
 **Voraussetzung:** ein Antrag, bei dem `requested_by=emma` (Lead stellt selbst einen Antrag).
 
