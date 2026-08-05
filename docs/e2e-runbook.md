@@ -289,8 +289,11 @@ DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
   .venv/bin/python src/manage.py collectstatic --noinput
 
 # 4. Server starten
+# ``python -m gunicorn`` wie in ``src/tests/e2e/conftest.py`` — der Konsolen-
+# Wrapper ``.venv/bin/gunicorn`` traegt einen absoluten Shebang und zeigt nach
+# einem venv-Neubau auf einen Interpreter, den es nicht mehr gibt (Refs #1787).
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/gunicorn anlaufstelle.wsgi:application \
+  .venv/bin/python -m gunicorn anlaufstelle.wsgi:application \
   --bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120
 
 # 5. Browser öffnen: http://127.0.0.1:8844/login/

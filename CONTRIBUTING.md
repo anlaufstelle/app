@@ -236,6 +236,7 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs #741) |
 | `make test` | Unit- und Integrationstests ausführen (ohne E2E) |
 | `make test-e2e` | End-to-End-Tests mit Playwright ausführen |
+| `make test-e2e-halves` | E2E in zwei seriellen Hälften (RAM-limitierte Hosts, Refs #1787) |
 | `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
 | `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-parallel` |
 | `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast |

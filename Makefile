@@ -149,12 +149,21 @@ test-e2e: tailwind-build
 # wird dynamisch ermittelt — neue Testdateien landen ohne Pflege in einer der
 # Haelften. Das Rezept ist EINE Shell (``; \``), damit ``set -e`` ueber alle
 # Zeilen gilt und die zweite Haelfte nicht den Exit-Code der ersten maskiert.
+#
+# Die drei Leer-Guards sind kein Zierrat: ``pytest`` OHNE Dateiargumente
+# sammelt die **gesamte** Suite ein. Eine leere zweite Haelfte (eine einzige
+# E2E-Datei, verschobenes Verzeichnis, umbenanntes Namensschema) liefe damit
+# still als zweiter Voll-Lauf durch — genau die Situation, gegen die dieses
+# Target gebaut ist, nur unbemerkt und mit doppelter Laufzeit.
 test-e2e-halves: tailwind-build
 	set -e; \
 	files=$$(ls src/tests/e2e/test_*.py | sort); \
+	[ -n "$$files" ] || { echo "test-e2e-halves: keine E2E-Testdateien gefunden"; exit 1; }; \
 	n=$$(echo "$$files" | wc -l); half=$$(( (n + 1) / 2 )); \
 	h1=$$(echo "$$files" | head -n $$half); \
 	h2=$$(echo "$$files" | tail -n +$$(( half + 1 ))); \
+	[ -n "$$h1" ] || { echo "test-e2e-halves: erste Haelfte leer"; exit 1; }; \
+	[ -n "$$h2" ] || { echo "test-e2e-halves: zweite Haelfte leer"; exit 1; }; \
 	$(PYTHON) -m pytest $$h1 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v; \
 	$(PYTHON) -m pytest $$h2 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
