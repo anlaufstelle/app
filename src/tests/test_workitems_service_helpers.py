@@ -93,8 +93,24 @@ class TestUpdateWorkItemService:
             update_workitem(workitem_open, staff_user, client=None)
 
     def test_update_workitem_same_client_is_noop(self, workitem_open, staff_user):
+        """Identischer Wert = No-op: kein Fehler, keine Aenderung — und **kein**
+        Audit-Eintrag.
+
+        Die Audit-Assertion gehoert dazu (Refs #1786): der Service wirft
+        ``client`` aus ``fields``, damit kein leerer Diff entsteht. Ohne sie
+        pruefte der Test nur den Rueckgabewert, und ein zurueckgebauter ``pop``
+        fiele erst im Audit-Log auf — dort, wo niemand danach sucht.
+        """
+        from core.models import AuditLog
+
         result = update_workitem(workitem_open, staff_user, client=workitem_open.client)
+
         assert result.client == workitem_open.client
+        workitem_open.refresh_from_db()
+        assert workitem_open.client is not None
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(workitem_open.pk)
+        ).exists()
 
     def test_update_workitem_pin_prueft_den_db_stand_unter_lock(
         self, workitem_unassigned, client_identified, client_qualified, staff_user

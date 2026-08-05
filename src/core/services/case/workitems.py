@@ -162,8 +162,9 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     """Update a work item with activity logging and audit logging.
 
     Accepts allowed fields (item_type, title, description, priority, due_date,
-    assigned_to, client) and persists them. Writes an AuditLog entry with the
-    names of changed fields (no PII values).
+    remind_at, recurrence, assigned_to, client) and persists them — die Liste im
+    Code ist die Wahrheit, dieser Satz ihr Spiegel. Writes an AuditLog entry with
+    the names of changed fields (no PII values).
 
     ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
     DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
@@ -185,9 +186,12 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     from core.services.security import check_version_conflict
 
     check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
-    # Allowlist (Refs #734-Muster, Refs #1786): bis hierher hatte
-    # ``update_workitem`` als einzige der drei Update-Services KEINE — jedes
-    # durchgereichte Feld landete blind im ``setattr``. Menge = die Kwargs von
+    # Allowlist (Refs #734-Muster, Refs #1786): bis hierher war
+    # ``update_workitem`` eine von ZWEI der vier Update-Services ohne Allowlist —
+    # jedes durchgereichte Feld landete blind im ``setattr``. Die verbliebene
+    # Luecke ist ``update_event`` (dokumentierter Restpunkt in
+    # ``docs/security-notes.md``, bewusst nicht in #1786 mitbehoben: fremder
+    # Pfad, eigener Testbedarf). Menge = die Kwargs von
     # ``WorkItemUpdateView.post``. Läuft ZUERST, unabhängig vom Diff.
     allowed = {
         "item_type",
