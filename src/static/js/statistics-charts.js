@@ -31,6 +31,18 @@ document.addEventListener("htmx:beforeSwap", function (evt) {
 // htmx's eigenem (Bubble-Phase-)Listener auf demselben <select> und stoppt
 // die Propagation, bevor htmx den Request überhaupt baut -- kein Request,
 // kein Toast. Nicht-leere Auswahl ist unberührt (Event läuft normal weiter).
+//
+// SCOPE (Refs #1772, Review #1785): Der Listener hängt an `document` und
+// prüft nur den Selektor, nicht das Zielformular -- geprüft (Repo-weiter
+// Template-Grep, Stand dieses Commits): `select[name='backend']` kommt
+// genau EINMAL im gesamten Markup vor (full_content.html, Berichte-Sektion).
+// report_panel.html liegt IM SELBEN <form> wie dieses Select, hat aber kein
+// eigenes -- es gibt also aktuell kein zweites Formular, dessen
+// change-Handler der globale stopPropagation() verschlucken könnte. Kommt
+// künftig ein zweites `select[name='backend']` hinzu (z.B. ein separates
+// Panel-Exportformular), braucht dieser Listener eine engere Eingrenzung
+// (z.B. `el.closest('#report-section')`), sonst gilt dieselbe Analyse nicht
+// mehr.
 document.addEventListener(
   "change",
   function (evt) {
