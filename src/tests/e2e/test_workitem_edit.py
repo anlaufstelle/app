@@ -62,27 +62,33 @@ def _cleanup_task_by_title(title: str, e2e_env) -> None:
 class TestWorkItemEdit:
     """WorkItem-Edit-Formular: Laden, Bearbeiten, Speichern."""
 
-    def _navigate_to_first_workitem_edit(self, page, base_url):
-        """Hilfsfunktion: Navigiert zum Edit-Formular des ersten WorkItems."""
-        page.goto(f"{base_url}/workitems/")
-        page.wait_for_load_state("domcontentloaded")
+    def test_edit_form_loads_with_existing_data(self, authenticated_page, base_url):
+        """Edit-Formular zeigt aktuellen Titel vorausgefüllt.
 
-        # Erste Aufgabe in der Inbox anklicken → Detail
-        page.locator("#inbox-content a[href*='/workitems/']").first.click()
+        Refs #1788: Vorher navigierte der Test über die erste Aufgabe der
+        Inbox (``#inbox-content a[href*='/workitems/']").first``). Der Seed
+        garantiert für admin im Einzellauf keine offene Aufgabe, und selbst
+        wenn eine existiert, kann ``.first`` im eingeklappten
+        ``<details data-testid="recent-done">`` landen. Wie die
+        UI-basierten Nachbartests dieser Datei legt der Test jetzt eine
+        eigene Aufgabe an und navigiert gezielt über deren Titel.
+        """
+        page = authenticated_page
+        unique_title = f"E2E-Edit-{uuid.uuid4().hex[:6]}"
+        page.goto(f"{base_url}/workitems/new/")
+        page.fill('input[name="title"]', unique_title)
+        page.select_option('select[name="item_type"]', index=1)
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(f"{base_url}/workitems/")
+
+        page.locator(f"a:has-text('{unique_title}')").click()
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
-
-        # "Bearbeiten"-Link klicken
         page.click("a:has-text('Bearbeiten')")
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/edit/"))
 
-    def test_edit_form_loads_with_existing_data(self, authenticated_page, base_url):
-        """Edit-Formular zeigt aktuellen Titel vorausgefüllt."""
-        page = authenticated_page
-        self._navigate_to_first_workitem_edit(page, base_url)
-
-        # Titel-Feld ist nicht leer
+        # Titel-Feld ist mit dem eigenen Titel vorausgefüllt.
         title_value = page.locator('input[name="title"]').input_value()
-        assert title_value != "", "Titel-Feld sollte vorausgefüllt sein"
+        assert title_value == unique_title, "Titel-Feld sollte vorausgefüllt sein"
 
         # Priorität-Dropdown ist sichtbar
         assert page.locator('select[name="priority"]').is_visible()
@@ -287,16 +293,25 @@ class TestWorkItemEdit:
 class TestWorkItemEditPermissions:
     """Berechtigungsprüfungen für WorkItem-Edit."""
 
-    def test_assistant_cannot_edit_workitem(self, assistant_page, authenticated_page, base_url):
-        """Assistenz bekommt 403 auf WorkItem-Edit-URL."""
-        # Als Admin eine gültige WorkItem-UUID holen
-        admin = authenticated_page
-        admin.goto(f"{base_url}/workitems/")
-        admin.wait_for_load_state("domcontentloaded")
-        admin.locator("#inbox-content a[href*='/workitems/']").first.click()
-        admin.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
-        wi_pk = re.search(r"/workitems/([0-9a-f-]+)/", admin.url).group(1)
+    def test_assistant_cannot_edit_workitem(self, assistant_page, base_url, e2e_env):
+        """Assistenz bekommt 403 auf WorkItem-Edit-URL.
 
-        # Als Assistenz auf Edit zugreifen → 403
-        resp = assistant_page.goto(f"{base_url}/workitems/{wi_pk}/edit/")
-        assert resp.status == 403
+        Refs #1788: Vorher holte sich der Test die WorkItem-UUID über einen
+        ``.first``-Klick in der Admin-Inbox (``authenticated_page``) — mit
+        demselben fragilen Muster wie
+        ``test_edit_form_loads_with_existing_data``: kein garantiertes
+        offenes WorkItem im Einzellauf, potenzieller Treffer im
+        eingeklappten ``<details data-testid="recent-done">``. Für einen
+        reinen 403-Check auf die Edit-URL ist die konkrete Aufgabe egal —
+        die Aufgabe wird deshalb per ORM angelegt (Muster
+        ``_create_overdue_task_for``), ohne dass eine Admin-Browsersession
+        nötig ist.
+        """
+        title = f"E2E-Assistant403-{uuid.uuid4().hex[:6]}"
+        wi_pk = _create_overdue_task_for("admin", title, e2e_env)
+        try:
+            # Als Assistenz auf Edit zugreifen → 403
+            resp = assistant_page.goto(f"{base_url}/workitems/{wi_pk}/edit/")
+            assert resp.status == 403
+        finally:
+            _cleanup_task_by_title(title, e2e_env)
