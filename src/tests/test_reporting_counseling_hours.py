@@ -6,6 +6,9 @@ unterdrueckte Zeile zieht ihre Minuten mit, und die Minuten-Randsumme faellt,
 sobald ueberhaupt eine Zeilen-Minutenzahl fehlt (sonst waere sie die Differenz).
 """
 
+import csv
+import json
+import xml.etree.ElementTree as ET
 from datetime import timedelta
 
 import pytest
@@ -17,6 +20,7 @@ from core.reporting import registry
 from core.reporting.backends.counseling_hours import BEITRAGENDE_KEY, CounselingHoursBackend
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import ALL_EVENTS
+from core.reporting.export import export_dataset
 
 pytestmark = pytest.mark.django_db
 
@@ -336,6 +340,66 @@ class TestPrepareExport:
 
         assert prepared.summary["events_gesamt"] == 5
         assert prepared.summary["minuten_gesamt"] == 120
+
+
+class TestExportPipeline:
+    """Doku § 10: der Datensatz muss durch alle drei Renderer laufen.
+
+    Geprueft wird auf dem Weg zugleich die Rueckprojektion: weder der interne
+    Suppressions-Marker noch der Suppressions-Eingabewert ``beitragende`` darf
+    im Artefakt auftauchen.
+    """
+
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
+    def test_export_laeuft_und_ist_wohlgeformt(self, backend, facility, admin_user, date_range, fmt):
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        krise = _typ_mit_dauer(facility, "Krisengespräch", system_type=DocumentType.SystemType.CRISIS)
+        _events(facility, kontakt, admin_user, 7, 20)
+        _events(facility, krise, admin_user, 6, 90)
+
+        response = export_dataset(backend, facility, *date_range, format=fmt)
+        body = b"".join(response.streaming_content) if fmt == "csv" else response.content
+
+        assert response.status_code == 200
+        assert f"counseling-hours_{date_range[0]}_{date_range[1]}.{fmt}" in response["Content-Disposition"]
+        if fmt == "json":
+            payload = json.loads(body)
+            assert payload["records"] == [
+                {"kategorie": "contact", "events": 7, "minuten": 140},
+                {"kategorie": "crisis", "events": 6, "minuten": 540},
+            ]
+        if fmt == "xml":
+            # Begruendung fuers noqa (Muster ``test_reporting_export.py``):
+            # eigener, gerade erst generierter Output, keine fremde Eingabe.
+            ET.fromstring(body)  # noqa: S314
+        if fmt == "csv":
+            zeilen = body.decode().splitlines()
+            assert next(csv.reader(zeilen[1:])) == ["Kategorie", "Ereignisse", "Minuten"]
+
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
+    def test_kaskade_am_artefakt(self, backend, facility, admin_user, date_range, fmt):
+        """Kleine Zeile im Artefakt: ``None`` in ZWEI Spalten. Die zweite Zeile
+        faellt ueber die zentrale Sekundaer-Suppression mit (Residuum sonst
+        exakt) — der Guard entscheidet das, nicht dieses Backend.
+        """
+        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        krise = _typ_mit_dauer(facility, "Krisengespräch", system_type=DocumentType.SystemType.CRISIS)
+        _events(facility, kontakt, admin_user, 7, 20)
+        _events(facility, krise, admin_user, 2, 90)
+
+        response = export_dataset(backend, facility, *date_range, format=fmt)
+        body = b"".join(response.streaming_content) if fmt == "csv" else response.content
+
+        assert response.status_code == 200
+        if fmt == "json":
+            payload = json.loads(body)
+            assert payload["records"] == [
+                {"kategorie": "contact", "events": None, "minuten": None},
+                {"kategorie": "crisis", "events": None, "minuten": None},
+            ]
+            assert payload["summary"]["minuten_gesamt"] is None
+        if fmt == "xml":
+            ET.fromstring(body)  # noqa: S314
 
 
 class TestIsAvailable:

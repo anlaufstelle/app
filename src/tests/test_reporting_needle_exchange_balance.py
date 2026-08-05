@@ -18,6 +18,9 @@ gibt und die kein bisheriges Backend haben konnte:
   der Schwelle liegt, und der ``saldo`` faellt immer mit ihr.
 """
 
+import csv
+import json
+import xml.etree.ElementTree as ET
 from datetime import timedelta
 
 import pytest
@@ -29,6 +32,7 @@ from core.reporting import registry
 from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanceBackend
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import ALL_EVENTS
+from core.reporting.export import export_dataset
 
 pytestmark = pytest.mark.django_db
 
@@ -350,6 +354,57 @@ class TestPrepareExport:
         assert prepared.summary["events"] == 4
         assert prepared.summary["saldo"] == 30
         assert prepared.summary["k_anonymity_threshold"] == 2
+
+
+class TestExportPipeline:
+    """Doku § 10: der Datensatz muss durch alle drei Renderer laufen.
+
+    Nicht der Format-Dispatch ist hier der Prueflauf (den pinnt
+    ``test_reporting_export.py`` generisch), sondern DIESER Datensatz: eine
+    einzelne Aggregatzeile mit ``float``-Summen und ``None``-Zellen aus der
+    Suppression ist genau die Form, an der ein Serialisierer stolpert.
+    """
+
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
+    def test_export_laeuft_und_ist_wohlgeformt(self, backend, facility, admin_user, date_range, fmt):
+        doc_type = _spritzentausch_typ(facility)
+        for wert in (10, 12.5, "7", 4, 9, 3):
+            _event(facility, doc_type, admin_user, {"ausgabe": wert, "rueckgabe": 1})
+
+        response = export_dataset(backend, facility, *date_range, format=fmt)
+        body = b"".join(response.streaming_content) if fmt == "csv" else response.content
+
+        assert response.status_code == 200
+        assert f"needle-exchange-balance_{date_range[0]}_{date_range[1]}.{fmt}" in response["Content-Disposition"]
+        if fmt == "json":
+            payload = json.loads(body)
+            assert payload["records"] == [{"events": 6, "summe_ausgabe": 45.5, "summe_rueckgabe": 6, "saldo": 39.5}]
+        if fmt == "xml":
+            # Begruendung fuers noqa (Muster ``test_reporting_export.py``):
+            # eigener, gerade erst generierter Output, keine fremde Eingabe.
+            ET.fromstring(body)  # noqa: S314
+        if fmt == "csv":
+            zeilen = body.decode().splitlines()
+            assert next(csv.reader(zeilen[1:])) == ["Ereignisse", "Ausgabe gesamt", "Rückgabe gesamt", "Saldo"]
+
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
+    def test_unterdrueckter_datensatz_laeuft_ebenfalls(self, backend, facility, admin_user, date_range, fmt):
+        """Der Suppressionsfall ist der haeufigere — und der mit ``None`` in
+        jeder Zelle.
+        """
+        doc_type = _spritzentausch_typ(facility)
+        _event(facility, doc_type, admin_user, {"ausgabe": 10, "rueckgabe": 4})
+
+        response = export_dataset(backend, facility, *date_range, format=fmt)
+        body = b"".join(response.streaming_content) if fmt == "csv" else response.content
+
+        assert response.status_code == 200
+        if fmt == "json":
+            assert json.loads(body)["records"] == [
+                {"events": None, "summe_ausgabe": None, "summe_rueckgabe": None, "saldo": None}
+            ]
+        if fmt == "xml":
+            ET.fromstring(body)  # noqa: S314
 
 
 class TestIsAvailable:
