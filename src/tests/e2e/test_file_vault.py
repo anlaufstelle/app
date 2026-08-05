@@ -55,13 +55,13 @@ def set_files_on_swapped_input(page, selector, path):
     HTMX-eingeswappte Datei-Felder (vgl. ``test_import_wizard.py``).
 
     Historie (Refs #1060, #1797): Hier stand bis #1797 eine Retry-Schleife mit
-    Nachprüfung von ``input.files.length``. Ursache war der Doppel-Swap des
-    Dokumentationstyp-Selects im Ereignisformular — ``hx-trigger="change"`` und
-    ein Alpine-``@change`` reagierten unabhängig auf dasselbe Event, zwei
-    parallele Requests swappten nacheinander ``#dynamic-fields``, und der zweite
-    ersetzte das Datei-Feld, nachdem der Chooser es bereits befüllt hatte. Seit
-    #1797 gibt es nur noch einen Kanal (plus ``hx-sync="this:replace"``), der
-    Workaround ist damit gegenstandslos.
+    Nachprüfung von ``input.files.length``. Die Race hatte zwei Mechanismen
+    (forensisch belegt): zwei ``change``-EVENTS erzeugten zwei parallele
+    Feld-Requests (der Alpine-``@change`` selbst hat nie einen ausgelöst) —
+    dagegen ``hx-sync="this:replace"`` — und Interaktion mit den ALTEN
+    Feld-Knoten während des laufenden Swaps (Default-Typ-Server-Render) —
+    dagegen ``hx-disabled-elt`` im Template plus ``select_doc_type_and_wait``
+    hier in der Suite. Der Retry-Workaround ist damit gegenstandslos.
     """
     with page.expect_file_chooser() as fc_info:
         page.click(selector)

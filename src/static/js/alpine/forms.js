@@ -256,11 +256,14 @@ document.addEventListener("alpine:init", () => {
                     }
                     // Refs #1797: Die Stufen-/Anonym-Auswertung haengt am
                     // htmx-Lebenszyklus des Selects statt an einem eigenen
-                    // ``@change`` im Template. Zwei Kanaele auf demselben
-                    // ``change`` liefen unabhaengig voneinander und liessen
-                    // (zusammen mit dem synthetischen change-Dispatch des
-                    // Autosave-Restores) zwei parallele Feld-Swaps zu — der
-                    // zweite ersetzte ein bereits befuelltes Datei-Feld.
+                    // ``@change`` im Template. Der Alpine-Handler hat selbst
+                    // nie einen Request ausgeloest — die doppelten Swaps kamen
+                    // aus ZWEI change-Events (synthetischer Autosave-Restore-
+                    // Dispatch + Nutzerauswahl, geschlossen per ``hx-sync``).
+                    // Am htmx-Lebenszyklus laeuft die Auswertung aber exakt
+                    // einmal je REALEM Request (auch bei synthetischen Events
+                    // und abgebrochenen Vorgaengern) und kann nicht mehr vom
+                    // Swap-Kanal wegdriften.
                     // ``htmx:beforeRequest`` feuert synchron am ausloesenden
                     // Element, BEVOR der Request rausgeht (verifiziert an
                     // ``static/js/htmx.min.js`` 2.0.10) — also ohne UI-Lag,

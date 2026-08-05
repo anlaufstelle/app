@@ -533,15 +533,16 @@ class TestAlpineCspCompatibilityGuard:
         """Ein Tag darf auf ``change`` nicht gleichzeitig htmx-swappen UND
         einen Alpine-``@change``-Handler ausfuehren — Refs #1797.
 
-        Beide Kanaele haengen am selben Browser-Event, laufen aber unabhaengig:
-        jedes ``change`` (auch ein synthetisch dispatchtes, z. B. beim
-        Autosave-Entwurfs-Restore in ``static/js/autosave.js``) startet einen
-        eigenen htmx-Request. Treffen zwei Antworten ein, ersetzt der zweite
-        Swap die Feld-Knoten des ersten — im Ereignisformular hing eine bereits
-        gewaehlte Datei danach an einem abgehaengten DOM-Knoten und der Kontakt
-        wurde ohne Anhang gespeichert. Ein Kanal genuegt: die Alpine-Logik am
-        htmx-Lebenszyklus (``htmx:beforeRequest``) registrieren statt an einem
-        zweiten ``@change``, und den Request per ``hx-sync`` serialisieren.
+        Praezisierung (Review-Befund #1797): Ein Alpine-``@change`` ist ein
+        zweiter LISTENER, kein zweiter Request-Emitter — die doppelten Swaps
+        im Ereignisformular kamen aus zwei ``change``-EVENTS (synthetischer
+        Autosave-Restore-Dispatch + Nutzerauswahl; dagegen ``hx-sync``) bzw.
+        aus Interaktion mit den Alt-Knoten waehrend des laufenden Swaps
+        (dagegen ``hx-disabled-elt``). Der Guard verhindert die Kanal-DRIFT:
+        ein separater ``@change`` laeuft auch fuer Events, deren htmx-Request
+        nie startet oder abgebrochen wird, und sein Zustand laeuft dann am
+        Swap-Kanal vorbei. Ein Kanal genuegt: die Alpine-Logik am
+        htmx-Lebenszyklus (``htmx:beforeRequest``) registrieren.
 
         Bekannte Grenze: der Scan sieht nur Templates. Trigger, die in
         Python-Widget-``attrs`` stehen (``forms.Select(attrs={"hx-trigger": …})``),
@@ -560,12 +561,12 @@ class TestAlpineCspCompatibilityGuard:
                 violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} {reason}")
         assert not violations, (
             "Diese Tags reagieren doppelt auf ``change``: htmx swappt UND ein "
-            "Alpine-@change-Handler laeuft. Zwei change-Events (z. B. der "
-            "synthetische Dispatch des Autosave-Restores plus die Nutzerauswahl) "
-            "erzeugen so zwei parallele Swaps, die einander ueberschreiben. "
-            "Bitte die Alpine-Logik in ``init()`` an ``htmx:beforeRequest`` des "
-            'Elements haengen und den Request mit ``hx-sync="this:replace"`` '
-            "serialisieren.\nRefs #1797.\n"
+            "Alpine-@change-Handler laeuft. Der Alpine-Handler driftet dann vom "
+            "Swap-Kanal weg (er laeuft auch fuer Events ohne bzw. mit "
+            "abgebrochenem Request). Bitte die Alpine-Logik in ``init()`` an "
+            "``htmx:beforeRequest`` des Elements haengen; gegen doppelte "
+            'change-EVENTS zusaetzlich ``hx-sync="this:replace"`` setzen.\n'
+            "Refs #1797.\n"
             f"Betroffen: {violations}"
         )
 
