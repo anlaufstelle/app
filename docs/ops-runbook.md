@@ -518,6 +518,22 @@ docker compose -f docker-compose.prod.yml exec \
 docker compose -f docker-compose.prod.yml exec \
  -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
  web python manage.py purge_orphan_field_data # ausfuehren
+
+# Facility-Export (Refs #1060, M4 / DSGVO Art. 20): kompletter fachlicher
+# Datenbestand EINER Einrichtung als versioniertes JSON (Schema v1, Referenz
+# docs/facility-export-schema.md). MUSS mit der Admin-DB-Rolle laufen
+# (BYPASSRLS) — sonst fail-loud statt stillschweigend leerer Listen.
+#
+# ACHTUNG Datenschutz: die Ausgabedatei enthaelt ENTSCHLUESSELTE Klartext-
+# Werte (inkl. Art.-9-Inhalten) — wie ein DB-Backup behandeln: nur auf
+# verschluesselte Ziele schreiben, Uebergabe nur an Berechtigte, danach
+# sicher loeschen. Laufzeit skaliert mit der Anhangsmenge (SHA-256 wird
+# ueber die entschluesselten Inhalte gestreamt); --no-file-hashes
+# ueberspringt das Hashing (sha256: null).
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py export_facility \
+ --facility "Beratungsstelle Nord" --output /tmp/facility-export.json --indent 2
 ```
 
 ---
