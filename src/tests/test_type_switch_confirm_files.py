@@ -335,9 +335,7 @@ class TestOriginalDocumentTypeAttribute:
         _set_marker(person, "anlage", [_attach(facility, person, ft, staff_user, "original.pdf")])
         # Namenskollision erzwingt den ungueltigen MAIN-Form-Zweig, waehrend das
         # gueltige document_type=dt_new die Instanz ueber _post_clean mutiert.
-        Client.objects.create(
-            facility=facility, pseudonym="Kollision", contact_stage=Client.ContactStage.IDENTIFIED
-        )
+        Client.objects.create(facility=facility, pseudonym="Kollision", contact_stage=Client.ContactStage.IDENTIFIED)
 
         client.force_login(staff_user)
         response = client.post(
