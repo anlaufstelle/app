@@ -20,7 +20,7 @@
 | Right | Reference | For |
 |---|---|---|
 | Art. 13/14 Information duties | [Information duties](../../src/core/dsgvo_templates/informationspflichten.md) | [Operator] [Auditor] |
-| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · since #1738 it also contains **attachment metadata** for all three owners (filename, size, type, version chain; **no** binary contents) · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
+| Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · since #1738 it also contains **attachment metadata** for all three owners (filename, size, type, version chain; **no** binary contents) and since #1796 also **rectification requests** (Art. 16, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in all states · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
 | Art. 16 Rectification | [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) — deliberately no self-service | [Auditor] [Dev] |
 | Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **Attachments:** owner lifecycle — client- and case-owned files fall with the client anonymization (trash period `client_trash_days`), physically deleted including the `.enc` file on **both** anonymization paths (`anonymize_client` and the k-anon bridge, parity guard), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) · **residual risk:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753) | [Auditor] [Dev] [Operator] |
 | Art. 18 Restriction | Legal Hold — [ADR-021](../adr/021-retention-modell.md) · [`legal_holds.py`](../../src/core/retention/legal_holds.py) | [Auditor] [Dev] |
@@ -64,5 +64,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-04 -->
-<!-- source-hash: d6966e13133067d99dc177144620a4eb10e5aab9 -->
+<!-- translation-date: 2026-08-05 -->
+<!-- source-hash: e82dc5721231bdafb7930cb0908844b576daf79c -->
