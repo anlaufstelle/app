@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-05 18:10+0200\n"
+"POT-Creation-Date: 2026-08-05 19:58+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -28,6 +28,7 @@ msgstr "Event"
 #: templates/core/events/delete_confirm.html:32
 #: templates/core/events/deletion_review.html:41
 #: templates/core/events/detail.html:58 templates/core/events/edit.html:22
+#: templates/core/rectification/review.html:19
 #: templates/core/workitems/detail.html:136
 #: templates/core/workitems/form.html:83 templates/core/workitems/form.html:98
 #: templates/core/workitems/offline_workitem_list.html:41
@@ -157,6 +158,7 @@ msgid "– Ohne Gruppe –"
 msgstr "– No group –"
 
 #: core/forms/config.py:444 core/models/field_condition.py:53
+#: templates/core/import/mapping.html:28
 msgid "Zielfeld"
 msgstr "Target field"
 
@@ -231,9 +233,10 @@ msgstr "Start"
 msgid "Ende"
 msgstr "End"
 
-#: core/forms/events.py:41 core/models/case.py:72 core/models/client.py:78
-#: core/models/document_type.py:206 core/models/document_type.py:511
-#: core/models/document_type.py:604 core/models/event.py:37
+#: core/forms/events.py:41 core/forms/import_data.py:49 core/models/case.py:72
+#: core/models/client.py:78 core/models/document_type.py:206
+#: core/models/document_type.py:511 core/models/document_type.py:604
+#: core/models/event.py:37 core/models/import_job.py:97
 #: core/models/quick_template.py:41 core/services/system/export.py:106
 #: templates/core/attachments/partials/attachment_table.html:12
 #: templates/core/clients/offline_detail.html:124
@@ -245,10 +248,12 @@ msgstr "End"
 #: templates/core/export/client_data_pdf.html:55
 #: templates/core/export/client_data_pdf.html:244
 #: templates/core/export/client_data_pdf.html:292
+#: templates/core/import/detail.html:22
 msgid "Dokumentationstyp"
 msgstr "Document type"
 
 #: core/forms/events.py:57 core/models/event.py:75
+#: core/services/import_engine.py:371
 #: templates/core/clients/offline_detail.html:134
 #: templates/core/events/delete_confirm.html:28
 #: templates/core/events/deletion_review.html:37
@@ -264,6 +269,88 @@ msgstr "Timestamp"
 #: core/forms/events.py:70 templates/core/events/create.html:165
 msgid "– Keinem Fall zuordnen –"
 msgstr "– Do not assign to any case –"
+
+#: core/forms/import_data.py:21 core/forms/import_data.py:29
+msgid "Automatisch erkennen"
+msgstr "Detect automatically"
+
+#: core/forms/import_data.py:22
+msgid "Semikolon (;)"
+msgstr "Semicolon (;)"
+
+#: core/forms/import_data.py:23
+msgid "Komma (,)"
+msgstr "Comma (,)"
+
+#: core/forms/import_data.py:24
+msgid "Tabulator"
+msgstr "Tab"
+
+#: core/forms/import_data.py:28
+msgid "UTF-8"
+msgstr "UTF-8"
+
+#: core/forms/import_data.py:28
+msgid "Windows-1252 (ältere Excel-Exporte)"
+msgstr "Windows-1252 (older Excel exports)"
+
+#: core/forms/import_data.py:43
+msgid "Was soll importiert werden?"
+msgstr "What should be imported?"
+
+#: core/forms/import_data.py:50 core/models/import_job.py:98
+msgid "Liefert die Zusatzfelder als Zuordnungsziele. Für Ereignisse Pflicht."
+msgstr "Supplies the extra fields as mapping targets. Required for events."
+
+#: core/forms/import_data.py:54
+msgid "CSV-Datei"
+msgstr "CSV file"
+
+#: core/forms/import_data.py:55
+msgid "Erste Zeile = Spaltenüberschriften. Maximal 5 MB und 1000 Datenzeilen."
+msgstr "First row = column headers. Maximum 5 MB and 1000 data rows."
+
+#: core/forms/import_data.py:61
+msgid "Trennzeichen"
+msgstr "Delimiter"
+
+#: core/forms/import_data.py:67
+msgid "Zeichensatz"
+msgstr "Character encoding"
+
+#: core/forms/import_data.py:89 core/models/import_job.py:160
+msgid "Für den Ereignis-Import ist ein Dokumentationstyp erforderlich."
+msgstr "A documentation type is required for event imports."
+
+#: core/forms/import_data.py:91 core/models/import_job.py:166
+msgid "Der Dokumentationstyp passt nicht zum gewählten Zieltyp."
+msgstr "The documentation type does not match the selected target type."
+
+#: core/forms/rectification.py:29
+msgid "Zu berichtigendes Feld"
+msgstr "Field to be rectified"
+
+#: core/forms/rectification.py:33
+msgid "Richtiger Wert"
+msgstr "Correct value"
+
+#: core/forms/rectification.py:37
+msgid ""
+"Leer lassen, wenn der Eintrag ersatzlos entfallen soll. Mehrfachauswahl: "
+"Werte mit Komma trennen."
+msgstr ""
+"Leave empty if the entry should be removed without replacement. Multi-"
+"select: separate values with a comma."
+
+#: core/forms/rectification.py:41 templates/core/rectification/review.html:37
+msgid "Fachliche Begründung"
+msgstr "Professional justification"
+
+#: core/forms/rectification.py:43
+msgid ""
+"Woraus ergibt sich, dass der bisherige Eintrag unrichtig ist? Wird "
+"verschlüsselt gespeichert."
+msgstr "What shows that the current entry is incorrect? Stored encrypted."
 
 #: core/forms/workitems.py:138
 #, python-format
@@ -443,8 +530,9 @@ msgstr "Activities"
 #: core/models/attachment.py:47 core/models/audit.py:152 core/models/case.py:28
 #: core/models/client.py:34 core/models/document_type.py:136
 #: core/models/document_type.py:298 core/models/event.py:23
-#: core/models/offline_revocation.py:51 core/models/organization.py:41
-#: core/models/quick_template.py:35 core/models/retention.py:33
+#: core/models/import_job.py:72 core/models/offline_revocation.py:51
+#: core/models/organization.py:41 core/models/quick_template.py:35
+#: core/models/rectification.py:53 core/models/retention.py:33
 #: core/models/retention.py:93 core/models/settings.py:27
 #: core/models/time_filter.py:21 core/models/user.py:37
 #: core/models/workitem.py:45 core/models/workitem.py:199
@@ -491,7 +579,7 @@ msgstr ""
 "Marks the entry as removed by the user. Physical deletion only on owner "
 "delete/anonymize."
 
-#: core/models/attachment.py:102
+#: core/models/attachment.py:102 core/models/import_job.py:110
 msgid "Speicherdateiname"
 msgstr "Storage file name"
 
@@ -499,11 +587,12 @@ msgstr "Storage file name"
 msgid "UUID-basierter Dateiname auf Disk (z.B. abcd1234.enc)"
 msgstr "UUID-based filename on disk (e.g. abcd1234.enc)"
 
-#: core/models/attachment.py:106
+#: core/models/attachment.py:106 core/models/import_job.py:116
 msgid "Originaldateiname (verschlüsselt)"
 msgstr "Original filename (encrypted)"
 
-#: core/models/attachment.py:107
+#: core/models/attachment.py:107 core/models/rectification.py:82
+#: core/models/rectification.py:88
 msgid "Verschlüsselt via encrypt_field()"
 msgstr "Encrypted via encrypt_field()"
 
@@ -546,8 +635,9 @@ msgstr "Created by"
 
 #: core/models/attachment.py:134 core/models/case.py:92
 #: core/models/client.py:90 core/models/episode.py:41 core/models/event.py:84
-#: core/models/organization.py:14 core/models/organization.py:38
-#: core/models/quick_template.py:72 core/models/retention.py:114
+#: core/models/import_job.py:131 core/models/organization.py:14
+#: core/models/organization.py:38 core/models/quick_template.py:72
+#: core/models/rectification.py:116 core/models/retention.py:114
 #: core/models/workitem.py:105 core/models/workitem.py:229
 #: templates/core/cases/detail.html:96 templates/core/events/detail.html:78
 #: templates/core/export/client_data_pdf.html:46
@@ -878,6 +968,7 @@ msgstr "Acting person"
 #: templates/core/clients/trash.html:22 templates/core/dsgvo/package.html:27
 #: templates/core/export/client_data_pdf.html:321
 #: templates/core/export/client_data_pdf.html:554
+#: templates/core/import/list.html:25
 #: templates/core/system/auditlog_detail.html:33
 #: templates/core/system/auditlog_list.html:38
 #: templates/core/system/lockouts.html:32
@@ -885,13 +976,14 @@ msgstr "Acting person"
 msgid "Aktion"
 msgstr "Action"
 
-#: core/models/audit.py:189 core/models/retention.py:38
-#: core/models/retention.py:95 core/models/workitem.py:201
-#: templates/core/audit/detail.html:43
+#: core/models/audit.py:189 core/models/import_job.py:85
+#: core/models/retention.py:38 core/models/retention.py:95
+#: core/models/workitem.py:201 templates/core/audit/detail.html:43
 #: templates/core/audit/partials/table.html:11
 #: templates/core/export/client_data_pdf.html:361
 #: templates/core/export/client_data_pdf.html:398
 #: templates/core/export/client_data_pdf.html:428
+#: templates/core/import/list.html:22
 #: templates/core/system/auditlog_detail.html:51
 #: templates/core/system/legal_holds.html:65
 #: templates/core/system/partials/auditlog_table.html:12
@@ -939,8 +1031,8 @@ msgstr "Entry hash"
 
 #: core/models/audit.py:218 templates/core/audit/list.html:4
 #: templates/core/audit/list.html:7 templates/core/system/_subnav.html:14
-#: templates/partials/_navigation_desktop.html:129
-#: templates/partials/_navigation_mobile.html:86
+#: templates/partials/_navigation_desktop.html:143
+#: templates/partials/_navigation_mobile.html:91
 msgid "Audit-Log"
 msgstr "Audit log"
 
@@ -1004,7 +1096,8 @@ msgstr ""
 "names or Art. 9 data; sensitive content belongs in an event FieldTemplate "
 "with sensitivity=HIGH."
 
-#: core/models/case.py:55 core/models/retention.py:47
+#: core/models/case.py:55 core/models/import_job.py:104
+#: core/models/rectification.py:94 core/models/retention.py:47
 #: core/models/workitem.py:86 core/models/workitem.py:208
 #: templates/core/cases/partials/table.html:11
 #: templates/core/config/document_types/detail.html:58
@@ -1014,6 +1107,7 @@ msgstr ""
 #: templates/core/export/client_data_pdf.html:362
 #: templates/core/export/client_data_pdf.html:429
 #: templates/core/export/client_data_pdf.html:461
+#: templates/core/import/detail.html:18 templates/core/import/list.html:23
 #: templates/core/system/legal_holds.html:37
 #: templates/core/system/legal_holds.html:70
 #: templates/core/workitems/detail.html:24
@@ -1042,7 +1136,8 @@ msgid "Hauptverantwortliche Fachkraft für diesen Fall"
 msgstr "Primary caseworker for this case"
 
 #: core/models/case.py:93 core/models/client.py:91 core/models/event.py:85
-#: core/models/settings.py:158 core/models/workitem.py:106
+#: core/models/import_job.py:132 core/models/settings.py:158
+#: core/models/workitem.py:106
 msgid "Aktualisiert am"
 msgstr "Updated on"
 
@@ -1053,7 +1148,7 @@ msgstr "Closed on"
 
 #: core/models/case.py:102 templates/core/cases/detail.html:11
 #: templates/core/cases/list.html:4 templates/core/cases/list.html:9
-#: templates/core/clients/detail.html:262
+#: templates/core/clients/detail.html:286
 #: templates/core/clients/offline_detail.html:314
 #: templates/core/config/document_types/detail.html:67
 #: templates/partials/_navigation_desktop.html:96
@@ -1095,7 +1190,8 @@ msgstr "27+"
 msgid "Unbekannt"
 msgstr "Unknown"
 
-#: core/models/client.py:39 templates/core/clients/deletion_review.html:33
+#: core/models/client.py:39 core/services/import_engine.py:364
+#: templates/core/clients/deletion_review.html:33
 #: templates/core/clients/offline_list.html:75
 #: templates/core/clients/partials/table.html:16
 #: templates/core/clients/trash.html:19
@@ -1104,7 +1200,8 @@ msgstr "Unknown"
 msgid "Pseudonym"
 msgstr "Pseudonym"
 
-#: core/models/client.py:45 core/services/system/export.py:108
+#: core/models/client.py:45 core/services/import_engine.py:365
+#: core/services/system/export.py:108
 #: templates/core/clients/deletion_review.html:37
 #: templates/core/export/client_data_pdf.html:38
 msgid "Kontaktstufe"
@@ -1117,7 +1214,7 @@ msgid ""
 msgstr "Identified = pseudonym known, Qualified = full identity known"
 
 #: core/models/client.py:52 core/reporting/backends/client_metrics.py:204
-#: core/services/system/export.py:109
+#: core/services/import_engine.py:366 core/services/system/export.py:109
 #: templates/core/export/client_data_pdf.html:39
 #: templates/core/export/report_pdf.html:95
 #: templates/core/export/sample_report_1_pdf.html:85
@@ -1131,7 +1228,7 @@ msgid "Altersgruppe der Person zum Zeitpunkt der Erfassung"
 msgstr "Person's age group at time of registration"
 
 #: core/models/client.py:57 core/models/user.py:51
-#: templates/core/clients/detail.html:210
+#: core/services/import_engine.py:367 templates/core/clients/detail.html:234
 #: templates/core/clients/offline_detail.html:105
 #: templates/core/export/client_data_pdf.html:40
 msgid "Notizen"
@@ -1178,7 +1275,8 @@ msgstr ""
 "Indicates whether the record has been generalized via K-anonymization "
 "(alternative to hard delete for long-term statistics)."
 
-#: core/models/client.py:103 core/reporting/backends/client_metrics.py:205
+#: core/models/client.py:103 core/models/import_job.py:52
+#: core/reporting/backends/client_metrics.py:205
 #: templates/core/clients/detail.html:11 templates/core/clients/list.html:4
 #: templates/core/clients/list.html:9
 #: templates/core/clients/offline_list.html:4
@@ -1467,8 +1565,8 @@ msgstr ""
 #: templates/core/config/field_templates/list.html:4
 #: templates/core/config/field_templates/list.html:9
 #: templates/core/config/field_templates/partials/table.html:5
-#: templates/partials/_navigation_desktop.html:141
-#: templates/partials/_navigation_mobile.html:89
+#: templates/partials/_navigation_desktop.html:155
+#: templates/partials/_navigation_mobile.html:94
 msgid "Feldvorlagen"
 msgstr "Field templates"
 
@@ -1570,7 +1668,8 @@ msgstr "Anonymous"
 msgid "Gelöscht"
 msgstr "Deleted"
 
-#: core/models/event.py:89 core/reporting/backends/counseling_hours.py:206
+#: core/models/event.py:89 core/models/import_job.py:53
+#: core/reporting/backends/counseling_hours.py:206
 #: core/reporting/backends/needle_exchange_balance.py:162
 #: templates/core/config/document_types/detail.html:69
 #: templates/core/config/document_types/partials/table.html:11
@@ -1697,6 +1796,82 @@ msgstr "The comparison value must be a valid option slug."
 msgid "Diese Bedingung erzeugt einen Zyklus: %(path)s"
 msgstr "This condition creates a cycle: %(path)s"
 
+#: core/models/import_job.py:56
+msgid "Hochgeladen"
+msgstr "Uploaded"
+
+#: core/models/import_job.py:57
+msgid "Zugeordnet"
+msgstr "Mapped"
+
+#: core/models/import_job.py:58
+msgid "Geprüft"
+msgstr "Validated"
+
+#: core/models/import_job.py:59
+msgid "Übernommen"
+msgstr "Committed"
+
+#: core/models/import_job.py:60
+msgid "Abgebrochen"
+msgstr "Aborted"
+
+#: core/models/import_job.py:80 templates/core/import/detail.html:26
+#: templates/core/import/list.html:24
+msgid "Angelegt von"
+msgstr "Created by"
+
+#: core/models/import_job.py:86
+msgid "Ob die Zeilen der Datei Personen oder Ereignisse anlegen."
+msgstr "Whether the rows in the file create people or events."
+
+#: core/models/import_job.py:111
+msgid ""
+"UUID-basierter Dateiname der verschlüsselten Quelldatei; leer nach Übernahme/"
+"Abbruch."
+msgstr ""
+"UUID-based filename of the encrypted source file; empty after commit/abort."
+
+#: core/models/import_job.py:117
+msgid ""
+"Verschlüsselt via encrypt_field() — der Dateiname kann Klientenbezug tragen."
+msgstr ""
+"Encrypted via encrypt_field() — the filename may carry a client reference."
+
+#: core/models/import_job.py:122
+msgid "Zuordnung (JSON)"
+msgstr "Mapping (JSON)"
+
+#: core/models/import_job.py:123
+msgid "{'columns': {Spalte: Ziel}, 'delimiter': ';', 'encoding': 'utf-8-sig'}"
+msgstr ""
+"{'columns': {column: target}, 'delimiter': ';', 'encoding': 'utf-8-sig'}"
+
+#: core/models/import_job.py:128
+msgid "Ergebnis (JSON)"
+msgstr "Result (JSON)"
+
+#: core/models/import_job.py:129
+msgid ""
+"{'summary': {...}, 'errors': [{'row','column','code','message'}]} — ohne "
+"Zellwerte."
+msgstr ""
+"{'summary': {...}, 'errors': [{'row','column','code','message'}]} — without "
+"cell values."
+
+#: core/models/import_job.py:135 templates/core/import/detail.html:4
+#: templates/core/import/detail.html:9
+msgid "Importlauf"
+msgstr "Import run"
+
+#: core/models/import_job.py:136
+msgid "Importläufe"
+msgstr "Import runs"
+
+#: core/models/import_job.py:164
+msgid "Der Dokumentationstyp gehört zu einer anderen Einrichtung."
+msgstr "The documentation type belongs to a different facility."
+
 #: core/models/mixins.py:22 templates/core/clients/trash.html:20
 #: templates/core/export/client_data_pdf.html:44
 msgid "Gelöscht am"
@@ -1811,13 +1986,94 @@ msgstr "Person visit"
 msgid "Personen-Besuche"
 msgstr "Person visits"
 
-#: core/models/retention.py:17 core/models/workitem.py:184
-#: templates/core/deletion_requests/list.html:11
+#: core/models/rectification.py:42 core/models/retention.py:17
+#: core/models/workitem.py:184 templates/core/deletion_requests/list.html:11
 #: templates/core/deletion_requests/list.html:21
+#: templates/core/rectification/list.html:12
+#: templates/core/rectification/list.html:22
 #: templates/core/retention/partials/dashboard_content.html:7
 #: templates/core/system/retention.html:34
 msgid "Ausstehend"
 msgstr "Pending"
+
+#: core/models/rectification.py:43 core/models/workitem.py:185
+#: templates/core/deletion_requests/list.html:54
+#: templates/core/deletion_requests/list.html:61
+#: templates/core/rectification/list.html:46
+#: templates/core/rectification/list.html:54
+msgid "Genehmigt"
+msgstr "Approved"
+
+#: core/models/rectification.py:44 core/models/retention.py:21
+#: core/models/workitem.py:186 templates/core/deletion_requests/list.html:77
+#: templates/core/deletion_requests/list.html:84
+#: templates/core/rectification/list.html:69
+#: templates/core/rectification/list.html:77
+#: templates/core/system/retention.html:38
+msgid "Abgelehnt"
+msgstr "Rejected"
+
+#: core/models/rectification.py:59
+#: templates/core/clients/deletion_review.html:30
+msgid "Betroffene Person"
+msgstr "Affected person"
+
+#: core/models/rectification.py:63
+msgid "Feldpfad"
+msgstr "Field path"
+
+#: core/models/rectification.py:64
+msgid ""
+"Stammdatenfeld (z.B. pseudonym) oder dynamisches Feld (data_json.<slug>)."
+msgstr ""
+"Master data field (e.g. pseudonym) or dynamic field (data_json.<slug>)."
+
+#: core/models/rectification.py:69
+msgid "Alter Wert (verschlüsselt)"
+msgstr "Old value (encrypted)"
+
+#: core/models/rectification.py:70 core/models/rectification.py:76
+msgid "JSON-serialisiert, dann via encrypt_field() verschlüsselt."
+msgstr "JSON-serialized, then encrypted via encrypt_field()."
+
+#: core/models/rectification.py:75
+msgid "Neuer Wert (verschlüsselt)"
+msgstr "New value (encrypted)"
+
+#: core/models/rectification.py:81
+msgid "Begründung (verschlüsselt)"
+msgstr "Reason (encrypted)"
+
+#: core/models/rectification.py:87
+msgid "Prüfvermerk (verschlüsselt)"
+msgstr "Review note (encrypted)"
+
+#: core/models/rectification.py:106 core/models/workitem.py:219
+#: templates/core/clients/deletion_review.html:14
+#: templates/core/events/deletion_review.html:14
+#: templates/core/export/client_data_pdf.html:364
+msgid "Beantragt von"
+msgstr "Requested by"
+
+#: core/models/rectification.py:114 core/models/workitem.py:227
+#: templates/core/export/client_data_pdf.html:365
+msgid "Geprüft von"
+msgstr "Reviewed by"
+
+#: core/models/rectification.py:117 core/models/workitem.py:233
+#: templates/core/export/client_data_pdf.html:367
+msgid "Geprüft am"
+msgstr "Reviewed on"
+
+#: core/models/rectification.py:120
+msgid "Berichtigungsantrag"
+msgstr "Rectification request"
+
+#: core/models/rectification.py:121 templates/core/rectification/list.html:4
+#: templates/core/rectification/list.html:7
+#: templates/core/rectification/review.html:11
+msgid "Berichtigungsanträge"
+msgstr "Rectification requests"
 
 #: core/models/retention.py:18
 #: templates/core/retention/partials/dashboard_content.html:17
@@ -1828,13 +2084,6 @@ msgstr "Released"
 #: core/models/retention.py:20 templates/core/system/retention.html:37
 msgid "Zurückgestellt"
 msgstr "Deferred"
-
-#: core/models/retention.py:21 core/models/workitem.py:186
-#: templates/core/deletion_requests/list.html:77
-#: templates/core/deletion_requests/list.html:84
-#: templates/core/system/retention.html:38
-msgid "Abgelehnt"
-msgstr "Rejected"
 
 #: core/models/retention.py:41 templates/core/export/client_data_pdf.html:432
 msgid "Vorgeschlagen am"
@@ -2386,25 +2635,6 @@ msgstr "Work item"
 msgid "Arbeitsaufträge"
 msgstr "Work items"
 
-#: core/models/workitem.py:185 templates/core/deletion_requests/list.html:54
-#: templates/core/deletion_requests/list.html:61
-msgid "Genehmigt"
-msgstr "Approved"
-
-#: core/models/workitem.py:219 templates/core/clients/deletion_review.html:14
-#: templates/core/events/deletion_review.html:14
-#: templates/core/export/client_data_pdf.html:364
-msgid "Beantragt von"
-msgstr "Requested by"
-
-#: core/models/workitem.py:227 templates/core/export/client_data_pdf.html:365
-msgid "Geprüft von"
-msgstr "Reviewed by"
-
-#: core/models/workitem.py:233 templates/core/export/client_data_pdf.html:367
-msgid "Geprüft am"
-msgstr "Reviewed on"
-
 #: core/models/workitem.py:237
 msgid "Löschantrag"
 msgstr "Deletion request"
@@ -2649,6 +2879,7 @@ msgstr "Example: distribution of services and crisis types"
 #: templates/core/events/conflict_review.html:51
 #: templates/core/events/detail.html:195
 #: templates/core/export/client_data_pdf.html:81
+#: templates/core/rectification/review.html:23
 msgid "Feld"
 msgstr "Field"
 
@@ -2800,11 +3031,11 @@ msgstr "Please specify the document type only once (object or ID, not both)."
 msgid "Der Dokumentationstyp existiert nicht."
 msgstr "The document type does not exist."
 
-#: core/services/client/main.py:660
+#: core/services/client/main.py:694
 msgid "Nur die Leitung darf eine qualifizierte Person herabstufen."
 msgstr "Only the lead may downgrade a qualified person."
 
-#: core/services/client/main.py:732
+#: core/services/client/main.py:766
 msgid ""
 "Diese Person wurde gelöscht oder anonymisiert — es können keine Daten mehr "
 "zu ihr gespeichert werden."
@@ -2812,16 +3043,62 @@ msgstr ""
 "This person has been deleted or anonymized — no further data can be saved "
 "for them."
 
-#: core/services/client/main.py:1017
+#: core/services/client/main.py:1051
 msgid "Nur Personen im Papierkorb können anonymisiert werden."
 msgstr "Only persons in the trash can be anonymized."
 
-#: core/services/client/main.py:1021
+#: core/services/client/main.py:1055
 msgid ""
 "Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — "
 "Anonymisierung nicht möglich."
 msgstr ""
 "This person is subject to a legal hold — anonymization is not possible."
+
+#: core/services/client/rectification.py:99
+msgid "Dieses Feld kann nicht über den Berichtigungsworkflow geändert werden."
+msgstr "This field cannot be changed via the rectification workflow."
+
+#: core/services/client/rectification.py:119
+msgid "Ungültige Altersgruppe."
+msgstr "Invalid age group."
+
+#: core/services/client/rectification.py:123
+msgid "Das Pseudonym darf nicht leer sein."
+msgstr "The pseudonym must not be empty."
+
+#: core/services/client/rectification.py:126
+msgid "Der Wert ist zu lang für dieses Feld."
+msgstr "The value is too long for this field."
+
+#: core/services/client/rectification.py:214
+msgid "Für dieses Feld läuft bereits ein Berichtigungsantrag."
+msgstr "A rectification request is already in progress for this field."
+
+#: core/services/client/rectification.py:241
+msgid "Dieser Berichtigungsantrag ist bereits abgeschlossen."
+msgstr "This rectification request is already completed."
+
+#: core/services/client/rectification.py:243
+msgid ""
+"Sie können Ihren eigenen Berichtigungsantrag nicht prüfen (Vier-Augen-"
+"Prinzip)."
+msgstr ""
+"You cannot review your own rectification request (four-eyes principle)."
+
+#: core/services/client/rectification.py:245
+msgid "Nur die Leitung darf Berichtigungsanträge prüfen."
+msgstr "Only the lead may review rectification requests."
+
+#: core/services/client/rectification.py:302
+msgid ""
+"Der Wert wurde zwischenzeitlich geändert — bitte den Antrag neu stellen."
+msgstr ""
+"The value has changed in the meantime — please submit the request again."
+
+#: core/services/client/rectification.py:356
+msgid ""
+"Die Berichtigung konnte nicht angewendet werden (Wert bereits vergeben)."
+msgstr "The rectification could not be applied (value already taken)."
 
 #: core/services/compliance/vvt.py:42
 msgid "Klienten-Stammdaten"
@@ -3552,6 +3829,7 @@ msgstr "No"
 
 #: core/services/dynamic_data.py:483 core/services/dynamic_data.py:567
 #: core/services/events/context.py:153 core/services/system/export.py:189
+#: core/views/rectification.py:210
 msgid "[Eingeschränkt]"
 msgstr "[Restricted]"
 
@@ -3673,6 +3951,140 @@ msgstr "File upload rejected: virus scanner is unreachable."
 #, python-format
 msgid "Datei wurde von Virenscanner abgewiesen: %(signature)s"
 msgstr "File rejected by virus scanner: %(signature)s"
+
+#: core/services/import_engine.py:114
+msgid "Pflichtfeld ist leer."
+msgstr "Required field is empty."
+
+#: core/services/import_engine.py:115
+msgid "Wert ist keine gültige Zahl."
+msgstr "Value is not a valid number."
+
+#: core/services/import_engine.py:116
+msgid "Wert ist kein gültiges Datum (erwartet: TT.MM.JJJJ oder JJJJ-MM-TT)."
+msgstr "Value is not a valid date (expected: DD.MM.YYYY or YYYY-MM-DD)."
+
+#: core/services/import_engine.py:117
+msgid "Wert ist kein gültiger Zeitpunkt (erwartet: TT.MM.JJJJ [HH:MM])."
+msgstr "Value is not a valid timestamp (expected: DD.MM.YYYY [HH:MM])."
+
+#: core/services/import_engine.py:118
+msgid "Wert ist keine gültige Uhrzeit (erwartet: HH:MM)."
+msgstr "Value is not a valid time (expected: HH:MM)."
+
+#: core/services/import_engine.py:119
+msgid "Wert ist kein Ja/Nein-Wert."
+msgstr "Value is not a yes/no value."
+
+#: core/services/import_engine.py:120
+msgid "Wert ist keine zulässige Auswahl für dieses Feld."
+msgstr "Value is not a valid choice for this field."
+
+#: core/services/import_engine.py:121
+msgid "Zu diesem Pseudonym gibt es in der Einrichtung keine Person."
+msgstr "There is no person with this pseudonym in this facility."
+
+#: core/services/import_engine.py:122
+msgid ""
+"Die Zeile verletzt eine Eindeutigkeitsregel (z. B. bereits vergebenes "
+"Pseudonym)."
+msgstr "The row violates a uniqueness rule (e.g. pseudonym already in use)."
+
+#: core/services/import_engine.py:123
+msgid "Die fachliche Prüfung hat die Zeile abgelehnt."
+msgstr "The professional review rejected the row."
+
+#: core/services/import_engine.py:124
+msgid "Ihre Rolle darf diese Dokumentation nicht anlegen."
+msgstr "Your role is not permitted to create this documentation."
+
+#: core/services/import_engine.py:125
+msgid "Der Zeileninhalt ist für dieses Ziel nicht verwendbar."
+msgstr "The row content cannot be used for this target."
+
+#: core/services/import_engine.py:128
+msgid "Die Zeile konnte nicht übernommen werden."
+msgstr "The row could not be committed."
+
+#: core/services/import_engine.py:185 core/services/import_engine.py:190
+#, python-format
+msgid "Die Datei ist zu groß (maximal %(mb)s MB)."
+msgstr "The file is too large (maximum %(mb)s MB)."
+
+#: core/services/import_engine.py:207
+msgid "Die Datei konnte weder als UTF-8 noch als Windows-1252 gelesen werden."
+msgstr "The file could not be read as either UTF-8 or Windows-1252."
+
+#: core/services/import_engine.py:228 core/services/import_engine.py:230
+msgid "Die Datei enthält keine Kopfzeile."
+msgstr "The file does not contain a header row."
+
+#: core/services/import_engine.py:232
+msgid "Jede Spalte der Kopfzeile braucht eine Überschrift."
+msgstr "Every column in the header row needs a heading."
+
+#: core/services/import_engine.py:234
+msgid "Die Kopfzeile enthält doppelte Spaltenüberschriften."
+msgstr "The header row contains duplicate column headings."
+
+#: core/services/import_engine.py:242
+#, python-format
+msgid "Die Datei hat mehr als %(max)s Datenzeilen."
+msgstr "The file has more than %(max)s data rows."
+
+#: core/services/import_engine.py:316
+msgid "Zu diesem Importlauf gibt es keine Quelldatei mehr."
+msgstr "There is no longer a source file for this import run."
+
+#: core/services/import_engine.py:319
+msgid "Die hochgeladene Datei ist nicht mehr vorhanden."
+msgstr "The uploaded file no longer exists."
+
+#: core/services/import_engine.py:372
+msgid "Pseudonym der Person"
+msgstr "Person's pseudonym"
+
+#: core/services/import_engine.py:389 core/services/import_engine.py:661
+#: core/services/import_engine.py:801 core/views/import_wizard.py:119
+#: core/views/import_wizard.py:129
+msgid "Der Importlauf ist bereits abgeschlossen."
+msgstr "The import run is already completed."
+
+#: core/services/import_engine.py:400
+#, python-format
+msgid "Die Spalte „%(column)s“ gibt es in der Datei nicht."
+msgstr "The column „%(column)s“ does not exist in the file."
+
+#: core/services/import_engine.py:402
+#, python-format
+msgid "„%(target)s“ ist kein zulässiges Zielfeld."
+msgstr "„%(target)s“ is not a valid target field."
+
+#: core/services/import_engine.py:405
+#, python-format
+msgid "Das Zielfeld „%(target)s“ ist mehrfach zugeordnet."
+msgstr "The target field „%(target)s“ is mapped more than once."
+
+#: core/services/import_engine.py:413
+#, python-format
+msgid "Diese Pflichtfelder brauchen eine Spalte: %(fields)s"
+msgstr "These required fields need a column: %(fields)s"
+
+#: core/services/import_engine.py:666
+msgid "Für diesen Importlauf ist noch keine Spaltenzuordnung hinterlegt."
+msgstr "No column mapping has been saved yet for this import run."
+
+#: core/services/import_engine.py:756
+msgid "Der Importlauf muss zuerst fehlerfrei geprüft werden."
+msgstr "The import run must first pass validation without errors."
+
+#: core/services/import_engine.py:758
+msgid "Der Importlauf enthält Fehler und kann nicht übernommen werden."
+msgstr "The import run contains errors and cannot be committed."
+
+#: core/services/import_engine.py:770
+msgid "Beim Übernehmen sind Fehler aufgetreten — es wurde nichts gespeichert."
+msgstr "Errors occurred during commit — nothing was saved."
 
 #: core/services/security/locking.py:70
 msgid "Für diese Änderung ist ein Versions-Token erforderlich."
@@ -3820,8 +4232,8 @@ msgstr "No event selected."
 msgid "Fall nicht gefunden."
 msgstr "Case not found."
 
-#: core/views/cases.py:767 core/views/cases.py:772 core/views/clients.py:756
-#: core/views/clients.py:761 core/views/events.py:150
+#: core/views/cases.py:767 core/views/cases.py:772 core/views/clients.py:763
+#: core/views/clients.py:768 core/views/events.py:150
 msgid "Dokumentationstyp nicht gefunden."
 msgstr "Document type not found."
 
@@ -3856,15 +4268,15 @@ msgstr "Person restored."
 msgid "Person wurde endgültig anonymisiert."
 msgstr "Person has been permanently anonymized."
 
-#: core/views/clients.py:461
+#: core/views/clients.py:468
 msgid "Person wurde angelegt."
 msgstr "Person has been created."
 
-#: core/views/clients.py:654
+#: core/views/clients.py:661
 msgid "Person wurde aktualisiert."
 msgstr "Person has been updated."
 
-#: core/views/clients.py:736
+#: core/views/clients.py:743
 msgid "Person nicht gefunden."
 msgstr "Person not found."
 
@@ -4032,6 +4444,23 @@ msgstr "Deletion request has been submitted and must be approved by a manager."
 msgid "Ereignis wurde gelöscht."
 msgstr "Event has been deleted."
 
+#: core/views/import_wizard.py:102
+msgid "Datei hochgeladen. Bitte die Spalten zuordnen."
+msgstr "File uploaded. Please map the columns."
+
+#: core/views/import_wizard.py:181
+msgid "Für diesen Importlauf liegt kein Probelauf vor."
+msgstr "No dry run is available for this import run."
+
+#: core/views/import_wizard.py:200
+#, python-format
+msgid "Import übernommen: %(count)s Zeile(n) angelegt."
+msgstr "Import committed: %(count)s row(s) created."
+
+#: core/views/import_wizard.py:219
+msgid "Import abgebrochen. Die hochgeladene Datei wurde gelöscht."
+msgstr "Import aborted. The uploaded file was deleted."
+
 #: core/views/lockout_recovery.py:38
 #: templates/auth/lockout_recovery_request.html:28
 #: templates/registration/password_reset_form.html:34
@@ -4138,6 +4567,29 @@ msgstr ""
 msgid "Offline — dieser Inhalt kann gerade nicht aktualisiert werden."
 msgstr "Offline — this content cannot be updated right now."
 
+#: core/views/rectification.py:107
+msgid ""
+"Berichtigungsantrag gestellt — die Leitung prüft ihn (Vier-Augen-Prinzip)."
+msgstr ""
+"Rectification request submitted — the lead will review it (four-eyes "
+"principle)."
+
+#: core/views/rectification.py:165
+msgid "Berichtigung genehmigt und angewendet."
+msgstr "Rectification approved and applied."
+
+#: core/views/rectification.py:168
+msgid "Für eine Ablehnung ist ein Prüfvermerk erforderlich."
+msgstr "A review note is required for a rejection."
+
+#: core/views/rectification.py:170
+msgid "Berichtigungsantrag abgelehnt."
+msgstr "Rectification request rejected."
+
+#: core/views/rectification.py:172 core/views/system/maintenance.py:99
+msgid "Unbekannte Aktion."
+msgstr "Unknown action."
+
 #: core/views/retention.py:72
 msgid "Begründung ist erforderlich."
 msgstr "Reason is required."
@@ -4223,10 +4675,6 @@ msgstr "Could not disable maintenance mode (see server log)."
 #: core/views/system/maintenance.py:96
 msgid "Wartungsmodus deaktiviert."
 msgstr "Maintenance mode disabled."
-
-#: core/views/system/maintenance.py:99
-msgid "Unbekannte Aktion."
-msgstr "Unknown action."
 
 #: core/views/system/organization.py:33
 msgid ""
@@ -4333,7 +4781,7 @@ msgstr "All"
 msgid "Kontakte"
 msgstr "Contacts"
 
-#: core/views/zeitstrom.py:117 templates/core/clients/detail.html:245
+#: core/views/zeitstrom.py:117 templates/core/clients/detail.html:269
 #: templates/core/clients/offline_detail.html:329
 #: templates/core/workitems/inbox.html:4 templates/core/workitems/inbox.html:9
 #: templates/core/workitems/offline_workitem_list.html:4
@@ -4779,8 +5227,8 @@ msgid "Zurück zur Authenticator-App"
 msgstr "Back to authenticator app"
 
 #: templates/auth/mfa_login.html:129
-#: templates/partials/_navigation_desktop.html:181
-#: templates/partials/_navigation_mobile.html:105
+#: templates/partials/_navigation_desktop.html:195
+#: templates/partials/_navigation_mobile.html:110
 msgid "Abmelden"
 msgstr "Log out"
 
@@ -5421,7 +5869,8 @@ msgstr "Create Episode"
 #: templates/core/config/field_templates/form.html:32
 #: templates/core/events/create.html:205
 #: templates/core/events/delete_confirm.html:62
-#: templates/core/events/edit.html:49
+#: templates/core/events/edit.html:49 templates/core/import/upload.html:25
+#: templates/core/rectification/form.html:32
 #: templates/core/retention/partials/proposal_card.html:78
 #: templates/core/workitems/form.html:132
 msgid "Abbrechen"
@@ -5434,7 +5883,7 @@ msgstr "Edit Case"
 #: templates/core/cases/form.html:4 templates/core/cases/form.html:8
 #: templates/core/cases/list.html:13 templates/core/clients/detail.html:71
 #: templates/core/clients/detail.html:124
-#: templates/core/clients/detail.html:283
+#: templates/core/clients/detail.html:307
 msgid "Neuer Fall"
 msgstr "New Case"
 
@@ -5717,10 +6166,6 @@ msgstr "Review person deletion request"
 msgid "Beantragt am"
 msgstr "Requested on"
 
-#: templates/core/clients/deletion_review.html:30
-msgid "Betroffene Person"
-msgstr "Affected person"
-
 #: templates/core/clients/deletion_review.html:41
 msgid "Angelegt am"
 msgstr "Created on"
@@ -5751,6 +6196,7 @@ msgstr "Approve"
 
 #: templates/core/clients/deletion_review.html:62
 #: templates/core/events/deletion_review.html:59
+#: templates/core/rectification/review.html:66
 #: templates/core/retention/partials/dashboard_content.html:73
 #: templates/partials/_umami_consent.html:33
 msgid "Ablehnen"
@@ -5840,23 +6286,44 @@ msgstr ""
 msgid "Zu den Löschanträgen"
 msgstr "Go to deletion requests"
 
-#: templates/core/clients/detail.html:222
+#: templates/core/clients/detail.html:212
+msgid "Berichtigung (Art. 16 DSGVO)"
+msgstr "Rectification (Art. 16 GDPR)"
+
+#: templates/core/clients/detail.html:216
+#, python-format
+msgid "%(n)s offener Antrag"
+msgid_plural "%(n)s offene Anträge"
+msgstr[0] "%(n)s open request"
+msgstr[1] "%(n)s open requests"
+
+#: templates/core/clients/detail.html:220
+#: templates/core/rectification/form.html:4
+#: templates/core/rectification/form.html:15
+msgid "Berichtigung beantragen"
+msgstr "Request rectification"
+
+#: templates/core/clients/detail.html:224
+msgid "Zu den Berichtigungsanträgen"
+msgstr "Go to rectification requests"
+
+#: templates/core/clients/detail.html:246
 #: templates/core/clients/offline_detail.html:177
 msgid "Kontakt-Chronik"
 msgstr "Contact Chronicle"
 
-#: templates/core/clients/detail.html:239
+#: templates/core/clients/detail.html:263
 #: templates/core/clients/offline_detail.html:180
 msgid "Noch keine Kontakte dokumentiert."
 msgstr "No contacts documented yet."
 
-#: templates/core/clients/detail.html:253
+#: templates/core/clients/detail.html:277
 #: templates/core/clients/offline_detail.html:365
 #: templates/core/workitems/partials/inbox_content.html:34
 msgid "Keine offenen Aufgaben"
 msgstr "No open tasks"
 
-#: templates/core/clients/detail.html:278
+#: templates/core/clients/detail.html:302
 msgid "Keine offenen Fälle"
 msgstr "No open cases"
 
@@ -6703,6 +7170,7 @@ msgid ""
 msgstr "Awaiting approval by a second authorized person (four-eyes principle)"
 
 #: templates/core/deletion_requests/list.html:30
+#: templates/core/rectification/list.html:30
 msgid "Prüfen"
 msgstr "Review"
 
@@ -6717,6 +7185,8 @@ msgstr ""
 "user management."
 
 #: templates/core/deletion_requests/list.html:42
+#: templates/core/rectification/list.html:34
+#: templates/core/rectification/review.html:41
 msgid "Beantragt von:"
 msgstr "Requested by:"
 
@@ -6726,6 +7196,8 @@ msgstr "No pending deletion requests"
 
 #: templates/core/deletion_requests/list.html:65
 #: templates/core/deletion_requests/list.html:88
+#: templates/core/rectification/list.html:57
+#: templates/core/rectification/list.html:80
 msgid "Geprüft von:"
 msgstr "Reviewed by:"
 
@@ -7035,7 +7507,7 @@ msgstr ""
 "All fields of this event are restricted for your role. Editing is not "
 "possible."
 
-#: templates/core/events/edit.html:58
+#: templates/core/events/edit.html:58 templates/core/import/mapping.html:61
 msgid "Zurück"
 msgstr "Back"
 
@@ -7524,6 +7996,156 @@ msgstr "Crises, bans and urgent tasks"
 msgid "Keine Daten für diesen Zeitraum"
 msgstr "No data for this period"
 
+#: templates/core/import/detail.html:12
+msgid "Zur Übersicht"
+msgstr "Back to overview"
+
+#: templates/core/import/detail.html:31
+msgid "Angelegte Datensätze"
+msgstr "Created records"
+
+#: templates/core/import/detail.html:31
+msgid "Würden angelegt (Probelauf)"
+msgstr "Would be created (dry run)"
+
+#: templates/core/import/detail.html:38 templates/core/import/preview.html:21
+#: templates/core/system/dashboard.html:36
+msgid "Fehler"
+msgstr "Error"
+
+#: templates/core/import/detail.html:46
+msgid "Zuordnung fortsetzen"
+msgstr "Continue mapping"
+
+#: templates/core/import/detail.html:50 templates/core/import/preview.html:46
+msgid "Import abbrechen"
+msgstr "Cancel import"
+
+#: templates/core/import/detail.html:53
+msgid "Der Lauf ist abgeschlossen; die hochgeladene Datei wurde gelöscht."
+msgstr "The run is completed; the uploaded file was deleted."
+
+#: templates/core/import/list.html:4 templates/core/import/list.html:9
+#: templates/partials/_navigation_desktop.html:139
+#: templates/partials/_navigation_mobile.html:90
+msgid "Datenimport"
+msgstr "Data import"
+
+#: templates/core/import/list.html:10
+msgid ""
+"CSV-Dateien mit Personen oder Ereignissen einlesen — mit Probelauf vor der "
+"Übernahme."
+msgstr "Import CSV files with people or events — with a dry run before commit."
+
+#: templates/core/import/list.html:14 templates/core/import/upload.html:4
+#: templates/core/import/upload.html:8
+msgid "Neuer Import"
+msgstr "New import"
+
+#: templates/core/import/list.html:21
+msgid "Angelegt"
+msgstr "Created"
+
+#: templates/core/import/list.html:38
+msgid "Anzeigen"
+msgstr "View"
+
+#: templates/core/import/list.html:43
+msgid "Noch kein Import angelegt."
+msgstr "No imports yet."
+
+#: templates/core/import/mapping.html:4 templates/core/import/mapping.html:7
+msgid "Spalten zuordnen"
+msgstr "Map columns"
+
+#: templates/core/import/mapping.html:9
+#, python-format
+msgid ""
+"Schritt 2 von 4: %(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten "
+"werden ignoriert."
+msgstr ""
+"Step 2 of 4: %(total)s data row(s) detected. Unmapped columns are ignored."
+
+#: templates/core/import/mapping.html:26
+msgid "Spalte in der Datei"
+msgstr "Column in the file"
+
+#: templates/core/import/mapping.html:27
+msgid "Beispielwerte"
+msgstr "Example values"
+
+#: templates/core/import/mapping.html:39
+msgid "Zielfeld für"
+msgstr "Target field for"
+
+#: templates/core/import/mapping.html:44
+msgid "— ignorieren —"
+msgstr "— ignore —"
+
+#: templates/core/import/mapping.html:56
+msgid "Mit * markierte Zielfelder sind Pflicht."
+msgstr "Target fields marked with * are required."
+
+#: templates/core/import/mapping.html:60
+msgid "Probelauf starten"
+msgstr "Start dry run"
+
+#: templates/core/import/partials/_error_table.html:13
+msgid "Zeile"
+msgstr "Row"
+
+#: templates/core/import/partials/_error_table.html:14
+msgid "Spalte"
+msgstr "Column"
+
+#: templates/core/import/partials/_error_table.html:15
+msgid "Meldung"
+msgstr "Message"
+
+#: templates/core/import/preview.html:4
+msgid "Probelauf"
+msgstr "Dry run"
+
+#: templates/core/import/preview.html:7
+msgid "Ergebnis des Probelaufs"
+msgstr "Dry run result"
+
+#: templates/core/import/preview.html:8
+msgid "Schritt 3 von 4: Es wurde noch nichts gespeichert."
+msgstr "Step 3 of 4: Nothing has been saved yet."
+
+#: templates/core/import/preview.html:13
+msgid "Datenzeilen"
+msgstr "Data rows"
+
+#: templates/core/import/preview.html:17
+msgid "Würden angelegt"
+msgstr "Would be created"
+
+#: templates/core/import/preview.html:29
+msgid ""
+"Solange Fehler bestehen, kann der Import nicht übernommen werden. Bitte die "
+"Datei korrigieren und neu hochladen."
+msgstr ""
+"As long as errors remain, the import cannot be committed. Please correct the "
+"file and upload it again."
+
+#: templates/core/import/preview.html:39
+msgid "Jetzt übernehmen"
+msgstr "Commit now"
+
+#: templates/core/import/preview.html:42
+msgid "Zuordnung ändern"
+msgstr "Change mapping"
+
+#: templates/core/import/upload.html:9
+msgid "Schritt 1 von 4: Datei hochladen"
+msgstr "Step 1 of 4: Upload file"
+
+#: templates/core/import/upload.html:23
+msgid "Hochladen und fortfahren"
+msgstr "Upload and continue"
+
 #: templates/core/partials/dynamic_data_display.html:71
 msgid "Keine Angaben erfasst."
 msgstr "No information recorded."
@@ -7552,10 +8174,88 @@ msgstr "Replace"
 msgid "Weitere Dateien hinzufügen (mehrere möglich):"
 msgstr "Add more files (multiple possible):"
 
+#: templates/core/rectification/form.html:17
+msgid ""
+"Nach Art. 16 DSGVO. Der Antrag wird von der Leitung geprüft (Vier-Augen-"
+"Prinzip); erst danach ändert sich der Eintrag."
+msgstr ""
+"Under Art. 16 GDPR. The request is reviewed by the lead (four-eyes "
+"principle); the entry only changes afterwards."
+
+#: templates/core/rectification/form.html:31
+msgid "Antrag stellen"
+msgstr "Submit request"
+
+#: templates/core/rectification/list.html:8
+msgid ""
+"Anträge nach Art. 16 DSGVO. Der eigene Antrag kann nicht selbst geprüft "
+"werden (Vier-Augen-Prinzip)."
+msgstr ""
+"Requests under Art. 16 GDPR. You cannot review your own request (four-eyes "
+"principle)."
+
+#: templates/core/rectification/list.html:25
+msgid ""
+"Wartet auf Prüfung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)"
+msgstr "Awaiting review by a second authorized person (four-eyes principle)"
+
+#: templates/core/rectification/list.html:40
+msgid "Keine ausstehenden Berichtigungsanträge"
+msgstr "No pending rectification requests"
+
+#: templates/core/rectification/list.html:63
+msgid "Keine genehmigten Berichtigungsanträge"
+msgstr "No approved rectification requests"
+
+#: templates/core/rectification/list.html:86
+msgid "Keine abgelehnten Berichtigungsanträge"
+msgstr "No rejected rectification requests"
+
+#: templates/core/rectification/review.html:4
+#: templates/core/rectification/review.html:15
+msgid "Berichtigungsantrag prüfen"
+msgstr "Review rectification request"
+
+#: templates/core/rectification/review.html:29
+msgid "Bisheriger Wert"
+msgstr "Previous value"
+
+#: templates/core/rectification/review.html:33
+msgid "Beantragter Wert"
+msgstr "Requested value"
+
+#: templates/core/rectification/review.html:47
+msgid ""
+"Dieses Feld ist für Sie nicht einsehbar (entfernt oder höher eingestuft) — "
+"der Antrag kann von Ihnen nicht genehmigt werden."
+msgstr ""
+"This field is not visible to you (removed or reclassified to a higher "
+"sensitivity) — you cannot approve this request."
+
+#: templates/core/rectification/review.html:51
+msgid ""
+"Sie haben diesen Antrag selbst gestellt und können ihn deshalb nicht prüfen "
+"(Vier-Augen-Prinzip)."
+msgstr ""
+"You submitted this request yourself and therefore cannot review it (four-"
+"eyes principle)."
+
+#: templates/core/rectification/review.html:57
+msgid "Prüfvermerk"
+msgstr "Review note"
+
+#: templates/core/rectification/review.html:60
+msgid "Bei einer Ablehnung verpflichtend. Wird verschlüsselt gespeichert."
+msgstr "Required for a rejection. Stored encrypted."
+
+#: templates/core/rectification/review.html:63
+msgid "Genehmigen und anwenden"
+msgstr "Approve and apply"
+
 #: templates/core/retention/dashboard.html:4
 #: templates/core/retention/dashboard.html:7
-#: templates/partials/_navigation_desktop.html:123
-#: templates/partials/_navigation_mobile.html:83
+#: templates/partials/_navigation_desktop.html:131
+#: templates/partials/_navigation_mobile.html:87
 #: tests/test_i18n_loeschantrag_nav.py:36
 msgid "Löschfristen"
 msgstr "Deletion deadlines"
@@ -7744,7 +8444,7 @@ msgid "Datenschutzprofil"
 msgstr "Privacy profile"
 
 #: templates/core/statistics/external_report.html:19
-#: templates/partials/_navigation_mobile.html:99
+#: templates/partials/_navigation_mobile.html:104
 msgid "Profil"
 msgstr "Profile"
 
@@ -8180,9 +8880,9 @@ msgstr ""
 
 #: templates/core/system/dashboard.html:4
 #: templates/core/system/dashboard.html:10
-#: templates/partials/_navigation_desktop.html:151
+#: templates/partials/_navigation_desktop.html:165
 #: templates/partials/_navigation_mobile.html:10
-#: templates/partials/_navigation_mobile.html:93
+#: templates/partials/_navigation_mobile.html:98
 msgid "Systembereich"
 msgstr "System area"
 
@@ -8201,10 +8901,6 @@ msgstr "Connection reachable"
 #: templates/core/system/dashboard.html:31
 msgid "Verbindung fehlgeschlagen"
 msgstr "Connection failed"
-
-#: templates/core/system/dashboard.html:36
-msgid "Fehler"
-msgstr "Error"
 
 #: templates/core/system/dashboard.html:49
 msgid "Migrationen"
@@ -8925,7 +9621,7 @@ msgid "Hauptnavigation"
 msgstr "Main navigation"
 
 #: templates/partials/_navigation_desktop.html:19
-#: templates/partials/_navigation_mobile.html:120
+#: templates/partials/_navigation_mobile.html:125
 msgid "Suche..."
 msgstr "Search..."
 
@@ -8970,20 +9666,25 @@ msgstr "Create case"
 msgid "Längere Begleitung dokumentieren"
 msgstr "Document longer-term support"
 
-#: templates/partials/_navigation_desktop.html:133
-#: templates/partials/_navigation_mobile.html:87
+#: templates/partials/_navigation_desktop.html:125
+#: templates/partials/_navigation_mobile.html:84
+msgid "Berichtigungen"
+msgstr "Rectifications"
+
+#: templates/partials/_navigation_desktop.html:147
+#: templates/partials/_navigation_mobile.html:92
 msgid "DSGVO-Paket"
 msgstr "GDPR Package"
 
-#: templates/partials/_navigation_desktop.html:137
-#: templates/partials/_navigation_mobile.html:88
+#: templates/partials/_navigation_desktop.html:151
+#: templates/partials/_navigation_mobile.html:93
 msgid "Konfiguration"
 msgstr "Configuration"
 
-#: templates/partials/_navigation_desktop.html:145
-#: templates/partials/_navigation_desktop.html:155
-#: templates/partials/_navigation_mobile.html:90
-#: templates/partials/_navigation_mobile.html:94
+#: templates/partials/_navigation_desktop.html:159
+#: templates/partials/_navigation_desktop.html:169
+#: templates/partials/_navigation_mobile.html:95
+#: templates/partials/_navigation_mobile.html:99
 msgid "Administration"
 msgstr "Administration"
 
