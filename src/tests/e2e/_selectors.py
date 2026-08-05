@@ -86,16 +86,6 @@ def find_first_dsgvo_download_link(page: Page) -> Locator:
     return page.locator("[data-testid='dsgvo-download-link']").first
 
 
-def find_deletion_review_link(page: Page, dr_pk: str) -> Locator:
-    """Link to the deletion-review page for the given DeletionRequest pk."""
-    return page.locator(f"[data-testid='deletion-review-link'][data-dr-pk='{dr_pk}']")
-
-
-def find_first_deletion_review_link(page: Page) -> Locator:
-    """First pending deletion-review link on the page."""
-    return page.locator("[data-testid='deletion-review-link']").first
-
-
 def find_deletion_approve_button(page: Page) -> Locator:
     """Approve button on a deletion-review page.
 

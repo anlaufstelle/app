@@ -1,13 +1,13 @@
 """E2E-Tests: Löschanträge — 4-Augen-Prinzip und Liste."""
 
 import re
+from urllib.parse import urlparse
 
 import pytest
 
 from tests.e2e._selectors import (
     find_deletion_approve_button,
     find_deletion_reject_button,
-    find_first_deletion_review_link,
 )
 
 pytestmark = pytest.mark.e2e
@@ -15,8 +15,30 @@ pytestmark = pytest.mark.e2e
 SUBMIT = "#main-content button[type='submit']"
 
 
+def _find_deletion_request_card(page, event_path):
+    """Löschantrags-Karte für GENAU dieses Event, per Ziel-Link-Href gescopt.
+
+    Refs #1788: ``find_first_deletion_review_link`` traf ``.first`` auf der
+    Liste — bei mehreren offenen Anträgen (z. B. Rest eines anderen Tests
+    derselben Datei) nicht zwingend den eigenen. Die Karte trägt laut
+    ``core/deletion_requests/list.html`` (Zeile 16-30) ``data-testid``
+    ``deletion-request-card`` und enthält den Ziel-Link aus
+    ``partials/target.html`` mit ``href="{{ dr.target_url }}"`` — für Events
+    ``reverse("core:event_detail", args=[pk])``, also exakt ``event_path``.
+    ``.first`` als Sicherheitsnetz (Konvention aus 1b52bea7/Refs #1787), auch
+    wenn ein Event-Pfad-Suffix praktisch eindeutig ist.
+    """
+    return page.locator(f"[data-testid='deletion-request-card']:has(a[href$='{event_path}'])").first
+
+
 def _create_qualified_event_and_request_deletion(page, base_url):
-    """Event für Stern-42 erstellen und Löschantrag stellen."""
+    """Event für Stern-42 erstellen und Löschantrag stellen.
+
+    Gibt den Event-Pfad zurück (z. B. ``/events/<uuid>/``) — Aufrufer scopen
+    ihre Löschantrags-Karte darüber via ``_find_deletion_request_card``
+    (Refs #1788) statt über das inzwischen entfernte, ungescopte
+    ``find_first_deletion_review_link``.
+    """
     page.goto(f"{base_url}/events/new/")
     page.wait_for_load_state("domcontentloaded")
 
@@ -34,6 +56,7 @@ def _create_qualified_event_and_request_deletion(page, base_url):
     page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
     assert re.search(r"/events/[0-9a-f-]+/$", page.url), f"Erwartete Event-Detail, bekam {page.url}"
+    event_path = urlparse(page.url).path
 
     page.click("a:has-text('Löschen')")
     page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/delete/$"))
@@ -47,6 +70,8 @@ def _create_qualified_event_and_request_deletion(page, base_url):
 
     assert page.locator("text=Löschantrag").first.is_visible()
 
+    return event_path
+
 
 class TestFourEyesPrincipleReview:
     """4-Augen-Prinzip: Löschantrag genehmigen/ablehnen."""
@@ -54,14 +79,16 @@ class TestFourEyesPrincipleReview:
     @pytest.mark.smoke
     def test_lead_can_approve_deletion_request(self, authenticated_page, lead_page, base_url):
         """Lead (emma) genehmigt von admin gestellten Löschantrag."""
-        _create_qualified_event_and_request_deletion(authenticated_page, base_url)
+        event_path = _create_qualified_event_and_request_deletion(authenticated_page, base_url)
 
         lead_page.goto(f"{base_url}/deletion-requests/")
         lead_page.wait_for_load_state("domcontentloaded")
 
         assert lead_page.locator("h1").inner_text() == "Löschanträge"
 
-        review_link = find_first_deletion_review_link(lead_page)
+        card = _find_deletion_request_card(lead_page, event_path)
+        card.wait_for(state="visible", timeout=5000)
+        review_link = card.locator("[data-testid='deletion-review-link']")
         assert review_link.is_visible()
         review_link.click()
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
@@ -92,12 +119,14 @@ class TestFourEyesPrincipleReview:
         eigenes Begründungs-Feld für die Ablehnung. Test deckt das
         implementierte Verhalten ab.
         """
-        _create_qualified_event_and_request_deletion(authenticated_page, base_url)
+        event_path = _create_qualified_event_and_request_deletion(authenticated_page, base_url)
 
         lead_page.goto(f"{base_url}/deletion-requests/")
         lead_page.wait_for_load_state("domcontentloaded")
 
-        review_link = find_first_deletion_review_link(lead_page)
+        card = _find_deletion_request_card(lead_page, event_path)
+        card.wait_for(state="visible", timeout=5000)
+        review_link = card.locator("[data-testid='deletion-review-link']")
         assert review_link.is_visible()
         review_link.click()
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
@@ -160,12 +189,14 @@ class TestReviewerNotRequester:
 
     def test_deletion_request_review_page_shows_event_details(self, authenticated_page, lead_page, base_url):
         """Review-Seite zeigt Event-Details für informierte Entscheidung."""
-        _create_qualified_event_and_request_deletion(authenticated_page, base_url)
+        event_path = _create_qualified_event_and_request_deletion(authenticated_page, base_url)
 
         lead_page.goto(f"{base_url}/deletion-requests/")
         lead_page.wait_for_load_state("domcontentloaded")
 
-        review_link = find_first_deletion_review_link(lead_page)
+        card = _find_deletion_request_card(lead_page, event_path)
+        card.wait_for(state="visible", timeout=5000)
+        review_link = card.locator("[data-testid='deletion-review-link']")
         assert review_link.is_visible()
         review_link.click()
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
