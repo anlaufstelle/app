@@ -889,3 +889,35 @@ def foreign_import_job(second_facility, foreign_staff):
         created_by=foreign_staff,
         target_type=ImportJob.TargetType.CLIENT,
     )
+
+
+# ---- Berichtigungsantraege (M4, Refs #1060) -------------------------------
+# Referenz-Antrag der Haupt-facility fuer AuthZ-/IDOR-Matrix und View-Tests;
+# der foreign_*-Spiegel liegt in der zweiten Einrichtung. Bewusst PENDING —
+# nur offene Antraege sind ueber ``rectification_review`` erreichbar.
+
+
+@pytest.fixture
+def rectification_request(facility, client_identified, staff_user):
+    from core.services.client.rectification import request_rectification
+
+    return request_rectification(
+        client_identified,
+        staff_user,
+        "notes",
+        "AuthZ-Matrix-Wunschwert",
+        "AuthZ-Matrix-Test",
+    )
+
+
+@pytest.fixture
+def foreign_rectification_request(second_facility, foreign_client, foreign_staff):
+    from core.services.client.rectification import request_rectification
+
+    return request_rectification(
+        foreign_client,
+        foreign_staff,
+        "notes",
+        "AuthZ-IDOR-Wunschwert",
+        "AuthZ-IDOR-Test",
+    )

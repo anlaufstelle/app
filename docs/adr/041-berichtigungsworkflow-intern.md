@@ -31,7 +31,7 @@ Die App erhält einen **internen Antrags-/Review-Workflow für Berichtigungen** 
 - **+** Vier-Augen-Prinzip für Datenkorrekturen, konsistent mit dem Lösch-Workflow.
 - **+** Die fachliche Begründung (ADR-013: „abweichende Wahrnehmungen") wird strukturiert dokumentiert — auch bei Ablehnung.
 - **−** Mehraufwand für triviale Korrekturen (Tippfehler): auch sie laufen über den Antrag, sobald der Workflow genutzt wird. Direktes Editieren durch berechtigtes Personal bleibt für den Alltag erlaubt; der Workflow ist der dokumentierte Weg für Art.-16-Verlangen.
-- **−** Anonymisierung räumt offene/abgeschlossene Anträge nicht automatisch ab — Folge-Issue erforderlich (bekannter Residue, siehe `_residue_expectations.py`).
+- **+** Die Anonymisierung räumt offene wie abgeschlossene Anträge mit ab: `_redact_rectification_requests` leert `old_value`/`new_value`/`reason`/`review_note` in `anonymize_client` und in der K-Anon-Bridge; Antrags-Meta (Status, Feldpfad, Antragstellerin, Prüferin, Zeitstempel) bleibt als Vier-Augen-Nachweis erhalten (#1792).
 
 ## Alternatives considered
 

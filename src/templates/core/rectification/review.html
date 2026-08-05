@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Berichtigungsantrag prüfen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-xl">
+    <div class="flex items-center gap-2.5 mb-5">
+        <a href="{% url 'core:rectification_list' %}" class="flex items-center gap-1 text-[13px] text-ink-muted hover:text-ink">
+            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            {% trans "Berichtigungsanträge" %}
+        </a>
+    </div>
+
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Berichtigungsantrag prüfen" %}</h1>
+
+    <div class="card p-5 space-y-4 mb-5">
+        <div>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Person" %}</h2>
+            <a href="{% url 'core:client_detail' client.pk %}" class="text-[13px] font-semibold text-accent hover:underline">{{ client.pseudonym }}</a>
+        </div>
+        <div>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Feld" %}</h2>
+            <p class="text-[13px] text-ink">{{ field_label }} <span class="font-mono text-[12px] text-ink-muted">({{ rectification_request.field_path }})</span></p>
+        </div>
+        {# Werte werden ausschliesslich serverseitig entschluesselt und nur an #}
+        {# bereits berechtigte Rollen ausgeliefert. #}
+        <div>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bisheriger Wert" %}</h2>
+            <p class="text-[13px] text-ink-soft whitespace-pre-wrap" data-testid="rectification-old-value">{{ old_value_display }}</p>
+        </div>
+        <div>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Beantragter Wert" %}</h2>
+            <p class="text-[13px] text-ink font-semibold whitespace-pre-wrap" data-testid="rectification-new-value">{{ new_value_display }}</p>
+        </div>
+        <div>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Fachliche Begründung" %}</h2>
+            <p class="text-[13px] text-ink-soft whitespace-pre-wrap">{{ reason_text }}</p>
+        </div>
+        <div class="text-[12px] text-ink-muted">
+            {% trans "Beantragt von:" %} {% if rectification_request.requested_by %}{{ rectification_request.requested_by.display_name|default:rectification_request.requested_by.username }}{% else %}–{% endif %} – {{ rectification_request.created_at|date:"DATETIME_FORMAT" }}
+        </div>
+    </div>
+
+    {% if not field_visible %}
+    <p class="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-2.5" role="status" data-testid="rectification-field-restricted">
+        {% trans "Dieses Feld ist für Sie nicht einsehbar (entfernt oder höher eingestuft) — der Antrag kann von Ihnen nicht genehmigt werden." %}
+    </p>
+    {% elif is_own_request %}
+    <p class="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-2.5" role="status" data-testid="rectification-self-review-blocked">
+        {% trans "Sie haben diesen Antrag selbst gestellt und können ihn deshalb nicht prüfen (Vier-Augen-Prinzip)." %}
+    </p>
+    {% else %}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label for="review_note" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Prüfvermerk" %}</label>
+            <textarea id="review_note" name="review_note" rows="3"
+                      class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"></textarea>
+            <p class="mt-1 text-[12px] text-ink-muted">{% trans "Bei einer Ablehnung verpflichtend. Wird verschlüsselt gespeichert." %}</p>
+        </div>
+        <div class="flex gap-2">
+            <button type="submit" name="action" value="approve" class="btn-primary px-4 py-2" data-testid="rectification-approve">{% trans "Genehmigen und anwenden" %}</button>
+            <button type="submit" name="action" value="reject"
+                    class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-4 py-2 hover:bg-canvas"
+                    data-testid="rectification-reject">{% trans "Ablehnen" %}</button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

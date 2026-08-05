@@ -251,4 +251,30 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         "result_json",
         reason="Zeilen-/Spaltennummern, Fehlercodes und feste Meldungstexte — nie Zellwerte (PII-Invariante).",
     ),
+    # --- M4 Rectification (Refs #1060) ------------------------------------
+    # ``RectificationRequest`` (ADR-041) haelt die Wertpaare eines
+    # Art.-16-Berichtigungsantrags. Alle vier Freitext-Traeger liegen
+    # Fernet-verschluesselt in der Spalte (``encrypt_field``-Marker-Dict) — die
+    # Einordnung als ``pii`` ist trotzdem die richtige, konservative Richtung:
+    # sie beschreibt den *Inhalt*, nicht das Speicherformat (Muster
+    # ``core_attachment.original_filename_encrypted``). Ein Klartext-Sentinel
+    # kann in diesen Spalten nicht auftauchen; entsprechend faellt hier auch
+    # kein ``known_residue`` an. Dass die Anonymisierung offene/abgeschlossene
+    # Antraege nicht abraeumte, war die Luecke aus
+    # https://github.com/anlaufstelle/app/issues/1792 — sie ist
+    # geschlossen: ``_redact_rectification_requests`` leert alle vier Spalten
+    # in ``anonymize_client`` UND in der K-Anon-Bridge (Antrags-Meta bleibt als
+    # Vier-Augen-Nachweis stehen). Der Sweep selbst kann das per Konstruktion
+    # nicht pruefen (kein Klartext-Sentinel in verschluesselten Spalten); die
+    # Redaktion haengt an ``test_client_anonymize_characterization.py``.
+    pii("core_rectificationrequest", "old_value"),
+    pii("core_rectificationrequest", "new_value"),
+    pii("core_rectificationrequest", "reason"),
+    pii("core_rectificationrequest", "review_note"),
+    non_pii(
+        "core_rectificationrequest",
+        "field_path",
+        reason="Feldbezeichner (Stammdatenname oder data_json.<slug>), kein Feldwert.",
+    ),
+    non_pii("core_rectificationrequest", "status", reason="Enum (pending/approved/rejected)."),
 )

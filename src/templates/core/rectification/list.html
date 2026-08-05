@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Berichtigungsanträge" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Berichtigungsanträge" %}</h1>
+<p class="text-[13px] text-ink-muted mb-6">{% trans "Anträge nach Art. 16 DSGVO. Der eigene Antrag kann nicht selbst geprüft werden (Vier-Augen-Prinzip)." %}</p>
+
+{# Ausstehend #}
+<section class="mb-8">
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ausstehend" %} ({{ pending_requests|length }})</h2>
+    {% if pending_requests %}
+    <div class="space-y-3">
+        {% for rr in pending_requests %}
+        <div class="bg-surface border border-yellow-200 rounded-[10px] p-4"
+             data-testid="rectification-request-card" data-rr-pk="{{ rr.pk }}">
+            <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <a href="{% url 'core:client_detail' rr.target_client.pk %}" class="text-sm font-semibold text-accent hover:underline">{{ rr.target_client.pseudonym }}</a>
+                    <span class="font-mono text-[12px] text-ink-muted">{{ rr.field_path }}</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{% trans "Ausstehend" %}</span>
+                </div>
+                {% if rr.requested_by_id == request.user.pk %}
+                <span class="text-xs text-ink-muted italic" data-testid="rectification-own-request-hint">{% trans "Wartet auf Prüfung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)" %}</span>
+                {% else %}
+                <a href="{% url 'core:rectification_review' pk=rr.pk %}"
+                   class="text-sm text-accent hover:underline font-medium"
+                   data-testid="rectification-review-link"
+                   data-rr-pk="{{ rr.pk }}">{% trans "Prüfen" %}</a>
+                {% endif %}
+            </div>
+            <div class="text-xs text-ink-muted">
+                {% trans "Beantragt von:" %} {% if rr.requested_by %}{{ rr.requested_by.display_name|default:rr.requested_by.username }}{% else %}–{% endif %} – {{ rr.created_at|date:"DATETIME_FORMAT" }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-ink-muted">{% trans "Keine ausstehenden Berichtigungsanträge" %}</p>
+    {% endif %}
+</section>
+
+{# Genehmigt #}
+<section class="mb-8">
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Genehmigt" %} ({{ approved_requests|length }})</h2>
+    {% if approved_requests %}
+    <div class="space-y-3">
+        {% for rr in approved_requests %}
+        <div class="bg-surface border border-green-200 rounded-[10px] p-4">
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <a href="{% url 'core:client_detail' rr.target_client.pk %}" class="text-sm font-semibold text-accent hover:underline">{{ rr.target_client.pseudonym }}</a>
+                <span class="font-mono text-[12px] text-ink-muted">{{ rr.field_path }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">{% trans "Genehmigt" %}</span>
+            </div>
+            <div class="text-xs text-ink-muted">
+                {% trans "Geprüft von:" %} {% if rr.reviewed_by %}{{ rr.reviewed_by.display_name|default:rr.reviewed_by.username }}{% else %}–{% endif %} – {{ rr.reviewed_at|date:"DATETIME_FORMAT" }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-ink-muted">{% trans "Keine genehmigten Berichtigungsanträge" %}</p>
+    {% endif %}
+</section>
+
+{# Abgelehnt #}
+<section>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Abgelehnt" %} ({{ rejected_requests|length }})</h2>
+    {% if rejected_requests %}
+    <div class="space-y-3">
+        {% for rr in rejected_requests %}
+        <div class="bg-surface border border-subtle rounded-[10px] p-4">
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <a href="{% url 'core:client_detail' rr.target_client.pk %}" class="text-sm font-semibold text-accent hover:underline">{{ rr.target_client.pseudonym }}</a>
+                <span class="font-mono text-[12px] text-ink-muted">{{ rr.field_path }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-canvas border border-subtle text-ink-soft">{% trans "Abgelehnt" %}</span>
+            </div>
+            <div class="text-xs text-ink-muted">
+                {% trans "Geprüft von:" %} {% if rr.reviewed_by %}{{ rr.reviewed_by.display_name|default:rr.reviewed_by.username }}{% else %}–{% endif %} – {{ rr.reviewed_at|date:"DATETIME_FORMAT" }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-ink-muted">{% trans "Keine abgelehnten Berichtigungsanträge" %}</p>
+    {% endif %}
+</section>
+{% endblock %}

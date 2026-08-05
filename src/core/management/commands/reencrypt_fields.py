@@ -1,5 +1,10 @@
-"""Re-encrypt all encrypted Event/EventHistory/Attachment/Client/Case fields
-with the current primary key.
+"""Re-encrypt all encrypted Event/EventHistory/Attachment/Client/Case/
+RectificationRequest fields with the current primary key.
+
+M4 Strang C (Refs #1060): ``RectificationRequest`` ist der siebte Rotationspfad —
+seine vier verschluesselten Spalten (Wertpaar, Begruendung, Pruefvermerk) sind
+nach ADR-041 dauerhafte Rechenschaftsbelege und muessen daher mitrotieren, sonst
+liesse sich ein ausrangierter Schluessel nie entfernen.
 
 M24 (Refs #1738): ``Attachment`` ist seit ADR-039 owner-generisch (Ereignis,
 Person, Fall) — die Rotation erfasst weiterhin ALLE Zeilen ohne Owner-Filter
@@ -20,7 +25,7 @@ dauerhaft unter einem ausrangierten Schluessel liegen.
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from core.models import Case, Client, Event, EventHistory
+from core.models import Case, Client, Event, EventHistory, RectificationRequest
 from core.models.attachment import Attachment
 from core.services.file_vault import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import bypass_replication_triggers
@@ -54,7 +59,8 @@ class Command(BaseCommand):
         "Re-encrypt all encrypted fields with the current primary encryption key — "
         "Event.data_json, EventHistory.data_before/data_after, "
         "Attachment.original_filename_encrypted (Refs #783), TOTP-Secrets "
-        "(Refs #1362), Client.data_json, Case.data_json (Refs #1058). Heilt zusätzlich "
+        "(Refs #1362), Client.data_json, Case.data_json (Refs #1058), "
+        "RectificationRequest-Wertpaare (Refs #1060). Heilt zusätzlich "
         "Plaintext-PII in Event/Client/Case.data_json (Refs #1024 A4.4, #1058)."
     )
 
@@ -84,13 +90,15 @@ class Command(BaseCommand):
         totp_updated = self._reencrypt_totp_devices(dry_run)
         clients_updated = self._reencrypt_clients(dry_run)
         cases_updated = self._reencrypt_cases(dry_run)
+        rectifications_updated = self._reencrypt_rectification_requests(dry_run)
 
         action = "Would re-encrypt" if dry_run else "Re-encrypted"
         self.stdout.write(
             self.style.SUCCESS(
                 f"{action} {events_updated} events, {history_updated} history entries, "
                 f"{attachments_updated} attachments, {totp_updated} TOTP devices, "
-                f"{clients_updated} clients, {cases_updated} cases."
+                f"{clients_updated} clients, {cases_updated} cases, "
+                f"{rectifications_updated} rectification requests."
             )
         )
 
@@ -168,6 +176,45 @@ class Command(BaseCommand):
                 if not dry_run:
                     case.data_json = healed
                     case.save(update_fields=["data_json", "updated_at"])
+        return updated
+
+    #: Die vier feldverschluesselten Spalten von ``RectificationRequest`` (M4,
+    #: Refs #1060). Als Konstante, damit ein spaeter ergaenztes Feld hier
+    #: sichtbar fehlt statt still aus der Rotation zu fallen.
+    _RECTIFICATION_COLUMNS = ("old_value", "new_value", "reason", "review_note")
+
+    def _reencrypt_rectification_requests(self, dry_run: bool) -> int:
+        """Siebter Rotationspfad: die Wertpaare der Art.-16-Antraege (Refs #1060).
+
+        ``old_value``/``new_value``/``reason``/``review_note`` sind
+        ``encrypt_field``-Marker-Dicts (ADR-041) — mechanisch derselbe Fall wie
+        ``Attachment.original_filename_encrypted``, nur vier Spalten pro Zeile.
+        Die JSON-Stufe **innerhalb** des Klartexts bleibt dabei unangetastet:
+        entschluesselt wird zum JSON-String, der unveraendert wieder eingewickelt
+        wird — hier wird rotiert, nicht interpretiert.
+
+        Es wird ueber ALLE Zeilen iteriert, auch ueber abgeschlossene Antraege:
+        genehmigte/abgelehnte Antraege sind der Rechenschaftsnachweis und
+        duerfen nicht unter einem ausrangierten Schluessel liegenbleiben (Muster
+        :meth:`_reencrypt_clients`, Refs #1724/E17).
+        """
+        updated = 0
+        for rr in RectificationRequest.objects.iterator(chunk_size=500):
+            changed: list[str] = []
+            for column in self._RECTIFICATION_COLUMNS:
+                value = getattr(rr, column)
+                if not is_encrypted_value(value):
+                    continue
+                decrypted = safe_decrypt(value)
+                if decrypted == "[verschlüsselt]":
+                    continue
+                setattr(rr, column, encrypt_field(decrypted))
+                changed.append(column)
+            if not changed:
+                continue
+            updated += 1
+            if not dry_run:
+                rr.save(update_fields=changed)
         return updated
 
     def _reencrypt_event_history(self, dry_run: bool) -> int:

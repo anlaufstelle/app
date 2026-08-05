@@ -15,6 +15,7 @@ from .organization import Facility, Organization
 from .outcome import Milestone, OutcomeGoal
 from .quick_template import QuickTemplate
 from .recent_client_visit import RecentClientVisit
+from .rectification import RectificationRequest
 from .retention import LegalHold, RetentionProposal
 from .settings import Settings
 from .statistics_snapshot import StatisticsSnapshot
@@ -45,6 +46,7 @@ __all__ = [
     "OutcomeGoal",
     "QuickTemplate",
     "RecentClientVisit",
+    "RectificationRequest",
     "Facility",
     "LegalHold",
     "RetentionProposal",

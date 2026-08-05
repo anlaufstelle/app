@@ -279,6 +279,35 @@ _ENSURE_CONFIG_CONDITION = f"""
 """  # noqa: S608 — nur statische Fragmente, keine Userdaten.
 
 
+# M4 (Refs #1060): Der Seed kennt keine Berichtigungsantraege — ohne diesen
+# Schritt bliebe ``rectification_review`` dauerhaft unerntbar (SETUP-ERROR-Zeile
+# im Report). Die vier verschluesselten Spalten bleiben bewusst NULL: dieses
+# Modul spricht reines SQL ohne Django-Krypto, und die Ansicht kommt mit
+# leeren Werten aus (``—``). Antragsteller ist die Fachkraft, damit Leitung und
+# Anwendungsbetreuung nicht am Selbst-Review-Guard haengenbleiben.
+_ENSURE_RECTIFICATION_REQUEST = """
+    INSERT INTO core_rectificationrequest
+        (id, facility_id, target_client_id, field_path, old_value, new_value, reason,
+         review_note, status, requested_by_id, reviewed_by_id, created_at, reviewed_at)
+    SELECT gen_random_uuid(), %(fac)s, c.id, 'notes', NULL, NULL, NULL,
+           NULL, 'pending', u.id, NULL, now(), NULL
+    FROM (
+        SELECT id FROM core_client
+        WHERE facility_id = %(fac)s AND is_deleted = false AND is_active = true
+        ORDER BY id LIMIT 1
+    ) AS c(id),
+    (
+        SELECT id FROM core_user
+        WHERE facility_id = %(fac)s AND role = 'staff'
+        ORDER BY id LIMIT 1
+    ) AS u(id)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM core_rectificationrequest
+        WHERE facility_id = %(fac)s AND status = 'pending'
+    )
+"""
+
+
 def _owner_attachment_source(owner_column):
     """Erster owner-eigener Anhang der Facility (``client``/``case``)."""
     return f"""
@@ -481,6 +510,8 @@ def prepare_audit_objects(conn, fac_id):
         )
     # 9. Feldbedingung am Konfigurations-Anker (Refs #1783).
     cur.execute(_ENSURE_CONFIG_CONDITION, params)
+    # 10. Offener Berichtigungsantrag (M4, Refs #1060).
+    cur.execute(_ENSURE_RECTIFICATION_REQUEST, params)
 
 
 # SQL pro Fixture-Name aus der Erwartungs-Tabelle. %(fac)s = Facility-ID.
@@ -642,6 +673,11 @@ HARVEST_SQL = {
         "SELECT id FROM core_importjob WHERE facility_id = %(fac)s "
         "AND status NOT IN ('committed', 'aborted') ORDER BY id LIMIT 1"
     ),
+    # M4 (Refs #1060): garantiert durch ``prepare_audit_objects`` Schritt 10.
+    "rectification_request": (
+        "SELECT id FROM core_rectificationrequest WHERE facility_id = %(fac)s AND status = 'pending' "
+        "ORDER BY id LIMIT 1"
+    ),
 }
 
 # Eltern-Namen, deren geerntete ID den NACHFOLGENDEN Queries als
@@ -679,6 +715,7 @@ FOREIGN_ALIASES = {
     "foreign_retention_proposal": "retention_proposal",
     "foreign_legal_hold": "legal_hold",
     "foreign_deletion_request": "deletion_request",
+    "foreign_rectification_request": "rectification_request",
     # Konfigurations-Endpoints (Refs #1783). Der Unit-Fixture-Name des fremden
     # Dokumentationstyps heisst ``foreign_doc_type`` (ohne ``_contact``) — die
     # Alias-Tabelle ist genau fuer solche Namensbrueche da.

@@ -47,6 +47,7 @@ from core.services.client import (
     _redact_deletion_requests,
     _redact_event_history,
     _redact_legal_holds,
+    _redact_rectification_requests,
     _redact_retention_proposals,
     _redact_workitems,
     _revoke_offline_bundles,
@@ -103,6 +104,7 @@ def _k_anonymize_with_cascade(client, k):
         _redact_event_history(event_ids)
         _redact_deletion_requests(event_ids)
         _redact_client_deletion_request(client)
+        _redact_rectification_requests(client)
         _redact_retention_proposals(event_ids)
         _redact_legal_holds(client, event_ids)
         _redact_activities(client, event_ids)

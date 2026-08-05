@@ -337,6 +337,36 @@ def _redact_client_deletion_request(client) -> None:
     ).update(reason="[Anonymisiert]")
 
 
+def _redact_rectification_requests(client) -> None:
+    """Redigiere die Wertpaare/Freitexte der Art.-16-Antraege dieser Person (Refs #1792).
+
+    ``RectificationRequest`` (ADR-041) haelt vier Traeger von Klartext:
+    ``old_value`` (der urspruengliche Feldwert der Person), ``new_value`` (der
+    Wunschwert), ``reason`` (die fachliche Begruendung, die den strittigen
+    Sachverhalt benennt) und ``review_note``. ``target_client`` ist zwar
+    CASCADE — das greift aber nur beim HARTEN Loeschen; die Anonymisierung ist
+    ein Soft-Pfad und liesse die Zeile sonst mitsamt Inhalt stehen.
+
+    Geleert wird auf ``NULL``, nicht auf den ``[Anonymisiert]``-Marker des
+    Loeschantrags: alle vier Spalten sind ``JSONField(null=True)`` und tragen
+    per Vertrag ausschliesslich ``encrypt_field``-Marker-Dicts. Ein
+    Klartext-Sentinel waere dort ein Formatbruch. ``NULL`` ist lesesicher —
+    ``safe_decrypt`` reicht es durch, ``decode_rectification_text`` liefert
+    ``""``, und ``reencrypt_fields`` uebergeht die Zeile.
+
+    Antrags-Meta (status, field_path, requested_by/reviewed_by, Zeitstempel)
+    bleibt als Vier-Augen-Nachweis erhalten — exakt wie beim Loeschantrag.
+    """
+    from core.models import RectificationRequest
+
+    RectificationRequest.objects.filter(target_client=client).update(
+        old_value=None,
+        new_value=None,
+        reason=None,
+        review_note=None,
+    )
+
+
 def _redact_retention_proposals(event_ids: list) -> None:
     """Redigiere das Klartext-Pseudonym in ``RetentionProposal.details`` (Refs #1751, Punkt 3).
 
@@ -524,6 +554,9 @@ def anonymize_client(client, user=None):
     - ``DeletionRequest.reason`` für Event-Targets sowie für den
       Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
+    - ``RectificationRequest.old_value``/``new_value``/``reason``/
+      ``review_note`` der Art.-16-Berichtigungsanträge dieser Person
+      (Refs #1792) — dieselbe Trennung: Werte raus, Antrags-Meta bleibt.
     - ``RetentionProposal.details["pseudonym"]`` der Löschvorschläge dieser
       Events und ``LegalHold.reason`` für Client-/Event-Ziele (Refs #1751) —
       auch hier bleibt die Nachweis-Metadatenspur unangetastet.
@@ -552,6 +585,7 @@ def anonymize_client(client, user=None):
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
     _redact_client_deletion_request(client)
+    _redact_rectification_requests(client)
     _redact_retention_proposals(event_ids)
     _redact_legal_holds(client, event_ids)
     _redact_activities(client, event_ids)

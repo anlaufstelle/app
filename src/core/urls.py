@@ -129,6 +129,11 @@ from core.views.offline import (
     OfflineWorkItemListShellView,
     OfflineZeitstromShellView,
 )
+from core.views.rectification import (
+    RectificationCreateView,
+    RectificationListView,
+    RectificationReviewView,
+)
 from core.views.retention import (
     RetentionApproveView,
     RetentionBulkApproveView,
@@ -256,6 +261,14 @@ urlpatterns = [
     # Deletion Requests
     path("deletion-requests/", DeletionRequestListView.as_view(), name="deletion_request_list"),
     path("deletion-requests/<uuid:pk>/review/", DeletionRequestReviewView.as_view(), name="deletion_review"),
+    # --- M4 Rectification (Refs #1060)
+    path(
+        "clients/<uuid:pk>/rectification/new/",
+        RectificationCreateView.as_view(),
+        name="rectification_create",
+    ),
+    path("rectification/", RectificationListView.as_view(), name="rectification_list"),
+    path("rectification/<uuid:pk>/review/", RectificationReviewView.as_view(), name="rectification_review"),
     # Retention Dashboard
     path("retention/", RetentionDashboardView.as_view(), name="retention_dashboard"),
     path("retention/bulk-approve/", RetentionBulkApproveView.as_view(), name="retention_bulk_approve"),

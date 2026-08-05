@@ -108,6 +108,27 @@ class TestClientAnonymizeCharacterization:
         # ... aber der freie Reason-Text ist redigiert.
         assert dr.reason == "[Anonymisiert]"
 
+    def test_rectification_requests_are_redacted_by_the_cascade(
+        self, facility, client_identified, staff_user, lead_user
+    ):
+        """Refs #1792: die Kaskade raeumt auch Art.-16-Antraege ab.
+
+        Ein offener Antrag traegt den ALTEN Klartextwert der Person, den
+        Wunschwert und die fachliche Begruendung — die Anonymisierung waere
+        sonst rueckwirkend entwertet, sobald jemand die Antragsliste oeffnet.
+        """
+        from core.services.client.rectification import request_rectification
+
+        rr = request_rectification(client_identified, staff_user, "notes", "Wunschwert", "Klartext-Begruendung")
+
+        anonymize_client(client_identified, user=lead_user)
+
+        rr.refresh_from_db()
+        assert (rr.old_value, rr.new_value, rr.reason, rr.review_note) == (None, None, None, None)
+        # Antrags-Meta bleibt fuer den Vier-Augen-Audit-Trail erhalten.
+        assert rr.field_path == "notes"
+        assert rr.requested_by_id == staff_user.pk
+
     def test_activity_summaries_redacted_for_client_and_event_targets(self, facility, staff_user, doc_type_contact):
         """Refs #1067: Zeitstrom darf das alte Pseudonym nicht überleben.
 
@@ -727,6 +748,61 @@ class TestAnonymizeClientHelpers:
 
         foreign_hold.refresh_from_db()
         assert foreign_hold.reason == "Fremde Begruendung"
+
+    def test_redact_rectification_requests_clears_all_four_value_columns(
+        self, facility, client_identified, staff_user, lead_user
+    ):
+        """Refs #1792: Berichtigungsantraege ueberleben die Anonymisierung nicht mehr.
+
+        ``old_value``/``new_value``/``reason``/``review_note`` tragen den
+        Klartext-Wortlaut der Person (verschluesselt, aber mit dem Schluessel
+        der Einrichtung jederzeit lesbar). ``target_client`` ist CASCADE — das
+        greift nur beim HARTEN Loeschen; die Anonymisierung ist ein Soft-Pfad
+        und liess die Zeile bislang unangetastet stehen.
+        """
+        from core.models import RectificationRequest
+        from core.services.client import _redact_rectification_requests
+        from core.services.client.rectification import reject_rectification, request_rectification
+
+        rr = request_rectification(client_identified, staff_user, "notes", "Wunschwert", "Begruendung")
+        reject_rectification(rr, lead_user, "Pruefvermerk")
+
+        _redact_rectification_requests(client_identified)
+
+        rr.refresh_from_db()
+        assert rr.old_value is None
+        assert rr.new_value is None
+        assert rr.reason is None
+        assert rr.review_note is None
+        # Antrags-Meta bleibt als Vier-Augen-Nachweis erhalten.
+        assert rr.status == RectificationRequest.Status.REJECTED
+        assert rr.field_path == "notes"
+        assert rr.requested_by_id == staff_user.pk
+        assert rr.reviewed_by_id == lead_user.pk
+        assert rr.created_at is not None
+        assert rr.reviewed_at is not None
+
+    def test_redact_rectification_requests_leaves_other_clients_alone(
+        self, facility, client_identified, staff_user, lead_user
+    ):
+        """Gegenprobe: Antraege ANDERER Personen derselben Einrichtung bleiben lesbar."""
+        from core.models import Client
+        from core.services.client import _redact_rectification_requests
+        from core.services.client.rectification import decode_rectification_text, request_rectification
+
+        other = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Fremd-Rect-1",
+            created_by=staff_user,
+        )
+        foreign = request_rectification(other, staff_user, "notes", "Fremdwert", "Fremde Begruendung")
+
+        _redact_rectification_requests(client_identified)
+
+        foreign.refresh_from_db()
+        assert decode_rectification_text(foreign.reason) == "Fremde Begruendung"
+        assert foreign.new_value is not None
 
 
 # ---------------------------------------------------------------------------

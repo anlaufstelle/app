@@ -203,6 +203,30 @@
 </div>
 {% endif %}
 
+{# Berichtigungsanträge (M4, Refs #1060 / ADR-041) — Art.-16-Prüfweg am Datensatz #}
+{# sichtbar. Der Antrag ist staff+ (wie die View), der Link in die Prüfliste lead+. #}
+{% if user.is_staff_or_above %}
+<div class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft"
+     data-testid="client-rectification-section">
+    <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+    <span class="font-semibold">{% trans "Berichtigung (Art. 16 DSGVO)" %}</span>
+    {% if open_rectification_count %}
+    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+          data-testid="client-rectification-pending-badge">
+        {% blocktrans count n=open_rectification_count %}{{ n }} offener Antrag{% plural %}{{ n }} offene Anträge{% endblocktrans %}
+    </span>
+    {% endif %}
+    <a href="{% url 'core:rectification_create' client.pk %}" class="font-semibold text-accent underline hover:no-underline" data-testid="client-rectification-create-link">
+        {% trans "Berichtigung beantragen" %}
+    </a>
+    {% if user.is_lead_or_admin %}
+    <a href="{% url 'core:rectification_list' %}" class="text-ink-muted underline hover:no-underline" data-testid="client-rectification-list-link">
+        {% trans "Zu den Berichtigungsanträgen" %}
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
 {# Notizen — staff-stufig, analog notes_visible in services/system/offline.py (Refs #1068) #}
 {% if user.is_staff_or_above %}
 {% if client.notes %}

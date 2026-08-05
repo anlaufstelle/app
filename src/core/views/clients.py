@@ -16,7 +16,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.clients import ClientForm, DynamicClientDataForm
-from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, WorkItem
+from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, RectificationRequest, WorkItem
 from core.models import Case as CaseModel
 from core.services.attachments import (
     apply_attachment_changes,
@@ -349,6 +349,13 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
             # Datensatz bisher unsichtbar — Banner, Badge und die
             # umbeschriftete Aktion haengen an diesem einen Objekt.
             "pending_deletion_request": get_pending_deletion_request(client),
+            # M4 (Refs #1060, ADR-041): laufende Art.-16-Antraege am Datensatz
+            # sichtbar machen. Nur die Anzahl — Feldwerte liegen verschluesselt
+            # am Antrag und gehoeren in die Pruef-Ansicht, nicht auf die
+            # Personenseite.
+            "open_rectification_count": RectificationRequest.objects.for_facility(facility)
+            .filter(target_client=client, status=RectificationRequest.Status.PENDING)
+            .count(),
         }
         # M2 P7 (Refs #1058, E18): Sektion „Zusatzfelder". Die Aufbereitung
         # (entschluesseln, Labels, ``[Eingeschraenkt]``, Sensitivity-Gate auf

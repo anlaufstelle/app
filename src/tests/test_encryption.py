@@ -533,3 +533,51 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
 
         att.refresh_from_db()
         assert decrypt_field(att.original_filename_encrypted) == "geheim-bescheid.pdf"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reencrypt_command_rotates_rectification_requests(facility, client_identified, staff_user, lead_user):
+    """M4 Strang C (Refs #1060): der siebte Rotationspfad.
+
+    Alle vier verschluesselten Spalten eines Berichtigungsantrags
+    (``old_value``/``new_value``/``reason``/``review_note``) muessen unter den
+    neuen Primaerschluessel umgewickelt werden — sonst bliebe der Alt-Schluessel
+    wegen der Rechenschaftsbelege dauerhaft in ``ENCRYPTION_KEYS`` (Muster
+    ``test_reencrypt_command_rotates_event_history_and_attachments``).
+    """
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import RectificationRequest
+
+    old_key = generate_key()
+    new_key = generate_key()
+
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        rr = RectificationRequest.objects.create(
+            facility=facility,
+            target_client=client_identified,
+            field_path="notes",
+            old_value=encrypt_field('"Alt"'),
+            new_value=encrypt_field('"Neu"'),
+            reason=encrypt_field("Antragsbegruendung"),
+            review_note=encrypt_field("Pruefvermerk"),
+            status=RectificationRequest.Status.REJECTED,
+            requested_by=staff_user,
+            reviewed_by=lead_user,
+        )
+
+    keys = f"{new_key},{old_key}"
+    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+        out = StringIO()
+        call_command("reencrypt_fields", stdout=out)
+    assert "rectification requests" in out.getvalue()
+
+    # Nur mit dem NEUEN Schluessel entschluesseln — gelingt das, wurde rotiert.
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+        rr.refresh_from_db()
+        assert decrypt_field(rr.old_value) == '"Alt"'
+        assert decrypt_field(rr.new_value) == '"Neu"'
+        assert decrypt_field(rr.reason) == "Antragsbegruendung"
+        assert decrypt_field(rr.review_note) == "Pruefvermerk"

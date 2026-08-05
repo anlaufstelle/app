@@ -841,4 +841,29 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "import_job.pk"),),
         idor=(("pk", "foreign_import_job.pk"),),
     ),
+    # --- M4 Rectification (Refs #1060) ------------------------------------
+    # ADR-041: Antrag stellen ist Fachkraft-Arbeit (staff+), pruefen ist
+    # Leitungsarbeit (lead+) — die beiden Stufen sind das Vier-Augen-Prinzip.
+    # Die Assistenz bleibt aussen vor: sie dokumentiert, entscheidet aber nicht
+    # ueber Datenrichtigkeit.
+    E(
+        "core:rectification_create",
+        "rectification",
+        get=STAFF_PLUS,
+        post=STAFF_PLUS,
+        url_kwargs=(("pk", "client_identified.pk"),),
+        idor=(("pk", "foreign_client.pk"),),
+    ),
+    E("core:rectification_list", "rectification", get=LEAD_PLUS),
+    E(
+        "core:rectification_review",
+        "rectification",
+        get=LEAD_PLUS,
+        post=LEAD_PLUS,
+        url_kwargs=(("pk", "rectification_request.pk"),),
+        idor=(("pk", "foreign_rectification_request.pk"),),
+        # Ein leerer POST ohne ``action`` ist ein Fachfehler (unbekannte Aktion)
+        # und antwortet mit 400 auf derselben Seite — kein 403/404.
+        extra_ok=(400,),
+    ),
 )
