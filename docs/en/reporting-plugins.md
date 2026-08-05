@@ -322,6 +322,22 @@ See [§ 10](#10-test-checklist-for-new-backends). After that there is nothing le
 python src/manage.py shell -c "from core.reporting.registry import get_backends; print([b.slug for b in get_backends()])"
 ```
 
+### Inventory: the bundled example backends
+
+Every module under [`src/core/reporting/backends/`](../../src/core/reporting/backends/) is a **template**, not a binding reporting standard. Each one has a different shape — when writing your own backend, first find the case closest to yours and copy **that** module. All seven from #1754 carry `snapshot_enabled = False` and tie their `is_available` to the seed/package configuration.
+
+| Slug | Reference character |
+|---|---|
+| [`example`](../../src/core/reporting/backends/example.py) | The minimal case: one metric per row plus a margin total (`mode="rows"`). The entry point for everything else. |
+| [`sample-report-1`](../../src/core/reporting/backends/sample_report_1.py) | The full case: several interrelated metrics, a completeness block, `snapshot_enabled = True`. |
+| [`monthly-trend`](../../src/core/reporting/backends/monthly_trend.py) | **Time series + imported mapping.** Shows that `CATEGORY_MAP`/`resolve_category` are imported and never copied — and documents the refinement relationship to the activity report (K4a, see [§ 6](#6-k-anonymity--the-prepare_export-hook)). |
+| [`client-metrics`](../../src/core/reporting/backends/client_metrics.py) | **Exact person partition + margin doctrine.** Pure person counts (DISTINCT over `Event.client`) and a breakdown that partitions its margin total exactly — the strictest class in the k-anonymity model. |
+| [`case-metrics`](../../src/core/reporting/backends/case_metrics.py) | **Independent scalars without a margin total.** The opposite pole: no figure partitions another, each stands on its own at the k threshold. Shows how little machinery this common shape needs. |
+| [`ban-overview`](../../src/core/reporting/backends/ban_overview.py) | **Highly sensitive special case.** Facility bans are deliberately not part of the activity report; this report is an internal analysis path by product decision. Rows are emitted data-independently — otherwise their very existence would be an assertion. |
+| [`needle-exchange-balance`](../../src/core/reporting/backends/needle_exchange_balance.py) | **Field-value sums.** The first backend that reads `Event.data_json` instead of counting events. The base pattern for any analysis over field values (slug addressing, `safe_decrypt`, the sum rule). |
+| [`counseling-hours`](../../src/core/reporting/backends/counseling_hours.py) | **Row → total cascade.** Field-value sums with a breakdown: one row per category, made of an event count and a minute total. When a row falls, that cascades into the grand total. |
+| [`service-distribution`](../../src/core/reporting/backends/service_distribution.py) | **Multiple selection.** Two field groups side by side: a `select` (exact partition) and a `multi_select` (does **not** partition). The case where the margin-total question flips — see [§ 6](#6-k-anonymity--the-prepare_export-hook). |
+
 ---
 
 ## 5. Snapshot Integration
@@ -402,6 +418,36 @@ Several interrelated metrics plus completeness notices. Cell suppression alone i
 4. **Completeness notices are data-independent** (#1769): **both** notices always appear in the export and **never carry a number**. The problem was not how large a stated number is but that it was stated at all — a quantified notice implicitly publishes "my complement is ≥ k", i.e. a lower bound, and the decision about it ran over a disjunction on raw data and was therefore informative in itself. The block is therefore built from fixed codes rather than derived from `result.completeness`. The notice about the gap always remains — a report that conceals gaps would be misleadingly complete; conversely the notice also stands when there is no gap at all (if the two cases were distinguishable, the mere shape of the block would reveal the raw data again).
 
 **Remember:** what makes a backend dangerous are **relationships between metrics** — by construction, for instance, `total + unmapped_events = Σ by_age_cluster + events_without_client` (both sides are "all visible events in the period"). If three terms are known, the fourth is exactly determined and the suppression would run empty. Since (3) and (4), both notice terms are hidden by default and Σ age groups disappears entirely for small person counts — never fewer than two unknowns remain, without any data-dependent post-correction. A `rows` backend with *one* metric per row has no such identity; the pattern from `example.py` is sufficient there. Anyone emitting several interrelated metrics should examine the relationships between them **as a whole**, not pairwise.
+
+### Sums over field values — count the contributing events, not the sum
+
+A backend that adds up `Event.data_json` (`needle-exchange-balance`, `counseling-hours`) publishes a **sum**, not a case count. The k threshold therefore applies to a different quantity: **a sum is suppressed when the number of contributing events is `< k`** — not when the sum itself is small. The reason is the downward inference: if "Total issued: 340" stands next to two contributing events, the individual value is all but determined, and an individual value is one person's datum. A large sum from few events is thus more dangerous than a small sum from many.
+
+Three points follow, and they belong together:
+
+- **The event count itself also passes through the threshold** (R14) — otherwise it would be exactly the small cell the sum was meant to protect.
+- **With breakdowns this cascades** (`counseling-hours`): when a category row falls, its contribution also drops out of every grand total it feeds — otherwise the suppressed row would be recoverable as a difference.
+- **Events without a usable numeric value are in no sum.** That belongs in the artefact as a data-independent (unquantified) completeness notice; otherwise the recipient reads a partial sum as a grand total.
+
+### Multiple selection: `margin=None` is not an all-clear
+
+A `multi_select` field **does not partition** — one event can carry several options, so only `Σ option counts ≥ margin total` holds. Reading that as "nothing can be inferred here" was the mistake in the first version of `service-distribution`. The correct treatment is a two-step:
+
+1. **`margin=None` passed to `_suppress_small`** — because a declared margin total that does not partition exactly would be *worse* than none: the feasibility audit and the fixed-point guard compute `residual = margin total − Σ visible cells`, and that residual is simply wrong under multiple selection. `margin=None` deliberately switches both off.
+2. **And precisely for that reason the group needs its own, named rule:** the inequality still holds and is itself a channel. It yields a **lower** bound `x ≥ margin total − Σ visible cells` for every suppressed cell, while primary suppression yields the **upper** bound `x ≤ k − 1`. When the two coincide, the cell is exactly determined (with *k* = 5, a visible cell of 6 and a published margin total of 10, the suppressed cell is necessarily 4). **The margin total therefore falls as soon as *one* cell of the group is suppressed** — without it there is no lower bound left, and `1 ≤ x ≤ k − 1` remains.
+
+**Remember:** "does not partition" does not mean "harmless", it means "the central machinery is not responsible". `margin=None` on its own does **not** protect; it merely switches off the protection that would have computed the wrong thing here.
+
+### K4a — the guarantee holds per artefact, not across artefacts
+
+Everything in this section reasons **within one report**. Two reports for the same facility and the same period can unlock each other without either of them breaking a rule:
+
+- **Refinement.** `monthly-trend` decomposes exactly the category figures of the activity report by month. A category cell suppressed there is summable from the visible monthly rows — and vice versa. This holds even when *neither* report suppressed a single cell: the finer resolution is itself the gain.
+- **Difference.** `service-distribution` counts contact events **with** a selected value, `counseling-hours` counts **all** contact events. The difference — contacts without a service entry — appears in neither report and passes through no suppression rule.
+
+This is an **accepted definitional boundary, not an omission**: there is no cell an artefact-local rule could attach to, and a cross-artefact guard would have to know which reports went to the same recipient — knowledge that does not exist in the generation path. As a flanking measure, the **release overview** (`ReportReleaseLogView`, [`core/services/dashboard/release_log.py`](../../src/core/services/dashboard/release_log.py)) makes overlapping releases visible so the facility can decide.
+
+> **Obligation for imitators** (from [`monthly_trend.py`](../../src/core/reporting/backends/monthly_trend.py)): anyone who breaks an existing population down more finely is building a refinement. Three questions — **the same maps? the same base set (filters, period semantics)? the same counted quantity?** Three times "yes" and it is one, and the relationship belongs **in the module docstring**. It is visible nowhere else, neither in the code nor in the artefact, and release practice can only take into account what somebody wrote down.
 
 ### Boundary behaviour you need to know
 
@@ -572,5 +618,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 28f12c932c436220d0f854bd7836e10b98c6c766 -->
+<!-- translation-date: 2026-08-05 -->
+<!-- source-hash: 637b4ac4d045f181d25eac6c3fa03f0ee4c68bad -->

@@ -319,6 +319,22 @@ Siehe [§ 10](#10-test-checkliste-für-neue-backends). Danach ist nichts mehr zu
 python src/manage.py shell -c "from core.reporting.registry import get_backends; print([b.slug for b in get_backends()])"
 ```
 
+### Bestand: die mitgelieferten Beispiel-Backends
+
+Alle Module unter [`src/core/reporting/backends/`](../src/core/reporting/backends/) sind **Vorlagen**, keine verbindlichen Berichtsstandards. Jedes hat einen anderen Zuschnitt — wer ein eigenes Backend schreibt, sucht sich zuerst den Fall, der dem eigenen am nächsten kommt, und kopiert **dieses** Modul. Alle sieben aus #1754 tragen `snapshot_enabled = False` und binden ihre `is_available` an die Seed-/Paket-Konfiguration.
+
+| Slug | Referenz-Charakter |
+|---|---|
+| [`example`](../src/core/reporting/backends/example.py) | Der Minimalfall: eine Kennzahl je Zeile plus Randsumme (`mode="rows"`). Einstiegspunkt für alles Weitere. |
+| [`sample-report-1`](../src/core/reporting/backends/sample_report_1.py) | Der Vollfall: mehrere zusammenhängende Kennzahlen, Vollständigkeitsblock, `snapshot_enabled = True`. |
+| [`monthly-trend`](../src/core/reporting/backends/monthly_trend.py) | **Zeitreihe + importiertes Mapping.** Zeigt, dass `CATEGORY_MAP`/`resolve_category` importiert und nie kopiert werden — und dokumentiert die Verfeinerungs-Beziehung zum Sachbericht (K4a, siehe [§ 6](#6-k-anonymität--der-prepare_export-hook)). |
+| [`client-metrics`](../src/core/reporting/backends/client_metrics.py) | **Exakte Personen-Partition + Randsummen-Doktrin.** Reine Personenzählungen (DISTINCT über `Event.client`), eine Aufschlüsselung, die ihre Randsumme exakt partitioniert — die schärfste Klasse im K-Anon-Modell. |
+| [`case-metrics`](../src/core/reporting/backends/case_metrics.py) | **Unabhängige Skalare ohne Randsumme.** Der Gegenpol: keine Zahl partitioniert eine andere, jede steht für sich an der k-Schwelle. Zeigt, wie wenig Maschinerie dieser häufige Zuschnitt braucht. |
+| [`ban-overview`](../src/core/reporting/backends/ban_overview.py) | **Hochsensibler Sonderfall.** Hausverbote sind bewusst kein Teil des Sachberichts; dieser Bericht ist ein interner Auswertungspfad per Produktentscheid. Zeilen werden datenunabhängig emittiert — schon ihre Existenz wäre sonst eine Aussage. |
+| [`needle-exchange-balance`](../src/core/reporting/backends/needle_exchange_balance.py) | **Feldwert-Summen.** Das erste Backend, das `Event.data_json` liest statt Ereignisse zu zählen. Grundmuster für jede Auswertung über Feldwerten (Slug-Adressierung, `safe_decrypt`, Summen-Regel). |
+| [`counseling-hours`](../src/core/reporting/backends/counseling_hours.py) | **Kaskade Zeile → Gesamt.** Feldwert-Summen mit Aufschlüsselung: je Kategorie eine Zeile aus Ereigniszahl und Minutensumme. Fällt eine Zeile, kaskadiert das in die Gesamtsumme. |
+| [`service-distribution`](../src/core/reporting/backends/service_distribution.py) | **Mehrfachnennung.** Zwei Feldgruppen nebeneinander: ein `select` (exakte Partition) und ein `multi_select` (partitioniert **nicht**). Der Fall, an dem die Randsummen-Frage kippt — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook). |
+
 ---
 
 ## 5. Snapshot-Integration
@@ -399,6 +415,36 @@ Mehrere zusammenhängende Kennzahlen plus Vollständigkeits-Meldungen. Hier reic
 4. **Vollständigkeits-Meldungen sind datenunabhängig** (#1769): **beide** Meldungen erscheinen im Export **immer** und **nie mit einer Zahl**. Nicht die Größe einer genannten Zahl war das Problem, sondern dass sie überhaupt genannt wurde — eine bezifferte Meldung publiziert implizit „mein Komplement ≥ k", also eine untere Schranke, und die Entscheidung darüber lief über eine Disjunktion auf Rohdaten und war damit selbst informativ. Der Block wird deshalb aus festen Codes gebaut, nicht aus `result.completeness` abgeleitet. Der Hinweis auf die Lücke bleibt in jedem Fall stehen — ein Bericht, der Lücken verschweigt, wäre irreführend vollständig; umgekehrt steht der Hinweis auch dann, wenn es gar keine Lücke gibt (wären beide Fälle unterscheidbar, verriete die bloße Gestalt des Blocks wieder die Rohdaten).
 
 **Merke:** Der Punkt, an dem ein Backend gefährlich wird, sind **Beziehungen zwischen Kennzahlen** — konstruktionsbedingt gilt hier etwa `total + unmapped_events = Σ by_age_cluster + events_without_client` (beide Seiten sind „alle sichtbaren Ereignisse im Zeitraum"). Sind drei Terme bekannt, ist der vierte exakt bestimmt und die Suppression liefe leer. Seit (3) und (4) sind die beiden Meldungs-Terme grundsätzlich verborgen und Σ Altersgruppen fällt bei kleiner Personenzahl ganz weg — es bleiben nie weniger als zwei Unbekannte, ganz ohne datenabhängige Nachbesserung. Ein `rows`-Backend mit *einer* Kennzahl je Zeile hat keine solche Identität; dort genügt das Muster aus `example.py`. Wer mehrere zusammenhängende Kennzahlen ausgibt, prüft die Beziehungen zwischen ihnen **als Ganzes**, nicht paarweise.
+
+### Summen über Feldwerte — die beitragenden Ereignisse zählen, nicht die Summe
+
+Ein Backend, das `Event.data_json` addiert (`needle-exchange-balance`, `counseling-hours`), publiziert keine Fallzahl, sondern eine **Summe**. Die k-Schwelle greift dort deshalb an einer anderen Größe: **eine Summe fällt, wenn die Zahl der beitragenden Ereignisse `< k` ist** — nicht, wenn die Summe selbst klein ist. Der Grund ist die Rückrechnung nach unten: Steht „Ausgabe gesamt: 340" neben zwei beitragenden Ereignissen, ist der Einzelwert nahezu bestimmt, und ein Einzelwert ist ein Datum einer einzelnen Person. Eine große Summe aus wenigen Ereignissen ist damit gefährlicher als eine kleine aus vielen.
+
+Daraus folgen drei Punkte, die zusammengehören:
+
+- **Die Ereigniszahl selbst läuft ebenfalls durch die Schwelle** (R14) — sonst wäre sie die Kleinstfallzahl, die die Summe gerade schützen sollte.
+- **Bei Aufschlüsselungen kaskadiert das** (`counseling-hours`): Fällt die Zeile einer Kategorie, fällt ihr Beitrag auch aus jeder Gesamtsumme, in die sie eingeht — sonst wäre die unterdrückte Zeile als Differenz bestimmbar.
+- **Ereignisse ohne verwertbaren Zahlenwert sind in keiner Summe enthalten.** Das gehört als datenunabhängige (unbezifferte) Vollständigkeits-Meldung ins Artefakt, sonst liest der Empfänger eine Teilsumme als Gesamtsumme.
+
+### Mehrfachnennung: `margin=None` ist keine Entwarnung
+
+Ein `multi_select`-Feld **partitioniert nicht** — ein Ereignis kann mehrere Optionen tragen, es gilt nur `Σ Options-Counts ≥ Randsumme`. Der Reflex, daraus „hier ist nichts zurückzurechnen" zu lesen, war der Fehler in der ersten Fassung von `service-distribution`. Richtig ist ein Doppelschritt:
+
+1. **`margin=None` an `_suppress_small`** — weil eine deklarierte Randsumme, die nicht exakt partitioniert, *schlimmer* wäre als keine: Machbarkeits-Audit und Fixpunkt-Guard rechnen mit `Residuum = Randsumme − Σ sichtbare Zellen`, und dieses Residuum ist bei Mehrfachnennung schlicht falsch. `margin=None` schaltet beide bewusst ab.
+2. **Und genau deshalb braucht die Gruppe eine eigene, benannte Regel:** Die Ungleichung besteht ja weiter und ist selbst ein Kanal. Sie liefert für jede unterdrückte Zelle die **untere** Schranke `x ≥ Randsumme − Σ sichtbare Zellen`, die Primär-Suppression die **obere** `x ≤ k − 1`. Fallen beide zusammen, ist die Zelle exakt bestimmt (bei *k* = 5, sichtbarer Zelle 6 und publizierter Randsumme 10 ist die unterdrückte Zelle zwingend 4). **Deshalb fällt die Randsumme, sobald *eine* Zelle der Gruppe unterdrückt ist** — ohne sie gibt es die untere Schranke nicht mehr, und es bleibt `1 ≤ x ≤ k − 1`.
+
+**Merke:** „partitioniert nicht" heißt nicht „ungefährlich", sondern „die zentrale Maschinerie ist nicht zuständig". `margin=None` allein schützt **nicht**; es schaltet nur den Schutz ab, der hier falsch gerechnet hätte.
+
+### K4a — die Zusicherung gilt je Artefakt, nicht über Artefakte hinweg
+
+Alles in diesem Abschnitt rechnet **innerhalb eines Berichts**. Zwei Berichte derselben Einrichtung und desselben Zeitraums können sich gegenseitig aufschließen, ohne dass in einem von beiden eine Regel verletzt wäre:
+
+- **Verfeinerung.** `monthly-trend` zerlegt exakt die Kategoriezahlen des Sachberichts nach Monat. Eine dort unterdrückte Kategoriezelle ist aus den sichtbaren Monatszeilen summierbar — und umgekehrt. Das gilt auch, wenn in *keinem* der beiden Berichte eine Zelle unterdrückt wurde: die feinere Auflösung ist selbst der Zugewinn.
+- **Differenz.** `service-distribution` zählt Kontakt-Ereignisse **mit** Auswahlwert, `counseling-hours` **alle** Kontakt-Ereignisse. Die Differenz — Kontakte ohne Leistungs-Eintrag — steht in keinem der beiden Berichte und läuft durch keine Suppressionsregel.
+
+Das ist eine **akzeptierte Definitionsgrenze, kein Versäumnis**: Es gibt keine Zelle, an der eine artefaktlokale Regel ansetzen könnte, und ein artefaktübergreifender Guard müsste wissen, welche Berichte an denselben Empfänger gegangen sind — Wissen, das im Erzeugungspfad nicht existiert. Flankierend macht die **Freigabe-Übersicht** (`ReportReleaseLogView`, [`core/services/dashboard/release_log.py`](../src/core/services/dashboard/release_log.py)) überlappende Herausgaben sichtbar, damit die Einrichtung entscheiden kann.
+
+> **Auflage für Nachahmer** (aus [`monthly_trend.py`](../src/core/reporting/backends/monthly_trend.py)): Wer eine bestehende Grundgesamtheit feiner aufschlüsselt, baut eine Verfeinerung. Drei Fragen — **dieselben Maps? dieselbe Basismenge (Filter, Zeitraumsemantik)? dieselbe Zählgröße?** Dreimal „ja" ⇒ es ist eine, und die Beziehung gehört **in den Modul-Docstring**. Sie ist sonst nirgends sichtbar, weder im Code noch im Artefakt, und die Freigabepraxis kann nur berücksichtigen, was jemand aufgeschrieben hat.
 
 ### Grenzverhalten, das man kennen muss
 
