@@ -56,8 +56,18 @@ class TestDiscovery:
     def test_echte_discovery_findet_beide_backends(self):
         """Pflichtfall 1: das ~50-Zeilen-Backend wird automatisch gefunden —
         neben ``sample-report-1`` jetzt auch ``example`` (Sortierung nach Slug).
+
+        Refs #1754: Teilmengen- statt Gleichheits-Assertion. Seit die Doku
+        weitere Beispiel-Backends mitliefert, waere eine exakte Liste eine
+        Wartungsfalle, die bei jedem neuen Backend anschlaegt, ohne etwas ueber
+        *dieses* auszusagen. Gepinnt bleibt beides, was der Fall belegen soll:
+        die Discovery findet das Modul ohne Zusatzeintrag, und ``get_backends``
+        liefert nach Slug sortiert.
         """
-        assert [b.slug for b in registry.get_backends()] == ["example", "sample-report-1"]
+        slugs = [b.slug for b in registry.get_backends()]
+
+        assert {"example", "sample-report-1"} <= set(slugs)
+        assert slugs == sorted(slugs)
 
 
 class TestBackendMetadaten:

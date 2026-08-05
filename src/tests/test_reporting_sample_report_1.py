@@ -1418,13 +1418,24 @@ class TestDiscovery:
         (monkeypatch stellt beides zurueck). Seit M5 P6 (Refs #1061) gehoert
         ``example`` (Referenz-Plugin) zu den real registrierten Backends — die
         Discovery-Assertion pinnt jetzt beide.
+
+        Refs #1754: Entfernt werden **alle** Backend-Module, nicht mehr zwei
+        namentlich genannte, und die Assertion ist eine Teilmengen-Pruefung.
+        Beides aus demselben Grund: mit weiteren Beispiel-Backends im Paket
+        haette die namentliche Liste stumm gemacht, was der Test belegen soll
+        (ein nicht entferntes Modul registriert sich nicht neu und fehlte in der
+        Gleichheits-Assertion **erwartungsgemaess** — der Fall waere gruen
+        geblieben, ohne noch etwas zu pruefen).
         """
-        monkeypatch.delitem(sys.modules, "core.reporting.backends.sample_report_1", raising=False)
-        monkeypatch.delitem(sys.modules, "core.reporting.backends.example", raising=False)
+        for name in [name for name in sys.modules if name.startswith("core.reporting.backends.")]:
+            monkeypatch.delitem(sys.modules, name, raising=False)
         monkeypatch.setattr(registry, "_REGISTRY", {})
         monkeypatch.setattr(registry, "_discovered", False)
 
-        assert [b.slug for b in registry.get_backends()] == ["example", "sample-report-1"]
+        slugs = [b.slug for b in registry.get_backends()]
+
+        assert {"example", "sample-report-1"} <= set(slugs)
+        assert slugs == sorted(slugs)
 
 
 class TestBackendStringsSindUebersetzbar:
