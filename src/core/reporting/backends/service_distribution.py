@@ -65,6 +65,23 @@ Maschinerie ist nicht zustaendig, also braucht die Aufschluesselung eine eigene,
 benannte Regel. Der Reflex, ``margin=None`` als Entwarnung zu lesen, war der
 Fehler in der ersten Fassung dieses Moduls.
 
+**Grenze dieser Begruendung: sie gilt artefakt-LOKAL** (K4a, Refs #1770/#1754).
+Alles oben rechnet innerhalb *dieses* Berichts. ``events_leistungen`` zaehlt
+dieselbe Ereignismenge wie die ``contact``-Zeile in
+:mod:`core.reporting.backends.counseling_hours` — dort allerdings ALLE
+Kontakt-Ereignisse, hier nur die mit Auswahlwert. Die **Differenz** ist die Zahl
+der Kontakte ohne Leistungs-Eintrag: eine Groesse, die in keinem der beiden
+Berichte steht und deshalb durch keine Suppressionsregel laeuft. Fuer
+``events_art_der_krise`` und die ``crisis``-Zeile gilt dasselbe.
+
+Das ist **keine offene Baustelle, sondern die akzeptierte Definitionsgrenze**
+der k-Anonymitaets-Zusicherung: sie gilt je Artefakt und je Zeitraum. Ein
+artefaktuebergreifender Guard muesste wissen, welche Berichte an denselben
+Empfaenger gegangen sind — Wissen, das im Erzeugungspfad nicht existiert.
+Flankierend gibt es die **Freigabe-Uebersicht**
+(:class:`core.views.statistics.ReportReleaseLogView`, K4a): sie verhindert den
+Kanal nicht, macht ueberlappende Herausgaben aber sichtbar.
+
 Eine Optionszelle zaehlt **Ereignisse mit dieser Option**, nicht Nennungen:
 ein Ereignis, das dieselbe Option doppelt fuehrt (Altdaten), zaehlt einmal.
 Sonst waere die Zelle keine Fallzahl und die k-Schwelle darauf bedeutungslos.

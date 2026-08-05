@@ -44,6 +44,30 @@ weggeworfen. Daraus folgt die Kaskade in :meth:`CounselingHoursBackend.prepare_e
    sonst waere die fehlende Zahl exakt die Differenz zu den sichtbaren Zeilen.
    Es faellt ebenso, wenn ``events_gesamt`` selbst unterdrueckt ist oder der
    Guard die ganze Aufschluesselung hat fallen lassen.
+
+**Grenze dieser Begruendung: sie gilt artefakt-LOKAL** (K4a, Refs #1770/#1754).
+Alles oben rechnet innerhalb *dieses* Berichts. Zwischen Artefakten gibt es
+Kanaele, die kein Backend allein schliessen kann, und dieser hier hat einen
+konkreten:
+
+Die ``contact``-Zeile zaehlt dieselbe Ereignismenge wie
+``events_leistungen`` in :mod:`core.reporting.backends.service_distribution`
+(beide: Kontakt-Ereignisse des Zeitraums; der Slug-Zweitschluessel ist
+derselbe). Ihre **Differenz** ist die Zahl der Kontakte **ohne**
+Leistungs-Eintrag — eine Groesse, die in keinem der beiden Berichte steht und
+deshalb durch keine Suppressionsregel laeuft. Fuer ``crisis`` und
+``events_art_der_krise`` gilt dasselbe. Wer beide Berichte desselben Zeitraums
+herausgibt, publiziert damit implizit eine dritte, ungeprueft kleine Zahl.
+
+Das ist **keine offene Baustelle, sondern die akzeptierte Definitionsgrenze**
+der k-Anonymitaets-Zusicherung: sie gilt je Artefakt und je Zeitraum. Ein
+artefaktuebergreifender Guard muesste wissen, welche Berichte an denselben
+Empfaenger gegangen sind — Wissen, das im Erzeugungspfad nicht existiert.
+Flankierend gibt es die **Freigabe-Uebersicht**
+(:class:`core.views.statistics.ReportReleaseLogView`, K4a): sie verhindert den
+Kanal nicht, macht ueberlappende Herausgaben aber sichtbar. Die Konsequenz
+gehoert damit zur organisatorischen Ebene ("nicht beliebig viele Zuschnitte an
+denselben Empfaenger"), nicht in dieses Modul.
 """
 
 import dataclasses
