@@ -158,6 +158,13 @@ class WorkItemForm(forms.ModelForm):
             # werden jetzt symmetrisch abgewiesen. Der legitime Fall bleibt
             # fehlerfrei: das gepinnte Formular rendert gar kein
             # ``<input name="client">``, der Key fehlt dann im POST.
+            # Bekannter Grenzfall (Review #1791): Wurde die Aufgabe ZWISCHEN
+            # Render (personenlos -> Hidden-Feld sendet ``client=""``) und
+            # Submit von jemand anderem zugeordnet, greift die Pruefung mit
+            # derselben Meldung — inhaltlich zutreffend (die Zuordnung ist
+            # jetzt fix), auch wenn der Ausloeser Nebenlaeufigkeit statt
+            # Manipulation ist; offline endet so ein Replay als 422 statt im
+            # 409-Konfliktfluss. Fail-closed ist hier bewusst in Kauf genommen.
             raw = self.data.get("client")
             if raw is not None and str(raw) != str(self.pinned_client.pk):
                 raise forms.ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))

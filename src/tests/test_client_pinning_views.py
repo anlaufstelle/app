@@ -81,6 +81,27 @@ class TestCaseClientPinning:
         assert case_open.title == "Neuer Titel"
         assert case_open.client_id == original
 
+    def test_case_update_post_cannot_clear_client(self, client, staff_user, case_open):
+        """Leeres ``client``-Feld ist ein Entfernen-Versuch — Formularfehler wie beim Wechsel.
+
+        Refs #1791 (Symmetrie-Nachzug aus dem Review): Das gepinnte
+        Fall-Formular rendert kein ``client``-Feld; ein POST, der den Key
+        explizit leer mitsendet, ist manipuliert und wird wie der
+        Wechsel-Versuch sichtbar abgewiesen — kein Teil-Write.
+        """
+        client.force_login(staff_user)
+        original = case_open.client_id
+        original_title = case_open.title
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case_open.pk}),
+            {"title": "Ohne Person", "description": "Beschreibung", "client": ""},
+        )
+        assert response.status_code == 200
+        assert "Die Personenzuordnung kann nach dem Anlegen nicht geändert werden." in response.content.decode()
+        case_open.refresh_from_db()
+        assert case_open.client_id == original
+        assert case_open.title == original_title
+
     def test_case_update_form_renders_readonly_client(self, client, staff_user, case_open):
         client.force_login(staff_user)
         response = client.get(reverse("core:case_update", kwargs={"pk": case_open.pk}))

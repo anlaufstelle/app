@@ -139,12 +139,17 @@ class CaseForm(forms.ModelForm):
 
     def clean_client(self):
         client_id = self.cleaned_data.get("client")
-        # Refs #1786: Ist die Person gepinnt, gewinnt IMMER der gespeicherte
-        # Wert. Ein fehlender Wert (Read-only-Formular sendet keinen) ist
-        # kein Fehler; ein abweichender Wert ist ein manipulierter POST und
-        # wird als Formularfehler sichtbar abgewiesen, nicht still ignoriert.
+        # Refs #1786/#1791: Ist die Person gepinnt, gewinnt IMMER der
+        # gespeicherte Wert. Ein FEHLENDER Key (das Read-only-Formular rendert
+        # kein ``client``-Feld) ist der legitime Normalfall; ein VORHANDENER
+        # Key mit leerem oder abweichendem Wert ist ein manipulierter POST —
+        # Wechsel und Entfernen werden symmetrisch als Formularfehler
+        # abgewiesen, nicht still ignoriert. Die Unterscheidung braucht das
+        # rohe ``self.data``: nach ``UUIDField.to_python("")`` sind beide
+        # Faelle in ``cleaned_data`` identisch ``None``.
         if self.pinned_client is not None:
-            if client_id and str(client_id) != str(self.pinned_client.pk):
+            raw = self.data.get("client")
+            if raw is not None and str(raw) != str(self.pinned_client.pk):
                 raise ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
             # Der gepinnte Wert geht trotzdem durch ``resolve_writable_client``:
             # das Pinning ersetzt das Widerrufs-Gate (#1771) nicht, es kommt
