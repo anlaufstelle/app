@@ -108,7 +108,14 @@ base.py → dev.py → e2e.py
  - `_lead_storage_state` → Lead (emma)
  - `_staff_storage_state` → Staff (miriam)
  - `_assistant_storage_state` → Assistant (lena)
+ - `_super_admin_storage_state` → Super-Admin (superadmin)
  - Passwort: `anlaufstelle2026` (Seed-Default)
+ - Bauen sich ueber einen **kurzlebigen eigenen Browser** (`launch_browser`), nicht ueber die `browser`-Fixture — sonst ScopeMismatch (session haengt an module, siehe unten). Ein Storage-State ist reines Cookie-JSON und ueberlebt das Schliessen des Browsers; die Server-Session bleibt unabhaengig davon gueltig.
+
+### Modul-scoped (einmal pro Testdatei)
+
+- **`browser`** — ueberschreibt die session-scoped `browser`-Fixture von pytest-playwright: **ein Chromium-Prozess je Testdatei** (Refs #1787). Der Speicherverbrauch eines Browser-Prozesses waechst ueber die Session monoton (Renderer-Reste, Caches, SW-Registrierungen), auch wenn jeder Test seinen Context sauber schliesst — auf RAM-knappen Hosts kippt der Voll-Lauf sonst im letzten Datei-Cluster ins OOM. Am Dateiende stirbt der Prozess, die naechste Datei startet frisch.
+- Fuer Tests ist der Wechsel transparent: Alle Consumer sind function-scoped (`authenticated_page` & Co. sowie die Tests, die `browser.new_context()` selbst rufen — Lockout, MFA, Offline-Contract). Neue **session- oder modul-scoped** Fixtures duerfen dagegen **nicht** von `browser` abhaengen; sie nutzen `launch_browser` wie die Storage-States.
 
 ### Function-scoped (pro Test)
 
@@ -168,6 +175,10 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 ## Bekannte Einschraenkungen
 
 1. **Serielle Ausfuehrung:** E2E-Tests laufen seriell (kein pytest-xdist). Playwright/Chromium braucht ~200-400 MB RAM pro Instanz. Auf CI-Runnern mit begrenztem RAM wuerde Parallelisierung zu OOM fuehren.
+
+ **RAM-Decke auch seriell (Refs #1787):** Der volle serielle Lauf (~760 Tests, ~21 min) hat auf einem 7,5-GiB-Host ohne Swap den Chromium per OOM-Killer verloren. Zwei Stufen der Abhilfe, in dieser Reihenfolge:
+ 1. **Browser-Recycling** (Default, kein Aufruf noetig): modul-scoped `browser`-Fixture, ein Chromium je Testdatei — kappt das monotone Speicherwachstum ueber die Session.
+ 2. **`make test-e2e-halves`** — kanonischer Fallback, wenn der Voll-Lauf **trotz** Recycling ins OOM laeuft: zwei serielle pytest-Sessions ueber je eine Haelfte der Testdateien (Liste dynamisch, kein Drift bei neuen Dateien). Jede Haelfte startet Server + `seed --flush` neu und hat ihr eigenes Speicher-Budget; das Rezept laeuft als eine Shell mit `set -e`, ein Fehlschlag in Haelfte 1 bricht ab. Preis: doppelte Server-/Seed-Zeit und keine dateiuebergreifende Zustandskette — Tests muessen ohnehin dateiweise unabhaengig sein.
 
 2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4().hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
 
