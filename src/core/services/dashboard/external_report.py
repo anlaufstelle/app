@@ -500,7 +500,13 @@ def _order_tiebreak(rows: Sequence[dict[str, Any]], order: str) -> Callable[[int
 _PERSON_DERIVED_KEYS = ("by_age_cluster", "by_contact_stage")
 
 
-def _drop_person_derived_breakdowns(report: dict[str, Any], unique_clients: int | None, threshold: int) -> None:
+def _drop_person_derived_breakdowns(
+    report: dict[str, Any],
+    unique_clients: int | None,
+    threshold: int,
+    *,
+    breakdown_keys: Sequence[str] = _PERSON_DERIVED_KEYS,
+) -> None:
     """K0-Fail-safe (Refs #1768): Personenzahl < k ⇒ Personen-Tabellen ganz weg.
 
     Die Zell-Suppression prueft die Schwelle gegen **Ereignis**zahlen
@@ -521,10 +527,23 @@ def _drop_person_derived_breakdowns(report: dict[str, Any], unique_clients: int 
     Inline-``if``): K0-b ersetzt bzw. ergaenzt genau diese Stelle. Mutiert
     ``report`` in place; fehlende Keys werden still uebergangen (nicht jeder
     Wrapper fuehrt beide Tabellen).
+
+    **Schluessel-Parameter statt Verdrahtung** (Refs #1754, dasselbe Muster wie
+    :func:`drop_person_margin_on_person_suppression`): Der Fail-safe haengt nicht
+    an den Namen ``by_age_cluster``/``by_contact_stage``, sondern an der
+    **Form** — eine Aufschluesselung, deren Aequivalenzklassen Personen sind,
+    neben einer Personenzahl, die unter der Schwelle liegt. Genau die hat auch
+    ``ClientMetricsBackend`` (``records`` = Personen je Altersgruppe neben
+    ``aktive_personen``), nur unter einem anderen Schluessel. Ohne den Parameter
+    baute das Backend die Regel nach — eine zweite Suppressionslogik, die der
+    Architektur-Guard aus gutem Grund verbietet (sie driftet).
+
+    Die Defaults sind die Bestandsschluessel; alle drei Bestandsaufrufer rufen
+    unveraendert weiter.
     """
     if unique_clients is not None and unique_clients >= threshold:
         return
-    for key in _PERSON_DERIVED_KEYS:
+    for key in breakdown_keys:
         report.pop(key, None)
 
 

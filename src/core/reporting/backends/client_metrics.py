@@ -62,9 +62,19 @@ vollstaendig durch die zentrale Maschinerie:
   konsistente Partition drei Gruppen mit exakt einer Person festlegt. Die
   Doktrin setzt bewusst schon bei der *Einengung* an, der Guard erst beim
   exakten Pin — sie ist die erste Linie, nicht die zweite.
+* **K0-Fail-safe** (:func:`_drop_person_derived_breakdowns`, Refs #1768/#1754):
+  Liegt ``aktive_personen`` **selbst** unter der Schwelle, faellt die
+  Altersverteilung **ganz** — nicht nur ihre Werte. Werte zu nullen genuegt
+  nicht, weil schon die **Zeilenexistenz** eine Aussage ueber die Verteilung
+  der < *k* Personen ist: eine einzige Zeile „u18, leer" publiziert „alle
+  weniger als *k* aktiven Personen sind unter 18", also einen Pin bis hinunter
+  zu *k* = 1. Der Bestand laesst in genau dieser Lage die ganze Tabelle fallen;
+  dieser Bericht darf nicht genauer sein als das Artefakt, dessen Menge er
+  zaehlt (siehe K4a unten).
 * ``neuaufnahmen`` ist **keine** Zelle dieser Partition und darf deshalb nicht
   in die Kaskade: es gibt keine Gleichung, ueber die sie eine unterdrueckte
-  Alterszelle aufloesen koennte. Sie steht einzeln an der Schwelle.
+  Alterszelle aufloesen koennte. Sie steht einzeln an der Schwelle — auch der
+  K0-Fail-safe fasst sie nicht an.
 
 **Zur ``persons``-Mechanik der Helper.** ``_suppress_small`` kennt ein zweites,
 personenbasiertes Kriterium ueber den internen Schluessel ``persons`` (K0-b,
@@ -97,13 +107,19 @@ jede sichtbare Gruppe den exakten Wert, den das Inferenzmodell des
 Bestands-Guards dort nur als ``[k, ∞)`` kennt.
 
 **Was das praktisch begrenzt** — und warum es kein offener Befund ist: beide
-Seiten treffen ihre Suppressionsentscheidung ueber **dieselben** Personenzahlen
-und **dieselbe** Schwelle. Eine Gruppe mit weniger als *k* Personen faellt hier
-wie dort, und seit die Personen-Randsummen-Doktrin auch hier laeuft (siehe oben)
-faellt in beiden Faellen zusaetzlich die Randsumme. Publiziert wird also nur, was
-auch der Bestand publizieren duerfte; die Verschaerfung liegt in der
-**Genauigkeit** der uebrigen Zellen, nicht darin, dass eine Kleinstfallzahl
-sichtbar wuerde.
+Seiten treffen ihre Suppressionsentscheidung ueber **dieselben** Personenzahlen,
+**dieselbe** Schwelle und seit der finalen Fix-Welle (Refs #1754) auch **dieselben
+drei Regeln**: Zell-Suppression, Personen-Randsummen-Doktrin und K0-Fail-safe
+(alle drei oben, alle drei aus dem zentralen Modul). Eine Gruppe mit weniger als
+*k* Personen faellt hier wie dort; ist die Gesamtpersonenmenge kleiner als *k*,
+faellt hier wie dort die ganze Tabelle. Publiziert wird also nur, was auch der
+Bestand publizieren duerfte; die Verschaerfung liegt in der **Genauigkeit** der
+uebrigen Zellen, nicht darin, dass eine Kleinstfallzahl sichtbar wuerde.
+
+(Vor der finalen Fix-Welle stimmte dieser Satz **nicht**: der K0-Fail-safe fehlte
+hier, und eine Tabelle mit genullten Zeilen neben ``aktive_personen = null``
+publizierte die Altersverteilung einer Personenmenge, die der Bestand in
+derselben Lage komplett zurueckhaelt.)
 
 **Trotzdem gehoert es hierher.** Es ist ein K4a-Fall — artefaktlokal nicht
 loesbar (es gibt keine Zelle, an der eine Regel ansetzen koennte), und ein
@@ -127,6 +143,7 @@ from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
     _Breakdown,
+    _drop_person_derived_breakdowns,
     _get_threshold,
     _suppress_small,
     apply_residual_guard,
@@ -228,7 +245,14 @@ class ClientMetricsBackend(DatasetBackend):
            konsistente Partition drei Gruppen mit exakt einer Person festlegt.
            Die Doktrin ist bewusst schaerfer als der Guard — sie setzt schon
            bei der *Einengung* an, nicht erst beim exakten Pin.
-        4. :func:`apply_residual_guard` als letzter Schritt (K1).
+        4. :func:`apply_residual_guard` (K1).
+        5. :func:`_drop_person_derived_breakdowns` — der K0-Fail-safe
+           (Refs #1768/#1754). Liegt die **rohe** ``aktive_personen`` unter der
+           Schwelle, faellt ``records`` als ganze Tabelle: die Zeilenexistenz
+           allein publiziert sonst die Verteilung einer Personenmenge, von der
+           das Artefakt gleichzeitig sagt, dass sie kleiner als *k* ist. Auch
+           dieser Guard kommt mit Schluessel-Parameter aus dem zentralen Modul,
+           statt hier als ``if`` nachgebaut zu werden.
 
         Aufgerufen wird die Doktrin mit den **rohen** ``result.records`` (dort
         stehen die Personenzahlen noch) und mit den Schluesseln dieses Backends
@@ -264,6 +288,13 @@ class ClientMetricsBackend(DatasetBackend):
             margin_key="aktive_personen",
         )
         apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
+        # 5. K0-Fail-safe (Refs #1768/#1754): liegt die **rohe** Personenzahl
+        #    unter der Schwelle, faellt die ganze Altersverteilung — Werte nullen
+        #    genuegt nicht, weil schon die Zeilenexistenz die Verteilung der < k
+        #    Personen publiziert (eine einzige „u18"-Zeile sagt: alle sind u18).
+        #    Gegen die **rohe** Zahl, nicht gegen ``published_aktive``: die ist
+        #    genau dann ``None``, wenn der Fail-safe greifen muss.
+        _drop_person_derived_breakdowns(view, aktive, threshold, breakdown_keys=("records",))
 
         field_keys = [spec.key for spec in self.get_field_specs()]
         records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]

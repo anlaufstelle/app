@@ -220,14 +220,61 @@ def _rohergebnis(records, aktive, neuaufnahmen=0):
 
 class TestPrepareExport:
     def test_alles_unter_der_schwelle_faellt(self, backend, facility):
+        """Anforderungsaenderung (finale Fix-Welle, Refs #1754): frueher pinnte
+        dieser Test eine **stehenbleibende** Zeile ``{"u18": None}``. Genau die
+        war das Leck — die Zeilenexistenz publiziert „alle < k aktiven Personen
+        sind u18". Liegt die Personenzahl unter der Schwelle, faellt die
+        gesamte personenabgeleitete Tabelle (K0-Fail-safe wie im Bestand)."""
         prepared = backend.prepare_export(
             facility, _rohergebnis([{"alterscluster": "u18", "personen": 2}], aktive=2, neuaufnahmen=1)
         )
 
-        assert prepared.records == [{"alterscluster": "u18", "personen": None}]
+        assert prepared.records == []
         assert prepared.summary["aktive_personen"] is None
         assert prepared.summary["neuaufnahmen"] is None
         assert prepared.summary["k_anonymity_threshold"] == 5
+
+    def test_k0_fail_safe_wirft_die_ganze_altersverteilung_weg(self, backend, facility):
+        """K0-Fail-safe (Refs #1768/#1754): ``aktive_personen`` < k ⇒ keine Zeile.
+
+        Der Angriff sitzt in der blossen **Zeilenexistenz**, nicht im Wert: eine
+        Tabelle mit zwei genullten Zeilen sagt „die < k aktiven Personen
+        verteilen sich auf genau diese beiden Altersgruppen". Artefakt-
+        uebergreifend ist das ein Pin bis hinunter zu k = 1, denn der Bestand
+        (``_drop_person_derived_breakdowns``) laesst in derselben Lage die ganze
+        Tabelle fallen — die Genauigkeit dieses Berichts darf die des Bestands
+        nicht ueberschreiten.
+        """
+        prepared = backend.prepare_export(
+            facility,
+            _rohergebnis(
+                [{"alterscluster": "u18", "personen": 3}, {"alterscluster": "unknown", "personen": 1}],
+                aktive=4,
+                neuaufnahmen=8,
+            ),
+        )
+
+        assert prepared.records == []
+        assert prepared.summary["aktive_personen"] is None
+        # ``neuaufnahmen`` ist keine Zelle der Partition — der Fail-safe fasst
+        # sie nicht an, sie steht allein an der Schwelle.
+        assert prepared.summary["neuaufnahmen"] == 8
+
+    def test_zeilen_bleiben_ab_der_schwelle_trotz_suppressierter_zellen(self, backend, facility):
+        """Gegenprobe zum Fail-safe: er haengt an der **Personen**zahl, nicht an
+        der Suppression einzelner Zellen. Ist ``aktive_personen`` >= k, bleiben
+        die Zeilen stehen (genullt) — die Doktrin-Kaskade bleibt unveraendert."""
+        prepared = backend.prepare_export(
+            facility,
+            _rohergebnis(
+                [{"alterscluster": "u18", "personen": 5}, {"alterscluster": "unknown", "personen": 1}],
+                aktive=6,
+            ),
+        )
+
+        assert [row["alterscluster"] for row in prepared.records] == ["u18", "unknown"]
+        assert [row["personen"] for row in prepared.records] == [None, None]
+        assert prepared.summary["aktive_personen"] is None
 
     def test_zahlen_ab_der_schwelle_bleiben_sichtbar(self, backend, facility):
         prepared = backend.prepare_export(
@@ -347,12 +394,16 @@ class TestPrepareExport:
 
 class TestEndeZuEndeUeberBuildDataset:
     def test_panel_sicht_zeigt_suppressierte_zahlen(self, backend, facility, staff_user, doc_type):
+        """Anforderungsaenderung (finale Fix-Welle, Refs #1754): drei aktive
+        Personen liegen unter der Schwelle, also faellt die Altersverteilung
+        **ganz** — vorher blieb die genullte ``u18``-Zeile stehen und verriet,
+        dass alle drei Personen unter 18 sind (K0-Fail-safe)."""
         for index in range(3):
             person = _client(facility, f"P{index}", Client.AgeCluster.U18, created=_berlin(2026, 1, 5))
             _event(facility, doc_type, staff_user, _berlin(2026, 1, 10), person)
 
         prepared = backend.prepare_export(facility, backend.build_dataset(facility, JANUAR, FEBRUAR_ENDE))
 
-        assert prepared.records == [{"alterscluster": "u18", "personen": None}]
+        assert prepared.records == []
         assert prepared.summary["aktive_personen"] is None
         assert prepared.summary["neuaufnahmen"] is None
