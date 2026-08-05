@@ -118,9 +118,18 @@ class TestWorkItemClientPinning:
         assert workitem_pinned.title != "Umgehängte Aufgabe"
 
     def test_workitem_update_post_cannot_clear_client(self, client, staff_user, workitem_pinned):
-        """Leeres ``client``-Feld darf die bestehende Zuordnung nicht entfernen."""
+        """Leeres ``client``-Feld ist ein Entfernen-Versuch — und damit ein Formularfehler.
+
+        Refs #1791 (Maintainer-Entscheid, Punkt 1): Der Wechsel-Versuch liefert
+        seit #1786 einen sichtbaren Formularfehler, das Entfernen rutschte
+        dagegen als 302 durch (die Zuordnung blieb zwar erhalten, aber der
+        Rest des POSTs wurde gespeichert und die Manipulation blieb
+        unsichtbar). Beide Versuche werden jetzt symmetrisch abgewiesen: 200
+        mit Fehlermeldung, kein Teil-Write.
+        """
         client.force_login(staff_user)
         original = workitem_pinned.client_id
+        original_title = workitem_pinned.title
         response = client.post(
             reverse("core:workitem_update", kwargs={"pk": workitem_pinned.pk}),
             {
@@ -130,10 +139,31 @@ class TestWorkItemClientPinning:
                 "client": "",
             },
         )
-        assert response.status_code == 302
+        assert response.status_code == 200
+        # Exakt die Fehlermeldung, nicht der Read-only-Hinweis daneben.
+        assert "Die Personenzuordnung kann nach dem Anlegen nicht geändert werden." in response.content.decode()
         workitem_pinned.refresh_from_db()
         assert workitem_pinned.client_id == original
-        assert workitem_pinned.title == "Ohne Person"
+        assert workitem_pinned.title == original_title
+
+    def test_workitem_update_post_without_client_key_still_saves(self, client, staff_user, workitem_pinned):
+        """Gegenprobe zu #1791: Das gepinnte Formular rendert kein
+        ``<input name="client">`` — ein POST **ohne** den Key ist der legitime
+        Normalfall und muss weiterhin durchgehen."""
+        client.force_login(staff_user)
+        original = workitem_pinned.client_id
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": workitem_pinned.pk}),
+            {
+                "item_type": WorkItem.ItemType.TASK,
+                "title": "Neuer Titel",
+                "priority": WorkItem.Priority.NORMAL,
+            },
+        )
+        assert response.status_code == 302
+        workitem_pinned.refresh_from_db()
+        assert workitem_pinned.title == "Neuer Titel"
+        assert workitem_pinned.client_id == original
 
     def test_workitem_update_post_can_attach_client(self, client, staff_user, workitem_unassigned, client_identified):
         client.force_login(staff_user)

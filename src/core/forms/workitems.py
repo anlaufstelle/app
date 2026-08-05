@@ -146,10 +146,20 @@ class WorkItemForm(forms.ModelForm):
         client_id = self.cleaned_data.get("client")
         # Refs #1786 (Spiegel zu ``CaseForm.clean_client``): gepinnt gewinnt
         # der gespeicherte Wert; ein abweichender POST-Wert ist ein Wechsel-
-        # Versuch und wird als Formularfehler abgewiesen. Ohne Pin bleibt das
-        # bisherige Verhalten (freie Auswahl, leer erlaubt).
+        # oder Entfernen-Versuch und wird als Formularfehler abgewiesen. Ohne
+        # Pin bleibt das bisherige Verhalten (freie Auswahl, leer erlaubt).
         if self.pinned_client is not None:
-            if client_id and str(client_id) != str(self.pinned_client.pk):
+            # Refs #1791 (Maintainer-Entscheid, Punkt 1): gegen den ROHEN
+            # POST-Wert pruefen, nicht gegen ``cleaned_data``. Ein leeres
+            # ``client``-Feld ist nach dem Field-clean bereits ``None`` und
+            # rutschte durch das ``if client_id``-Short-Circuit — das Entfernen
+            # blieb damit unsichtbar (302 statt Formularfehler), waehrend der
+            # Wechsel-Versuch korrekt scheiterte. Beide sind Manipulationen und
+            # werden jetzt symmetrisch abgewiesen. Der legitime Fall bleibt
+            # fehlerfrei: das gepinnte Formular rendert gar kein
+            # ``<input name="client">``, der Key fehlt dann im POST.
+            raw = self.data.get("client")
+            if raw is not None and str(raw) != str(self.pinned_client.pk):
                 raise forms.ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
             # Wie bei ``CaseForm``: das Pinning ersetzt das Widerrufs-Gate
             # (#1771) nicht, der gepinnte Wert laeuft ebenfalls durch
