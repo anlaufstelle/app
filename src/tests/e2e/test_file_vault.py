@@ -28,6 +28,28 @@ def _test_pdf(tmp_path):
     return str(path)
 
 
+def select_doc_type_and_wait(page, label, ready_selector):
+    """Dokumenttyp wählen und auf den FRISCH geswappten Feldblock warten.
+
+    ``/events/new/`` rendert die Felder des Default-Dokumenttyps bereits
+    server-seitig, und innerhalb eines Tests kann ein zweiter Wechsel auf
+    denselben Typ treffen — ein nacktes ``wait_for_selector`` nach dem
+    ``select_option`` matcht dann den VOR-Swap-Knoten. Chooser/``set_files``
+    landen auf einem DOM-Knoten, den der eintreffende Swap ersetzt, und das
+    Ereignis geht ohne Datei raus (Restbefund zu Refs #1797, unter CPU-Last
+    deterministisch reproduziert). Deshalb: Alt-Bestand stempeln und nur den
+    ungestempelten Nachfolger akzeptieren.
+    """
+    page.evaluate(
+        "() => document.querySelectorAll('#dynamic-fields > *').forEach((el) => el.setAttribute('data-pre-swap', '1'))"
+    )
+    page.select_option('select[name="document_type"]', label=label)
+    page.wait_for_selector(
+        f"css=#dynamic-fields > :not([data-pre-swap]) >> {ready_selector}",
+        timeout=10000,
+    )
+
+
 def set_files_on_swapped_input(page, selector, path):
     """Datei über den echten File-Chooser setzen — Repo-Konvention für
     HTMX-eingeswappte Datei-Felder (vgl. ``test_import_wizard.py``).
@@ -88,8 +110,7 @@ class TestFileUploadAndDownload:
         page.wait_for_load_state("domcontentloaded")
 
         # Select Beratungsgespräch (has FILE field for Lead)
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
 
         # Select a qualified client (required for Beratungsgespräch)
         _select_qualified_client(page, base_url, e2e_env)
@@ -129,8 +150,7 @@ class TestFileUploadAndDownload:
         # Create event with file
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
         _select_qualified_client(page, base_url, e2e_env)
         page.fill('input[name="thema"]', "E2E Content-Check")
         page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
@@ -155,8 +175,7 @@ class TestFileUploadAndDownload:
         # Create event with file
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
         _select_qualified_client(page, base_url, e2e_env)
         page.fill('input[name="thema"]', "E2E Audit-Check")
         page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
@@ -200,8 +219,7 @@ class TestFileEdit:
         # Create event with file
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
         _select_qualified_client(page, base_url, e2e_env)
         page.fill('input[name="thema"]', "E2E Edit-Test")
         page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
@@ -244,8 +262,7 @@ class TestFileEdit:
         # Original anlegen
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
         _select_qualified_client(page, base_url, e2e_env)
         page.fill('input[name="thema"]', "E2E Vorversion-Download")
         page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
@@ -282,8 +299,7 @@ class TestFileOverview:
         # First create an event with a file
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
         _select_qualified_client(page, base_url, e2e_env)
         page.fill('input[name="thema"]', "E2E Datei-Übersicht")
         page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
@@ -311,8 +327,7 @@ class TestFileOverview:
         # Upload an einem Event mit DocumentType "Beratungsgespräch".
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
         _select_qualified_client(page, base_url, e2e_env)
         page.fill('input[name="thema"]', "E2E ATT-09 DocType-Filter")
         page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
@@ -383,9 +398,7 @@ class TestFileSensitivity:
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        # Wait for dynamic fields to load
-        page.wait_for_selector("text=Dauer", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Dauer")
 
         # Scan/Bescheid has sensitivity="high" — staff should NOT see it
         assert page.locator("text=Scan/Bescheid").count() == 0
@@ -396,8 +409,7 @@ class TestFileSensitivity:
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        select_doc_type_and_wait(page, "Beratungsgespräch", "text=Scan/Bescheid")
 
         assert page.locator("text=Scan/Bescheid").count() >= 1
 
@@ -419,8 +431,7 @@ class TestStaffAttachmentReachable:
 
         # Kontakt ist NORMAL → für Fachkraft erstellbar; das anhang-Feld ist
         # NORMAL-sichtbar (anders als Scan/Bescheid mit sensitivity='high').
-        page.select_option('select[name="document_type"]', label="Kontakt")
-        page.wait_for_selector('input[name="anhang"]', timeout=10000)
+        select_doc_type_and_wait(page, "Kontakt", 'input[name="anhang"]')
 
         # Datei über den echten File-Chooser setzen (wie ein realer Nutzer).
         # ``set_input_files`` direkt auf das frisch via HTMX eingeswappte Feld ist
