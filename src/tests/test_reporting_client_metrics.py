@@ -247,11 +247,16 @@ class TestPrepareExport:
         assert prepared.summary["neuaufnahmen"] == 7
 
     def test_suppressionskaskade_alterscluster_gegen_randsumme(self, backend, facility):
-        """Eine Zelle < k neben einer sichtbaren: die unterdrueckte Zelle waere
-        aus der Randsumme exakt rueckrechenbar (6 − 5 = 1). Das
-        Machbarkeits-Audit laesst deshalb die kleinste sichtbare Zelle
-        mitfallen; die Randsumme darf danach stehen bleiben, weil zwei
-        unterdrueckte Zellen sie nicht mehr eindeutig aufloesen."""
+        """Eine Zelle < k neben einer sichtbaren: das Machbarkeits-Audit laesst
+        die kleinste sichtbare Zelle mitfallen — **und** die Personen-Randsumme
+        faellt, weil eine Altersgruppe personenbedingt unterdrueckt ist
+        (``drop_person_margin_on_person_suppression``, Auflage 1 zu K0-b).
+
+        Anforderungsaenderung (Fix-Runde 1, Refs #1754): frueher pinnte dieser
+        Fall ``aktive_personen == 6``. Das war die Divergenz zur
+        Bestands-Doktrin, die fuer genau diese Partition (Σ Personen je
+        Altersgruppe = aktive Personen) in allen drei Bestandsartefakten laeuft.
+        """
         prepared = backend.prepare_export(
             facility,
             _rohergebnis(
@@ -262,10 +267,53 @@ class TestPrepareExport:
         )
 
         assert [row["personen"] for row in prepared.records] == [None, None]
-        assert prepared.summary["aktive_personen"] == 6
+        assert prepared.summary["aktive_personen"] is None
         # ``neuaufnahmen`` ist keine Zelle der Partition und faellt allein an
         # der Schwelle — die Kaskade darf sie nicht mitnehmen.
         assert prepared.summary["neuaufnahmen"] == 9
+
+    def test_randsumme_faellt_bei_personenbedingter_suppression(self, backend, facility):
+        """Der konkrete Angriff aus dem Review (k = 5): vier Altersgruppen
+        (2, 1, 1, 1) auf eine Randsumme von 5.
+
+        Alle vier Zellen fallen primaer; der Fixpunkt-Guard findet die Spanne
+        genau bei ``MIN_FEASIBLE_SPAN`` und greift **nicht**. Bliebe die
+        Randsumme stehen, wuesste die Empfaengerin: jede Gruppe hat ein oder
+        zwei Personen, drei davon genau eine — die einzige mit Σ = 5
+        vertraegliche Partition. Genau dagegen ist die Personen-Randsummen-
+        Doktrin gebaut: eine personenbedingt unterdrueckte Zelle laesst die
+        Randsumme fallen, noch bevor ein exakter Pin entsteht.
+        """
+        prepared = backend.prepare_export(
+            facility,
+            _rohergebnis(
+                [
+                    {"alterscluster": "18_26", "personen": 1},
+                    {"alterscluster": "27_plus", "personen": 1},
+                    {"alterscluster": "u18", "personen": 2},
+                    {"alterscluster": "unknown", "personen": 1},
+                ],
+                aktive=5,
+            ),
+        )
+
+        assert [row["personen"] for row in prepared.records] == [None, None, None, None]
+        assert prepared.summary["aktive_personen"] is None
+
+    def test_randsumme_bleibt_wenn_keine_gruppe_unterdrueckt_ist(self, backend, facility):
+        """Gegenprobe: die Doktrin ist an die **personenbedingte** Suppression
+        gebunden, nicht an ihre blosse Moeglichkeit. Sind alle Gruppen >= k,
+        bleibt die Randsumme stehen — sonst waere der Bericht ohne Not leer."""
+        prepared = backend.prepare_export(
+            facility,
+            _rohergebnis(
+                [{"alterscluster": "u18", "personen": 7}, {"alterscluster": "unknown", "personen": 5}],
+                aktive=12,
+            ),
+        )
+
+        assert [row["personen"] for row in prepared.records] == [7, 5]
+        assert prepared.summary["aktive_personen"] == 12
 
     def test_neuaufnahmen_faellt_unabhaengig_von_der_verteilung(self, backend, facility):
         prepared = backend.prepare_export(

@@ -49,6 +49,19 @@ vollstaendig durch die zentrale Maschinerie:
   :func:`apply_residual_guard` als letzter Schritt (K1). Bliebe die Randsumme
   nach einer Zellen-Suppression roh stehen, waere die unterdrueckte Gruppe als
   Differenz rueckrechenbar.
+* **Die Personen-Randsummen-Doktrin gilt hier genauso wie im Bestand**
+  (:func:`drop_person_margin_on_person_suppression`, Auflage 1 zu K0-b,
+  Refs #1770): faellt **eine** Altersgruppe personenbedingt unter die Schwelle,
+  faellt ``aktive_personen`` mit. ``aktive_personen`` ist dieselbe Groesse, die
+  ``core.services.dashboard.statistics.count_unique_clients`` zaehlt, und
+  ``records`` ist die DISTINCT-Verteilung genau dieser Personenmenge — es ist
+  also **dieselbe Partition**, fuer die die Doktrin in allen drei
+  Bestandsartefakten laeuft, nur unter anderen Schluesseln. Der Fixpunkt-Guard
+  allein genuegt nicht: bei vier Gruppen (2, 1, 1, 1) und ``aktive_personen``
+  = 5 misst er genau ``MIN_FEASIBLE_SPAN`` und greift nicht, obwohl die einzige
+  konsistente Partition drei Gruppen mit exakt einer Person festlegt. Die
+  Doktrin setzt bewusst schon bei der *Einengung* an, der Guard erst beim
+  exakten Pin — sie ist die erste Linie, nicht die zweite.
 * ``neuaufnahmen`` ist **keine** Zelle dieser Partition und darf deshalb nicht
   in die Kaskade: es gibt keine Gleichung, ueber die sie eine unterdrueckte
   Alterszelle aufloesen koennte. Sie steht einzeln an der Schwelle.
@@ -84,6 +97,7 @@ from core.services.dashboard.external_report import (
     _get_threshold,
     _suppress_small,
     apply_residual_guard,
+    drop_person_margin_on_person_suppression,
 )
 
 # Zaehlschluessel der Aufschluesselung. Bewusst NICHT ``persons``: das ist der
@@ -161,16 +175,33 @@ class ClientMetricsBackend(DatasetBackend):
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278/#1770).
 
-        Reihenfolge wie in ``example.py``, nur mit zwei Randgroessen:
+        Reihenfolge **exakt wie in den drei Bestandsartefakten** — nur mit
+        anderen Schluesseln:
 
         1. Beide Randzahlen unter der Schwelle werden ``None`` (R14).
         2. :func:`_suppress_small` nullt Alterszellen < *k* und fuehrt das
            Machbarkeits-Audit (K2) gegen die **publizierte** Randsumme aus —
            ``margin=published_aktive``, nicht die Rohzahl: gegen eine gar nicht
            veroeffentlichte Randsumme kann niemand rueckrechnen.
-        3. :func:`apply_residual_guard` als letzter Schritt (K1); er darf
-           ``aktive_personen`` fallen lassen, wenn die Verteilung sie sonst
-           aufloest.
+        3. :func:`drop_person_margin_on_person_suppression` — die Personen-
+           Randsummen-Doktrin (Auflage 1 zu K0-b, Refs #1770). Sie ist hier
+           **Pflicht und nicht Kuer**: ``aktive_personen`` ist dieselbe Groesse,
+           die ``statistics.count_unique_clients()`` zaehlt, und ``records`` ist
+           die DISTINCT-Altersverteilung genau dieser Personenmenge — also die
+           Partition, fuer die die Doktrin in allen drei Bestandsartefakten
+           laeuft. Ohne sie bliebe die Randsumme im Fall (2, 1, 1, 1) bei
+           ``aktive_personen`` = 5 stehen: der Fixpunkt-Guard misst dort genau
+           ``MIN_FEASIBLE_SPAN`` und greift nicht, obwohl die einzige
+           konsistente Partition drei Gruppen mit exakt einer Person festlegt.
+           Die Doktrin ist bewusst schaerfer als der Guard — sie setzt schon
+           bei der *Einengung* an, nicht erst beim exakten Pin.
+        4. :func:`apply_residual_guard` als letzter Schritt (K1).
+
+        Aufgerufen wird die Doktrin mit den **rohen** ``result.records`` (dort
+        stehen die Personenzahlen noch) und mit den Schluesseln dieses Backends
+        — die Regel selbst bleibt im zentralen Modul. Ein backend-lokales
+        ``if`` waere eine zweite Suppressionslogik und damit genau das, was der
+        Architektur-Guard verbietet.
 
         ``neuaufnahmen`` bleibt bewusst **ausserhalb** von ``view``: sie ist
         keine Zelle der Partition, und sie in die Kaskade zu nehmen waere eine
@@ -192,6 +223,13 @@ class ClientMetricsBackend(DatasetBackend):
                 result.records, threshold, count_key=_COUNT_KEY, margin=published_aktive, order=ORDER_INPUT
             ),
         }
+        drop_person_margin_on_person_suppression(
+            view,
+            result.records,
+            threshold,
+            count_key=_COUNT_KEY,
+            margin_key="aktive_personen",
+        )
         apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
 
         field_keys = [spec.key for spec in self.get_field_specs()]

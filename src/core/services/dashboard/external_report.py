@@ -669,7 +669,12 @@ def _person_partition_cells(age_rows: Sequence[dict[str, Any]], threshold: int) 
 
 
 def drop_person_margin_on_person_suppression(
-    report: dict[str, Any], age_rows: Sequence[dict[str, Any]], threshold: int
+    report: dict[str, Any],
+    age_rows: Sequence[dict[str, Any]],
+    threshold: int,
+    *,
+    count_key: str = PERSONS_KEY,
+    margin_key: str = PERSON_MARGIN_KEY,
 ) -> None:
     """total-Doktrin fuer die Personen-Randsumme (Auflage 1 zu K0-b, Refs #1770).
 
@@ -694,9 +699,29 @@ def drop_person_margin_on_person_suppression(
     genuegt — in der Konstruktion oben hat jede Zelle noch zwei moegliche Werte
     (1 oder 2) und trotzdem steht fest, dass jede Altersgruppe weniger als *k*
     Personen umfasst. Der Guard ist die zweite Linie, nicht der Ersatz.
+
+    **Schluessel-Parameter statt Verdrahtung** (Refs #1754): Die Doktrin haengt
+    nicht an den Namen ``persons``/``unique_clients``, sondern an der **Form**
+    der Beziehung — eine publizierte Randsumme ueber Personen, die von den
+    Zeilen exakt partitioniert wird. Genau diese Form hat auch
+    ``ClientMetricsBackend`` (Σ Personen je Altersgruppe = aktive Personen),
+    nur unter anderen Schluesseln. ``count_key``/``margin_key`` machen die
+    Wiederverwendung moeglich, ohne dass ein Backend die Regel nachbaut: eine
+    zweite Kopie waere eine zweite Suppressionslogik, und die verbietet der
+    Architektur-Guard aus gutem Grund (sie driftet).
+
+    Die Defaults sind die Bestandsschluessel — alle drei Bestandsaufrufer
+    (``build_external_report``, ``suppress_sample_report_1_stats``,
+    ``suppress_report_stats``) rufen unveraendert weiter.
+
+    ``age_rows`` sind die **rohen** Zeilen mit ihren Personenzahlen, nicht die
+    bereits suppressierten: nach :func:`_suppress_small` ist die Zahl aus der
+    Zeile entfernt (sie ist Suppressions-Eingabe, nie Ausgabe), und
+    :func:`_below_threshold` faende dann ausnahmslos ``None`` — die Regel liefe
+    zwar fail-safe, aber immer, und der Bericht waere ohne Not randsummenlos.
     """
-    if any(_below_threshold(row.get(PERSONS_KEY), threshold) for row in age_rows):
-        report[PERSON_MARGIN_KEY] = None
+    if any(_below_threshold(row.get(count_key), threshold) for row in age_rows):
+        report[margin_key] = None
 
 
 def _published_partitions(
