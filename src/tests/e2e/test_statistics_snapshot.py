@@ -29,7 +29,36 @@ class TestStatisticsSnapshotPreservation:
     """Statistik-Zahlen bleiben nach enforce_retention erhalten."""
 
     def test_statistics_preserved_after_retention(self, lead_page, base_url, e2e_env):
-        """Gesamtkontakte auf Statistik-Seite bleiben nach Retention stabil."""
+        """Gesamtkontakte auf Statistik-Seite bleiben nach Retention stabil.
+
+        Refs #1788 — Warnkommentar statt Umbau: Dieser Test führt den
+        ECHTEN ``enforce_retention``-Command aus (kein ``--dry-run``), und
+        der läuft installationsweit auf der geteilten E2E-DB — nicht auf
+        eigens angelegten Wegwerf-Daten (Leitplanke des Tickets:
+        "Zielobjekte selbst erzeugen, nie Seed-/Fremdobjekte"). Verifiziert
+        gegen Seed + Command vor dem Schreiben dieses Kommentars:
+        - Die Standard-E2E-Seed-Skala ("small", ``conftest.py`` seedet ohne
+          ``--scale``) erzeugt Events nur bis 80 Tage in die Vergangenheit
+          (``core/seed/events.py``); alle Retention-Fenster liegen bei
+          Seed-Defaults (90/365/3650 Tage, ``core/seed/settings_seed.py``)
+          gleich oder darüber — für DIESE Skala ist der Lauf gegen die
+          Seed-Daten selbst ein No-op.
+        - ABER: ``enforce_retention`` reaktiviert/löscht auch
+          RetentionProposals und Legal Holds anderer Dateien, wenn diese
+          nicht sauber isoliert sind — genau das ist bereits einmal real
+          passiert (Refs #1787, siehe Docstring in
+          ``test_retention_dashboard.py::_ensure_proposals``: ein in
+          diesem Suite-Durchgang aufgehobener Legal Hold gab ein fremdes
+          Event für einen ``enforce_retention``-Lauf frei). Der Schutz
+          davor ist NICHT strukturell (kein Fixture-Ownership-Scoping im
+          Command selbst), sondern reine Test-Disziplin: jede E2E-Datei,
+          die PENDING/APPROVED-Proposals oder Legal Holds anlegt, MUSS das
+          auf eigenen Wegwerf-Objekten tun (wie ``test_retention_dashboard.py``
+          es seit #1787 tut). Dieser Test bleibt also ein bewusst
+          geduldetes, offenes Restrisiko der Lebenszyklus-Klasse — nicht
+          eliminiert, nur (Stand heute) durch Disziplin in den anderen
+          Dateien nicht ausgelöst.
+        """
         page = lead_page
 
         # Snapshots für alle vorhandenen Monate erstellen
