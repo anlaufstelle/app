@@ -115,7 +115,7 @@ class RectificationListView(LeadOrAdminRequiredMixin, View):
 
     def get(self, request):
         all_requests = RectificationRequest.objects.for_facility(request.current_facility).select_related(
-            "target_client", "requested_by", "reviewed_by"
+            "target_client", "target_client__document_type", "requested_by", "reviewed_by"
         )
         # Zu Listen evaluieren, damit das Template ``|length`` ohne zusaetzliche
         # COUNT-Queries nutzen kann (Muster ``DeletionRequestListView``, #640).
@@ -126,17 +126,44 @@ class RectificationListView(LeadOrAdminRequiredMixin, View):
                 # Offene Antraege widerrufener Personen sind kein pruefbarer
                 # Vorgang mehr (siehe ``RectificationReviewView._pending``) —
                 # entschiedene bleiben als historischer Nachweis gelistet.
-                "pending_requests": list(
+                "pending_requests": self._with_field_labels(
                     all_requests.filter(
                         status=RectificationRequest.Status.PENDING,
                         target_client__is_deleted=False,
                         target_client__is_active=True,
-                    )
+                    ),
+                    request.user,
                 ),
-                "approved_requests": list(all_requests.filter(status=RectificationRequest.Status.APPROVED)),
-                "rejected_requests": list(all_requests.filter(status=RectificationRequest.Status.REJECTED)),
+                "approved_requests": self._with_field_labels(
+                    all_requests.filter(status=RectificationRequest.Status.APPROVED), request.user
+                ),
+                "rejected_requests": self._with_field_labels(
+                    all_requests.filter(status=RectificationRequest.Status.REJECTED), request.user
+                ),
             },
         )
+
+    @staticmethod
+    def _with_field_labels(queryset, user):
+        """``field_label`` je Antrag nachtragen — wie in der Pruefansicht.
+
+        Der rohe ``field_path`` (``notes``, ``data_json.<slug>``) sagt der
+        pruefenden Leitung nichts; ``RectificationReviewView._context`` loest ihn
+        deshalb laengst ueber ``rectifiable_fields`` auf. Die Liste tut es jetzt
+        genauso — mit einem Cache je ``document_type``, sonst liefe die
+        Feldaufloesung (inkl. Sichtbarkeits-Filter) pro Zeile erneut. Der
+        Fallback auf den rohen Pfad greift, wenn das Feld inzwischen entfernt
+        wurde oder *user* es nicht sehen darf; ein Label zu erfinden waere hier
+        falsch, und die Werte selbst stehen ohnehin erst in der Pruefansicht.
+        """
+        requests = list(queryset)
+        labels_by_document_type: dict = {}
+        for rr in requests:
+            key = rr.target_client.document_type_id
+            if key not in labels_by_document_type:
+                labels_by_document_type[key] = dict(rectifiable_fields(rr.target_client, user))
+            rr.field_label = labels_by_document_type[key].get(rr.field_path, rr.field_path)
+        return requests
 
 
 @method_decorator(

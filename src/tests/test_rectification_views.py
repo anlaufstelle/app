@@ -125,6 +125,19 @@ class TestListView:
         assert rectification_request in pending
         assert foreign_rectification_request not in pending
 
+    def test_pending_list_shows_the_field_label_not_the_raw_path(self, client, rectification_request, lead_user):
+        """Die Liste zeigt dasselbe „Label (pfad)" wie die Pruefansicht (Refs #1793).
+
+        Ein roher ``field_path`` (``notes``, ``data_json.<slug>``) ist fuer die
+        pruefende Leitung nicht lesbar — sie muesste jeden Antrag oeffnen, nur
+        um zu sehen, um welches Feld es geht.
+        """
+        _login(client, lead_user)
+        response = client.get(reverse("core:rectification_list"))
+        content = response.content.decode()
+        assert "Notizen" in content
+        assert "(notes)" in content
+
     def test_own_request_shows_no_review_link(self, client, client_identified, lead_user):
         request_rectification(client_identified, lead_user, "notes", "A", "Grund")
         _login(client, lead_user)

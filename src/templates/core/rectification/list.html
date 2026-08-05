@@ -18,7 +18,7 @@
             <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
                 <div class="flex items-center gap-2 flex-wrap">
                     <a href="{% url 'core:client_detail' rr.target_client.pk %}" class="text-sm font-semibold text-accent hover:underline">{{ rr.target_client.pseudonym }}</a>
-                    <span class="font-mono text-[12px] text-ink-muted">{{ rr.field_path }}</span>
+                    <span class="text-[13px] text-ink">{{ rr.field_label }} <span class="font-mono text-[12px] text-ink-muted">({{ rr.field_path }})</span></span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{% trans "Ausstehend" %}</span>
                 </div>
                 {% if rr.requested_by_id == request.user.pk %}
@@ -50,7 +50,7 @@
         <div class="bg-surface border border-green-200 rounded-[10px] p-4">
             <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <a href="{% url 'core:client_detail' rr.target_client.pk %}" class="text-sm font-semibold text-accent hover:underline">{{ rr.target_client.pseudonym }}</a>
-                <span class="font-mono text-[12px] text-ink-muted">{{ rr.field_path }}</span>
+                <span class="text-[13px] text-ink">{{ rr.field_label }} <span class="font-mono text-[12px] text-ink-muted">({{ rr.field_path }})</span></span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">{% trans "Genehmigt" %}</span>
             </div>
             <div class="text-xs text-ink-muted">
@@ -73,7 +73,7 @@
         <div class="bg-surface border border-subtle rounded-[10px] p-4">
             <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <a href="{% url 'core:client_detail' rr.target_client.pk %}" class="text-sm font-semibold text-accent hover:underline">{{ rr.target_client.pseudonym }}</a>
-                <span class="font-mono text-[12px] text-ink-muted">{{ rr.field_path }}</span>
+                <span class="text-[13px] text-ink">{{ rr.field_label }} <span class="font-mono text-[12px] text-ink-muted">({{ rr.field_path }})</span></span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-canvas border border-subtle text-ink-soft">{% trans "Abgelehnt" %}</span>
             </div>
             <div class="text-xs text-ink-muted">
