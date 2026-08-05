@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -141,6 +141,22 @@ test:
 # faellig-still). Beseitigt die Falle an der Wurzel statt sie zu dokumentieren.
 test-e2e: tailwind-build
 	$(PYTHON) -m pytest -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
+
+# Zwei-Haelften-Fallback fuer RAM-limitierte Hosts (Refs #1787): zwei serielle
+# pytest-Sessions statt einer, jede mit eigenem Server+Seed und eigenem
+# Speicher-Budget. Greift, wenn der Voll-Lauf trotz Browser-Recycling
+# (modul-scoped ``browser``-Fixture) noch ins Host-OOM laeuft. Die Dateiliste
+# wird dynamisch ermittelt — neue Testdateien landen ohne Pflege in einer der
+# Haelften. Das Rezept ist EINE Shell (``; \``), damit ``set -e`` ueber alle
+# Zeilen gilt und die zweite Haelfte nicht den Exit-Code der ersten maskiert.
+test-e2e-halves: tailwind-build
+	set -e; \
+	files=$$(ls src/tests/e2e/test_*.py | sort); \
+	n=$$(echo "$$files" | wc -l); half=$$(( (n + 1) / 2 )); \
+	h1=$$(echo "$$files" | head -n $$half); \
+	h2=$$(echo "$$files" | tail -n +$$(( half + 1 ))); \
+	$(PYTHON) -m pytest $$h1 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v; \
+	$(PYTHON) -m pytest $$h2 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
 test-focus:
 	$(PYTHON) -m pytest -m "not e2e" -x $(T)
