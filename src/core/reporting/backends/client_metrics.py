@@ -79,6 +79,39 @@ Nachlass, sondern korrekt — die Ausnahme „exakter Pin >= *k* ist kein Befund
 gilt genau dann, wenn der rueckrechenbare Wert selbst keine Kleinstfallzahl ist,
 und ein Pin auf >= *k* Personen ist keine.
 
+**K4a — dieses Backend publiziert Zahlen, die der Bestands-Guard als „nie
+publiziert" modelliert** (Refs #1770; Fix-Runde 1 zu #1754).
+
+:func:`~core.services.dashboard.external_report._person_partition_cells` baut die
+Personen-Partition der Bestandsartefakte mit ``published=None`` fuer **jede**
+Zelle, ausdruecklich begruendet mit „Die Personenzahlen werden **nie**
+publiziert" — sie sind dort reine Suppressions-Eingabe und werden von
+:func:`_suppress_small` aus jeder Ausgabezeile entfernt. Innerhalb jedes
+Bestandsartefakts stimmt das weiterhin.
+
+**Artefaktuebergreifend stimmt es seit diesem Backend nicht mehr.** ``records``
+publiziert genau diese Groesse: Personen je Altersgruppe im Zeitraum, dieselbe
+Menge, die ``by_age_cluster``/``unique_clients`` im externen Bericht und im
+Sachbericht-PDF zaehlen. Wer beide Artefakte desselben Zeitraums hat, kennt fuer
+jede sichtbare Gruppe den exakten Wert, den das Inferenzmodell des
+Bestands-Guards dort nur als ``[k, ∞)`` kennt.
+
+**Was das praktisch begrenzt** — und warum es kein offener Befund ist: beide
+Seiten treffen ihre Suppressionsentscheidung ueber **dieselben** Personenzahlen
+und **dieselbe** Schwelle. Eine Gruppe mit weniger als *k* Personen faellt hier
+wie dort, und seit die Personen-Randsummen-Doktrin auch hier laeuft (siehe oben)
+faellt in beiden Faellen zusaetzlich die Randsumme. Publiziert wird also nur, was
+auch der Bestand publizieren duerfte; die Verschaerfung liegt in der
+**Genauigkeit** der uebrigen Zellen, nicht darin, dass eine Kleinstfallzahl
+sichtbar wuerde.
+
+**Trotzdem gehoert es hierher.** Es ist ein K4a-Fall — artefaktlokal nicht
+loesbar (es gibt keine Zelle, an der eine Regel ansetzen koennte), und ein
+Backend darf keine eigene erfinden. Die flankierende Massnahme ist dieselbe wie
+dort: die **Freigabe-Uebersicht** macht ueberlappende Herausgaben sichtbar.
+Sollte die Guard-Annahme je verschaerft werden muessen, ist dies die Stelle, an
+der steht, warum.
+
 ``snapshot_enabled = False`` (Beispielvorlage, kein Monats-Merge-Thema).
 """
 

@@ -46,6 +46,48 @@ Kleinstfallzahl — und zwar eine, die durch keine Suppression laeuft, weil sie
 nicht Teil der Partition ist. ``build_dataset`` behaelt die bezifferte Fassung
 fuer die interne Pruefung (Panel-Vorschau und Export sehen sie nie).
 
+**K4a — dieser Bericht ist eine echte Verfeinerung des Sachberichts, und das
+muss man wissen** (Refs #1770, Analyse #1742; Fix-Runde 1 zu #1754).
+
+Fuer dieselbe Einrichtung und denselben Zeitraum gilt konstruktionsbedingt:
+
+    Σ ueber die Monatszeilen einer Kategorie
+        = die Kategoriezahl des Beispiel-Sachberichts
+    Σ ueber alle Monatszeilen
+        = dessen ``total``
+
+Das ist kein Zufall und keine Naeherung, sondern eine Identitaet: beide Backends
+lesen dieselbe Basismenge (``_base_queryset``: Facility, ``is_deleted=False``,
+dieselben ``occurred_at__date``-Grenzen), loesen ueber **dieselben** Maps auf
+(:func:`~core.reporting.backends.sample_report_1.resolve_category`, importiert
+statt kopiert) und zaehlen dieselben Ereignisse. Dieses Backend zerlegt die
+Kategoriezahl nur zusaetzlich nach Monat.
+
+**Konsequenz.** Die k-Anonymitaets-Zusicherung gilt je Artefakt und je Zeitraum.
+Werden Sachbericht und Monatsverlauf desselben Zeitraums herausgegeben, ist eine
+im Sachbericht unterdrueckte Kategoriezelle aus den sichtbaren Monatszeilen
+summierbar — und umgekehrt ein unterdrueckter Monat aus der Kategoriezahl minus
+den uebrigen Monaten. Das gilt auch dann, wenn in **keinem** der beiden Berichte
+eine einzige Zelle unterdrueckt wurde: die feinere Aufloesung ist selbst der
+Zugewinn. Der Kanal wird durch dieses Backend also nicht neu geschaffen (K4a
+existiert, seit es Berichte ueber Teilzeitraeume gibt), aber **breiter**.
+
+**Artefaktuebergreifend gibt es keine Suppression, und das ist eine
+Definitionsgrenze, kein Versaeumnis** (siehe
+:mod:`core.services.dashboard.release_log`): es gibt keine Zelle, an der eine
+artefaktlokale Regel ansetzen koennte, und ein Backend darf sie erst recht nicht
+erfinden. Die flankierende Massnahme ist die **Freigabe-Uebersicht** (K4a) —
+sie macht ueberlappende Herausgaben sichtbar, damit die Einrichtung entscheiden
+kann, ob sie beide Berichte an denselben Empfaenger gibt.
+
+**Auflage fuer Nachahmer.** Wer ein Backend baut, das dieselbe Grundgesamtheit
+ueber dieselben Maps **feiner** aufschluesselt als ein bestehendes, baut eine
+Verfeinerung. Drei Fragen, alle drei mit „ja" beantwortet ⇒ es ist eine:
+dieselben Maps? dieselbe Basismenge (Filter, Zeitraumsemantik)? dieselbe
+Zaehlgroesse? Dann gehoert die Beziehung **in den Modul-Docstring** — sie ist
+sonst nirgends sichtbar, weder im Code noch im Artefakt, und die Freigabepraxis
+kann nur beruecksichtigen, was jemand aufgeschrieben hat.
+
 ``snapshot_enabled = False``: der Bericht ist eine Beispielvorlage, sein
 ``summary`` soll nicht in ``StatisticsSnapshot.backend_data`` persistiert
 werden (kein Monats-Merge-Thema, siehe Vertrag an
