@@ -1422,12 +1422,12 @@
 
     /*
      * Refs #1774: Die URL eines gequeuten `POST /events/<uuid>/edit/` (analog
-     * `/workitems/<uuid>/edit/`, `/partials/workitems/<uuid>/status/`) traegt
-     * die EREIGNIS-pk, nicht die Personen-UUID; der Body eines Edit-POSTs nennt
-     * die Person ebenfalls nicht (nur CSRF, `expected_updated_at`, Feld-Slugs).
-     * Ueber `_mentionsRevoked` allein blieb er darum nach einem Widerruf stehen
-     * und der naechste Replay schrieb frische Klartext-PII zu einer nach
-     * Art. 17 getilgten Person.
+     * `/workitems/<uuid>/edit/`) traegt die EREIGNIS-/AUFGABEN-pk, nicht die
+     * Personen-UUID; der Body eines Edit-POSTs nennt die Person ebenfalls
+     * nicht (nur CSRF, `expected_updated_at`, Feld-Slugs). Ueber
+     * `_mentionsRevoked` allein blieb er darum nach einem Widerruf stehen und
+     * der naechste Replay schrieb frische Klartext-PII zu einer nach Art. 17
+     * getilgten Person.
      *
      * Die lokale `events`-Tabelle kennt die Zuordnung: `pk` und `clientPk`
      * liegen dort als PLAINTEXT-Indexfelder (kein Decrypt, kein Session-Key
@@ -1435,6 +1435,17 @@
      * liefert die Record-pks aller lokal bekannten Ereignisse/Aufgaben der
      * widerrufenen Personen; sie werden dem Suchbegriff-Satz des Queue-/
      * Entwurfs-Purges hinzugefuegt.
+     *
+     * WORKITEM_STATUS-GRENZE (bewusst): Ein gequeuter
+     * `POST /partials/workitems/<uuid>/status/` traegt nur die Aufgaben-pk in
+     * der URL, keine Personen-UUID im Body. Diese Aufloesung erfasst ihn NUR,
+     * wenn die Aufgabe bereits einen `events`-Eintrag hat (`data.kind ===
+     * "workitem"`, siehe `_isWorkItemRow`) — also nur, wenn sie offline schon
+     * einmal VOLL editiert wurde. Eine reine Bundle-Aufgabe, die nie offline
+     * editiert wurde und deren Status offline umgeschaltet wird, hat KEINE
+     * `events`-Zeile; ihr Status-POST bleibt nach einem Widerruf zunaechst in
+     * der Queue stehen — die serverseitige zweite Linie (#1771) faengt genau
+     * diesen Fall ab.
      *
      * REIHENFOLGE (kritisch): Der Aufruf MUSS vor dem Bundle-Purge stehen —
      * `removeOfflineClient(pk, {force: true})` loescht genau die events-Rows,
