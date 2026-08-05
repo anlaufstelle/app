@@ -20,6 +20,15 @@ zwei Auflagen benannt, beide sind umgesetzt:
   sonst täuscht die Übersicht Vollständigkeit vor (:data:`RELEASE_EXPORT_Q`,
   ausgewertet in :mod:`core.retention.audit_pruning`).
 
+Dazu kam eine dritte aus der finalen Fix-Welle zu #1754: **eine Herausgabe muss
+zuordenbar sein.** Solange es einen Berichts-Download gab, genügte das Format als
+Kennung; mit neun registrierten Backends liefern alle dasselbe ``csv``, und eine
+Überlappungswarnung „csv überschneidet sich mit csv" ist nicht bewertbar — genau
+die Sorte Alarm, wegen der die Seite weggeklickt wird. Die Audit-Zeile der
+Berichts-Pipeline (``DatasetExportView``) trägt den Backend-Slug ohnehin; er ist
+seit dieser Welle die **Identität** der Herausgabe (:func:`_as_release`) und
+zugleich das Gruppenkriterium der Überlappungsprüfung (:func:`_overlaps`).
+
 **``EXPORT`` ist eine Sammelklasse, kein Freigabe-Register.** Unter derselben
 Aktion laufen die Art.-15-Datenauskunft einer Person (``target_id`` = Klienten-
 UUID), die DSGVO-Dokument-Downloads und **jeder Bildschirm-Aufruf** des externen
@@ -195,6 +204,11 @@ class Release:
     timestamp: object
     artifact: str
     format: str
+    # Backend-Slug der Berichts-Pipeline (``DatasetExportView``), sonst leer.
+    # Er ist die **Identitaet** der Herausgabe: mit neun registrierten Backends
+    # sagt das Ausgabeformat allein nichts mehr darueber, welcher Bericht das
+    # Haus verlassen hat (Refs #1754).
+    backend: str
     date_from: date | None
     date_to: date | None
     recipient: str
@@ -222,10 +236,17 @@ class Release:
 
 def _as_release(entry: AuditLog) -> Release:
     detail = entry.detail if isinstance(entry.detail, dict) else {}
+    backend = str(detail.get("backend") or "")
     return Release(
         timestamp=entry.timestamp,
-        artifact=str(detail.get("format") or entry.target_type or ""),
+        # Identitaet der Herausgabe, in dieser Reihenfolge: Backend-Slug (die
+        # Berichts-Pipeline schreibt ihn seit jeher mit), sonst Format, sonst
+        # Ziel. Der Slug steht **vor** dem Format, weil neun Backends dasselbe
+        # ``csv`` liefern und eine Warnung „csv ueberschneidet sich mit csv"
+        # niemand zuordnen kann (Refs #1754).
+        artifact=backend or str(detail.get("format") or entry.target_type or ""),
         format=str(detail.get("format") or ""),
+        backend=backend,
         date_from=parse_date(detail.get("date_from")),
         date_to=parse_date(detail.get("date_to")),
         recipient=str(detail.get("recipient") or ""),
@@ -242,7 +263,19 @@ def _overlaps(first: Release, second: Release) -> bool:
     Artefakts. Der Kanal aus K4a lebt von *verschachtelten* oder *teilweise*
     überlappenden Zeiträumen (A ⊊ B), und genau die bleiben stehen. Ohne diese
     Einschränkung produzierte die Übersicht Alarme ohne Aussage.
+
+    **Gruppiert wird je Artefakt** (Refs #1754), also je Backend-Slug bzw. — wo
+    es keinen gibt — je Format/Ziel. Der Kanal ist eine *Differenz*, und die
+    setzt zwei Artefakte **derselben Definition** über verschiedene Zeiträume
+    voraus: Jahresbericht minus Monatsbericht desselben Berichts. Zwei
+    verschiedene Backends zählen verschiedene Größen; da ist nichts zu
+    subtrahieren, und eine Warnung darüber wäre Rauschen, das die echten Befunde
+    zudeckt. Das Ausgabe**format** ist dagegen kein Gruppenkriterium: derselbe
+    Bericht als CSV und als JSON ist derselbe Bericht (deshalb der Slug vor dem
+    Format in :func:`_as_release`).
     """
+    if first.artifact != second.artifact:
+        return False
     if not (first.has_period and second.has_period):
         return False
     first_from, first_to, second_from, second_to = (

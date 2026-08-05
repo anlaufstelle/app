@@ -67,6 +67,30 @@ def _alt_zeile_vor_marker_einfuehrung(facility, user, date_from, date_to):
     )
 
 
+def _backend_export(facility, user, backend, date_from, date_to, fmt="csv"):
+    """Ein Download aus der Backend-Pipeline (``DatasetExportView``).
+
+    Traegt den Backend-Slug im ``detail`` — die View schreibt ihn seit jeher,
+    die Uebersicht wertete ihn bis zur finalen Fix-Welle (Refs #1754) nicht aus
+    und identifizierte alle neun Backends ueber ihr Ausgabeformat.
+    """
+    from core.services.dashboard.release_log import RELEASE_ARTIFACT_KEY
+
+    return AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.EXPORT,
+        target_type="DatasetExport",
+        detail={
+            "backend": backend,
+            "format": fmt,
+            RELEASE_ARTIFACT_KEY: True,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
+    )
+
+
 def _bildschirm_aufruf(facility, user, date_from, date_to, fmt="html"):
     """Ein On-Screen-Aufruf des externen Berichts — **keine** Herausgabe.
 
@@ -260,6 +284,49 @@ class TestUeberlappungswarnung:
     def test_teilueberlappung_wird_gemeldet(self, facility, lead_user):
         _export(facility, lead_user, "2026-01-01", "2026-06-30")
         _export(facility, lead_user, "2026-05-01", "2026-09-30")
+
+        releases = build_release_overview(facility)
+
+        assert all(release.overlaps for release in releases)
+
+    def test_ueberlappung_nennt_das_backend(self, facility, lead_user):
+        """Refs #1754: Mit neun Backends ist „csv überschneidet sich mit csv"
+        nicht zuordenbar — die Warnung muss sagen, **welcher** Bericht.
+
+        Die Audit-Zeile der Backend-Pipeline traegt den Slug bereits; die
+        Uebersicht wertet ihn jetzt aus, statt die Herausgabe ueber ihr
+        Ausgabeformat zu identifizieren.
+        """
+        _backend_export(facility, lead_user, "monthly-trend", "2026-01-01", "2026-12-31")
+        _backend_export(facility, lead_user, "monthly-trend", "2026-03-01", "2026-03-31")
+
+        releases = build_release_overview(facility)
+
+        assert all(release.backend == "monthly-trend" for release in releases)
+        assert all(release.overlaps for release in releases)
+        assert all("monthly-trend" in overlap for release in releases for overlap in release.overlaps)
+
+    def test_verschiedene_backends_schlagen_nicht_quer_zu(self, facility, lead_user):
+        """Zwei **verschiedene** Berichte ueber ineinanderliegende Zeitraeume
+        sind kein Befund: der K4a-Kanal lebt von der Differenz zweier Artefakte
+        **derselben** Definition (Jahresbericht minus Monatsbericht). Zwei
+        Backends zaehlen verschiedene Groessen — da gibt es nichts zu
+        subtrahieren, und eine Warnung darueber waere Rauschen, das die echten
+        Befunde zudeckt.
+        """
+        _backend_export(facility, lead_user, "monthly-trend", "2026-01-01", "2026-12-31")
+        _backend_export(facility, lead_user, "client-metrics", "2026-03-01", "2026-03-31")
+
+        releases = build_release_overview(facility)
+
+        assert not any(release.overlaps for release in releases)
+
+    def test_gleicher_bericht_in_zwei_formaten_bleibt_ein_befund(self, facility, lead_user):
+        """Gegenprobe zur Gruppierung: gruppiert wird nach **Bericht**, nicht
+        nach Ausgabeformat. Derselbe Zuschnitt einmal als CSV und einmal als
+        JSON ist derselbe Bericht — die Zeitraeume bleiben verrechenbar."""
+        _backend_export(facility, lead_user, "monthly-trend", "2026-01-01", "2026-12-31", fmt="csv")
+        _backend_export(facility, lead_user, "monthly-trend", "2026-03-01", "2026-03-31", fmt="json")
 
         releases = build_release_overview(facility)
 

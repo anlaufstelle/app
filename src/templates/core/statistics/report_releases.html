@@ -42,7 +42,11 @@ sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
             {% for release in releases %}
             <tr>
                 <td class="px-4 py-2.5 text-[13px] text-ink whitespace-nowrap font-mono">{{ release.timestamp|date:"d.m.Y H:i" }}</td>
-                <td class="px-4 py-2.5 text-[13px] text-ink">{{ release.artifact }}</td>
+                {# Refs #1754: Bei Berichts-Downloads ist der Backend-Slug die
+                   Identitaet der Herausgabe (neun Backends liefern dasselbe
+                   ``csv``); das Format steht daneben, weil es die Datei
+                   beschreibt, aber den Bericht nicht bestimmt. #}
+                <td class="px-4 py-2.5 text-[13px] text-ink">{{ release.artifact }}{% if release.backend and release.format %} <span class="text-ink-muted">({{ release.format }})</span>{% endif %}</td>
                 <td class="px-4 py-2.5 text-[13px] text-ink">
                     {% if release.has_period %}
                         <span class="font-mono">{{ release.date_from }} – {{ release.date_to }}</span>
