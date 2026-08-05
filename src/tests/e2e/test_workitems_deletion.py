@@ -130,28 +130,33 @@ class TestReviewerNotRequester:
 
     @pytest.mark.smoke
     def test_requester_cannot_approve_own_request(self, authenticated_page, base_url):
-        """Admin kann eigenen Löschantrag nicht genehmigen."""
+        """Admin kann eigenen Löschantrag nicht genehmigen.
+
+        Refs #1787: Der Test hing vorher an ``find_first_deletion_review_link``
+        — und **eigene** Anträge tragen gar keinen Prüfen-Link (die Karte
+        rendert stattdessen ``deletion-own-request-hint``). ``.first`` zeigte
+        also zwangsläufig auf einen FREMDEN Antrag; im Voll-Lauf war das der
+        liegen gebliebene Personen-Löschantrag aus
+        ``test_client_deletion_workflow.py`` — der Klick auf „Genehmigen"
+        schob damit eine Seed-Person in den Papierkorb. Sichtbar wurde der
+        Fehlgriff nie, weil die Erfolgsmeldung selbst ein ``[role='alert']``
+        ist und die letzte Oder-Zusicherung deshalb immer griff.
+
+        Jetzt wird am EIGENEN Antrag geprüft, was der Vier-Augen-Vertrag
+        zusagt: keine Prüfen-Option, dafür der Hinweis auf die zweite Person.
+        Der Service-Guard (``approve_deletion`` mit ``requested_by ==
+        reviewer``) ist auf Unit-Ebene abgedeckt.
+        """
         _create_qualified_event_and_request_deletion(authenticated_page, base_url)
 
         authenticated_page.goto(f"{base_url}/deletion-requests/")
         authenticated_page.wait_for_load_state("domcontentloaded")
 
-        review_link = find_first_deletion_review_link(authenticated_page)
-        if review_link.count() == 0:
-            return  # Kein Link = korrekt blockiert
-
-        review_link.click()
-        authenticated_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
-
-        approve_btn = find_deletion_approve_button(authenticated_page)
-        if approve_btn.count() > 0:
-            approve_btn.click()
-            authenticated_page.wait_for_load_state("domcontentloaded")
-            assert (
-                authenticated_page.locator("text=eigenen").count() > 0
-                or authenticated_page.locator("text=nicht genehmigen").count() > 0
-                or authenticated_page.locator("[role='alert']").count() > 0
-            )
+        own_card = authenticated_page.locator(
+            "[data-testid='deletion-request-card']:has([data-testid='deletion-own-request-hint'])"
+        ).first
+        own_card.wait_for(state="visible", timeout=5000)
+        assert own_card.locator("[data-testid='deletion-review-link']").count() == 0
 
     def test_deletion_request_review_page_shows_event_details(self, authenticated_page, lead_page, base_url):
         """Review-Seite zeigt Event-Details für informierte Entscheidung."""
