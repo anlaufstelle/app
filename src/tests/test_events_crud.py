@@ -65,6 +65,44 @@ class TestEventService:
         assert entry.field_metadata
         assert "dauer" in entry.field_metadata
 
+    def test_update_event_rejects_unknown_field(self, facility, staff_user, doc_type_contact):
+        """Refs #1789: ``update_event`` nimmt keine freien Kwargs mehr entgegen.
+
+        Die Allowlist ist bewusst LEER — kein heutiger Aufrufer
+        (``EventUpdateView.post``) reicht ein Feld-Kwarg durch. Damit kann ein
+        versehentlich weitergereichtes POST-Feld (``client``, ``facility``,
+        ``is_deleted`` …) nicht mehr blind per ``setattr`` am Ereignis landen
+        (Mass-Assignment). Muster: ``update_case``/``update_workitem``.
+        """
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+        )
+        with pytest.raises(ValueError, match="Feld"):
+            update_event(event, staff_user, {"dauer": 30}, is_deleted=True)
+
+    def test_update_event_rejects_client_kwarg(self, facility, staff_user, doc_type_contact, client_identified):
+        """Der PII-schwerste Kwarg konkret: ``client`` biegt sonst den ganzen
+        Ereignis-Klartext auf eine andere Person um (Ursprungs-Pinning, #1786).
+        Der Datensatz bleibt unveraendert — die Pruefung laeuft vor jedem Write.
+        """
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+        )
+        with pytest.raises(ValueError, match="client"):
+            update_event(event, staff_user, {"dauer": 30}, client=client_identified)
+
+        event.refresh_from_db()
+        assert event.client_id is None
+        assert not EventHistory.objects.filter(event=event, action=EventHistory.Action.UPDATE).exists()
+
     def test_soft_delete_stores_field_metadata(self, facility, staff_user, doc_type_contact):
         event = create_event(
             facility=facility,

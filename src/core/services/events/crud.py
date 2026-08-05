@@ -205,15 +205,35 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
     Clients müssen dadurch einen Token mitschicken, während der klassische
     HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
+
+    Allowlist (Refs #1789): ``**kwargs`` bleibt in der Signatur, die Menge der
+    erlaubten Felder ist aber **leer**. ``update_event`` war die letzte der
+    vier Update-Services ohne Mass-Assignment-Prüfung (Restpunkt aus #1786):
+    jedes durchgereichte Feld landete blind im ``setattr``. Kein heutiger
+    Aufrufer nutzt Kwargs — ``EventUpdateView.post`` übergibt ausschließlich
+    ``data_json``. Ein künftiges Update-Feld muss deshalb bewusst in
+    ``allowed`` eingetragen werden, statt still durchzurutschen.
     """
     from core.services.security import check_version_conflict
 
     check_version_conflict(event, expected_updated_at, require_token=require_version_token)
+    # Läuft ZUERST (Muster ``update_case``/``update_workitem``): die
+    # Mass-Assignment-Prüfung darf weder vom Diff noch von der
+    # ``data_json``-Validierung abhängen — ein abgewiesener Kwarg darf
+    # keinen Teil-Write hinterlassen.
+    allowed: set[str] = set()
+    for key in kwargs:
+        if key not in allowed:
+            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+
     data_json = _validate_data_json(event.document_type, data_json)
     data_before = event.data_json.copy() if event.data_json else {}
     event.data_json = data_json
     event.search_text = compute_event_search_text(data_json, event.document_type)
-    for k, v in kwargs.items():
+    # Solange ``allowed`` leer ist, laeuft diese Schleife nie — sie bleibt als
+    # Write-Pfad stehen, damit das Eintragen eines Feldes in ``allowed`` eine
+    # Ein-Zeilen-Aenderung ist (Symmetrie zu den drei Geschwister-Services).
+    for k, v in kwargs.items():  # pragma: no cover
         setattr(event, k, v)
     event.save()
     EventHistory.objects.create(
