@@ -70,13 +70,19 @@
             Zuordnung gepinnt — read-only-Anzeige ohne ``<input name="client">``.
             Eine personenlose Aufgabe behaelt das Autocomplete (nachtraegliches
             Zuordnen bleibt erlaubt).{% endcomment %}
+            {% comment %}a11y (Refs #1786): KEIN ``<label>`` — es gibt kein
+            Bedienelement, zu dem es gehören könnte. Stattdessen eine Gruppe mit
+            ``aria-labelledby``, damit der Wert denselben Namen trägt wie das
+            Autocomplete-Feld im anderen Zweig. Das verwaiste
+            ``id_client-error`` ist entfallen (``aria-describedby``-Ziel ohne
+            Referenz); angesagt wird der Fehler über ``role="alert"``.{% endcomment %}
             {% if client_locked %}
-            <div>
-                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %}</label>
+            <div role="group" aria-labelledby="client-pinned-label">
+                <span id="client-pinned-label" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %}</span>
                 <p class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink" data-testid="client-pinned">{{ workitem.client.pseudonym }}</p>
                 <p class="mt-1 text-[12px] text-ink-muted">{% trans "Die Personenzuordnung ist nach dem Anlegen festgelegt." %}</p>
                 {% if form.client.errors %}
-                <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
+                <ul class="mt-1 text-sm text-red-600" role="alert">
                     {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
                 </ul>
                 {% endif %}
