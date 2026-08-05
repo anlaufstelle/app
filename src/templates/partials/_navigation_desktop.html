@@ -117,6 +117,14 @@
             {% trans "Löschanträge" %}
         </a>
         {% endif %}
+        {# Refs #1060 (M4/ADR-041): Berichtigungen pruefen ist Leitungsarbeit — #}
+        {# Antraege STELLEN geht fuer staff+ direkt aus der Personenakte. #}
+        {% if user.is_lead_or_admin %}
+        <a href="{% url 'core:rectification_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'rectification_list,rectification_review'|split:',' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-rectification-requests">
+            <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
+            {% trans "Berichtigungen" %}
+        </a>
+        {% endif %}
         {% if user.is_lead_or_admin %}
         <a href="{% url 'core:retention_dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'retention_dashboard' %}bg-accent-light text-accent font-semibold{% endif %}">
             <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -124,6 +132,12 @@
         </a>
         {% endif %}
         {% if user.is_facility_admin %}
+        {# Refs #1060 (M4): Masseningest ist Anwendungsbetreuung — ADMIN_ONLY, #}
+        {# konsistent mit der AuthZ-Matrix (import_* in _authz_expectations). #}
+        <a href="{% url 'core:import_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'import_list,import_create,import_detail,import_mapping,import_preview'|split:',' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-import">
+            <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+            {% trans "Datenimport" %}
+        </a>
         <a href="{% url 'core:audit_log' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'audit_log' %}bg-accent-light text-accent font-semibold{% endif %}">
             <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             {% trans "Audit-Log" %}
