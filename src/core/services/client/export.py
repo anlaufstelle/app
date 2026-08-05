@@ -665,8 +665,12 @@ def _gather_rectification_requests(facility, client):
             "status": rr.get_status_display(),
             "old_value": _rectification_value(rr.field_path, rr.old_value, field_templates),
             "new_value": _rectification_value(rr.field_path, rr.new_value, field_templates),
-            "reason": decode_rectification_text(rr.reason),
-            "review_note": decode_rectification_text(rr.review_note),
+            # ``None`` (nach Anonymisierung redigiert, Refs #1792) bleibt
+            # ``None`` — ein echter leerer Freitext bleibt ``""``. Die
+            # Auskunft muss "redigiert" von "leer eingereicht" unterscheiden
+            # koennen (Review-Befund #1796).
+            "reason": decode_rectification_text(rr.reason) if rr.reason is not None else None,
+            "review_note": decode_rectification_text(rr.review_note) if rr.review_note is not None else None,
             "requested_by": _username(rr.requested_by),
             "reviewed_by": _username(rr.reviewed_by),
             "created_at": _isoformat(rr.created_at),

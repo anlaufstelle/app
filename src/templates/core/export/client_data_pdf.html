@@ -401,14 +401,18 @@
             <tr>
                 <td>{{ rr.field_label }}</td>
                 <td>{{ rr.status }}</td>
-                <td>{{ rr.old_value|default:"—" }}</td>
-                <td>{{ rr.new_value|default:"—" }}</td>
-                <td>{{ rr.reason|default:"—" }}</td>
-                <td>{{ rr.review_note|default:"—" }}</td>
+                {% comment %}default_if_none statt default (Review-Befund
+                #1796): nur redigierte (NULL-)Spalten werden "—" — echte, aber
+                falsy Werte (0, leerer Bestandswert, leere Liste) bleiben als
+                das stehen, was gespeichert ist.{% endcomment %}
+                <td>{{ rr.old_value|default_if_none:"—" }}</td>
+                <td>{{ rr.new_value|default_if_none:"—" }}</td>
+                <td>{{ rr.reason|default_if_none:"—" }}</td>
+                <td>{{ rr.review_note|default_if_none:"—" }}</td>
                 <td>{{ rr.requested_by|default:"—" }}</td>
                 <td>{{ rr.reviewed_by|default:"—" }}</td>
                 <td>{{ rr.created_at }}</td>
-                <td>{{ rr.reviewed_at|default:"—" }}</td>
+                <td>{{ rr.reviewed_at|default_if_none:"—" }}</td>
             </tr>
             {% endfor %}
         </tbody>

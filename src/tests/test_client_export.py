@@ -1453,7 +1453,10 @@ class TestClientExportRectificationRequests:
         assert entry["old_value"] == "Export-Klientel"
         assert entry["new_value"] == "Neu-Pseudonym"
         assert entry["reason"] == "Schreibfehler im Pseudonym"
-        assert entry["review_note"] == ""
+        # NULL (nie geprueft) wird als ``None`` exportiert — die Auskunft
+        # unterscheidet "kein Pruefvermerk vorhanden" von einem echten leeren
+        # Freitext (Review-Befund #1796).
+        assert entry["review_note"] is None
         assert entry["requested_by"] == "ce_staff"
         assert entry["reviewed_by"] is None
         assert entry["created_at"] is not None
@@ -1570,10 +1573,13 @@ class TestClientExportRectificationRequests:
         entry = data["rectification_requests"][0]
         assert entry["field_label"] == "Pseudonym"
         assert entry["status"] == "Ausstehend"
+        # Alle vier Wertspalten sind ``None`` — nicht ``""``: die Auskunft
+        # unterscheidet "redigiert" von "leer eingereicht" (Review-Befund
+        # #1796; das PDF rendert ``None`` als "—", echte leere Werte leer).
         assert entry["old_value"] is None
         assert entry["new_value"] is None
-        assert entry["reason"] == ""
-        assert entry["review_note"] == ""
+        assert entry["reason"] is None
+        assert entry["review_note"] is None
 
     def test_corrupt_token_yields_the_placeholder_instead_of_crashing(
         self, sample_client, facility, staff_user, admin_user
