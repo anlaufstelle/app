@@ -15,8 +15,12 @@ Zwei Muster ziehen sich durch alle pk-Views:
    Detailseite (Repo-Muster, nie 5xx).
 
 Fehler der Engine (fehlende Quelldatei, kaputtes CSV, Statusverstoss) kommen
-als ``ValidationError`` hoch und werden hier zu einer Nutzermeldung — die
-Wizard-Seiten duerfen nie mit einem 500er antworten.
+als ``ValidationError`` hoch und werden hier zu einer Nutzermeldung: **keine
+Nutzereingabe darf einen 500er ausloesen**. Infrastrukturfehler sind davon
+bewusst ausgenommen — reisst etwa die DB-Verbindung mitten im Lauf ab, reicht
+die Engine den Fehler durch und der Request endet als 500 (Refs #1793). Eine
+Nutzermeldung wuerde einen technischen Ausfall als Fachproblem tarnen und die
+Ueberwachung um den Alarm bringen.
 """
 
 import logging

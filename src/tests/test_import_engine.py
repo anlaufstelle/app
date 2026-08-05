@@ -713,6 +713,61 @@ class TestDatabaseErrorsBecomeRowErrors:
 
 
 @pytest.mark.django_db
+class TestBrokenTransactionIsNotMaskedAsRowError:
+    """Eine kaputte Transaktion ist Infrastruktur, kein Zeilenfehler (Refs #1793).
+
+    Scheitert der Savepoint-Rollback einer Zeile (Verbindungsabriss), setzt
+    Djangos ``Atomic.__exit__`` ``connection.needs_rollback = True``. Ab dann
+    lehnt Django JEDE weitere Query mit ``TransactionManagementError`` ab — und
+    der ist als ``ProgrammingError`` ein Enkel von ``DatabaseError``. Ohne
+    Sonderbehandlung landete deshalb jede Folgezeile als ``invalid_value`` im
+    Bericht, und der Lauf endete mit einem VALIDATED-Verdikt, das nichts mehr
+    geprueft hat.
+    """
+
+    def _two_row_job(self, facility, admin_user):
+        content = PSEUDONYM_HEADER + "TXM-BROKEN;;;\nTXM-FOLGE;;;\n"
+        job = import_engine.store_import_upload(
+            facility, admin_user, _upload(content), target_type=ImportJob.TargetType.CLIENT
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+        return job
+
+    def test_transaction_management_error_aborts_the_run(self, facility, admin_user, media_root, monkeypatch):
+        from django.db import DatabaseError, IntegrityError, connection
+        from django.db.transaction import TransactionManagementError
+
+        real_create_client = import_engine.create_client
+        real_savepoint_rollback = connection.savepoint_rollback
+
+        def _first_row_conflicts(*args, **kwargs):
+            """Zeile 1 scheitert an einer Eindeutigkeitsregel (ohne DB-Kontakt)."""
+            if kwargs.get("pseudonym") == "TXM-BROKEN":
+                raise IntegrityError("duplicate key value violates unique constraint")
+            return real_create_client(*args, **kwargs)
+
+        def _savepoint_rollback_fails_once(sid):
+            # Setzt sich SOFORT selbst zurueck: bliebe der Patch stehen, waere
+            # auch das pytest-django-Teardown vergiftet.
+            connection.savepoint_rollback = real_savepoint_rollback
+            raise DatabaseError("server closed the connection unexpectedly")
+
+        job = self._two_row_job(facility, admin_user)
+        monkeypatch.setattr(import_engine, "create_client", _first_row_conflicts)
+        monkeypatch.setattr(connection, "savepoint_rollback", _savepoint_rollback_fails_once)
+
+        with pytest.raises(TransactionManagementError):
+            import_engine.run_import(job, admin_user, commit=False)
+
+        job.refresh_from_db()
+        # Kein verfaelschter Bericht, kein VALIDATED-Verdikt: der Lauf bleibt
+        # da stehen, wo er war.
+        assert job.status == ImportJob.Status.MAPPED
+        assert not job.result_json
+        assert not Client.objects.filter(pseudonym__startswith="TXM-").exists()
+
+
+@pytest.mark.django_db
 class TestCommitImport:
     def test_commit_deletes_the_upload_and_audits(self, client_job, admin_user):
         import_engine.run_import(client_job, admin_user, commit=False)

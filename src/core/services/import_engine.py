@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import DatabaseError, IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, connection, transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
@@ -694,6 +694,18 @@ def run_import(job: ImportJob, user, *, commit: bool = False) -> dict:
                 # in Postgres auf. Ohne diesen Arm waere das ein 500er und der
                 # ganze Lauf braeche ab. Auch hier nie ``str(exc)`` — die
                 # DETAIL-Zeile traegt den Zellwert.
+                if connection.needs_rollback:
+                    # Der Savepoint-Rollback einer Zeile ist gescheitert
+                    # (Verbindungsabriss): ab hier lehnt Django jede Query mit
+                    # ``TransactionManagementError`` ab — ein ProgrammingError
+                    # und damit ebenfalls ``DatabaseError``. Ohne dieses
+                    # Durchreichen liefe die Schleife weiter und meldete JEDE
+                    # Folgezeile faelschlich als ``invalid_value``, der Lauf
+                    # endete mit einem VALIDATED-Verdikt, das nichts geprueft
+                    # hat. Die aeussere Klammer rollt sauber zurueck, das
+                    # abschliessende ``job.save()`` laeuft nicht mehr — der
+                    # Lauf bleibt in seinem alten Status (Refs #1793).
+                    raise
                 errors.append(_error_entry(row_number, None, "invalid_value", row))
             except ValidationError as exc:
                 message = " ".join(str(part) for part in exc.messages) if exc.messages else None
