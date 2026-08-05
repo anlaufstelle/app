@@ -28,36 +28,22 @@ def _test_pdf(tmp_path):
     return str(path)
 
 
-def set_files_on_swapped_input(page, selector, path, attempts=5):
-    """Datei über den File-Chooser setzen und prüfen, dass sie am LEBENDEN Feld liegt.
+def set_files_on_swapped_input(page, selector, path):
+    """Datei über den echten File-Chooser setzen — Repo-Konvention für
+    HTMX-eingeswappte Datei-Felder (vgl. ``test_import_wizard.py``).
 
-    Hintergrund (Refs #1060, beim M4-Regressionslauf beobachtet): Der
-    Dokumentationstyp-Select im Ereignisformular trägt sowohl ``hx-trigger=
-    "change"`` als auch einen Alpine-``@change``-Handler. Je nach Aufwärmzustand
-    des Servers landen dadurch ZWEI Swaps auf ``#dynamic-fields``. Der zweite
-    ersetzt das Feld, nachdem ``expect_file_chooser``/``set_files`` es bereits
-    befüllt hat — die Auswahl hängt danach an einem abgehängten DOM-Knoten, das
-    Formular wird ohne Datei abgeschickt und der Test scheitert erst weit
-    später an der fehlenden Datei auf der Detailseite.
-
-    Reproduzierbar mit ``TestFileOverview::test_attachment_list_shows_uploaded_
-    files`` direkt davor (warmer Server): eine Probe direkt nach ``set_files``
-    zeigte ``input.files.length == 0``. Isoliert lief derselbe Test grün — ein
-    klassischer Ordnungs-Fehlalarm.
-
-    Deshalb wird hier nach jedem Versuch am frisch aufgelösten Locator geprüft,
-    ob die Datei wirklich anliegt, und andernfalls neu gesetzt. ``.evaluate``
-    löst den Selektor jedes Mal neu auf und sieht damit den aktuellen Knoten.
+    Historie (Refs #1060, #1797): Hier stand bis #1797 eine Retry-Schleife mit
+    Nachprüfung von ``input.files.length``. Ursache war der Doppel-Swap des
+    Dokumentationstyp-Selects im Ereignisformular — ``hx-trigger="change"`` und
+    ein Alpine-``@change`` reagierten unabhängig auf dasselbe Event, zwei
+    parallele Requests swappten nacheinander ``#dynamic-fields``, und der zweite
+    ersetzte das Datei-Feld, nachdem der Chooser es bereits befüllt hatte. Seit
+    #1797 gibt es nur noch einen Kanal (plus ``hx-sync="this:replace"``), der
+    Workaround ist damit gegenstandslos.
     """
-    for _ in range(attempts):
-        with page.expect_file_chooser() as fc_info:
-            page.click(selector)
-        fc_info.value.set_files(path)
-        # Kurz nachfassen: der zweite Swap kommt (wenn überhaupt) unmittelbar.
-        page.wait_for_timeout(250)
-        if page.locator(selector).evaluate("el => el.files.length") == 1:
-            return
-    raise AssertionError(f"Datei blieb nach {attempts} Versuchen nicht am Feld {selector!r} haften.")
+    with page.expect_file_chooser() as fc_info:
+        page.click(selector)
+    fc_info.value.set_files(path)
 
 
 def _select_qualified_client(page, base_url, e2e_env):
@@ -440,8 +426,6 @@ class TestStaffAttachmentReachable:
         # ``set_input_files`` direkt auf das frisch via HTMX eingeswappte Feld ist
         # zeitkritisch und verwirft die Auswahl gelegentlich; der Chooser-Weg ist
         # deterministisch. Kontakt erlaubt anonyme Erfassung — keine Person nötig.
-        # Der Helfer prüft zusätzlich, dass die Auswahl am *lebenden* Feld hängt
-        # (Doppel-Swap des Dokumentationstyp-Selects — siehe dort).
         set_files_on_swapped_input(page, 'input[name="anhang"]', _test_pdf)
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
