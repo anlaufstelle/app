@@ -341,6 +341,35 @@ class TestPrepareExport:
         assert zellen[(KRISE_SLUG, "gewalt")] == 7
         assert prepared.summary["events_art_der_krise"] == 7
 
+    def test_suppression_in_der_einfachauswahl_laesst_die_mehrfachauswahl_stehen(self, backend, facility):
+        """Gegenrichtung zu ``…_je_gruppe_unabhaengig`` (Refs #1754).
+
+        Dort faellt eine Zelle der **Mehrfach**auswahl und die Einfachauswahl
+        bleibt unberuehrt. Hier faellt eine Zelle der **Einfach**auswahl — dem
+        Zweig mit deklarierter Randsumme, Sekundaer-Suppression und
+        Residual-Guard, also der Maschinerie, die im Extremfall eine ganze
+        Aufschluesselung fallen lassen kann. Sie darf ``events_leistungen``
+        trotzdem nicht mitnehmen: die Gruppen teilen keine Randsumme, und die
+        Total-Doktrin der Mehrfachauswahl haengt ausschliesslich an deren
+        **eigenen** Zeilen.
+        """
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [
+                    {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 8},
+                    {"feld": KRISE_SLUG, "option": "gewalt", "count": 2},
+                    {"feld": KRISE_SLUG, "option": "sucht", "count": 9},
+                ],
+                {"events_leistungen": 8, "events_art_der_krise": 11},
+            ),
+        )
+
+        zellen = {(row["feld"], row["option"]): row["count"] for row in prepared.records}
+        assert zellen[(KRISE_SLUG, "gewalt")] is None
+        assert zellen[(LEISTUNGEN_SLUG, "essen")] == 8
+        assert prepared.summary["events_leistungen"] == 8
+
     def test_mehrfachnennung_randsumme_faellt_bei_jeder_unterdrueckten_zelle(self, backend, facility):
         """C1: die Ungleichung ist auch eine Gleichung, sobald sie eng genug wird.
 
