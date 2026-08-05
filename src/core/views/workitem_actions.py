@@ -438,18 +438,23 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         if form.is_valid():
             expected_updated_at = request.POST.get("expected_updated_at") or None
             wants_json = _wants_json_response(request)
+            # Ursprungs-Pinning (Refs #1786): ``client`` geht nur im Attach-Fall
+            # (bisher personenlose Aufgabe) an den Service. Bei bereits
+            # gesetzter Person weist ``update_workitem`` jeden ``client``-Kwarg
+            # ab — auch das stille ``None`` eines Formulars ohne Personenfeld.
+            pin_kwargs = {} if workitem.client_id else {"client": form.cleaned_data.get("client")}
             try:
                 update_workitem(
                     workitem,
                     request.user,
                     expected_updated_at=expected_updated_at,
+                    **pin_kwargs,
                     # Refs #1351 Task 7 (analog #1338 bei Events): JSON-/
                     # Offline-Replay-Clients müssen den Versions-Token
                     # mitschicken (kein stilles Last-Write-Wins mehr). Der
                     # klassische HTML-Formular-Pfad bleibt unverändert
                     # (kein require).
                     require_version_token=wants_json,
-                    client=form.cleaned_data.get("client"),
                     item_type=form.cleaned_data["item_type"],
                     title=form.cleaned_data["title"],
                     description=form.cleaned_data.get("description", ""),

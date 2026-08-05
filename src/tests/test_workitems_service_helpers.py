@@ -29,6 +29,19 @@ def workitem_open(facility, client_identified, staff_user):
     )
 
 
+@pytest.fixture
+def workitem_unassigned(facility, staff_user):
+    """Personenlose Aufgabe (Refs #1786): Attach ist hier weiterhin erlaubt."""
+    return WorkItem.objects.create(
+        facility=facility,
+        client=None,
+        created_by=staff_user,
+        title="Personenlose Aufgabe",
+        status=WorkItem.Status.OPEN,
+        priority=WorkItem.Priority.NORMAL,
+    )
+
+
 @pytest.mark.django_db
 class TestUpdateWorkItemService:
     """Tests for the update_workitem service function."""
@@ -51,15 +64,37 @@ class TestUpdateWorkItemService:
             target_id=workitem_open.pk,
         ).exists()
 
-    def test_updates_client_association(self, facility, staff_user, workitem_open, client_qualified):
-        update_workitem(workitem_open, staff_user, client=client_qualified)
-        workitem_open.refresh_from_db()
-        assert workitem_open.client == client_qualified
+    def test_update_workitem_rejects_unknown_field(self, workitem_open, staff_user):
+        with pytest.raises(ValueError, match="Feld"):
+            update_workitem(workitem_open, staff_user, status="done")
+
+    def test_updates_client_association(self, facility, staff_user, workitem_unassigned, client_identified):
+        """Nachtraegliches Zuordnen an eine personenlose Aufgabe bleibt erlaubt.
+
+        Refs #1786 (Maintainer-Entscheid 2026-08-05): frueher pruefte dieser
+        Test den freien Wechsel der Personenzuordnung — der ist jetzt verboten.
+        """
+        update_workitem(workitem_unassigned, staff_user, client=client_identified)
+        workitem_unassigned.refresh_from_db()
+        assert workitem_unassigned.client == client_identified
+
+    def test_update_workitem_allows_attach_to_unassigned(self, workitem_unassigned, client_identified, staff_user):
+        """Nachtraegliches Zuordnen an personenlose Aufgabe bleibt erlaubt (Maintainer-Entscheid 2026-08-05)."""
+        result = update_workitem(workitem_unassigned, staff_user, client=client_identified)
+        assert result.client == client_identified
+
+    def test_update_workitem_rejects_client_change(self, workitem_open, client_qualified, staff_user):
+        with pytest.raises(ValueError, match="Personenzuordnung"):
+            update_workitem(workitem_open, staff_user, client=client_qualified)
 
     def test_clears_client_association(self, facility, staff_user, workitem_open):
-        update_workitem(workitem_open, staff_user, client=None)
-        workitem_open.refresh_from_db()
-        assert workitem_open.client is None
+        """Refs #1786: Entfernen der Personenzuordnung ist jetzt verboten."""
+        with pytest.raises(ValueError, match="Personenzuordnung"):
+            update_workitem(workitem_open, staff_user, client=None)
+
+    def test_update_workitem_same_client_is_noop(self, workitem_open, staff_user):
+        result = update_workitem(workitem_open, staff_user, client=workitem_open.client)
+        assert result.client == workitem_open.client
 
     def test_returns_updated_workitem(self, facility, staff_user, workitem_open):
         result = update_workitem(workitem_open, staff_user, description="Neue Beschreibung")

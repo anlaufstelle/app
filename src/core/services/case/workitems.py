@@ -150,11 +150,45 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
     Clients müssen dadurch einen Token mitschicken, während der klassische
     HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
+
+    Ursprungs-Pinning (Refs #1786, Maintainer-Entscheid 2026-08-05): Anders
+    als beim Fall (dort strikt) bleibt bei der Aufgabe das nachträgliche
+    Zuordnen erlaubt — eine personenlose Aufgabe darf einer Person zugeordnet
+    werden. Verboten sind Wechsel und Entfernen: ``title``/``description``
+    sind Freitext und es gibt keinen nachgelagerten Prune, ein Umhängen
+    schriebe also fremden Klartext an eine andere Person fest.
     """
     from core.services.audit.diff import changed_fields_vs_db
     from core.services.security import check_version_conflict
 
     check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
+    # Allowlist (Refs #734-Muster, Refs #1786): bis hierher hatte
+    # ``update_workitem`` als einzige der drei Update-Services KEINE — jedes
+    # durchgereichte Feld landete blind im ``setattr``. Menge = die Kwargs von
+    # ``WorkItemUpdateView.post``. Läuft ZUERST, unabhängig vom Diff.
+    allowed = {
+        "item_type",
+        "title",
+        "description",
+        "priority",
+        "due_date",
+        "assigned_to",
+        "client",
+        "remind_at",
+        "recurrence",
+    }
+    for key in fields:
+        if key not in allowed:
+            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+
+    if "client" in fields and workitem.client_id is not None:
+        new_client = fields["client"]
+        new_pk = getattr(new_client, "pk", new_client)
+        if new_pk != workitem.client_id:
+            raise ValueError("Personenzuordnung einer Aufgabe kann nicht geändert oder entfernt werden.")
+        # No-op: identischer Wert. Raus aus ``fields``, damit weder ein
+        # leerer Audit-Diff noch ein unnötiger Schreibzugriff entsteht.
+        fields.pop("client")
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``WorkItemForm(instance=workitem)`` hat die Instanz in ``_post_clean()``
     # bereits mutiert — ein ``getattr(workitem, key) != value`` sähe hier
