@@ -259,6 +259,20 @@ class TestIsAvailable:
 
         assert backend.is_available(facility) is False
 
+    def test_negativ_wenn_nur_nicht_ereignis_typen_zugeordnet_sind(self, backend, facility):
+        """Refs #1754: Der Bericht zaehlt ``Event``-Zeilen. Ein Personen- oder
+        Fall-Formular mit passendem ``system_type`` erzeugt keine Ereignisse —
+        der Bericht stuende im Dropdown und zeigte dauerhaft Nullen (dieselbe
+        Regel wie in ``client-metrics``)."""
+        DocumentType.objects.create(
+            facility=facility,
+            name="Kontaktprofil",
+            system_type=DocumentType.SystemType.CONTACT,
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+
+        assert backend.is_available(facility) is False
+
     def test_fremde_facility_macht_nicht_verfuegbar(self, backend, facility, doc_type_kontakt):
         fremd = Facility.objects.create(organization=Organization.objects.create(name="Fremd"), name="Fremdstelle")
 

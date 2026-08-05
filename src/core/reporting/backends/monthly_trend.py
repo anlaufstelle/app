@@ -106,7 +106,12 @@ from core.models import DocumentType, Event
 
 # DRY (Refs #1741/#1785): Die Kategorie-Aufloesung ist Fachlogik des
 # Sachberichts und wird importiert, nicht nachgebaut.
-from core.reporting.backends.sample_report_1 import CATEGORY_MAP, SLUG_MAP, resolve_category
+from core.reporting.backends.sample_report_1 import (
+    _SUPPRESSED_MESSAGES,
+    CATEGORY_MAP,
+    SLUG_MAP,
+    resolve_category,
+)
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
@@ -133,7 +138,12 @@ _MAPPED_DOC_TYPE_Q = Q(system_type__in=tuple(CATEGORY_MAP)) | (_SYSTEM_TYPE_UNSE
 # Faelle unterscheidbar, verriete die blosse Gestalt des Blocks wieder, ob die
 # Luecke > 0 ist.
 _UNMAPPED_CODE = "unmapped_system_types"
-_UNMAPPED_EXPORT_MESSAGE = _("Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-Anonymität)")
+# Importiert statt kopiert (Refs #1754): Es ist **derselbe** Code in beiden
+# Berichten, und die K6-Auflage „ziffernfrei in JEDER Sprache" gilt je Code. Zwei
+# gleichlautende Literale waeren zwei Uebersetzungseintraege, die getrennt
+# driften koennen — und ein Empfaenger, der beide Artefakte hat, laese zu
+# demselben Code zwei verschiedene Saetze.
+_UNMAPPED_EXPORT_MESSAGE = _SUPPRESSED_MESSAGES[_UNMAPPED_CODE]
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -296,5 +306,19 @@ class MonthlyTrendBackend(DatasetBackend):
         ``is_active``: ein deaktivierter Typ ist Konfigurations-Altlast und
         begruendet kein Angebot im Dropdown. Fuer die **Daten** gilt das nicht,
         dort zaehlt die historische Zuordnung (siehe ``build_dataset``).
+
+        ``entity_type="event"`` ist die zweite Bedingung (Refs #1754, analog
+        ``client-metrics``): ``build_dataset`` zaehlt ``Event``-Zeilen. Ein
+        Personen- oder Fall-Formular kann denselben ``system_type`` tragen und
+        erzeugt trotzdem kein einziges Ereignis — der Bericht stuende im
+        Dropdown und zeigte dauerhaft Nullen.
         """
-        return DocumentType.objects.filter(facility=facility, is_active=True).filter(_MAPPED_DOC_TYPE_Q).exists()
+        return (
+            DocumentType.objects.filter(
+                facility=facility,
+                is_active=True,
+                entity_type=DocumentType.EntityType.EVENT,
+            )
+            .filter(_MAPPED_DOC_TYPE_Q)
+            .exists()
+        )
