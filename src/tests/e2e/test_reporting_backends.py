@@ -65,10 +65,10 @@ class TestReportSectionVisibility:
         expect(select).to_be_visible()
 
     def test_dropdown_offers_registered_backends(self, authenticated_page, base_url):
-        """Beide registrierten Backends stehen zur Wahl (Auto-Discovery der Registry).
+        """Alle registrierten Backends stehen zur Wahl (Auto-Discovery der Registry).
 
-        Das Beispiel-Backend (``example``) taucht ohne View-/Template-Aenderung
-        auf — genau das ist der Copy-Vorlage-Vertrag aus M5 P6.
+        Ein neues Backend taucht ohne View-/Template-Aenderung auf — genau das
+        ist der Copy-Vorlage-Vertrag aus M5 P6.
         """
         page = authenticated_page
         select = _open_statistics(page, base_url)
@@ -80,10 +80,39 @@ class TestReportSectionVisibility:
         # nutzersichtbare Flaeche — ein neu registriertes Backend soll hier
         # sichtbar nachgezogen werden statt still aufzutauchen. Wer ein
         # Backend ergaenzt, aktualisiert diese Zeile mit.
-        assert values == ["", "example", "sample-report-1"], f"Unerwartete Backend-Auswahl: {values}"
+        #
+        # Die Liste ist zugleich ein Pin auf ``is_available`` (Refs #1754):
+        # jedes der sieben Beispiel-Backends haengt an Seed-/Paket-Konfiguration
+        # (``ban-overview`` am Hausverbots-Typ, ``client-metrics`` an einem
+        # Ereignis-Typ, ``needle-exchange-balance`` an beiden Feldvorlagen an
+        # EINEM Typ, …). Faellt eines aus dieser Liste, ist entweder die
+        # Verfuegbarkeitsregel oder der Seed gewandert — beides gehoert gesehen.
+        assert values == [
+            "",
+            "ban-overview",
+            "case-metrics",
+            "client-metrics",
+            "counseling-hours",
+            "example",
+            "monthly-trend",
+            "needle-exchange-balance",
+            "sample-report-1",
+            "service-distribution",
+        ], f"Unerwartete Backend-Auswahl: {values}"
 
         expect(select.locator("option[value='sample-report-1']")).to_have_text("Beispiel-Sachbericht")
         expect(select.locator("option[value='example']")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
+        expect(select.locator("option[value='ban-overview']")).to_have_text("Beispiel: Hausverbots-Übersicht")
+        expect(select.locator("option[value='case-metrics']")).to_have_text("Beispiel: Fall-Kennzahlen")
+        expect(select.locator("option[value='client-metrics']")).to_have_text("Beispiel: Klienten-Kennzahlen")
+        expect(select.locator("option[value='counseling-hours']")).to_have_text("Beispiel: Beratungsstunden")
+        expect(select.locator("option[value='monthly-trend']")).to_have_text("Beispiel: Monatsverlauf nach Kategorie")
+        expect(select.locator("option[value='needle-exchange-balance']")).to_have_text(
+            "Beispiel: Spritzentausch-Bilanz"
+        )
+        expect(select.locator("option[value='service-distribution']")).to_have_text(
+            "Beispiel: Leistungs- und Krisenarten-Verteilung"
+        )
 
     def test_lead_sees_report_section(self, lead_page, base_url):
         """Lead (emma) sieht die Sektion ebenfalls — die Seite ist LEAD_PLUS-gated."""
@@ -172,6 +201,48 @@ class TestReportPanelPreview:
         # ``mode == "rows"`` blendet die Zeilen-Zaehlung ein (max. 10 Vorschauzeilen).
         expect(panel).to_contain_text("Zeilen")
 
+    def test_client_metrics_panel_renders(self, authenticated_page, base_url):
+        """Refs #1754: "Beispiel: Klienten-Kennzahlen" rendert die Personen-Partition.
+
+        Beobachtet am manuellen E2E-Server (2026-08-05): Spalten
+        "Altersgruppe"/"Personen", vier Zeilen (``u18``/``18_26``/``27_plus``/
+        ``unknown``) — bei Seed-Daten allesamt k-anonym unterdrueckt ("—").
+        Der Test prueft deshalb **Gestalt statt Zahlen**: die Zeilen werden
+        datenunabhaengig emittiert (K6-Lehre), nur ihre Werte fallen.
+        """
+        page = authenticated_page
+        _open_statistics(page, base_url)
+        panel = _select_backend(page, "client-metrics")
+
+        expect(panel.locator("h3")).to_have_text("Beispiel: Klienten-Kennzahlen")
+        headers = panel.locator("thead th")
+        expect(headers.first).to_have_text(re.compile(r"^altersgruppe$", re.IGNORECASE))
+        expect(headers.nth(1)).to_have_text(re.compile(r"^personen$", re.IGNORECASE))
+        assert panel.locator("tbody tr").count() > 0
+        # Grundgesamtheit steht am Panel — ohne sie ist "Personen" mehrdeutig.
+        expect(panel).to_contain_text("Personen mit mindestens einem Ereignis im Zeitraum")
+
+    def test_needle_exchange_balance_panel_renders(self, authenticated_page, base_url):
+        """Refs #1754: "Beispiel: Spritzentausch-Bilanz" rendert Summen + Saldo.
+
+        Beobachtet am manuellen E2E-Server (2026-08-05): eine Zeile mit den
+        Spalten "Ereignisse"/"Ausgabe gesamt"/"Rückgabe gesamt"/"Saldo". Bei
+        Seed-Daten faellt sie komplett unter die k-Schwelle — geprueft wird
+        darum die Spaltenform und die deklarierte Grundgesamtheit.
+        """
+        page = authenticated_page
+        _open_statistics(page, base_url)
+        panel = _select_backend(page, "needle-exchange-balance")
+
+        expect(panel.locator("h3")).to_have_text("Beispiel: Spritzentausch-Bilanz")
+        headers = panel.locator("thead th")
+        expect(headers.first).to_have_text(re.compile(r"^ereignisse$", re.IGNORECASE))
+        expect(headers.nth(1)).to_have_text(re.compile(r"^ausgabe gesamt$", re.IGNORECASE))
+        expect(headers.nth(2)).to_have_text(re.compile(r"^rückgabe gesamt$", re.IGNORECASE))
+        expect(headers.nth(3)).to_have_text(re.compile(r"^saldo$", re.IGNORECASE))
+        assert panel.locator("tbody tr").count() > 0
+        expect(panel).to_contain_text("Ereignisse der im Bericht ausgewiesenen Dokumentationstypen im Zeitraum")
+
     def test_backend_switch_replaces_panel(self, authenticated_page, base_url):
         """Zweite Auswahl ersetzt das Panel vollstaendig (kein Rest des ersten Backends)."""
         page = authenticated_page
@@ -215,6 +286,32 @@ class TestReportDownloads:
 
         assert filename.startswith("example_"), filename
         assert filename.endswith(".csv"), filename
+
+    @pytest.mark.parametrize("slug", ["client-metrics", "needle-exchange-balance"])
+    def test_new_backend_csv_download(self, authenticated_page, base_url, slug):
+        """Refs #1754: Panel-Knopf → CSV mit Slug-Dateiname und Kopfzeile.
+
+        Die Kopfzeile ist der Ort, an dem Grundgesamtheit, Datenquelle und
+        k-Schwelle **mit den Zahlen mitreisen** — ohne sie waere eine exportierte
+        Datei ausserhalb der App nicht mehr interpretierbar. Deshalb wird nicht
+        nur der Dateiname geprueft, sondern auch der Inhalt der ersten Zeile.
+        """
+        page = authenticated_page
+        _open_statistics(page, base_url)
+        panel = _select_backend(page, slug)
+
+        with page.expect_download() as download_info:
+            panel.locator("button:has-text('CSV-Export')").click()
+        download = download_info.value
+
+        assert download.suggested_filename.startswith(f"{slug}_"), download.suggested_filename
+        assert download.suggested_filename.endswith(".csv"), download.suggested_filename
+
+        header = download.path().read_text(encoding="utf-8").splitlines()[0]
+        assert header.startswith("# Bericht: "), header
+        assert slug in header, header
+        assert "Grundgesamtheit:" in header, header
+        assert "k-Anonymität:" in header, header
 
 
 class TestReportPeriodPassthrough:
