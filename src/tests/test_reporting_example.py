@@ -53,20 +53,20 @@ def date_range():
 
 
 class TestDiscovery:
-    def test_echte_discovery_findet_beide_backends(self):
-        """Pflichtfall 1: das ~50-Zeilen-Backend wird automatisch gefunden —
-        neben ``sample-report-1`` jetzt auch ``example`` (Sortierung nach Slug).
+    def test_echte_discovery_findet_das_beispiel_backend(self):
+        """Pflichtfall 1: das ~50-Zeilen-Backend wird automatisch gefunden.
 
-        Refs #1754: Teilmengen- statt Gleichheits-Assertion. Seit die Doku
-        weitere Beispiel-Backends mitliefert, waere eine exakte Liste eine
-        Wartungsfalle, die bei jedem neuen Backend anschlaegt, ohne etwas ueber
-        *dieses* auszusagen. Gepinnt bleibt beides, was der Fall belegen soll:
-        die Discovery findet das Modul ohne Zusatzeintrag, und ``get_backends``
-        liefert nach Slug sortiert.
+        Bewusst **kein** Vergleich auf die vollstaendige Slug-Liste (Refs #1754):
+        die Aussage dieses Tests ist „Ablegen genuegt", und die haengt nicht
+        daran, wie viele Backends es sonst noch gibt. Die Vollstaendigkeit der
+        Discovery pinnt ``test_reporting_sample_report_1.py``; hier wuerde eine
+        Liste nur jedes neue Backend zu einer Fremdaenderung an dieser Datei
+        zwingen. Die Sortierung nach ``slug`` bleibt geprueft.
         """
         slugs = [b.slug for b in registry.get_backends()]
 
-        assert {"example", "sample-report-1"} <= set(slugs)
+        assert "example" in slugs
+        assert "sample-report-1" in slugs
         assert slugs == sorted(slugs)
 
 
