@@ -1,6 +1,6 @@
 # ADR-037: Konfigurationspakete (YAML) und entitätsübergreifende dynamische Felder
 
-- **Status:** Accepted
+- **Status:** Accepted; die Consequences-Punkte 1 und 3 (unten) sind teilweise superseded durch [ADR-040](040-documenttype-category-entfernt.md) (2026-08-04) — `category` ist als Paket-Property entfernt, die zugehörige Unique-Constraint ist seither `(facility, name)`.
 - **Date:** 2026-08-03
 - **Deciders:** Tobias Nix
 - **Refs:** #1058 (M2, Planung), [anlaufstelle/app#35](https://github.com/anlaufstelle/app/issues/35) (M2-Feature), [anlaufstelle/app#40](https://github.com/anlaufstelle/app/issues/40) (Programm), #1713 (globale Block-Sequenz), [ADR-024](024-slug-based-identifiers.md) (Slug-basierte Identifikatoren), [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) (Evaluator-Semantik), [ADR-036](036-globale-block-sequenz-feldordnung.md) (globale Block-Sequenz), [ADR-006](006-fernet-field-encryption.md) (Feldverschlüsselung)
@@ -164,9 +164,9 @@ Schicht 3 ist die letzte Verteidigungslinie und bewusst **kein** Fehler: der Dat
 
 Der Loader ist **update-sicher**, und genau das ist eine sichtbare Verhaltensänderung. Diese Punkte gehören in jede Betriebsdoku und in die Vorbereitung eines Deploys:
 
-1. **Paket-Properties werden zurückgesetzt.** `name`, `icon`, `color`, `category`, `sensitivity`, `min_contact_stage`, `sort_order` (Typ) und `name`, `help_text`, `options_json`, `default_value`, `sensitivity`, `is_required` (Vorlage) werden bei **jedem** Lauf auf die Paketwerte gezogen. Bisher griffen sie nur beim Anlegen.
+1. **Paket-Properties werden zurückgesetzt.** `name`, `icon`, `color`, `sensitivity`, `min_contact_stage`, `sort_order` (Typ; `category` war hier bis [ADR-040](040-documenttype-category-entfernt.md) mit aufgeführt — das Feld ist seit Migration `0134` entfernt) und `name`, `help_text`, `options_json`, `default_value`, `sensitivity`, `is_required` (Vorlage) werden bei **jedem** Lauf auf die Paketwerte gezogen. Bisher griffen sie nur beim Anlegen.
 2. **`sort_order`-Rücksync gilt jetzt auch für gruppenlose Typen.** Eine per Config-UI umsortierte Feldliste eines Typs ohne Gruppen wird beim nächsten Seed auf die Katalogreihenfolge zurückgesetzt.
-3. **Rückbenennen kann in einen Hard-Lock laufen.** Benennt ein Betreiber „Kontakt" in „Erstkontakt" um und legt danach einen *neuen* Typ „Kontakt" an (Slug `kontakt-2`), verletzt der Rückbenennen-Sync `UniqueConstraint(facility, name, category)` — ab da bricht **jeder** weitere Lauf komplett ab. Auflösung: den betreiber-eigenen Typ umbenennen oder den Namen im Paket anpassen.
+3. **Rückbenennen kann in einen Hard-Lock laufen.** Benennt ein Betreiber „Kontakt" in „Erstkontakt" um und legt danach einen *neuen* Typ „Kontakt" an (Slug `kontakt-2`), verletzt der Rückbenennen-Sync `UniqueConstraint(facility, name)` (bis [ADR-040](040-documenttype-category-entfernt.md) `(facility, name, category)`) — ab da bricht **jeder** weitere Lauf komplett ab. Auflösung: den betreiber-eigenen Typ umbenennen oder den Namen im Paket anpassen.
 4. **Konflikte sind fail-loud und kaskadieren.** Eine einrichtungseigene Feldvorlage auf einem Paket-Slug mit abweichendem `field_type`/`is_encrypted` bricht den **gesamten** Lauf ab — es wird nichts angewendet, auch nicht für die übrigen Typen. Das ist gewollt (kein halb angewendetes Paket), aber der Fehler muss gelesen und behoben werden, statt ihn zu ignorieren.
 5. **Optionen und Vorbelegungswerte sind Paket-Hoheit** (siehe Abschnitt 6) — Weglassen leert.
 6. Der Loader schreibt **kein AuditLog**. Wer eine Konfigurationsänderung nachvollziehen will, braucht das Paket-Diff aus der Versionsverwaltung, nicht das Audit-Log der App. Bewusste Konsistenz mit Seed/Commands; falls Paket-Importe je auditpflichtig werden, ist das eine eigene Entscheidung.
