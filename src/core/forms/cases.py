@@ -146,7 +146,11 @@ class CaseForm(forms.ModelForm):
         if self.pinned_client is not None:
             if client_id and str(client_id) != str(self.pinned_client.pk):
                 raise ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
-            return self.pinned_client
+            # Der gepinnte Wert geht trotzdem durch ``resolve_writable_client``:
+            # das Pinning ersetzt das Widerrufs-Gate (#1771) nicht, es kommt
+            # dazu. Sonst schriebe ein Edit an einer inzwischen anonymisierten
+            # Person wieder frischen Klartext.
+            client_id = self.pinned_client.pk
         if not client_id:
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
         # Refs #819: scoped Query — eine Person aus einer fremden

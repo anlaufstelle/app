@@ -151,7 +151,10 @@ class WorkItemForm(forms.ModelForm):
         if self.pinned_client is not None:
             if client_id and str(client_id) != str(self.pinned_client.pk):
                 raise forms.ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
-            return self.pinned_client
+            # Wie bei ``CaseForm``: das Pinning ersetzt das Widerrufs-Gate
+            # (#1771) nicht, der gepinnte Wert laeuft ebenfalls durch
+            # ``resolve_writable_client``.
+            client_id = self.pinned_client.pk
         if not client_id:
             return None
         # Refs #1771: gemeinsames Widerrufs-Gate mit Event-/Fall-Formular. Der

@@ -10,6 +10,16 @@ import pytest
 from django.urls import reverse
 
 from core.models import WorkItem
+from tests._form_helpers import assert_field_error
+
+
+@pytest.fixture
+def client_anonymized(client_identified):
+    """Anonymisiert, aber nicht im Papierkorb — der K-Anon-Bridge-Zustand (#1771)."""
+    client_identified.is_active = False
+    client_identified.pseudonym = f"Gelöscht-{str(client_identified.pk)[:8]}"
+    client_identified.save(update_fields=["is_active", "pseudonym"])
+    return client_identified
 
 
 @pytest.fixture
@@ -153,3 +163,71 @@ class TestWorkItemClientPinning:
         response = client.get(reverse("core:workitem_update", kwargs={"pk": workitem_unassigned.pk}))
         assert response.status_code == 200
         assert 'name="client"' in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestPinnedClientStillHonoursRevocationGate:
+    """Das Pinning darf das Widerrufs-Gate (#1771) nicht ueberholen.
+
+    Der gepinnte Wert kommt aus dem Bestand, nicht aus dem POST — er darf
+    deshalb NICHT an ``resolve_writable_client`` vorbei zurueckgereicht
+    werden: sonst schriebe ein Edit an einer inzwischen anonymisierten Person
+    wieder frischen Klartext (``title``/``description`` sind Freitext, es gibt
+    keinen nachgelagerten Prune).
+    """
+
+    def test_workitem_form_rejects_pinned_anonymized_client(self, facility, client_anonymized):
+        from core.forms.workitems import WorkItemForm
+
+        form = WorkItemForm(
+            data={
+                "item_type": WorkItem.ItemType.TASK,
+                "title": "Aufgabe",
+                "priority": WorkItem.Priority.NORMAL,
+            },
+            facility=facility,
+            pinned_client=client_anonymized,
+        )
+        assert_field_error(form, "client", "gelöscht oder anonymisiert")
+
+    def test_workitem_form_rejects_pinned_trashed_client(self, facility, client_trashed):
+        from core.forms.workitems import WorkItemForm
+
+        form = WorkItemForm(
+            data={
+                "item_type": WorkItem.ItemType.TASK,
+                "title": "Aufgabe",
+                "priority": WorkItem.Priority.NORMAL,
+            },
+            facility=facility,
+            pinned_client=client_trashed,
+        )
+        assert_field_error(form, "client", "gelöscht oder anonymisiert")
+
+    def test_case_form_rejects_pinned_anonymized_client(self, facility, staff_user, client_anonymized):
+        from core.forms.cases import CaseForm
+
+        form = CaseForm(
+            data={"title": "Fall", "description": ""},
+            facility=facility,
+            user=staff_user,
+            pinned_client=client_anonymized,
+        )
+        assert_field_error(form, "client", "gelöscht oder anonymisiert")
+
+    def test_workitem_update_post_blocked_for_anonymized_client(self, client, staff_user, workitem_pinned):
+        """Ende-zu-Ende: die Person wird nach dem Anlegen anonymisiert."""
+        workitem_pinned.client.is_active = False
+        workitem_pinned.client.save(update_fields=["is_active"])
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": workitem_pinned.pk}),
+            {
+                "item_type": WorkItem.ItemType.TASK,
+                "title": "Frischer Klartext",
+                "priority": WorkItem.Priority.NORMAL,
+            },
+        )
+        assert response.status_code == 200
+        workitem_pinned.refresh_from_db()
+        assert workitem_pinned.title != "Frischer Klartext"
