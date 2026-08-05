@@ -66,6 +66,25 @@ ALL_EVENTS = "all_events"
 EVENTS_WITH_PERSON = "events_with_person"
 MAPPED_EVENTS = "mapped_events"
 PERSONS = "persons"
+# Refs #1754: Ereignisse der Dokumentationstypen, die ein Bericht selbst
+# benennt — die uebliche Grundgesamtheit eines **Feldwert**-Backends. Es liest
+# einen bestimmten Feld-Template-Slug und filtert dafuer auf die Typen, an denen
+# dieser Slug haengt; gezaehlt wird also eine echte Teilmenge von
+# :data:`ALL_EVENTS`.
+#
+# Abgrenzung zu :data:`MAPPED_EVENTS`: dort ist das Kriterium eine
+# Berichts**kategorie** aus einem hart kodierten Mapping (Sachbericht), hier die
+# Zugehoerigkeit zu den im Bericht ausgewiesenen **Dokumentationstypen**. Zwei
+# verschiedene Mengen, die derselbe Code verwaschen wuerde — und genau das
+# Verwaschen ist der K3-A3-Befund.
+#
+# Die Note nennt bewusst **weder die Typen selbst noch ihre Anzahl**: sie steht
+# in jedem Artefakt dieser Backends gleich, unabhaengig von der Konfiguration
+# der Einrichtung. Eine aufzaehlende oder bezifferte Fassung waere selbst eine
+# Aussage ueber den Bestand (dieselbe Begruendung wie bei den ziffernfreien
+# Vollstaendigkeits-Meldungen, K6/#1769) — welche Typen gemeint sind, sagt der
+# Bericht ohnehin in seinen Zeilen.
+TYPED_EVENTS = "typed_events"
 
 # Refs #1754: Zwei Grundgesamtheiten, die keine der vier obigen trifft — und ein
 # ungefaehr passender Code waere hier schlimmer als gar keiner: der Ausweis ist
@@ -87,6 +106,7 @@ POPULATION_NOTES = {
     EVENTS_WITH_PERSON: _("Ereignisse mit Personenbezug im Zeitraum"),
     MAPPED_EVENTS: _("Ereignisse mit Berichtszuordnung im Zeitraum"),
     PERSONS: _("Personen mit mindestens einem Ereignis im Zeitraum"),
+    TYPED_EVENTS: _("Ereignisse der im Bericht ausgewiesenen Dokumentationstypen im Zeitraum"),
     CASES_IN_PERIOD: _("Fälle mit Anlage oder Abschluss im Zeitraum, dazu der Fallbestand am Stichtag"),
     BANS_IN_PERIOD: _("Hausverbote mit Ausspruch oder Ablauf im Zeitraum, dazu der Bestand am Stichtag"),
 }

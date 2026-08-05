@@ -77,6 +77,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
@@ -170,6 +171,10 @@ class ServiceDistributionBackend(DatasetBackend):
 
     name = _("Beispiel: Leistungs- und Krisenarten-Verteilung")
     snapshot_enabled = False
+    # K3-A3 (Refs #1770/#1754): die Randsummen zaehlen Ereignisse der
+    # jeweiligen Feld-Typen MIT Auswahlwert, also eine Teilmenge einer
+    # Teilmenge. ``ALL_EVENTS`` waere hier doppelt falsch.
+    population = TYPED_EVENTS
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [

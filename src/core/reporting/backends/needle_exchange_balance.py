@@ -67,6 +67,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import _get_threshold, apply_residual_guard
 from core.services.file_vault import safe_decrypt
@@ -148,6 +149,12 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
 
     name = _("Beispiel: Spritzentausch-Bilanz")
     snapshot_enabled = False
+    # K3-A3 (Refs #1770/#1754): ``events`` zaehlt NICHT alle Ereignisse des
+    # Zeitraums, sondern nur die der Spritzentausch-Typen. Der Default
+    # ``ALL_EVENTS`` waere hier eine falsche Angabe und laedt zur Differenz mit
+    # jeder anderen Tabelle ein — ``base.py`` verlangt deshalb, dass ein enger
+    # zaehlendes Backend seine Grundgesamtheit explizit ueberschreibt.
+    population = TYPED_EVENTS
 
     def get_field_specs(self) -> list[FieldSpec]:
         """Eine Aggregatzeile; die Spalten sind die vier Kennzahlen."""

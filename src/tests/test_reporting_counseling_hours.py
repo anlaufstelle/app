@@ -19,7 +19,7 @@ from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, S
 from core.reporting import registry
 from core.reporting.backends.counseling_hours import BEITRAGENDE_KEY, CounselingHoursBackend
 from core.reporting.base import DatasetResult
-from core.reporting.data_source import ALL_EVENTS
+from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
 
 pytestmark = pytest.mark.django_db
@@ -85,8 +85,12 @@ class TestDiscoveryUndMetadaten:
     def test_snapshot_bleibt_aus(self, backend):
         assert backend.snapshot_enabled is False
 
-    def test_grundgesamtheit_alle_ereignisse(self, backend):
-        assert backend.population == ALL_EVENTS
+    def test_grundgesamtheit_ist_enger_als_der_default(self, backend):
+        """I3: das Backend zaehlt NICHT alle Ereignisse des Zeitraums, sondern
+        nur die seiner Dokumentationstypen — ``base.py`` verlangt dann eine
+        explizite, engere Deklaration.
+        """
+        assert backend.population == TYPED_EVENTS
 
     def test_field_specs(self, backend):
         assert [spec.key for spec in backend.get_field_specs()] == ["kategorie", "events", "minuten"]

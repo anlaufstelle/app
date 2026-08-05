@@ -61,6 +61,7 @@ from core.models import DocumentType, Event
 # ``as_number`` mit oder importiert es weiter von hier.
 from core.reporting.backends.needle_exchange_balance import as_number
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
@@ -142,6 +143,11 @@ class CounselingHoursBackend(DatasetBackend):
 
     name = _("Beispiel: Beratungsstunden")
     snapshot_enabled = False
+    # K3-A3 (Refs #1770/#1754): gezaehlt werden nur Ereignisse der drei
+    # Gespraechs-Typen, nicht alle des Zeitraums. Ohne diese Deklaration
+    # stuende "alle Ereignisse im Zeitraum" neben einer echten Teilmenge —
+    # genau die irrefuehrende Angabe, die K3-A3 beseitigen sollte.
+    population = TYPED_EVENTS
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [

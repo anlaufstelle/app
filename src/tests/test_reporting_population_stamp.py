@@ -28,7 +28,9 @@ from core.reporting.data_source import (
     EVENTS_WITH_PERSON,
     LIVE,
     MAPPED_EVENTS,
+    POPULATION_NOTES,
     SNAPSHOT_HYBRID,
+    TYPED_EVENTS,
     table_note,
 )
 
@@ -207,6 +209,35 @@ class TestGrundgesamtheitInDenArtefakten:
 
         assert get_backend("case-metrics").population == CASES_IN_PERIOD
         assert get_backend("ban-overview").population == BANS_IN_PERIOD
+
+    @pytest.mark.parametrize("slug", ["needle-exchange-balance", "counseling-hours", "service-distribution"])
+    def test_feldwert_backends_deklarieren_die_engere_menge(self, slug):
+        """Refs #1754: Die Feldwert-Backends filtern auf die Dokumentationstypen,
+        an denen ihr Feld haengt — sie zaehlen also NICHT alle Ereignisse des
+        Zeitraums.
+
+        Der Default ``ALL_EVENTS`` waere dort eine schlicht falsche Angabe, und
+        zwar genau die Sorte Falschangabe, die K3-A3 beseitigen sollte: „alle
+        Ereignisse im Zeitraum" neben einer Zahl, die eine echte Teilmenge
+        zaehlt, laedt zur Differenzbildung mit jeder anderen Tabelle ein.
+        """
+        from core.reporting.registry import get_backend
+
+        assert get_backend(slug).population == TYPED_EVENTS
+
+    def test_typed_events_note_ist_datenunabhaengig_und_ziffernfrei(self):
+        """Die Note steht in jedem Artefakt dieser Backends — unabhaengig davon,
+        WELCHE Typen die Einrichtung konfiguriert hat und wie viele es sind.
+
+        Eine Note, die die Typen aufzaehlte oder ihre Anzahl naennte, waere
+        selbst eine Aussage ueber die Konfiguration; eine mit Ziffern waere ein
+        Kanal wie die frueheren bezifferten Vollstaendigkeits-Meldungen
+        (K6, Refs #1769).
+        """
+        note = str(POPULATION_NOTES[TYPED_EVENTS])
+
+        assert not any(char.isdigit() for char in note)
+        assert str(table_note(TYPED_EVENTS, LIVE)) != str(table_note(ALL_EVENTS, LIVE))
 
 
 @pytest.mark.django_db
