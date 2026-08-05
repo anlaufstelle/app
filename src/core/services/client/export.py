@@ -10,6 +10,7 @@ from core.models import (
     Activity,
     Attachment,
     AuditLog,
+    Client,
     DeletionRequest,
     Episode,
     Event,
@@ -18,6 +19,7 @@ from core.models import (
     Milestone,
     OutcomeGoal,
     RecentClientVisit,
+    RectificationRequest,
     RetentionProposal,
     WorkItem,
 )
@@ -565,6 +567,115 @@ def _gather_deletion_requests(facility, client, event_ids):
     ]
 
 
+def _rectification_field_label(field_path, field_templates):
+    """Lesbares Feld-Label zu einem ``field_path`` eines Berichtigungsantrags (Refs #1796).
+
+    Stammdatenfelder loesen ueber das Modell auf (``verbose_name``, dieselbe
+    SSOT wie :func:`~core.services.client.rectification._core_field_label`),
+    dynamische Pfade ueber die ``FieldTemplate``-Vorlage des Typs. Bleibt beides
+    ergebnislos — etwa weil das Feld nach dem Antrag vom Typ entfernt wurde
+    (Waise, Muster Refs #1725) —, steht der rohe Pfad da: er ist unschoen, aber
+    wahr, und die Auskunft darf an ihm nicht scheitern.
+
+    ``str()`` ist Pflicht, nicht Kosmetik: ``verbose_name`` ist ein Lazy-Proxy,
+    und der JSON-Download serialisiert das Dict.
+    """
+    from core.services.client.rectification import CORE_FIELDS, DATA_JSON_PREFIX, _core_field_label
+
+    if field_path in CORE_FIELDS:
+        return str(_core_field_label(field_path))
+    if field_path.startswith(DATA_JSON_PREFIX):
+        ft = field_templates.get(field_path[len(DATA_JSON_PREFIX) :])
+        if ft is not None:
+            return ft.name
+    return field_path
+
+
+def _rectification_value(field_path, stored, field_templates):
+    """Lesbarer Klartext-Wert einer ``old_value``/``new_value``-Spalte (Refs #1796).
+
+    Entschluesselt wird ueber :func:`~core.services.client.rectification.decode_rectification_value`
+    (Fernet + ``json.loads``); ``None`` bleibt ``None`` — genau so liegen die
+    Spalten nach der Anonymisierung (Refs #1792), und eine redigierte Zeile muss
+    die Auskunft ohne Absturz passieren.
+
+    Anschliessend dieselbe Lesbarkeits-Regel wie in
+    :func:`_gather_entity_dynamic_data`: ein gespeicherter Code waere keine
+    Auskunft. ``age_cluster`` loest auf sein Choices-Label auf, dynamische Werte
+    laufen durch :func:`~core.services.dynamic_data.format_dynamic_display_value`
+    (SELECT-Slug -> Label, Bool -> Ja/Nein). Unbekannte Codes und ein fehlendes
+    Template fallen auf den Rohwert zurueck — inklusive des
+    ``safe_decrypt``-Platzhalters bei korruptem Token.
+    """
+    from core.services.client.rectification import DATA_JSON_PREFIX, decode_rectification_value
+    from core.services.dynamic_data import format_dynamic_display_value
+
+    value = decode_rectification_value(stored)
+    if value is None:
+        return None
+    if field_path == "age_cluster":
+        try:
+            return Client.AgeCluster(value).label
+        except ValueError:
+            return value
+    if field_path.startswith(DATA_JSON_PREFIX):
+        return format_dynamic_display_value(value, field_templates.get(field_path[len(DATA_JSON_PREFIX) :]))
+    return value
+
+
+def _gather_rectification_requests(facility, client):
+    """Serialize Art.-16-Berichtigungsantraege der Person (Refs #1796, ADR-041).
+
+    Der Antrag ist selbst gespeicherte Information ueber die betroffene Person:
+    er benennt das strittige Feld, den damaligen und den gewuenschten Wert, die
+    fachliche Begruendung und den Pruefvermerk. Ohne ihn wies die Auskunft zwar
+    Art.-17-Loeschantraege aus, den Art.-16-Vorgang aber gar nicht.
+
+    **Alle Status** (offen/genehmigt/abgelehnt), wie bei
+    :func:`_gather_deletion_requests` — gerade ein abgelehnter Antrag ist fuer
+    die betroffene Person die aussagekraeftigste Zeile.
+
+    Facility-gescopt ueber den ``FacilityScopedManager`` (Defense-in-Depth
+    zusaetzlich zu RLS), Muster :func:`_gather_deletion_requests`.
+
+    Die Feld-Vorlagen werden nur geladen, wenn ueberhaupt ein dynamischer Pfad
+    vorkommt — ohne den Zweig kostete jede Auskunft eine Query mehr. Sie laufen
+    bewusst **ohne** Sensitivity-Gate (kein ``rectifiable_fields``, das nach der
+    Sicht des aufrufenden Nutzers filtert): dieselbe Begruendung wie in
+    :func:`_gather_entity_dynamic_data` — der Export haengt an
+    ``LeadOrAdminRequiredMixin`` + SudoMode, und eine Filterung erzeugte hier
+    nur eine unvollstaendige Auskunft.
+    """
+    from core.services.client.rectification import DATA_JSON_PREFIX, decode_rectification_text
+    from core.services.dynamic_data import build_field_template_lookup
+
+    requests = list(
+        RectificationRequest.objects.for_facility(facility)
+        .filter(target_client=client)
+        .select_related("requested_by", "reviewed_by")
+        .order_by("-created_at", "pk")
+    )
+    field_templates = {}
+    if client.document_type_id and any(rr.field_path.startswith(DATA_JSON_PREFIX) for rr in requests):
+        field_templates = build_field_template_lookup(client.document_type)
+    return [
+        {
+            "field_path": rr.field_path,
+            "field_label": _rectification_field_label(rr.field_path, field_templates),
+            "status": rr.get_status_display(),
+            "old_value": _rectification_value(rr.field_path, rr.old_value, field_templates),
+            "new_value": _rectification_value(rr.field_path, rr.new_value, field_templates),
+            "reason": decode_rectification_text(rr.reason),
+            "review_note": decode_rectification_text(rr.review_note),
+            "requested_by": _username(rr.requested_by),
+            "reviewed_by": _username(rr.reviewed_by),
+            "created_at": _isoformat(rr.created_at),
+            "reviewed_at": _isoformat(rr.reviewed_at),
+        }
+        for rr in requests
+    ]
+
+
 def _gather_workitems(client):
     """Serialize all work items linked to the client."""
     workitems = (
@@ -931,6 +1042,9 @@ def export_client_data(client, facility, user):
         "outcome_goals": _gather_outcome_goals(client),
         "event_history": _gather_event_history(all_event_ids),
         "deletion_requests": _gather_deletion_requests(facility, client, all_event_ids),
+        # Refs #1796: Art.-16-Antraege neben den Art.-17-Antraegen — beides sind
+        # Vorgaenge ueber die Person, beide mit Vier-Augen-Nachweis.
+        "rectification_requests": _gather_rectification_requests(facility, client),
         "legal_holds": _gather_legal_holds(facility, client, all_event_ids),
         "retention_proposals": _gather_retention_proposals(facility, client, all_event_ids),
         "work_items": _gather_workitems(client),

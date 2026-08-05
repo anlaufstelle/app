@@ -105,7 +105,9 @@ class TestExportClientDataAggregate:
     Quertabellen-Kategorien gewachsen (Produktentscheid 2026-08-03) und mit
     #1738 um
     ``attachments`` (M24: Anhang-Metadaten aller drei Owner gehoeren in die
-    Auskunft; die personen-eigenen als eigene Top-Level-Kategorie).
+    Auskunft; die personen-eigenen als eigene Top-Level-Kategorie) sowie mit
+    #1796 um
+    ``rectification_requests`` (Art.-16-Antraege, ADR-041).
     """
 
     def test_top_level_dict_contains_all_aggregate_keys(self, client_identified, facility, staff_user):
@@ -120,6 +122,7 @@ class TestExportClientDataAggregate:
             "outcome_goals",
             "event_history",
             "deletion_requests",
+            "rectification_requests",
             "legal_holds",
             "retention_proposals",
             "work_items",

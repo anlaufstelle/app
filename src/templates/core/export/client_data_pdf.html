@@ -374,10 +374,53 @@
     <p>{% trans "Keine Löschanträge vorhanden." %}</p>
     {% endif %}
 
+    {% comment %}Refs #1796 (Art. 16, ADR-041): Berichtigungsantraege stehen direkt
+    neben den Loeschantraegen — beides sind Vorgaenge ueber die Person mit
+    Vier-Augen-Nachweis. Ausgewiesen werden ALLE Status; ein abgelehnter Antrag ist
+    fuer die betroffene Person die aussagekraeftigste Zeile. Redigierte Werte
+    (Anonymisierung, Refs #1792) erscheinen als „—", nie als ``None``.{% endcomment %}
+    <h2>{% trans "10. Berichtigungsanträge" %}</h2>
+    {% if rectification_requests %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Feld" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Bisheriger Wert" %}</th>
+                <th>{% trans "Beantragter Wert" %}</th>
+                <th>{% trans "Begründung" %}</th>
+                <th>{% trans "Prüfvermerk" %}</th>
+                <th>{% trans "Beantragt von" %}</th>
+                <th>{% trans "Geprüft von" %}</th>
+                <th>{% trans "Erstellt am" %}</th>
+                <th>{% trans "Geprüft am" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rr in rectification_requests %}
+            <tr>
+                <td>{{ rr.field_label }}</td>
+                <td>{{ rr.status }}</td>
+                <td>{{ rr.old_value|default:"—" }}</td>
+                <td>{{ rr.new_value|default:"—" }}</td>
+                <td>{{ rr.reason|default:"—" }}</td>
+                <td>{{ rr.review_note|default:"—" }}</td>
+                <td>{{ rr.requested_by|default:"—" }}</td>
+                <td>{{ rr.reviewed_by|default:"—" }}</td>
+                <td>{{ rr.created_at }}</td>
+                <td>{{ rr.reviewed_at|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Berichtigungsanträge vorhanden." %}</p>
+    {% endif %}
+
     {% comment %}Refs #1752 (Art. 18): Legal Hold erklaert, warum Daten trotz
     abgelaufener Frist noch existieren; der Loeschvorschlag benennt die anstehende
     Loeschung samt Frist.{% endcomment %}
-    <h2>{% trans "10. Aufbewahrung: Sperrvermerke und Löschvorschläge" %}</h2>
+    <h2>{% trans "11. Aufbewahrung: Sperrvermerke und Löschvorschläge" %}</h2>
     <h3>{% trans "Sperrvermerke (Legal Holds)" %}</h3>
     {% if legal_holds %}
     <table>
@@ -438,7 +481,7 @@
     <p>{% trans "Keine Löschvorschläge vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "11. Aufgaben" %}</h2>
+    <h2>{% trans "12. Aufgaben" %}</h2>
     {% if work_items %}
     <table>
         <thead>
@@ -474,7 +517,7 @@
     <p>{% trans "Keine Aufgaben vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "12. Aktivitäten" %}</h2>
+    <h2>{% trans "13. Aktivitäten" %}</h2>
     {% if activities %}
     <table>
         <thead>
@@ -505,7 +548,7 @@
     {% comment %}Refs #1752: Merklisten-/Zuletzt-besucht-Eintraege sind gespeicherte
     Information ueber die Person. Bewusst OHNE die zugreifende Person — sonst waere
     das ein Zugriffsprotokoll ueber Beschaeftigte (Art. 15 Abs. 4).{% endcomment %}
-    <h2>{% trans "13. Merkliste und zuletzt aufgerufen" %}</h2>
+    <h2>{% trans "14. Merkliste und zuletzt aufgerufen" %}</h2>
     {% if recent_visits %}
     <table>
         <thead>
@@ -529,7 +572,7 @@
 
     {% comment %}Refs #1752: Zugriffsprotokoll bewusst ohne Beschaeftigten-Identitaet
     (Produktentscheid 2026-08-03) — Aktion, Zeitpunkt und Kategorie ja, Namen nein.{% endcomment %}
-    <h2>{% trans "14. Zugriffsprotokoll" %}</h2>
+    <h2>{% trans "15. Zugriffsprotokoll" %}</h2>
     <p>{% trans "Protokollierte Zugriffe auf Ihre Daten. Die Namen der zugreifenden Beschäftigten sind nicht aufgeführt, da es sich dabei zugleich um Daten Dritter handelt." %}</p>
     {% if audit_trail %}
     <table>

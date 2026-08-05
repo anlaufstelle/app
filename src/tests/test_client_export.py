@@ -1359,6 +1359,219 @@ class TestClientExportAttachments:
         assert "Dateianhang" in entry["value"]
 
 
+def _select_field_on_client(facility, sample_client, name="Wohnsituation", slug_label=("wohnungslos", "Wohnungslos")):
+    """SELECT-Zusatzfeld an einem Personen-Dokumentationstyp (Refs #1796).
+
+    Liefert das ``FieldTemplate`` zurueck; ``sample_client`` traegt danach den
+    Typ, damit ein ``data_json.<slug>``-Berichtigungsantrag zulaessig ist.
+    """
+    from core.models import DocumentTypeField, FieldTemplate
+
+    slug, label = slug_label
+    ft = FieldTemplate.objects.create(
+        facility=facility,
+        name=name,
+        field_type=FieldTemplate.FieldType.SELECT,
+        options_json=[{"slug": slug, "label": label}],
+    )
+    dt = DocumentType.objects.create(
+        facility=facility,
+        name="Personenprofil-Berichtigung",
+        entity_type=DocumentType.EntityType.CLIENT,
+    )
+    DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+    sample_client.document_type = dt
+    sample_client.save(update_fields=["document_type"])
+    return ft
+
+
+@pytest.mark.django_db
+class TestClientExportRectificationRequests:
+    """Refs #1796 — Art.-16-Berichtigungsantraege gehoeren in die Art.-15-Auskunft.
+
+    Der Antrag (ADR-041, M4/#1060) ist gespeicherte Information ueber die
+    betroffene Person: er benennt das strittige Feld, den alten und den
+    gewuenschten Wert sowie die Begruendung. Ausgewiesen werden ALLE Status —
+    ein abgelehnter Antrag ist fuer die betroffene Person die interessanteste
+    Zeile, nicht die unwichtigste.
+    """
+
+    EXPECTED_KEYS = {
+        "field_path",
+        "field_label",
+        "status",
+        "old_value",
+        "new_value",
+        "reason",
+        "review_note",
+        "requested_by",
+        "reviewed_by",
+        "created_at",
+        "reviewed_at",
+    }
+
+    def test_pending_request_is_exported_with_decrypted_values(self, sample_client, facility, staff_user, admin_user):
+        from core.services.client.rectification import request_rectification
+
+        request_rectification(sample_client, staff_user, "pseudonym", "Neu-Pseudonym", "Schreibfehler im Pseudonym")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["rectification_requests"]) == 1
+        entry = data["rectification_requests"][0]
+        assert set(entry) == self.EXPECTED_KEYS
+        assert entry["field_path"] == "pseudonym"
+        assert entry["field_label"] == "Pseudonym"
+        assert entry["status"] == "Ausstehend"
+        assert entry["old_value"] == "Export-Klientel"
+        assert entry["new_value"] == "Neu-Pseudonym"
+        assert entry["reason"] == "Schreibfehler im Pseudonym"
+        assert entry["review_note"] == ""
+        assert entry["requested_by"] == "ce_staff"
+        assert entry["reviewed_by"] is None
+        assert entry["created_at"] is not None
+        assert entry["reviewed_at"] is None
+
+    def test_rejected_request_carries_status_reviewer_and_note(
+        self, sample_client, facility, staff_user, lead_user, admin_user
+    ):
+        """Abgelehnte Antraege bleiben in der Auskunft — samt Pruefvermerk."""
+        from core.services.client.rectification import reject_rectification, request_rectification
+
+        rr = request_rectification(sample_client, staff_user, "notes", "Korrigierte Notiz", "Sachlich falsch")
+        reject_rectification(rr, lead_user, "Nicht nachvollziehbar")
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["rectification_requests"][0]
+        assert entry["field_label"] == "Notizen"
+        assert entry["status"] == "Abgelehnt"
+        assert entry["review_note"] == "Nicht nachvollziehbar"
+        assert entry["reviewed_by"] == "ce_lead"
+        assert entry["reviewed_at"] is not None
+
+    def test_age_cluster_values_are_resolved_to_labels(self, sample_client, facility, staff_user, admin_user):
+        """Ein Code wie ``18_26`` waere fuer die betroffene Person keine Auskunft."""
+        from core.services.client.rectification import request_rectification
+
+        request_rectification(sample_client, staff_user, "age_cluster", Client.AgeCluster.AGE_27_PLUS, "Alter falsch")
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["rectification_requests"][0]
+        assert entry["field_label"] == "Altersgruppe"
+        assert entry["old_value"] == "18–26"
+        assert entry["new_value"] == "27+"
+
+    def test_dynamic_field_uses_template_label_and_display_value(self, sample_client, facility, staff_user, admin_user):
+        """``data_json.<slug>``: Label aus der Feldvorlage, Wert als Options-Label."""
+        from core.services.client.rectification import request_rectification
+
+        ft = _select_field_on_client(facility, sample_client)
+        request_rectification(sample_client, staff_user, f"data_json.{ft.slug}", "wohnungslos", "Lage geaendert")
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["rectification_requests"][0]
+        assert entry["field_path"] == f"data_json.{ft.slug}"
+        assert entry["field_label"] == "Wohnsituation"
+        assert entry["new_value"] == "Wohnungslos"
+        assert entry["old_value"] is None
+
+    def test_orphan_dynamic_path_falls_back_to_the_raw_field_path(
+        self, sample_client, facility, staff_user, admin_user
+    ):
+        """Ein spaeter entferntes Feld darf die Auskunft nicht reissen (Refs #1725-Muster)."""
+        from core.models import RectificationRequest
+        from core.services.client.rectification import _encode_value
+
+        RectificationRequest.objects.create(
+            facility=facility,
+            target_client=sample_client,
+            field_path="data_json.verwaist",
+            old_value=_encode_value("alt"),
+            new_value=_encode_value("neu"),
+            requested_by=staff_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["rectification_requests"][0]
+        assert entry["field_label"] == "data_json.verwaist"
+        assert entry["new_value"] == "neu"
+
+    def test_request_of_another_client_is_excluded(self, sample_client, facility, staff_user, admin_user):
+        from core.services.client.rectification import request_rectification
+
+        other = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Berichtigung",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=admin_user,
+        )
+        request_rectification(other, staff_user, "pseudonym", "Fremd-Wunsch", "Fremd-Grund")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["rectification_requests"] == []
+
+    def test_request_of_another_facility_is_excluded(self, sample_client, facility, staff_user, admin_user):
+        """Defense-in-Depth: ``for_facility`` zusaetzlich zu RLS (Muster Loeschantrag)."""
+        from core.models import RectificationRequest
+        from core.services.client.rectification import _encode_value
+
+        other_org = Organization.objects.create(name="Fremd-Org-1796")
+        other_facility = Facility.objects.create(organization=other_org, name="Fremd-Einrichtung-1796")
+        RectificationRequest.objects.create(
+            facility=other_facility,
+            target_client=sample_client,
+            field_path="pseudonym",
+            old_value=_encode_value("alt"),
+            new_value=_encode_value("Fremd-Facility-Wunsch"),
+            requested_by=staff_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["rectification_requests"] == []
+
+    def test_redacted_request_is_listed_without_values(self, sample_client, facility, staff_user, admin_user):
+        """Nach der Anonymisierung (Refs #1792) sind alle vier Wertspalten NULL.
+
+        Die Zeile bleibt als Vier-Augen-Nachweis stehen — die Auskunft muss sie
+        ohne Absturz ausweisen, mit leeren Werten statt Klartext.
+        """
+        from core.models import RectificationRequest
+        from core.services.client.rectification import request_rectification
+
+        request_rectification(sample_client, staff_user, "pseudonym", "Neu-Pseudonym", "Schreibfehler")
+        RectificationRequest.objects.filter(target_client=sample_client).update(
+            old_value=None,
+            new_value=None,
+            reason=None,
+            review_note=None,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["rectification_requests"][0]
+        assert entry["field_label"] == "Pseudonym"
+        assert entry["status"] == "Ausstehend"
+        assert entry["old_value"] is None
+        assert entry["new_value"] is None
+        assert entry["reason"] == ""
+        assert entry["review_note"] == ""
+
+    def test_corrupt_token_yields_the_placeholder_instead_of_crashing(
+        self, sample_client, facility, staff_user, admin_user
+    ):
+        """Muster ``test_history_decrypts_encrypted_values`` — Gegenprobe mit kaputtem Token."""
+        from core.models import RectificationRequest
+
+        RectificationRequest.objects.create(
+            facility=facility,
+            target_client=sample_client,
+            field_path="pseudonym",
+            old_value={"__encrypted__": True, "value": "kaputtes-token"},
+            new_value={"__encrypted__": True, "value": "kaputtes-token"},
+            reason={"__encrypted__": True, "value": "kaputtes-token"},
+            requested_by=staff_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["rectification_requests"][0]
+        assert entry["old_value"] == "[verschlüsselt]"
+        assert entry["new_value"] == "[verschlüsselt]"
+        assert entry["reason"] == "[verschlüsselt]"
+
+    def test_empty_list_without_requests(self, sample_client, facility, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["rectification_requests"] == []
+
+
 @pytest.fixture
 def fully_populated_client(facility, doc_type, sample_client, admin_user, confirmer_user, lead_user):
     """Eine Person mit je einem Datensatz aus jeder Auskunfts-Kategorie (Refs #1752)."""
@@ -1416,6 +1629,10 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         requested_by=admin_user,
         reviewed_by=confirmer_user,
     )
+    # Refs #1796: Berichtigungsantrag (Art. 16, ADR-041) — eigene PDF-Nadel.
+    from core.services.client.rectification import request_rectification
+
+    request_rectification(sample_client, admin_user, "notes", "PDF-Wunschnotiz", "PDF-Berichtigungsgrund")
     LegalHold.objects.create(
         facility=facility,
         target_type="Event",
@@ -1527,6 +1744,7 @@ class TestClientExportPdfCoverage:
             "Ereignis-Klartext",  # Ereignis-Daten
             "Historien-Klartext",  # Historien-Inhalte
             "PDF-Loeschgrund",  # Loeschantrag mit Client-Target
+            "PDF-Berichtigungsgrund",  # Berichtigungsantrag (Refs #1796)
             "PDF-Hold-Grund",  # Legal Hold
             "pdf-kategorie",  # Loeschvorschlag
             "PDF-Aufgabe",  # Aufgabe
@@ -1646,6 +1864,8 @@ class TestClientExportCompleteness:
         "outcome_goals",
         "event_history",
         "deletion_requests",
+        # Refs #1796: Art.-16-Berichtigungsantraege (ADR-041).
+        "rectification_requests",
         "legal_holds",
         "retention_proposals",
         "work_items",
