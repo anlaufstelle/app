@@ -19,7 +19,7 @@ auf den aktuellen Datenbestand, nicht auf geloeschte Zwischenstaende.
 **Die Papierkorb-Grenze verlaeuft ueber die PERSON, nicht ueber das eigene
 ``is_deleted`` von Case/Event/Episode/Goal/WorkItem** (Befund 1+2,
 Adversarial-Review Refs #1060): der Personen-Loeschpfad ist
-``client.soft_delete()`` (``approve_client_deletion``,
+der Client-Soft-Delete (``approve_client_deletion``,
 ``core/services/client/main.py:938``) — Case/Episode/WorkItem setzen ihr
 eigenes ``is_deleted`` in Produktion nie direkt (gepinnt in
 ``test_cases_trash_invariant``); NUR **Event** hat eigene Loeschpfade
