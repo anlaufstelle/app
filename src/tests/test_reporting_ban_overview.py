@@ -8,6 +8,7 @@ kein Slug-Fallback, keine Gruende, keine Personen — und die ``data_json``-Lesa
 inklusive Feldverschluesselung.
 """
 
+import dataclasses
 from datetime import date, timedelta
 
 import pytest
@@ -366,6 +367,18 @@ class TestPrepareExport:
         field_keys = {spec.key for spec in backend.get_field_specs()}
         for row in prepared.records:
             assert set(row) == field_keys
+
+    def test_summary_traegt_keine_zahl_ohne_zugehoerige_zeile(self, backend, facility):
+        """Fail-safe: ``summary`` entsteht aus den suppressierten Zeilen. Faellt
+        eine Zeile weg, darf der Rohwert nicht im Aggregat ueberleben."""
+        roh = _rohergebnis(ausgesprochen=42, aktiv_aktuell=17)
+        ohne_zeilen = dataclasses.replace(roh, records=[])
+
+        prepared = backend.prepare_export(facility, ohne_zeilen)
+
+        assert prepared.records == []
+        assert prepared.summary["ausgesprochen"] is None
+        assert prepared.summary["aktiv_aktuell"] is None
 
     def test_schwelle_kommt_aus_den_facility_settings(self, backend, facility):
         Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})

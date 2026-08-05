@@ -227,6 +227,12 @@ class BanOverviewBackend(DatasetBackend):
         records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
 
         summary = dict(result.summary)
+        # Fail-safe-Reihenfolge wie in ``case_metrics``: erst alles auf ``None``,
+        # dann die suppressierten Zeilen einspielen. Faellt eine Zeile weg (die
+        # Eskalationsleiter des Guards kann eine Aufschluesselung ganz
+        # entfernen), bleibt ``None`` stehen statt des Rohwerts aus
+        # ``build_dataset``.
+        summary.update(dict.fromkeys(_KENNZAHLEN, None))
         summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)

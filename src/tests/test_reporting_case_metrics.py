@@ -8,6 +8,7 @@ sich an der k-Schwelle. Die Faelle folgen der Checkliste aus
 genullt).
 """
 
+import dataclasses
 from datetime import timedelta
 
 import pytest
@@ -264,6 +265,20 @@ class TestPrepareExport:
         field_keys = {spec.key for spec in backend.get_field_specs()}
         for row in prepared.records:
             assert set(row) == field_keys
+
+    def test_summary_traegt_keine_zahl_ohne_zugehoerige_zeile(self, backend, facility):
+        """Fail-safe: ``summary`` wird aus den suppressierten Zeilen gebaut, nicht
+        aus dem Rohergebnis ergaenzt. Faellt eine Zeile weg (die
+        Eskalationsleiter des Residual-Guards kann eine Aufschluesselung ganz
+        entfernen), darf der Rohwert nicht im Aggregat ueberleben."""
+        roh = _rohergebnis(neue_faelle=42, offene_faelle_aktuell=17)
+        ohne_zeilen = dataclasses.replace(roh, records=[])
+
+        prepared = backend.prepare_export(facility, ohne_zeilen)
+
+        assert prepared.records == []
+        assert prepared.summary["neue_faelle"] is None
+        assert prepared.summary["offene_faelle_aktuell"] is None
 
     def test_schwelle_kommt_aus_den_facility_settings(self, backend, facility):
         Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})

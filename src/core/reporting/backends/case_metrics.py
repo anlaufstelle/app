@@ -182,6 +182,15 @@ class CaseMetricsBackend(DatasetBackend):
         records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
 
         summary = dict(result.summary)
+        # Fail-safe-Reihenfolge: erst alles auf ``None``, dann die
+        # suppressierten Zeilen einspielen. Die Eskalationsleiter des Guards
+        # kann eine Aufschluesselung im Extremfall komplett fallen lassen
+        # (``_drop_breakdowns`` entfernt den Key) — ohne diese Vorbelegung
+        # ueberlebten die **rohen** Werte aus ``build_dataset`` im ``summary``.
+        # Heute unerreichbar (es gibt keine Randsumme, also keine Befunde), aber
+        # eine Suppression darf nie davon abhaengen, dass ein anderer Codepfad
+        # nicht ausgeloest wird.
+        summary.update(dict.fromkeys(_KENNZAHLEN, None))
         summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
         summary["k_anonymity_threshold"] = threshold
         return dataclasses.replace(result, records=records, summary=summary)
