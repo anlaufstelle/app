@@ -254,6 +254,24 @@ document.addEventListener("alpine:init", () => {
                     if (this.selectedId) {
                         this.loadCasesForClient(this.selectedId);
                     }
+                    // Refs #1797: Die Stufen-/Anonym-Auswertung haengt am
+                    // htmx-Lebenszyklus des Selects statt an einem eigenen
+                    // ``@change`` im Template. Zwei Kanaele auf demselben
+                    // ``change`` liefen unabhaengig voneinander und liessen
+                    // (zusammen mit dem synthetischen change-Dispatch des
+                    // Autosave-Restores) zwei parallele Feld-Swaps zu — der
+                    // zweite ersetzte ein bereits befuelltes Datei-Feld.
+                    // ``htmx:beforeRequest`` feuert synchron am ausloesenden
+                    // Element, BEVOR der Request rausgeht (verifiziert an
+                    // ``static/js/htmx.min.js`` 2.0.10) — also ohne UI-Lag,
+                    // anders als ``htmx:afterSwap``. Muster:
+                    // ``confirmDynamicDataLoss.init()`` weiter oben.
+                    const docTypeSelect = this.$refs.docTypeSelect;
+                    if (docTypeSelect) {
+                        docTypeSelect.addEventListener("htmx:beforeRequest", () => {
+                            this.updateAnonymousAllowed(docTypeSelect);
+                        });
+                    }
                 },
                 get ariaExpanded() {
                     return this.show ? "true" : "false";
@@ -333,14 +351,6 @@ document.addEventListener("alpine:init", () => {
                         .catch(() => {
                             this.clientCases = [];
                         });
-                },
-                // Refs #1775: umbenannt von ``onDocTypeChange`` — der Name war
-                // doppelt vergeben (``statistics-charts.js`` nutzt ihn fuer den
-                // Chart-Filter). Zwei gleichnamige Handler in verschiedenen
-                // Alpine-Komponenten sind im Template nicht auseinanderzuhalten
-                // und laden zum Verwechseln der Fundstelle ein.
-                onEventDocTypeChange(event) {
-                    this.updateAnonymousAllowed(event.target);
                 },
                 setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },
             },

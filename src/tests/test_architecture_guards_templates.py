@@ -491,6 +491,119 @@ class TestAlpineCspCompatibilityGuard:
         matches = list(self._DUPLICATE_ALPINE_EVENT_ATTR.finditer(html))
         assert matches, f"Duplikat-Regex erkennt {html!r} nicht (':' im Event-Namen fehlt)."
 
+    # Ein Tag, zwei Reaktionswege auf dasselbe ``change`` (Refs #1797). Anders
+    # als beim Duplikat-Guard oben stehen die beiden Attribute nicht zwingend
+    # nebeneinander, daher wird der Tag-Rumpf als Ganzes betrachtet: ein
+    # einzelner Regex-Durchlauf ueber ``<tag …>``, kein HTML-Parsing. Gequotete
+    # Attributwerte duerfen ``<``/``>`` tragen, deshalb die Alternation.
+    _TAG_WITH_ATTRS = re.compile(
+        r"""<(?P<name>[a-zA-Z][\w:-]*)
+            (?P<attrs>(?:"[^"]*"|'[^']*'|[^<>"'])*)
+            /?>""",
+        re.VERBOSE,
+    )
+    # ``@change``/``x-on:change`` inkl. Modifiern (``@change.debounce.300ms``),
+    # aber NICHT gleichnamige Praefixe wie ``@changed``.
+    _ALPINE_CHANGE_ATTR = re.compile(r"""(?:^|\s)(?:@|x-on:)change(?:\.[\w.\-]+)?\s*=\s*["']""")
+    _HX_TRIGGER_ATTR = re.compile(r"""(?:^|\s)hx-trigger\s*=\s*["'](?P<value>[^"']*)["']""")
+    _HX_REQUEST_ATTR = re.compile(r"""(?:^|\s)hx-(?:get|post|put|patch|delete)\s*=\s*["']""")
+    # Elemente, deren htmx-Default-Trigger ohne ``hx-trigger`` ``change`` ist.
+    _HTMX_CHANGE_DEFAULT_TAGS = frozenset({"select", "input", "textarea"})
+
+    @classmethod
+    def _double_change_channel(cls, tag_name: str, attrs: str) -> str | None:
+        """Beschreibt den Verstoss, wenn ein Tag auf ``change`` zwei Wege faehrt."""
+        if not cls._ALPINE_CHANGE_ATTR.search(attrs):
+            return None
+        trigger = cls._HX_TRIGGER_ATTR.search(attrs)
+        if trigger is not None:
+            # ``changed`` ist ein htmx-Filter-Modifier, kein change-Event —
+            # die Wortgrenze haelt ``keyup changed delay:300ms`` heraus.
+            if re.search(r"\bchange\b", trigger.group("value")):
+                return f'hx-trigger="{trigger.group("value")}" neben Alpine-@change'
+            return None
+        if cls._HX_REQUEST_ATTR.search(attrs) and tag_name.lower() in cls._HTMX_CHANGE_DEFAULT_TAGS:
+            return (
+                f"impliziter change-Default (hx-get/hx-post ohne hx-trigger am "
+                f"<{tag_name.lower()}>) neben Alpine-@change"
+            )
+        return None
+
+    def test_no_double_change_channel_per_tag(self):
+        """Ein Tag darf auf ``change`` nicht gleichzeitig htmx-swappen UND
+        einen Alpine-``@change``-Handler ausfuehren — Refs #1797.
+
+        Beide Kanaele haengen am selben Browser-Event, laufen aber unabhaengig:
+        jedes ``change`` (auch ein synthetisch dispatchtes, z. B. beim
+        Autosave-Entwurfs-Restore in ``static/js/autosave.js``) startet einen
+        eigenen htmx-Request. Treffen zwei Antworten ein, ersetzt der zweite
+        Swap die Feld-Knoten des ersten — im Ereignisformular hing eine bereits
+        gewaehlte Datei danach an einem abgehaengten DOM-Knoten und der Kontakt
+        wurde ohne Anhang gespeichert. Ein Kanal genuegt: die Alpine-Logik am
+        htmx-Lebenszyklus (``htmx:beforeRequest``) registrieren statt an einem
+        zweiten ``@change``, und den Request per ``hx-sync`` serialisieren.
+
+        Bekannte Grenze: der Scan sieht nur Templates. Trigger, die in
+        Python-Widget-``attrs`` stehen (``forms.Select(attrs={"hx-trigger": …})``),
+        erfasst er nicht — die werden erst beim Rendern zu HTML.
+        """
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._TAG_WITH_ATTRS.finditer(source):
+                reason = self._double_change_channel(match.group("name"), match.group("attrs"))
+                if reason is None:
+                    continue
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} {reason}")
+        assert not violations, (
+            "Diese Tags reagieren doppelt auf ``change``: htmx swappt UND ein "
+            "Alpine-@change-Handler laeuft. Zwei change-Events (z. B. der "
+            "synthetische Dispatch des Autosave-Restores plus die Nutzerauswahl) "
+            "erzeugen so zwei parallele Swaps, die einander ueberschreiben. "
+            "Bitte die Alpine-Logik in ``init()`` an ``htmx:beforeRequest`` des "
+            'Elements haengen und den Request mit ``hx-sync="this:replace"`` '
+            "serialisieren.\nRefs #1797.\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_alpine_change_without_htmx_is_not_a_violation(self):
+        """Gegenprobe: ``@change`` ohne htmx-Attribute ist voellig in Ordnung
+        (z. B. der Chart-Filter in ``statistics/partials/dashboard_content.html``).
+        """
+        html = '<select :value="docTypeFilter" @change="onDocTypeChange" class="x">'
+        match = self._TAG_WITH_ATTRS.search(html)
+        assert match is not None
+        assert self._double_change_channel(match.group("name"), match.group("attrs")) is None
+
+    def test_implicit_htmx_change_default_on_select_is_detected(self):
+        """Ohne ``hx-trigger`` triggert htmx ein ``<select>`` auf ``change`` —
+        zusammen mit ``@change`` ist das derselbe Doppelkanal."""
+        html = '<select @change="onDocTypeChange" hx-get="/x/" hx-target="#dynamic-fields">'
+        match = self._TAG_WITH_ATTRS.search(html)
+        assert match is not None
+        assert self._double_change_channel(match.group("name"), match.group("attrs")) is not None
+
+    def test_changed_filter_modifier_is_not_mistaken_for_change_event(self):
+        """``hx-trigger="keyup changed delay:300ms"`` feuert auf ``keyup``;
+        ``changed`` ist nur ein Filter — kein Doppelkanal."""
+        html = '<input @change="mark" hx-get="/x/" hx-trigger="keyup changed delay:300ms">'
+        match = self._TAG_WITH_ATTRS.search(html)
+        assert match is not None
+        assert self._double_change_channel(match.group("name"), match.group("attrs")) is None
+
+    def test_tag_scan_survives_gt_inside_quoted_attribute(self):
+        """Ein ``>`` in einem gequoteten Attributwert darf den Tag-Rumpf nicht
+        vorzeitig abschneiden — sonst entginge das dahinter stehende
+        ``hx-trigger`` der Pruefung."""
+        html = '<select title="a > b" @change="f" hx-get="/x/" hx-trigger="change">'
+        match = self._TAG_WITH_ATTRS.search(html)
+        assert match is not None
+        assert "hx-trigger" in match.group("attrs")
+        assert self._double_change_channel(match.group("name"), match.group("attrs")) is not None
+
     def test_no_htmx_inline_handlers_in_templates(self):
         """``hx-on::evt`` Inline-Handler werden intern per ``Function()``
         evaluiert und brauchen ``script-src 'unsafe-eval'``. Refs #692.

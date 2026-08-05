@@ -63,15 +63,29 @@
                 {# Dokumentationstyp #}
                 <div>
                     <label for="id_document_type" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.document_type.label }} *</label>
+                    {% comment %}Refs #1797: KEIN zweites @change hier. Die Anonym-/
+                    Stufen-Logik haengt in ``eventClientAutocomplete.init()`` am
+                    htmx-Lebenszyklus (``htmx:beforeRequest`` dieses Selects) — ein
+                    Alpine-@change waere ein zweiter, unabhaengiger Kanal auf
+                    demselben Browser-Event. Guard: ``test_no_double_change_channel_
+                    per_tag``.{% endcomment %}
                     <select name="document_type" id="id_document_type"
                             x-ref="docTypeSelect"
-                            @change="onEventDocTypeChange"
                             aria-required="true"
                             {% if meta_form.document_type.errors %}aria-invalid="true" aria-describedby="id_document_type-error"{% endif %}
                             class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                             hx-get="{% url 'core:event_fields_partial' %}"
                             hx-target="#dynamic-fields"
                             hx-trigger="change"
+                            {% comment %}Refs #1797: ein neuer change bricht den noch
+                            laufenden Feld-Request desselben Selects ab. Ohne das
+                            erzeugen zwei change-Events — der synthetische Dispatch des
+                            Autosave-Entwurfs-Restores (``static/js/autosave.js``) plus
+                            die Nutzerauswahl — zwei parallele Swaps auf
+                            ``#dynamic-fields``; der spaeter eintreffende ersetzt das
+                            Datei-Feld, nachdem der File-Chooser es befuellt hat, und
+                            der Kontakt wird ohne Anhang gespeichert.{% endcomment %}
+                            hx-sync="this:replace"
                             hx-include="[name='document_type']">
                         <option value="">---------</option>
                         {% for dt in meta_form.document_type.field.queryset %}
