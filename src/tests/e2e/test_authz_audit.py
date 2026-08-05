@@ -16,6 +16,7 @@ import datetime
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import requests
@@ -51,6 +52,43 @@ def medium_seed(request, base_url):
     # unter xdist (workerinput gesetzt, vgl. _get_worker_info in conftest.py)
     # würden Reseed/Harvesting fremde Worker-DBs/Server verfehlen.
     assert getattr(request.config, "workerinput", None) is None, "Audit nur seriell ausführen (ohne pytest-xdist / -n)"
+
+    # Refs #1788: Kollektions-Guard, zusätzlich zum xdist-Guard oben. Der
+    # xdist-Guard fängt "läuft PARALLEL zu anderen Workern" — nicht "läuft
+    # SERIELL in derselben Session gemeinsam mit anderen E2E-Dateien" (z. B.
+    # versehentliches ``AUTHZ_AUDIT=1 pytest src/tests/e2e/`` ohne
+    # ``-m authz_audit``). Genau das ist fatal: ``seed --flush --scale
+    # medium`` unten reißt die geflushte E2E-Seed-Basis JEDER anderen Datei
+    # ab, die in derselben Session vor oder nach diesem Fixture läuft — die
+    # Zustands-Kaskade, die Refs #1787 für den vollen seriellen Lauf
+    # dokumentiert (dort ohne Reseed, aber dieselbe Klasse Fehlgriff: Tests
+    # verlassen sich auf Bestandsobjekte, die unter ihnen wegbrechen). Diese
+    # Datei ist deshalb als Solo-Invocation konzipiert (siehe Modul-Docstring
+    # + docs/e2e-architecture.md § AuthZ-Live-Audit-Runner).
+    #
+    # ``request.session.items`` ist zum Zeitpunkt des ersten Fixture-Setups
+    # bereits die vollständige, ggf. markerfilterte Collection dieser
+    # pytest-Session (befüllt in der Sammelphase, vor jedem Testlauf) — jedes
+    # Item trägt seinen Quelldateipfad in ``item.path``. Der Guard prüft
+    # gezielt auf GESCHWISTER-Dateien im selben ``tests/e2e``-Verzeichnis;
+    # unabhängige Unit-Test-Dateien (eigene DB über ``settings.test``) sind
+    # unproblematisch und werden bewusst nicht mitgezählt.
+    foreign_e2e_files = sorted(
+        {
+            str(item.path)
+            for item in request.session.items
+            if item.path.parent == Path(__file__).parent and item.path != Path(__file__)
+        }
+    )
+    if foreign_e2e_files:
+        pytest.fail(
+            "AUTHZ_AUDIT=1 ist eine Solo-Invocation: 'seed --flush --scale medium' "
+            "zerstoert die Seed-Basis ALLER anderen E2E-Dateien. Diese Session hat "
+            f"zusaetzlich gesammelt: {foreign_e2e_files}. Gezielt aufrufen: "
+            "AUTHZ_AUDIT=1 .venv/bin/python -m pytest "
+            "src/tests/e2e/test_authz_audit.py -m authz_audit -v"
+        )
+
     python = str(helpers.REPO_ROOT / ".venv" / "bin" / "python")
     if not os.path.exists(python):
         python = sys.executable

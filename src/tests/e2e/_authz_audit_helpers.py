@@ -331,6 +331,22 @@ def _owner_doc_type_source(owner_table, owner_column):
 def prepare_audit_objects(conn, fac_id):
     """Idempotente Seed-Nachbesserungen je Facility (Refs #1055):
 
+    **WARNUNG (Refs #1788):** Diese Funktion UPDATEt Bestandszeilen der
+    Seed-DB direkt (Owner-Umhängen, Sensitivität, Anhänge, Dokumentationstyp
+    von Client/Case, …) — es gibt KEIN Row-Snapshot/Restore, die Mutationen
+    bleiben für den Rest des Prozesses stehen. Das ist NUR zulässig, weil
+    ``test_authz_audit.py`` als Solo-Invocation exklusiv auf einer frisch
+    per ``seed --flush --scale medium`` geflushten E2E-DB läuft (erzwungen
+    durch den xdist- UND den Kollektions-Guard in der ``medium_seed``-Fixture,
+    siehe ``test_authz_audit.py``) — keine andere Datei/kein anderer Prozess
+    liest oder schreibt gleichzeitig dieselbe DB. Wird diese Funktion je in
+    einem Kontext mit geteiltem State wiederverwendet (z. B. gegen die
+    reguläre E2E-Seed-DB neben anderen Testdateien), MUSS sie zuerst auf
+    Snapshot/Restore umgebaut werden — die hier gemachten Mutationen sind
+    sonst genau die Klasse Fallout, die Refs #1787 für den vollen seriellen
+    Lauf dokumentiert (geteilte Bestandsobjekte, die unter fremden Tests
+    wegbrechen).
+
     1. 1 Trash-Client (client_trashed).
     2. Vertragskonformes sample_event: Der Seed vergibt Owner und
        DocumentType-Sensitivität zufällig; die Erwartungen für
