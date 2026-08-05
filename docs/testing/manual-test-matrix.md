@@ -125,6 +125,7 @@ Status-Symbole gelten gleichermassen im Run-Log:
 | I18N | Sprachen (DE/EN) | REPORT | Datenschutzfreundliche externe Berichte |
 | CONFIG | Formular-Konfiguration (DocumentTypes/FieldTemplates/FieldGroups) | COND | Bedingte Feldlogik (Regel-Editor + Live-Auswertung) |
 | CLIENT-DYN | Dynamische Zusatzfelder an der Person | CASE-DYN | Dynamische Zusatzfelder am Fall |
+| IMPORT | CSV-Import-Wizard (Datenportabilität, M4) | RECT | Art.-16-Berichtigungsworkflow (Datenportabilität, M4) |
 
 **Forward-looking Bereiche (Refs #908):** `SETUP`, `COMP`, `PRIV`, `REPORT` und `A11Y` sind aufgenommen, damit die jeweiligen Feature-Issues (#917 Einrichtungsassistent, #919 Compliance-Dashboard, #918 Freitext-Review, #921 Externe Berichte) ihre Cases unter einheitlichem Schema ablegen können, sobald das Feature implementiert ist. A11Y (Refs #912) bekommt einen eigenen Cases-Block.
 
@@ -271,8 +272,10 @@ Methodik:
 | B | Audit | 5 | 5 | 0 | 100 % |
 | B | Aufbewahrung | 2 | 2 | 0 | 100 % |
 | B | Auth | 10 | 10 | 0 | 100 % |
+| B | Berichtigungen | 8 | 0 | 8 | 0 % |
 | B | Compliance | 4 | 0 | 4 | 0 % |
 | B | DSGVO | 8 | 8 | 0 | 100 % |
+| B | Datenimport | 9 | 0 | 9 | 0 % |
 | B | DeletionRequests | 6 | 6 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
@@ -308,17 +311,17 @@ Methodik:
 | B | WorkItems | 10 | 10 | 0 | 100 % |
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
-| C | Compliance | 14 | 7 | 7 | 50 % |
-| C | Security | 20 | 1 | 19 | 5 % |
+| C | Compliance | 16 | 7 | 9 | 44 % |
+| C | Security | 22 | 1 | 21 | 5 % |
 | D | Audit | 2 | 1 | 1 | 50 % |
-| D | Aufbewahrung | 9 | 8 | 1 | 89 % |
+| D | Aufbewahrung | 10 | 8 | 2 | 80 % |
 | D | Compliance | 7 | 2 | 5 | 29 % |
 | D | DeletionRequests | 1 | 0 | 1 | 0 % |
 | D | Fälle / Kaskade | 2 | 0 | 2 | 0 % |
 | D | Klient:innen / Kaskade | 1 | 0 | 1 | 0 % |
 | D | Konfigurationspakete | 3 | 0 | 3 | 0 % |
-| D | Ops | 8 | 0 | 8 | 0 % |
-| D | Security | 7 | 0 | 7 | 0 % |
+| D | Ops | 10 | 1 | 9 | 10 % |
+| D | Security | 8 | 0 | 8 | 0 % |
 | D | Statistik | 2 | 2 | 0 | 100 % |
 
 **Sektion-Totals:**
@@ -326,10 +329,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 241 | 180 | 61 | 75 % |
-| C | 34 | 8 | 26 | 24 % |
-| D | 42 | 13 | 29 | 31 % |
-| **Gesamt** | **329** | **213** | **116** | **65 %** |
+| B | 258 | 180 | 78 | 70 % |
+| C | 38 | 8 | 30 | 21 % |
+| D | 46 | 14 | 32 | 30 % |
+| **Gesamt** | **354** | **214** | **140** | **60 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

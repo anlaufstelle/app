@@ -203,6 +203,42 @@
 
 ---
 
+#### AUD-DSGVO-Art16-02 — App-gestützter Berichtigungsantrag mit Vier-Augen-Prüfweg (ADR-041)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Compliance | fachkraft + leitung | C/F/S || `test_rectification_service.py`, `test_rectification_views.py` |
+
+**DSGVO-Artikel-Zitat:** *Art. 16 — Recht auf Berichtigung. Art. 5 Abs. 2 — Rechenschaftspflicht (Nachweis des Prüfwegs).*
+
+**Hinweis:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) **ergänzt** AUD-DSGVO-Art16-01 (direktes Editieren) um einen dokumentierten Antrags-/Review-Weg — ADR-013 (kein Klientel-Self-Service) bleibt unverändert in Kraft. Antragsteller ist immer eine Fachkraft, nie die betroffene Person.
+
+**Code-Referenz:**
+- `src/core/services/client/rectification.py` (`request_rectification`, `approve_rectification`, `reject_rectification`)
+- `src/core/views/rectification.py` (`RectificationCreateView`, `RectificationReviewView`)
+- `src/core/models/rectification.py` (`RectificationRequest` — verschlüsselte Wertpaare, partieller Unique-Index, Selbst-Review-Check-Constraint)
+
+**Voraussetzung:** identifizierte Klient:in mit einer korrigierbaren Stammdatenangabe (z.B. Pseudonym-Tippfehler).
+
+**Schritte:**
+1. Als `fachkraft` aus der Personenakte einen Berichtigungsantrag stellen (`/clients/<uuid>/rectification/new/`) — Zielfeld, neuer Wert, fachliche Begründung.
+2. AuditLog filtern auf `Action=rectification_requested` → Eintrag vorhanden, `detail` enthält **keine** Feldwerte (nur `field_path` + `target_client`).
+3. Als `leitung` `/rectification/` öffnen — Antrag unter „Offen" sichtbar, Liste nach Status gruppiert.
+4. Review-Seite öffnen — Alt-/Neu-Wert sind **entschlüsselt** lesbar.
+5. Genehmigen → Wertänderung läuft ausschließlich über `update_client` (inkl. Konflikt-/Sperrmechanik).
+6. Versuch, denselben Antrag als Antragsteller (`fachkraft`) zu genehmigen → Ablehnung mit Vier-Augen-Meldung.
+
+**Erwartetes Ergebnis:**
+- Vollständiger Prüfweg (Antrag → fachliche Prüfung → Entscheidung → Anwendung) ist in der App nachvollziehbar, revisionssicher im append-only AuditLog.
+- Vier-Augen-Prinzip technisch erzwungen (Formular-Guard + DB-Check-Constraint als Backstop).
+- Ablehnung erfordert einen Pflicht-Prüfvermerk (verschlüsselt gespeichert) — auch die fachliche Abwägung bei Nicht-Korrektur wird dokumentiert.
+
+**Erwarteter Audit-Eintrag:** `rectification_requested`, `rectification_approved`/`rectification_rejected` — jeweils ohne Feldwerte im `detail`.
+
+**Status:** ☐ Offen
+
+---
+
 ### DSGVO Art. 17 — Löschung
 
 #### AUD-DSGVO-Art17-01 — 4-Augen-Lösch-Antrag
@@ -297,6 +333,43 @@
 **Erwartetes Ergebnis:**
 - JSON ist syntaktisch korrekt und schema-konform.
 - Inhalte sind wiederverwertbar (Re-Import in Test-Tool funktioniert).
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-DSGVO-Art20-02 — Facility-weiter Export als vollständige Datenportabilität
+
+> 🔧 **LOKAL/SSH erforderlich** für den Command-Aufruf selbst — die Schema-/Inhalts-Prüfung ist Audit-Arbeit am Ergebnis. Ausführlicher Durchführungspfad in [SEKTION D](manual-test-matrix-d.md#sektion-d--entwickler-probes-lokalssh) (`DEV-OPS-09`).
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Compliance | admin (Server-Zugriff) ||| `src/tests/test_facility_export.py` |
+
+**DSGVO-Artikel-Zitat:** *Art. 20 — Übertragbarkeit des GESAMTEN fachlichen Datenbestands, nicht nur einer einzelnen betroffenen Person.*
+
+**Code-Referenz:**
+- `src/core/management/commands/export_facility.py`
+- Schema-Referenz: [`docs/facility-export-schema.md`](../facility-export-schema.md)
+- Betrieb: [`docs/ops-runbook.md`](../ops-runbook.md) § 3.5
+
+**Voraussetzung:** Admin-DB-Rolle (BYPASSRLS) verfügbar; Einrichtung mit Personen, Fällen, Ereignissen, Anhängen, Konfiguration.
+
+**Schritte:**
+1. `export_facility --facility "<Name>" --output /tmp/facility-export.json --indent 2` mit Admin-DB-Rolle ausführen (Ops-Runbook § 3.5).
+2. Datei öffnen: Top-Level-Schlüssel (`schema_version`, `facility`, `configuration`, `entities`) prüfen.
+3. Stichprobe: ein verschlüsseltes Feld (Client oder Event) liegt im Export als **entschlüsselter Klartext** vor.
+4. Papierkorb-Stichprobe: eine zuvor in den Trash gelegte Person samt Kind-Daten (Fälle/Events/Anhänge) fehlt vollständig; eine k-anonymisierte/vollständig anonymisierte Person ist enthalten und trägt eine entsprechende Markierung.
+5. Cross-Facility-Stichprobe: Konfiguration/Entitäten einer zweiten Einrichtung tauchen **nicht** im Export auf.
+6. AuditLog filtern auf den Export-Lauf.
+
+**Erwartetes Ergebnis:**
+- Datei ist vollständig, schema-konform (Schema v1) und maschinenlesbar (`json.load` ohne Fehler).
+- Klartext-Werte sind vorhanden — die Datei ist **wie ein DB-Backup zu behandeln** (nur verschlüsselte Ziele, Zugriff nur Berechtigte, danach sicher löschen).
+- Trash-Personen inkl. Kind-Daten fehlen vollständig (keine dangling FKs); anonymisierte Personen sind enthalten und markiert.
+- Ohne Admin-DB-Rolle (BYPASSRLS) bricht der Command **fail-loud** ab statt stillschweigend leere Listen zu liefern.
+
+**Erwarteter Audit-Eintrag:** Export-Audit mit Zählern je Entität, `detail` ohne PII (`test_command_writes_audit_entry_with_counters`, `test_audit_detail_contains_no_pii`).
 
 **Status:** ☐ Offen
 
@@ -847,6 +920,64 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 - Dateinamen enthalten keine personenbezogenen Daten.
 
 **DSGVO/Security-Note:** OWASP CSV-Injection (CWE-1236). Bei Klient-Daten besonders kritisch.
+
+**Status:** ☐ Offen
+
+---
+
+### Security: CSV-Import
+
+#### AUD-SEC-IMPORT-01 — Fehlerbericht des Probelaufs ist frei von Zellwerten
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | facility_admin | C || `test_import_engine.py::TestErrorReportIsPiiFree` |
+
+**DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. c/f — Datenminimierung und Vertraulichkeit auch im Fehlerpfad; ein Fehlerbericht darf kein Seitenkanal für die importierten Rohdaten sein.*
+
+**Code-Referenz:**
+- `src/core/services/import_engine.py` (`ERROR_MESSAGES`-Katalog — feste Meldungen ohne Interpolation von Zellwerten, `_pii_safe_message` als Sanitizer-Backstop)
+- `job.result_json` ist als `non_pii` klassifiziert
+
+**Voraussetzung:** CSV mit mindestens zwei absichtlich fehlerhaften Zeilen, deren Werte gut wiedererkennbar sind (z.B. ein eindeutiger Test-String als Pseudonym/Notiz).
+
+**Schritte:**
+1. Als `facility_admin` einen Import-Lauf mit den präparierten Fehlerzeilen bis zum Probelauf durchführen.
+2. Fehlertabelle auf der Detailseite sichten: Spalten Zeile/Spalte/Code/Meldung.
+3. Seitenquelltext nach dem eindeutigen Test-String durchsuchen.
+4. `job.result_json` direkt in der DB/Shell inspizieren (`ImportJob.objects.get(pk=...).result_json`) und ebenfalls nach dem Test-String durchsuchen.
+
+**Erwartetes Ergebnis:**
+- Fehlermeldungen kommen ausschließlich aus dem festen Katalog (z.B. „Wert ist keine gültige Zahl.") — kein Zellwert erscheint in UI, HTML-Quelltext oder `result_json`.
+- Selbst ein DB-Fehler (z.B. `DataError` bei zu langem Wert) leakt keine DB-`DETAIL`-Zeile mit dem Zellwert in den Report (`TestDatabaseErrorsBecomeRowErrors::test_database_error_detail_never_reaches_the_report`).
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-IMPORT-02 — Quelldatei bleibt verschlüsselt und wird nach Abschluss des Laufs entfernt
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | facility_admin | C || `test_import_engine.py::TestCommitImport`, `TestAbortImport` |
+
+**DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. e (Speicherbegrenzung) + Art. 32 (Verschlüsselung ruhender Daten) — die hochgeladene Rohdatei ist eine vollständige Kopie roher, teils sensibler Klientendaten und darf nicht länger als nötig unverschlüsselt oder überhaupt vorliegen.*
+
+**Code-Referenz:**
+- `src/core/services/import_engine.py` (`store_import_upload` — verschlüsselte Ablage unter `MEDIA_ROOT/<facility>/imports/`, `original_filename_encrypted`; `commit_import`/`abort_import` — `delete_import_file` + Leeren von `storage_filename`)
+
+**Voraussetzung:** SSH-/Server-Zugriff zur Sichtprüfung des Media-Verzeichnisses (siehe [SEKTION D](manual-test-matrix-d.md#sektion-d--entwickler-probes-lokalssh)).
+
+**Schritte:**
+1. CSV hochladen; per SSH `MEDIA_ROOT/<facility>/imports/` sichten — die abgelegte Datei trägt einen UUID-Dateinamen (`*.enc`), **nicht** den Original-Dateinamen.
+2. Datei roh öffnen (`hexdump`/`cat`) — kein Klartext-CSV-Inhalt lesbar.
+3. Lauf bis zur fehlerfreien Übernahme durchführen; Verzeichnis erneut sichten.
+4. Zweiten Lauf hochladen und stattdessen abbrechen; Verzeichnis erneut sichten.
+
+**Erwartetes Ergebnis:**
+- Schritt 1/2: Datei liegt ausschließlich verschlüsselt vor, Originaldateiname taucht nirgends im Klartext auf (auch nicht im Audit-Detail von `import_uploaded`).
+- Schritt 3: nach Übernahme ist die `.enc`-Datei entfernt, `storage_filename` in der DB geleert.
+- Schritt 4: nach Abbruch ebenso entfernt — unabhängig davon, ob der Lauf committed oder aborted endete, bleibt keine Quelldatei liegen.
 
 **Status:** ☐ Offen
 

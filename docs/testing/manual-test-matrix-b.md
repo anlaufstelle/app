@@ -9,7 +9,7 @@
 > **Zielgruppe:** Tobias als Entwickler/Tester. Systematisches Durchgehen aller Bereiche vor jedem Major-Release.
 >
 > **Format:** Pro Bereich ein `<details open>`-Block mit Header (Routen, View-Klassen, E2E-Coverage, Spezial-Setup) und allen Cases. Bereiche in dieser Reihenfolge:
-> AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS → CONFIG → COND → CLIENT-DYN/CASE-DYN.
+> AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS → CONFIG → COND → CLIENT-DYN/CASE-DYN → IMPORT → RECT.
 
 <details open>
 <summary><strong>🔐 AUTH — Authentifizierung (10 Cases)</strong></summary>
@@ -7404,6 +7404,430 @@
 - Es erscheint **kein** 500er — der `PROTECT`-Constraint wird als Fachmeldung übersetzt.
 - Nach Schritt 4 ist der Typ löschbar (oder die Blocker-Liste nennt nur noch die verbleibenden Gründe).
 - Der Entitätstyp ist beim Bearbeiten eines bestehenden Typs **nicht** änderbar; ein manipulierter POST ändert den Wert nicht und erzeugt keinen 500er.
+
+**Status:** ☐ Offen
+
+</details>
+
+<details open>
+<summary><strong>📥 IMPORT — CSV-Import-Wizard (9 Cases)</strong></summary>
+
+**Routen:** `/import/`, `/import/neu/`, `/import/<uuid>/`, `/import/<uuid>/zuordnung/`, `/import/<uuid>/probelauf/`, `/import/<uuid>/uebernehmen/`, `/import/<uuid>/abbrechen/` 
+**Views:** `src/core/views/import_wizard.py` (`ImportListView`, `ImportCreateView`, `ImportDetailView`, `ImportMappingView`, `ImportPreviewView`, `ImportCommitView`, `ImportAbortView`) — alle mit `FacilityAdminRequiredMixin`, kein Sudo-Mode 
+**Services:** `src/core/services/import_engine.py` (`store_import_upload`, `apply_mapping`, `available_targets`, `run_import`, `commit_import`, `abort_import`, `cleanup_stale_import_jobs`) — schreibt ausschließlich über `create_client`/`create_event` 
+**Forms:** `src/core/forms/import_data.py` (`ImportUploadForm` — Zieltyp, Dokumentationstyp, Datei, Trennzeichen-/Zeichensatz-Auswahl) 
+**Models:** `src/core/models/import_job.py` (`ImportJob` — `Status`: uploaded → mapped → validated → committed/aborted; `storage_filename`, `original_filename_encrypted` nur verschlüsselt) 
+**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über `test_import_engine.py`, `test_import_views.py`, `test_import_job.py` 
+**Spezial-Setup:**
+- Rolle **facility_admin** (`admin`) — alle anderen Rollen bekommen 403 (`TestRoleGate`).
+- CSV-Testdateien lokal vorbereiten: eine saubere (0-Fehler-Lauf), eine mit mind. einem defekten Datensatz (Zeilenfehler-Lauf), optional eine cp1252-kodierte (Excel-Export) für ENT-IMPORT-03.
+- Limits: max. 1000 Datenzeilen / 5 MB (`import_engine.MAX_ROWS`/`MAX_BYTES`).
+
+---
+
+### TC-ID: ENT-IMPORT-01 — Navigation „Datenimport" nur für facility_admin sichtbar
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin vs. emma/miriam/lena | C | ⚪ ||
+
+**Voraussetzung:** keine.
+
+**Schritte:**
+1. Als `emma` (lead), `miriam` (staff) und `lena` (assistant) einloggen und Desktop-Navigation + Mobile-„Mehr" sichten.
+2. Als `admin` (facility_admin) einloggen, dieselben Stellen sichten.
+3. Als `admin` direkt `/import/` aufrufen; als `miriam` denselben Aufruf versuchen.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: kein Menüpunkt „Datenimport" (`data-testid='nav-import'`/`'mobile-nav-import'` fehlt) in Desktop- oder Mobile-Navigation.
+- Schritt 2: Menüpunkt vorhanden, führt zu `/import/`.
+- Schritt 3: `admin` erhält 200, `miriam` 403 (`TestRoleGate.test_other_roles_get_403_on_the_list`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-02 — Upload mit Trennzeichen-Wahl und Zeilen-/Größenlimit
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C | ⚪ | `test_import_views.py`, `test_import_engine.py` |
+
+**Voraussetzung:** ENT-IMPORT-01 (Zugriff auf `/import/`).
+
+**Schritte:**
+1. `/import/neu/` aufrufen, Zieltyp „Person" wählen, eine saubere semikolon-getrennte CSV mit Kopfzeile hochladen, Trennzeichen auf „Automatisch erkennen" belassen.
+2. Speichern → Redirect auf Zuordnungs-Schritt (`/import/<uuid>/zuordnung/`).
+3. Zweiten Lauf mit einer Datei starten, die **1001** Datenzeilen enthält.
+4. Dritten Lauf mit einer Datei > 5 MB starten.
+5. Vierten Lauf mit Zieltyp „Ereignis" **ohne** Dokumentationstyp starten.
+
+**Erwartetes Ergebnis:**
+- Schritt 2: `ImportJob` im Status `uploaded`, Audit-Eintrag `import_uploaded` (Action-Detail ohne Dateinamen).
+- Schritt 3: Fehlermeldung „Die Datei hat mehr als 1000 Datenzeilen.", kein Job angelegt.
+- Schritt 4: Fehlermeldung zur Maximalgröße (5 MB), kein Job angelegt.
+- Schritt 5: Fehlermeldung — Ereignis-Import ohne Dokumentationstyp ist nicht ausführbar (`test_upload_rejects_an_event_job_without_document_type`).
+
+**DSGVO/Security-Note:**
+- Quelldatei liegt sofort verschlüsselt unter `MEDIA_ROOT/<facility>/imports/`; der Originaldateiname wird **nur verschlüsselt** gespeichert (`original_filename_encrypted`) und taucht auch im Audit-Detail nicht auf.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-03 — cp1252-Fallback bei nicht-UTF-8-Datei
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C || `test_import_engine.py::TestParsing` |
+
+**Voraussetzung:** eine CSV-Datei, in Windows-1252 exportiert (z.B. Umlaute aus älterem Excel).
+
+**Schritte:**
+1. `/import/neu/` aufrufen, die cp1252-Datei hochladen, Zeichensatz auf „Automatisch erkennen" belassen.
+2. Vorschau (erste Zeilen) auf der Zuordnungsseite prüfen.
+
+**Erwartetes Ergebnis:**
+- Umlaute/Sonderzeichen werden korrekt dargestellt (kein Mojibake) — die Engine fällt bei UTF-8-Dekodierfehler automatisch auf cp1252 zurück (`_decode`).
+- Alternativ: Zeichensatz explizit auf „Windows-1252" stellen — führt zum selben Ergebnis.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-04 — Zuordnung: Spalten→Ziele inkl. `data_json.<slug>`, FILE-Felder nie angeboten
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C || `test_import_engine.py::TestAvailableTargets`, `test_import_views.py` |
+
+**Voraussetzung:** Dokumentationstyp mit mind. einem normalen und einem Datei-Feld existiert; Upload mit Spalten, die auf Stammdaten **und** ein dynamisches Feld zeigen sollen.
+
+**Schritte:**
+1. Auf der Zuordnungsseite pro Spalte ein Ziel aus dem Dropdown wählen — mind. eine Spalte auf ein dynamisches Feld (`data_json.<slug>`) mappen.
+2. Dropdown-Inhalt der Zieldropdowns sichten: enthält es das Datei-Feld?
+3. Speichern mit einer Pflichtspalte (Pseudonym bzw. Zeitpunkt) unbelegt.
+4. Speichern mit doppelt vergebenem Ziel (zwei Spalten auf dasselbe Ziel).
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Sample-Werte je Spalte werden zur Orientierung angezeigt (`test_mapping_page_shows_sample_values_per_column`).
+- Schritt 2: **kein** Datei-Feld im Dropdown — Datei-Uploads laufen nie über den CSV-Import (`test_file_fields_are_never_offered`).
+- Schritt 3: Formular meldet die fehlende Pflichtzuordnung, kein Speichern.
+- Schritt 4: Formular meldet doppeltes Ziel, kein Speichern.
+- Erneutes Öffnen der Zuordnungsseite nach erfolgreichem Speichern zeigt die vorherige Auswahl vorbelegt (`test_mapping_page_keeps_the_previous_selection`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-05 — Probelauf mit Fehlern zeigt PII-freie Fehlertabelle
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C || `test_import_engine.py::TestErrorReportIsPiiFree`, `TestSavepointPerRow` |
+
+**Voraussetzung:** CSV mit mind. zwei fehlerhaften Zeilen (z.B. eine mit bereits vergebenem Pseudonym, eine mit unbekannter Kontaktstufe).
+
+**Schritte:**
+1. Zuordnung speichern, „Probelauf" auslösen (`/import/<uuid>/probelauf/`).
+2. Fehlertabelle auf der Detailseite sichten.
+3. Seitenquelltext (Strg+U bzw. „Seitenquelltext anzeigen") nach den eingegebenen Testzellwerten durchsuchen (z.B. dem konkreten Pseudonym-String).
+
+**Erwartetes Ergebnis:**
+- Fehlertabelle zeigt **ausschließlich** Zeile, Spalte, Fehlercode und eine feste Meldung aus dem Katalog (z.B. „Die fachliche Prüfung hat die Zeile abgelehnt.", „Wert ist keine gültige Zahl.") — **niemals** den eingegebenen Zellwert.
+- Schritt 3: kein Treffer für die Testzellwerte im gerenderten HTML.
+- `job.status` bleibt `validated` mit `error_count > 0` — kein Datensatz wurde angelegt (Probelauf rollt zurück).
+- Zähler auf der Detailseite ist als „Würden angelegt (Probelauf)" beschriftet, nicht als „Angelegte Datensätze" (`TestDetailCountLabel`).
+
+**DSGVO/Security-Note:**
+- Der Fehlerbericht (`result_json`) ist als `non_pii` klassifiziert — genau diese Case verifiziert die Zusicherung händisch, ergänzend zum Sanitizer-Unit-Test.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-06 — Übernahme nur bei 0 Fehlern, All-or-Nothing, Quelldatei danach gelöscht
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C | ⚪ | `test_import_engine.py::TestCommitRun`, `TestCommitImport` |
+
+**Voraussetzung:** ENT-IMPORT-05 durchgeführt (fehlerhafter Lauf liegt vor) **und** ein zweiter, fehlerfreier Lauf vorbereitet.
+
+**Schritte:**
+1. Beim fehlerhaften Lauf aus ENT-IMPORT-05 versuchen, „Übernehmen" auszulösen (`/import/<uuid>/uebernehmen/`).
+2. Beim fehlerfreien Lauf: Probelauf durchführen (0 Fehler), dann „Übernehmen" auslösen.
+3. Nach der Übernahme: `/import/<uuid>/` erneut öffnen; die angelegten Personen/Ereignisse im jeweiligen Modul stichprobenartig prüfen (inkl. Activity, EventHistory/Audit falls Ereignis-Import).
+4. Prüfen, ob die verschlüsselte Quelldatei unter `MEDIA_ROOT/<facility>/imports/` noch existiert (per SSH/Dev-Zugriff, siehe Sektion D).
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Fehlermeldung „Der Importlauf enthält Fehler und kann nicht übernommen werden." — kein Datensatz angelegt.
+- Schritt 2: Übernahme erfolgreich, `job.status=committed`, alle Zeilen als Personen/Ereignisse angelegt — **derselbe** Codepfad wie der Probelauf, nur ohne Rollback.
+- Schritt 3: Detailseite zeigt „Angelegte Datensätze" (faktische Beschriftung), Audit `import_committed` mit Zählern, ohne Feldwerte.
+- Schritt 4: `storage_filename` ist geleert, die `.enc`-Datei ist von der Platte entfernt (`test_commit_deletes_the_upload_and_audits`).
+
+**DSGVO/Security-Note:**
+- All-or-Nothing verhindert Teilimporte mit inkonsistentem Stand; die Löschung der Quelldatei nach Übernahme minimiert die Aufbewahrungszeit der rohen CSV (Art. 5 Abs. 1 lit. e).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-07 — Abbrechen löscht die verschlüsselte Quelldatei ohne Übernahme
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C || `test_import_engine.py::TestAbortImport` |
+
+**Voraussetzung:** ein Lauf im Status `uploaded` oder `mapped` (noch keine Übernahme).
+
+**Schritte:**
+1. Auf der Detail- oder Zuordnungsseite „Abbrechen" auslösen (`/import/<uuid>/abbrechen/`).
+2. Detailseite erneut öffnen.
+3. Abbrechen ein zweites Mal auf demselben Lauf versuchen.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: `job.status=aborted`, keine Personen/Ereignisse angelegt, Audit `import_aborted` mit `reason=user`.
+- Die verschlüsselte Quelldatei ist von der Platte entfernt, `storage_filename` geleert.
+- Schritt 3: freundliche Meldung „Der Importlauf ist bereits abgeschlossen." statt 500er (`test_second_abort_redirects_instead_of_failing`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-08 — Cross-Facility: fremder Import-Lauf ist 404
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin (F1) + admin_1 (F2) | C || `test_import_views.py::TestFacilityScoping` |
+
+**Voraussetzung:** ein Import-Lauf in Facility 1, angelegt von `admin`.
+
+**Schritte:**
+1. Als `admin` (F1) einen Lauf anlegen, UUID notieren.
+2. Als `admin_1` (F2) einloggen, `/import/` aufrufen — Liste sichten.
+3. Direkt-URL `/import/<F1-uuid>/`, `/import/<F1-uuid>/zuordnung/` und `/import/<F1-uuid>/abbrechen/` aufrufen.
+
+**Erwartetes Ergebnis:**
+- Schritt 2: Liste zeigt ausschließlich eigene (F2-)Läufe.
+- Schritt 3: alle drei Aufrufe liefern 404 — kein Leak, dass der Lauf existiert (`test_foreign_job_detail_is_404`, `test_foreign_job_abort_is_404`).
+
+**DSGVO/Security-Note:**
+- Mandantentrennung nach RLS-Muster, IDOR-Probe analog zu den bestehenden `_authz_expectations`-Tests.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-IMPORT-09 — Statusmaschine: Probelauf/Übernahme ohne vorherigen Schritt wird abgewiesen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Datenimport | admin | C || `test_import_views.py::TestStateMachineGuards` |
+
+**Voraussetzung:** ein frisch hochgeladener Lauf ohne Zuordnung (Status `uploaded`).
+
+**Schritte:**
+1. Direkt `/import/<uuid>/probelauf/` aufrufen, ohne vorher die Zuordnung zu speichern.
+2. Direkt `/import/<uuid>/uebernehmen/` aufrufen, ohne vorherigen Probelauf.
+3. Nach Übernahme (ENT-IMPORT-06) versuchen, dieselbe Zuordnung erneut zu ändern (`/import/<uuid>/zuordnung/`).
+
+**Erwartetes Ergebnis:**
+- Jeder Schritt außer der Reihe endet in `messages.error` + Redirect auf die Detailseite — **nie** ein 500er.
+- Schritt 3: „Der Importlauf ist bereits abgeschlossen." — ein abgeschlossener Lauf lässt sich nicht neu zuordnen.
+
+**Status:** ☐ Offen
+
+</details>
+
+<details open>
+<summary><strong>✍️ RECT — Art.-16-Berichtigungsworkflow (8 Cases)</strong></summary>
+
+**Routen:** `/clients/<uuid>/rectification/new/`, `/rectification/`, `/rectification/<uuid>/review/` 
+**Views:** `src/core/views/rectification.py` (`RectificationCreateView` — `StaffRequiredMixin`; `RectificationListView`/`RectificationReviewView` — `LeadOrAdminRequiredMixin`) 
+**Services:** `src/core/services/client/rectification.py` (`rectifiable_fields`, `request_rectification`, `approve_rectification`, `reject_rectification`) — Anwendung ausschließlich über `update_client` 
+**Models:** `src/core/models/rectification.py` (`RectificationRequest` — `field_path`, `old_value`/`new_value`/`reason`/`review_note` verschlüsselt, partieller Unique-Index `unique_pending_rectification_request`, Check-Constraint gegen Selbst-Review), Migrationen `0138`/`0139` 
+**Hintergrund:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) — ergänzt, ersetzt aber nicht [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) (kein Klientel-Self-Service) 
+**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über `test_rectification_model.py`, `test_rectification_service.py`, `test_rectification_views.py` 
+**Spezial-Setup:**
+- Antragstellung als **fachkraft** (`miriam`), Prüfung als **leitung** (`emma`) — Vier-Augen-Prinzip braucht zwei Sessions.
+- Für die Sichtbarkeits-Probe zusätzlich eine sensible dynamische Feldvorlage, für die Widerruf-Probe eine Person, die anschließend in den Papierkorb gelegt bzw. anonymisiert wird.
+
+---
+
+### TC-ID: ENT-RECT-01 — Navigation „Berichtigungen" nur für lead+ sichtbar
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | emma (lead) vs. miriam/lena | C | ⚪ ||
+
+**Schritte:**
+1. Als `miriam` (staff) und `lena` (assistant) Desktop-Navigation + Mobile-„Mehr" sichten.
+2. Als `emma` (lead) und `admin` (facility_admin) dieselben Stellen sichten.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: kein Menüpunkt „Berichtigungen" (`data-testid='nav-rectification-requests'`/`'mobile-nav-rectification-requests'` fehlt); `miriam` sieht aber den Weg, einen Antrag **zu stellen** (Entry-Point an der Personenakte, siehe ENT-RECT-02).
+- Schritt 2: Menüpunkt vorhanden, führt zu `/rectification/`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-02 — Antrag stellen aus der Personenakte (Stammdaten + dynamische Felder nach Sichtbarkeit)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | fachkraft (`miriam`) | C/F | ⚪ | `test_rectification_views.py::TestCreateView` |
+
+**Voraussetzung:** identifizierte Person mit Dokumentationstyp, der ein normales und ein sensibles (verschlüsseltes) dynamisches Feld sowie ein Datei-Feld trägt.
+
+**Schritte:**
+1. Personen-Detail öffnen, „Berichtigung beantragen" (`/clients/<uuid>/rectification/new/`).
+2. Zielfeld-Dropdown sichten: welche Felder stehen zur Auswahl?
+3. Zielfeld „Pseudonym" wählen, neuen Wert + fachliche Begründung eingeben, absenden.
+4. Als `lena` (assistant) denselben Weg versuchen (sensibles Feld sollte für sie nicht wählbar sein, falls sie überhaupt Zugriff auf die Personenakte hat).
+
+**Erwartetes Ergebnis:**
+- Schritt 2: Dropdown enthält Stammdaten (Pseudonym, Altersgruppe, Notizen) **und** die für `miriam` sichtbaren dynamischen Felder — **nicht** `contact_stage` (Kontaktstufe, eigener Workflow) und **nicht** das Datei-Feld.
+- Schritt 3: `RectificationRequest` im Status `pending`, Audit `rectification_requested` **ohne** Feldwerte im Detail (`test_audit_entry_without_values`).
+- Schritt 4: das für `lena` unsichtbare sensible Feld erscheint nicht im Dropdown; ein manipulierter POST auf dieses Feld wird serverseitig abgewiesen (`test_invisible_dynamic_field_is_rejected`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-03 — Nur ein offener Antrag je Feld
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | fachkraft (`miriam`) | C || `test_rectification_model.py::TestPendingUniqueness`, `test_rectification_service.py` |
+
+**Voraussetzung:** ENT-RECT-02 (offener Antrag auf „Pseudonym").
+
+**Schritte:**
+1. Erneut einen Antrag auf **dasselbe** Zielfeld derselben Person stellen.
+2. Einen Antrag auf ein **anderes** Zielfeld derselben Person stellen.
+3. Den ersten Antrag genehmigen oder ablehnen lassen (ENT-RECT-04/05), danach erneut einen Antrag auf das nun abgeschlossene Feld stellen.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Formularfehler „Für dieses Feld läuft bereits ein Berichtigungsantrag." — kein zweiter offener Antrag (partieller Unique-Index als Backstop).
+- Schritt 2: erfolgreich — die Sperre gilt pro Feld, nicht pro Person.
+- Schritt 3: nach Abschluss ist ein neuer Antrag auf dasselbe Feld wieder möglich (`test_closed_request_does_not_block_a_new_one`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-04 — Prüfansicht mit entschlüsselten Alt-/Neu-Werten, Genehmigen wendet über `update_client` an
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | leitung (`emma`) | C | ⚪ | `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestApproveEndToEnd` |
+
+**Voraussetzung:** ENT-RECT-02 (offener Antrag).
+
+**Schritte:**
+1. `/rectification/` öffnen — Liste nach Status gruppiert (offen/genehmigt/abgelehnt) sichten.
+2. Antrag öffnen (`/rectification/<uuid>/review/`).
+3. Alt- und Neu-Wert sichten (im Klartext, entschlüsselt).
+4. „Genehmigen" auslösen.
+5. Personen-Detail öffnen, geänderten Wert prüfen; Audit-Log auf `CLIENT_UPDATED`/`update_client`-Spur sichten.
+
+**Erwartetes Ergebnis:**
+- Schritt 3: Alt-/Neu-Wert sind lesbar (nicht als Fernet-Token), fachliche Begründung ebenfalls.
+- Schritt 4: Antrag wird `approved`, Wert am Klient:in geändert — **ausschließlich** über `update_client` (inkl. `expected_updated_at`-Konkurrenzschutz, EventHistory/Audit-Signale wie bei jeder anderen Bearbeitung).
+- Schritt 5: Audit `rectification_approved` **ohne** Feldwerte im Detail; die eigentliche Wertänderung erzeugt zusätzlich den regulären `CLIENT_UPDATED`-Audit-Eintrag.
+- Bei sensibler Feld-Sichtbarkeit, die sich zwischen Antrag und Prüfung erhöht hat, blockiert das die Genehmigung **nicht** (`test_raised_sensitivity_does_not_block_a_lead_reviewer`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-05 — Ablehnen mit Pflicht-Prüfvermerk
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | leitung (`emma`) | C || `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestReject` |
+
+**Voraussetzung:** ein offener Antrag.
+
+**Schritte:**
+1. Review-Seite öffnen, „Ablehnen" **ohne** Prüfvermerk absenden.
+2. „Ablehnen" mit Prüfvermerk absenden (z.B. „Angabe entspricht der dokumentierten Wahrnehmung, keine Korrektur nötig.").
+3. Personen-Detail öffnen — Wert unverändert?
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Formularfehler, Prüfvermerk ist Pflicht (`test_reject_requires_a_note`).
+- Schritt 2: Antrag `rejected`, `review_note` verschlüsselt gespeichert (`test_review_note_is_encrypted_at_rest`), Audit `rectification_rejected` ohne Werte.
+- Schritt 3: Wert am Klient:in ist **vollständig unverändert**.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-06 — Vier-Augen-Verbot: Antragstellerin kann eigenen Antrag nicht prüfen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | leitung (`emma`) | C || `test_rectification_views.py::test_self_review_is_blocked_in_the_view`, `test_rectification_service.py::TestApproveGuards` |
+
+**Voraussetzung:** ein Antrag, bei dem `requested_by=emma` (Lead stellt selbst einen Antrag).
+
+**Schritte:**
+1. Als `emma` einen Berichtigungsantrag für eine eigene Test-Person stellen.
+2. Als `emma` (= Antragstellerin) `/rectification/<uuid>/review/` mit „Genehmigen" aufrufen.
+3. Als zweite Leitung (`admin`, facility_admin) denselben Antrag prüfen.
+
+**Erwartetes Ergebnis:**
+- Schritt 2: Fehlermeldung „Sie können Ihren eigenen Berichtigungsantrag nicht prüfen (Vier-Augen-Prinzip)." — Antrag bleibt `pending`, kein Wertwechsel; der DB-Check-Constraint ist der Backstop hinter der Formularmeldung.
+- Schritt 3: zweite Leitung kann normal genehmigen/ablehnen.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-07 — Konflikt-Meldung bei zwischenzeitlich geändertem Wert
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | fachkraft (`miriam`) + leitung (`emma`) | C/F || `test_rectification_service.py::test_conflict_guard_when_value_changed_meanwhile`, `test_rectification_views.py::test_conflict_shows_message_not_500` |
+
+**Voraussetzung:** ein offener Antrag auf ein Feld einer Person.
+
+**Schritte:**
+1. Antrag stellen (Alt-Wert wird beim Antrag selbst festgehalten).
+2. Bevor die Leitung prüft: den Ziel-Wert der Person auf einem anderen Weg direkt ändern (z.B. reguläres Bearbeiten-Formular).
+3. Als `emma` den Antrag genehmigen.
+
+**Erwartetes Ergebnis:**
+- Schritt 3: freundliche Konflikt-Meldung „Der Wert wurde zwischenzeitlich geändert — bitte den Antrag neu stellen." statt 500er oder stillem Überschreiben.
+- Antrag bleibt `pending`, der zwischenzeitlich geänderte Wert bleibt unangetastet.
+- Konflikt-Vergleich arbeitet auf entschlüsseltem Klartext, nicht auf rohen Fernet-Tokens (`test_conflict_guard_compares_plaintext_not_tokens` — sonst wäre jede Prüfung eines verschlüsselten Felds ein Fehlalarm).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RECT-08 — Widerrufene Personen (Papierkorb/anonymisiert) sind nicht beantrag-/prüfbar
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Berichtigungen | fachkraft (`miriam`) + leitung (`emma`) | C || `test_rectification_views.py::test_anonymized_client_is_not_rectifiable`, `test_closed_request_is_404`, `test_revoked_client_request_is_404` |
+
+**Voraussetzung:** ein offener Antrag auf eine Person, die anschließend in den Papierkorb gelegt oder (via Retention/Anonymisierung) anonymisiert wird.
+
+**Schritte:**
+1. Antrag stellen, dann die Person löschen (Vier-Augen-Lösch-Workflow) oder anonymisieren lassen.
+2. Als `miriam` versuchen, für dieselbe (nun widerrufene) Person einen **neuen** Antrag zu stellen.
+3. Als `emma` den **bereits offenen** Antrag der widerrufenen Person prüfen wollen (`/rectification/<uuid>/review/`).
+
+**Erwartetes Ergebnis:**
+- Schritt 2: neuer Antrag wird abgewiesen — widerrufene Personen sind nicht berichtigungsfähig.
+- Schritt 3: 404 statt 200 mit veralteten Werten — der Genehmigungspfad würde sonst frischen Klartext in eine bereits redigierte Zeile schreiben.
+- Die Anonymisierung selbst leert `old_value`/`new_value`/`reason`/`review_note` des Antrags (auch abgeschlossener); Antrags-Metadaten (Status, Feldpfad, Zeitstempel) bleiben als Vier-Augen-Nachweis erhalten (ADR-041, Refs #1792).
+
+**DSGVO/Security-Note:**
+- Verhindert, dass die Anonymisierung durch einen nachträglichen Berichtigungs-Approve rückgängig gemacht bzw. kontaminiert wird (Präzedenz-Fix Refs #1792).
 
 **Status:** ☐ Offen
 

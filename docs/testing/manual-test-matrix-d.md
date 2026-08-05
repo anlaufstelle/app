@@ -418,6 +418,41 @@
 
 **Status:** ☐ Offen
 
+---
+
+#### DEV-RET-12 — `enforce_retention` räumt liegengebliebene Import-Läufe ab (STALE_DAYS=7)
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Aufbewahrung | admin (CLI) ||| `test_import_engine.py::TestCleanupStaleImportJobs` |
+
+**Voraussetzung:** ein CSV-Import-Lauf im Status `uploaded`/`mapped`/`validated` (nicht abgeschlossen).
+
+**Code-Referenz:**
+- `src/core/services/import_engine.py` (`cleanup_stale_import_jobs`, `STALE_DAYS = 7`)
+- `src/core/management/commands/enforce_retention.py` — ruft `cleanup_stale_import_jobs(facility)` je Einrichtung im regulären Lauf mit auf.
+
+**Schritte:**
+1. Einen Import-Lauf anlegen, nicht abschließen (weder Übernahme noch Abbruch).
+2. Per DB-Backdate `created_at` des Laufs auf mehr als 7 Tage zurückdatieren.
+3. `python manage.py enforce_retention --dry-run` ausführen — Ausgabe auf einen Hinweis zum Import-Lauf prüfen.
+4. `python manage.py enforce_retention` (ohne `--dry-run`) ausführen.
+5. Lauf in der DB / unter `/import/<uuid>/` erneut prüfen; Quelldatei auf der Platte prüfen.
+6. Einen frischen (< 7 Tage alten) Lauf gegenprüfen — bleibt unangetastet.
+
+**Erwartetes Ergebnis:**
+- Der liegengebliebene Lauf wird auf `aborted` gesetzt, seine verschlüsselte Quelldatei von der Platte entfernt.
+- AuditLog-Eintrag `import_aborted` mit `detail.reason=stale`.
+- Ein bereits abgeschlossener (committed/aborted) oder ein frischer Lauf bleibt unangetastet.
+- Der Cleanup ist je Einrichtung gescopt — ein liegengebliebener Lauf einer anderen Facility wird von diesem Aufruf nicht angefasst.
+
+**DSGVO/Security-Note:**
+- Art. 5 Abs. 1 lit. e (Speicherbegrenzung) — verhindert, dass abgebrochene/vergessene Import-Läufe unbegrenzt eine verschlüsselte Kopie roher Klientendaten auf der Platte halten.
+
+**Status:** ☐ Offen
+
 ### D.STAT
 
 #### DEV-STAT-03 — Snapshot via `python manage.py create_statistics_snapshots`
@@ -838,6 +873,40 @@
 
 ---
 
+#### DEV-SEC-RLS-08 — Cross-Facility RectificationRequest unsichtbar (Mandantentrennung)
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | leitung (F1) + leitung_2 (F2) | C || `test_rectification_model.py::TestRectificationRequestRLSIsolation` |
+
+**Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `RectificationRequest`.
+
+**Code-Referenz:**
+- `src/core/views/rectification.py` — Listen-/Review-Views.
+- `src/core/models/rectification.py` (`RectificationRequest.objects`-Manager, Facility-Scoping).
+- Migration `0139_rls_rectificationrequest.py` — RLS-Policy.
+
+**Schritte:**
+1. F1: als `emma` einen Berichtigungsantrag für eine F1-Person anlegen (`/clients/<uuid>/rectification/new/`).
+2. F2: als `emma_1` einloggen.
+3. `/rectification/` aufrufen → Liste prüfen.
+4. Direkt-URL des F1-Antrags aufrufen (`/rectification/<F1-uuid>/review/`) — Genehmigen/Ablehnen versuchen.
+5. Optional in PostgreSQL: ohne `app.current_facility_id` `SELECT count(*) FROM core_rectificationrequest;` mit gesetztem F2-Kontext → 0 F1-Zeilen sichtbar.
+
+**Erwartetes Ergebnis:**
+- Liste zeigt nur F2-Anträge, kein F1-Eintrag.
+- Direkt-URL liefert 404, niemals 200 mit fremden Alt-/Neu-Werten.
+- AuditLog protokolliert keinen Zugriff auf den F1-Datensatz durch F2-User.
+
+**DSGVO/Security-Note:**
+- Art. 5 Abs. 1 lit. f (Integrität & Vertraulichkeit) + Art. 32 (TOM). Besonders sensibel, da die Review-Seite entschlüsselte Alt-/Neu-Werte anzeigt — ein RLS-Leck wäre hier ein direkter Klartext-Leak.
+
+**Status:** ☐ Offen
+
+---
+
 #### DEV-SEC-MFA-03 — Recovery-Flow
 
 > 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
@@ -1167,6 +1236,78 @@
 **Erwartetes Ergebnis:**
 - Drei Stufen sind unterscheidbar.
 - Externes Monitoring (UptimeRobot o.ä.) kann auf `degraded` warnen statt erst auf hartem 5xx.
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-09 — `export_facility` (Admin-DB-Rolle, Klartext-Datei wie Backup behandeln)
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||| `src/tests/test_facility_export.py` |
+
+**Code-Referenz:**
+- [`src/core/management/commands/export_facility.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/export_facility.py)
+- Schema-Referenz: [`docs/facility-export-schema.md`](../facility-export-schema.md)
+- Betrieb: [`docs/ops-runbook.md`](../ops-runbook.md) § 3.5
+
+**Voraussetzung:** Admin-DB-Rolle (`$POSTGRES_ADMIN_USER`/`$POSTGRES_ADMIN_PASSWORD`) verfügbar.
+
+**Schritte:**
+1. Ohne Admin-Rollen-Override ausführen: `docker compose exec web python manage.py export_facility --facility "<Name>" --output /tmp/facility-export.json`.
+2. Mit Admin-Rollen-Override (Ops-Runbook § 3.5): `docker compose exec -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py export_facility --facility "<Name>" --output /tmp/facility-export.json --indent 2`.
+3. Ausgabedatei sichten: `schema_version`, `facility`, `configuration`, `entities`.
+4. `--no-file-hashes` einmal gegenprüfen: Laufzeit spürbar kürzer, `sha256`-Felder der Attachments sind `null`.
+5. Facility per UUID **und** per Name aufrufen; mehrdeutigen Namen (zwei Facilities mit demselben Namen, falls vorhanden) und unbekannte UUID/Namen gegenprüfen.
+6. Ausgabedatei danach sicher löschen (`shred`/`rm`) — sie enthält entschlüsselten Klartext.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Command bricht **fail-loud** ab (kein leerer/stiller Export ohne Bypass).
+- Schritt 2: Export läuft durch, Datei ist vollständiges, schema-konformes JSON.
+- Schritt 4: `--no-file-hashes` überspringt das SHA-256-Streaming über die entschlüsselten Anhänge.
+- Schritt 5: unbekannte UUID/unbekannter Name → `CommandError`; mehrdeutiger Name → `CommandError` mit Hinweis auf Eindeutigkeit per UUID.
+- **DSGVO-Hinweis (nicht automatisiert prüfbar):** die Ausgabedatei ist wie ein DB-Backup zu behandeln — nur auf verschlüsselte Ziele schreiben, Übergabe nur an Berechtigte.
+
+**DSGVO/Security-Note:**
+- Art. 20 (Datenübertragbarkeit) + Art. 32 (TOM: Admin-Rollen-Zwang verhindert versehentlichen Export mit RLS-Lücken).
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-10 — Orphan-Storage-Cleanup schützt offene Import-Uploads
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||| `test_file_vault.py::TestStorageOrphanCleanup`, `test_cleanup_orphan_storage_command.py` |
+
+**Code-Referenz:**
+- `src/core/management/commands/cleanup_orphan_storage_files.py`
+- `src/core/services/file_vault/cleanup.py` (`cleanup_orphan_storage_files`)
+- [`docs/ops-runbook.md`](../ops-runbook.md) § 3.1 — `.enc`-Dateien ohne `Attachment`-**und** ohne offenen `ImportJob`-Record gelten als Waise; ein offener `ImportJob.storage_filename` schützt die Datei, solange der Lauf nicht `committed`/`aborted` ist.
+
+**Voraussetzung:** ein CSV-Import-Lauf im Status `uploaded`/`mapped`/`validated` (offen, Quelldatei liegt noch verschlüsselt vor).
+
+**Schritte:**
+1. Import-Lauf anlegen, **nicht** abschließen — Quelldatei-Pfad notieren (`MEDIA_ROOT/<facility>/imports/<uuid>.enc`).
+2. Mit Admin-DB-Rolle ausführen: `docker compose exec -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py cleanup_orphan_storage_files`.
+3. Quelldatei-Pfad erneut prüfen — noch vorhanden?
+4. Denselben Lauf abschließen (Übernahme oder Abbruch) — `storage_filename` wird geleert.
+5. Cleanup erneut ausführen.
+6. Gegenprobe **ohne** Admin-DB-Rolle ausführen.
+
+**Erwartetes Ergebnis:**
+- Schritt 3: Datei ist **weiterhin vorhanden** — der offene `ImportJob` schützt sie, obwohl kein `Attachment`-Record existiert.
+- Schritt 5: nach Abschluss des Laufs ist die (jetzt tatsächlich verwaiste, falls noch auf der Platte) Datei ein regulärer Löschkandidat.
+- Schritt 6: Command bricht **fail-loud** ab, ohne Bypass sähe der Lauf 0 `ImportJob`-Zeilen und würde offene Uploads **aller** Einrichtungen fälschlich löschen (Refs #662, #1554, #1060).
+
+**DSGVO/Security-Note:**
+- Art. 5 Abs. 1 lit. e (Speicherbegrenzung) — der Guard verhindert zwei gegenläufige Fehler: verwaiste Dateien häufen sich (kein Cleanup) **oder** ein laufender Import verliert mitten im Wizard seine Quelldatei (zu aggressiver Cleanup).
 
 **Status:** ☐ Offen
 
