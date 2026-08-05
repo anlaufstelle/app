@@ -26,8 +26,8 @@ from core.models import (
     Settings,
 )
 from core.reporting import registry
-from core.reporting.base import DatasetResult
-from core.reporting.data_source import ALL_EVENTS
+from core.reporting.base import CompletenessIssue, DatasetResult
+from core.reporting.data_source import BANS_IN_PERIOD
 from core.services.file_vault import is_encrypted_value
 
 pytestmark = pytest.mark.django_db
@@ -109,8 +109,11 @@ class TestBackendMetadaten:
         assert backend.slug == "ban-overview"
         assert backend.snapshot_enabled is False
 
-    def test_population_ist_alle_ereignisse(self, backend):
-        assert backend.population == ALL_EVENTS
+    def test_population_ist_hausverbote_im_zeitraum(self, backend):
+        """Fix-Runde 1 (Refs #1754): frueher ``ALL_EVENTS`` — sachlich falsch.
+        Gezaehlt werden nur Hausverbots-Ereignisse, und zwei der drei Zahlen
+        ignorieren ``occurred_at`` voellig (Stichtag bzw. Ablaufdatum)."""
+        assert backend.population == BANS_IN_PERIOD
 
     def test_name_und_labels_sind_lazy(self, backend):
         assert isinstance(backend.name, Promise)
@@ -128,7 +131,7 @@ class TestBuildDataset:
         assert result.mode == "aggregate"
         assert _kennzahlen(result) == {"ausgesprochen": 0, "aktiv_aktuell": 0, "abgelaufen_im_zeitraum": 0}
         assert result.summary == {"ausgesprochen": 0, "aktiv_aktuell": 0, "abgelaufen_im_zeitraum": 0}
-        assert result.completeness == []
+        assert [issue.code for issue in result.completeness] == ["point_in_time_active_bans"]
 
     def test_records_spiegeln_das_summary(self, backend, facility, zeitraum, staff_user, doc_type_hausverbot):
         _ban(facility, doc_type_hausverbot, staff_user)
@@ -379,6 +382,32 @@ class TestPrepareExport:
         assert prepared.records == []
         assert prepared.summary["ausgesprochen"] is None
         assert prepared.summary["aktiv_aktuell"] is None
+
+    def test_momentaufnahme_hinweis_erreicht_das_artefakt(self, backend, facility):
+        """I1 (Fix-Runde 1): ``aktiv_aktuell`` ist eine Stichtagszahl — die
+        Kennzeichnung muss im Artefakt stehen, nicht nur im Docstring.
+        Datenunabhaengig, ziffernfrei, Severity ``info``."""
+        leer = backend.prepare_export(facility, _rohergebnis())
+        voll = backend.prepare_export(facility, _rohergebnis(ausgesprochen=7, aktiv_aktuell=12))
+
+        for prepared in (leer, voll):
+            assert [issue.code for issue in prepared.completeness] == ["point_in_time_active_bans"]
+            issue = prepared.completeness[0]
+            assert issue.severity == "info"
+            assert issue.count is None
+            assert not any(zeichen.isdigit() for zeichen in str(issue.message))
+
+    def test_momentaufnahme_hinweis_wird_nicht_aus_dem_ergebnis_abgeleitet(self, backend, facility):
+        """Fail-safe wie K6 (Refs #1769): fester Code statt Ableitung aus
+        ``result.completeness`` — bei diesem Thema besonders wichtig."""
+        roh = _rohergebnis(ausgesprochen=7)
+        mit_fremdem_hinweis = dataclasses.replace(
+            roh, completeness=[CompletenessIssue("leaky", "3 Hausverbote betroffen", "warning", count=3)]
+        )
+
+        prepared = backend.prepare_export(facility, mit_fremdem_hinweis)
+
+        assert [issue.code for issue in prepared.completeness] == ["point_in_time_active_bans"]
 
     def test_schwelle_kommt_aus_den_facility_settings(self, backend, facility):
         Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})

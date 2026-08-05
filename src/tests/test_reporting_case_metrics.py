@@ -17,8 +17,8 @@ from django.utils.functional import Promise
 
 from core.models import Case, Client, DocumentType, Facility, Organization, Settings
 from core.reporting import registry
-from core.reporting.base import DatasetResult
-from core.reporting.data_source import PERSONS
+from core.reporting.base import CompletenessIssue, DatasetResult
+from core.reporting.data_source import CASES_IN_PERIOD
 from core.services.case.cases import close_case, reopen_case
 
 pytestmark = pytest.mark.django_db
@@ -75,8 +75,14 @@ class TestBackendMetadaten:
         assert backend.slug == "case-metrics"
         assert backend.snapshot_enabled is False
 
-    def test_population_ist_personen(self, backend):
-        assert backend.population == PERSONS
+    def test_population_ist_faelle_im_zeitraum(self, backend):
+        """Fix-Runde 1 (Refs #1754): frueher ``PERSONS`` — sachlich falsch.
+        ``PERSONS`` ist definiert als „Personen mit mindestens einem Ereignis im
+        Zeitraum"; ein Fall setzt aber kein Ereignis voraus, und
+        ``offene_faelle_aktuell`` hat gar keinen Zeitraumbezug. Der Ausweis muss
+        die tatsaechliche Basismenge benennen, sonst ist er genau die Sorte
+        Falschangabe, die K3-A3 beseitigen sollte."""
+        assert backend.population == CASES_IN_PERIOD
 
     def test_name_und_labels_sind_lazy(self, backend):
         assert isinstance(backend.name, Promise)
@@ -107,7 +113,7 @@ class TestBuildDataset:
             "offene_faelle_aktuell": 0,
             "betroffene_personen": 0,
         }
-        assert result.completeness == []
+        assert [issue.code for issue in result.completeness] == ["point_in_time_open_cases"]
 
     def test_records_spiegeln_das_summary(self, backend, facility, zeitraum):
         person = _person(facility)
@@ -279,6 +285,38 @@ class TestPrepareExport:
         assert prepared.records == []
         assert prepared.summary["neue_faelle"] is None
         assert prepared.summary["offene_faelle_aktuell"] is None
+
+    def test_momentaufnahme_hinweis_erreicht_das_artefakt(self, backend, facility):
+        """I1 (Fix-Runde 1): Die Kennzeichnung von ``offene_faelle_aktuell`` als
+        Stichtagszahl darf nicht nur im Docstring stehen — die Empfaengerin
+        liest den Docstring nie. Der Hinweis ist datenunabhaengig (immer da,
+        egal welche Zahlen) und ziffernfrei (sonst publizierte er selbst eine
+        Groesse), Severity ``info``: es ist kein Datenqualitaets-Mangel, sondern
+        eine Lesehilfe."""
+        leer = backend.prepare_export(facility, _rohergebnis())
+        voll = backend.prepare_export(
+            facility, _rohergebnis(neue_faelle=7, geschlossene_faelle=6, offene_faelle_aktuell=12)
+        )
+
+        for prepared in (leer, voll):
+            assert [issue.code for issue in prepared.completeness] == ["point_in_time_open_cases"]
+            issue = prepared.completeness[0]
+            assert issue.severity == "info"
+            assert issue.count is None
+            assert not any(zeichen.isdigit() for zeichen in str(issue.message))
+
+    def test_momentaufnahme_hinweis_wird_nicht_aus_dem_ergebnis_abgeleitet(self, backend, facility):
+        """Fail-safe wie K6 (Refs #1769): der Block wird aus dem festen Code
+        gebaut, nicht aus ``result.completeness``. Ein kuenftiger, bezifferter
+        Hinweis erreicht den Export damit nicht ungeprueft."""
+        roh = _rohergebnis(neue_faelle=7)
+        mit_fremdem_hinweis = dataclasses.replace(
+            roh, completeness=[CompletenessIssue("leaky", "17 Fälle betroffen", "warning", count=17)]
+        )
+
+        prepared = backend.prepare_export(facility, mit_fremdem_hinweis)
+
+        assert [issue.code for issue in prepared.completeness] == ["point_in_time_open_cases"]
 
     def test_schwelle_kommt_aus_den_facility_settings(self, backend, facility):
         Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})

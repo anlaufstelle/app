@@ -33,7 +33,10 @@ die zentrale Schwelle.
   frueher ausgesprochenes Hausverbot gilt weiter) — und bewusst mit dem
   **heutigen** Feldwert: ``aktiv``/``bis`` sind aktuelle Zustaende, kein
   Verlauf. Wird ein Hausverbot heute aufgehoben, sinkt diese Zahl auch fuer
-  einen laengst vergangenen Berichtszeitraum.
+  einen laengst vergangenen Berichtszeitraum. Das Artefakt traegt die
+  Kennzeichnung selbst (:data:`_POINT_IN_TIME_ISSUE`) — ein Docstring wird nicht
+  mitexportiert, und „so viele gelten heute" ist eine andere Aussage ueber eine
+  Einrichtung als „so viele im ersten Halbjahr".
 * ``abgelaufen_im_zeitraum`` — Hausverbote mit nichtleerem, gueltigem ``bis``
   innerhalb des Zeitraums. Der ``aktiv``-Schalter wird hier **nicht**
   ausgewertet: er beschreibt den heutigen Zustand, und ihn hier einzurechnen
@@ -86,8 +89,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.data_source import ALL_EVENTS
+from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.data_source import BANS_IN_PERIOD
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
@@ -106,6 +109,24 @@ logger = logging.getLogger(__name__)
 _KENNZAHLEN = ("ausgesprochen", "aktiv_aktuell", "abgelaufen_im_zeitraum")
 
 _COUNT_KEY = "wert"
+
+# Momentaufnahme-Kennzeichnung im **Artefakt** (Refs #1754, Review I1). Ohne sie
+# liest die Empfaengerin ``aktiv_aktuell`` als dritte Zahl desselben Zeitraums —
+# bei diesem Thema keine Kleinigkeit: „so viele Hausverbote im ersten Halbjahr"
+# statt „so viele gelten heute" ist eine andere Aussage ueber eine Einrichtung.
+#
+# Datenunabhaengig und ziffernfrei (K6-Auflage, Refs #1769), Severity ``info``:
+# kein Mangel, sondern eine Lesehilfe. ``code`` ist sprachunabhaengiger Klartext.
+_POINT_IN_TIME_CODE = "point_in_time_active_bans"
+_POINT_IN_TIME_ISSUE = CompletenessIssue(
+    _POINT_IN_TIME_CODE,
+    _(
+        "Die Zahl der aktuell geltenden Hausverbote ist eine Momentaufnahme zum Zeitpunkt der Erstellung "
+        "und bezieht sich nicht auf den Berichtszeitraum"
+    ),
+    "info",
+    count=None,
+)
 
 
 def _ban_events(facility):
@@ -142,10 +163,14 @@ class BanOverviewBackend(DatasetBackend):
 
     name = _("Beispiel: Hausverbots-Übersicht")
     snapshot_enabled = False
-    # K3-A3 (Refs #1770): gezaehlt werden Ereignisse (Hausverbots-Eintraege),
-    # nicht Personen — eine Person kann mehrere Hausverbote haben. Der Ausweis
-    # verhindert, dass die Zahl als Personenzahl gelesen wird.
-    population = ALL_EVENTS
+    # K3-A3 (Refs #1770): gezaehlt werden Hausverbots-Ereignisse, nicht Personen
+    # (eine Person kann mehrere Hausverbote haben) — und ausdruecklich **nicht**
+    # alle Ereignisse. Der frueher deklarierte ``ALL_EVENTS``-Code war sachlich
+    # falsch (Refs #1754, Review I1): er nennt eine Grundgesamtheit, die um
+    # Groessenordnungen weiter ist als die tatsaechliche, und zwei der drei
+    # Zahlen werten ``occurred_at`` ueberhaupt nicht aus (Stichtag bzw.
+    # Ablaufdatum). ``BANS_IN_PERIOD`` sagt beides.
+    population = BANS_IN_PERIOD
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
@@ -195,8 +220,19 @@ class BanOverviewBackend(DatasetBackend):
             mode="aggregate",
             records=[{"kennzahl": key, _COUNT_KEY: werte[key]} for key in _KENNZAHLEN],
             summary=dict(werte),
-            completeness=[],
+            completeness=self.validate_completeness(facility, date_from, date_to),
         )
+
+    def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
+        """Kennzeichnet die Stichtagszahl — datenunabhaengig, ohne Datenbankzugriff.
+
+        Der Hinweis haengt an der Konstruktion des Berichts, nicht an seinen
+        Daten: ``aktiv_aktuell`` ist immer eine Momentaufnahme. Keine Abfrage,
+        keine Verzweigung — beides waere ein datenabhaengiger Kanal ueber die
+        blosse Existenz des Hinweises (K6-Lehre, Refs #1769), und hier verriete
+        er, ob es ueberhaupt Hausverbote gibt.
+        """
+        return [_POINT_IN_TIME_ISSUE]
 
     # Deklaration fuer den zentralen Residual-Guard (K1, Refs #1770).
     # ``margin_key=None``: keine der drei Zahlen partitioniert eine andere,
@@ -213,6 +249,11 @@ class BanOverviewBackend(DatasetBackend):
         entsteht aus **denselben** suppressierten Zeilen — eine zweite
         Suppressionsstelle gibt es nicht. Danach die Rueckprojektion auf die
         FieldSpec-Keys; das interne ``suppressed``-Flag ist keine Spalte.
+
+        Der Momentaufnahme-Hinweis wird aus dem **festen** Code gebaut, nicht aus
+        ``result.completeness`` abgeleitet (K6-Muster, Refs #1769) — bei diesem
+        Thema besonders wichtig: ein kuenftiger, bezifferter Hinweis erreichte
+        den Export sonst ungeprueft.
 
         Erwartet das **rohe** ``build_dataset``-Ergebnis (nicht idempotent).
         """
@@ -235,7 +276,7 @@ class BanOverviewBackend(DatasetBackend):
         summary.update(dict.fromkeys(_KENNZAHLEN, None))
         summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
         summary["k_anonymity_threshold"] = threshold
-        return dataclasses.replace(result, records=records, summary=summary)
+        return dataclasses.replace(result, records=records, summary=summary, completeness=[_POINT_IN_TIME_ISSUE])
 
     def is_available(self, facility) -> bool:
         """Waehlbar, sobald die Einrichtung einen **aktiven** Dokumentationstyp

@@ -23,7 +23,9 @@ K-Anon-Sinn, auch wo sie Faelle zaehlt.
   Faelle an einem vergangenen Datum offen waren; ein „offen am 31.12." waere
   eine Zahl, die das Modell nicht hergibt. Wer sie braucht, braucht zuerst eine
   Statushistorie. Konsequenz fuer die Leserin: diese eine Zahl aendert sich
-  zwischen zwei Aufrufen desselben Zeitraums.
+  zwischen zwei Aufrufen desselben Zeitraums. Damit die Kennzeichnung sie auch
+  erreicht, traegt das Artefakt selbst einen ``CompletenessIssue``
+  (:data:`_POINT_IN_TIME_ISSUE`) — ein Docstring wird nicht mitexportiert.
 * ``betroffene_personen`` — DISTINCT-Personen der im Zeitraum neuen **oder**
   geschlossenen Faelle. Bewusst als eigene Zahl statt als Summe: eine Person
   kann mehrere Faelle haben, und ein Fall kann im selben Zeitraum angelegt und
@@ -63,8 +65,8 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Case
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.data_source import PERSONS
+from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.data_source import CASES_IN_PERIOD
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
     ORDER_INPUT,
@@ -87,6 +89,26 @@ _KENNZAHLEN = ("neue_faelle", "geschlossene_faelle", "offene_faelle_aktuell", "b
 
 _COUNT_KEY = "wert"
 
+# Momentaufnahme-Kennzeichnung im **Artefakt** (Refs #1754, Review I1). Der
+# Docstring erreicht die Empfaengerin nie; ohne diesen Hinweis liest sie
+# ``offene_faelle_aktuell`` als vierte Zahl desselben Zeitraums und vergleicht
+# zwei Berichte, die nicht vergleichbar sind.
+#
+# Datenunabhaengig und ziffernfrei — dieselbe Auflage wie beim
+# Vollstaendigkeitsblock (K6, Refs #1769): der Hinweis steht immer, in jeder
+# Datenlage, und nennt nie eine Groesse. ``info``, weil er kein Mangel ist,
+# sondern eine Lesehilfe. ``code`` ist sprachunabhaengiger Klartext.
+_POINT_IN_TIME_CODE = "point_in_time_open_cases"
+_POINT_IN_TIME_ISSUE = CompletenessIssue(
+    _POINT_IN_TIME_CODE,
+    _(
+        "Die Zahl der aktuell offenen Fälle ist eine Momentaufnahme zum Zeitpunkt der Erstellung "
+        "und bezieht sich nicht auf den Berichtszeitraum"
+    ),
+    "info",
+    count=None,
+)
+
 
 def _visible_cases(facility):
     """Sichtbare Faelle der Einrichtung.
@@ -105,11 +127,15 @@ class CaseMetricsBackend(DatasetBackend):
 
     name = _("Beispiel: Fall-Kennzahlen")
     snapshot_enabled = False
-    # K3-A3 (Refs #1770): Faelle sind 1:1 personengebunden — die Grundgesamtheit
-    # ist damit eine Personenmenge, nicht eine Ereignismenge. Ohne den Ausweis
-    # summierte sich diese Tabelle sichtbar anders als jede Ereignistabelle
-    # daneben, ohne dass eine Leserin erkennen koennte warum.
-    population = PERSONS
+    # K3-A3 (Refs #1770): Die Grundgesamtheit sind **Faelle**, nicht Ereignisse
+    # und nicht ``PERSONS``. Der frueher deklarierte ``PERSONS``-Code war
+    # sachlich falsch (Refs #1754, Review I1): er ist definiert als „Personen mit
+    # mindestens einem Ereignis im Zeitraum", ein Fall setzt aber kein Ereignis
+    # voraus — und ``offene_faelle_aktuell`` wertet den Zeitraum ueberhaupt nicht
+    # aus. Ein ungefaehr passender Ausweis ist hier schlimmer als keiner: er soll
+    # gerade die Differenz zwischen Basismengen benennen. ``CASES_IN_PERIOD``
+    # sagt beides — Zeitraum UND Stichtagsanteil.
+    population = CASES_IN_PERIOD
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
@@ -143,8 +169,19 @@ class CaseMetricsBackend(DatasetBackend):
             # Modul-Docstring).
             records=[{"kennzahl": key, _COUNT_KEY: werte[key]} for key in _KENNZAHLEN],
             summary=dict(werte),
-            completeness=[],
+            completeness=self.validate_completeness(facility, date_from, date_to),
         )
+
+    def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
+        """Kennzeichnet die Stichtagszahl — datenunabhaengig, ohne Datenbankzugriff.
+
+        Der Hinweis haengt an der **Konstruktion** des Berichts, nicht an seinen
+        Daten: ``offene_faelle_aktuell`` ist immer eine Momentaufnahme, ob die
+        Einrichtung nun drei Faelle fuehrt oder dreitausend. Deshalb keine
+        Abfrage und keine Verzweigung — beides waere ein datenabhaengiger Kanal
+        ueber die blosse Existenz des Hinweises (K6-Lehre, Refs #1769).
+        """
+        return [_POINT_IN_TIME_ISSUE]
 
     # Deklaration fuer den zentralen Residual-Guard (K1, Refs #1770).
     # ``margin_key=None``: dieses Artefakt publiziert **keine** Randsumme, die
@@ -168,6 +205,13 @@ class CaseMetricsBackend(DatasetBackend):
         gibt also keine zweite Suppressionsstelle und keine Chance auf Drift
         zwischen Tabelle und Aggregat. Danach die Rueckprojektion auf die
         FieldSpec-Keys — das interne ``suppressed``-Flag ist keine Spalte.
+
+        Der Momentaufnahme-Hinweis wird aus dem **festen** Code gebaut, nicht aus
+        ``result.completeness`` abgeleitet (K6-Muster, Refs #1769): jede
+        Ableitung waere eine datenabhaengige Verzweigung, und ein kuenftiger,
+        bezifferter Hinweis erreichte den Export sonst ungeprueft. Fail-safe in
+        die richtige Richtung — lieber eine Meldung zu wenig als eine
+        Kleinstfallzahl zu viel.
 
         Erwartet das **rohe** ``build_dataset``-Ergebnis (nicht idempotent).
         """
@@ -193,7 +237,7 @@ class CaseMetricsBackend(DatasetBackend):
         summary.update(dict.fromkeys(_KENNZAHLEN, None))
         summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
         summary["k_anonymity_threshold"] = threshold
-        return dataclasses.replace(result, records=records, summary=summary)
+        return dataclasses.replace(result, records=records, summary=summary, completeness=[_POINT_IN_TIME_ISSUE])
 
     def is_available(self, facility) -> bool:
         """Immer waehlbar — und das ist hier kein vergessener Hook.

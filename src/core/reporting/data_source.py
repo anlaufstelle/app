@@ -67,11 +67,28 @@ EVENTS_WITH_PERSON = "events_with_person"
 MAPPED_EVENTS = "mapped_events"
 PERSONS = "persons"
 
+# Refs #1754: Zwei Grundgesamtheiten, die keine der vier obigen trifft — und ein
+# ungefaehr passender Code waere hier schlimmer als gar keiner: der Ausweis ist
+# genau dafuer da, die Differenz zwischen Basismengen zu benennen (K3), und eine
+# falsche Angabe macht ihn zur Fehlinformation.
+#
+# Beide beschreiben eine **gemischte** Basismenge: Zahlen ueber den Zeitraum
+# stehen neben einer Stichtagszahl, die den Zeitraum gar nicht auswertet. Das ist
+# in der Sache unvermeidbar (es gibt keinen Statusverlauf, aus dem sich ein
+# historischer Bestand rekonstruieren liesse) und wird deshalb **ausgewiesen**
+# statt kaschiert — dieselbe Haltung wie bei ``data_source``. Ergaenzend traegt
+# jedes der beiden Backends einen datenunabhaengigen ``CompletenessIssue``, der
+# genau benennt, welche Kennzahl die Stichtagszahl ist.
+CASES_IN_PERIOD = "cases_in_period"
+BANS_IN_PERIOD = "bans_in_period"
+
 POPULATION_NOTES = {
     ALL_EVENTS: _("alle Ereignisse im Zeitraum"),
     EVENTS_WITH_PERSON: _("Ereignisse mit Personenbezug im Zeitraum"),
     MAPPED_EVENTS: _("Ereignisse mit Berichtszuordnung im Zeitraum"),
     PERSONS: _("Personen mit mindestens einem Ereignis im Zeitraum"),
+    CASES_IN_PERIOD: _("Fälle mit Anlage oder Abschluss im Zeitraum, dazu der Fallbestand am Stichtag"),
+    BANS_IN_PERIOD: _("Hausverbote mit Ausspruch oder Ablauf im Zeitraum, dazu der Bestand am Stichtag"),
 }
 
 

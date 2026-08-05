@@ -156,6 +156,58 @@ class TestGrundgesamtheitInDenArtefakten:
         assert get_backend("sample-report-1").population == MAPPED_EVENTS
         assert DatasetBackend.population == ALL_EVENTS, "weiteste Menge als Default, engere muessen ueberschreiben"
 
+    def test_jedes_registrierte_backend_hat_eine_uebersetzte_kurzform(self):
+        """Fail-closed, aber erst zur Renderzeit — und das ist zu spaet.
+
+        :func:`table_note` schlaegt ``POPULATION_NOTES`` nach und wirft bei einem
+        unbekannten Code ``KeyError``. Ein Backend, das einen Code deklariert,
+        den niemand registriert hat, faellt damit erst beim Panel-/Export-Aufruf
+        auf — also in der Oberflaeche der Empfaengerin. Dieser Guard zieht den
+        Fehlschlag in die Testsuite vor (Refs #1754).
+        """
+        from core.reporting.data_source import POPULATION_NOTES
+        from core.reporting.registry import get_backends
+
+        fehlend = {b.slug: b.population for b in get_backends() if b.population not in POPULATION_NOTES}
+
+        assert not fehlend, f"Backends mit unregistrierter Grundgesamtheit: {fehlend}"
+
+    def test_kurzformen_sind_datenunabhaengig_und_ziffernfrei(self):
+        """Der Ausweis steht in **jedem** Artefakt, auch im suppressierten.
+
+        Eine Kurzform, die eine Zahl oder eine Bezugsgroesse nennt, waere damit
+        eine Angabe, die nie durch eine Suppressionsregel gelaufen ist —
+        dieselbe Lehre wie beim Vollstaendigkeitsblock (K6, Refs #1769). Gilt je
+        Code und in **jeder** Sprache; eine Uebersetzung darf keine Zahl
+        ergaenzen.
+        """
+        from core.reporting.data_source import POPULATION_NOTES
+
+        mit_ziffern = {
+            code: str(note) for code, note in POPULATION_NOTES.items() if any(c.isdigit() for c in str(note))
+        }
+
+        assert not mit_ziffern, mit_ziffern
+
+    def test_neue_codes_sind_von_den_bestehenden_unterscheidbar(self):
+        """K3 lebt von der Differenz zweier Grundgesamtheiten — zwei Codes mit
+        demselben Text waeren im Artefakt nicht auseinanderzuhalten."""
+        from core.reporting.data_source import POPULATION_NOTES
+
+        texte = [str(note) for note in POPULATION_NOTES.values()]
+
+        assert len(set(texte)) == len(texte), texte
+
+    def test_fall_und_hausverbots_backends_nennen_ihre_eigene_menge(self):
+        """Refs #1754 (Fix-Runde 1): ``PERSONS``/``ALL_EVENTS`` waren dort
+        sachlich falsch — ein Fall setzt kein Ereignis voraus, und zwei der drei
+        Hausverbots-Zahlen ignorieren ``occurred_at`` voellig."""
+        from core.reporting.data_source import BANS_IN_PERIOD, CASES_IN_PERIOD
+        from core.reporting.registry import get_backend
+
+        assert get_backend("case-metrics").population == CASES_IN_PERIOD
+        assert get_backend("ban-overview").population == BANS_IN_PERIOD
+
 
 @pytest.mark.django_db
 class TestGrundgesamtheitImEchtenViewRender:
