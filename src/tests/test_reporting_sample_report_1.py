@@ -737,14 +737,26 @@ class TestSlugZweitschluessel:
         assert summary["by_category"] == [("Beratung", 1)]
         assert summary["total"] == 1
 
-    def test_system_type_note_faellt_auf_den_slug_zurueck(self, backend, facility, make_doc_type, make_event):
-        """``note`` ist in ``CATEGORY_MAP`` nicht enthalten — also greift der Slug."""
-        typ = make_doc_type("Vermittlung", DocumentType.SystemType.NOTE, slug="vermittlung")
-        make_event(typ)
+    def test_bewusst_ausgeschlossener_system_type_wird_nicht_ueber_den_slug_hereingeholt(
+        self, backend, facility, make_doc_type, make_event
+    ):
+        """Der Erstschluessel gewinnt AUCH seine Ausschluesse (Refs #1785, Review).
+
+        ``note`` und ``ban`` stehen bewusst nicht in ``CATEGORY_MAP``. Ein gesetzter
+        ``system_type`` ist eine Aussage — auch die Aussage „gehoert nicht in den
+        Bericht". Der Slug darf sie nicht hintergehen (sonst zoege ein
+        Hausverbots-Typ mit dem Slug ``kontakt`` Bann-Ereignisse in den Bericht —
+        ein Disclosure-Leck). Der Slug greift nur, wo der Erstschluessel GAR keine
+        Aussage trifft (``system_type`` leer/NULL, siehe
+        :meth:`test_typ_ohne_system_type_wird_ueber_den_slug_gemappt`).
+        """
+        make_event(make_doc_type("Vermittlung", DocumentType.SystemType.NOTE, slug="vermittlung"))
+        make_event(make_doc_type("Hausnotiz", DocumentType.SystemType.BAN, slug="kontakt"))
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
-        assert summary["by_category"] == [("Vermittlung", 1)]
+        assert summary["by_category"] == []
+        assert summary["total"] == 0
 
     def test_unbekannter_slug_bleibt_ohne_zuordnung(self, backend, facility, make_doc_type, make_event):
         typ = make_doc_type("Hausinterne Notiz", None, slug="hausinterne-notiz")

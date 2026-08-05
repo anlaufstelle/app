@@ -107,12 +107,22 @@ def resolve_category(system_type: str | None, slug: str | None) -> str | None:
     ``system_type``, dann :data:`SLUG_MAP` ueber ``slug``. Der Erstschluessel
     gewinnt immer — er ist die Systemkennung, der Slug nur eine Konvention.
 
+    „Gewinnt immer" schliesst seine **Ausschluesse** ein (Refs #1785, Review):
+    ein GESETZTER ``system_type`` ist eine vollstaendige Aussage — auch wenn er
+    ``note``/``ban`` lautet und damit „gehoert nicht in den Bericht" bedeutet.
+    Der Slug greift deshalb NUR, wenn der Erstschluessel gar keine Aussage
+    trifft (``system_type`` leer/NULL). Andernfalls zoege ein Hausverbots-Typ
+    mit dem Slug ``kontakt`` seine Bann-Ereignisse in den Bericht — ein
+    Disclosure-Leck.
+
     Einzige Auflösungsstelle des Backends: ``build_dataset`` und der
     Unmapped-Filter (:data:`_UNMAPPED_Q`) muessen dieselbe Antwort geben, sonst
     zaehlt der Vollstaendigkeitshinweis Ereignisse als fehlend, die im Bericht
     stehen (oder umgekehrt).
     """
-    return CATEGORY_MAP.get(system_type or "") or SLUG_MAP.get(slug or "")
+    if system_type:
+        return CATEGORY_MAP.get(system_type)
+    return SLUG_MAP.get(slug or "")
 
 
 # Anzeigelabels der Altersgruppen — lazy wie bisher, damit der Snapshot-Payload
@@ -132,15 +142,23 @@ _AGE_LABELS = {
 # bereits mit ein. Blankes SQL-``NOT IN`` tut das nicht — der explizite Zweig
 # haelt die Absicht unabhaengig von diesem ORM-Detail fest.
 #
-# Seit dem Slug-Zweitschluessel (Refs #1741) ist „ohne Zuordnung" eine
-# **Konjunktion**: kein Treffer in ``CATEGORY_MAP`` UND keiner in ``SLUG_MAP``
-# — die SQL-Entsprechung von :func:`resolve_category`. ``slug`` ist nicht
-# NULL-bar (``blank=True``, aber ``NOT NULL``) und ``document_type`` ein
-# PROTECT-FK ohne ``null=True``, es gibt hier also keine Outer-Join-NULLs; der
-# Negations-Zweig braucht deshalb kein ``isnull``-Pendant.
-_UNMAPPED_Q = (
-    Q(document_type__system_type__isnull=True) | ~Q(document_type__system_type__in=tuple(CATEGORY_MAP))
-) & ~Q(document_type__slug__in=tuple(SLUG_MAP))
+# Seit dem Slug-Zweitschluessel (Refs #1741) ist „gemappt" eine Disjunktion —
+# die exakte SQL-Entsprechung von :func:`resolve_category`:
+#
+#   gemappt = system_type IN CATEGORY_MAP
+#             ODER (system_type leer/NULL UND slug IN SLUG_MAP)
+#
+# Der zweite Zweig ist an ``system_type`` leer/NULL **gebunden** (Refs #1785,
+# Review): ein gesetzter, aber bewusst ausgeschlossener ``system_type``
+# (``note``/``ban``) darf NICHT ueber den Slug hereingeholt werden. „Ohne
+# Zuordnung" ist die Negation. ``slug`` ist nicht NULL-bar (``blank=True``, aber
+# ``NOT NULL``) und ``document_type`` ein PROTECT-FK ohne ``null=True``, es gibt
+# hier also keine Outer-Join-NULLs.
+_SYSTEM_TYPE_UNSET_Q = Q(document_type__system_type__isnull=True) | Q(document_type__system_type="")
+_UNMAPPED_Q = ~(
+    Q(document_type__system_type__in=tuple(CATEGORY_MAP))
+    | (_SYSTEM_TYPE_UNSET_Q & Q(document_type__slug__in=tuple(SLUG_MAP)))
+)
 
 # Export-Fassung der Vollstaendigkeits-Meldungen (K6, Refs #1769). Sie ist die
 # EINZIGE Fassung, die ein externer Empfaenger je zu sehen bekommt: der Block
