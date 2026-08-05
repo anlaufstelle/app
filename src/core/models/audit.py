@@ -124,6 +124,21 @@ class AuditLog(models.Model):
         CONFIG_UPDATE = "config_update", _("Konfiguration geändert")
         CONFIG_DELETE = "config_delete", _("Konfiguration gelöscht")
         CONFIG_REORDER = "config_reorder", _("Konfiguration umsortiert")
+        # Refs #1060 (M4): CSV-Import-Wizard — pro Lebenszyklus-Schritt eines
+        # ImportJob ein dedizierter Eintrag (Upload/Commit/Abbruch). Bewusst
+        # NICHT ``EXPORT``/``CLIENT_CREATE``-Wiederverwendung: der Commit
+        # erzeugt zusaetzlich je Zeile die regulaeren Service-Audit-Eintraege;
+        # diese Marker tragen die Job-Ebene (Datei, Zeilenzahl, Ergebnis).
+        IMPORT_UPLOADED = "import_uploaded", _("Import hochgeladen")
+        IMPORT_COMMITTED = "import_committed", _("Import übernommen")
+        IMPORT_ABORTED = "import_aborted", _("Import abgebrochen")
+        # Refs #1060 (M4): Art.-16-Berichtigungsworkflow (ADR-041) — analog
+        # zum 4-Augen-Loesch-Workflow (DELETION_*) je Workflow-Stufe ein
+        # Eintrag; ``detail`` traegt nie Feldwerte (die liegen verschluesselt
+        # am RectificationRequest), nur field_path + Begruendungs-Metadaten.
+        RECTIFICATION_REQUESTED = "rectification_requested", _("Berichtigung beantragt")
+        RECTIFICATION_APPROVED = "rectification_approved", _("Berichtigung genehmigt")
+        RECTIFICATION_REJECTED = "rectification_rejected", _("Berichtigung abgelehnt")
 
     objects = FacilityScopedManager()
 

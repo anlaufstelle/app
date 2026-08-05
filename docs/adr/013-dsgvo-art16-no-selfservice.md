@@ -41,3 +41,4 @@ Berichtigung nach DSGVO Art. 16 läuft **organisatorisch** über Mitarbeiter und
 
 - [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)
 - [`docs/admin-guide.md`](../admin-guide.md)
+- [ADR-041](041-berichtigungsworkflow-intern.md) ergänzt/präzisiert diese Entscheidung: interner Antrags-/Review-Workflow (`RectificationRequest`) für den hier beschlossenen organisatorischen Weg — weiterhin ohne Klientel-Self-Service.
