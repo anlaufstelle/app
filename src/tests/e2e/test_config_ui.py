@@ -293,7 +293,11 @@ class TestDocumentTypeEntityScopedFields:
             expect(page.locator("input#id_retention_days")).to_be_visible(timeout=10000)
             expect(page.locator("input#id_retention_days")).to_have_value("30")
 
-            # Speichern MIT ausgeblendeten Feldern: die Werte gehen nicht verloren.
+            # Speichern MIT ausgeblendeten Feldern als „Person": ``sensitivity``
+            # überlebt (steuert den Zugriff, gilt für jeden Entitätstyp),
+            # ``retention_days`` wird bewusst geleert — die Frist wirkt nur an
+            # Ereignis-Typen (ADR-039 Event-only-Doktrin), und der Server NULLt
+            # sie beim Speichern für Personen-/Fall-Typen (Refs #1776).
             page.select_option("select#id_entity_type", value="client")
             expect(page.locator("input#id_retention_days")).to_be_hidden(timeout=10000)
             page.locator(FORM_SUBMIT).click()
@@ -302,11 +306,12 @@ class TestDocumentTypeEntityScopedFields:
             assert match, f"Detail-URL nicht erkannt: {page.url}"
             pk = match.group(1)
 
-            # Gegenprobe am Bearbeiten-Formular: beide Werte stehen am Datensatz,
-            # der Entitätstyp ist fest, die Felder bleiben ausgeblendet.
+            # Gegenprobe am Bearbeiten-Formular: ``sensitivity`` steht am Datensatz,
+            # ``retention_days`` ist leer (für „Person" serverseitig genullt), der
+            # Entitätstyp ist fest, die Felder bleiben ausgeblendet.
             page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")
             expect(page.locator("select#id_sensitivity")).to_have_value("elevated", timeout=10000)
-            expect(page.locator("input#id_retention_days")).to_have_value("30")
+            expect(page.locator("input#id_retention_days")).to_have_value("")
             expect(page.locator("select#id_entity_type")).to_be_disabled()
             expect(page.locator("input#id_retention_days")).to_be_hidden()
             expect(page.locator("select#id_sensitivity")).to_be_visible()
