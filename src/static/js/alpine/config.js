@@ -47,8 +47,9 @@ document.addEventListener("alpine:init", () => {
      *
      * Reines UI-Ausblenden: die Eingabefelder bleiben im DOM und aktiviert,
      * ihre Werte werden also unverändert mitgepostet. Kein Feld fällt durchs
-     * Ausblenden auf den Modell-Default zurück (``category`` — Teil des Natural
-     * Keys — ist ohnehin nie betroffen). Ohne JavaScript bleibt alles sichtbar.
+     * Ausblenden auf den Modell-Default zurück — ``name``, Teil des Natural
+     * Keys ``(facility, name)``, steht ohnehin nie in ``EVENT_ONLY_FIELDS``
+     * und ist damit nie betroffen. Ohne JavaScript bleibt alles sichtbar.
      *
      * Der ``change``-Listener wird hier in ``init()`` gesetzt statt per
      * ``@change`` im Template: das Select kommt aus ``components/_form_field.html``

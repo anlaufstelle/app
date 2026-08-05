@@ -58,7 +58,6 @@ function buildForm({ scopedFields = SCOPED, withSelect = true, errorOn = null } 
              data-entity-scoped-fields="${scopedFields}">
             <div><label for="id_name">Name</label><input id="id_name" name="name"></div>
             ${select}
-            <div><label for="id_category">Kategorie</label><select id="id_category" name="category"></select></div>
             ${scoped}
         </div>`;
     return document.getElementById("root");
@@ -116,9 +115,8 @@ describe("documentTypeEntityFields", () => {
     it("laesst nicht betroffene Felder immer sichtbar", () => {
         const root = mount(buildForm()).$el;
         selectEntityType("client");
-        // ``category`` ist Teil des Natural Keys (facility, name, category) und
-        // darf nie verschwinden.
-        expect(root.querySelector("#id_category").closest("div").hidden).toBe(false);
+        // ``name`` ist Teil des Natural Keys (facility, name) und darf nie
+        // verschwinden.
         expect(root.querySelector("#id_name").closest("div").hidden).toBe(false);
         expect(root.querySelector("#id_entity_type").closest("div").hidden).toBe(false);
     });
