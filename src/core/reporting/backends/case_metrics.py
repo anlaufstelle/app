@@ -50,6 +50,29 @@ Zahlen bestehen nur **Ungleichungen** (``betroffene_personen`` <=
 Zahl bestenfalls eine Schranke, nie ein exakter Wert — und die Schranke ist
 schwaecher als das, was die Suppression ohnehin einraeumt (< *k*).
 
+**K4a — die Stichtagszahl ist ein Differenzkanal ueber den Erstellungszeitpunkt**
+(Refs #1754, finale Fix-Welle). ``offene_faelle_aktuell`` haengt am Tag der
+Erstellung, nicht am Berichtszeitraum. Zwei Herausgaben **desselben** Zeitraums
+zu verschiedenen Zeitpunkten unterscheiden sich genau in dieser Zahl, und ihre
+Differenz ist die Netto-Veraenderung der offenen Faelle zwischen den beiden
+Tagen — eine Groesse, die in keinem der beiden Artefakte steht und durch keine
+Suppressionsregel laeuft (bei Faellen zugleich eine Personenzahl, siehe oben).
+Wer taeglich abruft, baut daraus eine Zeitreihe mit Aufloesung 1, obwohl jede
+einzelne Zahl die k-Schwelle passiert hat. Dasselbe gilt fuer ``aktiv_aktuell``
+in :mod:`~core.reporting.backends.ban_overview`.
+
+Einordnung wie K4a (Refs #1770): **akzeptierte Definitionsgrenze, kein offener
+Befund.** Die Zusicherung gilt je Artefakt und je Zeitraum; der zweite
+Bezugspunkt ist hier gar kein Zeitraum, sondern ein Zeitpunkt. Artefaktlokal ist
+nichts auszurichten — es gibt keine Zelle, an der eine Regel ansetzen koennte,
+und ein Guard muesste wissen, welche frueheren Ausgaben desselben Berichts an
+denselben Empfaenger gegangen sind. Die Kennzahl bleibt (Maintainer-Entscheid
+2026-08-05); flankierend macht die **Freigabe-Uebersicht**
+(:class:`core.views.statistics.ReportReleaseLogView`,
+:mod:`core.services.dashboard.release_log`) wiederholte Herausgaben desselben
+Zeitraums sichtbar, und :data:`_POINT_IN_TIME_ISSUE` sagt der Empfaengerin im
+Artefakt selbst, dass die Zahl am Erstellungstag haengt.
+
 Die vier Zeilen werden **datenunabhaengig** emittiert, auch bei Wert 0: waere
 ihre Existenz an Daten geknuepft, verriete die blosse Gestalt der Tabelle,
 welche Kennzahl > 0 ist (dieselbe Lehre wie beim Vollstaendigkeitsblock, K6,
