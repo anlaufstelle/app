@@ -1,0 +1,478 @@
+"""Tests fuer das Beispiel-Backend ``service-distribution`` (Refs #1754).
+
+Drittes Feldwert-Backend und der Fall, an dem die Randsummen-Frage kippt: eine
+``multi_select``-Verteilung partitioniert ihre Ereignis-Randsumme **nicht**
+(ein Ereignis kann mehrere Optionen tragen), eine ``select``-Verteilung schon.
+Die Tests pinnen deshalb vor allem, dass beide Gruppen unabhaengig voneinander
+suppressiert werden und nur die Einfachauswahl eine Randsummen-Partition
+deklariert.
+"""
+
+import csv
+import json
+import xml.etree.ElementTree as ET
+from datetime import timedelta
+
+import pytest
+from django.utils import timezone
+from django.utils.functional import Promise
+
+from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.reporting import registry
+from core.reporting.backends.service_distribution import (
+    KRISE_SLUG,
+    LEISTUNGEN_SLUG,
+    ServiceDistributionBackend,
+)
+from core.reporting.base import DatasetResult
+from core.reporting.data_source import ALL_EVENTS
+from core.reporting.export import export_dataset
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _isolated_registry(monkeypatch):
+    """Registry je Test isolieren, echte Backends bleiben verfuegbar (Doku § 10)."""
+    registry._discover()
+    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
+    monkeypatch.setattr(registry, "_discovered", True)
+    yield
+
+
+@pytest.fixture
+def backend():
+    return registry.get_backend("service-distribution")
+
+
+@pytest.fixture
+def date_range():
+    today = timezone.localdate()
+    return today - timedelta(days=1), today + timedelta(days=1)
+
+
+def _typ_mit_feld(facility, name, *, system_type, feld_name, feld_typ, anhaengen=True):
+    doc_type = DocumentType.objects.create(facility=facility, name=name, system_type=system_type)
+    if anhaengen:
+        feld, _created = FieldTemplate.objects.get_or_create(
+            facility=facility, name=feld_name, defaults={"field_type": feld_typ}
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
+    return doc_type
+
+
+@pytest.fixture
+def kontakt_typ(facility):
+    return _typ_mit_feld(
+        facility,
+        "Kontakt",
+        system_type=DocumentType.SystemType.CONTACT,
+        feld_name="Leistungen",
+        feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+    )
+
+
+@pytest.fixture
+def krise_typ(facility):
+    return _typ_mit_feld(
+        facility,
+        "Krisengespräch",
+        system_type=DocumentType.SystemType.CRISIS,
+        feld_name="Art der Krise",
+        feld_typ=FieldTemplate.FieldType.SELECT,
+    )
+
+
+def _events(facility, doc_type, user, anzahl, data):
+    for _index in range(anzahl):
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json=dict(data),
+            created_by=user,
+        )
+
+
+class TestDiscoveryUndMetadaten:
+    def test_discovery_findet_das_backend(self):
+        assert "service-distribution" in [b.slug for b in registry.get_backends()]
+
+    def test_registriert_unter_slug(self, backend):
+        assert isinstance(backend, ServiceDistributionBackend)
+        assert backend.slug == "service-distribution"
+
+    def test_snapshot_bleibt_aus(self, backend):
+        assert backend.snapshot_enabled is False
+
+    def test_grundgesamtheit_alle_ereignisse(self, backend):
+        assert backend.population == ALL_EVENTS
+
+    def test_field_specs(self, backend):
+        assert [spec.key for spec in backend.get_field_specs()] == ["feld", "option", "count"]
+
+    def test_labels_sind_lazy(self, backend):
+        for spec in backend.get_field_specs():
+            assert isinstance(spec.label, Promise), f"FieldSpec {spec.key!r} traegt Klartext statt gettext_lazy"
+
+    def test_name_ist_lazy(self, backend):
+        assert isinstance(ServiceDistributionBackend.name, Promise)
+
+
+class TestBuildDataset:
+    def test_mehrfachnennungen_zaehlen_je_option(
+        self, backend, facility, admin_user, kontakt_typ, krise_typ, date_range
+    ):
+        _events(facility, kontakt_typ, admin_user, 2, {LEISTUNGEN_SLUG: ["essen", "duschen"]})
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+        _events(facility, krise_typ, admin_user, 3, {KRISE_SLUG: "gewalt"})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.mode == "rows"
+        assert result.records == [
+            {"feld": LEISTUNGEN_SLUG, "option": "duschen", "count": 2},
+            {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 3},
+            {"feld": KRISE_SLUG, "option": "gewalt", "count": 3},
+        ]
+        # Die Options-Counts summieren sich BEWUSST nicht auf die Randsumme:
+        # 2 + 3 > 3 Ereignisse mit Leistungen.
+        assert result.summary["events_leistungen"] == 3
+        assert result.summary["events_art_der_krise"] == 3
+
+    def test_doppelte_option_zaehlt_je_ereignis_einmal(self, backend, facility, admin_user, kontakt_typ, date_range):
+        """Die Zelle ist eine Ereigniszahl („Ereignisse mit dieser Option") —
+        sonst waere sie keine k-anonymisierbare Groesse.
+        """
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen", "essen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 1}]
+
+    def test_string_statt_liste_wird_als_ein_wert_gelesen(self, backend, facility, admin_user, kontakt_typ, date_range):
+        """Altwert-Robustheit: aeltere/fremde Schreibpfade legen einen blanken
+        String ab, wo heute eine Liste steht.
+        """
+        _events(facility, kontakt_typ, admin_user, 2, {LEISTUNGEN_SLUG: "beratung"})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == [{"feld": LEISTUNGEN_SLUG, "option": "beratung", "count": 2}]
+        assert result.summary["events_leistungen"] == 2
+
+    def test_muellwerte_sind_kein_absturz(self, backend, facility, admin_user, kontakt_typ, date_range):
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: 42})
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["", "   ", None, 7]})
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 1}]
+        assert result.summary["events_leistungen"] == 1
+        assert [issue.code for issue in result.completeness] == ["missing_field_values"]
+        assert result.completeness[0].count == 2
+
+    def test_unbekannte_optionsschluessel_erscheinen_wie_gespeichert(
+        self, backend, facility, admin_user, kontakt_typ, date_range
+    ):
+        """Options-Keys kommen roh aus ``data_json`` — auch inaktive oder
+        geloeschte Optionen bleiben so sichtbar, wie sie dokumentiert wurden.
+        """
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["sachspenden", "gibt-es-nicht"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert [row["option"] for row in result.records] == ["gibt-es-nicht", "sachspenden"]
+
+    def test_verschluesselter_feldwert_roundtrip(self, backend, facility, admin_user, krise_typ, date_range):
+        FieldTemplate.objects.filter(facility=facility, slug=KRISE_SLUG).update(is_encrypted=True)
+        _events(facility, krise_typ, admin_user, 1, {KRISE_SLUG: "suizidal"})
+        assert Event.objects.get().data_json[KRISE_SLUG]["__encrypted__"] is True
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == [{"feld": KRISE_SLUG, "option": "suizidal", "count": 1}]
+
+    def test_nur_konfigurierte_gruppen_erscheinen(self, backend, facility, admin_user, kontakt_typ, date_range):
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert set(result.summary) == {"events_leistungen"}
+        assert [row["feld"] for row in result.records] == [LEISTUNGEN_SLUG]
+
+    def test_leerer_zeitraum(self, backend, facility, admin_user, kontakt_typ, krise_typ):
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+        vorher = timezone.localdate() - timedelta(days=100)
+
+        result = backend.build_dataset(facility, vorher, vorher + timedelta(days=1))
+
+        assert result.records == []
+        assert result.summary == {"events_leistungen": 0, "events_art_der_krise": 0}
+
+    def test_soft_geloeschte_events_zaehlen_nicht(self, backend, facility, admin_user, kontakt_typ, date_range):
+        _events(facility, kontakt_typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+        Event.objects.update(is_deleted=True)
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
+
+    def test_fremde_einrichtung_zaehlt_nicht(
+        self, backend, facility, kontakt_typ, second_facility, second_facility_user, date_range
+    ):
+        fremd = _typ_mit_feld(
+            second_facility,
+            "Kontakt",
+            system_type=DocumentType.SystemType.CONTACT,
+            feld_name="Leistungen",
+            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        )
+        _events(second_facility, fremd, second_facility_user, 3, {LEISTUNGEN_SLUG: ["essen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
+
+
+class TestTypaufloesung:
+    def test_slug_zweitschluessel_ohne_system_type(self, backend, facility, admin_user, date_range):
+        typ = _typ_mit_feld(
+            facility,
+            "Kontakt",
+            system_type=None,
+            feld_name="Leistungen",
+            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        )
+        assert typ.slug == "kontakt"
+        _events(facility, typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 1}]
+
+    def test_gesetzter_system_type_sperrt_den_zweitschluessel(self, backend, facility, admin_user, date_range):
+        """Refs #1785: ein gesetzter, aber ausgeschlossener ``system_type``
+        (hier ``note``) wird vom Slug NICHT gerettet.
+
+        Der Notiz-Typ traegt den Paket-Slug ``kontakt``; die Gruppe ist ueber
+        einen zweiten, korrekt getypten Dokumentationstyp konfiguriert. Wuerde
+        der Zweitschluessel greifen, zoege der Notiz-Typ seine Ereignisse in die
+        Verteilung — genau das Disclosure-Leck aus #1785.
+        """
+        echter_kontakt = _typ_mit_feld(
+            facility,
+            "Kontaktdokumentation",
+            system_type=DocumentType.SystemType.CONTACT,
+            feld_name="Leistungen",
+            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        )
+        notiz = DocumentType.objects.create(
+            facility=facility, name="Kontaktnotiz", slug="kontakt", system_type=DocumentType.SystemType.NOTE
+        )
+        feld = FieldTemplate.objects.get(facility=facility, slug=LEISTUNGEN_SLUG)
+        DocumentTypeField.objects.create(document_type=notiz, field_template=feld)
+        _events(facility, notiz, admin_user, 3, {LEISTUNGEN_SLUG: ["essen"]})
+        _events(facility, echter_kontakt, admin_user, 1, {LEISTUNGEN_SLUG: ["duschen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == [{"feld": LEISTUNGEN_SLUG, "option": "duschen", "count": 1}]
+        assert result.summary["events_leistungen"] == 1
+
+
+def _result(zeilen, summary):
+    return DatasetResult(mode="rows", records=zeilen, summary=summary, completeness=[])
+
+
+class TestPrepareExport:
+    def test_beide_gruppen_ueber_der_schwelle(self, backend, facility):
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [
+                    {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 8},
+                    {"feld": KRISE_SLUG, "option": "gewalt", "count": 6},
+                ],
+                {"events_leistungen": 8, "events_art_der_krise": 6},
+            ),
+        )
+
+        assert prepared.records == [
+            {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 8},
+            {"feld": KRISE_SLUG, "option": "gewalt", "count": 6},
+        ]
+        assert prepared.summary["events_leistungen"] == 8
+        assert prepared.summary["events_art_der_krise"] == 6
+        assert prepared.summary["k_anonymity_threshold"] == 5
+
+    def test_kleine_zelle_faellt_je_gruppe_unabhaengig(self, backend, facility):
+        """Die Gruppen teilen keine Randsumme — eine Suppression in der einen
+        darf die andere nicht anfassen.
+        """
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [
+                    {"feld": LEISTUNGEN_SLUG, "option": "duschen", "count": 2},
+                    {"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 9},
+                    {"feld": KRISE_SLUG, "option": "gewalt", "count": 7},
+                ],
+                {"events_leistungen": 10, "events_art_der_krise": 7},
+            ),
+        )
+
+        zellen = {(row["feld"], row["option"]): row["count"] for row in prepared.records}
+        assert zellen[(LEISTUNGEN_SLUG, "duschen")] is None
+        # Keine Sekundaer-Suppression bei Mehrfachnennung: es gibt keine
+        # Gleichung, aus der sich die unterdrueckte Zelle ableiten liesse.
+        assert zellen[(LEISTUNGEN_SLUG, "essen")] == 9
+        assert zellen[(KRISE_SLUG, "gewalt")] == 7
+        assert prepared.summary["events_leistungen"] == 10
+
+    def test_einfachauswahl_kennt_die_sekundaer_suppression(self, backend, facility):
+        """``art-der-krise`` IST eine exakte Partition seiner Randsumme — die
+        verbliebene unterdrueckte Zelle waere sonst die Differenz.
+        """
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [
+                    {"feld": KRISE_SLUG, "option": "gewalt", "count": 9},
+                    {"feld": KRISE_SLUG, "option": "suizidal", "count": 2},
+                ],
+                {"events_art_der_krise": 11},
+            ),
+        )
+
+        assert [row["count"] for row in prepared.records] == [None, None]
+        assert prepared.summary["events_art_der_krise"] == 11
+
+    def test_randsumme_unter_schwelle_faellt(self, backend, facility):
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 3}],
+                {"events_leistungen": 3},
+            ),
+        )
+
+        assert prepared.records == [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": None}]
+        assert prepared.summary["events_leistungen"] is None
+
+    def test_nicht_konfigurierte_gruppe_bleibt_draussen(self, backend, facility):
+        prepared = backend.prepare_export(
+            facility,
+            _result([{"feld": KRISE_SLUG, "option": "gewalt", "count": 6}], {"events_art_der_krise": 6}),
+        )
+
+        assert "events_leistungen" not in prepared.summary
+        assert [row["feld"] for row in prepared.records] == [KRISE_SLUG]
+
+    def test_records_tragen_nur_die_field_spec_keys(self, backend, facility):
+        prepared = backend.prepare_export(
+            facility,
+            _result([{"feld": KRISE_SLUG, "option": "gewalt", "count": 6}], {"events_art_der_krise": 6}),
+        )
+
+        assert set(prepared.records[0]) == {"feld", "option", "count"}
+
+    def test_completeness_ist_datenunabhaengig_und_unbeziffert(self, backend, facility):
+        prepared = backend.prepare_export(
+            facility,
+            _result([{"feld": KRISE_SLUG, "option": "gewalt", "count": 6}], {"events_art_der_krise": 6}),
+        )
+
+        assert [issue.code for issue in prepared.completeness] == ["missing_field_values"]
+        assert prepared.completeness[0].count is None
+
+    def test_schwelle_aus_den_facility_settings(self, backend, facility):
+        Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 2})
+
+        prepared = backend.prepare_export(
+            facility,
+            _result(
+                [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 3}],
+                {"events_leistungen": 3},
+            ),
+        )
+
+        assert prepared.records[0]["count"] == 3
+        assert prepared.summary["events_leistungen"] == 3
+
+
+class TestExportPipeline:
+    """Doku § 10: der Datensatz muss durch alle drei Renderer laufen.
+
+    Der Wert liegt nicht im Format-Dispatch (den pinnt ``test_reporting_export.py``
+    generisch), sondern in DIESEM Datensatz: variable Summary-Schluessel je
+    konfigurierter Gruppe und ``None``-Zellen aus der Suppression sind genau die
+    Formen, an denen ein Serialisierer stolpert.
+    """
+
+    @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
+    def test_export_laeuft_und_ist_wohlgeformt(
+        self, backend, facility, admin_user, kontakt_typ, krise_typ, date_range, fmt
+    ):
+        _events(facility, kontakt_typ, admin_user, 6, {LEISTUNGEN_SLUG: ["essen"]})
+        _events(facility, kontakt_typ, admin_user, 2, {LEISTUNGEN_SLUG: ["duschen"]})
+        _events(facility, krise_typ, admin_user, 3, {KRISE_SLUG: "gewalt"})
+
+        response = export_dataset(backend, facility, *date_range, format=fmt)
+        body = b"".join(response.streaming_content) if fmt == "csv" else response.content
+
+        assert response.status_code == 200
+        assert f"service-distribution_{date_range[0]}_{date_range[1]}.{fmt}" in response["Content-Disposition"]
+        if fmt == "json":
+            payload = json.loads(body)
+            # Die Kleinstzelle „duschen" (2 < 5) darf im Artefakt nur als
+            # ``None`` stehen — Panel/Export-Paritaet der Suppression.
+            zellen = {row["option"]: row["count"] for row in payload["records"]}
+            assert zellen["duschen"] is None
+            assert zellen["essen"] == 6
+        if fmt == "xml":
+            # Begruendung fuers noqa (Muster ``test_reporting_export.py``):
+            # eigener, gerade erst generierter Output, keine fremde Eingabe.
+            ET.fromstring(body)  # noqa: S314
+        if fmt == "csv":
+            zeilen = body.decode().splitlines()
+            assert next(csv.reader(zeilen[1:])) == ["Feld", "Option", "Anzahl"]
+
+
+class TestIsAvailable:
+    def test_nur_leistungen_konfiguriert(self, backend, facility, kontakt_typ):
+        assert backend.is_available(facility) is True
+
+    def test_nur_krisenart_konfiguriert(self, backend, facility, krise_typ):
+        assert backend.is_available(facility) is True
+
+    def test_keine_gruppe_konfiguriert(self, backend, facility, doc_type_contact):
+        assert backend.is_available(facility) is False
+
+    def test_feld_am_falschen_typ(self, backend, facility):
+        _typ_mit_feld(
+            facility,
+            "Spritzentausch",
+            system_type=DocumentType.SystemType.NEEDLE_EXCHANGE,
+            feld_name="Leistungen",
+            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        )
+
+        assert backend.is_available(facility) is False
+
+    def test_inaktiver_typ_zaehlt_nicht(self, backend, facility, kontakt_typ):
+        DocumentType.objects.filter(pk=kontakt_typ.pk).update(is_active=False)
+
+        assert backend.is_available(facility) is False
+
+    def test_fremde_einrichtung_macht_nicht_verfuegbar(self, backend, facility, second_facility):
+        _typ_mit_feld(
+            second_facility,
+            "Kontakt",
+            system_type=DocumentType.SystemType.CONTACT,
+            feld_name="Leistungen",
+            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        )
+
+        assert backend.is_available(facility) is False
