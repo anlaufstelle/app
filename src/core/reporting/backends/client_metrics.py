@@ -37,6 +37,27 @@ partitioniert.
    ``is_active``-Flag wird dagegen **nicht** ausgewertet: Deaktivieren ist ein
    Arbeitsstand, keine Aussage darueber, ob die Aufnahme stattgefunden hat.
 
+**Die Soft-Delete-Asymmetrie zwischen den Kennzahlen ist beabsichtigt**
+(Refs #1754). ``neuaufnahmen`` filtert ``Client.is_deleted=False``,
+``aktive_personen`` und ``records`` tun das **nicht** — sie zaehlen ueber die
+Ereignisse (``Event.is_deleted=False``) und nehmen eine Person im Papierkorb
+weiter mit. Grund: Die beiden Zahlen beantworten verschiedene Fragen.
+``neuaufnahmen`` beschreibt den **Personenbestand** („wen fuehren wir seit dem
+Zeitraum?"), und wer im Papierkorb liegt, wird gerade nicht mehr gefuehrt.
+``aktive_personen`` beschreibt **Arbeit, die stattgefunden hat** — der Besuch
+ist ein Fakt des Zeitraums, den ein spaeterer Loeschantrag nicht ungeschehen
+macht; ein Ereignis, das nicht mehr zaehlen soll, wird selbst soft-deletet, und
+genau darauf filtert die Abfrage.
+
+Zwei Folgen, die man kennen muss: (a) ``aktive_personen`` kann groesser sein als
+die Zahl der aktuell gefuehrten Personen; (b) nach Ablauf der Papierkorb-Frist
+anonymisiert ``anonymize_client`` den Datensatz und setzt ``age_cluster`` auf
+``unknown`` — die Person bleibt also in ``aktive_personen``, wandert in der
+Verteilung aber in die ``unknown``-Zeile. Ein zweiter Lauf ueber denselben
+Zeitraum liefert dann dieselbe Randsumme bei anderer Verteilung. Beides ist
+Folge derselben Entscheidung: die Loeschung greift am **Personendatensatz**, die
+Zaehlung haengt am **Ereignis**.
+
 **K-Anonymitaet.** Alle drei Groessen sind Personenzaehlungen und laufen
 vollstaendig durch die zentrale Maschinerie:
 

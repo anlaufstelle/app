@@ -221,7 +221,17 @@ class BanOverviewBackend(DatasetBackend):
         heute = timezone.localdate()
         aktiv_aktuell = 0
         abgelaufen_im_zeitraum = 0
-        for data_json in events.values_list("data_json", flat=True):
+        # ``iterator()`` statt Voll-Materialisierung (Refs #1754): Die Schleife
+        # braucht **alle** Hausverbots-Ereignisse — ``aktiv_aktuell`` kennt
+        # keinen Zeitraum (ein 2019 ausgesprochenes Hausverbot kann heute
+        # gelten), und ``bis`` liegt in ``data_json`` und ist womoeglich
+        # feldverschluesselt, laesst sich also nicht als SQL-Praedikat
+        # ausdruecken. Ein Zeitraum- oder Schluesselfilter waere hier deshalb
+        # kein Optimierungsschritt, sondern eine Semantikaenderung. Was bleibt,
+        # ist die Speichergrenze: der Server-Cursor haelt immer nur einen Block
+        # im RAM, statt die Payloads aller Ereignisse auf einmal aufzubauen.
+        # ``values_list("data_json")`` laedt bereits nur diese eine Spalte.
+        for data_json in events.values_list("data_json", flat=True).iterator(chunk_size=1000):
             data = data_json or {}
             bis = _bis_datum(data)
             # Truthiness wie in ``_collect_active_bans``: ein entschluesselter
@@ -261,6 +271,15 @@ class BanOverviewBackend(DatasetBackend):
     # ``margin_key=None``: keine der drei Zahlen partitioniert eine andere,
     # es gibt also keine Gleichung zum Rueckrechnen. Der Guard laeuft trotzdem
     # und bestaetigt das — Pruefung statt Behauptung.
+    #
+    # Es haengt zusaetzlich an den datenunabhaengigen Nullzeilen (Refs #1754,
+    # ausfuehrlich am selben Punkt in ``case_metrics``): das Inferenzmodell des
+    # Guards setzt fuer Zeilen einer Aufschluesselung ``lo = 1`` an, eine
+    # Nullzeile macht es unerfuellbar, und ein leeres Intervall gilt dort als
+    # begruendete Ausnahme — mit deklarierter Randsumme liefe der Guard also
+    # fail-open. Wer hier eine Randsumme nachruestet, muss die Nullzeilen
+    # zuerst loswerden — und damit die K6-Zusage aufgeben, dass die Gestalt der
+    # Tabelle nichts ueber die Existenz von Hausverboten verraet.
     _EXPORT_BREAKDOWN = _Breakdown("records", None, ORDER_INPUT, count_key=_COUNT_KEY)
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:

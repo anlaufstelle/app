@@ -213,6 +213,20 @@ class CaseMetricsBackend(DatasetBackend):
     # trotzdem (Pflicht fuer jedes ``prepare_export`` mit ``summary``) und
     # bestaetigt genau das; die Alternative — ihn wegzulassen — waere die
     # Behauptung statt der Pruefung.
+    #
+    # **Wer hier je eine Randsumme nachruestet, muss zuerst die Nullzeilen
+    # loswerden** (Refs #1754): Das Inferenzmodell des Guards setzt fuer Zeilen
+    # einer Aufschluesselung die Existenz-Untergrenze ``lo = 1`` an
+    # (``external_report._row_min_value``) — eine GROUP-BY-Zeile existiert nur,
+    # weil sie mindestens einen Fall traegt. Dieses Backend emittiert seine
+    # Zeilen dagegen datenunabhaengig, auch mit Wert 0 (K6, siehe
+    # Modul-Docstring). Mit einer deklarierten Randsumme waere das
+    # Intervallmodell fuer eine Nullzeile unerfuellbar, und ein leeres Intervall
+    # gilt dort als begruendete Ausnahme — der Guard liefe fail-OPEN. Solange
+    # ``margin_key=None`` ist, kommt das Modell gar nicht erst zum Zug; die
+    # beiden Entscheidungen haengen also zusammen (dieselbe Falle beschreibt
+    # ``counseling_hours.build_dataset`` aus der Gegenrichtung: dort werden
+    # Nullzeilen weggelassen, WEIL es eine Randsumme gibt).
     _EXPORT_BREAKDOWN = _Breakdown("records", None, ORDER_INPUT, count_key=_COUNT_KEY)
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:

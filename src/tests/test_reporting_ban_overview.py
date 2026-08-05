@@ -9,7 +9,7 @@ inklusive Feldverschluesselung.
 """
 
 import dataclasses
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
@@ -420,7 +420,15 @@ class TestPrepareExport:
 
 class TestEndeZuEndeUeberBuildDataset:
     def test_panel_sicht_zeigt_suppressierte_zahlen(self, backend, facility, zeitraum, staff_user, doc_type_hausverbot):
-        _ban(facility, doc_type_hausverbot, staff_user, bis=(date.today() + timedelta(days=5)).isoformat())
+        # ``timezone.localdate()`` wie im Backend (Refs #1754): ``date.today()``
+        # liest die Systemzeitzone und laege in einer UTC-Umgebung kurz vor
+        # Mitternacht Ortszeit einen Tag daneben.
+        _ban(
+            facility,
+            doc_type_hausverbot,
+            staff_user,
+            bis=(timezone.localdate() + timedelta(days=5)).isoformat(),
+        )
 
         prepared = backend.prepare_export(facility, backend.build_dataset(facility, *zeitraum))
 
