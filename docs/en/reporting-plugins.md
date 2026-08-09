@@ -444,6 +444,8 @@ Everything in this section reasons **within one report**. Two reports for the sa
 
 - **Refinement.** `monthly-trend` decomposes exactly the category figures of the activity report by month. A category cell suppressed there is summable from the visible monthly rows — and vice versa. This holds even when *neither* report suppressed a single cell: the finer resolution is itself the gain.
 - **Difference.** `service-distribution` counts contact events **with** a selected value, `counseling-hours` counts **all** contact events. The difference — contacts without a service entry — appears in neither report and passes through no suppression rule.
+- **Reproduction.** The category rows of `counseling-hours` (`contact`/`counseling`/`crisis`) reproduce the categories of the activity report — same maps, same base set, same count measure, only refined by the minutes column. This also lifts the **secondary** suppression there: a category that falls in the activity report only so that the primarily suppressed neighbouring cell cannot be back-calculated shows its event count here (which passed its own k-check). No small case count becomes visible, but a correct suppression rationale loses its effect — secondary suppression is table-local by construction.
+- **Reporting date.** `ban-overview` (`aktiv_aktuell`) and `case-metrics` (`offene_faelle_aktuell`) each carry one figure tied to the **creation day**, not to the reporting period. Two releases of the same period at different points in time differ in exactly this figure; the difference is the net change between the two days and passes through no suppression rule. The metrics stay (maintainer decision 2026-08-05) — both artefacts carry a `CompletenessIssue` naming the snapshot for it.
 
 This is an **accepted definitional boundary, not an omission**: there is no cell an artefact-local rule could attach to, and a cross-artefact guard would have to know which reports went to the same recipient — knowledge that does not exist in the generation path. As a flanking measure, the **release overview** (`ReportReleaseLogView`, [`core/services/dashboard/release_log.py`](../../src/core/services/dashboard/release_log.py)) makes overlapping releases visible so the facility can decide.
 
@@ -617,6 +619,6 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 - [packages.md](../packages.md) — configuration packages (source of the documentation types that reports evaluate)
 
 <!-- translation-source: docs/reporting-plugins.md -->
-<!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-05 -->
+<!-- translation-version: v0.80.0 -->
+<!-- translation-date: 2026-08-09 -->
 <!-- source-hash: b178af7f203ff108b1b3d11603718693c4474d66 -->

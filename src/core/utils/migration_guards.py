@@ -70,13 +70,13 @@ Klassen mit unterschiedlicher Begruendung:
 * ``0068``–``0099`` sind Bestandteil von ``v0.23.0`` (Snapshot endet bei
   ``0109``) und auf allen Instanzen laengst angewandt — ein nachtraeglicher
   Guard liefe dort nie und schriebe nur die Migrationshistorie um.
-* ``0115``/``0117``/``0120``/``0122`` sind **noch nicht** released (``v0.23.0``
-  reicht nur bis ``0109``); sie laufen beim naechsten Deploy im selben
-  ``migrate``-Aufruf wie ``0123``. Da ``0123`` den Guard traegt und bei falscher
-  Rolle fail-loud abbricht, *bevor* die Batch committet, ist der ganze Lauf
-  transitiv geschuetzt. Ein Retrofit auf diese vier bliebe moeglich, wurde aber
-  bewusst unterlassen, um die Migrationsdateien so kurz vor dem Release nicht
-  erneut anzufassen — der Guard ist ab ``0123`` die Konvention fuer *neue*
+* ``0115``/``0117``/``0120``/``0122`` liegen zwischen dem ``v0.23.0``-Snapshot
+  (endet bei ``0109``) und ``0123``; beim Update einer Instanz laufen sie im
+  selben ``migrate``-Aufruf wie ``0123``. Da ``0123`` den Guard traegt und bei
+  falscher Rolle fail-loud abbricht, *bevor* die Batch committet, ist der ganze
+  Lauf transitiv geschuetzt. Ein Retrofit auf diese vier bliebe moeglich, wurde
+  aber bewusst unterlassen, um releasefertige Migrationsdateien nicht erneut
+  anzufassen — der Guard ist ab ``0123`` die Konvention fuer *neue*
   Datenmigrationen.
 """
 

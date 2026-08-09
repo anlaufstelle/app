@@ -209,4 +209,4 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: aff7129d8adbba6b0cf613b9180005fae08c0af0 -->
+<!-- source-hash: 36a8227c2272edba42e837c8dbf13f669175127c -->

@@ -236,6 +236,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs #741) |
 | `make test` | Run unit and integration tests (excluding E2E) |
 | `make test-e2e` | Run end-to-end tests with Playwright |
+| `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787) |
 | `make check` | Run Django system checks and verify migration consistency |
 | `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-parallel` |
 | `make test-focus T=<path>` | Single test file with fail-fast |
@@ -764,6 +765,6 @@ src/
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
 
 <!-- translation-source: CONTRIBUTING.md -->
-<!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-03 -->
+<!-- translation-version: v0.80.0 -->
+<!-- translation-date: 2026-08-09 -->
 <!-- source-hash: 6d39f2281bf18560178542dbde65179b35ef0ab3 -->

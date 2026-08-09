@@ -48,6 +48,7 @@ Templates included:
 |----------|-------------|
 | [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
 | [ops-runbook.md](../ops-runbook.md) | Operations runbook: monitoring, alerts, cron jobs, RLS, backup/restore, restore drill |
+| [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
 | [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
@@ -67,6 +68,6 @@ Templates included:
 | `async-pdf-evaluation.md` (dev-only) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
-<!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-03 -->
+<!-- translation-version: v0.80.0 -->
+<!-- translation-date: 2026-08-09 -->
 <!-- source-hash: 813eb7ac2aa9a76319e7ca06bfecc8d7a6719f5b -->

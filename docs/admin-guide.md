@@ -1446,7 +1446,7 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 
 ### 7.9 Row Level Security (RLS)
 
-Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **allen facility-scoped Tabellen** (derzeit 25, per Test ableitungsbasiert erzwungen) als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
+Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **allen facility-scoped Tabellen** (derzeit 27, per Test ableitungsbasiert erzwungen) als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
 
 #### Funktionsweise
 
