@@ -136,6 +136,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Update-Services gegen Mass-Assignment und Lost Updates gehärtet** (#1789) — `update_event` weist durchgereichte Feld-Kwargs jetzt über eine (bewusst leere) Allowlist ab, und `update_workitem`, `update_client` sowie `update_case` schreiben nur noch die im Aufruf genannten Spalten (`update_fields`), sodass parallel gesetzter Status, Wiedervorlage-Marker, Soft-Delete-Zustand und anonymisierte Freitexte nicht mehr von einem veralteten Bearbeiten-Stand überschrieben werden — beim Client schloss das die stille Reaktivierung einer bereits genehmigten Löschung durch einen zeitgleich offenen Bearbeiten-Request aus.
 - **Import-Wizard: Zuordnen und Probelauf laufen unter dem Job-Zeilen-Lock** (#1793) — ein Mapping-/Probelauf-POST kann einen parallel abgeschlossenen Import nicht mehr in einen inkonsistenten Zwischenzustand zurückschreiben (Status VALIDATED ohne hinterlegte Datei); alle drei Status-Schreiber serialisieren jetzt über denselben Zeilen-Lock.
 - **Import bricht bei kaputter Transaktion ab, statt Zeilenfehler vorzutäuschen** (#1793) — reißt die Datenbankverbindung mitten im Lauf ab, endet der Lauf sichtbar mit einem Fehler, statt alle Folgezeilen als „ungültiger Wert" zu protokollieren und einen plausiblen Datenfehlerbericht vorzutäuschen.
+- **cryptography auf 50.0.0 angehoben** — behebt PYSEC-2026-3552 (pip-audit-Gate beim Release-Schnitt); pyOpenSSL zieht auf 26.4.0 nach, das cryptography 50 erlaubt. Obergrenze im Pin jetzt `<51`.
 
 ### Docs
 

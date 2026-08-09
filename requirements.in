@@ -10,8 +10,9 @@ django-ratelimit>=4.1
 # ungenutzt (dann greift der DatabaseCache-Fallback), muss aber im Image
 # liegen, weil docker-compose.prod.yml den Cache ab Werk auf Redis zeigt.
 redis>=6.0
-# Major-Bump auf 49.0.0 verifiziert (#1129); der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
-cryptography>=49.0.0,<50
+# Major-Bump auf 50.0.0 wegen PYSEC-2026-3552 (pip-audit-Gate, v0.80.0-Schnitt);
+# 49.0.0 war mit #1129 verifiziert, der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
+cryptography>=50.0.0,<51
 python-dotenv>=1.0
 # Obergrenze <70, damit ein Major-Bump (Dependabot) den PDF-Export nicht
 # ueberraschend bricht — insb. den SSRF-url_fetcher (Refs #1610, #1596).
@@ -23,7 +24,7 @@ pyclamd>=0.4.0
 django-otp>=1.3
 # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Zieht
 # webauthn>=3,<4 (duo-labs py_webauthn) + cbor2/pyOpenSSL/pyasn1 transitiv;
-# die cryptography-Anforderung (>=49) deckt sich mit unserem bestehenden Pin.
+# die cryptography-Anforderung (>=49) wird von unserem Pin (>=50) erfuellt.
 django-otp-webauthn>=0.10.0,<0.11
 qrcode>=7.4
 python-magic>=0.4.27
