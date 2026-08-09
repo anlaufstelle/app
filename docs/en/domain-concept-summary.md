@@ -190,13 +190,6 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Container-runtime hardening** (`no-new-privileges`, dropped capabilities, read-only filesystems) and **build integrity** (pip hash-pinning, digest-pinned base images).
 - **Tailwind CSS 4** and **Python 3.14** as the production base.
 
-### v0.23.0 (2026-08-01)
-
-- **Defense-in-depth wave**: the Content-Security-Policy now ships `style-src` without `'unsafe-inline'` (special pages via sha256 hashes, narrow admin-UI exception); statistics materialized-view access is funneled through a facility-enforcing helper; an AST guard fails CI on unscoped queries against the three non-RLS tables; upload temp files are pinned to tmpfs with a new deploy check.
-- **Operations out of the box**: `scripts/initial-setup.sh` performs the full first-run setup idempotently; the health endpoint continuously reports whether the runtime DB connection could bypass row-level security (`db_role_posture`); `docker-compose.prod.yml` gains a supercronic cron sidecar for the six background jobs (backup stays host-side) and a Redis cache service (database-cache fallback unchanged).
-- **Governance clarified**: the CRA deadline is documented as a self-imposed precaution (the project is outside the CRA's scope in its current operating model), and funding-programme references were removed project-wide.
-- **"Works ≠ correct" pilot**: the first synthetic-persona walk against the dev instance produced eleven triage candidates and directly led to two pre-release fixes (htmx settle attributes, admin CSP exception).
-
 ### v0.22.0 (2026-07-15)
 
 - **Offline "one world"** (offline V2, #1499): contacts and tasks can be captured offline even without a previously opened form, and the task list and timeline render offline in-place at their canonical URLs from the merged local snapshot.
@@ -206,7 +199,26 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Serial capture of anonymous mass contacts** (#1349): a "Save & next contact" action creates the contact and immediately reopens a fresh, empty form with the documentation type pre-selected -- for quickly tallying many anonymous contacts without the detour via the detail page; the next contact starts anonymous with the first field focused.
 - **Task overview status and time filters** (#1570): the task overview gains an explicit status filter (open / in progress / done / all) and -- effective only for "done" -- a time-range filter (last 7/30 days / all), so all completed tasks become reachable beyond the passive seven-day "recently done" preview; both combine with the existing assignment and facility scoping filters.
 
+### v0.23.0 (2026-08-01)
+
+- **Defense-in-depth wave**: the Content-Security-Policy now ships `style-src` without `'unsafe-inline'` (special pages via sha256 hashes, narrow admin-UI exception); statistics materialized-view access is funneled through a facility-enforcing helper; an AST guard fails CI on unscoped queries against the three non-RLS tables; upload temp files are pinned to tmpfs with a new deploy check.
+- **Operations out of the box**: `scripts/initial-setup.sh` performs the full first-run setup idempotently; the health endpoint continuously reports whether the runtime DB connection could bypass row-level security (`db_role_posture`); `docker-compose.prod.yml` gains a supercronic cron sidecar for the six background jobs (backup stays host-side) and a Redis cache service (database-cache fallback unchanged).
+- **Governance clarified**: the CRA deadline is documented as a self-imposed precaution (the project is outside the CRA's scope in its current operating model), and funding-programme references were removed project-wide.
+- **"Works ≠ correct" pilot**: the first synthetic-persona walk against the dev instance produced eleven triage candidates and directly led to two pre-release fixes (htmx settle attributes, admin CSP exception).
+
+### v0.80.0 (2026-08-10)
+
+The largest collective pre-release to date — the configurability milestones M0–M5 plus file attachments and data portability. The version jump from 0.23 to 0.80 signals the approach to 1.0.
+
+- **Configuration UI (M0)**: facility admins manage documentation types, field templates and the new field groups under `/config/…` — including a drag-and-drop field board with two-level ordering; the Django admin stays the ops surface.
+- **Conditional field logic (M1)**: show/hide rules between fields of a documentation type, maintained in a rule editor, evaluated identically live in the form and on the server.
+- **Dynamic fields on persons and cases + configuration packages (M2)**: the field system moves beyond events; a facility's entire field setup can be exported/imported as a versioned YAML package (schema v1.1) with an idempotent loader.
+- **Data portability (M4)**: CSV import wizard for persons, a complete facility export (JSON, schema v1) via `manage.py export_facility`, and an internal rectification workflow for Art. 16 GDPR requests.
+- **Report backends as a plugin system (M5)**: one file per reporting standard behind a fixed interface with mandatory k-anonymity hooks; seven example backends ship with it.
+- **File attachments on persons and cases**: the encrypted file vault, previously event-only, becomes owner-generic (exactly one owner per file — event, person or case) with a direct RLS policy.
+- **Removed (breaking)**: the documentation-type "category" field is gone; report mappings are structural (`system_type`/`slug`); type names are now unique per facility.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.23.0 -->
-<!-- translation-date: 2026-08-04 -->
+<!-- translation-version: v0.80.0 -->
+<!-- translation-date: 2026-08-09 -->
 <!-- source-hash: 36a8227c2272edba42e837c8dbf13f669175127c -->
