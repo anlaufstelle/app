@@ -317,34 +317,62 @@ def _create_storage_state(launch_browser, base_url, username, password="anlaufst
     return storage
 
 
-@pytest.fixture(scope="session")
-def _login_storage_state(base_url, launch_browser):
-    """Einmalig einloggen und Storage-State speichern (Session-Cookies)."""
-    return _create_storage_state(launch_browser, base_url, "admin")
+# Die Server-Session laeuft ABSOLUT ab: der Login-View setzt
+# ``set_expiry(session_timeout_minutes * 60)`` (Seed: 30 Minuten), und ohne
+# ``SESSION_SAVE_EVERY_REQUEST`` verlaengert kein Request das Fenster. Ein am
+# Lauf-Anfang erzeugter Storage-State ist damit nach 30 Minuten Wall-Clock tot
+# — auf langsamen Runnern (Stage-CI: 38 min Gesamtlauf) landete ab Minute 30
+# jeder Test mit geteiltem Storage-State auf ``/login/`` (v0.80.0-Schnitt).
+# Deshalb sind die Storage-States function-scoped mit session-weitem Cache:
+# ein State wird wiederverwendet, bis er _STORAGE_STATE_TTL_S alt ist, und
+# dann per frischem Login ersetzt. TTL = halbes Session-Fenster, damit auch
+# der langsamste Einzeltest (Timeout 120 s) nie in den Ablauf laeuft.
+_STORAGE_STATE_TTL_S = 15 * 60
 
 
 @pytest.fixture(scope="session")
-def _lead_storage_state(base_url, launch_browser):
+def _storage_state_cache():
+    """Session-weiter Cache ``username -> (monotonic-Zeitstempel, state)``."""
+    return {}
+
+
+def _fresh_storage_state(cache, launch_browser, base_url, username):
+    """Gecachten Storage-State liefern; nach Ablauf der TTL neu einloggen."""
+    entry = cache.get(username)
+    if entry is None or time.monotonic() - entry[0] > _STORAGE_STATE_TTL_S:
+        state = _create_storage_state(launch_browser, base_url, username)
+        cache[username] = (time.monotonic(), state)
+    return cache[username][1]
+
+
+@pytest.fixture
+def _login_storage_state(base_url, launch_browser, _storage_state_cache):
+    """Storage-State fuer Admin-User (Session-Cookies, TTL-erneuert)."""
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "admin")
+
+
+@pytest.fixture
+def _lead_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Lead-User (emma)."""
-    return _create_storage_state(launch_browser, base_url, "emma")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "emma")
 
 
-@pytest.fixture(scope="session")
-def _staff_storage_state(base_url, launch_browser):
+@pytest.fixture
+def _staff_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Staff-User (miriam)."""
-    return _create_storage_state(launch_browser, base_url, "miriam")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "miriam")
 
 
-@pytest.fixture(scope="session")
-def _assistant_storage_state(base_url, launch_browser):
+@pytest.fixture
+def _assistant_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Assistant-User (lena)."""
-    return _create_storage_state(launch_browser, base_url, "lena")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "lena")
 
 
-@pytest.fixture(scope="session")
-def _super_admin_storage_state(base_url, launch_browser):
+@pytest.fixture
+def _super_admin_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Super-Admin (superadmin) — Refs #867."""
-    return _create_storage_state(launch_browser, base_url, "superadmin")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "superadmin")
 
 
 def _setup_page(context):
