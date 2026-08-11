@@ -42,15 +42,27 @@
     {% endfor %}
     {% endif %}
 
-    <div class="border-t border-subtle mt-1 pt-1">
-        <a href="{% url 'core:search' %}?q={{ q|urlencode }}" class="flex items-center px-3 py-2 text-sm text-accent hover:bg-accent-light font-medium">
-            <svg aria-hidden="true" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            {% trans "Alle Ergebnisse anzeigen" %}
-        </a>
-    </div>
 </div>
 {% elif q %}
 <div class="px-3 py-4 text-sm text-ink-muted text-center">
     {% trans "Keine Ergebnisse" %}
+</div>
+{% endif %}
+
+{% comment %}
+Refs #1813 (Konzept #1801 §7.1): Die Fusszeile steht AUSSERHALB der
+Treffer-Verzweigung. Vorher lag sie darin — wer sich vertippte, sah „Keine
+Ergebnisse" und danach nichts mehr: kein Weg zur Volltextsuche, obwohl die
+mit anderen Feldern und ohne Ergebnis-Deckelung noch etwas finden kann. Genau
+deshalb bekommt `/search/` auch keinen eigenen Nav-Eintrag — diese Zeile IST
+der Einstieg, und sie muss deshalb bei jeder Eingabe da sein.
+{% endcomment %}
+{% if q %}
+<div class="border-t border-subtle mt-1 pt-1">
+    <a href="{% url 'core:search' %}?q={{ q|urlencode }}" data-testid="search-all-results-link"
+       class="flex items-center min-h-[44px] px-3 py-2 text-sm text-accent hover:bg-accent-light font-medium">
+        <svg aria-hidden="true" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        {% if clients or events or similar_clients %}{% trans "Alle Ergebnisse anzeigen" %}{% else %}{% trans "Erweiterte Suche öffnen" %}{% endif %}
+    </a>
 </div>
 {% endif %}
