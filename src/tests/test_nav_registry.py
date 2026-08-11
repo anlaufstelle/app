@@ -37,6 +37,11 @@ NAV_ROUTE_PREFIXES = (
     # Reiter/Familie soll auffallen, nicht erst im Handtest.
     "datenschutz/",
     "verwaltung/",
+    # Verify-Befund #1813: Ereignis-Vollseiten (Detail/Neu/Edit/Lösch-
+    # Bestätigung) sind Zeitstrom-Territorium — ohne den Präfix fiele eine
+    # neue events/-Seite ohne Familien-Mitgliedschaft nicht auf (dieselbe
+    # Defektklasse wie der in T1 behobene audit_detail-Fall).
+    "events/",
     "config/",
     "import/",
     "deletion-requests/",

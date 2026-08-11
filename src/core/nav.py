@@ -297,7 +297,10 @@ ZEITSTROM = NavItem(
     key="zeitstrom",
     label=_("Zeitstrom"),
     url_name="core:zeitstrom",
-    family=frozenset({"zeitstrom"}),
+    # Ereignis-Vollseiten gehören zum Zeitstrom-Anker (Verify-Befund #1813,
+    # dieselbe Klasse wie der audit_detail-Fix): Detail, Neu, Edit und die
+    # GET-Lösch-Bestätigung sind "du bist hier"-Zustände.
+    family=frozenset({"zeitstrom", "event_detail", "event_create", "event_update", "event_delete"}),
     gates=("is_assistant_or_above",),
     icon="zeitstrom",
 )
@@ -660,6 +663,8 @@ def mobile_more_catalog() -> frozenset[str]:
 KNOWN_NON_NAV_ROUTES: dict[str, str] = {
     # /system/
     "system_audit_export": "Download-Endpunkt (CSV/JSON via ?format=) hinter dem Audit-Reiter, keine eigene Seite.",
+    # /events/
+    "attachment_download": "Datei-Download-Endpunkt am Ereignis (entschlüsselt, streamt), keine eigene Seite.",
     # /config/
     "config_doctype_field_add": "HTMX-Board-Mutation (POST) im Dokumentationstyp-Detail, kein Seitenaufruf.",
     "config_doctype_field_remove": "HTMX-Board-Mutation (POST) im Dokumentationstyp-Detail, kein Seitenaufruf.",
