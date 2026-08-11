@@ -246,19 +246,35 @@ def test_bottom_bar_families_stay_out_of_the_mehr_catalog():
         )
 
 
-def test_mehr_entries_are_the_same_objects_as_the_sidebar_entries():
-    """„Eine Quelle" strukturell: das Mehr-Menue fuehrt keine eigenen Kopien.
+def test_no_nav_key_is_defined_twice_in_the_registry():
+    """„Eine Quelle" strukturell: kein Eintrag existiert zweimal als Kopie.
 
-    Waeren es Kopien, koennten Label, Gate oder Familie zwischen Desktop und
-    Mobil auseinanderlaufen — genau die Doppelpflege, die #1813 beseitigt hat.
+    Waeren es Kopien, koennten Label, Gate oder Familie zwischen Desktop,
+    Mobil und Bereichs-Reiter auseinanderlaufen — genau die Doppelpflege, die
+    #1813 beseitigt hat.
+
+    Frueher lautete die Aussage „jeder Mehr-Eintrag steht auch in der Sidebar".
+    Das war seinerzeit gleichbedeutend, ist es aber seit Etappe 2 nicht mehr:
+    die Sidebar zeigt statt acht Einzel-Eintraegen zwei Bereichs-Hubs,
+    waehrend dieselben Eintraege als **Reiter** dieser Bereiche und (bis
+    Etappe 3) im Mehr-Menue weiterleben. Die tragende Aussage — Identitaet
+    statt Kopie — gilt hier jetzt fuer die **ganze** Registry und damit auch
+    fuer die Bereichs-Reiter, die vorher gar nicht geprueft waren.
     """
-    sidebar_by_key = {item.key: item for item in nav.SIDEBAR}
-    for item in nav.MOBILE_MORE:
-        assert item.key in sidebar_by_key, f"Mehr-Eintrag {item.key!r} hat keine Entsprechung in der Sidebar."
-        assert item is sidebar_by_key[item.key], (
-            f"Mehr-Eintrag {item.key!r} ist eine Kopie des Sidebar-Eintrags statt desselben Objekts — "
-            "Label/Gate/Familie koennen auseinanderlaufen."
-        )
+    seen: dict[str, tuple[str, object]] = {}
+    origins = [("SIDEBAR", item) for item in nav.SIDEBAR]
+    origins += [("MOBILE_MORE", item) for item in nav.MOBILE_MORE]
+    origins += [(f"section:{s.key}", tab) for s in nav.SECTIONS for tab in s.tabs]
+
+    for origin, item in origins:
+        if item.key in seen:
+            first_origin, first_item = seen[item.key]
+            assert item is first_item, (
+                f"Eintrag {item.key!r} existiert in {origin} als KOPIE des Eintrags aus {first_origin} — "
+                "Label/Gate/Familie koennen auseinanderlaufen. Dasselbe Objekt referenzieren."
+            )
+        else:
+            seen[item.key] = (origin, item)
 
 
 # ---------------------------------------------------------------------------

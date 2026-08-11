@@ -5,6 +5,25 @@ wurde zusaetzlich der Systembereich hervorgehoben. Ursache war das Django-
 Template-Idiom ``{% if x in 'a,b,c' %}``, das auf Strings als Substring-Test
 wirkt — und ``dashboard`` ist ein Substring von ``system_dashboard``.
 Erwartet: genau der aktive Bereich wird markiert.
+
+Refs #1813 (Etappe 2) verschiebt den Schauplatz, nicht die Aussage: seit der
+Sidebar-Konsolidierung sieht die Systemadministration keine Arbeitszentrale
+mehr (Regel N3), und die acht Einzel-Eintraege des Datenschutz-/Verwaltungs-
+Blocks sind zu zwei Hub-Ankern geworden. Das Ankerpaar
+``nav-dashboard``/``nav-system`` gibt es also in keiner Sidebar mehr. An seine
+Stelle treten drei Aussagen:
+
+* die **Datenebene** (``dashboard`` ist kein Element der System-Familie, und
+  die Hub-Familien sind von der System-Familie disjunkt) — sie faellt selbst
+  dann noch, wenn jemand die Familien wieder auf CSV-Strings zurueckdreht;
+* das **Hub-Ankerpaar** ``nav-datenschutz``/``nav-verwaltung``, das
+  tatsaechlich gemeinsam in einer Sidebar steht (Anwendungsbetreuung);
+* die Invariante **genau ein aktiver Sidebar-Anker pro Seite**, die die
+  eigentliche Regressionsklasse ("zwei Bereiche leuchten") rollenunabhaengig
+  festhaelt.
+
+Die Zwei-Ebenen-Unterscheidung bleibt am Marker ablesbar: Sidebar
+``bg-accent-light``, Reiter-Pill ``bg-accent text-white``.
 """
 
 from __future__ import annotations
@@ -25,18 +44,15 @@ def _opening_anchor(content: str, testid: str) -> str:
     return content[start:end]
 
 
-def _sidebar_anchor_by_href(content: str, href: str) -> str:
-    """Oeffnender ``<a ...>``-Tag der Sidebar-Zeile mit diesem ``href``.
+def _active_anchor_count(content: str) -> int:
+    """Zahl der aktiv markierten Sidebar-Zeilen (Marker im ``nav-items``-Slice)."""
+    start = content.index('data-testid="nav-items"')
+    return content[start : content.index("</div>", start)].count(ACTIVE_MARKER)
 
-    Fuer die Eintraege ohne eigenes ``data-testid`` (Refs #1813 aendert die
-    Testid-Landschaft bewusst nicht). Der Schnitt auf den ``nav-items``-
-    Container haelt gleichnamige Links aus Seiteninhalt und Mobile-Nav heraus.
-    """
-    nav_start = content.index('data-testid="nav-items"')
-    nav_end = content.index("</div>", nav_start)
-    items = content[nav_start:nav_end]
-    idx = items.index(f'href="{href}"')
-    return items[items.rindex("<a", 0, idx) : items.index(">", idx)]
+
+def _pill(content: str, key: str) -> str:
+    """Oeffnender ``<a ...>``-Tag eines Bereichs-Reiters (Refs #1813)."""
+    return _opening_anchor(content, f"subnav-tab-{key}")
 
 
 def test_dashboard_is_not_a_substring_member_of_system_family():
@@ -53,56 +69,79 @@ def test_dashboard_is_not_a_substring_member_of_system_family():
     assert "dashboard" not in nav.item("system").family
 
 
+def test_hub_families_are_disjoint_from_each_other_and_from_the_system_family():
+    """Das neue Ankerpaar auf Datenebene (Refs #1813).
+
+    Zwei Bereichsanker koennen nur dann gleichzeitig leuchten, wenn sich ihre
+    Familien ueberschneiden. Der Datentest schliesst das fuer die drei
+    Bereiche aus, bevor ueberhaupt eine Seite gerendert wird.
+    """
+    assert not nav.DATENSCHUTZ_FAMILY & nav.VERWALTUNG_FAMILY
+    assert not nav.DATENSCHUTZ_FAMILY & nav.SYSTEM_FAMILY
+    assert not nav.VERWALTUNG_FAMILY & nav.SYSTEM_FAMILY
+    assert nav.item("datenschutz").family == nav.DATENSCHUTZ_FAMILY
+    assert nav.item("verwaltung").family == nav.VERWALTUNG_FAMILY
+
+
 @pytest.mark.django_db
 class TestSidebarActiveState:
-    def test_super_admin_dashboard_does_not_activate_systembereich(self, client, super_admin_user):
-        """Auf der Arbeitszentrale ist nur Arbeitszentrale aktiv, nicht Systembereich."""
-        client.force_login(super_admin_user)
+    """Das Ankerpaar, das nach der Konsolidierung tatsaechlich gemeinsam in einer
+    Sidebar steht: die beiden Bereichs-Hubs der Anwendungsbetreuung."""
+
+    def test_datenschutz_page_does_not_activate_verwaltung(self, client, admin_user):
+        client.force_login(admin_user)
+        content = client.get(reverse("core:datenschutz_uebersicht")).content.decode()
+
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-datenschutz")
+        assert ACTIVE_MARKER not in _opening_anchor(content, "nav-verwaltung")
+
+    def test_verwaltung_page_does_not_activate_datenschutz(self, client, admin_user):
+        client.force_login(admin_user)
+        content = client.get(reverse("core:verwaltung_uebersicht")).content.decode()
+
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-verwaltung")
+        assert ACTIVE_MARKER not in _opening_anchor(content, "nav-datenschutz")
+
+    def test_lead_arbeitszentrale_activates_only_itself(self, client, lead_user):
+        """Die Arbeitszentrale gehoert seit Regel N3 der Leitung — dort gilt die
+        urspruengliche Aussage unveraendert weiter."""
+        client.force_login(lead_user)
         content = client.get(reverse("core:dashboard")).content.decode()
 
-        dashboard_anchor = _opening_anchor(content, "nav-dashboard")
-        system_anchor = _opening_anchor(content, "nav-system")
-
-        assert ACTIVE_MARKER in dashboard_anchor, "Arbeitszentrale sollte aktiv sein"
-        assert ACTIVE_MARKER not in system_anchor, "Systembereich darf auf der Arbeitszentrale nicht aktiv sein"
-
-    def test_super_admin_systembereich_activates_only_systembereich(self, client, super_admin_user):
-        """Im Systembereich ist Systembereich aktiv, nicht die Arbeitszentrale."""
-        client.force_login(super_admin_user)
-        content = client.get(reverse("core:system_dashboard")).content.decode()
-
-        dashboard_anchor = _opening_anchor(content, "nav-dashboard")
-        system_anchor = _opening_anchor(content, "nav-system")
-
-        assert ACTIVE_MARKER in system_anchor, "Systembereich sollte aktiv sein"
-        assert ACTIVE_MARKER not in dashboard_anchor, "Arbeitszentrale darf im Systembereich nicht aktiv sein"
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-dashboard")
+        assert _active_anchor_count(content) == 1
 
 
 @pytest.mark.django_db
 class TestFeldvorlagenNavActiveState:
-    """Refs #1717: 'Feldvorlagen' ist ein eigener Nav-Eintrag, getrennt von
-    'Konfiguration' (Dokumentationstypen) — beide duerfen nie gleichzeitig
-    aktiv sein."""
+    """Refs #1717: 'Feldvorlagen' und 'Dokumentationstypen' duerfen nie
+    gleichzeitig aktiv sein.
+
+    Refs #1813: beide sind keine Sidebar-Zeilen mehr, sondern Reiter des
+    Bereichs „Verwaltung" — die Aussage wandert eine Ebene tiefer auf die
+    Pills (Marker ``bg-accent text-white``). Der Sidebar-Anker „Verwaltung"
+    ist auf beiden Seiten aktiv; genau das ist der Zwei-Ebenen-Zustand.
+    """
+
+    PILL_ACTIVE = "bg-accent text-white"
 
     def test_fieldtemplate_list_activates_feldvorlagen_not_konfiguration(self, client, admin_user):
         client.force_login(admin_user)
         content = client.get(reverse("core:config_fieldtemplate_list")).content.decode()
 
-        feldvorlagen_anchor = _opening_anchor(content, "nav-config-fieldtemplates")
-        konfiguration_anchor = _opening_anchor(content, "nav-config")
-
-        assert ACTIVE_MARKER in feldvorlagen_anchor, "Feldvorlagen sollte aktiv sein"
-        assert ACTIVE_MARKER not in konfiguration_anchor, "Konfiguration darf hier nicht aktiv sein"
+        assert self.PILL_ACTIVE in _pill(content, "config-fieldtemplates"), "Feldvorlagen sollte aktiv sein"
+        assert self.PILL_ACTIVE not in _pill(content, "config"), "Dokumentationstypen darf hier nicht aktiv sein"
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-verwaltung")
 
     def test_doctype_list_activates_konfiguration_not_feldvorlagen(self, client, admin_user):
         client.force_login(admin_user)
         content = client.get(reverse("core:config_doctype_list")).content.decode()
 
-        feldvorlagen_anchor = _opening_anchor(content, "nav-config-fieldtemplates")
-        konfiguration_anchor = _opening_anchor(content, "nav-config")
-
-        assert ACTIVE_MARKER in konfiguration_anchor, "Konfiguration sollte aktiv sein"
-        assert ACTIVE_MARKER not in feldvorlagen_anchor, "Feldvorlagen darf hier nicht aktiv sein"
+        assert self.PILL_ACTIVE in _pill(content, "config"), "Dokumentationstypen sollte aktiv sein"
+        assert self.PILL_ACTIVE not in _pill(content, "config-fieldtemplates"), (
+            "Feldvorlagen darf hier nicht aktiv sein"
+        )
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-verwaltung")
 
 
 @pytest.mark.django_db
@@ -121,20 +160,28 @@ class TestSystembereichActiveOnEveryTab:
         assert ACTIVE_MARKER in _opening_anchor(content, "nav-system"), f"Systembereich muss auf {url_name} aktiv sein"
 
     @pytest.mark.parametrize("url_name", [tab.url_name for tab in nav.SYSTEM.tabs])
-    def test_arbeitszentrale_stays_inactive_on_every_system_page(self, client, super_admin_user, url_name):
-        """Gegenprobe zur Substring-Regression: nie beide gleichzeitig."""
+    def test_exactly_one_sidebar_anchor_is_active_on_every_system_page(self, client, super_admin_user, url_name):
+        """Gegenprobe zur Substring-Regression, rollenunabhaengig formuliert.
+
+        Frueher hiess sie „die Arbeitszentrale darf nicht mitleuchten" — die
+        Systemadministration hat seit Regel N3 gar keine mehr. Die eigentliche
+        Aussage war ohnehin allgemeiner: **ein** Ort, **eine** Markierung.
+        """
         client.force_login(super_admin_user)
         content = client.get(reverse(url_name)).content.decode()
 
-        assert ACTIVE_MARKER not in _opening_anchor(content, "nav-dashboard"), (
-            f"Arbeitszentrale darf auf {url_name} nicht aktiv sein"
-        )
+        assert _active_anchor_count(content) == 1, f"{url_name}: genau ein Sidebar-Anker darf aktiv sein"
 
 
 @pytest.mark.django_db
 class TestAuditNavActiveState:
     """Refs #1813: die Detailansicht eines Audit-Eintrags fehlte in der
-    Audit-Familie — der Nav-Eintrag graute beim Aufklappen eines Eintrags aus."""
+    Audit-Familie — der Nav-Eintrag graute beim Aufklappen eines Eintrags aus.
+
+    Seit der Sidebar-Konsolidierung traegt den Zustand der Hub-Anker
+    „Datenschutz": ``audit_detail`` gehoert zur Audit-Familie, die Audit-Familie
+    zum Bereich, der Bereich zum Anker. Die Aussage bleibt dieselbe, sie wird
+    nur nicht mehr an einer eigenen Sidebar-Zeile abgelesen."""
 
     def test_audit_entry_stays_active_on_the_detail_page(self, client, admin_user, facility):
         from core.models import AuditLog
@@ -148,4 +195,4 @@ class TestAuditNavActiveState:
         client.force_login(admin_user)
         content = client.get(reverse("core:audit_detail", args=[entry.pk])).content.decode()
 
-        assert ACTIVE_MARKER in _sidebar_anchor_by_href(content, "/audit/")
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-datenschutz")

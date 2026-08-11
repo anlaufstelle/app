@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Hauptnavigation: aus bis zu 18 Einträgen werden höchstens 8** (#1813) — der Alltag steht oben (Zeitstrom · Aufgaben · Personen · Fälle · Dateien · Statistik), darunter abgetrennt die beiden Bereiche „Datenschutz" und „Verwaltung"; Löschanträge, Berichtigungen, Löschfristen, Datenimport, Audit-Log, DSGVO-Paket, Dokumentationstypen und Feldvorlagen sind jetzt Reiter dieser Bereiche und behalten ihre Adressen. „Administration" öffnet die Anwendungsbetreuung künftig über eine Zeile auf der Verwaltungs-Übersicht, die Systemadministration behält ihren Eintrag (#1801).
 - **Reiter „Dokumentationstypen" statt „Konfiguration"** (#1813) — das Label benennt jetzt seinen Inhalt (die Seiten-Überschrift hieß ohnehin schon so); die Adresse `/config/document-types/` bleibt unverändert.
 - **Reiterzeilen erfüllen die 44-px-Mindest-Touchfläche und melden die aktuelle Seite an Screenreader** (#1813) — die Reiter des Systembereichs waren rechnerisch nur ~32 px hoch und trugen kein `aria-current`; beide Hubs und `/system/` nutzen jetzt dasselbe Partial (#810).
 

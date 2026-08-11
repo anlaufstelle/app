@@ -16,7 +16,7 @@ zurückwandern, wo seinerzeit der Substring-Bug entstand.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from django import template
 from django.urls import reverse
@@ -39,6 +39,7 @@ class RenderedItem:
     icon: str
     external: bool
     badge: str
+    divider_before: bool = False
 
 
 def _href(item: nav.NavItem) -> str:
@@ -75,16 +76,30 @@ def _rendered(items, context, *, mobile: bool = False) -> list[RenderedItem]:
             icon=item.icon,
             external=item.external,
             badge=item.badge,
+            divider_before=item.divider_before,
         )
         for item in nav.visible_items(items, user)
     ]
+
+
+def _without_leading_divider(items: list[RenderedItem]) -> list[RenderedItem]:
+    """Eine Trennlinie über dem ersten sichtbaren Eintrag trennt nichts.
+
+    Die Gliederung der Sidebar hängt an ``divider_before`` **eines** Eintrags;
+    welche Einträge davor sichtbar sind, entscheidet die Rolle. Ohne diesen
+    Schnitt bekäme eine Rolle, die nur den Hub-Block sieht, eine Linie am
+    oberen Rand.
+    """
+    if items and items[0].divider_before:
+        items[0] = replace(items[0], divider_before=False)
+    return items
 
 
 @register.inclusion_tag("partials/_nav_sidebar_items.html", takes_context=True)
 def nav_sidebar(context):
     """Die Einträge der Desktop-Sidebar (innerhalb des ``nav-items``-Containers)."""
     return {
-        "items": _rendered(nav.SIDEBAR, context),
+        "items": _without_leading_divider(_rendered(nav.SIDEBAR, context)),
         "overdue_workitems_count": context.get("overdue_workitems_count"),
         "open_workitems_count": context.get("open_workitems_count"),
     }

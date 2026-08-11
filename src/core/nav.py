@@ -62,6 +62,7 @@ class NavItem:
     icon: str = ""  # Schlüssel in partials/_nav_icons.html
     external: bool = False  # target="_blank" rel="noopener"
     badge: str = ""  # Zähler-Block in partials/_nav_sidebar_items.html
+    divider_before: bool = False  # Trennlinie über dem Eintrag (Sidebar-Gliederung)
 
 
 @dataclass(frozen=True)
@@ -207,12 +208,17 @@ SYSTEM_FAMILY = section_family(SYSTEM)
 # Hauptnavigation (Desktop-Sidebar) — Reihenfolge = Renderreihenfolge
 # ---------------------------------------------------------------------------
 
+# Regel N3 (Refs #1801 §3.2): nach der Vervollständigung der Rollen-Einstiege
+# hat nur noch die Leitung eine eigene Arbeitszentrale — Anwendungsbetreuung und
+# Systemadministration bekämen unter /start/ nur einen Redirect. Das Gate lebt
+# als ``User.sees_arbeitszentrale`` am Modell, damit Nav und View dieselbe
+# Bedingung auswerten.
 ARBEITSZENTRALE = NavItem(
     key="dashboard",
     label=_("Arbeitszentrale"),
     url_name="core:dashboard",
     family=frozenset({"dashboard"}),
-    gates=("is_lead_or_admin", "is_super_admin"),
+    gates=("sees_arbeitszentrale",),
     testid="nav-dashboard",
     icon="dashboard",
 )
@@ -463,7 +469,41 @@ SECTIONS: tuple[NavSection, ...] = (SYSTEM, DATENSCHUTZ, VERWALTUNG)
 DATENSCHUTZ_FAMILY = section_family(DATENSCHUTZ)
 VERWALTUNG_FAMILY = section_family(VERWALTUNG)
 
+# Die Sidebar-Anker der Hubs. Familie und Gate sind **abgeleitet** — ein neuer
+# Reiter zieht Aktivzustand und Sichtbarkeit automatisch mit (Regel N2), genau
+# wie beim Systembereich.
+DATENSCHUTZ_HUB = NavItem(
+    key="datenschutz",
+    label=DATENSCHUTZ.label,
+    url_name="core:datenschutz_uebersicht",
+    family=DATENSCHUTZ_FAMILY,
+    gates=section_gates(DATENSCHUTZ),
+    testid="nav-datenschutz",
+    mobile_testid="mobile-nav-datenschutz",
+    icon="datenschutz",
+    divider_before=True,
+)
+VERWALTUNG_HUB = NavItem(
+    key="verwaltung",
+    label=VERWALTUNG.label,
+    url_name="core:verwaltung_uebersicht",
+    family=VERWALTUNG_FAMILY,
+    gates=section_gates(VERWALTUNG),
+    testid="nav-verwaltung",
+    mobile_testid="mobile-nav-verwaltung",
+    icon="config",
+)
 
+
+# Ziel-IA (Refs #1801 §3.2): der operative Block steht immer VOLLSTÄNDIG vor
+# Statistik und den Hubs — Alltag oben, Anlass im Hub (Regel N1). Aus 18 flachen
+# Einträgen (Anwendungsbetreuung sah 15) werden höchstens 8.
+#
+# „Administration ↗" bleibt nur für die Systemadministration ein Sidebar-
+# Eintrag; für die Anwendungsbetreuung ist der Django-Admin eine markierte
+# Zeile auf der Verwaltungs-Übersicht („öffnet die technische Administration ·
+# erfordert Sudo-Modus", Konzept §3.1) — er ist eine eigene Anwendungshülle mit
+# eigener Navigation und Sudo-Modus, kein Bereich dieser Anwendung.
 SIDEBAR: tuple[NavItem, ...] = (
     ARBEITSZENTRALE,
     ZEITSTROM,
@@ -472,15 +512,8 @@ SIDEBAR: tuple[NavItem, ...] = (
     FAELLE,
     DATEIEN,
     STATISTIK,
-    LOESCHANTRAEGE,
-    BERICHTIGUNGEN,
-    LOESCHFRISTEN,
-    DATENIMPORT,
-    AUDIT_LOG,
-    DSGVO_PAKET,
-    KONFIGURATION,
-    FELDVORLAGEN,
-    ADMINISTRATION,
+    DATENSCHUTZ_HUB,
+    VERWALTUNG_HUB,
     SYSTEMBEREICH,
     ADMINISTRATION_SUPER,
 )

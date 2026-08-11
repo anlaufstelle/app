@@ -1,5 +1,8 @@
 {# Eintraege der Desktop-Sidebar. Datenquelle: core.nav via {% nav_sidebar %} (Refs #1813). #}
 {% for item in items %}
+{# Gliederung der Ziel-IA: operativer Block oben, Bereichs-Hubs darunter (Refs #1801 §3.2). #}
+{# Bewusst ein <hr> statt eines <div>: der nav-items-Slice der Guards endet am ersten </div>. #}
+{% if item.divider_before %}<hr class="my-1.5 border-t border-subtle">{% endif %}
 <a href="{{ item.href }}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if item.is_active %}bg-accent-light text-accent font-semibold{% endif %}"{% if item.external %} target="_blank" rel="noopener"{% endif %}{% if item.testid %} data-testid="{{ item.testid }}"{% endif %}>
     {% include "partials/_nav_icons.html" with icon=item.icon %}
     {{ item.label }}

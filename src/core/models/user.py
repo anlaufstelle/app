@@ -129,6 +129,21 @@ class User(AbstractUser):
     def is_assistant_or_above(self):
         return self.role in (self.Role.FACILITY_ADMIN, self.Role.LEAD, self.Role.STAFF, self.Role.ASSISTANT)
 
+    @property
+    def sees_arbeitszentrale(self):
+        """Nav-Gate für ``/start/`` (Regel N3, Refs #1813, Konzept #1801).
+
+        Nach der Vervollständigung der Rollen-Einstiege landet nur noch die
+        Leitung auf einer eigenen Arbeitszentrale-Seite: Fachkraft/Assistenz →
+        Zeitstrom, Anwendungsbetreuung → ``/verwaltung/``, Systemadministration
+        → ``/system/``. Ein Nav-Eintrag für eine Rolle, die dort nur einen
+        Redirect bekommt, ist ein Umweg mit Etikett.
+
+        Lebt wie ``can_access_deletion_requests`` am Modell, damit Navigation
+        und View garantiert dieselbe Bedingung auswerten.
+        """
+        return self.role == self.Role.LEAD
+
     @cached_property
     def has_open_deletion_requests(self):
         """True, wenn diese Person einen noch offenen Löschantrag gestellt hat.

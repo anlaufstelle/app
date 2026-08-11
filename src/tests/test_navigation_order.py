@@ -59,6 +59,37 @@ class TestOperativeNavOrder:
 
         assert pos_aufgaben < pos_personen
 
+    def test_operative_block_precedes_statistik_and_hubs(self, client, admin_user):
+        """Refs #1801 §3.2 (Regel N1 „Alltag oben, Anlass im Hub").
+
+        Der operative Block steht **vollstaendig** vor Statistik und den beiden
+        Bereichs-Hubs — geprueft an der Rolle mit der laengsten Sidebar
+        (Anwendungsbetreuung, acht Eintraege).
+        """
+        client.force_login(admin_user)
+        nav = _desktop_nav(client.get(reverse("core:zeitstrom")).content.decode())
+
+        operativ = [
+            nav.index(f'href="{href}"') for href in ("/", "/workitems/", "/clients/", "/cases/", "/attachments/")
+        ]
+        statistik = nav.index('href="/statistics/"')
+        hubs = [nav.index('href="/datenschutz/"'), nav.index('href="/verwaltung/"')]
+
+        assert operativ == sorted(operativ), "Der operative Block ist in sich vertauscht."
+        assert max(operativ) < statistik, "Statistik steht vor einem operativen Eintrag."
+        assert statistik < min(hubs), "Ein Hub steht vor der Statistik."
+
+    def test_hub_entries_come_last(self, client, admin_user):
+        """Nach den Hubs folgt in dieser Rolle nichts mehr — sie schliessen die Liste ab."""
+        client.force_login(admin_user)
+        nav = _desktop_nav(client.get(reverse("core:zeitstrom")).content.decode())
+
+        verwaltung = nav.index('href="/verwaltung/"')
+        assert nav.index('href="/datenschutz/"') < verwaltung
+        assert 'href="' not in nav[nav.index(">", verwaltung) :], (
+            "Nach dem letzten Hub steht noch ein Sidebar-Eintrag — die Ziel-IA endet mit den Hubs."
+        )
+
     def test_mobile_nav_aufgaben_before_personen(self, client, staff_user):
         """Konsistenz mobil: Aufgaben-Slot steht vor Personen-Slot (Refs #1126)."""
         client.force_login(staff_user)
