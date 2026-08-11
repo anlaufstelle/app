@@ -5,6 +5,8 @@ K4a (Refs #1770): Die drei Export-Aktionen sind seit der Freigabe-Erfassung
 Felder Empfaenger/Zweck ohne JavaScript an allen drei Zielen an.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -127,7 +129,9 @@ class TestFreigabeUebersichtE2E:
         page.goto(f"{base_url}/statistics/")
 
         page.locator('[data-testid="subnav-tab-statistik_releases"]').click()
-        page.wait_for_url("**/statistics/reports/releases/")
+        # Refs #1804 (§3.5): der Reiter-Link fuehrt den aufgeloesten Zeitraum
+        # mit — die Ziel-URL traegt also eine Query (z. B. ?zeitraum=letzte30).
+        page.wait_for_url(re.compile(r"/statistics/reports/releases/(\?.*)?$"))
 
         assert page.locator("h1:has-text('Freigabe-Übersicht')").is_visible()
 
