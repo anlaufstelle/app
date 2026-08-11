@@ -75,14 +75,14 @@ class TestBuildClientOfflineBundleService:
         assert bundle["client"]["pk"] == str(client_identified.pk)
 
     def test_bundle_schema_version_is_2(self, facility, client_identified, staff_user):
-        """SI-1 (#1529, #1499): Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
+        """ (#1529, #1499): Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
         v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-store.js)."""
         assert BUNDLE_SCHEMA_VERSION == 2
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["schema_version"] == 2
 
     def test_bundle_client_last_contact_is_max_event(self, facility, client_identified, doc_type_contact, staff_user):
-        """SI-1: ``last_contact`` = juengstes ``occurred_at`` als ISO-String."""
+        """: ``last_contact`` = juengstes ``occurred_at`` als ISO-String."""
         from datetime import timedelta
 
         older = Event.objects.create(
@@ -109,13 +109,13 @@ class TestBuildClientOfflineBundleService:
         assert bundle["client"]["last_contact"] != older.occurred_at.isoformat()
 
     def test_bundle_client_last_contact_none_without_events(self, facility, client_identified, staff_user):
-        """SI-1: kontaktloser Klient -> ``last_contact`` ist ``None`` (JSON-clean,
+        """: kontaktloser Klient -> ``last_contact`` ist ``None`` (JSON-clean,
         keine Serialisierung eines fehlenden Werts)."""
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["client"]["last_contact"] is None
 
     def test_bundle_last_contact_is_cutoff_free(self, facility, client_identified, doc_type_contact, staff_user):
-        """SI-1: ``last_contact`` ist CUTOFF-FREI — ein Event aelter als
+        """: ``last_contact`` ist CUTOFF-FREI — ein Event aelter als
         ``LOOKBACK_DAYS`` faellt zwar aus der 90-Tage-``events``-Liste, bestimmt
         aber weiterhin ``last_contact`` (Semantik der Online-Spalte, NICHT der
         gecachten Event-Liste)."""
@@ -142,7 +142,7 @@ class TestBuildClientOfflineBundleService:
     def test_bundle_last_contact_matches_online_clientlistview_annotation(
         self, facility, client_identified, doc_type_contact, staff_user
     ):
-        """SI-1: exakte Semantik-Gleichheit mit der Online-Annotation aus
+        """: exakte Semantik-Gleichheit mit der Online-Annotation aus
         ``ClientListView`` (clients.py:57) — cutoff-FREI und OHNE
         ``is_deleted``-Filter. Das juengste Event ist bewusst geloescht UND es
         gibt ein >90d-Event; eine is_deleted- oder cutoff-gefilterte Berechnung

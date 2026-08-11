@@ -1,17 +1,17 @@
 /*
  * Alpine-Komponente fuer die In-Place-Offline-Personenliste
- * (Refs #1532, #1499 SI-4). Auf Alpine.data() registriert fuer den
+ * (Refs #1532, #1499). Auf Alpine.data() registriert fuer den
  * @alpinejs/csp Build (Refs #672).
  *
  * Rendert an der kanonischen URL /clients/ (offline vom SW aus dem Cache
- * serviert, SI-5) die offline mitgenommenen Personen aus der
- * verschluesselten IndexedDB (offlineStore.listOfflineClientsDetailed, SI-2)
+ * serviert) die offline mitgenommenen Personen aus der
+ * verschluesselten IndexedDB (offlineStore.listOfflineClientsDetailed)
  * als role=table-Liste — 1:1-Spiegel von templates/core/clients/partials/
  * table.html (Grid, Sichtbarkeit, data-testid). Keine eigene Formatierung
  * der Anzeigetexte: Stufe/Alter kommen fertig lokalisiert vom Server
  * (contactStageDisplay/ageClusterDisplay).
  *
- * SI-6 (#1534): client-seitige Suche + Stufe-/Alter-Filter (UND-kombiniert)
+ * (#1534): client-seitige Suche + Stufe-/Alter-Filter (UND-kombiniert)
  * ueber die gecachten Zeilen — reaktiv via Alpine ``x-model`` (searchQuery/
  * stageFilter/ageFilter) + ``filteredClients``-Getter. Vorbild
  * offline-home.js applyFilter, Parallele zur Online-Filterleiste
@@ -58,7 +58,7 @@
             pseudonym: c.pseudonym || "",
             contactStage: c.contactStage || "",
             contactStageDisplay: c.contactStageDisplay || "",
-            // ageCluster (Rohwert) fuer den Alter-Filter aus SI-6 mitfuehren —
+            // ageCluster (Rohwert) fuer den Alter-Filter aus mitfuehren —
             // die Online-Liste filtert ueber den Cluster-Wert, nicht den
             // lokalisierten Anzeigetext.
             ageCluster: c.ageCluster || "",
@@ -76,12 +76,12 @@
         };
     }
 
-    // SI-6 (#1534): UND-kombinierter Match einer Zeile gegen die drei Filter
+    // (#1534): UND-kombinierter Match einer Zeile gegen die drei Filter
     // — Pseudonym-Teilstring (case-insensitive, wie online ``q``) plus
     // exakter Stufe- (contactStage) und Alter-Vergleich (ageCluster, Rohwert
     // wie online, nicht der lokalisierte Anzeigetext). Leere Filter matchen
     // alles. Reine Funktion (keine Alpine-/DOM-Abhaengigkeit) — leicht via
-    // node --check pruefbar und E2E-getestet (SI-9).
+    // node --check pruefbar und E2E-getestet.
     function matchesFilters(row, q, stage, age) {
         if (q && (row.pseudonym || "").toLowerCase().indexOf(q) === -1) {
             return false;
@@ -95,7 +95,7 @@
         Alpine.data("offlineClientList", () => ({
             loading: true,
             clients: [],
-            // SI-6: reaktive Filterzustaende (an x-model gebunden).
+            //: reaktive Filterzustaende (an x-model gebunden).
             searchQuery: "",
             stageFilter: "",
             ageFilter: "",
@@ -131,7 +131,7 @@
                 }
             },
 
-            // SI-6: die gefilterte Sicht (Suche UND Stufe UND Alter) — die
+            //: die gefilterte Sicht (Suche UND Stufe UND Alter) — die
             // Liste iteriert sie statt der Rohliste. Ohne aktive Filter wird
             // die Rohliste unveraendert durchgereicht (kein unnoetiges Kopieren).
             get filteredClients() {
@@ -142,7 +142,7 @@
                 return this.clients.filter((c) => matchesFilters(c, q, stage, age));
             },
 
-            // SI-6: Filterleiste erst zeigen, sobald ueberhaupt Personen
+            //: Filterleiste erst zeigen, sobald ueberhaupt Personen
             // gecacht sind (Rohliste, nicht die gefilterte) — sonst blieben
             // die Controls bei 0 Treffern unbedienbar/verschwaenden.
             get hasCachedClients() {

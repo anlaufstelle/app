@@ -9,8 +9,8 @@
  * Alpine.data()-Bestandteil, nur ein window-Export (CSP-konform, analog
  * csrf-utils.js/url-patterns.js).
  *
- * Muss (SI-6, Refs #1499) in den Service-Worker-APP_SHELL aufgenommen
- * werden -- ist hier noch NICHT enthalten (SI-6 haelt den einzigen
+ * Muss (, Refs #1499) in den Service-Worker-APP_SHELL aufgenommen
+ * werden -- ist hier noch NICHT enthalten ( haelt den einzigen
  * CACHE_NAME-Bump-Commit der Welle).
  */
 (function () {

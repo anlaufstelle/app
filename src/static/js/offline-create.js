@@ -1,12 +1,12 @@
 /*
  * Alpine-Komponenten fuer die pk-losen Offline-Create-Shells:
- *   - offlineEventCreate     (Event,    /events/new/,    Refs #1521 SI-4)
- *   - offlineWorkItemCreate  (WorkItem, /workitems/new/, Refs #1522 SI-5)
+ *   - offlineEventCreate     (Event,    /events/new/,    Refs #1521)
+ *   - offlineWorkItemCreate  (WorkItem, /workitems/new/, Refs #1522)
  * Beide unter #1499. Auf Alpine.data() registriert fuer den
  * @alpinejs/csp-Build (Refs #672).
  *
  * Der Service Worker serviert die Shells offline IN-PLACE an ihren
- * kanonischen URLs (SI-6). Beide Komponenten lesen das PERSONENLOSE
+ * kanonischen URLs. Beide Komponenten lesen das PERSONENLOSE
  * Facility-Meta-Bundle (getOfflineFacility: DocumentTypes/Feld-Schema/
  * assignable_users) und die bereits offline mitgenommenen Personen
  * (listOfflineClientsDetailed) aus IndexedDB und legen via markEventNew /
@@ -14,7 +14,7 @@
  * KEIN Online-Dispatch hier — der Startup-Drain repliziert beim naechsten
  * Online-Kontakt.
  *
- * Die reinen Feld-Helfer (Event) stammen aus offline-form-fields.js (SI-3,
+ * Die reinen Feld-Helfer (Event) stammen aus offline-form-fields.js (,
  * window.offlineFormFields); der geteilte Event-Feld-Loop lebt im Partial
  * _offline_event_fields.html, der WorkItem-Feld-Loop im bestehenden
  * _offline_workitem_fields.html (beide auch von offline_detail.html includet).
@@ -115,7 +115,7 @@
             async init() {
                 this.createOccurredAt = _nowLocalInput();
                 try {
-                    // Refs #1524 (#1499, SI-7): Auf die eager Krypto-Hydration
+                    // Refs #1524 (#1499): Auf die eager Krypto-Hydration
                     // warten, BEVOR aus dem verschluesselten Store gelesen wird.
                     // Ohne dieses await liest der Kalt-Offline-Shell-Load das
                     // Facility-Bundle waehrend die IndexedDB-Schluessel-Hydration
@@ -261,7 +261,7 @@
             },
         }));
 
-        // ── SI-5 (#1522): pk-lose WorkItem-Create-Shell ─────────────────────
+        // ── (#1522): pk-lose WorkItem-Create-Shell ─────────────────────
         // Spiegel von offlineEventCreate fuer den WorkItem-Track. STAFF+-GATE:
         // das personenlose Facility-Bundle liefert `assignableUsers` NUR fuer
         // Staff+ (Assistenz bekommt []). canCreateWorkItem = assignableUsers>0
@@ -301,7 +301,7 @@
                 this.wiRemindMin = this.wiDateMin;
                 this.wiValues = _emptyWorkItemValues();
                 try {
-                    // Refs #1524 (#1499, SI-7): siehe offlineEventCreate.init —
+                    // Refs #1524 (#1499): siehe offlineEventCreate.init —
                     // erst auf die Krypto-Hydration warten, dann lesen (sonst
                     // zeigt der Kalt-Offline-WorkItem-Shell-Load faelschlich den
                     // Unavailable-Fallback statt Form bzw. Assistenz-Gate).

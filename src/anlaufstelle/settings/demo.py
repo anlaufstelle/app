@@ -37,7 +37,7 @@ UMAMI_REQUIRE_CONSENT = True
 # lieferten ausserdem 404). Die Views (DemoImprintView/DemoPrivacyView) sind nur
 # bei DEMO_MODE erreichbar und oeffentlich ohne Login.
 DEMO_LEGAL_IMPRINT_URL = "/impressum/"
-DEMO_LEGAL_PRIVACY_URL = "/datenschutz/"
+DEMO_LEGAL_PRIVACY_URL = "/datenschutzerklaerung/"
 
 # CSP zurueck auf STRIKT (frische Deep-Copy aus base): devlive gibt den
 # Umami-Host GLOBAL frei — auf der oeffentlichen Demo mit Art-9-Offline-Daten

@@ -1,10 +1,10 @@
 """Tests fuer OfflineClientListShellView (core/views/offline.py).
 
-Refs #1531 (#1499, SI-3): pk-lose, PUBLIC Personenlisten-Shell. Der
+Refs #1531 (#1499): pk-lose, PUBLIC Personenlisten-Shell. Der
 Service Worker precacht sie und serviert sie offline IN-PLACE an der
-kanonischen URL /clients/ (SI-5). Der Shell selbst traegt kein PII — die
+kanonischen URL /clients/. Der Shell selbst traegt kein PII — die
 mitgenommenen Personen liest die Alpine-Komponente client-seitig aus
-IndexedDB (SI-6).
+IndexedDB.
 
 Analog zu TestOfflineClientShellView/TestOfflineEventCreateShellView in
 test_pwa_views.py bzw. test_offline_event_create_shell.py: public,
@@ -42,12 +42,12 @@ class TestOfflineClientListShellView:
 
 @pytest.mark.django_db
 class TestOfflineClientListShellSI4:
-    """SI-4 (#1532, #1499): offline_list.html spiegelt
+    """ (#1532, #1499): offline_list.html spiegelt
     partials/table.html 1:1 als Alpine ``x-for``-Liste ueber die gecachten
     Klienten (``listOfflineClientsDetailed``). Der Shell traegt kein PII —
     die Zeilen entstehen client-seitig; hier wird nur das statische Geruest
-    geprueft (Render + node --check der JS; Interaktion/Filter kommt SI-6,
-    E2E SI-9).
+    geprueft (Render + node --check der JS; Interaktion/Filter kommt,
+    E2E).
     """
 
     @pytest.fixture
@@ -62,7 +62,7 @@ class TestOfflineClientListShellSI4:
 
     def test_role_table_scaffold_with_x_for(self, body):
         assert 'role="table"' in body
-        # SI-6: iteriert die gefilterte Sicht (Suche/Stufe/Alter), nicht die
+        #: iteriert die gefilterte Sicht (Suche/Stufe/Alter), nicht die
         # Rohliste — bleibt aber der 1:1-Spiegel von partials/table.html.
         assert 'x-for="c in filteredClients"' in body
         assert 'role="rowgroup"' in body
@@ -114,12 +114,12 @@ class TestOfflineClientListShellSI4:
 
 @pytest.mark.django_db
 class TestOfflineClientListShellSI6:
-    """SI-6 (#1534, #1499): client-seitige Suche + Stufe-/Alter-Filter
+    """ (#1534, #1499): client-seitige Suche + Stufe-/Alter-Filter
     ueber die gecachten Klienten (Vorbild ``offline-home.js applyFilter``,
     Parallele zur Online-Filterleiste ``clients/list.html``). Rein clientseitig
     und reaktiv (Alpine ``x-model`` + ``filteredClients``-Getter) — hier wird
     nur das statische Geruest der Controls geprueft; die Filterlogik selbst
-    faellt in JS (node --check) bzw. E2E (SI-9).
+    faellt in JS (node --check) bzw. E2E.
     """
 
     @pytest.fixture

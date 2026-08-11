@@ -311,7 +311,7 @@ class TestColdStartShellAssets:
 
 
 class TestOfflineCreateEntryFallback:
-    """Refs #1524 (#1499, SI-6/SI-7): Kalt-Navigation auf die Create-Formulare
+    """Refs #1524 (#1499/): Kalt-Navigation auf die Create-Formulare
     endet NICHT mehr auf dem Offline-Arbeitsplatz mit "geht nur im Dossier"-
     Sackgasse (#1483/#1485 ueberholt) — der Service Worker serviert IN-PLACE die
     echte pk-lose Create-Shell. Diese Kalt-Faelle haben KEIN vorbereitetes

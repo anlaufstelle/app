@@ -64,7 +64,7 @@
         if (!saltResp.ok) return null;
         var json = await saltResp.json();
         await window.crypto_session.deriveSessionKey(password, json.salt);
-        // SI-2 (#1520/#1499): das personenlose Facility-Meta-Bundle EAGER beim
+        // (#1520/#1499): das personenlose Facility-Meta-Bundle EAGER beim
         // Login-Bootstrap vorwaermen — direkt nach der Schluesselableitung
         // (verschluesseltes At-Rest-Schreiben braucht den Session-Key). So hat
         // die Offline-Create-Shell den Katalog + Feld-Metadaten schon KALT-

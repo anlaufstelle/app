@@ -190,7 +190,7 @@ class TestBuildFacilityOfflineBundleService:
 
     def test_assignable_users_empty_for_assistant(self, facility, assistant_user):
         """Spiegelt den Klient-Builder: Assistenz erhaelt kein Roster (nur Staff+
-        legt WorkItems an/weist zu). SI-5 haengt seinen WorkItem-Shell-Gate
+        legt WorkItems an/weist zu). haengt seinen WorkItem-Shell-Gate
         (``canCreateWorkItem``) an eine nicht-leere Liste."""
         bundle = build_facility_offline_bundle(assistant_user, facility)
         assert bundle["assignable_users"] == []

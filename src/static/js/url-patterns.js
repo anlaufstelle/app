@@ -10,7 +10,7 @@
     "use strict";
     var UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
     var CLIENT_DETAIL_RE = new RegExp("/clients/(" + UUID + ")/(?:$|\\?)", "i");
-    // Refs #1533 (#1499, SI-5): die kanonische Personenlisten-URL /clients/
+    // Refs #1533 (#1499): die kanonische Personenlisten-URL /clients/
     // (mit optionalem ?query). Bewusst OHNE ^-Anker (request.url ist eine volle
     // URL) und mit exaktem Terminator ``(?:$|\?)`` — genau wie CLIENT_DETAIL_RE,
     // nur ohne pk-Segment. So matcht GENAU /clients/ und /clients/?…, aber NICHT

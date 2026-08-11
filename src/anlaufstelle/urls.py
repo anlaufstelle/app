@@ -104,7 +104,7 @@ urlpatterns = [
     # Rechtstexte der oeffentlichen Demo — nur bei DEMO_MODE aktiv (die Views
     # geben ausserhalb der Demo 404), oeffentlich ohne Login. Refs #1641.
     path("impressum/", DemoImprintView.as_view(), name="demo_imprint"),
-    path("datenschutz/", DemoPrivacyView.as_view(), name="demo_privacy"),
+    path("datenschutzerklaerung/", DemoPrivacyView.as_view(), name="demo_privacy"),
     path("sw.js", ServiceWorkerView.as_view(), name="service_worker"),
     path("manifest.json", ManifestView.as_view(), name="manifest"),
     path("offline/", OfflineFallbackView.as_view(), name="offline_fallback"),

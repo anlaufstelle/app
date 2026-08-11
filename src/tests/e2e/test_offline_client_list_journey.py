@@ -1,11 +1,11 @@
 """E2E: Offline-Personenliste an /clients/ — In-Place-Shell, Suche/Filter, Dossier.
 
-Refs #1536 (#1499, SI-9). Deckt die neue Kern-Journey der Welle ab:
+Refs #1536 (#1499). Deckt die neue Kern-Journey der Welle ab:
 offline rendert der Service Worker die kanonische Personenliste ``/clients/``
-IN-PLACE aus der precachten, pk-losen Shell (OfflineClientListShellView, SI-3/
-SI-5) — kein Bounce mehr auf die ``/offline/``-Home. ``offline-client-list.js``
-(SI-4/SI-6) liest die offline mitgenommenen Personen aus der verschluesselten
-IndexedDB (``listOfflineClientsDetailed``, SI-2) und rendert die gewohnte
+IN-PLACE aus der precachten, pk-losen Shell (OfflineClientListShellView/
+) — kein Bounce mehr auf die ``/offline/``-Home. ``offline-client-list.js``
+(/) liest die offline mitgenommenen Personen aus der verschluesselten
+IndexedDB (``listOfflineClientsDetailed``) und rendert die gewohnte
 ``role=table``-Liste inkl. client-seitiger Suche + Stufe-/Alter-Filter.
 
 Test-Technik (bewusst, s. Suite-Konventionen + Memory „Playwright-SW-Offline-

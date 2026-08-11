@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **Demo-Rechtstexte: Datenschutzerklärung liegt jetzt unter `/datenschutzerklaerung/`** (#1813) — macht den Pfad `/datenschutz/` für den kommenden Datenschutz-Bereich der Hauptnavigation frei (#1801); Footer-, Login- und Consent-Banner-Links folgen der Einstellung `DEMO_LEGAL_PRIVACY_URL` automatisch, `/impressum/` bleibt unverändert.
+
 ## [0.80.0] - 2026-08-10
 
 ### Added

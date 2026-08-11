@@ -5959,7 +5959,7 @@
  - `/api/`
  - `/sudo/`
  - `/login/` (optional)
-4. `Allow:` ggf. für `/`, `/about/`, `/impressum/`, `/datenschutz/`.
+4. `Allow:` ggf. für `/`, `/about/`, `/impressum/`, `/datenschutzerklaerung/`.
 5. `Sitemap:`-Eintrag (falls vorhanden).
 
 **Erwartetes Ergebnis:**

@@ -175,7 +175,7 @@ class TestServiceWorkerCachesOfflineFallback:
         )
 
     def test_sw_caches_offline_create_shells(self, client):
-        """Refs #1523 (#1499, SI-6): Die pk-losen Create-Shells (Event/WorkItem)
+        """Refs #1523 (#1499): Die pk-losen Create-Shells (Event/WorkItem)
         werden offline IN-PLACE an /events/new/ bzw. /workitems/new/ serviert —
         Shell-URLs und ihre Renderer (offline-create.js + der reine Feld-Helfer
         offline-form-fields.js) muessen daher im APP_SHELL pre-cached sein, sonst
@@ -190,7 +190,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert "/static/js/offline-form-fields.js" in shell_block, "offline-form-fields.js fehlt im APP_SHELL."
 
     def test_sw_serves_create_shell_fallback_before_generic_offline(self, client):
-        """Refs #1523 (#1499, SI-6): Offline fallen /events/new/ und
+        """Refs #1523 (#1499): Offline fallen /events/new/ und
         /workitems/new/ VOR dem generischen /offline/-Fallback auf die
         gecachten Create-Shells (In-Place, URL bleibt kanonisch — analog dem
         Client-/Konflikt-Shell-Zweig). Ohne diesen Zweig lieferte die
@@ -427,7 +427,7 @@ class TestServiceWorkerRuntimeCacheHygiene:
 
 @pytest.mark.django_db
 class TestServiceWorkerCachesClientListShell:
-    """Refs #1533 (#1499, SI-5): Die pk-lose Offline-Personenliste wird offline
+    """Refs #1533 (#1499): Die pk-lose Offline-Personenliste wird offline
     IN-PLACE an der kanonischen URL /clients/ serviert — die Listen-Shell-URL
     (/offline/clients/) UND ihr Renderer (offline-client-list.js) muessen daher
     im APP_SHELL pre-cached sein, sonst fehlt der Renderer im Kalt-Offline-Pfad
@@ -443,7 +443,7 @@ class TestServiceWorkerCachesClientListShell:
         assert "/static/js/offline-client-list.js" in shell_block, "offline-client-list.js fehlt im APP_SHELL."
 
     def test_sw_serves_client_list_shell_fallback_before_generic_offline(self, client):
-        """Refs #1533 (#1499, SI-5): Offline faellt /clients/ VOR dem generischen
+        """Refs #1533 (#1499): Offline faellt /clients/ VOR dem generischen
         /offline/-Fallback auf die gecachte Listen-Shell (In-Place, URL bleibt
         kanonisch — analog dem Client-/Konflikt-/Create-Shell-Zweig). Der Zweig
         muss NACH dem HTMX-Such-Swap-Sonderfall stehen (ein HX-Request returnt
@@ -462,7 +462,7 @@ class TestServiceWorkerCachesClientListShell:
 
 
 class TestClientListUrlPattern:
-    """Refs #1533 (#1499, SI-5): CLIENT_LIST_RE in url-patterns.js matcht GENAU
+    """Refs #1533 (#1499): CLIENT_LIST_RE in url-patterns.js matcht GENAU
     die kanonische Personenlisten-URL /clients/ (mit optionalem ?query) und
     grenzt exakt gegen die Nachbarrouten ab — sonst faengt der neue SW-Zweig
     (Listen-Shell) faelschlich Detail-/Create-/Trash-/Autocomplete-Requests
@@ -713,7 +713,7 @@ class TestServiceWorkerPrecacheHashedAssets:
         assert re.search(r'"/static/css/styles\.[0-9a-f]{8,}\.css"', prod_block), (
             "styles.css wurde nicht auf eine gehashte URL aufgeloest."
         )
-        # Refs #1523 (#1499, SI-6): die neuen Create-Shell-Renderer muessen in
+        # Refs #1523 (#1499): die neuen Create-Shell-Renderer muessen in
         # Prod ebenfalls auf gehashte URLs aufgeloest werden, sonst verfehlt
         # caches.match sie im Kalt-Offline-Pfad (Dev/E2E ungehasht sehen es nicht).
         assert re.search(r'"/static/js/offline-create\.[0-9a-f]{8,}\.js"', prod_block), (
@@ -722,7 +722,7 @@ class TestServiceWorkerPrecacheHashedAssets:
         assert re.search(r'"/static/js/offline-form-fields\.[0-9a-f]{8,}\.js"', prod_block), (
             "offline-form-fields.js wurde nicht auf eine gehashte URL aufgeloest."
         )
-        # Refs #1533 (#1499, SI-5): der Renderer der pk-losen Personenlisten-Shell
+        # Refs #1533 (#1499): der Renderer der pk-losen Personenlisten-Shell
         # muss in Prod ebenfalls auf eine gehashte URL aufgeloest werden, sonst
         # verfehlt caches.match ihn im Kalt-Offline-Pfad (/clients/).
         assert re.search(r'"/static/js/offline-client-list\.[0-9a-f]{8,}\.js"', prod_block), (

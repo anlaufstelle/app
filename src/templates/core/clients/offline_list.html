@@ -4,13 +4,13 @@
 {% block title %}{% trans "Personen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# Refs #1532 (#1499, SI-4): In-Place-Offline-Rendern der            #}
+{# Refs #1532 (#1499): In-Place-Offline-Rendern der            #}
 {# Personenliste an der kanonischen URL /clients/ (Muster #1322). Kein PII   #}
 {# im Scaffold — die Alpine-Komponente offlineClientList liest die           #}
 {# mitgenommenen Personen client-seitig aus IndexedDB                        #}
-{# (listOfflineClientsDetailed, SI-2) und spiegelt partials/table.html 1:1   #}
+{# (listOfflineClientsDetailed) und spiegelt partials/table.html 1:1   #}
 {# (Grid-String, hidden sm:/md:-Sichtbarkeit, data-testid client-row/        #}
-{# client-detail-link). Suche/Filter kommt SI-6, E2E SI-9.                   #}
+{# client-detail-link). Suche/Filter kommt, E2E.                   #}
 <div data-testid="offline-client-list"
      x-data="offlineClientList" x-init="load"
      data-confirm-remove-text="{% trans '{count} nicht übertragene Änderungen bleiben lokal erhalten, wenn Sie diese Person jetzt aus dem Offline-Cache entfernen. Trotzdem fortfahren?' %}"
@@ -20,7 +20,7 @@
         <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
     </div>
 
-    {# SI-6 (#1534): Client-seitige Suche + Stufe-/Alter-Filter (UND-        #}
+    {# (#1534): Client-seitige Suche + Stufe-/Alter-Filter (UND-        #}
     {# kombiniert) ueber die gecachten Personen — reines Alpine (x-model +   #}
     {# filteredClients-Getter), kein Netz/HTMX (offline kein JSON-Endpoint). #}
     {# Parallele zur Online-Filterleiste (clients/list.html); Optionswerte   #}
@@ -152,7 +152,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{# Ausgelagert wegen CSP (Refs #672). SI-6 ergaenzt Suche/Filter, SI-5/#1499 #}
+{# Ausgelagert wegen CSP (Refs #672). ergaenzt Suche/Filter/#1499 #}
 {# nimmt die Datei in den SW-Precache (APP_SHELL) auf.                       #}
 <script src="{% static 'js/offline-client-list.js' %}"></script>
 {% endblock %}

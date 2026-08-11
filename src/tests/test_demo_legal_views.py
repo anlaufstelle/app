@@ -1,6 +1,6 @@
 """Routen-Gating + Overlay-Verhalten der Demo-Rechtstexte (Refs #1641, #1701).
 
-Impressum (``/impressum/``) und Datenschutz (``/datenschutz/``) sind eigene
+Impressum (``/impressum/``) und Datenschutz (``/datenschutzerklaerung/``) sind eigene
 Seiten der oeffentlichen Demo. Sie sind:
 
 - **nur bei ``DEMO_MODE=True`` erreichbar** (sonst 404 — die Views geben ausser
@@ -25,7 +25,7 @@ def demo_mode(settings):
     """Aktiviert die Demo (Routen registriert) + die internen Rechts-URLs."""
     settings.DEMO_MODE = True
     settings.DEMO_LEGAL_IMPRINT_URL = "/impressum/"
-    settings.DEMO_LEGAL_PRIVACY_URL = "/datenschutz/"
+    settings.DEMO_LEGAL_PRIVACY_URL = "/datenschutzerklaerung/"
     return settings
 
 
@@ -37,7 +37,7 @@ class TestGatingWithoutDemoMode:
         assert client.get("/impressum/").status_code == 404
 
     def test_privacy_404_without_demo_mode(self, client):
-        assert client.get("/datenschutz/").status_code == 404
+        assert client.get("/datenschutzerklaerung/").status_code == 404
 
 
 @pytest.mark.django_db
@@ -75,16 +75,16 @@ class TestImprintPlaceholder:
 @pytest.mark.django_db
 class TestPrivacyPlaceholder:
     def test_public_access_returns_200(self, client, demo_mode):
-        assert client.get("/datenschutz/").status_code == 200
+        assert client.get("/datenschutzerklaerung/").status_code == 200
 
     def test_placeholder_content_without_operator_overlay(self, client, demo_mode):
-        body = client.get("/datenschutz/").content.decode()
+        body = client.get("/datenschutzerklaerung/").content.decode()
         assert "Datenschutzerklärung" in body
         assert "Betreiber" in body
         assert "EXTRA_TEMPLATE_DIR" in body
 
     def test_no_instance_specific_data_in_source(self, client, demo_mode):
-        body = client.get("/datenschutz/").content.decode()
+        body = client.get("/datenschutzerklaerung/").content.decode()
         assert "Erika Musterfrau" not in body
         # Bewusst die Komposition (nie das nackte Token): der Release-Sanitizer
         # swapt umami.example.org konsistent auf einen Beispiel-Host; den nackten
@@ -119,7 +119,7 @@ class TestOperatorOverlay:
 
     def test_overlay_privacy_wins_over_placeholder(self, client, demo_mode, tmp_path):
         self._with_overlay(demo_mode, tmp_path, "privacy.html", "OVERLAY-DATENSCHUTZ-MARKER")
-        body = client.get("/datenschutz/").content.decode()
+        body = client.get("/datenschutzerklaerung/").content.decode()
         assert "OVERLAY-DATENSCHUTZ-MARKER" in body
         assert "EXTRA_TEMPLATE_DIR" not in body
 
@@ -130,11 +130,11 @@ class TestFooterLinks:
         """Der Demo-Footer (base.html) verlinkt die internen Pfade."""
         body = client.get("/impressum/").content.decode()
         assert 'href="/impressum/"' in body
-        assert 'href="/datenschutz/"' in body
+        assert 'href="/datenschutzerklaerung/"' in body
 
     def test_login_page_exposes_legal_links(self, client, demo_mode):
         """Von der Login-Seite aus zugaenglich: der Demo-Login-Footer verlinkt
         Impressum + Datenschutz."""
         body = client.get("/login/").content.decode()
         assert 'href="/impressum/"' in body
-        assert 'href="/datenschutz/"' in body
+        assert 'href="/datenschutzerklaerung/"' in body

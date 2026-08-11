@@ -23,13 +23,13 @@ importScripts("/static/js/url-patterns.js");
 // (alpine-csp.min.js, alpine/base-layout.js, sync-orchestrator.js); der Bump
 // erzwingt Re-Install + Re-Precache, damit Bestandsnutzer die Module offline
 // bekommen.
-// Refs #1523 (#1499, SI-6): v19 -> v20 -- APP_SHELL um die pk-losen
+// Refs #1523 (#1499): v19 -> v20 -- APP_SHELL um die pk-losen
 // Create-Shells (OFFLINE_EVENT_SHELL_URL/OFFLINE_WORKITEM_SHELL_URL) und ihre
 // Renderer (offline-create.js + der reine Feld-Helfer offline-form-fields.js)
 // erweitert; der Bump erzwingt Re-Install + Re-Precache, damit der
 // Kalt-Offline-Pfad (/events/new/, /workitems/new/) den neuen Erfassungs-Shell
 // findet statt der /offline/-Sackgasse.
-// Refs #1533 (#1499, SI-5): v20 -> v21 -- APP_SHELL um die pk-lose
+// Refs #1533 (#1499): v20 -> v21 -- APP_SHELL um die pk-lose
 // Personenlisten-Shell (OFFLINE_CLIENT_LIST_SHELL_URL = /offline/clients/) und
 // ihren Renderer (offline-client-list.js) erweitert; der SW serviert die Liste
 // offline IN-PLACE an der kanonischen URL /clients/ (neuer CLIENT_LIST-Zweig).
@@ -125,12 +125,12 @@ const OFFLINE_CLIENT_SHELL_URL = "/offline/client-shell/";
 // kanonischen URL /offline/conflicts/<pk>/ (offline) — statt Bounce auf
 // /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL.
 const OFFLINE_CONFLICT_SHELL_URL = "/offline/conflict-shell/";
-// Refs #1523 (#1499, SI-6): generische, pk-lose Create-Shells fuer das
+// Refs #1523 (#1499): generische, pk-lose Create-Shells fuer das
 // In-Place-Rendern an den kanonischen URLs /events/new/ bzw. /workitems/new/
 // (offline) — statt Bounce auf /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL.
 const OFFLINE_EVENT_SHELL_URL = "/offline/event-shell/";
 const OFFLINE_WORKITEM_SHELL_URL = "/offline/workitem-shell/";
-// Refs #1533 (#1499, SI-5): generische, pk-lose Personenlisten-Shell fuer das
+// Refs #1533 (#1499): generische, pk-lose Personenlisten-Shell fuer das
 // In-Place-Rendern an der kanonischen URL /clients/ (offline) — statt Bounce
 // auf /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL; die Shell selbst ist PII-
 // frei, offline-client-list.js fuellt sie aus der verschluesselten IndexedDB.
@@ -197,16 +197,16 @@ const APP_SHELL = [
     // per stale-while-revalidate gecacht). Ohne Pre-Cache bliebe der Shell
     // offline ohne Renderer.
     "/static/js/offline-client-view.js",
-    // Refs #1523 (#1499, SI-6): Die pk-losen Create-Shells (offline_create.html
+    // Refs #1523 (#1499): Die pk-losen Create-Shells (offline_create.html
     // fuer Event/WorkItem) rendern ueber offline-create.js; der reine
-    // Feld-Helfer offline-form-fields.js (SI-3) speist den Event-Feld-Loop.
+    // Feld-Helfer offline-form-fields.js speist den Event-Feld-Loop.
     // Beide werden NUR von den Create-/Detail-Templates geladen (sonst nirgends
     // -> nicht per stale-while-revalidate gecacht). Ohne Pre-Cache bliebe der
     // Kalt-Offline-Pfad (/events/new/, /workitems/new/) nach einem SW-Update
     // ohne Renderer.
     "/static/js/offline-form-fields.js",
     "/static/js/offline-create.js",
-    // Refs #1533 (#1499, SI-5): Die pk-lose Personenlisten-Shell (offline_list.html)
+    // Refs #1533 (#1499): Die pk-lose Personenlisten-Shell (offline_list.html)
     // rendert ueber offline-client-list.js; das Modul wird NUR vom Listen-Template
     // geladen (sonst nirgends -> nicht per stale-while-revalidate gecacht). Ohne
     // Pre-Cache bliebe der Kalt-Offline-Pfad (/clients/) nach einem SW-Update ohne
@@ -275,11 +275,11 @@ const APP_SHELL = [
     OFFLINE_FALLBACK_URL,
     OFFLINE_CLIENT_SHELL_URL,
     OFFLINE_CONFLICT_SHELL_URL,
-    // Refs #1523 (#1499, SI-6): pk-lose Create-Shells — offline IN-PLACE an
+    // Refs #1523 (#1499): pk-lose Create-Shells — offline IN-PLACE an
     // /events/new/ bzw. /workitems/new/ serviert (Fallback-Zweige unten).
     OFFLINE_EVENT_SHELL_URL,
     OFFLINE_WORKITEM_SHELL_URL,
-    // Refs #1533 (#1499, SI-5): pk-lose Personenlisten-Shell — offline IN-PLACE
+    // Refs #1533 (#1499): pk-lose Personenlisten-Shell — offline IN-PLACE
     // an /clients/ serviert (CLIENT_LIST-Fallback-Zweig unten).
     OFFLINE_CLIENT_LIST_SHELL_URL,
     // Refs #1543 (#1499): pk-lose Tab-Shells — offline IN-PLACE an
@@ -664,7 +664,7 @@ self.addEventListener("fetch", (event) => {
                         .match(OFFLINE_CONFLICT_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
-                // Refs #1523 (#1499, SI-6): Create-Formular-Sonderfall — den
+                // Refs #1523 (#1499): Create-Formular-Sonderfall — den
                 // gecachten, pk-losen Event-/WorkItem-Create-Shell IN-PLACE an
                 // der kanonischen URL (/events/new/ bzw. /workitems/new/)
                 // servieren (200, KEIN Redirect); offline-create.js liest den
@@ -683,7 +683,7 @@ self.addEventListener("fetch", (event) => {
                         .match(OFFLINE_WORKITEM_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
-                // Refs #1533 (#1499, SI-5): Personenlisten-Sonderfall — den
+                // Refs #1533 (#1499): Personenlisten-Sonderfall — den
                 // gecachten, pk-losen Listen-Shell IN-PLACE an der kanonischen
                 // URL /clients/ servieren (200, KEIN Redirect); offline-client-
                 // list.js liest die mitgenommenen Personen aus der

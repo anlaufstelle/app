@@ -40,6 +40,6 @@ class DemoImprintView(DemoOnlyTemplateView):
 
 
 class DemoPrivacyView(DemoOnlyTemplateView):
-    """GET /datenschutz/ — Datenschutzerklaerung der Demo (nur ``DEMO_MODE``)."""
+    """GET /datenschutzerklaerung/ — Datenschutzerklaerung der Demo (nur ``DEMO_MODE``)."""
 
     template_name = "core/legal/privacy.html"

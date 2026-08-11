@@ -1,10 +1,10 @@
 """E2E: Offline-V2 — kalt-offline Erfassung ueber die "+"-Create-Shells.
 
-Refs #1524 (#1499, SI-7). Offline-V2 ersetzt die alte Sackgasse (Kalt-Navigation
+Refs #1524 (#1499). Offline-V2 ersetzt die alte Sackgasse (Kalt-Navigation
 auf /events/new/ bzw. /workitems/new/ landete auf dem Offline-Arbeitsplatz mit
 einem "geht nur im Dossier"-Wegweiser, #1483/#1485) durch **echte pk-lose
 Create-Shells**, die der Service Worker offline IN-PLACE an den kanonischen URLs
-serviert (SI-6). Diese Journeys fahren den kompletten Feldpfad nach:
+serviert. Diese Journeys fahren den kompletten Feldpfad nach:
 
 * Kalt-offline ueber das mobile "+"-Menue (``mobile-nav-create`` →
   ``mobile-create-event`` aus ``_navigation_mobile.html``) zur Event-Create-
@@ -169,7 +169,7 @@ def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026
 
 
 def _cache_facility_bundle(page):
-    """Personenloses Facility-Meta-Bundle (SI-1) online holen und verschluesselt
+    """Personenloses Facility-Meta-Bundle online holen und verschluesselt
     in IndexedDB ablegen (Analog ``_cache_bundle`` fuer Klient-Bundles). Speist
     getOfflineFacility() der Create-Shells: DocumentType-Katalog + (nur Staff+)
     assignable_users. Ohne dieses Bundle zeigen die Shells den Edge-Fallback."""
@@ -256,7 +256,7 @@ def _purge_offline(page):
 
 
 class TestColdOfflinePlusMenuCreate:
-    """Refs #1524/#1499 (SI-7): kalt-offline Erfassung ueber die "+"-Shells,
+    """Refs #1524/#1499: kalt-offline Erfassung ueber die "+"-Shells,
     inkl. serverseitiger Verifikation nach dem Startup-Drain."""
 
     def test_plus_menu_anonymous_event_syncs_via_startup_drain(self, browser, base_url, e2e_env):

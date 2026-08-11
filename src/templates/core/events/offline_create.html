@@ -4,8 +4,8 @@
 {% block title %}{% trans "Neue Erfassung (offline)" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# Refs #1521 (#1499, SI-4): pk-lose Event-Create-Shell. Der Service Worker    #}
-{# serviert sie offline IN-PLACE an /events/new/ (SI-6). Kein PII im Scaffold — #}
+{# Refs #1521 (#1499): pk-lose Event-Create-Shell. Der Service Worker    #}
+{# serviert sie offline IN-PLACE an /events/new/. Kein PII im Scaffold — #}
 {# offlineEventCreate liest Katalog + mitgenommene Personen aus IndexedDB.      #}
 <div x-data="offlineEventCreate" x-init="init"
      data-testid="offline-event-create"
@@ -110,7 +110,7 @@
 
 {% block extra_js %}
 {# Ausgelagert wegen CSP (Refs #618). offline-store.js/offline-edit.js kommen  #}
-{# global aus base.html; offline-form-fields.js (SI-3) muss VOR offline-        #}
+{# global aus base.html; offline-form-fields.js muss VOR offline-        #}
 {# create.js laden, das seine reinen Feld-Helfer nutzt. #}
 <script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-create.js' %}"></script>

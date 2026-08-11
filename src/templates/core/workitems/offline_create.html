@@ -4,8 +4,8 @@
 {% block title %}{% trans "Neue Aufgabe (offline)" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# Refs #1522 (#1499, SI-5): pk-lose WorkItem-Create-Shell. Der Service Worker  #}
-{# serviert sie offline IN-PLACE an /workitems/new/ (SI-6). Kein PII im Scaffold #}
+{# Refs #1522 (#1499): pk-lose WorkItem-Create-Shell. Der Service Worker  #}
+{# serviert sie offline IN-PLACE an /workitems/new/. Kein PII im Scaffold #}
 {# — offlineWorkItemCreate liest Roster + mitgenommene Personen aus IndexedDB.   #}
 <div x-data="offlineWorkItemCreate" x-init="init"
      data-testid="offline-workitem-create"
@@ -104,6 +104,6 @@
 {% block extra_js %}
 {# Ausgelagert wegen CSP (Refs #618). offline-store.js/offline-edit.js kommen  #}
 {# global aus base.html; offline-create.js traegt die offlineWorkItemCreate-    #}
-{# Komponente (dieselbe Datei wie die Event-Shell, SI-4). #}
+{# Komponente (dieselbe Datei wie die Event-Shell). #}
 <script src="{% static 'js/offline-create.js' %}"></script>
 {% endblock %}

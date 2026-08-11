@@ -86,10 +86,10 @@ class TestOfflineBannerRendersBothForms:
 
 @pytest.mark.django_db
 class TestOfflineBannerCachedClientsLink:
-    """Refs #1535 (#1499, SI-8): der "N Personen lokal verfügbar"-Link
+    """Refs #1535 (#1499): der "N Personen lokal verfügbar"-Link
 
     fuehrt auf die kanonische Personenliste (``core:client_list``, /clients/),
-    die im Offline-Zustand in-place die gecachten Personen rendert (SI-3/SI-4),
+    die im Offline-Zustand in-place die gecachten Personen rendert (/),
     statt auf die generische ``offline_fallback``-Seite (/offline/).
     """
 

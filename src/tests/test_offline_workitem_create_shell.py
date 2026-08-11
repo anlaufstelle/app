@@ -1,15 +1,15 @@
 """Tests fuer OfflineWorkItemCreateShellView (core/views/offline.py).
 
-Refs #1522 (#1499, SI-5): pk-lose, PUBLIC WorkItem-Create-Shell. Der
+Refs #1522 (#1499): pk-lose, PUBLIC WorkItem-Create-Shell. Der
 Service Worker precacht sie und serviert sie offline IN-PLACE an der kanonischen
-URL /workitems/new/ (SI-6). Der Shell selbst traegt kein PII — das
+URL /workitems/new/. Der Shell selbst traegt kein PII — das
 assignable_users-Roster (Staff+-Marker) und die mitgenommenen Personen liest die
 Alpine-Komponente ``offlineWorkItemCreate`` client-seitig aus IndexedDB
 (getOfflineFacility / listOfflineClientsDetailed).
 
 Analog zu :class:`TestOfflineEventCreateShellView`: public, GET-only,
 Template-Smoke. Das Verhalten (Staff+-Gate, Person-Picker, Standalone, Replay)
-deckt die E2E-Journey in SI-7 ab. Der Staff+-Gate (Assistenz ohne
+deckt die E2E-Journey in ab. Der Staff+-Gate (Assistenz ohne
 assignable_users sieht die Form nicht -> kein 403-"revoked"-Replay, weil
 WorkItemCreateView = StaffRequiredMixin) ist Alpine-seitig verdrahtet und wird
 hier als Scaffold-Hook (offline-workitem-create-gate) belegt.

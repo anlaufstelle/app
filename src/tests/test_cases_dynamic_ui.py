@@ -653,14 +653,14 @@ class TestCaseUpdateOptimisticLockingAndAudit:
         target = Case.objects.create(
             facility=facility,
             client=client_identified,
-            title="P8-",
+            title="Fall-Titel vorher",
             created_by=staff_user,
         )
         client.force_login(staff_user)
         response = client.post(
             reverse("core:case_update", args=[target.pk]),
             _case_post_data(
-                "P8--geaendert",
+                "Fall-Titel nachher",
                 client_identified,
                 document_type=str(doc_type_case_form.pk),
                 anlass="Streng geheime Adresse",

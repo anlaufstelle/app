@@ -151,7 +151,7 @@ def test_lie_fi_navigation_falls_back_before_hanging(browser, base_url):
             f"Navigation kam nach nur {elapsed:.1f}s zurueck — die Route hat den Request offenbar nicht "
             "haengen lassen (Testaufbau pruefen)."
         )
-        # Refs #1533 (#1499, SI-5): /clients/ faellt offline NICHT mehr
+        # Refs #1533 (#1499): /clients/ faellt offline NICHT mehr
         # auf die Offline-Home, sondern der CLIENT_LIST-Zweig serviert die
         # precachte, pk-lose Personenlisten-Shell IN-PLACE (kein Klartext-
         # Netzwerkfehler, kein /offline/-Redirect). Ohne mitgenommene Personen
@@ -329,22 +329,22 @@ def test_precache_includes_offline_sync_core_assets(browser, base_url):
             "/static/js/alpine-csp.min.js",
             "/static/js/alpine/base-layout.js",
             "/static/js/sync-orchestrator.js",
-            # Refs #1523 (#1499, SI-6): Renderer der pk-losen Create-Shells
+            # Refs #1523 (#1499): Renderer der pk-losen Create-Shells
             # (Event/WorkItem) — ohne Pre-Cache faellt der Kalt-Offline-Pfad
             # (/events/new/, /workitems/new/) nach einem SW-Update ohne Renderer.
             "/static/js/offline-form-fields.js",
             "/static/js/offline-create.js",
-            # Refs #1533 (#1499, SI-5): Renderer der pk-losen Personenlisten-Shell
+            # Refs #1533 (#1499): Renderer der pk-losen Personenlisten-Shell
             # — ohne Pre-Cache faellt der Kalt-Offline-Pfad (/clients/) nach einem
             # SW-Update ohne Renderer.
             "/static/js/offline-client-list.js",
-            # Refs #1524 (#1499, SI-7): die Create-Shell-HTMLs selbst — der SW
+            # Refs #1524 (#1499): die Create-Shell-HTMLs selbst — der SW
             # serviert sie IN-PLACE an /events/new/ bzw. /workitems/new/, was nur
             # traegt, wenn sie tatsaechlich im Install-Precache liegen (nicht nur
             # als APP_SHELL-Literal, sondern als gecachte Response).
             "/offline/event-shell/",
             "/offline/workitem-shell/",
-            # Refs #1533 (#1499, SI-5): die Personenlisten-Shell selbst — der SW
+            # Refs #1533 (#1499): die Personenlisten-Shell selbst — der SW
             # serviert sie IN-PLACE an /clients/, was nur traegt, wenn sie
             # tatsaechlich im Install-Precache liegt (gecachte Response, nicht nur
             # APP_SHELL-Literal).

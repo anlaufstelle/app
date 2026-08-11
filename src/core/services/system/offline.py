@@ -41,7 +41,7 @@ BUNDLE_TTL_SECONDS = 48 * 3600
 # changes in a non-backwards-compatible way so the client can purge stale
 # caches after an app upgrade. MUSS mit ``BUNDLE_SCHEMA_VERSION`` in
 # ``src/static/js/offline-store.js`` synchron bleiben (kein Build-Sync).
-# v1->v2 (SI-1, #1529/#1499): ``client.last_contact`` neu im Bundle -> ein
+# v1->v2 (, #1529/#1499): ``client.last_contact`` neu im Bundle -> ein
 # Alt-v1-Bundle wird beim naechsten Read/Listing per Schema-Mismatch gepurged.
 BUNDLE_SCHEMA_VERSION = 2
 
@@ -323,7 +323,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         .order_by("-created_at")
     )
 
-    # SI-1 (#1529, #1499): ``last_contact`` fuer die Offline-Personenliste —
+    # (#1529, #1499): ``last_contact`` fuer die Offline-Personenliste —
     # BEWUSST cutoff- UND is_deleted-FREI, exakt die Online-Spalten-Annotation
     # aus ``ClientListView`` (views/clients.py: ``Max("events__occurred_at")``),
     # damit der offline gezeigte Wert dem Online-Listenwert 1:1 entspricht.
@@ -428,6 +428,6 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
         "document_types": [_serialize_document_type(user, dt) for dt in doc_types],
         # Refs #1398/#1518: zuweisbare Nutzer:innen nur fuer Staff+ (nur sie
         # legen WorkItems an/weisen zu) — begrenzt die Roster-Exposition und
-        # speist den Staff+-Gate der Offline-WorkItem-Shell (SI-5).
+        # speist den Staff+-Gate der Offline-WorkItem-Shell.
         "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
     }
