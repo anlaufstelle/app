@@ -6,6 +6,7 @@ import core.services.system.health as system_health
 from core.models import AuditLog, Facility, Organization
 from core.models.user import User
 from core.services.compliance import ComplianceStatus, cron_job_checks
+from core.services.dashboard import super_admin_dashboard_context
 from core.views.system.mixins import SystemAuditMixin
 
 
@@ -52,11 +53,22 @@ class SystemDashboardView(SystemAuditMixin, TemplateView):
             "versions": system_health.app_versions(),
         }
 
+        # Refs #1813 (F5): /start/ leitet super_admin hierher. Die beiden
+        # Kennzahlen der bisherigen System-Arbeitszentrale, die es hier noch
+        # nicht gab, ziehen mit — sonst verlöre die Rolle beim Umzug ihre
+        # Audit-Aktivitätsanzeige. Bewusst nur diese zwei Werte statt
+        # ``context.update(...)``: Einrichtungs- und Benutzerzahlen stehen hier
+        # bereits (und mit anderer Bedeutung — ``total_users`` zählt alle,
+        # ``users_total`` nur aktive).
+        audit_activity = super_admin_dashboard_context(user=self.request.user)
+
         context.update(
             {
                 "organization": organization,
                 "facilities": facilities,
                 "facilities_count": facilities.count(),
+                "recent_audit_events_count": audit_activity["recent_audit_events_count"],
+                "critical_recent": audit_activity["critical_recent"],
                 "role_counts": role_counts,
                 "total_users": User.objects.count(),
                 "auditlog_total": AuditLog.objects.count(),

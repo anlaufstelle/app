@@ -205,6 +205,29 @@
     {% endif %}
 </section>
 
+{# Audit-Aktivitaet (Refs #1813): zog mit der System-Arbeitszentrale hierher um, #}
+{# nachdem /start/ fuer super_admin auf diesen Bereich weiterleitet (F5). #}
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="system-audit-activity-card">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Audit-Aktivität (24 h)" %}</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-subtle">
+        <div class="px-4 py-3">
+            <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Audit-Events 24h" %}</div>
+            <div class="mt-1 text-2xl font-bold text-ink" data-testid="card-audit-events">{{ recent_audit_events_count }}</div>
+            <div class="text-[12px] text-ink-soft mt-1">{% trans "in den letzten 24 Stunden" %}</div>
+        </div>
+        <div class="px-4 py-3">
+            <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Kritische Events" %}</div>
+            <div class="mt-1 text-2xl font-bold {% if critical_recent > 0 %}text-orange-600{% else %}text-ink{% endif %}" data-testid="card-critical-events">{{ critical_recent }}</div>
+            <div class="text-[12px] text-ink-soft mt-1">{% trans "Anmeldefehler, Sicherheitsverstöße, Löschungen" %}</div>
+        </div>
+    </div>
+    <div class="px-4 py-2.5 border-t border-subtle bg-canvas">
+        <a href="{% url 'core:system_audit_list' %}" class="text-[12px] font-medium text-accent hover:underline" data-testid="system-audit-activity-link">
+            {% trans "Zum Audit-Log" %} →
+        </a>
+    </div>
+</section>
+
 {# Counts #}
 <section class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
     <div class="card p-4">
