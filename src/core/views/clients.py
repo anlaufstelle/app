@@ -807,7 +807,14 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
         q = request.GET.get("q", "").strip()
 
         # Refs #819: FacilityScopedManager statt Inline-Facility-Filter.
-        qs = Client.objects.for_facility(request.current_facility).filter(is_active=True)
+        #
+        # Refs #1803: ``is_deleted=False`` — identisch zu ``ClientListView`` und
+        # zur Suche. ``soft_delete()`` setzt ``is_active`` nicht mit; ohne den
+        # Filter war eine Person aus dem Papierkorb in den Personenfeldern von
+        # Ereignis-, Fall- und Aufgabenformular weiter auffindbar UND
+        # auswaehlbar — Pseudonym-Leak plus neue Dokumentation an einer
+        # geloeschten Person.
+        qs = Client.objects.for_facility(request.current_facility).filter(is_active=True, is_deleted=False)
         if q:
             qs = qs.filter(pseudonym__icontains=q)
 

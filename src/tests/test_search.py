@@ -423,3 +423,127 @@ class TestSearchExcludesTrashedClients:
         client.force_login(staff_user)
 
         assert client.get(reverse("core:client_detail", args=[client_identified.pk])).status_code == 404
+
+
+@pytest.mark.django_db
+class TestSearchExcludesEventsOfTrashedClients:
+    """Refs #1803: der Papierkorb war ueber den EREIGNIS-Zweig weiter lesbar.
+
+    Der Client-Zweig filtert ``is_deleted=False`` (Klasse oben) — der
+    Ereignis-Zweig matchte aber weiter ``client__pseudonym__icontains`` ohne
+    jeden Zustandsfilter. Das Pseudonym einer geloeschten Person stand damit
+    weiter in den Trefferkarten der Suche, und ueber den Treffer war ihre
+    Dokumentation vollstaendig aufblaetterbar: derselbe Leak, eine Flaeche
+    weiter.
+
+    Ereignisse papierkorb-geloeschter Personen fallen deshalb KOMPLETT aus der
+    Suche — auch die, die nur ueber ``search_text`` matchen. Der Zeitstrom
+    bleibt davon unberuehrt (bewusste Nicht-Paritaet, siehe Kommentar in
+    ``event_search_queryset``).
+
+    Die dritte Flaeche derselben Klasse — ``ClientAutocompleteView`` in den
+    Personenfeldern der Formulare — haengt bei den Autocomplete-Tests
+    (``test_events_access_policy.py::TestClientAutocomplete``).
+    """
+
+    @pytest.fixture
+    def event_of_trashed(self, facility, staff_user, doc_type_contact, client_identified):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"notiz": "Spezialberatung-Geheim"},
+            created_by=staff_user,
+        )
+        client_identified.soft_delete(user=staff_user)
+        return event
+
+    def test_service_drops_events_of_a_trashed_client(self, facility, staff_user, event_of_trashed):
+        from core.services.dashboard import search_clients_and_events
+
+        _, events = search_clients_and_events(facility, staff_user, "ID-01")
+        assert events == []
+
+    def test_service_drops_them_on_the_search_text_branch_too(self, facility, staff_user, event_of_trashed):
+        """Auch ohne Pseudonym-Treffer: der Inhalt gehoert zur geloeschten Person."""
+        from core.services.dashboard import search_clients_and_events
+
+        _, events = search_clients_and_events(facility, staff_user, "Spezialberatung-Geheim")
+        assert events == []
+
+    def test_counts_drop_events_of_a_trashed_client(self, facility, staff_user, event_of_trashed):
+        """Sonst zaehlt die Gruppenueberschrift Treffer, die die Liste nicht zeigt."""
+        from core.services.dashboard import search_result_counts
+
+        assert search_result_counts(facility, staff_user, "ID-01") == {"clients": 0, "events": 0}
+
+    def test_full_search_page_hides_events_of_a_trashed_client(self, client, staff_user, event_of_trashed):
+        client.force_login(staff_user)
+
+        content = client.get(reverse("core:search"), {"q": "ID-01"}).content.decode()
+        assert "Test-ID-01" not in content
+        assert reverse("core:event_detail", args=[event_of_trashed.pk]) not in content
+
+    def test_event_type_list_hides_events_of_a_trashed_client(self, client, staff_user, event_of_trashed):
+        """``?type=event`` paginiert dasselbe Queryset — der Filter muss dort mitlaufen."""
+        client.force_login(staff_user)
+
+        content = client.get(reverse("core:search"), {"q": "ID-01", "type": "event"}).content.decode()
+        assert "Test-ID-01" not in content
+        assert reverse("core:event_detail", args=[event_of_trashed.pk]) not in content
+
+    def test_dropdown_hides_events_of_a_trashed_client(self, client, staff_user, event_of_trashed):
+        client.force_login(staff_user)
+
+        content = client.get(reverse("core:global_search"), {"q": "ID-01"}).content.decode()
+        assert "Test-ID-01" not in content
+        assert reverse("core:event_detail", args=[event_of_trashed.pk]) not in content
+
+    def test_events_of_a_living_client_stay_searchable(self, facility, staff_user, doc_type_contact, client_identified):
+        """Gegenprobe: der Filter darf nur den Papierkorb treffen."""
+        from core.services.dashboard import search_clients_and_events
+
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"notiz": "Spezialberatung-Geheim"},
+            created_by=staff_user,
+        )
+
+        _, events = search_clients_and_events(facility, staff_user, "ID-01")
+        assert len(events) == 1
+
+    def test_events_without_a_client_stay_searchable(self, facility, staff_user, doc_type_contact):
+        """Ein ``client``-loses Ereignis haengt an keinem Papierkorb.
+
+        ``Event.client`` ist ``null=True`` (``SET_NULL``) — ein Ausschluss ueber
+        den Join darf diese Zeilen nicht mitnehmen.
+        """
+        from core.services.dashboard import search_clients_and_events
+
+        Event.objects.create(
+            facility=facility,
+            client=None,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"notiz": "Spezialberatung-Geheim"},
+            created_by=staff_user,
+        )
+
+        _, events = search_clients_and_events(facility, staff_user, "Spezialberatung-Geheim")
+        assert len(events) == 1
+
+    def test_the_timeline_still_shows_them(self, facility, staff_user, event_of_trashed):
+        """Bewusste Nicht-Paritaet: das chronologische Protokoll bleibt vollstaendig.
+
+        Die Suche ist ein Nachschlagewerkzeug — was dort nicht auftaucht, ist
+        praktisch weg. Der Zeitstrom ist ein Protokoll: eine Luecke darin waere
+        eine Faelschung des Verlaufs. Deshalb filtert er hier bewusst nicht mit.
+        """
+        from core.services.events import build_feed_items
+
+        items = build_feed_items(facility, timezone.localdate(), "events", user=staff_user)
+        assert [i for i in items if i["object"].pk == event_of_trashed.pk]

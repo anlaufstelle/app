@@ -91,6 +91,29 @@ class TestClientAutocomplete:
         data = response.json()
         assert len(data) >= 1
 
+    def test_autocomplete_hides_trashed_clients(self, client, staff_user, client_identified):
+        """Refs #1803: dieselbe Papierkorb-Luecke wie in der Suche, dritte Flaeche.
+
+        ``soft_delete()`` setzt ``is_active`` nicht mit — der Filter hier las
+        aber nur ``is_active=True``. Eine geloeschte Person war damit in den
+        Personenfeldern von Ereignis-, Fall- und Aufgabenformular weiter
+        auffindbar UND auswaehlbar: Pseudonym-Leak plus die Moeglichkeit, neue
+        Dokumentation an eine geloeschte Person zu haengen.
+        """
+        client_identified.soft_delete(user=staff_user)
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:client_autocomplete"), {"q": "ID"})
+        assert response.json() == []
+
+    def test_autocomplete_hides_trashed_clients_on_the_empty_query(self, client, staff_user, client_identified):
+        """Ohne Suchwort listet der Endpunkt die letzten Personen — auch dort."""
+        client_identified.soft_delete(user=staff_user)
+        client.force_login(staff_user)
+
+        pseudonyms = [d["pseudonym"] for d in client.get(reverse("core:client_autocomplete"), {"q": ""}).json()]
+        assert "Test-ID-01" not in pseudonyms
+
 
 @pytest.mark.django_db
 class TestMinContactStageGate:

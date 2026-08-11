@@ -117,18 +117,37 @@ class SearchView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXPartialM
 
 
 class GlobalSearchPartialView(AssistantOrAboveRequiredMixin, View):
-    """HTMX partial: compact search results for the global search dropdown."""
+    """HTMX partial: compact search results for the global search dropdown.
+
+    Refs #1803: ``MIN_QUERY_LENGTH`` galt hier bisher nur fuer die Fusszeile
+    und den Fuzzy-Zweig. Bei einem einzelnen Zeichen lief der volle
+    ``icontains``-Scan weiter und das Dropdown zeigte dessen Treffer — direkt
+    ueber der Zeile „Bitte mindestens 2 Zeichen eingeben.". Unterhalb der
+    Schwelle wird deshalb gar nicht gesucht: dieselbe Grenze wie auf der
+    Vollseite (``SearchView.too_short``), kein Tabellenscan, kein
+    Ratelimit-Budget fuer Treffer, die der beworbene Sprung ins ``/search/``
+    ohnehin nicht wiederholen wuerde.
+    """
 
     @method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True))
     def get(self, request):
         q = request.GET.get("q", "").strip()
         facility = request.current_facility
+        too_short = bool(q) and len(q) < MIN_QUERY_LENGTH
 
-        clients, events = search_clients_and_events(facility, request.user, q, max_clients=5, max_events=5)
-        similar_clients = search_similar_clients(facility, q, exclude_pks={c.pk for c in clients}, max_results=5)
+        clients, events, similar_clients = [], [], []
+        if q and not too_short:
+            clients, events = search_clients_and_events(facility, request.user, q, max_clients=5, max_events=5)
+            similar_clients = search_similar_clients(facility, q, exclude_pks={c.pk for c in clients}, max_results=5)
 
         return render(
             request,
             "core/search/partials/global_results.html",
-            {"q": q, "clients": clients, "events": events, "similar_clients": similar_clients},
+            {
+                "q": q,
+                "too_short": too_short,
+                "clients": clients,
+                "events": events,
+                "similar_clients": similar_clients,
+            },
         )

@@ -47,6 +47,22 @@ def event_search_queryset(facility, user, query):
     Der Sensitivity-Filter bleibt, wo er ist: ``Event.search_text`` enthaelt
     schreibseitig nur unverschluesselte, nicht erhoehte Feldwerte (ADR-016);
     der Lesefilter deckelt zusaetzlich ueber den Dokumentationstyp.
+
+    Refs #1803: ``exclude(client__is_deleted=True)`` — Ereignisse einer Person
+    im Papierkorb fallen KOMPLETT aus der Suche, auch die, die nur ueber
+    ``search_text`` matchen. Ohne den Filter blieb das Pseudonym einer
+    geloeschten Person ueber ihre Ereignis-Trefferkarten lesbar und ihre
+    Dokumentation von dort aus aufblaetterbar — derselbe Leak wie im
+    Client-Zweig, nur eine Flaeche weiter.
+
+    Das ist eine BEWUSSTE Nicht-Paritaet zum Zeitstrom (``build_feed_items``),
+    der diese Ereignisse weiter zeigt: Die Suche ist ein Nachschlagewerkzeug —
+    was sie nicht findet, ist praktisch weg, und genau das soll der Papierkorb
+    bewirken. Der Zeitstrom ist ein chronologisches Protokoll — eine Luecke
+    darin waere eine Faelschung des Verlaufs. Ereignisse ohne ``client``
+    (``SET_NULL``) haengen an keinem Papierkorb und bleiben suchbar; das
+    ``exclude`` ueber die nullable Relation laesst sie stehen (Django haengt
+    den ``IS NOT NULL``-Vorbehalt selbst an).
     """
     allowed_sens = allowed_sensitivities_for_user(user)
     return (
@@ -55,6 +71,7 @@ def event_search_queryset(facility, user, query):
             is_deleted=False,
             document_type__sensitivity__in=allowed_sens,
         )
+        .exclude(client__is_deleted=True)
         .filter(Q(client__pseudonym__icontains=query) | Q(search_text__icontains=query))
         .select_related("document_type", "client")
     )

@@ -44,7 +44,13 @@
     {% endif %}
 
 </div>
-{% elif q %}
+{% elif q and not too_short %}
+{% comment %}
+Refs #1803: nur wenn tatsaechlich gesucht wurde. Unter der 2-Zeichen-Schwelle
+laeuft keine Query — „Keine Ergebnisse" waere dort eine Aussage ueber ein
+Suchergebnis, das es nicht gibt, und widerspraeche der Zeile darunter, die
+genau in diesem Fall zwei Zeichen verlangt.
+{% endcomment %}
 <div class="px-3 py-4 text-sm text-ink-muted text-center">
     {% trans "Keine Ergebnisse" %}
 </div>
@@ -58,7 +64,7 @@ mit anderen Feldern und ohne Ergebnis-Deckelung noch etwas finden kann. Genau
 deshalb bekommt `/search/` auch keinen eigenen Nav-Eintrag — diese Zeile IST
 der Einstieg, und sie muss deshalb bei jeder Eingabe da sein.
 {% endcomment %}
-{% if q|length >= 2 %}
+{% if q and not too_short %}
 <div class="border-t border-subtle mt-1 pt-1">
     <a href="{% url 'core:search' %}?q={{ q|urlencode }}" data-testid="search-all-results-link"
        class="flex items-center min-h-[44px] px-3 py-2 text-sm text-accent hover:bg-accent-light font-medium">
