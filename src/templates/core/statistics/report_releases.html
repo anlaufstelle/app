@@ -14,6 +14,17 @@ sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
 <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Freigabe-Übersicht" %}</h1>
 
 {% subnav "statistik" %}
+{% comment %}
+Refs #1804 (§3.5, Ausnahme Freigaben): Dieser Reiter zeigt die N jüngsten
+Herausgaben, nicht einen Zeitraum. Er reicht die Zeitraum-Parameter unverändert
+an die anderen Reiter weiter (`NavSection.carry`, Roh-Pfad in
+`nav_tags._carry_query`) — und sagt das hier. Ein Reiter, der einen Zeitraum
+sichtbar mitführt und ihn still ignoriert, liest sich sonst wie ein
+Filterfehler.
+{% endcomment %}
+<p class="text-[13px] text-ink-muted mb-2 max-w-3xl" data-testid="release-period-note">
+    {% blocktrans %}Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen.{% endblocktrans %}
+</p>
 <p class="text-[13px] text-ink-muted mb-6 max-w-3xl">
     {% blocktrans %}Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, wenn in keinem der beiden etwas unterdrückt wurde.{% endblocktrans %}
 </p>

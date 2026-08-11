@@ -35,6 +35,14 @@
     {% endif %}
     <h1>{{ facility_name }}</h1>
     <p class="meta">{% trans "Statistikbericht" %} · {{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</p>
+    {% comment %}
+    R2 (Refs #1804): Der Ausschnitt gehört auf das Deckblatt. Ein gefiltertes
+    PDF ohne diesen Satz ist im Umlauf nicht mehr von einem vollständigen
+    Bericht zu unterscheiden — und genau als solcher wird es weitergereicht.
+    {% endcomment %}
+    {% if document_type %}
+    <p class="meta">{% blocktrans with name=document_type.name %}Gefiltert nach Dokumentationstyp: {{ name }}{% endblocktrans %}</p>
+    {% endif %}
 
     <h2>{% trans "Zusammenfassung" %}</h2>
     <div class="kpi-grid">

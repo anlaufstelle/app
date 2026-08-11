@@ -42,7 +42,7 @@ field_templates:
     help_text: Dauer in Minuten
 
   - slug: alterscluster
-    name: Alterscluster
+    name: Altersgruppe
     field_type: select
     is_encrypted: false
     sensitivity: ""

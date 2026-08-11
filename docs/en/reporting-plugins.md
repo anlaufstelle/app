@@ -177,9 +177,10 @@ from core.services.dashboard.external_report import (
 
 @register_backend("example")
 class ExampleBackend(DatasetBackend):
-    """Ereignisse je Dokumenttyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
+    """Ereignisse je Dokumentationstyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
 
-    name = _("Beispiel: Ereignisse je Dokumenttyp")
+    name = _("Beispiel: Ereignisse je Dokumentationstyp")
+    description = _("Zählt die Ereignisse des Zeitraums je Dokumentationstyp.")
     snapshot_enabled = False
 ```
 
@@ -192,7 +193,7 @@ This is the **complete** import header of `example.py` — the excerpts in steps
 ```python
     def get_field_specs(self) -> list[FieldSpec]:
         return [
-            FieldSpec("document_type", _("Dokumenttyp")),
+            FieldSpec("document_type", _("Dokumentationstyp")),
             FieldSpec("system_type", _("System-Typ")),
             FieldSpec("count", _("Anzahl")),
         ]
@@ -496,7 +497,7 @@ Kontakte,42
 ```json
 {
   "backend": "example",
-  "name": "Beispiel: Ereignisse je Dokumenttyp",
+  "name": "Beispiel: Ereignisse je Dokumentationstyp",
   "date_from": "2026-01-01",
   "date_to": "2026-01-31",
   "generated_at": "2026-02-01T09:00:00+01:00",
@@ -505,7 +506,7 @@ Kontakte,42
   "data_source_note": "Live-Abfrage zum Erstellungszeitpunkt",
   "population": "all_events",
   "population_note": "alle Ereignisse im Zeitraum",
-  "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
+  "field_specs": [{"key": "document_type", "label": "Dokumentationstyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
   "records": [{"document_type": "Kontakt", "system_type": "contact", "count": 42}],
   "completeness": [{"code": "…", "message": "…", "severity": "warning"}]
@@ -622,5 +623,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-09 -->
-<!-- source-hash: 67fc168fafe89f58d90a492cc70e108c79a61907 -->
+<!-- translation-date: 2026-08-11 -->
+<!-- source-hash: 41283f154820941a2b59484118af071061672aa1 -->

@@ -1,0 +1,27 @@
+{% comment %}
+Ein Zeitraum-Pill der gemeinsamen Leiste (Refs #1804 §3.5).
+
+Zwei Modi, ein Markup. Wo eine Inhaltszone existiert, die sich unabhängig
+tauschen lässt (`zeitraum_target`, heute `#statistics-content`), bleibt der Pill
+ein `<button>` mit `hx-get` — genau wie bisher. Wo es keine gibt (externer
+Bericht), ist er ein gewöhnlicher Link: derselbe serverseitige Zustand, nur ohne
+Fragment-Tausch. Ein „HTMX überall"-Zwang hieße, dort erst eine Inhaltszone zu
+erfinden, damit ein Pill sein Muster behält.
+
+Erwartete Variablen: `pill_key`, `pill_label`, `zeitraum_url`, `zeitraum_target`,
+`period`, `view_query`, `bericht_query`, `doktyp_query`.
+{% endcomment %}
+{% if zeitraum_target %}
+<button hx-get="{{ zeitraum_url }}?zeitraum={{ pill_key }}{{ view_query }}{{ bericht_query }}{{ doktyp_query }}"
+        hx-target="{{ zeitraum_target }}"
+        hx-push-url="true"
+        class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == pill_key %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+    {{ pill_label }}
+</button>
+{% else %}
+<a href="{{ zeitraum_url }}?zeitraum={{ pill_key }}{{ view_query }}{{ bericht_query }}{{ doktyp_query }}"
+   {% if period == pill_key %}aria-current="true"{% endif %}
+   class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == pill_key %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+    {{ pill_label }}
+</a>
+{% endif %}

@@ -1039,6 +1039,182 @@ class TestDoktypFilter:
         assert segmente[0]["total_contacts"] == 2
 
 
+# ---------------------------------------------------------------------------
+# R2: Der Export gibt aus, was am Bildschirm steht (Refs #1804)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestDoktypFilterErreichtDieExporte:
+    """„Am Bildschirm stand X, exportiert wurde Y" ist der teuerste Fehler des Bereichs.
+
+    Der Doktyp-Filter wirkt seit Entscheid F3 auf KPI, Tabellen und Diagramme
+    — die beiden Export-Schaltflaechen der Uebersicht standen aber daneben und
+    exportierten weiter ungefiltert. Ein CSV, das mehr Zeilen enthaelt als die
+    Tabelle darueber zeigt, ist keine Unbequemlichkeit, sondern eine falsche
+    Herausgabe: es geht als Verwendungsnachweis aus dem Haus.
+    """
+
+    def _event(self, facility, user, doc_type, client=None, days_ago=0):
+        return Event.objects.create(
+            facility=facility,
+            client=client,
+            document_type=doc_type,
+            occurred_at=timezone.now() - timedelta(days=days_ago),
+            data_json={},
+            created_by=user,
+        )
+
+    @pytest.fixture
+    def zwei_typen(self, facility, admin_user, doc_type_kontakt, doc_type_beratung, clients):
+        c1, c2, _ = clients
+        self._event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._event(facility, admin_user, doc_type_kontakt, client=c1)
+        self._event(facility, admin_user, doc_type_beratung, client=c2)
+        return doc_type_kontakt, doc_type_beratung
+
+    @staticmethod
+    def _range():
+        today = date.today()
+        return {"date_from": str(today - timedelta(days=1)), "date_to": str(today)}
+
+    def test_csv_export_enthaelt_nur_zeilen_des_gefilterten_typs(self, client, admin_user, facility, zwei_typen):
+        kontakt, beratung = zwei_typen
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_csv_export"), {**self._range(), "doktyp": str(kontakt.pk)})
+        assert response.status_code == 200
+        body = b"".join(response.streaming_content).decode("utf-8")
+        # Spalte 3 ist der Dokumentationstyp (``_build_event_row``); die
+        # Kopfzeile traegt den Spaltennamen, nicht den Typnamen.
+        datenzeilen = [zeile for zeile in body.splitlines()[2:] if zeile.strip()]
+        assert len(datenzeilen) == 2
+        assert all(kontakt.name in zeile for zeile in datenzeilen)
+        assert beratung.name not in body
+
+    def test_csv_export_ohne_filter_bleibt_vollstaendig(self, client, admin_user, facility, zwei_typen):
+        """Gegenprobe: der ungefilterte Export darf durch die Aenderung nichts verlieren."""
+        _, beratung = zwei_typen
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_csv_export"), self._range())
+        body = b"".join(response.streaming_content).decode("utf-8")
+        assert len([zeile for zeile in body.splitlines()[2:] if zeile.strip()]) == 3
+        assert beratung.name in body
+
+    def test_csv_export_ignoriert_einen_fremden_typ(self, client, admin_user, facility, zwei_typen, other_facility):
+        """Fail-closed wie auf der Seite: ein fremder Typ filtert nicht, er faellt weg."""
+        fremd = DocumentType.objects.create(facility=other_facility, name="Fremd")
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_csv_export"), {**self._range(), "doktyp": str(fremd.pk)})
+        body = b"".join(response.streaming_content).decode("utf-8")
+        assert len([zeile for zeile in body.splitlines()[2:] if zeile.strip()]) == 3
+
+    def test_pdf_export_rechnet_mit_dem_filter(self, client, admin_user, facility, zwei_typen, monkeypatch):
+        """Das PDF speist sich aus denselben Zahlen wie die Kacheln — mit Filter
+        also aus dem Live-Pfad, nicht aus den Monats-Aggregaten."""
+        import core.views.statistics as statistics_views
+
+        kontakt, _ = zwei_typen
+        gesehen = {}
+
+        def _fake_pdf(fac, date_from, date_to, stats, **kwargs):
+            gesehen["stats"] = stats
+            gesehen["kwargs"] = kwargs
+            return b"%PDF-fake"
+
+        monkeypatch.setattr(statistics_views, "generate_report_pdf", _fake_pdf)
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_pdf_export"), {**self._range(), "doktyp": str(kontakt.pk)})
+        assert response.status_code == 200
+        assert gesehen["stats"]["total_contacts"] == 2
+        assert [row["name"] for row in gesehen["stats"]["by_document_type"]] == [kontakt.name]
+        assert gesehen["kwargs"]["document_type"] == kontakt
+
+    def test_pdf_export_ohne_filter_bleibt_hybrid(self, client, admin_user, facility, zwei_typen, monkeypatch):
+        import core.views.statistics as statistics_views
+
+        gesehen = {}
+
+        def _fake_pdf(fac, date_from, date_to, stats, **kwargs):
+            gesehen["stats"] = stats
+            gesehen["kwargs"] = kwargs
+            return b"%PDF-fake"
+
+        monkeypatch.setattr(statistics_views, "generate_report_pdf", _fake_pdf)
+        client.force_login(admin_user)
+
+        client.get(reverse("core:statistics_pdf_export"), self._range())
+        assert gesehen["stats"]["total_contacts"] == 3
+        assert gesehen["kwargs"]["document_type"] is None
+
+    def test_pdf_deckblatt_nennt_den_filter(self, facility, zwei_typen):
+        """Ein gefiltertes PDF, das seinen Filter verschweigt, ist im Umlauf
+        nicht mehr von einem vollstaendigen Bericht zu unterscheiden."""
+        from django.template.loader import render_to_string
+
+        from core.reporting.data_source import ALL_EVENTS, LIVE, table_note
+
+        kontakt, _ = zwei_typen
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today, document_type=kontakt)
+
+        html = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "facility_name": facility.name,
+                "date_from": today - timedelta(days=1),
+                "date_to": today,
+                "stats": stats,
+                "internal_mode": False,
+                "generated_at": timezone.now(),
+                "document_type": kontakt,
+                "population_notes": {"by_document_type": table_note(ALL_EVENTS, LIVE)},
+            },
+        )
+        assert f"Gefiltert nach Dokumentationstyp: {kontakt.name}" in html
+
+    def test_pdf_quellenausweis_folgt_dem_gelaufenen_pfad(self, facility, zwei_typen):
+        """Der Ausweis „Monats-Aggregate" auf einem live gerechneten Bericht
+        waere genau die Falschangabe, die K3-A3 beseitigen sollte."""
+        from core.services.system import generate_report_pdf
+
+        kontakt, _ = zwei_typen
+        today = date.today()
+        stats = get_statistics(facility, today - timedelta(days=1), today, document_type=kontakt)
+
+        with patch("core.services.system.export.render_to_string", return_value="<html></html>") as gerendert:
+            generate_report_pdf(facility, today - timedelta(days=1), today, stats, document_type=kontakt)
+        kontext = gerendert.call_args[0][1]
+        assert kontext["document_type"] == kontakt
+        assert "Live-Abfrage" in str(kontext["data_source_note"])
+        assert "Live-Abfrage" in str(kontext["population_notes"]["by_document_type"])
+
+    @staticmethod
+    def _export_formular(content: str) -> str:
+        """Nur das Export-Formular — die Seite traegt drei Formulare mit
+        ``doktyp``-Feldern (Chart-Filter, Zeitraum-Formular, Export)."""
+        start = content.index('data-testid="statistics-export-form"')
+        return content[start : content.index("</form>", start)]
+
+    def test_export_formular_traegt_den_doktyp(self, client, admin_user, facility, zwei_typen):
+        """Ohne das versteckte Feld kommt der Filter an keiner der beiden
+        Schaltflaechen an — das Formular ist der einzige Traeger (K4a-GET-Form)."""
+        kontakt, _ = zwei_typen
+        client.force_login(admin_user)
+
+        content = client.get(reverse("core:statistics"), {"doktyp": str(kontakt.pk)}).content.decode()
+        assert f'name="doktyp" value="{kontakt.pk}"' in self._export_formular(content)
+
+    def test_export_formular_bleibt_ohne_filter_unveraendert(self, client, admin_user, facility, zwei_typen):
+        """Gegenprobe: ohne Filter kein verstecktes Feld im Export-Formular."""
+        client.force_login(admin_user)
+        content = client.get(reverse("core:statistics")).content.decode()
+        assert 'name="doktyp"' not in self._export_formular(content)
+
+
 @pytest.fixture
 def other_facility(db):
     org = Organization.objects.create(name="Andere Org (Doktyp-Filter)")

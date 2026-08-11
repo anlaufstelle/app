@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from django.core.exceptions import ValidationError
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -146,14 +147,19 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
     }
 
 
-def statistics_state_query(period_state, document_type) -> str:
-    """Der Zustand des Statistik-Bereichs als Query-String (ohne fuehrendes ``?``).
+def statistics_state_params(period_state, document_type=None) -> dict[str, str]:
+    """Der **aufgeloeste** Zustand des Statistik-Bereichs als Parameter-Dict.
 
-    Ein Ort fuer beides: die HTMX-Nachladeziele der Zeitraum-Leiste und die
-    Chart-API. Der Zustand steht damit **serverseitig gerendert** in der Seite
-    (R3) — die Diagramme lesen ihn aus dem Markup statt aus
+    Drei Verwender teilen sich diese eine Aufloesung: die HTMX-Nachladeziele
+    der Zeitraum-Leiste, die Chart-API und die Reiterzeile (``subnav_carry``,
+    Refs #1804 §3.5). Der Zustand steht damit **serverseitig gerendert** in der
+    Seite (R3) — die Diagramme lesen ihn aus dem Markup statt aus
     ``window.location.search``, das nach einem HTMX-Swap noch den vorherigen
     Stand tragen kann (die History-Aktualisierung folgt dem Swap).
+
+    Aufgeloest heisst: kanonische Schluessel, nie der eingehende Alias. Ein
+    Bookmark mit ``?period=quarter`` zeigt den richtigen Stand, breitet seine
+    Schreibweise aber nicht ueber die Oberflaeche weiter aus.
     """
     from core.services.dashboard import PERIOD_FREI, PERIOD_JAHR
 
@@ -165,7 +171,12 @@ def statistics_state_query(period_state, document_type) -> str:
         params["year"] = str(period_state.selected_year)
     if document_type is not None:
         params["doktyp"] = str(document_type.pk)
-    return urlencode(params)
+    return params
+
+
+def statistics_state_query(period_state, document_type=None) -> str:
+    """:func:`statistics_state_params` als Query-String (ohne fuehrendes ``?``)."""
+    return urlencode(statistics_state_params(period_state, document_type))
 
 
 class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
@@ -233,14 +244,29 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
         context = {
             "view_mode": view_mode,
             "view_query": f"&ansicht={view_mode}" if view_mode else "",
+            # Refs #1804 (§3.5): Kontrakt der gemeinsamen Zeitraum-Leiste. Hier
+            # mit HTMX-Ziel — diese Seite hat eine Inhaltszone, die sich
+            # unabhaengig von Reiterzeile und Ortsanzeige tauschen laesst.
+            "zeitraum_url": reverse("core:statistics"),
+            "zeitraum_target": "#statistics-content",
             # Refs #1804: der Doktyp-Filter haengt wie der Modus an den
             # HTMX-Nachladezielen der Zeitraum-Leiste — ohne ihn faellt er beim
             # ersten Zeitraum-Klick still weg.
             "doktyp_query": f"&doktyp={selected_doc_type.pk}" if selected_doc_type is not None else "",
+            # Refs #1804 (§3.3 + §3.5): dasselbe fuer die Berichtsauswahl. Ohne
+            # sie verschwanden Vorschau, Export-Schaltflaechen und die
+            # Empfaenger/Zweck-Felder beim ersten Zeitraum-Klick — wortlos, denn
+            # die Seite sieht danach aus wie ein frisch geoeffneter Reiter.
+            # Genau beim Zeitraum-Wechsel braucht man die Auswahl aber:
+            # denselben Bericht ueber ein anderes Fenster rechnen.
+            "bericht_query": f"&bericht={selected_backend.slug}" if selected_backend is not None else "",
             "selected_doc_type": selected_doc_type,
             # Serverseitig gerenderter Zustand fuer die Chart-API (R3, kein
             # Client-State): siehe ``statistics_state_query``.
             "chart_query": statistics_state_query(period_state, selected_doc_type),
+            # Refs #1804 (§3.5): Der Zeitraum reist an der Reiterzeile mit —
+            # OHNE ``doktyp``: der Filter existiert nur auf der Uebersicht.
+            "subnav_carry": statistics_state_params(period_state),
             "stats": stats,
             "period": period_state.period,
             "date_from": period_state.date_from,
@@ -379,6 +405,20 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
         return JsonResponse(data)
 
 
+def export_document_type_detail(document_type) -> dict:
+    """Der Doktyp-Filter als Audit-Detail — leer, wenn ungefiltert exportiert wurde.
+
+    Refs #1804 (R2): Die Freigabe-Uebersicht bewertet Herausgaben ueber ihren
+    Zeitraum. Zwei Exporte desselben Zeitraums koennen jetzt verschiedene
+    Ausschnitte sein; ohne diese Angabe stuenden sie im Audit als dieselbe
+    Herausgabe da. Der Schluessel bleibt weg, wenn nicht gefiltert wurde — so
+    unterscheiden sich Alt-Zeilen nicht von neuen ungefilterten.
+    """
+    if document_type is None:
+        return {}
+    return {"document_type": document_type.name, "document_type_id": str(document_type.pk)}
+
+
 class CSVExportView(LeadOrAdminRequiredMixin, View):
     """Streaming CSV export of all events in the period."""
 
@@ -396,10 +436,16 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
+        # R2 (Refs #1804): Der Export gibt aus, was am Bildschirm steht. Die
+        # Aufloesung laeuft ueber dieselbe fail-closed, facility-skopierte
+        # Funktion wie die Seite — ein zweiter Parser waere hier ein
+        # Lesepfad in fremde Ereigniszahlen.
+        document_type = resolve_document_type_filter(facility, request.GET)
+
         response = safe_download_response(
             f"export_{date_from}_{date_to}.csv",
             "text/csv; charset=utf-8",
-            export_events_csv(facility, date_from, date_to, user=request.user),
+            export_events_csv(facility, date_from, date_to, user=request.user, document_type=document_type),
         )
 
         log_audit_event(
@@ -414,6 +460,7 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
                 "format": "CSV",
                 "date_from": str(date_from),
                 "date_to": str(date_to),
+                **export_document_type_detail(document_type),
                 **release_detail(request.GET, artifact_released=True),
             },
         )
@@ -438,12 +485,22 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
-        stats = get_statistics_hybrid(facility, date_from, date_to)
+        # R2 (Refs #1804): Dasselbe Regime wie die Uebersicht — bei gesetztem
+        # Filter live rechnen, weil Monats-Aggregate keine Zerlegung nach
+        # Dokumentationstyp kennen. Genau dieser Zweig ist die Zusicherung
+        # „am Bildschirm stand X, im PDF steht X".
+        document_type = resolve_document_type_filter(facility, request.GET)
+        if document_type is not None:
+            stats = get_statistics(facility, date_from, date_to, document_type)
+        else:
+            stats = get_statistics_hybrid(facility, date_from, date_to)
         # Refs #792 (C-24): ``?internal=1`` aktiviert den internen Report-Modus
         # mit Pseudonym-Ranking + INTERN-Banner. Standard ist der externe Modus
         # ohne Top-Pseudonyme — DSGVO-Datenminimierung bei Traegerberichten.
         internal_mode = request.GET.get("internal") in ("1", "true", "yes", "on")
-        pdf_bytes = generate_report_pdf(facility, date_from, date_to, stats, internal_mode=internal_mode)
+        pdf_bytes = generate_report_pdf(
+            facility, date_from, date_to, stats, internal_mode=internal_mode, document_type=document_type
+        )
 
         filename_suffix = "_intern" if internal_mode else ""
         response = safe_download_response(
@@ -460,6 +517,7 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
                 "format": "PDF",
                 "date_from": str(date_from),
                 "date_to": str(date_to),
+                **export_document_type_detail(document_type),
                 **release_detail(request.GET, artifact_released=True),
             },
         )
@@ -574,6 +632,21 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
                 "date_to": period_state.date_to,
                 "selected_year": period_state.selected_year,
                 "current_year": today.year,
+                # Refs #1804 (§3.5/R6): Diese Seite wertet den Zeitraum seit
+                # jeher aus (``parse_statistics_period`` ist Single Source of
+                # Truth fuer alle Statistik-Sichten) — sie hatte nur kein
+                # einziges Bedienelement dafuer und war ausschliesslich ueber
+                # eine von Hand getippte Adresse steuerbar. Die Zeitraum-Leiste
+                # navigiert hier per Link statt per HTMX: die Seite hat keine
+                # Inhaltszone, die sich unabhaengig tauschen liesse.
+                "zeitraum_url": reverse("core:statistics_external_report"),
+                "zeitraum_target": "",
+                "subnav_carry": statistics_state_params(period_state),
+                # Der JSON-Link trug bisher ``date_from``/``date_to`` OHNE
+                # ``zeitraum=frei``; beide Werte fielen im Parser durch und die
+                # Datei beschrieb einen anderen Zeitraum als der Bildschirm
+                # darueber. Jetzt traegt er den aufgeloesten Zustand.
+                "state_query": statistics_state_query(period_state),
                 # Quellenausweis (Refs #1743): der Erklaersatz gehoert zur
                 # Darstellung, der Code/die Kurzform stehen in
                 # ``report["metadata"]`` und damit auch im JSON-Format.

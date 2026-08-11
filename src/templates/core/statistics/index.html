@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n static nav_tags %}
+{% load i18n static %}
 
 {% block title %}{% trans "Statistik" %} – Anlaufstelle{% endblock %}
 
@@ -11,10 +11,19 @@
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Statistik" %}</h1>
 
-{# Reiterzeile des Bereichs. Sie liegt bewusst AUSSERHALB von #statistics-content: #}
-{# der HTMX-Swap der Zeitraum-Auswahl tauscht nur den Inhalt, nicht die Ortsanzeige. #}
-{% subnav "statistik" %}
+{% comment %}
+Die Reiterzeile liegt INNERHALB von #statistics-content (Refs #1804 §3.5). Sie
+lag bis dahin darüber, damit der HTMX-Swap „nur den Inhalt, nicht die
+Ortsanzeige" tauscht — das war richtig, solange die Reiter-Links zustandslos
+waren. Seit sie den Zeitraum mitführen, trüge eine nicht mitgetauschte Zeile
+nach dem ersten Pill-Klick weiter den Zustand des Seitenaufrufs: die
+Adresszeile stimmte, die Reiter-Links nicht, und der Zeitraum ginge beim
+nächsten Reiterwechsel verloren. Unsichtbar, weil die Zeile korrekt aussieht.
 
+Der Aktiv-Zustand wird im Swap identisch neu berechnet (dieselbe Route,
+dieselben Query-Parameter) — die Ortsanzeige bleibt also stehen, sie wird nur
+mit erneuert.
+{% endcomment %}
 <div id="statistics-content">
     {% include "core/statistics/partials/full_content.html" %}
 </div>

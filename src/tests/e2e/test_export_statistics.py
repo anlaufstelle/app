@@ -144,3 +144,57 @@ class TestFreigabeUebersichtE2E:
 
         page.goto(f"{base_url}/statistics/reports/releases/")
         assert page.locator("text=Stadt Musterstadt").first.is_visible()
+
+
+class TestDoktypFilterErreichtDieExporteE2E:
+    """R2 (Refs #1804): Was am Bildschirm steht, steht auch in der Datei.
+
+    Der Doktyp-Filter wirkt auf KPI, Tabellen und Diagramme — die beiden
+    Export-Schaltflaechen darunter exportierten trotzdem den ganzen Zeitraum.
+    Der Fehler ist nur im echten Klickpfad sichtbar: Filter setzen (HTMX-Swap),
+    dann exportieren. Ein Server-Test der Vollseite sieht ihn nicht, weil er
+    das versteckte Feld des Export-Formulars nie mit dem Swap-Stand vergleicht.
+    """
+
+    def _filter_auf_ersten_typ(self, page, base_url):
+        """Ersten echten Dokumentationstyp waehlen und auf den Swap warten."""
+        page.goto(f"{base_url}/statistics/")
+        select = page.locator("#statistics-doktyp")
+        select.wait_for(timeout=30_000)
+        # Option 0 ist „Alle Dokumentationstypen" — der erste echte Typ steht danach.
+        slug = select.locator("option").nth(1).get_attribute("value")
+        label = select.locator("option").nth(1).inner_text()
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
+            select.select_option(slug)
+        # Nach dem Swap traegt das Export-Formular den Filter als verstecktes Feld.
+        expect(page.locator("[data-testid='statistics-export-form'] input[name='doktyp']")).to_have_attribute(
+            "value", slug, timeout=10_000
+        )
+        return slug, label.strip()
+
+    def test_csv_export_enthaelt_nur_den_gefilterten_typ(self, authenticated_page, base_url):
+        page = authenticated_page
+        _slug, label = self._filter_auf_ersten_typ(page, base_url)
+
+        with page.expect_download() as download_info:
+            page.locator("[data-testid='statistics-export-form'] button:has-text('CSV-Export')").click()
+        zeilen = download_info.value.path().read_text(encoding="utf-8").splitlines()
+
+        # Zeile 0 = Metadaten, Zeile 1 = Kopf, ab Zeile 2 die Ereignisse.
+        # Spalte 3 ist der Dokumentationstyp (``_build_event_row``).
+        datenzeilen = [z for z in zeilen[2:] if z.strip()]
+        assert datenzeilen, "Setup-Sanity: der Seed liefert Ereignisse dieses Typs"
+        for zeile in datenzeilen:
+            assert label in zeile, f"ungefilterte Zeile im gefilterten Export: {zeile}"
+
+    def test_pdf_export_folgt_dem_filter(self, authenticated_page, base_url):
+        """Das PDF nennt den Ausschnitt — ohne die Zeile ist die Datei im Umlauf
+        nicht mehr von einem vollstaendigen Bericht zu unterscheiden."""
+        page = authenticated_page
+        self._filter_auf_ersten_typ(page, base_url)
+
+        with page.expect_download() as download_info:
+            page.locator("[data-testid='statistics-export-form'] button:has-text('PDF-Export')").click()
+        download = download_info.value
+        assert download.suggested_filename.endswith(".pdf")
+        assert download.path().read_bytes()[:4] == b"%PDF"

@@ -427,3 +427,28 @@ class TestReportPanelConsoleHygiene:
         _select_backend(page, "example")
 
         assert errors == [], f"Konsolen-Fehler in der Berichte-Sektion: {errors}"
+
+
+class TestBerichtsauswahlUeberlebtDenZeitraumWechsel:
+    """Refs #1804 (§3.3 + §3.5): Die Berichtsauswahl ist URL-Zustand.
+
+    Ohne ``bericht`` in den Nachladezielen der Zeitraum-Leiste verschwanden
+    Vorschau, Export-Schaltflaechen und die Empfaenger/Zweck-Felder beim ersten
+    Klick auf „Letzte 90 Tage" — wortlos: die Seite sah danach aus wie ein
+    frisch geoeffneter Reiter statt wie ein verlorener Zustand.
+    """
+
+    def test_selected_report_survives_a_period_switch(self, authenticated_page, base_url):
+        page = authenticated_page
+        _open_statistics(page, base_url)
+
+        panel = _select_backend(page, "sample-report-1")
+        expect(panel.locator("button:has-text('CSV-Export')")).to_be_visible()
+
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
+            page.get_by_role("button", name="Letzte 90 Tage", exact=True).click()
+
+        assert "bericht=sample-report-1" in page.url, page.url
+        expect(page.locator("[data-testid='report-card-sample-report-1']")).to_have_attribute("aria-current", "true")
+        expect(page.locator("#report-panel button:has-text('CSV-Export')")).to_be_visible()
+        expect(page.locator("#report-recipient")).to_be_visible()

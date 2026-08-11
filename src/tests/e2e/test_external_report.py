@@ -72,3 +72,50 @@ def test_staff_blocked_from_external_report(page: Page, base_url: str) -> None:
     page.wait_for_load_state("domcontentloaded")
     # Erwartet: 403-Page mit "Zugriff verweigert"-Title.
     assert "403" in page.title() or "verweigert" in page.title().lower()
+
+
+def test_external_report_has_a_working_period_bar(page: Page, base_url: str) -> None:
+    """Refs #1804 (§3.5/R6): Der externe Bericht wertet ``?zeitraum=`` seit jeher
+    aus — er hatte nur kein einziges Bedienelement dafuer und war ausschliesslich
+    ueber eine von Hand getippte Adresse steuerbar.
+
+    Die Leiste navigiert hier per Link (kein HTMX): die Seite hat keine
+    Inhaltszone, die sich unabhaengig tauschen liesse.
+    """
+    _login(page, base_url, "emma")
+
+    page.goto(f"{base_url}/statistics/external/")
+    page.wait_for_load_state("domcontentloaded")
+    leiste = page.locator("[data-testid='statistics-zeitraum-leiste']")
+    leiste.wait_for(timeout=30_000)
+
+    leiste.get_by_role("link", name="Kalenderjahr", exact=True).click()
+    page.wait_for_url("**/statistics/external/?zeitraum=jahr*", timeout=30_000)
+    page.wait_for_load_state("domcontentloaded")
+
+    # Der Zeitraum im Datenschutzprofil folgt der Auswahl: Kalenderjahr beginnt
+    # am 1. Januar. ``metadata.date_from`` wird als ISO-Datum gerendert.
+    metadaten = page.locator("[data-testid='external-report-metadata']")
+    assert "-01-01" in metadaten.inner_text(), metadaten.inner_text()
+
+
+def test_external_report_json_link_carries_the_period(page: Page, base_url: str) -> None:
+    """Refs #1804: Der JSON-Link trug ``date_from``/``date_to`` OHNE
+    ``zeitraum=frei``; beide Werte fielen im Parser durch, und die Datei
+    beschrieb einen anderen Zeitraum als der Bildschirm darueber."""
+    _login(page, base_url, "emma")
+
+    page.goto(f"{base_url}/statistics/external/?zeitraum=jahr&year=2025")
+    page.wait_for_load_state("domcontentloaded")
+    link = page.locator("[data-testid='external-report-json']")
+    link.wait_for(timeout=30_000)
+
+    href = link.get_attribute("href") or ""
+    assert "zeitraum=jahr" in href, href
+    assert "year=2025" in href, href
+
+    link.click()
+    page.wait_for_load_state("domcontentloaded")
+    body_text = page.evaluate("() => document.body.innerText")
+    assert '"date_from": "2025-01-01"' in body_text, body_text[:400]
+    assert '"date_to": "2025-12-31"' in body_text, body_text[:400]

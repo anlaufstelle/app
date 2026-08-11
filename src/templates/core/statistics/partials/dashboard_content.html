@@ -250,9 +250,19 @@ Ziel selbst) — und weil `action` die POST-Semantik des AuthZ-Template-Guards
 auslöste, die hier sachlich falsch wäre. Die `formaction`-Ziele prüft der Guard
 seit #1770 mit (GET-Semantik); sie sind nicht ausgenommen.
 {% endcomment %}
-<form method="get" class="no-print mb-4">
+<form method="get" class="no-print mb-4" data-testid="statistics-export-form">
     <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
     <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    {% comment %}
+    R2 (Refs #1804): Der Doktyp-Filter trifft KPI, Tabellen und Diagramme —
+    die beiden Schaltflächen darunter exportierten trotzdem ungefiltert. „Am
+    Bildschirm stand X, exportiert wurde Y" ist der teuerste Fehler des
+    Bereichs: die Datei geht als Verwendungsnachweis aus dem Haus. Dieses
+    Formular ist der einzige Träger des Filters zu beiden `formaction`-Zielen
+    (ein reines GET-Formular, K4a) — ohne das versteckte Feld kommt er nirgends
+    an.
+    {% endcomment %}
+    {% if selected_doc_type %}<input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
     {% comment %}Refs #1776: Enter in Empfänger/Zweck löste als implizite
     Formularübermittlung den ERSTEN Submit-Button aus (CSV-Export, inkl.
     unwiderruflichem Audit-Eintrag) — ``suppressEnterSubmit`` fängt Enter in

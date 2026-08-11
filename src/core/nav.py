@@ -81,6 +81,17 @@ class NavSection:
     testid: str = ""
     subtitle: str | Promise = ""
     icon: str = ""
+    # Refs #1804 (Konzept §3.5): Query-Parameter, die beim Reiterwechsel an
+    # JEDEN Reiter dieses Bereichs mitgehen. Leer heisst „Reiterwechsel ist ein
+    # Ortswechsel, kein Zustandstransport" — das ist die Vorgabe und gilt fuer
+    # ``/system/`` und beide Hubs unveraendert. Der Statistik-Bereich ist der
+    # eine Bereich mit EINEM Zeitraum ueber alle Reiter; ohne Mitfuehrung
+    # kostete jeder Reiterklick die Zeitraum-Auswahl, und das provoziert den
+    # teuersten Fehler des Bereichs: „Am Bildschirm stand Q1, exportiert wurde
+    # Q2." Die Liste ist zugleich die **Whitelist** fuer den Roh-Durchreich-
+    # Pfad (siehe ``nav_tags._carry_query``) — nur benannte Parameter reisen,
+    # nie beliebige Query-Bestandteile.
+    carry: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +281,19 @@ STATISTIK_SECTION = NavSection(
     label=_("Statistik"),
     aria_label=_("Statistik-Navigation"),
     testid="subnav-statistik",
+    # Refs #1804 (§3.5): EIN Zeitraum fuer den ganzen Bereich. Alle Reiter
+    # beantworten dieselbe Frage ueber denselben Zeitraum in verschiedenen
+    # Fassungen — getrennte Zeitraeume je Reiter erschwerten genau den
+    # Vergleich, um dessentwillen die Freigabe-Uebersicht existiert.
+    #
+    # Beide Schreibweisen stehen drin: kanonisch deutsch (``zeitraum``/``von``/
+    # ``bis``/``jahr``) und die vom Zeitraum-Formular ausgelieferten
+    # ``date_from``/``date_to``/``year``. Die Whitelist muss den Roh-Durchreich-
+    # Pfad des Freigaben-Reiters abdecken, der den Zeitraum bewusst NICHT parst.
+    # ``doktyp`` fehlt absichtlich: der Filter existiert nur auf der Uebersicht,
+    # und ein Reiter, der ihn mitschleppte, verspraeche den anderen dreien eine
+    # Verengung, die dort niemand auswertet.
+    carry=("zeitraum", "period", "von", "bis", "date_from", "date_to", "jahr", "year"),
     tabs=(
         STATISTIK_UEBERSICHT,
         STATISTIK_EXTERNER_BERICHT,

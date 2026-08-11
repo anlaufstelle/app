@@ -1,71 +1,21 @@
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% comment %}
-Zeitraum-Auswahl (Pills)
+Reiterzeile des Bereichs (Refs #1804 §3.5): Subnav zuerst, darunter die
+Zeitraum-Leiste, dann Inhalt. Sie steht HIER und nicht in `index.html`, weil
+ihre Links den Zeitraum mitführen — was der HTMX-Swap nicht mit erneuert, ist
+nach dem ersten Pill-Klick veraltet, und zwar unsichtbar.
+{% endcomment %}
+{% subnav "statistik" %}
 
-Refs #1804 (Konzept §3.6, Z1/Z2): Kalenderwoerter sind fuer Kalendereinheiten
-reserviert; rollierende Fenster heissen nach ihrer Laenge. Die drei linken
-Pills sind rollierend („Letzte N Tage"), „Kalenderjahr" ist die einzige
-kalendarische Einheit (mit Stepper), „Eigener Zeitraum" der freie Fall.
+{% comment %}
+Zeitraum-Auswahl (Pills, Freier Zeitraum, Jahres-Stepper) — seit Refs #1804
+(Konzept §3.5) ein gemeinsames Partial: EIN Zeitraum für den ganzen Bereich,
+dieselbe Leiste auf Übersicht, Datensatz-Berichten und externem Bericht.
+Hier mit HTMX-Ziel, weil die Seite eine Inhaltszone hat, die sich unabhängig
+tauschen lässt.
 {% endcomment %}
-<div class="mb-6 flex flex-wrap gap-2 items-end no-print">
-    <div class="flex flex-wrap gap-1.5">
-        <button hx-get="{% url 'core:statistics' %}?zeitraum=letzte30{{ view_query }}{{ doktyp_query }}"
-                hx-target="#statistics-content"
-                hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'letzte30' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Letzte 30 Tage" %}
-        </button>
-        <button hx-get="{% url 'core:statistics' %}?zeitraum=letzte90{{ view_query }}{{ doktyp_query }}"
-                hx-target="#statistics-content"
-                hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'letzte90' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Letzte 90 Tage" %}
-        </button>
-        <button hx-get="{% url 'core:statistics' %}?zeitraum=letzte180{{ view_query }}{{ doktyp_query }}"
-                hx-target="#statistics-content"
-                hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'letzte180' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Letzte 180 Tage" %}
-        </button>
-        <button hx-get="{% url 'core:statistics' %}?zeitraum=jahr{{ view_query }}{{ doktyp_query }}"
-                hx-target="#statistics-content"
-                hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'jahr' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Kalenderjahr" %}
-        </button>
-    </div>
-    <form class="flex flex-wrap gap-2 items-end ml-4" aria-label="{% trans 'Eigener Zeitraum' %}">
-        <input type="hidden" name="zeitraum" value="frei">
-        {% if view_mode %}{# Refs #1813: hx-include sammelt die Felder DIESES Formulars ein — ohne das Feld faellt der Modus beim Anwenden eines eigenen Zeitraums weg. #}
-        <input type="hidden" name="ansicht" value="{{ view_mode }}">{% endif %}
-        {% if selected_doc_type %}{# Refs #1804: dasselbe fuer den Doktyp-Filter. #}
-        <input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
-        {% comment %}
-Der freie Zeitraum ist die fuenfte Zeitraum-Option (Konzept-Tabelle §3.6) — ohne
-Beschriftung stuenden hier zwei Datumsfelder ohne gemeinsame Ueberschrift.
-{% endcomment %}
-        <span class="text-[12px] font-bold uppercase tracking-wider pb-1.5 {% if period == 'frei' %}text-accent{% else %}text-ink-muted{% endif %}">{% trans "Eigener Zeitraum" %}</span>
-        <div>
-            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
-            <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
-                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
-        </div>
-        <div>
-            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
-            <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
-                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
-        </div>
-        <button type="submit"
-                hx-get="{% url 'core:statistics' %}"
-                hx-target="#statistics-content"
-                hx-include="closest form"
-                hx-push-url="true"
-                class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-1.5 hover:bg-canvas">
-            {% trans "Anwenden" %}
-        </button>
-    </form>
-</div>
+{% include "core/statistics/_zeitraum_leiste.html" %}
 
 {% comment %}
 Z3 (Refs #1804): Wo eine Zahl von einem Fenster abhaengt, steht das aufgeloeste
@@ -76,32 +26,6 @@ auf dem Berichte-Reiter waere die Zeitraum-Leiste sonst die einzige Angabe.
 <p class="text-[13px] text-ink-muted mb-4" data-testid="statistics-period-range">
     {% trans "Zeitraum" %}: <span class="font-mono">{{ date_from|date:"DATE_FORMAT" }} – {{ date_to|date:"DATE_FORMAT" }}</span>
 </p>
-{% endif %}
-
-{% if period == "jahr" and selected_year %}
-<div class="mb-4 flex items-center gap-3 no-print">
-    <button hx-get="{% url 'core:statistics' %}?zeitraum=jahr&amp;year={{ selected_year|add:'-1' }}{{ view_query }}{{ doktyp_query }}"
-            hx-target="#statistics-content"
-            hx-push-url="true"
-            class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
-            aria-label="{% trans 'Vorheriges Jahr' %}">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-        </svg>
-    </button>
-    <span class="font-mono font-semibold text-[15px] text-ink">{{ selected_year }}</span>
-    {% if selected_year < current_year %}
-    <button hx-get="{% url 'core:statistics' %}?zeitraum=jahr&amp;year={{ selected_year|add:'1' }}{{ view_query }}{{ doktyp_query }}"
-            hx-target="#statistics-content"
-            hx-push-url="true"
-            class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
-            aria-label="{% trans 'Nächstes Jahr' %}">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-        </svg>
-    </button>
-    {% endif %}
-</div>
 {% endif %}
 
 {% comment %}

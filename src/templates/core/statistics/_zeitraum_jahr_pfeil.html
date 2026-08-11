@@ -1,0 +1,28 @@
+{% comment %}
+Ein Pfeil des Jahres-Steppers (Refs #1804 §3.5) — dieselbe Zwei-Modi-Regel wie
+`_zeitraum_pill.html`. Der `aria-label`-Wert ist der Griff der E2E-Selektoren
+und bleibt in beiden Modi identisch.
+
+Erwartete Variablen: `arrow_year`, `arrow_label`, `arrow_direction`
+("prev"|"next"), `zeitraum_url`, `zeitraum_target`, `view_query`,
+`bericht_query`, `doktyp_query`.
+{% endcomment %}
+{% if zeitraum_target %}
+<button hx-get="{{ zeitraum_url }}?zeitraum=jahr&amp;year={{ arrow_year }}{{ view_query }}{{ bericht_query }}{{ doktyp_query }}"
+        hx-target="{{ zeitraum_target }}"
+        hx-push-url="true"
+        class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
+        aria-label="{{ arrow_label }}">
+    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="{% if arrow_direction == 'prev' %}M15 19l-7-7 7-7{% else %}M9 5l7 7-7 7{% endif %}"/>
+    </svg>
+</button>
+{% else %}
+<a href="{{ zeitraum_url }}?zeitraum=jahr&amp;year={{ arrow_year }}{{ view_query }}{{ bericht_query }}{{ doktyp_query }}"
+   class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
+   aria-label="{{ arrow_label }}">
+    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="{% if arrow_direction == 'prev' %}M15 19l-7-7 7-7{% else %}M9 5l7 7-7 7{% endif %}"/>
+    </svg>
+</a>
+{% endif %}

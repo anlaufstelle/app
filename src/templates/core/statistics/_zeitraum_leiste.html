@@ -1,0 +1,92 @@
+{% load i18n %}
+{% comment %}
+Gemeinsame Zeitraum-Leiste des Statistik-Bereichs (Refs #1804, Konzept §3.5).
+
+EIN Zeitraum für den ganzen Bereich: Übersicht, Datensatz-Berichte und externer
+Bericht beantworten dieselbe Frage über denselben Zeitraum in verschiedenen
+Fassungen. Vorher lag die Leiste ausschließlich in `full_content.html`; der
+externe Bericht wertete `?zeitraum=` seit jeher aus (`parse_statistics_period`
+ist Single Source of Truth für alle Statistik-Sichten), hatte dafür aber kein
+einziges Bedienelement und war nur über eine von Hand getippte Adresse
+steuerbar.
+
+Z1/Z2 (§3.6): Kalenderwörter sind für Kalendereinheiten reserviert; rollierende
+Fenster heißen nach ihrer Länge. Die drei linken Pills sind rollierend („Letzte
+N Tage"), „Kalenderjahr" ist die einzige kalendarische Einheit (mit Stepper),
+„Eigener Zeitraum" der freie Fall.
+
+Kontrakt der aufrufenden View:
+* `zeitraum_url`    — Ziel der Pills (die Seite, die die Leiste trägt).
+* `zeitraum_target` — HTMX-Ziel für den Fragment-Tausch; leer = Seitenwechsel
+                      per Link (siehe `_zeitraum_pill.html`).
+* `view_query` / `bericht_query` / `doktyp_query` — Zustände, die AN der Seite
+                      hängen und den Zeitraum-Wechsel überleben müssen (leer,
+                      wo es sie nicht gibt — der externe Bericht kennt keinen
+                      davon). Ihre Formular-Gegenstücke sind die versteckten
+                      Felder `ansicht`, `bericht` und `doktyp` unten: `hx-include`
+                      sammelt beim „Anwenden" nur die Felder DIESES Formulars ein.
+* `period`, `date_from`, `date_to`, `selected_year`, `current_year`,
+  `view_mode`, `selected_backend`, `selected_doc_type`.
+{% endcomment %}
+<div class="mb-6 flex flex-wrap gap-2 items-end no-print" data-testid="statistics-zeitraum-leiste">
+    <div class="flex flex-wrap gap-1.5">
+        {% trans "Letzte 30 Tage" as label_letzte30 %}
+        {% include "core/statistics/_zeitraum_pill.html" with pill_key="letzte30" pill_label=label_letzte30 %}
+        {% trans "Letzte 90 Tage" as label_letzte90 %}
+        {% include "core/statistics/_zeitraum_pill.html" with pill_key="letzte90" pill_label=label_letzte90 %}
+        {% trans "Letzte 180 Tage" as label_letzte180 %}
+        {% include "core/statistics/_zeitraum_pill.html" with pill_key="letzte180" pill_label=label_letzte180 %}
+        {% trans "Kalenderjahr" as label_jahr %}
+        {% include "core/statistics/_zeitraum_pill.html" with pill_key="jahr" pill_label=label_jahr %}
+    </div>
+    {% comment %}
+    Bewusst OHNE `action`: ein GET-Formular ohne Ziel schickt an die aktuelle
+    Adresse — genau die Seite, die diese Leiste trägt. Das hält das Markup in
+    beiden Modi identisch und vermeidet zugleich, dass der AuthZ-Template-Guard
+    das `action`-Attribut als POST-Ziel liest (es steht in seiner POST-Menge).
+    {% endcomment %}
+    <form method="get" class="flex flex-wrap gap-2 items-end ml-4" aria-label="{% trans 'Eigener Zeitraum' %}">
+        <input type="hidden" name="zeitraum" value="frei">
+        {% if view_mode %}{# Refs #1813: hx-include sammelt die Felder DIESES Formulars ein — ohne das Feld faellt der Modus beim Anwenden eines eigenen Zeitraums weg. #}
+        <input type="hidden" name="ansicht" value="{{ view_mode }}">{% endif %}
+        {% if selected_backend %}{# Refs #1804: dasselbe fuer die Berichtsauswahl — sonst verschwinden Vorschau und Export beim „Anwenden". #}
+        <input type="hidden" name="bericht" value="{{ selected_backend.slug }}">{% endif %}
+        {% if selected_doc_type %}{# Refs #1804: dasselbe fuer den Doktyp-Filter. #}
+        <input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
+        {% comment %}
+Der freie Zeitraum ist die fuenfte Zeitraum-Option (Konzept-Tabelle §3.6) — ohne
+Beschriftung stuenden hier zwei Datumsfelder ohne gemeinsame Ueberschrift.
+{% endcomment %}
+        <span class="text-[12px] font-bold uppercase tracking-wider pb-1.5 {% if period == 'frei' %}text-accent{% else %}text-ink-muted{% endif %}">{% trans "Eigener Zeitraum" %}</span>
+        <div>
+            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
+                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
+        </div>
+        <div>
+            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
+                   class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
+        </div>
+        <button type="submit"
+                {% if zeitraum_target %}hx-get="{{ zeitraum_url }}"
+                hx-target="{{ zeitraum_target }}"
+                hx-include="closest form"
+                hx-push-url="true"{% endif %}
+                class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-1.5 hover:bg-canvas">
+            {% trans "Anwenden" %}
+        </button>
+    </form>
+</div>
+
+{% if period == "jahr" and selected_year %}
+<div class="mb-4 flex items-center gap-3 no-print">
+    {% trans "Vorheriges Jahr" as label_vorheriges_jahr %}
+    {% include "core/statistics/_zeitraum_jahr_pfeil.html" with arrow_year=selected_year|add:"-1" arrow_label=label_vorheriges_jahr arrow_direction="prev" %}
+    <span class="font-mono font-semibold text-[15px] text-ink">{{ selected_year }}</span>
+    {% if selected_year < current_year %}
+    {% trans "Nächstes Jahr" as label_naechstes_jahr %}
+    {% include "core/statistics/_zeitraum_jahr_pfeil.html" with arrow_year=selected_year|add:"1" arrow_label=label_naechstes_jahr arrow_direction="next" %}
+    {% endif %}
+</div>
+{% endif %}

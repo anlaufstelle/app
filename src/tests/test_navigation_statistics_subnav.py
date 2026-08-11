@@ -29,6 +29,8 @@ Daraus folgen zwei Aussagen, die sonst nirgends geprüft wären:
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
 
@@ -43,6 +45,12 @@ TAB_KEYS = ("statistik_uebersicht", "statistik_external_report", "statistik_beri
 def _pill(content: str, key: str) -> str:
     idx = content.index(f'data-testid="subnav-tab-{key}"')
     return content[content.rindex("<a", 0, idx) : content.index(">", idx)]
+
+
+def _href(content: str, key: str) -> str:
+    pill = _pill(content, key)
+    start = pill.index('href="') + len('href="')
+    return pill[start : pill.index('"', start)].replace("&amp;", "&")
 
 
 def _active_pill_keys(content: str) -> list[str]:
@@ -230,6 +238,55 @@ class TestViewModeBerichte:
                 f"Perioden-Pill {period} verliert den Berichte-Modus beim HTMX-Nachladen"
             )
 
+    def test_period_pills_keep_the_selected_report(self, client, admin_user):
+        """Refs #1804 (§3.3 + §3.5): Die Berichtsauswahl ist URL-Zustand und
+        muss den Zeitraum-Wechsel genauso überleben wie der Reiter-Modus.
+
+        Ohne ``bericht`` in den Nachladezielen verschwinden Vorschau,
+        Export-Schaltflächen und die Empfänger/Zweck-Felder beim ersten Klick
+        auf „Letzte 90 Tage" — und zwar wortlos: die Seite sieht danach aus wie
+        ein frisch geöffneter Reiter, nicht wie ein verlorener Zustand. Genau
+        beim Zeitraum-Wechsel braucht man die Auswahl aber (denselben Bericht
+        über ein anderes Fenster rechnen)."""
+        content = _get(client, admin_user, "/statistics/?ansicht=datensaetze&bericht=example")
+        for period in ("letzte30", "letzte90", "letzte180", "jahr"):
+            assert f'hx-get="/statistics/?zeitraum={period}&amp;ansicht=datensaetze&amp;bericht=example"' in content, (
+                f"Perioden-Pill {period} verliert die Berichtsauswahl beim HTMX-Nachladen"
+            )
+
+    def test_year_stepper_keeps_the_selected_report(self, client, admin_user):
+        year = timezone.localdate().year
+        content = _get(client, admin_user, "/statistics/?zeitraum=jahr&ansicht=datensaetze&bericht=example")
+        assert (
+            f'hx-get="/statistics/?zeitraum=jahr&amp;year={year - 1}&amp;ansicht=datensaetze&amp;bericht=example"'
+            in content
+        )
+
+    def test_custom_range_form_keeps_the_selected_report(self, client, admin_user):
+        """Das Zeitraum-Formular sammelt per ``hx-include`` seine eigenen Felder
+        ein — was nicht als Feld drinsteht, geht beim „Anwenden" verloren."""
+        content = _get(client, admin_user, "/statistics/?ansicht=datensaetze&bericht=example")
+        assert '<input type="hidden" name="bericht" value="example">' in content
+
+    def test_the_report_selection_survives_the_period_switch(self, client, admin_user):
+        """Ende-zu-Ende: der nachgeladene Stand trägt dieselbe Auswahl."""
+        client.force_login(admin_user)
+        response = client.get("/statistics/", {"ansicht": "datensaetze", "bericht": "example", "zeitraum": "letzte90"})
+        assert response.context["selected_backend"] is not None
+        assert response.context["selected_backend"].slug == "example"
+        assert 'data-testid="report-card-example"' in response.content.decode()
+
+    def test_without_a_report_the_pills_stay_free_of_the_parameter(self, client, admin_user):
+        """Gegenprobe: ohne Auswahl bleibt die Pill-URL exakt wie bisher.
+
+        Geprüft wird die Pill-URL, nicht die Seite: die Berichtskarten tragen
+        ``bericht=`` naturgemäß in jedem Zustand — das ist ihr Zweck.
+        """
+        content = _get(client, admin_user, "/statistics/?ansicht=datensaetze")
+        for period in ("letzte30", "letzte90", "letzte180", "jahr"):
+            assert f'hx-get="/statistics/?zeitraum={period}&amp;ansicht=datensaetze"' in content
+        assert '<input type="hidden" name="bericht"' not in content
+
     def test_period_pills_are_canonical_even_when_the_alias_brought_us_here(self, client, admin_user):
         """Ein Alt-Deep-Link zeigt den richtigen Reiter, verlinkt aber weiter
         kanonisch — der Alias breitet sich nicht durch die Oberfläche aus."""
@@ -252,3 +309,165 @@ class TestViewModeBerichte:
         content = _get(client, admin_user, "/statistics/")
         for period in ("letzte30", "letzte90", "letzte180", "jahr"):
             assert f'hx-get="/statistics/?zeitraum={period}"' in content
+
+
+# ---------------------------------------------------------------------------
+# §3.5 / R3: EIN Zeitraum für den ganzen Bereich (Refs #1804)
+# ---------------------------------------------------------------------------
+
+
+def test_only_the_statistics_section_carries_state():
+    """Die Mitführung ist eine Eigenschaft **dieses** Bereichs, kein Nav-Default.
+
+    ``/system/`` und die beiden Hubs haben keinen gemeinsamen Zeitraum; würden
+    ihre Reiter fremde Query-Parameter weiterreichen, wäre das eine stille
+    Zustandsverschleppung statt einer Orientierungshilfe.
+    """
+    assert nav.section("statistik").carry, "Der Statistik-Bereich führt seinen Zeitraum mit (§3.5)."
+    for key in ("system", "datenschutz", "verwaltung"):
+        assert nav.section(key).carry == (), f"{key} darf keinen Zustand mitführen"
+
+
+@pytest.mark.django_db
+class TestZeitraumUeberlebtDenReiterwechsel:
+    """Getrennte Zeiträume je Reiter provozieren den teuersten Fehler des
+    Bereichs: „Am Bildschirm stand Q1, exportiert wurde Q2." Alle Reiter
+    beantworten dieselbe Frage über denselben Zeitraum in verschiedenen
+    Fassungen — der Zeitraum gehört deshalb dem Bereich, nicht der Seite.
+    """
+
+    OTHER_TABS = ("statistik_external_report", "statistik_berichte", "statistik_releases")
+
+    def test_rolling_period_travels_to_every_tab(self, client, lead_user):
+        content = _get(client, lead_user, "/statistics/?zeitraum=letzte90")
+        for key in TAB_KEYS:
+            assert "zeitraum=letzte90" in _href(content, key), f"Reiter {key} verliert den Zeitraum"
+
+    def test_custom_range_travels_with_both_ends(self, client, lead_user):
+        content = _get(client, lead_user, "/statistics/?zeitraum=frei&date_from=2026-01-01&date_to=2026-03-31")
+        for key in TAB_KEYS:
+            href = _href(content, key)
+            assert "zeitraum=frei" in href
+            assert "date_from=2026-01-01" in href, f"Reiter {key} verliert den Anfang des Zeitraums"
+            assert "date_to=2026-03-31" in href, f"Reiter {key} verliert das Ende des Zeitraums"
+
+    def test_selected_year_travels(self, client, lead_user):
+        content = _get(client, lead_user, "/statistics/?zeitraum=jahr&year=2025")
+        for key in TAB_KEYS:
+            href = _href(content, key)
+            assert "zeitraum=jahr" in href
+            assert "year=2025" in href, f"Reiter {key} verliert den Jahres-Stepper-Stand"
+
+    def test_the_query_tab_keeps_its_own_mode_next_to_the_period(self, client, lead_user):
+        """``ansicht`` und ``zeitraum`` sind zwei Zustände, nicht einer — der
+        Reiter darf seinen Modus nicht gegen den Zeitraum eintauschen."""
+        href = _href(_get(client, lead_user, "/statistics/?zeitraum=letzte90"), "statistik_berichte")
+        assert "ansicht=datensaetze" in href
+        assert "zeitraum=letzte90" in href
+
+    def test_the_alias_does_not_spread(self, client, lead_user):
+        """Ein Alt-Deep-Link zeigt den richtigen Stand, verlinkt aber kanonisch."""
+        content = _get(client, lead_user, "/statistics/?period=quarter")
+        for key in TAB_KEYS:
+            href = _href(content, key)
+            assert "zeitraum=letzte90" in href
+            assert "period=" not in href
+
+    def test_doktyp_stays_on_the_overview(self, client, lead_user, statistik_doktyp):
+        """§3.5 führt den **Zeitraum** mit, nicht jeden Filter: der
+        Dokumentationstyp existiert nur auf der Übersicht, und ein Reiter, der
+        ihn mitschleppte, versprächen den anderen dreien eine Verengung, die
+        dort niemand auswertet."""
+        content = _get(client, lead_user, f"/statistics/?doktyp={statistik_doktyp.pk}")
+        for key in TAB_KEYS:
+            assert "doktyp=" not in _href(content, key)
+
+    def test_the_htmx_swap_refreshes_the_tab_row(self, client, lead_user):
+        """Der schärfste Fall: der Zeitraum-Wechsel läuft per HTMX.
+
+        Läge die Reiterzeile ausserhalb der getauschten Zone, trüge sie nach dem
+        ersten Pill-Klick weiter den Zustand des **Seitenaufrufs** — die
+        Mitführung funktionierte genau bis zur ersten Benutzung und danach nie
+        wieder, und zwar unsichtbar (die Adresszeile stimmt, nur die Reiter-
+        Links nicht). Eine Mitführung, die nach dem ersten Klick still aussetzt,
+        ist schlimmer als keine.
+        """
+        client.force_login(lead_user)
+        content = client.get("/statistics/?zeitraum=letzte180", headers={"HX-Request": "true"}).content.decode()
+        assert 'data-testid="subnav-statistik"' in content, "Der HTMX-Swap muss die Reiterzeile mit erneuern"
+        for key in TAB_KEYS:
+            assert "zeitraum=letzte180" in _href(content, key), f"Reiter {key} bleibt nach dem Swap veraltet"
+
+    def test_the_releases_tab_passes_the_period_through(self, client, lead_user):
+        """Ausnahme Freigaben: der Reiter wertet den Zeitraum nicht aus, reicht
+        ihn aber unverändert weiter — sonst kostet jeder Blick in die
+        Herausgaben den Zeitraum, mit dem man gekommen ist."""
+        content = _get(client, lead_user, "/statistics/reports/releases/?zeitraum=letzte90&year=2025")
+        for key in self.OTHER_TABS[:2] + ("statistik_uebersicht",):
+            assert "zeitraum=letzte90" in _href(content, key), f"Reiter {key} verliert den Zeitraum"
+
+    def test_the_releases_tab_says_that_it_ignores_the_period(self, client, lead_user):
+        """Ein Reiter, der den Zeitraum sichtbar trägt und still ignoriert,
+        liest sich wie ein Filterfehler (Refs #1772)."""
+        content = _get(client, lead_user, "/statistics/reports/releases/?zeitraum=letzte90")
+        assert "unabhängig vom gewählten Zeitraum" in content
+
+
+@pytest.mark.django_db
+class TestZeitraumLeisteAufDemExternenBericht:
+    """R6: keine wirkungslose Bedienung — und keine fehlende.
+
+    Der externe Bericht wertet den Zeitraum seit jeher aus
+    (``parse_statistics_period`` ist Single Source of Truth für alle
+    Statistik-Sichten), hatte aber kein einziges Bedienelement dafür: er war
+    nur über eine von Hand getippte Adresse steuerbar.
+    """
+
+    def test_the_period_bar_is_rendered(self, client, lead_user):
+        content = _get(client, lead_user, "/statistics/external/")
+        assert 'data-testid="statistics-zeitraum-leiste"' in content
+        for label in ("Letzte 30 Tage", "Letzte 90 Tage", "Letzte 180 Tage", "Kalenderjahr"):
+            assert label in content
+
+    def test_the_period_bar_links_to_this_page(self, client, lead_user):
+        """Ohne eigenes Ziel landete jeder Pill-Klick auf der Übersicht — ein
+        Bedienelement, das die Seite verlässt, statt sie zu steuern."""
+        content = _get(client, lead_user, "/statistics/external/")
+        assert "/statistics/external/?zeitraum=letzte90" in content.replace("&amp;", "&")
+
+    def test_the_period_is_effective(self, client, lead_user):
+        client.force_login(lead_user)
+        response = client.get("/statistics/external/", {"zeitraum": "letzte90"})
+        today = timezone.localdate()
+        assert response.context["date_from"] == today - timedelta(days=89)
+        assert response.context["period"] == "letzte90"
+
+    def test_the_year_stepper_appears_for_the_calendar_year(self, client, lead_user):
+        content = _get(client, lead_user, "/statistics/external/?zeitraum=jahr&year=2025")
+        assert "/statistics/external/?zeitraum=jahr&year=2024" in content.replace("&amp;", "&")
+
+    def test_the_json_link_carries_the_period(self, client, lead_user):
+        """Der JSON-Link trug bisher ``date_from``/``date_to`` **ohne**
+        ``zeitraum=frei`` — beide Werte fielen im Parser durch, und die Datei
+        beschrieb einen anderen Zeitraum als der Bildschirm darüber."""
+        content = _get(client, lead_user, "/statistics/external/?zeitraum=jahr&year=2025").replace("&amp;", "&")
+        idx = content.index('data-testid="external-report-json"')
+        link = content[content.rindex("<a", 0, idx) : content.index(">", idx)]
+        assert "format=json" in link
+        assert "zeitraum=jahr" in link
+        assert "year=2025" in link
+
+    def test_the_json_export_answers_with_that_period(self, client, lead_user):
+        client.force_login(lead_user)
+        payload = client.get("/statistics/external/", {"format": "json", "zeitraum": "jahr", "year": "2025"}).json()
+        assert payload["metadata"]["date_from"] == "2025-01-01"
+        assert payload["metadata"]["date_to"] == "2025-12-31"
+
+
+@pytest.fixture
+def statistik_doktyp(facility):
+    from core.models import DocumentType
+
+    return DocumentType.objects.create(
+        facility=facility, name="Kontakt (Subnav-Test)", entity_type=DocumentType.EntityType.EVENT
+    )

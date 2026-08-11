@@ -17,7 +17,7 @@ zurückwandern, wo seinerzeit der Substring-Bug entstand.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlencode
 
 from django import template
 from django.urls import reverse
@@ -43,9 +43,38 @@ class RenderedItem:
     divider_before: bool = False
 
 
-def _href(item: nav.NavItem) -> str:
+def _href(item: nav.NavItem, carry: str = "") -> str:
     url = reverse(item.url_name) if item.url_name else item.url
-    return f"{url}?{item.query}" if item.query else url
+    query = "&".join(part for part in (item.query, carry) if part)
+    return f"{url}?{query}" if query else url
+
+
+def _carry_query(section: nav.NavSection, context) -> str:
+    """Der beim Reiterwechsel mitgeführte Bereichszustand (Refs #1804 §3.5).
+
+    Zwei Quellen, eine Whitelist (``section.carry``):
+
+    * **Aufgelöst.** Eine View, die den Zustand ohnehin parst, veröffentlicht
+      ihn als ``subnav_carry`` — dann reisen die kanonischen Werte, und ein
+      Alt-Deep-Link (``?period=quarter``) breitet seine Schreibweise nicht über
+      die Reiterzeile weiter aus.
+    * **Roh.** Ohne ``subnav_carry`` reicht der Tag die benannten Parameter
+      unverändert aus ``request.GET`` weiter. Das ist kein Notnagel, sondern
+      die Zusage des Freigaben-Reiters: er wertet den Zeitraum bewusst nicht
+      aus (er zeigt die *N* jüngsten Herausgaben), darf ihn aber nicht
+      verschlucken — sonst kostet jeder Blick in die Herausgaben den Zeitraum,
+      mit dem man gekommen ist.
+
+    Die Whitelist ist der Grund, warum der Roh-Pfad ungefährlich ist: es reisen
+    nur benannte Parameter, nie beliebige Query-Bestandteile eines Requests.
+    """
+    if not section.carry:
+        return ""
+    state = context.get("subnav_carry")
+    if state is None:
+        request = context.get("request")
+        state = request.GET if request is not None else {}
+    return urlencode([(key, state[key]) for key in section.carry if state.get(key)])
 
 
 def _current_url_name(context) -> str:
@@ -108,14 +137,14 @@ def _active_keys(items, context) -> set[str]:
     }
 
 
-def _rendered(items, context, *, mobile: bool = False) -> list[RenderedItem]:
+def _rendered(items, context, *, mobile: bool = False, carry: str = "") -> list[RenderedItem]:
     visible = nav.visible_items(items, _user(context))
     active = _active_keys(visible, context)
     return [
         RenderedItem(
             key=item.key,
             label=item.label,
-            href=_href(item),
+            href=_href(item, carry),
             testid=item.mobile_testid if mobile else item.testid,
             is_active=item.key in active,
             icon=item.icon,
@@ -164,9 +193,14 @@ def subnav(context, key: str):
     ausgewertet. Damit kann eine ``LEAD_PLUS``-Seite gar keinen
     ``ADMIN_ONLY``-Reiter rendern — die Zusicherung hängt an der Datenstruktur,
     nicht an Template-Disziplin (``test_authz_template_links.py``).
+
+    ``section.carry`` entscheidet, ob der Bereichszustand (heute: der Zeitraum
+    der Statistik, Refs #1804 §3.5) an den Reiter-Links mitreist. Ohne
+    ``carry`` bleibt die Reiterzeile exakt wie bisher — der Zustandstransport
+    ist Opt-in je Bereich, kein Nav-Default.
     """
     area = nav.section(key)
-    return {"section": area, "tabs": _rendered(area.tabs, context)}
+    return {"section": area, "tabs": _rendered(area.tabs, context, carry=_carry_query(area, context))}
 
 
 @register.inclusion_tag("components/_back_link.html", takes_context=True)

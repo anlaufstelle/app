@@ -52,7 +52,7 @@ def restricted_url_fetcher(url, *args, **kwargs):
     raise ValueError(f"Externe Ressourcen sind in PDF-Exporten nicht erlaubt: {url!r}")
 
 
-def _get_events_queryset(facility, date_from, date_to, user=None):
+def _get_events_queryset(facility, date_from, date_to, user=None, document_type=None):
     """Events in the given period, ordered descending by occurrence.
 
     Refs #779 (C-11): wenn ``user`` gesetzt ist, wird der QuerySet ueber
@@ -63,6 +63,11 @@ def _get_events_queryset(facility, date_from, date_to, user=None):
 
     ``user=None`` bleibt der Systemmodus (z.B. Cron-Reports). Aufrufer im
     Systemmodus tragen das Privileg-Risiko bewusst.
+
+    ``document_type`` (Refs #1804, R2) verengt den Export auf denselben
+    Dokumentationstyp, den die Uebersicht am Bildschirm zeigt. Der Parameter
+    ist die Voraussetzung dafuer, dass die Export-Schaltflaeche neben einer
+    gefilterten Tabelle nicht mehr Zeilen ausgibt, als darueber stehen.
     """
     qs = Event.objects.filter(
         facility=facility,
@@ -70,6 +75,8 @@ def _get_events_queryset(facility, date_from, date_to, user=None):
         occurred_at__date__gte=date_from,
         occurred_at__date__lte=date_to,
     )
+    if document_type is not None:
+        qs = qs.filter(document_type=document_type)
     if user is not None:
         qs = qs & Event.objects.visible_to(user)
     return qs.select_related("document_type", "client").order_by("-occurred_at")
@@ -204,13 +211,18 @@ def _stream_row(writer, output, row):
     return chunk
 
 
-def export_events_csv(facility, date_from, date_to, user=None):
+def export_events_csv(facility, date_from, date_to, user=None, document_type=None):
     """Generate CSV data for events in the given period. Yields CSV chunks.
 
     When *user* is provided, fields are filtered by the user's role and the
     field's sensitivity level (same logic as EventDetailView).
+
+    ``document_type`` (Refs #1804, R2) ist der Dokumentationstyp-Filter der
+    Uebersicht. Er gehoert hierher und nicht in die View: der Export ist die
+    Datei-Fassung derselben Zahlen, und beide muessen ueber dieselbe
+    Grundgesamtheit laufen.
     """
-    events = _get_events_queryset(facility, date_from, date_to, user=user)
+    events = _get_events_queryset(facility, date_from, date_to, user=user, document_type=document_type)
     all_field_templates, field_slugs = _collect_field_templates(facility, user)
     header = _build_header(all_field_templates, field_slugs)
 
@@ -229,7 +241,7 @@ def export_events_csv(facility, date_from, date_to, user=None):
         yield _stream_row(writer, output, row)
 
 
-def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=False):
+def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=False, document_type=None):
     """Generate a PDF semi-annual report. Returns bytes.
 
     Refs #792 (C-24): Standard-PDF (``internal_mode=False``) rendert keine
@@ -237,15 +249,26 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     risiko bei Traeger-/Foerderberichten. Im Internal-Mode (Lead/Admin-Toggle)
     wird das Ranking gerendert und der Report mit einem ``INTERN``-Banner
     markiert.
+
+    ``document_type`` (Refs #1804, R2) ist der Dokumentationstyp-Filter der
+    Uebersicht. Er aendert die Zahlen nicht — die stehen bereits in ``stats``
+    —, sondern zwei Angaben, ohne die das PDF im Umlauf nicht mehr von einem
+    vollstaendigen Bericht zu unterscheiden waere: den Filterhinweis auf dem
+    Deckblatt und den Quellenausweis. Bei gesetztem Filter rechnet der
+    Aufrufer live (Monats-Aggregate kennen keine Zerlegung nach Typ); ein
+    fester ``SNAPSHOT_HYBRID``-Ausweis waere dann eine Falschangabe.
     """
     from core.reporting.data_source import (
         ALL_EVENTS,
         DATA_SOURCE_EXPLANATIONS,
         DATA_SOURCE_NOTES,
         EVENTS_WITH_PERSON,
+        LIVE,
         SNAPSHOT_HYBRID,
         table_note,
     )
+
+    data_source = LIVE if document_type is not None else SNAPSHOT_HYBRID
 
     # Security R4: Standard-Modus ist das externe Artefakt (Traeger/Foerderer)
     # — Kleinstfallzahlen unterdruecken wie Sachbericht-PDF/On-Screen-Bericht.
@@ -264,12 +287,17 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
             "stats": stats,
             "internal_mode": internal_mode,
             "generated_at": timezone.now(),
+            # Refs #1804 (R2): Der Filter steht auf dem Deckblatt. Eine Datei,
+            # die ihren Ausschnitt verschweigt, wandert als „der Bericht" durch
+            # Traegerpostfaecher.
+            "document_type": document_type,
             # Quellenausweis (Refs #1743): Der Aufrufer ``PDFExportView`` liest
             # ueber ``get_statistics_hybrid`` aus den Monats-Snapshots — derselbe
             # hybride Pfad wie das Sachbericht-PDF. Auch dieses extern
             # zirkulierende PDF weist seine Quelle daher in der Fusszeile aus.
-            "data_source_note": DATA_SOURCE_NOTES[SNAPSHOT_HYBRID],
-            "data_source_explanation": DATA_SOURCE_EXPLANATIONS[SNAPSHOT_HYBRID],
+            # Bei gesetztem Doktyp-Filter ist es der Live-Pfad (Refs #1804).
+            "data_source_note": DATA_SOURCE_NOTES[data_source],
+            "data_source_explanation": DATA_SOURCE_EXPLANATIONS[data_source],
             # K3-A3 (Refs #1770): Jede Tabelle benennt ihre Grundgesamtheit.
             # Die Alterstabelle zaehlt **alle** Ereignisse des Zeitraums, aber
             # erst seit die Restzeile "ohne Personenbezug" mitlaeuft (K3-A1) —
@@ -280,8 +308,8 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
             # beseitigen sollte. Die Dokumenttyp-Tabelle ist in beiden Modi
             # dieselbe Menge.
             "population_notes": {
-                "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
-                "by_age_cluster": table_note(EVENTS_WITH_PERSON if internal_mode else ALL_EVENTS, SNAPSHOT_HYBRID),
+                "by_document_type": table_note(ALL_EVENTS, data_source),
+                "by_age_cluster": table_note(EVENTS_WITH_PERSON if internal_mode else ALL_EVENTS, data_source),
             },
         },
     )

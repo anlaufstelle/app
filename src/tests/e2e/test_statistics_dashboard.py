@@ -140,3 +140,40 @@ class TestStatisticsYearNavigation:
         # ``expect_response`` kann unter Parallel-Last den Vor-Swap-Stand
         # sehen (Refs #849).
         expect(page.locator("[aria-label='Nächstes Jahr']")).to_have_count(0, timeout=10000)
+
+
+class TestZeitraumUeberlebtDenReiterwechsel:
+    """Refs #1804 (§3.5): EIN Zeitraum fuer den ganzen Statistik-Bereich.
+
+    Bisher fing jeder Reiter wieder bei den letzten 30 Tagen an — wer auf der
+    Uebersicht ein Kalenderjahr eingestellt hatte und den Reiter wechselte, sah
+    dort ein anderes Fenster, ohne dass es irgendwo stand. Der Fehler ist nur im
+    Klickpfad sichtbar: die Reiter-``href``s entstehen serverseitig aus dem
+    Zustand der gerade gerenderten Seite.
+    """
+
+    def test_period_travels_to_the_other_tabs(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/statistics/")
+
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
+            page.get_by_role("button", name="Letzte 180 Tage", exact=True).click()
+
+        # Die Reiterzeile liegt seit #1804 INNERHALB von #statistics-content und
+        # wird vom Swap mit erneuert — genau deshalb tragen ihre Links danach den
+        # neuen Zeitraum. Geprueft wird der echte Klick nach dem Swap: ein
+        # Attribut-Test auf der frisch geladenen Seite bemerkt den Bruch nicht.
+        page.locator("[data-testid='subnav-tab-statistik_external_report']").click()
+        page.wait_for_url("**/statistics/external/**", timeout=30_000)
+        assert "zeitraum=letzte180" in page.url, page.url
+
+        page.locator("[data-testid='subnav-tab-statistik_releases']").click()
+        page.wait_for_url("**/statistics/reports/releases/**", timeout=30_000)
+        assert "zeitraum=letzte180" in page.url, page.url
+        # Ausnahme Freigaben: ignoriert den Zeitraum, sagt das — und reicht ihn weiter.
+        expect(page.locator("[data-testid='release-period-note']")).to_contain_text("unabhängig vom gewählten Zeitraum")
+
+        page.locator("[data-testid='subnav-tab-statistik_uebersicht']").click()
+        page.wait_for_url("**/statistics/**", timeout=30_000)
+        assert "zeitraum=letzte180" in page.url, page.url
+        expect(page.locator("button:has-text('Letzte 180 Tage')")).to_have_class(re.compile(r"bg-accent"))

@@ -174,9 +174,10 @@ from core.services.dashboard.external_report import (
 
 @register_backend("example")
 class ExampleBackend(DatasetBackend):
-    """Ereignisse je Dokumenttyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
+    """Ereignisse je Dokumentationstyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
 
-    name = _("Beispiel: Ereignisse je Dokumenttyp")
+    name = _("Beispiel: Ereignisse je Dokumentationstyp")
+    description = _("Zählt die Ereignisse des Zeitraums je Dokumentationstyp.")
     snapshot_enabled = False
 ```
 
@@ -189,7 +190,7 @@ Das ist der **vollständige** Import-Kopf von `example.py` — die Auszüge in S
 ```python
     def get_field_specs(self) -> list[FieldSpec]:
         return [
-            FieldSpec("document_type", _("Dokumenttyp")),
+            FieldSpec("document_type", _("Dokumentationstyp")),
             FieldSpec("system_type", _("System-Typ")),
             FieldSpec("count", _("Anzahl")),
         ]
@@ -493,7 +494,7 @@ Kontakte,42
 ```json
 {
   "backend": "example",
-  "name": "Beispiel: Ereignisse je Dokumenttyp",
+  "name": "Beispiel: Ereignisse je Dokumentationstyp",
   "date_from": "2026-01-01",
   "date_to": "2026-01-31",
   "generated_at": "2026-02-01T09:00:00+01:00",
@@ -502,7 +503,7 @@ Kontakte,42
   "data_source_note": "Live-Abfrage zum Erstellungszeitpunkt",
   "population": "all_events",
   "population_note": "alle Ereignisse im Zeitraum",
-  "field_specs": [{"key": "document_type", "label": "Dokumenttyp"}],
+  "field_specs": [{"key": "document_type", "label": "Dokumentationstyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
   "records": [{"document_type": "Kontakt", "system_type": "contact", "count": 42}],
   "completeness": [{"code": "…", "message": "…", "severity": "warning"}]
