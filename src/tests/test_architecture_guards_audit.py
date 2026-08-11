@@ -262,7 +262,8 @@ class TestE2ESelectorStabilityGuard:
         "test_button_permissions.py": 2,
         "test_cases.py": 3,
         # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 3 Vorkommen.
-        "test_client_deletion_workflow.py": 3,
+        # #1813: Overflow-Umbau stabilisierte 2 weitere auf Testid-Klicks.
+        "test_client_deletion_workflow.py": 1,
         "test_episodes.py": 1,
         # dbdaf3c: TestMultipleGoalsAndMilestones brachte 3 weitere
         # ``.first.click()`` (Milestone-Toggle + Goal-Toggle + Submit innerhalb
@@ -271,8 +272,8 @@ class TestE2ESelectorStabilityGuard:
         "test_goals_htmx.py": 5,
         "test_handover.py": 2,
         "test_i18n_locale.py": 2,
-        # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 4 Vorkommen.
-        "test_retention_dashboard.py": 1,
+        # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 4 Vorkommen;
+        # #1813: Hub-/Subnav-Umbau entfernte das letzte.
         "test_workflow_complete.py": 1,
         # #1788: eigene Aufgaben statt ``.first``-Griff — beide Vorkommen entfernt.
         "test_zeitstrom_enrichment.py": 1,
