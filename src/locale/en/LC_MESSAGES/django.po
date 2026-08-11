@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 10:43+0200\n"
+"POT-Creation-Date: 2026-08-11 11:29+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -548,7 +548,7 @@ msgstr "Activities"
 #: src/core/models/settings.py:27 src/core/models/time_filter.py:21
 #: src/core/models/user.py:37 src/core/models/workitem.py:45
 #: src/core/models/workitem.py:199 src/templates/core/account/profile.html:31
-#: src/templates/core/statistics/external_report.html:15
+#: src/templates/core/statistics/external_report.html:17
 #: src/templates/core/system/auditlog_detail.html:41
 #: src/templates/core/system/auditlog_list.html:62
 #: src/templates/core/system/legal_holds.html:26
@@ -1048,7 +1048,7 @@ msgstr "Previous hash"
 msgid "Eintrags-Hash"
 msgstr "Entry hash"
 
-#: src/core/models/audit.py:218 src/core/nav.py:154 src/core/nav.py:328
+#: src/core/models/audit.py:218 src/core/nav.py:154 src/core/nav.py:392
 #: src/core/services/hubs.py:163 src/templates/core/audit/list.html:4
 #: src/templates/core/audit/list.html:7
 msgid "Audit-Log"
@@ -1169,7 +1169,7 @@ msgstr "Updated on"
 msgid "Geschlossen am"
 msgstr "Closed on"
 
-#: src/core/models/case.py:102 src/core/nav.py:252
+#: src/core/models/case.py:102 src/core/nav.py:323
 #: src/templates/core/cases/detail.html:11 src/templates/core/cases/list.html:4
 #: src/templates/core/cases/list.html:9
 #: src/templates/core/clients/detail.html:286
@@ -1246,7 +1246,7 @@ msgstr "Identified = pseudonym known, Qualified = full identity known"
 #: src/templates/core/export/client_data_pdf.html:39
 #: src/templates/core/export/report_pdf.html:95
 #: src/templates/core/export/sample_report_1_pdf.html:85
-#: src/templates/core/statistics/external_report.html:120
+#: src/templates/core/statistics/external_report.html:122
 #: src/templates/core/statistics/partials/dashboard_content.html:179
 msgid "Altersgruppe"
 msgstr "Age group"
@@ -1306,7 +1306,7 @@ msgstr ""
 "(alternative to hard delete for long-term statistics)."
 
 #: src/core/models/client.py:103 src/core/models/import_job.py:52
-#: src/core/nav.py:244 src/core/reporting/backends/client_metrics.py:205
+#: src/core/nav.py:315 src/core/reporting/backends/client_metrics.py:205
 #: src/templates/core/clients/detail.html:11
 #: src/templates/core/clients/list.html:4
 #: src/templates/core/clients/list.html:9
@@ -1471,13 +1471,14 @@ msgstr ""
 "Which entity documents of this type relate to. Cannot be changed after "
 "creation."
 
-#: src/core/models/document_type.py:207 src/core/nav.py:347
+#: src/core/models/document_type.py:207 src/core/nav.py:411
 #: src/core/services/hubs.py:228
 #: src/templates/core/config/document_types/detail.html:20
 #: src/templates/core/config/document_types/list.html:4
 #: src/templates/core/config/document_types/list.html:9
 #: src/templates/core/config/document_types/partials/table.html:5
 #: src/templates/core/statistics/partials/dashboard_content.html:111
+#: src/tests/test_i18n_loeschantrag_nav.py:68
 msgid "Dokumentationstypen"
 msgstr "Document types"
 
@@ -1597,7 +1598,7 @@ msgstr ""
 "Disabled field templates are no longer shown in forms. Existing values in "
 "events are preserved (soft-delete alternative to hard delete)."
 
-#: src/core/models/document_type.py:358 src/core/nav.py:366
+#: src/core/models/document_type.py:358 src/core/nav.py:430
 #: src/core/services/hubs.py:236
 #: src/templates/core/config/field_templates/list.html:4
 #: src/templates/core/config/field_templates/list.html:9
@@ -2613,7 +2614,7 @@ msgstr "Assigned to"
 #: src/templates/core/config/field_templates/partials/table.html:10
 #: src/templates/core/export/client_data_pdf.html:509
 #: src/templates/core/export/report_pdf.html:69
-#: src/templates/core/statistics/external_report.html:81
+#: src/templates/core/statistics/external_report.html:83
 #: src/templates/core/statistics/partials/dashboard_content.html:139
 #: src/templates/core/workitems/detail.html:20
 #: src/templates/core/workitems/inbox.html:33
@@ -2697,14 +2698,14 @@ msgstr "Work items"
 msgid "Löschantrag"
 msgstr "Deletion request"
 
-#: src/core/models/workitem.py:238 src/core/nav.py:286
+#: src/core/models/workitem.py:238 src/core/nav.py:353
 #: src/core/services/hubs.py:104 src/templates/core/dashboard/role_lead.html:17
 #: src/templates/core/deletion_requests/list.html:4
 #: src/templates/core/deletion_requests/list.html:7
 msgid "Löschanträge"
 msgstr "Deletion requests"
 
-#: src/core/nav.py:134 src/core/nav.py:391
+#: src/core/nav.py:134 src/core/nav.py:447
 #: src/templates/core/system/dashboard.html:4
 #: src/templates/core/system/dashboard.html:10
 #: src/templates/partials/_navigation_mobile.html:15
@@ -2715,7 +2716,8 @@ msgstr "System area"
 msgid "Systembereich-Navigation"
 msgstr "System area navigation"
 
-#: src/core/nav.py:140 src/core/nav.py:423 src/core/nav.py:430
+#: src/core/nav.py:140 src/core/nav.py:221 src/core/nav.py:478
+#: src/core/nav.py:485
 msgid "Übersicht"
 msgstr "Overview"
 
@@ -2739,11 +2741,33 @@ msgstr "Processing register"
 msgid "Compliance"
 msgstr "Compliance"
 
-#: src/core/nav.py:218
+#: src/core/nav.py:237 src/templates/core/statistics/external_report.html:4
+msgid "Externer Bericht"
+msgstr "External report"
+
+#: src/core/nav.py:244
+msgid "Datensatz-Berichte"
+msgstr "Dataset reports"
+
+#: src/core/nav.py:256
+msgid "Freigaben"
+msgstr "Releases"
+
+#: src/core/nav.py:264 src/templates/core/dashboard/role_lead.html:34
+#: src/templates/core/statistics/index.html:4
+#: src/templates/core/statistics/index.html:12
+msgid "Statistik"
+msgstr "Statistics"
+
+#: src/core/nav.py:265
+msgid "Statistik-Navigation"
+msgstr "Statistics navigation"
+
+#: src/core/nav.py:288
 msgid "Arbeitszentrale"
 msgstr "Work center"
 
-#: src/core/nav.py:227 src/templates/core/zeitstrom/index.html:4
+#: src/core/nav.py:298 src/templates/core/zeitstrom/index.html:4
 #: src/templates/core/zeitstrom/index.html:9
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:4
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:37
@@ -2751,7 +2775,7 @@ msgstr "Work center"
 msgid "Zeitstrom"
 msgstr "Timeline"
 
-#: src/core/nav.py:235 src/core/views/zeitstrom.py:117
+#: src/core/nav.py:306 src/core/views/zeitstrom.py:117
 #: src/templates/core/clients/detail.html:269
 #: src/templates/core/clients/offline_detail.html:329
 #: src/templates/core/workitems/inbox.html:4
@@ -2763,66 +2787,64 @@ msgstr "Timeline"
 msgid "Aufgaben"
 msgstr "Tasks"
 
-#: src/core/nav.py:260 src/templates/core/attachments/list.html:4
+#: src/core/nav.py:331 src/templates/core/attachments/list.html:4
 #: src/templates/core/attachments/list.html:8
 #: src/tests/test_i18n_loeschantrag_nav.py:32
 msgid "Dateien"
 msgstr "Files"
 
-#: src/core/nav.py:269 src/templates/core/dashboard/role_lead.html:34
-#: src/templates/core/statistics/index.html:4
-#: src/templates/core/statistics/index.html:12
-msgid "Statistik"
-msgstr "Statistics"
-
-#: src/core/nav.py:298 src/core/services/hubs.py:127
+#: src/core/nav.py:364 src/core/services/hubs.py:127
 msgid "Berichtigungen"
 msgstr "Rectifications"
 
-#: src/core/nav.py:308 src/core/services/hubs.py:144
+#: src/core/nav.py:373 src/core/services/hubs.py:144
 #: src/templates/core/retention/dashboard.html:4
 #: src/templates/core/retention/dashboard.html:7
 #: src/tests/test_i18n_loeschantrag_nav.py:36
 msgid "Löschfristen"
 msgstr "Deletion deadlines"
 
-#: src/core/nav.py:318 src/core/services/hubs.py:244
+#: src/core/nav.py:383 src/core/services/hubs.py:244
 #: src/templates/core/import/list.html:4 src/templates/core/import/list.html:9
 msgid "Datenimport"
 msgstr "Data import"
 
-#: src/core/nav.py:336 src/core/services/hubs.py:188
+#: src/core/nav.py:400 src/core/services/hubs.py:188
 msgid "DSGVO-Paket"
 msgstr "GDPR Package"
 
-#: src/core/nav.py:383 src/core/nav.py:404
+#: src/core/nav.py:459 src/tests/test_i18n_loeschantrag_nav.py:64
 msgid "Administration"
 msgstr "Administration"
 
-#: src/core/nav.py:438 src/templates/auth/login.html:130
+#: src/core/nav.py:493 src/templates/auth/login.html:130
 #: src/templates/base.html:155 src/templates/core/hubs/datenschutz.html:4
 #: src/templates/core/hubs/datenschutz.html:8
+#: src/tests/test_i18n_loeschantrag_nav.py:59
 msgid "Datenschutz"
 msgstr "Privacy"
 
-#: src/core/nav.py:439 src/templates/core/hubs/datenschutz.html:9
+#: src/core/nav.py:494 src/templates/core/hubs/datenschutz.html:9
+#: src/tests/test_i18n_loeschantrag_nav.py:72
 msgid "Betroffenenrechte, Fristen und Nachweise."
 msgstr "Data subject rights, deadlines and records."
 
-#: src/core/nav.py:440
+#: src/core/nav.py:495
 msgid "Datenschutz-Navigation"
 msgstr "Privacy navigation"
 
-#: src/core/nav.py:455 src/templates/core/hubs/verwaltung.html:4
+#: src/core/nav.py:510 src/templates/core/hubs/verwaltung.html:4
 #: src/templates/core/hubs/verwaltung.html:8
+#: src/tests/test_i18n_loeschantrag_nav.py:63
 msgid "Verwaltung"
 msgstr "Management"
 
-#: src/core/nav.py:456 src/templates/core/hubs/verwaltung.html:9
+#: src/core/nav.py:511 src/templates/core/hubs/verwaltung.html:9
+#: src/tests/test_i18n_loeschantrag_nav.py:75
 msgid "Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge."
 msgstr "Application support: forms, fields, data transfer and access."
 
-#: src/core/nav.py:457
+#: src/core/nav.py:512
 msgid "Verwaltungs-Navigation"
 msgstr "Management navigation"
 
@@ -2959,8 +2981,8 @@ msgstr "System type"
 #: src/templates/core/export/report_pdf.html:96
 #: src/templates/core/export/sample_report_1_pdf.html:60
 #: src/templates/core/export/sample_report_1_pdf.html:86
-#: src/templates/core/statistics/external_report.html:82
-#: src/templates/core/statistics/external_report.html:121
+#: src/templates/core/statistics/external_report.html:84
+#: src/templates/core/statistics/external_report.html:123
 #: src/templates/core/statistics/partials/dashboard_content.html:140
 #: src/templates/core/statistics/partials/dashboard_content.html:180
 #: src/templates/core/system/dashboard.html:254
@@ -3137,14 +3159,14 @@ msgid "Grundgesamtheit: {population} · Quelle: {source}"
 msgstr "Population: {population} · Source: {source}"
 
 #: src/core/reporting/export.py:133
-#: src/templates/core/statistics/partials/full_content.html:107
+#: src/templates/core/statistics/partials/full_content.html:117
 msgid "Bericht"
 msgstr "Report"
 
 #: src/core/reporting/export.py:147
 #: src/templates/core/export/report_pdf.html:138
 #: src/templates/core/export/sample_report_1_pdf.html:111
-#: src/templates/core/statistics/external_report.html:36
+#: src/templates/core/statistics/external_report.html:38
 #: src/templates/core/statistics/partials/report_panel.html:74
 msgid "Datenquelle"
 msgstr "Data source"
@@ -4843,24 +4865,24 @@ msgstr "No proposals selected."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No valid proposals found."
 
-#: src/core/views/statistics.py:203 src/core/views/statistics.py:245
-#: src/core/views/statistics.py:291 src/core/views/statistics.py:545
+#: src/core/views/statistics.py:218 src/core/views/statistics.py:260
+#: src/core/views/statistics.py:306 src/core/views/statistics.py:560
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
 
-#: src/core/views/statistics.py:431
+#: src/core/views/statistics.py:446
 msgid "backend erforderlich"
 msgstr "backend required"
 
-#: src/core/views/statistics.py:435 src/core/views/statistics.py:556
+#: src/core/views/statistics.py:450 src/core/views/statistics.py:571
 msgid "Unbekanntes Berichts-Backend."
 msgstr "Unknown report backend."
 
-#: src/core/views/statistics.py:441 src/core/views/statistics.py:559
+#: src/core/views/statistics.py:456 src/core/views/statistics.py:574
 msgid "Bericht für diese Einrichtung nicht verfügbar."
 msgstr "Report is not available for this facility."
 
-#: src/core/views/statistics.py:563
+#: src/core/views/statistics.py:578
 msgid "Unbekanntes Export-Format."
 msgstr "Unknown export format."
 
@@ -5454,7 +5476,7 @@ msgstr "Back to authenticator app"
 
 #: src/templates/auth/mfa_login.html:129
 #: src/templates/partials/_navigation_desktop.html:95
-#: src/templates/partials/_navigation_mobile.html:88
+#: src/templates/partials/_navigation_mobile.html:100
 msgid "Abmelden"
 msgstr "Log out"
 
@@ -5892,35 +5914,52 @@ msgstr "Language"
 msgid "2FA verwalten"
 msgstr "Manage 2FA"
 
-#: src/templates/core/account/profile.html:60
+#: src/templates/core/account/profile.html:70
+#: src/templates/core/events/conflict_list.html:30
+msgid "Offline-Konflikte"
+msgstr "Offline conflicts"
+
+#: src/templates/core/account/profile.html:72
+msgid "Änderung dieses Geräts wartet auf eine Entscheidung."
+msgstr "change from this device is waiting for a decision."
+
+#: src/templates/core/account/profile.html:72
+msgid "Änderungen dieses Geräts warten auf eine Entscheidung."
+msgstr "changes from this device are waiting for a decision."
+
+#: src/templates/core/account/profile.html:76
+msgid "Offline-Konflikte prüfen"
+msgstr "Review offline conflicts"
+
+#: src/templates/core/account/profile.html:89
 msgid "Zuletzt besuchte Personen"
 msgstr "Recently visited people"
 
-#: src/templates/core/account/profile.html:61
+#: src/templates/core/account/profile.html:90
 msgid "Alle anzeigen"
 msgstr "Show all"
 
-#: src/templates/core/account/profile.html:69
+#: src/templates/core/account/profile.html:98
 msgid "Letzte Ereignisse"
 msgstr "Recent Events"
 
-#: src/templates/core/account/profile.html:85
+#: src/templates/core/account/profile.html:114
 msgid "Keine Ereignisse vorhanden."
 msgstr "No events available."
 
-#: src/templates/core/account/profile.html:91
+#: src/templates/core/account/profile.html:120
 msgid "Offene Aufgaben"
 msgstr "Open Tasks"
 
-#: src/templates/core/account/profile.html:106
+#: src/templates/core/account/profile.html:135
 msgid "Keine offenen Aufgaben."
 msgstr "No open tasks."
 
-#: src/templates/core/account/profile.html:112
+#: src/templates/core/account/profile.html:141
 msgid "Kürzlich erledigt"
 msgstr "Recently completed"
 
-#: src/templates/core/account/profile.html:127
+#: src/templates/core/account/profile.html:156
 msgid "Keine erledigten Aufgaben."
 msgstr "No recently completed tasks."
 
@@ -5991,13 +6030,13 @@ msgid "Alle Benutzer"
 msgstr "All users"
 
 #: src/templates/core/audit/list.html:44
-#: src/templates/core/statistics/partials/full_content.html:34
+#: src/templates/core/statistics/partials/full_content.html:36
 #: src/templates/core/system/auditlog_list.html:77
 msgid "Von"
 msgstr "From"
 
 #: src/templates/core/audit/list.html:51
-#: src/templates/core/statistics/partials/full_content.html:39
+#: src/templates/core/statistics/partials/full_content.html:41
 #: src/templates/core/system/auditlog_list.html:84
 msgid "Bis"
 msgstr "To"
@@ -7416,10 +7455,6 @@ msgstr ""
 msgid "Exportiert und protokolliert."
 msgstr "Exported and logged."
 
-#: src/templates/core/events/conflict_list.html:30
-msgid "Offline-Konflikte"
-msgstr "Offline conflicts"
-
 #: src/templates/core/events/conflict_list.html:32
 msgid "Ereignisse und Änderungen, bei denen eine Entscheidung nötig ist."
 msgstr "Events and changes that require a decision."
@@ -8017,10 +8052,10 @@ msgstr "Summary"
 #: src/templates/core/export/sample_report_1_pdf.html:49
 #: src/templates/core/export/sample_report_1_pdf.html:67
 #: src/templates/core/export/sample_report_1_pdf.html:93
-#: src/templates/core/statistics/external_report.html:55
-#: src/templates/core/statistics/external_report.html:65
-#: src/templates/core/statistics/external_report.html:91
-#: src/templates/core/statistics/external_report.html:130
+#: src/templates/core/statistics/external_report.html:57
+#: src/templates/core/statistics/external_report.html:67
+#: src/templates/core/statistics/external_report.html:93
+#: src/templates/core/statistics/external_report.html:132
 msgid "unterdrückt"
 msgstr "suppressed"
 
@@ -8040,7 +8075,7 @@ msgid "Kontakte nach Dokumentationstyp"
 msgstr "Contacts by Document Type"
 
 #: src/templates/core/export/report_pdf.html:84
-#: src/templates/core/statistics/external_report.html:102
+#: src/templates/core/statistics/external_report.html:104
 msgid "Angaben nach Dokumentationstyp unterdrückt (k-Anonymität)."
 msgstr "Documentation type figures suppressed (k-anonymity)."
 
@@ -8059,7 +8094,7 @@ msgstr "Contacts by Age Group"
 
 #: src/templates/core/export/report_pdf.html:110
 #: src/templates/core/export/sample_report_1_pdf.html:100
-#: src/templates/core/statistics/external_report.html:141
+#: src/templates/core/statistics/external_report.html:143
 msgid "Angaben nach Altersgruppe unterdrückt (k-Anonymität)."
 msgstr "Age group figures suppressed (k-anonymity)."
 
@@ -8182,8 +8217,7 @@ msgid ""
 "— in der Personenakte: dort liegt die Datenauskunft als JSON- oder PDF-"
 "Export."
 msgstr ""
-"— in the person's record: the data export is available there as JSON "
-"or PDF."
+"— in the person's record: the data export is available there as JSON or PDF."
 
 #: src/templates/core/hubs/datenschutz.html:33
 msgid "Berichtigung (Art. 16)"
@@ -8193,8 +8227,8 @@ msgstr "Rectification (Art. 16)"
 msgid ""
 "— im Reiter „Berichtigungen“: eine Fachkraft beantragt, die Leitung prüft."
 msgstr ""
-"— in the “Rectifications” tab: a staff member requests it, the lead "
-"reviews it."
+"— in the “Rectifications” tab: a staff member requests it, the lead reviews "
+"it."
 
 #: src/templates/core/hubs/datenschutz.html:37
 msgid "Löschung (Art. 17)"
@@ -8204,8 +8238,7 @@ msgstr "Erasure (Art. 17)"
 msgid ""
 "— im Reiter „Löschanträge“: jede Löschung braucht ein zweites Augenpaar."
 msgstr ""
-"— in the “Deletion requests” tab: every deletion needs a second pair "
-"of eyes."
+"— in the “Deletion requests” tab: every deletion needs a second pair of eyes."
 
 #: src/templates/core/hubs/datenschutz.html:42
 msgid "Nachweis (Art. 30)"
@@ -8216,8 +8249,7 @@ msgid ""
 "— im Reiter „DSGVO-Paket“: Verzeichnis der Verarbeitungstätigkeiten und "
 "Vorlagen."
 msgstr ""
-"— in the “GDPR Package” tab: record of processing activities and "
-"templates."
+"— in the “GDPR Package” tab: record of processing activities and templates."
 
 #: src/templates/core/hubs/verwaltung.html:18
 msgid "Benutzer ohne MFA"
@@ -8270,16 +8302,15 @@ msgid ""
 "— fasst Felder innerhalb eines Formulars zu einem Abschnitt zusammen; "
 "angelegt wird er im Feld-Board des Dokumentationstyps."
 msgstr ""
-"— groups fields within a form into one section; it is created in the "
-"field board of the document type."
+"— groups fields within a form into one section; it is created in the field "
+"board of the document type."
 
 #: src/templates/core/hubs/verwaltung.html:76
 msgid ""
 "— stammt immer aus einer Feldvorlage und wird einem Dokumentationstyp "
 "zugeordnet."
 msgstr ""
-"— always comes from a field template and is assigned to a document "
-"type."
+"— always comes from a field template and is assigned to a document type."
 
 #: src/templates/core/hubs/verwaltung.html:80
 msgid "Bedingung"
@@ -8290,8 +8321,8 @@ msgid ""
 "— blendet ein Feld nur ein, wenn ein anderes einen bestimmten Wert hat; "
 "gepflegt im Regel-Editor des Dokumentationstyps."
 msgstr ""
-"— shows a field only when another one has a certain value; maintained "
-"in the rule editor of the document type."
+"— shows a field only when another one has a certain value; maintained in the "
+"rule editor of the document type."
 
 #: src/templates/core/import/detail.html:12
 msgid "Zur Übersicht"
@@ -8687,12 +8718,16 @@ msgid "ähnlich"
 msgstr "similar"
 
 #: src/templates/core/search/partials/global_results.html:48
+msgid "Keine Ergebnisse"
+msgstr "No results"
+
+#: src/templates/core/search/partials/global_results.html:65
 msgid "Alle Ergebnisse anzeigen"
 msgstr "Show all results"
 
-#: src/templates/core/search/partials/global_results.html:54
-msgid "Keine Ergebnisse"
-msgstr "No results"
+#: src/templates/core/search/partials/global_results.html:65
+msgid "Erweiterte Suche öffnen"
+msgstr "Open advanced search"
 
 #: src/templates/core/search/partials/results.html:38
 msgid "Tippfehler-tolerante Treffer – könnten gemeint sein."
@@ -8707,38 +8742,34 @@ msgstr "No results for \"%(term)s\""
 msgid "Suchbegriff eingeben, um Personen und Ereignisse zu finden."
 msgstr "Enter a search term to find people and events."
 
-#: src/templates/core/statistics/external_report.html:4
-msgid "Externer Bericht"
-msgstr "External report"
-
 #: src/templates/core/statistics/external_report.html:7
 msgid "Externer Bericht (Datenschutzprofil)"
 msgstr "External report (privacy profile)"
 
-#: src/templates/core/statistics/external_report.html:11
+#: src/templates/core/statistics/external_report.html:13
 msgid "Datenschutzprofil"
 msgstr "Privacy profile"
 
-#: src/templates/core/statistics/external_report.html:19
+#: src/templates/core/statistics/external_report.html:21
 #: src/templates/partials/_navigation_mobile.html:82
 msgid "Profil"
 msgstr "Profile"
 
-#: src/templates/core/statistics/external_report.html:23
+#: src/templates/core/statistics/external_report.html:25
 #: src/templates/core/statistics/partials/dashboard_content.html:5
 #: src/templates/core/statistics/partials/report_panel.html:11
 msgid "Zeitraum"
 msgstr "Period"
 
-#: src/templates/core/statistics/external_report.html:27
+#: src/templates/core/statistics/external_report.html:29
 msgid "K-Anonymität-Schwelle"
 msgstr "K-anonymity threshold"
 
-#: src/templates/core/statistics/external_report.html:31
+#: src/templates/core/statistics/external_report.html:33
 msgid "Erzeugt am"
 msgstr "Generated on"
 
-#: src/templates/core/statistics/external_report.html:41
+#: src/templates/core/statistics/external_report.html:43
 #, python-format
 msgid ""
 "\n"
@@ -8751,33 +8782,33 @@ msgstr ""
 "protect anonymity (shown as \"suppressed\").\n"
 "        "
 
-#: src/templates/core/statistics/external_report.html:49
+#: src/templates/core/statistics/external_report.html:51
 msgid "Kennzahlen"
 msgstr "Key figures"
 
-#: src/templates/core/statistics/external_report.html:52
+#: src/templates/core/statistics/external_report.html:54
 msgid "Kontakte gesamt"
 msgstr "Total contacts"
 
-#: src/templates/core/statistics/external_report.html:62
+#: src/templates/core/statistics/external_report.html:64
 #: src/templates/core/statistics/partials/dashboard_content.html:38
 msgid "Unterschiedliche Personen"
 msgstr "Distinct people"
 
-#: src/templates/core/statistics/external_report.html:75
+#: src/templates/core/statistics/external_report.html:77
 msgid "Nach Dokumentationstyp"
 msgstr "By documentation type"
 
-#: src/templates/core/statistics/external_report.html:104
-#: src/templates/core/statistics/external_report.html:143
+#: src/templates/core/statistics/external_report.html:106
+#: src/templates/core/statistics/external_report.html:145
 msgid "Keine Daten im Zeitraum."
 msgstr "No data in the period."
 
-#: src/templates/core/statistics/external_report.html:114
+#: src/templates/core/statistics/external_report.html:116
 msgid "Nach Altersgruppe"
 msgstr "By age group"
 
-#: src/templates/core/statistics/external_report.html:155
+#: src/templates/core/statistics/external_report.html:157
 msgid "Als JSON exportieren"
 msgstr "Export as JSON"
 
@@ -8838,22 +8869,22 @@ msgid "Altersgruppen"
 msgstr "Age groups"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:238
-#: src/templates/core/statistics/partials/full_content.html:137
+#: src/templates/core/statistics/partials/full_content.html:147
 msgid "Empfänger (optional)"
 msgstr "Recipient (optional)"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:241
-#: src/templates/core/statistics/partials/full_content.html:140
+#: src/templates/core/statistics/partials/full_content.html:150
 msgid "z. B. Stadt Musterstadt"
 msgstr "e.g. City of Anytown"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:245
-#: src/templates/core/statistics/partials/full_content.html:144
+#: src/templates/core/statistics/partials/full_content.html:154
 msgid "Zweck (optional)"
 msgstr "Purpose (optional)"
 
 #: src/templates/core/statistics/partials/dashboard_content.html:248
-#: src/templates/core/statistics/partials/full_content.html:147
+#: src/templates/core/statistics/partials/full_content.html:157
 msgid "z. B. Verwendungsnachweis 2026"
 msgstr "e.g. 2026 funding report"
 
@@ -8893,28 +8924,32 @@ msgstr "Half-year"
 msgid "Jahr"
 msgstr "Year"
 
-#: src/templates/core/statistics/partials/full_content.html:49
+#: src/templates/core/statistics/partials/full_content.html:51
 #: src/templates/core/workitems/inbox.html:172
 #: src/templates/core/workitems/inbox.html:189
 #: src/templates/core/workitems/inbox.html:206
 msgid "Anwenden"
 msgstr "Apply"
 
-#: src/templates/core/statistics/partials/full_content.html:60
+#: src/templates/core/statistics/partials/full_content.html:62
 msgid "Vorheriges Jahr"
 msgstr "Previous year"
 
-#: src/templates/core/statistics/partials/full_content.html:71
+#: src/templates/core/statistics/partials/full_content.html:73
 msgid "Nächstes Jahr"
 msgstr "Next year"
 
-#: src/templates/core/statistics/partials/full_content.html:91
+#: src/templates/core/statistics/partials/full_content.html:101
 msgid "Berichte"
 msgstr "Reports"
 
-#: src/templates/core/statistics/partials/full_content.html:114
+#: src/templates/core/statistics/partials/full_content.html:124
 msgid "Bericht wählen …"
 msgstr "Select report …"
+
+#: src/templates/core/statistics/partials/full_content.html:165
+msgid "Für diese Einrichtung ist kein Bericht verfügbar."
+msgstr "No report is available for this facility."
 
 #: src/templates/core/statistics/partials/report_panel.html:22
 #: src/templates/core/system/dashboard.html:129
@@ -8945,7 +8980,7 @@ msgstr "JSON export"
 msgid "XML-Export"
 msgstr "XML export"
 
-#: src/templates/core/statistics/report_releases.html:16
+#: src/templates/core/statistics/report_releases.html:18
 msgid ""
 "Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. "
 "Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider "
@@ -8957,14 +8992,14 @@ msgstr ""
 "what a single report would have suppressed — even if nothing was suppressed "
 "in either of them."
 
-#: src/templates/core/statistics/report_releases.html:22
+#: src/templates/core/statistics/report_releases.html:24
 #, python-format
 msgid "%(count)s Herausgabe mit überschneidendem Zeitraum"
 msgid_plural "%(count)s Herausgaben mit überschneidendem Zeitraum"
 msgstr[0] "%(count)s release with an overlapping period"
 msgstr[1] "%(count)s releases with an overlapping period"
 
-#: src/templates/core/statistics/report_releases.html:25
+#: src/templates/core/statistics/report_releases.html:27
 msgid ""
 "Prüfen Sie, ob die überschneidenden Berichte an denselben Empfänger gegangen "
 "sind. Identische Zeiträume sind unkritisch und werden nicht gemeldet."
@@ -8972,37 +9007,37 @@ msgstr ""
 "Check whether the overlapping reports went to the same recipient. Identical "
 "periods are harmless and are not reported."
 
-#: src/templates/core/statistics/report_releases.html:34
+#: src/templates/core/statistics/report_releases.html:36
 msgid "Herausgegeben am"
 msgstr "Released on"
 
-#: src/templates/core/statistics/report_releases.html:35
+#: src/templates/core/statistics/report_releases.html:37
 msgid "Artefakt"
 msgstr "Artefact"
 
-#: src/templates/core/statistics/report_releases.html:36
+#: src/templates/core/statistics/report_releases.html:38
 msgid "Berichtszeitraum"
 msgstr "Reporting period"
 
-#: src/templates/core/statistics/report_releases.html:37
+#: src/templates/core/statistics/report_releases.html:39
 #: src/templates/core/system/vvt.html:72
 msgid "Empfänger"
 msgstr "Recipients"
 
-#: src/templates/core/statistics/report_releases.html:38
+#: src/templates/core/statistics/report_releases.html:40
 #: src/templates/core/system/vvt.html:51
 msgid "Zweck"
 msgstr "Purpose"
 
-#: src/templates/core/statistics/report_releases.html:56
+#: src/templates/core/statistics/report_releases.html:58
 msgid "Überschneidung"
 msgstr "Overlap"
 
-#: src/templates/core/statistics/report_releases.html:67
+#: src/templates/core/statistics/report_releases.html:69
 msgid "Noch keine Herausgabe protokolliert."
 msgstr "No release recorded yet."
 
-#: src/templates/core/statistics/report_releases.html:75
+#: src/templates/core/statistics/report_releases.html:77
 msgid ""
 "Die Übersicht zeigt Herausgaben ab Einführung dieser Protokollierung. Ältere "
 "Herausgaben stehen weiterhin im Audit-Log, lassen sich dort aber nicht als "
@@ -9014,7 +9049,7 @@ msgstr ""
 "releases there, so they do not appear here — and they cannot be added "
 "retroactively, because the audit log is immutable."
 
-#: src/templates/core/statistics/report_releases.html:78
+#: src/templates/core/statistics/report_releases.html:80
 msgid ""
 "Erfasst wird außerdem nur, was als Datei herausgegeben wurde. Das Betrachten "
 "eines Berichts am Bildschirm ist keine Herausgabe — auch nicht in der "
@@ -9027,7 +9062,7 @@ msgstr ""
 "other means — a forwarded PDF file, a photographed screen — do not appear "
 "here either."
 
-#: src/templates/core/statistics/report_releases.html:81
+#: src/templates/core/statistics/report_releases.html:83
 #, python-format
 msgid ""
 "Ausgewertet werden die %(limit)s jüngsten Herausgaben. Ältere bleiben im "
@@ -9038,7 +9073,7 @@ msgstr ""
 "the audit log but do not appear in this overview and no longer trigger an "
 "overlap warning."
 
-#: src/templates/core/statistics/report_releases.html:85
+#: src/templates/core/statistics/report_releases.html:87
 msgid "Zurück zur Statistik"
 msgstr "Back to statistics"
 
@@ -9886,7 +9921,7 @@ msgid "Hauptnavigation"
 msgstr "Main navigation"
 
 #: src/templates/partials/_navigation_desktop.html:19
-#: src/templates/partials/_navigation_mobile.html:103
+#: src/templates/partials/_navigation_mobile.html:115
 msgid "Suche..."
 msgstr "Search..."
 

@@ -75,3 +75,38 @@ class TestEnglishHubLabels:
             assert gettext("Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge.") == (
                 "Application support: forms, fields, data transfer and access."
             )
+
+
+class TestEnglishStatisticsTabLabels:
+    """Refs #1813 (Etappe 3): die Reiter der Statistik-Reiterzeile und die zwei
+    neuen Einstiege, die Etappe 3 sonst nur auf Deutsch hätte.
+
+    Warum als Test und nicht „steht ja in der .po": ``makemessages`` schlägt
+    für neue msgids **fuzzy** Übersetzungen aus ähnlichen Einträgen vor —
+    „Datensatz-Berichte" bekam so „Data categories" (aus „Datenkategorien"),
+    „Freigaben" das Verb „Release", „Statistik-Navigation" die
+    „Privacy navigation" des Datenschutz-Bereichs. Fuzzy-Einträge kompiliert
+    gettext nicht mit, der Reiter stünde also auf Englisch schlicht auf
+    Deutsch da — und beim nächsten Lauf könnte jemand die Vorschläge
+    unbesehen entfuzzyfizieren. Dieser Test hält die geprüften Vokabeln fest.
+    """
+
+    def test_statistics_tab_labels(self):
+        with override("en"):
+            assert gettext("Externer Bericht") == "External report"
+            assert gettext("Datensatz-Berichte") == "Dataset reports"
+            assert gettext("Freigaben") == "Releases"
+
+    def test_statistics_subnav_aria_label_is_not_the_privacy_one(self):
+        with override("en"):
+            assert gettext("Statistik-Navigation") == "Statistics navigation"
+            assert gettext("Datenschutz-Navigation") == "Privacy navigation"
+
+    def test_search_footer_fallback_label(self):
+        with override("en"):
+            assert gettext("Erweiterte Suche öffnen") == "Open advanced search"
+
+    def test_offline_conflict_entry_in_the_profile(self):
+        with override("en"):
+            assert gettext("Offline-Konflikte") == "Offline conflicts"
+            assert gettext("Offline-Konflikte prüfen") == "Review offline conflicts"
