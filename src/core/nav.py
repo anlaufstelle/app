@@ -110,6 +110,20 @@ def section_family(section: NavSection) -> frozenset[str]:
     return frozenset(chain.from_iterable(tab.family for tab in section.tabs))
 
 
+def first_visible_tab(section: NavSection, user) -> NavItem | None:
+    """Der erste für ``user`` sichtbare Reiter — Ziel der Einzelreiter-Weiterleitung.
+
+    Wer den Übersichts-Reiter nicht sieht (Fachkraft mit eigenem Löschantrag,
+    Trägerin des Rechts „Löschbestätigung" ohne Leitungsrolle), bekommt keine
+    leere Hülle, sondern direkt seine einzige Seite. Abgeleitet statt
+    handgeschrieben: ändern sich Reiter-Gates, zieht das Ziel automatisch mit.
+    """
+    for tab in section.tabs:
+        if is_visible(tab, user):
+            return tab
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Bereiche mit Reiterzeile
 # ---------------------------------------------------------------------------
@@ -185,8 +199,6 @@ SYSTEM = NavSection(
         ),
     ),
 )
-
-SECTIONS: tuple[NavSection, ...] = (SYSTEM,)
 
 SYSTEM_FAMILY = section_family(SYSTEM)
 
@@ -321,9 +333,12 @@ DSGVO_PAKET = NavItem(
     gates=("is_facility_admin",),
     icon="dsgvo",
 )
+# Refs #1801 (§4.4): „Konfiguration" war neben „Feldvorlagen" nichtssagend —
+# #1717 hat die beiden getrennt, aber nicht benannt. Im Bereich „Verwaltung"
+# benennt der Reiter jetzt seinen Inhalt; die Seiten-H1 heißt ohnehin schon so.
 KONFIGURATION = NavItem(
     key="config",
-    label=_("Konfiguration"),
+    label=_("Dokumentationstypen"),
     url_name="core:config_doctype_list",
     family=frozenset(
         {
@@ -387,6 +402,67 @@ ADMINISTRATION_SUPER = NavItem(
     icon="admin",
     external=True,
 )
+
+# ---------------------------------------------------------------------------
+# Bereichs-Hubs (Refs #1801 §4) — reines Navigations-Chrom
+# ---------------------------------------------------------------------------
+#
+# Die Reiter sind **dieselben Objekte** wie die bisherigen Einzel-Einträge:
+# Label, Gate und Familie werden nicht zweitgepflegt. Damit sind die Hubs
+# genau das, was sie sein sollen — eine andere Anordnung derselben Seiten,
+# ohne URL-Umzug und ohne neue Rechte. Reiter[0] ist die Übersicht (Landing).
+
+DATENSCHUTZ_UEBERSICHT = NavItem(
+    key="datenschutz_uebersicht",
+    label=_("Übersicht"),
+    url_name="core:datenschutz_uebersicht",
+    family=frozenset({"datenschutz_uebersicht"}),
+    gates=("is_lead_or_admin",),
+)
+VERWALTUNG_UEBERSICHT = NavItem(
+    key="verwaltung_uebersicht",
+    label=_("Übersicht"),
+    url_name="core:verwaltung_uebersicht",
+    family=frozenset({"verwaltung_uebersicht"}),
+    gates=("is_facility_admin",),
+)
+
+DATENSCHUTZ = NavSection(
+    key="datenschutz",
+    label=_("Datenschutz"),
+    subtitle=_("Betroffenenrechte, Fristen und Nachweise."),
+    aria_label=_("Datenschutz-Navigation"),
+    testid="subnav-datenschutz",
+    tabs=(
+        DATENSCHUTZ_UEBERSICHT,
+        LOESCHANTRAEGE,
+        BERICHTIGUNGEN,
+        LOESCHFRISTEN,
+        AUDIT_LOG,
+        DSGVO_PAKET,
+    ),
+)
+# F1 (Konfigurationspakete + Einrichtungs-Export) ist Folgeticket — der Hub
+# startet bewusst mit vier Reitern statt mit zwei leeren Versprechen.
+VERWALTUNG = NavSection(
+    key="verwaltung",
+    label=_("Verwaltung"),
+    subtitle=_("Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge."),
+    aria_label=_("Verwaltungs-Navigation"),
+    testid="subnav-verwaltung",
+    tabs=(
+        VERWALTUNG_UEBERSICHT,
+        KONFIGURATION,
+        FELDVORLAGEN,
+        DATENIMPORT,
+    ),
+)
+
+SECTIONS: tuple[NavSection, ...] = (SYSTEM, DATENSCHUTZ, VERWALTUNG)
+
+DATENSCHUTZ_FAMILY = section_family(DATENSCHUTZ)
+VERWALTUNG_FAMILY = section_family(VERWALTUNG)
+
 
 SIDEBAR: tuple[NavItem, ...] = (
     ARBEITSZENTRALE,
@@ -532,3 +608,15 @@ def item(key: str) -> NavItem:
         if entry.key == key:
             return entry
     raise KeyError(f"Unbekannter Navigations-Schlüssel: {key!r}")
+
+
+def section(key: str) -> NavSection:
+    """Ein Bereich per Schlüssel — für ``{% subnav "datenschutz" %}``.
+
+    Wirft ``KeyError`` wie :func:`item`: ein Tippfehler im Template soll die
+    Reiterzeile hörbar zerbrechen, nicht still leer rendern.
+    """
+    for entry in SECTIONS:
+        if entry.key == key:
+            return entry
+    raise KeyError(f"Unbekannter Bereichs-Schlüssel: {key!r}")

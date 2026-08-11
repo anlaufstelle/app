@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Audit-Log" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Audit-Log" %}</h1>
+
+{% subnav "datenschutz" %}
 
 {# Filter form #}
 <form id="audit-filter-form"

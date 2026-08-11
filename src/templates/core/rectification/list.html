@@ -1,11 +1,13 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Berichtigungsanträge" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Berichtigungsanträge" %}</h1>
 <p class="text-[13px] text-ink-muted mb-6">{% trans "Anträge nach Art. 16 DSGVO. Der eigene Antrag kann nicht selbst geprüft werden (Vier-Augen-Prinzip)." %}</p>
+
+{% subnav "datenschutz" %}
 
 {# Ausstehend #}
 <section class="mb-8">

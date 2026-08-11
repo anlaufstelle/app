@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Datenimport" %} – Anlaufstelle{% endblock %}
 
@@ -13,6 +13,8 @@
        class="btn-primary px-4 py-2 hover:opacity-90"
        data-testid="import-new-link">{% trans "Neuer Import" %}</a>
 </div>
+
+{% subnav "verwaltung" %}
 
 <div class="card overflow-hidden">
     <table class="min-w-full divide-y divide-subtle">

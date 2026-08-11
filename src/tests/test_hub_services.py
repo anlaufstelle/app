@@ -39,21 +39,27 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def hub_data(facility, staff_user, client_identified, sample_event):
+def hub_data(facility, staff_user, lead_user, client_identified, sample_event):
     # 2 offene Löschanträge + 1 entschiedener (Köder).
-    for status in (
-        DeletionRequest.Status.PENDING,
-        DeletionRequest.Status.PENDING,
-        DeletionRequest.Status.APPROVED,
-    ):
+    for _ in range(2):
         DeletionRequest.objects.create(
             facility=facility,
             target_type=DeletionRequest.TargetType.CLIENT,
             target_id=uuid.uuid4(),
             reason="Hub-Kennzahl",
             requested_by=staff_user,
-            status=status,
+            status=DeletionRequest.Status.PENDING,
         )
+    DeletionRequest.objects.create(
+        facility=facility,
+        target_type=DeletionRequest.TargetType.CLIENT,
+        target_id=uuid.uuid4(),
+        reason="Hub-Kennzahl (entschieden)",
+        requested_by=staff_user,
+        status=DeletionRequest.Status.APPROVED,
+        reviewed_by=lead_user,
+        reviewed_at=timezone.now(),
+    )
 
     # 1 offene Berichtigung + 1 offene Berichtigung einer INAKTIVEN Person
     # (Köder: die Zielseite blendet sie aus, weil sie kein prüfbarer Vorgang
@@ -205,13 +211,18 @@ class TestMetricRoleFilterAndBudget:
 
 
 class TestVerwaltungOverview:
-    def test_metrics_name_doctypes_fieldtemplates_and_imports(
-        self, facility, admin_user, doc_type_contact, field_template, import_job
-    ):
+    def test_metrics_name_doctypes_fieldtemplates_and_imports(self, facility, admin_user, field_template, import_job):
+        from core.models import DocumentType
+
+        DocumentType.objects.create(facility=facility, name="Hub-Typ aktiv")
+        DocumentType.objects.create(facility=facility, name="Hub-Typ inaktiv", is_active=False)
+
         metrics = verwaltung_metrics(facility)
 
         assert [m.key for m in metrics] == ["config", "config-fieldtemplates", "import"]
-        assert _metric(metrics, "config").value == 1
+        # Zwei Zahlen aus EINEM Aggregat: Bestand und davon aktiv.
+        assert _metric(metrics, "config").value == 2
+        assert "1" in _metric(metrics, "config").detail
         assert _metric(metrics, "config-fieldtemplates").value == 1
         assert _metric(metrics, "import").value == 1
 

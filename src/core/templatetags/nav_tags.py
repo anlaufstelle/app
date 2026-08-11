@@ -96,6 +96,19 @@ def nav_mobile_more(context):
     return {"items": _rendered(nav.MOBILE_MORE, context, mobile=True)}
 
 
+@register.inclusion_tag("partials/_subnav.html", takes_context=True)
+def subnav(context, key: str):
+    """Die Reiterzeile eines Bereichs (``/system/`` und die Hubs, Refs #1801 §4.5).
+
+    Die Rollen-Gates je Reiter kommen aus der Registry und werden **hier**
+    ausgewertet. Damit kann eine ``LEAD_PLUS``-Seite gar keinen
+    ``ADMIN_ONLY``-Reiter rendern — die Zusicherung hängt an der Datenstruktur,
+    nicht an Template-Disziplin (``test_authz_template_links.py``).
+    """
+    area = nav.section(key)
+    return {"section": area, "tabs": _rendered(area.tabs, context)}
+
+
 @register.simple_tag(takes_context=True)
 def nav_mobile_more_active(context) -> bool:
     """True, wenn die aktuelle Seite den „Mehr"-Button hervorheben soll."""

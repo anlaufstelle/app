@@ -1,0 +1,11 @@
+{% load i18n %}
+{# Eine Zeile der Bereichs-Statusliste (Refs #1813, Konzept #1801 §4.2). #}
+{# ``metric.value is None`` = reine Datumszeile; ``detail`` traegt dann den ganzen Satz. #}
+<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+    <span class="text-[13px] font-semibold text-ink min-w-[10rem]">{{ metric.label }}</span>
+    {% if metric.value is not None %}
+    <span class="text-[20px] font-bold {% if metric.is_actionable %}text-orange-600{% else %}text-ink{% endif %}" data-testid="{{ metric.testid }}-value">{{ metric.value }}</span>
+    {% endif %}
+    <span class="text-[12px] text-ink-soft"{% if metric.value is None %} data-testid="{{ metric.testid }}-detail"{% endif %}>{{ metric.detail }}</span>
+    <a href="{% url metric.url_name %}" class="ml-auto inline-flex items-center min-h-[44px] text-[13px] font-medium text-accent hover:underline" data-testid="{{ metric.testid }}">{% trans "Öffnen" %} →</a>
+</li>

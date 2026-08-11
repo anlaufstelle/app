@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Bereichs-Übersichten „Datenschutz" (`/datenschutz/`) und „Verwaltung" (`/verwaltung/`)** (#1813) — zwei neue Seiten mit Reiterzeile nach dem Muster des Systembereichs (die Reiterzeile erscheint auch auf den Bereichsseiten selbst), je einer kurzen Statusliste (offene Löschanträge, Berichtigungen, Löschvorschläge, letzter Audit-Eintrag, letzter DSGVO-Download bzw. Dokumentationstypen, Feldvorlagen, offene Importläufe) und einem Erklärabsatz; alle bestehenden Seiten behalten ihre Adressen, Berechtigungen bleiben unverändert (#1801).
+
 ### Changed
+
+- **Reiter „Dokumentationstypen" statt „Konfiguration"** (#1813) — das Label benennt jetzt seinen Inhalt (die Seiten-Überschrift hieß ohnehin schon so); die Adresse `/config/document-types/` bleibt unverändert.
+- **Reiterzeilen erfüllen die 44-px-Mindest-Touchfläche und melden die aktuelle Seite an Screenreader** (#1813) — die Reiter des Systembereichs waren rechnerisch nur ~32 px hoch und trugen kein `aria-current`; beide Hubs und `/system/` nutzen jetzt dasselbe Partial (#810).
 
 - **Demo-Rechtstexte: Datenschutzerklärung liegt jetzt unter `/datenschutzerklaerung/`** (#1813) — macht den Pfad `/datenschutz/` für den kommenden Datenschutz-Bereich der Hauptnavigation frei (#1801); Footer-, Login- und Consent-Banner-Links folgen der Einstellung `DEMO_LEGAL_PRIVACY_URL` automatisch, `/impressum/` bleibt unverändert.
 

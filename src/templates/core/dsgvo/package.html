@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "DSGVO-Dokumentationspaket" %} – Anlaufstelle{% endblock %}
 
@@ -8,6 +8,8 @@
     <h1 class="text-[22px] font-bold text-ink">{% trans "DSGVO-Dokumentationspaket" %}</h1>
     <p class="mt-1 text-sm text-ink-muted">{% trans "Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten befüllt." %}</p>
 </div>
+
+{% subnav "datenschutz" %}
 
 <div class="bg-blue-50 border border-blue-200 rounded-[10px] p-4 mb-6">
     <div class="flex">

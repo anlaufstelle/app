@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Dokumentationstypen" %} – Anlaufstelle{% endblock %}
 
@@ -14,6 +14,8 @@
         {% trans "Neuer Typ" %}
     </a>
 </div>
+
+{% subnav "verwaltung" %}
 
 {# Suchleiste + Filter #}
 <div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print">

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Datenschutz" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Datenschutz" %}</h1>
+    <p class="text-[13px] text-ink-muted mt-1">{% trans "Betroffenenrechte, Fristen und Nachweise." %}</p>
+</div>
+
+{% subnav "datenschutz" %}
+
+{# Statusliste statt Kachelwand (Konzept §4.2): eine Frage, hoechstens sechs Zeilen. #}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden mb-6" data-testid="datenschutz-metrics">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Was wartet auf mich?" %}</h2>
+    <ul class="divide-y divide-subtle">
+        {% for metric in metrics %}
+        {% include "core/hubs/_metric_row.html" %}
+        {% endfor %}
+    </ul>
+</section>
+
+{# Erklaerabsatz (Konzept §4.3): lebensweltlich formuliert, Artikel in Klammern. #}
+<section class="bg-surface border border-subtle rounded-[10px] p-4" data-testid="datenschutz-rights-explainer">
+    <h2 class="text-[15px] font-semibold text-ink">{% trans "Welches Recht wird wo bearbeitet?" %}</h2>
+    <dl class="mt-3 space-y-2 text-[13px] text-ink">
+        <div class="flex flex-wrap gap-x-2">
+            <dt class="font-semibold">{% trans "Auskunft (Art. 15)" %}</dt>
+            <dd class="text-ink-soft">{% trans "— in der Personenakte: dort liegt die Datenauskunft als JSON- oder PDF-Export." %}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-2">
+            <dt class="font-semibold">{% trans "Berichtigung (Art. 16)" %}</dt>
+            <dd class="text-ink-soft">{% trans "— im Reiter „Berichtigungen“: eine Fachkraft beantragt, die Leitung prüft." %}</dd>
+        </div>
+        <div class="flex flex-wrap gap-x-2">
+            <dt class="font-semibold">{% trans "Löschung (Art. 17)" %}</dt>
+            <dd class="text-ink-soft">{% trans "— im Reiter „Löschanträge“: jede Löschung braucht ein zweites Augenpaar." %}</dd>
+        </div>
+        {% if user.is_facility_admin %}
+        <div class="flex flex-wrap gap-x-2">
+            <dt class="font-semibold">{% trans "Nachweis (Art. 30)" %}</dt>
+            <dd class="text-ink-soft">{% trans "— im Reiter „DSGVO-Paket“: Verzeichnis der Verarbeitungstätigkeiten und Vorlagen." %}</dd>
+        </div>
+        {% endif %}
+    </dl>
+</section>
+{% endblock %}

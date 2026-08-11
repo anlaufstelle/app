@@ -399,6 +399,15 @@ EXPECTATIONS = (
     E("core:workitem_bulk_priority", "facility-write", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS),
     E("core:workitem_bulk_assign", "facility-write", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS),
     # ---- lead-admin -------------------------------------------------------
+    # Bereichs-Hub „Datenschutz" (Refs #1813, Konzept #1801 §4.1). Reines
+    # Navigations-Chrom: das Gate ist per Regel N2 die Oder-Verknüpfung der
+    # Reiter-Gates, das Rollen-Soll deshalb dasselbe LEAD_PLUS wie beim
+    # ersten Reiter „Löschanträge" — inklusive derselben zustandsabhängigen
+    # Erweiterung (wer selbst einen offenen Löschantrag gestellt hat, wird auf
+    # die Antragsliste weitergeleitet statt abgewiesen). Gegenprobe:
+    # mx_staff/mx_assistant haben keinen eigenen Antrag → 403; mx_super hat
+    # facility=None → 403.
+    E("core:datenschutz_uebersicht", "lead-admin", get=LEAD_PLUS),
     E("core:retention_dashboard", "lead-admin", get=LEAD_PLUS),
     E("core:retention_bulk_approve", "lead-admin", get=LEAD_PLUS, post=LEAD_PLUS),
     E("core:retention_bulk_defer", "lead-admin", get=LEAD_PLUS, post=LEAD_PLUS),
@@ -430,6 +439,10 @@ EXPECTATIONS = (
         idor=(("pk", "foreign_deletion_request.pk"),),
     ),
     # ---- facility-admin -----------------------------------------------------
+    # Bereichs-Hub „Verwaltung" (Refs #1813, Konzept #1801 §4.1): dasselbe Gate
+    # wie alle vier Reiter (Dokumentationstypen, Feldvorlagen, Datenimport) —
+    # keine neue Berechtigung, nur eine andere Anordnung derselben Seiten.
+    E("core:verwaltung_uebersicht", "facility-admin", get=ADMIN_ONLY),
     E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
     E("core:audit_log", "facility-admin", get=ADMIN_ONLY),
     E(

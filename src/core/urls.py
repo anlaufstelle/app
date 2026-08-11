@@ -97,6 +97,7 @@ from core.views.events import (
     EventUpdateView,
     TallyIncrementView,
 )
+from core.views.hubs import DatenschutzUebersichtView, VerwaltungUebersichtView
 from core.views.import_wizard import (
     ImportAbortView,
     ImportCommitView,
@@ -192,6 +193,11 @@ urlpatterns = [
     path("", ZeitstromView.as_view(), name="zeitstrom"),
     # Rollenbezogene Arbeitszentrale (Refs #920)
     path("start/", RoleDashboardView.as_view(), name="dashboard"),
+    # Bereichs-Hubs (Refs #1813, Konzept #1801 §4.1): genau zwei neue Routen —
+    # alle Mitgliedsseiten behalten ihre Pfade (null Redirects, null
+    # Bookmark-Bruch, null Aenderung an Service-Worker-Routen).
+    path("datenschutz/", DatenschutzUebersichtView.as_view(), name="datenschutz_uebersicht"),
+    path("verwaltung/", VerwaltungUebersichtView.as_view(), name="verwaltung_uebersicht"),
     # Übergabe → in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
     path("uebergabe/", RedirectView.as_view(url="/?view=uebergabe", permanent=True), name="handover"),
     # Redirects (alte URLs)
