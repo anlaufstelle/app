@@ -131,9 +131,7 @@ class TestCaseOwnerFilter:
         assert response.status_code == 200
         assert response.context["attachments"] == []
 
-    def test_assistant_case_filter_returns_empty(
-        self, client, assistant_user, case_with_direct_and_event_attachment
-    ):
+    def test_assistant_case_filter_returns_empty(self, client, assistant_user, case_with_direct_and_event_attachment):
         """ADR-039 §12: Fälle sind für die Assistenz unsichtbar — ein
         ``?case=`` liefert für sie die LEERE Menge, nicht nur die fall-eigene
         Zeile gefiltert.
