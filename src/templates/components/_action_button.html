@@ -1,0 +1,53 @@
+{% comment %}
+components/_action_button.html — einzelne Kontextaktion (Konzept #1801 §6.2/§6.4,
+Refs #1813 T4).
+
+Mitgliedschaft und Reihenfolge der Aktionen stehen in der jeweiligen
+``core/<entity>/partials/_actions.html`` — hier verzweigt NUR die Pixelform.
+
+Parameter:
+- variant: "desktop" | "mobile".
+- position: "primary" | "overflow" (Default "primary"). Primär sitzt direkt
+  in der Aktionsleiste, Overflow in der ⋮-Dropdown-Zeile — folgenschwere
+  Aktionen (Löschen, Fall abschließen, Löschung beantragen) sind NIE primary.
+- base_url: Ziel-Pfad (Pflicht).
+- query_param_name / query_param_value: optionaler ``?name=value``-Anhang
+  (z. B. ``?client=<pk>``); ohne Wert bleibt die URL unverändert — R8 verlangt
+  genau das für ein anonymes Ereignis.
+- label: sichtbares/aria-Label (immer über ``{% trans … as … %}`` befüllen).
+- testid: data-testid; testid_mobile überschreibt ihn nur für variant="mobile"
+  (Bestandscode hat eigene "mobile-"-Präfixe für einzelne Buttons).
+- icon_path: SVG-"d"-Pfad als reiner String (kein Markup, kein ``|safe``
+  nötig). Ohne icon_path bleibt die Aktion ohne Icon.
+- icon_stroke_width: optional, Default "2" (die "+"-Icons nutzen "2.5").
+- highlight: bool — hebt GENAU eine primäre Aktion mit ``btn-primary`` hervor
+  (die häufigste, §6.2 Rangregel). Wird in "overflow" ignoriert.
+- extra_class: zusätzliche Klassen (z. B. "text-red-600" für Löschen).
+
+Mobil verliert eine PRIMARY-Aktion nur ihr sichtbares Label (Icon +
+aria-label bleiben) — nie ihren Eintrag (§6.4 Paritätsregel). Overflow-Zeilen
+zeigen auf beiden Varianten Icon + Label (identisch zur bisherigen
+Mobil-Menü-Optik) und tragen ein einheitliches ``min-h-[44px]``-Ziel.
+{% endcomment %}
+{% if position == 'overflow' %}
+<a href="{{ base_url }}{% if query_param_value %}?{{ query_param_name }}={{ query_param_value }}{% endif %}"
+   class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas{% if extra_class %} {{ extra_class }}{% endif %}"
+   data-testid="{% if variant == 'mobile' %}{{ testid_mobile|default:testid }}{% else %}{{ testid }}{% endif %}">
+    {% if icon_path %}<svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" stroke-width="{{ icon_stroke_width|default:'2' }}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ icon_path }}"/></svg>{% endif %}
+    {{ label }}
+</a>
+{% elif variant == 'mobile' %}
+<a href="{{ base_url }}{% if query_param_value %}?{{ query_param_name }}={{ query_param_value }}{% endif %}"
+   class="inline-flex items-center justify-center min-h-[44px] {% if highlight %}btn-primary{% else %}bg-surface border border-subtle text-ink-soft{% endif %} rounded-md px-3 py-2{% if extra_class %} {{ extra_class }}{% endif %}"
+   aria-label="{{ label }}"
+   data-testid="{{ testid_mobile|default:testid }}">
+    {% if icon_path %}<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="{{ icon_stroke_width|default:'2' }}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ icon_path }}"/></svg>{% endif %}
+</a>
+{% else %}
+<a href="{{ base_url }}{% if query_param_value %}?{{ query_param_name }}={{ query_param_value }}{% endif %}"
+   class="inline-flex items-center gap-1.5 {% if highlight %}btn-primary{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %} text-[13px] font-medium rounded-md px-3.5 py-2{% if extra_class %} {{ extra_class }}{% endif %}"
+   data-testid="{{ testid }}">
+    {% if icon_path %}<svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="{{ icon_stroke_width|default:'2' }}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ icon_path }}"/></svg>{% endif %}
+    {{ label }}
+</a>
+{% endif %}

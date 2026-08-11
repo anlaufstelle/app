@@ -12,6 +12,10 @@
           x-data="eventClientAutocomplete"
           data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
           data-initial-client-id="{{ client_id|default:'' }}"
+          {# §6.5 (Refs #1813 T4): ?case=-Vorbelegung — das Fall-<select> ist #}
+          {# Alpine-getrieben (eventClientAutocomplete.loadCasesForClient), #}
+          {# dieses Attribut ist der einzige Übergabeweg dorthin. #}
+          data-initial-case-id="{{ case_id|default:'' }}"
           data-autocomplete-url="{% url 'core:client_autocomplete' %}"
           {% comment %}Refs #1735: ``cases_for_client`` ist staff+, die Kontakterfassung
           assistant+. Ohne Guard lief der Fetch für die Assistenz ins 403 und wurde in

@@ -227,6 +227,24 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
                 lambda value: Q(event__client_id=value) | Q(client_id=value) | Q(case__client_id=value),
             )
 
+        # §6.5 Kontextregel (Refs #1813 T4): Owner-Filter fuer Fall/Ereignis,
+        # analog dem Personen-Filter. Ein Fall-Anhang haengt entweder direkt
+        # am Fall ODER an einem seiner Ereignisse — beide Zweige zaehlen fuer
+        # "Alle Dateien dieses Falls". Laeuft NACH dem Assistenz-Ausschluss
+        # oben: ein ?case= liefert fuer die Assistenz weiterhin leer, kein
+        # Nebeneingang in die Fall-Dokumentation (ADR-039 §12).
+        case_id = request.GET.get("case")
+        if case_id:
+            attachments = self._filter_by_uuid(
+                attachments,
+                case_id,
+                lambda value: Q(case_id=value) | Q(event__case_id=value),
+            )
+
+        event_id = request.GET.get("event")
+        if event_id:
+            attachments = self._filter_by_uuid(attachments, event_id, lambda value: Q(event_id=value))
+
         visible = [self._build_row(user, att) for att in attachments[:200]]
 
         context = {
@@ -234,6 +252,10 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "doc_types": self._filter_doc_types(facility, user, allowed),
             "selected_doc_type": doc_type_id or "",
             "selected_client": client_id or "",
+            # Refs #1813 T4: fuers HTMX-Nachladen (Partial-Filter-Requests
+            # tragen die Query-Parameter erneut mit, siehe selected_client).
+            "selected_case": case_id or "",
+            "selected_event": event_id or "",
         }
 
         return self.render_htmx_or_full(context)

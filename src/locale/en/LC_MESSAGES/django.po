@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 11:29+0200\n"
+"POT-Creation-Date: 2026-08-11 11:43+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -24,13 +24,13 @@ msgstr "Event"
 #: src/templates/core/attachments/partials/attachment_table.html:15
 #: src/templates/core/cases/form.html:60 src/templates/core/cases/form.html:75
 #: src/templates/core/cases/partials/table.html:10
-#: src/templates/core/events/create.html:132
+#: src/templates/core/events/create.html:136
 #: src/templates/core/events/delete_confirm.html:32
 #: src/templates/core/events/deletion_review.html:41
-#: src/templates/core/events/detail.html:58
+#: src/templates/core/events/detail.html:35
 #: src/templates/core/events/edit.html:22
 #: src/templates/core/rectification/review.html:19
-#: src/templates/core/workitems/detail.html:136
+#: src/templates/core/workitems/detail.html:87
 #: src/templates/core/workitems/form.html:83
 #: src/templates/core/workitems/form.html:98
 #: src/templates/core/workitems/offline_workitem_list.html:41
@@ -42,8 +42,8 @@ msgstr "Person"
 #: src/core/models/document_type.py:127 src/core/models/episode.py:21
 #: src/core/models/event.py:45 src/core/views/attachments.py:106
 #: src/templates/core/cases/episode_form.html:11
-#: src/templates/core/events/create.html:188
-#: src/templates/core/events/detail.html:83
+#: src/templates/core/events/create.html:192
+#: src/templates/core/events/detail.html:61
 #: src/templates/core/export/client_data_pdf.html:182
 #: src/templates/core/export/client_data_pdf.html:212
 #: src/templates/core/export/client_data_pdf.html:246
@@ -249,7 +249,7 @@ msgstr "End"
 #: src/templates/core/config/document_types/detail.html:4
 #: src/templates/core/events/delete_confirm.html:24
 #: src/templates/core/events/deletion_review.html:33
-#: src/templates/core/events/detail.html:70
+#: src/templates/core/events/detail.html:47
 #: src/templates/core/events/edit.html:14
 #: src/templates/core/events/offline_create.html:76
 #: src/templates/core/export/client_data_pdf.html:55
@@ -274,7 +274,7 @@ msgstr "Document type"
 msgid "Zeitpunkt"
 msgstr "Timestamp"
 
-#: src/core/forms/events.py:70 src/templates/core/events/create.html:191
+#: src/core/forms/events.py:70 src/templates/core/events/create.html:195
 msgid "– Keinem Fall zuordnen –"
 msgstr "– Do not assign to any case –"
 
@@ -633,15 +633,15 @@ msgstr ""
 #: src/core/models/client.py:98 src/core/models/episode.py:39
 #: src/core/models/event.py:61 src/core/models/quick_template.py:68
 #: src/core/models/retention.py:112 src/core/models/workitem.py:65
-#: src/templates/core/cases/detail.html:100
-#: src/templates/core/events/detail.html:74
+#: src/templates/core/cases/detail.html:51
+#: src/templates/core/events/detail.html:51
 #: src/templates/core/export/client_data_pdf.html:48
 #: src/templates/core/export/client_data_pdf.html:124
 #: src/templates/core/export/client_data_pdf.html:187
 #: src/templates/core/export/client_data_pdf.html:248
 #: src/templates/core/export/client_data_pdf.html:295
 #: src/templates/core/export/client_data_pdf.html:512
-#: src/templates/core/workitems/detail.html:142
+#: src/templates/core/workitems/detail.html:93
 msgid "Erstellt von"
 msgstr "Created by"
 
@@ -651,8 +651,8 @@ msgstr "Created by"
 #: src/core/models/organization.py:14 src/core/models/organization.py:38
 #: src/core/models/quick_template.py:72 src/core/models/rectification.py:116
 #: src/core/models/retention.py:114 src/core/models/workitem.py:105
-#: src/core/models/workitem.py:229 src/templates/core/cases/detail.html:96
-#: src/templates/core/events/detail.html:78
+#: src/core/models/workitem.py:229 src/templates/core/cases/detail.html:47
+#: src/templates/core/events/detail.html:55
 #: src/templates/core/export/client_data_pdf.html:46
 #: src/templates/core/export/client_data_pdf.html:120
 #: src/templates/core/export/client_data_pdf.html:366
@@ -664,7 +664,7 @@ msgstr "Created by"
 #: src/templates/core/system/legal_holds.html:69
 #: src/templates/core/system/organization.html:24
 #: src/templates/core/system/organization.html:39
-#: src/templates/core/workitems/detail.html:129
+#: src/templates/core/workitems/detail.html:80
 msgid "Erstellt am"
 msgstr "Created on"
 
@@ -887,8 +887,8 @@ msgstr "Retention run completed"
 msgid "Restore-Test verifiziert"
 msgstr "Restore test verified"
 
-#: src/core/models/audit.py:96 src/templates/core/clients/detail.html:38
-#: src/templates/core/clients/detail.html:193
+#: src/core/models/audit.py:96 src/templates/core/clients/detail.html:33
+#: src/templates/core/clients/detail.html:92
 #: src/templates/core/clients/partials/table.html:53
 msgid "Löschung beantragt"
 msgstr "Deletion requested"
@@ -1021,7 +1021,7 @@ msgstr "Target ID"
 #: src/core/models/audit.py:196 src/core/models/retention.py:49
 #: src/templates/core/audit/detail.html:53
 #: src/templates/core/audit/partials/table.html:13
-#: src/templates/core/events/detail.html:173
+#: src/templates/core/events/detail.html:158
 #: src/templates/core/system/auditlog_detail.html:61
 msgid "Details"
 msgstr "Details"
@@ -1093,16 +1093,16 @@ msgstr "Title"
 #: src/core/models/case.py:43 src/core/models/document_type.py:177
 #: src/core/models/episode.py:26 src/core/models/organization.py:36
 #: src/core/models/outcome.py:16 src/core/models/workitem.py:99
-#: src/templates/core/cases/detail.html:112
+#: src/templates/core/cases/detail.html:63
 #: src/templates/core/clients/_offline_workitem_fields.html:26
-#: src/templates/core/config/document_types/detail.html:76
+#: src/templates/core/config/document_types/detail.html:79
 #: src/templates/core/export/client_data_pdf.html:118
 #: src/templates/core/export/client_data_pdf.html:184
 #: src/templates/core/export/client_data_pdf.html:214
 #: src/templates/core/export/client_data_pdf.html:508
 #: src/templates/core/export/client_data_pdf.html:546
 #: src/templates/core/system/organization.html:37
-#: src/templates/core/workitems/detail.html:159
+#: src/templates/core/workitems/detail.html:110
 msgid "Beschreibung"
 msgstr "Description"
 
@@ -1120,7 +1120,7 @@ msgstr ""
 #: src/core/models/rectification.py:94 src/core/models/retention.py:47
 #: src/core/models/workitem.py:86 src/core/models/workitem.py:208
 #: src/templates/core/cases/partials/table.html:11
-#: src/templates/core/config/document_types/detail.html:58
+#: src/templates/core/config/document_types/detail.html:61
 #: src/templates/core/config/document_types/partials/table.html:12
 #: src/templates/core/config/field_templates/partials/table.html:12
 #: src/templates/core/export/client_data_pdf.html:119
@@ -1132,7 +1132,7 @@ msgstr ""
 #: src/templates/core/import/list.html:25
 #: src/templates/core/system/legal_holds.html:37
 #: src/templates/core/system/legal_holds.html:70
-#: src/templates/core/workitems/detail.html:24
+#: src/templates/core/workitems/detail.html:34
 #: src/templates/core/workitems/inbox.html:105
 #: src/templates/core/workitems/inbox.html:165
 #: src/templates/core/workitems/offline_workitem_list.html:42
@@ -1148,7 +1148,7 @@ msgstr "Open = active case, Closed = completed"
 msgid "Daten (JSON)"
 msgstr "Data (JSON)"
 
-#: src/core/models/case.py:89 src/templates/core/cases/detail.html:92
+#: src/core/models/case.py:89 src/templates/core/cases/detail.html:43
 #: src/templates/core/cases/partials/table.html:12
 #: src/templates/core/export/client_data_pdf.html:123
 msgid "Fallverantwortlich"
@@ -1164,17 +1164,17 @@ msgstr "Primary caseworker for this case"
 msgid "Aktualisiert am"
 msgstr "Updated on"
 
-#: src/core/models/case.py:97 src/templates/core/cases/detail.html:105
+#: src/core/models/case.py:97 src/templates/core/cases/detail.html:56
 #: src/templates/core/export/client_data_pdf.html:121
 msgid "Geschlossen am"
 msgstr "Closed on"
 
 #: src/core/models/case.py:102 src/core/nav.py:323
-#: src/templates/core/cases/detail.html:11 src/templates/core/cases/list.html:4
+#: src/templates/core/cases/detail.html:9 src/templates/core/cases/list.html:4
 #: src/templates/core/cases/list.html:9
-#: src/templates/core/clients/detail.html:286
+#: src/templates/core/clients/detail.html:191
 #: src/templates/core/clients/offline_detail.html:314
-#: src/templates/core/config/document_types/detail.html:67
+#: src/templates/core/config/document_types/detail.html:70
 msgid "Fälle"
 msgstr "Cases"
 
@@ -1257,7 +1257,7 @@ msgstr "Person's age group at time of registration"
 
 #: src/core/models/client.py:57 src/core/models/user.py:51
 #: src/core/services/import_engine.py:367
-#: src/templates/core/clients/detail.html:234
+#: src/templates/core/clients/detail.html:133
 #: src/templates/core/clients/offline_detail.html:105
 #: src/templates/core/export/client_data_pdf.html:40
 msgid "Notizen"
@@ -1278,7 +1278,7 @@ msgstr ""
 #: src/core/models/client.py:81 src/core/models/document_type.py:178
 #: src/core/models/document_type.py:349 src/core/models/organization.py:37
 #: src/core/models/quick_template.py:60 src/core/models/time_filter.py:37
-#: src/templates/core/config/document_types/detail.html:59
+#: src/templates/core/config/document_types/detail.html:62
 #: src/templates/core/config/document_types/partials/table.html:36
 #: src/templates/core/config/field_templates/partials/table.html:31
 #: src/templates/core/export/client_data_pdf.html:41
@@ -1307,13 +1307,13 @@ msgstr ""
 
 #: src/core/models/client.py:103 src/core/models/import_job.py:52
 #: src/core/nav.py:315 src/core/reporting/backends/client_metrics.py:205
-#: src/templates/core/clients/detail.html:11
+#: src/templates/core/clients/detail.html:9
 #: src/templates/core/clients/list.html:4
 #: src/templates/core/clients/list.html:9
 #: src/templates/core/clients/offline_list.html:4
 #: src/templates/core/clients/offline_list.html:72
 #: src/templates/core/clients/partials/table.html:13
-#: src/templates/core/config/document_types/detail.html:65
+#: src/templates/core/config/document_types/detail.html:68
 #: src/templates/core/search/partials/global_results.html:6
 #: src/templates/core/search/partials/results.html:8
 #: src/templates/partials/_navigation_mobile.html:57
@@ -1340,8 +1340,8 @@ msgstr "High"
 
 #: src/core/models/document_type.py:112
 #: src/templates/components/_ban_feed_card.html:8
-#: src/templates/core/clients/detail.html:33
-#: src/templates/core/clients/detail.html:178
+#: src/templates/core/clients/detail.html:28
+#: src/templates/core/clients/detail.html:77
 #: src/templates/core/handover/partials/_highlights.html:36
 msgid "Hausverbot"
 msgstr "Facility ban"
@@ -1411,7 +1411,7 @@ msgstr ""
 "changed after creation."
 
 #: src/core/models/document_type.py:155 src/core/models/document_type.py:319
-#: src/templates/core/config/document_types/detail.html:34
+#: src/templates/core/config/document_types/detail.html:37
 msgid "Sensibilität"
 msgstr "Sensitivity"
 
@@ -1440,7 +1440,7 @@ msgid "Farbe"
 msgstr "Color"
 
 #: src/core/models/document_type.py:185 src/core/packages/loader.py:246
-#: src/templates/core/config/document_types/detail.html:50
+#: src/templates/core/config/document_types/detail.html:53
 #: src/templates/core/config/document_types/partials/table.html:10
 msgid "Systemtyp"
 msgstr "System type"
@@ -1459,7 +1459,7 @@ msgstr ""
 "report (same as having no system type)."
 
 #: src/core/models/document_type.py:201 src/core/packages/loader.py:414
-#: src/templates/core/config/document_types/detail.html:38
+#: src/templates/core/config/document_types/detail.html:41
 msgid "Entitätstyp"
 msgstr "Entity type"
 
@@ -1473,7 +1473,7 @@ msgstr ""
 
 #: src/core/models/document_type.py:207 src/core/nav.py:411
 #: src/core/services/hubs.py:228
-#: src/templates/core/config/document_types/detail.html:20
+#: src/templates/core/config/document_types/detail.html:22
 #: src/templates/core/config/document_types/list.html:4
 #: src/templates/core/config/document_types/list.html:9
 #: src/templates/core/config/document_types/partials/table.html:5
@@ -1693,7 +1693,7 @@ msgstr "Search index"
 #: src/templates/components/_ban_feed_card.html:12
 #: src/templates/components/_event_card.html:22
 #: src/templates/core/events/delete_confirm.html:34
-#: src/templates/core/events/detail.html:61
+#: src/templates/core/events/detail.html:38
 #: src/templates/core/events/edit.html:24
 #: src/templates/core/export/report_pdf.html:47
 #: src/templates/core/retention/partials/dashboard_content.html:26
@@ -1710,7 +1710,7 @@ msgstr "Deleted"
 #: src/core/models/event.py:89 src/core/models/import_job.py:53
 #: src/core/reporting/backends/counseling_hours.py:206
 #: src/core/reporting/backends/needle_exchange_balance.py:162
-#: src/templates/core/config/document_types/detail.html:69
+#: src/templates/core/config/document_types/detail.html:72
 #: src/templates/core/config/document_types/partials/table.html:11
 #: src/templates/core/search/partials/results.html:25
 msgid "Ereignisse"
@@ -2160,7 +2160,7 @@ msgstr "anonymous, identified, qualified, or document_type"
 #: src/core/models/retention.py:58 src/core/models/workitem.py:122
 #: src/templates/core/clients/_offline_workitem_fields.html:36
 #: src/templates/core/export/client_data_pdf.html:482
-#: src/templates/core/workitems/detail.html:117
+#: src/templates/core/workitems/detail.html:68
 msgid "Wiedervorlage am"
 msgstr "Follow-up on"
 
@@ -2540,8 +2540,8 @@ msgstr "In progress"
 #: src/templates/components/_workitem_row.html:131
 #: src/templates/components/_workitem_row.html:141
 #: src/templates/core/events/conflict_list.html:20
-#: src/templates/core/workitems/detail.html:73
 #: src/templates/core/workitems/offline_workitem_list.html:107
+#: src/templates/core/workitems/partials/_actions.html:67
 #: src/templates/core/workitems/partials/inbox_content.html:153
 msgid "Erledigt"
 msgstr "Completed"
@@ -2559,7 +2559,7 @@ msgstr "Discarded"
 #: src/templates/components/_workitem_row.html:71
 #: src/templates/core/clients/_offline_workitem_fields.html:21
 #: src/templates/core/clients/offline_detail.html:16
-#: src/templates/core/workitems/detail.html:95
+#: src/templates/core/workitems/detail.html:46
 #: src/templates/core/workitems/offline_workitem_list.html:69
 msgid "Wichtig"
 msgstr "Important"
@@ -2570,7 +2570,7 @@ msgstr "Important"
 #: src/templates/components/_workitem_row.html:69
 #: src/templates/core/clients/_offline_workitem_fields.html:22
 #: src/templates/core/clients/offline_detail.html:17
-#: src/templates/core/workitems/detail.html:93
+#: src/templates/core/workitems/detail.html:44
 #: src/templates/core/workitems/offline_workitem_list.html:65
 msgid "Dringend"
 msgstr "Urgent"
@@ -2603,7 +2603,7 @@ msgstr "Yearly"
 #: src/core/models/workitem.py:73
 #: src/templates/core/clients/_offline_workitem_fields.html:51
 #: src/templates/core/export/client_data_pdf.html:513
-#: src/templates/core/workitems/detail.html:152
+#: src/templates/core/workitems/detail.html:103
 #: src/templates/core/workitems/inbox.html:67
 msgid "Zugewiesen an"
 msgstr "Assigned to"
@@ -2616,7 +2616,7 @@ msgstr "Assigned to"
 #: src/templates/core/export/report_pdf.html:69
 #: src/templates/core/statistics/external_report.html:83
 #: src/templates/core/statistics/partials/dashboard_content.html:139
-#: src/templates/core/workitems/detail.html:20
+#: src/templates/core/workitems/detail.html:30
 #: src/templates/core/workitems/inbox.html:33
 msgid "Typ"
 msgstr "Type"
@@ -2633,7 +2633,7 @@ msgstr "Open = not yet started, In progress = active, Completed = finished"
 #: src/core/models/workitem.py:93
 #: src/templates/core/clients/_offline_workitem_fields.html:18
 #: src/templates/core/export/client_data_pdf.html:511
-#: src/templates/core/workitems/detail.html:90
+#: src/templates/core/workitems/detail.html:41
 #: src/templates/core/workitems/inbox.html:51
 #: src/templates/core/workitems/inbox.html:182
 msgid "Priorität"
@@ -2654,7 +2654,7 @@ msgstr ""
 #: src/core/models/workitem.py:116
 #: src/templates/components/_workitem_row.html:59
 #: src/templates/core/clients/_offline_workitem_fields.html:31
-#: src/templates/core/workitems/detail.html:102
+#: src/templates/core/workitems/detail.html:53
 msgid "Zu erledigen bis"
 msgstr "Due by"
 
@@ -2742,14 +2742,15 @@ msgid "Compliance"
 msgstr "Compliance"
 
 #: src/core/nav.py:237 src/templates/core/statistics/external_report.html:4
+#: src/tests/test_i18n_loeschantrag_nav.py:96
 msgid "Externer Bericht"
 msgstr "External report"
 
-#: src/core/nav.py:244
+#: src/core/nav.py:244 src/tests/test_i18n_loeschantrag_nav.py:97
 msgid "Datensatz-Berichte"
 msgstr "Dataset reports"
 
-#: src/core/nav.py:256
+#: src/core/nav.py:256 src/tests/test_i18n_loeschantrag_nav.py:98
 msgid "Freigaben"
 msgstr "Releases"
 
@@ -2759,7 +2760,7 @@ msgstr "Releases"
 msgid "Statistik"
 msgstr "Statistics"
 
-#: src/core/nav.py:265
+#: src/core/nav.py:265 src/tests/test_i18n_loeschantrag_nav.py:102
 msgid "Statistik-Navigation"
 msgstr "Statistics navigation"
 
@@ -2767,7 +2768,8 @@ msgstr "Statistics navigation"
 msgid "Arbeitszentrale"
 msgstr "Work center"
 
-#: src/core/nav.py:298 src/templates/core/zeitstrom/index.html:4
+#: src/core/nav.py:298 src/templates/core/events/detail.html:10
+#: src/templates/core/zeitstrom/index.html:4
 #: src/templates/core/zeitstrom/index.html:9
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:4
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:37
@@ -2776,8 +2778,9 @@ msgid "Zeitstrom"
 msgstr "Timeline"
 
 #: src/core/nav.py:306 src/core/views/zeitstrom.py:117
-#: src/templates/core/clients/detail.html:269
+#: src/templates/core/clients/detail.html:174
 #: src/templates/core/clients/offline_detail.html:329
+#: src/templates/core/workitems/detail.html:10
 #: src/templates/core/workitems/inbox.html:4
 #: src/templates/core/workitems/inbox.html:9
 #: src/templates/core/workitems/offline_workitem_list.html:4
@@ -2829,7 +2832,7 @@ msgstr "Privacy"
 msgid "Betroffenenrechte, Fristen und Nachweise."
 msgstr "Data subject rights, deadlines and records."
 
-#: src/core/nav.py:495
+#: src/core/nav.py:495 src/tests/test_i18n_loeschantrag_nav.py:103
 msgid "Datenschutz-Navigation"
 msgstr "Privacy navigation"
 
@@ -3079,7 +3082,7 @@ msgstr "Example: distribution of services and crisis types"
 
 #: src/core/reporting/backends/service_distribution.py:198
 #: src/templates/core/events/conflict_review.html:51
-#: src/templates/core/events/detail.html:195
+#: src/templates/core/events/detail.html:180
 #: src/templates/core/export/client_data_pdf.html:81
 #: src/templates/core/export/client_data_pdf.html:399
 #: src/templates/core/hubs/verwaltung.html:75
@@ -3180,46 +3183,46 @@ msgstr "Population"
 msgid "k-Anonymität: Zellen < %(threshold)s unterdrückt"
 msgstr "k-anonymity: cells < %(threshold)s suppressed"
 
-#: src/core/services/case/cases.py:68 src/core/services/client/main.py:45
+#: src/core/services/case/cases.py:94 src/core/services/client/main.py:45
 msgid "Der Dokumentationstyp gehört nicht zu dieser Einrichtung."
 msgstr "The document type does not belong to this facility."
 
-#: src/core/services/case/cases.py:70
+#: src/core/services/case/cases.py:96
 msgid "Der Dokumentationstyp ist nicht für Fälle vorgesehen."
 msgstr "The document type is not intended for cases."
 
-#: src/core/services/case/cases.py:89 src/core/services/client/main.py:104
+#: src/core/services/case/cases.py:115 src/core/services/client/main.py:104
 msgid ""
 "Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."
 msgstr "Dynamic data cannot be saved without a document type."
 
-#: src/core/services/case/cases.py:107
+#: src/core/services/case/cases.py:133
 msgid "Fälle müssen einer Person zugeordnet sein."
 msgstr "Cases must be assigned to a person."
 
-#: src/core/services/case/cases.py:109
+#: src/core/services/case/cases.py:135
 msgid "Person gehört nicht zur Einrichtung."
 msgstr "Person does not belong to this facility."
 
-#: src/core/services/case/cases.py:111
+#: src/core/services/case/cases.py:137
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Case manager does not belong to the facility."
 
-#: src/core/services/case/cases.py:260
+#: src/core/services/case/cases.py:286
 msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgstr "Event does not belong to the same facility as the case."
 
-#: src/core/services/case/cases.py:262
+#: src/core/services/case/cases.py:288
 msgid "Ereignis ist für diese Rolle nicht sichtbar."
 msgstr "Event is not visible to this role."
 
-#: src/core/services/case/cases.py:265
+#: src/core/services/case/cases.py:291
 msgid ""
 "Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
 "werden."
 msgstr "Anonymous events cannot be attached to a client-bound case."
 
-#: src/core/services/case/cases.py:267 src/core/services/events/crud.py:70
+#: src/core/services/case/cases.py:293 src/core/services/events/crud.py:70
 msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Event person does not match case person."
 
@@ -4485,7 +4488,7 @@ msgstr "Case not found."
 
 #: src/core/views/cases.py:767 src/core/views/cases.py:772
 #: src/core/views/clients.py:763 src/core/views/clients.py:768
-#: src/core/views/events.py:150
+#: src/core/views/events.py:183
 msgid "Dokumentationstyp nicht gefunden."
 msgstr "Document type not found."
 
@@ -4675,27 +4678,27 @@ msgstr "Deletion request has been approved."
 msgid "Löschantrag wurde abgelehnt."
 msgstr "Deletion request has been rejected."
 
-#: src/core/views/events.py:434
+#: src/core/views/events.py:470
 msgid "Kontakt gespeichert – bereit für den nächsten."
 msgstr "Contact saved – ready for the next one."
 
-#: src/core/views/events.py:437
+#: src/core/views/events.py:473
 msgid "Kontakt wurde dokumentiert."
 msgstr "Contact has been documented."
 
-#: src/core/views/events.py:499
+#: src/core/views/events.py:535
 msgid "Dieser Dokumentationstyp erfordert eine Person."
 msgstr "This document type requires a person."
 
-#: src/core/views/events.py:678
+#: src/core/views/events.py:714
 msgid "Ereignis wurde aktualisiert."
 msgstr "Event has been updated."
 
-#: src/core/views/events.py:737
+#: src/core/views/events.py:773
 msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
 msgstr "Deletion request has been submitted and must be approved by a manager."
 
-#: src/core/views/events.py:740
+#: src/core/views/events.py:776
 msgid "Ereignis wurde gelöscht."
 msgstr "Event has been deleted."
 
@@ -5031,7 +5034,7 @@ msgstr "Last 30 days"
 msgid "Alle"
 msgstr "All"
 
-#: src/core/views/zeitstrom.py:115 src/templates/core/cases/detail.html:124
+#: src/core/views/zeitstrom.py:115 src/templates/core/cases/detail.html:76
 #: src/templates/core/export/report_pdf.html:122
 #: src/templates/core/handover/partials/_stats_grid.html:7
 #: src/templates/core/search/partials/global_results.html:20
@@ -5315,8 +5318,7 @@ msgid "Neu laden"
 msgstr "Reload"
 
 #: src/templates/auth/login.html:33 src/templates/base.html:63
-#: src/templates/core/cases/detail.html:41
-#: src/templates/core/cases/detail.html:69
+#: src/templates/core/cases/partials/_actions.html:34
 msgid "Schließen"
 msgstr "Close"
 
@@ -5763,6 +5765,11 @@ msgstr ""
 "Demo — synthetic data, reset every full hour (next: %(reset)s). Emails &amp; "
 "admin functions disabled."
 
+#: src/templates/components/_action_overflow.html:18
+#: src/templates/components/_action_overflow.html:21
+msgid "Weitere Aktionen"
+msgstr "More actions"
+
 #: src/templates/components/_activity_card.html:33
 msgid "Benutzer:"
 msgstr "User:"
@@ -5820,7 +5827,7 @@ msgstr "FU"
 
 #: src/templates/components/_workitem_row.html:18
 #: src/templates/components/_workitem_row.html:66
-#: src/templates/core/workitems/detail.html:112
+#: src/templates/core/workitems/detail.html:63
 msgid "Wiederkehrend"
 msgstr "Recurring"
 
@@ -5843,8 +5850,8 @@ msgstr "Take over"
 
 #: src/templates/components/_workitem_row.html:106
 #: src/templates/components/_workitem_row.html:126
-#: src/templates/core/workitems/detail.html:44
-#: src/templates/core/workitems/detail.html:67
+#: src/templates/core/workitems/partials/_actions.html:38
+#: src/templates/core/workitems/partials/_actions.html:61
 msgid ""
 "Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert "
 "und erscheint nicht mehr bei offenen Aufgaben."
@@ -5853,12 +5860,12 @@ msgstr ""
 "among open tasks."
 
 #: src/templates/components/_workitem_row.html:111
-#: src/templates/core/workitems/detail.html:50
+#: src/templates/core/workitems/partials/_actions.html:44
 msgid "Als erledigt markieren"
 msgstr "Mark as done"
 
 #: src/templates/components/_workitem_row.html:115
-#: src/templates/core/workitems/detail.html:55
+#: src/templates/core/workitems/partials/_actions.html:49
 msgid ""
 "Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und "
 "erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und "
@@ -5868,7 +5875,7 @@ msgstr ""
 "longer appear under open tasks. It will not be deleted and remains traceable."
 
 #: src/templates/components/_workitem_row.html:120
-#: src/templates/core/workitems/detail.html:61
+#: src/templates/core/workitems/partials/_actions.html:55
 msgid "Als nicht relevant schließen"
 msgstr "Close as not relevant"
 
@@ -5876,7 +5883,7 @@ msgstr "Close as not relevant"
 #: src/templates/core/audit/list.html:64
 #: src/templates/core/system/auditlog_list.html:97
 #: src/templates/core/system/legal_holds.html:53
-#: src/templates/core/workitems/detail.html:82
+#: src/templates/core/workitems/partials/_actions.html:76
 msgid "Zurücksetzen"
 msgstr "Reset"
 
@@ -5916,6 +5923,7 @@ msgstr "Manage 2FA"
 
 #: src/templates/core/account/profile.html:70
 #: src/templates/core/events/conflict_list.html:30
+#: src/tests/test_i18n_loeschantrag_nav.py:111
 msgid "Offline-Konflikte"
 msgstr "Offline conflicts"
 
@@ -5928,6 +5936,7 @@ msgid "Änderungen dieses Geräts warten auf eine Entscheidung."
 msgstr "changes from this device are waiting for a decision."
 
 #: src/templates/core/account/profile.html:76
+#: src/tests/test_i18n_loeschantrag_nav.py:112
 msgid "Offline-Konflikte prüfen"
 msgstr "Review offline conflicts"
 
@@ -6058,33 +6067,9 @@ msgstr "IP"
 msgid "Keine Einträge gefunden."
 msgstr "No entries found."
 
-#: src/templates/core/cases/detail.html:35
-#: src/templates/core/cases/detail.html:55
-#: src/templates/core/cases/partials/episode_list.html:50
-#: src/templates/core/cases/partials/goals_section.html:15
-#: src/templates/core/clients/detail.html:80
-#: src/templates/core/clients/detail.html:106
-#: src/templates/core/clients/offline_detail.html:219
-#: src/templates/core/clients/offline_detail.html:405
-#: src/templates/core/config/document_types/detail.html:24
-#: src/templates/core/config/document_types/partials/condition_board.html:58
-#: src/templates/core/config/document_types/partials/field_board.html:51
-#: src/templates/core/events/detail.html:20
-#: src/templates/core/events/detail.html:32
-#: src/templates/core/workitems/detail.html:12
-msgid "Bearbeiten"
-msgstr "Edit"
-
-#: src/templates/core/cases/detail.html:48
-#: src/templates/core/cases/detail.html:76
-msgid "Wiedereröffnen"
-msgstr "Reopen"
-
-#: src/templates/core/cases/detail.html:60
-#: src/templates/core/clients/detail.html:111
-#: src/templates/core/events/detail.html:38
-msgid "Weitere Aktionen"
-msgstr "More actions"
+#: src/templates/core/cases/detail.html:79
+msgid "Alle Dateien dieses Falls"
+msgstr "All files for this case"
 
 #: src/templates/core/cases/episode_form.html:4
 #: src/templates/core/cases/episode_form.html:8
@@ -6108,7 +6093,7 @@ msgstr "New Episode"
 #: src/templates/core/config/document_types/form.html:49
 #: src/templates/core/config/document_types/partials/group_form.html:45
 #: src/templates/core/config/field_templates/form.html:30
-#: src/templates/core/events/create.html:227
+#: src/templates/core/events/create.html:231
 #: src/templates/core/events/offline_create.html:103
 #: src/templates/core/workitems/form.html:130
 #: src/templates/core/workitems/offline_create.html:96
@@ -6135,7 +6120,7 @@ msgstr "Create Episode"
 #: src/templates/core/config/document_types/form.html:54
 #: src/templates/core/config/field_templates/confirm_delete.html:47
 #: src/templates/core/config/field_templates/form.html:32
-#: src/templates/core/events/create.html:240
+#: src/templates/core/events/create.html:244
 #: src/templates/core/events/delete_confirm.html:62
 #: src/templates/core/events/edit.html:49
 #: src/templates/core/import/upload.html:25
@@ -6151,9 +6136,6 @@ msgstr "Edit Case"
 
 #: src/templates/core/cases/form.html:4 src/templates/core/cases/form.html:8
 #: src/templates/core/cases/list.html:13
-#: src/templates/core/clients/detail.html:71
-#: src/templates/core/clients/detail.html:124
-#: src/templates/core/clients/detail.html:307
 msgid "Neuer Fall"
 msgstr "New Case"
 
@@ -6205,13 +6187,13 @@ msgid "Die Personenzuordnung ist nach dem Anlegen festgelegt."
 msgstr "The person assignment is fixed after creation."
 
 #: src/templates/core/cases/form.html:86
-#: src/templates/core/events/create.html:145
+#: src/templates/core/events/create.html:149
 #: src/templates/core/workitems/form.html:105
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
 
 #: src/templates/core/cases/form.html:87
-#: src/templates/core/events/create.html:146
+#: src/templates/core/events/create.html:150
 msgid "Person suchen"
 msgstr "Search person"
 
@@ -6276,6 +6258,41 @@ msgstr "Filter by status"
 #: src/templates/core/workitems/inbox.html:114
 msgid "Alle Status"
 msgstr "All statuses"
+
+#: src/templates/core/cases/partials/_actions.html:17
+#: src/templates/core/clients/offline_detail.html:117
+#: src/templates/core/clients/partials/_actions.html:25
+#: src/templates/partials/_navigation_desktop.html:49
+#: src/templates/partials/_navigation_mobile.html:28
+msgid "Kontakt dokumentieren"
+msgstr "Document contact"
+
+#: src/templates/core/cases/partials/_actions.html:18
+#: src/templates/core/clients/offline_detail.html:338
+#: src/templates/core/clients/partials/_actions.html:26
+#: src/templates/core/events/partials/_actions.html:17
+#: src/templates/partials/_navigation_desktop.html:58
+#: src/templates/partials/_navigation_mobile.html:35
+msgid "Aufgabe erstellen"
+msgstr "Create task"
+
+#: src/templates/core/cases/partials/_actions.html:19
+#: src/templates/core/cases/partials/episode_list.html:50
+#: src/templates/core/cases/partials/goals_section.html:15
+#: src/templates/core/clients/offline_detail.html:219
+#: src/templates/core/clients/offline_detail.html:405
+#: src/templates/core/clients/partials/_actions.html:27
+#: src/templates/core/config/document_types/detail.html:27
+#: src/templates/core/config/document_types/partials/condition_board.html:58
+#: src/templates/core/config/document_types/partials/field_board.html:51
+#: src/templates/core/events/partials/_actions.html:18
+#: src/templates/core/workitems/partials/_actions.html:84
+msgid "Bearbeiten"
+msgstr "Edit"
+
+#: src/templates/core/cases/partials/_actions.html:41
+msgid "Wiedereröffnen"
+msgstr "Reopen"
 
 #: src/templates/core/cases/partials/episode_list.html:26
 msgid "laufend"
@@ -6477,7 +6494,7 @@ msgstr "Approve"
 msgid "Ablehnen"
 msgstr "Reject"
 
-#: src/templates/core/clients/detail.html:20
+#: src/templates/core/clients/detail.html:15
 #: src/templates/core/clients/offline_list.html:16
 #: src/templates/core/clients/partials/table.html:32
 #, python-brace-format
@@ -6488,75 +6505,27 @@ msgstr ""
 "{count} untransferred changes will remain locally if you remove this person "
 "from the offline cache now. Continue anyway?"
 
-#: src/templates/core/clients/detail.html:21
+#: src/templates/core/clients/detail.html:16
 #: src/templates/core/clients/partials/table.html:33
 #, python-brace-format
 msgid "{count} lokale Änderungen beibehalten."
 msgstr "{count} local changes kept."
 
-#: src/templates/core/clients/detail.html:44
+#: src/templates/core/clients/detail.html:39
 #: src/templates/core/clients/partials/table.html:45
 msgid "Lokal verfügbar"
 msgstr "Available locally"
 
-#: src/templates/core/clients/detail.html:47
+#: src/templates/core/clients/detail.html:42
 msgid "läuft bald ab"
 msgstr "expires soon"
 
-#: src/templates/core/clients/detail.html:60
-#: src/templates/core/clients/detail.html:137
-#: src/templates/core/clients/partials/table.html:30
-msgid "Offline mitnehmen"
-msgstr "Take offline"
-
-#: src/templates/core/clients/detail.html:61
-#: src/templates/core/clients/detail.html:138
-#: src/templates/core/clients/offline_list.html:131
-#: src/templates/core/clients/offline_list.html:141
-#: src/templates/core/clients/partials/table.html:31
-msgid "Aus Offline-Cache entfernen"
-msgstr "Remove from offline cache"
-
-#: src/templates/core/clients/detail.html:66
-#: src/templates/core/clients/detail.html:119
-#: src/templates/core/clients/offline_detail.html:338
-#: src/templates/core/workitems/form.html:4
-#: src/templates/core/workitems/form.html:8
-#: src/templates/core/workitems/inbox.html:15
-#: src/templates/core/zeitstrom/index.html:17
-msgid "Neue Aufgabe"
-msgstr "New Task"
-
-#: src/templates/core/clients/detail.html:76
-#: src/templates/core/clients/detail.html:129
-#: src/templates/core/clients/offline_detail.html:117
-#: src/templates/core/events/create.html:4
-#: src/templates/core/events/create.html:8
-#: src/templates/core/zeitstrom/index.html:13
-msgid "Neuer Kontakt"
-msgstr "New Contact"
-
-#: src/templates/core/clients/detail.html:88
-#: src/templates/core/export/client_data_pdf.html:6
-msgid "Datenauskunft"
-msgstr "Data Disclosure"
-
-#: src/templates/core/clients/detail.html:94
-#: src/templates/core/clients/detail.html:147
-msgid "JSON-Export (Art. 20)"
-msgstr "JSON Export (Art. 20)"
-
-#: src/templates/core/clients/detail.html:97
-#: src/templates/core/clients/detail.html:150
-msgid "PDF-Export (Art. 15)"
-msgstr "PDF Export (Art. 15)"
-
-#: src/templates/core/clients/detail.html:180
+#: src/templates/core/clients/detail.html:79
 #: src/templates/core/zeitstrom/index.html:62
 msgid "Bis:"
 msgstr "To:"
 
-#: src/templates/core/clients/detail.html:195
+#: src/templates/core/clients/detail.html:94
 #, python-format
 msgid ""
 "am %(datum)s durch %(person)s — wartet auf Bestätigung durch eine zweite "
@@ -6565,50 +6534,61 @@ msgstr ""
 "on %(datum)s by %(person)s — awaiting confirmation by a second authorized "
 "person (four-eyes principle)."
 
-#: src/templates/core/clients/detail.html:200
+#: src/templates/core/clients/detail.html:99
 msgid "Zu den Löschanträgen"
 msgstr "Go to deletion requests"
 
-#: src/templates/core/clients/detail.html:212
+#: src/templates/core/clients/detail.html:111
 msgid "Berichtigung (Art. 16 DSGVO)"
 msgstr "Rectification (Art. 16 GDPR)"
 
-#: src/templates/core/clients/detail.html:216
+#: src/templates/core/clients/detail.html:115
 #, python-format
 msgid "%(n)s offener Antrag"
 msgid_plural "%(n)s offene Anträge"
 msgstr[0] "%(n)s open request"
 msgstr[1] "%(n)s open requests"
 
-#: src/templates/core/clients/detail.html:220
+#: src/templates/core/clients/detail.html:119
 #: src/templates/core/rectification/form.html:4
 #: src/templates/core/rectification/form.html:15
 msgid "Berichtigung beantragen"
 msgstr "Request rectification"
 
-#: src/templates/core/clients/detail.html:224
+#: src/templates/core/clients/detail.html:123
 msgid "Zu den Berichtigungsanträgen"
 msgstr "Go to rectification requests"
 
-#: src/templates/core/clients/detail.html:246
+#: src/templates/core/clients/detail.html:146
 #: src/templates/core/clients/offline_detail.html:177
 msgid "Kontakt-Chronik"
 msgstr "Contact Chronicle"
 
-#: src/templates/core/clients/detail.html:263
+#: src/templates/core/clients/detail.html:149
+msgid "Alle Dateien dieser Person"
+msgstr "All files for this person"
+
+#: src/templates/core/clients/detail.html:168
 #: src/templates/core/clients/offline_detail.html:180
 msgid "Noch keine Kontakte dokumentiert."
 msgstr "No contacts documented yet."
 
-#: src/templates/core/clients/detail.html:277
+#: src/templates/core/clients/detail.html:182
 #: src/templates/core/clients/offline_detail.html:365
 #: src/templates/core/workitems/partials/inbox_content.html:34
 msgid "Keine offenen Aufgaben"
 msgstr "No open tasks"
 
-#: src/templates/core/clients/detail.html:302
+#: src/templates/core/clients/detail.html:207
 msgid "Keine offenen Fälle"
 msgstr "No open cases"
+
+#: src/templates/core/clients/detail.html:212
+#: src/templates/core/clients/partials/_actions.html:28
+#: src/templates/partials/_navigation_desktop.html:62
+#: src/templates/partials/_navigation_mobile.html:38
+msgid "Fall anlegen"
+msgstr "Create case"
 
 #: src/templates/core/clients/form.html:4
 #: src/templates/core/clients/form.html:8
@@ -6849,6 +6829,26 @@ msgstr "Last contact"
 msgid "Offline"
 msgstr "Offline"
 
+#: src/templates/core/clients/offline_list.html:131
+#: src/templates/core/clients/offline_list.html:141
+#: src/templates/core/clients/partials/_actions.html:50
+#: src/templates/core/clients/partials/table.html:31
+msgid "Aus Offline-Cache entfernen"
+msgstr "Remove from offline cache"
+
+#: src/templates/core/clients/partials/_actions.html:49
+#: src/templates/core/clients/partials/table.html:30
+msgid "Offline mitnehmen"
+msgstr "Take offline"
+
+#: src/templates/core/clients/partials/_actions.html:59
+msgid "JSON-Export (Art. 20)"
+msgstr "JSON Export (Art. 20)"
+
+#: src/templates/core/clients/partials/_actions.html:62
+msgid "PDF-Export (Art. 15)"
+msgstr "PDF Export (Art. 15)"
+
 #: src/templates/core/clients/partials/delete_request_action.html:14
 msgid "Ein Löschantrag wartet bereits auf Bestätigung."
 msgstr "A deletion request is already awaiting confirmation."
@@ -6978,31 +6978,30 @@ msgstr "Edit / deactivate instead"
 msgid "Endgültig löschen"
 msgstr "Delete permanently"
 
-#: src/templates/core/config/document_types/detail.html:25
+#: src/templates/core/config/document_types/detail.html:28
 #: src/templates/core/config/document_types/partials/condition_board.html:63
 #: src/templates/core/config/document_types/partials/field_board.html:58
 #: src/templates/core/config/field_templates/partials/table.html:43
-#: src/templates/core/events/detail.html:25
-#: src/templates/core/events/detail.html:44
+#: src/templates/core/events/partials/_actions.html:21
 msgid "Löschen"
 msgstr "Delete"
 
-#: src/templates/core/config/document_types/detail.html:31
+#: src/templates/core/config/document_types/detail.html:34
 msgid "Stammdaten"
 msgstr "Master data"
 
-#: src/templates/core/config/document_types/detail.html:54
+#: src/templates/core/config/document_types/detail.html:57
 msgid "Aufbewahrungsfrist"
 msgstr "Retention period"
 
-#: src/templates/core/config/document_types/detail.html:55
+#: src/templates/core/config/document_types/detail.html:58
 #, python-format
 msgid "%(days)s Tag"
 msgid_plural "%(days)s Tage"
 msgstr[0] "%(days)s day"
 msgstr[1] "%(days)s days"
 
-#: src/templates/core/config/document_types/detail.html:59
+#: src/templates/core/config/document_types/detail.html:62
 #: src/templates/core/config/document_types/partials/table.html:38
 #: src/templates/core/config/field_templates/partials/table.html:33
 #: src/templates/core/system/dashboard.html:288
@@ -7010,24 +7009,24 @@ msgstr[1] "%(days)s days"
 msgid "Inaktiv"
 msgstr "Inactive"
 
-#: src/templates/core/config/document_types/detail.html:84
+#: src/templates/core/config/document_types/detail.html:87
 #: src/templates/core/partials/dynamic_fields.html:57
 msgid "Felder"
 msgstr "Fields"
 
-#: src/templates/core/config/document_types/detail.html:90
+#: src/templates/core/config/document_types/detail.html:93
 msgid "Bedingte Sichtbarkeit"
 msgstr "Conditional visibility"
 
-#: src/templates/core/config/document_types/detail.html:115
+#: src/templates/core/config/document_types/detail.html:118
 msgid "Live-Vorschau"
 msgstr "Live preview"
 
-#: src/templates/core/config/document_types/detail.html:134
+#: src/templates/core/config/document_types/detail.html:137
 msgid "Vorschau wird geladen …"
 msgstr "Loading preview …"
 
-#: src/templates/core/config/document_types/detail.html:138
+#: src/templates/core/config/document_types/detail.html:141
 msgid "Vorschau nur für aktive Typen."
 msgstr "Preview only available for active types."
 
@@ -7545,45 +7544,51 @@ msgstr "Use server version"
 msgid "Manuell mergen"
 msgstr "Merge manually"
 
-#: src/templates/core/events/create.html:27
+#: src/templates/core/events/create.html:4
+#: src/templates/core/events/create.html:8
+#: src/templates/core/zeitstrom/index.html:13
+msgid "Neuer Kontakt"
+msgstr "New Contact"
+
+#: src/templates/core/events/create.html:31
 msgid "Schnell-Vorlagen"
 msgstr "Quick templates"
 
-#: src/templates/core/events/create.html:30
+#: src/templates/core/events/create.html:34
 #, python-format
 msgid "Vorlage angewendet: <strong>%(name)s</strong>"
 msgstr "Template applied: <strong>%(name)s</strong>"
 
-#: src/templates/core/events/create.html:31
+#: src/templates/core/events/create.html:35
 msgid "Vorlage entfernen"
 msgstr "Remove template"
 
-#: src/templates/core/events/create.html:34
+#: src/templates/core/events/create.html:38
 msgid "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen."
 msgstr "Choose a template to auto-fill fields."
 
-#: src/templates/core/events/create.html:52
+#: src/templates/core/events/create.html:56
 msgid "Basis-Daten"
 msgstr "Basic data"
 
-#: src/templates/core/events/create.html:180
+#: src/templates/core/events/create.html:184
 msgid ""
 "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
 msgstr "Required: this document type requires a minimum contact stage."
 
-#: src/templates/core/events/create.html:183
+#: src/templates/core/events/create.html:187
 msgid "Ohne Person wird der Kontakt als anonym gespeichert."
 msgstr "Without a person, the contact is saved as anonymous."
 
-#: src/templates/core/events/create.html:202
+#: src/templates/core/events/create.html:206
 msgid "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen."
 msgstr "Optional: assign the contact to an open case of the selected person."
 
-#: src/templates/core/events/create.html:206
+#: src/templates/core/events/create.html:210
 msgid "Kein offener Fall für diese Person vorhanden."
 msgstr "No open case for this person."
 
-#: src/templates/core/events/create.html:238
+#: src/templates/core/events/create.html:242
 msgid "Speichern & nächster Kontakt"
 msgstr "Save & next contact"
 
@@ -7616,11 +7621,15 @@ msgstr "Reason for deletion..."
 msgid "Betroffenes Ereignis"
 msgstr "Affected event"
 
-#: src/templates/core/events/detail.html:95
+#: src/templates/core/events/detail.html:73
+msgid "Alle Dateien dieses Ereignisses"
+msgstr "All files for this event"
+
+#: src/templates/core/events/detail.html:80
 msgid "Erfasste Daten"
 msgstr "Recorded data"
 
-#: src/templates/core/events/detail.html:101
+#: src/templates/core/events/detail.html:86
 msgid ""
 "Dieses Feld ist dem Dokumentationstyp nicht mehr zugeordnet; der Wert bleibt "
 "gespeichert."
@@ -7628,11 +7637,11 @@ msgstr ""
 "This field is no longer assigned to the document type; the value remains "
 "stored."
 
-#: src/templates/core/events/detail.html:101
+#: src/templates/core/events/detail.html:86
 msgid "Nicht mehr zugeordnet"
 msgstr "No longer assigned"
 
-#: src/templates/core/events/detail.html:120
+#: src/templates/core/events/detail.html:105
 #: src/templates/core/partials/dynamic_data_display.html:49
 #, python-format
 msgid "%(count)s Vorversion"
@@ -7640,26 +7649,26 @@ msgid_plural "%(count)s Vorversionen"
 msgstr[0] "%(count)s previous version"
 msgstr[1] "%(count)s previous versions"
 
-#: src/templates/core/events/detail.html:131
+#: src/templates/core/events/detail.html:116
 #: src/templates/core/export/client_data_pdf.html:163
 #: src/templates/core/export/client_data_pdf.html:271
 msgid "ersetzt"
 msgstr "replaced"
 
-#: src/templates/core/events/detail.html:160
+#: src/templates/core/events/detail.html:145
 msgid "Änderungshistorie"
 msgstr "Change History"
 
-#: src/templates/core/events/detail.html:174
+#: src/templates/core/events/detail.html:159
 msgid "Ausblenden"
 msgstr "Hide"
 
-#: src/templates/core/events/detail.html:196
+#: src/templates/core/events/detail.html:181
 #: src/templates/core/export/client_data_pdf.html:327
 msgid "Vorher"
 msgstr "Before"
 
-#: src/templates/core/events/detail.html:197
+#: src/templates/core/events/detail.html:182
 #: src/templates/core/export/client_data_pdf.html:328
 msgid "Nachher"
 msgstr "After"
@@ -7720,6 +7729,19 @@ msgstr "— no person —"
 #: src/templates/core/events/offline_create.html:69
 msgid "Dieser Dokumentationstyp erfordert eine zugeordnete Person."
 msgstr "This document type requires an assigned person."
+
+#: src/templates/core/events/partials/_actions.html:19
+#: src/templates/core/workitems/partials/_actions.html:22
+msgid "Zur Person"
+msgstr "Go to person"
+
+#: src/templates/core/events/partials/_actions.html:20
+msgid "Zum Fall"
+msgstr "Go to case"
+
+#: src/templates/core/export/client_data_pdf.html:6
+msgid "Datenauskunft"
+msgstr "Data Disclosure"
 
 #: src/templates/core/export/client_data_pdf.html:21
 msgid "Datenauskunft gemäß Art. 15 DSGVO"
@@ -8726,6 +8748,7 @@ msgid "Alle Ergebnisse anzeigen"
 msgstr "Show all results"
 
 #: src/templates/core/search/partials/global_results.html:65
+#: src/tests/test_i18n_loeschantrag_nav.py:107
 msgid "Erweiterte Suche öffnen"
 msgstr "Open advanced search"
 
@@ -9560,34 +9583,33 @@ msgstr "Technical and organisational measures (TOMs)"
 msgid "Keine Verarbeitungstätigkeiten registriert."
 msgstr "No processing activities registered."
 
-#: src/templates/core/workitems/detail.html:27
+#: src/templates/core/workitems/detail.html:37
 msgid "Abgeschlossen am:"
 msgstr "Completed on:"
 
-#: src/templates/core/workitems/detail.html:39
-msgid "Aufgabe übernehmen"
-msgstr "Take over task"
-
-#: src/templates/core/workitems/detail.html:108
+#: src/templates/core/workitems/detail.html:59
 msgid "Keine Frist"
 msgstr "No deadline"
 
-#: src/templates/core/workitems/detail.html:112
+#: src/templates/core/workitems/detail.html:63
 msgid "Wiederkehrend:"
 msgstr "Recurring:"
 
-#: src/templates/core/workitems/detail.html:125
+#: src/templates/core/workitems/detail.html:76
 msgid "Keine Wiedervorlage"
 msgstr "No follow-up"
-
-#: src/templates/core/workitems/detail.html:166
-msgid "Zurück zur Inbox"
-msgstr "Back to inbox"
 
 #: src/templates/core/workitems/form.html:4
 #: src/templates/core/workitems/form.html:8
 msgid "Aufgabe bearbeiten"
 msgstr "Edit Task"
+
+#: src/templates/core/workitems/form.html:4
+#: src/templates/core/workitems/form.html:8
+#: src/templates/core/workitems/inbox.html:15
+#: src/templates/core/zeitstrom/index.html:17
+msgid "Neue Aufgabe"
+msgstr "New Task"
 
 #: src/templates/core/workitems/form.html:37
 #: src/templates/core/workitems/form.html:56
@@ -9693,6 +9715,10 @@ msgstr "no person"
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:61
 msgid "Person offline entfernt"
 msgstr "Person removed offline"
+
+#: src/templates/core/workitems/partials/_actions.html:33
+msgid "Aufgabe übernehmen"
+msgstr "Take over task"
 
 #: src/templates/core/workitems/partials/_empty_filtered.html:11
 msgid "Keine Treffer für die aktuellen Filter"
@@ -9935,11 +9961,6 @@ msgstr "Search results"
 msgid "Neu erstellen"
 msgstr "Create new"
 
-#: src/templates/partials/_navigation_desktop.html:49
-#: src/templates/partials/_navigation_mobile.html:28
-msgid "Kontakt dokumentieren"
-msgstr "Document contact"
-
 #: src/templates/partials/_navigation_desktop.html:50
 msgid "Eintrag im Zeitstrom"
 msgstr "Timeline entry"
@@ -9948,19 +9969,9 @@ msgstr "Timeline entry"
 msgid "Neues Pseudonym vergeben"
 msgstr "Assign a new pseudonym"
 
-#: src/templates/partials/_navigation_desktop.html:58
-#: src/templates/partials/_navigation_mobile.html:35
-msgid "Aufgabe erstellen"
-msgstr "Create task"
-
 #: src/templates/partials/_navigation_desktop.html:59
 msgid "Für Team oder Person"
 msgstr "For team or person"
-
-#: src/templates/partials/_navigation_desktop.html:62
-#: src/templates/partials/_navigation_mobile.html:38
-msgid "Fall anlegen"
-msgstr "Create case"
 
 #: src/templates/partials/_navigation_desktop.html:63
 msgid "Längere Begleitung dokumentieren"

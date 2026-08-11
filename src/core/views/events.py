@@ -17,6 +17,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.models import Client, DocumentType, Event
+from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.compliance import (
     get_visible_event_or_404,
@@ -64,6 +65,37 @@ from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 logger = logging.getLogger(__name__)
 
 
+def _prefill_owner(meta_form, facility, client_id, case_id):
+    """``?client=`` und ``?case=`` in ``meta_form`` vorbelegen (Refs #1813 T4).
+
+    Ersetzt die vormals dreifach wiederholte ``?client=``-Vorbelegung in
+    :class:`EventCreateView` — jetzt ergänzt um ``?case=`` (Konzept #1801
+    §6.5): ist ein Fall gesetzt, wird zusätzlich die zugehörige Person
+    abgeleitet vorbelegt, aber nur, solange kein expliziter ``?client=``
+    vorliegt (der gewinnt immer).
+
+    Sicherheit: ``EventMetaForm.case`` führt bereits ein facility-gescoptes
+    Queryset als Validierungs-Whitelist — ein manipulierter ``?case=`` kann
+    beim Absenden nichts vorbelegen, was der Nutzer nicht ohnehin wählen
+    dürfte. Für die abgeleitete Person braucht es trotzdem einen eigenen
+    facility-gescopten, fail-closed Lookup (:func:`get_case_or_none`, Muster
+    ``get_client_or_none``) — sonst wäre die Ableitung ein Existenz-Orakel
+    über Fremd-/widerrufene Fälle.
+
+    Gibt die (ggf. aus dem Fall abgeleitete) ``client_id`` zurück, damit der
+    Aufrufer sie für die restliche Kontext-Konstruktion (Pseudonym-Anzeige,
+    ``context["client_id"]``) weiterverwenden kann.
+    """
+    if case_id:
+        meta_form.fields["case"].initial = case_id
+        case = get_case_or_none(facility, case_id)
+        if case is not None and case.client_id and not client_id:
+            client_id = str(case.client_id)
+    if client_id:
+        meta_form.fields["client"].initial = client_id
+    return client_id
+
+
 def _event_conflict_response(user, event, client_expected, *, error="conflict"):
     """Build the 409-Conflict JSON payload for a stale optimistic-concurrency Event edit.
 
@@ -105,10 +137,12 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         default_doc_type, initial = resolve_default_document_type(facility)
         meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
 
-        # Pre-select client
+        # Pre-select client/case (?client= und ?case=, Refs #1813 T4 — bei
+        # gesetztem ?case= wird die Person daraus abgeleitet, sofern kein
+        # expliziter ?client= vorliegt).
         client_id = request.GET.get("client")
-        if client_id:
-            meta_form.fields["client"].initial = client_id
+        case_id = request.GET.get("case")
+        client_id = _prefill_owner(meta_form, facility, client_id, case_id)
 
         # Quick-Templates (Refs #494): Applied template prefills dynamic fields
         # and selects the associated DocumentType. Template-Auswahl über
@@ -123,8 +157,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 default_doc_type = applied_template.document_type
                 initial["document_type"] = default_doc_type.pk
                 meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
-                if client_id:
-                    meta_form.fields["client"].initial = client_id
+                client_id = _prefill_owner(meta_form, facility, client_id, case_id)
                 prefill_data = apply_template(applied_template)
 
         # Serienerfassung (Refs #1349): der „Speichern & nächster Kontakt"-
@@ -152,8 +185,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 default_doc_type = prefill_doc_type
                 initial["document_type"] = prefill_doc_type.pk
                 meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
-                if client_id:
-                    meta_form.fields["client"].initial = client_id
+                client_id = _prefill_owner(meta_form, facility, client_id, case_id)
                 serienerfassung = True
 
         # Pre-render dynamic fields when default document type is set
@@ -184,6 +216,10 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             "data_form": data_form,
             "client_id": client_id or "",
             "client_pseudonym": "",
+            # Refs #1813 (T4, §6.5): roher ?case=-Query-Wert, analog client_id —
+            # das Case-<select> ist Alpine-/JS-getrieben (eventClientAutocomplete),
+            # data-initial-case-id ist der einzige Übergabeweg dorthin.
+            "case_id": case_id or "",
             "quick_templates": quick_templates,
             "current_doc_type_templates": current_doc_type_templates,
             "applied_template": applied_template,

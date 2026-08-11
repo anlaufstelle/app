@@ -16,7 +16,7 @@
             hx-get="{% url 'core:attachment_list' %}"
             hx-trigger="change"
             hx-target="#attachment-table"
-            hx-include="[name='client']">
+            hx-include="[name='client'],[name='case'],[name='event']">
         <option value="">{% trans "Alle Dokumentationstypen" %}</option>
         {% for dt in doc_types %}
         <option value="{{ dt.pk }}" {% if selected_doc_type == dt.pk|slugify %}selected{% endif %}>{{ dt.name }}</option>
@@ -30,7 +30,13 @@
            hx-get="{% url 'core:attachment_list' %}"
            hx-trigger="keyup changed delay:300ms"
            hx-target="#attachment-table"
-           hx-include="[name='document_type']">
+           hx-include="[name='document_type'],[name='case'],[name='event']">
+    {# §6.5 Kontextregel (Refs #1813 T4): ?case=/?event= kommen ausschließlich #}
+    {# per Deep-Link von den Detailseiten (Person/Fall/Ereignis) — kein eigenes #}
+    {# Eingabefeld, aber als hidden Inputs am HTMX-Nachladen der anderen Filter #}
+    {# beteiligt, sonst geht der Filter beim ersten Dropdown-/Tipp-Wechsel verloren. #}
+    <input type="hidden" name="case" value="{{ selected_case }}">
+    <input type="hidden" name="event" value="{{ selected_event }}">
 </div>
 
 <div id="attachment-table">

@@ -5,13 +5,23 @@
 
 {% block content %}
 <div class="max-w-2xl">
+    {# Rücklink-Konvention (§7.3, Refs #1813 T4). #}
+    {% url 'core:workitem_inbox' as back_url %}
+    {% trans "Aufgaben" as back_label %}
+    {% include "components/_back_link.html" with url=back_url label=back_label %}
+
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-[22px] font-bold text-ink">{{ workitem.title }}</h1>
-        {% if can_edit %}
-        <a href="{% url 'core:workitem_update' pk=workitem.pk %}" class="inline-flex items-center px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
-            {% trans "Bearbeiten" %}
-        </a>
-        {% endif %}
+        <div class="flex items-center gap-2">
+            {# --- Desktop-Aktionen (md+) --- #}
+            <div class="hidden md:flex md:items-center md:gap-2" data-testid="workitem-actions-desktop">
+                {% include "core/workitems/partials/_actions.html" with variant="desktop" %}
+            </div>
+            {# --- Mobile-Aktionen (< md) --- #}
+            <div class="flex items-center gap-2 md:hidden" data-testid="workitem-actions-mobile">
+                {% include "core/workitems/partials/_actions.html" with variant="mobile" %}
+            </div>
+        </div>
     </div>
 
     <div class="card p-4 space-y-4">
@@ -25,65 +35,6 @@
                 <p class="text-sm font-medium">{{ workitem.get_status_display }}</p>
                 {% if workitem.completed_at %}
                 <p class="text-xs text-ink-muted mt-1">{% trans "Abgeschlossen am:" %} {{ workitem.completed_at|date:"DATETIME_FORMAT" }}</p>
-                {% endif %}
-                {% if user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user %}
-                <div class="flex items-center space-x-2 mt-2">
-                    {% if workitem.status == "open" %}
-                    {# Refs #1130: zwei getrennte positive Aktionen — übernehmen (in_progress) und direkt erledigen (done ohne Zwischenstatus). #}
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
-                        <input type="hidden" name="status" value="in_progress">
-                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
-                            {% trans "Aufgabe übernehmen" %}
-                        </button>
-                    </form>
-                    {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung, daher kein versehentlicher Klick (data-confirm, confirm-action.js, CSP-konform). #}
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
-                          data-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
-                        <input type="hidden" name="status" value="done">
-                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
-                            {% trans "Als erledigt markieren" %}
-                        </button>
-                    </form>
-                    {# Refs #1130: data-confirm erklärt, dass nicht gelöscht und nur aus den offenen Aufgaben entfernt wird (confirm-action.js, CSP-konform). #}
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
-                          data-confirm="{% trans 'Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und bleibt weiterhin nachvollziehbar.' %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
-                        <input type="hidden" name="status" value="dismissed">
-                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
-                            {% trans "Als nicht relevant schließen" %}
-                        </button>
-                    </form>
-                    {% elif workitem.status == "in_progress" %}
-                    {# Refs #1147: Auch aus In Bearbeitung heraus vor dem Statuswechsel auf erledigt bestätigen — konsistent mit dem direkten Pfad aus Offen. #}
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
-                          data-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
-                        <input type="hidden" name="status" value="done">
-                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
-                            {% trans "Erledigt" %}
-                        </button>
-                    </form>
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
-                        <input type="hidden" name="status" value="open">
-                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
-                            {% trans "Zurücksetzen" %}
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
                 {% endif %}
             </div>
             <div>
@@ -160,10 +111,6 @@
             <p class="text-sm text-ink-soft whitespace-pre-wrap">{{ workitem.description }}</p>
         </div>
         {% endif %}
-    </div>
-
-    <div class="mt-4">
-        <a href="{% url 'core:workitem_inbox' %}" class="text-sm text-accent hover:underline">{% trans "Zurück zur Inbox" %}</a>
     </div>
 </div>
 {% endblock %}

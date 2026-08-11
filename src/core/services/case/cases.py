@@ -47,6 +47,32 @@ def cases_with_live_client():
     return Case.objects.filter(client__is_deleted=False, client__is_active=True)
 
 
+def get_case_or_none(facility, case_id):
+    """Lookup a case by PK scoped to *facility* (Refs #1813 T4).
+
+    Analog zu :func:`core.services.client.main.get_client_or_none`: liefert
+    ``None`` statt eine Exception, wenn der Fall nicht existiert, die ID keine
+    gültige UUID ist, der Fall einer anderen Facility gehört, oder seine
+    Person widerrufen ist (Papierkorb/anonymisiert — ``cases_with_live_client``,
+    Refs #1777). Der Live-Client-Filter ist hier bewusst mit drin: ein Aufrufer,
+    der aus dieser Rückgabe eine Person ableitet (z. B. ``?case=``-Vorbelegung
+    in ``EventCreateView``), darf über einen fremden/widerrufenen Fall kein
+    Existenz-Orakel bekommen.
+
+    Gedacht für View-GET-Handler, die einen vorselektierten Fall aus der
+    URL/Query laden wollen, ohne bei fehlendem/ungültigem Parameter eine 404
+    zu werfen.
+    """
+    if not case_id:
+        return None
+    try:
+        return cases_with_live_client().get(pk=case_id, facility=facility)
+    except (Case.DoesNotExist, ValueError, ValidationError):
+        # Django wirft bei ungültigen UUID-Strings ValidationError (nicht
+        # ValueError) — beide Fälle werden als "not found" behandelt.
+        return None
+
+
 def _check_case_document_type(facility, document_type):
     """Prueft den Fall-``DocumentType`` (M2 P5, Refs #1058).
 

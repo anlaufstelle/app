@@ -267,11 +267,11 @@ class TestEventDetailButtonVisibility:
 class TestClientDetailButtonVisibility:
     """Test button visibility for assistant vs. staff on client detail."""
 
-    def test_assistant_cannot_see_neue_aufgabe(self, client, assistant_user, client_identified):
+    def test_assistant_cannot_see_aufgabe_erstellen(self, client, assistant_user, client_identified):
         client.force_login(assistant_user)
         response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
         content = response.content.decode()
-        assert "Neue Aufgabe" not in content
+        assert "Aufgabe erstellen" not in content
 
     def test_assistant_cannot_see_bearbeiten(self, client, assistant_user, client_identified):
         client.force_login(assistant_user)
@@ -280,25 +280,25 @@ class TestClientDetailButtonVisibility:
         client_edit_url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
         assert client_edit_url not in content
 
-    def test_assistant_cannot_see_neuer_fall(self, client, assistant_user, client_identified):
+    def test_assistant_cannot_see_fall_anlegen(self, client, assistant_user, client_identified):
         client.force_login(assistant_user)
         response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
         content = response.content.decode()
-        assert "Neuer Fall" not in content
+        assert "Fall anlegen" not in content
 
-    def test_assistant_can_see_neuer_kontakt(self, client, assistant_user, client_identified):
+    def test_assistant_can_see_kontakt_dokumentieren(self, client, assistant_user, client_identified):
         client.force_login(assistant_user)
         response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
         content = response.content.decode()
-        assert "Neuer Kontakt" in content
+        assert "Kontakt dokumentieren" in content
 
     def test_staff_can_see_all_buttons(self, client, staff_user, client_identified):
         client.force_login(staff_user)
         response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
         content = response.content.decode()
-        assert "Neue Aufgabe" in content
-        assert "Neuer Kontakt" in content
-        assert "Neuer Fall" in content
+        assert "Aufgabe erstellen" in content
+        assert "Kontakt dokumentieren" in content
+        assert "Fall anlegen" in content
         client_edit_url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
         assert client_edit_url in content
 

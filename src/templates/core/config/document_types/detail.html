@@ -17,7 +17,10 @@
 <div class="max-w-2xl [overflow-anchor:none]">
     <div class="flex items-center justify-between mb-6">
         <div>
-            <a href="{% url 'core:config_doctype_list' %}" class="text-[13px] text-ink-muted hover:text-ink hover:underline">← {% trans "Dokumentationstypen" %}</a>
+            {# Rücklink-Konvention (§7.3, Refs #1813 T4). #}
+            {% url 'core:config_doctype_list' as back_url %}
+            {% trans "Dokumentationstypen" as back_label %}
+            {% include "components/_back_link.html" with url=back_url label=back_label %}
             <h1 class="text-[22px] font-bold text-ink mt-1">{{ doc_type.name }}</h1>
         </div>
         <div class="flex items-center gap-2">

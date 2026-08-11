@@ -1,0 +1,22 @@
+{% load i18n %}
+{% comment %}
+components/_action_overflow.html — ⋮-Trigger-Button für die Overflow-Aktionen
+(§6.4 Paritätsregel, Refs #1813 T4). Der Alpine-Scope (``mobileOverflowMenu``
+— trotz des Namens fuer BEIDE Varianten wiederverwendet, das Verhalten ist
+viewport-agnostisch; Umbenennen wuerde vier weitere Templates anfassen, YAGNI)
+und das Dropdown-Panel selbst bleiben bei der aufrufenden ``_actions.html`` —
+sie umschliessen fachliche Sonderformen (POST-Forms, data-confirm), die ein
+generischer Include nicht transportieren kann. Bei leerem Overflow wird
+dieser Include schlicht nicht aufgerufen (kein leerer ⋮-Knopf).
+
+Parameter: variant ("desktop"|"mobile"). Eigene Testids je Variante
+(``desktop-overflow-menu``/``mobile-overflow-menu``) — Bestands-E2E-Selektoren
+zielen exklusiv auf ``mobile-overflow-menu``.
+{% endcomment %}
+<button @click="toggle" type="button"
+        class="inline-flex items-center {% if variant == 'mobile' %}bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2{% else %}bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas{% endif %}"
+        aria-label="{% trans 'Weitere Aktionen' %}"
+        data-testid="{% if variant == 'mobile' %}mobile-overflow-menu{% else %}desktop-overflow-menu{% endif %}">
+    <svg aria-hidden="true" class="w-4 h-4{% if variant == 'desktop' %} mr-1.5{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+    {% if variant == 'desktop' %}{% trans 'Weitere Aktionen' %}{% endif %}
+</button>

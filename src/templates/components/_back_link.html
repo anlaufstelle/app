@@ -1,0 +1,21 @@
+{% comment %}
+components/_back_link.html — Rücklink-Konvention (Konzept #1801 §7.3, Refs #1813 T4).
+
+Ersetzt die bisher vierfach getrennt gepflegten Breadcrumb-Kopfzeilen der
+Detailseiten. Parameter:
+- url: Ziel des Rücklinks (Pflicht).
+- label: sichtbarer Linktext, z. B. "Personen"/"Fälle"/"Zeitstrom"/"Aufgaben"
+  (Pflicht).
+- current: optionaler zweiter Krümel (Titel des aktuellen Objekts), truncate
+  steckt hier im Partial.
+
+Hub-/Subnav-Seiten (T1–T3) bekommen keinen Rücklink — dieses Partial ist nur
+für Objekt-Detailseiten gedacht.
+{% endcomment %}
+<div class="flex items-center gap-2.5 mb-5">
+    <a href="{{ url }}" class="flex items-center gap-1 min-h-[44px] text-[13px] text-ink-muted hover:text-ink" data-testid="back-link">
+        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        {{ label }}
+    </a>
+    {% if current %}<span class="text-subtle">/</span><span class="text-[13px] text-ink-soft font-medium truncate">{{ current }}</span>{% endif %}
+</div>

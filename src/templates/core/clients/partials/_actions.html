@@ -1,0 +1,66 @@
+{% load i18n %}
+{% comment %}
+core/clients/partials/_actions.html — Kontextaktionen der Personenakte
+(Konzept #1801 §6.2/§6.4, Refs #1813 T4).
+
+Mitgliedschaft und Reihenfolge stehen GENAU HIER — die Detailseite ruft diese
+Datei zweimal auf (``variant="desktop"``/``"mobile"``), nur die Pixelform
+verzweigt in components/_action_button.html. Primär: Kontakt dokumentieren ·
+Aufgabe erstellen (staff+) · Bearbeiten (staff+). Overflow: Fall anlegen
+(staff+) · Offline mitnehmen (Alpine-Sonderform) · Löschung beantragen
+(Sonderform, staff+) · Datenauskunft JSON/PDF (lead+). Bestehende
+Funktionalität (Alpine-Bindings, Sonderform-Partial, Rollen-Gates) bleibt
+1:1 erhalten — nur Position/Gruppierung ändern sich.
+
+Vokabelvereinheitlichung (F6, Refs #1813): die Objekt-Labels tragen die
+Verb-Vokabel des validierten „Neu erstellen"-Dropdowns
+(``_navigation_desktop.html``) — „Kontakt dokumentieren"/„Aufgabe
+erstellen"/„Fall anlegen" statt der Objektvarianten „Neuer
+Kontakt"/„Neue Aufgabe"/„Neuer Fall".
+{% endcomment %}
+{% url 'core:event_create' as event_create_url %}
+{% url 'core:workitem_create' as workitem_create_url %}
+{% url 'core:client_update' client.pk as client_update_url %}
+{% url 'core:case_create' as case_create_url %}
+{% trans "Kontakt dokumentieren" as label_contact %}
+{% trans "Aufgabe erstellen" as label_task %}
+{% trans "Bearbeiten" as label_edit %}
+{% trans "Fall anlegen" as label_case %}
+
+{% include "components/_action_button.html" with variant=variant position="primary" base_url=event_create_url query_param_name="client" query_param_value=client.pk label=label_contact testid="client-action-contact" icon_path="M12 4v16m8-8H4" icon_stroke_width="2.5" highlight=True %}
+{% if user.is_staff_or_above %}
+{% include "components/_action_button.html" with variant=variant position="primary" base_url=workitem_create_url query_param_name="client" query_param_value=client.pk label=label_task testid="client-action-task" icon_path="M12 4v16m8-8H4" icon_stroke_width="2.5" %}
+{% include "components/_action_button.html" with variant=variant position="primary" base_url=client_update_url label=label_edit testid="client-action-edit" icon_path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" %}
+{% endif %}
+
+<div x-data="mobileOverflowMenu" class="relative">
+    {% include "components/_action_overflow.html" with variant=variant %}
+    <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
+         class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
+        {% if user.is_staff_or_above %}
+        {% include "components/_action_button.html" with variant=variant position="overflow" base_url=case_create_url query_param_name="client" query_param_value=client.pk label=label_case testid="client-new-case-btn" testid_mobile="mobile-client-new-case-btn" icon_path="M12 4v16m8-8H4" icon_stroke_width="2.5" %}
+        {% endif %}
+        <button type="button"
+                @click="closeAndToggleOffline"
+                :disabled="busy"
+                class="w-full text-left flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas disabled:opacity-50"
+                data-testid="{% if variant == 'mobile' %}mobile-take-offline-btn{% else %}take-offline-btn{% endif %}">
+            <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+            <span x-show="notOffline">{% trans "Offline mitnehmen" %}</span>
+            <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
+        </button>
+        {% if user.is_staff_or_above %}
+        <div class="border-t border-subtle my-1"></div>
+        {% include "core/clients/partials/delete_request_action.html" with action_class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" %}
+        {% endif %}
+        {% if user.is_lead_or_admin %}
+        <div class="border-t border-subtle my-1"></div>
+        <a href="{% url 'core:client_export_json' client.pk %}" class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="client-export-json-link">
+            {% trans "JSON-Export (Art. 20)" %}
+        </a>
+        <a href="{% url 'core:client_export_pdf' client.pk %}" class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="client-export-pdf-link">
+            {% trans "PDF-Export (Art. 15)" %}
+        </a>
+        {% endif %}
+    </div>
+</div>

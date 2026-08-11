@@ -144,8 +144,14 @@ class TestWorkItemDetailActions:
         response = client.get(reverse("core:workitem_detail", kwargs={"pk": workitem_open.pk}))
         body = response.content.decode()
         assert "Als erledigt markieren" in body
-        # Es existiert genau ein Form, das den Status direkt auf done setzt.
-        assert body.count('value="done"') == 1
+        # Refs #1813 (T4): die Aktionsleiste rendert seit der Paritätsregel
+        # (§6.4) zweimal (Desktop + Mobil, CSS-exklusiv sichtbar) — dieselbe
+        # Verdopplung, die Person/Fall/Ereignis schon vorher hatten. Die
+        # Invariante "genau ein Form pro Leiste, das direkt auf done setzt"
+        # wird deshalb je Leiste geprüft statt seitenweit.
+        desktop_start = body.index('data-testid="workitem-actions-desktop"')
+        mobile_start = body.index('data-testid="workitem-actions-mobile"')
+        assert body[desktop_start:mobile_start].count('value="done"') == 1
 
     def test_open_task_dismiss_relabelled_with_confirmation(self, client, staff_user, workitem_open):
         """`Verwerfen` wird zu `Als nicht relevant schließen` und erhält eine

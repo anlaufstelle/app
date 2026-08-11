@@ -246,9 +246,15 @@ document.addEventListener("alpine:init", () => {
                 selectedCaseId: "",
                 _autocompleteUrl: "",
                 _casesForClientUrl: "",
+                // Refs #1813 (T4, §6.5): ?case=-Vorbelegung vom Server
+                // (data-initial-case-id); wird in loadCasesForClient() beim
+                // ERSTEN Laden angewendet und danach geloescht, damit ein
+                // spaeterer manueller Personenwechsel den Fall nicht "festhaelt".
+                _initialCaseId: "",
                 init() {
                     this._initCommon();
                     this._casesForClientUrl = this.$el.dataset.casesForClientUrl || "";
+                    this._initialCaseId = this.$el.dataset.initialCaseId || "";
                     // Stage initial pruefen + ggf. Cases laden
                     this.updateAnonymousAllowed(this.$refs.docTypeSelect);
                     if (this.selectedId) {
@@ -350,6 +356,15 @@ document.addEventListener("alpine:init", () => {
                         .then((r) => (r.ok ? r.json() : []))
                         .then((data) => {
                             this.clientCases = Array.isArray(data) ? data : [];
+                            // Refs #1813 (T4, §6.5): serverseitige ?case=-Vorbelegung
+                            // nur uebernehmen, wenn sie tatsaechlich zu einem der
+                            // geladenen (offenen, facility-eigenen) Faelle dieser
+                            // Person gehoert — sonst bliebe ein fremder/geschlossener
+                            // Fall unsichtbar im Zustand haengen.
+                            if (this._initialCaseId && this.clientCases.some((c) => c.id === this._initialCaseId)) {
+                                this.selectedCaseId = this._initialCaseId;
+                            }
+                            this._initialCaseId = "";
                         })
                         .catch(() => {
                             this.clientCases = [];
