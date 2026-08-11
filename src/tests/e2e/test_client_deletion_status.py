@@ -109,12 +109,19 @@ class TestRequesterFeedbackChannel:
         pseudonym, detail_url = _create_client(page, base_url)
         _request_deletion(page, detail_url, "E2E: Rückkanal")
 
-        # Banner verlinkt in die Liste; die Navigation trägt denselben Eintrag.
+        # Banner verlinkt in die Liste; die Navigation trägt denselben Einstieg.
         page.goto(detail_url)
         assert page.locator("[data-testid='client-deletion-pending-link']").first.is_visible()
-        assert page.locator("[data-testid='nav-deletion-requests']").count() >= 1
 
-        page.goto(f"{base_url}/deletion-requests/")
+        # Refs #1813: „Löschanträge" ist kein flacher Sidebar-Eintrag mehr,
+        # sondern ein Reiter des Hubs „Datenschutz". Fuer die Fachkraft mit
+        # eigenem Antrag ist es der EINZIGE sichtbare Reiter — der Hub leitet
+        # deshalb direkt auf die Liste weiter (Einzelreiter-Weiterleitung,
+        # ``nav.first_visible_tab``). Genau dieser Rueckkanal wird geprueft.
+        hub = page.locator("[data-testid='nav-datenschutz']")
+        assert hub.count() >= 1
+        hub.first.click()
+        page.wait_for_url(re.compile(r"/deletion-requests/"))
         page.wait_for_load_state("domcontentloaded")
         assert page.locator(f"[data-testid='deletion-target-link']:text-is('{pseudonym}')").first.is_visible()
         # Eigene Anträge tragen den Hinweis auf die Zweitbestätigung.

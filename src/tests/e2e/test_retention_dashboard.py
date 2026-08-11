@@ -6,6 +6,8 @@ import sys
 
 import pytest
 
+from ._selectors import sidebar_item, subnav_tab
+
 pytestmark = pytest.mark.e2e
 
 
@@ -246,23 +248,34 @@ class TestRetentionHoldFlow:
 
 
 class TestRetentionNavigation:
-    """Navigation zum Dashboard."""
+    """Navigation zum Dashboard.
+
+    Refs #1813 (Konzept #1801 §4): „Löschfristen" hat keinen eigenen
+    Sidebar-Eintrag mehr — der Einstieg laeuft ueber den Bereichs-Hub
+    „Datenschutz" und dessen Reiterzeile. Die Aussage bleibt: die Leitung
+    findet die Seite ueber die Navigation und landet per Klick dort.
+    """
 
     def test_nav_link_visible_for_lead(self, lead_page, base_url):
-        """Navigationslink 'Löschfristen' ist für Lead sichtbar."""
+        """Der Löschfristen-Reiter ist für Lead über den Hub sichtbar."""
         page = lead_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        nav_link = page.locator("a:has-text('Löschfristen')")
-        assert nav_link.count() >= 1
+        assert sidebar_item(page, "datenschutz").count() >= 1
+
+        page.goto(f"{base_url}/datenschutz/")
+        page.wait_for_load_state("domcontentloaded")
+        assert subnav_tab(page, "retention").count() >= 1
 
     def test_nav_link_navigates_to_dashboard(self, lead_page, base_url):
-        """Klick auf 'Löschfristen' navigiert zum Dashboard."""
+        """Klick über Hub → Reiter 'Löschfristen' navigiert zum Dashboard."""
         page = lead_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.locator("nav a:has-text('Löschfristen')").first.click()
+        sidebar_item(page, "datenschutz").click()
+        page.wait_for_url(re.compile(r"/datenschutz/"))
+        subnav_tab(page, "retention").click()
         page.wait_for_url(re.compile(r"/retention/"))
         assert page.locator("h1:has-text('Löschfristen')").is_visible()

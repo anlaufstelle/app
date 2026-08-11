@@ -1,26 +1,50 @@
 """E2E-Tests: DSGVO-Dokumentationspaket."""
 
+import re
+
 import pytest
 
-from ._selectors import find_first_dsgvo_download_link
+from ._selectors import find_first_dsgvo_download_link, sidebar_item, subnav_tab
 
 pytestmark = pytest.mark.e2e
 
 
 class TestDSGVOPackageNavigation:
-    """Nav-Link und Seitenaufruf."""
+    """Nav-Einstieg und Seitenaufruf.
 
-    def test_admin_sees_nav_link(self, authenticated_page):
-        """Admin sieht DSGVO-Paket in der Navigation."""
-        nav = authenticated_page.locator("nav[aria-label='Hauptnavigation']")
-        link = nav.locator("a:has-text('DSGVO-Paket')")
-        assert link.count() == 1
+    Refs #1813 (Konzept #1801 §4): „DSGVO-Paket" ist kein flacher
+    Sidebar-Eintrag mehr, sondern ein Reiter des Bereichs-Hubs „Datenschutz".
+    Die Rollen-Aussage bleibt: Anwendungsbetreuung erreicht die Seite ueber die
+    Navigation, die Leitung sieht den Reiter nicht.
+    """
 
-    def test_lead_does_not_see_nav_link(self, lead_page):
-        """Leitung sieht keinen DSGVO-Paket-Link."""
-        nav = lead_page.locator("nav[aria-label='Hauptnavigation']")
-        link = nav.locator("a:has-text('DSGVO-Paket')")
-        assert link.count() == 0
+    def test_admin_sees_nav_link(self, authenticated_page, base_url):
+        """Admin erreicht das DSGVO-Paket ueber den Hub „Datenschutz"."""
+        page = authenticated_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        hub = sidebar_item(page, "datenschutz")
+        assert hub.count() == 1
+        hub.click()
+        page.wait_for_url(re.compile(r"/datenschutz/"))
+
+        tab = subnav_tab(page, "dsgvo")
+        assert tab.count() == 1
+        tab.click()
+        page.wait_for_url(re.compile(r"/dsgvo/"))
+        assert page.locator("h1:has-text('DSGVO-Dokumentationspaket')").is_visible()
+
+    def test_lead_does_not_see_nav_link(self, lead_page, base_url):
+        """Leitung sieht den DSGVO-Reiter nicht — auch nicht im Hub."""
+        page = lead_page
+        page.goto(f"{base_url}/datenschutz/")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Gegenprobe: der Hub selbst steht der Leitung offen (sonst waere die
+        # Abwesenheit des Reiters trivial), nur der DSGVO-Reiter fehlt.
+        assert sidebar_item(page, "datenschutz").count() == 1
+        assert subnav_tab(page, "dsgvo").count() == 0
 
     def test_admin_can_access_page(self, authenticated_page, base_url):
         """Admin kann DSGVO-Paket-Seite aufrufen."""
