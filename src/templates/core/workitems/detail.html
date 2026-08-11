@@ -1,14 +1,12 @@
 {% extends "base.html" %}
-{% load i18n date_tags %}
+{% load i18n date_tags nav_tags %}
 
 {% block title %}{{ workitem.title }} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
-    {# Rücklink-Konvention (§7.3, Refs #1813 T4). #}
-    {% url 'core:workitem_inbox' as back_url %}
-    {% trans "Aufgaben" as back_label %}
-    {% include "components/_back_link.html" with url=back_url label=back_label %}
+    {# Rücklink-Konvention (§7.3, Refs #1813 T4, #1802): Ziel und Label kommen aus core.nav. #}
+    {% back_link %}
 
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-[22px] font-bold text-ink">{{ workitem.title }}</h1>

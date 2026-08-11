@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% load i18n core_tags static %}
+{% load i18n core_tags static nav_tags %}
 
 {% block title %}{{ client.pseudonym }} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# Rücklink-Konvention (§7.3, Refs #1813 T4). #}
-{% url 'core:client_list' as back_url %}
-{% trans "Personen" as back_label %}
-{% include "components/_back_link.html" with url=back_url label=back_label current=client.pseudonym %}
+{# Rücklink-Konvention (§7.3, Refs #1813 T4, #1802): Ziel und Label kommen aus core.nav. #}
+{% back_link current=client.pseudonym %}
 
 {# Profil-Header #}
 <div class="mb-5"

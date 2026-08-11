@@ -1,13 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{{ case.title }} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# Rücklink-Konvention (§7.3, Refs #1813 T4). #}
-{% url 'core:case_list' as back_url %}
-{% trans "Fälle" as back_label %}
-{% include "components/_back_link.html" with url=back_url label=back_label current=case.title %}
+{# Rücklink-Konvention (§7.3, Refs #1813 T4, #1802): Ziel und Label kommen aus core.nav. #}
+{% back_link current=case.title %}
 
 {# Header #}
 <div class="mb-5">

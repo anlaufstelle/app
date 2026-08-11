@@ -1,21 +1,28 @@
 {% comment %}
-components/_back_link.html — Rücklink-Konvention (Konzept #1801 §7.3, Refs #1813 T4).
+components/_back_link.html — Rücklink-Konvention (Konzept #1801 §7.3, Refs #1813 T4, #1802).
 
-Ersetzt die bisher vierfach getrennt gepflegten Breadcrumb-Kopfzeilen der
+Ersetzt die bisher fünffach getrennt gepflegten Breadcrumb-Kopfzeilen der
 Detailseiten. Parameter:
-- url: Ziel des Rücklinks (Pflicht).
+- url: Ziel des Rücklinks (Pflicht; ohne url rendert das Partial nichts).
 - label: sichtbarer Linktext, z. B. "Personen"/"Fälle"/"Zeitstrom"/"Aufgaben"
   (Pflicht).
 - current: optionaler zweiter Krümel (Titel des aktuellen Objekts), truncate
   steckt hier im Partial.
 
-Hub-/Subnav-Seiten (T1–T3) bekommen keinen Rücklink — dieses Partial ist nur
-für Objekt-Detailseiten gedacht.
+Regelfall ist der Inclusion-Tag "back_link" (core/templatetags/nav_tags.py),
+der Ziel und Label aus core.nav holt; ein direkter Include ist nur dort
+richtig, wo die Heimat ein Objekt ist.
+
+Der Rücklink ist KEIN "?next=" (Regel R3): "next" beantwortet "wohin nach dem
+Absenden", der Rücklink "wo bin ich zuhause". Hub-/Subnav-Seiten (R5) bekommen
+gar keinen — die Registry liefert dort None.
 {% endcomment %}
+{% if url %}
 <div class="flex items-center gap-2.5 mb-5">
-    <a href="{{ url }}" class="flex items-center gap-1 min-h-[44px] text-[13px] text-ink-muted hover:text-ink" data-testid="back-link">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        {{ label }}
+    <a href="{{ url }}" class="flex items-center gap-1 min-h-[44px] -ml-1 pl-1 text-[13px] text-ink-muted hover:text-ink" data-testid="back-link">
+        <svg aria-hidden="true" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <span class="truncate max-w-[60vw]" title="{{ label }}">{{ label }}</span>
     </a>
     {% if current %}<span class="text-subtle">/</span><span class="text-[13px] text-ink-soft font-medium truncate">{{ current }}</span>{% endif %}
 </div>
+{% endif %}

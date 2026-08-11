@@ -159,6 +159,33 @@ def subnav(context, key: str):
     return {"section": area, "tabs": _rendered(area.tabs, context)}
 
 
+@register.inclusion_tag("components/_back_link.html", takes_context=True)
+def back_link(context, current: str = ""):
+    """Der Rücklink der aktuellen Seite (Refs #1802, Konzept #1801 §7.3).
+
+    Auflösung in der Reihenfolge des Konzepts (3.3): Ein von der View gesetztes
+    ``context["back_link"]`` (``{"url": …, "label": …}``) gilt — das sind die
+    Objekt-Eltern aus Konzept 3.4, deren Heimat ein Objekt statt einer Liste
+    ist. Sonst antwortet die Registry über ``request.resolver_match``; liefert
+    sie ``None`` (Hub, Reiter, Liste, Assistenten-Schritt), rendert dieser Tag
+    **nichts**.
+
+    Bewusst ein Inclusion-Tag statt eines Context-Processors — Begründung im
+    Modul-Docstring: ein Prozessor liefe auch auf HTMX-Partials, Downloads und
+    Fehlerseiten, wo es gar keine Orientierungszeile gibt.
+
+    ``current`` ist der optionale zweite Krümel (Objektname); er ersetzt den
+    Rücklink nicht, sondern steht als reiner Text dahinter.
+    """
+    override = context.get("back_link")
+    if isinstance(override, dict) and override.get("url"):
+        return {"url": override["url"], "label": override.get("label", ""), "current": current}
+    link = nav.back_link_for(_current_url_name(context))
+    if link is None:
+        return {}
+    return {"url": reverse(link.url_name), "label": link.label, "current": current}
+
+
 @register.simple_tag(takes_context=True)
 def nav_mobile_more_active(context) -> bool:
     """True, wenn die aktuelle Seite den „Mehr"-Button hervorheben soll."""

@@ -726,3 +726,147 @@ def section(key: str) -> NavSection:
         if entry.key == key:
             return entry
     raise KeyError(f"Unbekannter Bereichs-Schlüssel: {key!r}")
+
+
+# ---------------------------------------------------------------------------
+# Rücklink-Auflösung (Refs #1802, Konzept #1801 §7.3)
+# ---------------------------------------------------------------------------
+#
+# Der Rücklink zeigt zur **Heimat**, nicht zur Herkunft (Regel R2): zu der einen
+# Liste bzw. dem einen Reiter, unter dem das Objekt hier geführt wird. Genau das
+# sagen die Aktiv-State-Familien schon — sie ein zweites Mal als eigene
+# Breadcrumb-Tabelle zu pflegen wäre die nächste Drift (Konzept 1.3). Deshalb
+# gibt es hier keine dritte Zuordnungstabelle, sondern nur die Antwort auf die
+# beiden Fragen, die die Familien NICHT beantworten:
+#
+# * Welche Seiten zeigen bewusst **keinen** Rücklink (``BACKLINK_EXEMPT``)?
+# * Welche Seiten haben als Heimat ein **Objekt** statt einer Liste
+#   (``VIEW_PROVIDED_BACKLINK``)?
+#
+# Abgrenzung zu ``?next=`` (Regel R3): ``safe_redirect_path()`` beantwortet
+# „wohin nach dem Absenden", der Rücklink „wo bin ich zuhause". Beide dürfen
+# dasselbe Ziel haben, werden aber nie voneinander abgeleitet.
+
+
+@dataclass(frozen=True)
+class BackLink:
+    """Ziel und Beschriftung eines Bereichs-Rücklinks."""
+
+    label: str | Promise
+    url_name: str
+
+
+# Seiten ohne Rücklink (Regel R5: wer Reiter zeigt, zeigt keinen Rücklink).
+# Vier Gruppen: Hub-/Rollen-Einstiege, Reiterseiten, operative Listen und die
+# Schritte des Import-Assistenten (Regel R7: ein Stepper ist kein Breadcrumb —
+# er zeigt Fortschritt auf einer verwerfbaren Strecke, nicht Verortung in einem
+# Bestand). Dazu die Konto-/Anmeldeflächen, die außerhalb der Bereichs-IA liegen.
+BACKLINK_EXEMPT: frozenset[str] = frozenset(
+    {
+        # Hub-Übersichten und Rollen-Arbeitszentrale
+        "dashboard",
+        "datenschutz_uebersicht",
+        "verwaltung_uebersicht",
+        "system_dashboard",
+        # Reiterseiten der Bereiche
+        "system_organization",
+        "system_audit_list",
+        "system_lockout_list",
+        "system_maintenance",
+        "system_retention",
+        "system_vvt",
+        "system_legal_hold_list",
+        "system_compliance",
+        "statistics",
+        "statistics_external_report",
+        "statistics_report_releases",
+        "dsgvo_package",
+        # Operative Listen (die Heimat selbst — ein Rücklink zeigte auf sich)
+        "zeitstrom",
+        "workitem_inbox",
+        "client_list",
+        "client_trash",
+        "case_list",
+        "attachment_list",
+        "search",
+        "deletion_request_list",
+        "rectification_list",
+        "retention_dashboard",
+        "audit_log",
+        "config_doctype_list",
+        "config_fieldtemplate_list",
+        "import_list",
+        # Schritte des Import-Assistenten (R7): Stepper + „Abbrechen", sonst nichts.
+        "import_create",
+        "import_mapping",
+        "import_preview",
+        # Konto- und Anmeldeflächen außerhalb der Bereichs-IA
+        "account_profile",
+        "password_change",
+        "sudo_mode",
+        "mfa_setup",
+        "mfa_verify",
+        "mfa_backup_codes",
+    }
+)
+
+# Objekt-Eltern (Konzept 3.4): Heimat ist ein Objekt, nicht eine Liste — der
+# Rücklink kommt deshalb aus dem Seitenkontext (``context["back_link"]``), nicht
+# aus dieser Registry. Kein Rollengefälle in dieser Gruppe: das Ziel ist überall
+# gleich oder weiter gegated als die Seite selbst (verifiziert gegen
+# ``_authz_expectations.py``), die Liste braucht darum keine Rollenlogik — nur
+# der Guard muss sie einfrieren.
+VIEW_PROVIDED_BACKLINK: dict[str, str] = {
+    "episode_create": "Episode liegt unter einem Fall (cases/<pk>/episodes/…) — Rücklink ist der Fallname.",
+    "episode_update": "wie episode_create.",
+    "rectification_create": "Antrag wird AUS der Personenakte gestellt (clients/<pk>/rectification/new/).",
+    "client_delete_request": "Löschantrag wird aus der Personenakte gestellt (clients/<pk>/delete-request/).",
+    "event_update": "Bearbeiten kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
+    "event_delete": "Lösch-Bestätigung kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
+    "config_fieldgroup_create": "Feldgruppe liegt unter einem Dokumentationstyp (document-types/<pk>/groups/…).",
+    "config_fieldgroup_update": "wie config_fieldgroup_create.",
+    "mfa_settings": "Konto-Ebene: Heimat ist das eigene Profil, kein Navigationsbereich.",
+}
+
+# Routen, die per GET zwar erreichbar sind, aber kein Anwendungsdokument
+# liefern (Downloads, HTMX-Fragmente, POST-Handler mit GET-Deklaration in der
+# AuthZ-Tabelle). Ergänzt ``KNOWN_NON_NAV_ROUTES`` um die Fälle außerhalb der
+# Navigations-Präfixe; beide Listen beantworten dieselbe Frage — „gibt es hier
+# überhaupt eine Seite?" — und werden vom Guard vereinigt gelesen.
+BACKLINK_NON_PAGE: dict[str, str] = {
+    "client_attachment_download": "Datei-Download an der Personenakte (entschlüsselt, streamt).",
+    "case_attachment_download": "Datei-Download am Fall (entschlüsselt, streamt).",
+    "dsgvo_document": "Vorlagen-Download des DSGVO-Pakets, kein gerendertes Dokument.",
+    "workitem_bulk_status": "Massenaktion der Aufgabenliste, antwortet mit der Liste bzw. leitet weiter.",
+    "workitem_bulk_priority": "wie workitem_bulk_status.",
+    "workitem_bulk_assign": "wie workitem_bulk_status.",
+}
+
+
+def _family_back_link(url_name: str) -> BackLink | None:
+    """Der Bereichs-Rücklink laut Nav-Familien — ohne Ausnahmen zu beachten.
+
+    Gewinner ist die **kleinste** Familie, die die Route enthält. Damit zeigt
+    eine Objektseite unter einem Hub auf ihren Reiter („← Audit-Log") statt auf
+    den Bereichsanker („← Datenschutz"), obwohl beide Familien sie führen —
+    Konzept 3.6, ohne dafür eine zweite Tabelle zu pflegen.
+    """
+    kandidaten = [entry for entry in all_items() if entry.url_name and url_name in entry.family]
+    if not kandidaten:
+        return None
+    beste = min(kandidaten, key=lambda entry: (len(entry.family), entry.key))
+    return BackLink(label=beste.label, url_name=beste.url_name)
+
+
+def back_link_for(url_name: str) -> BackLink | None:
+    """Der Rücklink einer Route — ``None``, wenn die Registry keinen liefert.
+
+    ``None`` heißt zweierlei und ist deshalb NIE ein stiller Fallback: entweder
+    zeigt die Seite bewusst keinen Rücklink (``BACKLINK_EXEMPT``), oder ihn
+    liefert der Seitenkontext (``VIEW_PROVIDED_BACKLINK``). Dass jede Route
+    genau einen dieser drei Zustände hat, sichert
+    ``tests/test_navigation_backlink.py``.
+    """
+    if url_name in BACKLINK_EXEMPT or url_name in VIEW_PROVIDED_BACKLINK:
+        return None
+    return _family_back_link(url_name)
