@@ -17,6 +17,8 @@ Template hooks (added in the data-testid commit):
   download link
 - ``data-testid="deletion-review-link"`` with ``data-dr-pk`` on each
   pending-deletion-request link
+- ``data-testid="nav-items"`` on the desktop sidebar entry container and
+  ``data-testid="mobile-more-items"`` on the mobile „Mehr" dropdown (Refs #1813)
 
 When extending: keep helpers small, return ``Locator``s, and document the
 template hook each helper depends on.
@@ -98,3 +100,46 @@ def find_deletion_approve_button(page: Page) -> Locator:
 def find_deletion_reject_button(page: Page) -> Locator:
     """Reject button on a deletion-review page (siehe find_deletion_approve_button)."""
     return page.locator("button[name='action'][value='reject']")
+
+
+# --- Navigation (Refs #1813) ------------------------------------------------
+# Die Nav-Selektoren hingen bisher an Tailwind-Klassen (``.flex-1.overflow-y-auto``)
+# und an sichtbaren Labels (``a:has-text('Statistik')``). Beides bricht bei jeder
+# Umbenennung oder Layout-Anpassung, ohne dass sich die Navigation fachlich
+# geaendert haette. Die Registry ``core.nav`` liefert dafuer stabile Testids.
+
+
+def sidebar_items(page: Page) -> Locator:
+    """Alle Eintraege der Desktop-Sidebar, in Renderreihenfolge.
+
+    Haengt am Container-Marker ``data-testid="nav-items"`` — loest den
+    Tailwind-Klassen-Selektor ``.flex-1.overflow-y-auto > a`` ab.
+    """
+    return page.locator("[data-testid='nav-items'] > a")
+
+
+def sidebar_item(page: Page, key: str) -> Locator:
+    """Ein einzelner Sidebar-Eintrag ueber seinen Registry-Schluessel.
+
+    ``key`` ist der ``NavItem.key`` aus ``core/nav.py`` (z.B. ``"system"``,
+    ``"import"``, ``"deletion-requests"``). Nicht jeder Eintrag traegt heute
+    ein ``data-testid`` — die Registry fuehrt den Marker pro Eintrag,
+    Etappe 2 von #1801 vervollstaendigt ihn.
+    """
+    return page.locator(f"[data-testid='nav-{key}']")
+
+
+def open_mobile_more(page: Page) -> Locator:
+    """Oeffnet Slot 5 („Mehr") der mobilen Bottom-Nav und gibt die Liste zurueck."""
+    page.locator("[data-testid='mobile-nav-more']").click()
+    return page.locator("[data-testid='mobile-more-items']")
+
+
+def subnav_tab(page: Page, key: str) -> Locator:
+    """Ein Reiter einer Bereichs-Reiterzeile (``NavItem.key`` der Section).
+
+    Der Marker ``subnav-tab-<key>`` kommt mit den Bereichs-Hubs (Etappe 2 von
+    #1801); der Helfer
+    steht schon hier, damit die Nav-Selektoren an einem Ort liegen.
+    """
+    return page.locator(f"[data-testid='subnav-tab-{key}']")

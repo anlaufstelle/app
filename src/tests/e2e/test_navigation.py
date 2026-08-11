@@ -4,6 +4,8 @@ import re
 
 import pytest
 
+from tests.e2e._selectors import sidebar_items
+
 pytestmark = pytest.mark.e2e
 
 
@@ -55,9 +57,9 @@ class TestOperativeNavOrder:
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
-        sidebar = page.locator("nav[aria-label='Hauptnavigation'] .flex-1.overflow-y-auto")
-        sidebar.wait_for(state="visible", timeout=10000)
-        hrefs = sidebar.locator(":scope > a").evaluate_all("els => els.map(a => a.getAttribute('href'))")
+        items = sidebar_items(page)
+        items.first.wait_for(state="visible", timeout=10000)
+        hrefs = items.evaluate_all("els => els.map(a => a.getAttribute('href'))")
 
         idx_zeitstrom = hrefs.index("/")
         idx_aufgaben = hrefs.index("/workitems/")
