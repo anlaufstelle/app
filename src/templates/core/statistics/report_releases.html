@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% comment %}
 Freigabe-Übersicht (K4a, Refs #1770): flankierende Maßnahme zu einer akzeptierten
@@ -12,6 +12,8 @@ sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Freigabe-Übersicht" %}</h1>
+
+{% subnav "statistik" %}
 <p class="text-[13px] text-ink-muted mb-6 max-w-3xl">
     {% blocktrans %}Herausgegebene Berichtszeiträume dieser Einrichtung, aus der Audit-Spur. Überschneiden sich zwei Zeiträume, lässt sich aus der Differenz beider Berichte rechnen, was ein einzelner Bericht unterdrückt hätte — auch dann, wenn in keinem der beiden etwas unterdrückt wurde.{% endblocktrans %}
 </p>

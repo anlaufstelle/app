@@ -244,6 +244,16 @@ def _extract_report_section(html: str) -> str:
     return html[start:end]
 
 
+# Refs #1813 (Konzept #1801 §7.1): Die Berichte-Sektion haengt nicht mehr unten
+# am Dashboard, sie ist ein eigener Reiter der Statistik-Reiterzeile. Ihr
+# natuerliches Ziel ``core:statistics_report_panel`` scheidet als Reiter aus
+# (HTMX-Partial ohne base.html, ohne ?backend= ein 400), deshalb dieser Modus
+# auf derselben Route — Hausmuster Zeitstrom ``?view=`` (Refs #1124). Die Tests
+# unten rufen die Seite entsprechend mit dem Modus auf; an ihren Aussagen
+# aendert das nichts.
+BERICHTE_VIEW = {"view": "berichte"}
+
+
 class TestBerichteFormZeitraumDurchreichung:
     """Review I2: Die Berichte-Form muss ``period=custom`` mitschicken.
 
@@ -273,7 +283,7 @@ class TestBerichteFormZeitraumDurchreichung:
 
         dashboard = client.get(
             reverse("core:statistics"),
-            {"period": "custom", "date_from": "2020-01-01", "date_to": "2020-01-31"},
+            {**BERICHTE_VIEW, "period": "custom", "date_from": "2020-01-01", "date_to": "2020-01-31"},
         )
         section_html = _extract_report_section(dashboard.content.decode())
         hidden_fields = dict(_HIDDEN_INPUT_RE.findall(section_html))
@@ -350,7 +360,7 @@ class TestPanelExportOhneRoundtrip:
     def test_berichte_formular_umschliesst_das_panel(self, client, lead_user):
         """Sonst serialisiert der Submit die Freitextfelder gar nicht mit."""
         client.force_login(lead_user)
-        section = _extract_report_section(client.get(reverse("core:statistics")).content.decode())
+        section = _extract_report_section(client.get(reverse("core:statistics"), BERICHTE_VIEW).content.decode())
 
         assert section.index("<form") < section.index('id="report-panel"') < section.index("</form>")
         assert 'method="get"' in section[section.index("<form") : section.index(">", section.index("<form"))]
@@ -358,7 +368,7 @@ class TestPanelExportOhneRoundtrip:
     def test_freitextfelder_loesen_keinen_panel_request_mehr_aus(self, client, lead_user):
         """Ohne gewaehltes Backend antwortet das Panel 400 → roter Fehler-Toast."""
         client.force_login(lead_user)
-        section = _extract_report_section(client.get(reverse("core:statistics")).content.decode())
+        section = _extract_report_section(client.get(reverse("core:statistics"), BERICHTE_VIEW).content.decode())
 
         for feld in ("recipient", "purpose"):
             start = section.index(f'name="{feld}"')
@@ -375,7 +385,7 @@ class TestPanelExportOhneRoundtrip:
         section = _extract_report_section(
             client.get(
                 reverse("core:statistics"),
-                {"period": "custom", "date_from": "2026-01-01", "date_to": "2026-01-31"},
+                {**BERICHTE_VIEW, "period": "custom", "date_from": "2026-01-01", "date_to": "2026-01-31"},
             ).content.decode()
         )
         felder = dict(_HIDDEN_INPUT_RE.findall(section))
@@ -666,7 +676,7 @@ class TestStatisticsViewBerichteSektion:
     def test_zeigt_berichte_sektion_mit_beispiel_sachbericht(self, client, admin_user):
         client.force_login(admin_user)
 
-        response = client.get(reverse("core:statistics"))
+        response = client.get(reverse("core:statistics"), BERICHTE_VIEW)
 
         assert response.status_code == 200
         content = response.content.decode()
@@ -678,7 +688,20 @@ class TestStatisticsViewBerichteSektion:
         monkeypatch.setattr(registry, "_discovered", True)
         client.force_login(admin_user)
 
-        response = client.get(reverse("core:statistics"))
+        response = client.get(reverse("core:statistics"), BERICHTE_VIEW)
 
         assert response.status_code == 200
         assert 'id="report-section"' not in response.content.decode()
+
+    def test_dashboard_reiter_zeigt_die_sektion_nicht_mehr(self, client, admin_user):
+        """Refs #1813: die Verzweigung ist der eigentliche Umbau — ohne diese
+        Gegenprobe koennte die Sektion in beiden Reitern stehen und der neue
+        Reiter waere eine Verdopplung statt eines Umzugs."""
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics"))
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'id="report-section"' not in content
+        assert 'id="dashboard-content"' in content

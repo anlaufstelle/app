@@ -3,25 +3,25 @@
 {# Zeitraum-Auswahl (Pills) #}
 <div class="mb-6 flex flex-wrap gap-2 items-end no-print">
     <div class="flex gap-1.5">
-        <button hx-get="{% url 'core:statistics' %}?period=month"
+        <button hx-get="{% url 'core:statistics' %}?period=month{{ view_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
                 class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'month' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
             {% trans "Monat" %}
         </button>
-        <button hx-get="{% url 'core:statistics' %}?period=quarter"
+        <button hx-get="{% url 'core:statistics' %}?period=quarter{{ view_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
                 class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'quarter' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
             {% trans "Quartal" %}
         </button>
-        <button hx-get="{% url 'core:statistics' %}?period=half"
+        <button hx-get="{% url 'core:statistics' %}?period=half{{ view_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
                 class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'half' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
             {% trans "Halbjahr" %}
         </button>
-        <button hx-get="{% url 'core:statistics' %}?period=year"
+        <button hx-get="{% url 'core:statistics' %}?period=year{{ view_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
                 class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'year' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
@@ -30,6 +30,8 @@
     </div>
     <form class="flex gap-2 items-end ml-4">
         <input type="hidden" name="period" value="custom">
+        {% if view_mode %}{# Refs #1813: hx-include sammelt die Felder DIESES Formulars ein — ohne das Feld faellt der Modus beim Anwenden eines eigenen Zeitraums weg. #}
+        <input type="hidden" name="view" value="{{ view_mode }}">{% endif %}
         <div>
             <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
             <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
@@ -53,7 +55,7 @@
 
 {% if period == "year" and selected_year %}
 <div class="mb-4 flex items-center gap-3 no-print">
-    <button hx-get="{% url 'core:statistics' %}?period=year&year={{ selected_year|add:'-1' }}"
+    <button hx-get="{% url 'core:statistics' %}?period=year&amp;year={{ selected_year|add:'-1' }}{{ view_query }}"
             hx-target="#statistics-content"
             hx-push-url="true"
             class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
@@ -64,7 +66,7 @@
     </button>
     <span class="font-mono font-semibold text-[15px] text-ink">{{ selected_year }}</span>
     {% if selected_year < current_year %}
-    <button hx-get="{% url 'core:statistics' %}?period=year&year={{ selected_year|add:'1' }}"
+    <button hx-get="{% url 'core:statistics' %}?period=year&amp;year={{ selected_year|add:'1' }}{{ view_query }}"
             hx-target="#statistics-content"
             hx-push-url="true"
             class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
@@ -77,10 +79,18 @@
 </div>
 {% endif %}
 
+{% comment %}
+Refs #1813 (Konzept #1801 §7.1): Dashboard und Berichte sind zwei Reiter
+desselben Bereichs, nicht zwei Abschnitte einer Seite. Die Zeitraum-Auswahl
+oben steht bewusst ÜBER dieser Verzweigung — beide Reiter arbeiten mit
+demselben Zeitraum, und der Bericht erbt ihn über die versteckten Felder
+seiner Form.
+{% endcomment %}
+{% if view_mode != "berichte" %}
 <div id="dashboard-content">
     {% include "core/statistics/partials/dashboard_content.html" %}
 </div>
-
+{% else %}
 {% comment %}
 Berichte-Sektion (M5 P5, Refs #1061): Backend-Auswahl + generischer Export.
 Sichtbarkeit wie das Dashboard selbst (die ganze Seite ist LEAD_PLUS-gated) —
@@ -148,4 +158,7 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
     <div id="report-panel"></div>
     </form>
 </section>
+{% else %}
+<p class="text-[13px] text-ink-muted">{% trans "Für diese Einrichtung ist kein Bericht verfügbar." %}</p>
+{% endif %}
 {% endif %}

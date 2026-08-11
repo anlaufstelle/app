@@ -69,7 +69,22 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
 
         stats = get_statistics_hybrid(facility, period_state.date_from, period_state.date_to)
 
+        # Refs #1813 (Konzept #1801 §7.1): der Reiter „Datensatz-Berichte" ist ein
+        # serverseitiger Modus derselben Route — Hausmuster der Bereichs-
+        # Konsolidierung (Zeitstrom ``?view=``, Refs #1124). Eine eigene Route
+        # scheidet aus: ``core:statistics_report_panel`` ist ein HTMX-Partial ohne
+        # ``base.html`` und antwortet ohne ``?backend=`` mit 400.
+        #
+        # Nur ``berichte`` ist gültig, alles andere fällt auf das Dashboard
+        # zurück: ein Tippfehler in einem Deep-Link soll eine bekannte Seite
+        # zeigen, keine leere. ``view_query`` hängt den Modus an die
+        # HTMX-Nachladeziele der Zeitraum-Auswahl — ohne ihn spränge der erste
+        # Filterklick zurück ins Dashboard.
+        view_mode = "berichte" if request.GET.get("view") == "berichte" else ""
+
         context = {
+            "view_mode": view_mode,
+            "view_query": f"&view={view_mode}" if view_mode else "",
             "stats": stats,
             "period": period_state.period,
             "date_from": period_state.date_from,

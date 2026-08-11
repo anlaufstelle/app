@@ -44,6 +44,11 @@ PILL_ACTIVE = "bg-accent text-white"
 # hier eingetragen wird — sonst wäre die 44-px-Prüfung für ihn still blind.
 SECTION_PROBES: dict[str, str] = {
     "system": "super_admin_user",
+    # Refs #1813 (Etappe 3): die Statistik-Reiterzeile ist LEAD_PLUS-einheitlich
+    # — alle vier Reiter tragen dasselbe Gate. Die Probe laeuft deshalb bewusst
+    # mit der *unteren* Stufe (Leitung): saehe sie dort weniger Reiter als
+    # gedacht, waere das ein echter Befund, kein Artefakt der Rollenwahl.
+    "statistik": "lead_user",
     "datenschutz": "admin_user",
     "verwaltung": "admin_user",
 }

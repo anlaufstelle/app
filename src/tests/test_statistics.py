@@ -335,9 +335,16 @@ class TestStatisticsEnterSubmitGuard:
         assert content.count('@keydown.enter="suppress"') >= 2
 
     def test_panel_export_fields_carry_the_guard(self, client, admin_user):
-        """Panel-Exportformular (Berichte-Sektion) braucht denselben Schutz."""
+        """Panel-Exportformular braucht denselben Schutz.
+
+        Refs #1813: die Berichte-Sektion haengt nicht mehr unten am Dashboard,
+        sie ist ein eigener Reiter der Statistik-Reiterzeile
+        (``?view=berichte``, Konzept #1801 §7.1). Der Test folgt dem Umzug —
+        und zaehlt entsprechend nur noch die zwei Handler dieses Reiters; die
+        zwei des Dashboard-Exports pruefen wir eine Ebene hoeher im Test davor.
+        """
         client.force_login(admin_user)
-        content = client.get(reverse("core:statistics")).content.decode()
+        content = client.get(reverse("core:statistics"), {"view": "berichte"}).content.decode()
 
         # Sanity: die Berichte-Sektion ist ueberhaupt gerendert (sample-report-1
         # ist immer registriert, s. TestStatisticsRangeGuardViews).
@@ -346,8 +353,7 @@ class TestStatisticsEnterSubmitGuard:
         purpose_pos = content.index('id="report-purpose"')
         container_start = content.rindex('x-data="suppressEnterSubmit"', 0, recipient_pos)
         assert container_start < recipient_pos < purpose_pos
-        # Beide Formulare zusammen: 2 (Dashboard) + 2 (Panel).
-        assert content.count('@keydown.enter="suppress"') == 4
+        assert content.count('@keydown.enter="suppress"') == 2
 
 
 class TestStatisticsBackendPlaceholderNoRequestGuard:

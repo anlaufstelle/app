@@ -17,6 +17,7 @@ zurückwandern, wo seinerzeit der Substring-Bug entstand.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from urllib.parse import parse_qsl
 
 from django import template
 from django.urls import reverse
@@ -63,22 +64,56 @@ def _user(context):
     return getattr(context.get("request"), "user", None) or context.get("user")
 
 
-def _rendered(items, context, *, mobile: bool = False) -> list[RenderedItem]:
-    user = _user(context)
+def _query_matches(item: nav.NavItem, request) -> bool:
+    """Trägt die aktuelle Anfrage die Query-Parameter des Eintrags?
+
+    Nur relevant für Reiter mit ``query`` (heute „Datensatz-Berichte" =
+    ``core:statistics?view=berichte``, Refs #1801 §7.1). Ohne diese Prüfung wäre
+    ein solcher Reiter auf **jeder** Seite seiner Route aktiv.
+    """
+    if not item.query:
+        return True
+    if request is None:
+        return False
+    return all(request.GET.get(key) == value for key, value in parse_qsl(item.query))
+
+
+def _active_keys(items, context) -> set[str]:
+    """Die Schlüssel der aktiven Einträge — inklusive der Query-Regel.
+
+    Zwei Reiter dürfen sich eine Route teilen und sich trotzdem gegenseitig
+    ausschließen: „Übersicht" (``/statistics/``) und „Datensatz-Berichte"
+    (``/statistics/?view=berichte``). Ist der Query-Reiter aktiv, **tritt der
+    query-lose Reiter derselben Route zurück** — sonst leuchteten beide Pills,
+    und die Reiterzeile sagte nicht mehr, wo man ist.
+    """
+    request = context.get("request")
     current = _current_url_name(context)
+    active = {item.key for item in items if current in item.family and _query_matches(item, request)}
+    routes_taken_by_a_query_tab = {item.url_name for item in items if item.key in active and item.query}
+    return {
+        item.key
+        for item in items
+        if item.key in active and (item.query or item.url_name not in routes_taken_by_a_query_tab)
+    }
+
+
+def _rendered(items, context, *, mobile: bool = False) -> list[RenderedItem]:
+    visible = nav.visible_items(items, _user(context))
+    active = _active_keys(visible, context)
     return [
         RenderedItem(
             key=item.key,
             label=item.label,
             href=_href(item),
             testid=item.mobile_testid if mobile else item.testid,
-            is_active=current in item.family,
+            is_active=item.key in active,
             icon=item.icon,
             external=item.external,
             badge=item.badge,
             divider_before=item.divider_before,
         )
-        for item in nav.visible_items(items, user)
+        for item in visible
     ]
 
 

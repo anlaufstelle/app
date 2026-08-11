@@ -1,6 +1,8 @@
 """E2E-Tests: Berichts-Panel, Backend-Auswahl und Format-Downloads (M5 P8, Refs #1061).
 
-Deckt die Benutzersicht der Berichte-Sektion auf ``/statistics/`` ab: das per
+Deckt die Benutzersicht der Berichte-Sektion ab — seit der Statistik-Reiterzeile
+(Refs #1813) liegt sie auf dem Reiter ``/statistics/?view=berichte`` statt unten
+am Dashboard. Geprueft wird das per
 Lazy-Discovery befuellte Backend-Dropdown, den HTMX-Swap des Vorschau-Panels
 (``core:statistics_report_panel``) und die drei Format-Downloads
 (``core:statistics_report_export``). Die inhaltlichen Garantien der Backends
@@ -29,8 +31,12 @@ PANEL_URL_FRAGMENT = "/statistics/reports/panel/"
 
 
 def _open_statistics(page, base_url):
-    """Statistik-Seite oeffnen und das Backend-Dropdown der Berichte-Sektion liefern."""
-    page.goto(f"{base_url}/statistics/", wait_until="domcontentloaded")
+    """Berichte-Reiter oeffnen und sein Backend-Dropdown liefern.
+
+    Refs #1813: ``?view=berichte`` ist der Reiter „Datensatz-Berichte" der
+    Statistik-Reiterzeile (Konzept #1801 §7.1) — dieselbe Route, anderer Modus.
+    """
+    page.goto(f"{base_url}/statistics/?view=berichte", wait_until="domcontentloaded")
     expect(page.locator("#report-section")).to_be_visible(timeout=10000)
     return page.locator("#report-section select[name='backend']")
 

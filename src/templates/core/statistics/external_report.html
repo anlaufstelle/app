@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Externer Bericht" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Externer Bericht (Datenschutzprofil)" %}</h1>
+
+{% subnav "statistik" %}
 
 <section aria-labelledby="report-metadata" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
     <h2 id="report-metadata" class="text-lg font-semibold text-blue-900 mb-2">

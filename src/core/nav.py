@@ -204,6 +204,76 @@ SYSTEM = NavSection(
 SYSTEM_FAMILY = section_family(SYSTEM)
 
 
+# Refs #1801 §7.1: drei Statistik-Seiten waren praktisch unerreichbar —
+# ``/statistics/external/`` hatte **keinen einzigen Link** im ganzen Repo, die
+# Freigabe-Übersicht nur einen Textlink im Berichts-Panel, und die
+# Berichts-Sektion hing unten am Dashboard. Die Reiterzeile gibt ihnen eine
+# Heimat, ohne eine einzige Route zu verschieben.
+#
+# Der Reiter „Datensatz-Berichte" ist der Sonderfall (Befund N2): sein
+# natürliches Ziel ``core:statistics_report_panel`` ist ein HTMX-Partial ohne
+# ``base.html``, das ohne ``?backend=`` mit 400 antwortet — als Seite
+# unbrauchbar. Statt einer neuen Route trägt er ``?view=berichte`` auf
+# ``core:statistics``; das ist das Hausmuster der Bereichs-Konsolidierung
+# (Zeitstrom ``?view=``, Refs #1124) und hält Deep-Links abwärtskompatibel.
+STATISTIK_UEBERSICHT = NavItem(
+    key="statistik_uebersicht",
+    label=_("Übersicht"),
+    url_name="core:statistics",
+    # Die drei Download-Endpunkte gehören zur Übersicht, nicht zum Berichte-
+    # Reiter: sie hängen an den Schaltflächen des Dashboards.
+    family=frozenset(
+        {
+            "statistics",
+            "statistics_csv_export",
+            "statistics_pdf_export",
+            "statistics_sample_report_1_export",
+        }
+    ),
+    gates=("is_lead_or_admin",),
+)
+STATISTIK_EXTERNER_BERICHT = NavItem(
+    key="statistik_external_report",
+    label=_("Externer Bericht"),
+    url_name="core:statistics_external_report",
+    family=frozenset({"statistics_external_report"}),
+    gates=("is_lead_or_admin",),
+)
+STATISTIK_DATENSATZ_BERICHTE = NavItem(
+    key="statistik_berichte",
+    label=_("Datensatz-Berichte"),
+    url_name="core:statistics",
+    query="view=berichte",
+    # Dieselbe Route wie die Übersicht. Der Aktiv-Zustand unterscheidet die
+    # beiden über ``query`` (``nav_tags._rendered``): trüge dieser Reiter die
+    # Route nicht in seiner Familie, wäre er nie aktiv — trügen beide sie ohne
+    # Query-Prüfung, leuchteten auf ``?view=berichte`` beide.
+    family=frozenset({"statistics"}),
+    gates=("is_lead_or_admin",),
+)
+STATISTIK_FREIGABEN = NavItem(
+    key="statistik_releases",
+    label=_("Freigaben"),
+    url_name="core:statistics_report_releases",
+    family=frozenset({"statistics_report_releases"}),
+    gates=("is_lead_or_admin",),
+)
+
+STATISTIK_SECTION = NavSection(
+    key="statistik",
+    label=_("Statistik"),
+    aria_label=_("Statistik-Navigation"),
+    testid="subnav-statistik",
+    tabs=(
+        STATISTIK_UEBERSICHT,
+        STATISTIK_EXTERNER_BERICHT,
+        STATISTIK_DATENSATZ_BERICHTE,
+        STATISTIK_FREIGABEN,
+    ),
+)
+STATISTIK_FAMILY = section_family(STATISTIK_SECTION)
+
+
 # ---------------------------------------------------------------------------
 # Hauptnavigation (Desktop-Sidebar) — Reihenfolge = Renderreihenfolge
 # ---------------------------------------------------------------------------
@@ -267,16 +337,12 @@ DATEIEN = NavItem(
 )
 STATISTIK = NavItem(
     key="statistics",
-    label=_("Statistik"),
+    label=STATISTIK_SECTION.label,
     url_name="core:statistics",
-    family=frozenset(
-        {
-            "statistics",
-            "statistics_csv_export",
-            "statistics_pdf_export",
-            "statistics_sample_report_1_export",
-        }
-    ),
+    # Abgeleitet wie bei „Systembereich" und den Hubs: ein neuer Statistik-
+    # Reiter zieht den Sidebar-Aktivzustand automatisch mit. Vorher fehlten
+    # hier die beiden verwaisten Seiten — auf ihnen erlosch die Ortsanzeige.
+    family=STATISTIK_FAMILY,
     gates=("is_lead_or_admin",),
     icon="statistics",
 )
@@ -453,7 +519,7 @@ VERWALTUNG = NavSection(
     ),
 )
 
-SECTIONS: tuple[NavSection, ...] = (SYSTEM, DATENSCHUTZ, VERWALTUNG)
+SECTIONS: tuple[NavSection, ...] = (SYSTEM, STATISTIK_SECTION, DATENSCHUTZ, VERWALTUNG)
 
 DATENSCHUTZ_FAMILY = section_family(DATENSCHUTZ)
 VERWALTUNG_FAMILY = section_family(VERWALTUNG)
@@ -616,16 +682,12 @@ KNOWN_NON_NAV_ROUTES: dict[str, str] = {
     "retention_bulk_reject": "POST-only Massenaktion der Löschfristen-Übersicht.",
     # /statistics/
     "statistics_chart_data": "JSON-Endpunkt für die Diagramme der Statistikseite, kein Seitenaufruf.",
-    "statistics_report_panel": "HTMX-Partial ohne base.html; antwortet ohne ?backend= mit 400 — als Seite unbrauchbar.",
+    "statistics_report_panel": (
+        "HTMX-Partial ohne base.html; antwortet ohne ?backend= mit 400 — als Seite unbrauchbar (Befund N2). "
+        "Der Reiter „Datensatz-Berichte“ zeigt deshalb auf core:statistics?view=berichte, wo dieses Partial "
+        "nachgeladen wird."
+    ),
     "statistics_report_export": "Generischer Download-Endpunkt der Berichts-Plugins.",
-    "statistics_external_report": (
-        "Verwaiste Seite: aktuell existiert kein einziger Link darauf (nur per Direkt-URL erreichbar). "
-        "Etappe 3 von #1801 gibt ihr einen Reiter in der Statistik-Reiterzeile."
-    ),
-    "statistics_report_releases": (
-        "Verwaiste Seite (K4a, Refs #1770): nur aus dem Berichts-Panel heraus verlinkt, kein Nav-Eintrag. "
-        "Etappe 3 von #1801 gibt ihr einen Reiter in der Statistik-Reiterzeile."
-    ),
 }
 
 

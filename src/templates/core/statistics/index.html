@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n static %}
+{% load i18n static nav_tags %}
 
 {% block title %}{% trans "Statistik" %} – Anlaufstelle{% endblock %}
 
@@ -10,6 +10,10 @@
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Statistik" %}</h1>
+
+{# Reiterzeile des Bereichs. Sie liegt bewusst AUSSERHALB von #statistics-content: #}
+{# der HTMX-Swap der Zeitraum-Auswahl tauscht nur den Inhalt, nicht die Ortsanzeige. #}
+{% subnav "statistik" %}
 
 <div id="statistics-content">
     {% include "core/statistics/partials/full_content.html" %}
