@@ -10446,3 +10446,12 @@ msgstr "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%
 #: src/templates/core/events/create.html:186
 msgid "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe."
 msgstr "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe."
+
+#: src/templates/core/export/report_pdf.html:44
+#, python-format
+msgid "Gefiltert nach Dokumentationstyp: %(name)s"
+msgstr "Gefiltert nach Dokumentationstyp: %(name)s"
+
+#: src/templates/core/statistics/report_releases.html:26
+msgid "Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen."
+msgstr "Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen."

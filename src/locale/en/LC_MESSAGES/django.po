@@ -10350,3 +10350,12 @@ msgstr "For this documentation type, only people at contact stage \"%(stage)s\" 
 #: src/templates/core/events/create.html:186
 msgid "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe."
 msgstr "The selected person was cleared: this documentation type requires a higher contact stage."
+
+#: src/templates/core/export/report_pdf.html:44
+#, python-format
+msgid "Gefiltert nach Dokumentationstyp: %(name)s"
+msgstr "Filtered by documentation type: %(name)s"
+
+#: src/templates/core/statistics/report_releases.html:26
+msgid "Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen."
+msgstr "This overview shows the most recent releases regardless of the selected period; the period is preserved and applies again as soon as you open another tab."
