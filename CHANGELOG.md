@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Demo-Rechtstexte: Datenschutzerklärung liegt jetzt unter `/datenschutzerklaerung/`** (#1813) — macht den Pfad `/datenschutz/` für den kommenden Datenschutz-Bereich der Hauptnavigation frei (#1801); Footer-, Login- und Consent-Banner-Links folgen der Einstellung `DEMO_LEGAL_PRIVACY_URL` automatisch, `/impressum/` bleibt unverändert.
 
+### Fixed
+
+- **Navigation zeigt den aktiven Bereich jetzt auf allen Seiten des Systembereichs und in der Audit-Detailansicht** (#1813) — auf „Retention", „VVT", „Legal Holds" und „Compliance" sowie beim Aufklappen eines Audit-Eintrags war die Ortsanzeige in der Hauptnavigation bisher erloschen.
+
 ## [0.80.0] - 2026-08-10
 
 ### Added

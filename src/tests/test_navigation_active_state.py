@@ -25,6 +25,20 @@ def _opening_anchor(content: str, testid: str) -> str:
     return content[start:end]
 
 
+def _sidebar_anchor_by_href(content: str, href: str) -> str:
+    """Oeffnender ``<a ...>``-Tag der Sidebar-Zeile mit diesem ``href``.
+
+    Fuer die Eintraege ohne eigenes ``data-testid`` (Refs #1813 aendert die
+    Testid-Landschaft bewusst nicht). Der Schnitt auf den ``nav-items``-
+    Container haelt gleichnamige Links aus Seiteninhalt und Mobile-Nav heraus.
+    """
+    nav_start = content.index('data-testid="nav-items"')
+    nav_end = content.index("</div>", nav_start)
+    items = content[nav_start:nav_end]
+    idx = items.index(f'href="{href}"')
+    return items[items.rindex("<a", 0, idx) : items.index(">", idx)]
+
+
 def test_dashboard_is_not_a_substring_member_of_system_family():
     """Dieselbe Aussage wie die Render-Tests unten — aber auf Datenebene.
 
@@ -89,3 +103,49 @@ class TestFeldvorlagenNavActiveState:
 
         assert ACTIVE_MARKER in konfiguration_anchor, "Konfiguration sollte aktiv sein"
         assert ACTIVE_MARKER not in feldvorlagen_anchor, "Feldvorlagen darf hier nicht aktiv sein"
+
+
+@pytest.mark.django_db
+class TestSystembereichActiveOnEveryTab:
+    """Refs #1813: der Sidebar-Eintrag „Systembereich" markierte nur sieben der
+    neun ``/system/``-Reiter. Auf Retention, VVT, Legal Holds und Compliance
+    graute er aus — die Ortsanzeige verschwand mitten im Bereich. Ursache war
+    eine handgepflegte CSV-Familie, die bei jedem neuen Reiter (#875, #876,
+    #877, #919) nachgezogen werden musste und es nie wurde."""
+
+    @pytest.mark.parametrize("url_name", [tab.url_name for tab in nav.SYSTEM.tabs])
+    def test_sidebar_entry_is_active_on_every_system_page(self, client, super_admin_user, url_name):
+        client.force_login(super_admin_user)
+        content = client.get(reverse(url_name)).content.decode()
+
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-system"), f"Systembereich muss auf {url_name} aktiv sein"
+
+    @pytest.mark.parametrize("url_name", [tab.url_name for tab in nav.SYSTEM.tabs])
+    def test_arbeitszentrale_stays_inactive_on_every_system_page(self, client, super_admin_user, url_name):
+        """Gegenprobe zur Substring-Regression: nie beide gleichzeitig."""
+        client.force_login(super_admin_user)
+        content = client.get(reverse(url_name)).content.decode()
+
+        assert ACTIVE_MARKER not in _opening_anchor(content, "nav-dashboard"), (
+            f"Arbeitszentrale darf auf {url_name} nicht aktiv sein"
+        )
+
+
+@pytest.mark.django_db
+class TestAuditNavActiveState:
+    """Refs #1813: die Detailansicht eines Audit-Eintrags fehlte in der
+    Audit-Familie — der Nav-Eintrag graute beim Aufklappen eines Eintrags aus."""
+
+    def test_audit_entry_stays_active_on_the_detail_page(self, client, admin_user, facility):
+        from core.models import AuditLog
+
+        entry = AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.LOGIN,
+            detail={"username": admin_user.username},
+        )
+        client.force_login(admin_user)
+        content = client.get(reverse("core:audit_detail", args=[entry.pk])).content.decode()
+
+        assert ACTIVE_MARKER in _sidebar_anchor_by_href(content, "/audit/")

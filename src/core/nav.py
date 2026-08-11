@@ -309,7 +309,7 @@ AUDIT_LOG = NavItem(
     key="audit",
     label=_("Audit-Log"),
     url_name="core:audit_log",
-    family=frozenset({"audit_log"}),
+    family=frozenset({"audit_log", "audit_detail"}),
     gates=("is_facility_admin",),
     icon="audit",
 )
@@ -369,20 +369,10 @@ SYSTEMBEREICH = NavItem(
     key="system",
     label=_("Systembereich"),
     url_name="core:system_dashboard",
-    # Refs #1813: bewusst noch die Ist-Menge von sieben Reitern — die
-    # Zusammenführung mit SYSTEM_FAMILY (alle neun) ist der Fix im
-    # Folge-Commit, damit dieser Commit nichts Sichtbares ändert.
-    family=frozenset(
-        {
-            "system_dashboard",
-            "system_organization",
-            "system_audit_list",
-            "system_audit_detail",
-            "system_lockout_list",
-            "system_unlock",
-            "system_maintenance",
-        }
-    ),
+    # Die Familie ist die Vereinigung ALLER Reiter des Bereichs — genau das ist
+    # der Punkt der Registry: ein neuer /system/-Reiter zieht den Sidebar-
+    # Aktivzustand automatisch mit (Refs #1813).
+    family=SYSTEM_FAMILY,
     gates=("is_super_admin",),
     testid="nav-system",
     mobile_testid="mobile-nav-system",
@@ -509,12 +499,6 @@ KNOWN_NON_NAV_ROUTES: dict[str, str] = {
     "retention_bulk_approve": "POST-only Massenaktion der Löschfristen-Übersicht.",
     "retention_bulk_defer": "POST-only Massenaktion der Löschfristen-Übersicht.",
     "retention_bulk_reject": "POST-only Massenaktion der Löschfristen-Übersicht.",
-    # /audit/
-    "audit_detail": (
-        "Ist-Defekt, kein Strukturmerkmal: die Detailansicht eines Audit-Eintrags gehört fachlich in die "
-        "Audit-Familie, steht aber heute nicht darin (der Nav-Eintrag graut auf der Detailseite aus). "
-        "Wird im Folge-Commit zu #1813 in die Familie überführt und hier entfernt."
-    ),
     # /statistics/
     "statistics_chart_data": "JSON-Endpunkt für die Diagramme der Statistikseite, kein Seitenaufruf.",
     "statistics_report_panel": "HTMX-Partial ohne base.html; antwortet ohne ?backend= mit 400 — als Seite unbrauchbar.",
