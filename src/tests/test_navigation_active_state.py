@@ -12,6 +12,8 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
+from core import nav
+
 ACTIVE_MARKER = "bg-accent-light"
 
 
@@ -21,6 +23,20 @@ def _opening_anchor(content: str, testid: str) -> str:
     start = content.rindex("<a", 0, idx)
     end = content.index(">", idx)
     return content[start:end]
+
+
+def test_dashboard_is_not_a_substring_member_of_system_family():
+    """Dieselbe Aussage wie die Render-Tests unten — aber auf Datenebene.
+
+    Refs #1813: Die Familien sind seit der Registry ``frozenset``\\ s, ``in``
+    ist damit strukturell ein Element- und kein Substring-Test. Dieser
+    Datentest haelt die Aussage fest, ohne eine Seite rendern zu muessen: er
+    faellt selbst dann noch, wenn jemand die Familien versehentlich wieder auf
+    einen CSV-String zurueckdreht (dort waere ``"dashboard" in family`` wahr).
+    """
+    assert "dashboard" not in nav.SYSTEM_FAMILY
+    assert "system_dashboard" in nav.SYSTEM_FAMILY
+    assert "dashboard" not in nav.item("system").family
 
 
 @pytest.mark.django_db

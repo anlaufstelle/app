@@ -14,14 +14,16 @@ from django.urls import reverse
 
 
 def _desktop_nav(content: str) -> str:
-    """Schneidet den Desktop-Sidebar-Block aus der gerenderten Seite.
+    """Schneidet die Eintragsliste der Desktop-Sidebar aus der gerenderten Seite.
 
-    Grenzen sind die ``aria-label``-Marker der beiden Navigationen, damit die
-    Mobile-Bottom-Nav (eigene Reihenfolge, 5-Slot-Layout) die Assertion nicht
-    verfaelscht.
+    Grenzen sind der Container-Marker ``data-testid="nav-items"`` (Refs #1813)
+    und sein schliessendes ``</div>``. Der engere Schnitt haelt sowohl die
+    Mobile-Bottom-Nav (eigene Reihenfolge, 5-Slot-Layout) als auch den
+    Org-Header ueber der Liste heraus — dessen ``href="/"`` war bisher ein
+    Zufallstreffer fuer die Zeitstrom-Position.
     """
-    start = content.index('aria-label="Hauptnavigation"')
-    end = content.index('aria-label="Mobile Navigation"')
+    start = content.index('data-testid="nav-items"')
+    end = content.index("</div>", start)
     assert start < end
     return content[start:end]
 

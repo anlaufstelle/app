@@ -1,514 +1,389 @@
-"""Drift-Guard: url_name-Katalog des Mobile-„Mehr"-Highlights (Refs #1795).
+"""Drift-Guard: Highlight-Katalog des mobilen „Mehr"-Buttons vs. Registry (Refs #1795, #1813).
 
-``_navigation_mobile.html`` haelt fuer den „Mehr"-Button (Slot 5 der
-5-Slot-Bottom-Nav) einen hartkodierten CSV-Katalog von url_names, der
-entscheidet, wann der Button als aktiv markiert wird
-(``{% if request.resolver_match.url_name in '...'|split:',' %}``). Neue Routen
-muessen manuell in diesen Katalog nachgezogen werden — nichts erzwang das
-bisher. M4 (CSV-Import) vergass zunaechst ``import_detail`` im Katalog; das
-fiel nur beim Handtest auf (Nachtrag Commit 473b34e0). Dieser Guard vergleicht
-den Mobile-Katalog gegen zwei unabhaengige Quellen echter Navigierbarkeit:
+Slot 5 der mobilen Bottom-Nav („Mehr") wird hervorgehoben, wenn die aktuelle
+Seite zu einem seiner Einträge gehört. Früher war das ein hartkodierter
+CSV-Katalog im Template, den niemand nachziehen musste — M4 vergaß so
+``import_detail`` (Nachtrag Commit 473b34e0). Seit #1813 berechnet
+:func:`core.nav.mobile_more_catalog` den Katalog aus denselben Familien, aus
+denen die Einträge gerendert werden; der Katalog kann also nicht mehr
+„vergessen" werden.
 
-1. Die tatsaechlich im Mehr-Dropdown per ``href`` verlinkten Routen
-   (**Kern-Guard**).
-2. Die Desktop-Sidebar, die pro Bereich dieselbe
-   ``url_name in '...'|split:','``-Familie fuehrt, aber vollstaendig (inkl.
-   Detail-/Edit-/Review-Geschwistern) — eine dort verlinkte, im Mehr direkt
-   erreichbare Familie muss komplett im Mobile-Katalog stehen
-   (**Familien-Guard**, faengt genau den M4-Fall).
+Womit dieser Guard **nicht** überflüssig wird: die Berechnung hat drei
+begründungspflichtige Ausnahmen, und genau dort kann sie still falsch werden.
 
-Skeleton-Vorbild: ``test_seed_doc_drift.py`` (Katalog-vs-Katalog, reine
-Funktionen + synthetische Selbsttests), Slice-Idiom aus
-``test_navigation_order.py``, begruendungspflichtige Ausnahme-Dicts aus
-``test_authz_template_links.py``. Kein ``django_db``, kein
-Template-Rendering — reines Regex-/String-Parsing auf dem Quelltext.
+* ``nav.MOBILE_MORE_EXCLUDED_KEYS`` — eine ganze Familie trägt bewusst nicht
+  zum Highlight bei (heute nur der super_admin-Redundanzlink „Systembereich",
+  der einen eigenen Bottom-Bar-Slot hat).
+* ``nav.MOBILE_MORE_EXCLUDED_ROUTES`` — einzelne Familienmitglieder ohne
+  „du bist hier"-Zustand (reine Download-Endpunkte).
+* ``nav.MOBILE_MORE_EXTRA_FAMILY`` — Routen im Katalog **ohne** Listeneintrag
+  (Suche als Overlay-Button, Profil als feste Fußzeile).
+
+Jede Ausnahme wird hier auf drei Dinge geprüft: sie ist begründet, sie ist noch
+nötig (kein Bit-Rot), und sie deckt nichts mit ab, was sie nicht decken soll.
+Dazu kommt die Aussage, die den Bottom-Bar-Slots ihre Eindeutigkeit gibt: keine
+Familie mit eigenem Slot darf im Mehr-Katalog auftauchen — sonst leuchten zwei
+Slots gleichzeitig.
+
+Die reinen Funktionen unten nehmen Einträge **und** Katalog als unabhängige
+Eingaben entgegen. Nur so ist der Abgleich ein echter Kreuzvergleich (und kein
+Test der Implementierung gegen sich selbst), und nur so lassen sich die
+synthetischen Selbsttests am Ende der Datei formulieren, die beweisen, dass der
+Guard Drift tatsächlich **erkennt**.
+
+Kein ``architecture``-Marker mehr: die Datei liest keinen Quelltext von der
+Platte, sondern importiert ``core.nav`` — und ``src/core`` liegt in
+``[tool.mutmut] also_copy``. Mutationen in der Registry sollen hier auffallen.
 """
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
-
 import pytest
+from django.urls import reverse
 
-# Meta-Test auf dem Repo-Filesystem (Template-/URLconf-Quelltext). Analog
-# test_seed_doc_drift.py als ``architecture`` markiert — im Mutmut-Subprozess
-# (laeuft aus ``mutants/``) fehlen diese Pfade.
-pytestmark = pytest.mark.architecture
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MOBILE_NAV = REPO_ROOT / "src" / "templates" / "partials" / "_navigation_mobile.html"
-DESKTOP_NAV = REPO_ROOT / "src" / "templates" / "partials" / "_navigation_desktop.html"
-CORE_URLS = REPO_ROOT / "src" / "core" / "urls.py"
-
-# Marker fuer den Beginn des Mehr-Blocks. BEWUSST NICHT
-# ``data-testid="mobile-nav-more"``: dieses Attribut steht im selben
-# <button>-Tag wie der Highlight-Katalog, aber DAHINTER im Quelltext (die
-# Klassen-Bedingung kommt vor ``data-testid`` in der Attributliste) — ein
-# Slice ab diesem Marker wuerde den Katalog selbst abschneiden. ``x-data
-# ="mobileMore"`` steht am oeffnenden <div> davor, ist im Template einmalig
-# und liegt zugleich HINTER dem „Neu"-Dropdown (``x-data="createMenu"``),
-# dessen event_create/client_create/workitem_create/case_create-Links sonst
-# als falsche Positive in ``mehr_linked_url_names`` landen wuerden.
-MEHR_MARKER = 'x-data="mobileMore"'
-
-_CATALOG_RE = re.compile(r"url_name in '([^']+)'\|split:','")
-_HREF_CORE_RE = re.compile(r"href=\"\{% url 'core:([a-zA-Z0-9_]+)' %\}\"")
-_URLCONF_NAME_RE = re.compile(r'name="([a-zA-Z0-9_]+)"')
-
+from core import nav
+from core.nav import NavItem, NavSection
 
 # ---------------------------------------------------------------------------
 # Reine Funktionen (synthetisch unit-testbar)
 # ---------------------------------------------------------------------------
 
 
-def _mehr_slice(source: str) -> str:
-    """Quelltext ab dem Mehr-Marker bis Dateiende."""
-    idx = source.find(MEHR_MARKER)
-    if idx == -1:
-        raise AssertionError(
-            f"Marker {MEHR_MARKER!r} nicht im Mobile-Nav-Quelltext gefunden — Guard blind (Template umgebaut?)."
-        )
-    return source[idx:]
+def _route(item: NavItem) -> str:
+    """``url_name`` ohne Namespace — leer bei externen Zielen."""
+    return item.url_name.split(":")[-1] if item.url_name else ""
 
 
-def mehr_catalog(source: str) -> set[str]:
-    """url_names aus dem Highlight-Katalog des Mehr-Buttons."""
-    match = _CATALOG_RE.search(_mehr_slice(source))
-    if match is None:
-        raise AssertionError("Mehr-Katalog-Pattern (url_name in '...'|split:',') nicht gefunden — Guard blind.")
-    entries = {e.strip() for e in match.group(1).split(",") if e.strip()}
-    if not entries:
-        raise AssertionError("Mehr-Katalog leer geparst — Guard blind.")
-    return entries
+def anchors_missing_from_catalog(items, catalog, *, excluded_keys=()) -> set[str]:
+    """Kern-Guard: jedes direkt verlinkte Ziel steht im Katalog.
 
-
-def mehr_linked_url_names(source: str) -> set[str]:
-    """``core:``-url_names, die im Mehr-Dropdown direkt per ``href`` verlinkt sind.
-
-    Nur ``href="{% url 'core:...' %}"`` zaehlt — nicht ``hx-get``/``hx-post``
-    (die Suche ist ein Button + hx-get, keine direkte Seiten-Navigation) und
-    nicht Nicht-core-URLs (``logout``, ``set_language``, ``/admin-mgmt/``).
+    Sonst führt der Eintrag auf eine Seite, auf der der „Mehr"-Button nicht
+    hervorgehoben ist — die Nutzerin verliert die Ortsanzeige.
     """
-    names = set(_HREF_CORE_RE.findall(_mehr_slice(source)))
-    if not names:
-        raise AssertionError("Keine 'href=\"{% url ‘core:...’ %}\"'-Links im Mehr-Dropdown gefunden — Guard blind.")
-    return names
+    return {
+        route for item in items if item.key not in excluded_keys and (route := _route(item)) and route not in catalog
+    }
 
 
-def desktop_families(source: str) -> list[set[str]]:
-    """Alle Desktop-Family-Sets (jeder ``url_name in '...'|split:','``-Catch).
+def family_gap_violations(items, catalog, *, excluded_keys=(), excluded_routes=()) -> dict[str, set[str]]:
+    """Familien-Guard: nicht nur das Ziel, die **ganze** Familie steht im Katalog.
 
-    Einfache ``== 'x'``-Vergleiche (z. B. Zeitstrom, Dashboard) sind KEINE
-    Familien und tauchen hier nicht auf.
+    Das ist der M4-Fall: ``import_list`` war im Katalog, ``import_detail`` nicht
+    — auf der Detailseite eines Importlaufs erlosch die Hervorhebung.
     """
-    matches = _CATALOG_RE.findall(source)
-    if not matches:
-        raise AssertionError("Keine Desktop-Family-Catches gefunden — Guard blind (Template umgebaut?).")
-    return [{e.strip() for e in m.split(",") if e.strip()} for m in matches]
-
-
-def urlconf_route_names(source: str) -> set[str]:
-    """Alle ``name="..."`` aus einer URLconf-Quelldatei."""
-    names = set(_URLCONF_NAME_RE.findall(source))
-    if not names:
-        raise AssertionError("Keine 'name=\"...\"'-Routen gefunden — Guard blind.")
-    return names
-
-
-def family_guard_violations(
-    mobile_source: str,
-    desktop_source: str,
-    *,
-    anchor_exceptions: dict[str, str] | None = None,
-    family_gaps: dict[str, tuple[set[str], str]] | None = None,
-) -> dict[str, set[str]]:
-    """``{Anker: fehlende Geschwister}`` je Desktop-Family mit Mehr-Anker.
-
-    Eine Desktop-Family wird nur geprueft, wenn mindestens eines ihrer
-    Mitglieder ("der Anker") im Mehr-Dropdown direkt verlinkt ist — Familien
-    ohne Mehr-Anker (eigene Bottom-Bar-Slots: Zeitstrom, Aufgaben, Personen)
-    sind strukturell nicht Teil des Mehr-Katalogs und werden uebersprungen.
-    Der Anker wird ueber die Schnittmenge Family ∩ ``mehr_linked_url_names``
-    bestimmt (keine Annahme ueber Positionen in der CSV noetig).
-    """
-    anchor_exceptions = anchor_exceptions or {}
-    family_gaps = family_gaps or {}
-    linked = mehr_linked_url_names(mobile_source)
-    catalog = mehr_catalog(mobile_source)
-
     violations: dict[str, set[str]] = {}
-    for family in desktop_families(desktop_source):
-        anchors = family & linked
-        if not anchors:
-            continue  # keine Mehr-Verlinkung -> nicht Teil dieses Guards
-        if anchors & set(anchor_exceptions):
-            continue  # dokumentierte Alt-Anomalie, ganze Familie ausgenommen
-        allowed_gap: set[str] = set()
-        for anchor in anchors:
-            gap, _reason = family_gaps.get(anchor, (set(), ""))
-            allowed_gap |= gap
-        missing = family - catalog - allowed_gap
+    for item in items:
+        if item.key in excluded_keys or not item.family:
+            continue
+        missing = item.family - set(catalog) - set(excluded_routes)
         if missing:
-            violations["/".join(sorted(anchors))] = missing
+            violations[item.key] = missing
     return violations
 
 
-def catalog_extras_violations(
-    mobile_source: str,
-    desktop_source: str,
-    *,
-    known_extras: dict[str, str] | None = None,
-) -> set[str]:
-    """Mehr-Katalog-Eintraege ohne direkten Link, die weder Geschwister einer
-    verlinkten Desktop-Family noch in ``known_extras`` begruendet sind."""
-    known_extras = known_extras or {}
-    linked = mehr_linked_url_names(mobile_source)
-    catalog = mehr_catalog(mobile_source)
+def catalog_extras_violations(items, catalog, *, excluded_keys=(), extra_routes=()) -> set[str]:
+    """Extras-Guard: kein Katalog-Eintrag ohne Herkunft.
 
-    sibling_extras: set[str] = set()
-    for family in desktop_families(desktop_source):
-        if family & linked:
-            sibling_extras |= family - linked
-
-    extras = catalog - linked
-    return extras - sibling_extras - set(known_extras)
+    Eine Route, die den Button hervorhebt, ohne aus einem Eintrag zu stammen,
+    ist entweder ein Tippfehler oder ein bewusster Sonderfall — Letzteres
+    braucht eine Begründung.
+    """
+    covered: set[str] = set()
+    for item in items:
+        if item.key in excluded_keys:
+            continue
+        covered |= item.family
+    return set(catalog) - covered - set(extra_routes)
 
 
 # ---------------------------------------------------------------------------
-# Begruendungspflichtige Ausnahme-Dicts (Muster test_authz_template_links.py)
+# Begruendungspflichtige Ausnahmen
 # ---------------------------------------------------------------------------
 
-# url_names, die im Mehr-Dropdown per href verlinkt sind, aber bewusst NICHT
-# im Highlight-Katalog stehen (bricht sonst den Kern-Guard) — und deren
-# gesamte Desktop-Family bewusst NICHT im Mobile-Katalog erwartet wird
-# (bricht sonst den Familien-Guard).
-MEHR_LINK_WITHOUT_CATALOG_ENTRY: dict[str, str] = {
-    "system_dashboard": (
-        "Redundanz-Link fuer super_admin im Mehr-Dropdown (_navigation_mobile.html, "
-        "'{% url \"core:system_dashboard\" %}' im is_super_admin-Zweig des Mehr-Menues), "
-        "aber bewusst nicht im Mehr-Katalog: Slot 1 (der eigene Systembereich-Button "
-        "am Kopf der mobilen Nav, mit derselben Family) traegt den Active-State fuer "
-        "super_admin bereits. Eine Aufnahme in den Mehr-Katalog wuerde bei super_admin "
-        "auf einer System-Seite zu doppelter Hervorhebung fuehren — genau die Klasse "
-        "Regression, die test_navigation_active_state.py fuer dashboard/system_dashboard "
-        "bereits fuer die Desktop-Sidebar abdeckt. Alt-Anomalie: der Duplikat-Link selbst "
-        "bleibt bestehen, nur sein Highlight-Beitrag ist ausgeschlossen."
-    ),
-}
-
-# Desktop-Family-Geschwister, die bewusst NICHT im Mobile-Katalog stehen,
-# obwohl der Familien-Anker im Mehr-Dropdown verlinkt ist.
-KNOWN_FAMILY_CATALOG_GAPS: dict[str, tuple[set[str], str]] = {
-    "statistics": (
-        {"statistics_csv_export", "statistics_pdf_export", "statistics_sample_report_1_export"},
-        "Reine Download-Endpunkte (CSVExportView/PDFExportView/SampleReport1ExportView in "
-        "core/views/statistics.py, jeweils safe_download_response — kein gerendertes HTML). "
-        "Ein GET dorthin loest einen Datei-Download aus, es gibt keinen 'du bist hier'-Seitenzustand, "
-        "den ein Mobile-Nav-Eintrag hervorheben koennte — kein eigener Seitenaufruf im mobilen Kontext.",
-    ),
-}
-
-# Mehr-Katalog-Eintraege ohne direkten href-Link und ohne Geschwister einer
-# verlinkten Desktop-Family.
+# ``nav.MOBILE_MORE_EXTRA_FAMILY`` ist eine reine Menge (Rechenbaustein der
+# Katalog-Funktion). Die Begruendungen dazu leben hier, weil sie Guard-Substanz
+# sind: wer die Menge in nav.py erweitert, muss den Eintrag hier begruenden —
+# ``test_extra_routes_are_explained_and_reachable`` erzwingt die Deckungsgleichheit.
 KNOWN_CATALOG_EXTRAS: dict[str, str] = {
     "search": (
-        "Eigene Seite core:search (src/core/urls.py) — im Mehr-Dropdown nur als <button "
-        '@click="toggleSearch"> verlinkt (Such-Overlay), nicht als href; kein Desktop-'
-        "Sidebar-Family-Pendant, da die Desktop-Suche ein Alpine-Dropdown ohne Vollseite ist. "
-        "Transitiv ueber das Such-Partial/-Overlay erreichbar."
+        "Eigene Seite core:search, im Mehr-Menue aber nur als Button mit @click=toggleSearch "
+        "verlinkt (Such-Overlay), nicht als href — die Desktop-Suche ist ein Alpine-Dropdown "
+        "ohne Vollseite. Transitiv ueber Overlay/Such-Partial erreichbar, deshalb im Katalog."
+    ),
+    "account_profile": (
+        "Profil steht als feste Fusszeile unter der Eintragsliste (zusammen mit Abmelden), "
+        "nicht als Registry-Eintrag — es ist Konto-Chrom, kein Navigationsbereich. Der "
+        "Mehr-Button soll auf /account/ trotzdem hervorgehoben sein, denn dorthin fuehrt "
+        "mobil ausschliesslich dieses Menue."
     ),
 }
 
-# Familien, die strukturell nie einen Mehr-Anker haben (eigene Bottom-Bar-
-# Slots bzw. keinen Mobile-Nav-Eintrag ueberhaupt) — der Familien-Guard
-# ueberspringt sie automatisch (kein Eintrag in mehr_linked_url_names). Diese
-# Menge dokumentiert und ERZWINGT die Praemisse dahinter (siehe
-# test_bottom_bar_and_dashboard_families_stay_unlinked_in_mehr unten).
-STRUCTURALLY_EXCLUDED_ANCHORS = frozenset({"dashboard", "zeitstrom", "workitem_inbox", "client_list"})
+# Nav-Schluessel mit eigenem Slot in der Bottom-Bar (bzw. ohne mobilen Eintrag).
+# Ihre Familien duerfen NIE im Mehr-Katalog stehen: sonst leuchteten der eigene
+# Slot und „Mehr" gleichzeitig — dieselbe Regressionsklasse, die
+# test_navigation_active_state.py fuer die Sidebar abdeckt.
+STRUCTURALLY_EXCLUDED_ANCHORS = frozenset({"dashboard", "zeitstrom", "workitems", "clients"})
 
 
 # ---------------------------------------------------------------------------
-# Echte-Daten-Guards (heute MUSS Code == Code gelten)
+# Echte-Daten-Guards
 # ---------------------------------------------------------------------------
-
-
-def _mobile_source() -> str:
-    return MOBILE_NAV.read_text(encoding="utf-8")
-
-
-def _desktop_source() -> str:
-    return DESKTOP_NAV.read_text(encoding="utf-8")
 
 
 def test_mehr_links_are_all_in_catalog():
-    """Kern-Guard: jeder direkt verlinkte Mehr-Eintrag steht im Katalog."""
-    mobile_source = _mobile_source()
-    linked = mehr_linked_url_names(mobile_source)
-    catalog = mehr_catalog(mobile_source)
-
-    unexplained = linked - catalog - set(MEHR_LINK_WITHOUT_CATALOG_ENTRY)
+    """Kern-Guard gegen die echte Registry."""
+    unexplained = anchors_missing_from_catalog(
+        nav.MOBILE_MORE,
+        nav.mobile_more_catalog(),
+        excluded_keys=nav.MOBILE_MORE_EXCLUDED_KEYS,
+    )
     assert not unexplained, (
-        f"Direkt im Mehr-Dropdown verlinkte url_names fehlen im Highlight-Katalog: {sorted(unexplained)}. "
-        "Katalog in _navigation_mobile.html (Mehr-Block) ergaenzen — oder, falls bewusst, begruendete "
-        "Ausnahme in MEHR_LINK_WITHOUT_CATALOG_ENTRY eintragen (Refs #1795)."
+        f"Im Mehr-Menue verlinkte Ziele fehlen im Highlight-Katalog: {sorted(unexplained)}. "
+        "Familie in src/core/nav.py ergaenzen — oder, falls bewusst, in "
+        "nav.MOBILE_MORE_EXCLUDED_KEYS begruenden (Refs #1795)."
     )
 
 
-def test_desktop_family_siblings_are_in_mobile_catalog():
-    """Familien-Guard: verlinkte Desktop-Family komplett im Mobile-Katalog (faengt den M4-Fall)."""
-    violations = family_guard_violations(
-        _mobile_source(),
-        _desktop_source(),
-        anchor_exceptions=MEHR_LINK_WITHOUT_CATALOG_ENTRY,
-        family_gaps=KNOWN_FAMILY_CATALOG_GAPS,
+def test_mehr_family_siblings_are_in_catalog():
+    """Familien-Guard gegen die echte Registry (faengt den M4-Fall)."""
+    violations = family_gap_violations(
+        nav.MOBILE_MORE,
+        nav.mobile_more_catalog(),
+        excluded_keys=nav.MOBILE_MORE_EXCLUDED_KEYS,
+        excluded_routes=nav.MOBILE_MORE_EXCLUDED_ROUTES,
     )
     assert not violations, (
-        f"Desktop-Family(s) mit Anker im Mehr-Dropdown, deren Geschwister im Mobile-Katalog fehlen: "
-        f"{violations}. Katalog in _navigation_mobile.html ergaenzen — oder, falls bewusst (Download-"
-        "Endpunkt o.ae.), begruendete Ausnahme in KNOWN_FAMILY_CATALOG_GAPS eintragen (Refs #1795, "
-        "M4-Fall Commit 473b34e0: import_detail wurde so vergessen)."
+        f"Mehr-Eintraege, deren Familien-Geschwister nicht im Katalog stehen: {violations}. "
+        "Entweder gehoert die Route in die Familie — oder sie hat keinen Seitenzustand und "
+        "braucht eine Begruendung in nav.MOBILE_MORE_EXCLUDED_ROUTES (Refs #1795, M4-Fall "
+        "Commit 473b34e0: import_detail wurde so vergessen)."
     )
 
 
-def test_catalog_extras_are_siblings_or_known():
-    """Katalog-Extras-Guard: nicht direkt verlinkte Katalog-Eintraege sind erklaert."""
+def test_catalog_extras_are_explained():
+    """Extras-Guard gegen die echte Registry."""
     unexplained = catalog_extras_violations(
-        _mobile_source(),
-        _desktop_source(),
-        known_extras=KNOWN_CATALOG_EXTRAS,
+        nav.MOBILE_MORE,
+        nav.mobile_more_catalog(),
+        excluded_keys=nav.MOBILE_MORE_EXCLUDED_KEYS,
+        extra_routes=nav.MOBILE_MORE_EXTRA_FAMILY,
     )
     assert not unexplained, (
-        f"Mehr-Katalog-Eintraege ohne direkten Link und ohne Desktop-Family-Geschwister: "
-        f"{sorted(unexplained)}. Entweder gehoert der Eintrag zu einer verlinkten Desktop-Family, "
-        "oder er braucht eine begruendete Ausnahme in KNOWN_CATALOG_EXTRAS (Refs #1795)."
+        f"Katalog-Eintraege ohne Herkunft in einem Mehr-Eintrag: {sorted(unexplained)}. "
+        "Entweder stammt die Route aus einer Familie, oder sie braucht einen begruendeten "
+        "Eintrag in nav.MOBILE_MORE_EXTRA_FAMILY + KNOWN_CATALOG_EXTRAS (Refs #1795)."
     )
 
 
-def test_known_extras_are_still_present():
-    """Bit-Rot-Schutz: KNOWN_CATALOG_EXTRAS-Eintraege stehen noch im Katalog und existieren real."""
-    catalog = mehr_catalog(_mobile_source())
-    routes = urlconf_route_names(CORE_URLS.read_text(encoding="utf-8"))
+def test_excluded_keys_are_still_linked_and_still_absent():
+    """Bit-Rot-Schutz: eine ganze ausgenommene Familie ist noch verlinkt und noch draussen."""
+    catalog = nav.mobile_more_catalog()
+    mehr_keys = {item.key for item in nav.MOBILE_MORE}
 
-    for name, reason in KNOWN_CATALOG_EXTRAS.items():
-        assert reason.strip(), f"KNOWN_CATALOG_EXTRAS[{name!r}] braucht eine Begruendung."
-        assert name in catalog, (
-            f"KNOWN_CATALOG_EXTRAS-Eintrag {name!r} steht nicht mehr im Mehr-Katalog — Eintrag entfernen."
+    for key, reason in nav.MOBILE_MORE_EXCLUDED_KEYS.items():
+        assert reason.strip(), f"nav.MOBILE_MORE_EXCLUDED_KEYS[{key!r}] braucht eine Begruendung."
+        assert key in mehr_keys, (
+            f"nav.MOBILE_MORE_EXCLUDED_KEYS[{key!r}] steht nicht mehr im Mehr-Menue — Ausnahme entfernen."
         )
-        assert name in routes, f"KNOWN_CATALOG_EXTRAS-Eintrag {name!r} ist keine reale Route in core/urls.py."
-
-
-def test_known_family_gaps_are_still_real_gaps():
-    """Bit-Rot-Schutz: KNOWN_FAMILY_CATALOG_GAPS-Eintraege sind noch tatsaechlich Katalog-Luecken."""
-    catalog = mehr_catalog(_mobile_source())
-
-    for anchor, (gap, reason) in KNOWN_FAMILY_CATALOG_GAPS.items():
-        assert reason.strip(), f"KNOWN_FAMILY_CATALOG_GAPS[{anchor!r}] braucht eine Begruendung."
-        assert gap, f"KNOWN_FAMILY_CATALOG_GAPS[{anchor!r}] hat eine leere Gap-Menge — Eintrag entfernen."
-        stale = gap & catalog
+        stale = nav.item(key).family & catalog
         assert not stale, (
-            f"KNOWN_FAMILY_CATALOG_GAPS[{anchor!r}]: {sorted(stale)} steht jetzt im Mehr-Katalog — "
-            "Ausnahme ist stale, aus dem Dict entfernen."
+            f"nav.MOBILE_MORE_EXCLUDED_KEYS[{key!r}]: {sorted(stale)} steht jetzt doch im Katalog — "
+            "Ausnahme ist wirkungslos, Behandlung neu bewerten."
         )
 
 
-def test_mehr_link_without_catalog_exceptions_are_still_needed():
-    """Bit-Rot-Schutz: MEHR_LINK_WITHOUT_CATALOG_ENTRY-Eintraege sind noch verlinkt und noch abwesend."""
-    mobile_source = _mobile_source()
-    linked = mehr_linked_url_names(mobile_source)
-    catalog = mehr_catalog(mobile_source)
+def test_excluded_routes_are_still_real_gaps():
+    """Bit-Rot-Schutz: ausgenommene Einzelrouten gehoeren noch zu einer Familie und fehlen noch."""
+    catalog = nav.mobile_more_catalog()
+    mehr_routes: set[str] = set()
+    for item in nav.MOBILE_MORE:
+        if item.key not in nav.MOBILE_MORE_EXCLUDED_KEYS:
+            mehr_routes |= item.family
 
-    for name, reason in MEHR_LINK_WITHOUT_CATALOG_ENTRY.items():
-        assert reason.strip(), f"MEHR_LINK_WITHOUT_CATALOG_ENTRY[{name!r}] braucht eine Begruendung."
-        assert name in linked, (
-            f"MEHR_LINK_WITHOUT_CATALOG_ENTRY[{name!r}] ist nicht mehr im Mehr-Dropdown verlinkt — Eintrag entfernen."
+    for route, reason in nav.MOBILE_MORE_EXCLUDED_ROUTES.items():
+        assert reason.strip(), f"nav.MOBILE_MORE_EXCLUDED_ROUTES[{route!r}] braucht eine Begruendung."
+        assert route in mehr_routes, (
+            f"nav.MOBILE_MORE_EXCLUDED_ROUTES[{route!r}] gehoert zu keiner Mehr-Familie mehr — Ausnahme entfernen."
         )
-        assert name not in catalog, (
-            f"MEHR_LINK_WITHOUT_CATALOG_ENTRY[{name!r}] steht jetzt im Mehr-Katalog — Ausnahme ist stale, entfernen."
+        assert route not in catalog, (
+            f"nav.MOBILE_MORE_EXCLUDED_ROUTES[{route!r}] steht jetzt im Katalog — Ausnahme ist stale."
         )
 
 
-def test_bottom_bar_and_dashboard_families_stay_unlinked_in_mehr():
-    """Erzwingt die Praemisse hinter dem automatischen Familien-Guard-Skip.
+def test_extra_routes_are_explained_and_reachable():
+    """Bit-Rot-Schutz: jede Katalog-Sonderroute ist begruendet, real und im Katalog."""
+    catalog = nav.mobile_more_catalog()
+    assert set(KNOWN_CATALOG_EXTRAS) == set(nav.MOBILE_MORE_EXTRA_FAMILY), (
+        "nav.MOBILE_MORE_EXTRA_FAMILY und KNOWN_CATALOG_EXTRAS sind auseinandergelaufen: "
+        f"{sorted(set(nav.MOBILE_MORE_EXTRA_FAMILY) ^ set(KNOWN_CATALOG_EXTRAS))}. Jede Sonderroute "
+        "braucht hier eine Begruendung."
+    )
+    for route, reason in KNOWN_CATALOG_EXTRAS.items():
+        assert reason.strip(), f"KNOWN_CATALOG_EXTRAS[{route!r}] braucht eine Begruendung."
+        assert route in catalog, f"KNOWN_CATALOG_EXTRAS[{route!r}] steht nicht im Katalog — Eintrag entfernen."
+        assert reverse(f"core:{route}"), f"KNOWN_CATALOG_EXTRAS[{route!r}] ist keine reale core-Route."
 
-    Zeitstrom/Aufgaben/Personen sind eigene Bottom-Bar-Slots, Arbeitszentrale
-    hat gar keinen Mobile-Nav-Eintrag — keiner ihrer url_names darf je direkt
-    im Mehr-Dropdown verlinkt sein. Wuerde einer davon dort auftauchen, griffe
-    der automatische Skip in family_guard_violations() nicht mehr wie gedacht
-    und muesste neu bewertet werden.
+
+def test_bottom_bar_families_stay_out_of_the_mehr_catalog():
+    """Keine Familie mit eigenem Bottom-Bar-Slot darf den „Mehr"-Button hervorheben.
+
+    Frueher war das nur indirekt gesichert (die Familie durfte nicht im
+    Mehr-Dropdown verlinkt sein); mit dem berechneten Katalog laesst sich die
+    eigentliche Aussage direkt pruefen.
     """
-    linked = mehr_linked_url_names(_mobile_source())
-    overlap = linked & STRUCTURALLY_EXCLUDED_ANCHORS
-    assert not overlap, (
-        f"{sorted(overlap)} ist jetzt im Mehr-Dropdown direkt verlinkt — Praemisse fuer den automatischen "
-        "Familien-Guard-Skip nicht mehr gueltig, Behandlung im Test pruefen (Refs #1795)."
-    )
+    catalog = nav.mobile_more_catalog()
+    mehr_keys = {item.key for item in nav.MOBILE_MORE}
+
+    for key in sorted(STRUCTURALLY_EXCLUDED_ANCHORS):
+        assert key not in mehr_keys, (
+            f"{key!r} hat einen eigenen Slot in der Bottom-Bar und steht jetzt zusaetzlich im "
+            "Mehr-Menue — doppelte Hervorhebung, Behandlung neu bewerten (Refs #1795)."
+        )
+        overlap = nav.item(key).family & catalog
+        assert not overlap, (
+            f"{key!r}: {sorted(overlap)} hebt jetzt den Mehr-Button hervor, obwohl der eigene "
+            "Bottom-Bar-Slot dieselbe Familie traegt — zwei Slots leuchteten gleichzeitig."
+        )
+
+
+def test_mehr_entries_are_the_same_objects_as_the_sidebar_entries():
+    """„Eine Quelle" strukturell: das Mehr-Menue fuehrt keine eigenen Kopien.
+
+    Waeren es Kopien, koennten Label, Gate oder Familie zwischen Desktop und
+    Mobil auseinanderlaufen — genau die Doppelpflege, die #1813 beseitigt hat.
+    """
+    sidebar_by_key = {item.key: item for item in nav.SIDEBAR}
+    for item in nav.MOBILE_MORE:
+        assert item.key in sidebar_by_key, f"Mehr-Eintrag {item.key!r} hat keine Entsprechung in der Sidebar."
+        assert item is sidebar_by_key[item.key], (
+            f"Mehr-Eintrag {item.key!r} ist eine Kopie des Sidebar-Eintrags statt desselben Objekts — "
+            "Label/Gate/Familie koennen auseinanderlaufen."
+        )
 
 
 # ---------------------------------------------------------------------------
-# Synthetische Selbsttests — beweisen, dass der Guard Drift ERKENNT, ohne von
-# der echten Doku/Templates abzuhaengen (Muster test_seed_doc_drift.py).
+# Synthetische Selbsttests — beweisen, dass der Guard Drift ERKENNT.
+# Jeder Echt-Guard bekommt mindestens einen Fall mit kuenstlicher Verletzung.
 # ---------------------------------------------------------------------------
 
-_SYNTHETIC_MOBILE = """\
-{% load i18n core_tags %}
-<div class="relative" x-data="createMenu">
-    <a href="{% url 'core:event_create' %}">Neu</a>
-</div>
-<div class="relative" x-data="mobileMore">
-    <button
-        class="{% if request.resolver_match.url_name in 'foo_list,foo_detail,bar'|split:',' %}a{% endif %}">
-        Mehr
-    </button>
-    <a href="{% url 'core:foo_list' %}">Foo</a>
-    <a href="{% url 'core:bar' %}">Bar</a>
-</div>
-"""
-
-_SYNTHETIC_MOBILE_WITH_ORPHAN = _SYNTHETIC_MOBILE.replace(
-    "'foo_list,foo_detail,bar'", "'foo_list,foo_detail,bar,orphan'"
+_FOO = NavItem(
+    key="foo",
+    label="Foo",
+    url_name="core:foo_list",
+    family=frozenset({"foo_list", "foo_detail", "foo_export"}),
+    gates=("is_staff_or_above",),
 )
+_BAR = NavItem(
+    key="bar",
+    label="Bar",
+    url_name="core:bar",
+    family=frozenset({"bar"}),
+    gates=("is_lead_or_admin",),
+)
+_BAZ = NavItem(  # ganze Familie ausgenommen (Analogon zum Systembereich)
+    key="baz",
+    label="Baz",
+    url_name="core:baz_list",
+    family=frozenset({"baz_list", "baz_detail"}),
+    gates=("is_super_admin",),
+)
+_EXTERN = NavItem(key="extern", label="Extern", url="/admin-mgmt/", gates=("is_facility_admin",), external=True)
 
-_SYNTHETIC_DESKTOP = """\
-{% load i18n core_tags %}
-<a href="{% url 'core:foo_list' %}"
-    class="{% if request.resolver_match.url_name in 'foo_list,foo_detail,foo_create'|split:',' %}a{% endif %}">F</a>
-<a href="{% url 'core:baz_list' %}"
-    class="{% if request.resolver_match.url_name in 'baz_list,baz_detail'|split:',' %}a{% endif %}">B</a>
-<a href="{% url 'core:qux' %}" class="{% if request.resolver_match.url_name == 'qux' %}a{% endif %}">Q</a>
-"""
-
-_SYNTHETIC_URLCONF = """\
-path("foo/", FooView.as_view(), name="foo_list"),
-path("bar/", BarView.as_view(), name="bar"),
-"""
-
-
-def test_synthetic_mehr_catalog():
-    assert mehr_catalog(_SYNTHETIC_MOBILE) == {"foo_list", "foo_detail", "bar"}
-
-
-def test_synthetic_mehr_linked_url_names_excludes_neu_dropdown():
-    """Das 'Neu'-Dropdown (event_create) steht VOR dem Mehr-Marker und darf nicht durchschlagen."""
-    linked = mehr_linked_url_names(_SYNTHETIC_MOBILE)
-    assert "event_create" not in linked
-    assert linked == {"foo_list", "bar"}
+_ITEMS = (_FOO, _BAR, _BAZ, _EXTERN)
+_EXCLUDED_KEYS = {"baz": "Testgrund"}
+_EXCLUDED_ROUTES = {"foo_export": "Testgrund"}
+_EXTRA_ROUTES = {"suche"}
+_GOOD_CATALOG = frozenset({"foo_list", "foo_detail", "bar", "suche"})
 
 
-def test_synthetic_desktop_families():
-    assert desktop_families(_SYNTHETIC_DESKTOP) == [
-        {"foo_list", "foo_detail", "foo_create"},
-        {"baz_list", "baz_detail"},
-    ]
-
-
-def test_synthetic_desktop_families_ignores_equality_checks():
-    """`== 'qux'` (kein `in '...'`-Family-Muster) wird nicht als Family erfasst."""
-    families = desktop_families(_SYNTHETIC_DESKTOP)
-    assert not any("qux" in f for f in families)
-
-
-def test_synthetic_urlconf_route_names():
-    assert urlconf_route_names(_SYNTHETIC_URLCONF) == {"foo_list", "bar"}
-
-
-def test_synthetic_catalog_missing_entry_is_detected():
-    drifted = _SYNTHETIC_MOBILE.replace("foo_list,foo_detail,bar", "foo_list,bar")
-    assert "foo_detail" not in mehr_catalog(drifted)
-
-
-def test_synthetic_linked_names_detect_new_link():
-    added = _SYNTHETIC_MOBILE.replace(
-        "<a href=\"{% url 'core:bar' %}\">Bar</a>",
-        "<a href=\"{% url 'core:bar' %}\">Bar</a>\n    <a href=\"{% url 'core:baz' %}\">Baz</a>",
+def test_synthetic_healthy_catalog_passes_all_three_guards():
+    assert anchors_missing_from_catalog(_ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS) == set()
+    assert (
+        family_gap_violations(_ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS, excluded_routes=_EXCLUDED_ROUTES)
+        == {}
     )
-    assert "baz" in mehr_linked_url_names(added)
-
-
-def test_family_guard_catches_forgotten_sibling():
-    """Reproduziert den M4-Fall: Anker (foo_list) im Mehr verlinkt, Geschwister
-    (foo_create) fehlt im Mobile-Katalog -> muss als Drift auffallen. Die
-    nicht verlinkte baz-Family (kein Mehr-Anker) darf NICHT mitgemeldet werden."""
-    violations = family_guard_violations(_SYNTHETIC_MOBILE, _SYNTHETIC_DESKTOP)
-    assert violations == {"foo_list": {"foo_create"}}
-
-
-def test_family_guard_skips_families_without_direct_mehr_link():
-    """baz_list ist nirgends im Mehr verlinkt -> baz_detail-Luecke wird nicht gemeldet."""
-    violations = family_guard_violations(_SYNTHETIC_MOBILE, _SYNTHETIC_DESKTOP)
-    assert "baz_list" not in violations
-    assert not any("baz" in key for key in violations)
-
-
-def test_family_guard_anchor_exception_suppresses_whole_family():
-    violations = family_guard_violations(
-        _SYNTHETIC_MOBILE, _SYNTHETIC_DESKTOP, anchor_exceptions={"foo_list": "Testgrund"}
+    assert (
+        catalog_extras_violations(_ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS, extra_routes=_EXTRA_ROUTES)
+        == set()
     )
-    assert violations == {}
 
 
-def test_family_guard_gap_exception_suppresses_specific_sibling():
-    violations = family_guard_violations(
-        _SYNTHETIC_MOBILE,
-        _SYNTHETIC_DESKTOP,
-        family_gaps={"foo_list": ({"foo_create"}, "Testgrund")},
+def test_synthetic_missing_anchor_is_detected():
+    """Kern-Guard: das Ziel eines Eintrags fehlt im Katalog."""
+    drifted = _GOOD_CATALOG - {"bar"}
+    assert anchors_missing_from_catalog(_ITEMS, drifted, excluded_keys=_EXCLUDED_KEYS) == {"bar"}
+
+
+def test_synthetic_anchor_guard_respects_excluded_keys():
+    """Die ausgenommene Familie darf nicht als fehlender Anker gemeldet werden."""
+    assert "baz_list" not in anchors_missing_from_catalog(_ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS)
+    assert anchors_missing_from_catalog(_ITEMS, _GOOD_CATALOG) == {"baz_list"}
+
+
+def test_synthetic_anchor_guard_ignores_external_entries():
+    """Ein externes Ziel (kein url_name) kann per Definition nicht im Katalog stehen."""
+    assert "extern" not in anchors_missing_from_catalog(_ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS)
+
+
+def test_synthetic_forgotten_family_sibling_is_detected():
+    """Familien-Guard: reproduziert den M4-Fall (Detail-Route vergessen)."""
+    drifted = _GOOD_CATALOG - {"foo_detail"}
+    violations = family_gap_violations(_ITEMS, drifted, excluded_keys=_EXCLUDED_KEYS, excluded_routes=_EXCLUDED_ROUTES)
+    assert violations == {"foo": {"foo_detail"}}
+
+
+def test_synthetic_family_guard_gap_exception_does_not_hide_other_siblings():
+    """Eine Ausnahme fuer EIN Geschwister darf ein anderes fehlendes nicht mitdecken."""
+    drifted = _GOOD_CATALOG - {"foo_detail"}
+    violations = family_gap_violations(_ITEMS, drifted, excluded_keys=_EXCLUDED_KEYS, excluded_routes=_EXCLUDED_ROUTES)
+    assert violations == {"foo": {"foo_detail"}}, "foo_export ist ausgenommen, foo_detail nicht."
+
+
+def test_synthetic_family_guard_skips_excluded_family():
+    """Die ganze ausgenommene Familie wird nicht als Luecke gemeldet."""
+    violations = family_gap_violations(
+        _ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS, excluded_routes=_EXCLUDED_ROUTES
     )
-    assert violations == {}
+    assert "baz" not in violations
+    assert family_gap_violations(_ITEMS, _GOOD_CATALOG, excluded_routes=_EXCLUDED_ROUTES) == {
+        "baz": {"baz_list", "baz_detail"}
+    }
 
 
-def test_family_guard_gap_exception_does_not_hide_other_missing_siblings():
-    """Eine Gap-Ausnahme fuer EIN Geschwister darf ein anderes fehlendes nicht mitdecken."""
-    desktop_with_extra_sibling = _SYNTHETIC_DESKTOP.replace(
-        "'foo_list,foo_detail,foo_create'", "'foo_list,foo_detail,foo_create,foo_extra'"
+def test_synthetic_unexplained_catalog_extra_is_detected():
+    """Extras-Guard: eine Route ohne Herkunft faellt auf."""
+    drifted = _GOOD_CATALOG | {"orphan"}
+    assert catalog_extras_violations(_ITEMS, drifted, excluded_keys=_EXCLUDED_KEYS, extra_routes=_EXTRA_ROUTES) == {
+        "orphan"
+    }
+
+
+def test_synthetic_extras_guard_respects_known_extras():
+    """Ohne die Extras-Liste faellt die Sonderroute selbst auf — das ist die Begruendungspflicht."""
+    assert catalog_extras_violations(_ITEMS, _GOOD_CATALOG, excluded_keys=_EXCLUDED_KEYS) == {"suche"}
+
+
+def test_synthetic_excluded_family_member_in_catalog_is_reported_as_extra():
+    """Wer eine ausgenommene Familie doch in den Katalog holt, bekommt sie als Extra gemeldet."""
+    drifted = _GOOD_CATALOG | {"baz_detail"}
+    assert catalog_extras_violations(_ITEMS, drifted, excluded_keys=_EXCLUDED_KEYS, extra_routes=_EXTRA_ROUTES) == {
+        "baz_detail"
+    }
+
+
+def test_synthetic_section_family_is_the_union_of_its_tabs():
+    """Der Katalog-Baustein fuer Bereiche: NavSection buendelt die Reiter-Familien."""
+    section = NavSection(
+        key="synthetisch",
+        label="Synthetisch",
+        aria_label="Synthetisch-Navigation",
+        tabs=(_FOO, _BAR),
     )
-    violations = family_guard_violations(
-        _SYNTHETIC_MOBILE,
-        desktop_with_extra_sibling,
-        family_gaps={"foo_list": ({"foo_create"}, "Testgrund")},
-    )
-    assert violations == {"foo_list": {"foo_extra"}}
+    assert nav.section_family(section) == frozenset({"foo_list", "foo_detail", "foo_export", "bar"})
+    assert set(nav.section_gates(section)) == {"is_staff_or_above", "is_lead_or_admin"}
 
 
-def test_catalog_extras_violations_allows_sibling_of_linked_family():
-    """foo_detail ist Geschwister der verlinkten foo_list-Family -> keine Meldung."""
-    assert catalog_extras_violations(_SYNTHETIC_MOBILE, _SYNTHETIC_DESKTOP) == set()
-
-
-def test_catalog_extras_violations_detects_unexplained_extra():
-    violations = catalog_extras_violations(_SYNTHETIC_MOBILE_WITH_ORPHAN, _SYNTHETIC_DESKTOP)
-    assert violations == {"orphan"}
-
-
-def test_catalog_extras_violations_respects_known_extras():
-    violations = catalog_extras_violations(
-        _SYNTHETIC_MOBILE_WITH_ORPHAN, _SYNTHETIC_DESKTOP, known_extras={"orphan": "Testgrund"}
-    )
-    assert violations == set()
-
-
-# --- Defensive Guards: 0 Treffer muss HART fehlschlagen (nie leere-Menge-gruen) ---
-
-
-def test_mehr_catalog_raises_if_marker_missing():
-    with pytest.raises(AssertionError, match="Marker"):
-        mehr_catalog("<html>kein Marker hier</html>")
-
-
-def test_mehr_catalog_raises_if_pattern_missing():
-    with pytest.raises(AssertionError, match="Katalog-Pattern"):
-        mehr_catalog('<div x-data="mobileMore"><button>Mehr</button></div>')
-
-
-def test_mehr_linked_url_names_raises_if_no_links():
-    with pytest.raises(AssertionError, match="Guard blind"):
-        mehr_linked_url_names('<div x-data="mobileMore"><button>Mehr</button></div>')
-
-
-def test_desktop_families_raises_if_no_families():
-    with pytest.raises(AssertionError, match="Guard blind"):
-        desktop_families("<html>keine Familien hier</html>")
-
-
-def test_urlconf_route_names_raises_if_no_routes():
-    with pytest.raises(AssertionError, match="Guard blind"):
-        urlconf_route_names("# leere Datei, keine Routen")
+def test_synthetic_unknown_key_raises_instead_of_silently_passing():
+    """``nav.item`` schluckt Tippfehler nicht — sonst waere jeder Guard hier blind."""
+    with pytest.raises(KeyError):
+        nav.item("gibt-es-nicht")
