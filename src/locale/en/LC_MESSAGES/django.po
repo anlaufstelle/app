@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-05 23:00+0200\n"
+"POT-Creation-Date: 2026-08-11 10:43+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -24,7 +24,7 @@ msgstr "Event"
 #: src/templates/core/attachments/partials/attachment_table.html:15
 #: src/templates/core/cases/form.html:60 src/templates/core/cases/form.html:75
 #: src/templates/core/cases/partials/table.html:10
-#: src/templates/core/events/create.html:122
+#: src/templates/core/events/create.html:132
 #: src/templates/core/events/delete_confirm.html:32
 #: src/templates/core/events/deletion_review.html:41
 #: src/templates/core/events/detail.html:58
@@ -42,7 +42,7 @@ msgstr "Person"
 #: src/core/models/document_type.py:127 src/core/models/episode.py:21
 #: src/core/models/event.py:45 src/core/views/attachments.py:106
 #: src/templates/core/cases/episode_form.html:11
-#: src/templates/core/events/create.html:178
+#: src/templates/core/events/create.html:188
 #: src/templates/core/events/detail.html:83
 #: src/templates/core/export/client_data_pdf.html:182
 #: src/templates/core/export/client_data_pdf.html:212
@@ -75,7 +75,7 @@ msgstr "Identified"
 msgid "Qualifiziert"
 msgstr "Qualified"
 
-#: src/core/forms/cases.py:36 src/core/forms/cases.py:155
+#: src/core/forms/cases.py:36 src/core/forms/cases.py:160
 msgid ""
 "Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."
 msgstr "Please select a person — cases must be assigned to a person."
@@ -84,11 +84,11 @@ msgstr "Please select a person — cases must be assigned to a person."
 msgid "— Kein Typ —"
 msgstr "— No type —"
 
-#: src/core/forms/cases.py:148 src/core/forms/workitems.py:163
+#: src/core/forms/cases.py:153 src/core/forms/workitems.py:170
 msgid "Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."
 msgstr "The person assignment cannot be changed after creation."
 
-#: src/core/forms/cases.py:167 src/core/forms/events.py:134
+#: src/core/forms/cases.py:172 src/core/forms/events.py:134
 msgid "Person existiert nicht."
 msgstr "Person does not exist."
 
@@ -255,6 +255,7 @@ msgstr "End"
 #: src/templates/core/export/client_data_pdf.html:55
 #: src/templates/core/export/client_data_pdf.html:244
 #: src/templates/core/export/client_data_pdf.html:292
+#: src/templates/core/hubs/verwaltung.html:66
 #: src/templates/core/import/detail.html:22
 msgid "Dokumentationstyp"
 msgstr "Document type"
@@ -268,12 +269,12 @@ msgstr "Document type"
 #: src/templates/core/events/offline_create.html:87
 #: src/templates/core/export/client_data_pdf.html:245
 #: src/templates/core/export/client_data_pdf.html:293
-#: src/templates/core/export/client_data_pdf.html:538
-#: src/templates/core/export/client_data_pdf.html:596
+#: src/templates/core/export/client_data_pdf.html:543
+#: src/templates/core/export/client_data_pdf.html:601
 msgid "Zeitpunkt"
 msgstr "Timestamp"
 
-#: src/core/forms/events.py:70 src/templates/core/events/create.html:181
+#: src/core/forms/events.py:70 src/templates/core/events/create.html:191
 msgid "– Keinem Fall zuordnen –"
 msgstr "– Do not assign to any case –"
 
@@ -369,29 +370,29 @@ msgstr "The date must be on or before %(max)s."
 msgid "Das Datum darf nicht in der Vergangenheit liegen."
 msgstr "The date must not be in the past."
 
-#: src/core/forms/workitems.py:182
+#: src/core/forms/workitems.py:189
 msgid "Ungültige Person-ID"
 msgstr "Invalid person ID"
 
-#: src/core/forms/workitems.py:190
+#: src/core/forms/workitems.py:197
 msgid "Die Erinnerung muss vor oder am Fälligkeitstag liegen."
 msgstr "The reminder must be on or before the due date."
 
-#: src/core/forms/workitems.py:196
+#: src/core/forms/workitems.py:203
 #, python-format
 msgid "Das Fälligkeitsdatum darf höchstens am %(max)s liegen."
 msgstr "The due date must be on or before %(max)s."
 
-#: src/core/forms/workitems.py:200
+#: src/core/forms/workitems.py:207
 #, python-format
 msgid "Die Erinnerung darf höchstens am %(max)s liegen."
 msgstr "The reminder must be on or before %(max)s."
 
-#: src/core/forms/workitems.py:208
+#: src/core/forms/workitems.py:215
 msgid "Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen."
 msgstr "The due date must not be in the past."
 
-#: src/core/forms/workitems.py:210
+#: src/core/forms/workitems.py:217
 msgid "Die Erinnerung darf nicht in der Vergangenheit liegen."
 msgstr "The reminder must not be in the past."
 
@@ -639,7 +640,7 @@ msgstr ""
 #: src/templates/core/export/client_data_pdf.html:187
 #: src/templates/core/export/client_data_pdf.html:248
 #: src/templates/core/export/client_data_pdf.html:295
-#: src/templates/core/export/client_data_pdf.html:507
+#: src/templates/core/export/client_data_pdf.html:512
 #: src/templates/core/workitems/detail.html:142
 msgid "Erstellt von"
 msgstr "Created by"
@@ -656,10 +657,10 @@ msgstr "Created by"
 #: src/templates/core/export/client_data_pdf.html:120
 #: src/templates/core/export/client_data_pdf.html:366
 #: src/templates/core/export/client_data_pdf.html:407
-#: src/templates/core/export/client_data_pdf.html:446
-#: src/templates/core/export/client_data_pdf.html:509
+#: src/templates/core/export/client_data_pdf.html:451
+#: src/templates/core/export/client_data_pdf.html:514
 #: src/templates/core/system/dashboard.html:195
-#: src/templates/core/system/dashboard.html:254
+#: src/templates/core/system/dashboard.html:277
 #: src/templates/core/system/legal_holds.html:69
 #: src/templates/core/system/organization.html:24
 #: src/templates/core/system/organization.html:39
@@ -963,7 +964,7 @@ msgstr "Rectification rejected"
 #: src/core/models/audit.py:160 src/core/models/user.py:106
 #: src/core/models/user.py:107 src/templates/auth/_demo_credentials.html:23
 #: src/templates/core/audit/detail.html:19
-#: src/templates/core/audit/list.html:30
+#: src/templates/core/audit/list.html:32
 #: src/templates/core/audit/partials/table.html:9
 #: src/templates/core/system/auditlog_detail.html:21
 #: src/templates/core/system/auditlog_list.html:50
@@ -980,13 +981,13 @@ msgstr "Acting person"
 #: src/core/models/audit.py:184 src/core/models/event_history.py:41
 #: src/templates/core/attachments/partials/attachment_table.html:17
 #: src/templates/core/audit/detail.html:31
-#: src/templates/core/audit/list.html:18
+#: src/templates/core/audit/list.html:20
 #: src/templates/core/audit/partials/table.html:10
 #: src/templates/core/clients/trash.html:22
-#: src/templates/core/dsgvo/package.html:27
+#: src/templates/core/dsgvo/package.html:29
 #: src/templates/core/export/client_data_pdf.html:321
-#: src/templates/core/export/client_data_pdf.html:598
-#: src/templates/core/import/list.html:25
+#: src/templates/core/export/client_data_pdf.html:603
+#: src/templates/core/import/list.html:27
 #: src/templates/core/system/auditlog_detail.html:33
 #: src/templates/core/system/auditlog_list.html:38
 #: src/templates/core/system/lockouts.html:32
@@ -999,9 +1000,9 @@ msgstr "Action"
 #: src/core/models/workitem.py:201 src/templates/core/audit/detail.html:43
 #: src/templates/core/audit/partials/table.html:11
 #: src/templates/core/export/client_data_pdf.html:361
-#: src/templates/core/export/client_data_pdf.html:442
-#: src/templates/core/export/client_data_pdf.html:472
-#: src/templates/core/import/list.html:22
+#: src/templates/core/export/client_data_pdf.html:447
+#: src/templates/core/export/client_data_pdf.html:477
+#: src/templates/core/import/list.html:24
 #: src/templates/core/system/auditlog_detail.html:51
 #: src/templates/core/system/legal_holds.html:65
 #: src/templates/core/system/partials/auditlog_table.html:12
@@ -1047,11 +1048,9 @@ msgstr "Previous hash"
 msgid "Eintrags-Hash"
 msgstr "Entry hash"
 
-#: src/core/models/audit.py:218 src/templates/core/audit/list.html:4
+#: src/core/models/audit.py:218 src/core/nav.py:154 src/core/nav.py:328
+#: src/core/services/hubs.py:163 src/templates/core/audit/list.html:4
 #: src/templates/core/audit/list.html:7
-#: src/templates/core/system/_subnav.html:14
-#: src/templates/partials/_navigation_desktop.html:143
-#: src/templates/partials/_navigation_mobile.html:91
 msgid "Audit-Log"
 msgstr "Audit log"
 
@@ -1087,7 +1086,7 @@ msgstr ""
 #: src/templates/core/clients/_offline_workitem_fields.html:6
 #: src/templates/core/export/client_data_pdf.html:117
 #: src/templates/core/export/client_data_pdf.html:183
-#: src/templates/core/export/client_data_pdf.html:502
+#: src/templates/core/export/client_data_pdf.html:507
 msgid "Titel"
 msgstr "Title"
 
@@ -1100,8 +1099,8 @@ msgstr "Title"
 #: src/templates/core/export/client_data_pdf.html:118
 #: src/templates/core/export/client_data_pdf.html:184
 #: src/templates/core/export/client_data_pdf.html:214
-#: src/templates/core/export/client_data_pdf.html:503
-#: src/templates/core/export/client_data_pdf.html:541
+#: src/templates/core/export/client_data_pdf.html:508
+#: src/templates/core/export/client_data_pdf.html:546
 #: src/templates/core/system/organization.html:37
 #: src/templates/core/workitems/detail.html:159
 msgid "Beschreibung"
@@ -1127,10 +1126,10 @@ msgstr ""
 #: src/templates/core/export/client_data_pdf.html:119
 #: src/templates/core/export/client_data_pdf.html:362
 #: src/templates/core/export/client_data_pdf.html:400
-#: src/templates/core/export/client_data_pdf.html:473
-#: src/templates/core/export/client_data_pdf.html:505
+#: src/templates/core/export/client_data_pdf.html:478
+#: src/templates/core/export/client_data_pdf.html:510
 #: src/templates/core/import/detail.html:18
-#: src/templates/core/import/list.html:23
+#: src/templates/core/import/list.html:25
 #: src/templates/core/system/legal_holds.html:37
 #: src/templates/core/system/legal_holds.html:70
 #: src/templates/core/workitems/detail.html:24
@@ -1170,13 +1169,12 @@ msgstr "Updated on"
 msgid "Geschlossen am"
 msgstr "Closed on"
 
-#: src/core/models/case.py:102 src/templates/core/cases/detail.html:11
-#: src/templates/core/cases/list.html:4 src/templates/core/cases/list.html:9
+#: src/core/models/case.py:102 src/core/nav.py:252
+#: src/templates/core/cases/detail.html:11 src/templates/core/cases/list.html:4
+#: src/templates/core/cases/list.html:9
 #: src/templates/core/clients/detail.html:286
 #: src/templates/core/clients/offline_detail.html:314
 #: src/templates/core/config/document_types/detail.html:67
-#: src/templates/partials/_navigation_desktop.html:96
-#: src/templates/partials/_navigation_mobile.html:71
 msgid "Fälle"
 msgstr "Cases"
 
@@ -1284,9 +1282,9 @@ msgstr ""
 #: src/templates/core/config/document_types/partials/table.html:36
 #: src/templates/core/config/field_templates/partials/table.html:31
 #: src/templates/core/export/client_data_pdf.html:41
-#: src/templates/core/export/client_data_pdf.html:444
-#: src/templates/core/system/dashboard.html:253
-#: src/templates/core/system/dashboard.html:263
+#: src/templates/core/export/client_data_pdf.html:449
+#: src/templates/core/system/dashboard.html:276
+#: src/templates/core/system/dashboard.html:286
 #: src/templates/core/system/legal_holds.html:41
 #: src/templates/core/system/legal_holds.html:94
 #: src/templates/core/system/organization.html:38
@@ -1308,7 +1306,7 @@ msgstr ""
 "(alternative to hard delete for long-term statistics)."
 
 #: src/core/models/client.py:103 src/core/models/import_job.py:52
-#: src/core/reporting/backends/client_metrics.py:205
+#: src/core/nav.py:244 src/core/reporting/backends/client_metrics.py:205
 #: src/templates/core/clients/detail.html:11
 #: src/templates/core/clients/list.html:4
 #: src/templates/core/clients/list.html:9
@@ -1318,8 +1316,7 @@ msgstr ""
 #: src/templates/core/config/document_types/detail.html:65
 #: src/templates/core/search/partials/global_results.html:6
 #: src/templates/core/search/partials/results.html:8
-#: src/templates/partials/_navigation_desktop.html:90
-#: src/templates/partials/_navigation_mobile.html:52
+#: src/templates/partials/_navigation_mobile.html:57
 msgid "Personen"
 msgstr "People"
 
@@ -1392,7 +1389,7 @@ msgstr "Note"
 #: src/templates/core/config/document_types/partials/table.html:8
 #: src/templates/core/config/field_templates/partials/table.html:8
 #: src/templates/core/system/dashboard.html:191
-#: src/templates/core/system/dashboard.html:252
+#: src/templates/core/system/dashboard.html:275
 #: src/templates/core/system/organization.html:20
 #: src/templates/core/system/organization.html:36
 msgid "Name"
@@ -1474,7 +1471,8 @@ msgstr ""
 "Which entity documents of this type relate to. Cannot be changed after "
 "creation."
 
-#: src/core/models/document_type.py:207
+#: src/core/models/document_type.py:207 src/core/nav.py:347
+#: src/core/services/hubs.py:228
 #: src/templates/core/config/document_types/detail.html:20
 #: src/templates/core/config/document_types/list.html:4
 #: src/templates/core/config/document_types/list.html:9
@@ -1599,12 +1597,11 @@ msgstr ""
 "Disabled field templates are no longer shown in forms. Existing values in "
 "events are preserved (soft-delete alternative to hard delete)."
 
-#: src/core/models/document_type.py:358
+#: src/core/models/document_type.py:358 src/core/nav.py:366
+#: src/core/services/hubs.py:236
 #: src/templates/core/config/field_templates/list.html:4
 #: src/templates/core/config/field_templates/list.html:9
 #: src/templates/core/config/field_templates/partials/table.html:5
-#: src/templates/partials/_navigation_desktop.html:155
-#: src/templates/partials/_navigation_mobile.html:94
 msgid "Feldvorlagen"
 msgstr "Field templates"
 
@@ -1859,7 +1856,7 @@ msgid "Abgebrochen"
 msgstr "Aborted"
 
 #: src/core/models/import_job.py:80 src/templates/core/import/detail.html:26
-#: src/templates/core/import/list.html:24
+#: src/templates/core/import/list.html:26
 msgid "Angelegt von"
 msgstr "Created by"
 
@@ -1941,8 +1938,7 @@ msgid "Offline-Widerrufe"
 msgstr "Offline revocations"
 
 #: src/core/models/organization.py:17 src/core/models/organization.py:33
-#: src/templates/core/system/_subnav.html:10
-#: src/templates/core/system/dashboard.html:187
+#: src/core/nav.py:147 src/templates/core/system/dashboard.html:187
 #: src/templates/core/system/organization.html:10
 msgid "Organisation"
 msgstr "Organization"
@@ -1952,10 +1948,9 @@ msgid "Organisationen"
 msgstr "Organizations"
 
 #: src/core/models/organization.py:42
-#: src/templates/core/dashboard/role_super_admin.html:19
 #: src/templates/core/system/dashboard.html:199
-#: src/templates/core/system/dashboard.html:211
-#: src/templates/core/system/dashboard.html:247
+#: src/templates/core/system/dashboard.html:234
+#: src/templates/core/system/dashboard.html:270
 #: src/templates/core/system/organization.html:31
 msgid "Einrichtungen"
 msgstr "Facilities"
@@ -2033,29 +2028,29 @@ msgstr "Person visits"
 
 #: src/core/models/rectification.py:42 src/core/models/retention.py:17
 #: src/core/models/workitem.py:184
-#: src/templates/core/deletion_requests/list.html:11
-#: src/templates/core/deletion_requests/list.html:21
-#: src/templates/core/rectification/list.html:12
-#: src/templates/core/rectification/list.html:22
+#: src/templates/core/deletion_requests/list.html:13
+#: src/templates/core/deletion_requests/list.html:23
+#: src/templates/core/rectification/list.html:14
+#: src/templates/core/rectification/list.html:24
 #: src/templates/core/retention/partials/dashboard_content.html:7
 #: src/templates/core/system/retention.html:34
 msgid "Ausstehend"
 msgstr "Pending"
 
 #: src/core/models/rectification.py:43 src/core/models/workitem.py:185
-#: src/templates/core/deletion_requests/list.html:54
-#: src/templates/core/deletion_requests/list.html:61
-#: src/templates/core/rectification/list.html:46
-#: src/templates/core/rectification/list.html:54
+#: src/templates/core/deletion_requests/list.html:56
+#: src/templates/core/deletion_requests/list.html:63
+#: src/templates/core/rectification/list.html:48
+#: src/templates/core/rectification/list.html:56
 msgid "Genehmigt"
 msgstr "Approved"
 
 #: src/core/models/rectification.py:44 src/core/models/retention.py:21
 #: src/core/models/workitem.py:186
-#: src/templates/core/deletion_requests/list.html:77
-#: src/templates/core/deletion_requests/list.html:84
-#: src/templates/core/rectification/list.html:69
-#: src/templates/core/rectification/list.html:77
+#: src/templates/core/deletion_requests/list.html:79
+#: src/templates/core/deletion_requests/list.html:86
+#: src/templates/core/rectification/list.html:71
+#: src/templates/core/rectification/list.html:79
 #: src/templates/core/system/retention.html:38
 msgid "Abgelehnt"
 msgstr "Rejected"
@@ -2137,12 +2132,12 @@ msgid "Zurückgestellt"
 msgstr "Deferred"
 
 #: src/core/models/retention.py:41
-#: src/templates/core/export/client_data_pdf.html:476
+#: src/templates/core/export/client_data_pdf.html:481
 msgid "Vorgeschlagen am"
 msgstr "Proposed on"
 
 #: src/core/models/retention.py:42
-#: src/templates/core/export/client_data_pdf.html:475
+#: src/templates/core/export/client_data_pdf.html:480
 msgid "Löschfrist"
 msgstr "Deletion due date"
 
@@ -2150,7 +2145,7 @@ msgstr "Deletion due date"
 #: src/core/reporting/backends/counseling_hours.py:205
 #: src/core/reporting/backends/monthly_trend.py:173
 #: src/core/reporting/backends/sample_report_1.py:230
-#: src/templates/core/export/client_data_pdf.html:474
+#: src/templates/core/export/client_data_pdf.html:479
 #: src/templates/core/export/sample_report_1_pdf.html:59
 #: src/tests/test_reporting_export.py:676
 #: src/tests/test_reporting_export.py:698
@@ -2163,7 +2158,7 @@ msgstr "anonymous, identified, qualified, or document_type"
 
 #: src/core/models/retention.py:58 src/core/models/workitem.py:122
 #: src/templates/core/clients/_offline_workitem_fields.html:36
-#: src/templates/core/export/client_data_pdf.html:477
+#: src/templates/core/export/client_data_pdf.html:482
 #: src/templates/core/workitems/detail.html:117
 msgid "Wiedervorlage am"
 msgstr "Follow-up on"
@@ -2186,7 +2181,7 @@ msgstr "Deletion proposal"
 
 #: src/core/models/retention.py:69
 #: src/templates/core/dashboard/role_lead.html:22
-#: src/templates/core/export/client_data_pdf.html:467
+#: src/templates/core/export/client_data_pdf.html:472
 msgid "Löschvorschläge"
 msgstr "Deletion proposals"
 
@@ -2197,7 +2192,7 @@ msgstr "Deletion proposals"
 #: src/templates/core/events/deletion_review.html:22
 #: src/templates/core/export/client_data_pdf.html:363
 #: src/templates/core/export/client_data_pdf.html:403
-#: src/templates/core/export/client_data_pdf.html:443
+#: src/templates/core/export/client_data_pdf.html:448
 #: src/templates/core/retention/partials/proposal_card.html:61
 #: src/templates/core/system/legal_holds.html:68
 msgid "Begründung"
@@ -2209,7 +2204,7 @@ msgid "Ablaufdatum"
 msgstr "Expiration date"
 
 #: src/core/models/retention.py:118
-#: src/templates/core/export/client_data_pdf.html:447
+#: src/templates/core/export/client_data_pdf.html:452
 msgid "Aufgehoben am"
 msgstr "Dismissed on"
 
@@ -2217,7 +2212,7 @@ msgstr "Dismissed on"
 msgid "Aufgehoben von"
 msgstr "Dismissed by"
 
-#: src/core/models/retention.py:144 src/templates/core/system/_subnav.html:34
+#: src/core/models/retention.py:144 src/core/nav.py:189
 msgid "Legal Holds"
 msgstr "Legal holds"
 
@@ -2445,7 +2440,7 @@ msgstr "Assistant"
 
 #: src/core/models/user.py:29 src/templates/auth/_demo_credentials.html:24
 #: src/templates/core/account/profile.html:22
-#: src/templates/core/system/dashboard.html:230
+#: src/templates/core/system/dashboard.html:253
 msgid "Rolle"
 msgstr "Role"
 
@@ -2606,7 +2601,7 @@ msgstr "Yearly"
 
 #: src/core/models/workitem.py:73
 #: src/templates/core/clients/_offline_workitem_fields.html:51
-#: src/templates/core/export/client_data_pdf.html:508
+#: src/templates/core/export/client_data_pdf.html:513
 #: src/templates/core/workitems/detail.html:152
 #: src/templates/core/workitems/inbox.html:67
 msgid "Zugewiesen an"
@@ -2616,7 +2611,7 @@ msgstr "Assigned to"
 #: src/templates/core/attachments/partials/attachment_table.html:11
 #: src/templates/core/clients/_offline_workitem_fields.html:11
 #: src/templates/core/config/field_templates/partials/table.html:10
-#: src/templates/core/export/client_data_pdf.html:504
+#: src/templates/core/export/client_data_pdf.html:509
 #: src/templates/core/export/report_pdf.html:69
 #: src/templates/core/statistics/external_report.html:81
 #: src/templates/core/statistics/partials/dashboard_content.html:139
@@ -2636,7 +2631,7 @@ msgstr "Open = not yet started, In progress = active, Completed = finished"
 
 #: src/core/models/workitem.py:93
 #: src/templates/core/clients/_offline_workitem_fields.html:18
-#: src/templates/core/export/client_data_pdf.html:506
+#: src/templates/core/export/client_data_pdf.html:511
 #: src/templates/core/workitems/detail.html:90
 #: src/templates/core/workitems/inbox.html:51
 #: src/templates/core/workitems/inbox.html:182
@@ -2702,14 +2697,134 @@ msgstr "Work items"
 msgid "Löschantrag"
 msgstr "Deletion request"
 
-#: src/core/models/workitem.py:238
-#: src/templates/core/dashboard/role_lead.html:17
+#: src/core/models/workitem.py:238 src/core/nav.py:286
+#: src/core/services/hubs.py:104 src/templates/core/dashboard/role_lead.html:17
 #: src/templates/core/deletion_requests/list.html:4
 #: src/templates/core/deletion_requests/list.html:7
-#: src/templates/partials/_navigation_desktop.html:117
-#: src/templates/partials/_navigation_mobile.html:80
 msgid "Löschanträge"
 msgstr "Deletion requests"
+
+#: src/core/nav.py:134 src/core/nav.py:391
+#: src/templates/core/system/dashboard.html:4
+#: src/templates/core/system/dashboard.html:10
+#: src/templates/partials/_navigation_mobile.html:15
+msgid "Systembereich"
+msgstr "System area"
+
+#: src/core/nav.py:135
+msgid "Systembereich-Navigation"
+msgstr "System area navigation"
+
+#: src/core/nav.py:140 src/core/nav.py:423 src/core/nav.py:430
+msgid "Übersicht"
+msgstr "Overview"
+
+#: src/core/nav.py:161 src/templates/core/system/lockouts.html:10
+msgid "Sperrkonten"
+msgstr "Locked accounts"
+
+#: src/core/nav.py:168
+msgid "Wartung"
+msgstr "Maintenance"
+
+#: src/core/nav.py:175
+msgid "Retention"
+msgstr "Retention"
+
+#: src/core/nav.py:182
+msgid "VVT"
+msgstr "Processing register"
+
+#: src/core/nav.py:196
+msgid "Compliance"
+msgstr "Compliance"
+
+#: src/core/nav.py:218
+msgid "Arbeitszentrale"
+msgstr "Work center"
+
+#: src/core/nav.py:227 src/templates/core/zeitstrom/index.html:4
+#: src/templates/core/zeitstrom/index.html:9
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:4
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:37
+#: src/templates/partials/_navigation_mobile.html:46
+msgid "Zeitstrom"
+msgstr "Timeline"
+
+#: src/core/nav.py:235 src/core/views/zeitstrom.py:117
+#: src/templates/core/clients/detail.html:269
+#: src/templates/core/clients/offline_detail.html:329
+#: src/templates/core/workitems/inbox.html:4
+#: src/templates/core/workitems/inbox.html:9
+#: src/templates/core/workitems/offline_workitem_list.html:4
+#: src/templates/core/workitems/offline_workitem_list.html:37
+#: src/templates/offline.html:166
+#: src/templates/partials/_navigation_mobile.html:51
+msgid "Aufgaben"
+msgstr "Tasks"
+
+#: src/core/nav.py:260 src/templates/core/attachments/list.html:4
+#: src/templates/core/attachments/list.html:8
+#: src/tests/test_i18n_loeschantrag_nav.py:32
+msgid "Dateien"
+msgstr "Files"
+
+#: src/core/nav.py:269 src/templates/core/dashboard/role_lead.html:34
+#: src/templates/core/statistics/index.html:4
+#: src/templates/core/statistics/index.html:12
+msgid "Statistik"
+msgstr "Statistics"
+
+#: src/core/nav.py:298 src/core/services/hubs.py:127
+msgid "Berichtigungen"
+msgstr "Rectifications"
+
+#: src/core/nav.py:308 src/core/services/hubs.py:144
+#: src/templates/core/retention/dashboard.html:4
+#: src/templates/core/retention/dashboard.html:7
+#: src/tests/test_i18n_loeschantrag_nav.py:36
+msgid "Löschfristen"
+msgstr "Deletion deadlines"
+
+#: src/core/nav.py:318 src/core/services/hubs.py:244
+#: src/templates/core/import/list.html:4 src/templates/core/import/list.html:9
+msgid "Datenimport"
+msgstr "Data import"
+
+#: src/core/nav.py:336 src/core/services/hubs.py:188
+msgid "DSGVO-Paket"
+msgstr "GDPR Package"
+
+#: src/core/nav.py:383 src/core/nav.py:404
+msgid "Administration"
+msgstr "Administration"
+
+#: src/core/nav.py:438 src/templates/auth/login.html:130
+#: src/templates/base.html:155 src/templates/core/hubs/datenschutz.html:4
+#: src/templates/core/hubs/datenschutz.html:8
+msgid "Datenschutz"
+msgstr "Privacy"
+
+#: src/core/nav.py:439 src/templates/core/hubs/datenschutz.html:9
+msgid "Betroffenenrechte, Fristen und Nachweise."
+msgstr "Data subject rights, deadlines and records."
+
+#: src/core/nav.py:440
+msgid "Datenschutz-Navigation"
+msgstr "Privacy navigation"
+
+#: src/core/nav.py:455 src/templates/core/hubs/verwaltung.html:4
+#: src/templates/core/hubs/verwaltung.html:8
+msgid "Verwaltung"
+msgstr "Management"
+
+#: src/core/nav.py:456 src/templates/core/hubs/verwaltung.html:9
+msgid "Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge."
+msgstr "Application support: forms, fields, data transfer and access."
+
+#: src/core/nav.py:457
+msgid "Verwaltungs-Navigation"
+msgstr "Management navigation"
 
 #: src/core/packages/loader.py:311
 msgid "Feldvorlage konnte nicht angelegt werden — Zuordnung übersprungen."
@@ -2848,7 +2963,7 @@ msgstr "System type"
 #: src/templates/core/statistics/external_report.html:121
 #: src/templates/core/statistics/partials/dashboard_content.html:140
 #: src/templates/core/statistics/partials/dashboard_content.html:180
-#: src/templates/core/system/dashboard.html:231
+#: src/templates/core/system/dashboard.html:254
 #: src/tests/test_reporting_export.py:676
 msgid "Anzahl"
 msgstr "Count"
@@ -2945,6 +3060,7 @@ msgstr "Example: distribution of services and crisis types"
 #: src/templates/core/events/detail.html:195
 #: src/templates/core/export/client_data_pdf.html:81
 #: src/templates/core/export/client_data_pdf.html:399
+#: src/templates/core/hubs/verwaltung.html:75
 #: src/templates/core/rectification/review.html:23
 msgid "Feld"
 msgstr "Field"
@@ -3067,21 +3183,21 @@ msgstr "Person does not belong to this facility."
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Case manager does not belong to the facility."
 
-#: src/core/services/case/cases.py:257
+#: src/core/services/case/cases.py:260
 msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgstr "Event does not belong to the same facility as the case."
 
-#: src/core/services/case/cases.py:259
+#: src/core/services/case/cases.py:262
 msgid "Ereignis ist für diese Rolle nicht sichtbar."
 msgstr "Event is not visible to this role."
 
-#: src/core/services/case/cases.py:262
+#: src/core/services/case/cases.py:265
 msgid ""
 "Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
 "werden."
 msgstr "Anonymous events cannot be attached to a client-bound case."
 
-#: src/core/services/case/cases.py:264 src/core/services/events/crud.py:70
+#: src/core/services/case/cases.py:267 src/core/services/events/crud.py:70
 msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Event person does not match case person."
 
@@ -3102,7 +3218,7 @@ msgstr "The document type does not exist."
 msgid "Nur die Leitung darf eine qualifizierte Person herabstufen."
 msgstr "Only the lead may downgrade a qualified person."
 
-#: src/core/services/client/main.py:766
+#: src/core/services/client/main.py:771
 msgid ""
 "Diese Person wurde gelöscht oder anonymisiert — es können keine Daten mehr "
 "zu ihr gespeichert werden."
@@ -3110,11 +3226,11 @@ msgstr ""
 "This person has been deleted or anonymized — no further data can be saved "
 "for them."
 
-#: src/core/services/client/main.py:1051
+#: src/core/services/client/main.py:1056
 msgid "Nur Personen im Papierkorb können anonymisiert werden."
 msgstr "Only persons in the trash can be anonymized."
 
-#: src/core/services/client/main.py:1055
+#: src/core/services/client/main.py:1060
 msgid ""
 "Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — "
 "Anonymisierung nicht möglich."
@@ -3830,8 +3946,6 @@ msgid "Ohne Personenbezug"
 msgstr "Not linked to a person"
 
 #: src/core/services/dashboard/focus_box.py:42 src/core/views/workitems.py:129
-#: src/templates/core/dashboard/role_staff.html:27
-#: src/templates/core/dashboard/role_staff.html:45
 #: src/templates/core/system/retention.html:40
 #: src/templates/core/zeitstrom/index.html:37
 msgid "Überfällig"
@@ -3877,8 +3991,8 @@ msgstr "Person (no longer available)"
 #: src/templates/core/export/client_data_pdf.html:43
 #: src/templates/core/export/client_data_pdf.html:137
 #: src/templates/core/export/client_data_pdf.html:225
-#: src/templates/core/export/client_data_pdf.html:455
-#: src/templates/core/export/client_data_pdf.html:578
+#: src/templates/core/export/client_data_pdf.html:460
+#: src/templates/core/export/client_data_pdf.html:583
 msgid "Ja"
 msgstr "Yes"
 
@@ -3889,8 +4003,8 @@ msgstr "Yes"
 #: src/templates/core/export/client_data_pdf.html:43
 #: src/templates/core/export/client_data_pdf.html:137
 #: src/templates/core/export/client_data_pdf.html:225
-#: src/templates/core/export/client_data_pdf.html:455
-#: src/templates/core/export/client_data_pdf.html:578
+#: src/templates/core/export/client_data_pdf.html:460
+#: src/templates/core/export/client_data_pdf.html:583
 msgid "Nein"
 msgstr "No"
 
@@ -4018,6 +4132,50 @@ msgstr "File upload rejected: virus scanner is unreachable."
 #, python-format
 msgid "Datei wurde von Virenscanner abgewiesen: %(signature)s"
 msgstr "File rejected by virus scanner: %(signature)s"
+
+#: src/core/services/hubs.py:106
+msgid "warten auf Bestätigung"
+msgstr "awaiting confirmation"
+
+#: src/core/services/hubs.py:129
+#: src/templates/core/cases/partials/goals_section.html:57
+msgid "offen"
+msgstr "open"
+
+#: src/core/services/hubs.py:146
+msgid "Löschvorschläge offen"
+msgstr "deletion proposals open"
+
+#: src/core/services/hubs.py:167
+#, python-format
+msgid "letzter Eintrag am %(date)s"
+msgstr "last entry on %(date)s"
+
+#: src/core/services/hubs.py:168
+msgid "noch keine Einträge"
+msgstr "no entries yet"
+
+#: src/core/services/hubs.py:192
+#, python-format
+msgid "zuletzt heruntergeladen am %(date)s"
+msgstr "last downloaded on %(date)s"
+
+#: src/core/services/hubs.py:193
+msgid "noch nie heruntergeladen"
+msgstr "never downloaded"
+
+#: src/core/services/hubs.py:230
+#, python-format
+msgid "davon %(count)s aktiv"
+msgstr "%(count)s of them active"
+
+#: src/core/services/hubs.py:238
+msgid "angelegt"
+msgstr "created"
+
+#: src/core/services/hubs.py:246
+msgid "Importläufe offen"
+msgstr "import runs open"
 
 #: src/core/services/import_engine.py:114
 msgid "Pflichtfeld ist leer."
@@ -4858,18 +5016,6 @@ msgstr "All"
 msgid "Kontakte"
 msgstr "Contacts"
 
-#: src/core/views/zeitstrom.py:117 src/templates/core/clients/detail.html:269
-#: src/templates/core/clients/offline_detail.html:329
-#: src/templates/core/workitems/inbox.html:4
-#: src/templates/core/workitems/inbox.html:9
-#: src/templates/core/workitems/offline_workitem_list.html:4
-#: src/templates/core/workitems/offline_workitem_list.html:37
-#: src/templates/offline.html:166
-#: src/templates/partials/_navigation_desktop.html:84
-#: src/templates/partials/_navigation_mobile.html:46
-msgid "Aufgaben"
-msgstr "Tasks"
-
 #: src/core/views/zeitstrom.py:118
 msgid "Hausverbote"
 msgstr "Facility bans"
@@ -5201,10 +5347,6 @@ msgstr "Source code"
 msgid "Impressum"
 msgstr "Legal notice"
 
-#: src/templates/auth/login.html:130 src/templates/base.html:155
-msgid "Datenschutz"
-msgstr "Privacy"
-
 #: src/templates/auth/mfa_backup_codes.html:4
 #: src/templates/auth/mfa_settings.html:45
 msgid "Backup-Codes"
@@ -5311,8 +5453,8 @@ msgid "Zurück zur Authenticator-App"
 msgstr "Back to authenticator app"
 
 #: src/templates/auth/mfa_login.html:129
-#: src/templates/partials/_navigation_desktop.html:195
-#: src/templates/partials/_navigation_mobile.html:110
+#: src/templates/partials/_navigation_desktop.html:95
+#: src/templates/partials/_navigation_mobile.html:88
 msgid "Abmelden"
 msgstr "Log out"
 
@@ -5709,7 +5851,7 @@ msgid "Als nicht relevant schließen"
 msgstr "Close as not relevant"
 
 #: src/templates/components/_workitem_row.html:138
-#: src/templates/core/audit/list.html:62
+#: src/templates/core/audit/list.html:64
 #: src/templates/core/system/auditlog_list.html:97
 #: src/templates/core/system/legal_holds.html:53
 #: src/templates/core/workitems/detail.html:82
@@ -5729,7 +5871,6 @@ msgid "Offene Fälle"
 msgstr "Open Cases"
 
 #: src/templates/core/account/partials/_stats_widget.html:12
-#: src/templates/core/dashboard/role_staff.html:22
 #: src/templates/core/zeitstrom/index.html:33
 msgid "Meine Aufgaben"
 msgstr "My Tasks"
@@ -5783,14 +5924,6 @@ msgstr "Recently completed"
 msgid "Keine erledigten Aufgaben."
 msgstr "No recently completed tasks."
 
-#: src/templates/core/attachments/list.html:4
-#: src/templates/core/attachments/list.html:8
-#: src/templates/partials/_navigation_desktop.html:102
-#: src/templates/partials/_navigation_mobile.html:73
-#: src/tests/test_i18n_loeschantrag_nav.py:32
-msgid "Dateien"
-msgstr "Files"
-
 #: src/templates/core/attachments/list.html:14
 msgid "Dokumentationstyp filtern"
 msgstr "Filter by document type"
@@ -5827,7 +5960,7 @@ msgstr "%(count)s versions"
 
 #: src/templates/core/attachments/partials/attachment_table.html:62
 #: src/templates/core/attachments/partials/attachment_table.html:91
-#: src/templates/core/dsgvo/package.html:41
+#: src/templates/core/dsgvo/package.html:43
 msgid "Herunterladen"
 msgstr "Download"
 
@@ -5847,29 +5980,29 @@ msgstr "Audit Log Detail"
 msgid "Zurück zur Liste"
 msgstr "Back to list"
 
-#: src/templates/core/audit/list.html:21
+#: src/templates/core/audit/list.html:23
 #: src/templates/core/system/auditlog_list.html:41
 msgid "Alle Aktionen"
 msgstr "All actions"
 
-#: src/templates/core/audit/list.html:33
+#: src/templates/core/audit/list.html:35
 #: src/templates/core/system/auditlog_list.html:53
 msgid "Alle Benutzer"
 msgstr "All users"
 
-#: src/templates/core/audit/list.html:42
+#: src/templates/core/audit/list.html:44
 #: src/templates/core/statistics/partials/full_content.html:34
 #: src/templates/core/system/auditlog_list.html:77
 msgid "Von"
 msgstr "From"
 
-#: src/templates/core/audit/list.html:49
+#: src/templates/core/audit/list.html:51
 #: src/templates/core/statistics/partials/full_content.html:39
 #: src/templates/core/system/auditlog_list.html:84
 msgid "Bis"
 msgstr "To"
 
-#: src/templates/core/audit/list.html:58
+#: src/templates/core/audit/list.html:60
 #: src/templates/core/system/auditlog_list.html:93
 #: src/templates/core/system/legal_holds.html:49
 msgid "Filtern"
@@ -5936,7 +6069,7 @@ msgstr "New Episode"
 #: src/templates/core/config/document_types/form.html:49
 #: src/templates/core/config/document_types/partials/group_form.html:45
 #: src/templates/core/config/field_templates/form.html:30
-#: src/templates/core/events/create.html:208
+#: src/templates/core/events/create.html:227
 #: src/templates/core/events/offline_create.html:103
 #: src/templates/core/workitems/form.html:130
 #: src/templates/core/workitems/offline_create.html:96
@@ -5963,7 +6096,7 @@ msgstr "Create Episode"
 #: src/templates/core/config/document_types/form.html:54
 #: src/templates/core/config/field_templates/confirm_delete.html:47
 #: src/templates/core/config/field_templates/form.html:32
-#: src/templates/core/events/create.html:221
+#: src/templates/core/events/create.html:240
 #: src/templates/core/events/delete_confirm.html:62
 #: src/templates/core/events/edit.html:49
 #: src/templates/core/import/upload.html:25
@@ -6033,13 +6166,13 @@ msgid "Die Personenzuordnung ist nach dem Anlegen festgelegt."
 msgstr "The person assignment is fixed after creation."
 
 #: src/templates/core/cases/form.html:86
-#: src/templates/core/events/create.html:135
+#: src/templates/core/events/create.html:145
 #: src/templates/core/workitems/form.html:105
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
 
 #: src/templates/core/cases/form.html:87
-#: src/templates/core/events/create.html:136
+#: src/templates/core/events/create.html:146
 msgid "Person suchen"
 msgstr "Search person"
 
@@ -6093,14 +6226,14 @@ msgid "Titel suchen..."
 msgstr "Search title..."
 
 #: src/templates/core/cases/list.html:35
-#: src/templates/core/config/document_types/list.html:34
-#: src/templates/core/config/field_templates/list.html:45
+#: src/templates/core/config/document_types/list.html:36
+#: src/templates/core/config/field_templates/list.html:47
 msgid "Status filtern"
 msgstr "Filter by status"
 
 #: src/templates/core/cases/list.html:41
-#: src/templates/core/config/document_types/list.html:40
-#: src/templates/core/config/field_templates/list.html:51
+#: src/templates/core/config/document_types/list.html:42
+#: src/templates/core/config/field_templates/list.html:53
 #: src/templates/core/workitems/inbox.html:114
 msgid "Alle Status"
 msgstr "All statuses"
@@ -6137,10 +6270,6 @@ msgstr "Description (optional)"
 #: src/templates/core/cases/partials/goals_section.html:53
 msgid "erreicht"
 msgstr "reached"
-
-#: src/templates/core/cases/partials/goals_section.html:57
-msgid "offen"
-msgstr "open"
 
 #: src/templates/core/cases/partials/goals_section.html:72
 msgid "Nicht erreicht"
@@ -6456,7 +6585,7 @@ msgstr "New person"
 
 #: src/templates/core/clients/form.html:72
 #: src/templates/partials/_navigation_desktop.html:54
-#: src/templates/partials/_navigation_mobile.html:27
+#: src/templates/partials/_navigation_mobile.html:32
 msgid "Person anlegen"
 msgstr "Create person"
 
@@ -6837,7 +6966,7 @@ msgstr[1] "%(days)s days"
 #: src/templates/core/config/document_types/detail.html:59
 #: src/templates/core/config/document_types/partials/table.html:38
 #: src/templates/core/config/field_templates/partials/table.html:33
-#: src/templates/core/system/dashboard.html:265
+#: src/templates/core/system/dashboard.html:288
 #: src/templates/core/system/organization.html:51
 msgid "Inaktiv"
 msgstr "Inactive"
@@ -6891,18 +7020,18 @@ msgstr "Form configuration for your facility"
 msgid "Neuer Typ"
 msgstr "New type"
 
-#: src/templates/core/config/document_types/list.html:25
-#: src/templates/core/config/field_templates/list.html:25
+#: src/templates/core/config/document_types/list.html:27
+#: src/templates/core/config/field_templates/list.html:27
 msgid "Name suchen..."
 msgstr "Search name..."
 
-#: src/templates/core/config/document_types/list.html:41
-#: src/templates/core/config/field_templates/list.html:52
+#: src/templates/core/config/document_types/list.html:43
+#: src/templates/core/config/field_templates/list.html:54
 msgid "Nur aktive"
 msgstr "Active only"
 
-#: src/templates/core/config/document_types/list.html:42
-#: src/templates/core/config/field_templates/list.html:53
+#: src/templates/core/config/document_types/list.html:44
+#: src/templates/core/config/field_templates/list.html:55
 msgid "Nur inaktive"
 msgstr "Inactive only"
 
@@ -7071,11 +7200,11 @@ msgstr "The slug cannot be changed after creation."
 msgid "Wiederverwendbare Formularfelder Ihrer Einrichtung"
 msgstr "Reusable form fields for your facility"
 
-#: src/templates/core/config/field_templates/list.html:34
+#: src/templates/core/config/field_templates/list.html:36
 msgid "Feldtyp filtern"
 msgstr "Filter by field type"
 
-#: src/templates/core/config/field_templates/list.html:40
+#: src/templates/core/config/field_templates/list.html:42
 msgid "Alle Feldtypen"
 msgstr "All field types"
 
@@ -7145,42 +7274,6 @@ msgstr ""
 msgid "Papierkorb öffnen"
 msgstr "Open trash"
 
-#: src/templates/core/dashboard/role_facility_admin.html:4
-#: src/templates/core/dashboard/role_facility_admin.html:9
-msgid "Admin-Arbeitszentrale"
-msgstr "Admin work center"
-
-#: src/templates/core/dashboard/role_facility_admin.html:10
-msgid "Benutzer, Sicherheit und Konfiguration auf einen Blick."
-msgstr "Users, security and configuration at a glance."
-
-#: src/templates/core/dashboard/role_facility_admin.html:12
-#: src/templates/core/dashboard/role_lead.html:12
-#: src/templates/core/dashboard/role_staff.html:12
-msgid "Zum Zeitstrom"
-msgstr "To the timeline"
-
-#: src/templates/core/dashboard/role_facility_admin.html:17
-msgid "Benutzer ohne MFA"
-msgstr "Users without MFA"
-
-#: src/templates/core/dashboard/role_facility_admin.html:19
-msgid "von"
-msgstr "of"
-
-#: src/templates/core/dashboard/role_facility_admin.html:19
-msgid "aktiven Benutzern"
-msgstr "active users"
-
-#: src/templates/core/dashboard/role_facility_admin.html:22
-#: src/templates/core/dashboard/role_facility_admin.html:30
-msgid "Konfigurations-Warnungen"
-msgstr "Configuration warnings"
-
-#: src/templates/core/dashboard/role_facility_admin.html:24
-msgid "aktive Hinweise"
-msgstr "active notices"
-
 #: src/templates/core/dashboard/role_lead.html:4
 #: src/templates/core/dashboard/role_lead.html:9
 msgid "Leitungs-Arbeitszentrale"
@@ -7190,18 +7283,14 @@ msgstr "Lead work center"
 msgid "DSGVO-Workflows, Retention und Statistik im Überblick."
 msgstr "GDPR workflows, retention and statistics at a glance."
 
+#: src/templates/core/dashboard/role_lead.html:12
+msgid "Zum Zeitstrom"
+msgstr "To the timeline"
+
 #: src/templates/core/dashboard/role_lead.html:19
 #: src/templates/core/dashboard/role_lead.html:24
 msgid "ausstehend"
 msgstr "pending"
-
-#: src/templates/core/dashboard/role_lead.html:34
-#: src/templates/core/statistics/index.html:4
-#: src/templates/core/statistics/index.html:12
-#: src/templates/partials/_navigation_desktop.html:108
-#: src/templates/partials/_navigation_mobile.html:76
-msgid "Statistik"
-msgstr "Statistics"
 
 #: src/templates/core/dashboard/role_lead.html:37
 msgid "letzter Snapshot"
@@ -7211,91 +7300,18 @@ msgstr "last snapshot"
 msgid "noch kein Snapshot"
 msgstr "no snapshot yet"
 
-#: src/templates/core/dashboard/role_staff.html:4
-#: src/templates/core/dashboard/role_staff.html:9
-#: src/templates/partials/_navigation_desktop.html:73
-msgid "Arbeitszentrale"
-msgstr "Work center"
-
-#: src/templates/core/dashboard/role_staff.html:10
-msgid "Heutige Aufgaben und Kontakte auf einen Blick."
-msgstr "Today's tasks and contacts at a glance."
-
-#: src/templates/core/dashboard/role_staff.html:17
-#: src/templates/core/zeitstrom/index.html:29
-msgid "Heutige Kontakte"
-msgstr "Today's contacts"
-
-#: src/templates/core/dashboard/role_staff.html:19
-msgid "Ereignisse heute"
-msgstr "Events today"
-
-#: src/templates/core/dashboard/role_staff.html:24
-msgid "Offen / In Bearbeitung"
-msgstr "Open / In progress"
-
-#: src/templates/core/dashboard/role_staff.html:29
-msgid "Aufgaben mit überschrittenem Termin"
-msgstr "Tasks past their due date"
-
-#: src/templates/core/dashboard/role_staff.html:35
-msgid "Meine offenen Aufgaben"
-msgstr "My open tasks"
-
-#: src/templates/core/dashboard/role_staff.html:50
-msgid "ohne Termin"
-msgstr "no date"
-
-#: src/templates/core/dashboard/role_super_admin.html:4
-#: src/templates/core/dashboard/role_super_admin.html:9
-msgid "System-Arbeitszentrale"
-msgstr "System work center"
-
-#: src/templates/core/dashboard/role_super_admin.html:10
-msgid "Cross-Facility-Status und Audit-Aktivität."
-msgstr "Cross-facility status and audit activity."
-
-#: src/templates/core/dashboard/role_super_admin.html:12
-msgid "Detail: Systembereich"
-msgstr "Detail: system area"
-
-#: src/templates/core/dashboard/role_super_admin.html:17
-msgid "Mandanten"
-msgstr "Tenants"
-
-#: src/templates/core/dashboard/role_super_admin.html:22
-msgid "Benutzer aktiv"
-msgstr "Active users"
-
-#: src/templates/core/dashboard/role_super_admin.html:24
-msgid "über alle Mandanten"
-msgstr "across all tenants"
-
-#: src/templates/core/dashboard/role_super_admin.html:27
-msgid "Audit-Events 24h"
-msgstr "Audit events 24h"
-
-#: src/templates/core/dashboard/role_super_admin.html:29
-#: src/templates/core/dashboard/role_super_admin.html:34
-msgid "in den letzten 24 Stunden"
-msgstr "in the last 24 hours"
-
-#: src/templates/core/dashboard/role_super_admin.html:32
-msgid "Kritische Events"
-msgstr "Critical events"
-
-#: src/templates/core/deletion_requests/list.html:25
+#: src/templates/core/deletion_requests/list.html:27
 msgid ""
 "Wartet auf Genehmigung durch eine zweite berechtigte Person (Vier-Augen-"
 "Prinzip)"
 msgstr "Awaiting approval by a second authorized person (four-eyes principle)"
 
-#: src/templates/core/deletion_requests/list.html:30
-#: src/templates/core/rectification/list.html:30
+#: src/templates/core/deletion_requests/list.html:32
+#: src/templates/core/rectification/list.html:32
 msgid "Prüfen"
 msgstr "Review"
 
-#: src/templates/core/deletion_requests/list.html:37
+#: src/templates/core/deletion_requests/list.html:39
 msgid ""
 "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand "
 "das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der "
@@ -7305,28 +7321,28 @@ msgstr ""
 "'deletion confirmation' right. The facility administration can grant it in "
 "user management."
 
-#: src/templates/core/deletion_requests/list.html:42
-#: src/templates/core/rectification/list.html:34
+#: src/templates/core/deletion_requests/list.html:44
+#: src/templates/core/rectification/list.html:36
 #: src/templates/core/rectification/review.html:41
 msgid "Beantragt von:"
 msgstr "Requested by:"
 
-#: src/templates/core/deletion_requests/list.html:48
+#: src/templates/core/deletion_requests/list.html:50
 msgid "Keine ausstehenden Löschanträge"
 msgstr "No pending deletion requests"
 
-#: src/templates/core/deletion_requests/list.html:65
-#: src/templates/core/deletion_requests/list.html:88
-#: src/templates/core/rectification/list.html:57
-#: src/templates/core/rectification/list.html:80
+#: src/templates/core/deletion_requests/list.html:67
+#: src/templates/core/deletion_requests/list.html:90
+#: src/templates/core/rectification/list.html:59
+#: src/templates/core/rectification/list.html:82
 msgid "Geprüft von:"
 msgstr "Reviewed by:"
 
-#: src/templates/core/deletion_requests/list.html:71
+#: src/templates/core/deletion_requests/list.html:73
 msgid "Keine genehmigten Löschanträge"
 msgstr "No approved deletion requests"
 
-#: src/templates/core/deletion_requests/list.html:94
+#: src/templates/core/deletion_requests/list.html:96
 msgid "Keine abgelehnten Löschanträge"
 msgstr "No rejected deletion requests"
 
@@ -7342,7 +7358,7 @@ msgid ""
 msgstr ""
 "GDPR compliance templates, automatically filled with your facility's data."
 
-#: src/templates/core/dsgvo/package.html:17
+#: src/templates/core/dsgvo/package.html:19
 msgid ""
 "Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt "
 "(Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der "
@@ -7351,11 +7367,11 @@ msgstr ""
 "These templates are automatically filled with your facility's data (name, "
 "retention periods). Please review and complete the documents before use."
 
-#: src/templates/core/dsgvo/package.html:25
+#: src/templates/core/dsgvo/package.html:27
 msgid "Dokument"
 msgstr "Document"
 
-#: src/templates/core/dsgvo/package.html:26
+#: src/templates/core/dsgvo/package.html:28
 msgid "DSGVO-Artikel"
 msgstr "GDPR Article"
 
@@ -7515,24 +7531,24 @@ msgstr "Choose a template to auto-fill fields."
 msgid "Basis-Daten"
 msgstr "Basic data"
 
-#: src/templates/core/events/create.html:170
+#: src/templates/core/events/create.html:180
 msgid ""
 "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
 msgstr "Required: this document type requires a minimum contact stage."
 
-#: src/templates/core/events/create.html:173
+#: src/templates/core/events/create.html:183
 msgid "Ohne Person wird der Kontakt als anonym gespeichert."
 msgstr "Without a person, the contact is saved as anonymous."
 
-#: src/templates/core/events/create.html:192
+#: src/templates/core/events/create.html:202
 msgid "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen."
 msgstr "Optional: assign the contact to an open case of the selected person."
 
-#: src/templates/core/events/create.html:196
+#: src/templates/core/events/create.html:206
 msgid "Kein offener Fall für diese Person vorhanden."
 msgstr "No open case for this person."
 
-#: src/templates/core/events/create.html:219
+#: src/templates/core/events/create.html:238
 msgid "Speichern & nächster Kontakt"
 msgstr "Save & next contact"
 
@@ -7879,84 +7895,84 @@ msgstr "Requested value"
 msgid "Prüfvermerk"
 msgstr "Review note"
 
-#: src/templates/core/export/client_data_pdf.html:429
+#: src/templates/core/export/client_data_pdf.html:434
 msgid "Keine Berichtigungsanträge vorhanden."
 msgstr "No rectification requests."
 
-#: src/templates/core/export/client_data_pdf.html:436
+#: src/templates/core/export/client_data_pdf.html:441
 msgid "11. Aufbewahrung: Sperrvermerke und Löschvorschläge"
 msgstr "11. Retention: Legal Holds and Deletion Proposals"
 
-#: src/templates/core/export/client_data_pdf.html:437
+#: src/templates/core/export/client_data_pdf.html:442
 msgid "Sperrvermerke (Legal Holds)"
 msgstr "Legal holds"
 
-#: src/templates/core/export/client_data_pdf.html:445
+#: src/templates/core/export/client_data_pdf.html:450
 msgid "Läuft ab am"
 msgstr "Expires on"
 
-#: src/templates/core/export/client_data_pdf.html:464
+#: src/templates/core/export/client_data_pdf.html:469
 msgid "Keine Sperrvermerke vorhanden."
 msgstr "No legal holds available."
 
-#: src/templates/core/export/client_data_pdf.html:494
+#: src/templates/core/export/client_data_pdf.html:499
 msgid "Keine Löschvorschläge vorhanden."
 msgstr "No deletion proposals available."
 
-#: src/templates/core/export/client_data_pdf.html:497
+#: src/templates/core/export/client_data_pdf.html:502
 msgid "12. Aufgaben"
 msgstr "12. Tasks"
 
-#: src/templates/core/export/client_data_pdf.html:510
+#: src/templates/core/export/client_data_pdf.html:515
 msgid "Fällig am"
 msgstr "Due on"
 
-#: src/templates/core/export/client_data_pdf.html:530
+#: src/templates/core/export/client_data_pdf.html:535
 msgid "Keine Aufgaben vorhanden."
 msgstr "No tasks available."
 
-#: src/templates/core/export/client_data_pdf.html:533
+#: src/templates/core/export/client_data_pdf.html:538
 msgid "13. Aktivitäten"
 msgstr "13. Activities"
 
-#: src/templates/core/export/client_data_pdf.html:539
-#: src/templates/core/export/client_data_pdf.html:597
+#: src/templates/core/export/client_data_pdf.html:544
+#: src/templates/core/export/client_data_pdf.html:602
 msgid "Bezug"
 msgstr "Reference"
 
-#: src/templates/core/export/client_data_pdf.html:540
+#: src/templates/core/export/client_data_pdf.html:545
 msgid "Vorgang"
 msgstr "Action"
 
-#: src/templates/core/export/client_data_pdf.html:542
+#: src/templates/core/export/client_data_pdf.html:547
 msgid "Ausgeführt von"
 msgstr "Performed by"
 
-#: src/templates/core/export/client_data_pdf.html:558
+#: src/templates/core/export/client_data_pdf.html:563
 msgid "Keine Aktivitäten vorhanden."
 msgstr "No activities available."
 
-#: src/templates/core/export/client_data_pdf.html:565
+#: src/templates/core/export/client_data_pdf.html:570
 msgid "14. Merkliste und zuletzt aufgerufen"
 msgstr "14. Favorites and Recently Viewed"
 
-#: src/templates/core/export/client_data_pdf.html:570
+#: src/templates/core/export/client_data_pdf.html:575
 msgid "Zuletzt aufgerufen am"
 msgstr "Last viewed on"
 
-#: src/templates/core/export/client_data_pdf.html:571
+#: src/templates/core/export/client_data_pdf.html:576
 msgid "Als Favorit markiert"
 msgstr "Marked as favorite"
 
-#: src/templates/core/export/client_data_pdf.html:584
+#: src/templates/core/export/client_data_pdf.html:589
 msgid "Keine Einträge vorhanden."
 msgstr "No entries available."
 
-#: src/templates/core/export/client_data_pdf.html:590
+#: src/templates/core/export/client_data_pdf.html:595
 msgid "15. Zugriffsprotokoll"
 msgstr "15. Access Log"
 
-#: src/templates/core/export/client_data_pdf.html:591
+#: src/templates/core/export/client_data_pdf.html:596
 msgid ""
 "Protokollierte Zugriffe auf Ihre Daten. Die Namen der zugreifenden "
 "Beschäftigten sind nicht aufgeführt, da es sich dabei zugleich um Daten "
@@ -7965,11 +7981,11 @@ msgstr ""
 "Logged accesses to your data. The names of the employees who accessed it are "
 "not listed, because those are third-party data as well."
 
-#: src/templates/core/export/client_data_pdf.html:612
+#: src/templates/core/export/client_data_pdf.html:617
 msgid "Keine protokollierten Zugriffe vorhanden."
 msgstr "No logged accesses available."
 
-#: src/templates/core/export/client_data_pdf.html:616
+#: src/templates/core/export/client_data_pdf.html:621
 #: src/templates/core/export/report_pdf.html:146
 #: src/templates/core/export/sample_report_1_pdf.html:119
 #, python-format
@@ -8142,6 +8158,141 @@ msgstr "Crises, bans and urgent tasks"
 msgid "Keine Daten für diesen Zeitraum"
 msgstr "No data for this period"
 
+#: src/templates/core/hubs/_metric_row.html:10
+#: src/templates/core/hubs/verwaltung.html:55
+#: src/templates/core/hubs/verwaltung.html:68
+#: src/templates/core/hubs/verwaltung.html:77
+msgid "Öffnen"
+msgstr "Open"
+
+#: src/templates/core/hubs/datenschutz.html:16
+msgid "Was wartet auf mich?"
+msgstr "What is waiting for me?"
+
+#: src/templates/core/hubs/datenschutz.html:26
+msgid "Welches Recht wird wo bearbeitet?"
+msgstr "Which right is handled where?"
+
+#: src/templates/core/hubs/datenschutz.html:29
+msgid "Auskunft (Art. 15)"
+msgstr "Access (Art. 15)"
+
+#: src/templates/core/hubs/datenschutz.html:30
+msgid ""
+"— in der Personenakte: dort liegt die Datenauskunft als JSON- oder PDF-"
+"Export."
+msgstr ""
+"— in the person's record: the data export is available there as JSON "
+"or PDF."
+
+#: src/templates/core/hubs/datenschutz.html:33
+msgid "Berichtigung (Art. 16)"
+msgstr "Rectification (Art. 16)"
+
+#: src/templates/core/hubs/datenschutz.html:34
+msgid ""
+"— im Reiter „Berichtigungen“: eine Fachkraft beantragt, die Leitung prüft."
+msgstr ""
+"— in the “Rectifications” tab: a staff member requests it, the lead "
+"reviews it."
+
+#: src/templates/core/hubs/datenschutz.html:37
+msgid "Löschung (Art. 17)"
+msgstr "Erasure (Art. 17)"
+
+#: src/templates/core/hubs/datenschutz.html:38
+msgid ""
+"— im Reiter „Löschanträge“: jede Löschung braucht ein zweites Augenpaar."
+msgstr ""
+"— in the “Deletion requests” tab: every deletion needs a second pair "
+"of eyes."
+
+#: src/templates/core/hubs/datenschutz.html:42
+msgid "Nachweis (Art. 30)"
+msgstr "Record (Art. 30)"
+
+#: src/templates/core/hubs/datenschutz.html:43
+msgid ""
+"— im Reiter „DSGVO-Paket“: Verzeichnis der Verarbeitungstätigkeiten und "
+"Vorlagen."
+msgstr ""
+"— in the “GDPR Package” tab: record of processing activities and "
+"templates."
+
+#: src/templates/core/hubs/verwaltung.html:18
+msgid "Benutzer ohne MFA"
+msgstr "Users without MFA"
+
+#: src/templates/core/hubs/verwaltung.html:20
+msgid "von"
+msgstr "of"
+
+#: src/templates/core/hubs/verwaltung.html:20
+msgid "aktiven Benutzern"
+msgstr "active users"
+
+#: src/templates/core/hubs/verwaltung.html:23
+#: src/templates/core/hubs/verwaltung.html:31
+msgid "Konfigurations-Warnungen"
+msgstr "Configuration warnings"
+
+#: src/templates/core/hubs/verwaltung.html:25
+msgid "aktive Hinweise"
+msgstr "active notices"
+
+#: src/templates/core/hubs/verwaltung.html:45
+msgid "Stand der Einrichtung"
+msgstr "Facility setup at a glance"
+
+#: src/templates/core/hubs/verwaltung.html:53
+msgid "Benutzer &amp; Zugänge"
+msgstr "Users &amp; access"
+
+#: src/templates/core/hubs/verwaltung.html:54
+msgid "öffnet die technische Administration · erfordert Sudo-Modus"
+msgstr "opens the technical administration · requires sudo mode"
+
+#: src/templates/core/hubs/verwaltung.html:63
+msgid "Wie hängt die Konfiguration zusammen?"
+msgstr "How does the configuration fit together?"
+
+#: src/templates/core/hubs/verwaltung.html:67
+msgid ""
+"— ein Formular Ihrer Einrichtung, zum Beispiel „Kontakt“ oder „Beratung“."
+msgstr "— a form of your facility, for example “Contact” or “Counselling”."
+
+#: src/templates/core/hubs/verwaltung.html:71
+msgid "Block (Feldgruppe)"
+msgstr "Block (field group)"
+
+#: src/templates/core/hubs/verwaltung.html:72
+msgid ""
+"— fasst Felder innerhalb eines Formulars zu einem Abschnitt zusammen; "
+"angelegt wird er im Feld-Board des Dokumentationstyps."
+msgstr ""
+"— groups fields within a form into one section; it is created in the "
+"field board of the document type."
+
+#: src/templates/core/hubs/verwaltung.html:76
+msgid ""
+"— stammt immer aus einer Feldvorlage und wird einem Dokumentationstyp "
+"zugeordnet."
+msgstr ""
+"— always comes from a field template and is assigned to a document "
+"type."
+
+#: src/templates/core/hubs/verwaltung.html:80
+msgid "Bedingung"
+msgstr "Condition"
+
+#: src/templates/core/hubs/verwaltung.html:81
+msgid ""
+"— blendet ein Feld nur ein, wenn ein anderes einen bestimmten Wert hat; "
+"gepflegt im Regel-Editor des Dokumentationstyps."
+msgstr ""
+"— shows a field only when another one has a certain value; maintained "
+"in the rule editor of the document type."
+
 #: src/templates/core/import/detail.html:12
 msgid "Zur Übersicht"
 msgstr "Back to overview"
@@ -8173,12 +8324,6 @@ msgstr "Cancel import"
 msgid "Der Lauf ist abgeschlossen; die hochgeladene Datei wurde gelöscht."
 msgstr "The run is completed; the uploaded file was deleted."
 
-#: src/templates/core/import/list.html:4 src/templates/core/import/list.html:9
-#: src/templates/partials/_navigation_desktop.html:139
-#: src/templates/partials/_navigation_mobile.html:90
-msgid "Datenimport"
-msgstr "Data import"
-
 #: src/templates/core/import/list.html:10
 msgid ""
 "CSV-Dateien mit Personen oder Ereignissen einlesen — mit Probelauf vor der "
@@ -8191,15 +8336,15 @@ msgstr "Import CSV files with people or events — with a dry run before commit.
 msgid "Neuer Import"
 msgstr "New import"
 
-#: src/templates/core/import/list.html:21
+#: src/templates/core/import/list.html:23
 msgid "Angelegt"
 msgstr "Created"
 
-#: src/templates/core/import/list.html:38
+#: src/templates/core/import/list.html:40
 msgid "Anzeigen"
 msgstr "View"
 
-#: src/templates/core/import/list.html:43
+#: src/templates/core/import/list.html:45
 msgid "Noch kein Import angelegt."
 msgstr "No imports yet."
 
@@ -8344,20 +8489,20 @@ msgstr ""
 "Requests under Art. 16 GDPR. You cannot review your own request (four-eyes "
 "principle)."
 
-#: src/templates/core/rectification/list.html:25
+#: src/templates/core/rectification/list.html:27
 msgid ""
 "Wartet auf Prüfung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)"
 msgstr "Awaiting review by a second authorized person (four-eyes principle)"
 
-#: src/templates/core/rectification/list.html:40
+#: src/templates/core/rectification/list.html:42
 msgid "Keine ausstehenden Berichtigungsanträge"
 msgstr "No pending rectification requests"
 
-#: src/templates/core/rectification/list.html:63
+#: src/templates/core/rectification/list.html:65
 msgid "Keine genehmigten Berichtigungsanträge"
 msgstr "No approved rectification requests"
 
-#: src/templates/core/rectification/list.html:86
+#: src/templates/core/rectification/list.html:88
 msgid "Keine abgelehnten Berichtigungsanträge"
 msgstr "No rejected rectification requests"
 
@@ -8389,14 +8534,6 @@ msgstr "Required for a rejection. Stored encrypted."
 #: src/templates/core/rectification/review.html:63
 msgid "Genehmigen und anwenden"
 msgstr "Approve and apply"
-
-#: src/templates/core/retention/dashboard.html:4
-#: src/templates/core/retention/dashboard.html:7
-#: src/templates/partials/_navigation_desktop.html:131
-#: src/templates/partials/_navigation_mobile.html:87
-#: src/tests/test_i18n_loeschantrag_nav.py:36
-msgid "Löschfristen"
-msgstr "Deletion deadlines"
 
 #: src/templates/core/retention/partials/dashboard_content.html:12
 msgid "Aufgeschoben"
@@ -8528,7 +8665,7 @@ msgstr "Will be deleted on next run"
 
 #: src/templates/core/search/index.html:4
 #: src/templates/core/search/index.html:7
-#: src/templates/partials/_navigation_mobile.html:67
+#: src/templates/partials/_navigation_mobile.html:73
 msgid "Suche"
 msgstr "Search"
 
@@ -8583,7 +8720,7 @@ msgid "Datenschutzprofil"
 msgstr "Privacy profile"
 
 #: src/templates/core/statistics/external_report.html:19
-#: src/templates/partials/_navigation_mobile.html:104
+#: src/templates/partials/_navigation_mobile.html:82
 msgid "Profil"
 msgstr "Profile"
 
@@ -8913,35 +9050,6 @@ msgstr ""
 "You are accessing data across facilities — this access is logged in the "
 "audit log."
 
-#: src/templates/core/system/_subnav.html:3
-msgid "Systembereich-Navigation"
-msgstr "System area navigation"
-
-#: src/templates/core/system/_subnav.html:6
-msgid "Übersicht"
-msgstr "Overview"
-
-#: src/templates/core/system/_subnav.html:18
-#: src/templates/core/system/lockouts.html:10
-msgid "Sperrkonten"
-msgstr "Locked accounts"
-
-#: src/templates/core/system/_subnav.html:22
-msgid "Wartung"
-msgstr "Maintenance"
-
-#: src/templates/core/system/_subnav.html:26
-msgid "Retention"
-msgstr "Retention"
-
-#: src/templates/core/system/_subnav.html:30
-msgid "VVT"
-msgstr "Processing register"
-
-#: src/templates/core/system/_subnav.html:38
-msgid "Compliance"
-msgstr "Compliance"
-
 #: src/templates/core/system/auditlog_detail.html:4
 #: src/templates/core/system/auditlog_detail.html:11
 msgid "Audit-Log Detail (System)"
@@ -9017,14 +9125,6 @@ msgid ""
 msgstr ""
 "Source: <code>core/services/compliance.py</code>. Refreshed on every reload "
 "— no caching in the MVP."
-
-#: src/templates/core/system/dashboard.html:4
-#: src/templates/core/system/dashboard.html:10
-#: src/templates/partials/_navigation_desktop.html:165
-#: src/templates/partials/_navigation_mobile.html:10
-#: src/templates/partials/_navigation_mobile.html:98
-msgid "Systembereich"
-msgstr "System area"
 
 #: src/templates/core/system/dashboard.html:18
 msgid "System-Status"
@@ -9133,19 +9233,43 @@ msgstr "Details in the compliance dashboard"
 msgid "Es ist noch keine Organisation angelegt."
 msgstr "No organisation has been set up yet."
 
-#: src/templates/core/system/dashboard.html:215
+#: src/templates/core/system/dashboard.html:211
+msgid "Audit-Aktivität (24 h)"
+msgstr "Audit activity (24 h)"
+
+#: src/templates/core/system/dashboard.html:214
+msgid "Audit-Events 24h"
+msgstr "Audit events 24h"
+
+#: src/templates/core/system/dashboard.html:216
+msgid "in den letzten 24 Stunden"
+msgstr "in the last 24 hours"
+
+#: src/templates/core/system/dashboard.html:219
+msgid "Kritische Events"
+msgstr "Critical events"
+
+#: src/templates/core/system/dashboard.html:221
+msgid "Anmeldefehler, Sicherheitsverstöße, Löschungen"
+msgstr "Failed logins, security violations, deletions"
+
+#: src/templates/core/system/dashboard.html:226
+msgid "Zum Audit-Log"
+msgstr "To the audit log"
+
+#: src/templates/core/system/dashboard.html:238
 msgid "Benutzer (gesamt)"
 msgstr "Users (total)"
 
-#: src/templates/core/system/dashboard.html:219
+#: src/templates/core/system/dashboard.html:242
 msgid "Audit-Log-Einträge"
 msgstr "Audit log entries"
 
-#: src/templates/core/system/dashboard.html:226
+#: src/templates/core/system/dashboard.html:249
 msgid "Benutzer pro Rolle"
 msgstr "Users per role"
 
-#: src/templates/core/system/dashboard.html:274
+#: src/templates/core/system/dashboard.html:297
 #: src/templates/core/system/organization.html:60
 #: src/templates/core/system/retention.html:99
 msgid "Keine Einrichtungen vorhanden."
@@ -9586,14 +9710,9 @@ msgstr "Show all completed tasks"
 msgid "Keine erledigten Aufgaben im gewählten Zeitraum"
 msgstr "No completed tasks in the selected period"
 
-#: src/templates/core/zeitstrom/index.html:4
-#: src/templates/core/zeitstrom/index.html:9
-#: src/templates/core/zeitstrom/offline_zeitstrom.html:4
-#: src/templates/core/zeitstrom/offline_zeitstrom.html:37
-#: src/templates/partials/_navigation_desktop.html:79
-#: src/templates/partials/_navigation_mobile.html:41
-msgid "Zeitstrom"
-msgstr "Timeline"
+#: src/templates/core/zeitstrom/index.html:29
+msgid "Heutige Kontakte"
+msgstr "Today's contacts"
 
 #: src/templates/core/zeitstrom/index.html:45
 msgid "Feed"
@@ -9767,7 +9886,7 @@ msgid "Hauptnavigation"
 msgstr "Main navigation"
 
 #: src/templates/partials/_navigation_desktop.html:19
-#: src/templates/partials/_navigation_mobile.html:125
+#: src/templates/partials/_navigation_mobile.html:103
 msgid "Suche..."
 msgstr "Search..."
 
@@ -9777,12 +9896,12 @@ msgstr "Search results"
 
 #: src/templates/partials/_navigation_desktop.html:41
 #: src/templates/partials/_navigation_desktop.html:43
-#: src/templates/partials/_navigation_mobile.html:16
+#: src/templates/partials/_navigation_mobile.html:21
 msgid "Neu erstellen"
 msgstr "Create new"
 
 #: src/templates/partials/_navigation_desktop.html:49
-#: src/templates/partials/_navigation_mobile.html:23
+#: src/templates/partials/_navigation_mobile.html:28
 msgid "Kontakt dokumentieren"
 msgstr "Document contact"
 
@@ -9795,7 +9914,7 @@ msgid "Neues Pseudonym vergeben"
 msgstr "Assign a new pseudonym"
 
 #: src/templates/partials/_navigation_desktop.html:58
-#: src/templates/partials/_navigation_mobile.html:30
+#: src/templates/partials/_navigation_mobile.html:35
 msgid "Aufgabe erstellen"
 msgstr "Create task"
 
@@ -9804,7 +9923,7 @@ msgid "Für Team oder Person"
 msgstr "For team or person"
 
 #: src/templates/partials/_navigation_desktop.html:62
-#: src/templates/partials/_navigation_mobile.html:33
+#: src/templates/partials/_navigation_mobile.html:38
 msgid "Fall anlegen"
 msgstr "Create case"
 
@@ -9812,37 +9931,15 @@ msgstr "Create case"
 msgid "Längere Begleitung dokumentieren"
 msgstr "Document longer-term support"
 
-#: src/templates/partials/_navigation_desktop.html:125
-#: src/templates/partials/_navigation_mobile.html:84
-msgid "Berichtigungen"
-msgstr "Rectifications"
-
-#: src/templates/partials/_navigation_desktop.html:147
-#: src/templates/partials/_navigation_mobile.html:92
-msgid "DSGVO-Paket"
-msgstr "GDPR Package"
-
-#: src/templates/partials/_navigation_desktop.html:151
-#: src/templates/partials/_navigation_mobile.html:93
-msgid "Konfiguration"
-msgstr "Configuration"
-
-#: src/templates/partials/_navigation_desktop.html:159
-#: src/templates/partials/_navigation_desktop.html:169
-#: src/templates/partials/_navigation_mobile.html:95
-#: src/templates/partials/_navigation_mobile.html:99
-msgid "Administration"
-msgstr "Administration"
-
 #: src/templates/partials/_navigation_mobile.html:4
 msgid "Mobile Navigation"
 msgstr "Mobile navigation"
 
-#: src/templates/partials/_navigation_mobile.html:18
+#: src/templates/partials/_navigation_mobile.html:23
 msgid "Neu"
 msgstr "New"
 
-#: src/templates/partials/_navigation_mobile.html:59
+#: src/templates/partials/_navigation_mobile.html:64
 msgid "Mehr"
 msgstr "More"
 

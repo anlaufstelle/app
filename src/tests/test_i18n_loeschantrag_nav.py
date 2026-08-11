@@ -34,3 +34,44 @@ class TestEnglishNavLabels:
     def test_loeschfristen_translates_to_deletion_deadlines(self):
         with override("en"):
             assert gettext("Löschfristen") == "Deletion deadlines"
+
+
+class TestEnglishHubLabels:
+    """Refs #1813: die Labels der beiden Bereichs-Hubs und des umbenannten Reiters.
+
+    Drei Entscheidungen, die der Test festhaelt, weil sie sonst beim naechsten
+    ``makemessages``-Lauf unbemerkt kippen koennten:
+
+    * „Datenschutz" nutzt die **bestehende** msgid (Fusszeile/Login-Seite) und
+      bleibt damit „Privacy" — gettext kennt nur eine Uebersetzung je msgid,
+      und eine zweite deutsche Vokabel nur fuer eine zweite englische zu
+      erfinden waere Etikettenschwindel.
+    * „Verwaltung" wird **nicht** „Administration": diese msgid existiert
+      bereits fuer den Django-Admin-Link (``/admin-mgmt/``), auf den die
+      Verwaltungs-Uebersicht selbst verweist. Zwei Dinge mit demselben Namen
+      auf derselben Seite waeren schlechter als eine unscharfe Vokabel.
+    * „Dokumentationstypen" war schon uebersetzt (Seiten-H1) — der Reitername
+      erbt diese Uebersetzung, statt eine zweite einzufuehren.
+    """
+
+    def test_datenschutz_keeps_the_established_privacy_translation(self):
+        with override("en"):
+            assert gettext("Datenschutz") == "Privacy"
+
+    def test_verwaltung_does_not_collide_with_administration(self):
+        with override("en"):
+            assert gettext("Verwaltung") == "Management"
+            assert gettext("Administration") == "Administration"
+
+    def test_dokumentationstypen_translates_to_document_types(self):
+        with override("en"):
+            assert gettext("Dokumentationstypen") == "Document types"
+
+    def test_hub_subtitles_are_translated(self):
+        with override("en"):
+            assert gettext("Betroffenenrechte, Fristen und Nachweise.") == (
+                "Data subject rights, deadlines and records."
+            )
+            assert gettext("Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge.") == (
+                "Application support: forms, fields, data transfer and access."
+            )
