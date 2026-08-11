@@ -120,10 +120,10 @@ class TestReportSectionVisibility:
 
         for slug, name in [
             ("sample-report-1", "Beispiel-Sachbericht"),
-            ("example", "Beispiel: Ereignisse je Dokumenttyp"),
+            ("example", "Beispiel: Ereignisse je Dokumentationstyp"),
             ("ban-overview", "Beispiel: Hausverbots-Übersicht"),
             ("case-metrics", "Beispiel: Fall-Kennzahlen"),
-            ("client-metrics", "Beispiel: Klienten-Kennzahlen"),
+            ("client-metrics", "Beispiel: Personen-Kennzahlen"),
             ("counseling-hours", "Beispiel: Beratungsstunden"),
             ("monthly-trend", "Beispiel: Monatsverlauf nach Kategorie"),
             ("needle-exchange-balance", "Beispiel: Spritzentausch-Bilanz"),
@@ -154,7 +154,7 @@ class TestReportSectionVisibility:
 
         page.wait_for_url(lambda url: "bericht=example" in url, timeout=10000)
         page.reload(wait_until="domcontentloaded")
-        expect(page.locator("#report-panel h3")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
+        expect(page.locator("#report-panel h3")).to_have_text("Beispiel: Ereignisse je Dokumentationstyp")
 
     def test_lead_sees_report_section(self, lead_page, base_url):
         """Lead (emma) sieht die Sektion ebenfalls — die Seite ist LEAD_PLUS-gated."""
@@ -233,18 +233,18 @@ class TestReportPanelPreview:
         assert badges > 0 or clean_box == 1, "Weder Vollstaendigkeits-Hinweise noch der 'keine Probleme'-Kasten"
 
     def test_example_backend_panel_renders(self, authenticated_page, base_url):
-        """Auswahl "Beispiel: Ereignisse je Dokumenttyp" → eigenes Panel (Zeilen-Modus)."""
+        """Auswahl "Beispiel: Ereignisse je Dokumentationstyp" → eigenes Panel (Zeilen-Modus)."""
         page = authenticated_page
         _open_statistics(page, base_url)
         panel = _select_backend(page, "example")
 
-        expect(panel.locator("h3")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
-        expect(panel.locator("thead th").first).to_have_text(re.compile(r"^dokumenttyp$", re.IGNORECASE))
+        expect(panel.locator("h3")).to_have_text("Beispiel: Ereignisse je Dokumentationstyp")
+        expect(panel.locator("thead th").first).to_have_text(re.compile(r"^dokumentationstyp$", re.IGNORECASE))
         # ``mode == "rows"`` blendet die Zeilen-Zaehlung ein (max. 10 Vorschauzeilen).
         expect(panel).to_contain_text("Zeilen")
 
     def test_client_metrics_panel_renders(self, authenticated_page, base_url):
-        """Refs #1754: "Beispiel: Klienten-Kennzahlen" rendert die Personen-Partition.
+        """Refs #1754: "Beispiel: Personen-Kennzahlen" rendert die Personen-Partition.
 
         Beobachtet am manuellen E2E-Server (2026-08-05): Spalten
         "Altersgruppe"/"Personen", vier Zeilen (``u18``/``18_26``/``27_plus``/
@@ -256,7 +256,7 @@ class TestReportPanelPreview:
         _open_statistics(page, base_url)
         panel = _select_backend(page, "client-metrics")
 
-        expect(panel.locator("h3")).to_have_text("Beispiel: Klienten-Kennzahlen")
+        expect(panel.locator("h3")).to_have_text("Beispiel: Personen-Kennzahlen")
         headers = panel.locator("thead th")
         expect(headers.first).to_have_text(re.compile(r"^altersgruppe$", re.IGNORECASE))
         expect(headers.nth(1)).to_have_text(re.compile(r"^personen$", re.IGNORECASE))
@@ -292,7 +292,7 @@ class TestReportPanelPreview:
         _select_backend(page, "sample-report-1")
         panel = _select_backend(page, "example")
 
-        expect(panel.locator("h3")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
+        expect(panel.locator("h3")).to_have_text("Beispiel: Ereignisse je Dokumentationstyp")
         assert panel.locator("h3:has-text('Beispiel-Sachbericht')").count() == 0
 
     def test_sachbericht_pdf_steht_beim_bericht_nicht_auf_der_uebersicht(self, authenticated_page, base_url):

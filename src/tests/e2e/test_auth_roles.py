@@ -97,18 +97,23 @@ class TestAssistantNavigation:
         assert resp.status == 403
 
     def test_assistant_zeitstrom_quick_actions_restricted(self, assistant_page):
-        """Assistenz sieht auf dem Zeitstrom nur 'Neuer Kontakt', nicht 'Neue Aufgabe'/'Neue Person'."""
+        """Assistenz sieht auf dem Zeitstrom nur die Kontakt-Aktion, nicht Aufgabe/Person.
+
+        Refs #1805 (T7): Selektoren auf ``data-testid`` umgestellt, damit die
+        Rollen-Zusicherung eine Vokabel-Umbenennung ueberlebt. Die Semantik
+        ("Assistenz sieht die beiden staff+-Aktionen nicht") bleibt identisch.
+        """
         header = assistant_page.locator(".hidden.md\\:flex.md\\:flex-wrap")
-        assert header.locator("a:has-text('Neuer Kontakt')").count() == 1
-        assert header.locator("a:has-text('Neue Aufgabe')").count() == 0
-        assert header.locator("a:has-text('Neue Person')").count() == 0
+        assert header.locator("[data-testid='zeitstrom-create-event']").count() == 1
+        assert header.locator("[data-testid='zeitstrom-create-workitem']").count() == 0
+        assert header.locator("[data-testid='zeitstrom-create-client']").count() == 0
 
     def test_staff_zeitstrom_quick_actions_all_visible(self, staff_page):
         """Fachkraft sieht auf dem Zeitstrom alle drei Quick-Action-Links."""
         header = staff_page.locator(".hidden.md\\:flex.md\\:flex-wrap")
-        assert header.locator("a:has-text('Neuer Kontakt')").count() == 1
-        assert header.locator("a:has-text('Neue Aufgabe')").count() == 1
-        assert header.locator("a:has-text('Neue Person')").count() == 1
+        assert header.locator("[data-testid='zeitstrom-create-event']").count() == 1
+        assert header.locator("[data-testid='zeitstrom-create-workitem']").count() == 1
+        assert header.locator("[data-testid='zeitstrom-create-client']").count() == 1
 
 
 class TestAssistantQualifiedClientAccess:

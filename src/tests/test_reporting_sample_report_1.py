@@ -594,7 +594,7 @@ class TestValidateCompleteness:
         assert issues == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "3 Ereignisse in 2 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
+                "3 Ereignisse in 2 Dokumentationstypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=3,
             )
@@ -614,7 +614,7 @@ class TestValidateCompleteness:
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "1 Ereignisse in 1 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
+                "1 Ereignisse in 1 Dokumentationstypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=1,
             )
@@ -667,7 +667,7 @@ class TestValidateCompleteness:
         assert issues == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "2 Ereignisse in 2 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
+                "2 Ereignisse in 2 Dokumentationstypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=2,
             ),
@@ -790,7 +790,7 @@ class TestSlugZweitschluessel:
         assert issues == [
             CompletenessIssue(
                 "unmapped_system_types",
-                "1 Ereignisse in 1 Dokumenttypen ohne Berichtszuordnung im Zeitraum",
+                "1 Ereignisse in 1 Dokumentationstypen ohne Berichtszuordnung im Zeitraum",
                 "warning",
                 count=1,
             )

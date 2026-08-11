@@ -34,8 +34,8 @@ class TestStatisticsDashboard:
         page.goto(f"{base_url}/statistics/")
         assert page.locator("text=Gesamtkontakte").is_visible()
         assert page.locator("text=Anonym").first.is_visible()
-        assert page.locator("text=Identifiziert").first.is_visible()
-        assert page.locator("text=Qualifiziert").first.is_visible()
+        assert page.locator("text=Nur Pseudonym").first.is_visible()
+        assert page.locator("text=Mit Zusatzangaben").first.is_visible()
 
     def test_tables_visible(self, authenticated_page, base_url):
         page = authenticated_page

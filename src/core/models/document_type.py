@@ -153,7 +153,11 @@ class DocumentType(models.Model):
         choices=Sensitivity.choices,
         default=Sensitivity.NORMAL,
         verbose_name=_("Sensibilität"),
-        help_text=_("Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"),
+        help_text=_(
+            "Steuert, wer die Inhalte sehen darf. „Erhöht“ und „Hoch“ setzen "
+            "zusätzliche Berechtigungen voraus; „Hoch“ wird immer "
+            "verschlüsselt gespeichert."
+        ),
     )
     min_contact_stage = models.CharField(
         max_length=20,
@@ -161,7 +165,12 @@ class DocumentType(models.Model):
         null=True,
         choices=CONTACT_STAGE_CHOICES,
         verbose_name=_("Mindest-Kontaktstufe"),
-        help_text=_("Mindest-Kontaktstufe der Person für diesen Dokumentationstyp"),
+        help_text=_(
+            "Legt fest, wie viel über eine Person bekannt sein muss, damit "
+            "dieser Dokumentationstyp verwendet werden darf. Bleibt das Feld "
+            "leer, ist der Typ auch für anonyme Kontakte ohne zugeordnete "
+            "Person nutzbar."
+        ),
     )
     retention_days = models.IntegerField(
         blank=True,

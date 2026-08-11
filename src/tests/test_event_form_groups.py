@@ -241,8 +241,12 @@ class TestPartialViewRendersGroups:
         # Header trotzdem vorhanden.
         assert group.name in body
 
-    def test_named_group_plus_ungrouped_renders_ohne_gruppe_header(self, client, staff_user, facility):
-        """Benannte Gruppe + ungruppiertes Feld → Ungruppiert-Sektion trägt „Ohne Gruppe"."""
+    def test_named_group_plus_ungrouped_renders_ungrouped_header(self, client, staff_user, facility):
+        """Benannte Gruppe + ungruppiertes Feld → Ungruppiert-Sektion trägt „Weitere Angaben".
+
+        Refs #1805: der Header hiess „Ohne Gruppe" und beschrieb damit
+        einen Konfigurationszustand statt des Inhalts.
+        """
         dt, group, ft = _doc_type_with_named_group(facility, group_name="Benannt")
         loose = _text_field(facility, "Loses Feld")
         _assign(dt, loose, group=None, sort_order=1)
@@ -250,16 +254,16 @@ class TestPartialViewRendersGroups:
         resp = client.get(reverse("core:event_fields_partial") + f"?document_type={dt.pk}")
         body = resp.content.decode()
         assert "Benannt" in body
-        assert "Ohne Gruppe" in body
+        assert "Weitere Angaben" in body
         assert loose.name in body
 
-    def test_flat_doc_type_has_no_ohne_gruppe_header(self, client, staff_user, doc_type_contact):
-        """Ohne benannte Gruppen erscheint NIE ein „Ohne Gruppe"-Header (nur „Felder")."""
+    def test_flat_doc_type_has_no_ungrouped_header(self, client, staff_user, doc_type_contact):
+        """Ohne benannte Gruppen erscheint NIE ein „Weitere Angaben"-Header (nur „Angaben")."""
         client.force_login(staff_user)
         resp = client.get(reverse("core:event_fields_partial") + f"?document_type={doc_type_contact.pk}")
         body = resp.content.decode()
-        assert "Ohne Gruppe" not in body
-        assert "Felder" in body
+        assert "Weitere Angaben" not in body
+        assert "Angaben" in body
 
     def test_flat_doc_type_has_no_group_component(self, client, staff_user, doc_type_contact):
         """Ohne benannte Gruppen: flache Darstellung, keine Collapsible-Komponente."""

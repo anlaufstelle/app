@@ -77,7 +77,7 @@ class TestClientEdit:
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
         # Detail-Seite zeigt die neue Stage als Badge
-        expected_text = "Qualifiziert" if new_stage == "qualified" else "Identifiziert"
+        expected_text = "Mit Zusatzangaben" if new_stage == "qualified" else "Nur Pseudonym"
         assert page.locator(f"span.rounded-full:has-text('{expected_text}')").is_visible()
 
 

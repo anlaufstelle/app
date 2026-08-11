@@ -1,4 +1,4 @@
-"""Beispiel-Backend „Klienten-Kennzahlen" (Refs #1754).
+"""Beispiel-Backend „Personen-Kennzahlen" (Refs #1754).
 
 **Zweck.** Referenzfall fuer einen Bericht, dessen Zahlen ausnahmslos
 **Personen** zaehlen — die schaerfste Klasse im K-Anon-Modell. Er zeigt drei
@@ -191,7 +191,7 @@ def _events_with_person(facility, date_from, date_to):
 class ClientMetricsBackend(DatasetBackend):
     """Aktive Personen, Neuaufnahmen und Altersverteilung im Zeitraum."""
 
-    name = _("Beispiel: Klienten-Kennzahlen")
+    name = _("Beispiel: Personen-Kennzahlen")
     description = _("Zählt die Personen mit mindestens einem Ereignis im Zeitraum, aufgeschlüsselt nach Altersgruppe.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770): Grundgesamtheit sind **Personen** mit mindestens einem

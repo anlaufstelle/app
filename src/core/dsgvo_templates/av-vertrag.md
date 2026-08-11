@@ -50,7 +50,7 @@ Die Verarbeitung umfasst:
 
 Folgende Datenkategorien werden verarbeitet:
 - Pseudonyme (keine Klarnamen)
-- Alterscluster
+- Altersgruppe
 - Kontaktstufen
 - Verschlüsselte Kontaktnotizen
 - Mitarbeiter-Zugangsdaten

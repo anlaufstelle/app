@@ -1,5 +1,6 @@
 """Tests für Events — Event-Service + CRUD-Views (Create/Detail/Update + Atomicity) (Refs #929)."""
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -909,7 +910,14 @@ class TestCreateEventValidationHelpers:
 
     def test_min_stage_client_too_low_rejected(self, facility, staff_user, doc_type_min_stage, client_identified):
         # client_identified ist IDENTIFIED, doc verlangt QUALIFIED → zu niedrig.
-        with pytest.raises(ValidationError, match="mindestens die Kontaktstufe"):
+        # Refs #1805: Der Match prueft den VOLLSTAENDIGEN Satz. Vorher
+        # stand hier nur "mindestens die Kontaktstufe" — dahinter versteckte
+        # sich der Rohwert "qualified" neben dem deutschen Label der Ist-Stufe
+        # ("... Kontaktstufe 'qualified' ..., aktuelle Stufe ist 'Identifiziert'").
+        expected = (
+            "Person muss mindestens die Kontaktstufe 'Mit Zusatzangaben' haben, aktuelle Stufe ist 'Nur Pseudonym'."
+        )
+        with pytest.raises(ValidationError, match=re.escape(expected)):
             create_event(
                 facility=facility,
                 user=staff_user,

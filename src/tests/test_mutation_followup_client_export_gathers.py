@@ -93,16 +93,16 @@ class TestGatherClientFields:
 
     def test_contact_stage_uses_display_label_not_raw_value(self, client_identified):
         """Mutation ``get_contact_stage_display()`` → ``contact_stage``
-        würde den Rohwert ``"identified"`` statt ``"Identifiziert"`` liefern.
+        würde den Rohwert ``"identified"`` statt ``"Nur Pseudonym"`` liefern.
         """
         result = _gather_client_fields(client_identified)
         # i18n-Label, nicht der Rohwert.
-        assert result["contact_stage"] == "Identifiziert"
+        assert result["contact_stage"] == "Nur Pseudonym"
         assert result["contact_stage"] != "identified"
 
     def test_contact_stage_qualified(self, client_qualified):
         result = _gather_client_fields(client_qualified)
-        assert result["contact_stage"] == "Qualifiziert"
+        assert result["contact_stage"] == "Mit Zusatzangaben"
 
     def test_age_cluster_uses_display_label(self, facility, staff_user):
         from core.models import Client

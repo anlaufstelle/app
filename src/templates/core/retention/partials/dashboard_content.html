@@ -22,10 +22,13 @@
 {# Retention settings info #}
 <div class="bg-blue-50 border border-blue-200 rounded-[10px] p-4 mb-6">
     <h3 class="text-sm font-semibold text-blue-800 mb-2">{% trans "Aufbewahrungsfristen" %}</h3>
+    {# Refs #1805 (C1): rahmt die drei Fristenzeilen — die Stufennamen stehen #}
+    {# hier ohne jeden Kontext, in dem sie sich selbst erklaeren koennten. #}
+    <div class="mb-2">{% include "components/_contact_stage_legend.html" with legend_class="text-blue-700" %}</div>
     <div class="text-sm text-blue-700 space-y-1">
         <div>{% trans "Anonym" %}: {{ retention_settings.anonymous }} {% trans "Tage" %}</div>
-        <div>{% trans "Identifiziert" %}: {{ retention_settings.identified }} {% trans "Tage" %}</div>
-        <div>{% trans "Qualifiziert" %}: {{ retention_settings.qualified }} {% trans "Tage" %}</div>
+        <div>{% trans "Nur Pseudonym" %}: {{ retention_settings.identified }} {% trans "Tage" %}</div>
+        <div>{% trans "Mit Zusatzangaben" %}: {{ retention_settings.qualified }} {% trans "Tage" %}</div>
     </div>
 </div>
 

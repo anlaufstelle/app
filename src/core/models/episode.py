@@ -25,8 +25,11 @@ class Episode(SoftDeletableModel):
         blank=True,
         verbose_name=_("Beschreibung"),
         help_text=_(
-            "Frei-Text-Beschreibung der Episode. Nicht feldverschlüsselt — "
-            "keine Klarnamen oder Art-9-Daten hier vermerken."
+            "Frei-Text zur Episode. Dieses Feld wird nicht verschlüsselt "
+            "gespeichert — bitte keine Klarnamen und keine besonders "
+            "schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
+            "oder Sexualität (besondere Kategorien personenbezogener Daten, "
+            "Art. 9 DSGVO)."
         ),
     )
     started_at = models.DateField(verbose_name=_("Beginn"))

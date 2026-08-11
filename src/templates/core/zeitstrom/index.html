@@ -8,16 +8,16 @@
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
     <h1 class="text-[22px] font-bold text-ink">{% trans "Zeitstrom" %}</h1>
     <div class="hidden md:flex md:flex-wrap gap-2">
-        <a href="{% url 'core:event_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
+        <a href="{% url 'core:event_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2" data-testid="zeitstrom-create-event">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-            {% trans "Neuer Kontakt" %}
+            {% trans "Kontakt dokumentieren" %}
         </a>
         {% if user.is_staff_or_above %}
-        <a href="{% url 'core:workitem_create' %}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-            {% trans "Neue Aufgabe" %}
+        <a href="{% url 'core:workitem_create' %}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="zeitstrom-create-workitem">
+            {% trans "Aufgabe erstellen" %}
         </a>
-        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-            {% trans "Neue Person" %}
+        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="zeitstrom-create-client">
+            {% trans "Person anlegen" %}
         </a>
         {% endif %}
     </div>

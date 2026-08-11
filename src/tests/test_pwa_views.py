@@ -150,7 +150,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v33"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v34"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#1774: offline-store.js ist precached und traegt die erweiterte "
             "Reichweite des Offline-Widerrufs — die Ereignis->Person-Aufloesung "
@@ -603,8 +603,8 @@ class TestPrecachedShellBumpGuard:
     # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
     # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
     # dem neuen Inhalt neu berechnen).
-    _PINNED_CACHE_NAME = "anlaufstelle-v33"
-    _PINNED_SHELL_HASH = "a880ad96ff1a9285209661ee590dadebe5a8f5500ffa90055b033de378c54f81"
+    _PINNED_CACHE_NAME = "anlaufstelle-v34"
+    _PINNED_SHELL_HASH = "0d2ffa20be6df58b2ef40144d99d9ce2be154f4cda6b552f738a5e8639101ec6"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

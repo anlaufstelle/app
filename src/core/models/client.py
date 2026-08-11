@@ -15,8 +15,13 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
     """Pseudonymized client of a facility."""
 
     class ContactStage(models.TextChoices):
-        IDENTIFIED = "identified", _("Identifiziert")
-        QUALIFIED = "qualified", _("Qualifiziert")
+        # Refs #1805: lebensweltliche Labels statt der Verwaltungsvokabel
+        # "Identifiziert"/"Qualifiziert" (Leitprinzip 3 der Sprachleitlinie:
+        # Datenstufe != Personenmerkmal). Die WERTE bleiben unveraendert —
+        # Art.-15-/Art.-20-Export, CSV-Import und API sprechen weiter
+        # "identified"/"qualified". Guard: tests/test_terminology_guard.py.
+        IDENTIFIED = "identified", _("Nur Pseudonym")
+        QUALIFIED = "qualified", _("Mit Zusatzangaben")
 
     class AgeCluster(models.TextChoices):
         U18 = "u18", _("Unter 18")
@@ -43,7 +48,12 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         choices=ContactStage.choices,
         default=ContactStage.IDENTIFIED,
         verbose_name=_("Kontaktstufe"),
-        help_text=_("Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität bekannt"),
+        help_text=_(
+            "Wie viel über die Person bekannt ist. Nur Pseudonym: es ist nur "
+            "das Pseudonym hinterlegt. Mit Zusatzangaben: zusätzliche "
+            "persönliche Angaben sind hinterlegt; jeder Zugriff darauf wird "
+            "protokolliert."
+        ),
     )
     age_cluster = models.CharField(
         max_length=20,
@@ -56,10 +66,14 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         blank=True,
         verbose_name=_("Notizen"),
         help_text=_(
-            "Interne Notizen, nur für Fachkräfte sichtbar. "
-            "**Nicht feldverschlüsselt** — keine Klarnamen / Art-9-Daten "
-            "(Gesundheit, Suchtdiagnosen, Klarname-Adresse) hier vermerken. "
-            "Sensible Inhalte gehören in ein FieldTemplate mit Sensitivity=HOCH."
+            "Interne Notizen, nur für Fachkräfte sichtbar. Dieses Feld wird "
+            "nicht verschlüsselt gespeichert — bitte hier keine Klarnamen "
+            "notieren und keine besonders schützenswerten Angaben zu "
+            "Gesundheit, Sucht, Herkunft, Religion oder Sexualität (besondere "
+            "Kategorien personenbezogener Daten, Art. 9 DSGVO). Solche Angaben "
+            "gehören in ein Zusatzfeld mit der Sensibilität „Hoch“; das wird "
+            "verschlüsselt gespeichert. Einrichten kann das die "
+            "Anwendungsbetreuung."
         ),
     )
     # M2/P4b (Refs #1058, Entscheid E4): Personen bekommen dieselbe dynamische

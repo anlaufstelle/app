@@ -25,9 +25,12 @@ from core.services.audit import audit_retention_decision
 # (not the view) because the context-builder needs them.
 DASHBOARD_CATEGORY_LABELS = {
     "anonymous": _("Anonym"),
-    "identified": _("Identifiziert"),
-    "qualified": _("Qualifiziert"),
-    "document_type": _("Dokumenttyp"),
+    # Refs #1805: dieselben Kontaktstufen-Labels wie Client.ContactStage —
+    # die Gruppenkarten des Loeschfristen-Dashboards sind eine Leseflaeche
+    # derselben Aussage.
+    "identified": _("Nur Pseudonym"),
+    "qualified": _("Mit Zusatzangaben"),
+    "document_type": _("Dokumentationstyp"),
 }
 
 

@@ -48,11 +48,11 @@
         </div>
         <div class="kpi-card">
             <div class="kpi-value">{% if not stats.by_contact_stage or stats.by_contact_stage.identifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.identifiziert }}{% endif %}</div>
-            <div class="kpi-label">{% trans "Identifiziert" %}</div>
+            <div class="kpi-label">{% trans "Nur Pseudonym" %}</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-value">{% if not stats.by_contact_stage or stats.by_contact_stage.qualifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.qualifiziert }}{% endif %}</div>
-            <div class="kpi-label">{% trans "Qualifiziert" %}</div>
+            <div class="kpi-label">{% trans "Mit Zusatzangaben" %}</div>
         </div>
     </div>
 

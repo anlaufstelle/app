@@ -59,8 +59,8 @@
 | `Client` | Modell-/API-/Codebegriff — **kein Zwang**, das Domain-Modell sofort umzubenennen |
 | Adressat\*innen | Fachlich korrekt, aber nicht als Produktwort in der UI |
 | Nutzer\*innen | Eher für Forschung / Fachdebatte, nicht für begleitete Personen |
-| Fall | Intern und im Fachkontext okay; in UI prüfen, ob _Begleitung_ / _Unterstützungsprozess_ passender ist |
-| identifiziert / qualifiziert | Als technische Stufen okay; sichtbare UI-Texte möglichst erläuternd formulieren |
+| Fall | **Entschieden (Refs #1805): _Fall_ bleibt UI-Begriff.** Intern, im Fachkontext und in der Oberfläche einheitlich — die Vokabelregel des Hauptkonzepts sagt _Fall anlegen_ |
+| identifiziert / qualifiziert | **Nur noch Code-/API-Werte** (`ContactStage.IDENTIFIED` / `.QUALIFIED`, CSV, Export-JSON). Sichtbares UI-Label ab Refs #1805: _Nur Pseudonym_ / _Mit Zusatzangaben_ |
 
 ## Standards pro Ebene
 
@@ -130,15 +130,15 @@ Umbenannte Query-Werte bleiben dauerhaft als stille Aliasse akzeptiert (Bookmark
 
 - **niedrigschwellig** — behalten (Caritas, BAG W verwenden den Begriff weiterhin). In der UI nicht alleine stehen lassen, lieber konkretisieren: _ohne Termin_, _anonym möglich_, _einfacher Zugang_, _aufsuchend_.
 - **Streetwork** — behalten, wenn tatsächlich Straßensozialarbeit gemeint ist. Andernfalls: _aufsuchende Arbeit_ / _aufsuchende Sozialarbeit_.
-- **Fall** — im Case-Management fachlich nicht falsch, in niedrigschwelliger UI aber diskussionswürdig. Für interne Fachlogik bleibt _Fall_; in sichtbarer UI sind _Begleitung_ / _Unterstützungsprozess_ / _Verlauf_ oft weicher.
+- **Fall** — **entschieden (2026-08, Refs #1805): _Fall_ bleibt UI-Begriff.** Im Case-Management fachlich korrekt; die Vokabelregel des Hauptkonzepts (_Fall anlegen_) entscheidet damit auch für die Oberfläche. _Begleitung_ / _Unterstützungsprozess_ / _Verlauf_ bleiben als Fließtext-Varianten zulässig, nicht als Produktwort.
 - **obdachlos vs. wohnungslos** — _wohnungslos_ ist der Oberbegriff; _obdachlos_ nur bei tatsächlichem Leben ohne Unterkunft.
 
 ## Priorisierung (Umsetzungsreihenfolge)
 
-1. **Klientel → Person** in UI und Handbuch ersetzen (siehe Sofortkorrekturen-Liste oben).
-2. **qualifiziert / identifiziert** als Personenetiketten entpersonalisieren (Kontaktstufen statt Personenmerkmale).
+1. ~~**Klientel → Person** in UI und Handbuch ersetzen (siehe Sofortkorrekturen-Liste oben).~~ **Erledigt**; die Restklassen außerhalb der vier Sweep-Verzeichnisse (Reporting-Backends, VVT/Compliance, Modell-`help_text`s, Code-Kommentare, Glossar) sind mit Refs #1805 nachgezogen.
+2. ~~**qualifiziert / identifiziert** als Personenetiketten entpersonalisieren (Kontaktstufen statt Personenmerkmale).~~ **Erledigt 2026-08** (Refs #1805): umbenannt statt nur erklärt — sichtbare Labels sind _Nur Pseudonym_ / _Mit Zusatzangaben_, die Werte `identified`/`qualified` bleiben unverändert. Erklärt wird zusätzlich am Feld, am Badge (`title`) und über eine Legendenzeile je Liste.
 3. **obdachlos / wohnungslos** fachlich schärfen (Seed, Beispieltexte, Handbuch).
-4. **Fall** strategisch prüfen — welche UI-Stellen bewusst Case-Management-Sprache brauchen, wo _Begleitung_ passt.
+4. ~~**Fall** strategisch prüfen~~ **Entschieden 2026-08** (Refs #1805): _Fall_ bleibt UI-Begriff — siehe „Nur intern verwenden“ und „Diskutable Begriffe“.
 
 ## Quellen
 

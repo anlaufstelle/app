@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load i18n static core_tags nav_tags %}
 
-{% block title %}{% trans "Neuer Kontakt" %} – Anlaufstelle{% endblock %}
+{% block title %}{% trans "Kontakt dokumentieren" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
     {# Ruecklink aus core.nav (Refs #1802). #}
     {% back_link %}
-    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Neuer Kontakt" %}</h1>
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Kontakt dokumentieren" %}</h1>
 
     {% comment %}String-Literale sind in Django als SafeString markiert — weder
     `{% templatetag openblock %} trans %}` noch das normale Autoescaping escapen sie. Der
@@ -66,7 +66,7 @@
 
         {# Sektion 1: Meta — kompaktes Layout #}
         <div class="card p-4 space-y-3">
-            <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Basis-Daten" %}</h2>
+            <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Zuordnung und Zeitpunkt" %}</h2>
 
             {% if meta_form.non_field_errors %}
             <div class="bg-red-50 border border-red-200 rounded-[10px] p-3">
@@ -210,7 +210,7 @@
                     {% trans "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe." %}
                 </p>
                 <p x-show="notAnonymousAllowed" x-cloak class="mt-1 text-[12px] text-yellow-700">
-                    {% trans "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
+                    {% trans "Dieser Dokumentationstyp erfordert eine zugeordnete Person." %}
                 </p>
                 <p x-show="showAnonymousHint" x-cloak class="mt-1 text-[12px] text-ink-muted">
                     {% trans "Ohne Person wird der Kontakt als anonym gespeichert." %}

@@ -67,25 +67,25 @@ class RectificationRequest(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Alter Wert (verschlüsselt)"),
-        help_text=_("JSON-serialisiert, dann via encrypt_field() verschlüsselt."),
+        help_text=_("Wird als JSON verschlüsselt gespeichert."),
     )
     new_value = models.JSONField(
         null=True,
         blank=True,
         verbose_name=_("Neuer Wert (verschlüsselt)"),
-        help_text=_("JSON-serialisiert, dann via encrypt_field() verschlüsselt."),
+        help_text=_("Wird als JSON verschlüsselt gespeichert."),
     )
     reason = models.JSONField(
         null=True,
         blank=True,
         verbose_name=_("Begründung (verschlüsselt)"),
-        help_text=_("Verschlüsselt via encrypt_field()"),
+        help_text=_("Wird verschlüsselt gespeichert."),
     )
     review_note = models.JSONField(
         null=True,
         blank=True,
         verbose_name=_("Prüfvermerk (verschlüsselt)"),
-        help_text=_("Verschlüsselt via encrypt_field()"),
+        help_text=_("Wird verschlüsselt gespeichert."),
     )
     status = models.CharField(
         max_length=20,

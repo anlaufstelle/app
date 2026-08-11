@@ -338,7 +338,7 @@ class SampleReport1Backend(DatasetBackend):
                 CompletenessIssue(
                     "unmapped_system_types",
                     format_lazy(
-                        _("{events} Ereignisse in {types} Dokumenttypen ohne Berichtszuordnung im Zeitraum"),
+                        _("{events} Ereignisse in {types} Dokumentationstypen ohne Berichtszuordnung im Zeitraum"),
                         events=counts["unmapped_events"],
                         types=counts["unmapped_types"],
                     ),

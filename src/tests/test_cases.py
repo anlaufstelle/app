@@ -215,7 +215,7 @@ class TestCaseCreateView:
         client.force_login(staff_user)
         response = client.get(reverse("core:case_create"))
         assert response.status_code == 200
-        assert "Neuer Fall" in response.content.decode()
+        assert "Fall anlegen" in response.content.decode()
 
     def test_case_create_post(self, client, staff_user, client_identified):
         client.force_login(staff_user)

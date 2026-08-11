@@ -70,7 +70,7 @@ field_templates:
       - {slug: sachspenden, label: Sachspenden, is_active: false}
 
   - slug: alterscluster
-    name: Alterscluster
+    name: Altersgruppe
     field_type: select
     is_encrypted: false
     sensitivity: ""

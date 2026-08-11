@@ -277,8 +277,8 @@ class TestBuildEventRowStaticColumns:
         assert row[1] == "14:30"
         assert row[2] == "Kontakt"
         assert row[3] == client_identified.pseudonym
-        # ``IDENTIFIED`` → Display-String "Identifiziert"
-        assert row[4] == "Identifiziert"
+        # ``IDENTIFIED`` → Display-String "Nur Pseudonym" (Refs #1805)
+        assert row[4] == "Nur Pseudonym"
         # AgeCluster default ``UNKNOWN`` → "Unbekannt"
         assert row[5] == "Unbekannt"
         assert len(row) == 6, "Ohne dyn. Felder muss row genau 6 statische Spalten haben"

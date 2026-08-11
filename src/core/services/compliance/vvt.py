@@ -39,7 +39,7 @@ from django.utils.translation import gettext_lazy as _
 PROCESSING_ACTIVITIES = [
     {
         "id": "klienten_stammdaten",
-        "title": _("Klienten-Stammdaten"),
+        "title": _("Personen-Stammdaten"),
         "purpose": _(
             "Beratungsdokumentation und Falllaufzeit-Steuerung in "
             "niedrigschwelligen Einrichtungen. Kein Klarname-Feld — der "
@@ -53,8 +53,8 @@ PROCESSING_ACTIVITIES = [
         ),
         "data_categories": [
             _("Pseudonym (kein Klarname)"),
-            _("Soziodemografische Eckdaten (Alterscluster, Geschlecht)"),
-            _("Kontaktstufe (anonym / identifiziert / qualifiziert)"),
+            _("Soziodemografische Eckdaten (Altersgruppe, ggf. über Zusatzfelder erhoben)"),
+            _("Kontaktstufe (anonym / nur Pseudonym / mit Zusatzangaben)"),
             _("Zugeordnete Einrichtung (Facility)"),
         ],
         "recipients": [
@@ -64,8 +64,9 @@ PROCESSING_ACTIVITIES = [
         "retention_period": _(
             "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. "
             "Anonyme Kontakte: 12 Monate (danach Aggregation). "
-            "Identifizierte Kontakte: 36 Monate nach letztem Kontakt. "
-            "Qualifizierte Kontakte: 10 Jahre nach Falllauf-Ende "
+            "Kontakte der Stufe „Nur Pseudonym“: 36 Monate nach letztem "
+            "Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre "
+            "nach Falllauf-Ende "
             "(SGB VIII §97)."
         ),
         "toms": [
@@ -95,7 +96,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "data_categories": [
             _("Ereignisbeschreibungen / Beratungsnotizen"),
-            _("Strukturierte Feldwerte (DocumentType-spezifisch)"),
+            _("Strukturierte Feldwerte (je Dokumentationstyp konfiguriert)"),
             _("Kontaktanlass, Themen, Vermittlungen"),
             _("Ggf. Gesundheits-/Suchtkontext (verschluesselt)"),
             _("Zeitstempel, Bearbeiter:in, Sensitivitaetsstufe"),
@@ -108,12 +109,12 @@ PROCESSING_ACTIVITIES = [
             ),
         ],
         "retention_period": _(
-            "Pro DocumentType konfigurierbar; Default an Kontaktstufe "
+            "Pro Dokumentationstyp konfigurierbar; Default an Kontaktstufe "
             "der zugehoerigen Person gebunden. Sensible Inhalte werden "
             "vor Loeschung k-anonymisiert oder redigiert."
         ),
         "toms": [
-            _("Sensitivitaets-basierte Sichtbarkeit (DocumentType-Level + FieldTemplate-Override)"),
+            _("Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen koennen sie anheben)"),
             _("Verschluesselung sensibler Felder (AES-GCM, Schluessel ausserhalb der DB)"),
             _("Optimistic Locking gegen versehentliches Ueberschreiben"),
             _("AuditLog jeder Lese- und Schreibaktion"),
@@ -275,7 +276,10 @@ PROCESSING_ACTIVITIES = [
             "im AuditLog dauerhaft (siehe Verarbeitung 'AuditLog')."
         ),
         "toms": [
-            _("Berichtigung organisatorisch ueber Mitarbeiter:innen / Leitung — kein Self-Service durch Klient:in"),
+            _(
+                "Berichtigung organisatorisch ueber Mitarbeiter:innen / Leitung — "
+                "kein Self-Service durch die betroffene Person"
+            ),
             _("Vier-Augen-Prinzip fuer Loeschung qualifizierter Daten"),
             _("Sudo-Mode-Re-Auth vor Erstellung von Datenpaketen"),
             _("AuditLog jeder Auskunft / Berichtigung / Loeschung"),

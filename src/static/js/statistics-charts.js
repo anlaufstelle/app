@@ -125,7 +125,7 @@ function buildStatisticsCharts() {
               pointRadius: 3,
             },
             {
-              label: "Identifiziert",
+              label: "Nur Pseudonym",
               data: data.contacts.identifiziert,
               borderColor: "rgb(59, 130, 246)",
               borderDash: [5, 5],
@@ -133,7 +133,7 @@ function buildStatisticsCharts() {
               pointRadius: 3,
             },
             {
-              label: "Qualifiziert",
+              label: "Mit Zusatzangaben",
               data: data.contacts.qualifiziert,
               borderColor: "rgb(16, 185, 129)",
               borderDash: [5, 5],

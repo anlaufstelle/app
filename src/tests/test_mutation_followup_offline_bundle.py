@@ -108,7 +108,7 @@ class TestBundleClientFields:
         identische Werte liefern."""
         bundle = build_client_offline_bundle(staff_user, facility, client_qualified)
         assert bundle["client"]["contact_stage"] == "qualified"
-        assert bundle["client"]["contact_stage_display"] == "Qualifiziert"
+        assert bundle["client"]["contact_stage_display"] == "Mit Zusatzangaben"
         assert bundle["client"]["contact_stage"] != bundle["client"]["contact_stage_display"]
 
     def test_client_age_cluster_and_display(self, facility, staff_user):

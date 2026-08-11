@@ -54,7 +54,7 @@ Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
     </button>
     {% else %}
     <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">
-        {% if group %}{{ group.name }}{% elif grouped|length > 1 %}{% trans "Ohne Gruppe" %}{% else %}{% trans "Felder" %}{% endif %}
+        {% if group %}{{ group.name }}{% elif grouped|length > 1 %}{% trans "Weitere Angaben" %}{% else %}{% trans "Angaben" %}{% endif %}
     </h2>
     {% endif %}
     <div class="space-y-4"{% if group.is_collapsible %} x-show="open"{% endif %}>

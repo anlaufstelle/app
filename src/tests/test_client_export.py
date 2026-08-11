@@ -143,7 +143,7 @@ class TestClientExportService:
     def test_client_master_data(self, sample_client, facility, admin_user):
         data = export_client_data(sample_client, facility, admin_user)
         assert data["client"]["pseudonym"] == "Export-Klientel"
-        assert data["client"]["contact_stage"] == "Identifiziert"
+        assert data["client"]["contact_stage"] == "Nur Pseudonym"
         assert data["client"]["age_cluster"] == "18–26"
 
     def test_events_included(self, sample_client, facility, sample_event, admin_user):

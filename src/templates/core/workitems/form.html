@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load i18n core_tags nav_tags %}
 
-{% block title %}{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Neue Aufgabe" %}{% endif %} – Anlaufstelle{% endblock %}
+{% block title %}{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Aufgabe erstellen" %}{% endif %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
     {# Ruecklink aus core.nav (Refs #1802). #}
     {% back_link %}
-    <h1 class="text-[22px] font-bold text-ink mb-6">{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Neue Aufgabe" %}{% endif %}</h1>
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Aufgabe erstellen" %}{% endif %}</h1>
 
     <form method="post" class="space-y-5">
         {% csrf_token %}

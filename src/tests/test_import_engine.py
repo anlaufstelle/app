@@ -591,6 +591,35 @@ class TestValueCoercion:
         result = self._run(facility, admin_user, doc_type_client_profile, "Pseudonym;Zugang", "SEL-02;Wald", mapping)
         assert result["errors"][0]["code"] == "invalid_option"
 
+    @pytest.mark.parametrize(
+        ("cell", "expected"),
+        [
+            # Aktuelle Labels (Refs #1805).
+            ("Nur Pseudonym", Client.ContactStage.IDENTIFIED),
+            ("Mit Zusatzangaben", Client.ContactStage.QUALIFIED),
+            # Abgeloeste Labels: jede vor #1805 exportierte CSV traegt sie,
+            # weil services/system/export.py das Anzeige-Label schreibt.
+            ("Identifiziert", Client.ContactStage.IDENTIFIED),
+            ("qualifiziert", Client.ContactStage.QUALIFIED),
+            # Rohwerte bleiben unabhaengig vom Label gueltig.
+            ("identified", Client.ContactStage.IDENTIFIED),
+        ],
+    )
+    def test_contact_stage_accepts_current_and_legacy_labels(self, facility, admin_user, media_root, cell, expected):
+        """CSV ist ein Datenvertrag mit Bestandsdateien — die Label-Umbenennung
+        aus #1805 darf keine bereits exportierte Datei unlesbar machen."""
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload(f"Pseudonym;Kontaktstufe\nSTG-ALIAS;{cell}\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Kontaktstufe": "contact_stage"})
+        result = import_engine.run_import(job, admin_user, commit=True)
+
+        assert result["errors"] == []
+        assert Client.objects.for_facility(facility).get(pseudonym="STG-ALIAS").contact_stage == expected
+
     def test_unknown_contact_stage_is_a_row_error(self, facility, admin_user, media_root):
         job = import_engine.store_import_upload(
             facility,

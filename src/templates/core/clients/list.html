@@ -24,9 +24,9 @@
         </button>
         {# Refs #1735: Die Liste ist assistant+, das Anlegen staff+ — ohne Guard lief der Button für die Assistenz ins 403 (gleicher Guard wie in der Navigation). #}
         {% if user.is_staff_or_above %}
-        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
+        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2" data-testid="clients-list-create-client">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-            {% trans "Neue Person" %}
+            {% trans "Person anlegen" %}
         </a>
         {% endif %}
     </div>
@@ -74,6 +74,8 @@
         {% endfor %}
     </select>
 </div>
+
+{% include "components/_contact_stage_legend.html" %}
 
 <div id="client-table">
     {% include "core/clients/partials/table.html" %}

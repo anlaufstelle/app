@@ -89,10 +89,10 @@ class TestEventErstellung:
     def test_event_create_with_dynamic_fields(self, authenticated_page, base_url):
         page = authenticated_page
 
-        # Neuer Kontakt → Dokumenttyp-Auswahl → dynamische Felder
+        # Kontakt dokumentieren → Dokumentationstyp-Auswahl → dynamische Felder
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
-        assert page.locator("h1").inner_text() == "Neuer Kontakt"
+        assert page.locator("h1").inner_text() == "Kontakt dokumentieren"
 
         # Dokumenttyp wählen → dynamische Felder laden (HTMX)
         page.select_option("select[name='document_type']", label="Kontakt")

@@ -101,7 +101,7 @@ importScripts("/static/js/url-patterns.js");
 // Genau wie beim v25 -> v26-Bump (crypto.js/sync-orchestrator.js) erzwingt der
 // Bump Re-Install + Re-Precache und raeumt zugleich den SWR-Runtime-Cache
 // (autosave.js liegt dort) weg.
-const CACHE_NAME = "anlaufstelle-v33";
+const CACHE_NAME = "anlaufstelle-v34";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

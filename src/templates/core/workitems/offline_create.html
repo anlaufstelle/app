@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load i18n static %}
 
-{% block title %}{% trans "Neue Aufgabe (offline)" %} – Anlaufstelle{% endblock %}
+{% block title %}{% trans "Aufgabe erstellen (offline)" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 {# Refs #1522 (#1499): pk-lose WorkItem-Create-Shell. Der Service Worker  #}
@@ -66,7 +66,7 @@
 
     <template x-if="showForm">
         <form class="card p-4 space-y-3" @submit.prevent="saveCreate" data-testid="offline-workitem-create-form">
-            <h1 class="text-[18px] font-bold text-ink">{% trans "Neue Aufgabe (offline)" %}</h1>
+            <h1 class="text-[18px] font-bold text-ink">{% trans "Aufgabe erstellen (offline)" %}</h1>
 
             {# Person-Picker: mitgenommene Person | — ohne Person — (Standalone). #}
             {# WorkItems kennen keine Kontaktstufen-Anforderung (kein DocType) —  #}

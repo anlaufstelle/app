@@ -80,7 +80,7 @@ class TestBackendMetadaten:
 
     def test_field_specs(self, backend):
         assert backend.get_field_specs() == [
-            FieldSpec("document_type", "Dokumenttyp"),
+            FieldSpec("document_type", "Dokumentationstyp"),
             FieldSpec("system_type", "System-Typ"),
             FieldSpec("count", "Anzahl"),
         ]
@@ -116,7 +116,7 @@ class TestBuildDataset:
         assert result.summary == {"total": 0}
 
     def test_mehrere_dokumenttypen_sortiert_nach_name(self, backend, facility, admin_user, date_range):
-        """M5: mehrere Dokumenttypen (einer mit ``system_type``) — Sortierung
+        """M5: mehrere Dokumentationstypen (einer mit ``system_type``) — Sortierung
         nach ``document_type__name`` (nicht nach Anlage- oder Kategorie-Reihenfolge).
         """
         date_from, date_to = date_range
@@ -146,7 +146,7 @@ class TestBuildDataset:
     def test_genau_eine_query(
         self, backend, facility, doc_type_contact, sample_event, date_range, django_assert_num_queries
     ):
-        """M5: eine Aggregation, kein N+1 je Dokumenttyp — Anzahl eingefroren."""
+        """M5: eine Aggregation, kein N+1 je Dokumentationstyp — Anzahl eingefroren."""
         date_from, date_to = date_range
 
         with django_assert_num_queries(1):
@@ -164,7 +164,7 @@ class TestCsvExport:
         lines = content.splitlines()
         rows = list(csv.reader(lines[1:]))
 
-        assert rows[0] == ["Dokumenttyp", "System-Typ", "Anzahl"]
+        assert rows[0] == ["Dokumentationstyp", "System-Typ", "Anzahl"]
         # ``export_dataset`` wendet ``prepare_export`` an — die einzelne Zeile
         # (Anzahl 1) liegt unter der Default-Schwelle (5) und wird suppressiert.
         assert rows[1] == ["Kontakt", "", ""]
@@ -218,12 +218,12 @@ class TestStatisticsBerichtsliste:
     def test_beispiel_backend_in_der_liste(self, client, lead_user):
         karten = self._card_list(self._statistik(client, lead_user))
         assert 'data-testid="report-card-example"' in karten
-        assert "Beispiel: Ereignisse je Dokumenttyp" in karten
+        assert "Beispiel: Ereignisse je Dokumentationstyp" in karten
 
     def test_beispiel_backend_in_der_liste_admin(self, client, admin_user):
         karten = self._card_list(self._statistik(client, admin_user))
         assert 'data-testid="report-card-example"' in karten
-        assert "Beispiel: Ereignisse je Dokumenttyp" in karten
+        assert "Beispiel: Ereignisse je Dokumentationstyp" in karten
 
     def test_karte_nennt_beschreibung_grundgesamtheit_und_herkunft(self, client, lead_user):
         """Konzept §3.3: Name allein ist keine Auswahlgrundlage — die Karte sagt,
@@ -247,7 +247,7 @@ class TestStatisticsBerichtsliste:
         assert response.context["selected_backend"].slug == "example"
         content = response.content.decode()
         assert 'id="report-panel"' in content
-        assert "Beispiel: Ereignisse je Dokumenttyp" in content
+        assert "Beispiel: Ereignisse je Dokumentationstyp" in content
         assert 'aria-current="true"' in self._card_list(content)
 
     def test_ohne_auswahl_keine_vorschau_und_keine_freitextfelder(self, client, lead_user):

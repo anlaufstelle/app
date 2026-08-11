@@ -37,9 +37,9 @@ from core.services.dashboard.external_report import (
 
 @register_backend("example")
 class ExampleBackend(DatasetBackend):
-    """Ereignisse je Dokumenttyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
+    """Ereignisse je Dokumentationstyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
 
-    name = _("Beispiel: Ereignisse je Dokumenttyp")
+    name = _("Beispiel: Ereignisse je Dokumentationstyp")
     description = _("Zählt die Ereignisse des Zeitraums je Dokumentationstyp.")
     snapshot_enabled = False
 
@@ -48,7 +48,7 @@ class ExampleBackend(DatasetBackend):
         # vor, was der Vertrag will: sonst uebernimmt jedes abgeleitete
         # Backend deutschen Klartext in seine Spaltenkoepfe.
         return [
-            FieldSpec("document_type", _("Dokumenttyp")),
+            FieldSpec("document_type", _("Dokumentationstyp")),
             FieldSpec("system_type", _("System-Typ")),
             FieldSpec("count", _("Anzahl")),
         ]

@@ -370,7 +370,7 @@ class TestMobileEventCreate:
         page.goto(f"{base_url}/events/new/")
         page.wait_for_load_state("domcontentloaded")
 
-        assert page.locator("h1").inner_text() == "Neuer Kontakt"
+        assert page.locator("h1").inner_text() == "Kontakt dokumentieren"
 
     def test_mobile_event_create_no_overflow(self, mobile_page, base_url):
         page = mobile_page
@@ -416,7 +416,7 @@ class TestMobileActionButtonsHidden:
         assert not buttons_wrapper.is_visible(), "Create-Buttons sollten auf Mobile versteckt sein"
 
     def test_client_list_create_button_hidden(self, mobile_page, base_url):
-        """Personenliste: 'Neue Person'-Button auf Mobile unsichtbar."""
+        """Personenliste: 'Person anlegen'-Button auf Mobile unsichtbar."""
         page = mobile_page
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
@@ -523,7 +523,7 @@ class TestMobileNoHorizontalScroll:
             ("/", "Zeitstrom"),
             ("/clients/", "Personen"),
             ("/workitems/", "Aufgaben"),
-            ("/events/new/", "Neuer Kontakt"),
+            ("/events/new/", "Kontakt dokumentieren"),
             ("/?view=uebergabe", "Zeitstrom"),
         ],
     )

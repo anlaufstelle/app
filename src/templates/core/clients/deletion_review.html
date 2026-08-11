@@ -37,7 +37,9 @@
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Kontaktstufe" %}</dt>
-                <dd class="font-medium">{{ client.get_contact_stage_display }}</dd>
+                {# Refs #1805 (C3): erbt Farbe und erklaerenden title aus C2 statt #}
+                {# den Anzeigewert ein zweites Mal selbst zu rendern. #}
+                <dd>{% include "components/_client_badge.html" with client=client %}</dd>
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Angelegt am" %}</dt>

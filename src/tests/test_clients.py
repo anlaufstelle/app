@@ -169,6 +169,23 @@ class TestClientCreate:
         response = client.get(reverse("core:client_create"))
         assert response.status_code == 200
 
+    def test_client_form_renders_privacy_notice_without_markdown_or_code_names(self, client, staff_user):
+        """Refs #1805 (R10/T2/T3): der Notizen-Hinweis war Markdown-im-HTML.
+
+        ``components/_form_field.html`` rendert ``help_text`` ohne ``|safe``,
+        die Fachkraft sah also literal ``**Nicht feldverschluesselt**``. Und
+        er verwies auf ``FieldTemplate``/``Sensitivity=HOCH`` — Namen, die in
+        keinem sichtbaren Label vorkommen.
+        """
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_create")).content.decode()
+        assert "**" not in content
+        for code_name in ("FieldTemplate", "Sensitivity=", "Art-9"):
+            assert code_name not in content
+        # Der Ersatz nennt das sichtbare Label und die Rechtsgrundlage.
+        assert "Zusatzfeld" in content
+        assert "Art. 9 DSGVO" in content
+
     def test_client_create_success(self, client, staff_user, facility):
         client.force_login(staff_user)
         response = client.post(

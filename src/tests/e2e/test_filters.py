@@ -340,7 +340,7 @@ class TestFilterPersistenceExcludesQ:
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Stage-Select auf "Identifiziert" stellen.
+        # Stage-Select auf "Nur Pseudonym" stellen.
         stage_select = page.locator("select[name='stage']")
         expect(stage_select).to_be_visible(timeout=10000)
         stage_select.select_option("identified")

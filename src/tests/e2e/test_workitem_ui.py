@@ -66,7 +66,7 @@ class TestWorkItemInbox:
         page = authenticated_page
         page.goto(f"{base_url}/workitems/new/")
 
-        assert page.locator("h1").inner_text() == "Neue Aufgabe"
+        assert page.locator("h1").inner_text() == "Aufgabe erstellen"
 
         page.select_option("select[name='item_type']", value="task")
         page.fill("input[name='title']", "E2E-Testaufgabe")

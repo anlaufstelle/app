@@ -104,7 +104,7 @@ class Attachment(models.Model):
     )
     original_filename_encrypted = models.JSONField(
         verbose_name=_("Originaldateiname (verschlüsselt)"),
-        help_text=_("Verschlüsselt via encrypt_field()"),
+        help_text=_("Wird verschlüsselt gespeichert."),
     )
     file_size = models.PositiveIntegerField(
         verbose_name=_("Dateigröße (Bytes)"),

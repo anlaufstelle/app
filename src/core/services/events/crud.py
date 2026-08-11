@@ -20,7 +20,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Activity, AuditLog, DocumentType, Event, EventHistory, FieldTemplate
+from core.models import Activity, AuditLog, Client, DocumentType, Event, EventHistory, FieldTemplate
 from core.services.attachments import crud as attachments_crud
 from core.services.audit import audit_event
 from core.services.compliance import user_can_see_document_type
@@ -105,7 +105,11 @@ def _validate_contact_stage(document_type, client, is_anonymous):
                 "'%(actual_stage)s'."
             )
             % {
-                "required_stage": document_type.min_contact_stage,
+                # Refs #1805: beide Seiten als Anzeige-Label. Vorher stand
+                # hier der Rohwert ("... Kontaktstufe 'qualified' ...") neben dem
+                # deutschen Label der Ist-Stufe — englischer Enum-Wert und
+                # deutsches Label in einem Satz.
+                "required_stage": Client.ContactStage(document_type.min_contact_stage).label,
                 "actual_stage": client.get_contact_stage_display(),
             }
         )

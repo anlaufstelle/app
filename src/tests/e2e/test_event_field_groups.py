@@ -1,8 +1,8 @@
-"""E2E-Tests für gruppierte Event-Felder im „Neuer Kontakt"-Formular (M0 P4, Refs #1056).
+"""E2E-Tests für gruppierte Event-Felder im „Kontakt dokumentieren"-Formular (M0 P4, Refs #1056).
 
 Prüft, dass die Feldgruppen des Seed-Dokumentationstyps „Kontakt" im
 Ereignis-Formular korrekt gerendert werden: benannte Gruppen-Header, die
-„Ohne Gruppe"-Sektion zuletzt und die einklappbare Gruppe „Leistungen &
+„Weitere Angaben"-Sektion zuletzt und die einklappbare Gruppe „Leistungen &
 Notizen" (Alpine ``collapsibleGroup``, CSP-kompatibel).
 
 Es werden **keine** dauerhaften Ereignisse angelegt — die Sichtbarkeits-/
@@ -34,10 +34,10 @@ def _open_kontakt_form(page, base_url):
 
 
 class TestKontaktFieldGroups:
-    """Gruppen-Header, „Ohne Gruppe"-Reihenfolge und Collapsible-Verhalten."""
+    """Gruppen-Header, „Weitere Angaben"-Reihenfolge und Collapsible-Verhalten."""
 
     def test_group_headers_and_ungrouped_section(self, authenticated_page, base_url):
-        """Header „Basisdaten" + „Leistungen & Notizen" sichtbar, „Ohne Gruppe" zuletzt."""
+        """Header „Basisdaten" + „Leistungen & Notizen" sichtbar, „Weitere Angaben" zuletzt."""
         page = authenticated_page
         _open_kontakt_form(page, base_url)
 
@@ -45,13 +45,13 @@ class TestKontaktFieldGroups:
         expect(page.locator('#dynamic-fields h2:has-text("Basisdaten")')).to_be_visible()
         expect(page.locator(COLLAPSIBLE_TOGGLE)).to_be_visible()
 
-        # „Ohne Gruppe" ist die letzte Sektion und enthält „Straßenkontakt".
+        # „Weitere Angaben" ist die letzte Sektion und enthält „Straßenkontakt".
         # Seit M1 wrappt der conditionEvaluator-Wurzelknoten die Gruppen-Cards
         # (eine Ebene unter #dynamic-fields, Refs #1057).
         cards = page.locator("#dynamic-fields > div > div.card")
         expect(cards).to_have_count(3, timeout=10000)
         last_card = cards.last
-        expect(last_card.locator("h2")).to_contain_text("Ohne Gruppe")
+        expect(last_card.locator("h2")).to_contain_text("Weitere Angaben")
         expect(last_card.locator('input[name="strassenkontakt"]')).to_have_count(1)
 
     def test_collapsible_group_toggle(self, authenticated_page, base_url):

@@ -23,9 +23,9 @@ OFFLINE_CREATE_EN: list[tuple[str, str]] = [
         "Offline gespeichert – wird beim nächsten Online-Kontakt synchronisiert.",
         "Saved offline – will sync the next time you're online.",
     ),
-    ("Neuer Kontakt (offline)", "New contact (offline)"),
+    ("Kontakt dokumentieren (offline)", "Document contact (offline)"),
     ("– bitte wählen –", "– please select –"),
-    ("Neue Aufgabe (offline)", "New task (offline)"),
+    ("Aufgabe erstellen (offline)", "Create task (offline)"),
     ("Neue Erfassung (offline)", "New entry (offline)"),
     (
         "Für die Offline-Erfassung sind noch keine Vorlagen vorbereitet oder der "

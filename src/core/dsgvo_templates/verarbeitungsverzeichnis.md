@@ -23,8 +23,8 @@
 | Kategorie | Daten | Verschlüsselt |
 |-----------|-------|---------------|
 | Pseudonym | Selbstgewählter Name | Nein |
-| Alterscluster | Unter 18, 18–26, 27+, Unbekannt | Nein |
-| Kontaktstufe | Identifiziert, Qualifiziert | Nein |
+| Altersgruppe | Unter 18, 18–26, 27+, Unbekannt | Nein |
+| Kontaktstufe | Nur Pseudonym, Mit Zusatzangaben | Nein |
 | Kontaktdaten | Dokumentation einzelner Kontakte | Teilweise |
 | Sensible Notizen | Freitextnotizen mit sensiblen Inhalten | Ja (AES/Fernet) |
 

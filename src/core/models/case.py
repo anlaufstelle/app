@@ -42,10 +42,12 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
         blank=True,
         verbose_name=_("Beschreibung"),
         help_text=_(
-            "Frei-Text-Beschreibung des Falls. Nicht feldverschlüsselt — "
-            "keine Klarnamen oder Art-9-Daten hier vermerken; "
-            "sensible Inhalte gehören in ein Event-FieldTemplate "
-            "mit Sensitivity=HOCH."
+            "Frei-Text zum Fall. Dieses Feld wird nicht verschlüsselt "
+            "gespeichert — bitte keine Klarnamen und keine besonders "
+            "schützenswerten Angaben zu Gesundheit, Sucht, Herkunft, Religion "
+            "oder Sexualität (besondere Kategorien personenbezogener Daten, "
+            "Art. 9 DSGVO). Solche Angaben gehören in ein Zusatzfeld eines "
+            "Kontakts mit der Sensibilität „Hoch“."
         ),
     )
     status = models.CharField(

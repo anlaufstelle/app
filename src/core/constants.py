@@ -5,8 +5,8 @@ from django.utils.translation import gettext_lazy as _
 # Contact stage choices — single source of truth.
 # Must match Client.ContactStage values.
 CONTACT_STAGE_CHOICES = [
-    ("identified", _("Identifiziert")),
-    ("qualified", _("Qualifiziert")),
+    ("identified", _("Nur Pseudonym")),
+    ("qualified", _("Mit Zusatzangaben")),
 ]
 
 # Pagination — Listenseiten (Klient*innen, Fälle, Aufgaben)

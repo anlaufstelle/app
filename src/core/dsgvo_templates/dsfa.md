@@ -34,7 +34,7 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 | Datum | Erforderlich weil |
 |-------|------------------|
 | Pseudonym | Wiedererkennung ohne Klarnamen |
-| Alterscluster | Statistische Auswertung |
+| Altersgruppe | Statistische Auswertung |
 | Kontaktstufe | Anpassung der Löschfristen |
 | Kontaktnotizen | Qualität der Betreuung |
 

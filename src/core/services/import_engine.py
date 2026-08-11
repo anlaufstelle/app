@@ -505,11 +505,32 @@ def _coerce_option(template: FieldTemplate, raw: str, column: str | None) -> str
     raise _CellError("invalid_option", column)
 
 
-def _coerce_choice(raw: str, choices, column: str | None) -> str:
-    """Wert oder Anzeigename einer ``TextChoices``-Konstante → Wert."""
+# Refs #1805: Die Kontaktstufen-Labels wurden lebensweltlich umbenannt
+# ("Identifiziert"/"Qualifiziert" → "Nur Pseudonym"/"Mit Zusatzangaben"). Der
+# CSV-Export schreibt das ANZEIGE-Label (services/system/export.py:170), der
+# Import akzeptiert Wert ODER Label — jede vor der Umbenennung erzeugte Datei
+# traegt also die Altbezeichnung. CSV ist ein Datenvertrag mit Bestandsdateien
+# der Einrichtungen (Konzept §3.1), darum bleiben die Alt-Labels dauerhaft
+# lesbar; geschrieben wird ausschliesslich die neue Form.
+_LEGACY_CONTACT_STAGE_LABELS: dict[str, str] = {
+    "identifiziert": Client.ContactStage.IDENTIFIED.value,
+    "qualifiziert": Client.ContactStage.QUALIFIED.value,
+}
+
+
+def _coerce_choice(raw: str, choices, column: str | None, legacy_labels: dict[str, str] | None = None) -> str:
+    """Wert oder Anzeigename einer ``TextChoices``-Konstante → Wert.
+
+    ``legacy_labels`` bildet abgeloeste Anzeigenamen (casefold) auf den Wert
+    ab, damit eine Label-Umbenennung keine Bestandsdatei unlesbar macht.
+    """
     for value, label in choices.choices:
         if raw == value or raw.casefold() == str(label).casefold():
             return value
+    if legacy_labels is not None:
+        legacy_value = legacy_labels.get(raw.casefold())
+        if legacy_value is not None:
+            return legacy_value
     raise _CellError("invalid_option", column)
 
 
@@ -584,7 +605,10 @@ def _import_client_row(job: ImportJob, user, values: dict, columns: dict) -> Non
     payload: dict[str, Any] = {"pseudonym": pseudonym}
     if values.get("contact_stage"):
         payload["contact_stage"] = _coerce_choice(
-            values["contact_stage"], Client.ContactStage, columns.get("contact_stage")
+            values["contact_stage"],
+            Client.ContactStage,
+            columns.get("contact_stage"),
+            legacy_labels=_LEGACY_CONTACT_STAGE_LABELS,
         )
     if values.get("age_cluster"):
         payload["age_cluster"] = _coerce_choice(values["age_cluster"], Client.AgeCluster, columns.get("age_cluster"))

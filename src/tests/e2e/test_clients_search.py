@@ -46,7 +46,7 @@ class TestClientManagement:
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
         assert page.locator("h1").inner_text() == "Stern-42"
-        assert page.locator("text=Qualifiziert").first.is_visible()
+        assert page.locator("text=Mit Zusatzangaben").first.is_visible()
         assert page.locator("text=Kontakt-Chronik").is_visible()
 
     def test_client_create_pseudonym_uniqueness(self, authenticated_page, base_url):
@@ -54,7 +54,7 @@ class TestClientManagement:
         page = authenticated_page
         page.goto(f"{base_url}/clients/new/")
 
-        assert page.locator("h1").inner_text() == "Neue Person"
+        assert page.locator("h1").inner_text() == "Person anlegen"
 
         # Doppeltes Pseudonym
         page.fill("input[name='pseudonym']", "Stern-42")

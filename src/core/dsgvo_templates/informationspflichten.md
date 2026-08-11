@@ -46,7 +46,7 @@ Wir verarbeiten Ihre Daten zu folgenden Zwecken:
 |-------|-------------|
 | Pseudonym | Selbstgewählter Name (kein Klarname erforderlich) |
 | Altersgruppe | Grobe Einordnung (Unter 18, 18–26, 27+) |
-| Kontaktstufe | Identifiziert oder Qualifiziert |
+| Kontaktstufe | Nur Pseudonym oder Mit Zusatzangaben |
 | Kontaktnotizen | Dokumentation der Beratungsinhalte (verschlüsselt) |
 
 ---
@@ -66,8 +66,8 @@ Eine Übermittlung in Drittländer findet nicht statt.
 | Kontaktstufe | Aufbewahrung nach letztem Kontakt |
 |--------------|----------------------------------|
 | Anonym | {{ retention_anonymous_days }} Tage |
-| Identifiziert | {{ retention_identified_days }} Tage |
-| Qualifiziert | {{ retention_qualified_days }} Tage |
+| Nur Pseudonym | {{ retention_identified_days }} Tage |
+| Mit Zusatzangaben | {{ retention_qualified_days }} Tage |
 
 Nach Ablauf der Frist werden die Daten automatisch gelöscht.
 

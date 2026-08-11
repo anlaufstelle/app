@@ -114,7 +114,7 @@ class ImportJob(models.Model):
         default=dict,
         blank=True,
         verbose_name=_("Originaldateiname (verschlüsselt)"),
-        help_text=_("Verschlüsselt via encrypt_field() — der Dateiname kann Klientenbezug tragen."),
+        help_text=_("Wird verschlüsselt gespeichert — der Dateiname kann einen Personenbezug tragen."),
     )
     mapping_json = models.JSONField(
         default=dict,

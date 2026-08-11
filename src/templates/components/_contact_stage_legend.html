@@ -1,0 +1,20 @@
+{% load i18n %}
+{% comment %}
+components/_contact_stage_legend.html — Kontaktstufen-Legende (Refs #1805,
+Konzept §3.2 Baustein C1).
+
+Eine permanente Zeile unter der Filterleiste. Bewusst KEIN Tooltip/Popover:
+die primaere Zielgruppe arbeitet mit 44px-Touch, Hover ist dort kein
+verfuegbarer Kanal (M3 ist ausserdem gesperrt). Der Badge traegt zusaetzlich
+ein ``title`` (Baustein C2) — diese Zeile stellt sicher, dass die Erklaerung
+auf den Listenflaechen auch ohne Hover erreichbar ist.
+
+Eingebunden auf: Personenliste, Offline-Personenliste, Loeschfristen-
+Dashboard. NICHT auf der Statistik (traegt eigene Labels) und nicht im
+Suchergebnis-Dropdown (kein Platz — dort greift C2).
+{% endcomment %}
+{# ``legend_class`` erlaubt den Farbwechsel in farbigen Kaesten (Loeschfristen); #}
+{# Default ist die gedaempfte Listenfarbe. #}
+<p class="text-[12px] {{ legend_class|default:'text-ink-muted' }}" data-testid="contact-stage-legend">
+    {% trans "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, jeder Zugriff wird protokolliert." %}
+</p>

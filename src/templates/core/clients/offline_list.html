@@ -43,8 +43,8 @@
                 class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
                 data-testid="offline-client-stage-filter">
             <option value="">{% trans "Alle Stufen" %}</option>
-            <option value="identified">{% trans "Identifiziert" %}</option>
-            <option value="qualified">{% trans "Qualifiziert" %}</option>
+            <option value="identified">{% trans "Nur Pseudonym" %}</option>
+            <option value="qualified">{% trans "Mit Zusatzangaben" %}</option>
         </select>
         <select x-model="ageFilter" aria-label="{% trans 'Altersgruppe filtern' %}"
                 class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
@@ -55,6 +55,10 @@
             <option value="27_plus">{% trans "27+" %}</option>
             <option value="unknown">{% trans "Unbekannt" %}</option>
         </select>
+    </div>
+
+    <div x-show="hasCachedClients" x-cloak class="mb-4">
+        {% include "components/_contact_stage_legend.html" %}
     </div>
 
     {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}
