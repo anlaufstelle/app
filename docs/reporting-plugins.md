@@ -2,7 +2,7 @@
 
 Ein **Berichts-Backend** kapselt die Fachlogik eines Berichtsstandards — „Kontakte nach Kategorie", „Ereignisse je Dokumentationstyp", ein regionales Kostenträger-Formular — hinter einer festen Schnittstelle. Panel-Vorschau, CSV-/JSON-/XML-Export und die Snapshot-Speicherung sprechen ausschließlich diese Schnittstelle an und wissen nichts über den einzelnen Bericht.
 
-Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/core/reporting/backends/`](../src/core/reporting/backends/) mit einer `DatasetBackend`-Unterklasse und dem `@register_backend`-Decorator erscheint automatisch im Berichte-Dropdown der Statistik-Seite und in allen drei Exportformaten. Keine Migration, kein URL-Pattern, kein View, kein Eintrag in der AuthZ-Matrix.
+Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/core/reporting/backends/`](../src/core/reporting/backends/) mit einer `DatasetBackend`-Unterklasse und dem `@register_backend`-Decorator erscheint automatisch als Karte auf dem Reiter „Datensatz-Berichte“ der Statistik-Seite und in allen drei Exportformaten. Keine Migration, kein URL-Pattern, kein View, kein Eintrag in der AuthZ-Matrix.
 
 - **Warum das System so aussieht, wie es aussieht:** [ADR-038](adr/038-reporting-plugin-backends.md).
 - **Warum Kleinstfallzahlen unterdrückt werden:** [ADR-023](adr/023-k-anonymization-statistik.md) und #1278.
@@ -56,7 +56,8 @@ Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/co
 ```python
 class DatasetBackend(ABC):
     slug: str = ""                  # von @register_backend gesetzt/validiert
-    name: str = ""                  # Anzeigename im Dropdown (gettext_lazy-fähig)
+    name: str = ""                  # Anzeigename auf der Berichtskarte (gettext_lazy-fähig)
+    description: str = ""           # ein Satz „was dieser Bericht zählt“ (gettext_lazy-fähig)
     snapshot_enabled: bool = False  # True → summary landet in StatisticsSnapshot.backend_data
 
     def is_available(self, facility) -> bool: ...
@@ -71,9 +72,10 @@ class DatasetBackend(ABC):
 | Element | Pflicht | Bedeutung |
 |---|---|---|
 | `slug` || Wird vom Decorator gesetzt. **Nicht** selbst zuweisen. Format `^[a-z0-9]+(?:[-_][a-z0-9]+)*$` (Kleinbuchstaben/Ziffern, einzelne `-`/`_` als Trennzeichen, nicht am Rand). Er steckt in Query-Parametern, Dateinamen und `backend_data`-Schlüsseln und ist damit faktisch unveränderlich — ein nachträglicher Wechsel braucht eine Datenmigration (Muster: [`0123`](../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py)). |
-| `name` | **ja** | Sichtbarer Name im Berichte-Dropdown und im JSON-Payload. Als `gettext_lazy` deklarieren; die Export-Pipeline castet an der Payload-Grenze selbst nach `str`. |
+| `name` | **ja** | Sichtbarer Name auf der Berichtskarte und im JSON-Payload. Als `gettext_lazy` deklarieren; die Export-Pipeline castet an der Payload-Grenze selbst nach `str`. |
 | `snapshot_enabled` | nein | Default `False`. `True` nur bei **aggregatreinem** `summary` — siehe [§ 5](#5-snapshot-integration). |
-| `is_available(facility)` | nein | Default `True`. Hook für einrichtungsabhängige Berichte. `False` — wie jeder andere falsy Rückgabewert, etwa das `None` eines nullable `BooleanField` — blendet das Backend aus dem Dropdown aus **und** lässt Panel/Export mit HTTP 404 antworten. Dropdown-Filter und Zugriffs-Guard prüfen dieselbe Truthiness. |
+| `is_available(facility)` | nein | Default `True`. Hook für einrichtungsabhängige Berichte. `False` — wie jeder andere falsy Rückgabewert, etwa das `None` eines nullable `BooleanField` — blendet das Backend aus der Berichtsliste aus **und** lässt Panel/Export mit HTTP 404 antworten. Listen-Filter und Zugriffs-Guard prüfen dieselbe Truthiness. |
+| `description` | nein | Ein Satz „was dieser Bericht zählt“, direkt unter dem Namen auf der Karte (Refs #1804). Als `gettext_lazy` deklarieren. Leer = die Karte lässt die Zeile weg — dann bleibt nur der Name, und die Auswahl wird wieder zum Ratespiel. |
 | `get_field_specs()` | **ja** | Spaltendefinition der tabellarischen Projektion. Reihenfolge = Spaltenreihenfolge im CSV. |
 | `build_dataset(facility, date_from, date_to)` | **ja** | Baut den Datensatz für den **inklusiven** Zeitraum `[date_from, date_to]`. Ergebnis ist **roh** (unsuppressiert). |
 | `validate_completeness(facility, date_from, date_to)` | nein | Default `[]`. Datenqualitäts-Checks — siehe [§ 8](#8-completeness--was-der-bericht-nicht-zeigt). |
@@ -341,7 +343,7 @@ Alle Module unter [`src/core/reporting/backends/`](../src/core/reporting/backend
 
 `create_or_update_snapshot(facility, year, month)` schreibt für jedes Backend mit `snapshot_enabled = True` das **rohe** `build_dataset(...).summary` in die Map `StatisticsSnapshot.backend_data` (Schlüssel = Slug). `prepare_export` läuft dabei bewusst **nicht** — der Snapshot ist der interne Rohbestand.
 
-Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backends(facility)`: Ein snapshot-fähiges Backend wird also auch dann persistiert, wenn sein `is_available(facility)` `False` liefert. `is_available` steuert ausschließlich die Sichtbarkeit im Dropdown und die 404-Antwort von Panel und Export — es ist kein Schalter für die Datenhaltung. Wer ein Backend für einzelne Einrichtungen wirklich stilllegen will, darf sich darauf nicht verlassen.
+Die Schleife läuft über `get_backends()`, **nicht** über `get_available_backends(facility)`: Ein snapshot-fähiges Backend wird also auch dann persistiert, wenn sein `is_available(facility)` `False` liefert. `is_available` steuert ausschließlich die Sichtbarkeit in der Berichtsliste und die 404-Antwort von Panel und Export — es ist kein Schalter für die Datenhaltung. Wer ein Backend für einzelne Einrichtungen wirklich stilllegen will, darf sich darauf nicht verlassen.
 
 > **`snapshot_enabled` ist ein Datenschutz-Vertrag, kein Feature-Schalter.**
 >

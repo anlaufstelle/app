@@ -58,7 +58,12 @@ class NavItem:
     gates: tuple[str, ...] = ()
     testid: str = ""  # Sidebar-Marker; leer = kein data-testid (Ist-Zustand)
     mobile_testid: str = ""  # Marker im mobilen „Mehr"-Menü
-    query: str = ""  # optionaler Query-String, z.B. "view=berichte"
+    query: str = ""  # optionaler Query-String, z.B. "ansicht=datensaetze"
+    # Refs #1804 (F5): frueher ausgelieferte Schreibweisen desselben Reiters.
+    # Sie werden nie verlinkt, machen den Reiter aber aktiv — sonst zeigte ein
+    # Bookmark von gestern eine Reiterzeile ohne einen einzigen aktiven Reiter,
+    # und der „genau ein aktiver Reiter"-Guard braeche leise.
+    query_aliases: tuple[str, ...] = ()
     icon: str = ""  # Schlüssel in partials/_nav_icons.html
     external: bool = False  # target="_blank" rel="noopener"
     badge: str = ""  # Zähler-Block in partials/_nav_sidebar_items.html
@@ -213,7 +218,7 @@ SYSTEM_FAMILY = section_family(SYSTEM)
 # Der Reiter „Datensatz-Berichte" ist der Sonderfall (Befund N2): sein
 # natürliches Ziel ``core:statistics_report_panel`` ist ein HTMX-Partial ohne
 # ``base.html``, das ohne ``?backend=`` mit 400 antwortet — als Seite
-# unbrauchbar. Statt einer neuen Route trägt er ``?view=berichte`` auf
+# unbrauchbar. Statt einer neuen Route trägt er ``?ansicht=datensaetze`` auf
 # ``core:statistics``; das ist das Hausmuster der Bereichs-Konsolidierung
 # (Zeitstrom ``?view=``, Refs #1124) und hält Deep-Links abwärtskompatibel.
 STATISTIK_UEBERSICHT = NavItem(
@@ -243,11 +248,12 @@ STATISTIK_DATENSATZ_BERICHTE = NavItem(
     key="statistik_berichte",
     label=_("Datensatz-Berichte"),
     url_name="core:statistics",
-    query="view=berichte",
+    query="ansicht=datensaetze",
+    query_aliases=("view=berichte",),
     # Dieselbe Route wie die Übersicht. Der Aktiv-Zustand unterscheidet die
     # beiden über ``query`` (``nav_tags._rendered``): trüge dieser Reiter die
     # Route nicht in seiner Familie, wäre er nie aktiv — trügen beide sie ohne
-    # Query-Prüfung, leuchteten auf ``?view=berichte`` beide.
+    # Query-Prüfung, leuchteten auf ``?ansicht=datensaetze`` beide.
     family=frozenset({"statistics"}),
     gates=("is_lead_or_admin",),
 )
@@ -347,6 +353,9 @@ STATISTIK = NavItem(
     # hier die beiden verwaisten Seiten — auf ihnen erlosch die Ortsanzeige.
     family=STATISTIK_FAMILY,
     gates=("is_lead_or_admin",),
+    # Refs #1804 (§1.10): der einzige Anker seiner Umgebung ohne Marker — der
+    # Aktiv-State-Guard greift über ``data-testid`` und sah ihn deshalb nicht.
+    testid="nav-statistik",
     icon="statistics",
 )
 # Refs #1736 (B): Gate am View-Gate ausgerichtet — Leitung/Admin, Träger:innen
@@ -689,7 +698,7 @@ KNOWN_NON_NAV_ROUTES: dict[str, str] = {
     "statistics_chart_data": "JSON-Endpunkt für die Diagramme der Statistikseite, kein Seitenaufruf.",
     "statistics_report_panel": (
         "HTMX-Partial ohne base.html; antwortet ohne ?backend= mit 400 — als Seite unbrauchbar (Befund N2). "
-        "Der Reiter „Datensatz-Berichte“ zeigt deshalb auf core:statistics?view=berichte, wo dieses Partial "
+        "Der Reiter „Datensatz-Berichte“ zeigt deshalb auf core:statistics?ansicht=datensaetze, wo dieses "
         "nachgeladen wird."
     ),
     "statistics_report_export": "Generischer Download-Endpunkt der Berichts-Plugins.",

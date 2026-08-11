@@ -13,6 +13,30 @@
 
   var STORAGE_PREFIX = "filters:";
 
+  // Refs #1804 (Konzept §3.6, „Migrationsfalle"): Umbenannte Filterwerte, die
+  // in bereits ausgelieferten Sitzungen im sessionStorage stehen können. Der
+  // Server akzeptiert die Altwerte dauerhaft als stille Aliasse (Entscheid F5);
+  // hier werden sie zusätzlich beim Lesen migriert, damit der In-Place-Restore
+  // (`restoreInPlace`, Listen ohne `data-filter-persist-url`) keinen Wert in ein
+  // Select schreibt, das diese Option nicht mehr führt — dort fiele die Auswahl
+  // stumm auf den leeren Wert zurück, während die Liste gefiltert bliebe.
+  var LEGACY_VALUES = {
+    due: { week: "next7" },
+  };
+
+  function migrateLegacyValues(state) {
+    var changed = false;
+    Object.keys(LEGACY_VALUES).forEach(function (name) {
+      var current = state[name];
+      var replacement = current && LEGACY_VALUES[name][current];
+      if (replacement) {
+        state[name] = replacement;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   function getStorageKey() {
     return STORAGE_PREFIX + window.location.pathname;
   }
@@ -174,6 +198,17 @@
     } catch (e) {
       sessionStorage.removeItem(key);
       return;
+    }
+
+    // Einmalige Migration umbenannter Werte, sofort zurückgeschrieben — sonst
+    // liefe sie bei jedem Einstieg erneut über denselben Altwert.
+    if (migrateLegacyValues(state)) {
+      try {
+        sessionStorage.setItem(key, JSON.stringify(state));
+      } catch (e) {
+        // sessionStorage voll/nicht verfügbar — der Server versteht den
+        // Altwert ohnehin weiterhin.
+      }
     }
 
     var elements = getFilterElements();

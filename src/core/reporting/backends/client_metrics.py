@@ -192,6 +192,7 @@ class ClientMetricsBackend(DatasetBackend):
     """Aktive Personen, Neuaufnahmen und Altersverteilung im Zeitraum."""
 
     name = _("Beispiel: Klienten-Kennzahlen")
+    description = _("Zählt die Personen mit mindestens einem Ereignis im Zeitraum, aufgeschlüsselt nach Altersgruppe.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770): Grundgesamtheit sind **Personen** mit mindestens einem
     # Ereignis im Zeitraum, nicht Ereignisse. Ohne den Ausweis liest sich die

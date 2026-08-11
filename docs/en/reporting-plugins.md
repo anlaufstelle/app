@@ -5,7 +5,7 @@
 
 A **report backend** encapsulates the domain logic of one reporting standard — "contacts by category", "events per documentation type", a regional funding-body form — behind a fixed interface. The panel preview, the CSV/JSON/XML export and the snapshot storage talk to that interface only and know nothing about the individual report.
 
-The practical consequence: **a new report is a single file.** A module under [`src/core/reporting/backends/`](../../src/core/reporting/backends/) containing a `DatasetBackend` subclass and the `@register_backend` decorator automatically appears in the reports dropdown of the statistics page and in all three export formats. No migration, no URL pattern, no view, no entry in the authorization matrix.
+The practical consequence: **a new report is a single file.** A module under [`src/core/reporting/backends/`](../../src/core/reporting/backends/) containing a `DatasetBackend` subclass and the `@register_backend` decorator automatically appears as a card on the "Dataset reports" tab of the statistics page and in all three export formats. No migration, no URL pattern, no view, no entry in the authorization matrix.
 
 - **Why the system looks the way it does:** [ADR-038](../adr/038-reporting-plugin-backends.md).
 - **Why small cell counts are suppressed:** [ADR-023](../adr/023-k-anonymization-statistik.md) and #1278.
@@ -59,7 +59,8 @@ The practical consequence: **a new report is a single file.** A module under [`s
 ```python
 class DatasetBackend(ABC):
     slug: str = ""                  # set and validated by @register_backend
-    name: str = ""                  # display name in the dropdown (gettext_lazy-capable)
+    name: str = ""                  # display name on the report card (gettext_lazy-capable)
+    description: str = ""           # one sentence "what this report counts" (gettext_lazy-capable)
     snapshot_enabled: bool = False  # True → summary is stored in StatisticsSnapshot.backend_data
 
     def is_available(self, facility) -> bool: ...
@@ -74,9 +75,10 @@ class DatasetBackend(ABC):
 | Element | Required | Meaning |
 |---|---|---|
 | `slug` || Set by the decorator. Do **not** assign it yourself. Format `^[a-z0-9]+(?:[-_][a-z0-9]+)*$` (lowercase letters/digits, single `-`/`_` as separators, never at the edges). It appears in query parameters, file names and `backend_data` keys, which makes it effectively immutable — changing it afterwards requires a data migration (pattern: [`0123`](../../src/core/migrations/0123_rename_backend_data_key_sample_report_1.py)). |
-| `name` | **yes** | Visible name in the reports dropdown and in the JSON payload. Declare it as `gettext_lazy`; the export pipeline casts to `str` at the payload boundary itself. |
+| `name` | **yes** | Visible name on the report card and in the JSON payload. Declare it as `gettext_lazy`; the export pipeline casts to `str` at the payload boundary itself. |
 | `snapshot_enabled` | no | Defaults to `False`. Set it to `True` only if `summary` is **purely aggregated** — see [§ 5](#5-snapshot-integration). |
-| `is_available(facility)` | no | Defaults to `True`. Hook for facility-dependent reports. `False` — like any other falsy return value, for instance the `None` of a nullable `BooleanField` — hides the backend from the dropdown **and** makes panel and export respond with HTTP 404. The dropdown filter and the access guard check the same truthiness. |
+| `is_available(facility)` | no | Defaults to `True`. Hook for facility-dependent reports. `False` — like any other falsy return value, for instance the `None` of a nullable `BooleanField` — hides the backend from the report list **and** makes panel and export respond with HTTP 404. The list filter and the access guard check the same truthiness. |
+| `description` | no | One sentence "what this report counts", shown directly below the name on the card (Refs #1804). Declare it as `gettext_lazy`. Empty = the card omits the line — leaving only the name, which turns the choice back into guesswork. |
 | `get_field_specs()` | **yes** | Column definition of the tabular projection. The order is the column order in the CSV. |
 | `build_dataset(facility, date_from, date_to)` | **yes** | Builds the dataset for the **inclusive** period `[date_from, date_to]`. The result is **raw** (unsuppressed). |
 | `validate_completeness(facility, date_from, date_to)` | no | Defaults to `[]`. Data-quality checks — see [§ 8](#8-completeness--what-the-report-does-not-show). |
@@ -344,7 +346,7 @@ Every module under [`src/core/reporting/backends/`](../../src/core/reporting/bac
 
 For every backend with `snapshot_enabled = True`, `create_or_update_snapshot(facility, year, month)` writes the **raw** `build_dataset(...).summary` into the map `StatisticsSnapshot.backend_data` (key = slug). `prepare_export` deliberately does **not** run there — the snapshot is the internal raw record.
 
-The loop iterates over `get_backends()`, **not** over `get_available_backends(facility)`: a snapshot-capable backend is therefore persisted even when its `is_available(facility)` returns `False`. `is_available` controls only the visibility in the dropdown and the 404 response of panel and export — it is not a switch for data storage. Do not rely on it if you really want to disable a backend for individual facilities.
+The loop iterates over `get_backends()`, **not** over `get_available_backends(facility)`: a snapshot-capable backend is therefore persisted even when its `is_available(facility)` returns `False`. `is_available` controls only the visibility in the report list and the 404 response of panel and export — it is not a switch for data storage. Do not rely on it if you really want to disable a backend for individual facilities.
 
 > **`snapshot_enabled` is a data-protection contract, not a feature switch.**
 >
@@ -621,4 +623,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-09 -->
-<!-- source-hash: b178af7f203ff108b1b3d11603718693c4474d66 -->
+<!-- source-hash: 67fc168fafe89f58d90a492cc70e108c79a61907 -->

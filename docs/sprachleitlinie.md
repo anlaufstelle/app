@@ -100,6 +100,32 @@ Die folgenden Stellen wurden für den Refactor-Sweep per `grep` identifiziert:
 - [`src/core/management/commands/seed.py`](../src/core/management/commands/seed.py) — _obdachlos_ nur dort verwenden, wo wirklich Straßenobdachlosigkeit gemeint ist; sonst _wohnungslos_ / _von Wohnungslosigkeit betroffen_.
 - [`src/locale/de/LC_MESSAGES/django.po`](../src/locale/de/LC_MESSAGES/django.po) — bestehende Inkonsistenz (`msgid "Klientel"` → `msgstr "Klienten"`) entschärfen. Nach UI-Umbenennung werden die msgids ohnehin neu erzeugt; auf Kohärenz von _msgid_ und _msgstr_ auf _Person_ / _Personen_ achten.
 
+## Zeitwörter: kalendarisch vs. rollierend
+
+> **Quelle:** [Issue #1804](https://github.com/anlaufstelle/app/issues/1804) §3.6 (Maintainer-geprüft 2026-08-11). **Geltung:** app-weit — UI-Etiketten, Query-Werte, Handbuch, Übersetzung.
+
+Der Anlass war ein arithmetischer, kein kosmetischer Widerspruch: Der Fälligkeitsfilter „Diese Woche" zeigte ein rollierendes Acht-Tage-Fenster, während im selben Screen die Fälligkeits-Badges darunter ISO-kalendarisch rechneten — eine Aufgabe mit dem Badge „Nächste Woche (Mo)" lag im Filter „Diese Woche". In der Statistik hieß ein 31-Tage-Fenster „Monat".
+
+**Z1 — Kalenderwörter sind reserviert.** „Woche", „Monat", „Quartal", „Halbjahr", „Jahr", „Diese/Nächste Woche", „Dieser/Nächster Monat" bezeichnen **ausschließlich** Kalendereinheiten. Woche = ISO-Woche (Mo–So), passend zu [`src/core/utils/dates.py`](../src/core/utils/dates.py).
+
+**Z2 — Rollierende Fenster heißen nach ihrer Länge.** Muster: _Letzte N Tage_ (rückwärts), _Nächste N Tage_ (vorwärts). „Heute" ist der zulässige Sonderfall N = 1. Nie ein Kalenderwort für ein rollierendes Fenster.
+
+**Z3 — Endpunkte werden benannt, nicht geraten.** Wo eine Zahl von einem Fenster abhängt, steht das aufgelöste Intervall sichtbar daneben.
+
+**Z4 — Beide Enden inklusiv, Länge = Name.** _Letzte 30 Tage_ = `heute−29 … heute` (30 Tage), _Nächste 7 Tage_ = `heute … heute+6`. Ein Fenster, dessen Name eine andere Länge behauptet als seine Grenzen, ist ein Fehler.
+
+**Z5 — Die Konvention gilt auch für EN.** _Last 30 days_, _Next 7 days_, _Calendar year_ — keine Umdeutung in der Übersetzung.
+
+| Statt | Richtig | Wo |
+|---|---|---|
+| „Monat" / „Quartal" / „Halbjahr" (rollierend) | „Letzte 30 / 90 / 180 Tage" | Statistik-Zeitraumleiste (`?zeitraum=letzte30\|letzte90\|letzte180`) |
+| „Jahr" | „Kalenderjahr" | Statistik (`?zeitraum=jahr`, mit Stepper) |
+|| „Eigener Zeitraum" | Statistik (`?zeitraum=frei`) |
+| „Diese Woche" (rollierend) | „Nächste 7 Tage" | Fälligkeitsfilter der Aufgaben (`?due=next7`) |
+|| „Diese Woche (Do)" bleibt | Fälligkeits-Badges — sie sind ISO-kalendarisch und damit **korrekt** |
+
+Umbenannte Query-Werte bleiben dauerhaft als stille Aliasse akzeptiert (Bookmarks, `sessionStorage` der Filter-Persistenz); angeboten wird nur die kanonische Schreibweise.
+
 ## Diskutable Begriffe
 
 - **niedrigschwellig** — behalten (Caritas, BAG W verwenden den Begriff weiterhin). In der UI nicht alleine stehen lassen, lieber konkretisieren: _ohne Termin_, _anonym möglich_, _einfacher Zugang_, _aufsuchend_.

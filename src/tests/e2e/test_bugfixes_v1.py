@@ -105,27 +105,27 @@ class TestStatisticsButtons:
     """#154: Zeitraum-Buttons aktualisieren sich visuell nach HTMX-Klick."""
 
     def test_quarter_button_becomes_active(self, authenticated_page, base_url):
-        """Klick auf 'Quartal' markiert den Button als aktiv."""
+        """Klick auf 'Letzte 90 Tage' markiert den Button als aktiv."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/", wait_until="domcontentloaded")
 
-        # Monat-Button sollte initial aktiv sein (bg-accent)
-        month_button = page.locator("button:has-text('Monat')")
+        # „Letzte 30 Tage“-Button sollte initial aktiv sein (bg-accent)
+        month_button = page.locator("button:has-text('Letzte 30 Tage')")
         assert "bg-accent" in month_button.get_attribute("class")
 
-        # Quartal-Button sollte initial inaktiv sein
-        quarter_button = page.locator("button:has-text('Quartal')")
+        # „Letzte 90 Tage“-Button sollte initial inaktiv sein
+        quarter_button = page.locator("button:has-text('Letzte 90 Tage')")
         assert "bg-accent" not in quarter_button.get_attribute("class")
 
         # Klick auf Quartal und warten bis HTMX den Inhalt ersetzt hat
         quarter_button.click()
 
-        # Warten bis der Quartal-Button die aktive Klasse hat (nach HTMX-Swap)
+        # Warten bis der „Letzte 90 Tage“-Button die aktive Klasse hat (nach HTMX-Swap)
         page.wait_for_function(
             """() => {
                 const buttons = document.querySelectorAll('button');
                 for (const btn of buttons) {
-                    if (btn.textContent.trim().includes('Quartal') &&
+                    if (btn.textContent.trim().includes('Letzte 90 Tage') &&
                         btn.classList.contains('bg-accent')) {
                         return true;
                     }
@@ -135,29 +135,33 @@ class TestStatisticsButtons:
             timeout=10000,
         )
 
-        # Quartal-Button sollte jetzt aktiv sein
-        quarter_button = page.locator("button:has-text('Quartal')")
-        assert "bg-accent" in quarter_button.get_attribute("class"), "Quartal-Button ist nicht aktiv nach Klick"
+        # „Letzte 90 Tage“-Button sollte jetzt aktiv sein
+        quarter_button = page.locator("button:has-text('Letzte 90 Tage')")
+        assert "bg-accent" in quarter_button.get_attribute("class"), (
+            "„Letzte 90 Tage“-Button ist nicht aktiv nach Klick"
+        )
 
-        # Monat-Button sollte jetzt inaktiv sein
-        month_button = page.locator("button:has-text('Monat')")
-        assert "bg-accent" not in month_button.get_attribute("class"), "Monat-Button ist noch aktiv nach Quartal-Klick"
+        # „Letzte 30 Tage“-Button sollte jetzt inaktiv sein
+        month_button = page.locator("button:has-text('Letzte 30 Tage')")
+        assert "bg-accent" not in month_button.get_attribute("class"), (
+            "„Letzte 30 Tage“-Button ist noch aktiv nach „Letzte 90 Tage“-Klick"
+        )
 
     def test_half_year_button_becomes_active(self, authenticated_page, base_url):
-        """Klick auf 'Halbjahr' markiert den Button als aktiv."""
+        """Klick auf 'Letzte 180 Tage' markiert den Button als aktiv."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/", wait_until="domcontentloaded")
 
         # Klick auf Halbjahr
-        half_button = page.locator("button:has-text('Halbjahr')")
+        half_button = page.locator("button:has-text('Letzte 180 Tage')")
         half_button.click()
 
-        # Warten bis der Halbjahr-Button die aktive Klasse hat (nach HTMX-Swap)
+        # Warten bis der „Letzte 180 Tage“-Button die aktive Klasse hat (nach HTMX-Swap)
         page.wait_for_function(
             """() => {
                 const buttons = document.querySelectorAll('button');
                 for (const btn of buttons) {
-                    if (btn.textContent.trim().includes('Halbjahr') &&
+                    if (btn.textContent.trim().includes('Letzte 180 Tage') &&
                         btn.classList.contains('bg-accent')) {
                         return true;
                     }
@@ -167,5 +171,5 @@ class TestStatisticsButtons:
             timeout=10000,
         )
 
-        half_button = page.locator("button:has-text('Halbjahr')")
-        assert "bg-accent" in half_button.get_attribute("class"), "Halbjahr-Button ist nicht aktiv nach Klick"
+        half_button = page.locator("button:has-text('Letzte 180 Tage')")
+        assert "bg-accent" in half_button.get_attribute("class"), "„Letzte 180 Tage“-Button ist nicht aktiv nach Klick"

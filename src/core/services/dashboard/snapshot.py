@@ -389,7 +389,7 @@ def get_statistics_hybrid(facility, date_from, date_to):
     return merged
 
 
-def get_statistics_trend(facility, date_from, date_to):
+def get_statistics_trend(facility, date_from, date_to, document_type=None):
     """Return per-segment statistics for trend visualisation.
 
     Unlike :func:`get_statistics_hybrid` which merges all segments into one
@@ -400,6 +400,12 @@ def get_statistics_trend(facility, date_from, date_to):
     - ``label`` – ``"YYYY-MM"`` month identifier
     - ``source`` – ``"snapshot"`` or ``"live"``
     - The standard statistics fields (``total_contacts``, etc.)
+
+    Refs #1804 (Entscheid F3): Ist ``document_type`` gesetzt, faellt der
+    Snapshot-Zweig komplett weg — Monats-Aggregate speichern die Kontaktstufen-
+    und Alters-Aufschluesselung, aber keine Zerlegung nach Dokumentationstyp;
+    aus ihnen laesst sich der Filter nicht rekonstruieren. Das ist der im
+    Konzept benannte Preis des Filters, nicht ein uebersehener Zweig.
     """
     segments = _split_into_segments(date_from, date_to)
     result = []
@@ -407,12 +413,12 @@ def get_statistics_trend(facility, date_from, date_to):
     for seg_from, seg_to, use_snapshot in segments:
         stats = None
         source = "live"
-        if use_snapshot:
+        if use_snapshot and document_type is None:
             stats = get_snapshot(facility, seg_from.year, seg_from.month)
             if stats is not None:
                 source = "snapshot"
         if stats is None:
-            stats = get_statistics(facility, seg_from, seg_to)
+            stats = get_statistics(facility, seg_from, seg_to, document_type)
             stats.pop("top_clients", None)
         result.append(
             {

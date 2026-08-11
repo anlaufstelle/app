@@ -25,6 +25,33 @@ from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 logger = logging.getLogger(__name__)
 
 
+# Refs #1804 (Konzept §3.6, Z1/Z2/Z4): „Diese Woche" war ein Kalenderwort ueber
+# einem rollierenden Fenster — und das Fenster war acht Tage lang
+# (``heute … heute+7``). Im selben Screen trug das Faelligkeits-Badge einer
+# Aufgabe „Naechste Woche (Mo)" (ISO-kalendarisch, ``utils/dates.py``), waehrend
+# der Filter sie unter „Diese Woche" zeigte. Der Widerspruch war nicht
+# kosmetisch, sondern arithmetisch.
+#
+# Kanonisch heisst der Filter jetzt ``next7`` („Naechste 7 Tage",
+# ``heute … heute+6``). ``week`` bleibt DAUERHAFT ein stiller Alias (Entscheid
+# F5): ``filter-persistence.js`` legt Select-Werte im ``sessionStorage`` ab, und
+# ein reiner Rename liesse gespeicherte ``week``-Werte in ein Select ohne
+# passende Option zurueckfliessen — die Auswahl fiele stumm auf „Alle" zurueck.
+DUE_NEXT7 = "next7"
+DUE_FILTER_ALIASES = {"week": DUE_NEXT7}
+NEXT7_WINDOW_DAYS = 7
+
+
+def normalize_due_filter(value: str) -> str:
+    """Kanonischer Faelligkeits-Schluessel; Unbekanntes bleibt unveraendert.
+
+    Bewusst kein Fallback auf ``""``: die Gueltigkeitspruefung gegen
+    ``DUE_FILTER_CHOICES`` liegt in ``apply_workitem_filters`` und soll dort
+    bleiben (ein ungueltiger Wert wird ignoriert, nicht uebersetzt).
+    """
+    return DUE_FILTER_ALIASES.get(value, value)
+
+
 def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due="", user=None):
     """Wendet die Inbox-Filter (Typ/Priorität/Zuweisung/Fälligkeit) auf ``qs`` an.
 
@@ -52,6 +79,7 @@ def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due
 
     if due:
         today = timezone.localdate()
+        due = normalize_due_filter(due)
         valid_due_values = {c[0] for c in WorkItemInboxView.DUE_FILTER_CHOICES}
         if due in valid_due_values:
             if due == "overdue":
@@ -61,8 +89,13 @@ def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due
                 )
             elif due == "today":
                 qs = qs.filter(due_date=today)
-            elif due == "week":
-                qs = qs.filter(due_date__gte=today, due_date__lte=today + timedelta(days=7))
+            elif due == DUE_NEXT7:
+                # Z4: beide Enden inklusiv — sieben Tage ab heute enden am
+                # sechsten Folgetag, nicht am siebten.
+                qs = qs.filter(
+                    due_date__gte=today,
+                    due_date__lte=today + timedelta(days=NEXT7_WINDOW_DAYS - 1),
+                )
             elif due == "none":
                 qs = qs.filter(due_date__isnull=True)
 
@@ -128,7 +161,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     DUE_FILTER_CHOICES = [
         ("overdue", _("Überfällig")),
         ("today", _("Heute")),
-        ("week", _("Diese Woche")),
+        (DUE_NEXT7, _("Nächste 7 Tage")),
         ("none", _("Ohne Frist")),
     ]
 
@@ -177,7 +210,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             item_type=request.GET.get("item_type", ""),
             priority=request.GET.get("priority", ""),
             assigned_to=assigned_to or "",
-            due=request.GET.get("due", ""),
+            due=normalize_due_filter(request.GET.get("due", "")),
             user=request.user,
         )
 
@@ -387,7 +420,10 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "selected_priority": request.GET.get("priority", ""),
             "selected_assigned_to": selected_assigned_to,
             "default_assigned_scope": self.DEFAULT_ASSIGNED_SCOPE,
-            "selected_due": request.GET.get("due", ""),
+            # Refs #1804: der kanonische Wert, nicht der eingehende Alias — sonst
+            # findet das Select fuer ein gespeichertes ``week`` keine Option und
+            # zeigt stumm „Alle", waehrend die Liste gefiltert ist.
+            "selected_due": normalize_due_filter(request.GET.get("due", "")),
             "selected_status": status_filter,
             "selected_done_period": done_period,
             "has_active_filters": has_active_filters,

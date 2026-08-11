@@ -49,13 +49,107 @@ def validate_statistics_range(date_from: date, date_to: date) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# Zeitraum-Schluessel (Refs #1804, Konzept §3.6 / Entscheide F1+F5)
+# ---------------------------------------------------------------------------
+#
+# Kanonisch sind deutsche Schluessel, und rollierende Fenster heissen nach ihrer
+# Laenge (Z2): „letzte30" statt „month". Vier Kalenderwoerter in einem
+# Pill-Streifen, von denen drei rollierende Fenster meinten, waren keine
+# Ungenauigkeit, sondern eine falsche Zusage — „Monat" hiess ``today-30 …
+# today`` und traf nie ein Kalendersegment.
+#
+# ``jahr`` ist der einzige kalendarische Schluessel (mit Stepper), ``frei`` der
+# freie Zeitraum. Kalendermonat/-quartal sind bewusst NICHT gebaut (Entscheid
+# F2) — sie liessen sich hier ohne Umbau nachruesten.
+PERIOD_LETZTE_30 = "letzte30"
+PERIOD_LETZTE_90 = "letzte90"
+PERIOD_LETZTE_180 = "letzte180"
+PERIOD_JAHR = "jahr"
+PERIOD_FREI = "frei"
+
+DEFAULT_PERIOD = PERIOD_LETZTE_30
+
+# Fensterlaenge in Tagen — der Name IST die Zusage (Z2/Z4). Beide Enden sind
+# inklusiv, deshalb beginnt das Fenster ``laenge - 1`` Tage vor heute.
+ROLLING_WINDOW_DAYS: dict[str, int] = {
+    PERIOD_LETZTE_30: 30,
+    PERIOD_LETZTE_90: 90,
+    PERIOD_LETZTE_180: 180,
+}
+
+CANONICAL_PERIODS: frozenset[str] = frozenset(
+    {PERIOD_LETZTE_30, PERIOD_LETZTE_90, PERIOD_LETZTE_180, PERIOD_JAHR, PERIOD_FREI}
+)
+
+# Die Werte des Bestands bleiben DAUERHAFT stille Aliasse (Entscheid F5): sie
+# stehen in Bookmarks, in geteilten Deep-Links und im ``sessionStorage`` der
+# Filter-Persistenz. Sie werden nirgends mehr angeboten, aber immer akzeptiert —
+# das kostet diese eine Tabelle und schuetzt jeden gespeicherten Link.
+PERIOD_ALIASES: dict[str, str] = {
+    "month": PERIOD_LETZTE_30,
+    "quarter": PERIOD_LETZTE_90,
+    "half": PERIOD_LETZTE_180,
+    "year": PERIOD_JAHR,
+    "custom": PERIOD_FREI,
+}
+
+
+def normalize_period(value: str | None) -> str:
+    """Kanonischer Zeitraum-Schluessel zu einem beliebigen Eingabewert.
+
+    Unbekanntes faellt auf die Vorgabe zurueck — dieselbe Gutmuetigkeit wie beim
+    Modus-Parameter (``?ansicht=quatsch`` → Uebersicht): ein Tippfehler in einem
+    Deep-Link soll eine bekannte Seite zeigen, keinen Zustand ohne aktiven Pill.
+    """
+    if not value:
+        return DEFAULT_PERIOD
+    if value in CANONICAL_PERIODS:
+        return value
+    return PERIOD_ALIASES.get(value, DEFAULT_PERIOD)
+
+
+def _first_present(query_params, *keys):
+    """Erster Schluessel mit nicht-leerem Wert — Zweitschluessel nur bei LEEREM Erstem.
+
+    Ein ``or``-Kurzschluss ueber ``.get()`` waere hier subtil falsch: ein
+    ausdruecklich leeres ``?zeitraum=`` wuerde den Alias gewinnen lassen, ohne
+    dass irgendwo sichtbar waere, welcher Parameter entschieden hat.
+    """
+    for key in keys:
+        value = query_params.get(key)
+        if value:
+            return value
+    return None
+
+
+# Modus-Parameter des Statistik-Bereichs (Refs #1804, F1/F5). Kanonisch
+# ``?ansicht=datensaetze``; ``?view=berichte`` bleibt dauerhaft Alias — es steht
+# seit #1813 in Bookmarks und in der Reiterzeile ausgelieferter Staende.
+VIEW_DATENSAETZE = "datensaetze"
+VIEW_ALIASES: dict[str, str] = {"berichte": VIEW_DATENSAETZE}
+
+
+def parse_statistics_view(query_params) -> str:
+    """Kanonischer Modus-Schluessel oder ``""`` fuer die Uebersicht.
+
+    Der Rueckgabewert ist bewusst der leere String statt ``None``: er ist im
+    Template direkt als Wahrheitswert und als Attributwert verwendbar.
+    """
+    raw = _first_present(query_params, "ansicht", "view") or ""
+    if raw == VIEW_DATENSAETZE:
+        return VIEW_DATENSAETZE
+    return VIEW_ALIASES.get(raw, "")
+
+
 @dataclass(frozen=True)
 class PeriodState:
     """Refs #816 (C-49): Aufgeloeste Period-Konfiguration fuer Statistik-Sichten.
 
-    ``period`` ist der eingehende Schluessel (``month`` | ``quarter`` | ``half`` |
-    ``year`` | ``custom``); ``selected_year`` ist gesetzt, wenn ``period == "year"``,
-    sonst ``None``.
+    ``period`` ist der **kanonische** Schluessel (``letzte30`` | ``letzte90`` |
+    ``letzte180`` | ``jahr`` | ``frei``) — nie der eingehende Alias, damit
+    Templates und Tests genau einen Wertebereich kennen. ``selected_year`` ist
+    gesetzt, wenn ``period == "jahr"``, sonst ``None``.
     """
 
     period: str
@@ -78,30 +172,34 @@ def parse_statistics_period(query_params, today: date) -> PeriodState:
 
     Frueher interpretierten ``StatisticsView`` und ``ChartDataView`` dieselben
     Query-Parameter separat — Drift-Risiko zwischen Dashboard und Chart-API.
+
+    Refs #1804 (F1/F5): Hier — und nur hier — wird die Alt-Schreibweise
+    (``?period=``, ``?date_from=``/``?date_to=``, ``?year=``) auf die kanonische
+    deutsche normalisiert. Ein zweiter Normalisierungsort waere die naechste
+    Drift-Quelle; deshalb liest jede Statistik-Sicht ihren Zeitraum von hier.
     """
-    period = query_params.get("period", "month")
+    period = normalize_period(_first_present(query_params, "zeitraum", "period"))
     selected_year: int | None = None
 
-    if period == "custom":
+    if period == PERIOD_FREI:
         # parse_date faellt auf den Default zurueck — das ist hier ein
         # konkretes date, also ist None nicht erreichbar.
-        custom_default_from = today - timedelta(days=30)
-        date_from = parse_date(query_params.get("date_from"), custom_default_from) or custom_default_from
-        date_to = parse_date(query_params.get("date_to"), today) or today
+        custom_default_from = today - timedelta(days=ROLLING_WINDOW_DAYS[PERIOD_LETZTE_30] - 1)
+        raw_from = _first_present(query_params, "von", "date_from")
+        raw_to = _first_present(query_params, "bis", "date_to")
+        date_from = parse_date(raw_from, custom_default_from) or custom_default_from
+        date_to = parse_date(raw_to, today) or today
         # Refs #1589: unbegrenzte custom-Spanne = Query-Amplification-DoS.
         validate_statistics_range(date_from, date_to)
-    elif period == "year":
-        selected_year = _parse_year(query_params.get("year"), today.year)
+    elif period == PERIOD_JAHR:
+        selected_year = _parse_year(_first_present(query_params, "jahr", "year"), today.year)
         date_from = date(selected_year, 1, 1)
         date_to = today if selected_year == today.year else date(selected_year, 12, 31)
-    elif period == "quarter":
-        date_from = today - timedelta(days=90)
-        date_to = today
-    elif period == "half":
-        date_from = today - timedelta(days=182)
-        date_to = today
-    else:  # month (default)
-        date_from = today - timedelta(days=30)
+    else:
+        # Z4 (Refs #1804): beide Enden inklusiv, Laenge == Name. „Letzte 30 Tage"
+        # ist ``heute-29 … heute``; der Bestand rechnete ``heute-30 … heute`` und
+        # lieferte damit 31 Tage unter einem 30er-Etikett (bzw. 183 unter „Halbjahr").
+        date_from = today - timedelta(days=ROLLING_WINDOW_DAYS[period] - 1)
         date_to = today
 
     return PeriodState(period=period, date_from=date_from, date_to=date_to, selected_year=selected_year)
@@ -121,23 +219,31 @@ _STAGE_IDENTIFIED_Q = ~Q(is_anonymous=True) & Q(client__isnull=False) & Q(client
 _STAGE_QUALIFIED_Q = ~Q(is_anonymous=True) & Q(client__isnull=False) & Q(client__contact_stage="qualified")
 
 
-def event_queryset_for_period(facility, date_from, date_to):
+def event_queryset_for_period(facility, date_from, date_to, document_type=None):
     """Sichtbare Ereignisse der Einrichtung im Zeitraum — Basis aller Aggregate.
 
     Einziger Ort, an dem der Zeitraumfilter der Statistik-/Berichtspfade
     entsteht: Ereigniszahlen und Personenzahlen muessen ueber **dieselbe**
     Grundgesamtheit laufen, sonst vergleicht die k-Schwelle Aepfel mit Birnen
     (K0-b, Refs #1770).
+
+    ``document_type`` (Refs #1804, Entscheid F3) verengt dieselbe Grundgesamtheit
+    fuer ALLE Aggregate gemeinsam. Der Parameter gehoert genau hierher: ein
+    Filter, der nur in einzelnen Aggregaten landet, erzeugt Kennzahl und Tabelle
+    ueber verschiedenen Mengen — die Divergenzklasse, die #1804 schliesst.
     """
-    return Event.objects.filter(
+    qs = Event.objects.filter(
         facility=facility,
         is_deleted=False,
         occurred_at__date__gte=date_from,
         occurred_at__date__lte=date_to,
     )
+    if document_type is not None:
+        qs = qs.filter(document_type=document_type)
+    return qs
 
 
-def count_unique_clients(facility, date_from, date_to) -> int:
+def count_unique_clients(facility, date_from, date_to, document_type=None) -> int:
     """DISTINCT-Personenzahl der Einrichtung **im Zeitraum** (K0-b/K4b, Refs #1770).
 
     Bewusst **nicht** ``core.services.compliance.count_clients_in_bucket``: jene
@@ -152,7 +258,7 @@ def count_unique_clients(facility, date_from, date_to) -> int:
     ruft sie stattdessen einmal ueber den Gesamtzeitraum auf.
     """
     return (
-        event_queryset_for_period(facility, date_from, date_to)
+        event_queryset_for_period(facility, date_from, date_to, document_type)
         .exclude(client__isnull=True)
         .values("client")
         .distinct()
@@ -160,7 +266,7 @@ def count_unique_clients(facility, date_from, date_to) -> int:
     )
 
 
-def get_statistics(facility, date_from, date_to):
+def get_statistics(facility, date_from, date_to, document_type=None):
     """Statistics data for a facility in the given period.
 
     Returns dict with: total_contacts, by_contact_stage, persons_by_contact_stage,
@@ -173,7 +279,7 @@ def get_statistics(facility, date_from, date_to):
     Suppressions-*Eingabe*, kein publizierter Wert: ``_suppress_small``
     entfernt sie, bevor eine Zeile in ein Artefakt geht.
     """
-    base_qs = event_queryset_for_period(facility, date_from, date_to)
+    base_qs = event_queryset_for_period(facility, date_from, date_to, document_type)
 
     total_contacts = base_qs.count()
 
@@ -254,7 +360,9 @@ def get_statistics(facility, date_from, date_to):
     top_clients = [{"pseudonym": row["client__pseudonym"], "count": row["count"]} for row in top_clients]
 
     # Unique clients
-    unique_clients = count_unique_clients(facility, date_from, date_to)
+    # Refs #1804 (F3): eigener Query-Zweig — ohne den Filter zaehlte er weiter
+    # ueber alle Dokumentationstypen und widerspraeche der Kontaktzahl daneben.
+    unique_clients = count_unique_clients(facility, date_from, date_to, document_type)
 
     return {
         "total_contacts": total_contacts,

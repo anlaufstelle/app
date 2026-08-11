@@ -1,7 +1,9 @@
 """Views for statistics dashboard and exports."""
 
 import logging
+from urllib.parse import urlencode
 
+from django.core.exceptions import ValidationError
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -31,6 +33,7 @@ from core.services.dashboard import (
     _merge_stats,
     build_external_report,
     build_release_overview,
+    get_statistics,
     get_statistics_hybrid,
     get_statistics_trend,
     release_detail,
@@ -42,6 +45,127 @@ from core.utils.formatting import parse_date
 from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
+
+
+def event_document_types(facility):
+    """Die im Statistik-Filter anwaehlbaren Dokumentationstypen der Einrichtung.
+
+    M2 (Refs #1058, Entscheid E21): nur ``entity_type=EVENT`` — Statistiken
+    werten Ereignisse aus, personen-/fallbezogene Typen gehoeren nicht in den
+    Filter.
+    """
+    return DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT).order_by("name")
+
+
+def resolve_document_type_filter(facility, query_params):
+    """``?doktyp=<id>`` → ``DocumentType`` dieser Einrichtung oder ``None``.
+
+    Refs #1804 (Entscheid F3). Drei Eigenschaften, die hier zusammengehoeren
+    und deshalb nicht auf Dashboard- und Chart-View verteilt werden duerfen:
+
+    * **Facility-Scope.** Der Wert kommt aus der Query; ohne die
+      ``facility``-Bedingung waere ``?doktyp=<fremde-uuid>`` ein Lesepfad in die
+      Ereigniszahlen einer anderen Einrichtung.
+    * **Fail-closed auf die ungefilterte Sicht.** Unbekannt, fremd oder gar
+      keine UUID → ``None`` → alles wie ohne Filter. Nie ein 500er, nie fremde
+      Daten.
+    * **Ein Alias.** ``?document_type=`` war der Name, den das alte (wirkungs-
+      lose) Alpine-Select an die Chart-API haengte; er bleibt lesbar, damit ein
+      offener Tab beim Deploy nicht ins Leere greift.
+    """
+    raw = (query_params.get("doktyp") or query_params.get("document_type") or "").strip()
+    if not raw:
+        return None
+    try:
+        return event_document_types(facility).filter(pk=raw).first()
+    except (ValidationError, ValueError, TypeError):
+        # Keine gueltige UUID — Django wirft beim Bauen der Query, nicht beim
+        # Auswerten. Derselbe Ausgang wie „nicht gefunden".
+        return None
+
+
+def resolve_report_backend(facility, query_params):
+    """``?bericht=<slug>`` → verfuegbares Backend dieser Einrichtung oder ``None``.
+
+    Refs #1804 (Konzept §3.3): Die Berichtsauswahl ist URL-Zustand, kein
+    ``<select>``-Client-State — sie ueberlebt Reload und laesst sich teilen.
+    ``?backend=`` bleibt als Alias lesbar: das ist der Name, den das
+    GET-Formular der Export-Schaltflaechen ohnehin traegt.
+
+    Aufgeloest wird gegen ``get_available_backends`` (nicht ``get_backend``):
+    ein fuer diese Einrichtung nicht verfuegbares Backend darf ueber einen
+    Deep-Link so wenig erreichbar sein wie ueber die Liste.
+    """
+    slug = (query_params.get("bericht") or query_params.get("backend") or "").strip()
+    if not slug:
+        return None
+    return next((backend for backend in get_available_backends(facility) if backend.slug == slug), None)
+
+
+def build_report_panel_context(facility, backend, period_state) -> dict:
+    """Kontext der Berichts-Vorschau — geteilt von Reiter und HTMX-Partial.
+
+    Refs #1804: Seit der Reiter die Auswahl serverseitig rendert, brauchen
+    ``StatisticsView`` und ``DatasetReportPanelView`` denselben Kontext. Zwei
+    Aufbauorte waeren die naechste Drift-Quelle — und diese Funktion traegt die
+    Sicherheitszusage, die dabei nicht verloren gehen darf.
+
+    Sicherheitskritisch (K-Anon, Refs #1278/T1): niemals ``build_dataset()``
+    allein rendern — ``prepare_export()`` ist die export-paritaetische Sicht.
+    """
+    result = backend.prepare_export(
+        facility, backend.build_dataset(facility, period_state.date_from, period_state.date_to)
+    )
+
+    field_specs = backend.get_field_specs()
+    preview_records = result.records if result.mode == "aggregate" else result.records[:10]
+
+    return {
+        "backend": backend,
+        "date_from": period_state.date_from,
+        "date_to": period_state.date_to,
+        "field_specs": field_specs,
+        "result": result,
+        "preview_rows": [[record.get(spec.key) for spec in field_specs] for record in preview_records],
+        "preview_total": len(result.records),
+        "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
+        # Quellenausweis (Refs #1743): die Vorschau ruft ``build_dataset``,
+        # liest also live — anders als das hybrid gespeiste Sachbericht-PDF.
+        "data_source_note": DATA_SOURCE_NOTES[LIVE],
+        "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
+        # K3-A3 (Refs #1770): Die Vorschau zeigt die tabellarische Projektion des
+        # Backends — ihre Grundgesamtheit gehoert dazu. ``backend.population``
+        # ist der vom Backend deklarierte Code (Default: alle Ereignisse).
+        "population_note": table_note(backend.population, LIVE),
+        # K4a (Refs #1770): KEIN ``release_query``. Empfaenger/Zweck zur
+        # Renderzeit in die Export-Ziele zu backen war ein Race: der Klick auf
+        # einen Link blurrte zuerst das Freitextfeld (change → Panel-Neubau),
+        # folgte dann aber synchron dem alten ``href`` — die Angabe fehlte still
+        # im append-only EXPORT-Audit. Das Panel liegt im GET-Formular der
+        # Berichte-Sektion, dessen Submit die Felder selbst serialisiert.
+    }
+
+
+def statistics_state_query(period_state, document_type) -> str:
+    """Der Zustand des Statistik-Bereichs als Query-String (ohne fuehrendes ``?``).
+
+    Ein Ort fuer beides: die HTMX-Nachladeziele der Zeitraum-Leiste und die
+    Chart-API. Der Zustand steht damit **serverseitig gerendert** in der Seite
+    (R3) — die Diagramme lesen ihn aus dem Markup statt aus
+    ``window.location.search``, das nach einem HTMX-Swap noch den vorherigen
+    Stand tragen kann (die History-Aktualisierung folgt dem Swap).
+    """
+    from core.services.dashboard import PERIOD_FREI, PERIOD_JAHR
+
+    params = {"zeitraum": period_state.period}
+    if period_state.period == PERIOD_FREI:
+        params["date_from"] = period_state.date_from.isoformat()
+        params["date_to"] = period_state.date_to.isoformat()
+    elif period_state.period == PERIOD_JAHR and period_state.selected_year:
+        params["year"] = str(period_state.selected_year)
+    if document_type is not None:
+        params["doktyp"] = str(document_type.pk)
+    return urlencode(params)
 
 
 class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
@@ -57,7 +181,7 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     # Defense-in-Depth gegen wiederholtes Haemmern.
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
     def get(self, request):
-        from core.services.dashboard import parse_statistics_period
+        from core.services.dashboard import parse_statistics_period, parse_statistics_view
 
         facility = request.current_facility
         today = timezone.localdate()
@@ -67,7 +191,18 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
-        stats = get_statistics_hybrid(facility, period_state.date_from, period_state.date_to)
+        # Refs #1804 (Entscheid F3): Bei gesetztem Doktyp-Filter faellt der
+        # Snapshot-Pfad weg — Monats-Aggregate kennen keine Zerlegung nach
+        # Dokumentationstyp. Der Preis (langsamer) ist bewusst gewaehlt; die
+        # Alternative waere ein Filter, der Diagramme trifft, KPI und Tabellen
+        # aber nicht — genau die Divergenz, die #1804 schliesst.
+        selected_doc_type = resolve_document_type_filter(facility, request.GET)
+        if selected_doc_type is not None:
+            stats = get_statistics(facility, period_state.date_from, period_state.date_to, selected_doc_type)
+            data_source = LIVE
+        else:
+            stats = get_statistics_hybrid(facility, period_state.date_from, period_state.date_to)
+            data_source = SNAPSHOT_HYBRID
 
         # Refs #1813 (Konzept #1801 §7.1): der Reiter „Datensatz-Berichte" ist ein
         # serverseitiger Modus derselben Route — Hausmuster der Bereichs-
@@ -75,16 +210,37 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
         # scheidet aus: ``core:statistics_report_panel`` ist ein HTMX-Partial ohne
         # ``base.html`` und antwortet ohne ``?backend=`` mit 400.
         #
-        # Nur ``berichte`` ist gültig, alles andere fällt auf das Dashboard
+        # Nur ``datensaetze`` ist gültig, alles andere fällt auf das Dashboard
         # zurück: ein Tippfehler in einem Deep-Link soll eine bekannte Seite
         # zeigen, keine leere. ``view_query`` hängt den Modus an die
         # HTMX-Nachladeziele der Zeitraum-Auswahl — ohne ihn spränge der erste
         # Filterklick zurück ins Dashboard.
-        view_mode = "berichte" if request.GET.get("view") == "berichte" else ""
+        view_mode = parse_statistics_view(request.GET)
+
+        # Refs #1804 (Konzept §3.3): Die Berichtsauswahl ist URL-Zustand und
+        # wird serverseitig gerendert — der frueher noetige JS-Workaround gegen
+        # den 400-Toast beim Zuruecksetzen des Selects auf den Platzhalter
+        # entfaellt damit ersatzlos. Das Panel wird nur im Berichte-Modus
+        # gebaut: ``build_dataset`` ist teuer und hat auf der Uebersicht nichts
+        # zu suchen.
+        selected_backend = resolve_report_backend(facility, request.GET) if view_mode else None
+        report_panel = (
+            build_report_panel_context(facility, selected_backend, period_state)
+            if selected_backend is not None
+            else None
+        )
 
         context = {
             "view_mode": view_mode,
-            "view_query": f"&view={view_mode}" if view_mode else "",
+            "view_query": f"&ansicht={view_mode}" if view_mode else "",
+            # Refs #1804: der Doktyp-Filter haengt wie der Modus an den
+            # HTMX-Nachladezielen der Zeitraum-Leiste — ohne ihn faellt er beim
+            # ersten Zeitraum-Klick still weg.
+            "doktyp_query": f"&doktyp={selected_doc_type.pk}" if selected_doc_type is not None else "",
+            "selected_doc_type": selected_doc_type,
+            # Serverseitig gerenderter Zustand fuer die Chart-API (R3, kein
+            # Client-State): siehe ``statistics_state_query``.
+            "chart_query": statistics_state_query(period_state, selected_doc_type),
             "stats": stats,
             "period": period_state.period,
             "date_from": period_state.date_from,
@@ -94,12 +250,14 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             "current_year": today.year,
             # M2 (Refs #1058): nur event-Typen — Statistiken werten Events aus,
             # client-/case-Typen gehoeren nicht in den Filter (Entscheid E21).
-            "document_types": DocumentType.objects.filter(
-                facility=facility, entity_type=DocumentType.EntityType.EVENT
-            ).order_by("name"),
+            "document_types": event_document_types(facility),
             # M5 P5 (Refs #1061): Berichts-Plugins (z. B. "Beispiel-Sachbericht")
-            # fuers Dropdown der Berichte-Sektion — nur fuer diese Facility verfuegbare.
+            # fuer die Berichtsliste — nur fuer diese Facility verfuegbare.
             "report_backends": get_available_backends(facility),
+            "selected_backend": selected_backend,
+            # Refs #1804: Der Zeitraum reist an den Karten-Links mit — sonst
+            # faellt er beim ersten Berichtswechsel auf die Vorgabe zurueck.
+            "zeitraum_query": f"&{statistics_state_query(period_state, None)}",
             # K3-A3 (Refs #1770): Auch das interne Dashboard benennt seine
             # Grundgesamtheiten. Es liest hybrid (Monats-Aggregate mit
             # Live-Fallback) und zeigt die Alterstabelle **ohne** die
@@ -108,11 +266,22 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             # muss dastehen, sonst liest jemand dieselbe Tabelle in zwei
             # Bedeutungen. Unterdrueckt wird hier bewusst nichts (interner
             # Rohpfad, RLS-Scope, #1311).
+            # Refs #1804: die Herkunft folgt dem tatsaechlich gelaufenen Pfad.
+            # Ein fester SNAPSHOT_HYBRID-Ausweis waere bei gesetztem Filter eine
+            # falsche Angabe — und der Quellenausweis ist der Ort, an dem der
+            # Preis des Filters sichtbar wird.
             "population_notes": {
-                "by_document_type": table_note(ALL_EVENTS, SNAPSHOT_HYBRID),
-                "by_age_cluster": table_note(EVENTS_WITH_PERSON, SNAPSHOT_HYBRID),
+                "by_document_type": table_note(ALL_EVENTS, data_source),
+                "by_age_cluster": table_note(EVENTS_WITH_PERSON, data_source),
             },
         }
+
+        # Der Panel-Kontext wird flach gemergt: ``report_panel.html`` ist auch
+        # das Ziel des HTMX-Partials und erwartet dort dieselben Namen auf der
+        # obersten Ebene — ein zweiter Namensraum hier hiesse, dasselbe Template
+        # in zwei Kontraktversionen zu pflegen.
+        if report_panel is not None:
+            context.update(report_panel)
 
         return self.render_htmx_or_full(context)
 
@@ -154,7 +323,11 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
         date_from = period_state.date_from
         date_to = period_state.date_to
 
-        segments = get_statistics_trend(facility, date_from, date_to)
+        # Refs #1804 (F3): derselbe Filter wie KPI und Tabellen, aus derselben
+        # Aufloesung — sonst zeigen Diagramm und Tabelle im selben Screen
+        # verschiedene Grundgesamtheiten.
+        selected_doc_type = resolve_document_type_filter(facility, request.GET)
+        segments = get_statistics_trend(facility, date_from, date_to, selected_doc_type)
 
         # Build per-segment arrays for the line chart
         labels = []
@@ -461,43 +634,7 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
-        # Sicherheitskritisch (K-Anon, Refs #1278/T1): niemals build_dataset()
-        # allein rendern — prepare_export() ist die export-paritaetische Sicht.
-        result = backend.prepare_export(
-            facility, backend.build_dataset(facility, period_state.date_from, period_state.date_to)
-        )
-
-        field_specs = backend.get_field_specs()
-        preview_records = result.records if result.mode == "aggregate" else result.records[:10]
-        preview_rows = [[record.get(spec.key) for spec in field_specs] for record in preview_records]
-
-        context = {
-            "backend": backend,
-            "date_from": period_state.date_from,
-            "date_to": period_state.date_to,
-            "field_specs": field_specs,
-            "result": result,
-            "preview_rows": preview_rows,
-            "preview_total": len(result.records),
-            "k_anonymity_threshold": result.summary.get("k_anonymity_threshold"),
-            # Quellenausweis (Refs #1743): die Vorschau ruft ``build_dataset``,
-            # liest also live — anders als das hybrid gespeiste Sachbericht-PDF.
-            "data_source_note": DATA_SOURCE_NOTES[LIVE],
-            "data_source_explanation": DATA_SOURCE_EXPLANATIONS[LIVE],
-            # K3-A3 (Refs #1770): Die Vorschau zeigt die tabellarische
-            # Projektion des Backends — ihre Grundgesamtheit gehoert dazu.
-            # ``backend.population`` ist der vom Backend deklarierte Code
-            # (Default: alle Ereignisse des Zeitraums).
-            "population_note": table_note(backend.population, LIVE),
-            # K4a (Refs #1770): KEIN ``release_query`` mehr. Empfaenger/Zweck zur
-            # Renderzeit in die Export-Ziele zu backen war ein Race: der Klick auf
-            # einen Link blurrte zuerst das Freitextfeld (change → Panel-Neubau),
-            # folgte dann aber synchron dem alten ``href`` — die Angabe fehlte
-            # still im append-only EXPORT-Audit. Das Panel liegt jetzt im
-            # GET-Formular der Berichte-Sektion, dessen Submit die Felder selbst
-            # serialisiert (report_panel.html, formaction je Schaltflaeche).
-        }
-        return render(request, self.template_name, context)
+        return render(request, self.template_name, build_report_panel_context(facility, backend, period_state))
 
 
 class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):

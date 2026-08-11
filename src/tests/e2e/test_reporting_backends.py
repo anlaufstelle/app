@@ -1,7 +1,7 @@
 """E2E-Tests: Berichts-Panel, Backend-Auswahl und Format-Downloads (M5 P8, Refs #1061).
 
 Deckt die Benutzersicht der Berichte-Sektion ab — seit der Statistik-Reiterzeile
-(Refs #1813) liegt sie auf dem Reiter ``/statistics/?view=berichte`` statt unten
+(Refs #1813) liegt sie auf dem Reiter ``/statistics/?ansicht=datensaetze`` statt unten
 am Dashboard. Geprueft wird das per
 Lazy-Discovery befuellte Backend-Dropdown, den HTMX-Swap des Vorschau-Panels
 (``core:statistics_report_panel``) und die drei Format-Downloads
@@ -26,43 +26,43 @@ from ._helpers import track_console_errors
 
 pytestmark = pytest.mark.e2e
 
-# HTMX-Endpunkt des Vorschau-Panels (``core:statistics_report_panel``).
-PANEL_URL_FRAGMENT = "/statistics/reports/panel/"
-
 
 def _open_statistics(page, base_url):
-    """Berichte-Reiter oeffnen und sein Backend-Dropdown liefern.
+    """Berichte-Reiter oeffnen und seine Berichtsliste liefern.
 
-    Refs #1813: ``?view=berichte`` ist der Reiter „Datensatz-Berichte" der
-    Statistik-Reiterzeile (Konzept #1801 §7.1) — dieselbe Route, anderer Modus.
+    Refs #1804: ``?ansicht=datensaetze`` ist der Reiter „Datensatz-Berichte" der
+    Statistik-Reiterzeile; die Auswahl liegt seither als Karten in der Liste
+    (frueher ein ``<select name="backend">``).
     """
-    page.goto(f"{base_url}/statistics/?view=berichte", wait_until="domcontentloaded")
+    page.goto(f"{base_url}/statistics/?ansicht=datensaetze", wait_until="domcontentloaded")
     expect(page.locator("#report-section")).to_be_visible(timeout=10000)
-    return page.locator("#report-section select[name='backend']")
+    return page.locator("[data-testid='report-card-list']")
 
 
 def _select_backend(page, slug):
-    """Backend waehlen, HTMX-Antwort abwarten, gerendertes Panel zurueckgeben.
+    """Berichtskarte anklicken, HTMX-Antwort abwarten, Panel zurueckgeben.
 
-    Der ``expect_response``-Block endet mit der Server-Antwort; auf den DOM-Swap
-    wartet erst die pollende ``expect()``-Assertion auf die Panel-Ueberschrift
+    Refs #1804: Die Auswahl ist URL-Zustand (``?bericht=<slug>``) und wird
+    serverseitig gerendert — der Klick swappt ``#statistics-content``, nicht nur
+    ``#report-panel``. Der ``expect_response``-Block endet mit der Server-
+    Antwort; auf den DOM-Swap wartet erst die pollende ``expect()``-Assertion
     (Refs #761/#849).
     """
-    select = page.locator("#report-section select[name='backend']")
-    # Swap-bewusstes Warten (Refs #1798-Lektion): nach einem HX-Swap steht das
-    # ``select`` sofort im DOM, htmx bindet seine Listener aber erst in der
-    # Settle-Phase. Ein ``select_option`` davor feuert ein change-Event ins
-    # Leere — kein Panel-Request, Timeout. Python-seitig pollen (kein
-    # ``wait_for_function``, Refs docs/e2e-runbook.md § 8).
+    karte = page.locator(f"[data-testid='report-card-{slug}']")
+    # Swap-bewusstes Warten (Refs #1798-Lektion): nach einem HX-Swap steht die
+    # Karte sofort im DOM, htmx bindet seine Listener aber erst in der
+    # Settle-Phase. Ein Klick davor waere eine normale Navigation statt eines
+    # Swaps. Python-seitig pollen (kein ``wait_for_function``, Refs
+    # docs/e2e-runbook.md § 8).
     for _ in range(100):
-        if select.evaluate("el => !!el['htmx-internal-data']"):
+        if karte.evaluate("el => !!el['htmx-internal-data']"):
             break
         page.wait_for_timeout(100)
     else:
-        raise AssertionError("Backend-Select wurde nicht von htmx verarbeitet (Settle blieb aus)")
-    with page.expect_response(lambda r: PANEL_URL_FRAGMENT in r.url) as response_info:
-        select.select_option(slug)
-    assert response_info.value.status == 200, f"Panel-Request fehlgeschlagen: {response_info.value.status}"
+        raise AssertionError("Berichtskarte wurde nicht von htmx verarbeitet (Settle blieb aus)")
+    with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url) as response_info:
+        karte.click()
+    assert response_info.value.status == 200, f"Berichts-Request fehlgeschlagen: {response_info.value.status}"
 
     panel = page.locator("#report-panel")
     expect(panel.locator("h3")).to_be_visible(timeout=10000)
@@ -74,26 +74,28 @@ class TestReportSectionVisibility:
 
     @pytest.mark.smoke
     def test_report_section_visible(self, authenticated_page, base_url):
-        """Admin sieht die Berichte-Sektion mit Ueberschrift und Dropdown."""
+        """Admin sieht die Berichte-Sektion mit Ueberschrift und Berichtsliste."""
         page = authenticated_page
-        select = _open_statistics(page, base_url)
+        liste = _open_statistics(page, base_url)
 
-        expect(page.locator("#report-section h2")).to_have_text("Berichte")
-        expect(select).to_be_visible()
+        expect(page.locator("#report-section h2")).to_have_text("Datensatz-Berichte")
+        expect(liste).to_be_visible()
 
-    def test_dropdown_offers_registered_backends(self, authenticated_page, base_url):
+    def test_liste_bietet_alle_registrierten_backends(self, authenticated_page, base_url):
         """Alle registrierten Backends stehen zur Wahl (Auto-Discovery der Registry).
 
         Ein neues Backend taucht ohne View-/Template-Aenderung auf — genau das
         ist der Copy-Vorlage-Vertrag aus M5 P6.
         """
         page = authenticated_page
-        select = _open_statistics(page, base_url)
+        liste = _open_statistics(page, base_url)
 
-        options = select.locator("option")
-        values = [options.nth(i).get_attribute("value") for i in range(options.count())]
-        # Leerwert = Platzhalter "Bericht wählen …"; Backends nach Slug sortiert.
-        # Die Menge ist bewusst eingefroren: das Dropdown ist eine
+        karten = liste.locator("[data-testid^='report-card-']")
+        slugs = [
+            (karten.nth(i).get_attribute("data-testid") or "").removeprefix("report-card-")
+            for i in range(karten.count())
+        ]
+        # Die Menge ist bewusst eingefroren: die Berichtsliste ist eine
         # nutzersichtbare Flaeche — ein neu registriertes Backend soll hier
         # sichtbar nachgezogen werden statt still aufzutauchen. Wer ein
         # Backend ergaenzt, aktualisiert diese Zeile mit.
@@ -104,8 +106,7 @@ class TestReportSectionVisibility:
         # Ereignis-Typ, ``needle-exchange-balance`` an beiden Feldvorlagen an
         # EINEM Typ, …). Faellt eines aus dieser Liste, ist entweder die
         # Verfuegbarkeitsregel oder der Seed gewandert — beides gehoert gesehen.
-        assert values == [
-            "",
+        assert slugs == [
             "ban-overview",
             "case-metrics",
             "client-metrics",
@@ -115,27 +116,51 @@ class TestReportSectionVisibility:
             "needle-exchange-balance",
             "sample-report-1",
             "service-distribution",
-        ], f"Unerwartete Backend-Auswahl: {values}"
+        ], f"Unerwartete Backend-Auswahl: {slugs}"
 
-        expect(select.locator("option[value='sample-report-1']")).to_have_text("Beispiel-Sachbericht")
-        expect(select.locator("option[value='example']")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
-        expect(select.locator("option[value='ban-overview']")).to_have_text("Beispiel: Hausverbots-Übersicht")
-        expect(select.locator("option[value='case-metrics']")).to_have_text("Beispiel: Fall-Kennzahlen")
-        expect(select.locator("option[value='client-metrics']")).to_have_text("Beispiel: Klienten-Kennzahlen")
-        expect(select.locator("option[value='counseling-hours']")).to_have_text("Beispiel: Beratungsstunden")
-        expect(select.locator("option[value='monthly-trend']")).to_have_text("Beispiel: Monatsverlauf nach Kategorie")
-        expect(select.locator("option[value='needle-exchange-balance']")).to_have_text(
-            "Beispiel: Spritzentausch-Bilanz"
+        for slug, name in [
+            ("sample-report-1", "Beispiel-Sachbericht"),
+            ("example", "Beispiel: Ereignisse je Dokumenttyp"),
+            ("ban-overview", "Beispiel: Hausverbots-Übersicht"),
+            ("case-metrics", "Beispiel: Fall-Kennzahlen"),
+            ("client-metrics", "Beispiel: Klienten-Kennzahlen"),
+            ("counseling-hours", "Beispiel: Beratungsstunden"),
+            ("monthly-trend", "Beispiel: Monatsverlauf nach Kategorie"),
+            ("needle-exchange-balance", "Beispiel: Spritzentausch-Bilanz"),
+            ("service-distribution", "Beispiel: Leistungs- und Krisenarten-Verteilung"),
+        ]:
+            expect(liste.locator(f"[data-testid='report-card-{slug}']")).to_contain_text(name)
+
+    def test_karte_nennt_beschreibung_und_grundgesamtheit(self, authenticated_page, base_url):
+        """Refs #1804 (Konzept §3.3): Der Name allein war keine Auswahlgrundlage —
+        neun gleich praefigierte Eintraege ohne Erklaersatz waren ein Ratespiel."""
+        page = authenticated_page
+        liste = _open_statistics(page, base_url)
+
+        karte = liste.locator("[data-testid='report-card-example']")
+        expect(karte).to_contain_text("Zählt die Ereignisse des Zeitraums je Dokumentationstyp.")
+        expect(karte).to_contain_text("Grundgesamtheit")
+        expect(karte).to_contain_text("Wird bei jedem Aufruf live berechnet")
+        expect(liste.locator("[data-testid='report-card-sample-report-1']")).to_contain_text(
+            "Fließt in die Monats-Aggregate ein"
         )
-        expect(select.locator("option[value='service-distribution']")).to_have_text(
-            "Beispiel: Leistungs- und Krisenarten-Verteilung"
-        )
+
+    def test_auswahl_steht_in_der_url_und_ueberlebt_den_reload(self, authenticated_page, base_url):
+        """Refs #1804: ``?bericht=<slug>`` ist teilbar und reload-fest — vorher war
+        die Auswahl reiner Select-Zustand und nach jedem Reload weg."""
+        page = authenticated_page
+        _open_statistics(page, base_url)
+        _select_backend(page, "example")
+
+        page.wait_for_url(lambda url: "bericht=example" in url, timeout=10000)
+        page.reload(wait_until="domcontentloaded")
+        expect(page.locator("#report-panel h3")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
 
     def test_lead_sees_report_section(self, lead_page, base_url):
         """Lead (emma) sieht die Sektion ebenfalls — die Seite ist LEAD_PLUS-gated."""
         page = lead_page
-        select = _open_statistics(page, base_url)
-        expect(select).to_be_visible()
+        liste = _open_statistics(page, base_url)
+        expect(liste).to_be_visible()
 
         panel = _select_backend(page, "sample-report-1")
         expect(panel.locator("h3")).to_have_text("Beispiel-Sachbericht")
@@ -270,6 +295,22 @@ class TestReportPanelPreview:
         expect(panel.locator("h3")).to_have_text("Beispiel: Ereignisse je Dokumenttyp")
         assert panel.locator("h3:has-text('Beispiel-Sachbericht')").count() == 0
 
+    def test_sachbericht_pdf_steht_beim_bericht_nicht_auf_der_uebersicht(self, authenticated_page, base_url):
+        """R2 (Refs #1804): Der Export steht bei seinen Daten. Das Sachbericht-PDF
+        ist das Artefakt eines Backends, nicht eine Ausgabe der Uebersichtszahlen —
+        auf der Uebersicht hat es nichts mehr verloren."""
+        page = authenticated_page
+        page.goto(f"{base_url}/statistics/", wait_until="domcontentloaded")
+        expect(page.locator("#dashboard-content")).to_be_visible(timeout=10000)
+        assert page.locator("button:has-text('Beispiel-Sachbericht')").count() == 0
+
+        _open_statistics(page, base_url)
+        panel = _select_backend(page, "sample-report-1")
+        with page.expect_download() as download_info:
+            panel.locator("button:has-text('PDF-Export')").click()
+        assert download_info.value.suggested_filename.endswith(".pdf")
+        assert download_info.value.suggested_filename.startswith("sample-report-1_")
+
 
 class TestReportDownloads:
     """Format-Downloads aus dem Panel (CSV/JSON/XML)."""
@@ -349,7 +390,7 @@ class TestReportPeriodPassthrough:
         # Der Klick swappt ``#statistics-content`` inklusive Berichte-Sektion;
         # der ``chart-data``-Ausschluss haelt den Chart-Request aus dem Prädikat.
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
-            page.get_by_role("button", name="Jahr", exact=True).click()
+            page.get_by_role("button", name="Kalenderjahr", exact=True).click()
 
         # Pollt bis der Swap durch ist: das versteckte Feld der Berichte-Form
         # traegt danach den 1. Januar des gewaehlten Jahres.

@@ -6,6 +6,7 @@ Felder Empfaenger/Zweck ohne JavaScript an allen drei Zielen an.
 """
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -49,21 +50,39 @@ class TestPDFExportE2E:
 
 
 class TestSampleReport1ExportE2E:
-    """Sachbericht-Export → Download."""
+    """Sachbericht-Export → Download.
 
-    def test_sample_report_1_export_button_visible(self, authenticated_page, base_url):
+    R2 (Refs #1804): Der Export steht bei seinen Daten. Das Sachbericht-PDF ist
+    das Artefakt eines Berichts-Backends, nicht eine Ausgabe der
+    Uebersichtszahlen — sein Einstieg liegt seit #1804 auf der Berichtskarte des
+    Reiters „Datensatz-Berichte", nicht mehr in der Export-Leiste der Uebersicht.
+    """
+
+    def _open_report_panel(self, page, base_url):
+        page.goto(f"{base_url}/statistics/?ansicht=datensaetze&bericht=sample-report-1")
+        panel = page.locator("#report-panel")
+        expect(panel.locator("h3")).to_have_text("Beispiel-Sachbericht", timeout=10000)
+        return panel
+
+    def test_sachbericht_pdf_nicht_mehr_auf_der_uebersicht(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        assert page.locator("button:has-text('Beispiel-Sachbericht')").is_visible()
+        expect(page.locator("#dashboard-content")).to_be_visible(timeout=10000)
+        assert page.locator("button:has-text('Beispiel-Sachbericht')").count() == 0
+
+    def test_sample_report_1_export_button_visible(self, authenticated_page, base_url):
+        panel = self._open_report_panel(authenticated_page, base_url)
+        expect(panel.locator("button:has-text('PDF-Export')")).to_be_visible()
 
     def test_sample_report_1_download(self, authenticated_page, base_url):
         page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
+        panel = self._open_report_panel(page, base_url)
 
         with page.expect_download() as download_info:
-            page.locator("button:has-text('Beispiel-Sachbericht')").click()
+            panel.locator("button:has-text('PDF-Export')").click()
         download = download_info.value
         assert download.suggested_filename.startswith("sample-report-1_")
+        assert download.suggested_filename.endswith(".pdf")
 
 
 class TestStatisticsAccessControl:
@@ -102,10 +121,12 @@ class TestFreigabeUebersichtE2E:
     """
 
     def test_freigabe_uebersicht_ist_von_der_statistik_erreichbar(self, authenticated_page, base_url):
+        """Refs #1804: Einstieg ist der Subnav-Reiter, nicht mehr der Textlink im
+        Seitenfuß der Übersicht (der ist mit dem Reiterschnitt entfallen)."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
-        page.locator("a:has-text('Freigabe-Übersicht')").click()
+        page.locator('[data-testid="subnav-tab-statistik_releases"]').click()
         page.wait_for_url("**/statistics/reports/releases/")
 
         assert page.locator("h1:has-text('Freigabe-Übersicht')").is_visible()

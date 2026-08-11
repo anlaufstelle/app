@@ -92,7 +92,14 @@ class DatasetBackend(ABC):
     """
 
     slug: str = ""  # wird von @register_backend gesetzt/validiert
-    name: str = ""  # Anzeigename im UI-Dropdown (gettext_lazy-fähig)
+    name: str = ""  # Anzeigename in der Berichtsliste (gettext_lazy-fähig)
+    # Refs #1804 (Konzept §3.3): EIN Satz „was dieser Bericht zaehlt", in der
+    # Berichtsliste direkt unter dem Namen. Neun gleich praefigierte Namen ohne
+    # Beschreibung in einem Dropdown waren keine Auswahl, sondern ein Ratespiel;
+    # ``population`` sagt, WORUEBER gezaehlt wird, dieser Satz sagt, WAS. Als
+    # ``gettext_lazy`` deklarieren (wie ``name``); leer = die Liste laesst die
+    # Zeile weg, statt eine leere Zeile zu rendern.
+    description: str = ""
     # **Vertrag von ``snapshot_enabled``** (M5 P3, Refs #1061): Das ``summary``
     # eines so markierten Backends muss **aggregatrein** sein — keine
     # Pseudonyme, keine Personenzeilen, keine Freitexte.
@@ -114,6 +121,19 @@ class DatasetBackend(ABC):
     # Leserin hat keine Chance zu erkennen, warum. Der Default ist die weiteste
     # und haeufigste Menge; ein Backend, das enger zaehlt, MUSS ihn ueberschreiben.
     population: str = ALL_EVENTS
+
+    @property
+    def population_label(self):
+        """Uebersetzter Klartext zu ``population`` — fuer die Berichtsliste.
+
+        Refs #1804 (Konzept §3.3): Die Karte nennt die Grundgesamtheit im
+        Klartext, nicht ihren stabilen Code. Der Code bleibt die Schnittstelle
+        (JSON, Snapshot), die Uebersetzungstabelle lebt unveraendert in
+        :mod:`core.reporting.data_source`.
+        """
+        from core.reporting.data_source import POPULATION_NOTES
+
+        return POPULATION_NOTES.get(self.population, self.population)
 
     def is_available(self, facility) -> bool:  # Hook für facility-abhängige Backends
         """Ob dieses Backend fuer die gegebene Einrichtung waehlbar ist (Default: immer)."""

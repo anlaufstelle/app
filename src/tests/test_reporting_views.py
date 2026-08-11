@@ -251,16 +251,16 @@ def _extract_report_section(html: str) -> str:
 # auf derselben Route — Hausmuster Zeitstrom ``?view=`` (Refs #1124). Die Tests
 # unten rufen die Seite entsprechend mit dem Modus auf; an ihren Aussagen
 # aendert das nichts.
-BERICHTE_VIEW = {"view": "berichte"}
+BERICHTE_VIEW = {"ansicht": "datensaetze"}
 
 
 class TestBerichteFormZeitraumDurchreichung:
-    """Review I2: Die Berichte-Form muss ``period=custom`` mitschicken.
+    """Review I2: Die Berichte-Form muss ``zeitraum=frei`` mitschicken.
 
     ``parse_statistics_period`` (services/dashboard/statistics.py) liest
-    ``date_from``/``date_to`` NUR aus, wenn ``period == "custom"`` — sonst
+    ``date_from``/``date_to`` NUR aus, wenn ``period == "frei"`` — sonst
     verwirft sie beide Werte und rechnet ihr eigenes Default-Fenster
-    (``today - 30 Tage`` .. ``today``). Ohne ein hidden ``period=custom``-Feld
+    (``today - 30 Tage`` .. ``today``). Ohne ein hidden ``zeitraum=frei``-Feld
     in der Berichte-Form würde ``hx-include="closest form"`` beim Absenden nur
     ``date_from``/``date_to``/``backend`` einsammeln — die aufgelösten Werte
     kämen zwar korrekt im Formular an, würden vom Panel aber stillschweigend
@@ -269,7 +269,7 @@ class TestBerichteFormZeitraumDurchreichung:
     Der Test parst das ``#report-section``-Formular dynamisch (statt die
     Felder hart zu kodieren) und speist exakt das Ergebnis in die
     Panel-Request ein — genau das, was ``hx-include`` real einsammeln würde.
-    Vor dem Fix schlägt bereits die erste Assertion fehl (kein ``period``-Feld
+    Vor dem Fix schlägt bereits die erste Assertion fehl (kein ``zeitraum``-Feld
     im Formular); nach dem Fix propagieren die im Dashboard gewählten Daten
     unverändert bis in den Panel-Header.
 
@@ -283,7 +283,7 @@ class TestBerichteFormZeitraumDurchreichung:
 
         dashboard = client.get(
             reverse("core:statistics"),
-            {**BERICHTE_VIEW, "period": "custom", "date_from": "2020-01-01", "date_to": "2020-01-31"},
+            {**BERICHTE_VIEW, "zeitraum": "frei", "date_from": "2020-01-01", "date_to": "2020-01-31"},
         )
         section_html = _extract_report_section(dashboard.content.decode())
         hidden_fields = dict(_HIDDEN_INPUT_RE.findall(section_html))
@@ -292,8 +292,8 @@ class TestBerichteFormZeitraumDurchreichung:
         assert hidden_fields.get("date_from") == "2020-01-01"
         assert hidden_fields.get("date_to") == "2020-01-31"
         # Der eigentliche Fix: ohne dieses Feld verwirft parse_statistics_period
-        # die beiden Werte oben komplett (Default period="month").
-        assert hidden_fields.get("period") == "custom"
+        # die beiden Werte oben komplett (Vorgabe zeitraum="letzte30").
+        assert hidden_fields.get("zeitraum") == "frei"
 
         # Simuliert exakt, was ``hx-include="closest form"`` beim Absenden
         # zusammensammelt (alle Formularfelder + der gewaehlte Select-Wert).
@@ -304,8 +304,9 @@ class TestBerichteFormZeitraumDurchreichung:
         # Der Panel-Header weist den aufgeloesten Zeitraum aus (lokalisiert).
         assert date_format(date(2020, 1, 1)) in panel_html
         assert date_format(date(2020, 1, 31)) in panel_html
-        # Die drei Export-Schaltflaechen erben ihn ueber dasselbe Formular.
-        assert panel_html.count("formaction=") == 3
+        # Die Export-Schaltflaechen erben ihn ueber dasselbe Formular: CSV/JSON/XML
+        # plus — seit R2 (Refs #1804) — das hierher gewanderte Sachbericht-PDF.
+        assert panel_html.count("formaction=") == 4
 
 
 class TestPanelExportOhneRoundtrip:
@@ -366,9 +367,16 @@ class TestPanelExportOhneRoundtrip:
         assert 'method="get"' in section[section.index("<form") : section.index(">", section.index("<form"))]
 
     def test_freitextfelder_loesen_keinen_panel_request_mehr_aus(self, client, lead_user):
-        """Ohne gewaehltes Backend antwortet das Panel 400 → roter Fehler-Toast."""
+        """Ohne gewaehltes Backend antwortet das Panel 400 → roter Fehler-Toast.
+
+        Refs #1804: Empfaenger/Zweck erscheinen erst MIT einer Berichtsauswahl
+        (R2 — die Felder gehoeren zu dem Export, den sie begleiten); der Aufruf
+        traegt deshalb ``?bericht=``.
+        """
         client.force_login(lead_user)
-        section = _extract_report_section(client.get(reverse("core:statistics"), BERICHTE_VIEW).content.decode())
+        section = _extract_report_section(
+            client.get(reverse("core:statistics"), {**BERICHTE_VIEW, "bericht": "sample-report-1"}).content.decode()
+        )
 
         for feld in ("recipient", "purpose"):
             start = section.index(f'name="{feld}"')
@@ -385,7 +393,7 @@ class TestPanelExportOhneRoundtrip:
         section = _extract_report_section(
             client.get(
                 reverse("core:statistics"),
-                {**BERICHTE_VIEW, "period": "custom", "date_from": "2026-01-01", "date_to": "2026-01-31"},
+                {**BERICHTE_VIEW, "zeitraum": "frei", "date_from": "2026-01-01", "date_to": "2026-01-31"},
             ).content.decode()
         )
         felder = dict(_HIDDEN_INPUT_RE.findall(section))

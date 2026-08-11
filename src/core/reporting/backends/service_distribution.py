@@ -187,6 +187,7 @@ class ServiceDistributionBackend(DatasetBackend):
     """Options-Verteilung der Auswahlfelder ``leistungen`` und ``art-der-krise``."""
 
     name = _("Beispiel: Leistungs- und Krisenarten-Verteilung")
+    description = _("Zählt, wie oft die Optionen der Leistungs- und Krisenarten-Felder im Zeitraum gewählt wurden.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770/#1754): die Randsummen zaehlen Ereignisse der
     # jeweiligen Feld-Typen MIT Auswahlwert, also eine Teilmenge einer

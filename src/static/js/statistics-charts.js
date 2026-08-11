@@ -21,38 +21,13 @@ document.addEventListener("htmx:beforeSwap", function (evt) {
   });
 });
 
-// Refs #1776: Zurückstellen des Berichts-Selects auf den Platzhalter
-// ("Bericht wählen …", Wert "") feuert weiterhin dessen hx-trigger="change"
-// (report_panel.html) -- DatasetReportPanelView antwortet fail-closed mit
-// 400 "backend erforderlich", htmx-errors.js zeigt das als roten
-// Fehler-Toast. Ein hx-trigger-Filter (z.B. "change[target.value]") würde
-// das verhindern, braucht unter htmx aber `unsafe-eval` -- unter der CSP
-// verboten. Capture-Phase-Listener (Muster confirm-action.js) läuft VOR
-// htmx's eigenem (Bubble-Phase-)Listener auf demselben <select> und stoppt
-// die Propagation, bevor htmx den Request überhaupt baut -- kein Request,
-// kein Toast. Nicht-leere Auswahl ist unberührt (Event läuft normal weiter).
-//
-// SCOPE (Refs #1772, Review #1785): Der Listener hängt an `document` und
-// prüft nur den Selektor, nicht das Zielformular -- geprüft (Repo-weiter
-// Template-Grep, Stand dieses Commits): `select[name='backend']` kommt
-// genau EINMAL im gesamten Markup vor (full_content.html, Berichte-Sektion).
-// report_panel.html liegt IM SELBEN <form> wie dieses Select, hat aber kein
-// eigenes -- es gibt also aktuell kein zweites Formular, dessen
-// change-Handler der globale stopPropagation() verschlucken könnte. Kommt
-// künftig ein zweites `select[name='backend']` hinzu (z.B. ein separates
-// Panel-Exportformular), braucht dieser Listener eine engere Eingrenzung
-// (z.B. `el.closest('#report-section')`), sonst gilt dieselbe Analyse nicht
-// mehr.
-document.addEventListener(
-  "change",
-  function (evt) {
-    var el = evt.target;
-    if (el && el.matches && el.matches("select[name='backend']") && el.value === "") {
-      evt.stopPropagation();
-    }
-  },
-  true
-);
+// Refs #1804: Der frühere Capture-Listener gegen den 400-Toast des
+// Berichts-Selects ist ersatzlos entfallen. Er fing den Fall „Select zurück auf
+// den Platzhalter" ab, weil dessen change-Trigger `DatasetReportPanelView` ohne
+// `?backend=` aufrief und die fail-closed mit 400 antwortet. Seit die
+// Berichtsauswahl serverseitiger URL-Zustand ist (`?bericht=<slug>`, Karten
+// statt <select>), gibt es weder das Select noch den Platzhalter — und damit
+// auch den Sonderfall nicht mehr.
 
 /* statisticsCharts wird per Alpine.data() registriert (CSP-friendly, Refs #672). */
 function buildStatisticsCharts() {
@@ -61,17 +36,12 @@ function buildStatisticsCharts() {
     loading: true,
     error: null,
     sources: [],
-    docTypeFilter: "",
-    // Refs #1764: ersetzt die vorherigen zwei Handler `setDocTypeFilter` +
-    // `fetchAndRender`, die im Template als zwei `@change`-Attribute auf
-    // demselben <select> gebunden waren. Der HTML-Parser verwirft ein
-    // zweites gleichnamiges Attribut auf einem Element still -- nur
-    // `setDocTypeFilter` (Wert merken, kein Refetch) lief, der Chart-Refetch
-    // griff dadurch erst beim naechsten Filterwechsel.
-    onDocTypeChange(event) {
-      this.docTypeFilter = event.target.value;
-      this.fetchAndRender();
-    },
+    // Refs #1804: KEIN docTypeFilter mehr im Client-State. Der Filter ist
+    // serverseitiger Zustand (`?doktyp=`), das <select> laedt
+    // `#statistics-content` per htmx neu, und diese Komponente wird dabei
+    // komplett ersetzt -- ihr x-init holt die Daten danach ohnehin frisch.
+    // Der frueher hier gepflegte Wert wirkte nur auf die Chart-API (die ihn
+    // gar nicht las) und ging bei jedem Reload verloren.
     // CSP-konforme Wrapper
     get hasSources() {
       return this.sources.length > 0;
@@ -81,11 +51,15 @@ function buildStatisticsCharts() {
     },
 
     async fetchAndRender() {
-      const params = new URLSearchParams(window.location.search);
-      if (this.docTypeFilter) {
-        params.set("document_type", this.docTypeFilter);
-      }
-      const url = "/statistics/chart-data/?" + params.toString();
+      // Refs #1804 (R3): Der Zustand kommt SERVERSEITIG gerendert aus
+      // `data-chart-query`, nicht aus `window.location.search`. Die
+      // Zeitraum-Pills und das Doktyp-Select tauschen `#statistics-content` per
+      // htmx und schieben die URL erst danach nach -- zum Zeitpunkt von x-init
+      // kann `window.location.search` also noch den vorherigen Stand tragen.
+      // Der Fallback greift nur, falls das Attribut fehlt (fremder Einbau).
+      const host = document.getElementById("statistics-charts");
+      const query = (host && host.dataset.chartQuery) || window.location.search.replace(/^\?/, "");
+      const url = "/statistics/chart-data/" + (query ? "?" + query : "");
 
       this.loading = true;
       this.error = null;

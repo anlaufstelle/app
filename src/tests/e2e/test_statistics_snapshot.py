@@ -66,7 +66,7 @@ class TestStatisticsSnapshotPreservation:
 
         # Statistik-Seite mit Jahres-Ansicht laden
         page.goto(
-            f"{base_url}/statistics/?period=year",
+            f"{base_url}/statistics/?zeitraum=jahr",
             wait_until="domcontentloaded",
         )
         page.wait_for_load_state("domcontentloaded")
@@ -82,7 +82,7 @@ class TestStatisticsSnapshotPreservation:
 
         # Seite neu laden
         page.goto(
-            f"{base_url}/statistics/?period=year",
+            f"{base_url}/statistics/?zeitraum=jahr",
             wait_until="domcontentloaded",
         )
         page.wait_for_load_state("domcontentloaded")

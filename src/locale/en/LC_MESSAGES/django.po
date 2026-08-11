@@ -3162,11 +3162,6 @@ msgstr ""
 msgid "Grundgesamtheit: {population} · Quelle: {source}"
 msgstr "Population: {population} · Source: {source}"
 
-#: src/core/reporting/export.py:133
-#: src/templates/core/statistics/partials/full_content.html:117
-msgid "Bericht"
-msgstr "Report"
-
 #: src/core/reporting/export.py:147
 #: src/templates/core/export/report_pdf.html:138
 #: src/templates/core/export/sample_report_1_pdf.html:111
@@ -5008,10 +5003,6 @@ msgstr "Invalid priority"
 #: src/core/views/workitem_bulk.py:257
 msgid "Unbekannte Benutzerin/Benutzer"
 msgstr "Unknown user"
-
-#: src/core/views/workitems.py:131
-msgid "Diese Woche"
-msgstr "This week"
 
 #: src/core/views/workitems.py:132
 msgid "Ohne Frist"
@@ -8948,22 +8939,6 @@ msgstr "PDF export"
 msgid "Freigabe-Übersicht"
 msgstr "Release overview"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:273
-msgid "welche Berichtszeiträume wurden bereits herausgegeben?"
-msgstr "which reporting periods have already been released?"
-
-#: src/templates/core/statistics/partials/full_content.html:16
-msgid "Quartal"
-msgstr "Quarter"
-
-#: src/templates/core/statistics/partials/full_content.html:22
-msgid "Halbjahr"
-msgstr "Half-year"
-
-#: src/templates/core/statistics/partials/full_content.html:28
-msgid "Jahr"
-msgstr "Year"
-
 #: src/templates/core/statistics/partials/full_content.html:51
 #: src/templates/core/workitems/inbox.html:172
 #: src/templates/core/workitems/inbox.html:189
@@ -8978,18 +8953,6 @@ msgstr "Previous year"
 #: src/templates/core/statistics/partials/full_content.html:73
 msgid "Nächstes Jahr"
 msgstr "Next year"
-
-#: src/templates/core/statistics/partials/full_content.html:101
-msgid "Berichte"
-msgstr "Reports"
-
-#: src/templates/core/statistics/partials/full_content.html:124
-msgid "Bericht wählen …"
-msgstr "Select report …"
-
-#: src/templates/core/statistics/partials/full_content.html:165
-msgid "Für diese Einrichtung ist kein Bericht verfügbar."
-msgstr "No report is available for this facility."
 
 #: src/templates/core/statistics/partials/report_panel.html:22
 #: src/templates/core/system/dashboard.html:129
@@ -9112,10 +9075,6 @@ msgstr ""
 "Only the %(limit)s most recent releases are evaluated. Older ones remain in "
 "the audit log but do not appear in this overview and no longer trigger an "
 "overlap warning."
-
-#: src/templates/core/statistics/report_releases.html:87
-msgid "Zurück zur Statistik"
-msgstr "Back to statistics"
 
 #: src/templates/core/system/_banner.html:12
 msgid ""
@@ -10189,3 +10148,99 @@ msgstr "Dummy lazy report"
 #: src/tests/test_reporting_export.py:683
 msgid "Lücke im Zeitraum"
 msgstr "Gap in the period"
+
+#: src/templates/core/statistics/external_report.html:22
+msgid "Dieselben Zahlen wie die Übersicht, aber für außen: Kleinstfallzahlen unterdrückt, keine Pseudonyme."
+msgstr "The same figures as the overview, but for external use: small case numbers suppressed, no pseudonyms."
+
+#: src/templates/core/statistics/partials/full_content.html:15
+msgid "Letzte 90 Tage"
+msgstr "Last 90 days"
+
+#: src/templates/core/statistics/partials/full_content.html:15
+msgid "Letzte 180 Tage"
+msgstr "Last 180 days"
+
+#: src/templates/core/statistics/partials/full_content.html:15
+msgid "Kalenderjahr"
+msgstr "Calendar year"
+
+#: src/templates/core/statistics/partials/full_content.html:15
+msgid "Eigener Zeitraum"
+msgstr "Custom period"
+
+#: src/core/views/workitems.py:131
+msgid "Nächste 7 Tage"
+msgstr "Next 7 days"
+
+#: src/core/reporting/backends/ban_overview.py:188
+msgid "Zählt die im Zeitraum ausgesprochenen und abgelaufenen Hausverbote sowie den Bestand am Stichtag."
+msgstr "Counts the bans issued and expired within the period, plus the stock as of the reference date."
+
+#: src/core/reporting/backends/case_metrics.py:152
+msgid "Zählt die im Zeitraum angelegten und abgeschlossenen Fälle sowie den Fallbestand am Stichtag."
+msgstr "Counts the cases opened and closed within the period, plus the case stock as of the reference date."
+
+#: src/core/reporting/backends/client_metrics.py:195
+msgid "Zählt die Personen mit mindestens einem Ereignis im Zeitraum, aufgeschlüsselt nach Altersgruppe."
+msgstr "Counts the persons with at least one event in the period, broken down by age group."
+
+#: src/core/reporting/backends/counseling_hours.py:196
+msgid "Summiert Ereignisse und dokumentierte Minuten je Beratungskategorie im Zeitraum."
+msgstr "Sums events and documented minutes per counseling category within the period."
+
+#: src/core/reporting/backends/example.py:43
+msgid "Zählt die Ereignisse des Zeitraums je Dokumentationstyp."
+msgstr "Counts the events of the period per document type."
+
+#: src/core/reporting/backends/monthly_trend.py:164
+msgid "Zählt die Ereignisse mit Berichtszuordnung Monat für Monat, aufgeschlüsselt nach Kategorie."
+msgstr "Counts the events with a report mapping month by month, broken down by category."
+
+#: src/core/reporting/backends/needle_exchange_balance.py:151
+msgid "Summiert Ausgabe und Rückgabe des Spritzentauschs im Zeitraum und bildet den Saldo."
+msgstr "Sums needle exchange output and returns within the period and derives the balance."
+
+#: src/core/reporting/backends/sample_report_1.py:220
+msgid "Fasst die Ereignisse mit Berichtszuordnung zu den Kategorien eines Sachberichts zusammen."
+msgstr "Aggregates the events with a report mapping into the categories of an activity report."
+
+#: src/core/reporting/backends/service_distribution.py:190
+msgid "Zählt, wie oft die Optionen der Leistungs- und Krisenarten-Felder im Zeitraum gewählt wurden."
+msgstr "Counts how often the options of the service and crisis type fields were selected within the period."
+
+#: src/templates/core/statistics/partials/full_content.html:120
+msgid "Fertige Auswertungen für die Weitergabe nach außen. Kleinstfallzahlen sind unterdrückt — die Zahlen können deshalb von der Übersicht abweichen."
+msgstr "Ready-made analyses for external release. Small case numbers are suppressed, so the figures may differ from the overview."
+
+#: src/templates/core/statistics/partials/full_content.html:120
+msgid "Fließt in die Monats-Aggregate ein"
+msgstr "Feeds into the monthly aggregates"
+
+#: src/templates/core/statistics/partials/full_content.html:120
+msgid "Wird bei jedem Aufruf live berechnet"
+msgstr "Calculated live on every request"
+
+#: src/templates/core/statistics/partials/full_content.html:120
+msgid "Wählen Sie oben einen Bericht, um Vorschau und Export zu sehen."
+msgstr "Select a report above to see the preview and export options."
+
+#: src/templates/core/statistics/partials/full_content.html:120
+msgid "Für diese Einrichtung ist derzeit kein Bericht hinterlegt."
+msgstr "No report is currently configured for this facility."
+
+#: src/core/reporting/export.py:133
+msgid "Bericht"
+msgstr "Report"
+
+#: src/templates/core/zeitstrom/index.html:40
+msgid "Ereignisse heute"
+msgstr "Events today"
+
+#: src/templates/core/zeitstrom/index.html:40
+msgid "Mir zugewiesen, offen"
+msgstr "Assigned to me, open"
+
+#: src/templates/core/zeitstrom/index.html:40
+msgid "Mir zugewiesen, Frist verstrichen"
+msgstr "Assigned to me, past due"

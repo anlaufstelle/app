@@ -496,17 +496,20 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
 
 1. Navigate to **Statistics** (`/statistics/`).
 2. Select a time period:
- - **Last month** (default)
- - **Last quarter** (90 days)
- - **Last half-year** (182 days)
- - **Custom:** Enter start and end dates manually.
+ - **Last 30 days** (default)
+ - **Last 90 days**
+ - **Last 180 days**
+ - **Calendar year** (with year navigation, see below)
+ - **Custom period:** Enter start and end dates manually.
+
+ > The three "Last N days" windows are **rolling** and end today; both ends count, so "Last 30 days" spans exactly 30 days. Calendar words are reserved for calendar units -- which is why the calendar period is called "Calendar year" and the rolling windows are named after their length.
 3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and client groups.
 
 ### Year Navigation
 
 To view data for a specific year:
 
-1. Click **Year**.
+1. Click **Calendar year**.
 2. Use the arrow buttons to the left and right of the year number to navigate to the previous or next year.
 3. For the current year, the period from January 1st to today is shown. For past years, the full year (January 1st -- December 31st) is displayed.
 
@@ -554,7 +557,7 @@ The example activity report generates a structured report based on a fixed examp
 2. Click **Example Activity Report**.
 3. The PDF file is downloaded (filename: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
-> **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
+> **Tip:** For semi-annual reports, select "Custom period" and set the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31). "Last 180 days" is a rolling window and never lines up exactly with a calendar half-year.
 
 **Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The activity report PDFs -- both the example activity report and the semi-annual report export -- read from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". The reports in the reports section (CSV/JSON/XML, see below) are calculated live and can therefore show different figures for the same period.
 
@@ -885,5 +888,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-04 -->
-<!-- source-hash: 2c60c85872fae8709c0a65279a450079e8416456 -->
+<!-- source-hash: d05c78db86a8d3f2133bc26d002b46d182cebb8f -->
 

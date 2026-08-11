@@ -76,25 +76,55 @@ class TestWorkItemDueDateFilter:
         assert wi_today in all_items
         assert len(all_items) == 1
 
-    def test_filter_week(self, client, staff_user, facility):
-        """due=week shows items due between today and today+7."""
+    def _seed_week_window(self, facility, staff_user):
         today = timezone.localdate()
         self._create_workitem(facility, staff_user, "Yesterday", due_date=today - timedelta(days=1))
         self._create_workitem(facility, staff_user, "Today", due_date=today)
         self._create_workitem(facility, staff_user, "In 3 days", due_date=today + timedelta(days=3))
+        self._create_workitem(facility, staff_user, "In 6 days", due_date=today + timedelta(days=6))
         self._create_workitem(facility, staff_user, "In 7 days", due_date=today + timedelta(days=7))
-        self._create_workitem(facility, staff_user, "In 8 days", due_date=today + timedelta(days=8))
+
+    def _titles(self, response):
+        items = list(response.context["open_items"]) + list(response.context["in_progress_items"])
+        return {wi.title for wi in items}
+
+    def test_filter_next7(self, client, staff_user, facility):
+        """Z2/Z4 (Refs #1804): ``due=next7`` heisst „Naechste 7 Tage" und umfasst
+        genau sieben — ``heute … heute+6``. Der Vorgaenger ``due=week`` trug ein
+        Kalenderwort ueber einem rollierenden 8-Tage-Fenster; im selben Screen
+        stand darunter ein ISO-kalendarisches Badge „Naechste Woche (Mo)" fuer
+        eine Aufgabe, die der Filter zeigte."""
+        self._seed_week_window(facility, staff_user)
 
         client.force_login(staff_user)
-        response = client.get(reverse("core:workitem_inbox"), {"due": "week"})
-        assert response.status_code == 200
-        all_items = list(response.context["open_items"]) + list(response.context["in_progress_items"])
-        item_titles = {wi.title for wi in all_items}
-        assert "Today" in item_titles
-        assert "In 3 days" in item_titles
-        assert "In 7 days" in item_titles
-        assert "Yesterday" not in item_titles
-        assert "In 8 days" not in item_titles
+        titles = self._titles(client.get(reverse("core:workitem_inbox"), {"due": "next7"}))
+        assert "Today" in titles
+        assert "In 3 days" in titles
+        assert "In 6 days" in titles
+        assert "Yesterday" not in titles
+        assert "In 7 days" not in titles, "Der siebte Folgetag ist der achte Tag — ausserhalb des Fensters."
+
+    def test_alter_week_wert_bleibt_stiller_alias(self, client, staff_user, facility):
+        """F5 (Refs #1804): ``filter-persistence.js`` haelt Select-Werte im
+        sessionStorage. Ein reiner Rename liesse gespeicherte ``week``-Werte in
+        ein Select ohne passende Option zurueckfliessen — der Alias bleibt
+        dauerhaft, wird aber nirgends mehr angeboten."""
+        self._seed_week_window(facility, staff_user)
+
+        client.force_login(staff_user)
+        alias = client.get(reverse("core:workitem_inbox"), {"due": "week"})
+        kanonisch = client.get(reverse("core:workitem_inbox"), {"due": "next7"})
+        assert self._titles(alias) == self._titles(kanonisch)
+        assert alias.context["selected_due"] == "next7", (
+            "Das Select muss den kanonischen Wert zeigen, sonst faellt die Auswahl auf 'Alle' zurueck."
+        )
+
+    def test_week_wird_nicht_mehr_angeboten(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_inbox"))
+        choice_keys = [c[0] for c in response.context["due_filter_choices"]]
+        assert "week" not in choice_keys
+        assert "next7" in choice_keys
 
     def test_filter_none(self, client, staff_user, facility):
         """due=none shows only items without a due date."""
@@ -151,7 +181,7 @@ class TestWorkItemDueDateFilter:
         choice_keys = [c[0] for c in choices]
         assert "overdue" in choice_keys
         assert "today" in choice_keys
-        assert "week" in choice_keys
+        assert "next7" in choice_keys
         assert "none" in choice_keys
 
     def test_due_combined_with_priority_filter(self, client, staff_user, facility):

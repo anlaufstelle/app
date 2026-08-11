@@ -72,9 +72,10 @@
 | TOTP / 2FA | TOTP / 2FA | Time-based one-time passwords via `django-otp`. Enforceable per user (`User.mfa_required`) or facility-wide (`Settings.mfa_enforced_facility_wide`). Codes valid for 30 s. |
 | User | User | A staff member — a person who works with the system. Has credentials and a role assignment within a facility. |
 | WorkItem | Work item | An operational entry (note or task) with its own lifecycle and optional priority. Separate from case documentation. |
+| Zeitfenster (kalendarisch vs. rollierend) | Time window (calendar vs. rolling) | Two kinds of period statement that must never share a word (Refs #1804). *Calendar* = a unit tied to the calendar (ISO week Mon–Sun, calendar month, calendar year); calendar words are reserved for these. *Rolling* = a window of fixed length that moves with today; it is named after its length (*Last 30 days*, *Next 7 days*). Both ends are inclusive and the length matches the name: *Last 30 days* = `today−29 … today`. |
 | Zeitstrom | Timeline stream | The chronological flow of all events, unfiltered or filtered by time period, person, or document type. The core metaphor of documentation in Anlaufstelle. |
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-07-14 -->
-<!-- source-hash: 8d5c8b31a456dc49b327b35a25a434814f376055 -->
+<!-- source-hash: ce5377859ffc91bb81ea95a6d2f6952d568ae47c -->

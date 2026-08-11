@@ -217,6 +217,7 @@ class SampleReport1Backend(DatasetBackend):
     # und Anzeigename sind bewusst traegerneutral — der Bericht ist eine frei
     # anpassbare Beispielvorlage, kein Formular einer bestimmten Behoerde.
     name = _("Beispiel-Sachbericht")
+    description = _("Fasst die Ereignisse mit Berichtszuordnung zu den Kategorien eines Sachberichts zusammen.")
     snapshot_enabled = True
     # K3-A3 (Refs #1770): Die ``records``-Projektion sind die Berichtskategorien
     # — sie zaehlen nur Ereignisse mit Berichtszuordnung (``CATEGORY_MAP``),

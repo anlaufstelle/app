@@ -8,7 +8,7 @@
 {# KPI-Karten (Design: 4 Mono-Number-Cards) #}
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-7">
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
-        <div class="text-[32px] font-bold text-ink font-mono leading-none">{{ stats.total_contacts }}</div>
+        <div class="text-[32px] font-bold text-ink font-mono leading-none" data-testid="kpi-total-contacts">{{ stats.total_contacts }}</div>
         <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Gesamtkontakte" %}</div>
         <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Dokumentierte Einträge" %}</div>
     </div>
@@ -56,19 +56,46 @@ betrifft, ersetzt #statistics-content und damit diesen x-data-Container komplett
 Der frueher hier gebundene Listener (Refs #672) war ein toter Doppel-Guertel und
 warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
 {% endcomment %}
-<div x-data="statisticsCharts" x-init="fetchAndRender"
+{% comment %}
+Refs #1804 (R3/R6): Der Doktyp-Filter ist serverseitiger Zustand, kein
+Client-State. Er stand vorher nur in einer Alpine-Variablen, wirkte
+ausschließlich auf die Chart-API (wo der Parameter gar nicht gelesen wurde)
+und ging bei jedem Reload verloren, während der Zeitraum daneben in der URL
+stand. Jetzt lädt er — wie die Zeitraum-Pills — `#statistics-content` neu und
+trifft KPI, Tabellen und Diagramme gemeinsam.
+
+`data-chart-query` trägt den aufgelösten Zustand für die Chart-API: nach
+einem HTMX-Swap kann `window.location.search` noch den vorherigen Stand
+tragen (die History-Aktualisierung folgt dem Swap), das gerenderte Attribut
+nicht.
+{% endcomment %}
+<div id="statistics-charts" data-chart-query="{{ chart_query }}"
+     x-data="statisticsCharts" x-init="fetchAndRender"
      class="mb-8 no-print" x-cloak>
 
     {# Chart-Filter #}
-    <div class="flex flex-wrap gap-3 mb-4">
-        <select :value="docTypeFilter" @change="onDocTypeChange"
+    <form class="flex flex-wrap gap-3 mb-4" data-testid="statistics-doktyp-filter">
+        <input type="hidden" name="zeitraum" value="{{ period }}">
+        {% if period == "frei" %}
+        <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+        <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+        {% elif period == "jahr" and selected_year %}
+        <input type="hidden" name="year" value="{{ selected_year }}">
+        {% endif %}
+        <label for="statistics-doktyp" class="sr-only">{% trans "Dokumentationstyp" %}</label>
+        <select id="statistics-doktyp" name="doktyp"
+                hx-get="{% url 'core:statistics' %}"
+                hx-trigger="change"
+                hx-include="closest form"
+                hx-target="#statistics-content"
+                hx-push-url="true"
                 class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
             <option value="">{% trans "Alle Dokumentationstypen" %}</option>
             {% for dt in document_types %}
-            <option value="{{ dt.id }}">{{ dt.name }}</option>
+            <option value="{{ dt.id }}"{% if selected_doc_type and selected_doc_type.pk == dt.pk %} selected{% endif %}>{{ dt.name }}</option>
             {% endfor %}
         </select>
-    </div>
+    </form>
 
     {# Fehler-Anzeige #}
     <template x-if="error">
@@ -133,7 +160,7 @@ warf im CSP-Build von Alpine bei JEDEM Swap "CSP Parser Error".
     {% if stats.by_document_type %}
     {# Desktop table #}
     <div class="hidden sm:block bg-surface rounded-[10px] border border-subtle overflow-hidden">
-        <table class="min-w-full divide-y divide-subtle">
+        <table class="min-w-full divide-y divide-subtle" data-testid="table-by-document-type">
             <thead class="bg-canvas">
                 <tr>
                     <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</th>
@@ -260,15 +287,19 @@ seit #1770 mit (GET-Semantik); sie sind nicht ausgenommen.
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
             {% trans "PDF-Export" %}
         </button>
-        <button type="submit" formaction="{% url 'core:statistics_sample_report_1_export' %}"
-                class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-            {% trans "Beispiel-Sachbericht" %}
-        </button>
+        {% comment %}
+        R2 (Refs #1804): Der Beispiel-Sachbericht ist das Artefakt eines
+        Berichts-Backends, nicht eine Ausgabe der Übersichtszahlen — sein
+        Einstieg liegt jetzt auf dem Reiter „Datensatz-Berichte", bei seinen
+        Daten. Die Route ``core:statistics_sample_report_1_export`` bleibt
+        bestehen; ihre Zusammenführung mit ``DatasetExportView`` als Format
+        ``pdf`` gehört zur Wiedervorlage von #1790 (b) (Entscheid F4).
+        {% endcomment %}
     </div>
 </form>
-<p class="text-[12px] no-print">
-    <a href="{% url 'core:statistics_report_releases' %}" class="text-link underline">{% trans "Freigabe-Übersicht" %}</a>
-    <span class="text-ink-muted">— {% trans "welche Berichtszeiträume wurden bereits herausgegeben?" %}</span>
-</p>
+{% comment %}
+Refs #1804 (§3.4): kein Textlink zur Freigabe-Übersicht mehr — sie ist seit
+#1813 ein eigener Reiter der Statistik-Subnav und braucht keinen versteckten
+Zweiteinstieg im Seitenfuß.
+{% endcomment %}
 {% endif %}

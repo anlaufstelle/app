@@ -193,6 +193,7 @@ class CounselingHoursBackend(DatasetBackend):
     """Ereignisse und Minuten je Gespraechs-Kategorie im Zeitraum."""
 
     name = _("Beispiel: Beratungsstunden")
+    description = _("Summiert Ereignisse und dokumentierte Minuten je Beratungskategorie im Zeitraum.")
     snapshot_enabled = False
     # K3-A3 (Refs #1770/#1754): gezaehlt werden nur Ereignisse der drei
     # Gespraechs-Typen, nicht alle des Zeitraums. Ohne diese Deklaration

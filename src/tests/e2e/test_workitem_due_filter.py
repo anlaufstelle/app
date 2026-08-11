@@ -28,7 +28,7 @@ class TestWorkItemDueFilter:
         assert "Alle" in options
         assert "Überfällig" in options
         assert "Heute" in options
-        assert "Diese Woche" in options
+        assert "Nächste 7 Tage" in options
         assert "Ohne Frist" in options
 
     def test_filter_and_reset(self, staff_page, base_url):

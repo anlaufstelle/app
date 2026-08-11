@@ -4,11 +4,33 @@
 {% block title %}{% trans "Externer Bericht" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Externer Bericht (Datenschutzprofil)" %}</h1>
+{% comment %}
+Refs #1804 (§3.4): Kopfzone = Titel + Aktionen derselben Seite. Der
+JSON-Export stand vorher als einziger Weg zum maschinenlesbaren Artefakt in
+einem <aside> am Seitenfuß — unterhalb aller Tabellen und damit praktisch
+unsichtbar.
+{% endcomment %}
+<div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Externer Bericht (Datenschutzprofil)" %}</h1>
+    <a href="?format=json{% if date_from and date_to %}&amp;date_from={{ date_from|date:'Y-m-d' }}&amp;date_to={{ date_to|date:'Y-m-d' }}{% endif %}"
+       data-testid="external-report-json"
+       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {% trans "Als JSON exportieren" %}
+    </a>
+</div>
+
+{% comment %}
+Refs #1804 (§3.4): Einordnungssatz — dieselbe Tabelle in zwei Bedeutungen zu
+lesen ist der teuerste Fehler des Bereichs. Ein Reiter, ein Datenregime (R1).
+{% endcomment %}
+<p class="text-[13px] text-ink-muted mb-6 max-w-3xl">
+    {% blocktrans %}Dieselben Zahlen wie die Übersicht, aber für außen: Kleinstfallzahlen unterdrückt, keine Pseudonyme.{% endblocktrans %}
+</p>
 
 {% subnav "statistik" %}
 
-<section aria-labelledby="report-metadata" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+<section aria-labelledby="report-metadata" data-testid="external-report-metadata" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
     <h2 id="report-metadata" class="text-lg font-semibold text-blue-900 mb-2">
         {% trans "Datenschutzprofil" %}
     </h2>
@@ -150,11 +172,4 @@
         </tbody>
     </table>
 </section>
-
-<aside class="mt-8 text-sm text-muted">
-    <p>
-        <a href="?format=json{% if date_from and date_to %}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}{% endif %}"
-           class="text-link underline">{% trans "Als JSON exportieren" %}</a>
-    </p>
-</aside>
 {% endblock %}

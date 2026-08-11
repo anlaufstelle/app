@@ -493,17 +493,20 @@ Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (
 
 1. Navigieren Sie zu **Statistik** (`/statistics/`).
 2. Wählen Sie einen Zeitraum:
- - **Letzter Monat** (Standard)
- - **Letztes Quartal** (90 Tage)
- - **Letztes Halbjahr** (182 Tage)
- - **Benutzerdefiniert:** Geben Sie Start- und Enddatum manuell ein.
+ - **Letzte 30 Tage** (Standard)
+ - **Letzte 90 Tage**
+ - **Letzte 180 Tage**
+ - **Kalenderjahr** (mit Jahres-Navigation, siehe unten)
+ - **Eigener Zeitraum:** Geben Sie Start- und Enddatum manuell ein.
+
+ > Die drei „Letzte N Tage"-Fenster sind **rollierend** und enden heute; beide Enden zählen mit, „Letzte 30 Tage" umfasst also genau 30 Tage. Kalenderwörter stehen ausschließlich für Kalendereinheiten — deshalb heißt der kalendarische Zeitraum „Kalenderjahr" und die rollierenden Fenster nach ihrer Länge.
 3. Das Dashboard aktualisiert sich automatisch und zeigt aggregierte Kennzahlen zu Kontaktzahlen, Dokumentationstypen und Personengruppen.
 
 ### Jahresnavigation
 
 Um die Daten eines bestimmten Jahres zu sehen:
 
-1. Klicken Sie auf **Jahr**.
+1. Klicken Sie auf **Kalenderjahr**.
 2. Mit den Pfeil-Buttons links und rechts neben der Jahreszahl navigieren Sie zum vorherigen oder nächsten Jahr.
 3. Beim aktuellen Jahr wird der Zeitraum vom 01.01. bis heute angezeigt, bei vergangenen Jahren das vollständige Jahr (01.01. – 31.12.).
 
@@ -551,7 +554,7 @@ Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem fe
 2. Klicken Sie auf **Beispiel-Sachbericht**.
 3. Die PDF-Datei wird heruntergeladen (Dateiname: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
-> **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.
+> **Tipp:** Für Halbjahresberichte wählen Sie „Eigener Zeitraum" und setzen Start- und Enddatum auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.). „Letzte 180 Tage" ist ein rollierendes Fenster und trifft nie exakt ein Kalenderhalbjahr.
 
 **Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Die Sachbericht-PDFs — der Beispiel-Sachbericht wie auch der Halbjahresbericht-Export — lesen aus den gespeicherten **Monats-Auswertungen**. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Die Berichte der Berichte-Sektion (CSV/JSON/XML, siehe unten) rechnen dagegen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
 

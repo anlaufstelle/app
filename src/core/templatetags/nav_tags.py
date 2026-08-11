@@ -68,14 +68,24 @@ def _query_matches(item: nav.NavItem, request) -> bool:
     """Trägt die aktuelle Anfrage die Query-Parameter des Eintrags?
 
     Nur relevant für Reiter mit ``query`` (heute „Datensatz-Berichte" =
-    ``core:statistics?view=berichte``, Refs #1801 §7.1). Ohne diese Prüfung wäre
-    ein solcher Reiter auf **jeder** Seite seiner Route aktiv.
+    ``core:statistics?ansicht=datensaetze``, Refs #1801 §7.1). Ohne diese Prüfung
+    wäre ein solcher Reiter auf **jeder** Seite seiner Route aktiv.
+
+    Refs #1804 (F1/F5): Die kanonische Schreibweise ist deutsch, die frühere
+    (``?view=berichte``) bleibt als Alias gültig. Beide müssen **denselben**
+    Reiter aktivieren — täte nur die kanonische es, zeigte ein Bookmark von
+    gestern zwar den Berichte-Inhalt, aber die Reiterzeile stünde ohne aktiven
+    Reiter da (und der query-lose „Übersicht"-Reiter träte nicht zurück, weil
+    er nur vor einem AKTIVEN Query-Reiter zurücktritt).
     """
     if not item.query:
         return True
     if request is None:
         return False
-    return all(request.GET.get(key) == value for key, value in parse_qsl(item.query))
+    return any(
+        all(request.GET.get(key) == value for key, value in parse_qsl(query))
+        for query in (item.query, *item.query_aliases)
+    )
 
 
 def _active_keys(items, context) -> set[str]:

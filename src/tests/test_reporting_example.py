@@ -187,45 +187,91 @@ class TestJsonExport:
         assert payload["records"] == [{"document_type": "Kontakt", "system_type": "", "count": None}]
 
 
-_SELECT_BACKEND_RE = re.compile(r'<select name="backend".*?</select>', re.DOTALL)
-_BEISPIEL_OPTION = '<option value="example">Beispiel: Ereignisse je Dokumenttyp</option>'
+_CARD_LIST_RE = re.compile(r'data-testid="report-card-list".*?</ul>', re.DOTALL)
 
 
-class TestStatisticsPanelDropdown:
-    """Pflichtfall 4: Panel-Dropdown der StatisticsView enthaelt das Beispiel-Backend
-    (erfuellt die Issue-Verifikation "~50 Zeilen -> automatisch angeboten").
+class TestStatisticsBerichtsliste:
+    """Pflichtfall 4: Die Berichtsliste der StatisticsView enthaelt das
+    Beispiel-Backend (erfuellt die Issue-Verifikation "~50 Zeilen -> automatisch
+    angeboten").
 
-    M4: die Option muss innerhalb des ``<select name="backend">``-Blocks
-    stehen, nicht nur irgendwo auf der Seite (der Backend-Name koennte sonst
-    zufaellig auch anderswo im HTML auftauchen).
+    M4: der Eintrag muss INNERHALB der Berichtsliste stehen, nicht nur irgendwo
+    auf der Seite (der Backend-Name koennte sonst zufaellig auch anderswo im
+    HTML auftauchen).
 
-    Refs #1813: das Dropdown liegt seit der Statistik-Reiterzeile auf dem
-    Reiter „Datensatz-Berichte" (``?view=berichte``, Konzept #1801 §7.1) statt
-    unten am Dashboard. Der Aufruf folgt dem Umzug, die Aussage bleibt.
+    Refs #1804: Aus dem ``<select name="backend">`` sind Karten geworden — neun
+    gleich praefigierte Namen ohne Beschreibung waren keine Auswahl, sondern ein
+    Ratespiel. Der Test folgt der Form, die Aussage bleibt.
     """
 
-    def _dropdown_html(self, content: str) -> str:
-        match = _SELECT_BACKEND_RE.search(content)
-        assert match is not None, 'kein <select name="backend">-Block im HTML gefunden'
+    def _card_list(self, content: str) -> str:
+        match = _CARD_LIST_RE.search(content)
+        assert match is not None, "keine Berichtsliste (data-testid=report-card-list) im HTML gefunden"
         return match.group(0)
 
-    def test_beispiel_backend_im_dropdown(self, client, lead_user):
+    def _statistik(self, client, user):
+        client.force_login(user)
+        response = client.get(reverse("core:statistics"), {"ansicht": "datensaetze"})
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_beispiel_backend_in_der_liste(self, client, lead_user):
+        karten = self._card_list(self._statistik(client, lead_user))
+        assert 'data-testid="report-card-example"' in karten
+        assert "Beispiel: Ereignisse je Dokumenttyp" in karten
+
+    def test_beispiel_backend_in_der_liste_admin(self, client, admin_user):
+        karten = self._card_list(self._statistik(client, admin_user))
+        assert 'data-testid="report-card-example"' in karten
+        assert "Beispiel: Ereignisse je Dokumenttyp" in karten
+
+    def test_karte_nennt_beschreibung_grundgesamtheit_und_herkunft(self, client, lead_user):
+        """Konzept §3.3: Name allein ist keine Auswahlgrundlage — die Karte sagt,
+        WAS gezaehlt wird, WORUEBER und ob der Bericht in die Monats-Aggregate
+        einfliesst."""
+        karten = self._card_list(self._statistik(client, lead_user))
+
+        assert "Zählt die Ereignisse des Zeitraums je Dokumentationstyp." in karten
+        assert "alle Ereignisse im Zeitraum" in karten
+        assert "Wird bei jedem Aufruf live berechnet" in karten
+        # ``sample-report-1`` ist das einzige Backend mit ``snapshot_enabled``.
+        assert "Fließt in die Monats-Aggregate ein" in karten
+
+    def test_auswahl_steht_in_der_url_und_rendert_die_vorschau(self, client, lead_user):
+        """``?bericht=<slug>`` ist serverseitiger Zustand: die Vorschau kommt im
+        ersten Response, ohne HTMX-Nachladen — reload-fest und teilbar."""
         client.force_login(lead_user)
-
-        response = client.get(reverse("core:statistics"), {"view": "berichte"})
-
-        assert response.status_code == 200
-        dropdown = self._dropdown_html(response.content.decode())
-        assert _BEISPIEL_OPTION in dropdown
-
-    def test_beispiel_backend_im_dropdown_admin(self, client, admin_user):
-        client.force_login(admin_user)
-
-        response = client.get(reverse("core:statistics"), {"view": "berichte"})
+        response = client.get(reverse("core:statistics"), {"ansicht": "datensaetze", "bericht": "example"})
 
         assert response.status_code == 200
-        dropdown = self._dropdown_html(response.content.decode())
-        assert _BEISPIEL_OPTION in dropdown
+        assert response.context["selected_backend"].slug == "example"
+        content = response.content.decode()
+        assert 'id="report-panel"' in content
+        assert "Beispiel: Ereignisse je Dokumenttyp" in content
+        assert 'aria-current="true"' in self._card_list(content)
+
+    def test_ohne_auswahl_keine_vorschau_und_keine_freitextfelder(self, client, lead_user):
+        content = self._statistik(client, lead_user)
+        assert "Wählen Sie oben einen Bericht" in content
+        assert 'id="report-recipient"' not in content, (
+            "R2: Empfänger/Zweck gehören zu dem Export, den sie begleiten — ohne Auswahl gibt es keinen."
+        )
+
+    def test_unbekannter_slug_faellt_auf_die_liste_zurueck(self, client, lead_user):
+        """Fail-closed wie ``?ansicht=quatsch``: ein Tippfehler zeigt die Liste,
+        keinen Fehler."""
+        client.force_login(lead_user)
+        response = client.get(reverse("core:statistics"), {"ansicht": "datensaetze", "bericht": "gibt-es-nicht"})
+
+        assert response.status_code == 200
+        assert response.context["selected_backend"] is None
+
+    def test_alter_backend_parameter_bleibt_alias(self, client, lead_user):
+        """``?backend=`` ist der Name im Export-Formular — er bleibt lesbar."""
+        client.force_login(lead_user)
+        response = client.get(reverse("core:statistics"), {"ansicht": "datensaetze", "backend": "example"})
+
+        assert response.context["selected_backend"].slug == "example"
 
 
 class TestPrepareExport:

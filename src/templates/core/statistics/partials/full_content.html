@@ -1,37 +1,51 @@
 {% load i18n %}
 
-{# Zeitraum-Auswahl (Pills) #}
+{% comment %}
+Zeitraum-Auswahl (Pills)
+
+Refs #1804 (Konzept §3.6, Z1/Z2): Kalenderwoerter sind fuer Kalendereinheiten
+reserviert; rollierende Fenster heissen nach ihrer Laenge. Die drei linken
+Pills sind rollierend („Letzte N Tage"), „Kalenderjahr" ist die einzige
+kalendarische Einheit (mit Stepper), „Eigener Zeitraum" der freie Fall.
+{% endcomment %}
 <div class="mb-6 flex flex-wrap gap-2 items-end no-print">
-    <div class="flex gap-1.5">
-        <button hx-get="{% url 'core:statistics' %}?period=month{{ view_query }}"
+    <div class="flex flex-wrap gap-1.5">
+        <button hx-get="{% url 'core:statistics' %}?zeitraum=letzte30{{ view_query }}{{ doktyp_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'month' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Monat" %}
+                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'letzte30' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+            {% trans "Letzte 30 Tage" %}
         </button>
-        <button hx-get="{% url 'core:statistics' %}?period=quarter{{ view_query }}"
+        <button hx-get="{% url 'core:statistics' %}?zeitraum=letzte90{{ view_query }}{{ doktyp_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'quarter' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Quartal" %}
+                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'letzte90' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+            {% trans "Letzte 90 Tage" %}
         </button>
-        <button hx-get="{% url 'core:statistics' %}?period=half{{ view_query }}"
+        <button hx-get="{% url 'core:statistics' %}?zeitraum=letzte180{{ view_query }}{{ doktyp_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'half' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Halbjahr" %}
+                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'letzte180' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+            {% trans "Letzte 180 Tage" %}
         </button>
-        <button hx-get="{% url 'core:statistics' %}?period=year{{ view_query }}"
+        <button hx-get="{% url 'core:statistics' %}?zeitraum=jahr{{ view_query }}{{ doktyp_query }}"
                 hx-target="#statistics-content"
                 hx-push-url="true"
-                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'year' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-            {% trans "Jahr" %}
+                class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == 'jahr' %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+            {% trans "Kalenderjahr" %}
         </button>
     </div>
-    <form class="flex gap-2 items-end ml-4">
-        <input type="hidden" name="period" value="custom">
+    <form class="flex flex-wrap gap-2 items-end ml-4" aria-label="{% trans 'Eigener Zeitraum' %}">
+        <input type="hidden" name="zeitraum" value="frei">
         {% if view_mode %}{# Refs #1813: hx-include sammelt die Felder DIESES Formulars ein — ohne das Feld faellt der Modus beim Anwenden eines eigenen Zeitraums weg. #}
-        <input type="hidden" name="view" value="{{ view_mode }}">{% endif %}
+        <input type="hidden" name="ansicht" value="{{ view_mode }}">{% endif %}
+        {% if selected_doc_type %}{# Refs #1804: dasselbe fuer den Doktyp-Filter. #}
+        <input type="hidden" name="doktyp" value="{{ selected_doc_type.pk }}">{% endif %}
+        {% comment %}
+Der freie Zeitraum ist die fuenfte Zeitraum-Option (Konzept-Tabelle §3.6) — ohne
+Beschriftung stuenden hier zwei Datumsfelder ohne gemeinsame Ueberschrift.
+{% endcomment %}
+        <span class="text-[12px] font-bold uppercase tracking-wider pb-1.5 {% if period == 'frei' %}text-accent{% else %}text-ink-muted{% endif %}">{% trans "Eigener Zeitraum" %}</span>
         <div>
             <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
             <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
@@ -53,9 +67,20 @@
     </form>
 </div>
 
-{% if period == "year" and selected_year %}
+{% comment %}
+Z3 (Refs #1804): Wo eine Zahl von einem Fenster abhaengt, steht das aufgeloeste
+Intervall daneben — die Uebersicht tut das bereits in dashboard_content.html;
+auf dem Berichte-Reiter waere die Zeitraum-Leiste sonst die einzige Angabe.
+{% endcomment %}
+{% if view_mode %}
+<p class="text-[13px] text-ink-muted mb-4" data-testid="statistics-period-range">
+    {% trans "Zeitraum" %}: <span class="font-mono">{{ date_from|date:"DATE_FORMAT" }} – {{ date_to|date:"DATE_FORMAT" }}</span>
+</p>
+{% endif %}
+
+{% if period == "jahr" and selected_year %}
 <div class="mb-4 flex items-center gap-3 no-print">
-    <button hx-get="{% url 'core:statistics' %}?period=year&amp;year={{ selected_year|add:'-1' }}{{ view_query }}"
+    <button hx-get="{% url 'core:statistics' %}?zeitraum=jahr&amp;year={{ selected_year|add:'-1' }}{{ view_query }}{{ doktyp_query }}"
             hx-target="#statistics-content"
             hx-push-url="true"
             class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
@@ -66,7 +91,7 @@
     </button>
     <span class="font-mono font-semibold text-[15px] text-ink">{{ selected_year }}</span>
     {% if selected_year < current_year %}
-    <button hx-get="{% url 'core:statistics' %}?period=year&amp;year={{ selected_year|add:'1' }}{{ view_query }}"
+    <button hx-get="{% url 'core:statistics' %}?zeitraum=jahr&amp;year={{ selected_year|add:'1' }}{{ view_query }}{{ doktyp_query }}"
             hx-target="#statistics-content"
             hx-push-url="true"
             class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink"
@@ -86,7 +111,7 @@ oben steht bewusst ÜBER dieser Verzweigung — beide Reiter arbeiten mit
 demselben Zeitraum, und der Bericht erbt ihn über die versteckten Felder
 seiner Form.
 {% endcomment %}
-{% if view_mode != "berichte" %}
+{% if view_mode != "datensaetze" %}
 <div id="dashboard-content">
     {% include "core/statistics/partials/dashboard_content.html" %}
 </div>
@@ -98,48 +123,66 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
 {% endcomment %}
 {% if report_backends %}
 <section id="report-section" class="mt-8 no-print">
-    <h2 class="text-[15px] font-bold text-ink mb-3">{% trans "Berichte" %}</h2>
+    <h2 class="text-[15px] font-bold text-ink mb-1">{% trans "Datensatz-Berichte" %}</h2>
+    <p class="text-[13px] text-ink-muted mb-4 max-w-3xl">
+        {% blocktrans %}Fertige Auswertungen für die Weitergabe nach außen. Kleinstfallzahlen sind unterdrückt — die Zahlen können deshalb von der Übersicht abweichen.{% endblocktrans %}
+    </p>
+
+    {% comment %}
+    Refs #1804 (Konzept §3.3): Karten statt <select>. Neun gleich präfigierte
+    Namen ohne Beschreibung in einem Dropdown waren keine Auswahl, sondern ein
+    Ratespiel — je Bericht steht jetzt da, was er zählt (`description`), worüber
+    (`population`) und ob er in die Monats-Aggregate einfließt
+    (`snapshot_enabled`). Die Auswahl ist URL-Zustand (`?bericht=<slug>`):
+    reload-fest und teilbar. Der HTMX-Swap tauscht die Inhaltszone wie die
+    Zeitraum-Pills — dieselbe Mechanik, ein Zustand.
+    {% endcomment %}
+    <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" data-testid="report-card-list">
+        {% for b in report_backends %}
+        <li>
+            <a href="{% url 'core:statistics' %}?ansicht=datensaetze&amp;bericht={{ b.slug }}{{ zeitraum_query }}"
+               data-testid="report-card-{{ b.slug }}"
+               hx-get="{% url 'core:statistics' %}?ansicht=datensaetze&amp;bericht={{ b.slug }}{{ zeitraum_query }}"
+               hx-target="#statistics-content"
+               hx-push-url="true"
+               {% if selected_backend and selected_backend.slug == b.slug %}aria-current="true"{% endif %}
+               class="block h-full rounded-[10px] border p-4 {% if selected_backend and selected_backend.slug == b.slug %}border-accent bg-accent-light{% else %}border-subtle bg-surface hover:bg-canvas{% endif %}">
+                <span class="block text-[13px] font-bold text-ink">{{ b.name }}</span>
+                {% if b.description %}<span class="block text-[12px] text-ink-soft mt-1">{{ b.description }}</span>{% endif %}
+                <span class="block text-[12px] text-ink-muted mt-2">{% trans "Grundgesamtheit" %}: {{ b.population_label }}</span>
+                <span class="block text-[12px] text-ink-muted mt-0.5">
+                    {% if b.snapshot_enabled %}{% trans "Fließt in die Monats-Aggregate ein" %}{% else %}{% trans "Wird bei jedem Aufruf live berechnet" %}{% endif %}
+                </span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+
     {% comment %}
     Das Formular umschließt das Panel (K4a, Refs #1770): die Export-Schaltflächen
-    liegen im nachgeladenen Panel und nennen ihr Ziel per `formaction` — beim
-    Submit serialisiert der Browser Backend, Zeitraum, Empfänger und Zweck aus
-    diesem einen Formular. Kein `action` am Formular selbst (jede Schaltfläche
-    nennt ihr Ziel) und `method="get"`, weil alle Ziele GET sind; dasselbe Muster
-    wie der Dashboard-Export in `dashboard_content.html`.
+    liegen im Panel und nennen ihr Ziel per `formaction` — beim Submit
+    serialisiert der Browser Backend, Zeitraum, Empfänger und Zweck aus diesem
+    einen Formular. Kein `action` am Formular selbst (jede Schaltfläche nennt ihr
+    Ziel) und `method="get"`, weil alle Ziele GET sind.
+
+    R2 (Refs #1804): Empfänger/Zweck stehen genau EINMAL je Reiter — bei dem
+    Export, den sie begleiten. Sie erscheinen erst mit einer Auswahl: ohne
+    Bericht gibt es nichts herauszugeben.
     {% endcomment %}
     <form method="get">
+    <input type="hidden" name="zeitraum" value="frei">
+    <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    {% if selected_backend %}
+    <input type="hidden" name="backend" value="{{ selected_backend.slug }}">
+    {% comment %}
+    Refs #1776: Enter in Empfänger/Zweck löste als implizite Formularübermittlung
+    den ERSTEN Submit-Button aus (CSV-Export, inkl. unwiderruflichem
+    Audit-Eintrag) — `suppressEnterSubmit` fängt Enter in beiden Feldern ab.
+    Einen hx-Trigger tragen sie bewusst nicht: das Panel braucht sie nicht, ihre
+    Werte gehen beim Submit mit, race-frei und ohne JavaScript.
+    {% endcomment %}
     <div class="flex flex-wrap gap-3 items-end mb-4" x-data="suppressEnterSubmit">
-        <input type="hidden" name="period" value="custom">
-        <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
-        <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
-        <div>
-            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bericht" %}</label>
-            <select name="backend"
-                    hx-get="{% url 'core:statistics_report_panel' %}"
-                    hx-trigger="change"
-                    hx-include="closest form"
-                    hx-target="#report-panel"
-                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
-                <option value="">{% trans "Bericht wählen …" %}</option>
-                {% for b in report_backends %}<option value="{{ b.slug }}">{{ b.name }}</option>{% endfor %}
-            </select>
-        </div>
-        {% comment %}
-        K4a (Refs #1770): Empfänger/Zweck der Herausgabe. Sie tragen bewusst
-        KEINEN hx-Trigger: das Panel braucht sie nicht (es baut keine Links mehr
-        daraus). Die Werte gehen beim Submit der Export-Schaltflächen mit,
-        race-frei und ohne JavaScript.
-        {% endcomment %}
-        {% comment %}
-        Refs #1776: Der change-Trigger des Bericht-Selects SELBST bleibt davon
-        unberührt — auch das Zurückstellen auf den Platzhalter „Bericht
-        wählen …" (Wert "") löst ihn aus. `statistics-charts.js` fängt genau
-        diesen Fall vor dem Request ab (kein 400-Toast mehr); siehe dort. Enter
-        in Empfänger/Zweck löst außerdem keine implizite Übermittlung mehr aus
-        (`suppressEnterSubmit`, Refs #1776) — sonst würde Enter den ersten
-        Submit-Button (CSV-Export) auslösen, inkl. unwiderruflichem
-        Audit-Eintrag.
-        {% endcomment %}
         <div>
             <label for="report-recipient" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Empfänger (optional)" %}</label>
             <input type="text" id="report-recipient" name="recipient" maxlength="200"
@@ -155,10 +198,13 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
         </div>
     </div>
-    <div id="report-panel"></div>
+    {% endif %}
+    <div id="report-panel">
+        {% if selected_backend %}{% include "core/statistics/partials/report_panel.html" %}{% else %}<p class="text-[13px] text-ink-muted">{% trans "Wählen Sie oben einen Bericht, um Vorschau und Export zu sehen." %}</p>{% endif %}
+    </div>
     </form>
 </section>
 {% else %}
-<p class="text-[13px] text-ink-muted">{% trans "Für diese Einrichtung ist kein Bericht verfügbar." %}</p>
+<p class="text-[13px] text-ink-muted">{% trans "Für diese Einrichtung ist derzeit kein Bericht hinterlegt." %}</p>
 {% endif %}
 {% endif %}

@@ -54,12 +54,12 @@ class TestStatisticsHTMX:
         zeitraum_locator = page.locator("text=Zeitraum:")
         zeitraum_text = zeitraum_locator.inner_text()
 
-        # Auf Halbjahr klicken (HTMX aktualisiert den Content asynchron). Der
+        # Auf „Letzte 180 Tage" klicken (HTMX aktualisiert den Content asynchron). Der
         # ``expect_response``-Block wartet nur auf den Server-Response, nicht
         # auf den anschliessenden DOM-Swap — unter Parallel-Last entstand sonst
         # eine Race-Condition zwischen Response und ``inner_text`` (Refs #761).
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
-            page.locator("button:has-text('Halbjahr')").click()
+            page.locator("button:has-text('Letzte 180 Tage')").click()
 
         # ``not_to_have_text`` pollt automatisch bis der Swap durch ist.
         expect(zeitraum_locator).not_to_have_text(zeitraum_text, timeout=10000)
@@ -69,18 +69,18 @@ class TestStatisticsYearNavigation:
     """Jahres-Navigation: Button, Pfeile, Zeitraum (#437)."""
 
     def test_jahr_button_visible(self, authenticated_page, base_url):
-        """Jahr-Button ist auf der Statistik-Seite sichtbar."""
+        """Kalenderjahr-Button ist auf der Statistik-Seite sichtbar."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        assert page.get_by_role("button", name="Jahr", exact=True).is_visible()
+        assert page.get_by_role("button", name="Kalenderjahr", exact=True).is_visible()
 
     def test_jahr_button_switches_period(self, authenticated_page, base_url):
-        """Klick auf Jahr → Zeitraum zeigt 1. Januar bis heute."""
+        """Klick auf Kalenderjahr → Zeitraum zeigt 1. Januar bis heute."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
-            page.get_by_role("button", name="Jahr", exact=True).click()
+            page.get_by_role("button", name="Kalenderjahr", exact=True).click()
 
         # ``expect`` pollt bis der HTMX-DOM-Swap durch ist (Refs #849).
         # Langformat-Datum seit i18n-L10N-Umstellung (Refs #815).
@@ -93,7 +93,7 @@ class TestStatisticsYearNavigation:
 
         # Auf Jahr klicken
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
-            page.get_by_role("button", name="Jahr", exact=True).click()
+            page.get_by_role("button", name="Kalenderjahr", exact=True).click()
 
         # Auf DOM-Swap warten, bevor wir das Jahr lesen — ohne ``expect``
         # liest ``inner_text`` evtl. den alten Wert (Refs #849).
@@ -115,7 +115,7 @@ class TestStatisticsYearNavigation:
     def test_year_nav_next_arrow_for_past_year(self, authenticated_page, base_url):
         """Im Vorjahr: Pfeil rechts sichtbar, Klick → Jahr inkrementiert."""
         page = authenticated_page
-        page.goto(f"{base_url}/statistics/?period=year&year=2025")
+        page.goto(f"{base_url}/statistics/?zeitraum=jahr&year=2025")
 
         # Pfeil rechts muss sichtbar sein
         assert page.locator("[aria-label='Nächstes Jahr']").is_visible()
@@ -134,7 +134,7 @@ class TestStatisticsYearNavigation:
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
-            page.get_by_role("button", name="Jahr", exact=True).click()
+            page.get_by_role("button", name="Kalenderjahr", exact=True).click()
 
         # ``expect`` pollt bis zum DOM-Swap — ``count() == 0`` direkt nach
         # ``expect_response`` kann unter Parallel-Last den Vor-Swap-Stand

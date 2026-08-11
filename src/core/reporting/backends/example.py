@@ -40,6 +40,7 @@ class ExampleBackend(DatasetBackend):
     """Ereignisse je Dokumenttyp im Zeitraum — kleinstmoegliches Referenz-Backend."""
 
     name = _("Beispiel: Ereignisse je Dokumenttyp")
+    description = _("Zählt die Ereignisse des Zeitraums je Dokumentationstyp.")
     snapshot_enabled = False
 
     def get_field_specs(self) -> list[FieldSpec]:

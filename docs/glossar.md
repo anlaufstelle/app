@@ -75,6 +75,7 @@
 | **TOTP / 2FA** | Zeitbasierte Einmalpasswörter via `django-otp`. Erzwingbar pro Nutzer (`User.mfa_required`) oder einrichtungsweit (`Settings.mfa_enforced_facility_wide`). Codes 30 s gültig. |
 | **User** | Mitarbeitende — eine Person, die mit dem System arbeitet. Hat Zugangsdaten und eine Rollenzuweisung in einer Einrichtung. |
 | **WorkItem** | Arbeitsinfo — ein operativer Eintrag (Hinweis oder Aufgabe) mit eigenem Lebenszyklus und optionaler Priorität. Getrennt von der fachlichen Dokumentation. |
+| **Zeitfenster: kalendarisch vs. rollierend** | Zwei Arten von Zeitraum-Angaben, die nie dasselbe Wort teilen dürfen ([Sprachleitlinie](sprachleitlinie.md#zeitwörter-kalendarisch-vs-rollierend), Refs #1804). *Kalendarisch* = an den Kalender gebundene Einheit (ISO-Woche Mo–So, Kalendermonat, Kalenderjahr); Kalenderwörter sind dafür reserviert. *Rollierend* = ein Fenster relativer Länge, das mit „heute" wandert; es heißt nach seiner Länge (*Letzte 30 Tage*, *Nächste 7 Tage*). Beide Enden sind inklusiv, die Länge entspricht dem Namen: *Letzte 30 Tage* = `heute−29 … heute`. |
 | **Zeitstrom** | Der chronologische Fluss aller Ereignisse, ungefiltert oder gefiltert nach Zeitraum, Person oder Dokumentationstyp. Die Grundmetapher der Dokumentation in Anlaufstelle. |
 
 ---

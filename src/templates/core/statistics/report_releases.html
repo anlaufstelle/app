@@ -81,8 +81,9 @@ sichtbar. Quelle sind ausschließlich die ohnehin auditierten EXPORT-Einträge.
 <p class="text-[12px] text-ink-muted mt-2 max-w-3xl" data-testid="release-limit-note">
     {% blocktrans with limit=release_limit %}Ausgewertet werden die {{ limit }} jüngsten Herausgaben. Ältere bleiben im Audit-Log, erscheinen aber nicht in dieser Übersicht und lösen keine Überschneidungswarnung mehr aus.{% endblocktrans %}
 </p>
-
-<p class="mt-6">
-    <a href="{% url 'core:statistics' %}" class="text-link underline text-[13px]">{% trans "Zurück zur Statistik" %}</a>
-</p>
+{% comment %}
+Refs #1804 (§3.4): kein Rücklink — Hub-/Subnav-Seiten tragen ihre Orientierung
+in der Reiterzeile, ein zusätzlicher „Zurück"-Link böte einen zweiten,
+schwächeren Weg zum selben Ziel (Hauptkonzept #1801).
+{% endcomment %}
 {% endblock %}
