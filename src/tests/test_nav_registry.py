@@ -30,6 +30,13 @@ from core.urls import urlpatterns as core_urlpatterns
 # Begründung in ``KNOWN_NON_NAV_ROUTES``.
 NAV_ROUTE_PREFIXES = (
     "system/",
+    # Refs #1813 (Etappe 2): die beiden Bereichs-Hubs. Ihre eigenen Landing-
+    # Routen stehen ohnehin in einer Reiter-Familie; der Präfix steht hier für
+    # das, was noch kommt (F1: Konfigurationspakete/Einrichtungs-Export unter
+    # ``/verwaltung/…``) — eine neue Seite unter einem Hub-Präfix ohne
+    # Reiter/Familie soll auffallen, nicht erst im Handtest.
+    "datenschutz/",
+    "verwaltung/",
     "config/",
     "import/",
     "deletion-requests/",
