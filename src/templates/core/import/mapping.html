@@ -5,8 +5,9 @@
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-1">{% trans "Spalten zuordnen" %}</h1>
+{% include "core/import/partials/_stepper.html" with step=2 %}
 <p class="text-sm text-ink-muted mb-6">
-    {% blocktrans with total=preview.total_rows %}Schritt 2 von 4: {{ total }} Datenzeile(n) erkannt. Nicht zugeordnete Spalten werden ignoriert.{% endblocktrans %}
+    {% blocktrans with total=preview.total_rows %}{{ total }} Datenzeile(n) erkannt. Nicht zugeordnete Spalten werden ignoriert.{% endblocktrans %}
 </p>
 
 {% if errors %}

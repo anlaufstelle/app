@@ -12,6 +12,8 @@
     <a href="{% url 'core:import_list' %}" class="btn-secondary px-4 py-2">{% trans "Zur Übersicht" %}</a>
 </div>
 
+{% include "core/import/partials/_stepper.html" with step=4 %}
+
 <div class="card p-5 mb-6">
     <dl class="grid grid-cols-2 gap-4 text-sm">
         <div>

@@ -1,0 +1,42 @@
+{% load i18n %}{% comment %}
+Fortschrittsanzeige des Import-Wizards (Refs #1813, §F.1): Datei -> Zuordnung
+-> Probelauf -> Übernahme. Aufruf ``{% include "core/import/partials/_stepper.html" with step=n %}``.
+
+Schritt 4 („Übernahme") hat keine eigene Seite — Übernehmen ist ein reiner
+POST ohne GET-Template. ``core/import/detail.html`` (Landeziel nach dem
+Commit, aber auch jederzeit über die Listen-„Anzeigen"-Spalte erreichbar)
+rendert ihn deshalb dauerhaft mit ``step=4``; der Zustandszusatz
+(„abgeschlossen"/„abgebrochen") liest ``job.status`` direkt aus dem
+umgebenden Kontext — kein eigener Include-Parameter nötig, ``{% include %}``
+reicht den vollen Parent-Kontext durch. Für einen noch laufenden Lauf
+(UPLOADED/MAPPED/VALIDATED) bleibt Schritt 4 ohne Zusatz: er ist weder
+abgeschlossen noch abgebrochen, der Stepper darf das nicht behaupten.
+
+Rein präsentational — kein View-Kontext, keine Logikänderung.
+{% endcomment %}
+<ol aria-label="{% trans 'Fortschritt des Imports' %}" class="flex items-center gap-2 mb-6 text-[13px]" data-testid="import-stepper">
+    <li class="flex items-center gap-2" data-testid="import-step-1"{% if step == 1 %} aria-current="step"{% endif %}>
+        <span class="flex items-center justify-center w-6 h-6 rounded-full font-bold {% if step == 1 %}bg-accent text-white{% elif step > 1 %}bg-accent-light text-accent{% else %}bg-canvas text-ink-muted{% endif %}">1</span>
+        <span class="{% if step == 1 %}text-ink font-semibold{% else %}text-ink-muted{% endif %}">{% trans "Datei" %}</span>
+    </li>
+    <li class="w-4 h-px bg-subtle" aria-hidden="true"></li>
+    <li class="flex items-center gap-2" data-testid="import-step-2"{% if step == 2 %} aria-current="step"{% endif %}>
+        <span class="flex items-center justify-center w-6 h-6 rounded-full font-bold {% if step == 2 %}bg-accent text-white{% elif step > 2 %}bg-accent-light text-accent{% else %}bg-canvas text-ink-muted{% endif %}">2</span>
+        <span class="{% if step == 2 %}text-ink font-semibold{% else %}text-ink-muted{% endif %}">{% trans "Zuordnung" %}</span>
+    </li>
+    <li class="w-4 h-px bg-subtle" aria-hidden="true"></li>
+    <li class="flex items-center gap-2" data-testid="import-step-3"{% if step == 3 %} aria-current="step"{% endif %}>
+        <span class="flex items-center justify-center w-6 h-6 rounded-full font-bold {% if step == 3 %}bg-accent text-white{% elif step > 3 %}bg-accent-light text-accent{% else %}bg-canvas text-ink-muted{% endif %}">3</span>
+        <span class="{% if step == 3 %}text-ink font-semibold{% else %}text-ink-muted{% endif %}">{% trans "Probelauf" %}</span>
+    </li>
+    <li class="w-4 h-px bg-subtle" aria-hidden="true"></li>
+    <li class="flex items-center gap-2" data-testid="import-step-4"{% if step == 4 %} aria-current="step"{% endif %}>
+        <span class="flex items-center justify-center w-6 h-6 rounded-full font-bold {% if step == 4 %}bg-accent text-white{% else %}bg-canvas text-ink-muted{% endif %}">4</span>
+        <span class="{% if step == 4 %}text-ink font-semibold{% else %}text-ink-muted{% endif %}">{% trans "Übernahme" %}</span>
+        {% if step == 4 and job.status == "committed" %}
+        <span class="text-[12px] font-medium text-green-700" data-testid="import-step-4-state">({% trans "abgeschlossen" %})</span>
+        {% elif step == 4 and job.status == "aborted" %}
+        <span class="text-[12px] font-medium text-red-700" data-testid="import-step-4-state">({% trans "abgebrochen" %})</span>
+        {% endif %}
+    </li>
+</ol>

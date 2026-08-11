@@ -6,7 +6,7 @@
 {% block content %}
 <div class="max-w-lg">
     <h1 class="text-[22px] font-bold text-ink mb-1">{% trans "Neuer Import" %}</h1>
-    <p class="text-sm text-ink-muted mb-6">{% trans "Schritt 1 von 4: Datei hochladen" %}</p>
+    {% include "core/import/partials/_stepper.html" with step=1 %}
 
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-testid="import-upload-form">
         {% csrf_token %}

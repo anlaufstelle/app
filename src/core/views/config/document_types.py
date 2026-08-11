@@ -13,14 +13,24 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db.models import Count
+from django.db.models import Count, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
 from core.forms.config import DocumentTypeFieldAddForm, DocumentTypeForm
-from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldGroup, QuickTemplate
+from core.models import (
+    Case,
+    Client,
+    DocumentType,
+    DocumentTypeField,
+    Event,
+    FieldCondition,
+    FieldGroup,
+    QuickTemplate,
+)
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.views.mixins import (
@@ -111,6 +121,30 @@ def board_response(request, doc_type, *, add_form=None, group_form=None, retarge
     return redirect("core:config_doctype_detail", pk=doc_type.pk)
 
 
+def _count_sub(qs, group_field="document_type"):
+    """Korrelierte Aggregat-Subquery: Anzahl der Zeilen von ``qs`` je Gruppe.
+
+    §F.2 (Refs #1813), Muster ``AttachmentListView._chain_version_counts``
+    (attachments.py:242). Ein Statement statt eines Joins pro Annotation —
+    drei gleichzeitige ``Count(..., distinct=True)``-Joins (Feldgruppen ×
+    Felder × Bedingungen) würden ein Kreuzprodukt aufspannen, das den
+    bestehenden ``event_count`` mitverzerrt und auf großen Katalogen teuer
+    wird.
+
+    ``.order_by()`` löscht das ``Meta.ordering`` der übergebenen Queryset —
+    sonst landet das Sortierfeld (z. B. ``FieldGroup.sort_order``) im
+    GROUP BY und die Subquery liefert je Sortierwert eine eigene Zeile statt
+    einer einzigen Summe je Gruppe.
+    """
+    return Coalesce(
+        Subquery(
+            qs.order_by().values(group_field).annotate(n=Count("pk")).values("n"),
+            output_field=IntegerField(),
+        ),
+        Value(0),
+    )
+
+
 class ConfigDocumentTypeListView(FacilityAdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Liste der Dokumentationstypen mit Suche (Name) + Filter (aktiv)."""
 
@@ -130,7 +164,15 @@ class ConfigDocumentTypeListView(FacilityAdminRequiredMixin, PaginatedListMixin,
         elif active == "false":
             qs = qs.filter(is_active=False)
 
-        qs = qs.annotate(event_count=Count("events")).order_by("sort_order", "name")
+        qs = qs.annotate(
+            event_count=Count("events"),
+            block_count=_count_sub(FieldGroup.objects.filter(document_type=OuterRef("pk"))),
+            field_count=_count_sub(DocumentTypeField.objects.filter(document_type=OuterRef("pk"))),
+            condition_count=_count_sub(
+                FieldCondition.objects.filter(target_field__document_type=OuterRef("pk")),
+                group_field="target_field__document_type",
+            ),
+        ).order_by("sort_order", "name")
         doc_types = self.paginate(qs, request)
 
         params = {k: v for k, v in (("q", q), ("is_active", active)) if v}

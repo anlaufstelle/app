@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 11:43+0200\n"
+"POT-Creation-Date: 2026-08-11 11:44+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -171,7 +171,7 @@ msgid "– Ohne Gruppe –"
 msgstr "– Ohne Gruppe –"
 
 #: src/core/forms/config.py:444 src/core/models/field_condition.py:53
-#: src/templates/core/import/mapping.html:28
+#: src/templates/core/import/mapping.html:29
 msgid "Zielfeld"
 msgstr "Zielfeld"
 
@@ -264,7 +264,7 @@ msgstr "Ende"
 #: src/templates/core/export/client_data_pdf.html:244
 #: src/templates/core/export/client_data_pdf.html:292
 #: src/templates/core/hubs/verwaltung.html:66
-#: src/templates/core/import/detail.html:22
+#: src/templates/core/import/detail.html:24
 msgid "Dokumentationstyp"
 msgstr "Dokumentationstyp"
 
@@ -1138,7 +1138,7 @@ msgstr ""
 #: src/templates/core/export/client_data_pdf.html:400
 #: src/templates/core/export/client_data_pdf.html:478
 #: src/templates/core/export/client_data_pdf.html:510
-#: src/templates/core/import/detail.html:18
+#: src/templates/core/import/detail.html:20
 #: src/templates/core/import/list.html:25
 #: src/templates/core/system/legal_holds.html:37
 #: src/templates/core/system/legal_holds.html:70
@@ -1291,7 +1291,7 @@ msgstr ""
 #: src/core/models/document_type.py:349 src/core/models/organization.py:37
 #: src/core/models/quick_template.py:60 src/core/models/time_filter.py:37
 #: src/templates/core/config/document_types/detail.html:62
-#: src/templates/core/config/document_types/partials/table.html:36
+#: src/templates/core/config/document_types/partials/table.html:49
 #: src/templates/core/config/field_templates/partials/table.html:31
 #: src/templates/core/export/client_data_pdf.html:41
 #: src/templates/core/export/client_data_pdf.html:449
@@ -1546,6 +1546,7 @@ msgid "Mehrfachauswahl"
 msgstr "Mehrfachauswahl"
 
 #: src/core/models/document_type.py:289
+#: src/templates/core/import/partials/_stepper.html:20
 msgid "Datei"
 msgstr "Datei"
 
@@ -1869,7 +1870,7 @@ msgstr "Übernommen"
 msgid "Abgebrochen"
 msgstr "Abgebrochen"
 
-#: src/core/models/import_job.py:80 src/templates/core/import/detail.html:26
+#: src/core/models/import_job.py:80 src/templates/core/import/detail.html:28
 #: src/templates/core/import/list.html:26
 msgid "Angelegt von"
 msgstr "Angelegt von"
@@ -3962,7 +3963,7 @@ msgid_plural "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“."
 msgstr[0] "%(n)d Fall enthält Daten unter dem Slug „%(slug)s“."
 msgstr[1] "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“."
 
-#: src/core/services/config.py:508 src/core/views/config/document_types.py:286
+#: src/core/services/config.py:508 src/core/views/config/document_types.py:328
 msgid "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."
 
@@ -4606,36 +4607,36 @@ msgstr "Kein Quellfeld angegeben."
 msgid "Ungültige Quellfeld-ID."
 msgstr "Ungültige Quellfeld-ID."
 
-#: src/core/views/config/document_types.py:157
+#: src/core/views/config/document_types.py:199
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde angelegt."
 msgstr "Dokumentationstyp „%(name)s“ wurde angelegt."
 
-#: src/core/views/config/document_types.py:202
+#: src/core/views/config/document_types.py:244
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde aktualisiert."
 msgstr "Dokumentationstyp „%(name)s“ wurde aktualisiert."
 
-#: src/core/views/config/document_types.py:250
+#: src/core/views/config/document_types.py:292
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde gelöscht."
 msgstr "Dokumentationstyp „%(name)s“ wurde gelöscht."
 
-#: src/core/views/config/document_types.py:279
+#: src/core/views/config/document_types.py:321
 msgid "Ungültige Feldgruppen-ID."
 msgstr "Ungültige Feldgruppen-ID."
 
-#: src/core/views/config/document_types.py:291
-#: src/core/views/config/document_types.py:303
+#: src/core/views/config/document_types.py:333
+#: src/core/views/config/document_types.py:345
 msgid "Die Feldvorlage konnte nicht zugeordnet werden."
 msgstr "Die Feldvorlage konnte nicht zugeordnet werden."
 
-#: src/core/views/config/document_types.py:307
+#: src/core/views/config/document_types.py:349
 #, python-format
 msgid "Feld „%(name)s“ wurde zugeordnet."
 msgstr "Feld „%(name)s“ wurde zugeordnet."
 
-#: src/core/views/config/document_types.py:319
+#: src/core/views/config/document_types.py:361
 #, python-format
 msgid "Feld „%(name)s“ wurde entfernt."
 msgstr "Feld „%(name)s“ wurde entfernt."
@@ -6357,6 +6358,7 @@ msgstr "laufend"
 
 #: src/templates/core/cases/partials/episode_list.html:33
 #: src/templates/core/export/client_data_pdf.html:228
+#: src/templates/core/import/partials/_stepper.html:37
 msgid "abgeschlossen"
 msgstr "abgeschlossen"
 
@@ -7066,7 +7068,7 @@ msgstr[0] "%(days)s Tag"
 msgstr[1] "%(days)s Tage"
 
 #: src/templates/core/config/document_types/detail.html:62
-#: src/templates/core/config/document_types/partials/table.html:38
+#: src/templates/core/config/document_types/partials/table.html:51
 #: src/templates/core/config/field_templates/partials/table.html:33
 #: src/templates/core/system/dashboard.html:288
 #: src/templates/core/system/organization.html:51
@@ -7255,7 +7257,25 @@ msgstr "Neue Gruppe"
 msgid "Entität"
 msgstr "Entität"
 
-#: src/templates/core/config/document_types/partials/table.html:50
+#: src/templates/core/config/document_types/partials/table.html:26
+msgid "%(n)s Block"
+msgid_plural "%(n)s Blöcke"
+msgstr[0] "%(n)s Block"
+msgstr[1] "%(n)s Blöcke"
+
+#: src/templates/core/config/document_types/partials/table.html:28
+msgid "%(n)s Feld"
+msgid_plural "%(n)s Felder"
+msgstr[0] "%(n)s Feld"
+msgstr[1] "%(n)s Felder"
+
+#: src/templates/core/config/document_types/partials/table.html:30
+msgid "%(n)s Bedingung"
+msgid_plural "%(n)s Bedingungen"
+msgstr[0] "%(n)s Bedingung"
+msgstr[1] "%(n)s Bedingungen"
+
+#: src/templates/core/config/document_types/partials/table.html:63
 msgid "Keine Dokumentationstypen gefunden"
 msgstr "Keine Dokumentationstypen gefunden"
 
@@ -7765,7 +7785,7 @@ msgstr ""
 "Bearbeitung ist nicht möglich."
 
 #: src/templates/core/events/edit.html:58
-#: src/templates/core/import/mapping.html:61
+#: src/templates/core/import/mapping.html:62
 msgid "Zurück"
 msgstr "Zurück"
 
@@ -8431,30 +8451,30 @@ msgstr ""
 msgid "Zur Übersicht"
 msgstr "Zur Übersicht"
 
-#: src/templates/core/import/detail.html:31
+#: src/templates/core/import/detail.html:33
 msgid "Angelegte Datensätze"
 msgstr "Angelegte Datensätze"
 
-#: src/templates/core/import/detail.html:31
+#: src/templates/core/import/detail.html:33
 msgid "Würden angelegt (Probelauf)"
 msgstr "Würden angelegt (Probelauf)"
 
-#: src/templates/core/import/detail.html:38
+#: src/templates/core/import/detail.html:40
 #: src/templates/core/import/preview.html:21
 #: src/templates/core/system/dashboard.html:36
 msgid "Fehler"
 msgstr "Fehler"
 
-#: src/templates/core/import/detail.html:46
+#: src/templates/core/import/detail.html:48
 msgid "Zuordnung fortsetzen"
 msgstr "Zuordnung fortsetzen"
 
-#: src/templates/core/import/detail.html:50
+#: src/templates/core/import/detail.html:52
 #: src/templates/core/import/preview.html:46
 msgid "Import abbrechen"
 msgstr "Import abbrechen"
 
-#: src/templates/core/import/detail.html:53
+#: src/templates/core/import/detail.html:55
 msgid "Der Lauf ist abgeschlossen; die hochgeladene Datei wurde gelöscht."
 msgstr "Der Lauf ist abgeschlossen; die hochgeladene Datei wurde gelöscht."
 
@@ -8489,36 +8509,34 @@ msgstr "Noch kein Import angelegt."
 msgid "Spalten zuordnen"
 msgstr "Spalten zuordnen"
 
-#: src/templates/core/import/mapping.html:9
+#: src/templates/core/import/mapping.html:10
 #, python-format
 msgid ""
-"Schritt 2 von 4: %(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten "
-"werden ignoriert."
+"%(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten werden ignoriert."
 msgstr ""
-"Schritt 2 von 4: %(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten "
-"werden ignoriert."
+"%(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten werden ignoriert."
 
-#: src/templates/core/import/mapping.html:26
+#: src/templates/core/import/mapping.html:27
 msgid "Spalte in der Datei"
 msgstr "Spalte in der Datei"
 
-#: src/templates/core/import/mapping.html:27
+#: src/templates/core/import/mapping.html:28
 msgid "Beispielwerte"
 msgstr "Beispielwerte"
 
-#: src/templates/core/import/mapping.html:39
+#: src/templates/core/import/mapping.html:40
 msgid "Zielfeld für"
 msgstr "Zielfeld für"
 
-#: src/templates/core/import/mapping.html:44
+#: src/templates/core/import/mapping.html:45
 msgid "— ignorieren —"
 msgstr "— ignorieren —"
 
-#: src/templates/core/import/mapping.html:56
+#: src/templates/core/import/mapping.html:57
 msgid "Mit * markierte Zielfelder sind Pflicht."
 msgstr "Mit * markierte Zielfelder sind Pflicht."
 
-#: src/templates/core/import/mapping.html:60
+#: src/templates/core/import/mapping.html:61
 msgid "Probelauf starten"
 msgstr "Probelauf starten"
 
@@ -8534,17 +8552,30 @@ msgstr "Spalte"
 msgid "Meldung"
 msgstr "Meldung"
 
+#: src/templates/core/import/partials/_stepper.html:17
+msgid "Fortschritt des Imports"
+msgstr "Fortschritt des Imports"
+
+#: src/templates/core/import/partials/_stepper.html:25
+msgid "Zuordnung"
+msgstr "Zuordnung"
+
+#: src/templates/core/import/partials/_stepper.html:30
 #: src/templates/core/import/preview.html:4
 msgid "Probelauf"
 msgstr "Probelauf"
 
+#: src/templates/core/import/partials/_stepper.html:35
+msgid "Übernahme"
+msgstr "Übernahme"
+
+#: src/templates/core/import/partials/_stepper.html:39
+msgid "abgebrochen"
+msgstr "abgebrochen"
+
 #: src/templates/core/import/preview.html:7
 msgid "Ergebnis des Probelaufs"
 msgstr "Ergebnis des Probelaufs"
-
-#: src/templates/core/import/preview.html:8
-msgid "Schritt 3 von 4: Es wurde noch nichts gespeichert."
-msgstr "Schritt 3 von 4: Es wurde noch nichts gespeichert."
 
 #: src/templates/core/import/preview.html:13
 msgid "Datenzeilen"
@@ -8569,10 +8600,6 @@ msgstr "Jetzt übernehmen"
 #: src/templates/core/import/preview.html:42
 msgid "Zuordnung ändern"
 msgstr "Zuordnung ändern"
-
-#: src/templates/core/import/upload.html:9
-msgid "Schritt 1 von 4: Datei hochladen"
-msgstr "Schritt 1 von 4: Datei hochladen"
 
 #: src/templates/core/import/upload.html:23
 msgid "Hochladen und fortfahren"

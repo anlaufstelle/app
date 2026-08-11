@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 11:43+0200\n"
+"POT-Creation-Date: 2026-08-11 11:44+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -163,7 +163,7 @@ msgid "– Ohne Gruppe –"
 msgstr "– No group –"
 
 #: src/core/forms/config.py:444 src/core/models/field_condition.py:53
-#: src/templates/core/import/mapping.html:28
+#: src/templates/core/import/mapping.html:29
 msgid "Zielfeld"
 msgstr "Target field"
 
@@ -256,7 +256,7 @@ msgstr "End"
 #: src/templates/core/export/client_data_pdf.html:244
 #: src/templates/core/export/client_data_pdf.html:292
 #: src/templates/core/hubs/verwaltung.html:66
-#: src/templates/core/import/detail.html:22
+#: src/templates/core/import/detail.html:24
 msgid "Dokumentationstyp"
 msgstr "Document type"
 
@@ -1128,7 +1128,7 @@ msgstr ""
 #: src/templates/core/export/client_data_pdf.html:400
 #: src/templates/core/export/client_data_pdf.html:478
 #: src/templates/core/export/client_data_pdf.html:510
-#: src/templates/core/import/detail.html:18
+#: src/templates/core/import/detail.html:20
 #: src/templates/core/import/list.html:25
 #: src/templates/core/system/legal_holds.html:37
 #: src/templates/core/system/legal_holds.html:70
@@ -1279,7 +1279,7 @@ msgstr ""
 #: src/core/models/document_type.py:349 src/core/models/organization.py:37
 #: src/core/models/quick_template.py:60 src/core/models/time_filter.py:37
 #: src/templates/core/config/document_types/detail.html:62
-#: src/templates/core/config/document_types/partials/table.html:36
+#: src/templates/core/config/document_types/partials/table.html:49
 #: src/templates/core/config/field_templates/partials/table.html:31
 #: src/templates/core/export/client_data_pdf.html:41
 #: src/templates/core/export/client_data_pdf.html:449
@@ -1535,6 +1535,7 @@ msgid "Mehrfachauswahl"
 msgstr "Multi-select"
 
 #: src/core/models/document_type.py:289
+#: src/templates/core/import/partials/_stepper.html:20
 msgid "Datei"
 msgstr "File"
 
@@ -1856,7 +1857,7 @@ msgstr "Committed"
 msgid "Abgebrochen"
 msgstr "Aborted"
 
-#: src/core/models/import_job.py:80 src/templates/core/import/detail.html:26
+#: src/core/models/import_job.py:80 src/templates/core/import/detail.html:28
 #: src/templates/core/import/list.html:26
 msgid "Angelegt von"
 msgstr "Created by"
@@ -3925,7 +3926,7 @@ msgid_plural "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“."
 msgstr[0] "%(n)d case contains data under the slug \"%(slug)s\"."
 msgstr[1] "%(n)d cases contain data under the slug \"%(slug)s\"."
 
-#: src/core/services/config.py:508 src/core/views/config/document_types.py:286
+#: src/core/services/config.py:508 src/core/views/config/document_types.py:328
 msgid "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field group does not belong to this document type."
 
@@ -4566,36 +4567,36 @@ msgstr "No source field specified."
 msgid "Ungültige Quellfeld-ID."
 msgstr "Invalid source field ID."
 
-#: src/core/views/config/document_types.py:157
+#: src/core/views/config/document_types.py:199
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde angelegt."
 msgstr "Document type \"%(name)s\" was created."
 
-#: src/core/views/config/document_types.py:202
+#: src/core/views/config/document_types.py:244
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde aktualisiert."
 msgstr "Document type \"%(name)s\" was updated."
 
-#: src/core/views/config/document_types.py:250
+#: src/core/views/config/document_types.py:292
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde gelöscht."
 msgstr "Document type \"%(name)s\" was deleted."
 
-#: src/core/views/config/document_types.py:279
+#: src/core/views/config/document_types.py:321
 msgid "Ungültige Feldgruppen-ID."
 msgstr "Invalid field group ID."
 
-#: src/core/views/config/document_types.py:291
-#: src/core/views/config/document_types.py:303
+#: src/core/views/config/document_types.py:333
+#: src/core/views/config/document_types.py:345
 msgid "Die Feldvorlage konnte nicht zugeordnet werden."
 msgstr "The field template could not be assigned."
 
-#: src/core/views/config/document_types.py:307
+#: src/core/views/config/document_types.py:349
 #, python-format
 msgid "Feld „%(name)s“ wurde zugeordnet."
 msgstr "Field \"%(name)s\" was assigned."
 
-#: src/core/views/config/document_types.py:319
+#: src/core/views/config/document_types.py:361
 #, python-format
 msgid "Feld „%(name)s“ wurde entfernt."
 msgstr "Field \"%(name)s\" was removed."
@@ -6300,6 +6301,7 @@ msgstr "ongoing"
 
 #: src/templates/core/cases/partials/episode_list.html:33
 #: src/templates/core/export/client_data_pdf.html:228
+#: src/templates/core/import/partials/_stepper.html:37
 msgid "abgeschlossen"
 msgstr "closed"
 
@@ -7002,7 +7004,7 @@ msgstr[0] "%(days)s day"
 msgstr[1] "%(days)s days"
 
 #: src/templates/core/config/document_types/detail.html:62
-#: src/templates/core/config/document_types/partials/table.html:38
+#: src/templates/core/config/document_types/partials/table.html:51
 #: src/templates/core/config/field_templates/partials/table.html:33
 #: src/templates/core/system/dashboard.html:288
 #: src/templates/core/system/organization.html:51
@@ -7190,7 +7192,25 @@ msgstr "New group"
 msgid "Entität"
 msgstr "Entity"
 
-#: src/templates/core/config/document_types/partials/table.html:50
+#: src/templates/core/config/document_types/partials/table.html:26
+msgid "%(n)s Block"
+msgid_plural "%(n)s Blöcke"
+msgstr[0] "%(n)s block"
+msgstr[1] "%(n)s blocks"
+
+#: src/templates/core/config/document_types/partials/table.html:28
+msgid "%(n)s Feld"
+msgid_plural "%(n)s Felder"
+msgstr[0] "%(n)s field"
+msgstr[1] "%(n)s fields"
+
+#: src/templates/core/config/document_types/partials/table.html:30
+msgid "%(n)s Bedingung"
+msgid_plural "%(n)s Bedingungen"
+msgstr[0] "%(n)s condition"
+msgstr[1] "%(n)s conditions"
+
+#: src/templates/core/config/document_types/partials/table.html:63
 msgid "Keine Dokumentationstypen gefunden"
 msgstr "No document types found"
 
@@ -7690,7 +7710,7 @@ msgstr ""
 "possible."
 
 #: src/templates/core/events/edit.html:58
-#: src/templates/core/import/mapping.html:61
+#: src/templates/core/import/mapping.html:62
 msgid "Zurück"
 msgstr "Back"
 
@@ -8350,30 +8370,30 @@ msgstr ""
 msgid "Zur Übersicht"
 msgstr "Back to overview"
 
-#: src/templates/core/import/detail.html:31
+#: src/templates/core/import/detail.html:33
 msgid "Angelegte Datensätze"
 msgstr "Created records"
 
-#: src/templates/core/import/detail.html:31
+#: src/templates/core/import/detail.html:33
 msgid "Würden angelegt (Probelauf)"
 msgstr "Would be created (dry run)"
 
-#: src/templates/core/import/detail.html:38
+#: src/templates/core/import/detail.html:40
 #: src/templates/core/import/preview.html:21
 #: src/templates/core/system/dashboard.html:36
 msgid "Fehler"
 msgstr "Error"
 
-#: src/templates/core/import/detail.html:46
+#: src/templates/core/import/detail.html:48
 msgid "Zuordnung fortsetzen"
 msgstr "Continue mapping"
 
-#: src/templates/core/import/detail.html:50
+#: src/templates/core/import/detail.html:52
 #: src/templates/core/import/preview.html:46
 msgid "Import abbrechen"
 msgstr "Cancel import"
 
-#: src/templates/core/import/detail.html:53
+#: src/templates/core/import/detail.html:55
 msgid "Der Lauf ist abgeschlossen; die hochgeladene Datei wurde gelöscht."
 msgstr "The run is completed; the uploaded file was deleted."
 
@@ -8406,35 +8426,33 @@ msgstr "No imports yet."
 msgid "Spalten zuordnen"
 msgstr "Map columns"
 
-#: src/templates/core/import/mapping.html:9
+#: src/templates/core/import/mapping.html:10
 #, python-format
 msgid ""
-"Schritt 2 von 4: %(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten "
-"werden ignoriert."
-msgstr ""
-"Step 2 of 4: %(total)s data row(s) detected. Unmapped columns are ignored."
+"%(total)s Datenzeile(n) erkannt. Nicht zugeordnete Spalten werden ignoriert."
+msgstr "%(total)s data row(s) detected. Unmapped columns are ignored."
 
-#: src/templates/core/import/mapping.html:26
+#: src/templates/core/import/mapping.html:27
 msgid "Spalte in der Datei"
 msgstr "Column in the file"
 
-#: src/templates/core/import/mapping.html:27
+#: src/templates/core/import/mapping.html:28
 msgid "Beispielwerte"
 msgstr "Example values"
 
-#: src/templates/core/import/mapping.html:39
+#: src/templates/core/import/mapping.html:40
 msgid "Zielfeld für"
 msgstr "Target field for"
 
-#: src/templates/core/import/mapping.html:44
+#: src/templates/core/import/mapping.html:45
 msgid "— ignorieren —"
 msgstr "— ignore —"
 
-#: src/templates/core/import/mapping.html:56
+#: src/templates/core/import/mapping.html:57
 msgid "Mit * markierte Zielfelder sind Pflicht."
 msgstr "Target fields marked with * are required."
 
-#: src/templates/core/import/mapping.html:60
+#: src/templates/core/import/mapping.html:61
 msgid "Probelauf starten"
 msgstr "Start dry run"
 
@@ -8450,17 +8468,30 @@ msgstr "Column"
 msgid "Meldung"
 msgstr "Message"
 
+#: src/templates/core/import/partials/_stepper.html:17
+msgid "Fortschritt des Imports"
+msgstr "Import progress"
+
+#: src/templates/core/import/partials/_stepper.html:25
+msgid "Zuordnung"
+msgstr "Mapping"
+
+#: src/templates/core/import/partials/_stepper.html:30
 #: src/templates/core/import/preview.html:4
 msgid "Probelauf"
 msgstr "Dry run"
 
+#: src/templates/core/import/partials/_stepper.html:35
+msgid "Übernahme"
+msgstr "Commit"
+
+#: src/templates/core/import/partials/_stepper.html:39
+msgid "abgebrochen"
+msgstr "aborted"
+
 #: src/templates/core/import/preview.html:7
 msgid "Ergebnis des Probelaufs"
 msgstr "Dry run result"
-
-#: src/templates/core/import/preview.html:8
-msgid "Schritt 3 von 4: Es wurde noch nichts gespeichert."
-msgstr "Step 3 of 4: Nothing has been saved yet."
 
 #: src/templates/core/import/preview.html:13
 msgid "Datenzeilen"
@@ -8485,10 +8516,6 @@ msgstr "Commit now"
 #: src/templates/core/import/preview.html:42
 msgid "Zuordnung ändern"
 msgstr "Change mapping"
-
-#: src/templates/core/import/upload.html:9
-msgid "Schritt 1 von 4: Datei hochladen"
-msgstr "Step 1 of 4: Upload file"
 
 #: src/templates/core/import/upload.html:23
 msgid "Hochladen und fortfahren"

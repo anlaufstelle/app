@@ -10,15 +10,27 @@ die IDOR-404-Semantik. Mutations-/Audit-Feinheiten selbst prüft
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
 from core.forms.config import DocumentTypeForm
-from core.models import AuditLog, DocumentType, Event, QuickTemplate
+from core.models import (
+    AuditLog,
+    DocumentType,
+    DocumentTypeField,
+    Event,
+    FieldCondition,
+    FieldGroup,
+    FieldTemplate,
+    QuickTemplate,
+)
 
 
 def _valid_post(**overrides):
@@ -651,3 +663,149 @@ class TestFieldRemovalConfirm:
         # 0-Fall: schlichter Text ohne Warnton — kein „behalten"/Zähler.
         assert "entfernen?" in body
         assert "behalten" not in body
+
+
+# ---------------------------------------------------------------------------
+# Blöcke/Felder/Bedingungen je Zeile — Zähler ohne N+1 (Refs #1813, §F.2)
+# ---------------------------------------------------------------------------
+#
+# Die naive Lösung (drei gleichzeitige ``Count(..., distinct=True)``-Joins)
+# spannt ein Kreuzprodukt Gruppen × Felder × Bedingungen auf — ``distinct``
+# korrigiert nur die Zahlen, nicht die Kosten, und würde den bestehenden
+# ``event_count`` mitverzerren. Korrekt sind korrelierte Aggregat-Subqueries
+# (Muster ``AttachmentListView._chain_version_counts``, attachments.py:242).
+
+
+def _number_field(facility, doc_type, name, **kwargs):
+    ft = FieldTemplate.objects.create(facility=facility, name=name, field_type=FieldTemplate.FieldType.NUMBER)
+    return DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, **kwargs)
+
+
+def _text_field(facility, doc_type, name, **kwargs):
+    ft = FieldTemplate.objects.create(facility=facility, name=name, field_type=FieldTemplate.FieldType.TEXTAREA)
+    return DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, **kwargs)
+
+
+def _build_zaehler_solo(facility):
+    """0 Blöcke, 2 Felder, 0 Bedingungen."""
+    doc_type = DocumentType.objects.create(facility=facility, name="Zähler Solo")
+    _number_field(facility, doc_type, "Dauer (Solo)")
+    _text_field(facility, doc_type, "Notiz (Solo)")
+    return doc_type
+
+
+def _build_zaehler_mehrfach(facility):
+    """2 Blöcke (je 1 Feld) + 1 ungruppiertes Feld = 3 Felder, 1 Bedingung."""
+    doc_type = DocumentType.objects.create(facility=facility, name="Zähler Mehrfach")
+    gruppe_1 = FieldGroup.objects.create(document_type=doc_type, name="Gruppe Eins")
+    gruppe_2 = FieldGroup.objects.create(document_type=doc_type, name="Gruppe Zwei")
+    quelle = _number_field(facility, doc_type, "Feld B1", field_group=gruppe_1)
+    _number_field(facility, doc_type, "Feld B2", field_group=gruppe_2)
+    ziel = _text_field(facility, doc_type, "Feld B3")
+    FieldCondition.objects.create(
+        target_field=ziel,
+        depends_on_field=quelle,
+        operator=FieldCondition.Operator.GREATER_THAN,
+        value=1,
+    )
+    return doc_type
+
+
+def _build_zaehler_leer(facility):
+    """0 Blöcke, 0 Felder, 0 Bedingungen — der Rand-/Leerfall."""
+    return DocumentType.objects.create(facility=facility, name="Zähler Leer")
+
+
+@pytest.mark.django_db
+class TestBlockFieldConditionCounters:
+    def test_counts_are_correct_for_each_row(self, client, admin_user, facility, client_identified):
+        doc_solo = _build_zaehler_solo(facility)
+        doc_mehrfach = _build_zaehler_mehrfach(facility)
+        doc_leer = _build_zaehler_leer(facility)
+
+        # event_count (bestehender Zähler) darf durch die neuen Subqueries
+        # nicht mitverzerrt werden — Zähler an zwei der drei Typen, damit ein
+        # Kreuzprodukt (Gruppen × Felder × Bedingungen × Ereignisse) auffiele.
+        for _ in range(2):
+            Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_solo,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=admin_user,
+            )
+        for _ in range(5):
+            Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_mehrfach,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=admin_user,
+            )
+
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_list"))
+        assert response.status_code == 200
+
+        by_pk = {dt.pk: dt for dt in response.context["doc_types"]}
+
+        solo = by_pk[doc_solo.pk]
+        assert (solo.block_count, solo.field_count, solo.condition_count, solo.event_count) == (0, 2, 0, 2)
+
+        mehrfach = by_pk[doc_mehrfach.pk]
+        assert (mehrfach.block_count, mehrfach.field_count, mehrfach.condition_count, mehrfach.event_count) == (
+            2,
+            3,
+            1,
+            5,
+        )
+
+        leer = by_pk[doc_leer.pk]
+        assert (leer.block_count, leer.field_count, leer.condition_count, leer.event_count) == (0, 0, 0, 0)
+
+    def test_row_renders_the_counts_as_readable_text(self, client, admin_user, facility, client_identified):
+        """Nicht nur die Annotation, auch das Markup muss die Zahlen zeigen —
+        Format „n Blöcke · m Felder · k Bedingungen" (0 Bedingungen: der
+        Bedingungs-Teil entfällt, s. Kommentar in table.html)."""
+        _build_zaehler_mehrfach(facility)  # 2 Blöcke, 3 Felder, 1 Bedingung
+        _build_zaehler_solo(facility)  # 0 Blöcke, 2 Felder, 0 Bedingungen
+
+        client.force_login(admin_user)
+        body = re.sub(r"\s+", " ", client.get(reverse("core:config_doctype_list")).content.decode())
+
+        assert "2 Blöcke · 3 Felder · 1 Bedingung" in body
+        assert "0 Blöcke · 2 Felder" in body
+        # 0 Bedingungen wird nicht ausgeschrieben — reines Rauschen auf einer
+        # Zeile ohne Bedingung.
+        assert "0 Bedingungen" not in body
+
+    def test_query_count_is_constant_regardless_of_doctype_count(self, client, admin_user, facility):
+        # Baseline: GENAU EIN Dokumentationstyp, aber mit Gruppen, Feldern UND
+        # einer Bedingung — die teuersten Subqueries laufen also bereits mit.
+        _build_zaehler_mehrfach(facility)
+
+        client.force_login(admin_user)
+        url = reverse("core:config_doctype_list")
+
+        with CaptureQueriesContext(connection) as baseline_ctx:
+            response = client.get(url)
+        assert response.status_code == 200
+        response.content  # noqa: B018 — Paginierung/Template vollständig auswerten
+        baseline_count = len(baseline_ctx.captured_queries)
+
+        # +2 weitere Typen mit unterschiedlich vielen Blöcken/Feldern/Bedingungen.
+        _build_zaehler_solo(facility)
+        _build_zaehler_leer(facility)
+
+        with CaptureQueriesContext(connection) as full_ctx:
+            response = client.get(url)
+        assert response.status_code == 200
+        response.content  # noqa: B018
+        full_count = len(full_ctx.captured_queries)
+
+        assert full_count == baseline_count, (
+            f"Query-Zahl wächst mit der Zeilenzahl: 1 Typ => {baseline_count} Queries, "
+            f"3 Typen => {full_count} Queries. Das deutet auf N+1 pro Zeile hin."
+        )

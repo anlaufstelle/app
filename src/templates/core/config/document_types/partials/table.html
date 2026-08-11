@@ -17,6 +17,18 @@
             <tr class="hover:bg-canvas transition-colors" data-testid="doctype-row">
                 <td class="px-4 py-3">
                     <a href="{% url 'core:config_doctype_detail' dt.pk %}" class="text-[14px] font-semibold text-accent hover:underline" data-testid="doctype-detail-link">{{ dt.name }}</a>
+                    {% comment %}
+                    Bedingungs-Teil bei 0 weggelassen — auf den meisten Typen gibt es (noch) keine
+                    Bedingung, „0 Bedingungen" auf jeder Zeile wäre reines Rauschen (Refs #1813, §F.2).
+                    {% endcomment %}
+                    <p class="text-[12px] text-ink-muted mt-0.5" data-testid="doctype-counts">
+                        {% blocktrans count n=dt.block_count %}{{ n }} Block{% plural %}{{ n }} Blöcke{% endblocktrans %}
+                        ·
+                        {% blocktrans count n=dt.field_count %}{{ n }} Feld{% plural %}{{ n }} Felder{% endblocktrans %}
+                        {% if dt.condition_count %}
+                        · {% blocktrans count n=dt.condition_count %}{{ n }} Bedingung{% plural %}{{ n }} Bedingungen{% endblocktrans %}
+                        {% endif %}
+                    </p>
                 </td>
                 <td class="px-4 py-3 hidden md:table-cell" data-testid="doctype-entity-type-badge">
                     {% if dt.entity_type == "client" %}

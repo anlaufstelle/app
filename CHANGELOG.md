@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Sprachumschalter auf dem Telefon** (#1813) — im mobilen „Mehr"-Menü steht über „Abmelden" jetzt dieselbe DE/EN-Umschaltung wie im Fuß der Desktop-Navigation; bisher ließ sich die Sprache mobil **gar nicht** wechseln, weil die Umschaltung ausschließlich in der auf kleinen Bildschirmen ausgeblendeten Seitenleiste lag. Nach dem Wechsel bleibt man auf derselben Seite (#1801).
 - **Bereichs-Übersichten „Datenschutz" (`/datenschutz/`) und „Verwaltung" (`/verwaltung/`)** (#1813) — zwei neue Seiten mit Reiterzeile nach dem Muster des Systembereichs (die Reiterzeile erscheint auch auf den Bereichsseiten selbst), je einer kurzen Statusliste (offene Löschanträge, Berichtigungen, Löschvorschläge, letzter Audit-Eintrag, letzter DSGVO-Download bzw. Dokumentationstypen, Feldvorlagen, offene Importläufe) und einem Erklärabsatz; alle bestehenden Seiten behalten ihre Adressen, Berechtigungen bleiben unverändert (#1801).
 - **Datei-Übersicht filtert jetzt auch nach Fall und Ereignis** (#1813) — `/attachments/?case=<id>` und `/attachments/?event=<id>` ergänzen den bestehenden `?client=`-Filter (fail-closed wie gehabt: eine unbrauchbare UUID liefert eine leere Liste statt eines Fehlers oder der Gesamtliste). Fall- und Ereignis-Detail verlinken neu auf „Alle Dateien dieses Falls"/„…dieses Ereignisses" (Personen-Detail hatte das Pendant „Alle Dateien dieser Person" bereits); der Assistenz-Ausschluss von Fall-Dateien (ADR-039 §12) bleibt unverändert bestehen.
+- **Dokumentationstypen-Liste zeigt Blöcke/Felder/Bedingungen je Zeile** (#1813) — jede Zeile nennt jetzt „n Blöcke · m Felder · k Bedingungen" (0 Bedingungen bleibt unausgeschrieben); die Zahlen kommen über korrelierte Aggregat-Subqueries (kein Kreuzprodukt, kein N+1) und verändern den bestehenden Ereigniszähler nicht.
 
 ### Changed
 
@@ -29,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Navigation zeigt den aktiven Bereich jetzt auf allen Seiten des Systembereichs und in der Audit-Detailansicht** (#1813) — auf „Retention", „VVT", „Legal Holds" und „Compliance" sowie beim Aufklappen eines Audit-Eintrags war die Ortsanzeige in der Hauptnavigation bisher erloschen.
+- **Import-Wizard zeigt eine durchgehende Fortschrittsanzeige** (#1813) — die bisherigen „Schritt n von 4"-Textzeilen auf den Seiten Hochladen/Zuordnen/Probelauf sind durch einen Stepper mit den vier Stationen Datei · Zuordnung · Probelauf · Übernahme ersetzt. Die „Übernahme" hat keine eigene Seite (reiner POST) — die Job-Detailseite zeigt sie deshalb dauerhaft und weist bei abgeschlossenen bzw. abgebrochenen Läufen den passenden Zustand aus.
 
 ## [0.80.0] - 2026-08-10
 

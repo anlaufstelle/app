@@ -5,7 +5,7 @@
 
 {% block content %}
 <h1 class="text-[22px] font-bold text-ink mb-1">{% trans "Ergebnis des Probelaufs" %}</h1>
-<p class="text-sm text-ink-muted mb-6">{% trans "Schritt 3 von 4: Es wurde noch nichts gespeichert." %}</p>
+{% include "core/import/partials/_stepper.html" with step=3 %}
 
 <div class="card p-5 mb-6" data-testid="import-preview-summary">
     <dl class="grid grid-cols-3 gap-4 text-sm">
