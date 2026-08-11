@@ -308,7 +308,6 @@ class TestUserFacingEntryPointGuard:
     """
 
     _TEMPLATES_DIR = Path("src/templates")
-    _NAV_REGISTRY = Path("src/core/nav.py")
     # URL-Names, für die mindestens ein ``{% url '<name>' ... %}`` in einem
     # Template existieren muss.  Wächst mit neuen Features.
     _REQUIRED_URL_NAMES = {
@@ -352,7 +351,14 @@ class TestUserFacingEntryPointGuard:
         templates_text = ""
         for template_file in self._TEMPLATES_DIR.rglob("*.html"):
             templates_text += template_file.read_text(errors="ignore") + "\n"
-        registry_text = self._NAV_REGISTRY.read_text(errors="ignore") if self._NAV_REGISTRY.exists() else ""
+        # Registry-Beleg über die ECHTEN Sammlungen (Sidebar, Mobil-Mehr,
+        # Bereichs-Reiter), nicht über einen Quelltext-Regex: ein NavItem,
+        # das definiert, aber in keiner Sammlung referenziert ist (Orphan),
+        # wird nirgends gerendert und zaehlt nicht als Einstieg
+        # (Verify-Befund #1813).
+        from core import nav as nav_registry
+
+        registry_url_names = {item.url_name for item in nav_registry.all_items()}
 
         missing = []
         for url_name in self._REQUIRED_URL_NAMES:
@@ -360,8 +366,7 @@ class TestUserFacingEntryPointGuard:
                 continue
             # `{% url 'name' ... %}` oder `{% url "name" ... %}`
             in_template = re.search(rf"""\{{%\s*url\s+['"]{re.escape(url_name)}['"]""", templates_text)
-            # `url_name="core:name"` in der Navigations-Registry
-            in_registry = re.search(rf"""url_name=['"]{re.escape(url_name)}['"]""", registry_text)
+            in_registry = url_name in registry_url_names
             if not (in_template or in_registry):
                 missing.append(url_name)
         assert not missing, (
