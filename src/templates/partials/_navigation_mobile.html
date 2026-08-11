@@ -81,6 +81,18 @@
                     <svg aria-hidden="true" class="w-4 h-4 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                     {% trans "Profil" %}
                 </a>
+                {# Sprachumschalter (Refs #1813, Konzept #1801 §5.3): mobil gab es bisher KEINEN — #}
+                {# die Form lag nur im Footer der Desktop-Sidebar, und die ist unter md ausgeblendet. #}
+                {# Gleiches Muster wie dort, nur mit 44-px-Schaltflaechen (Refs #810); Praezedenz fuer #}
+                {# ein <form> in diesem Alpine-Dropdown ist das Abmelden-Formular direkt darunter. #}
+                <form action="{% url 'set_language' %}" method="post" class="flex items-center gap-2 px-4 py-1">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" name="language" value="de" data-testid="mobile-nav-language-de"
+                            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-3 rounded text-[13px] font-bold {% if LANGUAGE_CODE == 'de' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">DE</button>
+                    <button type="submit" name="language" value="en" data-testid="mobile-nav-language-en"
+                            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-3 rounded text-[13px] font-bold {% if LANGUAGE_CODE == 'en' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">EN</button>
+                </form>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button type="submit" class="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] text-red-600 hover:bg-canvas">
