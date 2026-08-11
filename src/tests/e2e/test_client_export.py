@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from tests.e2e._helpers import enter_sudo_mode
-from tests.e2e._selectors import find_client_link
+from tests.e2e._selectors import find_client_link, open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
 
@@ -55,23 +55,33 @@ def _seed_qualified_client(e2e_env):
 
 
 class TestClientExportDropdown:
-    """Datenauskunft-Dropdown auf der Klientel-Detailseite."""
+    """Datenauskunft-Aktionen auf der Klientel-Detailseite.
+
+    Refs #1813: Ein eigenes „Datenauskunft"-Dropdown gibt es nicht mehr — die
+    beiden Auskunfts-Downloads sind Eintraege des gemeinsamen ⋮-Menues „Weitere
+    Aktionen" (Konzept #1801 §6.4: eine Overflow-Flaeche je Detailseite). Die
+    Rollen-Aussage bleibt unveraendert: nur Leitung/Admin sehen sie.
+    """
 
     def test_lead_sees_dropdown(self, lead_page, base_url):
-        """Leitung sieht den Datenauskunft-Button."""
+        """Leitung sieht beide Auskunfts-Eintraege im ⋮-Menue."""
         lead_page.goto(f"{base_url}/clients/")
         find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url and "Stern-42" not in url or "/clients/" in url)
-        btn = lead_page.locator("button:has-text('Datenauskunft')")
-        assert btn.count() == 1
+        overflow = open_desktop_overflow(lead_page, "client")
+        assert overflow.locator("[data-testid='client-export-json-link']").is_visible()
+        assert overflow.locator("[data-testid='client-export-pdf-link']").is_visible()
 
     def test_staff_does_not_see_dropdown(self, staff_page, base_url):
-        """Fachkraft sieht keinen Datenauskunft-Button."""
+        """Fachkraft hat die Auskunfts-Eintraege nicht — auch nicht im ⋮-Menue."""
         staff_page.goto(f"{base_url}/clients/")
         find_client_link(staff_page, "Stern-42").click()
         staff_page.wait_for_url(lambda url: "/clients/" in url)
-        btn = staff_page.locator("button:has-text('Datenauskunft')")
-        assert btn.count() == 0
+        # Gegenprobe mit geoeffnetem Menue: die Eintraege fehlen im Markup,
+        # nicht bloss hinter einem zugeklappten Panel.
+        open_desktop_overflow(staff_page, "client")
+        assert staff_page.locator("[data-testid='client-export-json-link']").count() == 0
+        assert staff_page.locator("[data-testid='client-export-pdf-link']").count() == 0
 
 
 class TestClientExportJSON:
@@ -85,11 +95,11 @@ class TestClientExportJSON:
         lead_page.goto(f"{base_url}/clients/")
         find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
-        desktop = lead_page.locator(".hidden.md\\:flex")
-        desktop.locator("button:has-text('Datenauskunft')").click()
+        # Refs #1813: Auskunft liegt im gemeinsamen ⋮-Menue der Aktionsleiste.
+        desktop = open_desktop_overflow(lead_page, "client")
 
         with lead_page.expect_download() as download_info:
-            desktop.locator("a:has-text('JSON-Export')").click()
+            desktop.locator("[data-testid='client-export-json-link']").click()
         download = download_info.value
         assert "datenauskunft" in download.suggested_filename
         assert download.suggested_filename.endswith(".json")
@@ -114,11 +124,10 @@ class TestClientExportJSON:
         # garantierte Eintrag, den der Audit-Auszug unten braucht.
         find_client_link(lead_page, pseudonym).click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
-        desktop = lead_page.locator(".hidden.md\\:flex")
-        desktop.locator("button:has-text('Datenauskunft')").click()
+        desktop = open_desktop_overflow(lead_page, "client")
 
         with lead_page.expect_download() as download_info:
-            desktop.locator("a:has-text('JSON-Export')").click()
+            desktop.locator("[data-testid='client-export-json-link']").click()
         payload = json.loads(Path(download_info.value.path()).read_text(encoding="utf-8"))
 
         assert set(payload) >= {
@@ -163,11 +172,10 @@ class TestClientExportPDF:
         lead_page.goto(f"{base_url}/clients/")
         find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
-        desktop = lead_page.locator(".hidden.md\\:flex")
-        desktop.locator("button:has-text('Datenauskunft')").click()
+        desktop = open_desktop_overflow(lead_page, "client")
 
         with lead_page.expect_download() as download_info:
-            desktop.locator("a:has-text('PDF-Export')").click()
+            desktop.locator("[data-testid='client-export-pdf-link']").click()
         download = download_info.value
         assert "datenauskunft" in download.suggested_filename
         assert download.suggested_filename.endswith(".pdf")

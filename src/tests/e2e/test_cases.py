@@ -5,6 +5,8 @@ import uuid
 
 import pytest
 
+from ._selectors import open_desktop_overflow
+
 pytestmark = pytest.mark.e2e
 
 
@@ -196,9 +198,11 @@ class TestCaseCRUD:
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
-        # "Schließen"-Button sollte sichtbar sein (Lead-User, offener Fall)
-        desktop_btns = page.locator(".hidden.md\\:flex")
-        close_btn = desktop_btns.locator("button:has-text('Schließen')")
+        # Refs #1813: "Fall abschließen" ist folgenschwer und steht deshalb nie
+        # primär (§6.2) — die POST-Form liegt im ⋮-Menü "Weitere Aktionen" der
+        # Desktop-Aktionsleiste. Sichtbar bleibt sie nur für Leitung/Admin.
+        overflow = open_desktop_overflow(page, "case")
+        close_btn = overflow.locator("button:has-text('Schließen')")
         assert close_btn.is_visible()
 
         close_btn.click()
@@ -207,8 +211,9 @@ class TestCaseCRUD:
 
         # Status-Badge zeigt "Geschlossen"
         assert page.locator("text=Geschlossen").first.is_visible()
-        # "Wiedereröffnen"-Button erscheint
-        assert desktop_btns.locator("button:has-text('Wiedereröffnen')").is_visible()
+        # "Wiedereröffnen"-Button erscheint — nach dem Reload erneut öffnen.
+        overflow = open_desktop_overflow(page, "case")
+        assert overflow.locator("button:has-text('Wiedereröffnen')").is_visible()
 
     @pytest.mark.smoke
     def test_reopen_case(self, lead_page, base_url):
@@ -224,22 +229,21 @@ class TestCaseCRUD:
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
-        # Schließen
-        desktop_btns = page.locator(".hidden.md\\:flex")
-        desktop_btns.locator("button:has-text('Schließen')").click()
+        # Schließen — Refs #1813: beide Statuswechsel liegen im ⋮-Menü der
+        # Desktop-Aktionsleiste und werden nach jedem Reload neu geöffnet.
+        open_desktop_overflow(page, "case").locator("button:has-text('Schließen')").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
         page.wait_for_load_state("domcontentloaded")
 
         # Wiedereröffnen
-        desktop_btns = page.locator(".hidden.md\\:flex")
-        desktop_btns.locator("button:has-text('Wiedereröffnen')").click()
+        open_desktop_overflow(page, "case").locator("button:has-text('Wiedereröffnen')").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
         page.wait_for_load_state("domcontentloaded")
 
         # Status zeigt wieder "Offen"
         assert page.locator("text=Offen").first.is_visible()
         # "Schließen"-Button ist wieder da
-        assert desktop_btns.locator("button:has-text('Schließen')").is_visible()
+        assert open_desktop_overflow(page, "case").locator("button:has-text('Schließen')").is_visible()
 
 
 class TestEpisodes:

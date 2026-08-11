@@ -12,6 +12,8 @@ from datetime import datetime, time
 import pytest
 from playwright.sync_api import expect
 
+from ._selectors import open_desktop_overflow
+
 pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
@@ -288,8 +290,8 @@ class TestEventEditAndDelete:
         page = authenticated_page
         self._create_identified_event(page, base_url)
 
-        # Löschen
-        page.click("a:has-text('Löschen')")
+        # Löschen — Refs #1813: nie primär, sondern im ⋮-Menü der Aktionsleiste.
+        open_desktop_overflow(page, "event").locator("[data-testid='event-action-delete']").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/delete/$"))
 
         # Identified Client → kein 4-Augen, direkter Löschen-Button
@@ -383,7 +385,8 @@ class TestQualifiedClientEventDeletion:
         page = authenticated_page
         self._create_event_for_stern42(page, base_url)
 
-        page.click("a:has-text('Löschen')")
+        # Refs #1813: „Löschen" liegt im ⋮-Menü „Weitere Aktionen".
+        open_desktop_overflow(page, "event").locator("[data-testid='event-action-delete']").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/delete/$"))
 
         reason_field = page.locator("textarea[name='reason']")

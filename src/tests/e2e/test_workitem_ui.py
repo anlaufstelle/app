@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from tests.e2e._selectors import find_client_link
+from tests.e2e._selectors import action_bar, find_client_link
 
 pytestmark = pytest.mark.e2e
 
@@ -333,9 +333,13 @@ class TestWorkItemDetailActions:
     def test_open_detail_offers_three_named_actions(self, authenticated_page, base_url):
         page = authenticated_page
         _open_workitem_detail(page, base_url, "Detail-Aktionen-Test")
-        assert page.locator("button:has-text('Aufgabe übernehmen')").is_visible()
-        assert page.locator("button:has-text('Als erledigt markieren')").is_visible()
-        assert page.locator("button:has-text('Als nicht relevant schließen')").is_visible()
+        # Refs #1813: die Statusaktionen sitzen in der Aktionsleiste, die jede
+        # Detailseite zweimal rendert (Desktop/Mobil) — ohne Scope waere der
+        # Selektor mehrdeutig (Strict-Mode-Verletzung).
+        actions = action_bar(page, "workitem")
+        assert actions.locator("button:has-text('Aufgabe übernehmen')").is_visible()
+        assert actions.locator("button:has-text('Als erledigt markieren')").is_visible()
+        assert actions.locator("button:has-text('Als nicht relevant schließen')").is_visible()
 
     def test_mark_as_done_directly_from_open(self, authenticated_page, base_url):
         """`Als erledigt markieren` setzt offene Aufgabe direkt auf Erledigt
@@ -358,10 +362,11 @@ class TestWorkItemDetailActions:
         page = authenticated_page
         _open_workitem_detail(page, base_url, "Verwerfen-Abbruch-Test")
         page.once("dialog", lambda dialog: dialog.dismiss())
-        page.click("button:has-text('Als nicht relevant schließen')")
+        actions = action_bar(page, "workitem")
+        actions.locator("button:has-text('Als nicht relevant schließen')").click()
         # Kein Statuswechsel — die offenen Aktionen bleiben sichtbar.
         page.wait_for_timeout(500)
-        assert page.locator("button:has-text('Als nicht relevant schließen')").is_visible()
+        assert actions.locator("button:has-text('Als nicht relevant schließen')").is_visible()
 
     def test_dismiss_confirmed_sets_status_to_verworfen(self, authenticated_page, base_url):
         """Bestätigtes Verwerfen setzt den Status auf Verworfen und entfernt
@@ -744,10 +749,11 @@ class TestWorkItemDoneConfirmation:
         page = authenticated_page
         _open_workitem_detail(page, base_url, "Detail-Erledigt-Abbruch")
         page.once("dialog", lambda dialog: dialog.dismiss())
-        page.click("button:has-text('Als erledigt markieren')")
+        actions = action_bar(page, "workitem")
+        actions.locator("button:has-text('Als erledigt markieren')").click()
         page.wait_for_timeout(500)
         # Kein Statuswechsel: der Erledigen-Button ist weiter da.
-        assert page.locator("button:has-text('Als erledigt markieren')").is_visible()
+        assert actions.locator("button:has-text('Als erledigt markieren')").is_visible()
 
     def test_overview_done_confirmation_cancel_keeps_in_progress(self, authenticated_page, base_url, e2e_env):
         """Übersicht/Tabelle: der Erledigt-Button einer In-Bearbeitung-Aufgabe

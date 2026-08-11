@@ -8,6 +8,7 @@ import pytest
 from tests.e2e._selectors import (
     find_deletion_approve_button,
     find_deletion_reject_button,
+    open_desktop_overflow,
 )
 
 pytestmark = pytest.mark.e2e
@@ -58,7 +59,9 @@ def _create_qualified_event_and_request_deletion(page, base_url):
     assert re.search(r"/events/[0-9a-f-]+/$", page.url), f"Erwartete Event-Detail, bekam {page.url}"
     event_path = urlparse(page.url).path
 
-    page.click("a:has-text('Löschen')")
+    # Refs #1813: „Löschen" ist folgenschwer und steht deshalb nicht mehr
+    # primär in der Aktionsleiste, sondern im ⋮-Menü „Weitere Aktionen".
+    open_desktop_overflow(page, "event").locator("[data-testid='event-action-delete']").click()
     page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/delete/$"))
 
     reason_field = page.locator("textarea[name='reason']")

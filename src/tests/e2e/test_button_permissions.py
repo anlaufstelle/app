@@ -10,6 +10,8 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
+from ._selectors import action_bar, open_desktop_overflow
+
 pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
@@ -125,8 +127,12 @@ class TestWorkItemDetailPermissions:
 
         # Status action buttons should be visible (Refs #1130: Detailansicht
         # bietet "Aufgabe übernehmen" + "Als nicht relevant schließen").
-        expect(page.locator("button:has-text('Aufgabe übernehmen')")).to_be_visible()
-        expect(page.locator("button:has-text('Als nicht relevant schließen')")).to_be_visible()
+        # Refs #1813: die Statusaktionen stehen jetzt in der Aktionsleiste, die
+        # zweimal gerendert wird (Desktop/Mobil) — ungescopt waere der Selektor
+        # mehrdeutig, daher immer die Desktop-Leiste als Scope.
+        desktop = action_bar(page, "workitem")
+        expect(desktop.locator("button:has-text('Aufgabe übernehmen')")).to_be_visible()
+        expect(desktop.locator("button:has-text('Als nicht relevant schließen')")).to_be_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -148,24 +154,25 @@ class TestEventDetailPermissions:
         page = assistant_page
         page.goto(f"{base_url}{event_path}", wait_until="domcontentloaded")
 
-        # Desktop buttons area: neither "Bearbeiten" nor "Löschen"
-        edit_link = page.locator(".hidden.md\\:flex a:has-text('Bearbeiten')")
-        delete_link = page.locator(".hidden.md\\:flex a:has-text('Löschen')")
-        expect(edit_link).not_to_be_visible()
-        expect(delete_link).not_to_be_visible()
+        # Weder "Bearbeiten" noch "Löschen" — Refs #1813: beide Aktionen tragen
+        # jetzt eigene Testids; "Löschen" liegt hinter dem ⋮-Knopf. Für die
+        # Assistenz rendert die Seite beide Einträge gar nicht erst, deshalb
+        # zählen statt auf Sichtbarkeit prüfen (der Overflow bliebe sonst zu).
+        expect(page.locator("[data-testid='event-action-edit']")).to_have_count(0)
+        expect(page.locator("[data-testid='event-action-delete']")).to_have_count(0)
 
     def test_staff_sees_edit_and_delete_on_own_event(self, staff_page, base_url):
         """Fachkraft sieht 'Bearbeiten' und 'Löschen' bei eigenem Event."""
         page = staff_page
         _create_event_and_go_to_detail(page, base_url)
 
-        # Desktop: "Bearbeiten" visible
-        edit_link = page.locator(".hidden.md\\:flex a:has-text('Bearbeiten')")
-        expect(edit_link).to_be_visible()
+        # Desktop: "Bearbeiten" steht primär in der Aktionsleiste
+        expect(action_bar(page, "event").locator("[data-testid='event-action-edit']")).to_be_visible()
 
-        # Desktop: "Löschen" visible (staff can delete own events)
-        delete_link = page.locator(".hidden.md\\:flex a:has-text('Löschen')")
-        expect(delete_link).to_be_visible()
+        # Refs #1813: "Löschen" ist folgenschwer und liegt deshalb nie primär,
+        # sondern im ⋮-Menü — sichtbar, sobald das Menü offen ist.
+        overflow = open_desktop_overflow(page, "event")
+        expect(overflow.locator("[data-testid='event-action-delete']")).to_be_visible()
 
     def test_lead_sees_all_buttons_on_any_event(self, lead_page, authenticated_page, base_url):
         """Leitung sieht 'Bearbeiten' und 'Löschen' bei jedem Event."""
@@ -178,11 +185,10 @@ class TestEventDetailPermissions:
         page = lead_page
         page.goto(f"{base_url}{event_path}", wait_until="domcontentloaded")
 
-        # Desktop: both buttons visible
-        edit_link = page.locator(".hidden.md\\:flex a:has-text('Bearbeiten')")
-        delete_link = page.locator(".hidden.md\\:flex a:has-text('Löschen')")
-        expect(edit_link).to_be_visible()
-        expect(delete_link).to_be_visible()
+        # Desktop: "Bearbeiten" primär, "Löschen" im ⋮-Menü (Refs #1813)
+        expect(action_bar(page, "event").locator("[data-testid='event-action-edit']")).to_be_visible()
+        overflow = open_desktop_overflow(page, "event")
+        expect(overflow.locator("[data-testid='event-action-delete']")).to_be_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -194,24 +200,29 @@ class TestClientDetailPermissions:
     """Button-Sichtbarkeit auf der Client-Detail-Seite."""
 
     def test_assistant_limited_buttons_on_client_detail(self, assistant_page, base_url):
-        """Assistenz sieht nur 'Neuer Kontakt', nicht 'Bearbeiten', 'Neue Aufgabe', 'Neuer Fall'."""
+        """Assistenz sieht nur 'Kontakt dokumentieren', nicht 'Bearbeiten', 'Aufgabe erstellen', 'Fall anlegen'.
+
+        Refs #1813 (F6): die Aktionen tragen die Verb-Vokabel („Kontakt
+        dokumentieren" statt „Neuer Kontakt") und eigene Testids — die
+        Rollen-Aussage dieses Tests bleibt unverändert.
+        """
         page = assistant_page
         _navigate_to_first_client_detail(page, base_url)
 
-        # Desktop buttons area
-        desktop_area = page.locator(".hidden.md\\:flex")
+        # Desktop-Aktionsleiste
+        desktop_area = action_bar(page, "client")
 
-        # "Neuer Kontakt" IS visible (no role restriction)
-        expect(desktop_area.locator("a:has-text('Neuer Kontakt')")).to_be_visible()
+        # "Kontakt dokumentieren" IS visible (no role restriction)
+        expect(desktop_area.locator("[data-testid='client-action-contact']")).to_be_visible()
 
-        # "Bearbeiten" should NOT be visible (staff_or_above only)
-        expect(desktop_area.locator("a:has-text('Bearbeiten')")).not_to_be_visible()
+        # "Bearbeiten" should NOT exist (staff_or_above only)
+        expect(page.locator("[data-testid='client-action-edit']")).to_have_count(0)
 
-        # "Neue Aufgabe" should NOT be visible (staff_or_above only)
-        expect(desktop_area.locator("a:has-text('Neue Aufgabe')")).not_to_be_visible()
+        # "Aufgabe erstellen" should NOT exist (staff_or_above only)
+        expect(page.locator("[data-testid='client-action-task']")).to_have_count(0)
 
-        # "Neuer Fall" link below the cases section should NOT be visible (staff_or_above only)
-        expect(page.locator("a:has-text('Neuer Fall')")).to_have_count(0)
+        # "Fall anlegen" link below the cases section should NOT be visible (staff_or_above only)
+        expect(page.locator("a:has-text('Fall anlegen')")).to_have_count(0)
 
         # Refs #1734: auch die beiden neuen Flächen (Aktionsleiste, Overflow-Menü)
         # tragen denselben Guard — keine davon darf für die Assistenz existieren.
@@ -219,12 +230,19 @@ class TestClientDetailPermissions:
             expect(page.locator(f"[data-testid='{testid}']")).to_have_count(0)
 
     def test_staff_sees_new_case_button_in_action_bar(self, staff_page, base_url):
-        """Refs #1734: „Neuer Fall" steht als Sekundär-Button in der Desktop-
-        Aktionsleiste (neben „Neue Aufgabe"), nicht nur als Fuß-Textlink."""
+        """Refs #1734: „Fall anlegen" ist aus der Desktop-Aktionsleiste erreichbar,
+        nicht nur als Fuß-Textlink unter der Fallliste.
+
+        Refs #1813: Die Fall-Anlage ist folgenschwer genug, um nicht primär zu
+        stehen (§6.2) — sie sitzt jetzt im ⋮-Menü „Weitere Aktionen" derselben
+        Leiste. Die Aussage bleibt: erreichbar ohne Scrollen bis unter die
+        Chronik.
+        """
         page = staff_page
         _navigate_to_first_client_detail(page, base_url)
 
-        button = page.locator(".hidden.md\\:flex [data-testid='client-new-case-btn']")
+        overflow = open_desktop_overflow(page, "client")
+        button = overflow.locator("[data-testid='client-new-case-btn']")
         expect(button).to_be_visible()
         button.click()
         page.wait_for_url(re.compile(r"/cases/new/\?client=[0-9a-f-]+"))

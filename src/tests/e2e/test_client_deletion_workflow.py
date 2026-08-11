@@ -23,6 +23,7 @@ import re
 
 import pytest
 
+from ._selectors import open_desktop_overflow
 from .test_client_deletion_status import _create_client
 
 pytestmark = pytest.mark.e2e
@@ -48,7 +49,11 @@ def test_staff_can_request_client_deletion(staff_page, base_url):
     _create_client(page, base_url, prefix="E2E-Req")
 
     # Button via data-testid (stabil gegenüber Layout-Änderungen).
-    page.locator("[data-testid='client-delete-request-btn']").first.click()
+    # Refs #1813: „Löschen beantragen" ist folgenschwer und liegt deshalb im
+    # ⋮-Menü „Weitere Aktionen" der Aktionsleiste (§6.2) — ausserdem rendert
+    # die Detailseite die Leiste zweimal (Desktop/Mobil), deshalb gescopt.
+    overflow = open_desktop_overflow(page, "client")
+    overflow.locator("[data-testid='client-delete-request-btn']").click()
     page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/delete/$"))
 
     page.locator("textarea[name='reason']").fill("E2E: Fachkraft beantragt Löschung")
@@ -77,7 +82,8 @@ def test_full_four_eyes_workflow(staff_page, lead_page, authenticated_page, base
     page = staff_page
     pseudonym, client_url = _create_client(page, base_url, prefix="E2E-4Eyes")
 
-    page.locator("[data-testid='client-delete-request-btn']").first.click()
+    # Refs #1813: Antrag stellen laeuft ueber das ⋮-Menü der Aktionsleiste.
+    open_desktop_overflow(page, "client").locator("[data-testid='client-delete-request-btn']").click()
     page.wait_for_url(re.compile(r"/delete/$"))
     page.locator("textarea[name='reason']").fill("E2E full workflow")
     page.locator("#main-content button[type='submit']").click()

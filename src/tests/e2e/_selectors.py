@@ -143,3 +143,73 @@ def subnav_tab(page: Page, key: str) -> Locator:
     steht schon hier, damit die Nav-Selektoren an einem Ort liegen.
     """
     return page.locator(f"[data-testid='subnav-tab-{key}']")
+
+
+# --- Aktionsleisten der Detailseiten (Refs #1813) ---------------------------
+# Jede Detailseite rendert ihre Kontextaktionen ZWEIMAL: einmal im Container
+# ``<entity>-actions-desktop`` (``hidden md:flex``) und einmal in
+# ``<entity>-actions-mobile`` (``md:hidden``). Ein ungescopter Selektor wie
+# ``page.locator("button:has-text('Löschen')")`` trifft deshalb immer zwei
+# Elemente — eines davon unsichtbar (Strict-Mode-Verletzung bzw. Klick-Timeout).
+# Folgenschwere Aktionen (Löschen, Fall abschließen, Datenauskunft) liegen
+# zudem hinter dem ⋮-Knopf und sind erst nach dessen Klick sichtbar.
+#
+# Template-Haken: ``components/_action_overflow.html``
+# (``desktop-overflow-menu``/``mobile-overflow-menu``) und
+# ``core/<entity>/partials/_actions.html``.
+
+ACTION_ENTITIES = ("client", "case", "event", "workitem")
+
+
+def action_bar(page: Page, entity: str, variant: str = "desktop") -> Locator:
+    """Die Aktionsleiste einer Detailseite (``entity`` aus :data:`ACTION_ENTITIES`).
+
+    Immer als Scope verwenden — nie global nach dem Aktions-Testid suchen, sonst
+    trifft der Selektor die Zwillings-Leiste der anderen Variante.
+    """
+    return page.locator(f"[data-testid='{entity}-actions-{variant}']")
+
+
+def open_desktop_overflow(page: Page, entity: str) -> Locator:
+    """Oeffnet „Weitere Aktionen" (⋮) der Desktop-Aktionsleiste.
+
+    Gibt die Desktop-Aktionsleiste zurueck, damit der Aufrufer die
+    Overflow-Eintraege darin gescopt adressieren kann::
+
+        bar = open_desktop_overflow(page, "client")
+        bar.locator("[data-testid='client-export-json-link']").click()
+    """
+    return _open_overflow(page, entity, "desktop")
+
+
+def open_mobile_overflow(page: Page, entity: str) -> Locator:
+    """Oeffnet das ⋮-Menue der mobilen Aktionsleiste (siehe :func:`open_desktop_overflow`)."""
+    return _open_overflow(page, entity, "mobile")
+
+
+def _open_overflow(page: Page, entity: str, variant: str) -> Locator:
+    bar = action_bar(page, entity, variant)
+    trigger = f"[data-testid='{variant}-overflow-menu']"
+    bar.locator(trigger).click()
+    # Das Panel ist das direkte Geschwister des ⋮-Knopfs (``x-show`` +
+    # ``x-transition``). Auf dessen Sichtbarkeit warten, damit nicht-wartende
+    # Pruefungen (``is_visible()``, ``bounding_box()``) nicht in die laufende
+    # Einblend-Transition greifen.
+    bar.locator(f"{trigger} + div").wait_for(state="visible")
+    return bar
+
+
+def wait_for_settled(locator: Locator, timeout: int = 5000) -> None:
+    """Wartet, bis die Alpine-``x-transition``-Skalierung eines Panels ausgelaufen ist.
+
+    Alpine blendet Dropdowns mit ``scale(.95) -> scale(1)`` ein. Waehrend der
+    150-ms-Transition liefert ``bounding_box()`` die *skalierte* Groesse (ein
+    44-px-Ziel misst dann ~42 px) — Groessen-Assertions muessen den Endzustand
+    messen. ``getComputedStyle().transform`` ist waehrend der Transition eine
+    Matrix und danach ``none``.
+    """
+    locator.page.wait_for_function(
+        "el => getComputedStyle(el).transform === 'none'",
+        arg=locator.element_handle(),
+        timeout=timeout,
+    )
