@@ -196,3 +196,36 @@ class TestAuditNavActiveState:
         content = client.get(reverse("core:audit_detail", args=[entry.pk])).content.decode()
 
         assert ACTIVE_MARKER in _opening_anchor(content, "nav-datenschutz")
+
+
+@pytest.mark.django_db
+class TestSearchHasNoSidebarAnchor:
+    """Refs #1803 (Konzept §3.10): Die Aktiv-State-Asymmetrie von ``/search/``
+    ist ein bewusster Zustand, kein Versehen — und deshalb ein Guard wert.
+
+    Desktop: die Suche hat keinen Sidebar-Eintrag (das Suchfeld steht bereits
+    als zweites Element in der Seitenleiste); ein Aktiv-State ohne zugehoerigen
+    Eintrag waere nicht zuordenbar, also leuchtet dort NICHTS.
+
+    Mobil gibt es sehr wohl einen Ausloeser — den „Suche"-Knopf im
+    „Mehr"-Dropdown. Ohne ``search`` im Mehr-Katalog verloere die untere Leiste
+    auf ``/search/`` jede Markierung.
+    """
+
+    def test_no_sidebar_anchor_is_active_on_the_search_page(self, client, staff_user):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:search")).content.decode()
+
+        assert _active_anchor_count(content) == 0, "Ohne Nav-Eintrag darf auch nichts leuchten"
+
+    def test_the_mobile_more_button_is_highlighted_on_the_search_page(self, client, staff_user):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:search")).content.decode()
+        button = _opening_anchor(content.replace("<button", "<a"), "mobile-nav-more")
+
+        assert "text-accent" in button, button
+
+    def test_search_stays_in_the_mobile_more_catalog(self):
+        """Datenebene — faellt auch ohne gerenderte Seite."""
+        assert "search" in nav.MOBILE_MORE_EXTRA_FAMILY
+        assert "search" in nav.mobile_more_catalog()

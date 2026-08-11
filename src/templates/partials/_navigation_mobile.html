@@ -109,23 +109,7 @@
                  class="fixed inset-x-0 top-0 z-[60] bg-surface shadow-lg border-b border-subtle p-4"
                  @click.away="closeSearch" @keydown.escape.window="closeSearch"
                  data-testid="mobile-search-overlay">
-                <div class="flex items-center gap-2" x-data="mobileSearchInput">
-                    <div class="relative flex-1">
-                        <svg aria-hidden="true" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input type="text" name="q" :value="mq" @input="setMq" placeholder="{% trans 'Suche...' %}"
-                               hx-get="{% url 'core:global_search' %}"
-                               hx-trigger="keyup changed delay:300ms"
-                               hx-target="#mobile-search-results"
-                               hx-include="this"
-                               class="w-full pl-9 pr-3 py-2.5 rounded-md border border-subtle text-sm bg-canvas"
-                               autocomplete="off"
-                               x-ref="input">
-                    </div>
-                    <button @click="closeSearch" class="p-2 text-ink-muted hover:text-ink">
-                        <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                </div>
-                <div id="mobile-search-results" class="mt-2 max-h-[60vh] overflow-y-auto"></div>
+                {% include "partials/_search_field.html" with variant="mobile" %}
             </div>
             {% endif %}
         </div>

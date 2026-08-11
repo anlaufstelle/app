@@ -13,26 +13,8 @@
     </a>
     {# Global Search — facility-scoped, daher fuer super_admin nicht sinnvoll. #}
     {% if user.is_assistant_or_above %}
-    <div class="px-4 py-3 border-b border-subtle relative" x-data="globalSearch" :aria-expanded="ariaExpanded">
-        <div class="relative">
-            <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <input type="text" name="q" :value="q" @input="setQ" placeholder="{% trans 'Suche...' %}"
-                   hx-get="{% url 'core:global_search' %}"
-                   hx-trigger="keyup changed delay:300ms"
-                   hx-target="#global-search-results"
-                   hx-include="this"
-                   @focus="focus" @click.away="close"
-                   @keydown.escape="escape"
-                   class="w-full pl-8 pr-3 py-1.5 rounded-md border border-subtle bg-canvas text-[13px] text-ink"
-                   autocomplete="off"
-                   aria-controls="global-search-results"
-                   data-testid="global-search-input">
-        </div>
-        <div id="global-search-results" x-show="hasResults" x-cloak
-             aria-live="polite" role="region" aria-label="{% trans 'Suchergebnisse' %}"
-             class="absolute left-4 right-4 mt-1 bg-surface shadow-lg rounded-md border border-subtle z-50 max-h-96 overflow-y-auto"
-             data-testid="global-search-results">
-        </div>
+    <div class="px-4 py-3 border-b border-subtle">
+        {% include "partials/_search_field.html" with variant="desktop" %}
     </div>
     {% endif %}
     {# --- "Neu erstellen" Create-Button: full-width mit Dropdown --- #}

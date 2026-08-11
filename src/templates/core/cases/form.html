@@ -93,7 +93,7 @@
                            autocomplete="off">
                     <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
 
-                    <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
+                    <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
                         <template x-for="(c, idx) in enrichedResults" :key="c.id">
                             <button type="button"
                                     :data-idx="idx"
@@ -107,6 +107,20 @@
                                 <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
                             </button>
                         </template>
+                    </div>
+                    {% comment %}
+                    Refs #1803 (Konzept §3.8): Der Leerzustand liegt NEBEN der
+                    Listbox, nicht darin — ein Textabsatz und ein Link haben in
+                    einem ``role="listbox"`` nichts verloren. Ohne ihn blieb das
+                    Feld bei null Treffern schlicht stumm.
+                    {% endcomment %}
+                    <div x-show="noMatches" x-cloak data-testid="client-autocomplete-empty"
+                         class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg px-3 py-2 text-[13px] text-ink-muted">
+                        <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>
+                        {% if user.is_staff_or_above %}
+                        <a href="{% url 'core:client_create' %}" data-testid="client-autocomplete-create"
+                           class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</a>
+                        {% endif %}
                     </div>
                 </div>
                 {% if form.client.errors %}

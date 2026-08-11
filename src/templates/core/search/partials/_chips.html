@@ -1,0 +1,31 @@
+{% load i18n %}
+{% comment %}
+Refs #1803 (Konzept §3.4): Typ-Filter als Chip-Reihe aus reinen ``<a href>``-
+Links — der Suchzustand steht damit vollstaendig in der Adresse (Regel L5),
+nicht im Client-State.
+
+Ein Chip erscheint nur, wenn seine Gruppe existiert (Regel L6): ein Filter, der
+strukturell nie einen Treffer liefern kann, ist eine Luege. Deshalb gibt es
+hier auch keine Chips fuer Faelle, Aufgaben oder Dateien.
+
+Die Chips sind FILTER, keine Bereichs-Reiter — sie stehen ueber den
+Ergebnissen, nicht als Subnav unter der H1.
+{% endcomment %}
+<div class="flex flex-wrap items-center gap-2 mb-6" role="group" aria-label="{% trans 'Ergebnistyp' %}">
+    <a href="?q={{ q|urlencode }}"
+       data-testid="search-chip-all"
+       {% if not result_type %}aria-current="page"{% endif %}
+       class="inline-flex items-center min-h-[44px] px-4 rounded-full border text-sm font-medium {% if not result_type %}bg-accent text-white border-accent{% else %}border-subtle text-ink-soft hover:bg-canvas{% endif %}">{% trans "Alle Typen" %}</a>
+    {% if counts.clients %}
+    <a href="?q={{ q|urlencode }}&amp;type=person"
+       data-testid="search-chip-person"
+       {% if result_type == "person" %}aria-current="page"{% endif %}
+       class="inline-flex items-center min-h-[44px] px-4 rounded-full border text-sm font-medium {% if result_type == "person" %}bg-accent text-white border-accent{% else %}border-subtle text-ink-soft hover:bg-canvas{% endif %}">{% trans "Nur Personen" %} ({{ counts.clients }})</a>
+    {% endif %}
+    {% if counts.events %}
+    <a href="?q={{ q|urlencode }}&amp;type=event"
+       data-testid="search-chip-event"
+       {% if result_type == "event" %}aria-current="page"{% endif %}
+       class="inline-flex items-center min-h-[44px] px-4 rounded-full border text-sm font-medium {% if result_type == "event" %}bg-accent text-white border-accent{% else %}border-subtle text-ink-soft hover:bg-canvas{% endif %}">{% trans "Nur Ereignisse" %} ({{ counts.events }})</a>
+    {% endif %}
+</div>

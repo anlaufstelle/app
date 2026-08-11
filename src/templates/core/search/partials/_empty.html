@@ -1,0 +1,52 @@
+{% load i18n %}
+{% comment %}
+Refs #1803 (Konzept §3.6): die drei Leerzustaende der Suche an EINER Stelle.
+
+(a) kein ``q``      — Einladung, unveraendert.
+(b) ``q`` zu kurz   — kein Scheitern, also auch keine Handlungsangebote; es
+                      laeuft keine Query und kein Ratelimit-Budget wird verbraucht.
+(c) null Treffer    — der eigentliche Fix: bisher endete die Seite hier mit
+                      „Keine Ergebnisse" und ohne jeden Ausgang (Regel L2).
+
+Der Kopftext bleibt bewusst der bestehende msgid — die Kritik betraf die
+fehlenden Angebote, nicht das Wort (Guard ``test_boundary_empty.py``).
+
+Die Angebote sind SERVERSEITIG gegated, nie clientseitig ausgeblendet:
+``core:client_create`` ist STAFF_PLUS, ein Link dorthin waere fuer die
+Assistenz ein 403-Sackgassenangebot (und broeche ``test_authz_template_links``).
+„Aufgabe erstellen"/„Fall anlegen" fehlen hier bewusst — sie beantworten die
+gescheiterte Suche nicht.
+
+Die Schaltflaeche „Person anlegen" gibt das Suchwort NICHT als Pseudonym mit
+(Maintainer-Entscheid 6.4): ein Tippfehler in der Suche wuerde sonst zum
+dauerhaften, einrichtungsweit eindeutigen Pseudonym.
+{% endcomment %}
+{% if not q %}
+{% include "components/_empty_state.html" with icon="search" message=_("Suchbegriff eingeben, um Personen und Ereignisse zu finden.") %}
+{% elif too_short %}
+{% include "components/_empty_state.html" with icon="search" message=_("Bitte mindestens 2 Zeichen eingeben.") %}
+{% else %}
+<div class="py-10 text-center" data-testid="search-empty-no-hits">
+    <svg aria-hidden="true" class="w-12 h-12 mx-auto mb-3 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    <p class="text-ink font-semibold">{% blocktrans with term=q %}Keine Ergebnisse für „{{ term }}"{% endblocktrans %}</p>
+    <p class="text-sm text-ink-muted mt-2">{% trans "Geprüft wurden Pseudonyme und die offen gespeicherten Inhalte von Ereignissen." %}</p>
+    <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+        {% if user.is_staff_or_above %}
+        <a href="{% url 'core:client_create' %}"
+           data-testid="search-empty-create-client"
+           class="inline-flex items-center justify-center min-h-[44px] btn-primary px-4 py-2">{% trans "Person anlegen" %}</a>
+        {% endif %}
+        <a href="{% url 'core:event_create' %}"
+           data-testid="search-empty-create-event"
+           class="inline-flex items-center justify-center min-h-[44px] btn-secondary px-4 py-2">{% trans "Kontakt dokumentieren" %}</a>
+    </div>
+    {% if not user.is_staff_or_above %}
+    <p class="text-sm text-ink-muted mt-3">{% trans "Neue Personen legt eine Fachkraft an." %}</p>
+    {% endif %}
+    <p class="mt-3">
+        <a href="{% url 'core:client_list' %}?q={{ q|urlencode }}"
+           data-testid="search-empty-client-list"
+           class="inline-flex items-center min-h-[44px] text-sm text-accent hover:underline">{% trans "In der Personenliste weitersuchen" %}</a>
+    </p>
+</div>
+{% endif %}

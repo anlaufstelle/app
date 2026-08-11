@@ -10020,6 +10020,10 @@ msgstr "Hauptnavigation"
 msgid "Suche..."
 msgstr "Suche..."
 
+#: src/templates/partials/_search_field.html:26
+msgid "Suche schließen"
+msgstr "Suche schließen"
+
 #: src/templates/partials/_navigation_desktop.html:32
 msgid "Suchergebnisse"
 msgstr "Suchergebnisse"
@@ -10339,3 +10343,74 @@ msgstr "Mir zugewiesen, offen"
 #: src/templates/core/zeitstrom/index.html:40
 msgid "Mir zugewiesen, Frist verstrichen"
 msgstr "Mir zugewiesen, Frist verstrichen"
+#: src/templates/core/search/partials/_empty.html:29
+msgid "Bitte mindestens 2 Zeichen eingeben."
+msgstr "Bitte mindestens 2 Zeichen eingeben."
+
+#: src/templates/core/search/partials/_empty.html:34
+msgid "Geprüft wurden Pseudonyme und die offen gespeicherten Inhalte von Ereignissen."
+msgstr "Geprüft wurden Pseudonyme und die offen gespeicherten Inhalte von Ereignissen."
+
+#: src/templates/core/search/partials/_empty.html:48
+msgid "Neue Personen legt eine Fachkraft an."
+msgstr "Neue Personen legt eine Fachkraft an."
+
+#: src/templates/core/search/partials/_empty.html:53
+msgid "In der Personenliste weitersuchen"
+msgstr "In der Personenliste weitersuchen"
+
+#: src/templates/core/search/partials/_chips.html:15
+msgid "Ergebnistyp"
+msgstr "Ergebnistyp"
+
+#: src/templates/core/search/partials/_chips.html:19
+msgid "Alle Typen"
+msgstr "Alle Typen"
+
+#: src/templates/core/search/partials/_chips.html:25
+msgid "Nur Personen"
+msgstr "Nur Personen"
+
+#: src/templates/core/search/partials/_chips.html:31
+msgid "Nur Ereignisse"
+msgstr "Nur Ereignisse"
+
+#: src/templates/core/search/partials/results.html:24
+msgid "Gesucht wird im Pseudonym."
+msgstr "Gesucht wird im Pseudonym."
+
+#: src/templates/core/search/partials/results.html:38
+msgid "Alle %(count)s Personen anzeigen"
+msgstr "Alle %(count)s Personen anzeigen"
+
+#: src/templates/core/search/partials/results.html:62
+msgid "Gesucht wird in den offen gespeicherten Feldinhalten der Ereignisse."
+msgstr "Gesucht wird in den offen gespeicherten Feldinhalten der Ereignisse."
+
+#: src/templates/core/search/partials/results.html:72
+msgid "Alle %(count)s Ereignisse anzeigen"
+msgstr "Alle %(count)s Ereignisse anzeigen"
+
+#: src/templates/core/search/partials/results.html:88
+msgid "Was die Suche nicht findet"
+msgstr "Was die Suche nicht findet"
+
+#: src/templates/core/search/partials/results.html:89
+msgid "Angaben in geschützten Feldern und Einträge, die deine Rolle nicht öffnen darf, erscheinen hier nie. Auch dann nicht, wenn es sie gibt."
+msgstr "Angaben in geschützten Feldern und Einträge, die deine Rolle nicht öffnen darf, erscheinen hier nie. Auch dann nicht, wenn es sie gibt."
+
+#: src/templates/core/search/partials/results.html:90
+msgid "Dateien sind ebenfalls nicht durchsuchbar: Dateinamen liegen verschlüsselt im Dateitresor."
+msgstr "Dateien sind ebenfalls nicht durchsuchbar: Dateinamen liegen verschlüsselt im Dateitresor."
+
+#: src/templates/core/events/create.html:167
+msgid "Keine Person mit diesem Pseudonym gefunden."
+msgstr "Keine Person mit diesem Pseudonym gefunden."
+
+#: src/templates/core/events/create.html:16
+msgid "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
+msgstr "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
+
+#: src/templates/core/events/create.html:186
+msgid "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe."
+msgstr "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe."

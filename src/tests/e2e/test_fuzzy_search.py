@@ -34,7 +34,7 @@ class TestFuzzySearch:
         assert pseudo in content
 
     def test_exact_match_not_duplicated_in_similar(self, authenticated_page, base_url):
-        """Exakter Treffer erscheint nur in 'Klientel', nicht zusätzlich in 'Ähnliche'."""
+        """Exakter Treffer erscheint nur in 'Personen', nicht zusätzlich in 'Ähnliche'."""
         page = authenticated_page
         suffix = uuid.uuid4().hex[:4]
         pseudo = f"Müller-{suffix}"

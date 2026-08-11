@@ -87,11 +87,33 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
-    /** Sidebar-Suche mit Dropdown. */
-    Alpine.data("globalSearch", () => ({
+    /**
+     * Gemeinsamer Zustand beider Nav-Suchfelder (Refs #1803).
+     *
+     * Sidebar und mobiles Overlay rendern dasselbe Partial
+     * (``partials/_search_field.html``) und brauchen deshalb dieselbe
+     * Oberflaeche. Die Fabrik gibt jedes Mal ein frisches Objekt zurueck —
+     * NICHT spreaden/Object.assign'en, das wuerde die Getter zu Werten
+     * einfrieren.
+     */
+    const searchFieldState = () => ({
         q: "",
         open: false,
         setQ(event) { this.q = event.target.value; },
+        /**
+         * Enter fuehrt auf ``/search/`` — aber erst ab zwei Zeichen.
+         *
+         * Der HTMX-Live-Trigger haengt am ``input``-Event; Enter aendert den
+         * Feldwert nicht und feuert deshalb keinen zweiten Request (das war
+         * das Doppel-Request-Risiko des Formular-Wrappers). Unterhalb der
+         * Schwelle wird der Submit unterdrueckt, weil ``/search/`` dann
+         * ohnehin nur den Hinweiszustand zeigen wuerde.
+         */
+        submitSearch(event) {
+            if (this.q.trim().length < 2) {
+                event.preventDefault();
+            }
+        },
         focus() {
             this.open = true;
         },
@@ -109,7 +131,10 @@ document.addEventListener("alpine:init", () => {
         get ariaExpanded() {
             return this.open ? "true" : "false";
         },
-    }));
+    });
+
+    /** Sidebar-Suche mit Dropdown. */
+    Alpine.data("globalSearch", searchFieldState);
 
     /** Sidebar + Mobile „Neu erstellen"-Dropdown. */
     Alpine.data("createMenu", () => ({
@@ -142,11 +167,11 @@ document.addEventListener("alpine:init", () => {
     }));
 
     /** Mobile-Search-Overlay-Inputfeld; fokussiert sich beim Mount. */
-    Alpine.data("mobileSearchInput", () => ({
-        mq: "",
-        setMq(event) { this.mq = event.target.value; },
-        init() {
+    Alpine.data("mobileSearchInput", () => {
+        const state = searchFieldState();
+        state.init = function () {
             this.$nextTick(() => this.$refs.input.focus());
-        },
-    }));
+        };
+        return state;
+    });
 });

@@ -44,7 +44,11 @@ from core.services.dashboard.release_log import (
     release_detail,
 )
 from core.services.dashboard.search import (
+    MIN_QUERY_LENGTH,
+    client_search_queryset,
+    event_search_queryset,
     search_clients_and_events,
+    search_result_counts,
     search_similar_clients,
 )
 from core.services.dashboard.snapshot import (
@@ -87,6 +91,7 @@ from core.services.dashboard.statistics import (
 
 __all__ = [
     "InvalidStatisticsPeriodError",
+    "MIN_QUERY_LENGTH",
     "PERSONS_KEY",
     "EXTERNAL_REPORT_TARGET",
     "RELEASE_FIELD_MAX_LENGTH",
@@ -107,10 +112,12 @@ __all__ = [
     "build_external_report",
     "build_focus_box",
     "build_release_overview",
+    "client_search_queryset",
     "count_unique_clients",
     "create_or_update_snapshot",
     "ensure_snapshots_for_months",
     "event_queryset_for_period",
+    "event_search_queryset",
     "facility_admin_dashboard_context",
     "filter_prefilled_data",
     "get_event_counts_by_month",
@@ -135,6 +142,7 @@ __all__ = [
     "parse_statistics_view",
     "release_detail",
     "search_clients_and_events",
+    "search_result_counts",
     "search_similar_clients",
     "staff_dashboard_context",
     "super_admin_dashboard_context",

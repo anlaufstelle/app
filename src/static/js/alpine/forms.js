@@ -20,6 +20,7 @@ const _autocompleteShared = {
         this.query = this.$el.dataset.initialPseudonym || "";
         this.selectedId = this.$el.dataset.initialClientId || "";
         this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
+        this._minStageHintTemplate = this.$el.dataset.minStageHint || "";
         // CSP-friendly: enriche Items mit isHighlighted statt
         // ``highlightIndex === idx`` im Template (Refs #693).
         this.$watch("highlightIndex", () => this._enrich());
@@ -39,6 +40,18 @@ const _autocompleteShared = {
     setSelectedId(event) { this.selectedId = event.target.value; },
     hideResults() {
         this.show = false;
+    },
+    /**
+     * Antwort uebernehmen — inkl. Leerzustand (Refs #1803).
+     *
+     * Vorher stand hier ``this.show = data.length > 0``; genau das war der
+     * stumme Zweig. Die Schwelle ist dieselbe zwei Zeichen wie in der globalen
+     * Suche: darunter ist „nichts gefunden" keine Aussage.
+     */
+    _applyResults(data) {
+        this.results = data;
+        this.searched = this.query.trim().length >= 2;
+        this.show = data.length > 0 || this.searched;
     },
     selectByEvent(event) {
         const idx = parseInt(event.currentTarget.dataset.idx, 10);
@@ -78,6 +91,7 @@ const _autocompleteShared = {
             return;
         }
         this.highlightIndex = -1;
+        this.selectionCleared = false;
         this.fetchResults();
     },
     onFocus() {
@@ -190,11 +204,36 @@ document.addEventListener("alpine:init", () => {
                 _justSelected: false,
                 _fetchGen: 0,
                 _autocompleteUrl: "",
+                // Refs #1803 (Konzept §3.8): `searched` unterscheidet „noch nicht
+                // genug getippt" von „gesucht und nichts gefunden". Ohne diese
+                // Unterscheidung blieb das Listenfeld bei null Treffern schlicht
+                // unsichtbar — ununterscheidbar davon, dass die Suche noch gar
+                // nicht lief.
+                searched: false,
+                // Sichtbarer Hinweis statt wortlosem Reset, wenn ein Typwechsel
+                // die bereits getroffene Personenauswahl leert.
+                selectionCleared: false,
+                // Label der geforderten Mindest-Kontaktstufe, serverseitig
+                // uebersetzt aus dem ``data-min-stage-label`` des <option>.
+                minStageLabel: "",
+                _minStageHintTemplate: "",
                 init() {
                     this._initCommon();
                 },
                 get ariaExpanded() {
                     return this.show ? "true" : "false";
+                },
+                get hasVisibleResults() {
+                    return this.show && this.results.length > 0;
+                },
+                get noMatches() {
+                    return this.show && this.searched && this.results.length === 0;
+                },
+                get showMinStageHint() {
+                    return this.minStageLabel !== "";
+                },
+                get minStageHint() {
+                    return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
                 },
                 fetchResults() {
                     const gen = ++this._fetchGen;
@@ -203,8 +242,7 @@ document.addEventListener("alpine:init", () => {
                         .then((r) => r.json())
                         .then((data) => {
                             if (gen === this._fetchGen) {
-                                this.results = data;
-                                this.show = data.length > 0;
+                                this._applyResults(data);
                             }
                         });
                 },
@@ -214,6 +252,8 @@ document.addEventListener("alpine:init", () => {
                     this.selectedId = item.id;
                     this.query = item.pseudonym;
                     this.show = false;
+                    this.searched = false;
+                    this.selectionCleared = false;
                     this.results = [];
                     this.highlightIndex = -1;
                 },
@@ -240,6 +280,19 @@ document.addEventListener("alpine:init", () => {
                 anonymousAllowed: true,
                 minStage: "",
                 highlightIndex: -1,
+                // Refs #1803 (Konzept §3.8): `searched` unterscheidet „noch nicht
+                // genug getippt" von „gesucht und nichts gefunden". Ohne diese
+                // Unterscheidung blieb das Listenfeld bei null Treffern schlicht
+                // unsichtbar — ununterscheidbar davon, dass die Suche noch gar
+                // nicht lief.
+                searched: false,
+                // Sichtbarer Hinweis statt wortlosem Reset, wenn ein Typwechsel
+                // die bereits getroffene Personenauswahl leert.
+                selectionCleared: false,
+                // Label der geforderten Mindest-Kontaktstufe, serverseitig
+                // uebersetzt aus dem ``data-min-stage-label`` des <option>.
+                minStageLabel: "",
+                _minStageHintTemplate: "",
                 _justSelected: false,
                 _fetchGen: 0,
                 clientCases: [],
@@ -294,6 +347,18 @@ document.addEventListener("alpine:init", () => {
                 get showCaseDropdown() {
                     return this.selectedId && this.clientCases.length > 0;
                 },
+                get hasVisibleResults() {
+                    return this.show && this.results.length > 0;
+                },
+                get noMatches() {
+                    return this.show && this.searched && this.results.length === 0;
+                },
+                get showMinStageHint() {
+                    return this.minStageLabel !== "";
+                },
+                get minStageHint() {
+                    return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
+                },
                 get showNoCasesHint() {
                     // Refs #1735: Ohne konfigurierte Cases-URL (Rolle darf
                     // ``cases_for_client`` nicht abrufen) wird gar nicht erst
@@ -311,6 +376,11 @@ document.addEventListener("alpine:init", () => {
                     const opt = selectEl.options[selectEl.selectedIndex];
                     this.anonymousAllowed = !opt || !opt.dataset.minStage;
                     this.minStage = (opt && opt.dataset.minStage) || "";
+                    // Refs #1803 (R1): Das Label der geforderten Stufe kommt
+                    // serverseitig uebersetzt aus dem <option> — die Regel wird
+                    // damit benennbar, ohne etwas ueber die gefilterte Menge zu
+                    // verraten.
+                    this.minStageLabel = (opt && opt.dataset.minStageLabel) || "";
                     if (this.minStage && this.selectedId) {
                         this._fetchGen++;
                         this.selectedId = "";
@@ -318,6 +388,13 @@ document.addEventListener("alpine:init", () => {
                         this.results = [];
                         this.clientCases = [];
                         this.selectedCaseId = "";
+                        this.show = false;
+                        this.searched = false;
+                        // Refs #1803: der Reset war wortlos — fuer die Nutzerin
+                        // verschwand eine Person, die sie eben noch gesehen hatte.
+                        this.selectionCleared = true;
+                    } else if (!this.minStage) {
+                        this.selectionCleared = false;
                     }
                 },
                 fetchResults() {
@@ -326,8 +403,7 @@ document.addEventListener("alpine:init", () => {
                         .then((r) => r.json())
                         .then((data) => {
                             if (gen === this._fetchGen) {
-                                this.results = data;
-                                this.show = data.length > 0;
+                                this._applyResults(data);
                             }
                         });
                 },
@@ -337,6 +413,8 @@ document.addEventListener("alpine:init", () => {
                     this.selectedId = item.id;
                     this.query = item.pseudonym;
                     this.show = false;
+                    this.searched = false;
+                    this.selectionCleared = false;
                     this.results = [];
                     this.highlightIndex = -1;
                     this.loadCasesForClient(item.id);

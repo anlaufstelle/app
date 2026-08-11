@@ -373,3 +373,53 @@ class TestSearchThresholdBoundaries:
         # durchkommen, wenn die Query selbst kein Substring ist.
         result = search_similar_clients(facility, "Xyz")
         assert len(result) >= 1
+
+
+@pytest.mark.django_db
+class TestSearchExcludesTrashedClients:
+    """Refs #1803 (Konzept §1.8/§3.9): Personen im Papierkorb sind nicht suchbar.
+
+    ``SoftDeletableModel.soft_delete()`` setzt ``is_active`` nicht mit — beide
+    Client-Zweige der Suche filterten aber nur auf ``is_active=True``. Eine
+    soft-geloeschte Person erschien damit weiter in Dropdown und Vollseite,
+    waehrend ``ClientDetailView`` (``is_deleted=False``) auf ihren Link mit 404
+    antwortete: ein toter Link auf eine Person, die geloescht sein soll.
+    """
+
+    def test_service_excludes_trashed_client_from_exact_hits(self, facility, staff_user, client_identified):
+        from core.services.dashboard import search_clients_and_events
+
+        client_identified.soft_delete(user=staff_user)
+
+        clients, _ = search_clients_and_events(facility, staff_user, "ID-01")
+        assert clients == []
+
+    def test_service_excludes_trashed_client_from_fuzzy_hits(self, facility, staff_user):
+        from core.models import Client as ClientModel
+        from core.services.dashboard import search_similar_clients
+
+        trashed = ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+        trashed.soft_delete(user=staff_user)
+
+        assert search_similar_clients(facility, "Schmitt") == []
+
+    def test_full_search_page_hides_trashed_client(self, client, staff_user, client_identified):
+        client_identified.soft_delete(user=staff_user)
+        client.force_login(staff_user)
+
+        content = client.get(reverse("core:search"), {"q": "ID-01"}).content.decode()
+        assert "Test-ID-01" not in content
+
+    def test_dropdown_hides_trashed_client(self, client, staff_user, client_identified):
+        client_identified.soft_delete(user=staff_user)
+        client.force_login(staff_user)
+
+        content = client.get(reverse("core:global_search"), {"q": "ID-01"}).content.decode()
+        assert "Test-ID-01" not in content
+
+    def test_trashed_client_detail_is_gone_so_the_hit_would_be_a_dead_link(self, client, staff_user, client_identified):
+        """Gegenprobe: genau deshalb darf der Treffer nicht erscheinen."""
+        client_identified.soft_delete(user=staff_user)
+        client.force_login(staff_user)
+
+        assert client.get(reverse("core:client_detail", args=[client_identified.pk])).status_code == 404

@@ -9,11 +9,23 @@
     {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Neuer Kontakt" %}</h1>
 
+    {% comment %}String-Literale sind in Django als SafeString markiert — weder
+    `{% templatetag openblock %} trans %}` noch das normale Autoescaping escapen sie. Der
+    Anfuehrungsstrich MITTEN im Satz haette das Attribut zerrissen (alles
+    dahinter waere zu Pseudo-Attributen geworden, die Komponente haette eine
+    abgeschnittene Vorlage gelesen). `force_escape` escapt auch Safe-Werte.{% endcomment %}
+    {% trans 'Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s" auswählbar.' as min_stage_hint %}
     {# Refs #1489: data-offline-enctype-downgrade — ohne gewaehlte Datei wird der Submit auf urlencoded umgestellt, damit der SW ihn offline queuen kann (multipart wird bewusst nie gequeued). #}
     <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-offline-enctype-downgrade data-autosave{% if applied_template or serienerfassung %} data-autosave-server-prefilled{% endif %}
           x-data="eventClientAutocomplete"
           data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
           data-initial-client-id="{{ client_id|default:'' }}"
+          {% comment %}Refs #1803 (Konzept §3.8, R1): Vorlage fuer die
+          Stufen-Erklaerung — serverseitig uebersetzt, %(stage)s ersetzt die
+          Komponente durch das data-min-stage-label des gewaehlten <option>.
+          Sie erklaert die REGEL, nicht die gefilterte Menge: die Existenz
+          einer Person unterhalb der Stufe wird nirgends bestaetigt.{% endcomment %}
+          data-min-stage-hint="{{ min_stage_hint|force_escape }}"
           {# §6.5 (Refs #1813 T4): ?case=-Vorbelegung — das Fall-<select> ist #}
           {# Alpine-getrieben (eventClientAutocomplete.loadCasesForClient), #}
           {# dieses Attribut ist der einzige Übergabeweg dorthin. #}
@@ -106,6 +118,7 @@
                         {% for dt in meta_form.document_type.field.queryset %}
                         <option value="{{ dt.pk }}"
                                 data-min-stage="{{ dt.min_contact_stage|default:'' }}"
+                                data-min-stage-label="{{ dt.get_min_contact_stage_display|default:'' }}"
                                 {% if meta_form.document_type.value|stringformat:"s" == dt.pk|stringformat:"s" %}selected{% endif %}>{{ dt.name }}</option>
                         {% endfor %}
                     </select>
@@ -157,7 +170,7 @@
                     <input type="hidden" name="client" :value="selectedId" @input="setSelectedId" data-autosave-person>
 
                     {# Dropdown mit Tastatur-Hervorhebung #}
-                    <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
+                    <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
                         <template x-for="(c, idx) in enrichedResults" :key="c.id">
                             <button type="button"
                                     :data-idx="idx"
@@ -172,12 +185,30 @@
                             </button>
                         </template>
                     </div>
+                    {% comment %}
+                    Refs #1803 (Konzept §3.8): Der Leerzustand liegt NEBEN der
+                    Listbox, nicht darin — ein Textabsatz und ein Link haben in
+                    einem ``role="listbox"`` nichts verloren. Ohne ihn blieb das
+                    Feld bei null Treffern schlicht stumm.
+                    {% endcomment %}
+                    <div x-show="noMatches" x-cloak data-testid="client-autocomplete-empty"
+                         class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg px-3 py-2 text-[13px] text-ink-muted">
+                        <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>
+                        <p x-show="showMinStageHint" x-cloak x-text="minStageHint" class="mt-1"></p>
+                        {% if user.is_staff_or_above %}
+                        <a href="{% url 'core:client_create' %}" data-testid="client-autocomplete-create"
+                           class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</a>
+                        {% endif %}
+                    </div>
                 </div>
                 {% if meta_form.client.errors %}
                 <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
                     {% for error in meta_form.client.errors %}<li>{{ error }}</li>{% endfor %}
                 </ul>
                 {% endif %}
+                <p x-show="selectionCleared" x-cloak data-testid="client-selection-cleared" class="mt-1 text-[12px] text-yellow-700">
+                    {% trans "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe." %}
+                </p>
                 <p x-show="notAnonymousAllowed" x-cloak class="mt-1 text-[12px] text-yellow-700">
                     {% trans "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
                 </p>

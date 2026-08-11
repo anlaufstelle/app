@@ -17,7 +17,8 @@
     {% if events %}
     {% if clients %}<div class="border-t border-subtle my-1"></div>{% endif %}
     <div class="px-3 py-1.5">
-        <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide">{% trans "Kontakte" %}</p>
+        {# Refs #1803 (Konzept §3.12): dieselbe msgid wie auf der Vollseite. #}
+        <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide">{% trans "Ereignisse" %}</p>
     </div>
     {% for event in events %}
     <a href="{% url 'core:event_detail' pk=event.pk %}" class="flex items-center px-3 py-2 text-sm text-ink-soft hover:bg-accent-light hover:text-accent">

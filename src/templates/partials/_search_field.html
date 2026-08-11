@@ -1,0 +1,48 @@
+{% load i18n %}
+{% comment %}
+Refs #1803 (Konzept #1801 §3.3): EIN Suchfeld fuer alle drei Flaechen —
+Sidebar (``variant="desktop"``), mobiles Overlay (``variant="mobile"``) und die
+Ergebnisseite ``/search/`` (``variant="page"``).
+
+Vorher lag das Markup dreifach im Baum und war entsprechend gedriftet: nur
+``/search/`` hatte einen Lade-Spinner, nur das Desktop-Dropdown ein
+``aria-controls``/``aria-live``, und kein einziges Feld stand in einem
+``<form>`` — die Tastatur erreichte die Vollsuche damit nie.
+
+Die Variante setzt hier nur Ids, Klassen und Platzhalter; der gemeinsame
+Kontrakt (Formular-Ziel, Live-Trigger, Debounce, Spinner, aria) steht
+geschlossen in ``partials/_search_field_control.html``.
+{% endcomment %}
+{% url 'core:global_search' as dropdown_url %}
+{% url 'core:search' as full_search_url %}
+{% trans "Suche..." as short_placeholder %}
+{% if variant == "mobile" %}
+{% with alpine=1 live_url=dropdown_url results_id="mobile-search-results" spinner_id="mobile-search-spinner" input_testid="mobile-search-input" placeholder=short_placeholder form_class="relative flex-1" input_class="w-full pl-9 pr-9 py-2.5 rounded-md border border-subtle text-sm bg-canvas" icon_class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" %}
+<div x-data="mobileSearchInput">
+    <div class="flex items-center gap-2">
+        {% include "partials/_search_field_control.html" %}
+        <button type="button" @click="closeSearch" class="p-2 text-ink-muted hover:text-ink" aria-label="{% trans 'Suche schließen' %}">
+            <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+    </div>
+    <div id="mobile-search-results" class="mt-2 max-h-[60vh] overflow-y-auto"
+         aria-live="polite" role="region" aria-label="{% trans 'Suchergebnisse' %}"
+         data-testid="mobile-search-results"></div>
+</div>
+{% endwith %}
+{% elif variant == "page" %}
+{% trans "Pseudonym oder Suchbegriff eingeben..." as page_placeholder %}
+{% with live_url=full_search_url results_id="search-results" spinner_id="search-results-spinner" input_testid="search-page-input" placeholder=page_placeholder prefill=1 push_url=1 form_class="relative w-full sm:max-w-lg" input_class="w-full border border-subtle rounded-[10px] pl-10 pr-10 py-3 text-sm" icon_class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" %}
+{% include "partials/_search_field_control.html" %}
+{% endwith %}
+{% else %}
+{% with alpine=1 live_url=dropdown_url results_id="global-search-results" spinner_id="global-search-spinner" input_testid="global-search-input" placeholder=short_placeholder form_class="relative" input_class="w-full pl-8 pr-8 py-1.5 rounded-md border border-subtle bg-canvas text-[13px] text-ink" icon_class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" %}
+<div class="relative" x-data="globalSearch">
+    {% include "partials/_search_field_control.html" %}
+    <div id="global-search-results" x-show="hasResults" x-cloak
+         aria-live="polite" role="region" aria-label="{% trans 'Suchergebnisse' %}"
+         class="absolute left-0 right-0 mt-1 bg-surface shadow-lg rounded-md border border-subtle z-50 max-h-96 overflow-y-auto"
+         data-testid="global-search-results"></div>
+</div>
+{% endwith %}
+{% endif %}

@@ -1,0 +1,42 @@
+{% load i18n %}
+{% comment %}
+Refs #1803 (Konzept #1801 §3.2/§3.3): der EINE Suchfeld-Kontrakt.
+
+Nicht direkt einbinden — ``partials/_search_field.html`` waehlt die Variante
+und setzt Ids, Klassen und Platzhalter; hier steht nur, was fuer alle drei
+Flaechen identisch gilt:
+
+* Formular-Wrapper mit ``/search/`` als Ziel — Enter ist damit ein
+  vollwertiger zweiter Weg in die Vollsuche, ohne JavaScript.
+* htmx-Live-Trigger auf ``input`` (NICHT ``keyup``). Enter aendert den
+  Feldwert nicht und feuert deshalb kein ``input`` — ein Tastendruck erzeugt
+  genau eine Navigation und keinen parallel laufenden HTMX-Request. ``input``
+  faengt zusaetzlich Einfuegen und Loeschen per Maus, die ``keyup`` verpasst.
+* 400 ms Debounce (vorher 300 ms): haelt den Tippfluss unter dem
+  30-Requests-pro-Minute-Ratelimit (ADR-026), ohne traege zu wirken.
+* Lade-Spinner und ``aria-controls`` auf das jeweilige Ergebnisziel — beides
+  hatte bisher nur ``/search/`` bzw. nur das Desktop-Dropdown.
+
+Parameter: ``variant`` ``alpine`` ``live_url`` ``results_id`` ``spinner_id``
+``form_class`` ``input_class`` ``icon_class`` ``input_testid`` ``placeholder``
+``prefill`` ``push_url``.
+{% endcomment %}
+<form method="get" action="{% url 'core:search' %}" role="search" class="{{ form_class }}"{% if alpine %} @submit="submitSearch"{% endif %} data-testid="search-field-{{ variant }}">
+    <svg aria-hidden="true" class="{{ icon_class }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    <input type="text" name="q"
+           {% if alpine %}:value="q" @input="setQ" @focus="focus" @click.away="close" @keydown.escape="escape" :aria-expanded="ariaExpanded" x-ref="input"{% endif %}
+           {% if prefill %}value="{{ q }}" autofocus{% endif %}
+           placeholder="{{ placeholder }}"
+           aria-label="{% trans 'Suchfeld' %}"
+           hx-get="{{ live_url }}"
+           hx-trigger="input changed delay:400ms"
+           hx-target="#{{ results_id }}"
+           hx-include="this"
+           hx-indicator="#{{ spinner_id }}"
+           {% if push_url %}hx-push-url="true"{% endif %}
+           class="{{ input_class }}"
+           autocomplete="off"
+           aria-controls="{{ results_id }}"
+           data-testid="{{ input_testid }}">
+    {% include "components/_htmx_spinner.html" with spinner_id=spinner_id position_class="absolute right-3 top-1/2 -translate-y-1/2" %}
+</form>
