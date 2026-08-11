@@ -230,16 +230,22 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # §6.5 Kontextregel (Refs #1813 T4): Owner-Filter fuer Fall/Ereignis,
         # analog dem Personen-Filter. Ein Fall-Anhang haengt entweder direkt
         # am Fall ODER an einem seiner Ereignisse — beide Zweige zaehlen fuer
-        # "Alle Dateien dieses Falls". Laeuft NACH dem Assistenz-Ausschluss
-        # oben: ein ?case= liefert fuer die Assistenz weiterhin leer, kein
-        # Nebeneingang in die Fall-Dokumentation (ADR-039 §12).
+        # "Alle Dateien dieses Falls".
         case_id = request.GET.get("case")
         if case_id:
-            attachments = self._filter_by_uuid(
-                attachments,
-                case_id,
-                lambda value: Q(case_id=value) | Q(event__case_id=value),
-            )
+            if user.is_staff_or_above:
+                attachments = self._filter_by_uuid(
+                    attachments,
+                    case_id,
+                    lambda value: Q(case_id=value) | Q(event__case_id=value),
+                )
+            else:
+                # ADR-039 §12: Faelle sind fuer die Assistenz unsichtbar.
+                # Der obige case__isnull-Ausschluss deckt nur fall-EIGENE
+                # Zeilen; der event__case_id-Zweig wuerde ihr sonst die
+                # verborgene Zuordnung Datei<->Fall beantworten (Orakel
+                # ueber den Fall-Schluessel). Fail-closed: leere Menge.
+                attachments = attachments.none()
 
         event_id = request.GET.get("event")
         if event_id:

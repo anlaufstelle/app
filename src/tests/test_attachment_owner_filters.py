@@ -131,24 +131,24 @@ class TestCaseOwnerFilter:
         assert response.status_code == 200
         assert response.context["attachments"] == []
 
-    def test_assistant_never_sees_the_case_owned_row_even_when_filtering_by_case(
+    def test_assistant_case_filter_returns_empty(
         self, client, assistant_user, case_with_direct_and_event_attachment
     ):
-        """ADR-039 §12: Fälle sind für die Assistenz unsichtbar — der
-        Ausschluss-Filter (``case__isnull=True``) läuft vor dem neuen
-        ``?case=``-Filter, kein Nebeneingang in die Fall-Dokumentation über
-        die fall-EIGENE Zeile.
+        """ADR-039 §12: Fälle sind für die Assistenz unsichtbar — ein
+        ``?case=`` liefert für sie die LEERE Menge, nicht nur die fall-eigene
+        Zeile gefiltert.
 
-        Die event-eigene Zeile (``fall_via_ereignis.pdf``) bleibt für die
-        Assistenz sichtbar — das Ereignis selbst ist ihr unabhängig vom
-        ``?case=``-Filter bereits zugänglich (genau wie ohne jeden Filter);
-        der Filter engt nur eine ohnehin sichtbare Menge über die Fall-UUID
-        als Selektionsschlüssel ein, öffnet aber keine neue Sichtbarkeit.
+        Auch die event-eigene Zeile (``fall_via_ereignis.pdf``) darf nicht
+        erscheinen: die Datei selbst ist der Assistenz zwar zugänglich, aber
+        eine Treffer-Antwort auf den Fall-Schlüssel beantwortet ihr die sonst
+        gezielt verborgene Zuordnungsfrage Datei↔Fall (Orakel über
+        ``event__case_id``; Security-Review-Befund zur #1813-Integration).
         """
         case, *_ = case_with_direct_and_event_attachment
         client.force_login(assistant_user)
         content = client.get(reverse(LIST_URL_NAME), {"case": str(case.pk)}).content.decode()
         assert "fall_direkt.pdf" not in content
+        assert "fall_via_ereignis.pdf" not in content
 
     def test_selected_case_is_in_context_for_htmx_reload(
         self, client, staff_user, case_with_direct_and_event_attachment
