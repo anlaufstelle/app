@@ -49,6 +49,17 @@ def _select_backend(page, slug):
     (Refs #761/#849).
     """
     select = page.locator("#report-section select[name='backend']")
+    # Swap-bewusstes Warten (Refs #1798-Lektion): nach einem HX-Swap steht das
+    # ``select`` sofort im DOM, htmx bindet seine Listener aber erst in der
+    # Settle-Phase. Ein ``select_option`` davor feuert ein change-Event ins
+    # Leere — kein Panel-Request, Timeout. Python-seitig pollen (kein
+    # ``wait_for_function``, Refs docs/e2e-runbook.md § 8).
+    for _ in range(100):
+        if select.evaluate("el => !!el['htmx-internal-data']"):
+            break
+        page.wait_for_timeout(100)
+    else:
+        raise AssertionError("Backend-Select wurde nicht von htmx verarbeitet (Settle blieb aus)")
     with page.expect_response(lambda r: PANEL_URL_FRAGMENT in r.url) as response_info:
         select.select_option(slug)
     assert response_info.value.status == 200, f"Panel-Request fehlgeschlagen: {response_info.value.status}"
