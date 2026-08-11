@@ -48,6 +48,34 @@
         </div>
     </div>
 
+    {% comment %}
+    Offline-Konflikte (Refs #1813, Konzept #1801 §7.1): bisher war
+    /offline/conflicts/ nur ueber das BEDINGTE rote Banner erreichbar — wer es
+    uebersprang, hatte keinen Weg mehr dorthin. Es sind die nicht uebertragenen
+    Aenderungen des eigenen Geraets, also Ich-Achse: sie gehoeren ins Profil.
+    Das Banner bleibt als Sofort-Signal.
+
+    Der Server kennt die Zahl nicht (Konflikte leben in IndexedDB, die Zahl
+    kommt per Custom-Event) — deshalb Alpine fuer den Zaehler, mit denselben
+    Event-Bindungen und Property-Gettern wie das Banner in base.html. Der LINK
+    ist statisch und haengt an keiner Bedingung; das ist der Punkt des
+    Abschnitts.
+    {% endcomment %}
+    <section class="card p-5 mb-5"
+             x-data="offlineStatus"
+             @offline-conflict-count.window="onConflictEvent"
+             @offline-queue-count.window="onQueueEvent"
+             data-testid="profile-offline-conflicts">
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offline-Konflikte" %}</h2>
+        <p class="text-[13px] text-ink-muted" x-show="showConflictBanner" x-cloak data-testid="profile-conflict-count">
+            <span class="font-semibold text-red-600" x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Änderung dieses Geräts wartet auf eine Entscheidung." %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Änderungen dieses Geräts warten auf eine Entscheidung." %}</span>
+        </p>
+        <a href="{% url 'core:offline_conflict_list' %}" data-testid="profile-offline-conflicts-link"
+           class="inline-flex items-center min-h-[44px] text-[13px] font-semibold text-accent hover:underline">
+            {% trans "Offline-Konflikte prüfen" %}
+        </a>
+    </section>
+
     {# Stats-Kacheln #}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
         {% include "core/account/partials/_stats_widget.html" %}
