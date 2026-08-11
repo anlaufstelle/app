@@ -823,8 +823,6 @@ VIEW_PROVIDED_BACKLINK: dict[str, str] = {
     "client_delete_request": "Löschantrag wird aus der Personenakte gestellt (clients/<pk>/delete-request/).",
     "event_update": "Bearbeiten kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
     "event_delete": "Lösch-Bestätigung kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
-    "config_fieldgroup_create": "Feldgruppe liegt unter einem Dokumentationstyp (document-types/<pk>/groups/…).",
-    "config_fieldgroup_update": "wie config_fieldgroup_create.",
     "mfa_settings": "Konto-Ebene: Heimat ist das eigene Profil, kein Navigationsbereich.",
 }
 
@@ -840,6 +838,13 @@ BACKLINK_NON_PAGE: dict[str, str] = {
     "workitem_bulk_status": "Massenaktion der Aufgabenliste, antwortet mit der Liste bzw. leitet weiter.",
     "workitem_bulk_priority": "wie workitem_bulk_status.",
     "workitem_bulk_assign": "wie workitem_bulk_status.",
+    # Konzept #1802 §3.4 zählt die Feldgruppen-Routen zu den Objekt-Eltern-
+    # Seiten. Das ist überholt: beide rendern seit M0 (Refs #1056) das
+    # Inline-Formular ``document_types/partials/group_form.html`` im Feld-Board
+    # — ein HTMX-Fragment ohne ``base.html``. Regel R6 gilt: ein Fragment, das
+    # in der Seite bleibt, ist kein Ort und bekommt keine Orientierungszeile.
+    "config_fieldgroup_create": "Inline-Formular des Feld-Boards (HTMX-Fragment ohne base.html), keine Seite.",
+    "config_fieldgroup_update": "wie config_fieldgroup_create.",
 }
 
 

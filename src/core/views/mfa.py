@@ -48,6 +48,7 @@ from core.services.security import (
     remaining_backup_codes,
     verify_backup_code,
 )
+from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +270,10 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
 
         context["passkeys"] = list(WebAuthnCredential.objects.filter(user=user, confirmed=True).order_by("created_at"))
         context["can_add_passkey"] = context["has_device"]
+        # Refs #1802: die 2FA-Seite liegt auf der Konto-Ebene, nicht in einem
+        # Navigationsbereich — ihre Heimat ist das eigene Profil. Bisher stand
+        # der Rueckweg als HTML-Entity-Pfeil in der Fusszeile.
+        context["back_link"] = object_back_link("core:account_profile", _("Profil"))
         return context
 
 

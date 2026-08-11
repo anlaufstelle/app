@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n otp_webauthn %}
+{% load i18n otp_webauthn nav_tags %}
 
 {% block title %}{% trans "Zwei-Faktor-Authentifizierung" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
+    {# Konto-Ebene (Refs #1802): Heimat ist das eigene Profil, kein Navigationsbereich. #}
+    {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Zwei-Faktor-Authentifizierung" %}</h1>
 
     {% if messages %}
@@ -148,10 +150,5 @@
         {% endif %}
     </div>
 
-    <div class="text-sm text-ink-muted">
-        <a href="{% url 'core:account_profile' %}" class="text-accent hover:underline">
-            &larr; {% trans "Zurück zum Profil" %}
-        </a>
-    </div>
 </div>
 {% endblock %}
