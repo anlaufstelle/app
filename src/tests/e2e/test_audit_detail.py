@@ -49,7 +49,12 @@ class TestAuditDetail:
         assert page.locator("text=Details").is_visible()
 
     def test_audit_detail_back_link(self, authenticated_page, base_url):
-        """'Zurück zur Liste'-Link navigiert zur Audit-Liste."""
+        """Der Rücklink navigiert zur Audit-Liste.
+
+        Selektor auf ``data-testid`` statt auf den Linktext (Refs #1802): der
+        Text kommt seit der Rücklink-Registry aus ``core.nav`` und heißt wie der
+        Navigations-Eintrag („Audit-Log"), nicht mehr „Zurück zur Liste".
+        """
         page = authenticated_page
         page.goto(f"{base_url}/audit/")
         page.wait_for_load_state("domcontentloaded")
@@ -57,8 +62,7 @@ class TestAuditDetail:
         find_first_audit_detail_link(page).click()
         page.wait_for_url(re.compile(r"/audit/[0-9a-f-]+/"))
 
-        # "Zurück zur Liste"-Link klicken
-        page.click("a:has-text('Zurück zur Liste')")
+        page.click('[data-testid="back-link"]')
         page.wait_for_url(re.compile(r"/audit/$"))
         assert page.locator("h1").filter(has_text="Audit-Log").is_visible()
 

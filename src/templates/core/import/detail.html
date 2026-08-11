@@ -1,15 +1,16 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Importlauf" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
-    <div>
-        <h1 class="text-[22px] font-bold text-ink">{% trans "Importlauf" %}</h1>
-        <p class="mt-1 text-sm text-ink-muted">{{ job.created_at|date:"DATETIME_FORMAT" }} · {{ job.get_target_type_display }}</p>
-    </div>
-    <a href="{% url 'core:import_list' %}" class="btn-secondary px-4 py-2">{% trans "Zur Übersicht" %}</a>
+{# Refs #1802 (Konzept 3.7): der abgeschlossene Lauf ist eine Objektseite, kein Assistenten-Schritt — #}
+{# der Ruecklink steht links oben statt als btn-secondary rechts in der Aktions-Optik. Der Stepper #}
+{# bleibt: er zeigt den Zustand DIESES Laufs (job.status), nicht die Verortung im Bestand. #}
+{% back_link %}
+<div class="mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Importlauf" %}</h1>
+    <p class="mt-1 text-sm text-ink-muted">{{ job.created_at|date:"DATETIME_FORMAT" }} · {{ job.get_target_type_display }}</p>
 </div>
 
 {% include "core/import/partials/_stepper.html" with step=4 %}
