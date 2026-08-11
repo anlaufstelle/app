@@ -5610,10 +5610,6 @@ msgstr "Two-factor authentication is currently inactive."
 msgid "2FA einrichten"
 msgstr "Set up 2FA"
 
-#: src/templates/auth/mfa_settings.html:153
-msgid "Zurück zum Profil"
-msgstr "Back to profile"
-
 #: src/templates/auth/mfa_setup.html:16
 msgid ""
 "Scanne den QR-Code mit deiner Authenticator-App (z.&nbsp;B. Google "
@@ -6023,11 +6019,6 @@ msgstr "No files found"
 #: src/templates/core/audit/detail.html:9
 msgid "Audit-Log Detail"
 msgstr "Audit Log Detail"
-
-#: src/templates/core/audit/detail.html:61
-#: src/templates/core/system/auditlog_detail.html:69
-msgid "Zurück zur Liste"
-msgstr "Back to list"
 
 #: src/templates/core/audit/list.html:23
 #: src/templates/core/system/auditlog_list.html:41
@@ -8368,10 +8359,6 @@ msgid ""
 msgstr ""
 "— shows a field only when another one has a certain value; maintained in the "
 "rule editor of the document type."
-
-#: src/templates/core/import/detail.html:12
-msgid "Zur Übersicht"
-msgstr "Back to overview"
 
 #: src/templates/core/import/detail.html:33
 msgid "Angelegte Datensätze"

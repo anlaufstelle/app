@@ -24,14 +24,37 @@ hier auf, nicht erst im Handtest.
 
 from __future__ import annotations
 
+import re
+
+import pytest
+from django.urls import reverse
+
 from core import nav
-from tests._authz_expectations import EXPECTATIONS
+from tests._authz_expectations import EXPECTATIONS, ROLES
+from tests._rbac_helpers import resolve_fixture_kwargs
+
+# Fixtures des AuthZ-Template-Guards mitbenutzen: dieselben fünf Akteure und
+# derselbe Datenbestand, damit Listen und Detailseiten nicht leer rendern.
+from tests.test_authz_template_links import guard_content, guard_users  # noqa: F401
 
 # Kategorien ohne gerendertes Anwendungsdokument. ``public`` enthält neben
 # Login-/Fehlerseiten die drei vom Service Worker vorgecachten Offline-Shells;
 # deren Rücklink ist ein eigener Fall (Konzept 4.2: statisch und
 # rollenagnostisch) und bewusst NICHT Teil dieses Laufs.
 NON_APP_CATEGORIES = frozenset({"export", "offline-api", "partials-htmx", "public"})
+
+BACK_LINK_MARKER = 'data-testid="back-link"'
+
+_TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_H1_RE = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+TITLE_SUFFIX = "– Anlaufstelle"
+
+
+def _text(html_fragment: str) -> str:
+    """Sichtbarer Text eines Fragments — Tags raus, Weißraum normalisiert."""
+    return " ".join(_TAG_RE.sub(" ", html_fragment).split())
 
 
 def _non_page_routes() -> set[str]:
@@ -163,3 +186,108 @@ class TestBacklinkRegistry:
         """Die Registry beantwortet nur die Bereichsfrage — nie die Objektfrage."""
         assert nav.back_link_for("client_list") is None
         assert nav.back_link_for("episode_create") is None
+
+
+@pytest.fixture
+def rendered_pages(client, request, guard_users, guard_content):  # noqa: F811
+    """``(url_name, html)`` jeder erreichbaren Anwendungsseite — einmal gerendert.
+
+    Je Seite genau **eine** Rolle: der Rücklink ist per Konzept 4.2 nie
+    rollenabhängig (in allen Objekt-Eltern- und allen Bereichsfällen ist das
+    Ziel gleich oder weiter gegated als die Seite). Das spart gegenüber der
+    5×-Matrix des AuthZ-Guards rund 80 % der Requests; die Rollen-Achse prüft
+    ohnehin ``test_authz_template_links``.
+    """
+    seiten: list[tuple[str, str]] = []
+    nach_rolle: dict[str, list] = {}
+    for exp in _app_pages():
+        erlaubt = dict(exp.methods).get("GET") or frozenset()
+        rolle = next((r for r in ROLES if r in erlaubt), None)
+        if rolle:
+            nach_rolle.setdefault(rolle, []).append(exp)
+    assert nach_rolle, "Keine Seiten zu prüfen — Guard blind."
+
+    for rolle, erwartungen in nach_rolle.items():
+        client.force_login(guard_users[rolle])
+        for exp in erwartungen:
+            url = reverse(exp.url_name, kwargs=resolve_fixture_kwargs(exp.url_kwargs, request) or None)
+            response = client.get(url)
+            if response.status_code != 200 or "text/html" not in response.headers.get("Content-Type", ""):
+                continue
+            seiten.append((exp.url_name, response.content.decode()))
+    assert seiten, "Keine Seite hat 200/HTML geliefert — Guard blind."
+    return seiten
+
+
+@pytest.mark.django_db
+class TestBacklinkRendering:
+    """Renderebene: Anzahl und Position des Markers auf der echten Seite."""
+
+    def test_every_page_has_exactly_one_or_zero_back_links(self, rendered_pages):
+        """R1: nie eine Kette, nie zwei Rückwege, nie gar keiner.
+
+        „Zweimal dasselbe Ziel" war real (``events/edit.html``: „Abbrechen"
+        und „Zurück"), „gar keiner" ebenfalls (beide ``deletion_review``-Seiten
+        hatten keinerlei Ausweg außer den Formular-Schaltflächen).
+        """
+        befunde = []
+        for url_name, html in rendered_pages:
+            anzahl = html.count(BACK_LINK_MARKER)
+            soll = 0 if _short(url_name) in nav.BACKLINK_EXEMPT else 1
+            if anzahl != soll:
+                befunde.append(f"{url_name}: {anzahl} Rücklinke, erwartet {soll}")
+        assert not befunde, "Rücklink-Anzahl weicht ab (Konzept #1802, R1/R5):\n  " + "\n  ".join(befunde)
+
+    def test_back_link_stands_before_the_first_h1(self, rendered_pages):
+        """Position: Zeile 1 des Inhalts, nicht Fußzeile und nicht rechts oben.
+
+        Fängt die acht Fußzeilen-/Rechtsbündig-Fälle aus Konzept 1.1 — ein
+        Rücklink unter 60 Zeilen Detailtabelle orientiert niemanden.
+        """
+        befunde = []
+        for url_name, html in rendered_pages:
+            marker = html.find(BACK_LINK_MARKER)
+            if marker == -1:
+                continue
+            h1 = _H1_RE.search(html)
+            if h1 and h1.start() < marker:
+                befunde.append(f"{url_name}: Rücklink steht hinter der H1")
+        assert not befunde, "Rücklink nicht am Anfang des Inhalts (Konzept 3.1):\n  " + "\n  ".join(befunde)
+
+
+@pytest.mark.django_db
+class TestTitleH1Coupling:
+    """Konzept 3.9: Fenstertitel und Orientierungszeile sagen dasselbe.
+
+    Der Fenstertitel ist der **Objektname**, die Orientierungszeile der
+    Bereich — zusammen ergeben sie den Kontext, einzeln keine Redundanz. Der
+    Bereich kommt bewusst NICHT in den Titel (Maintainer-Entscheid 5): bei
+    20–25 sichtbaren Zeichen im Tab verdrängt er genau das, was unterscheidet.
+    """
+
+    def test_titles_end_with_the_product_name(self, rendered_pages):
+        befunde = [
+            f"{url_name}: {_text(treffer.group(1))!r}"
+            for url_name, html in rendered_pages
+            if (treffer := _TITLE_RE.search(html)) and not _text(treffer.group(1)).endswith(TITLE_SUFFIX)
+        ]
+        assert not befunde, f"Fenstertitel ohne {TITLE_SUFFIX!r}:\n  " + "\n  ".join(befunde)
+
+    def test_object_page_titles_start_with_their_h1(self, rendered_pages):
+        """Auf Objektseiten ist der Titel der Objektname — nicht eine zweite Formulierung.
+
+        Geprüft auf den Seiten mit Rücklink: dort trug der Titel bisher teils
+        eine andere Aussage als die H1 (``clients/deletion_review.html``:
+        „Löschantrag prüfen" vs. „Person-Löschantrag prüfen").
+        """
+        befunde = []
+        for url_name, html in rendered_pages:
+            if _short(url_name) in nav.BACKLINK_EXEMPT:
+                continue
+            titel, h1 = _TITLE_RE.search(html), _H1_RE.search(html)
+            if not titel or not h1:
+                continue
+            titel_text, h1_text = _text(titel.group(1)), _text(h1.group(1))
+            if h1_text and not titel_text.startswith(h1_text):
+                befunde.append(f"{url_name}: Titel {titel_text!r} beginnt nicht mit H1 {h1_text!r}")
+        assert not befunde, "Fenstertitel und H1 driften (Konzept 3.9):\n  " + "\n  ".join(befunde)
