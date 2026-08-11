@@ -7440,7 +7440,7 @@
 3. Als `admin` direkt `/import/` aufrufen; als `miriam` denselben Aufruf versuchen.
 
 **Erwartetes Ergebnis:**
-- Schritt 1: kein Menüpunkt „Datenimport" (`data-testid='nav-import'`/`'mobile-nav-import'` fehlt) in Desktop- oder Mobile-Navigation.
+- Schritt 1: kein Menüpunkt „Datenimport" — weder als Reiter des Bereichs „Verwaltung" (`data-testid='subnav-tab-import'`) noch als Zugang dorthin: der Bereichs-Eintrag „Verwaltung" fehlt in der Desktop-Navigation (`data-testid='nav-verwaltung'`) und im mobilen „Mehr"-Menü (`data-testid='mobile-nav-verwaltung'`).
 - Schritt 2: Menüpunkt vorhanden, führt zu `/import/`.
 - Schritt 3: `admin` erhält 200, `miriam` 403 (`TestRoleGate.test_other_roles_get_403_on_the_list`).
 
@@ -7667,7 +7667,7 @@
 2. Als `emma` (lead) und `admin` (facility_admin) dieselben Stellen sichten.
 
 **Erwartetes Ergebnis:**
-- Schritt 1: kein Menüpunkt „Berichtigungen" (`data-testid='nav-rectification-requests'`/`'mobile-nav-rectification-requests'` fehlt); `miriam` sieht aber den Weg, einen Antrag **zu stellen** (Entry-Point an der Personenakte, siehe ENT-RECT-02).
+- Schritt 1: kein Menüpunkt „Berichtigungen" — weder als Reiter des Bereichs „Datenschutz" (`data-testid='subnav-tab-rectification-requests'`) noch als Zugang dorthin (`data-testid='nav-datenschutz'` in der Desktop-Navigation bzw. `'mobile-nav-datenschutz'` im mobilen „Mehr"-Menü); `miriam` sieht aber den Weg, einen Antrag **zu stellen** (Entry-Point an der Personenakte, siehe ENT-RECT-02).
 - Schritt 2: Menüpunkt vorhanden, führt zu `/rectification/`.
 
 **Status:** ☐ Offen

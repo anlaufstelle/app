@@ -220,6 +220,7 @@ ARBEITSZENTRALE = NavItem(
     family=frozenset({"dashboard"}),
     gates=("sees_arbeitszentrale",),
     testid="nav-dashboard",
+    mobile_testid="mobile-nav-dashboard",
     icon="dashboard",
 )
 ZEITSTROM = NavItem(
@@ -288,7 +289,6 @@ LOESCHANTRAEGE = NavItem(
     family=frozenset({"deletion_request_list", "deletion_review"}),
     gates=("can_access_deletion_requests",),
     testid="nav-deletion-requests",
-    mobile_testid="mobile-nav-deletion-requests",
     icon="deletion",
 )
 # Refs #1060 (M4/ADR-041): Berichtigungen prüfen ist Leitungsarbeit — Anträge
@@ -300,7 +300,6 @@ BERICHTIGUNGEN = NavItem(
     family=frozenset({"rectification_list", "rectification_review"}),
     gates=("is_lead_or_admin",),
     testid="nav-rectification-requests",
-    mobile_testid="mobile-nav-rectification-requests",
     icon="rectification",
 )
 LOESCHFRISTEN = NavItem(
@@ -320,7 +319,6 @@ DATENIMPORT = NavItem(
     family=frozenset({"import_list", "import_create", "import_detail", "import_mapping", "import_preview"}),
     gates=("is_facility_admin",),
     testid="nav-import",
-    mobile_testid="mobile-nav-import",
     icon="import",
 )
 AUDIT_LOG = NavItem(
@@ -378,14 +376,6 @@ FELDVORLAGEN = NavItem(
     testid="nav-config-fieldtemplates",
     icon="fieldtemplates",
 )
-ADMINISTRATION = NavItem(
-    key="admin-mgmt",
-    label=_("Administration"),
-    url="/admin-mgmt/",
-    gates=("is_facility_admin",),
-    icon="admin",
-    external=True,
-)
 SYSTEMBEREICH = NavItem(
     key="system",
     label=_("Systembereich"),
@@ -396,7 +386,6 @@ SYSTEMBEREICH = NavItem(
     family=SYSTEM_FAMILY,
     gates=("is_super_admin",),
     testid="nav-system",
-    mobile_testid="mobile-nav-system",
     icon="system",
 )
 ADMINISTRATION_SUPER = NavItem(
@@ -525,20 +514,34 @@ SIDEBAR: tuple[NavItem, ...] = (
 
 # Dieselben Objekte wie in der Sidebar — Label, Gate und Familie werden hier
 # NICHT zweitgepflegt; nur Reihenfolge und Auswahl sind eigenständig.
+#
+# Ziel-IA mobil (Refs #1801 §5.2): dieselbe Gliederung wie die Sidebar, nur ohne
+# die vier Einträge, die als Bottom-Bar-Slot schon da sind. Aus bis zu 14 Zeilen
+# werden höchstens sechs. Zwei Änderungen tragen das:
+#
+# * **Arbeitszentrale als erste Zeile.** Sie war mobil bisher gar nicht
+#   erreichbar — ein Desktop-Eintrag ohne Gegenstück. Kein Slot-Tausch: die fünf
+#   Slots sind erprobt, und die Arbeitszentrale ist ein Orientierungs-, kein
+#   Erfassungseinstieg (Konzept §5.3).
+# * **Die acht Datenschutz-/Verwaltungs-Einträge werden zwei Hub-Zeilen.**
+#   Dieselben Objekte wie in der Sidebar, dieselben abgeleiteten Gates — die
+#   Reiter dahinter sind die alten Ziele, unverändert adressiert.
+#
+# Bewusst **nicht** in dieser Liste:
+# * „Administration ↗" für die Anwendungsbetreuung — der Django-Admin ist für
+#   diese Rolle eine markierte Zeile auf der Verwaltungs-Übersicht (§3.1); mobil
+#   wäre er ein Absprung in eine fremde Anwendungshülle mit eigener Navigation
+#   und Sudo-Modus. Für die Systemadministration bleibt er die einzige Zeile.
+# * „Systembereich" — die Systemrolle hat dafür einen eigenen Bottom-Bar-Slot;
+#   beides hieße, denselben Ort zweimal anzubieten und beide Marker gleichzeitig
+#   leuchten zu lassen.
 MOBILE_MORE: tuple[NavItem, ...] = (
+    ARBEITSZENTRALE,
     FAELLE,
     DATEIEN,
     STATISTIK,
-    LOESCHANTRAEGE,
-    BERICHTIGUNGEN,
-    LOESCHFRISTEN,
-    DATENIMPORT,
-    AUDIT_LOG,
-    DSGVO_PAKET,
-    KONFIGURATION,
-    FELDVORLAGEN,
-    ADMINISTRATION,
-    SYSTEMBEREICH,
+    DATENSCHUTZ_HUB,
+    VERWALTUNG_HUB,
     ADMINISTRATION_SUPER,
 )
 
@@ -549,13 +552,16 @@ MOBILE_MORE_EXTRA_FAMILY: frozenset[str] = frozenset({"search", "account_profile
 
 # Ganze Familien, deren Anker zwar im Mehr-Menü verlinkt ist, die aber bewusst
 # NICHT zum „Mehr"-Highlight beitragen.
-MOBILE_MORE_EXCLUDED_KEYS: dict[str, str] = {
-    "system": (
-        "Redundanz-Link für super_admin: die mobile Bottom-Bar trägt für diese Rolle einen eigenen "
-        "Systembereich-Slot mit derselben Familie. Beides im Katalog hieße doppelte Hervorhebung — "
-        "genau die Regressionsklasse, die test_navigation_active_state.py für die Sidebar abdeckt."
-    ),
-}
+#
+# Derzeit leer: der einzige Fall war der Redundanz-Link „Systembereich", den die
+# Systemadministration zusätzlich zu ihrem eigenen Bottom-Bar-Slot im Mehr-Menü
+# hatte. Seit der Ziel-IA (Refs #1801 §5.2) steht er dort gar nicht mehr — die
+# Ausnahme ist damit gegenstandslos statt still wirkungslos. Der Mechanismus
+# bleibt: „im Menü verlinkt, aber ohne Highlight-Beitrag" ist ein Zustand, den
+# der nächste Sonderfall wieder braucht, und die Begründungspflicht dafür ist in
+# ``test_navigation_mehr_catalog_drift.py`` (inkl. synthetischer Selbsttests)
+# festgeschrieben.
+MOBILE_MORE_EXCLUDED_KEYS: dict[str, str] = {}
 
 # Einzelne Familienmitglieder ohne „du bist hier"-Zustand.
 MOBILE_MORE_EXCLUDED_ROUTES: dict[str, str] = {

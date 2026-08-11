@@ -61,14 +61,25 @@ class TestConfigNavEntry:
         assert CONFIG_LINK in content
         assert CONFIG_LABEL in content
 
-    def test_facility_admin_sees_config_entry_mobile(self, client, admin_user):
-        """facility_admin erreicht die Dokumentationstypen weiterhin mobil."""
+    def test_facility_admin_reaches_document_types_mobile_via_the_verwaltung_hub(self, client, admin_user):
+        """facility_admin erreicht die Dokumentationstypen weiterhin mobil.
+
+        Refs #1813 (Etappe 3): der Weg hat sich geaendert, die Aussage nicht.
+        Bis zur Ziel-IA (Konzept #1801 §5.2) stand „Konfiguration" als eigene
+        Zeile im Mehr-Menue; jetzt steht dort der Bereich „Verwaltung", und der
+        Reiter liegt auf dessen Seite. Der Test laeuft den Weg deshalb ab,
+        statt nur eine Zeile zu zaehlen — nur so belegt er „mobil erreichbar"
+        und nicht bloss „Link vorhanden".
+        """
         client.force_login(admin_user)
         content = client.get(reverse("core:zeitstrom")).content.decode()
         mobile_nav = content[content.index('aria-label="Mobile Navigation"') :]
 
-        assert CONFIG_LINK in mobile_nav
-        assert CONFIG_LABEL in mobile_nav
+        assert 'data-testid="mobile-nav-verwaltung"' in mobile_nav
+
+        hub = client.get(reverse("core:verwaltung_uebersicht")).content.decode()
+        assert CONFIG_TAB in hub
+        assert CONFIG_LINK in hub
 
     def test_assistant_does_not_see_config_entry(self, client, assistant_user):
         """Assistenz sieht keinen Konfigurations-Einstieg."""
@@ -125,13 +136,17 @@ class TestFeldvorlagenNavEntry:
         assert FIELDTEMPLATES_LINK in content
         assert FIELDTEMPLATES_LABEL in content
 
-    def test_facility_admin_sees_feldvorlagen_entry_mobile(self, client, admin_user):
+    def test_facility_admin_reaches_fieldtemplates_mobile_via_the_verwaltung_hub(self, client, admin_user):
+        """Wie bei den Dokumentationstypen: mobil fuehrt der Weg ueber den Hub."""
         client.force_login(admin_user)
         content = client.get(reverse("core:zeitstrom")).content.decode()
         mobile_nav = content[content.index('aria-label="Mobile Navigation"') :]
 
-        assert FIELDTEMPLATES_LINK in mobile_nav
-        assert FIELDTEMPLATES_LABEL in mobile_nav
+        assert 'data-testid="mobile-nav-verwaltung"' in mobile_nav
+
+        hub = client.get(reverse("core:verwaltung_uebersicht")).content.decode()
+        assert FIELDTEMPLATES_TAB in hub
+        assert FIELDTEMPLATES_LINK in hub
 
     def test_assistant_does_not_see_feldvorlagen_entry(self, client, assistant_user):
         client.force_login(assistant_user)

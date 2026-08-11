@@ -12,8 +12,9 @@ Womit dieser Guard **nicht** überflüssig wird: die Berechnung hat drei
 begründungspflichtige Ausnahmen, und genau dort kann sie still falsch werden.
 
 * ``nav.MOBILE_MORE_EXCLUDED_KEYS`` — eine ganze Familie trägt bewusst nicht
-  zum Highlight bei (heute nur der super_admin-Redundanzlink „Systembereich",
-  der einen eigenen Bottom-Bar-Slot hat).
+  zum Highlight bei (heute leer; der einzige Fall, der super_admin-Redundanzlink
+  „Systembereich", steht seit der Ziel-IA gar nicht mehr im Mehr-Menü und wird
+  jetzt von ``STRUCTURALLY_EXCLUDED_ANCHORS`` abgedeckt).
 * ``nav.MOBILE_MORE_EXCLUDED_ROUTES`` — einzelne Familienmitglieder ohne
   „du bist hier"-Zustand (reine Download-Endpunkte).
 * ``nav.MOBILE_MORE_EXTRA_FAMILY`` — Routen im Katalog **ohne** Listeneintrag
@@ -118,11 +119,23 @@ KNOWN_CATALOG_EXTRAS: dict[str, str] = {
     ),
 }
 
-# Nav-Schluessel mit eigenem Slot in der Bottom-Bar (bzw. ohne mobilen Eintrag).
-# Ihre Familien duerfen NIE im Mehr-Katalog stehen: sonst leuchteten der eigene
-# Slot und „Mehr" gleichzeitig — dieselbe Regressionsklasse, die
+# Nav-Schluessel mit eigenem Slot in der Bottom-Bar. Ihre Familien duerfen NIE
+# im Mehr-Katalog stehen: sonst leuchteten der eigene Slot und „Mehr"
+# gleichzeitig — dieselbe Regressionsklasse, die
 # test_navigation_active_state.py fuer die Sidebar abdeckt.
-STRUCTURALLY_EXCLUDED_ANCHORS = frozenset({"dashboard", "zeitstrom", "workitems", "clients"})
+#
+# Refs #1813 (Etappe 3), zwei Aenderungen an dieser Menge:
+#
+# * ``dashboard`` faellt heraus. Die Praemisse war „die Arbeitszentrale hat gar
+#   keinen mobilen Eintrag" — sie hat seit der Ziel-IA einen (erste Zeile des
+#   Mehr-Menues, Konzept §5.3), und einen eigenen Bottom-Bar-Slot hatte sie nie.
+#   Die Familie MUSS also im Katalog stehen, sonst erlischt die Ortsanzeige auf
+#   `/start/`; ``test_navigation_mobile_more.py`` prueft die Wirkung.
+# * ``system`` kommt hinzu. Der Redundanzlink im Mehr-Menue ist entfallen, der
+#   eigene Slot der Systemrolle bleibt — damit gilt hier genau die Aussage
+#   dieser Menge, und die vorher noetige Ausnahme in
+#   ``nav.MOBILE_MORE_EXCLUDED_KEYS`` wird ersatzlos ueberfluessig.
+STRUCTURALLY_EXCLUDED_ANCHORS = frozenset({"zeitstrom", "workitems", "clients", "system"})
 
 
 # ---------------------------------------------------------------------------
