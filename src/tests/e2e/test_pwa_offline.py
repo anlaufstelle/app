@@ -6,7 +6,7 @@ from contextlib import suppress
 
 import pytest
 
-from tests.e2e._selectors import find_first_client_link
+from tests.e2e._selectors import find_first_client_link, open_desktop_overflow
 
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
@@ -382,8 +382,9 @@ def test_offline_clients_shell_lists_cached_clients(browser, base_url):
         assert match, f"keine Client-UUID in {page.url}"
         client_pk = match.group(1)
 
-        take = page.locator('[data-testid="take-offline-btn"]').first
-        take.wait_for(state="visible", timeout=10000)
+        # Refs #1813: „Offline mitnehmen" ist keine primaere Aktion mehr,
+        # sondern ein Eintrag des ⋮-Menues „Weitere Aktionen" — erst oeffnen.
+        take = open_desktop_overflow(page, "client").locator('[data-testid="take-offline-btn"]')
         take.click()
         # Badge "Lokal verfügbar" bestaetigt das verschluesselte Bundle in IndexedDB.
         page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
@@ -588,8 +589,9 @@ def test_offline_client_detail_renders_in_place(browser, base_url):
         client_pk = re.search(r"/clients/([0-9a-f-]+)/", detail_url).group(1)
 
         # Offline mitnehmen + Badge abwarten (Bundle in IndexedDB).
-        take = page.locator('[data-testid="take-offline-btn"]').first
-        take.wait_for(state="visible", timeout=10000)
+        # Refs #1813: „Offline mitnehmen" ist keine primaere Aktion mehr,
+        # sondern ein Eintrag des ⋮-Menues „Weitere Aktionen" — erst oeffnen.
+        take = open_desktop_overflow(page, "client").locator('[data-testid="take-offline-btn"]')
         take.click()
         page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
 
@@ -799,8 +801,8 @@ def test_take_offline_shows_secure_context_hint_when_unsupported(staff_page, bas
         }"""
     )
 
-    take = page.locator('[data-testid="take-offline-btn"]').first
-    take.wait_for(state="visible", timeout=10000)
+    # Refs #1813: „Offline mitnehmen" liegt im ⋮-Menue „Weitere Aktionen".
+    take = open_desktop_overflow(page, "client").locator('[data-testid="take-offline-btn"]')
     take.click()
 
     toast = page.locator('[data-testid="offline-toast"]')
@@ -1028,8 +1030,9 @@ def test_take_offline_shows_quota_full_message(browser, base_url):
             }"""
         )
 
-        take = page.locator('[data-testid="take-offline-btn"]').first
-        take.wait_for(state="visible", timeout=10000)
+        # Refs #1813: „Offline mitnehmen" ist keine primaere Aktion mehr,
+        # sondern ein Eintrag des ⋮-Menues „Weitere Aktionen" — erst oeffnen.
+        take = open_desktop_overflow(page, "client").locator('[data-testid="take-offline-btn"]')
         take.click()
 
         toast = page.locator('[data-testid="offline-toast"]')
