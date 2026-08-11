@@ -170,7 +170,7 @@ def subnav(context, key: str):
 
 
 @register.inclusion_tag("components/_back_link.html", takes_context=True)
-def back_link(context, current: str = ""):
+def back_link(context):
     """Der Rücklink der aktuellen Seite (Refs #1802, Konzept #1801 §7.3).
 
     Auflösung in der Reihenfolge des Konzepts (3.3): Ein von der View gesetztes
@@ -184,16 +184,20 @@ def back_link(context, current: str = ""):
     Modul-Docstring: ein Prozessor liefe auch auf HTMX-Partials, Downloads und
     Fehlerseiten, wo es gar keine Orientierungszeile gibt.
 
-    ``current`` ist der optionale zweite Krümel (Objektname); er ersetzt den
-    Rücklink nicht, sondern steht als reiner Text dahinter.
+    Einen zweiten Krümel nimmt der Tag bewusst nicht mehr entgegen (Regel R1):
+    ``{% back_link current=case.title %}`` rendert „← Fälle / Wohnungsverlust"
+    und wiederholt damit den Objektnamen, der zwei Zeilen tiefer als H1 steht.
+    Der Parameter ist entfernt statt nur ungenutzt, damit ein Rückfall zur
+    Kette sofort bricht — ``test_navigation_backlink`` prüft ihn zusätzlich
+    statisch über alle Templates.
     """
     override = context.get("back_link")
     if isinstance(override, dict) and override.get("url"):
-        return {"url": override["url"], "label": override.get("label", ""), "current": current}
+        return {"url": override["url"], "label": override.get("label", "")}
     link = nav.back_link_for(_current_url_name(context))
     if link is None:
         return {}
-    return {"url": reverse(link.url_name), "label": link.label, "current": current}
+    return {"url": reverse(link.url_name), "label": link.label}
 
 
 @register.simple_tag(takes_context=True)

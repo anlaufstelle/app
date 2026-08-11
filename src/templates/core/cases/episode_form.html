@@ -8,7 +8,21 @@
     {# Objekt-Eltern (Konzept #1802 §3.4): die Kontextzeile "Fall: <Link>" wird zum Ruecklink — #}
     {# dasselbe Ziel, aber an der Stelle und in der Form, die jede Objektseite benutzt. #}
     {% back_link %}
-    <h1 class="text-[22px] font-bold text-ink mb-5">{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %}</h1>
+    <div class="mb-5">
+        <h1 class="text-[22px] font-bold text-ink">{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %}</h1>
+
+        {# Kontext-Badge (Konzept #1802 §3.5): der Ruecklink nennt den Fall, das Badge  #}
+        {# die Person des Falls — die zweite Beziehung wird Pille, nicht Trail-Segment  #}
+        {# (Regel R4). Kein Rollengefaelle (R8): episode_create/-update sind STAFF_PLUS,#}
+        {# client_detail ist ASSISTANT_PLUS. Das Gate steht wie auf cases/detail.html.  #}
+        {% if case.client %}
+        <div class="flex flex-wrap items-center gap-2 mt-2">
+            {% url 'core:client_detail' pk=case.client.pk as client_url %}
+            {% trans "Person" as person_label %}
+            {% include "components/_context_link.html" with url=client_url label=case.client.pseudonym prefix=person_label testid="context-badge-client" %}
+        </div>
+        {% endif %}
+    </div>
 
     <form method="post" class="space-y-4">
         {% csrf_token %}

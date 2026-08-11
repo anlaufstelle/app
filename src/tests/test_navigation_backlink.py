@@ -14,8 +14,10 @@ Heimat-Tabelle. Dieser Guard prüft drei Ebenen:
 2. *Renderebene* — jede gerenderte Seite trägt den Marker
    ``data-testid="back-link"`` genau einmal (bzw. gar nicht, wenn ausgenommen)
    und **vor** ihrer ``<h1>``.
-3. *Titelkopplung* — der Fenstertitel beginnt mit dem H1-Text und endet auf
-   „– Anlaufstelle" (Konzept 3.9, Maintainer-Entscheid 5).
+3. *Titelkopplung* — der Fenstertitel **ist** der H1-Text plus „– Anlaufstelle"
+   (Konzept 3.9, Maintainer-Entscheid 5). Gleichheit, nicht Präfix: sonst
+   ginge genau die Umformulierung durch, gegen die die Regel geschrieben ist.
+   Abweichungen stehen begründet in ``TITLE_H1_EXCEPTIONS``.
 
 Bewusst abgeleitet statt gepflegt: Seiten und Rollen kommen aus
 ``_authz_expectations.py``, die Heimat aus ``core.nav`` — eine neue Seite fällt
@@ -25,11 +27,14 @@ hier auf, nicht erst im Handtest.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.urls import reverse
 
 from core import nav
+from core.services.client import request_client_deletion
 from tests._authz_expectations import EXPECTATIONS, ROLES
 from tests._rbac_helpers import resolve_fixture_kwargs
 
@@ -40,7 +45,8 @@ from tests.test_authz_template_links import guard_content, guard_users  # noqa: 
 # Kategorien ohne gerendertes Anwendungsdokument. ``public`` enthält neben
 # Login-/Fehlerseiten die drei vom Service Worker vorgecachten Offline-Shells;
 # deren Rücklink ist ein eigener Fall (Konzept 4.2: statisch und
-# rollenagnostisch) und bewusst NICHT Teil dieses Laufs.
+# rollenagnostisch) und bewusst NICHT Teil dieses Laufs — nachgezogen in
+# https://github.com/anlaufstelle/app/issues/1844.
 NON_APP_CATEGORIES = frozenset({"export", "offline-api", "partials-htmx", "public"})
 
 BACK_LINK_MARKER = 'data-testid="back-link"'
@@ -50,6 +56,20 @@ _H1_RE = re.compile(r"<h1\b[^>]*>(.*?)</h1>", re.IGNORECASE | re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
 
 TITLE_SUFFIX = "– Anlaufstelle"
+
+# Benannte Ausnahmen von der Titel-Gleichheit (Konzept 3.9). Wert = Begründung;
+# ``test_title_exceptions_are_reachable_and_reasoned`` erzwingt beides — einen
+# nicht-leeren Grund und eine Seite, die es noch gibt.
+TITLE_H1_EXCEPTIONS = {
+    "core:event_detail": (
+        "Die H1 ist der Name des Dokumentationstyps und damit über alle Ereignisse "
+        "einer Person hinweg derselbe Text; mehrere gleichnamige Ereignis-Tabs wären "
+        "ohne den Zeitpunkt im Titel ununterscheidbar. Das ist genau die "
+        "Unterscheidbarkeit, für die Maintainer-Entscheid 5 den Bereichsnamen aus dem "
+        "Titel heraushält — hier trägt sie der Zeitpunkt, der auf der Seite ohnehin als "
+        "Untertitel direkt unter der H1 steht."
+    ),
+}
 
 
 def _text(html_fragment: str) -> str:
@@ -238,6 +258,28 @@ class TestBacklinkRendering:
                 befunde.append(f"{url_name}: {anzahl} Rücklinke, erwartet {soll}")
         assert not befunde, "Rücklink-Anzahl weicht ab (Konzept #1802, R1/R5):\n  " + "\n  ".join(befunde)
 
+    def test_no_template_passes_a_second_crumb(self):
+        """R1 statisch: kein Aufruf reicht dem Rücklink einen zweiten Krümel.
+
+        ``{% back_link current=case.title %}`` rendert „← Fälle / Wohnungs-
+        verlust" — eine zweite Ebene, deren Text zwei Zeilen tiefer als H1
+        noch einmal steht. Der Renderguard oben zählt nur ``back-link``-Marker
+        und sähe die Kette nicht; deshalb hier die Textprüfung. Der
+        Inclusion-Tag kennt den Parameter seit #1802 nicht mehr — ein Aufruf
+        bräche also ohnehin, aber erst zur Renderzeit der betroffenen Seite.
+        """
+        wurzel = Path(settings.BASE_DIR) / "templates"
+        aufrufe = re.compile(r"\{%\s*back_link\b[^%]*?\bcurrent\s*=")
+        dateien = sorted(wurzel.rglob("*.html"))
+        assert dateien, f"Keine Templates unter {wurzel} — Guard blind."
+        treffer = sorted(
+            str(pfad.relative_to(wurzel)) for pfad in dateien if aufrufe.search(pfad.read_text(encoding="utf-8"))
+        )
+        assert not treffer, (
+            "back_link mit current= aufgerufen — R1 verbietet die Kette, der Objektname "
+            f"steht bereits in der H1 direkt darunter: {treffer}"
+        )
+
     def test_back_link_stands_before_the_first_h1(self, rendered_pages):
         """Position: Zeile 1 des Inhalts, nicht Fußzeile und nicht rechts oben.
 
@@ -253,6 +295,29 @@ class TestBacklinkRendering:
             if h1 and h1.start() < marker:
                 befunde.append(f"{url_name}: Rücklink steht hinter der H1")
         assert not befunde, "Rücklink nicht am Anfang des Inhalts (Konzept 3.1):\n  " + "\n  ".join(befunde)
+
+
+@pytest.mark.django_db
+class TestNoSecondWayHome:
+    """R1 in Seitenzuständen, die die Routenmatrix nicht erreicht.
+
+    ``rendered_pages`` fährt jede Route genau einmal im Normalzustand. Der
+    Löschantrag mit **bereits laufendem** Antrag ist ein Zweig dahinter — und
+    dort stand neben dem Rücklink oben ein zweiter Button „Zurück zur Person"
+    auf dasselbe Ziel. Genau der Doppelbefund aus Konzept 1.1 („zweimal
+    dasselbe Ziel", ``events/edit.html``), nur eine Verzweigung tiefer.
+    """
+
+    def test_pending_delete_request_offers_exactly_one_way_back(self, client, staff_user, client_identified):
+        request_client_deletion(client_identified, staff_user, "Erster Grund")
+        client.force_login(staff_user)
+        url = reverse("core:client_delete_request", args=[client_identified.pk])
+        html = client.get(url).content.decode()
+
+        assert 'data-testid="delete-request-already-pending"' in html, "Zweig nicht erreicht"
+        ziel = reverse("core:client_detail", args=[client_identified.pk])
+        wege = html.count(f'href="{ziel}"')
+        assert wege == 1, f"{wege} Wege zurück zur Person — R1 verlangt genau einen, und das ist der Rücklink oben."
 
 
 @pytest.mark.django_db
@@ -273,12 +338,18 @@ class TestTitleH1Coupling:
         ]
         assert not befunde, f"Fenstertitel ohne {TITLE_SUFFIX!r}:\n  " + "\n  ".join(befunde)
 
-    def test_object_page_titles_start_with_their_h1(self, rendered_pages):
-        """Auf Objektseiten ist der Titel der Objektname — nicht eine zweite Formulierung.
+    def test_object_page_titles_equal_their_h1_plus_suffix(self, rendered_pages):
+        """Auf Objektseiten ist der Titel der H1-Text — nicht eine zweite Formulierung.
 
-        Geprüft auf den Seiten mit Rücklink: dort trug der Titel bisher teils
-        eine andere Aussage als die H1 (``clients/deletion_review.html``:
-        „Löschantrag prüfen" vs. „Person-Löschantrag prüfen").
+        Konzept 3.9 formuliert die Nebenregel als Gleichheit: „H1-Text und
+        ``{% block title %}``-Text müssen identisch sein (bis auf den Suffix)".
+        Ein ``startswith`` ließe genau die Drift durch, gegen die die Regel
+        geschrieben ist — „Löschantrag prüfen" vs. „Löschantrag prüfen für
+        A-4471" beginnen gleich und sagen Verschiedenes.
+
+        Ausnahmen stehen benannt und begründet in ``TITLE_H1_EXCEPTIONS``;
+        sie bleiben trotzdem an ``startswith`` + Suffix gebunden — eine
+        Ausnahme darf den Titel *erweitern*, nicht umformulieren.
         """
         befunde = []
         for url_name, html in rendered_pages:
@@ -288,6 +359,36 @@ class TestTitleH1Coupling:
             if not titel or not h1:
                 continue
             titel_text, h1_text = _text(titel.group(1)), _text(h1.group(1))
-            if h1_text and not titel_text.startswith(h1_text):
-                befunde.append(f"{url_name}: Titel {titel_text!r} beginnt nicht mit H1 {h1_text!r}")
-        assert not befunde, "Fenstertitel und H1 driften (Konzept 3.9):\n  " + "\n  ".join(befunde)
+            if not h1_text:
+                continue
+            if url_name in TITLE_H1_EXCEPTIONS:
+                if not (titel_text.startswith(h1_text) and titel_text.endswith(TITLE_SUFFIX)):
+                    befunde.append(
+                        f"{url_name}: Ausnahme erlaubt einen Zusatz, keine Umformulierung — "
+                        f"Titel {titel_text!r}, H1 {h1_text!r}"
+                    )
+                continue
+            if titel_text != f"{h1_text} {TITLE_SUFFIX}":
+                befunde.append(f"{url_name}: Titel {titel_text!r} ist nicht H1 {h1_text!r} + {TITLE_SUFFIX!r}")
+        assert not befunde, (
+            "Fenstertitel und H1 driften (Konzept 3.9):\n  "
+            + "\n  ".join(befunde)
+            + "\n  Entweder den Titel auf die H1 normieren oder mit Begründung in "
+            "TITLE_H1_EXCEPTIONS aufnehmen."
+        )
+
+    def test_title_exceptions_are_reachable_and_reasoned(self, rendered_pages):
+        """Bit-Rot-Schutz: jede Ausnahme zeigt auf eine gerenderte Seite und nennt einen Grund.
+
+        Ohne diesen Test wäre die Ausnahmeliste der bequeme Ort, an dem eine
+        normierte Seite unbemerkt stehen bliebe — und der nächste Titel
+        einfach mit eingetragen würde.
+        """
+        gerendert = {url_name for url_name, _ in rendered_pages}
+        unerreichbar = sorted(set(TITLE_H1_EXCEPTIONS) - gerendert)
+        assert not unerreichbar, (
+            f"TITLE_H1_EXCEPTIONS für nicht gerenderte Seiten: {unerreichbar} — "
+            "Eintrag entfernen oder Fixture ergänzen."
+        )
+        for url_name, grund in TITLE_H1_EXCEPTIONS.items():
+            assert grund.strip(), f"TITLE_H1_EXCEPTIONS[{url_name!r}] braucht eine Begründung."

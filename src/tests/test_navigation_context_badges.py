@@ -93,3 +93,51 @@ class TestWorkItemContextBadge:
         html = _get(client, staff_user, "core:workitem_detail", sample_workitem)
 
         assert 'data-testid="context-badge-client"' not in html
+
+
+@pytest.mark.django_db
+class TestEpisodeFormContextBadge:
+    """Konzept §3.5-Tabelle, Zeile „Episode-Formular": ← Fallname + Person des Falls.
+
+    Der Rücklink der Episodenseiten nennt den **Fall** (Objekt-Eltern nach
+    §3.4). Ohne Badge sagt der Kopf damit nicht, um wessen Akte es geht — die
+    Episode liegt unter einem Fall, der Fall unter einer Person, und genau
+    diese zweite Beziehung ist der Grund, warum §3.5 Badges statt eines
+    zweiten Rücklinks vorsieht (R4).
+
+    Kein Rollengefälle (R8): ``episode_create``/``episode_update`` sind
+    ``STAFF_PLUS``, ``client_detail`` ist ``ASSISTANT_PLUS`` — wer das
+    Formular sieht, darf die Person auch öffnen.
+    """
+
+    def _form_html(self, client, user, url_name, **kwargs):
+        client.force_login(user)
+        response = client.get(reverse(url_name, kwargs=kwargs))
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_create_form_shows_the_person_of_the_case(self, client, staff_user, case_open):
+        html = self._form_html(client, staff_user, "core:episode_create", case_pk=case_open.pk)
+
+        assert 'data-testid="context-badge-client"' in html
+        assert reverse("core:client_detail", kwargs={"pk": case_open.client.pk}) in html
+        assert case_open.client.pseudonym in html
+
+    def test_edit_form_shows_the_person_of_the_case(self, client, staff_user, case_open, episode):
+        html = self._form_html(client, staff_user, "core:episode_update", case_pk=case_open.pk, pk=episode.pk)
+
+        assert 'data-testid="context-badge-client"' in html
+        assert reverse("core:client_detail", kwargs={"pk": case_open.client.pk}) in html
+
+    def test_badge_stands_after_the_h1_not_before_the_back_link(self, client, staff_user, case_open):
+        """Reihenfolge des Kontext-Kopfes: Rücklink → H1 → Badges (§3.1/§3.5).
+
+        Ein Badge über dem Rücklink läse sich als zweiter Rückweg; die
+        Zugehörigkeit gehört unter den Titel, den sie qualifiziert.
+        """
+        html = self._form_html(client, staff_user, "core:episode_create", case_pk=case_open.pk)
+
+        rueck = html.index('data-testid="back-link"')
+        h1 = html.index("<h1")
+        badge = html.index('data-testid="context-badge-client"')
+        assert rueck < h1 < badge

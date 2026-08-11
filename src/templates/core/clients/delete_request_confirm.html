@@ -40,9 +40,9 @@
             {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}Für diese Person läuft bereits ein Löschantrag vom {{ datum }} (gestellt von {{ person }}). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich.{% endblocktrans %}
         </p>
     </div>
-    <a href="{% url 'core:client_detail' pk=client.pk %}" class="inline-flex items-center px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
-        {% trans "Zurück zur Person" %}
-    </a>
+    {# Refs #1802 (R1): kein zweiter Weg zurueck — der Ruecklink oben zeigt auf #}
+    {# dasselbe Ziel; der frueher hier stehende Button „Zurueck zur Person" war #}
+    {# derselbe Doppelbefund wie in events/edit.html (Konzept 1.1).             #}
     {% else %}
     <form method="post" class="space-y-4">
         {% csrf_token %}
