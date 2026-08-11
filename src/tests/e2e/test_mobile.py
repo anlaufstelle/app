@@ -49,26 +49,41 @@ def _assert_no_horizontal_overflow(page):
 
 
 class TestMobileNavMore:
-    """Mobile Bottom-Nav mit Mehr-Dropdown."""
+    """Mobile Bottom-Nav mit Mehr-Dropdown (Refs #1813: Selektoren auf testids).
+
+    Vorher haingen diese Tests an Label-Treffern (``a:has-text('Aufgaben')``).
+    Das war doppelt unscharf: „Aufgaben" ist ein eigener Bottom-Bar-Slot, kein
+    Menue-Eintrag — der Treffer kam also gar nicht aus dem Dropdown, und mit
+    einer englischen Sitzung waere er weggefallen. Jetzt greifen die Tests den
+    Container ``mobile-more-items`` und die Ziele darin.
+    """
+
+    def _open_more(self, page):
+        page.locator("[data-testid='mobile-nav-more']").click()
+        menu = page.locator("[data-testid='mobile-more-items']")
+        menu.wait_for(state="visible", timeout=10000)
+        return menu
 
     def test_more_dropdown(self, mobile_page, base_url):
+        """Anwendungsbetreuung: Ziel-IA des Menues (Konzept #1801 §5.2)."""
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Mehr-Button should be visible
-        more_btn = page.locator("button:has-text('Mehr')")
-        assert more_btn.is_visible()
+        menu = self._open_more(page)
 
-        # Click opens dropdown with Aufgaben, Klientel
-        more_btn.click()
-        aufgaben_link = page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')")
-        aufgaben_link.wait_for(state="visible", timeout=10000)
-        assert aufgaben_link.is_visible()
-        assert page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']").is_visible()
+        assert menu.locator("[data-testid='mobile-nav-search']").is_visible()
+        assert menu.locator("a[href='/cases/']").is_visible()
+        assert menu.locator("a[href='/attachments/']").is_visible()
+        assert menu.locator("a[href='/statistics/']").is_visible()
+        assert menu.locator("[data-testid='mobile-nav-datenschutz']").is_visible()
+        assert menu.locator("[data-testid='mobile-nav-verwaltung']").is_visible()
+        # Die vier Bottom-Bar-Slots stehen NICHT zusaetzlich im Menue.
+        assert menu.locator("a[href='/clients/']").count() == 0
+        assert menu.locator("a[href='/workitems/']").count() == 0
 
     def test_staff_no_statistik_in_more(self, base_url, browser):
-        """Staff-User sieht kein Statistik im Mehr-Menü."""
+        """Fachkraft: kein Statistik- und kein Verwaltungs-Eintrag im Mehr-Menue."""
         context = browser.new_context()
         page = context.new_page()
         page.goto(f"{base_url}/login/")
@@ -80,15 +95,31 @@ class TestMobileNavMore:
         page.set_viewport_size({"width": 375, "height": 812})
         page.goto(f"{base_url}/")
 
-        more_btn = page.locator("button:has-text('Mehr')")
-        more_btn.click()
-        # Menü geöffnet — auf ein immer-vorhandenes Element warten.
-        page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')").wait_for(
-            state="visible", timeout=10000
-        )
+        menu = self._open_more(page)
 
-        assert page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Statistik')").count() == 0
+        assert menu.locator("a[href='/cases/']").is_visible(), "Faelle fehlen — Menue leer geladen?"
+        assert menu.locator("a[href='/statistics/']").count() == 0
+        assert menu.locator("[data-testid='mobile-nav-verwaltung']").count() == 0
         context.close()
+
+    def test_language_switch_is_reachable_on_mobile(self, mobile_page, base_url):
+        """Refs #1813: mobil liess sich die Sprache bisher gar nicht wechseln.
+
+        Bewusst nur die Erreichbarkeit: ein Klick wuerde ueber
+        ``set_user_language`` die Praeferenz am Seed-User **persistieren** und
+        damit alle folgenden Specs dieses Laufs auf Englisch stellen.
+        """
+        page = mobile_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        menu = self._open_more(page)
+
+        assert menu.locator("[data-testid='mobile-nav-language-de']").is_visible()
+        assert menu.locator("[data-testid='mobile-nav-language-en']").is_visible()
+        for testid in ("mobile-nav-language-de", "mobile-nav-language-en"):
+            box = menu.locator(f"[data-testid='{testid}']").bounding_box()
+            assert box is not None and box["height"] >= 44, f"{testid}: Touch-Target zu klein"
 
 
 class TestMobileCards:
@@ -170,13 +201,13 @@ class TestMobileNavigation:
         assert page.locator("h1").inner_text() == "Zeitstrom"
 
     def test_mobile_nav_more_opens_menu(self, mobile_page, base_url):
-        # Klientel/Aufgaben sind eigene Bottom-Nav-Slots — Mehr enthält Dateien/Suche/Profil etc.
+        # Personen/Aufgaben sind eigene Bottom-Nav-Slots — Mehr enthält Dateien/Suche/Profil etc.
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-more']").click()
-        profil_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/account/']")
+        profil_link = page.locator("[data-testid='mobile-more-items'] a[href='/account/']")
         profil_link.wait_for(state="visible", timeout=10000)
         assert profil_link.is_visible(), "Profil-Link im Mehr-Menue nicht sichtbar"
 
