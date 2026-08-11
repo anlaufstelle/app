@@ -61,8 +61,19 @@ from core.views._json_contracts import (
     _wants_raw_json_response,
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
+from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
+
+
+def _event_back_link(event) -> dict[str, str]:
+    """Ruecklink der Ereignis-Unterseiten (Refs #1802, Konzept §3.4).
+
+    Bearbeiten und Loesch-Bestaetigung sind Unterseiten DES Ereignisses
+    (``events/<pk>/edit/``): ihre Heimat ist das Ereignis, nicht der Zeitstrom.
+    Beschriftet wird mit derselben Zeichenkette wie die H1 der Detailseite.
+    """
+    return object_back_link("core:event_detail", event.document_type.name, pk=event.pk)
 
 
 def _prefill_owner(meta_form, facility, client_id, case_id):
@@ -635,6 +646,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             "event": event,
             "data_form": data_form,
             "existing_attachments": build_attachment_context(event),
+            "back_link": _event_back_link(event),
         }
         return render(request, "core/events/edit.html", context)
 
@@ -731,6 +743,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # Refs #1056 (P4): wie im GET-Pfad — sonst verschwinden bestehende
             # Anhang-Zeilen beim invalid-POST-Re-Render aus dem Formular.
             "existing_attachments": build_attachment_context(event),
+            "back_link": _event_back_link(event),
         }
         return render(request, "core/events/edit.html", context)
 
@@ -760,7 +773,11 @@ class EventDeleteView(StaffRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
-        return render(request, "core/events/delete_confirm.html", {"event": self.event})
+        return render(
+            request,
+            "core/events/delete_confirm.html",
+            {"event": self.event, "back_link": _event_back_link(self.event)},
+        )
 
     def post(self, request, pk):
         event = self.event

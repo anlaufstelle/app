@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Löschantrag prüfen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-lg">
+    {# Refs #1802: die Genehmigungsseite hatte bisher gar keinen Ausweg ausser den Formular-Schaltflaechen. #}
+    {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Löschantrag prüfen" %}</h1>
 
     {# Antrag-Info #}

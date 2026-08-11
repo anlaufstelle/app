@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n static core_tags %}
+{% load i18n static core_tags nav_tags %}
 
 {% block title %}{% trans "Ereignis bearbeiten" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
+    {# Objekt-Eltern (Konzept #1802 §3.4): Heimat ist das Ereignis, nicht der Zeitstrom. #}
+    {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Ereignis bearbeiten" %}</h1>
 
     {# Meta (readonly) #}
@@ -52,9 +54,6 @@
             <p class="text-sm text-yellow-800">
                 {% trans "Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine Bearbeitung ist nicht möglich." %}
             </p>
-        </div>
-        <div class="mt-4">
-            <a href="{% url 'core:event_detail' event.pk %}" class="text-sm text-accent hover:underline">{% trans "Zurück" %}</a>
         </div>
         {% endif %}
     </form>
