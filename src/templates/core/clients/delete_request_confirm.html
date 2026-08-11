@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
-{% block title %}{% trans "Löschen beantragen" %} – {{ client.pseudonym }}{% endblock %}
+{% block title %}{% trans "Person löschen beantragen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-lg">
+    {# Objekt-Eltern (Konzept #1802 §3.4): der Antrag wird AUS der Personenakte gestellt. #}
+    {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Person löschen beantragen" %}</h1>
     {# Refs #1736 (D): Zuständig ist der Pool „Löschbestätigung", nicht „die Leitung". #}
     <p class="text-sm text-ink-muted mb-3">

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load i18n core_tags static %}
+{% load i18n core_tags static nav_tags %}
 
 {% block title %}{% if is_edit %}{% trans "Fall bearbeiten" %}{% else %}{% trans "Neuer Fall" %}{% endif %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-lg">
+    {# Ruecklink aus core.nav (Refs #1802). #}
+    {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% if is_edit %}{% trans "Fall bearbeiten" %}{% else %}{% trans "Neuer Fall" %}{% endif %}</h1>
 
     {% comment %}Refs #1733: Bedingte Rueckfrage vor dem Speichern — spiegelbildlich

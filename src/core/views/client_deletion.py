@@ -30,6 +30,7 @@ from core.services.client import (
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
 from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
+from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,10 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
             "core/clients/delete_request_confirm.html",
             {
                 "client": client,
+                # Objekt-Eltern (Konzept #1802 §3.4): der Antrag wird AUS der
+                # Personenakte gestellt — bisher gab es einen Rueckweg nur im
+                # Sonderzweig „laeuft schon ein Antrag".
+                "back_link": object_back_link("core:client_detail", client.pseudonym, pk=client.pk),
                 # Refs #1736 (A): laeuft schon ein Antrag, gibt es hier nichts
                 # mehr zu beantragen — statt eines wirkungslosen Formulars
                 # zeigt die Seite den Wartezustand.

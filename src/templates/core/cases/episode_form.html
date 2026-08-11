@@ -1,15 +1,14 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-lg">
-    <h1 class="text-[22px] font-bold text-ink mb-2">{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %}</h1>
-
-    <p class="text-[13px] text-ink-muted mb-5">
-        {% trans "Fall" %}: <a href="{% url 'core:case_detail' case.pk %}" class="text-accent hover:underline font-semibold">{{ case.title }}</a>
-    </p>
+    {# Objekt-Eltern (Konzept #1802 §3.4): die Kontextzeile "Fall: <Link>" wird zum Ruecklink — #}
+    {# dasselbe Ziel, aber an der Stelle und in der Form, die jede Objektseite benutzt. #}
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-5">{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %}</h1>
 
     <form method="post" class="space-y-4">
         {% csrf_token %}
