@@ -50,6 +50,17 @@ class TestFooterAlwaysVisible:
         """Ohne Eingabe ist das Dropdown leer — eine Fußzeile allein wäre Lärm."""
         assert FOOTER not in _dropdown(client, staff_user, "")
 
+    def test_single_character_shows_hint_instead_of_link(self, client, staff_user):
+        """Konzept #1803 §3.1: unter 2 Zeichen ist die Fußzeile ein Hinweis, kein Link.
+
+        Die Vollseite hat eine 2-Zeichen-Schwelle — ein Link dorthin wäre bei
+        einem einzelnen Zeichen ein Klick ins Leere.
+        """
+        content = _dropdown(client, staff_user, "a")
+
+        assert FOOTER not in content
+        assert "Bitte mindestens 2 Zeichen eingeben." in content
+
     @pytest.mark.parametrize("query", ["zzz-gibt-es-nicht", "ID-01"])
     def test_footer_links_to_the_full_search_with_the_query(self, client, staff_user, client_identified, query):
         content = _dropdown(client, staff_user, query)
