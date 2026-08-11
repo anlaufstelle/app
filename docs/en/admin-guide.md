@@ -504,7 +504,7 @@ The example activity report is a customizable example or template -- not a bindi
 
 Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "Qualified" because the person's identity must be known.
 
-> **Effective for event types only (Refs #1058).** **Minimum contact stage**, **retention period (`retention_days`)** and **system type** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. Persons and cases follow the facility-wide periods from the settings.
+> **Effective for event types only (Refs #1058).** **Minimum contact stage**, **retention period (`retention_days`)** and **system type** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own at all** — the retention run never touches them; their contents are only redacted when the associated person is anonymised ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` does key off a case being closed, but it deletes that case's events, not the case.
 >
 > The form **hides these three fields** as soon as you pick **person** or **case** as the entity type (Refs #1757) — so you no longer fill in fields that never apply. Hiding is purely visual: values already set stay unchanged on the record, and a field carrying an error message stays visible. Without JavaScript all fields remain visible and keep their explanatory help text as before.
 
@@ -1608,4 +1608,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-09 -->
-<!-- source-hash: cae2c700fc2c57bb5547b38c5c4ecfc086d13a38 -->
+<!-- source-hash: 8fb880fd75dc0a274108af391c653547ce195322 -->

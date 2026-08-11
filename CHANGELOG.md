@@ -33,6 +33,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Navigation zeigt den aktiven Bereich jetzt auf allen Seiten des Systembereichs und in der Audit-Detailansicht** (#1813) — auf „Retention", „VVT", „Legal Holds" und „Compliance" sowie beim Aufklappen eines Audit-Eintrags war die Ortsanzeige in der Hauptnavigation bisher erloschen.
 - **Import-Wizard zeigt eine durchgehende Fortschrittsanzeige** (#1813) — die bisherigen „Schritt n von 4"-Textzeilen auf den Seiten Hochladen/Zuordnen/Probelauf sind durch einen Stepper mit den vier Stationen Datei · Zuordnung · Probelauf · Übernahme ersetzt. Die „Übernahme" hat keine eigene Seite (reiner POST) — die Job-Detailseite zeigt sie deshalb dauerhaft und weist bei abgeschlossenen bzw. abgebrochenen Läufen den passenden Zustand aus.
 
+### Docs
+
+- **Reine Doku-Diffs brauchen keinen vollen `make ci` mehr** (#1823) — `AGENTS.md` § Git & Commits hält jetzt einen kleineren Guard-Satz für Diffs fest, die ausschließlich Markdown anfassen (Drift-Guards plus `pytest -m architecture`); sobald eine Nicht-Markdown-Datei im Diff liegt oder die gerenderten DSGVO-Vorlagen betroffen sind, gilt unverändert der volle Lauf.
+- **Admin-Handbuch: Falschaussage zu einer Aufbewahrungsfrist für Fälle korrigiert** (#1822) — DE und EN behaupteten, Personen **und Fälle** unterlägen den einrichtungsweiten Fristen aus den Einstellungen; tatsächlich fasst der Aufbewahrungslauf Fälle an keiner Stelle an, ihre Inhalte werden erst mit der Anonymisierung der zugehörigen Person redigiert ([ADR-039](docs/adr/039-owner-generische-dateianhaenge.md) § 6) — die DSFA-Vorlage sagte das bereits korrekt, der Admin-Guide widersprach ihr.
+
 ## [0.80.0] - 2026-08-10
 
 ### Added
