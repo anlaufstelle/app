@@ -57,6 +57,11 @@ def split(value, sep=","):
     not list membership — so ``'dashboard'`` matches ``'system_dashboard'``.
     Piping through ``|split:','`` yields a real list, making ``in`` an exact-
     element check (Nav-Aktivmarkierung, vermeidet Substring-Kollisionen).
+
+    Die einzigen Konsumenten waren die Nav-Templates; seit #1813 kommen die
+    Aktiv-Familien als Python-Mengen aus ``core.nav``, wo die Element-Semantik
+    strukturell gilt statt per Filter hergestellt zu werden. Der Filter bleibt
+    als allgemeines Werkzeug — und als Merkposten für die Fehlerklasse.
     """
     if value is None:
         return []

@@ -1,0 +1,11 @@
+{# Eintraege der Desktop-Sidebar. Datenquelle: core.nav via {% nav_sidebar %} (Refs #1813). #}
+{% for item in items %}
+<a href="{{ item.href }}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if item.is_active %}bg-accent-light text-accent font-semibold{% endif %}"{% if item.external %} target="_blank" rel="noopener"{% endif %}{% if item.testid %} data-testid="{{ item.testid }}"{% endif %}>
+    {% include "partials/_nav_icons.html" with icon=item.icon %}
+    {{ item.label }}
+    {% if item.badge == "workitems" %}
+    {% if overdue_workitems_count %}<span class="ml-auto inline-flex items-center justify-center px-1.5 py-px rounded-full text-[12px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
+    {% if open_workitems_count %}<span class="{% if not overdue_workitems_count %}ml-auto {% endif %}inline-flex items-center justify-center px-1.5 py-px rounded-full text-[12px] font-bold bg-accent-light text-accent">{{ open_workitems_count }}</span>{% endif %}
+    {% endif %}
+</a>
+{% endfor %}

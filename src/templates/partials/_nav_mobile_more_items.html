@@ -1,0 +1,5 @@
+{# Link-Eintraege des mobilen „Mehr"-Menues. Datenquelle: core.nav via {% nav_mobile_more %} (Refs #1813). #}
+{# Suche (Overlay-Button), Profil und Abmelden stehen als feste Rahmung in _navigation_mobile.html. #}
+{% for item in items %}
+<a href="{{ item.href }}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas"{% if item.external %} target="_blank" rel="noopener"{% endif %}{% if item.testid %} data-testid="{{ item.testid }}"{% endif %}>{{ item.label }}</a>
+{% endfor %}

@@ -285,16 +285,30 @@ class TestNoUncheckedNextRedirectGuard:
 
 
 class TestUserFacingEntryPointGuard:
-    """Jede user-facing Route muss irgendwo als ``{% url '<name>' %}`` auftauchen.
+    """Jede user-facing Route muss einen sichtbaren Einstieg haben.
 
     Wenn ein Feature hinzugefügt wird, aber kein Template einen Link/Button
     rendert, ist es ein halb-eingebauter Zustand — genau das Muster, das
     #605 vermeiden
     soll. Die Allowlist enthält nur solche URLs, die bewusst nur per Deep-
     Link, aus dem Code oder aus HTMX-Partials heraus aufgerufen werden.
+
+    Zwei gleichwertige Quellen zählen als Einstieg:
+
+    1. ein ``{% url '<name>' %}`` in irgendeinem Template, und
+    2. ein ``url_name="<name>"`` in der Navigations-Registry
+       ``src/core/nav.py`` (Refs #1813).
+
+    Quelle 2 kam mit der Registry dazu: die Hauptnavigation baut ihre ``href``
+    seither in Python (``reverse()`` im Inclusion-Tag), das Template enthält
+    nur noch ``{{ item.href }}``. Der Einstieg ist damit **nicht** verschwunden,
+    er hat den Ort gewechselt — und ist dort sogar stärker abgesichert:
+    ``test_nav_registry.py`` beweist, dass jeder Registry-Eintrag auflösbar ist,
+    während ein ``{% url %}`` auch in totem Markup stehen könnte.
     """
 
     _TEMPLATES_DIR = Path("src/templates")
+    _NAV_REGISTRY = Path("src/core/nav.py")
     # URL-Names, für die mindestens ein ``{% url '<name>' ... %}`` in einem
     # Template existieren muss.  Wächst mit neuen Features.
     _REQUIRED_URL_NAMES = {
@@ -333,20 +347,23 @@ class TestUserFacingEntryPointGuard:
         templates_text = ""
         for template_file in self._TEMPLATES_DIR.rglob("*.html"):
             templates_text += template_file.read_text(errors="ignore") + "\n"
+        registry_text = self._NAV_REGISTRY.read_text(errors="ignore") if self._NAV_REGISTRY.exists() else ""
 
         missing = []
         for url_name in self._REQUIRED_URL_NAMES:
             if url_name in self._ALLOWLIST:
                 continue
             # `{% url 'name' ... %}` oder `{% url "name" ... %}`
-            pattern = re.compile(rf"""\{{%\s*url\s+['"]{re.escape(url_name)}['"]""")
-            if not pattern.search(templates_text):
+            in_template = re.search(rf"""\{{%\s*url\s+['"]{re.escape(url_name)}['"]""", templates_text)
+            # `url_name="core:name"` in der Navigations-Registry
+            in_registry = re.search(rf"""url_name=['"]{re.escape(url_name)}['"]""", registry_text)
+            if not (in_template or in_registry):
                 missing.append(url_name)
         assert not missing, (
-            "Diese URL-Names haben keinen sichtbaren Einstieg in irgendeinem Template — "
-            "das Feature ist halb-eingebaut. Entweder Template-Link ergänzen oder "
-            "URL-Name aus _REQUIRED_URL_NAMES entfernen (falls bewusst deep-linked). "
-            f"Fehlend: {sorted(missing)}"
+            "Diese URL-Names haben keinen sichtbaren Einstieg — weder als {% url %} in einem "
+            "Template noch als Eintrag in src/core/nav.py. Das Feature ist halb-eingebaut. "
+            "Entweder Einstieg ergänzen oder URL-Name aus _REQUIRED_URL_NAMES entfernen "
+            f"(falls bewusst deep-linked). Fehlend: {sorted(missing)}"
         )
 
 
