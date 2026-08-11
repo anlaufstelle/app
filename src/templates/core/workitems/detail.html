@@ -9,7 +9,18 @@
     {% back_link %}
 
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-[22px] font-bold text-ink">{{ workitem.title }}</h1>
+        <div>
+            <h1 class="text-[22px] font-bold text-ink">{{ workitem.title }}</h1>
+            {# Kontext-Badge (Konzept #1802 §3.5): die Person gehoert in den Kopf, #}
+            {# nicht als Zeile 7 der Detailtabelle.                                #}
+            {% if workitem.client %}
+            <div class="flex flex-wrap items-center gap-2 mt-2">
+                {% url 'core:client_detail' pk=workitem.client.pk as client_url %}
+                {% trans "Person" as person_label %}
+                {% include "components/_context_link.html" with url=client_url label=workitem.client.pseudonym prefix=person_label testid="context-badge-client" %}
+            </div>
+            {% endif %}
+        </div>
         <div class="flex items-center gap-2">
             {# --- Desktop-Aktionen (md+) --- #}
             <div class="hidden md:flex md:items-center md:gap-2" data-testid="workitem-actions-desktop">
@@ -79,13 +90,6 @@
                 <p class="text-sm font-medium">{{ workitem.created_at|date:"DATETIME_FORMAT" }}</p>
             </div>
         </div>
-
-        {% if workitem.client %}
-        <div>
-            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</span>
-            <p class="text-sm"><a href="{% url 'core:client_detail' pk=workitem.client.pk %}" class="text-accent hover:underline">{{ workitem.client.pseudonym }}</a></p>
-        </div>
-        {% endif %}
 
         <div>
             <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</span>

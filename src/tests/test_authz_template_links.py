@@ -147,6 +147,12 @@ def guard_content(request):
         "outcome_goal",
         "milestone",
         "sample_event",
+        # Refs #1802: haengt ``sample_event`` an ``case_open``. Ohne diesen
+        # Zweig blieb der Guard blind fuer den Fall-Link auf der Ereignisseite —
+        # genau die oben dokumentierte Grenze („ein Link in einem Zweig ohne
+        # Testdaten faellt durch das Raster"), und genau dort sass das
+        # AuthZ-Loch aus Konzept #1802 §1.4.
+        "case_event",
         "sample_workitem",
         "deletion_request",
         "retention_proposal",

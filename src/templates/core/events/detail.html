@@ -13,6 +13,26 @@
         <div>
             <h1 class="text-[22px] font-bold text-ink">{{ event.document_type.name }}</h1>
             <p class="text-sm text-ink-muted mt-1">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</p>
+            {# Kontext-Badges (Konzept #1802 §3.5): Beziehungen gehoeren in den Kopf, #}
+            {# Metadaten (Dokumentationstyp, Erstellt von/am) bleiben im Block unten.  #}
+            {# Hoechstens zwei, jede einzeln weglassbar — ein Ereignis hat null bis    #}
+            {# drei Eltern (alle Felder nullable), ein Trail muesste sich einen        #}
+            {# erfinden. flex-wrap: mobil brechen die Pillen in eine eigene Zeile.     #}
+            <div class="flex flex-wrap items-center gap-2 mt-2">
+                {% if not event.is_anonymous and event.client %}
+                {% url 'core:client_detail' event.client.pk as client_url %}
+                {% trans "Person" as person_label %}
+                {% include "components/_context_link.html" with url=client_url label=event.client.pseudonym prefix=person_label testid="context-badge-client" %}
+                {% endif %}
+                {# Refs #1813 T4 / #1802 (Entscheid 2): Fall-Detail ist STAFF_PLUS. Fuer die #}
+                {# Assistenz erscheint weder Badge noch Titel — Fall-Titel sind Freitext,    #}
+                {# ein unverlinkter Text waere ein Existenz- und Inhalts-Leak (Regel R8).    #}
+                {% if event.case and user.is_staff_or_above %}
+                {% url 'core:case_detail' event.case.pk as case_url %}
+                {% trans "Fall" as fall_label %}
+                {% include "components/_context_link.html" with url=case_url label=event.case.title prefix=fall_label testid="context-badge-case" %}
+                {% endif %}
+            </div>
         </div>
         <div class="flex space-x-2">
             {# --- Desktop-Aktionen (md+) --- #}
@@ -29,18 +49,14 @@
     {# Meta-Daten #}
     <div class="card p-4 mb-4">
         <dl class="grid grid-cols-2 gap-4 text-sm">
+            {# Refs #1802: Person und Fall sind Beziehungen und stehen im Kontext-Kopf. #}
+            {# Hier bleibt nur, was ohne Ziel ist: das anonyme Ereignis.                 #}
+            {% if event.is_anonymous %}
             <div>
                 <dt class="text-ink-muted">{% trans "Person" %}</dt>
-                <dd class="font-medium">
-                    {% if event.is_anonymous %}
-                    <span class="text-ink-muted italic">{% trans "Anonym" %}</span>
-                    {% elif event.client %}
-                    <a href="{% url 'core:client_detail' event.client.pk %}" class="text-accent hover:text-accent">{{ event.client.pseudonym }}</a>
-                    {% else %}
-                    –
-                    {% endif %}
-                </dd>
+                <dd class="font-medium"><span class="text-ink-muted italic">{% trans "Anonym" %}</span></dd>
             </div>
+            {% endif %}
             <div>
                 <dt class="text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
                 <dd class="font-medium">{{ event.document_type.name }}</dd>
@@ -53,15 +69,6 @@
                 <dt class="text-ink-muted">{% trans "Erstellt am" %}</dt>
                 <dd class="font-medium">{{ event.created_at|date:"DATETIME_FORMAT" }}</dd>
             </div>
-            {% if event.case and user.is_staff_or_above %}
-            {# Refs #1813 T4: Fall-Detail ist STAFF_PLUS — ein ungegateter Link wäre für die Assistenz ein 403-Link (Refs #1735). #}
-            <div>
-                <dt class="text-ink-muted">{% trans "Fall" %}</dt>
-                <dd class="font-medium">
-                    <a href="{% url 'core:case_detail' event.case.pk %}" class="text-accent hover:text-accent">{{ event.case.title }}</a>
-                </dd>
-            </div>
-            {% endif %}
         </dl>
     </div>
 
