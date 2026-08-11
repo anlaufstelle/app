@@ -10,9 +10,28 @@ fehlerhaften URLs (Refs #733).
 Browser als protokoll-relativ interpretiert (Refs #770).
 """
 
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.constants import MAX_PAGE
+
+
+def object_back_link(url_name: str, label, **kwargs) -> dict[str, str]:
+    """Der Rücklink einer Objekt-Eltern-Seite für ``context["back_link"]`` (Refs #1802).
+
+    Fünf Seitengruppen haben als Heimat ein **Objekt** statt einer Liste
+    (Konzept #1802 §3.4) — Episode unter einem Fall, Berichtigung und
+    Löschantrag unter einer Person, Ereignis-Bearbeiten unter dem Ereignis,
+    Feldgruppe unter einem Dokumentationstyp. Das Objekt liegt in der View
+    ohnehin vor; die Registry kann es nicht kennen.
+
+    **Kein Verwandter von** ``safe_redirect_path`` (Regel R3): ``?next=``
+    beantwortet „wohin nach dem Absenden", der Rücklink „wo bin ich zuhause".
+    Beide dürfen dasselbe Ziel haben, werden aber nie voneinander abgeleitet —
+    deshalb nimmt dieser Helfer einen ``url_name``, nie einen rohen Pfad aus
+    der Anfrage.
+    """
+    return {"url": reverse(url_name, kwargs=kwargs), "label": label}
 
 
 def safe_redirect_path(raw: str | None) -> str:

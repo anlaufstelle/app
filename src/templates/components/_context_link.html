@@ -1,0 +1,25 @@
+{% comment %}
+components/_context_link.html — verlinkte Kontext-Pille (Konzept #1802 §3.5/3.11).
+
+Zusaetzliche Eltern eines Objekts erscheinen als Badge, NICHT als Segment eines
+Breadcrumb-Trails (Regel R4): ein Badge behauptet Zugehoerigkeit, ein Segment
+behauptet DEN Weg — und bei Ereignissen sind alle drei Elternfelder nullable.
+Badges lassen sich einzeln weglassen, ein Trail mit Loch in der Mitte ist kaputt.
+
+Parameter:
+- url: Ziel (Pflicht; ohne url rendert das Partial nichts).
+- label: der Wert, z. B. Pseudonym oder Fallname (Pflicht).
+- prefix: optionale Beziehungsart ("Person", "Fall"); noetig, sobald mehr als
+  eine Pille nebeneinander steht.
+- testid: optionaler data-testid.
+
+Regel R8: jedes Badge ist ein href und faellt unter test_authz_template_links.
+Ist das Ziel enger gegated als die Seite, wird die Pille WEGGELASSEN — nicht
+deaktiviert und nicht als Text gezeigt, sonst leakt die Existenz.
+{% endcomment %}
+{% if url %}
+<a href="{{ url }}"{% if testid %} data-testid="{{ testid }}"{% endif %}
+   class="inline-flex items-center min-h-[44px] px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-accent hover:underline">
+    {% if prefix %}<span class="text-ink-muted font-medium">{{ prefix }}:&nbsp;</span>{% endif %}<span class="truncate max-w-[40vw]">{{ label }}</span>
+</a>
+{% endif %}

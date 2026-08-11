@@ -1,17 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n nav_tags %}
 
 {% block title %}{% trans "Berichtigungsantrag prüfen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-xl">
-    <div class="flex items-center gap-2.5 mb-5">
-        <a href="{% url 'core:rectification_list' %}" class="flex items-center gap-1 text-[13px] text-ink-muted hover:text-ink">
-            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-            {% trans "Berichtigungsanträge" %}
-        </a>
-    </div>
-
+    {# Ruecklink aus core.nav (Refs #1802): heisst wie der Nav-Eintrag, nicht "Berichtigungsantraege". #}
+    {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Berichtigungsantrag prüfen" %}</h1>
 
     <div class="card p-5 space-y-4 mb-5">

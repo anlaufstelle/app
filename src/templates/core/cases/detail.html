@@ -14,10 +14,10 @@
             <h1 class="text-[26px] font-bold text-ink mb-2">{{ case.title }}</h1>
             <div class="flex items-center gap-2 flex-wrap">
                 {% include "core/cases/partials/status_badge.html" with case=case %}
+                {# Kontext-Badge (Konzept #1802 §3.5): die Person des Falls, verlinkt. #}
                 {% if case.client %}
-                <a href="{% url 'core:client_detail' case.client.pk %}" class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-accent hover:underline">
-                    {{ case.client.pseudonym }}
-                </a>
+                {% url 'core:client_detail' case.client.pk as client_url %}
+                {% include "components/_context_link.html" with url=client_url label=case.client.pseudonym %}
                 {% endif %}
             </div>
         </div>

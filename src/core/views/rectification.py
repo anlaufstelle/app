@@ -38,6 +38,7 @@ from core.services.client.rectification import (
 )
 from core.services.scoping import get_scoped_object
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
+from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,20 @@ def _display_value(value):
     return str(value)
 
 
+def _form_context(client, form) -> dict:
+    """Kontext des Antragsformulars — inklusive Objekt-Ruecklink (Refs #1802).
+
+    Die Heimat dieser Seite ist die Personenakte, nicht die Antragsliste: die
+    Route lautet ``clients/<pk>/rectification/new/`` und der Antrag wird AUS
+    der Akte gestellt (Konzept #1802 §3.4).
+    """
+    return {
+        "client": client,
+        "form": form,
+        "back_link": object_back_link("core:client_detail", client.pseudonym, pk=client.pk),
+    }
+
+
 @method_decorator(
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
@@ -83,7 +98,7 @@ class RectificationCreateView(StaffRequiredMixin, View):
     def get(self, request, pk):
         client = _writable_client(request, pk)
         form = RectificationRequestForm(client=client, user=request.user)
-        return render(request, "core/rectification/form.html", {"client": client, "form": form})
+        return render(request, "core/rectification/form.html", _form_context(client, form))
 
     def post(self, request, pk):
         # Lookup VOR der Payload-Validierung — IDOR-Proben muessen deterministisch
@@ -107,7 +122,7 @@ class RectificationCreateView(StaffRequiredMixin, View):
                     _("Berichtigungsantrag gestellt — die Leitung prüft ihn (Vier-Augen-Prinzip)."),
                 )
                 return redirect("core:client_detail", pk=client.pk)
-        return render(request, "core/rectification/form.html", {"client": client, "form": form})
+        return render(request, "core/rectification/form.html", _form_context(client, form))
 
 
 class RectificationListView(LeadOrAdminRequiredMixin, View):
