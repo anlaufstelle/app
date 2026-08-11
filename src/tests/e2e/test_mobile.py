@@ -7,6 +7,8 @@ Refs #382, #418.
 import pytest
 from django.utils import timezone
 
+from ._selectors import action_bar, open_mobile_overflow, wait_for_settled
+
 pytestmark = pytest.mark.e2e
 
 # Deutscher Monatsname für Datums-Asserts (locale-frei, Refs #761).
@@ -117,6 +119,11 @@ class TestMobileNavMore:
 
         assert menu.locator("[data-testid='mobile-nav-language-de']").is_visible()
         assert menu.locator("[data-testid='mobile-nav-language-en']").is_visible()
+        # Groesse erst messen, wenn die Alpine-Einblendung durch ist: waehrend
+        # ``x-transition`` skaliert das Panel (scale .95 -> 1) und
+        # ``bounding_box()`` liefert die skalierte Groesse — ein 44-px-Ziel
+        # maesse dann ~42 px (Refs #1813).
+        wait_for_settled(menu)
         for testid in ("mobile-nav-language-de", "mobile-nav-language-en"):
             box = menu.locator(f"[data-testid='{testid}']").bounding_box()
             assert box is not None and box["height"] >= 44, f"{testid}: Touch-Target zu klein"
@@ -459,16 +466,27 @@ class TestMobileDetailOverflowMenu:
         page.goto(f"{base_url}/clients/{pk}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Desktop-Buttons sollten versteckt sein
-        desktop_wrapper = page.locator("main .hidden.md\\:flex.md\\:space-x-2").first
-        assert not desktop_wrapper.is_visible(), "Desktop-Buttons sollten auf Mobile versteckt sein"
+        # Desktop-Aktionsleiste ist unter md ausgeblendet (Refs #1813: der
+        # Container traegt jetzt ein data-testid statt nur Tailwind-Klassen —
+        # der alte Klassen-Selektor traf nach dem Umbau NICHTS und war damit
+        # tautologisch wahr).
+        assert not action_bar(page, "client", "desktop").is_visible(), (
+            "Desktop-Aktionsleiste sollte auf Mobile versteckt sein"
+        )
+        assert action_bar(page, "client", "mobile").is_visible(), "Mobile Aktionsleiste sollte sichtbar sein"
 
         # Overflow-Menü-Button sichtbar
         overflow_btn = page.locator("[data-testid='mobile-overflow-menu']")
         assert overflow_btn.is_visible(), "Overflow-Menü-Button sollte sichtbar sein"
 
     def test_client_detail_overflow_menu_has_actions(self, mobile_page, base_url):
-        """Klienteldetail: Overflow-Menü enthält Neue Aufgabe, Neuer Kontakt, Neuer Fall."""
+        """Klienteldetail mobil: Kontakt dokumentieren, Aufgabe erstellen und Fall anlegen erreichbar.
+
+        Refs #1813 (§6.4 Paritaetsregel): „Kontakt dokumentieren" und „Aufgabe
+        erstellen" sind mobil PRIMAER (Icon + aria-label, kein Text) statt
+        Menue-Eintraege; nur „Fall anlegen" liegt im ⋮-Menue. Die Aussage des
+        Tests bleibt: alle drei Anlage-Aktionen sind mobil ohne Umweg da.
+        """
         page = mobile_page
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
@@ -482,14 +500,14 @@ class TestMobileDetailOverflowMenu:
         page.goto(f"{base_url}/clients/{pk}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Overflow-Menü öffnen
-        page.locator("[data-testid='mobile-overflow-menu']").click()
+        # Primaeraktionen stehen direkt in der mobilen Leiste.
+        bar = action_bar(page, "client", "mobile")
+        assert bar.locator("[data-testid='client-action-contact']").is_visible()
+        assert bar.locator("[data-testid='client-action-task']").is_visible()
 
-        # Aktionen im Menü prüfen — auf Menu-Panel warten.
-        menu = page.locator("[data-testid='mobile-overflow-menu'] + div")
-        menu.locator("a:has-text('Neue Aufgabe')").wait_for(state="visible", timeout=10000)
-        assert menu.locator("a:has-text('Neue Aufgabe')").is_visible()
-        assert menu.locator("a:has-text('Neuer Kontakt')").is_visible()
+        # Overflow-Menü öffnen
+        menu = open_mobile_overflow(page, "client")
+
         # Refs #1734: die Fall-Anlage war auf Mobil praktisch unauffindbar
         # (Textlink unterhalb der kompletten Kontakt-Chronik).
         assert menu.locator("[data-testid='mobile-client-new-case-btn']").is_visible()
