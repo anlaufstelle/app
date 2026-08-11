@@ -288,7 +288,9 @@ def assign_event_to_case(case, event, user):  # user reserved for future audit t
         raise ValidationError(_("Ereignis ist für diese Rolle nicht sichtbar."))
     if case.client_id is not None:
         if event.is_anonymous or event.client_id is None:
-            raise ValidationError(_("Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt werden."))
+            raise ValidationError(
+                _("Anonyme Ereignisse können nicht an einen Fall mit zugeordneter Person gehängt werden.")
+            )
         if event.client_id != case.client_id:
             raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
     event.case = case

@@ -806,7 +806,7 @@ class TestClientExportAuditTrail:
         data = export_client_data(sample_client, facility, admin_user)
         assert len(data["audit_trail"]) == 1
         entry = data["audit_trail"][0]
-        assert entry["action"] == "Qualifizierte Daten eingesehen"
+        assert entry["action"] == "Daten der Stufe „Mit Zusatzangaben“ eingesehen"
         assert entry["category"] == "Person"
         assert entry["timestamp"] is not None
 
@@ -1784,7 +1784,7 @@ class TestClientExportPdfCoverage:
             "pdf-kategorie",  # Loeschvorschlag
             "PDF-Aufgabe",  # Aufgabe
             "PDF-Aktivitaet",  # Zeitstrom
-            "Qualifizierte Daten eingesehen",  # Audit-Auszug
+            "Daten der Stufe „Mit Zusatzangaben“ eingesehen",  # Audit-Auszug
         ],
     )
     def test_pdf_contains_every_category(self, fully_populated_client, facility, admin_user, needle):
@@ -1823,7 +1823,7 @@ class TestClientExportPdfCoverage:
         # Letztes Vorkommen = die Abschnitts-Ueberschrift (das erste steht im
         # Hinweis-Kasten oben); danach folgen nur noch Tabelle und Footer.
         audit_section = html.rsplit("Zugriffsprotokoll", 1)[1]
-        assert "Qualifizierte Daten eingesehen" in audit_section
+        assert "Daten der Stufe „Mit Zusatzangaben“ eingesehen" in audit_section
         assert "ce_admin" not in audit_section
 
     def test_pdf_names_the_deliberate_exclusions(self, fully_populated_client, facility, admin_user):

@@ -137,9 +137,41 @@ DENYLIST: list[tuple[str, re.Pattern[str], str]] = [
     (
         # T1 — je Ebene genau eine Form. Wortgrenze, damit
         # „Dokumentationstyp“ nicht mittrifft.
+        #
+        # ``[Kk]lient`` statt ``Klient``: gross geschrieben wurde der Stamm zwar
+        # gesweept, klein geschrieben aber nicht — „klientelbezogen“ stand in
+        # zwei ausgelieferten Fehlermeldungen (cases.py/crud.py) und lief unter
+        # dem case-sensitiven Muster hindurch. Bewusst nur diese Alternative
+        # case-insensitiv: ein globales ``re.I`` wuerde „alterscluster“ als
+        # Wort auch in Kontexten treffen, in denen es keinen gibt, und
+        # ``\bDokumenttyp`` seine Trennschaerfe gegen „dokumenttypisch“ o. ae.
+        # nehmen.
         "Aufgeloeste Begriffs-Drift",
-        re.compile(r"Klient|\bDokumenttyp|Alterscluster"),
+        re.compile(r"[Kk]lient|\bDokumenttyp|Alterscluster"),
         "Kanonisch sind „Person“, „Dokumentationstyp“ und „Altersgruppe“ (docs/sprachleitlinie.md).",
+    ),
+    (
+        # Refs #1805 (D4) — die abgeloesten Kontaktstufen-Labels. Der JS-Guard
+        # oben deckt nur ``src/static/js`` ab; hier faellt auf, wenn ein
+        # uebersetzbarer String in ``src/core``/``src/templates`` wieder die
+        # Verwaltungsvokabel traegt (Fund bei der Merge-Naht-Durchsicht:
+        # ``AuditLog.Action.VIEW_QUALIFIED`` hiess noch „Qualifizierte Daten
+        # eingesehen“, waehrend das ``<select>` daneben „Mit Zusatzangaben“
+        # sagte).
+        #
+        # Bewusst NUR die gross geschriebene Form — das ist die Label-Position
+        # („Identifiziert“, „Qualifizierte Daten …“). Klein geschriebene
+        # Adjektive („eine qualifizierte Person herabstufen“) sind Fliesstext
+        # und stehen unter einer eigenen, groesseren Sprachfrage; sie hier
+        # mitzufangen wuerde den Guard sofort auf eine Ausnahmeliste
+        # angewiesen machen — und eine Ausnahmeliste ist genau das, was diese
+        # Guard-Familie vermeiden will.
+        #
+        # KEIN ``\b`` am Wortende: „Qualifizierte“/„Identifizierte“ sollen
+        # mitfallen, das ist die haeufigere Label-Form.
+        "Abgeloeste Kontaktstufen-Vokabel",
+        re.compile(r"Identifiziert|Qualifiziert"),
+        "Die Stufen heissen „Nur Pseudonym“ und „Mit Zusatzangaben“ (Client.ContactStage).",
     ),
 ]
 

@@ -50,8 +50,8 @@ Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Alle sieben sin
 | # | Frist | Wert | Einstellung | Wirkung bei Ablauf |
 |---|-------|------|-------------|--------------------|
 | 1 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht |
-| 2 | Kontakte identifizierter Personen | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht |
-| 3 | Qualifizierte Fälle (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Löschvorschlag; Soft-Delete erst nach Freigabe im 4-Augen-Prinzip |
+| 2 | Kontakte der Stufe „Nur Pseudonym“ | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht |
+| 3 | Fälle der Stufe „Mit Zusatzangaben“ (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Löschvorschlag; Soft-Delete erst nach Freigabe im 4-Augen-Prinzip |
 | 4 | Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Überschreibt die Fristen 1–3 für Ereignisse dieses Typs |
 | 5 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
 | 6 | Papierkorb-Frist für gelöschte Personen | {{ client_trash_days }} Tage | `client_trash_days` | Person wird automatisch anonymisiert; bis dahin wiederherstellbar |

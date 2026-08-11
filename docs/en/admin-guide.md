@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805).
 
 # Anlaufstelle -- Admin Guide
 
@@ -384,8 +384,8 @@ Under **Core > Settings** in the admin, you can configure the following for each
 | Default documentation type | -- | Pre-selected type for new entries |
 | Session timeout (minutes) | 30 | Automatic logout after inactivity |
 | Retention anonymous (days) | 90 | Deletion period for anonymous contacts |
-| Retention identified (days) | 365 | Deletion period for identified contacts |
-| Retention qualified (days) | 3650 | Deletion period after case closure |
+| Retention identified (days) | 365 | Deletion period for contacts of clients at the "Pseudonym only" level |
+| Retention qualified (days) | 3650 | Deletion period after case closure ("With additional details" level) |
 | Facility-wide 2FA enforcement | false | Enforces TOTP 2FA for **all** users of this facility (see [Section 2.7](#27-two-factor-authentication-2fa)) |
 
 ### 2.4 Create Additional Users
@@ -431,7 +431,7 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 | `facility_admin` | Application manager | one facility | Full access within their own facility: user management, type/sensitivity configuration, audit log (`/audit/`), GDPR package. **Cannot** view other facilities. |
 | `lead` | Lead / Manager | one facility | Reports, approve deletion requests, view all cases in the facility, data export |
 | `staff` | Staff / Social worker | one facility | Record and edit contacts, cases, and documentation |
-| `assistant` | Assistant | one facility | Limited data entry, no access to qualified data |
+| `assistant` | Assistant | one facility | Limited data entry, no access to client data at the "With additional details" level |
 
 > **System ↔ application separation:** `super_admin` manages hosting and bootstrap; `facility_admin` manages configuration and users **within** a facility. This separation is GDPR-relevant: the super-admin cannot view the substantive content of a facility without this being logged in the AuditLog (`SYSTEM_VIEW`). Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
@@ -502,7 +502,7 @@ The example activity report is a customizable example or template -- not a bindi
 
 #### Minimum Contact Stage
 
-Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "Qualified" because the person's identity must be known.
+Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "With additional details" because additional personal details about the person must be on record.
 
 > **Effective for event types only (Refs #1058).** **Minimum contact stage**, **retention period (`retention_days`)** and **system type** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own at all** — the retention run never touches them; their contents are only redacted when the associated person is anonymised ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` does key off a case being closed, but it deletes that case's events, not the case.
 >
@@ -680,7 +680,7 @@ All 2FA events are recorded in the `AuditLog` (actions: `MFA_ENABLED`, `MFA_DISA
 
 ### 2.8 Quick Templates
 
-**Quick templates** are pre-filled documentation templates that speed up recurring documentation patterns (e.g. "Counseling 30 min", "Standard check-in"). Staff can apply them with one click on the "New Contact" page.
+**Quick templates** are pre-filled documentation templates that speed up recurring documentation patterns (e.g. "Counseling 30 min", "Standard check-in"). Staff can apply them with one click on the "Document contact" page.
 
 **User-facing documentation:** [User Guide § 3 -- Quick Templates](user-guide.md#quick-templates).
 
@@ -694,7 +694,7 @@ Templates are maintained in the Django admin under **Core > Quick Templates**.
 | `document_type` | Which documentation type is pre-selected when the template is applied |
 | `name` | Display name on the button (e.g. "Counseling 30 min") |
 | `prefilled_data` | JSON object `{slug: value}` -- maps field slugs to default values |
-| `sort_order` | Order in which buttons appear on the "New Contact" page |
+| `sort_order` | Order in which buttons appear on the "Document contact" page |
 | `is_active` | Only active templates are offered for use |
 | `created_by` | User who created the template (informational only) |
 
@@ -1221,7 +1221,7 @@ The application stores **no real names** in the database. Personal data is captu
 
 - Persons are referenced by internal IDs.
 - Display names in the interface are configurable pseudonyms.
-- Qualified (identifiable) data is only visible to authorized roles (Lead, Application manager). The system administration (`super_admin`) can access qualified data only through the `/system/` area; every such access is logged in the AuditLog (`SYSTEM_VIEW`).
+- Data at the "With additional details" contact level (identifiable) is only visible to authorized roles (Lead, Application manager). The system administration (`super_admin`) can access such data only through the `/system/` area; every such access is logged in the AuditLog (`SYSTEM_VIEW`).
 
 ### 7.3 Retention Periods and `enforce_retention`
 
@@ -1232,8 +1232,8 @@ The management command `enforce_retention` enforces the configured periods by so
 | Strategy | Setting | Default |
 |---|---|---|
 | Anonymous contacts | `retention_anonymous_days` | 90 days |
-| Identified contacts | `retention_identified_days` | 365 days |
-| Qualified cases (after closure) | `retention_qualified_days` | 3650 days (10 years) |
+| Contacts at the "Pseudonym only" level | `retention_identified_days` | 365 days |
+| Cases at the "With additional details" level (after closure) | `retention_qualified_days` | 3650 days (10 years) |
 
 **Manual execution:**
 
@@ -1298,7 +1298,7 @@ The audit log is **append-only** and immutable. It automatically records:
 |---|---|
 | Login / Logout | Every login/logout |
 | Failed login | Incorrect password |
-| Qualified data viewed | Access to identifiable personal data |
+| Data at the "With additional details" level viewed | Access to identifiable personal data |
 | Export | Data export by a user — including data subject access requests for individual people and on-screen views of the external report. **Released report files** (CSV/PDF/JSON/XML with a reporting period) are a subset: only those are exempt from the retention deadline and appear in the [release overview](#8-statistics-snapshots--materialized-view) |
 | Deletion | Manual or via `enforce_retention` |
 | Level change | Change in a person's contact status |
@@ -1607,5 +1607,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-09 -->
-<!-- source-hash: 8fb880fd75dc0a274108af391c653547ce195322 -->
+<!-- translation-date: 2026-08-11 -->
+<!-- source-hash: d9412521d33f7c8211f15e82bb3e3d2f2a2d9406 -->

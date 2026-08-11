@@ -603,8 +603,18 @@ class TestPrecachedShellBumpGuard:
     # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
     # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
     # dem neuen Inhalt neu berechnen).
+    #
+    # Refs #1805 (Titel-H1-Drift in ``core/events/offline_create.html``: der
+    # ``<title>`` sagte noch „Neue Erfassung (offline)“, die H1 daneben schon
+    # „Kontakt dokumentieren (offline)“): nur der Hash ist nachgezogen, KEIN
+    # weiterer CACHE_NAME-Bump. ``anlaufstelle-v34`` entstand am selben Tag im
+    # selben unveroeffentlichten Lauf (Commit 9784bebd) und steht in keinem Tag
+    # und in keinem Deploy — kein Geraet im Feld traegt v34, also gibt es die
+    # Split-Brain-Generation nicht, gegen die der Bump schuetzt. Ein Bump waere
+    # hier Ritual statt Wirkung. Sobald v34 einmal ausgeliefert ist, gilt
+    # wieder: Shell-Aenderung => neuer CACHE_NAME.
     _PINNED_CACHE_NAME = "anlaufstelle-v34"
-    _PINNED_SHELL_HASH = "0d2ffa20be6df58b2ef40144d99d9ce2be154f4cda6b552f738a5e8639101ec6"
+    _PINNED_SHELL_HASH = "b028b5dbaba34ecadd25912facf3496d4f61c393792f0284b40b6eacfb1bbce3"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

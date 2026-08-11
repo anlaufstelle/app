@@ -18,7 +18,11 @@ class AuditLog(models.Model):
         LOGOUT = "logout", _("Abmeldung")
         LOGIN_FAILED = "login_failed", _("Anmeldung fehlgeschlagen")
         LOGIN_UNLOCK = "login_unlock", _("Account-Sperre aufgehoben")
-        VIEW_QUALIFIED = "view_qualified", _("Qualifizierte Daten eingesehen")
+        # Refs #1805: Label auf die neue Stufen-Vokabel gezogen (wie
+        # ``Client.ContactStage``). Der gespeicherte WERT bleibt
+        # ``view_qualified`` — Audit-Zeilen sind unveraenderlich, und der Code
+        # ist der Datenvertrag fuer Export/Filter; nur die Anzeige wechselt.
+        VIEW_QUALIFIED = "view_qualified", _("Daten der Stufe „Mit Zusatzangaben“ eingesehen")
         EXPORT = "export", _("Export")
         DELETE = "delete", _("Löschung")
         STAGE_CHANGE = "stage_change", _("Stufenwechsel")

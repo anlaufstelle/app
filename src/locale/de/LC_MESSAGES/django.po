@@ -718,262 +718,262 @@ msgstr "Anmeldung fehlgeschlagen"
 msgid "Account-Sperre aufgehoben"
 msgstr "Account-Sperre aufgehoben"
 
-#: src/core/models/audit.py:21
-msgid "Qualifizierte Daten eingesehen"
-msgstr "Qualifizierte Daten eingesehen"
+#: src/core/models/audit.py:25
+msgid "Daten der Stufe „Mit Zusatzangaben“ eingesehen"
+msgstr "Daten der Stufe „Mit Zusatzangaben“ eingesehen"
 
-#: src/core/models/audit.py:22
+#: src/core/models/audit.py:26
 msgid "Export"
 msgstr "Export"
 
-#: src/core/models/audit.py:23
+#: src/core/models/audit.py:27
 msgid "Löschung"
 msgstr "Löschung"
 
-#: src/core/models/audit.py:24
+#: src/core/models/audit.py:28
 msgid "Stufenwechsel"
 msgstr "Stufenwechsel"
 
-#: src/core/models/audit.py:25
+#: src/core/models/audit.py:29
 msgid "Einstellungen geändert"
 msgstr "Einstellungen geändert"
 
-#: src/core/models/audit.py:26
+#: src/core/models/audit.py:30
 msgid "Download"
 msgstr "Download"
 
-#: src/core/models/audit.py:27 src/core/models/retention.py:19
+#: src/core/models/audit.py:31 src/core/models/retention.py:19
 #: src/core/models/retention.py:143 src/templates/core/system/retention.html:36
 msgid "Legal Hold"
 msgstr "Legal Hold"
 
-#: src/core/models/audit.py:28
+#: src/core/models/audit.py:32
 msgid "Offline-Schlüssel abgerufen"
 msgstr "Offline-Schlüssel abgerufen"
 
-#: src/core/models/audit.py:35
+#: src/core/models/audit.py:39
 msgid "Offline-Bundle gelesen"
 msgstr "Offline-Bundle gelesen"
 
-#: src/core/models/audit.py:40
+#: src/core/models/audit.py:44
 msgid "Offline-Facility-Bundle gelesen"
 msgstr "Offline-Facility-Bundle gelesen"
 
-#: src/core/models/audit.py:41
+#: src/core/models/audit.py:45
 msgid "Person angelegt"
 msgstr "Person angelegt"
 
-#: src/core/models/audit.py:42
+#: src/core/models/audit.py:46
 msgid "Person aktualisiert"
 msgstr "Person aktualisiert"
 
-#: src/core/models/audit.py:43
+#: src/core/models/audit.py:47
 msgid "Person in Papierkorb"
 msgstr "Person in Papierkorb"
 
-#: src/core/models/audit.py:44
+#: src/core/models/audit.py:48
 msgid "Person wiederhergestellt"
 msgstr "Person wiederhergestellt"
 
-#: src/core/models/audit.py:45
+#: src/core/models/audit.py:49
 msgid "Person anonymisiert"
 msgstr "Person anonymisiert"
 
-#: src/core/models/audit.py:46
+#: src/core/models/audit.py:50
 msgid "Fall angelegt"
 msgstr "Fall angelegt"
 
-#: src/core/models/audit.py:47
+#: src/core/models/audit.py:51
 msgid "Fall aktualisiert"
 msgstr "Fall aktualisiert"
 
-#: src/core/models/audit.py:48
+#: src/core/models/audit.py:52
 msgid "Fall geschlossen"
 msgstr "Fall geschlossen"
 
-#: src/core/models/audit.py:49
+#: src/core/models/audit.py:53
 msgid "Fall wiedereröffnet"
 msgstr "Fall wiedereröffnet"
 
-#: src/core/models/audit.py:50
+#: src/core/models/audit.py:54
 msgid "Meilenstein gelöscht"
 msgstr "Meilenstein gelöscht"
 
-#: src/core/models/audit.py:51
+#: src/core/models/audit.py:55
 msgid "Ereignis angelegt"
 msgstr "Ereignis angelegt"
 
-#: src/core/models/audit.py:52
+#: src/core/models/audit.py:56
 msgid "Aufgabe angelegt"
 msgstr "Aufgabe angelegt"
 
-#: src/core/models/audit.py:53
+#: src/core/models/audit.py:57
 msgid "Aufgabe aktualisiert"
 msgstr "Aufgabe aktualisiert"
 
-#: src/core/models/audit.py:54
+#: src/core/models/audit.py:58
 msgid "Benutzerrolle geändert"
 msgstr "Benutzerrolle geändert"
 
-#: src/core/models/audit.py:55
+#: src/core/models/audit.py:59
 msgid "Benutzer deaktiviert"
 msgstr "Benutzer deaktiviert"
 
-#: src/core/models/audit.py:56
+#: src/core/models/audit.py:60
 msgid "Recht Löschbestätigung geändert"
 msgstr "Recht Löschbestätigung geändert"
 
-#: src/core/models/audit.py:57
+#: src/core/models/audit.py:61
 msgid "Passwort-Reset angefordert"
 msgstr "Passwort-Reset angefordert"
 
-#: src/core/models/audit.py:58
+#: src/core/models/audit.py:62
 msgid "Sicherheitsverletzung"
 msgstr "Sicherheitsverletzung"
 
-#: src/core/models/audit.py:59
+#: src/core/models/audit.py:63
 msgid "2FA aktiviert"
 msgstr "2FA aktiviert"
 
-#: src/core/models/audit.py:60
+#: src/core/models/audit.py:64
 msgid "2FA deaktiviert"
 msgstr "2FA deaktiviert"
 
-#: src/core/models/audit.py:61
+#: src/core/models/audit.py:65
 msgid "2FA-Verifikation fehlgeschlagen"
 msgstr "2FA-Verifikation fehlgeschlagen"
 
-#: src/core/models/audit.py:62
+#: src/core/models/audit.py:66
 msgid "2FA Backup-Codes generiert"
 msgstr "2FA Backup-Codes generiert"
 
-#: src/core/models/audit.py:63
+#: src/core/models/audit.py:67
 msgid "2FA Backup-Code verwendet"
 msgstr "2FA Backup-Code verwendet"
 
-#: src/core/models/audit.py:64
+#: src/core/models/audit.py:68
 msgid "2FA Backup-Codes neu generiert"
 msgstr "2FA Backup-Codes neu generiert"
 
-#: src/core/models/audit.py:66
+#: src/core/models/audit.py:70
 msgid "Passkey registriert"
 msgstr "Passkey registriert"
 
-#: src/core/models/audit.py:67
+#: src/core/models/audit.py:71
 msgid "Passkey entfernt"
 msgstr "Passkey entfernt"
 
-#: src/core/models/audit.py:68
+#: src/core/models/audit.py:72
 msgid "Passkey-Verifikation fehlgeschlagen"
 msgstr "Passkey-Verifikation fehlgeschlagen"
 
-#: src/core/models/audit.py:69
+#: src/core/models/audit.py:73
 msgid "Sudo-Mode aktiviert (Re-Auth)"
 msgstr "Sudo-Mode aktiviert (Re-Auth)"
 
-#: src/core/models/audit.py:73
+#: src/core/models/audit.py:77
 msgid "Sudo-Mode Re-Auth fehlgeschlagen"
 msgstr "Sudo-Mode Re-Auth fehlgeschlagen"
 
-#: src/core/models/audit.py:76
+#: src/core/models/audit.py:80
 msgid "Systembereich aufgerufen"
 msgstr "Systembereich aufgerufen"
 
-#: src/core/models/audit.py:79
+#: src/core/models/audit.py:83
 msgid "Audit-Log exportiert"
 msgstr "Audit-Log exportiert"
 
-#: src/core/models/audit.py:81
+#: src/core/models/audit.py:85
 msgid "Wartungsmodus aktiviert"
 msgstr "Wartungsmodus aktiviert"
 
-#: src/core/models/audit.py:82
+#: src/core/models/audit.py:86
 msgid "Wartungsmodus deaktiviert"
 msgstr "Wartungsmodus deaktiviert"
 
-#: src/core/models/audit.py:86
+#: src/core/models/audit.py:90
 msgid "Retention-Lauf abgeschlossen"
 msgstr "Retention-Lauf abgeschlossen"
 
-#: src/core/models/audit.py:91
+#: src/core/models/audit.py:95
 msgid "Restore-Test verifiziert"
 msgstr "Restore-Test verifiziert"
 
-#: src/core/models/audit.py:96 src/templates/core/clients/detail.html:33
+#: src/core/models/audit.py:100 src/templates/core/clients/detail.html:33
 #: src/templates/core/clients/detail.html:92
 #: src/templates/core/clients/partials/table.html:53
 msgid "Löschung beantragt"
 msgstr "Löschung beantragt"
 
-#: src/core/models/audit.py:97
+#: src/core/models/audit.py:101
 msgid "Löschung genehmigt"
 msgstr "Löschung genehmigt"
 
-#: src/core/models/audit.py:98
+#: src/core/models/audit.py:102
 msgid "Löschung abgelehnt"
 msgstr "Löschung abgelehnt"
 
-#: src/core/models/audit.py:102
+#: src/core/models/audit.py:106
 msgid "Statistik-Snapshot-Lauf abgeschlossen"
 msgstr "Statistik-Snapshot-Lauf abgeschlossen"
 
-#: src/core/models/audit.py:103
+#: src/core/models/audit.py:107
 msgid "Breach-Detection-Scan abgeschlossen"
 msgstr "Breach-Detection-Scan abgeschlossen"
 
-#: src/core/models/audit.py:104
+#: src/core/models/audit.py:108
 msgid "Statistik-View-Refresh abgeschlossen"
 msgstr "Statistik-View-Refresh abgeschlossen"
 
-#: src/core/models/audit.py:109
+#: src/core/models/audit.py:113
 msgid "Audit-Pruning-Checkpoint"
 msgstr "Audit-Pruning-Checkpoint"
 
-#: src/core/models/audit.py:118
+#: src/core/models/audit.py:122
 msgid "Offline-Notiz exportiert"
 msgstr "Offline-Notiz exportiert"
 
-#: src/core/models/audit.py:123
+#: src/core/models/audit.py:127
 msgid "Konfiguration angelegt"
 msgstr "Konfiguration angelegt"
 
-#: src/core/models/audit.py:124
+#: src/core/models/audit.py:128
 msgid "Konfiguration geändert"
 msgstr "Konfiguration geändert"
 
-#: src/core/models/audit.py:125
+#: src/core/models/audit.py:129
 msgid "Konfiguration gelöscht"
 msgstr "Konfiguration gelöscht"
 
-#: src/core/models/audit.py:126
+#: src/core/models/audit.py:130
 msgid "Konfiguration umsortiert"
 msgstr "Konfiguration umsortiert"
 
-#: src/core/models/audit.py:132
+#: src/core/models/audit.py:136
 msgid "Import hochgeladen"
 msgstr "Import hochgeladen"
 
-#: src/core/models/audit.py:133
+#: src/core/models/audit.py:137
 msgid "Import übernommen"
 msgstr "Import übernommen"
 
-#: src/core/models/audit.py:134
+#: src/core/models/audit.py:138
 msgid "Import abgebrochen"
 msgstr "Import abgebrochen"
 
-#: src/core/models/audit.py:139
+#: src/core/models/audit.py:143
 msgid "Berichtigung beantragt"
 msgstr "Berichtigung beantragt"
 
-#: src/core/models/audit.py:140
+#: src/core/models/audit.py:144
 msgid "Berichtigung genehmigt"
 msgstr "Berichtigung genehmigt"
 
-#: src/core/models/audit.py:141
+#: src/core/models/audit.py:145
 msgid "Berichtigung abgelehnt"
 msgstr "Berichtigung abgelehnt"
 
-#: src/core/models/audit.py:160 src/core/models/user.py:106
+#: src/core/models/audit.py:164 src/core/models/user.py:106
 #: src/core/models/user.py:107 src/templates/auth/_demo_credentials.html:23
 #: src/templates/core/audit/detail.html:19
 #: src/templates/core/audit/list.html:32
@@ -985,12 +985,12 @@ msgstr "Berichtigung abgelehnt"
 msgid "Benutzer"
 msgstr "Benutzer"
 
-#: src/core/models/audit.py:179 src/templates/core/audit/detail.html:26
+#: src/core/models/audit.py:183 src/templates/core/audit/detail.html:26
 #: src/templates/core/system/auditlog_detail.html:28
 msgid "Handelnde Person"
 msgstr "Handelnde Person"
 
-#: src/core/models/audit.py:184 src/core/models/event_history.py:41
+#: src/core/models/audit.py:188 src/core/models/event_history.py:41
 #: src/templates/core/attachments/partials/attachment_table.html:17
 #: src/templates/core/audit/detail.html:31
 #: src/templates/core/audit/list.html:20
@@ -1007,7 +1007,7 @@ msgstr "Handelnde Person"
 msgid "Aktion"
 msgstr "Aktion"
 
-#: src/core/models/audit.py:189 src/core/models/import_job.py:85
+#: src/core/models/audit.py:193 src/core/models/import_job.py:85
 #: src/core/models/retention.py:38 src/core/models/retention.py:95
 #: src/core/models/workitem.py:204 src/templates/core/audit/detail.html:43
 #: src/templates/core/audit/partials/table.html:11
@@ -1021,7 +1021,7 @@ msgstr "Aktion"
 msgid "Zieltyp"
 msgstr "Zieltyp"
 
-#: src/core/models/audit.py:194 src/core/models/retention.py:40
+#: src/core/models/audit.py:198 src/core/models/retention.py:40
 #: src/core/models/retention.py:96 src/core/models/workitem.py:205
 #: src/templates/core/audit/detail.html:47
 #: src/templates/core/audit/partials/table.html:12
@@ -1030,7 +1030,7 @@ msgstr "Zieltyp"
 msgid "Ziel-ID"
 msgstr "Ziel-ID"
 
-#: src/core/models/audit.py:196 src/core/models/retention.py:49
+#: src/core/models/audit.py:200 src/core/models/retention.py:49
 #: src/templates/core/audit/detail.html:53
 #: src/templates/core/audit/partials/table.html:13
 #: src/templates/core/events/detail.html:158
@@ -1038,13 +1038,13 @@ msgstr "Ziel-ID"
 msgid "Details"
 msgstr "Details"
 
-#: src/core/models/audit.py:200 src/core/services/compliance/vvt.py:144
+#: src/core/models/audit.py:204 src/core/services/compliance/vvt.py:144
 #: src/templates/core/audit/detail.html:39
 #: src/templates/core/system/auditlog_detail.html:47
 msgid "IP-Adresse"
 msgstr "IP-Adresse"
 
-#: src/core/models/audit.py:207 src/core/services/compliance/vvt.py:143
+#: src/core/models/audit.py:211 src/core/services/compliance/vvt.py:143
 #: src/templates/core/audit/detail.html:15
 #: src/templates/core/audit/partials/table.html:8
 #: src/templates/core/system/auditlog_detail.html:17
@@ -1052,21 +1052,21 @@ msgstr "IP-Adresse"
 msgid "Zeitstempel"
 msgstr "Zeitstempel"
 
-#: src/core/models/audit.py:214
+#: src/core/models/audit.py:218
 msgid "Vorheriger Hash"
 msgstr "Vorheriger Hash"
 
-#: src/core/models/audit.py:215
+#: src/core/models/audit.py:219
 msgid "Eintrags-Hash"
 msgstr "Eintrags-Hash"
 
-#: src/core/models/audit.py:218 src/core/nav.py:154 src/core/nav.py:395
+#: src/core/models/audit.py:222 src/core/nav.py:154 src/core/nav.py:395
 #: src/core/services/hubs.py:163 src/templates/core/audit/list.html:4
 #: src/templates/core/audit/list.html:7
 msgid "Audit-Log"
 msgstr "Audit-Log"
 
-#: src/core/models/audit.py:219
+#: src/core/models/audit.py:223
 msgid "Audit-Logs"
 msgstr "Audit-Logs"
 
@@ -3267,15 +3267,15 @@ msgstr "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgid "Ereignis ist für diese Rolle nicht sichtbar."
 msgstr "Ereignis ist für diese Rolle nicht sichtbar."
 
-#: src/core/services/case/cases.py:291
+#: src/core/services/case/cases.py:292
 msgid ""
-"Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
-"werden."
+"Anonyme Ereignisse können nicht an einen Fall mit zugeordneter Person "
+"gehängt werden."
 msgstr ""
-"Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
-"werden."
+"Anonyme Ereignisse können nicht an einen Fall mit zugeordneter Person "
+"gehängt werden."
 
-#: src/core/services/case/cases.py:293 src/core/services/events/crud.py:70
+#: src/core/services/case/cases.py:295 src/core/services/events/crud.py:70
 msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Person des Ereignisses passt nicht zur Person des Falls."
 
@@ -3395,9 +3395,11 @@ msgstr "Pseudonym (kein Klarname)"
 
 #: src/core/services/compliance/vvt.py:56
 msgid ""
-"Soziodemografische Eckdaten (Altersgruppe, ggf. über Zusatzfelder erhoben)"
+"Soziodemografische Eckdaten (Altersgruppe; Geschlecht ggf. über Zusatzfelder "
+"erhoben)"
 msgstr ""
-"Soziodemografische Eckdaten (Altersgruppe, ggf. über Zusatzfelder erhoben)"
+"Soziodemografische Eckdaten (Altersgruppe; Geschlecht ggf. über Zusatzfelder "
+"erhoben)"
 
 #: src/core/services/compliance/vvt.py:57
 msgid "Kontaktstufe (anonym / nur Pseudonym / mit Zusatzangaben)"
@@ -4113,9 +4115,11 @@ msgstr "Fall gehört nicht zur selben Einrichtung wie das Ereignis."
 
 #: src/core/services/events/crud.py:72
 msgid ""
-"Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."
+"Anonyme Ereignisse dürfen nicht an Fälle mit zugeordneter Person gehängt "
+"werden."
 msgstr ""
-"Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."
+"Anonyme Ereignisse dürfen nicht an Fälle mit zugeordneter Person gehängt "
+"werden."
 
 #: src/core/services/events/crud.py:86
 msgid ""
@@ -6850,6 +6854,7 @@ msgid "In der Konflikt-Liste ansehen"
 msgstr "In der Konflikt-Liste ansehen"
 
 #: src/templates/core/clients/offline_detail.html:122
+#: src/templates/core/events/offline_create.html:4
 #: src/templates/core/events/offline_create.html:54
 msgid "Kontakt dokumentieren (offline)"
 msgstr "Kontakt dokumentieren (offline)"
@@ -7818,10 +7823,6 @@ msgstr ""
 #: src/templates/core/import/mapping.html:62
 msgid "Zurück"
 msgstr "Zurück"
-
-#: src/templates/core/events/offline_create.html:4
-msgid "Neue Erfassung (offline)"
-msgstr "Neue Erfassung (offline)"
 
 #: src/templates/core/events/offline_create.html:15
 #: src/templates/core/workitems/offline_create.html:15
@@ -9061,22 +9062,6 @@ msgstr "PDF-Export"
 #: src/templates/core/statistics/report_releases.html:14
 msgid "Freigabe-Übersicht"
 msgstr "Freigabe-Übersicht"
-
-#: src/templates/core/statistics/partials/dashboard_content.html:271
-msgid "welche Berichtszeiträume wurden bereits herausgegeben?"
-msgstr "welche Berichtszeiträume wurden bereits herausgegeben?"
-
-#: src/templates/core/statistics/partials/full_content.html:16
-msgid "Quartal"
-msgstr "Quartal"
-
-#: src/templates/core/statistics/partials/full_content.html:22
-msgid "Halbjahr"
-msgstr "Halbjahr"
-
-#: src/templates/core/statistics/partials/full_content.html:28
-msgid "Jahr"
-msgstr "Jahr"
 
 #: src/templates/core/statistics/partials/full_content.html:51
 #: src/templates/core/workitems/inbox.html:172
@@ -10389,6 +10374,7 @@ msgstr "Mir zugewiesen, offen"
 #: src/templates/core/zeitstrom/index.html:40
 msgid "Mir zugewiesen, Frist verstrichen"
 msgstr "Mir zugewiesen, Frist verstrichen"
+
 #: src/templates/core/search/partials/_empty.html:29
 msgid "Bitte mindestens 2 Zeichen eingeben."
 msgstr "Bitte mindestens 2 Zeichen eingeben."

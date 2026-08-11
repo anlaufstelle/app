@@ -1,6 +1,6 @@
 # Informationspflichten (Art. 13/14 DSGVO)
 
-**Datenschutzhinweise für Klientel der Einrichtung**
+**Datenschutzhinweise für begleitete Personen der Einrichtung**
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}

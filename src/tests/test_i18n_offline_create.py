@@ -26,7 +26,6 @@ OFFLINE_CREATE_EN: list[tuple[str, str]] = [
     ("Kontakt dokumentieren (offline)", "Document contact (offline)"),
     ("– bitte wählen –", "– please select –"),
     ("Aufgabe erstellen (offline)", "Create task (offline)"),
-    ("Neue Erfassung (offline)", "New entry (offline)"),
     (
         "Für die Offline-Erfassung sind noch keine Vorlagen vorbereitet oder der "
         "lokale Cache ist leer. Bitte einmal online öffnen.",
@@ -56,7 +55,7 @@ def test_offline_create_strings_translated_en(source_de: str, expected_en: str) 
 
 def test_offline_create_lock_covers_all_new_strings() -> None:
     # Schutz gegen versehentliches Ausduennen der Lock-Liste.
-    assert len(OFFLINE_CREATE_EN) == 15
+    assert len(OFFLINE_CREATE_EN) == 14
     # Kein Eintrag faellt auf den deutschen Quelltext zurueck (echte Uebersetzung).
     with override("en"):
         for source_de, _expected in OFFLINE_CREATE_EN:

@@ -59,7 +59,7 @@ Folgende Datenkategorien werden verarbeitet:
 
 ## § 4 Kategorien betroffener Personen
 
-- Klientel der Einrichtung (pseudonymisiert)
+- Begleitete Personen der Einrichtung (pseudonymisiert)
 - Mitarbeitende der Einrichtung
 
 ---

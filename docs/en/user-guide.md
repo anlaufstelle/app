@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805).
 
 # Anlaufstelle -- User Guide
 
@@ -187,15 +187,15 @@ Depending on your role, a different variant is shown:
 
 An **event** is a single documented contact -- for example, a counseling session, a syringe exchange, or an anonymous visit.
 
-### Recording a New Contact
+### Documenting a Contact
 
-1. Click **New** in the sidebar and select **New Contact** (or navigate to `/events/new/`).
+1. Click **Create new** in the sidebar and select **Document contact** (or navigate to `/events/new/`).
 2. **Select a documentation type:** Choose the appropriate type from the list (e.g., "Contact", "Crisis counseling", "Syringe exchange"). The available types are configured by your facility.
 3. **Fill in the fields:** After selecting the type, the corresponding input fields are loaded. Fill in all relevant fields.
 4. **Timestamp:** The "Timestamp" field is automatically set to the current time. You can adjust it if you are recording a contact retroactively.
 5. **Assign a client (optional):**
  - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No client will be linked.
- - For an **identified client**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
+ - For a **client with a pseudonym**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
  - If the client has not been registered yet, create them first under **Clients** (see [Section 4](#4-managing-clients)).
 6. Click **Save**.
 
@@ -205,7 +205,7 @@ You will be redirected to the detail view of the newly created entry. A success 
 
 ### Quick Templates
 
-If your administrator has set up **quick templates** for recurring documentation patterns (e.g., "Counseling 30 min", "Standard check-in"), they appear as buttons at the top of the "New Contact" page.
+If your administrator has set up **quick templates** for recurring documentation patterns (e.g., "Counseling 30 min", "Standard check-in"), they appear as buttons at the top of the "Document contact" page.
 
 - **Click a template button** to pre-fill the form with the template's saved values and documentation type.
 - **You can still edit every field** before saving -- the template provides defaults, not a locked form.
@@ -253,7 +253,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 3. Enter a reason.
 4. Confirm the deletion.
 
-> **Important:** If the contact is associated with a **qualified client**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a lead or administrator (four-eyes principle). You will receive a corresponding notification.
+> **Important:** If the contact is associated with a **client at the "With additional details" contact level**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a lead or administrator (four-eyes principle). You will receive a corresponding notification.
 
 ---
 
@@ -312,17 +312,17 @@ Each client has a **contact level**:
 
 | Level | Description |
 |---|---|
-| **Identified** | Pseudonym known, basic data (age group) available |
-| **Qualified** | Additional personal data available (restricted access, audit log) |
+| **Pseudonym only** | Only the pseudonym is stored, plus the age group |
+| **With additional details** | Additional personal details are stored (restricted access, every access is logged) |
 
-> **Note:** Access to qualified client profiles is automatically recorded in the audit log.
+> **Note:** Access to client profiles at the "With additional details" level is automatically recorded in the audit log.
 
-### Creating a New Client
+### Creating a Client
 
-1. Navigate to **Clients** (`/clients/`) and click **New Client** (or go directly to `/clients/new/`).
+1. Navigate to **Clients** (`/clients/`) and click **Create person** (or go directly to `/clients/new/`).
 2. Fill in the form:
  - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
- - **Contact level:** Select "Identified" or "Qualified".
+ - **Contact level:** Select "Pseudonym only" or "With additional details".
  - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
  - **Notes:** Internal remarks about the client (optional).
 3. Click **Save**.
@@ -344,7 +344,7 @@ The detail page of a client (`/clients/<id>/`) shows:
 - **Chronology:** All previously documented contacts for this client, newest first
 - **Open work items:** Tasks and hints assigned to this client
 
-From the detail page, you can directly record a new contact for this client or create a new task.
+From the detail page, you can use **Document contact** to record a contact for this client directly, or **Create task** to add a task.
 
 ### Editing a Client
 
@@ -396,9 +396,9 @@ Directly on the inbox card of a work item, you can change the status with a clic
 
 The list updates without a page reload.
 
-### Creating a New Task or Hint
+### Creating a Task or Hint
 
-1. Click **New Task** in the inbox (or navigate to `/workitems/new/`).
+1. Click **Create task** in the inbox (or navigate to `/workitems/new/`).
 2. Fill in the form:
  - **Type:** "Task" or "Hint"
  - **Title:** A brief, concise description
@@ -519,7 +519,7 @@ Below the key figures, the dashboard shows three interactive charts:
 
 | Chart | Description |
 |-------|-------------|
-| **Contacts Over Time** | Line chart with monthly breakdown of contacts (Total, Anonymous, Identified, Qualified) |
+| **Contacts Over Time** | Line chart with monthly breakdown of contacts (Total, Anonymous, Pseudonym only, With additional details) |
 | **Documentation Types** | Bar chart showing the distribution by documentation type (e.g. Contact, Counseling, Needle Exchange) |
 | **Age Groups** | Doughnut chart showing the demographic distribution by age group |
 
@@ -589,7 +589,7 @@ Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive
 
 ### Reviewing Deletion Requests (Lead / Admin)
 
-When a social worker or assistant wants to delete a contact belonging to a qualified client, a **deletion request** is created that must be approved by a lead or administrator.
+When a social worker or assistant wants to delete a contact belonging to a client at the "With additional details" contact level, a **deletion request** is created that must be approved by a lead or administrator.
 
 1. View open deletion requests at `/deletion-requests/`.
 2. Click on a request to see the details and the affected event.
@@ -645,7 +645,7 @@ For assignments without a reliable internet connection -- for example, outreach 
 
 - **Clients, tasks, and the timeline stay available at their usual address (since Waves 2/3, #1499):** The **client list** (`/clients/`), the **task list** (`/workitems/`), and the **timeline** as the start page (`/`) render offline the same local excerpt as online -- assembled from your taken-along clients, in the usual look. The task list and timeline also show **anonymous or client-less entries** (standalone tasks, contacts without a client), clearly marked as such; the timeline is deliberately labeled a "local record" -- it shows only the offline-available activity, not the facility's complete history. You no longer need a separate offline start page for this.
 - Open a taken-along client as usual via their detail page -- the view stays at the **normal address** and is built from the encrypted offline store (no separate "offline" link anymore).
-- You can **record new events** (via **"New Contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
+- You can **record new events** (via **"Document contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
 - **Capture anywhere offline (since Wave 1, #1499):** you no longer need an **open client dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a client you took offline, and save. The old "only within the dossier" dead end (#1483/#1485) is gone.
 - **Contacts without a client** (anonymous contacts) and **standalone tasks** can now be **started offline too** -- choose **"-- no client --"** in the client picker. If the chosen document type requires a contact stage, "no client" is disabled; assign a taken-along client instead (the server re-checks the contact stage on sync).
 - **Task capture is staff-only.** As an assistant, opening the task form offline shows a note instead of the fields -- so no entry is created that would be rejected on sync.
@@ -688,7 +688,7 @@ Anlaufstelle distinguishes five roles. Your role is assigned by the facility adm
 
 | Role | Display Name | Brief Description |
 |---|---|---|
-| `assistant` | Assistant | Limited data entry without access to qualified client data |
+| `assistant` | Assistant | Limited data entry without access to client data at the "With additional details" level |
 | `staff` | Social Worker | Default role for employees doing documentation |
 | `lead` | Lead | All social worker functions plus reports and management tasks |
 | `facility_admin` | Facility Admin | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
@@ -704,9 +704,9 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 |---|---|---|---|---|
 | View Zeitstrom / home page | Yes | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
-| Document identified contacts | Yes | Yes | Yes | Yes |
+| Document contacts for clients at the "Pseudonym only" level | Yes | Yes | Yes | Yes |
 | Create and search for clients | Yes | Yes | Yes | Yes |
-| View qualified client details | No | Yes (own facility) | Yes | Yes |
+| View client details at the "With additional details" level | No | Yes (own facility) | Yes | Yes |
 | Edit own events | Yes | Yes | Yes | Yes |
 | Edit other users' events | No | Yes | Yes | Yes |
 | Create and edit work items | Yes | Yes | Yes | Yes |
@@ -726,7 +726,7 @@ Table covers the four facility-bound roles only -- `super_admin` is excluded her
 
 ### Audit Log (Facility Admin Only)
 
-The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, access to qualified data, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Facility Admin (`facility_admin`) for their own facility.
+The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, access to data at the "With additional details" level, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Facility Admin (`facility_admin`) for their own facility.
 
 ---
 
@@ -745,19 +745,19 @@ A case is a **bracket** around thematically related contacts. Case management is
 3. **Search:** Enter a title in the search field -- the list filters automatically as you type.
 4. **Status filter:** Select "Open", "Closed", or "All statuses" from the dropdown to narrow the display.
 
-### Creating a New Case
+### Creating a Case
 
-1. Click **New Case** on the case list (or navigate to `/cases/new/`).
+1. Click **Create case** on the case list (or navigate to `/cases/new/`).
 2. Fill in the form:
  - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
  - **Client:** Start typing the pseudonym -- a suggestion list appears. Select the matching client. A case can also be created without a client.
  - **Description:** More detailed information about the case (optional).
  - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, leads, and administrators from your facility are available.
-3. Click **Create Case**.
+3. Click **Create case**.
 
 You will be redirected to the detail page of the new case.
 
-> **Tip:** If you create a new case from the client detail page, the client is already pre-filled.
+> **Tip:** If you start from the client detail page via **Create case**, the client is already pre-filled.
 
 ### Case Detail Page
 
@@ -887,6 +887,6 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-04 -->
-<!-- source-hash: d05c78db86a8d3f2133bc26d002b46d182cebb8f -->
+<!-- translation-date: 2026-08-11 -->
+<!-- source-hash: e52a41fd8db778c45739b4fe1bf928d52ac99a71 -->
 

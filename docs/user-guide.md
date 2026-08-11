@@ -184,9 +184,9 @@ Je nach Rolle erscheint eine andere Variante:
 
 Ein **Event** ist ein einzelner dokumentierter Kontakt – z. B. ein Beratungsgespräch, eine Spritzentauschausgabe oder ein anonymer Besuch.
 
-### Neuen Kontakt erfassen
+### Einen Kontakt dokumentieren
 
-1. Klicken Sie in der Sidebar auf **Neu** und wählen Sie **Neuer Kontakt** (oder navigieren Sie zu `/events/new/`).
+1. Klicken Sie in der Sidebar auf **Neu erstellen** und wählen Sie **Kontakt dokumentieren** (oder navigieren Sie zu `/events/new/`).
 2. **Dokumentationstyp wählen:** Wählen Sie aus der Liste den passenden Typ (z. B. „Kontakt", „Krisengespräch", „Spritzentausch"). Die verfügbaren Typen sind von Ihrer Einrichtung konfiguriert.
 3. **Felder ausfüllen:** Nach der Typauswahl werden die zugehörigen Eingabefelder geladen. Füllen Sie alle relevanten Felder aus.
 4. **Zeitpunkt:** Das Feld „Zeitpunkt" ist automatisch auf die aktuelle Uhrzeit gesetzt. Sie können es anpassen, wenn Sie einen Kontakt nachträglich erfassen.
@@ -202,7 +202,7 @@ Sie werden zur Detailansicht des neu erstellten Eintrags weitergeleitet. Eine Er
 
 ### Schnell-Vorlagen (Quick-Templates)
 
-Wenn Ihre Administration für wiederkehrende Dokumentationsmuster **Schnell-Vorlagen** eingerichtet hat (z. B. „Beratungsgespräch 30 Min", „Standard-Check-in"), erscheinen diese oben auf der Seite „Neuer Kontakt" als Buttons.
+Wenn Ihre Administration für wiederkehrende Dokumentationsmuster **Schnell-Vorlagen** eingerichtet hat (z. B. „Beratungsgespräch 30 Min", „Standard-Check-in"), erscheinen diese oben auf der Seite „Kontakt dokumentieren" als Buttons.
 
 - **Klick auf einen Button** füllt das Formular mit den hinterlegten Werten und dem passenden Dokumentationstyp vor.
 - **Alle Felder bleiben bearbeitbar** — die Vorlage liefert nur Defaults, keine Sperre.
@@ -250,7 +250,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 3. Geben Sie eine Begründung ein.
 4. Bestätigen Sie die Löschung.
 
-> **Wichtig:** Wenn der Kontakt einer **Person mit qualifizierter Dokumentation** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
+> **Wichtig:** Wenn der Kontakt einer **Person der Kontaktstufe „Mit Zusatzangaben"** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
 
 ---
 
@@ -309,17 +309,17 @@ Jede Person hat eine **Kontaktstufe**:
 
 | Stufe | Beschreibung |
 |---|---|
-| **Identifiziert** | Pseudonym bekannt, grundlegende Daten (Altersgruppe) vorhanden |
-| **Qualifiziert** | Zusätzliche persönliche Daten vorhanden (eingeschränkter Zugriff, Audit-Log) |
+| **Nur Pseudonym** | Es ist nur das Pseudonym hinterlegt, dazu die Altersgruppe |
+| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, jeder Zugriff wird protokolliert) |
 
-> **Hinweis:** Der Zugriff auf Personenprofile in qualifizierter Kontaktstufe wird automatisch im Audit-Log protokolliert.
+> **Hinweis:** Der Zugriff auf Personenprofile der Kontaktstufe „Mit Zusatzangaben" wird automatisch im Audit-Log protokolliert.
 
-### Neue Person anlegen
+### Person anlegen
 
-1. Navigieren Sie zu **Personen** (`/clients/`) und klicken Sie auf **Neue Person** (oder direkt zu `/clients/new/`).
+1. Navigieren Sie zu **Personen** (`/clients/`) und klicken Sie auf **Person anlegen** (oder direkt zu `/clients/new/`).
 2. Füllen Sie das Formular aus:
  - **Pseudonym:** Einzigartiger Name innerhalb Ihrer Einrichtung (z. B. ein selbstgewählter Spitzname). Das Pseudonym darf innerhalb einer Einrichtung nur einmal vorkommen.
- - **Kontaktstufe:** Wählen Sie „Identifiziert" oder „Qualifiziert".
+ - **Kontaktstufe:** Wählen Sie „Nur Pseudonym" oder „Mit Zusatzangaben".
  - **Altersgruppe:** „Unter 18", „18–26", „27+" oder „Unbekannt".
  - **Notizen:** Interne Anmerkungen zur Person (optional).
 3. Klicken Sie auf **Speichern**.
@@ -341,7 +341,7 @@ Die Detailseite einer Person (`/clients/<id>/`) zeigt:
 - **Chronik:** Alle bisherigen dokumentierten Kontakte dieser Person, neueste zuerst
 - **Offene WorkItems:** Aufgaben und Hinweise, die dieser Person zugeordnet sind
 
-Von der Detailseite aus können Sie direkt einen neuen Kontakt für diese Person erfassen oder eine neue Aufgabe anlegen.
+Von der Detailseite aus können Sie über **Kontakt dokumentieren** direkt einen Kontakt für diese Person erfassen oder über **Aufgabe erstellen** eine Aufgabe anlegen.
 
 ### Person bearbeiten
 
@@ -393,9 +393,9 @@ Direkt in der Inbox-Karte eines WorkItems können Sie den Status per Klick ände
 
 Die Liste aktualisiert sich ohne Seitenneuladung.
 
-### Neue Aufgabe oder Hinweis erstellen
+### Aufgabe oder Hinweis erstellen
 
-1. Klicken Sie in der Inbox auf **Neue Aufgabe** (oder navigieren Sie zu `/workitems/new/`).
+1. Klicken Sie in der Inbox auf **Aufgabe erstellen** (oder navigieren Sie zu `/workitems/new/`).
 2. Füllen Sie das Formular aus:
  - **Typ:** „Aufgabe" oder „Hinweis"
  - **Titel:** Kurze, prägnante Beschreibung
@@ -516,7 +516,7 @@ Unterhalb der Kennzahlen zeigt das Dashboard drei interaktive Diagramme:
 
 | Diagramm | Beschreibung |
 |----------|-------------|
-| **Kontakte im Zeitverlauf** | Liniendiagramm mit monatlicher Aufschlüsselung der Kontakte (Gesamt, Anonym, Identifiziert, Qualifiziert) |
+| **Kontakte im Zeitverlauf** | Liniendiagramm mit monatlicher Aufschlüsselung der Kontakte (Gesamt, Anonym, Nur Pseudonym, Mit Zusatzangaben) |
 | **Dokumentationstypen** | Balkendiagramm mit der Verteilung nach Dokumentationstyp (z. B. Kontakt, Beratungsgespräch, Spritzentausch) |
 | **Altersgruppen** | Ringdiagramm mit der demografischen Verteilung nach Altersgruppe |
 
@@ -586,7 +586,7 @@ Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) g
 
 ### Löschanträge prüfen (Leitung / Admin)
 
-Wenn eine Fachkraft oder Assistenz einen Kontakt einer Person mit qualifizierter Dokumentation löschen möchte, entsteht ein **Löschantrag**, der von einer Leitung oder Administration genehmigt werden muss.
+Wenn eine Fachkraft oder Assistenz einen Kontakt einer Person der Kontaktstufe „Mit Zusatzangaben" löschen möchte, entsteht ein **Löschantrag**, der von einer Leitung oder Administration genehmigt werden muss.
 
 1. Offene Löschanträge sehen Sie unter `/deletion-requests/`.
 2. Klicken Sie auf einen Antrag, um Details und das betroffene Ereignis einzusehen.
@@ -642,7 +642,7 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 
 - **Personen, Aufgaben und Zeitstrom bleiben an ihrer gewohnten Adresse verfügbar (seit/3, #1499):** Die **Personenliste** (`/clients/`), die **Aufgabenliste** (`/workitems/`) und der **Zeitstrom** als Startseite (`/`) rendern offline denselben lokalen Ausschnitt wie online — aus Ihren mitgenommenen Personen zusammengestellt, in gewohnter Optik. Die Aufgabenliste und der Zeitstrom zeigen dabei auch **anonyme bzw. personlose Einträge** (Standalone-Aufgaben, Kontakte ohne Personenbezug), klar als solche markiert; der Zeitstrom ist bewusst als „lokale Chronik" gekennzeichnet — er zeigt nur die offline verfügbaren Vorgänge, nicht die vollständige Historie der Einrichtung. Eine separate Offline-Startseite brauchen Sie dafür nicht mehr.
 - Öffnen Sie eine mitgenommene Person wie gewohnt über ihre Detailseite — die Ansicht bleibt an der **normalen Adresse** und wird aus dem verschlüsselten Offline-Speicher aufgebaut (kein separater „Offline"-Link mehr).
-- Sie können **neue Ereignisse erfassen** (über **„Neuer Kontakt"**) und **bestehende bearbeiten**; die Einträge werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet. **Datei-Anhänge** können offline nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
+- Sie können **neue Ereignisse erfassen** (über **„Kontakt dokumentieren"**) und **bestehende bearbeiten**; die Einträge werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet. **Datei-Anhänge** können offline nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
 - **Erfassung überall offline (seit, #1499):** Sie müssen dafür **kein Dossier mehr geöffnet** haben. Tippen Sie offline im **„+"-Menü** auf **„Kontakt dokumentieren"** bzw. **„Aufgabe erstellen"** (oder öffnen Sie die Formulare `/events/new/` / `/workitems/new/` direkt) — es öffnet sich **an der gewohnten Adresse** eine echte Erfassungsmaske: Dokumentationstyp wählen, optional eine „offline mitgenommene" Person zuordnen, speichern. Der Eintrag wird verschlüsselt lokal abgelegt und beim nächsten Netzkontakt automatisch gesendet.
 - **Kontakte ohne Personenbezug** (anonyme Kontakte) und **Aufgaben ohne Person** (Standalone) lassen sich damit jetzt **auch offline neu beginnen** — wählen Sie im Personen-Auswahlfeld **„— ohne Person —"**. Erfordert der gewählte Dokumentationstyp eine Kontaktstufe, ist „ohne Person" deaktiviert; ordnen Sie dann eine mitgenommene Person zu (der Server prüft die Kontaktstufe beim Synchronisieren erneut). Die frühere Sackgasse mit „geht nur im Dossier"-Wegweiser (#1483/#1485) entfällt.
 - **Aufgaben-Erfassung ist Fachkräften vorbehalten.** Öffnen Sie als Assistenz offline die Aufgaben-Maske, sehen Sie statt der Felder einen Hinweis — so entsteht kein Eintrag, der beim Senden ohnehin abgelehnt würde.
@@ -686,7 +686,7 @@ Anlaufstelle unterscheidet fünf Rollen. Ihre Rolle wird von der Anwendungsbetre
 
 | Rolle | Anzeigename | Kurzbeschreibung |
 |---|---|---|
-| `assistant` | Assistenz | Eingeschränkte Erfassung ohne Zugriff auf qualifizierte Personendaten |
+| `assistant` | Assistenz | Eingeschränkte Erfassung ohne Zugriff auf Personendaten der Stufe „Mit Zusatzangaben" |
 | `staff` | Fachkraft | Standardrolle für Mitarbeitende in der Dokumentation |
 | `lead` | Leitung | Alle Fachkraft-Funktionen plus Auswertungen und Leitungsaufgaben |
 | `facility_admin` | Anwendungsbetreuung | Vollzugriff auf alle Bereiche und Einstellungen **Ihrer Einrichtung** (Audit-Log, DSGVO-Paket, Benutzerverwaltung) |
@@ -702,9 +702,9 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 |---|---|---|---|---|
 | Zeitstrom / Startseite einsehen | Ja | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
-| Identifizierte Kontakte dokumentieren | Ja | Ja | Ja | Ja |
+| Kontakte zu Personen der Stufe „Nur Pseudonym" dokumentieren | Ja | Ja | Ja | Ja |
 | Personen anlegen und suchen | Ja | Ja | Ja | Ja |
-| Qualifizierte Personendaten einsehen | Nein | Ja (eigene Einrichtung) | Ja | Ja |
+| Personendaten der Stufe „Mit Zusatzangaben" einsehen | Nein | Ja (eigene Einrichtung) | Ja | Ja |
 | Eigene Ereignisse bearbeiten | Ja | Ja | Ja | Ja |
 | Fremde Ereignisse bearbeiten | Nein | Ja | Ja | Ja |
 | WorkItems erstellen und bearbeiten | Ja | Ja | Ja | Ja |
@@ -724,7 +724,7 @@ Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier 
 
 ### Audit-Log (nur Anwendungsbetreuung)
 
-Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, Zugriffe auf qualifizierte Daten, Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
+Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, Zugriffe auf Daten der Stufe „Mit Zusatzangaben", Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
 
 ---
 
@@ -743,19 +743,19 @@ Ein Fall ist eine **Klammer** um thematisch zusammengehörige Kontakte. Das Fall
 3. **Suche:** Geben Sie im Suchfeld einen Titel ein – die Liste filtert sich automatisch während der Eingabe.
 4. **Status-Filter:** Wählen Sie im Dropdown „Offen", „Geschlossen" oder „Alle Status", um die Anzeige einzuschränken.
 
-### Neuen Fall erstellen
+### Fall anlegen
 
-1. Klicken Sie auf der Fallliste auf **Neuer Fall** (oder navigieren Sie zu `/cases/new/`).
+1. Klicken Sie auf der Fallliste auf **Fall anlegen** (oder navigieren Sie zu `/cases/new/`).
 2. Füllen Sie das Formular aus:
  - **Titel** (Pflichtfeld): Eine kurze Bezeichnung für den Fall (z. B. „Wohnungssuche", „Suchtberatung").
  - **Person:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie die passende Person aus. Ein Fall kann auch ohne Person erstellt werden.
  - **Beschreibung:** Ausführlichere Informationen zum Fall (optional).
  - **Fallverantwortlich:** Wählen Sie die zuständige Person aus dem Dropdown (optional). Nur Fachkräfte, Leitungen und Administratoren Ihrer Einrichtung stehen zur Auswahl.
-3. Klicken Sie auf **Fall erstellen**.
+3. Klicken Sie auf **Fall anlegen**.
 
 Sie werden zur Detailseite des neuen Falls weitergeleitet.
 
-> **Tipp:** Wenn Sie von der Detailseite der Person aus einen neuen Fall erstellen, ist die Person bereits vorausgefüllt.
+> **Tipp:** Wenn Sie von der Detailseite der Person aus über **Fall anlegen** starten, ist die Person bereits vorausgefüllt.
 
 ### Fall-Detailseite
 
@@ -869,7 +869,7 @@ Jede Episode zeigt ihren Status:
 | Funktion | Assistenz | Fachkraft | Leitung | Anwendungsbetreuung |
 |---|---|---|---|---|
 | Fallliste einsehen | Nein | Ja | Ja | Ja |
-| Fall erstellen und bearbeiten | Nein | Ja | Ja | Ja |
+| Fall anlegen und bearbeiten | Nein | Ja | Ja | Ja |
 | Fall schließen / wiedereröffnen | Nein | Nein | Ja | Ja |
 | Kontakte zuordnen / entfernen | Nein | Ja | Ja | Ja |
 | Episoden verwalten | Nein | Ja | Ja | Ja |

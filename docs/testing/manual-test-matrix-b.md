@@ -2657,7 +2657,7 @@
 - **Negativer Pfad:** Wird DocumentType mit `min_contact_stage=qualifiziert` ohne Klient:in gewählt → ValidationError „Für diesen Dokumentationstyp muss eine Person ausgewählt werden, da eine Mindest-Kontaktstufe vorausgesetzt wird." Form rendert erneut mit Fehlermeldung.
 
 **DSGVO/Security-Note:**
-- Anonyme Events dürfen nicht an klientelbezogene Cases gehängt werden (`create_event` validiert: ValidationError „Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden.").
+- Anonyme Events dürfen nicht an Cases mit zugeordneter Person gehängt werden (`create_event` validiert: ValidationError „Anonyme Ereignisse dürfen nicht an Fälle mit zugeordneter Person gehängt werden.").
 
 **Status:** ☐ Offen
 

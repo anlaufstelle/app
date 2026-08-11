@@ -381,8 +381,8 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 | Standard-Dokumentationstyp || Vorausgewählter Typ bei neuem Eintrag |
 | Session-Timeout (Minuten) | 30 | Automatischer Logout nach Inaktivität |
 | Aufbewahrung anonym (Tage) | 90 | Löschfrist für anonyme Kontakte |
-| Aufbewahrung identifiziert (Tage) | 365 | Löschfrist für identifizierte Kontakte |
-| Aufbewahrung qualifiziert (Tage) | 3650 | Löschfrist nach Fallabschluss |
+| Aufbewahrung identifiziert (Tage) | 365 | Löschfrist für Kontakte zu Personen der Stufe „Nur Pseudonym" |
+| Aufbewahrung qualifiziert (Tage) | 3650 | Löschfrist nach Fallabschluss (Stufe „Mit Zusatzangaben") |
 | 2FA einrichtungsweit verpflichtend | false | Erzwingt TOTP-2FA für **alle** Benutzer dieser Einrichtung (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa)) |
 
 ### 2.4 Weitere Benutzer anlegen
@@ -428,7 +428,7 @@ Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-überg
 | `facility_admin` | Anwendungsbetreuung | eine Einrichtung | Vollzugriff in der eigenen Einrichtung: Benutzerverwaltung, Typ-/Sensitivitätskonfiguration, Audit-Log (`/audit/`), DSGVO-Paket. Kann **nicht** in andere Einrichtungen schauen. |
 | `lead` | Leitung | eine Einrichtung | Auswertungen, Löschanträge genehmigen, alle Fälle der Einrichtung einsehen, Datenexport |
 | `staff` | Fachkraft | eine Einrichtung | Kontakte, Fälle, Dokumentation erfassen und bearbeiten |
-| `assistant` | Assistenz | eine Einrichtung | Eingeschränkte Erfassung, kein Zugriff auf qualifizierte Daten |
+| `assistant` | Assistenz | eine Einrichtung | Eingeschränkte Erfassung, kein Zugriff auf Personendaten der Stufe „Mit Zusatzangaben" |
 
 > **Trennung System ↔ Anwendung:** `super_admin` betreut Hosting und Bootstrap, `facility_admin` betreut Konfiguration und Nutzer **innerhalb** einer Einrichtung. Diese Trennung ist DSGVO-relevant: Der Super-Admin sieht keine fachlichen Inhalte einer Einrichtung, ohne dass dies im AuditLog (`SYSTEM_VIEW`) auftaucht. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
@@ -499,7 +499,7 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 
 #### Mindest-Kontaktstufe
 
-Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Qualifiziert", weil die Identität der Person bekannt sein muss.
+Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Mit Zusatzangaben", weil zusätzliche persönliche Angaben zur Person vorliegen müssen.
 
 > **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Aufbewahrungsfrist (`retention_days`)** und **Systemtyp** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Für **Personen** greifen stattdessen die einrichtungsweiten Regeln aus den Einstellungen: die Papierkorb-Frist (`client_trash_days`) und die Anonymisierung, sobald die Ereignis-Retention den Bestand einer Person abgeräumt hat. **Fälle haben überhaupt keine eigene Aufbewahrungsfrist** — der Aufbewahrungslauf fasst sie nicht an; ihre Inhalte werden erst mit der Anonymisierung der zugehörigen Person redigiert ([ADR-039](adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` knüpft zwar an den Abschluss eines Falls an, löscht aber dessen Ereignisse, nicht den Fall.
 >
@@ -677,7 +677,7 @@ Alle 2FA-Vorgänge werden im `AuditLog` protokolliert (Actions: `MFA_ENABLED`, `
 
 ### 2.8 Schnell-Vorlagen (Quick-Templates)
 
-**Schnell-Vorlagen** sind vorbefüllte Dokumentvorlagen für wiederkehrende Muster (z. B. „Beratungsgespräch 30 Min", „Standard-Check-in"). Fachkräfte wenden sie per Klick auf der Seite „Neuer Kontakt" an.
+**Schnell-Vorlagen** sind vorbefüllte Dokumentvorlagen für wiederkehrende Muster (z. B. „Beratungsgespräch 30 Min", „Standard-Check-in"). Fachkräfte wenden sie per Klick auf der Seite „Kontakt dokumentieren" an.
 
 **Benutzerseitige Doku:** [User-Guide § 3 — Schnell-Vorlagen](user-guide.md#schnell-vorlagen-quick-templates).
 
@@ -691,7 +691,7 @@ Vorlagen werden im Django-Admin unter **Core → Quick-Templates** gepflegt.
 | `document_type` | Dokumentationstyp, der beim Anwenden vorausgewählt wird |
 | `name` | Anzeigename auf dem Button (z. B. „Beratungsgespräch 30 Min") |
 | `prefilled_data` | JSON-Objekt `{slug: wert}` — mappt Feld-Slugs auf Standardwerte |
-| `sort_order` | Reihenfolge der Buttons auf „Neuer Kontakt" |
+| `sort_order` | Reihenfolge der Buttons auf „Kontakt dokumentieren" |
 | `is_active` | Nur aktive Vorlagen erscheinen zur Anwendung |
 | `created_by` | User, der die Vorlage angelegt hat (nur informativ) |
 
@@ -1218,7 +1218,7 @@ Die Anwendung speichert **keine Klarnamen** in der Datenbank. Personendaten werd
 
 - Personen werden über interne IDs referenziert.
 - Anzeigenamen in der Oberfläche sind konfigurierbare Pseudonyme.
-- Qualifizierte (identifizierbare) Daten sind nur für berechtigte Rollen (Leitung, Anwendungsbetreuung) sichtbar. Die Systemadministration (`super_admin`) sieht qualifizierte Daten nur über den `/system/`-Bereich, jeder solche Zugriff wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
+- Daten der Kontaktstufe „Mit Zusatzangaben" (identifizierbar) sind nur für berechtigte Rollen (Leitung, Anwendungsbetreuung) sichtbar. Die Systemadministration (`super_admin`) sieht solche Daten nur über den `/system/`-Bereich, jeder solche Zugriff wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
 
 ### 7.3 Löschfristen und `enforce_retention`
 
@@ -1229,8 +1229,8 @@ Das Management-Kommando `enforce_retention` setzt die konfigurierten Fristen dur
 | Strategie | Einstellung | Standard |
 |---|---|---|
 | Anonyme Kontakte | `retention_anonymous_days` | 90 Tage |
-| Identifizierte Kontakte | `retention_identified_days` | 365 Tage |
-| Qualifizierte Fälle (nach Abschluss) | `retention_qualified_days` | 3650 Tage (10 Jahre) |
+| Kontakte der Stufe „Nur Pseudonym" | `retention_identified_days` | 365 Tage |
+| Fälle der Stufe „Mit Zusatzangaben" (nach Abschluss) | `retention_qualified_days` | 3650 Tage (10 Jahre) |
 
 **Manueller Aufruf:**
 
@@ -1295,7 +1295,7 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 |---|---|
 | Anmeldung / Abmeldung | Jeder Login/Logout |
 | Fehlgeschlagene Anmeldung | Falsches Passwort |
-| Qualifizierte Daten eingesehen | Zugriff auf identifizierbare Personendaten |
+| Daten der Stufe „Mit Zusatzangaben" eingesehen | Zugriff auf identifizierbare Personendaten |
 | Export | Datenexport durch Benutzer — auch Datenauskünfte zu einzelnen Personen und der Aufruf des externen Berichts am Bildschirm. **Herausgegebene Berichtsdateien** (CSV/PDF/JSON/XML mit Berichtszeitraum) sind eine Teilmenge davon: nur sie unterliegen nicht der Aufbewahrungsfrist und erscheinen in der [Freigabe-Übersicht](#8-statistik-snapshots--materialized-view) |
 | Löschung | Manuell oder durch `enforce_retention` |
 | Stufenwechsel | Änderung des Kontaktstatus einer Person |

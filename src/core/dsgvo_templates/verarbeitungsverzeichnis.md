@@ -10,13 +10,13 @@
 ## 1. Dokumentation sozialer Kontakte
 
 ### 1.1 Zweck der Verarbeitung
-- Dokumentation von Kontakten mit Klientel
+- Dokumentation von Kontakten mit begleiteten Personen
 - Nachverfolgung von Beratungsgesprächen und Leistungen
 - Statistische Auswertung für Fördergeber (öffentliche Fördermittelgeber/Behörden)
 - Qualitätssicherung der sozialen Arbeit
 
 ### 1.2 Kategorien betroffener Personen
-- Klientel der Einrichtung (Jugendliche und junge Erwachsene)
+- Begleitete Personen der Einrichtung (Jugendliche und junge Erwachsene)
 - Mitarbeitende der Einrichtung
 
 ### 1.3 Kategorien personenbezogener Daten
@@ -45,8 +45,8 @@ Keine.
 | Kontaktstufe | Frist nach letztem Kontakt |
 |--------------|---------------------------|
 | Anonym | {{ retention_anonymous_days }} Tage |
-| Identifiziert | {{ retention_identified_days }} Tage |
-| Qualifiziert | {{ retention_qualified_days }} Tage |
+| Nur Pseudonym | {{ retention_identified_days }} Tage |
+| Mit Zusatzangaben | {{ retention_qualified_days }} Tage |
 
 ### 1.8 Technische und organisatorische Maßnahmen
 Siehe separates TOM-Dokument.

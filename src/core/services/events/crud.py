@@ -69,7 +69,7 @@ def _validate_case_assignment(facility, case, client, is_anonymous):
     if case.client_id is not None and client is not None and case.client_id != client.pk:
         raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
     if case.client_id is not None and (client is None or is_anonymous):
-        raise ValidationError(_("Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."))
+        raise ValidationError(_("Anonyme Ereignisse dürfen nicht an Fälle mit zugeordneter Person gehängt werden."))
 
 
 def _validate_contact_stage(document_type, client, is_anonymous):

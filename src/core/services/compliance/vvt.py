@@ -53,7 +53,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "data_categories": [
             _("Pseudonym (kein Klarname)"),
-            _("Soziodemografische Eckdaten (Altersgruppe, ggf. über Zusatzfelder erhoben)"),
+            _("Soziodemografische Eckdaten (Altersgruppe; Geschlecht ggf. über Zusatzfelder erhoben)"),
             _("Kontaktstufe (anonym / nur Pseudonym / mit Zusatzangaben)"),
             _("Zugeordnete Einrichtung (Facility)"),
         ],
