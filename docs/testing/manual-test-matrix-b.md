@@ -6526,7 +6526,7 @@
 
 ---
 
-### TC-ID: ENT-CONFIG-01 — Navigations-Eintrag „Konfiguration" nur für facility_admin sichtbar
+### TC-ID: ENT-CONFIG-01 — Reiter „Dokumentationstypen" nur für facility_admin sichtbar
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -6534,15 +6534,16 @@
 
 **Vorbereitung:**
 - Mit `admin` einloggen.
+- Hinweis: Seit der Navigations-Neuordnung (#1801) ist der Einstieg kein Sidebar-Eintrag „Konfiguration" mehr, sondern der Reiter „Dokumentationstypen" im Bereich „Verwaltung"; die Adresse `/config/document-types/` ist unverändert.
 
 **Schritte:**
-1. Dashboard `/` aufrufen, Desktop-Sidebar auf den Eintrag „Konfiguration" prüfen.
+1. `/verwaltung/` aufrufen (bzw. „Verwaltung" in der Desktop-Sidebar anklicken), Reiterzeile auf „Dokumentationstypen" prüfen.
 2. Viewport auf Mobile (iPhone 15) umschalten, mobiles „Mehr"-Menü öffnen.
 3. Nacheinander mit `emma` (lead), `miriam` (staff), `lena` (assistant) und `superadmin` einloggen, jeweils Sidebar/Mehr-Menü prüfen.
 
 **Erwartetes Ergebnis:**
-- `admin` sieht den Eintrag „Konfiguration" (Link auf `/config/document-types/`) sowohl in der Desktop-Sidebar als auch im mobilen Menü.
-- Keine der anderen vier Rollen sieht den Eintrag — weder Desktop noch Mobile.
+- `admin` sieht in der Sidebar „Verwaltung" und dort den Reiter „Dokumentationstypen" (Link auf `/config/document-types/`); im mobilen Menü erscheint derselbe Einstieg.
+- Keine der anderen vier Rollen sieht den Eintrag — weder Desktop noch Mobile; `emma` (lead) sieht zwar „Datenschutz", dort aber keinen Verwaltungs-Reiter.
 
 **Status:** ☐ Offen
 
