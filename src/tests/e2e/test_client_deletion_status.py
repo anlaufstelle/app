@@ -118,9 +118,9 @@ class TestRequesterFeedbackChannel:
         # eigenem Antrag ist es der EINZIGE sichtbare Reiter — der Hub leitet
         # deshalb direkt auf die Liste weiter (Einzelreiter-Weiterleitung,
         # ``nav.first_visible_tab``). Genau dieser Rueckkanal wird geprueft.
-        hub = page.locator("[data-testid='nav-datenschutz']")
-        assert hub.count() >= 1
-        hub.first.click()
+        # Der Desktop-Testid ist eindeutig (mobil traegt der Eintrag
+        # mobile-nav-datenschutz) — Strict-Mode-Klick ohne .first-Griff.
+        page.locator("[data-testid='nav-datenschutz']").click()
         page.wait_for_url(re.compile(r"/deletion-requests/"))
         page.wait_for_load_state("domcontentloaded")
         assert page.locator(f"[data-testid='deletion-target-link']:text-is('{pseudonym}')").first.is_visible()
