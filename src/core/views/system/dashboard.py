@@ -67,6 +67,9 @@ class SystemDashboardView(SystemAuditMixin, TemplateView):
                 "organization": organization,
                 "facilities": facilities,
                 "facilities_count": facilities.count(),
+                # Verify-Befund #1813: die Aktiv-Zahl der alten Arbeits-
+                # zentrale zieht als Zusatzzeile der Benutzer-Karte mit um.
+                "users_active": audit_activity["users_total"],
                 "recent_audit_events_count": audit_activity["recent_audit_events_count"],
                 "critical_recent": audit_activity["critical_recent"],
                 "role_counts": role_counts,

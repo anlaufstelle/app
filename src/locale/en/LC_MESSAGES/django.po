@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-11 11:44+0200\n"
+"POT-Creation-Date: 2026-08-11 12:48+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -660,7 +660,7 @@ msgstr "Created by"
 #: src/templates/core/export/client_data_pdf.html:451
 #: src/templates/core/export/client_data_pdf.html:514
 #: src/templates/core/system/dashboard.html:195
-#: src/templates/core/system/dashboard.html:277
+#: src/templates/core/system/dashboard.html:278
 #: src/templates/core/system/legal_holds.html:69
 #: src/templates/core/system/organization.html:24
 #: src/templates/core/system/organization.html:39
@@ -1048,7 +1048,7 @@ msgstr "Previous hash"
 msgid "Eintrags-Hash"
 msgstr "Entry hash"
 
-#: src/core/models/audit.py:218 src/core/nav.py:154 src/core/nav.py:392
+#: src/core/models/audit.py:218 src/core/nav.py:154 src/core/nav.py:395
 #: src/core/services/hubs.py:163 src/templates/core/audit/list.html:4
 #: src/templates/core/audit/list.html:7
 msgid "Audit-Log"
@@ -1169,7 +1169,7 @@ msgstr "Updated on"
 msgid "Geschlossen am"
 msgstr "Closed on"
 
-#: src/core/models/case.py:102 src/core/nav.py:323
+#: src/core/models/case.py:102 src/core/nav.py:326
 #: src/templates/core/cases/detail.html:9 src/templates/core/cases/list.html:4
 #: src/templates/core/cases/list.html:9
 #: src/templates/core/clients/detail.html:191
@@ -1283,8 +1283,8 @@ msgstr ""
 #: src/templates/core/config/field_templates/partials/table.html:31
 #: src/templates/core/export/client_data_pdf.html:41
 #: src/templates/core/export/client_data_pdf.html:449
-#: src/templates/core/system/dashboard.html:276
-#: src/templates/core/system/dashboard.html:286
+#: src/templates/core/system/dashboard.html:277
+#: src/templates/core/system/dashboard.html:287
 #: src/templates/core/system/legal_holds.html:41
 #: src/templates/core/system/legal_holds.html:94
 #: src/templates/core/system/organization.html:38
@@ -1306,7 +1306,7 @@ msgstr ""
 "(alternative to hard delete for long-term statistics)."
 
 #: src/core/models/client.py:103 src/core/models/import_job.py:52
-#: src/core/nav.py:315 src/core/reporting/backends/client_metrics.py:205
+#: src/core/nav.py:318 src/core/reporting/backends/client_metrics.py:205
 #: src/templates/core/clients/detail.html:9
 #: src/templates/core/clients/list.html:4
 #: src/templates/core/clients/list.html:9
@@ -1389,7 +1389,7 @@ msgstr "Note"
 #: src/templates/core/config/document_types/partials/table.html:8
 #: src/templates/core/config/field_templates/partials/table.html:8
 #: src/templates/core/system/dashboard.html:191
-#: src/templates/core/system/dashboard.html:275
+#: src/templates/core/system/dashboard.html:276
 #: src/templates/core/system/organization.html:20
 #: src/templates/core/system/organization.html:36
 msgid "Name"
@@ -1471,7 +1471,7 @@ msgstr ""
 "Which entity documents of this type relate to. Cannot be changed after "
 "creation."
 
-#: src/core/models/document_type.py:207 src/core/nav.py:411
+#: src/core/models/document_type.py:207 src/core/nav.py:414
 #: src/core/services/hubs.py:228
 #: src/templates/core/config/document_types/detail.html:22
 #: src/templates/core/config/document_types/list.html:4
@@ -1599,7 +1599,7 @@ msgstr ""
 "Disabled field templates are no longer shown in forms. Existing values in "
 "events are preserved (soft-delete alternative to hard delete)."
 
-#: src/core/models/document_type.py:358 src/core/nav.py:430
+#: src/core/models/document_type.py:358 src/core/nav.py:433
 #: src/core/services/hubs.py:236
 #: src/templates/core/config/field_templates/list.html:4
 #: src/templates/core/config/field_templates/list.html:9
@@ -1952,7 +1952,7 @@ msgstr "Organizations"
 #: src/core/models/organization.py:42
 #: src/templates/core/system/dashboard.html:199
 #: src/templates/core/system/dashboard.html:234
-#: src/templates/core/system/dashboard.html:270
+#: src/templates/core/system/dashboard.html:271
 #: src/templates/core/system/organization.html:31
 msgid "Einrichtungen"
 msgstr "Facilities"
@@ -2442,7 +2442,7 @@ msgstr "Assistant"
 
 #: src/core/models/user.py:29 src/templates/auth/_demo_credentials.html:24
 #: src/templates/core/account/profile.html:22
-#: src/templates/core/system/dashboard.html:253
+#: src/templates/core/system/dashboard.html:254
 msgid "Rolle"
 msgstr "Role"
 
@@ -2699,14 +2699,14 @@ msgstr "Work items"
 msgid "Löschantrag"
 msgstr "Deletion request"
 
-#: src/core/models/workitem.py:238 src/core/nav.py:353
+#: src/core/models/workitem.py:238 src/core/nav.py:356
 #: src/core/services/hubs.py:104 src/templates/core/dashboard/role_lead.html:17
 #: src/templates/core/deletion_requests/list.html:4
 #: src/templates/core/deletion_requests/list.html:7
 msgid "Löschanträge"
 msgstr "Deletion requests"
 
-#: src/core/nav.py:134 src/core/nav.py:447
+#: src/core/nav.py:134 src/core/nav.py:450
 #: src/templates/core/system/dashboard.html:4
 #: src/templates/core/system/dashboard.html:10
 #: src/templates/partials/_navigation_mobile.html:15
@@ -2717,8 +2717,8 @@ msgstr "System area"
 msgid "Systembereich-Navigation"
 msgstr "System area navigation"
 
-#: src/core/nav.py:140 src/core/nav.py:221 src/core/nav.py:478
-#: src/core/nav.py:485
+#: src/core/nav.py:140 src/core/nav.py:221 src/core/nav.py:481
+#: src/core/nav.py:488
 msgid "Übersicht"
 msgstr "Overview"
 
@@ -2778,7 +2778,7 @@ msgstr "Work center"
 msgid "Zeitstrom"
 msgstr "Timeline"
 
-#: src/core/nav.py:306 src/core/views/zeitstrom.py:117
+#: src/core/nav.py:309 src/core/views/zeitstrom.py:117
 #: src/templates/core/clients/detail.html:174
 #: src/templates/core/clients/offline_detail.html:329
 #: src/templates/core/workitems/detail.html:10
@@ -2791,64 +2791,64 @@ msgstr "Timeline"
 msgid "Aufgaben"
 msgstr "Tasks"
 
-#: src/core/nav.py:331 src/templates/core/attachments/list.html:4
+#: src/core/nav.py:334 src/templates/core/attachments/list.html:4
 #: src/templates/core/attachments/list.html:8
 #: src/tests/test_i18n_loeschantrag_nav.py:32
 msgid "Dateien"
 msgstr "Files"
 
-#: src/core/nav.py:364 src/core/services/hubs.py:127
+#: src/core/nav.py:367 src/core/services/hubs.py:127
 msgid "Berichtigungen"
 msgstr "Rectifications"
 
-#: src/core/nav.py:373 src/core/services/hubs.py:144
+#: src/core/nav.py:376 src/core/services/hubs.py:144
 #: src/templates/core/retention/dashboard.html:4
 #: src/templates/core/retention/dashboard.html:7
 #: src/tests/test_i18n_loeschantrag_nav.py:36
 msgid "Löschfristen"
 msgstr "Deletion deadlines"
 
-#: src/core/nav.py:383 src/core/services/hubs.py:244
+#: src/core/nav.py:386 src/core/services/hubs.py:244
 #: src/templates/core/import/list.html:4 src/templates/core/import/list.html:9
 msgid "Datenimport"
 msgstr "Data import"
 
-#: src/core/nav.py:400 src/core/services/hubs.py:188
+#: src/core/nav.py:403 src/core/services/hubs.py:188
 msgid "DSGVO-Paket"
 msgstr "GDPR Package"
 
-#: src/core/nav.py:459 src/tests/test_i18n_loeschantrag_nav.py:64
+#: src/core/nav.py:462 src/tests/test_i18n_loeschantrag_nav.py:64
 msgid "Administration"
 msgstr "Administration"
 
-#: src/core/nav.py:493 src/templates/auth/login.html:130
+#: src/core/nav.py:496 src/templates/auth/login.html:130
 #: src/templates/base.html:155 src/templates/core/hubs/datenschutz.html:4
 #: src/templates/core/hubs/datenschutz.html:8
 #: src/tests/test_i18n_loeschantrag_nav.py:59
 msgid "Datenschutz"
 msgstr "Privacy"
 
-#: src/core/nav.py:494 src/templates/core/hubs/datenschutz.html:9
+#: src/core/nav.py:497 src/templates/core/hubs/datenschutz.html:9
 #: src/tests/test_i18n_loeschantrag_nav.py:72
 msgid "Betroffenenrechte, Fristen und Nachweise."
 msgstr "Data subject rights, deadlines and records."
 
-#: src/core/nav.py:495 src/tests/test_i18n_loeschantrag_nav.py:103
+#: src/core/nav.py:498 src/tests/test_i18n_loeschantrag_nav.py:103
 msgid "Datenschutz-Navigation"
 msgstr "Privacy navigation"
 
-#: src/core/nav.py:510 src/templates/core/hubs/verwaltung.html:4
+#: src/core/nav.py:513 src/templates/core/hubs/verwaltung.html:4
 #: src/templates/core/hubs/verwaltung.html:8
 #: src/tests/test_i18n_loeschantrag_nav.py:63
 msgid "Verwaltung"
 msgstr "Management"
 
-#: src/core/nav.py:511 src/templates/core/hubs/verwaltung.html:9
+#: src/core/nav.py:514 src/templates/core/hubs/verwaltung.html:9
 #: src/tests/test_i18n_loeschantrag_nav.py:75
 msgid "Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge."
 msgstr "Application support: forms, fields, data transfer and access."
 
-#: src/core/nav.py:512
+#: src/core/nav.py:515
 msgid "Verwaltungs-Navigation"
 msgstr "Management navigation"
 
@@ -2989,7 +2989,7 @@ msgstr "System type"
 #: src/templates/core/statistics/external_report.html:123
 #: src/templates/core/statistics/partials/dashboard_content.html:140
 #: src/templates/core/statistics/partials/dashboard_content.html:180
-#: src/templates/core/system/dashboard.html:254
+#: src/templates/core/system/dashboard.html:255
 #: src/tests/test_reporting_export.py:676
 msgid "Anzahl"
 msgstr "Count"
@@ -7006,7 +7006,7 @@ msgstr[1] "%(days)s days"
 #: src/templates/core/config/document_types/detail.html:62
 #: src/templates/core/config/document_types/partials/table.html:51
 #: src/templates/core/config/field_templates/partials/table.html:33
-#: src/templates/core/system/dashboard.html:288
+#: src/templates/core/system/dashboard.html:289
 #: src/templates/core/system/organization.html:51
 msgid "Inaktiv"
 msgstr "Inactive"
@@ -7193,18 +7193,21 @@ msgid "Entität"
 msgstr "Entity"
 
 #: src/templates/core/config/document_types/partials/table.html:26
+#, python-format
 msgid "%(n)s Block"
 msgid_plural "%(n)s Blöcke"
 msgstr[0] "%(n)s block"
 msgstr[1] "%(n)s blocks"
 
 #: src/templates/core/config/document_types/partials/table.html:28
+#, python-format
 msgid "%(n)s Feld"
 msgid_plural "%(n)s Felder"
 msgstr[0] "%(n)s field"
 msgstr[1] "%(n)s fields"
 
 #: src/templates/core/config/document_types/partials/table.html:30
+#, python-format
 msgid "%(n)s Bedingung"
 msgid_plural "%(n)s Bedingungen"
 msgstr[0] "%(n)s condition"
@@ -9346,15 +9349,20 @@ msgstr "To the audit log"
 msgid "Benutzer (gesamt)"
 msgstr "Users (total)"
 
-#: src/templates/core/system/dashboard.html:242
+#: src/templates/core/system/dashboard.html:240
+#, python-format
+msgid "davon %(users_active)s aktiv — über alle Mandanten"
+msgstr "%(users_active)s of them active — across all tenants"
+
+#: src/templates/core/system/dashboard.html:243
 msgid "Audit-Log-Einträge"
 msgstr "Audit log entries"
 
-#: src/templates/core/system/dashboard.html:249
+#: src/templates/core/system/dashboard.html:250
 msgid "Benutzer pro Rolle"
 msgstr "Users per role"
 
-#: src/templates/core/system/dashboard.html:297
+#: src/templates/core/system/dashboard.html:298
 #: src/templates/core/system/organization.html:60
 #: src/templates/core/system/retention.html:99
 msgid "Keine Einrichtungen vorhanden."

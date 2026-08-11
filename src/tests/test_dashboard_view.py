@@ -99,3 +99,20 @@ class TestSuperAdminDashboardAuditLinks:
         client.force_login(super_admin_user)
         response = client.get(reverse("core:system_audit_list"))
         assert response.status_code == 200
+
+    def test_users_card_shows_active_count(self, client, super_admin_user, staff_user):
+        """Verify-Befund #1813: Die alte System-Arbeitszentrale trug die Karte
+        „Benutzer aktiv (über alle Mandanten)" — beim Umzug nach ``/system/``
+        darf die Aktiv-Zahl nicht verloren gehen. ``total_users`` zählt alle
+        Konten inkl. deaktivierter; die Karte weist beide Werte aus."""
+        staff_user.is_active = False
+        staff_user.save(update_fields=["is_active"])
+        client.force_login(super_admin_user)
+        content = client.get(reverse("core:system_dashboard")).content.decode()
+        assert 'data-testid="card-users-active"' in content
+        from core.models import User
+
+        active = User.objects.filter(is_active=True).count()
+        total = User.objects.count()
+        assert total == active + 1
+        assert f"davon {active} aktiv" in content
