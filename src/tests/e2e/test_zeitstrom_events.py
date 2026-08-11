@@ -156,12 +156,12 @@ class TestEventErstellung:
         page.click("button:has-text('Speichern')")
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
-        # Detailseite zeigt Fall-Zeile mit Link zur Case-Detail-Seite
-        fall_term = page.locator("dt:has-text('Fall')")
-        expect(fall_term).to_be_visible()
-        fall_link = page.locator("dd a:has-text('Gesundheitsversorgung')")
-        expect(fall_link).to_be_visible()
-        assert re.search(r"/cases/[0-9a-f-]+/$", fall_link.get_attribute("href"))
+        # Refs #1802: der Fall steht als verlinkte Kontext-Pille im Kopf,
+        # nicht mehr als Zeile in der Metadaten-<dl>.
+        fall_badge = page.locator("[data-testid='context-badge-case']")
+        expect(fall_badge).to_be_visible()
+        expect(fall_badge).to_contain_text("Gesundheitsversorgung")
+        assert re.search(r"/cases/[0-9a-f-]+/$", fall_badge.get_attribute("href"))
 
     def test_case_dropdown_filtered_to_selected_client(self, authenticated_page, base_url):
         """Nach Klientel-Auswahl enthält das Fall-Dropdown nur passende Fälle (Refs #620)."""
