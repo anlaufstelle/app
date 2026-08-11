@@ -67,22 +67,53 @@ class TestListGateMatchesNavigation:
 
 
 class TestNavigationEntry:
+    """Refs #1736: Wer die Antragsliste sehen darf, findet sie in der Navigation.
+
+    Refs #1813 (Etappe 2/3): Der Einstieg heisst jetzt „Datenschutz" und ist
+    der Bereichs-Hub — die acht Einzel-Eintraege sind seine Reiter geworden,
+    auf Desktop wie mobil. Wer dort nur EINEN sichtbaren Reiter hat (die
+    antragstellende Fachkraft, die Traegerin des Rechts „Loeschbestaetigung"),
+    bekommt keine leere Huelle, sondern eine Weiterleitung direkt auf die
+    Liste (Regel N2 + Einzelreiter-Weiterleitung, `test_navigation_hubs.py`).
+
+    Der Test greift deshalb nicht mehr nach dem Listen-Literal im Seitenkoerper,
+    sondern laeuft den Weg ab. Das ist eine geaenderte Anforderung, keine
+    abgeschwaechte Assertion — und die Aussage wird staerker: vorher belegte
+    ein Treffer irgendwo im HTML „Link da", jetzt steht da „Einstieg sichtbar
+    UND er kommt an".
+    """
+
+    HUB_URL_NAME = "core:datenschutz_uebersicht"
+
     def _nav_body(self, client, user):
         client.force_login(user)
         return client.get(reverse("core:client_list")).content.decode()
 
+    def _lands_on_the_list(self, client, user):
+        client.force_login(user)
+        response = client.get(reverse(self.HUB_URL_NAME))
+        return response.status_code == 302 and response.url == reverse(LIST_URL_NAME)
+
     def test_hidden_for_staff_without_request(self, client, staff_user):
-        assert reverse(LIST_URL_NAME) not in self._nav_body(client, staff_user)
+        body = self._nav_body(client, staff_user)
+        assert reverse(self.HUB_URL_NAME) not in body
+        assert reverse(LIST_URL_NAME) not in body
 
     def test_visible_for_staff_with_own_request(self, client, staff_user, client_identified):
         request_client_deletion(client_identified, staff_user, "Widerruf")
-        assert reverse(LIST_URL_NAME) in self._nav_body(client, staff_user)
+        assert reverse(self.HUB_URL_NAME) in self._nav_body(client, staff_user)
+        assert self._lands_on_the_list(client, staff_user)
 
     def test_visible_for_confirmer_without_lead_role(self, client, confirmer_assistant):
-        assert reverse(LIST_URL_NAME) in self._nav_body(client, confirmer_assistant)
+        assert reverse(self.HUB_URL_NAME) in self._nav_body(client, confirmer_assistant)
+        assert self._lands_on_the_list(client, confirmer_assistant)
 
     def test_visible_for_lead(self, client, lead_user):
-        assert reverse(LIST_URL_NAME) in self._nav_body(client, lead_user)
+        """Die Leitung sieht die Uebersicht selbst — die Liste ist dort ein Reiter."""
+        assert reverse(self.HUB_URL_NAME) in self._nav_body(client, lead_user)
+
+        client.force_login(lead_user)
+        assert reverse(LIST_URL_NAME) in client.get(reverse(self.HUB_URL_NAME)).content.decode()
 
 
 class TestDetailBannerLinksBack:
