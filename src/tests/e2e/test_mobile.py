@@ -421,10 +421,11 @@ class TestMobileActionButtonsHidden:
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Der Wrapper-Div (hidden md:block) im Main-Bereich
-        main = page.locator("main")
-        create_wrapper = main.locator(".hidden.md\\:block").first
-        assert not create_wrapper.is_visible(), "Neue-Person-Button sollte auf Mobile versteckt sein"
+        # Direkt am Ziel-Link statt am Wrapper: die Kopfzeile der Personenliste
+        # trägt heute ``hidden md:flex`` (nicht mehr ``md:block``) — der alte
+        # Klassen-Selektor traf NICHTS und war damit tautologisch wahr.
+        create_link = page.locator("main a[href$='/clients/new/']")
+        assert not create_link.first.is_visible(), "Neue-Person-Button sollte auf Mobile versteckt sein"
 
     def test_case_list_create_button_hidden(self, mobile_page, base_url):
         """Fälle-Liste: 'Neuer Fall'-Button auf Mobile unsichtbar."""
