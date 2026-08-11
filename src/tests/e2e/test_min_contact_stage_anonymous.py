@@ -1,7 +1,8 @@
 """E2E-Tests: Anonymität wird aus fehlender Klientel-Auswahl abgeleitet.
 
 Verifiziert, dass Events ohne Klientel automatisch als anonym gespeichert werden
-und dass bei Dokumentationstypen mit Mindest-Kontaktstufe ein Pflichtfeld-Hinweis erscheint.
+und dass bei Dokumentationstypen mit Mindest-Kontaktstufe ein Pflichtfeld-Hinweis erscheint
+(Wortlaut seit #1803/#1805 lebensweltlich: "erfordert eine zugeordnete Person").
 Refs #394, #472, #486
 """
 
@@ -23,7 +24,7 @@ class TestAnonymousMinContactStageGate:
 
         page.select_option("select[name='document_type']", label="Beratungsgespräch")
 
-        hint = page.locator("text=Mindest-Kontaktstufe")
+        hint = page.locator("text=erfordert eine zugeordnete Person")
         expect(hint).to_be_visible()
 
     def test_anonymous_hint_for_no_min_stage_doctype(self, authenticated_page, base_url):
@@ -42,7 +43,7 @@ class TestAnonymousMinContactStageGate:
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
 
         anon_hint = page.locator("text=anonym gespeichert")
-        required_hint = page.locator("text=Mindest-Kontaktstufe")
+        required_hint = page.locator("text=erfordert eine zugeordnete Person")
 
         # Kontakt (kein min_contact_stage) → Anonym-Hinweis
         page.select_option("select[name='document_type']", label="Kontakt")
