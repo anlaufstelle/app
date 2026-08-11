@@ -198,6 +198,10 @@ class TestStatisticsPanelDropdown:
     M4: die Option muss innerhalb des ``<select name="backend">``-Blocks
     stehen, nicht nur irgendwo auf der Seite (der Backend-Name koennte sonst
     zufaellig auch anderswo im HTML auftauchen).
+
+    Refs #1813: das Dropdown liegt seit der Statistik-Reiterzeile auf dem
+    Reiter „Datensatz-Berichte" (``?view=berichte``, Konzept #1801 §7.1) statt
+    unten am Dashboard. Der Aufruf folgt dem Umzug, die Aussage bleibt.
     """
 
     def _dropdown_html(self, content: str) -> str:
@@ -208,7 +212,7 @@ class TestStatisticsPanelDropdown:
     def test_beispiel_backend_im_dropdown(self, client, lead_user):
         client.force_login(lead_user)
 
-        response = client.get(reverse("core:statistics"))
+        response = client.get(reverse("core:statistics"), {"view": "berichte"})
 
         assert response.status_code == 200
         dropdown = self._dropdown_html(response.content.decode())
@@ -217,7 +221,7 @@ class TestStatisticsPanelDropdown:
     def test_beispiel_backend_im_dropdown_admin(self, client, admin_user):
         client.force_login(admin_user)
 
-        response = client.get(reverse("core:statistics"))
+        response = client.get(reverse("core:statistics"), {"view": "berichte"})
 
         assert response.status_code == 200
         dropdown = self._dropdown_html(response.content.decode())
