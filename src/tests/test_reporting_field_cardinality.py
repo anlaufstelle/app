@@ -310,6 +310,38 @@ class TestFailSafeImBackend:
         assert meldung.count is None
         assert not any(zeichen.isdigit() for zeichen in str(meldung.message))
 
+    def test_doppelbindung_an_einem_berichtsfremden_typ_meldet_nichts(
+        self, facility, admin_user, dauer, zweite_dauer, zeitraum
+    ):
+        """Der Hinweis gehoert dem Bericht, nicht der Einrichtung.
+
+        Disclosure-Review-Befund: Die Doppelt-Menge war einrichtungsweit
+        ermittelt. Ein ausdruecklich AUSGESCHLOSSENER Typ mit zwei
+        Minuten-Vorlagen loeste damit in ``counseling-hours`` einen Hinweis auf
+        eine Konfiguration aus, die diesen Bericht nichts angeht — dieselbe
+        Vermengung, die #1819 fuer den Vollstaendigkeitshinweis beseitigt hat.
+        """
+        ausgeschlossen = DocumentType.objects.create(
+            facility=facility, name="Ausgeschlossener Typ E-J", report_key=EXCLUDED
+        )
+        _zuordnen(ausgeschlossen, dauer, 0)
+        _zuordnen(ausgeschlossen, zweite_dauer, 1)
+        beratung = DocumentType.objects.create(facility=facility, name="Beratung sauber", report_key="counseling")
+        _zuordnen(beratung, dauer, 0)
+        Event.objects.create(
+            facility=facility,
+            document_type=beratung,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 30},
+            created_by=admin_user,
+        )
+        backend = registry.get_backend("counseling-hours")
+
+        result = backend.build_dataset(facility, *zeitraum)
+
+        assert [issue.code for issue in result.completeness] == []
+        assert result.summary["minuten_gesamt"] == 30
+
     def test_ohne_doppelbindung_keine_meldung(self, facility, admin_user, beratungstyp, dauer, zeitraum):
         _zuordnen(beratungstyp, dauer)
         Event.objects.create(

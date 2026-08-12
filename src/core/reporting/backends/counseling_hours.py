@@ -222,7 +222,7 @@ class CounselingHoursBackend(DatasetBackend):
         # Lesepfad je Dokumentationstyp (E3, Refs #1849): gebunden wird ueber
         # den Berichtsschluessel, gelesen wird unter dem Feldvorlagen-Slug —
         # beides faellt nur im Standardpaket zusammen.
-        lese = FELD_DAUER.leseschluessel(facility)
+        lese = FELD_DAUER.leseschluessel(facility, TYP_BINDUNG)
         payloads = (
             Event.objects.for_facility(facility)
             .filter(
@@ -338,6 +338,6 @@ class CounselingHoursBackend(DatasetBackend):
         )
         completeness = [
             CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
-            *doppelbindungs_issues(FELD_DAUER.leseschluessel(facility)),
+            *doppelbindungs_issues(FELD_DAUER.leseschluessel(facility, TYP_BINDUNG)),
         ]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

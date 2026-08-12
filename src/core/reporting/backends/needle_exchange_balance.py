@@ -199,8 +199,8 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
         """Summiert ``ausgabe``/``rueckgabe`` ueber die Spritzentausch-Ereignisse."""
         # Lesepfad je Dokumentationstyp (E3, Refs #1849): gebunden wird ueber den
         # Berichtsschluessel, gelesen wird unter dem Feldvorlagen-Slug.
-        lese_ausgabe = FELD_AUSGABE.leseschluessel(facility)
-        lese_rueckgabe = FELD_RUECKGABE.leseschluessel(facility)
+        lese_ausgabe = FELD_AUSGABE.leseschluessel(facility, TYP_BINDUNG)
+        lese_rueckgabe = FELD_RUECKGABE.leseschluessel(facility, TYP_BINDUNG)
         payloads = (
             Event.objects.for_facility(facility)
             .filter(

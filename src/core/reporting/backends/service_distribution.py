@@ -160,8 +160,12 @@ class Feldgruppe:
     mehrfachnennung: bool
 
     def leseschluessel(self, facility):
-        """Der ``data_json``-Lesepfad dieser Gruppe, je Dokumentationstyp (E3)."""
-        return self.feld_bindung.leseschluessel(facility)
+        """Der ``data_json``-Lesepfad dieser Gruppe, je Dokumentationstyp (E3).
+
+        Gescoped auf die Typ-Bindung DIESER Gruppe: der Doppelbindungs-Hinweis
+        gehoert dem Bericht, nicht der Einrichtung.
+        """
+        return self.feld_bindung.leseschluessel(facility, self.typ_bindung)
 
     @property
     def summary_key(self) -> str:

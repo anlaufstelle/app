@@ -371,7 +371,7 @@ class FeldBindung:
             }
         )
 
-    def leseschluessel(self, facility) -> "Leseschluessel":
+    def leseschluessel(self, facility, typ_bindung: "TypBindung | None" = None) -> "Leseschluessel":
         """Der ``data_json``-Lesepfad dieser Bindung, aufgeloest **je Dokumentationstyp**.
 
         ``data_json`` ist nach dem Feldvorlagen-**Slug** indiziert, gebunden wird
@@ -392,6 +392,15 @@ class FeldBindung:
         Nur **aktive** Feldvorlagen: eine deaktivierte Vorlage wird in
         Formularen nicht mehr angeboten und ist dieselbe Konfigurationsfrage,
         die :meth:`template_q` stellt.
+
+        ``typ_bindung`` schraenkt auf die Dokumentationstypen ein, die dieser
+        Bericht ueberhaupt zaehlt — **Pflicht, sobald das Ergebnis eine Meldung
+        traegt**: die Doppelbindungs-Menge waere sonst einrichtungsweit, und ein
+        ausdruecklich ausgeschlossener Typ mit zwei gleich geschluesselten
+        Vorlagen erzeugte einen Hinweis in einem Bericht, den er nichts angeht
+        (dieselbe Vermengung, die Refs #1819 fuer den Vollstaendigkeitshinweis
+        beseitigt hat). Ohne Angabe bleibt die Menge einrichtungsweit — fuer
+        Aufrufer ohne Typ-Bindung.
         """
         # Lokaler Import wie in ``Anforderung.erfuellt``: ``core.models`` zur
         # Modul-Importzeit zoege den Reporting-Vertrag in den Model-Importgraphen.
@@ -402,7 +411,10 @@ class FeldBindung:
             document_type__facility=facility,
             field_template__is_active=True,
             **{f"field_template__{self._erststufe()}__in": self._erststufen_werte()},
-        ).values_list("document_type_id", "field_template__slug")
+        )
+        if typ_bindung is not None:
+            zeilen = zeilen.filter(typ_bindung.matching_q("document_type__"))
+        zeilen = zeilen.values_list("document_type_id", "field_template__slug")
         for document_type_id, slug in zeilen:
             treffer.setdefault(document_type_id, set()).add(slug)
 
