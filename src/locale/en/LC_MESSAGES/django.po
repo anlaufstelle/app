@@ -6656,7 +6656,11 @@ msgstr "Trash"
 msgid "Rate-Limit erreicht — bitte später erneut versuchen."
 msgstr "Rate limit reached — please try again later."
 
-#: src/templates/core/clients/list.html:23
+#: src/templates/core/clients/list.html:44
+msgid "Alle mitnehmen"
+msgstr "Take all"
+
+#: src/templates/core/clients/list.html:45
 msgid "Alle offline mitnehmen"
 msgstr "Take all offline"
 

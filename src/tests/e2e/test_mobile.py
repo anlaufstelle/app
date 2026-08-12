@@ -448,6 +448,58 @@ class TestMobileActionButtonsHidden:
         assert not create_wrapper.is_visible(), "Neue-Aufgabe-Button sollte auf Mobile versteckt sein"
 
 
+class TestMobileClientListActions:
+    """Refs #1863: Gegenstueck zu ``TestMobileActionButtonsHidden``.
+
+    #448 versteckt mobil die *Create*-Buttons, weil die Bottom-Nav dieselbe
+    Aktion bietet. Papierkorb (#1040) und Sammel-Mitnahme (#1326) landeten
+    spaeter im selben Wrapper — ohne Ersatzweg. Was mobil versteckt bleiben
+    darf, ist damit genau das, was anderswo erreichbar ist; diese Klasse haelt
+    die andere Haelfte der Regel fest.
+
+    ``mobile_page`` laeuft als facility_admin (``_login_storage_state``) — die
+    einzige Rolle, die den Papierkorb ueberhaupt sieht.
+    """
+
+    def test_client_list_trash_link_reachable(self, mobile_page, base_url):
+        """Die Kopfleiste ist der EINZIGE Einstieg — der Papierkorb steht in
+        keiner Navigation (weder ``core/nav.py`` noch das Mehr-Menue)."""
+        page = mobile_page
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        link = page.locator("[data-testid='client-trash-link']")
+        link.wait_for(state="visible", timeout=10000)
+
+        box = link.bounding_box()
+        assert box is not None
+        assert box["height"] >= 44 and box["width"] >= 44, f"Touch-Ziel zu klein: {box}"
+
+        link.click()
+        page.wait_for_url(f"{base_url}/clients/trash/", timeout=10000)
+
+    def test_client_list_bulk_take_reachable(self, mobile_page, base_url):
+        page = mobile_page
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bulk = page.locator("[data-testid='bulk-take-offline-btn']")
+        bulk.wait_for(state="visible", timeout=10000)
+
+        box = bulk.bounding_box()
+        assert box is not None
+        assert box["height"] >= 44, f"Touch-Ziel zu klein: {box}"
+
+    def test_client_list_header_has_no_horizontal_overflow(self, mobile_page, base_url):
+        """Drei Elemente in einer 375-px-Zeile — der Grund, warum die Kurzform
+        „Alle mitnehmen" mobil den Langtext ersetzt."""
+        page = mobile_page
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        _assert_no_horizontal_overflow(page)
+
+
 class TestMobileDetailOverflowMenu:
     """Detail-Seiten haben auf Mobile ein Overflow-Menü statt vieler Buttons. Refs #448."""
 

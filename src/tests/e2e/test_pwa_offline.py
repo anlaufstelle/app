@@ -994,6 +994,61 @@ class TestOfflineEntrypointsMobile:
         label = offline_btn.text_content() or ""
         assert "Offline mitnehmen" in label or "Aus Offline-Cache entfernen" in label
 
+    def test_mobile_bulk_take_offline_is_reachable(self, staff_page, base_url):
+        """Refs #1863: Die Sammel-Mitnahme war unter 768 px unerreichbar.
+
+        Sie lag im Kopfleisten-Wrapper ``hidden md:flex``, den #448 fuer den
+        Anlegen-Button eingefuehrt hatte — ohne Ersatzweg, denn anders als
+        „Person anlegen" steht sie in keiner Navigation. Diese Klasse pruefte
+        bislang nur Karten- und Detail-Button, der Bulk-Pfad lief ausschliesslich
+        im Default-Viewport (Desktop) und konnte die Luecke nicht sehen.
+        """
+        page = staff_page
+        page.set_viewport_size(MOBILE_VIEWPORT)
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bulk_btn = page.locator("[data-testid='bulk-take-offline-btn']")
+        bulk_btn.wait_for(state="visible", timeout=5000)
+
+        box = bulk_btn.bounding_box()
+        assert box is not None
+        assert box["height"] >= 44, f"Touch-Ziel zu klein: {box['height']}px"
+        assert box["x"] >= 0 and box["x"] + box["width"] <= MOBILE_VIEWPORT["width"], (
+            f"Button ragt aus dem Viewport: {box}"
+        )
+        # Der sichtbare Kurztext IST der Accessible Name (kein aria-label) —
+        # ein nacktes Icon waere hier genau der Befund B1 aus #1859.
+        assert "Alle mitnehmen" in (bulk_btn.text_content() or "")
+
+        # Gegenprobe zu #448: „Person anlegen" bleibt mobil der Bottom-Nav
+        # vorbehalten. Ohne diese Zeile waere der Fix ein stiller Rueckbau.
+        assert not page.locator("main a[href$='/clients/new/']").first.is_visible()
+
+    def test_mobile_bulk_take_toast_does_not_cover_bottom_nav(self, staff_page, base_url):
+        """Refs #1863: Der Toast ist die einzige Rueckmeldung der Sammel-Mitnahme.
+
+        Er liegt mit ``z-50`` ueber der Bottom-Nav (``z-40``) und stand mit
+        ``bottom-6`` mitten auf ihr — die Bestaetigung verdeckte die Navigation.
+        """
+        page = staff_page
+        page.set_viewport_size(MOBILE_VIEWPORT)
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        page.locator("[data-testid='bulk-take-offline-btn']").click()
+
+        toast = page.locator("[data-testid='client-offline-toast']")
+        toast.wait_for(state="visible", timeout=10000)
+
+        toast_box = toast.bounding_box()
+        nav_box = page.locator("[data-testid='mobile-nav-clients']").bounding_box()
+        assert toast_box is not None and nav_box is not None
+        assert toast_box["y"] + toast_box["height"] <= nav_box["y"], (
+            f"Toast ueberdeckt die Bottom-Nav: Toast endet bei "
+            f"{toast_box['y'] + toast_box['height']}, Nav beginnt bei {nav_box['y']}"
+        )
+
 
 def test_take_offline_shows_quota_full_message(browser, base_url):
     """Refs #1414 (V2): Ein QuotaExceededError beim Schreiben des Bundles wird

@@ -85,7 +85,9 @@
                     <button type="button"
                             @click.prevent.stop="toggleOffline"
                             :disabled="busy"
-                            class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent disabled:opacity-50 px-2 py-1"
+                            {# Refs #1863: ``px-2 py-1`` um ein w-4-Icon ergab ca. 32x24 px — #}
+                            {# unter der projektweiten 44-px-Trefferflaeche (Refs #810). #}
+                            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] text-[12px] text-ink-muted hover:text-accent disabled:opacity-50"
                             data-testid="card-take-offline-btn"
                             :aria-label="offlineToggleLabel">
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>

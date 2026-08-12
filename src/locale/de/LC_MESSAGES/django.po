@@ -6716,7 +6716,11 @@ msgstr "Papierkorb"
 msgid "Rate-Limit erreicht — bitte später erneut versuchen."
 msgstr "Rate-Limit erreicht — bitte später erneut versuchen."
 
-#: src/templates/core/clients/list.html:23
+#: src/templates/core/clients/list.html:44
+msgid "Alle mitnehmen"
+msgstr "Alle mitnehmen"
+
+#: src/templates/core/clients/list.html:45
 msgid "Alle offline mitnehmen"
 msgstr "Alle offline mitnehmen"
 
