@@ -115,6 +115,23 @@ class TestConfiguration:
         assert diagnose["is_encrypted"] is True
         assert diagnose["field_type"] == "textarea"
 
+    def test_report_key_ersetzt_statistics_category(self, facility, doc_type_contact, field_template):
+        """E3 (Refs #1849): der Berichtsschluessel steht an BEIDEN Traegern im
+        Export; das folgenlose ``statistics_category`` ist ersatzlos entfallen.
+        """
+        doc_type_contact.report_key = "contact"
+        doc_type_contact.save()
+        field_template.report_key = "dauer_minuten"
+        field_template.save()
+
+        export = build_facility_export(facility)
+        typ = next(dt for dt in export["configuration"]["document_types"] if dt["id"] == str(doc_type_contact.pk))
+        vorlage = next(ft for ft in export["configuration"]["field_templates"] if ft["id"] == str(field_template.pk))
+
+        assert typ["report_key"] == "contact"
+        assert vorlage["report_key"] == "dauer_minuten"
+        assert "statistics_category" not in vorlage
+
     def test_field_group_present(self, facility, field_group):
         export = build_facility_export(facility)
         ids = {fg["id"] for fg in export["configuration"]["field_groups"]}

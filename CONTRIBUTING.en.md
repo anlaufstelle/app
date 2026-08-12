@@ -155,7 +155,7 @@ Since M2 the seed is no longer a plain "create if missing" but a re-sync against
 | `sort_order` of groups **and** field assignments — including types without groups | reset to the catalogue position (previously a manually reordered, group-less field list survived) |
 | `default_value` of a catalogue field template | **reset** to the package value (empty throughout the catalogue) — a default maintained through the config UI does **not** survive the seed. Package format v1 cannot express "do not touch" for this field (unlike `conditions`). |
 | Fields a facility has **additionally** assigned to a catalogue type | left untouched (the loader only touches what the package declares) |
-| `retention_days`, `description`, `is_active` (type) and `statistics_category`, `is_active` (template) | not part of schema v1 — neither set nor reset |
+| `retention_days`, `description`, `is_active` (type) and `is_active` (template) | not part of schema v1 — neither set nor reset |
 
 Two conflicts abort the **entire** seed run (fail-loud, all-or-nothing — nothing is
 applied, not even for the remaining types):
@@ -766,5 +766,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-09 -->
-<!-- source-hash: 6d39f2281bf18560178542dbde65179b35ef0ab3 -->
+<!-- translation-date: 2026-08-12 -->
+<!-- source-hash: 30cceaf21489f3f6c9756cdcd8889a5c9c69609c -->

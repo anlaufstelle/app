@@ -156,7 +156,7 @@ Rücksync gegen `default.yaml`. Was das im Betrieb bedeutet:
 | `sort_order` von Gruppen **und** Feldzuordnungen — auch bei Typen ohne Gruppen | wird auf die Katalogposition zurückgesetzt (früher blieb eine per UI umsortierte, gruppenlose Feldliste stehen) |
 | `default_value` einer Katalog-Feldvorlage | wird auf den Paketwert (im Katalog durchgehend leer) **zurückgesetzt** — ein per Config-UI gepflegter Vorbelegungswert überlebt den Seed **nicht**. Paketformat v1 kann „nicht anfassen" für dieses Feld nicht ausdrücken (anders als `conditions`). |
 | Felder, die eine Einrichtung einem Katalog-Typ **zusätzlich** zugeordnet hat | bleiben unangetastet (der Loader fasst nur an, was im Paket steht) |
-| `retention_days`, `description`, `is_active` (Typ) bzw. `statistics_category`, `is_active` (Vorlage) | nicht Teil von Schema v1 — werden weder gesetzt noch zurückgesetzt |
+| `retention_days`, `description`, `is_active` (Typ) bzw. `is_active` (Vorlage) | nicht Teil von Schema v1 — werden weder gesetzt noch zurückgesetzt |
 
 Zwei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder-nichts
 es wird nichts angewendet, auch nicht für die übrigen Typen):

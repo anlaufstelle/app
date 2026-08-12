@@ -128,7 +128,6 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         reason="Admin-konfigurierter Form-Vorbelegungswert (Schema-Default), keine Klientendaten.",
     ),
     non_pii("core_fieldtemplate", "options_json", reason="Select/Multi-Select-Optionsdefinitionen (Schema-Konfig)."),
-    non_pii("core_fieldtemplate", "statistics_category", reason="Statistik-Zuordnungs-Label (Konfiguration)."),
     non_pii(
         "core_fieldtemplate",
         "report_key",

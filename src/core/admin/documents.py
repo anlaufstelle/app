@@ -103,7 +103,6 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "sensitivity",
         "options_json",
         "default_value",
-        "statistics_category",
         "help_text",
         "is_active",
     )

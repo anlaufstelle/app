@@ -223,7 +223,7 @@ Der Loader ist ein Upsert über den Slug mit Diff: nur bei echter Abweichung wir
 | `conditions: []` | Alle Bedingungen des Typs werden **gelöscht** |
 | `conditions: [ … ]` | Wholesale-Replace; bei inhaltlicher Gleichheit passiert nichts (`unverändert`) |
 | Gruppe/Feldzuordnung nicht (mehr) erwähnt | bleibt **stehen** — v1 ist additiv und entfernt nie |
-| Feld außerhalb des Schemas | wird nie angefasst: `retention_days`, `description`, `is_active` (Typ); `statistics_category`, `is_active` (Vorlage) |
+| Feld außerhalb des Schemas | wird nie angefasst: `retention_days`, `description`, `is_active` (Typ); `is_active` (Vorlage) |
 
 ### Unveränderliche Werte
 
@@ -349,7 +349,7 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 
 Maßgeblich ist die **effektive** Sensibilität `max(Typ, Feld)`, nicht der rohe Feldwert. Eine Feld-`sensitivity` von `""` heißt „erbt vom Typ" (nicht Rang 0): Wird eine Vorlage von `elevated` auf `""` gesetzt, während der referenzierende Typ selbst `elevated` (oder höher) ist, ändert sich effektiv **nichts** — dann **keine** Warnung. Sinkt die effektive Schranke dagegen für mindestens einen referenzierenden Typ (z. B. dieselbe Absenkung unter einem `normal`-Typ), wird gewarnt. Ist die Vorlage noch keinem Typ zugeordnet, greift ein konservativer Roh-Vergleich (`""` ⇒ Rang 0).
 
-Was **nicht** angefasst wird: `is_active`, `description`, `retention_days` am Typ und `is_active`, `statistics_category` an der Vorlage. Eine Einrichtung kann einen Paket-Typ also deaktivieren, ohne dass der nächste Lauf ihn reaktiviert.
+Was **nicht** angefasst wird: `is_active`, `description`, `retention_days` am Typ und `is_active` an der Vorlage. Eine Einrichtung kann einen Paket-Typ also deaktivieren, ohne dass der nächste Lauf ihn reaktiviert.
 
 **Konflikte, die den ganzen Lauf abbrechen**
 

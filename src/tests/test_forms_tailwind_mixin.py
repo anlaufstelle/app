@@ -108,7 +108,6 @@ EXPECTED = {
         "sensitivity": ("Select", True, {}),
         "options_json": ("Textarea", True, {"rows": 3, "cols": "40"}),
         "default_value": ("TextInput", True, {}),
-        "statistics_category": ("TextInput", True, {"maxlength": "100"}),
         "help_text": ("TextInput", True, {"maxlength": "200"}),
         "is_active": ("CheckboxInput", False, {}),
     },

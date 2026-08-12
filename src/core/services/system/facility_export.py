@@ -182,6 +182,10 @@ def _serialize_document_type(document_type: DocumentType) -> dict:
         "sensitivity": document_type.sensitivity,
         "min_contact_stage": document_type.min_contact_stage,
         "system_type": document_type.system_type,
+        # E3 (Refs #1849): der Berichtsschluessel ersetzt ``statistics_category``
+        # an der Vorlage und kommt am Typ neu hinzu — er ist Teil der
+        # Konfiguration und muss in einem Vollexport rekonstruierbar sein.
+        "report_key": document_type.report_key,
         "retention_days": document_type.retention_days,
         "icon": document_type.icon,
         "color": document_type.color,
@@ -211,7 +215,7 @@ def _serialize_field_template(field_template: FieldTemplate) -> dict:
         "sensitivity": field_template.sensitivity,
         "options_json": field_template.options_json,
         "default_value": field_template.default_value,
-        "statistics_category": field_template.statistics_category,
+        "report_key": field_template.report_key,
         "help_text": field_template.help_text,
         "is_active": field_template.is_active,
     }

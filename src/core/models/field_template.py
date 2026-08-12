@@ -73,11 +73,6 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
             "(mehrere durch Komma trennen). Für FILE nicht unterstützt."
         ),
     )
-    statistics_category = models.CharField(
-        max_length=100,
-        blank=True,
-        verbose_name=_("Statistik-Kategorie"),
-    )
     help_text = models.CharField(
         max_length=200,
         blank=True,
