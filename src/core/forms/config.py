@@ -426,6 +426,39 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         self.facility = facility
         self._setup_report_key(get_field_key_vocabulary())
 
+    def clean(self):
+        """E-J (Refs #1849), vierter Weg: der Schlüssel wird NACHTRÄGLICH gesetzt.
+
+        Die drei Prüfungen aus C8 sitzen an den **Zuordnungs**-Pfaden. Hängen
+        zwei Vorlagen aber schon **ohne** Schlüssel am selben Typ, entsteht die
+        Doppelbindung erst hier — und ist danach irreparabel, weil die
+        Änderbarkeits-Regel keinen der beiden Schlüssel mehr freigibt.
+
+        In ``clean()`` statt ``clean_report_key()``: die Entscheidung braucht
+        auch ``is_active`` (eine deaktivierte Vorlage bindet nicht), und
+        Feldreihenfolge ist in ``clean_*``-Methoden keine verlässliche Zusage.
+        """
+        from core.services.config import conflicting_report_key_assignment
+
+        cleaned = super().clean() or {}
+        konflikt = conflicting_report_key_assignment(
+            self.instance,
+            cleaned.get("report_key"),
+            is_active=cleaned.get("is_active", self.instance.is_active),
+        )
+        if konflikt is not None:
+            _doc_type, bestand = konflikt
+            self.add_error(
+                "report_key",
+                _(
+                    "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+                    "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                    "zulässig — sonst zählt der Bericht keine von beiden."
+                )
+                % {"neu": cleaned.get("name") or self.instance.name, "bestand": bestand.name},
+            )
+        return cleaned
+
     def clean_name(self):
         name = self.cleaned_data["name"]
         if self.instance._state.adding:

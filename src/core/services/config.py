@@ -262,6 +262,22 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
     obj = form.save(commit=False)
     if creating:
         obj.facility = facility
+    # E-J (Refs #1849), vierter Weg: der Schluessel kann auch NACHTRAEGLICH
+    # gesetzt werden, ohne dass eine Zuordnung stattfindet. Das Formular faengt
+    # das ab; hier steht die Regel ein zweites Mal, weil dieser Pfad auch ohne
+    # Formular erreichbar ist (Skript, kuenftiger API-Aufruf) und der entstehende
+    # Zustand irreparabel waere.
+    konflikt = conflicting_report_key_assignment(obj, obj.report_key, is_active=obj.is_active)
+    if konflikt is not None:
+        _doc_type, bestand = konflikt
+        raise ValidationError(
+            _(
+                "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+                "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                "zulässig — sonst zählt der Bericht keine von beiden."
+            )
+            % {"neu": obj.name, "bestand": bestand.name}
+        )
     obj.save()
     action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
     log_audit_event(
@@ -508,6 +524,46 @@ def conflicting_report_key_field(doc_type: DocumentType, field_template: FieldTe
         .exclude(pk=field_template.pk)
         .first()
     )
+
+
+def conflicting_report_key_assignment(field_template: FieldTemplate, report_key, *, is_active: bool):
+    """Der vierte Weg zur Doppelbindung: der Schluessel wird NACHTRAEGLICH gesetzt.
+
+    Disclosure-Review-Befund zu E-J: :func:`conflicting_report_key_field` sitzt
+    an den **Zuordnungs**-Pfaden. Sind zwei Vorlagen aber schon **ohne**
+    Schluessel am selben Typ (beide Zuordnungen waren zulaessig — es gab nichts
+    zu kollidieren), entsteht die Doppelbindung erst beim spaeteren Setzen. Der
+    Zustand ist danach **irreparabel**: Die Aenderbarkeits-Regel (§2.1) laesst
+    keinen der beiden Schluessel mehr entfernen, das Backend zaehlt fail-safe
+    keines der Felder, und jeder Paketlauf gegen diesen Typ bricht ab.
+
+    Prueft alle Dokumentationstypen, an denen ``field_template`` **aktiv**
+    haengt, gegen die dort bereits gebundenen Vorlagen. Liefert das erste
+    Konfliktpaar ``(Dokumentationstyp, Bestandsvorlage)`` oder ``None``.
+
+    ``is_active`` ist der Wert, den die Vorlage **nach** dem Speichern traegt:
+    eine deaktivierte Vorlage bindet nicht (dieselbe Sicht wie
+    ``FeldBindung.leseschluessel``), und der Umbenennungs-Pfad — alte Vorlage
+    deaktivieren, neue mit demselben Schluessel anhaengen — muss offen bleiben.
+    """
+    from core.models.report_key import EXCLUDED
+
+    if not report_key or report_key == EXCLUDED or not is_active:
+        return None
+    zuordnungen = DocumentTypeField.objects.filter(field_template=field_template).select_related("document_type")
+    for zuordnung in zuordnungen:
+        bestand = (
+            FieldTemplate.objects.filter(
+                document_type_fields__document_type=zuordnung.document_type,
+                report_key=report_key,
+                is_active=True,
+            )
+            .exclude(pk=field_template.pk)
+            .first()
+        )
+        if bestand is not None:
+            return zuordnung.document_type, bestand
+    return None
 
 
 def add_field_to_doctype(

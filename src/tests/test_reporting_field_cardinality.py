@@ -61,6 +61,21 @@ def dauer(facility):
 
 
 @pytest.fixture
+def zweite_dauer_ohne_schluessel(facility):
+    """Dieselbe Vorlage, aber noch OHNE Schluessel — der Nachtrag-Fall.
+
+    Bewusst so angelegt statt nachtraeglich geleert: die Aenderbarkeits-Regel
+    laesst einen gesetzten Schluessel nicht mehr entfernen.
+    """
+    return FieldTemplate.objects.create(
+        facility=facility,
+        name="Gesprächsdauer E-J (offen)",
+        slug="gespraechsdauer-offen",
+        field_type="number",
+    )
+
+
+@pytest.fixture
 def zweite_dauer(facility):
     return FieldTemplate.objects.create(
         facility=facility,
@@ -164,6 +179,77 @@ class TestValidierungsschichten:
 
         assert [ident for ident, _text in exc.value.report.errors] == ["beratung/gespraechsdauer"]
         assert "bereits durch die Feldvorlage" in exc.value.report.errors[0][1]
+
+    def test_formular_weist_den_nachtraeglichen_schluessel_ab(
+        self, facility, beratungstyp, dauer, zweite_dauer_ohne_schluessel
+    ):
+        """Der vierte Weg (Disclosure-Review): nicht die Zuordnung, sondern das
+        spaetere SETZEN des Schluessels erzeugt die Doppelbindung.
+
+        Ablauf im Bestand: zwei Vorlagen ohne Schluessel demselben Typ zuordnen
+        (beide Zuordnungen sind zulaessig — es gibt nichts zu kollidieren), dann
+        der einen einen Schluessel geben, dann der anderen denselben. Die drei
+        Zuordnungs-Pruefungen sehen davon nichts, und wegen der
+        Aenderbarkeits-Regel ist der Zustand danach **irreparabel**: kein
+        Schluessel laesst sich mehr entfernen, und jeder Paketlauf gegen diesen
+        Typ bricht ab.
+        """
+        from core.forms.config import FieldTemplateForm
+
+        offen = zweite_dauer_ohne_schluessel
+        _zuordnen(beratungstyp, dauer, 0)
+        _zuordnen(beratungstyp, offen, 1)
+
+        form = FieldTemplateForm(
+            data={
+                "name": offen.name,
+                "field_type": "number",
+                "options_json": "",
+                "is_active": "on",
+                "report_key": "dauer_minuten",
+            },
+            instance=offen,
+            facility=facility,
+        )
+
+        assert not form.is_valid()
+        assert "denselben Berichtsschlüssel" in " ".join(form.errors["report_key"])
+
+    def test_service_weist_den_nachtraeglichen_schluessel_ab(
+        self, facility, beratungstyp, dauer, zweite_dauer_ohne_schluessel
+    ):
+        """Dieselbe Regel im Speicherpfad — der Weg, den auch Skripte nehmen."""
+        from core.services.config import conflicting_report_key_assignment
+
+        _zuordnen(beratungstyp, dauer, 0)
+        _zuordnen(beratungstyp, zweite_dauer_ohne_schluessel, 1)
+
+        konflikt = conflicting_report_key_assignment(zweite_dauer_ohne_schluessel, "dauer_minuten", is_active=True)
+
+        assert konflikt == (beratungstyp, dauer)
+
+    def test_nachtrag_ohne_gemeinsamen_typ_bleibt_moeglich(
+        self, facility, beratungstyp, dauer, zweite_dauer_ohne_schluessel
+    ):
+        """Zwei Vorlagen mit demselben Schluessel an VERSCHIEDENEN Typen sind legitim."""
+        from core.services.config import conflicting_report_key_assignment
+
+        telefonat = DocumentType.objects.create(facility=facility, name="Telefonat E-J 2", report_key="contact")
+        _zuordnen(beratungstyp, dauer, 0)
+        _zuordnen(telefonat, zweite_dauer_ohne_schluessel, 0)
+
+        assert conflicting_report_key_assignment(zweite_dauer_ohne_schluessel, "dauer_minuten", is_active=True) is None
+
+    def test_deaktivierte_vorlage_darf_den_schluessel_nachtragen(
+        self, facility, beratungstyp, dauer, zweite_dauer_ohne_schluessel
+    ):
+        """Der Umbenennungs-Pfad bleibt offen: eine inaktive Vorlage bindet nicht."""
+        from core.services.config import conflicting_report_key_assignment
+
+        _zuordnen(beratungstyp, dauer, 0)
+        _zuordnen(beratungstyp, zweite_dauer_ohne_schluessel, 1)
+
+        assert conflicting_report_key_assignment(zweite_dauer_ohne_schluessel, "dauer_minuten", is_active=False) is None
 
     def test_erste_zuordnung_bleibt_moeglich(self, rf, admin_user, beratungstyp, dauer):
         request = rf.post("/")
