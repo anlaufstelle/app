@@ -2,7 +2,7 @@ Django>=6.0.7,<6.1
 psycopg[binary]>=3.3.4
 gunicorn>=26.0.0
 whitenoise>=6.5
-django-htmx>=1.28.0
+django-htmx>=1.29.0
 django-ratelimit>=4.1
 # Client fuer den mitgelieferten Redis-Cache-Service (Refs #795). Django
 # spricht ihn ueber den eingebauten ``django.core.cache.backends.redis``-
@@ -17,7 +17,7 @@ python-dotenv>=1.0
 # Obergrenze <70, damit ein Major-Bump (Dependabot) den PDF-Export nicht
 # ueberraschend bricht — insb. den SSRF-url_fetcher (Refs #1610, #1596).
 weasyprint>=69.0,<70
-django-unfold>=0.101.0
+django-unfold>=0.103.0
 django-csp>=4.0
 sentry-sdk[django]>=2.66.0
 pyclamd>=0.4.0
