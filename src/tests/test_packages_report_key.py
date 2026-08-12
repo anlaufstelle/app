@@ -184,26 +184,61 @@ class TestStandardpaket:
         assert report.field_templates.updated == []
         assert len(report.document_types.unchanged) == 9
 
+    @staticmethod
+    def _schluessel(facility):
+        return {
+            "typen": dict(DocumentType.objects.filter(facility=facility).values_list("slug", "report_key")),
+            "vorlagen": dict(FieldTemplate.objects.filter(facility=facility).values_list("slug", "report_key")),
+        }
+
+    @staticmethod
+    def _backfill_ueber_geleerten_bestand(facility):
+        """Den Vor-Migrations-Zustand herstellen und die Migration laufen lassen.
+
+        **Das Leeren ist der Kern.** Ohne es waere jeder Vergleich tautologisch:
+        der Seed schreibt die Werte aus der YAML, der Backfill filtert auf leere
+        Schluessel und taete dann gar nichts. Zwei vertauschte Zuordnungen in der
+        YAML passierten so jede Zusicherung und broechen erst auf einer echten
+        Bestandsinstanz am E13-Konflikt.
+        """
+        DocumentType.objects.filter(facility=facility).update(report_key=None)
+        FieldTemplate.objects.filter(facility=facility).update(report_key=None)
+        with connection.schema_editor() as schema_editor:
+            _BACKFILL.backfill_report_key(django_apps, schema_editor)
+
     def test_backfill_und_paket_liefern_dasselbe_ergebnis(self, facility):
         """Beide Wege in dieselbe Instanz — das Paket darf nichts anderes sagen
         als der Bestands-Backfill (sonst waere der naechste Seed ein Konflikt).
         """
         seed_document_types(facility)
-        vorher = {
-            "typen": dict(DocumentType.objects.filter(facility=facility).values_list("slug", "report_key")),
-            "vorlagen": dict(FieldTemplate.objects.filter(facility=facility).values_list("slug", "report_key")),
-        }
+        aus_dem_paket = self._schluessel(facility)
 
-        with connection.schema_editor() as schema_editor:
-            _BACKFILL.backfill_report_key(django_apps, schema_editor)
+        self._backfill_ueber_geleerten_bestand(facility)
 
-        nachher = {
-            "typen": dict(DocumentType.objects.filter(facility=facility).values_list("slug", "report_key")),
-            "vorlagen": dict(FieldTemplate.objects.filter(facility=facility).values_list("slug", "report_key")),
-        }
-        assert vorher == nachher
-        assert vorher["typen"]["hausverbot"] == "excluded"
-        assert vorher["vorlagen"]["dauer"] == "dauer_minuten"
+        assert self._schluessel(facility) == aus_dem_paket
+        assert aus_dem_paket["typen"]["hausverbot"] == "excluded"
+        assert aus_dem_paket["vorlagen"]["dauer"] == "dauer_minuten"
+
+    def test_vertauschte_yaml_zuordnung_wuerde_auffallen(self, facility):
+        """Positiv-Kontrolle: derselbe Vergleich muss an einer manipulierten YAML reissen.
+
+        Ohne sie bliebe offen, ob der Vergleich oben ueberhaupt etwas misst —
+        genau die Luecke, die seinen Vorgaenger tautologisch machte. Vertauscht
+        werden ``begleitung`` und ``vermittlung``: beide sind zaehlende
+        Schluessel, die Verwechslung waere in keiner anderen Zusicherung sichtbar.
+        """
+        rohdaten = load_default_package_data()
+        vertauscht = {"begleitung": "referral", "vermittlung": "accompaniment"}
+        for eintrag in rohdaten["document_types"]:
+            if eintrag["slug"] in vertauscht:
+                eintrag["report_key"] = vertauscht[eintrag["slug"]]
+        load_package(facility, parse_package(rohdaten))
+        aus_dem_paket = self._schluessel(facility)
+        assert aus_dem_paket["typen"]["begleitung"] == "referral"
+
+        self._backfill_ueber_geleerten_bestand(facility)
+
+        assert self._schluessel(facility) != aus_dem_paket
 
     def test_katalog_fuehrt_den_schluessel_an_jedem_typ_mit(self):
         """Kein Typ ohne Aussage — sonst faellt er nach der Umstellung in den

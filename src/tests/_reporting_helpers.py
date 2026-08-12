@@ -29,9 +29,11 @@ def get_sample_report_1_statistics(facility, date_from, date_to):
 # Fachtests nicht mehr die Zahlen, sondern nur noch den Slug-Zweitschluessel.
 #
 # Bewusst als kleine Abbildung statt als Import der Migration: die Fixturen
-# brauchen den Wert je Zeile, nicht den Massen-Backfill. Dass beide dasselbe
-# Ergebnis liefern, prueft ``test_reporting_report_key_parity.py`` (dort laeuft
-# die Migrationsfunktion selbst).
+# brauchen den Wert je Zeile, nicht den Massen-Backfill. Dass diese Abbildung
+# und die Migration dasselbe sagen, prueft
+# ``test_packages_report_key.py::TestStandardpaket`` — dort laeuft die
+# Migrationsfunktion selbst ueber einen zuvor GELEERTEN Bestand (nur so ist der
+# Vergleich kein No-op) und wird gegen das Standardpaket gehalten.
 _REPORT_KEY_JE_SYSTEM_TYPE = {
     "contact": "contact",
     "crisis": "crisis",

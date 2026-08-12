@@ -44,11 +44,15 @@ from core.services.dashboard.snapshot import _merge_sample_report_1_stats
 
 pytestmark = pytest.mark.django_db
 
-# Der Bestands-Backfill selbst (E3, Refs #1849) — nicht nachgebaut, sondern
-# aufgerufen: die Paritaets-Aussage lautet „Backfill plus Umstellung aendern die
-# Zahlen nicht", und eine zweite Kopie der Regel im Test koennte genau dort
-# abweichen, wo es darauf ankommt. Die Testdatenbank ist beim Anlegen der
-# Fixture-Zeilen laengst durchmigriert; der Backfill hat sie also nie gesehen.
+# Der Bestands-Backfill (E3, Refs #1849) laeuft hier als **Sicherheitsnetz**,
+# nicht als Beleg: Die Fixture legt ihre Zeilen ueber das Standardpaket an, das
+# den ``report_key`` seit C6 selbst mitbringt — der Aufruf unten ist damit ein
+# No-op und stellt nur sicher, dass ein Paket ohne Schluessel (aeltere Kopie)
+# denselben Bestand ergaebe.
+#
+# **Dass Paket und Backfill dasselbe sagen, beweist dieser Test NICHT** — das
+# taete er nur ueber einen zuvor geleerten Bestand. Den Beleg fuehrt
+# ``test_packages_report_key.py::TestStandardpaket`` samt Positiv-Kontrolle.
 _BACKFILL = importlib.import_module("core.migrations.0145_backfill_report_key")
 
 MAI_VON = date(2025, 5, 1)
@@ -113,12 +117,12 @@ def _isolated_registry(monkeypatch):
 def paket_facility(db):
     """Einrichtung mit dem **Standardpaket** — der Seed-Weg, nicht handgebaute Typen.
 
-    Anschliessend laeuft der Bestands-Backfill aus Migration ``0145`` ueber die
-    frisch angelegten Zeilen: so sieht eine Instanz nach dem Update aus, und
-    genau darueber macht dieser Test seine Aussage. Sobald das Standardpaket
-    ``report_key`` selbst mitbringt, ist der Aufruf ein No-op (der Backfill
-    fasst nur leere Schluessel an) — dass beide Wege dasselbe Ergebnis liefern
-    muessen, ist die tragende Zusage aus Konzept #1847 §E3.8.
+    Anschliessend laeuft der Bestands-Backfill aus Migration ``0145`` als
+    Sicherheitsnetz darueber. Er ist heute ein No-op (das Standardpaket bringt
+    die Schluessel selbst mit, und der Backfill fasst nur leere an) — der Aufruf
+    haelt die Fixture unabhaengig davon, ob die Werte aus dem Paket oder aus der
+    Migration kommen. Der BELEG, dass beide Wege dasselbe liefern, steht in
+    ``test_packages_report_key.py::TestStandardpaket``.
     """
     org = Organization.objects.create(name="Paritaets-Org")
     facility = Facility.objects.create(organization=org, name="Paritaets-Stelle")
