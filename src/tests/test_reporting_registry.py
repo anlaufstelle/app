@@ -383,7 +383,7 @@ class TestDescribeTypeBindings:
             verfuegbarkeit=(Anforderung(TypBindung((BindungsEintrag("niemals", "Niemals"),))),),
         )
         registry.register_backend("beschreibung-g")(cls)
-        doc_type = SimpleNamespace(system_type="contact", slug="")
+        doc_type = SimpleNamespace(report_key="contact", system_type=None, slug="")
 
         assert registry.describe_type_bindings(doc_type, facility) == []
 

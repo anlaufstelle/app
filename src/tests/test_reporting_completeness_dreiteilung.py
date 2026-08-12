@@ -159,7 +159,7 @@ class TestAusdrueckenAusgeschlossen:
         assert _codes(backend, facility) == []
 
     def test_notiz_typ_erzeugt_keinen_hinweis(self, backend, facility, typ, ereignis):
-        ereignis(typ("Notiz", system_type=DocumentType.SystemType.NOTE, report_key=EXCLUDED_KEY), 3)
+        ereignis(typ("Notiz", report_key=EXCLUDED_KEY), 3)
 
         assert _codes(backend, facility) == []
 

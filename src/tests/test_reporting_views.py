@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 
-from core.models import AuditLog, DocumentType
+from core.models import AuditLog
 from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
@@ -38,8 +38,16 @@ def _isolated_registry(monkeypatch):
 
 
 def _mapped(doc_type):
-    """Ordnet ``doc_type_contact`` einer Berichtskategorie zu (Default: kein system_type)."""
-    doc_type.system_type = DocumentType.SystemType.CONTACT
+    """Stellt die Berichtszuordnung von ``doc_type_contact`` sicher.
+
+    Bis E4 (Refs #1850) setzte der Helfer den gleichnamigen ``system_type`` —
+    den gibt es nicht mehr, und fuer die Zuordnung war er seit E3 (Refs #1849)
+    ohnehin folgenlos: die Fixture bringt den ``report_key`` mit. Der Helfer
+    bleibt trotzdem stehen, weil die Tests an ihm ablesbar machen, dass sie den
+    ZUGEORDNETEN Fall meinen (Gegenstueck zu
+    ``test_completeness_warnung_bei_luecken``).
+    """
+    doc_type.report_key = "contact"
     doc_type.save()
     return doc_type
 

@@ -368,16 +368,19 @@ class TestFormFieldOrderAndHints:
 
     def test_system_type_help_text_trennt_app_logik_von_berichts_zuordnung(self, facility):
         """Refs #1748
-        (RFC, Option O1): Der Hilfetext muss sagen, was die Auswahl
-        wirklich bewirkt — sonst liest sich das Dropdown wie neun gleichwertige
-        Verhaltensschalter, obwohl nur zwei Werte App-Logik tragen, sechs reine
-        Bericht-Opt-ins sind und „Notiz" exportseitig wie „kein Systemtyp"
-        wirkt. Genau diese Fehlvorstellung ist der Anlass des RFC.
+        (RFC): Der Hilfetext muss sagen, was die Auswahl wirklich bewirkt.
+
+        Der RFC entstand, weil sich das Dropdown wie neun gleichwertige
+        Verhaltensschalter las, obwohl nur zwei Werte App-Logik trugen. Mit E4
+        (#1850) sind
+        genau diese zwei uebrig — der Text muss beide benennen UND auf das Feld
+        verweisen, das die Berichtszuordnung traegt. Ohne den Verweis bliebe
+        die naechstliegende Frage („und wie kommt mein Typ in einen Bericht?")
+        an derselben Stelle unbeantwortet wie vorher.
         """
         help_text = str(DocumentTypeForm(facility=facility).fields["system_type"].help_text)
         assert "Hausverbot" in help_text and "Krisengespräch" in help_text
-        assert "Beispiel-Sachbericht" in help_text
-        assert "Notiz" in help_text
+        assert "Berichtsschlüssel" in help_text
 
     def test_form_page_shows_the_system_type_hint(self, client, admin_user, facility):
         """Der Hinweis muss auch wirklich gerendert werden (einzeln gerenderte Felder)."""
@@ -830,9 +833,7 @@ class TestReportBindingsDisplay:
         # tautologisch (der Typname selbst taucht ueberall auf der Seite auf,
         # unabhaengig davon, ob die Bindungslogik je gelaufen ist).
         # E3 (Refs #1849): Erststufe der Berichtszuordnung ist der ``report_key``.
-        dt = DocumentType.objects.create(
-            facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange", report_key="needle_exchange"
-        )
+        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] != []
@@ -866,9 +867,7 @@ class TestReportBindingsDisplay:
         assert "Erscheint in" not in body
 
     def test_edit_form_shows_bindings_above_the_form_fields(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(
-            facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange", report_key="needle_exchange"
-        )
+        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_update", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] != []

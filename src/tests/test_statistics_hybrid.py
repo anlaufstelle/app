@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from core.models import DocumentType, Event, StatisticsSnapshot
+from core.models import Event, StatisticsSnapshot
 from core.services.dashboard import (
     _merge_sample_report_1_stats,
     _merge_stats,
@@ -412,9 +412,7 @@ class TestSampleReport1Hybrid:
             backend_data={"sample-report-1": _sample_report_1_snapshot_data(total=10, unique=6)},
         )
 
-        # Live event in March (needs doc_type with system_type=contact for the sample report)
-        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
-        doc_type_contact.save()
+        # Live event in March (``doc_type_contact`` traegt den report_key fuer den Sachbericht)
         mar_dt = datetime(2025, 3, 8, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, mar_dt)
 
@@ -462,8 +460,6 @@ class TestSampleReport1HybridReadsBackendData:
         wurde: ohne Fallback-Feld darf der Lesepfad kein leeres Aggregat
         ausliefern, sondern muss live nachrechnen.
         """
-        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
-        doc_type_contact.save()
         _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 8, 10, 0))
 
         StatisticsSnapshot.objects.create(
@@ -482,8 +478,6 @@ class TestSampleReport1HybridReadsBackendData:
 
     def test_empty_snapshot_falls_back_to_live_query(self, facility, client_identified, doc_type_contact, staff_user):
         """Leeres ``backend_data`` -> Live-Abfrage statt eines leeren Aggregats."""
-        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
-        doc_type_contact.save()
         _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 8, 10, 0))
 
         StatisticsSnapshot.objects.create(
@@ -698,8 +692,6 @@ class TestHybridPersonenzahlIstEigenerLiveTerm:
     def test_sample_report_1_hybrid_zaehlt_personen_live_ueber_den_gesamtzeitraum(
         self, facility, client_identified, doc_type_contact, staff_user
     ):
-        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
-        doc_type_contact.save()
         for monat in (1, 2):
             _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, monat, 10, 9, 0))
             StatisticsSnapshot.objects.create(

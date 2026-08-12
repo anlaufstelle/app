@@ -467,16 +467,18 @@ The system type links a documentation type to internal application logic. It is 
 
 > **Changed on 2026-08-12 (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)):** The **report mapping now has a field of its own** -- the **report key** (see the next section). The system type only drives application logic. If you previously brought a type into the example activity report via the system type, you will find it there unchanged: the update gave every existing type the matching report key. **The hardcoded slug fallback is gone** -- a type without a report key appears in no report, even if its slug is one of the package slugs.
 
-Currently, the system type serves **one** purpose: **UI logic** (only Ban and Crisis):
+The system type serves **one** purpose: **UI logic**. Accordingly there are exactly two values:
 
 | System Type | Effect |
 |-------------|--------|
 | **Ban** | Activates a ban banner on the person page, dedicated filter in the timeline, count and highlight in the handover; feeds the example ban overview |
 | **Crisis** | Displayed as a highlight in the handover (recent crisis events) |
 
-> **Note:** Not every documentation type needs a system type. The remaining seven values (Contact, Medical, Needle Exchange, Accompaniment, Counseling, Referral, Note) carry **no** application logic; until the update they were purely report mappings, and they are not that any more. Whether a type lands in a report is answered reliably only by the "Appears in …" information in the detail and form views.
+> **Note:** Not every documentation type needs a system type -- most do without one. Whether a type lands in a report is answered by the "Appears in …" information in the detail and form views; the system type has nothing to do with it.
 
-> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added.** A **reduction** to Ban/Crisis has been decided (#1847 stage E4, implementation #1850); its precondition -- a dedicated report field -- is met by the report key. Until the reduction is implemented the list stays unchanged, but the seven remaining values no longer have any effect.
+> **Changed on 2026-08-12 (#1850, [ADR-042](../adr/042-report-key-berichtszuordnung.md)):** Until this update the selection had **nine** values; the other seven (Contact, Medical, Needle Exchange, Accompaniment, Counseling, Referral, Note) were pure report mappings and have been without effect since the report key arrived. They are now **removed**. On existing types the system type was cleared in the process -- the report mapping has been living in the report key since the previous update and stays untouched; **the numbers in your reports do not change.** What you will notice: the form now offers only "Ban" and "Crisis", and the detail view of an affected type shows "–" for the system type.
+
+> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added:** a value belongs here only if it drives application behaviour. Report mappings go through the report key.
 
 #### Report Key
 
@@ -1620,4 +1622,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-12 -->
-<!-- source-hash: 6db98abc2b3f28e96ff2cb839b01db6f5d8864b8 -->
+<!-- source-hash: 6b6b970cb90158e5ca8ae535093512f9c76ce2f2 -->

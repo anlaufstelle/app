@@ -10,9 +10,9 @@ gibt und die kein bisheriges Backend haben konnte:
 * **Verschluesselte Feldwerte** (``is_encrypted``-Roundtrip): ``Event.save()``
   legt ``{"__encrypted__": …}`` ab, ``safe_decrypt`` liefert einen **String**
   zurueck — ohne Koersion waere die Summe still 0.
-* **Slug-Zweitschluessel** genau nach dem ``resolve_category``-Muster:
-  ``system_type`` zuerst und exklusiv, der Paket-Slug nur bei leerem
-  ``system_type``.
+* **Typaufloesung** genau nach dem ``resolve_category``-Muster: seit E3
+  (Refs #1849) entscheidet der ``report_key`` allein, der Paket-Slug ordnet
+  nichts mehr zu.
 * **K-Anon fuer Summen** (Maintainer-Entscheid): eine Summe ist keine
   Personenzaehlung — sie faellt, wenn die Zahl der **beitragenden** Events unter
   der Schwelle liegt, und der ``saldo`` faellt immer mit ihr.
@@ -33,10 +33,7 @@ from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanc
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
-from tests._reporting_helpers import feld_report_key_fuer, report_key_fuer
-
-# Sentinel: „nicht angegeben" — ``None`` heisst hier „kein Berichtsschluessel".
-_ABGELEITET = object()
+from tests._reporting_helpers import feld_report_key_fuer
 
 pytestmark = pytest.mark.django_db
 
@@ -71,23 +68,18 @@ def _feld(facility, name, *, encrypted=False):
     )
 
 
-def _spritzentausch_typ(
-    facility,
-    *,
-    system_type=DocumentType.SystemType.NEEDLE_EXCHANGE,
-    name="Spritzentausch",
-    report_key=_ABGELEITET,
-):
+def _spritzentausch_typ(facility, *, name="Spritzentausch", report_key="needle_exchange"):
     """Dokumentationstyp mit den Paket-Feldern ``ausgabe``/``rueckgabe``.
 
-    ``report_key`` folgt per Default dem Backfill (E3, Refs #1849); die
-    Zweitschluessel-Tests setzen ihn bewusst auf ``None``.
+    Der ``report_key`` ist die Achse, auf der dieses Backend bindet (E3, Refs
+    #1849) — und seit E4 (Refs #1850) die einzige: ``system_type`` kennt den
+    Wert ``needle_exchange`` nicht mehr. Die Aufloesungstests setzen ihn
+    bewusst auf ``None``.
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
         name=name,
-        system_type=system_type,
-        report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+        report_key=report_key,
     )
     for feld in (_feld(facility, "Ausgabe"), _feld(facility, "Rückgabe")):
         DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
@@ -214,7 +206,6 @@ class TestBuildDataset:
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Spritzentausch",
-            system_type=DocumentType.SystemType.NEEDLE_EXCHANGE,
             report_key="needle_exchange",
         )
         for feld in (_feld(facility, "Ausgabe", encrypted=True), _feld(facility, "Rückgabe", encrypted=True)):
@@ -263,9 +254,9 @@ class TestBuildDataset:
 
 
 class TestTypaufloesung:
-    def test_typ_ohne_system_type_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
-        """Einrichtungseigener Typ ohne ``system_type``, aber mit Schluessel (E-D)."""
-        doc_type = _spritzentausch_typ(facility, system_type=None, report_key="needle_exchange")
+    def test_typ_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
+        """Ein einrichtungseigener Typ mit Schluessel zaehlt mit (E-D)."""
+        doc_type = _spritzentausch_typ(facility, report_key="needle_exchange")
         _event(facility, doc_type, admin_user, {"ausgabe": 8, "rueckgabe": 2})
 
         result = backend.build_dataset(facility, *date_range)
@@ -275,7 +266,7 @@ class TestTypaufloesung:
 
     def test_der_paket_slug_allein_zaehlt_nicht_mehr(self, backend, facility, admin_user, date_range):
         """Entscheid E-E (Refs #1849): der Slug ``spritzentausch`` ordnet nichts mehr zu."""
-        doc_type = _spritzentausch_typ(facility, system_type=None, report_key=None)
+        doc_type = _spritzentausch_typ(facility, report_key=None)
         assert doc_type.slug == "spritzentausch"
         _event(facility, doc_type, admin_user, {"ausgabe": 8, "rueckgabe": 2})
 
@@ -283,8 +274,8 @@ class TestTypaufloesung:
 
         assert result.summary["events"] == 0
 
-    def test_fremder_slug_ohne_system_type_zaehlt_nicht(self, backend, facility, admin_user, date_range):
-        doc_type = _spritzentausch_typ(facility, system_type=None, name="Materialausgabe")
+    def test_fremder_slug_ohne_schluessel_zaehlt_nicht(self, backend, facility, admin_user, date_range):
+        doc_type = _spritzentausch_typ(facility, name="Materialausgabe", report_key=None)
         _event(facility, doc_type, admin_user, {"ausgabe": 8, "rueckgabe": 2})
 
         result = backend.build_dataset(facility, *date_range)
@@ -438,9 +429,7 @@ class TestIsAvailable:
         assert backend.is_available(facility) is True
 
     def test_nur_ein_feld_reicht_nicht(self, backend, facility):
-        doc_type = DocumentType.objects.create(
-            facility=facility, name="Spritzentausch", system_type=DocumentType.SystemType.NEEDLE_EXCHANGE
-        )
+        doc_type = DocumentType.objects.create(facility=facility, name="Spritzentausch", report_key="needle_exchange")
         DocumentTypeField.objects.create(document_type=doc_type, field_template=_feld(facility, "Ausgabe"))
 
         assert backend.is_available(facility) is False
@@ -459,13 +448,13 @@ class TestIsAvailable:
 
         assert backend.is_available(facility) is False
 
-    def test_report_key_ohne_system_type_genuegt(self, backend, facility):
-        _spritzentausch_typ(facility, system_type=None, report_key="needle_exchange")
+    def test_report_key_genuegt(self, backend, facility):
+        _spritzentausch_typ(facility, report_key="needle_exchange")
 
         assert backend.is_available(facility) is True
 
     def test_paket_slug_allein_macht_nicht_verfuegbar(self, backend, facility):
         """Kehrseite von E-E: ohne Schluessel faellt das Backend aus dem Dropdown."""
-        _spritzentausch_typ(facility, system_type=None, report_key=None)
+        _spritzentausch_typ(facility, report_key=None)
 
         assert backend.is_available(facility) is False

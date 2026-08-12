@@ -28,24 +28,19 @@ def get_sample_report_1_statistics(facility, date_from, date_to):
 # der Migration an und muessen ihn deshalb selbst mitgeben — sonst pruefen die
 # Fachtests nicht mehr die Zahlen, sondern nur noch den Slug-Zweitschluessel.
 #
+# Die **Typ**-Ebene braucht dafuer seit E4 (Refs #1850) keine Abbildung mehr:
+# der frueher hier gepflegte ``system_type`` → ``report_key``-Weg hatte nur
+# Sinn, solange Fixturen den Systemtyp setzten. Die sieben Werte gibt es nicht
+# mehr; die Fixturen geben den Schluessel jetzt direkt an, was die Zuordnung
+# an der Stelle sichtbar macht, an der sie wirkt. Auf **Feld**-Ebene bleibt die
+# Abbildung: dort ist der Slug der Anker, nicht der Schluessel selbst.
+#
 # Bewusst als kleine Abbildung statt als Import der Migration: die Fixturen
 # brauchen den Wert je Zeile, nicht den Massen-Backfill. Dass diese Abbildung
 # und die Migration dasselbe sagen, prueft
 # ``test_packages_report_key.py::TestStandardpaket`` — dort laeuft die
 # Migrationsfunktion selbst ueber einen zuvor GELEERTEN Bestand (nur so ist der
 # Vergleich kein No-op) und wird gegen das Standardpaket gehalten.
-_REPORT_KEY_JE_SYSTEM_TYPE = {
-    "contact": "contact",
-    "crisis": "crisis",
-    "medical": "medical",
-    "needle_exchange": "needle_exchange",
-    "accompaniment": "accompaniment",
-    "counseling": "counseling",
-    "referral": "referral",
-    "note": "excluded",
-    "ban": "excluded",
-}
-
 _FELD_REPORT_KEY_JE_SLUG = {
     "dauer": "dauer_minuten",
     "ausgabe": "ausgabe_stueck",
@@ -53,11 +48,6 @@ _FELD_REPORT_KEY_JE_SLUG = {
     "leistungen": "leistungen",
     "art-der-krise": "art_der_krise",
 }
-
-
-def report_key_fuer(system_type) -> str | None:
-    """Der ``report_key``, den der Backfill diesem ``system_type`` gaebe."""
-    return _REPORT_KEY_JE_SYSTEM_TYPE.get(str(system_type) if system_type else "")
 
 
 def feld_report_key_fuer(name: str) -> str | None:

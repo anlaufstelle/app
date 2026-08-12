@@ -28,6 +28,9 @@ from core.models import (
 )
 from core.services.file_vault import store_encrypted_file
 
+#: Slug des Beratungstyps aus ``core/packages/default.yaml`` (E4, Refs #1850).
+_COUNSELING_SLUG = "beratungsgespraech"
+
 
 def generate_dummy_file() -> SimpleUploadedFile:
     """Generate an in-memory dummy file (PDF/JPEG/PNG)."""
@@ -102,14 +105,21 @@ def attach_files_to_counseling_events(facility: Facility, users: list[User], cfg
     # so immer weitere Anhaenge an bislang unberuehrte Events. Muster wie
     # attach_files_to_client_and_case: EIN Existenz-Check je Einrichtung/
     # Kategorie statt einer Ziel-Quote je Lauf.
-    if Attachment.objects.filter(facility=facility, event__document_type__system_type="counseling").exists():
+    #
+    # E4 (Refs #1850): Der Beratungstyp wird ueber seinen **Slug** gesucht, nicht
+    # mehr ueber ``system_type="counseling"`` — den Wert gibt es seit der
+    # Enum-Reduktion nicht mehr, der Filter traefe dauerhaft nichts (stille
+    # Regression: der Seed legte einfach nie wieder Ereignis-Anhaenge an). Der
+    # Slug kommt aus demselben ``default.yaml``, das dieser Seed vorher
+    # eingespielt hat, und ist je Einrichtung eindeutig.
+    if Attachment.objects.filter(facility=facility, event__document_type__slug=_COUNSELING_SLUG).exists():
         return 0
 
     # Find counseling events without existing attachments
     counseling_events = list(
         Event.objects.filter(
             facility=facility,
-            document_type__system_type="counseling",
+            document_type__slug=_COUNSELING_SLUG,
         ).exclude(
             attachments__isnull=False,
         )

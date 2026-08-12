@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-12
 - **Deciders:** Tobias Nix
-- **Refs:** #1847 (Konzept O2″ mit den Entscheiden E-A…E-K), #1849 (Umsetzung E3), #1824 (E1, deklarative Bindung), #1848 (E2, Sichtbarkeit), #1819 (Vollständigkeitshinweis), #1741 / #1785 (Slug-Zweitschlüssel und sein Disclosure-Leck), #1748 (`SystemType`-Freeze), [ADR-038](038-reporting-plugin-backends.md) §4 (**hiermit superseded**), [ADR-040](040-documenttype-category-entfernt.md) (Präzedenz „folgenloses Feld entfernen"), [ADR-037](037-konfigurationspakete-dynamische-felder.md) (Paketformat), [ADR-024](024-slug-based-identifiers.md) (Slug-Rolle)
+- **Refs:** #1847 (Konzept O2″ mit den Entscheiden E-A…E-K), #1849 (Umsetzung E3), #1850 (Umsetzung E4, Vollzug), #1824 (E1, deklarative Bindung), #1848 (E2, Sichtbarkeit), #1819 (Vollständigkeitshinweis), #1741 / #1785 (Slug-Zweitschlüssel und sein Disclosure-Leck), #1748 (`SystemType`-Freeze), [ADR-038](038-reporting-plugin-backends.md) §4 (**hiermit superseded**), [ADR-040](040-documenttype-category-entfernt.md) (Präzedenz „folgenloses Feld entfernen"), [ADR-037](037-konfigurationspakete-dynamische-felder.md) (Paketformat), [ADR-024](024-slug-based-identifiers.md) (Slug-Rolle)
 
 ## Context
 
@@ -45,6 +45,19 @@ Im Einzelnen:
 - **−** **Weglassen ≠ Entfernen.** Ein fehlender `report_key` im Paket lässt den Bestand unangetastet — bewusst anders als `system_type`. Der Grund ist der Zeitpunkt: `system_type` gibt es seit Schema v1, `report_key` kommt jetzt dazu, und der Backfill vergibt ihn an **Bestandszeilen**. Wäre Weglassen ein Fehler, machte diese Etappe jedes bereits veröffentlichte Fremdpaket gegen eine aktualisierte Instanz unladbar, ohne dass das Paket etwas falsch macht. Ein Entfernen lässt sich damit nicht ausdrücken — kein Verlust, es ist ohnehin verboten.
 - **−** `E-I` lässt eine scharfe Kombination zu (`system_type=ban` mit Zähl-Schlüssel). Bewusst so entschieden: es wäre eine sichtbare Wahl, abgefedert durch die `excluded`-Vorbelegung und die „Erscheint in …"-Anzeige. Erweist sich das in der Praxis als Fehlkonfigurationsquelle, ist eine harte Validierung ein kleiner, rückwärtskompatibler Nachschlag.
 - **~** **K-Anon-Nähe.** Die Auflösung steckt in Vollständigkeitspfaden und Suppressions-Eingaben. Der Umbau ist deshalb durch einen Golden-Pin über alle sechs Backends abgesichert (`test_reporting_report_key_parity.py`), und der Disclosure-Prüfpunkt aus #1819 ist als Regressionstest festgeschrieben: die Bezugsgröße `events_in_period` steht in keinem Artefakt, der „bewusst ausgeschlossen"-Rest bleibt unberechenbar.
+
+## Vollzug E4 (2026-08-12, #1850)
+
+Die Reduktion, auf die dieser ADR hinarbeitet, ist umgesetzt: **`DocumentType.SystemType` trägt nur noch `ban` und `crisis`.** Die sieben reinen Berichtswerte (`contact`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note`) sind aus dem Enum entfernt; Migration `0147` nullt sie im Bestand. Damit ist die Doppelrolle aus dem *Context* nicht mehr nur entkoppelt, sondern aufgelöst — der Freeze aus #1748 bewacht ab jetzt eine Liste, in der jeder Wert App-Verhalten trägt.
+
+Vier Punkte, die der Vollzug festhält:
+
+1. **Reihenfolge in der Migration ist tragend.** Erst `RunPython` (Altwerte → `NULL`), dann `AlterField`. Bliebe ein Altwert stehen, stünde er (a) im Formular gegen eine Optionsliste, die ihn nicht mehr kennt, und (b) gegen den E13-Guard des Paket-Loaders: `default.yaml` führt die `system_type`-Zeilen der sieben Typen nicht mehr, und „gesetzt → weg" ist dort ein Fehler. Genullt wird per `exclude(ban, crisis)` statt per Aufzählung der sieben — `v0.80.0` ist öffentlich, ein Fremdbestand kann auch einen Wert tragen, den das Enum nie kannte.
+2. **Kein Rückweg.** `reverse` ist ein bewusster No-op (Muster `0134`/`0145`): welcher Typ welchen der sieben Werte trug, ist nachträglich nicht rekonstruierbar — `report_key` trägt dieselbe Information, aber die Rückabbildung wäre eine Erfindung (`excluded` stand für `note` **und** `ban`).
+3. **Alt-Pakete bleiben ladbar.** Die Werte-Ebenen-Toleranz aus Entscheid 8 trägt hier ein zweites Mal, jetzt auf der `system_type`-Achse: ein Paket mit `system_type: medical` lädt durch, der Wert **entfällt** (er hat auf dieser Achse keinen Nachfolger) und erzeugt eine Warnung im Load-Report. Ein *unbekannter* Wert bleibt dagegen ein Fehler — anders als beim `report_key` ist der Werteraum hier eine eingefrorene Liste und kein Fremdvokabular. Genau diese Toleranz war die Vorbedingung der Etappe, nicht ihr Komfort.
+4. **Die Seeds hingen an den Werten, nicht an der Sache.** Der Default-Dokumentationstyp und die Beispiel-Anhänge wurden über `system_type="contact"`/`"counseling"` gesucht, die Ereignis-Gewichtung und die Datenpools waren danach geschlüsselt. Alle vier laufen jetzt über Slug bzw. Namen aus `default.yaml`. Der Slug — nicht der `report_key` — ist dort der richtige Ersatz: er ist je Einrichtung eindeutig, ein `report_key` darf absichtlich mehrfach vergeben sein (Befund 1 im *Context*, in die Gegenrichtung gelesen).
+
+**Unberührt:** `ban_overview` bindet weiter über `system_type` (siehe *Abgrenzung*), die Vorbelegung `crisis → crisis` / `ban → excluded` beim Anlegen bleibt, und an den Zahlen der Berichte ändert der Vollzug nichts — sie hängen seit E3 am `report_key`.
 
 ## Abgrenzung
 

@@ -477,9 +477,7 @@ class TestReportBindingsDisplay:
         # einem passenden Dokumentationstyp hängt (Review-Befund #1848: der
         # blosse Schluessel-Match ohne Zuordnung reicht nicht) — sonst bliebe
         # die Liste trotz Treffer leer.
-        dt = DocumentType.objects.create(
-            facility=facility, name="Beratung", system_type="counseling", report_key="counseling"
-        )
+        dt = DocumentType.objects.create(facility=facility, name="Beratung", report_key="counseling")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         client.force_login(admin_user)
         response = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}))

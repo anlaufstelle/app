@@ -147,9 +147,7 @@ class TestBuildDataset:
         assert backend.build_dataset(facility, *zeitraum).summary["ausgesprochen"] == 1
 
     def test_nicht_ban_typen_zaehlen_nicht(self, backend, facility, zeitraum, staff_user):
-        kontakt = DocumentType.objects.create(
-            facility=facility, name="Kontakt", system_type=DocumentType.SystemType.CONTACT
-        )
+        kontakt = DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
         _ban(facility, kontakt, staff_user)
 
         assert backend.build_dataset(facility, *zeitraum).summary == {
@@ -313,7 +311,7 @@ class TestIsAvailable:
         assert backend.is_available(facility) is False
 
     def test_negativ_ohne_ban_typ(self, backend, facility):
-        DocumentType.objects.create(facility=facility, name="Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
 
         assert backend.is_available(facility) is False
 

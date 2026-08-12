@@ -24,13 +24,10 @@ from core.reporting.backends.service_distribution import (
     LEISTUNGEN_SLUG,
     ServiceDistributionBackend,
 )
-from core.reporting.base import DatasetResult
+from core.reporting.base import EXCLUDED_KEY, DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
-from tests._reporting_helpers import feld_report_key_fuer, report_key_fuer
-
-# Sentinel: „nicht angegeben" — ``None`` heisst hier „kein Berichtsschluessel".
-_ABGELEITET = object()
+from tests._reporting_helpers import feld_report_key_fuer
 
 pytestmark = pytest.mark.django_db
 
@@ -55,13 +52,12 @@ def date_range():
     return today - timedelta(days=1), today + timedelta(days=1)
 
 
-def _typ_mit_feld(facility, name, *, system_type, feld_name, feld_typ, anhaengen=True, report_key=_ABGELEITET):
-    """``report_key`` folgt per Default dem Backfill (E3, Refs #1849)."""
+def _typ_mit_feld(facility, name, *, report_key, feld_name, feld_typ, anhaengen=True):
+    """Der ``report_key`` ist die Achse, auf der dieses Backend bindet (E3/E4)."""
     doc_type = DocumentType.objects.create(
         facility=facility,
         name=name,
-        system_type=system_type,
-        report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+        report_key=report_key,
     )
     if anhaengen:
         feld, _created = FieldTemplate.objects.get_or_create(
@@ -78,7 +74,7 @@ def kontakt_typ(facility):
     return _typ_mit_feld(
         facility,
         "Kontakt",
-        system_type=DocumentType.SystemType.CONTACT,
+        report_key="contact",
         feld_name="Leistungen",
         feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
     )
@@ -89,7 +85,7 @@ def krise_typ(facility):
     return _typ_mit_feld(
         facility,
         "Krisengespräch",
-        system_type=DocumentType.SystemType.CRISIS,
+        report_key="crisis",
         feld_name="Art der Krise",
         feld_typ=FieldTemplate.FieldType.SELECT,
     )
@@ -241,7 +237,7 @@ class TestBuildDataset:
         fremd = _typ_mit_feld(
             second_facility,
             "Kontakt",
-            system_type=DocumentType.SystemType.CONTACT,
+            report_key="contact",
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
         )
@@ -253,12 +249,11 @@ class TestBuildDataset:
 
 
 class TestTypaufloesung:
-    def test_typ_ohne_system_type_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
-        """Die beiden Achsen sind unabhaengig (Entscheid E-D)."""
+    def test_typ_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
+        """Die Zuordnung kommt allein aus dem Schluessel (Entscheid E-D)."""
         typ = _typ_mit_feld(
             facility,
             "Kontakt",
-            system_type=None,
             report_key="contact",
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
@@ -275,7 +270,6 @@ class TestTypaufloesung:
         typ = _typ_mit_feld(
             facility,
             "Kontakt",
-            system_type=None,
             report_key=None,
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
@@ -287,19 +281,20 @@ class TestTypaufloesung:
 
         assert result.records == []
 
-    def test_gesetzter_system_type_sperrt_den_zweitschluessel(self, backend, facility, admin_user, date_range):
-        """Refs #1785: ein gesetzter, aber ausgeschlossener ``system_type``
-        (hier ``note``) wird vom Slug NICHT gerettet.
+    def test_ausgeschlossener_schluessel_sperrt_den_slug(self, backend, facility, admin_user, date_range):
+        """Refs #1785: ein ausdruecklich ausgeschlossener Typ wird vom Slug NICHT gerettet.
 
         Der Notiz-Typ traegt den Paket-Slug ``kontakt``; die Gruppe ist ueber
-        einen zweiten, korrekt getypten Dokumentationstyp konfiguriert. Wuerde
-        der Zweitschluessel greifen, zoege der Notiz-Typ seine Ereignisse in die
-        Verteilung — genau das Disclosure-Leck aus #1785.
+        einen zweiten, korrekt geschluesselten Dokumentationstyp konfiguriert.
+        Wuerde der Slug greifen, zoege der Notiz-Typ seine Ereignisse in die
+        Verteilung — genau das Disclosure-Leck aus #1785. Bis E4 stand der
+        Ausschluss im ``system_type=note``; heute steht er da, wo die
+        Zuordnung selbst steht.
         """
         echter_kontakt = _typ_mit_feld(
             facility,
             "Kontaktdokumentation",
-            system_type=DocumentType.SystemType.CONTACT,
+            report_key="contact",
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
         )
@@ -307,9 +302,8 @@ class TestTypaufloesung:
             facility=facility,
             name="Kontaktnotiz",
             slug="kontakt",
-            system_type=DocumentType.SystemType.NOTE,
-            # Wie der Backfill: „Notiz" heisst ausdruecklich „in keinen Bericht".
-            report_key=report_key_fuer(DocumentType.SystemType.NOTE),
+            # „Gehoert ausdruecklich in keinen Bericht."
+            report_key=EXCLUDED_KEY,
         )
         feld = FieldTemplate.objects.get(facility=facility, slug=LEISTUNGEN_SLUG)
         DocumentTypeField.objects.create(document_type=notiz, field_template=feld)
@@ -573,7 +567,7 @@ class TestIsAvailable:
         _typ_mit_feld(
             facility,
             "Spritzentausch",
-            system_type=DocumentType.SystemType.NEEDLE_EXCHANGE,
+            report_key="needle_exchange",
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
         )
@@ -589,7 +583,7 @@ class TestIsAvailable:
         _typ_mit_feld(
             second_facility,
             "Kontakt",
-            system_type=DocumentType.SystemType.CONTACT,
+            report_key="contact",
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
         )

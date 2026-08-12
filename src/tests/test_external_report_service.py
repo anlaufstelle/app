@@ -1172,14 +1172,13 @@ class TestPersonenkriteriumInDenWrappern:
     ):
         """Der Snapshot-Payload traegt ``persons`` je Cluster (Formatänderung).
 
-        Bewusst mapping-agnostisch: die Buckets entstehen weiterhin allein aus
-        ``system_type``/``age_cluster``, damit der Slug-Zweitschluessel aus
-        #1741 hier konfliktfrei aufsetzen kann.
+        Bewusst mapping-agnostisch: die Buckets entstehen allein aus
+        ``age_cluster``, unabhaengig von der Berichtszuordnung des Typs.
         """
-        from core.models import Client, DocumentType
+        from core.models import Client
         from core.reporting.registry import get_backend
 
-        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
+        doc_type_contact.report_key = "contact"
         doc_type_contact.save()
         person = Client.objects.create(
             facility=facility,

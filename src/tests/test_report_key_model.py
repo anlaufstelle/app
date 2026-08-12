@@ -138,10 +138,10 @@ class TestUnabhaengigkeitVonSystemType:
         typ = DocumentType.objects.create(
             facility=facility,
             name="Beide Guards",
-            system_type=DocumentType.SystemType.CONTACT,
+            system_type=DocumentType.SystemType.CRISIS,
             report_key="contact",
         )
 
-        typ.system_type = DocumentType.SystemType.COUNSELING
+        typ.system_type = DocumentType.SystemType.BAN
         with pytest.raises(ValidationError, match="system_type kann nach Erstellung nicht geändert werden"):
             typ.save()

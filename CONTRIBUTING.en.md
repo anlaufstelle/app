@@ -136,7 +136,8 @@ second run reports everything as unchanged.
 > **Changing the catalogue:** edit the values in `default.yaml`, not in
 > `core/seed/doc_types.py`. Existing `slug` values are **immutable** (migration
 > 0117/#1710 plus a DB trigger) — a changed slug creates a duplicate in every
-> existing facility instead of updating it. Always carry `system_type`, and always
+> existing facility instead of updating it. Always carry `system_type` where one is
+> set (only `ban`/`crisis` remain), and always
 > carry the `options` key for `select`/`multi_select`; **never** add a `conditions`
 > key (not even `[]` — that would delete field conditions maintained through the
 > UI). Never remove the **last** group of a document type from the catalogue: the
@@ -767,4 +768,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-12 -->
-<!-- source-hash: 30cceaf21489f3f6c9756cdcd8889a5c9c69609c -->
+<!-- source-hash: 6c7eb9aaace60ca0fb1943d30f00c74efc4853c4 -->

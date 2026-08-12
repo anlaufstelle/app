@@ -112,8 +112,6 @@ class TestBerichtsPanelEnglisch:
 
     def test_kategorienamen_bleiben_sprachunabhaengig(self, client, lead_user, doc_type_contact, sample_event):
         """``CATEGORY_MAP``-Werte sind Daten, keine UI-Strings — sie bleiben deutsch."""
-        doc_type_contact.system_type = "contact"
-        doc_type_contact.save()
         client.force_login(_speaks_english(lead_user))
 
         response = client.get(reverse("core:statistics_report_panel"), {"backend": "sample-report-1"})

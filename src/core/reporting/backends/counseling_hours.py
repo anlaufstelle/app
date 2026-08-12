@@ -12,7 +12,7 @@ Zeile mit Ereigniszahl und aufsummierten Minuten aus der Paket-Feldvorlage
 ``resolve_category``-Muster: seit E3 (Refs #1849) entscheidet der
 ``report_key`` des Dokumentationstyps, und zwar allein.
 
-Der Zeilenschluessel ``kategorie`` traegt den **``system_type``-Wert selbst**
+Der Zeilenschluessel ``kategorie`` traegt den **Berichtsschluessel selbst**
 (``"contact"``/``"counseling"``/``"crisis"``) und ist damit sprachunabhaengig
 und stabil — Record-Schluessel UND -Werte einer Maschinenschnittstelle duerfen
 sich nicht mit der Oberflaechensprache aendern (dieselbe Begruendung wie bei

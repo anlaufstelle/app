@@ -137,7 +137,8 @@ und ein zweiter Lauf meldet alles als `unverändert`.
 > **Katalog ändern:** Werte in `default.yaml` anpassen, nicht in `core/seed/doc_types.py`.
 > Bestehende `slug`-Werte sind **unveränderbar** (Migration 0117/#1710 + DB-Trigger)
 > ein geänderter Slug legt in jeder Bestands-Einrichtung ein Duplikat an statt zu
-> aktualisieren. `system_type` immer mitführen, bei `select`/`multi_select` immer den
+> aktualisieren. `system_type` (nur noch `ban`/`crisis`) immer mitführen, wo einer
+> steht, bei `select`/`multi_select` immer den
 > `options`-Schlüssel; **keinen** `conditions`-Schlüssel ergänzen (auch nicht `[]`
 > das würde per UI gepflegte Feldbedingungen löschen). Die **letzte** Gruppe eines
 > Dokumentationstyps nie aus dem Katalog entfernen: der Seed räumt verwaiste Gruppen

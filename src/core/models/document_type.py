@@ -22,15 +22,13 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         HIGH = "high", _("Hoch")
 
     class SystemType(models.TextChoices):
+        # E4 (Refs #1850, Konzept #1847): nur noch die beiden
+        # Verhaltens-Schluessel. Die sieben reinen Berichtswerte (contact,
+        # medical, needle_exchange, accompaniment, counseling, referral, note)
+        # sind entfernt — die Berichts-Zuordnung traegt seit E3 (Refs #1849)
+        # allein ``report_key``. Migration ``0147`` nullt die Altwerte.
         BAN = "ban", _("Hausverbot")
-        CONTACT = "contact", _("Kontakt")
         CRISIS = "crisis", _("Krisengespräch")
-        MEDICAL = "medical", _("Medizinische Versorgung")
-        NEEDLE_EXCHANGE = "needle_exchange", _("Spritzentausch")
-        ACCOMPANIMENT = "accompaniment", _("Begleitung")
-        COUNSELING = "counseling", _("Beratungsgespräch")
-        REFERRAL = "referral", _("Vermittlung")
-        NOTE = "note", _("Notiz")
 
     class EntityType(models.TextChoices):
         # M2 (Refs #1058): auf welche Entität sich Dokumente dieses Typs
@@ -105,15 +103,15 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         null=True,
         blank=True,
         verbose_name=_("Systemtyp"),
-        # Refs #1748 (RFC, Option O1): Der zweite Satz trennt die drei Rollen
-        # der Werteliste. Ohne ihn liest sich das Dropdown wie neun
-        # gleichwertige Verhaltensschalter — tatsaechlich tragen nur „ban" und
-        # „crisis" App-Logik, sechs Werte sind reine Bericht-Opt-ins und „note"
-        # wirkt exportseitig wie „kein Systemtyp".
+        # E4 (Refs #1850): Der Hilfetext trennte bisher die drei Rollen der
+        # neun Werte. Uebrig sind die beiden Verhaltens-Schluessel — der Text
+        # sagt jetzt, was sie tun, und verweist fuer die Berichts-Zuordnung
+        # auf das Feld, das sie seit E3 (Refs #1849) allein traegt.
         help_text=_(
-            "Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. Nach Erstellung unveränderbar. "
-            "Nur „Hausverbot“ und „Krisengespräch“ steuern App-Logik; die übrigen Werte ordnen den Typ ausschließlich "
-            "dem Beispiel-Sachbericht zu, „Notiz“ schließt ihn davon aus (wie ohne Systemtyp)."
+            "Stabile Kennung für Bann-Logik und Krisen-Highlight. Nach Erstellung unveränderbar. "
+            "Beide Werte steuern App-Verhalten: „Hausverbot“ speist Banner, Zeitstrom-Filter und Übergabe, "
+            "„Krisengespräch“ die Krisen-Hervorhebung. Für die Zuordnung zu einem Bericht ist der "
+            "Berichtsschlüssel zuständig, nicht dieses Feld."
         ),
     )
     entity_type = models.CharField(

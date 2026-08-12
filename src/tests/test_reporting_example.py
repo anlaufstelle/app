@@ -124,7 +124,7 @@ class TestBuildDataset:
         ambulanz = DocumentType.objects.create(
             facility=facility,
             name="Ambulanz",
-            system_type=DocumentType.SystemType.CONTACT,
+            system_type=DocumentType.SystemType.CRISIS,
         )
         for _index in range(3):
             Event.objects.create(
@@ -138,7 +138,7 @@ class TestBuildDataset:
 
         # order_by("document_type__name"): "Ambulanz" vor "Zeta-Typ".
         assert result.records == [
-            {"document_type": "Ambulanz", "system_type": "contact", "count": 1},
+            {"document_type": "Ambulanz", "system_type": "crisis", "count": 1},
             {"document_type": "Zeta-Typ", "system_type": "", "count": 3},
         ]
         assert result.summary == {"total": 4}

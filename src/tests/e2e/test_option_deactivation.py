@@ -37,9 +37,9 @@ facility = Facility.objects.first()
 admin = User.objects.filter(facility=facility, role="facility_admin").first() or User.objects.first()
 
 # "Kontakt" ist der Dokumentationstyp mit dem Feld "leistungen"
-# (core/packages/default.yaml) — system_type ist stabiler als der
-# uebersetzte Name.
-kontakt_dt = DocumentType.objects.filter(facility=facility, system_type="contact", is_active=True).first()
+# (core/packages/default.yaml) — der Slug ist stabiler als der uebersetzte
+# Name (und seit E4/#1850 traegt der Typ keinen system_type mehr).
+kontakt_dt = DocumentType.objects.filter(facility=facility, slug="kontakt", is_active=True).first()
 assert kontakt_dt is not None, "Kontakt-DocumentType fehlt in der E2E-DB"
 
 # Kein Personenbezug noetig (client ist nullable, core/models/event.py) —

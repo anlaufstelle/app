@@ -8,7 +8,14 @@ from core.models import DocumentType, Facility, Settings, TimeFilter
 
 def seed_settings(facility: Facility) -> None:
     """Create the per-facility ``Settings`` row if missing."""
-    default_dt = DocumentType.objects.filter(facility=facility, system_type="contact").first()
+    # E4 (Refs #1850): Der Lookup lief bis hierher ueber ``system_type="contact"``
+    # — ein Wert, den es seit der Enum-Reduktion nicht mehr gibt. Ersatz ist der
+    # **Slug** und nicht der ``report_key``: der Slug ist je Einrichtung
+    # eindeutig (UniqueConstraint) und bildet exakt den Katalog aus
+    # ``default.yaml`` ab, den dieser Seed vorher eingespielt hat. Der
+    # ``report_key`` waere absichtlich mehrdeutig (mehrere Typen duerfen
+    # denselben tragen) — ``.first()`` haette dort kein bestimmtes Ergebnis.
+    default_dt = DocumentType.objects.filter(facility=facility, slug="kontakt").first()
     Settings.objects.get_or_create(
         facility=facility,
         defaults={

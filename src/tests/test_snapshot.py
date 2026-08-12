@@ -144,11 +144,10 @@ class TestSampleReport1DataStored:
     """Sachbericht-Daten werden korrekt im Snapshot gespeichert."""
 
     def test_sample_report_1_data_stored(self, facility, staff_user, client_identified):
-        # DocumentType mit system_type fuer Sachbericht-Mapping
+        # DocumentType mit Berichtsschluessel fuer das Sachbericht-Mapping
         dt_contact = DocumentType.objects.create(
             facility=facility,
             name="Kontaktaufnahme",
-            system_type="contact",
             # E3 (Refs #1849): Erststufe der Berichtszuordnung.
             report_key="contact",
         )
@@ -181,7 +180,6 @@ class TestBackendData:
         dt_contact = DocumentType.objects.create(
             facility=facility,
             name="Kontaktaufnahme",
-            system_type="contact",
             # E3 (Refs #1849): Erststufe der Berichtszuordnung.
             report_key="contact",
         )

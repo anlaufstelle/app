@@ -65,7 +65,7 @@ class TestChangeFormSlugEntityTypeReadonly:
 
     def test_get_readonly_fields_still_locks_system_type_when_set(self, rf, admin_user, doc_type_contact):
         """Bestehendes Verhalten (system_type) bleibt unverändert."""
-        doc_type_contact.system_type = DocumentType.SystemType.CONTACT
+        doc_type_contact.system_type = DocumentType.SystemType.CRISIS
         doc_type_contact.save()
         request = _request(rf, admin_user)
         readonly = _admin().get_readonly_fields(request, doc_type_contact)

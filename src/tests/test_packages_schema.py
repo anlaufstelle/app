@@ -43,7 +43,9 @@ def _valid_raw() -> dict[str, Any]:
                 "slug": "kontakt",
                 "name": "Kontakt",
                 "entity_type": "event",
-                "system_type": "contact",
+                # E4 (Refs #1850): ``system_type`` traegt nur noch Verhalten —
+                # die Berichts-Zuordnung steht seit E3 im ``report_key``.
+                "report_key": "contact",
                 "sensitivity": "normal",
                 "icon": "users",
                 "color": "indigo",
@@ -91,7 +93,8 @@ class TestValidPackage:
         assert isinstance(doc_type, DocumentTypeDef)
         assert doc_type.slug == "kontakt"
         assert doc_type.entity_type == "event"
-        assert doc_type.system_type == "contact"
+        assert doc_type.system_type is None
+        assert doc_type.report_key == "contact"
         assert doc_type.min_contact_stage is None
         assert isinstance(doc_type.groups[0], GroupDef)
         assert isinstance(doc_type.field_refs[0], FieldRefDef)
@@ -360,6 +363,39 @@ class TestEnums:
         raw["document_types"][0]["system_type"] = "quatsch"
         assert "document_types[0].system_type" in _paths(raw)
 
+    def test_verhaltens_system_type_wird_uebernommen(self) -> None:
+        raw = _valid_raw()
+        raw["document_types"][0]["system_type"] = "crisis"
+        assert parse_package(raw).document_types[0].system_type == "crisis"
+
+    def test_entfallener_system_type_laedt_und_entfaellt(self) -> None:
+        """E4 (Refs #1850): ein Alt-Paket mit ``system_type: medical`` bleibt ladbar.
+
+        Werte-Ebenen-Toleranz (Konzept #1847 §E3.8, hier auf den reduzierten
+        Systemtyp angewendet): ``parse_package`` wirft, **bevor** ein
+        ``PackageV1`` existiert — ein einziger Altwert machte sonst das ganze
+        Paket unladbar, obwohl er nur eine Zeile betrifft und die Zuordnung
+        laengst am ``report_key`` haengt. Der Wert wird nicht uebersetzt,
+        sondern faellt weg; sichtbar bleibt er ueber ``removed_system_types``
+        (der Loader macht daraus eine Warnung).
+        """
+        for entfallen in ("contact", "medical", "needle_exchange", "accompaniment", "counseling", "referral", "note"):
+            raw = _valid_raw()
+            raw["document_types"][0]["system_type"] = entfallen
+            doc_type = parse_package(raw).document_types[0]
+            assert doc_type.system_type is None
+            assert doc_type.removed_system_types == (entfallen,)
+
+    def test_entfallener_system_type_ist_auch_ausserhalb_von_ereignissen_kein_fehler(self) -> None:
+        """Der ``entity_type``-Guard darf nicht auf einen Wert anspringen, der ohnehin entfaellt."""
+        raw = _valid_raw()
+        raw["document_types"].append(
+            {"slug": "stammdaten", "name": "Stammdaten", "entity_type": "case", "system_type": "note"}
+        )
+        package = parse_package(raw)
+        assert package.document_types[1].system_type is None
+        assert package.document_types[1].removed_system_types == ("note",)
+
     def test_unknown_min_contact_stage(self) -> None:
         raw = _valid_raw()
         raw["document_types"][0]["min_contact_stage"] = "quatsch"
@@ -544,7 +580,7 @@ class TestSemanticRules:
     def test_system_type_only_on_event_entity(self) -> None:
         raw = _valid_raw()
         raw["document_types"].append(
-            {"slug": "stammdaten", "name": "Stammdaten", "entity_type": "case", "system_type": "note"}
+            {"slug": "stammdaten", "name": "Stammdaten", "entity_type": "case", "system_type": "crisis"}
         )
         assert "document_types[1].system_type" in _paths(raw)
 

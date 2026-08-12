@@ -191,8 +191,27 @@ class TestStandardpaket:
             "vorlagen": dict(FieldTemplate.objects.filter(facility=facility).values_list("slug", "report_key")),
         }
 
-    @staticmethod
-    def _backfill_ueber_geleerten_bestand(facility):
+    #: Systemtypen des Katalogs VOR der E4-Reduktion (Refs #1850). Migration
+    #: ``0145`` laeuft auf einer echten Instanz vor ``0147`` — sie sieht die
+    #: Werte also noch. Ohne diese Rekonstruktion pruefte der Vergleich unten
+    #: einen Zustand, den es nie gab: ``notiz`` bekaeme seinen Sentinel
+    #: ``excluded`` nicht (der Slug-Zweitweg des Backfills kennt ihn bewusst
+    #: nicht), und der Test schluege an einer Stelle an, an der nichts kaputt
+    #: ist.
+    _VOR_E4_SYSTEM_TYPES = {
+        "kontakt": "contact",
+        "krisengespraech": "crisis",
+        "medizinische-versorgung": "medical",
+        "spritzentausch": "needle_exchange",
+        "begleitung": "accompaniment",
+        "beratungsgespraech": "counseling",
+        "vermittlung": "referral",
+        "notiz": "note",
+        "hausverbot": "ban",
+    }
+
+    @classmethod
+    def _backfill_ueber_geleerten_bestand(cls, facility):
         """Den Vor-Migrations-Zustand herstellen und die Migration laufen lassen.
 
         **Das Leeren ist der Kern.** Ohne es waere jeder Vergleich tautologisch:
@@ -200,9 +219,16 @@ class TestStandardpaket:
         Schluessel und taete dann gar nichts. Zwei vertauschte Zuordnungen in der
         YAML passierten so jede Zusicherung und broechen erst auf einer echten
         Bestandsinstanz am E13-Konflikt.
+
+        Zum Vor-Zustand gehoeren seit E4 auch die Systemtypen: ``.update()``
+        umgeht bewusst ``save()`` (dessen Immutabilitaets-Guard genau das
+        verhindert) — hier wird kein Bestand veraendert, sondern ein
+        historischer nachgestellt.
         """
         DocumentType.objects.filter(facility=facility).update(report_key=None)
         FieldTemplate.objects.filter(facility=facility).update(report_key=None)
+        for slug, system_type in cls._VOR_E4_SYSTEM_TYPES.items():
+            DocumentType.objects.filter(facility=facility, slug=slug).update(system_type=system_type)
         with connection.schema_editor() as schema_editor:
             _BACKFILL.backfill_report_key(django_apps, schema_editor)
 

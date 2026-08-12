@@ -1470,18 +1470,19 @@ msgstr "Color"
 msgid "Systemtyp"
 msgstr "System type"
 
-#: src/core/models/document_type.py:201
+#: src/core/models/document_type.py:198
 msgid ""
-"Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. "
-"Nach Erstellung unveränderbar. Nur „Hausverbot“ und „Krisengespräch“ steuern "
-"App-Logik; die übrigen Werte ordnen den Typ ausschließlich dem Beispiel-"
-"Sachbericht zu, „Notiz“ schließt ihn davon aus (wie ohne Systemtyp)."
+"Stabile Kennung für Bann-Logik und Krisen-Highlight. Nach Erstellung "
+"unveränderbar. Beide Werte steuern App-Verhalten: „Hausverbot“ speist Banner, "
+"Zeitstrom-Filter und Übergabe, „Krisengespräch“ die Krisen-Hervorhebung. Für "
+"die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig, nicht "
+"dieses Feld."
 msgstr ""
-"Stable identifier for ban logic, crisis highlighting and the activity report "
-"export. Immutable once created. Only \"Facility ban\" and \"Crisis "
-"counseling\" drive application logic; the remaining values assign the type "
-"solely to the example activity report, and \"Note\" excludes it from that "
-"report (same as having no system type)."
+"Stable identifier for ban logic and crisis highlighting. Immutable once "
+"created. Both values drive application behaviour: \"Facility ban\" feeds the "
+"banner, the timeline filter and the handover, \"Crisis counseling\" the crisis "
+"highlight. Assigning the type to a report is the report key's job, not this "
+"field's."
 
 #: src/core/models/document_type.py:210 src/core/packages/loader.py:414
 #: src/templates/core/config/document_types/detail.html:41
@@ -10480,3 +10481,12 @@ msgid ""
 "{count} Ereignisse mit einem Berichtsschlüssel, den kein Bericht "
 "kennt"
 msgstr "{count} events with a report key that no report knows"
+
+#: src/core/packages/loader.py:600
+#, python-format
+msgid ""
+"Der Systemtyp %(alt)r ist entfallen und wurde nicht übernommen — die "
+"Berichtszuordnung trägt seither der Berichtsschlüssel (report_key)."
+msgstr ""
+"The system type %(alt)r has been removed and was not applied — the report "
+"assignment has since been carried by the report key (report_key)."

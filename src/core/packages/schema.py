@@ -113,7 +113,19 @@ _REPORT_KEY_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 # Eintrag: sie heissen als Berichtsschluessel genauso und laufen ohnehin
 # unveraendert durch. Uebrig bleiben die beiden Ausschluss-Werte, fuer die der
 # Backfill denselben Sentinel setzt.
-_FORMER_REPORT_KEY_VALUES: dict[str, str] = {"note": EXCLUDED, "ban": EXCLUDED}
+_FORMER_REPORT_KEY_VALUES: dict[str, str | None] = {"note": EXCLUDED, "ban": EXCLUDED}
+
+# Dieselbe Mechanik auf der ``system_type``-Achse (E4, Refs #1850): die sieben
+# reinen Berichtswerte sind aus dem Enum entfernt. Ziel ``None`` heisst hier
+# **entfaellt** — anders als beim Berichtsschluessel gibt es nichts zu
+# uebersetzen: die Zuordnung, die diese Werte trugen, steht seit E3 im
+# ``report_key``, und die Datenmigration ``0147`` nullt den Bestand. Ohne die
+# Toleranz waere jedes fremde Paket mit ``system_type: medical`` schlagartig
+# unladbar — der Grund, warum dieser Mechanismus Vorbedingung von E4 war und
+# nicht bloss Bequemlichkeit.
+_FORMER_SYSTEM_TYPE_VALUES: dict[str, str | None] = dict.fromkeys(
+    ("contact", "medical", "needle_exchange", "accompaniment", "counseling", "referral", "note")
+)
 _OPTION_KEYS = frozenset({"slug", "label", "is_active"})
 # Refs #1749 (ADR-040): Schluessel, die v1 weiterhin ANNIMMT, aber nicht mehr
 # anwendet. ``category`` ist mit dem Wegfall von ``DocumentType.category``
@@ -249,7 +261,9 @@ class DocumentTypeDef:
     ``ignored_keys`` trägt die im Paket gesetzten, aber nicht mehr angewendeten
     Schlüssel (Refs #1749) — der Loader macht daraus je Typ eine Warnung im
     Report, damit ein Bestands-Paket zwar weiter lädt, sein toter Schlüssel
-    aber nicht stillschweigend verschwindet.
+    aber nicht stillschweigend verschwindet. ``removed_system_types`` ist das
+    Gegenstück auf der **Wert**-Ebene (E4, Refs #1850): ein ehemals gültiger
+    ``system_type``, der weggefallen ist.
     """
 
     slug: str
@@ -267,6 +281,7 @@ class DocumentTypeDef:
     conditions: tuple[ConditionDef, ...] | None = None
     ignored_keys: tuple[str, ...] = ()
     normalized_report_keys: tuple[tuple[str, str], ...] = ()
+    removed_system_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -393,8 +408,8 @@ def _tolerant_key_value(
     path: str,
     errors: Errors,
     *,
-    normalisierung: dict[str, str],
-) -> tuple[str | None, tuple[tuple[str, str], ...]]:
+    normalisierung: dict[str, str | None],
+) -> tuple[str | None, tuple[tuple[str, str | None], ...]]:
     """Toleranter Schluesselwert mit Normalisierung statt Werteliste (Refs #1849).
 
     Anders als :func:`_optional_enum_value`: ein **unbekannter** Wert ist KEIN
@@ -408,14 +423,14 @@ def _tolerant_key_value(
     zurueckgegeben, damit der Loader daraus eine sichtbare Warnung macht (kein
     Silent-Rewrite — dieselbe Linie wie bei ``ignored_keys``).
 
+    **``neu is None`` heisst „entfaellt"** (E4, Refs #1850): der Altwert wird
+    nicht uebersetzt, sondern weggelassen — der Fall des reduzierten
+    ``system_type``, dessen Werte keinen Nachfolger auf derselben Achse haben.
+    Deshalb entscheidet die **Mitgliedschaft** im Dict, nicht ein truthy Ziel.
+
     Fehlender Schluessel und ``null`` sind gleichbedeutend „keine Angabe": das
     Format kennt keinen Weg, einen gesetzten Schluessel zu ENTFERNEN — das
     verbietet die Aenderbarkeits-Regel ohnehin (Konzept §2.1).
-
-    **Fuer E4 wiederverwendbar:** dieselbe Mechanik traegt dort die Reduktion
-    des ``system_type``-Enums (Alt-Pakete mit ``system_type: medical`` bleiben
-    ladbar) — sie ist die Vorbedingung jener Etappe, nicht bloss eine
-    Bequemlichkeit hier.
     """
     value = data.get(key)
     if value is None:
@@ -428,9 +443,9 @@ def _tolerant_key_value(
             )
         )
         return None, ()
-    ersatz = normalisierung.get(value)
-    if ersatz is None:
+    if value not in normalisierung:
         return value, ()
+    ersatz = normalisierung[value]
     return ersatz, ((value, ersatz),)
 
 
@@ -438,7 +453,39 @@ def _optional_report_key_value(
     data: dict[str, Any], key: str, path: str, errors: Errors
 ) -> tuple[str | None, tuple[tuple[str, str], ...]]:
     """:func:`_tolerant_key_value` mit der Berichtsschluessel-Normalisierung."""
-    return _tolerant_key_value(data, key, path, errors, normalisierung=_FORMER_REPORT_KEY_VALUES)
+    wert, paare = _tolerant_key_value(data, key, path, errors, normalisierung=_FORMER_REPORT_KEY_VALUES)
+    # ``_FORMER_REPORT_KEY_VALUES`` kennt kein „entfaellt" — auf dieser Achse
+    # hat jeder Altwert einen Nachfolger. Das Filtern ist die Typ-Verengung
+    # dieser Zusage, kein Fallback.
+    return wert, tuple((alt, neu) for alt, neu in paare if neu is not None)
+
+
+def _optional_system_type_value(
+    data: dict[str, Any], key: str, path: str, errors: Errors
+) -> tuple[str | None, tuple[str, ...]]:
+    """``system_type`` mit der E4-Toleranz (Refs #1850) — Altwerte entfallen.
+
+    Anders als der Berichtsschluessel bleibt der Systemtyp gegen eine
+    **Werteliste** geprueft: er ist ein eingefrorenes Kern-Datenmodell-Enum
+    (RFC #1748), ein
+    unbekannter Wert ist dort ein Tippfehler und keine fremde Konvention. Neu
+    ist allein die Toleranz fuer die sieben Werte, die es bis E4 gab — sie
+    fallen weg statt das Paket zu sprengen. Zurueck kommen sie als
+    Altwert-Liste, damit der Loader daraus eine sichtbare Warnung macht.
+    """
+    vorher = len(errors)
+    wert, paare = _tolerant_key_value(data, key, path, errors, normalisierung=_FORMER_SYSTEM_TYPE_VALUES)
+    if len(errors) > vorher:
+        # Die Format-Meldung des Berichtsschluessels suggeriert einen freien
+        # Schluesselraum, den es fuer das eingefrorene Enum nicht gibt — fuer
+        # Paketautoren zaehlt die Werteliste (z. B. beim Tippfehler
+        # ``needle-exchange`` fuer einen entfallenen Altwert).
+        errors[vorher:] = [(_join(path, key), f"Unzulässiger Wert — erlaubt: null, {_allowed(_SYSTEM_TYPES)}.")]
+        return None, ()
+    if wert is not None and wert not in _SYSTEM_TYPES:
+        errors.append((_join(path, key), f"Unzulässiger Wert — erlaubt: null, {_allowed(_SYSTEM_TYPES)}."))
+        return None, ()
+    return wert, tuple(alt for alt, _neu in paare)
 
 
 def _allowed(allowed: frozenset[str]) -> str:
@@ -632,15 +679,17 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
     sensitivity = _enum_value(
         data, "sensitivity", path, errors, _SENSITIVITIES, default=DocumentType.Sensitivity.NORMAL.value
     )
-    system_type = _optional_enum_value(data, "system_type", path, errors, _SYSTEM_TYPES)
+    system_type, removed_system_types = _optional_system_type_value(data, "system_type", path, errors)
     min_contact_stage = _optional_enum_value(data, "min_contact_stage", path, errors, _CONTACT_STAGES)
     report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
     icon = _str_value(data, "icon", path, errors)
     color = _str_value(data, "color", path, errors)
     sort_order = _int_value(data, "sort_order", path, errors)
 
-    # ``system_type`` steuert Bann-Logik/Krisen-Highlight/Sachbericht-Export —
-    # alles Ereignis-Semantik. An Person-/Fall-Typen wäre er bedeutungslos.
+    # ``system_type`` steuert Bann-Logik und Krisen-Highlight (E4, Refs #1850:
+    # die Berichts-Zuordnung ist raus) — beides Ereignis-Semantik. An
+    # Person-/Fall-Typen wäre er bedeutungslos. Ein **entfallener** Altwert
+    # loest hier nichts aus: er ist zu diesem Zeitpunkt bereits ``None``.
     if system_type is not None and entity_type != DocumentType.EntityType.EVENT.value:
         errors.append(
             (
@@ -672,6 +721,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         conditions=conditions,
         ignored_keys=ignored_keys,
         normalized_report_keys=normalized_report_keys,
+        removed_system_types=removed_system_types,
     )
 
 

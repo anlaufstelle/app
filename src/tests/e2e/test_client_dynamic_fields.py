@@ -111,9 +111,9 @@ def _create_field_template(page, base_url, name, field_type, *, encrypted=False)
 def _create_entity_doctype(page, base_url, name, entity_type) -> str:
     """Wegwerf-Dokumentationstyp für ``entity_type`` (``client``/``case``) anlegen.
 
-    Anders als ``test_config_ui._create_doctype`` bleibt ``system_type`` LEER:
-    ``ConfigDocumentTypeForm.clean`` lässt einen Systemtyp nur bei
-    ``entity_type=event`` zu. Gibt die UUID aus der Detail-URL zurück.
+    ``system_type`` bleibt LEER: ``ConfigDocumentTypeForm.clean`` lässt einen
+    Systemtyp nur bei ``entity_type=event`` zu. Gibt die UUID aus der Detail-URL
+    zurück.
     """
     page.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
     page.fill("input#id_name", name)

@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
-from core.seed.constants import EVENT_DATA_POOLS
+from core.seed.constants import EVENT_DATA_POOLS, EVENT_TYPE_WEIGHTS
 from core.services.file_vault import encrypt_dynamic_data
 
 
@@ -66,7 +66,13 @@ def build_data_template(doc_type: DocumentType) -> list[dict]:
 
 
 def random_data(dt_name: str, dt_data_templates: dict) -> dict:
-    """Generate plausible random ``data_json`` for a given document type."""
+    """Generate plausible random ``data_json`` for a given document type.
+
+    ``dt_name`` ist der Poolschluessel: der ``system_type``, solange es einen
+    gibt, sonst der Name des Dokumentationstyps. Seit E4 (Refs #1850) tragen
+    nur noch ``ban`` und ``crisis`` einen Systemtyp — die uebrigen Pools haengen
+    deshalb am deutschen Namen aus ``default.yaml``.
+    """
     pool = EVENT_DATA_POOLS.get(dt_name)
     if pool:
         template = copy.deepcopy(random.choice(pool))
@@ -77,12 +83,12 @@ def random_data(dt_name: str, dt_data_templates: dict) -> dict:
             template["ausgabe"] = max(1, template["ausgabe"] + random.randint(-2, 5))
             template["rueckgabe"] = min(template["rueckgabe"], template["ausgabe"])
         # Dynamic dates for accompaniment
-        if dt_name == "accompaniment":
+        if dt_name == "Begleitung":
             offset = random.randint(-7, 14)
             template["datum"] = (date.today() + timedelta(days=offset)).isoformat()
             template["uhrzeit"] = f"{random.randint(8, 16):02d}:{random.choice(['00', '30'])}"
         # Dynamic next appointment for counseling
-        if dt_name == "counseling":
+        if dt_name == "Beratungsgespräch":
             template["naechster-termin"] = (date.today() + timedelta(days=random.randint(7, 28))).isoformat()
         return template
 
@@ -220,23 +226,11 @@ def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client
     for dt in doc_types:
         dt_data_templates[dt.system_type or dt.name] = build_data_template(dt)
 
-    # Realistic weighting by system_type: bans extremely rare
-    dt_weights = {
-        "contact": 40,
-        "crisis": 12,
-        "medical": 10,
-        "needle_exchange": 10,
-        "accompaniment": 8,
-        "counseling": 8,
-        "referral": 5,
-        "note": 6,
-        "ban": 0.2,
-    }
     # Refs #1730: ``dt.system_type`` ist nullable (``str | None``); ``dict.get``
-    # verlangt einen ``str``-Key. ``"" `` matcht ebenfalls keinen Eintrag im
-    # Pool und faellt damit — wie ``None`` es taete — verhaltensgleich auf den
-    # Default-Weight 5 zurueck.
-    weights = [dt_weights.get(dt.system_type or "", 5) for dt in doc_types]
+    # verlangt einen ``str``-Key. Der Name ist der Zweitschluessel (Idiom von
+    # ``dt_data_templates`` oben) — ein einrichtungseigener Typ ohne Eintrag
+    # faellt weiterhin auf den Default-Weight 5 zurueck.
+    weights = [EVENT_TYPE_WEIGHTS.get(dt.system_type or dt.name, 5) for dt in doc_types]
     today = timezone.localdate()
 
     now = timezone.now()

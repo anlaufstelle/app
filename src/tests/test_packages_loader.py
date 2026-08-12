@@ -40,7 +40,7 @@ def _raw(**overrides: Any) -> dict[str, Any]:
                 "slug": "kontakt",
                 "name": "Kontakt",
                 "entity_type": "event",
-                "system_type": "contact",
+                "system_type": "crisis",
                 "icon": "users",
                 "color": "indigo",
                 "sort_order": 3,
@@ -86,7 +86,7 @@ class TestCreate:
         doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
         assert doc_type.name == "Kontakt"
         assert doc_type.entity_type == "event"
-        assert doc_type.system_type == "contact"
+        assert doc_type.system_type == "crisis"
         assert doc_type.sort_order == 3
         dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
         assert dauer.field_type == "number"
@@ -254,16 +254,16 @@ class TestImmutables:
     def test_system_type_change_is_rejected(self, facility):
         self._seed(facility)
         raw = _raw()
-        raw["document_types"][0]["system_type"] = "crisis"
+        raw["document_types"][0]["system_type"] = "ban"
         self._expect_rejection(facility, raw, "kontakt")
-        assert DocumentType.objects.get(slug="kontakt").system_type == "contact"
+        assert DocumentType.objects.get(slug="kontakt").system_type == "crisis"
 
     def test_system_type_removal_is_rejected(self, facility):
         self._seed(facility)
         raw = _raw()
         del raw["document_types"][0]["system_type"]
         self._expect_rejection(facility, raw, "kontakt")
-        assert DocumentType.objects.get(slug="kontakt").system_type == "contact"
+        assert DocumentType.objects.get(slug="kontakt").system_type == "crisis"
 
     def test_system_type_none_to_value_is_allowed(self, facility):
         raw = _raw()
@@ -275,7 +275,7 @@ class TestImmutables:
 
         assert report.errors == []
         assert report.document_types.updated == ["kontakt"]
-        assert DocumentType.objects.get(slug="kontakt").system_type == "contact"
+        assert DocumentType.objects.get(slug="kontakt").system_type == "crisis"
 
     def test_partial_work_is_rolled_back_completely(self, facility):
         # Erster Typ ist sauber, zweiter kollidiert — nichts darf ankommen.
@@ -453,7 +453,7 @@ class TestDryRun:
     def test_dry_run_reports_errors_and_raises_too(self, facility):
         _load(facility, _raw())
         raw = _raw()
-        raw["document_types"][0]["system_type"] = "crisis"
+        raw["document_types"][0]["system_type"] = "ban"
 
         with pytest.raises(PackageLoadError):
             _load(facility, raw, dry_run=True)
@@ -633,5 +633,57 @@ class TestIgnorierteSchluessel:
 
         report = _load(facility, raw)
 
+        assert report.document_types.unchanged == ["kontakt"]
+        assert report.document_types.updated == []
+
+
+@pytest.mark.django_db
+class TestEntfalleneSystemtypen:
+    """Alt-Pakete mit einem der sieben entfallenen Systemtypen (E4, Refs #1850).
+
+    Dieselben drei Eigenschaften wie bei :class:`TestIgnorierteSchluessel`, nur
+    eine Ebene tiefer: dort ist ein ganzer **Schlüssel** tot, hier sind es
+    einzelne **Werte** eines weiterhin gültigen Schlüssels. Der Unterschied ist
+    für den Betrieb entscheidend, weil ``parse_package`` wirft, *bevor* ein
+    ``PackageV1`` existiert: ohne diese Toleranz machte ein einziges
+    ``system_type: medical`` das ganze fremde Paket unladbar — der Grund, warum
+    der Mechanismus Vorbedingung dieser Etappe war (Konzept #1847 §E4).
+    """
+
+    def _alt_paket(self) -> dict[str, Any]:
+        raw = _raw()
+        raw["document_types"][0]["system_type"] = "medical"
+        return raw
+
+    def test_altpaket_laedt_ohne_fehler(self, facility):
+        report = _load(facility, self._alt_paket())
+
+        assert report.errors == []
+        assert report.document_types.created == ["kontakt"]
+
+    def test_entfallener_wert_kommt_nicht_in_der_zeile_an(self, facility):
+        _load(facility, self._alt_paket())
+
+        assert DocumentType.objects.get(facility=facility, slug="kontakt").system_type is None
+
+    def test_entfallener_wert_erzeugt_eine_warnung_je_typ(self, facility):
+        report = _load(facility, self._alt_paket())
+
+        assert [identifier for identifier, _message in report.warnings] == ["kontakt"]
+        assert "medical" in report.warnings[0][1]
+
+    def test_zweiter_lauf_bleibt_konfliktfrei(self, facility):
+        """Der E13-Guard darf am Altwert nicht anschlagen.
+
+        Der Systemtyp ist unveränderbar („gesetzt → anders/weg" ist ein
+        Konflikt). Käme der Altwert in der Zeile an, stünde der zweite Lauf
+        desselben Pakets gegen einen Bestand, den das Enum nicht mehr kennt —
+        und die Einrichtung hätte einen dauerhaft unladbaren Katalog.
+        """
+        _load(facility, self._alt_paket())
+
+        report = _load(facility, self._alt_paket())
+
+        assert report.errors == []
         assert report.document_types.unchanged == ["kontakt"]
         assert report.document_types.updated == []

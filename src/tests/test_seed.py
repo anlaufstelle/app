@@ -779,27 +779,31 @@ def test_reseed_does_not_touch_field_groups_of_doctype_without_groups_key():
 # Seed über den Paket-Loader (M2 P12, Refs #1058)
 # ---------------------------------------------------------------------------
 
-# Slug → (Name, Kategorie, Systemtyp, Sensibilität, Icon, Farbe, sort_order,
+# Slug → (Name, Systemtyp, Sensibilität, Icon, Farbe, sort_order,
 # Mindest-Kontaktstufe). Werte 1:1 aus dem vor-M2-Python-Katalog; die Slugs
 # sind exakt das Ergebnis des 0117-Backfills (E16) — eine Abweichung würde in
 # jeder Bestands-Einrichtung einen Duplikat-Typ erzeugen.
+# E4 (Refs #1850): Systemtyp nur noch an „Krisengespräch" und „Hausverbot" —
+# die sieben reinen Berichtswerte sind aus dem Enum entfernt, die
+# Berichts-Zuordnung steht seit E3 im ``report_key``
+# (``test_packages_report_key.py`` prüft sie).
 EXPECTED_DOCUMENT_TYPES = {
-    "kontakt": ("Kontakt", "contact", "normal", "users", "indigo", 0, None),
+    "kontakt": ("Kontakt", None, "normal", "users", "indigo", 0, None),
     "krisengespraech": ("Krisengespräch", "crisis", "elevated", "alert-triangle", "amber", 1, None),
-    "medizinische-versorgung": ("Medizinische Versorgung", "medical", "high", "heart", "rose", 2, None),
-    "spritzentausch": ("Spritzentausch", "needle_exchange", "normal", "repeat", "teal", 3, None),
-    "begleitung": ("Begleitung", "accompaniment", "normal", "map-pin", "green", 4, None),
+    "medizinische-versorgung": ("Medizinische Versorgung", None, "high", "heart", "rose", 2, None),
+    "spritzentausch": ("Spritzentausch", None, "normal", "repeat", "teal", 3, None),
+    "begleitung": ("Begleitung", None, "normal", "map-pin", "green", 4, None),
     "beratungsgespraech": (
         "Beratungsgespräch",
-        "counseling",
+        None,
         "elevated",
         "message-circle",
         "purple",
         5,
         "qualified",
     ),
-    "vermittlung": ("Vermittlung", "referral", "normal", "share-2", "blue", 6, None),
-    "notiz": ("Notiz", "note", "normal", "file-text", "gray", 7, None),
+    "vermittlung": ("Vermittlung", None, "normal", "share-2", "blue", 6, None),
+    "notiz": ("Notiz", None, "normal", "file-text", "gray", 7, None),
     "hausverbot": ("Hausverbot", "ban", "elevated", "slash", "red", 8, None),
 }
 
@@ -981,27 +985,32 @@ def test_second_seed_run_reports_everything_unchanged(facility):
 
 
 @pytest.mark.django_db
-def test_seed_adopts_existing_document_type_without_system_type(facility):
+def test_seed_adopts_existing_document_type_without_report_key(facility):
     """E16-Kompatibilität: Bestands-Typ ``Kontakt`` wird übernommen, nicht dupliziert.
 
     Szenario einer Bestands-Installation: der Typ existiert mit dem Namen
     „Kontakt", hat über das 0117-Backfill den Slug ``kontakt`` bekommen und
-    trägt (noch) keinen ``system_type``. Der Seed muss genau diese Zeile
+    trägt (noch) keinen Berichtsschlüssel. Der Seed muss genau diese Zeile
     aktualisieren — ein zweiter „Kontakt"-Typ wäre der Top-Fehlerfall.
+
+    Bis E4 (Refs #1850) lief der Beleg über ``system_type``; der Katalog führt
+    für „Kontakt" seit der Enum-Reduktion keinen mehr, und die Nachtrag-Regel
+    (leer → gesetzt erlaubt, gesetzt → anders nicht) gilt unverändert für den
+    Schlüssel, der die Zuordnung heute trägt.
     """
     existing = DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
     )
     assert existing.slug == "kontakt"
-    assert existing.system_type is None
+    assert existing.report_key is None
 
     doc_types.seed_document_types(facility)
 
     assert DocumentType.objects.filter(facility=facility, name="Kontakt").count() == 1
     assert DocumentType.objects.filter(facility=facility, slug="kontakt").count() == 1
     existing.refresh_from_db()
-    assert existing.system_type == "contact"
+    assert existing.report_key == "contact"
     assert existing.icon == "users"
     assert existing.entity_type == "event"
 

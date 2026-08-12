@@ -387,8 +387,9 @@ class TestSammler:
 
 # --- Verfuegbarkeit + Strukturinvarianz (DB) ---------------------------------
 
-# Universum der Erststufe: alle neun ``system_type``-Werte plus die beiden
-# „ohne Aussage"-Faelle. ``slug`` ist NOT NULL — dort gibt es kein ``None``.
+# Universum der Erststufe: alle ``system_type``-Werte (seit E4/Refs #1850 die
+# beiden Verhaltens-Schluessel) plus die beiden „ohne Aussage"-Faelle. ``slug``
+# ist NOT NULL — dort gibt es kein ``None``.
 _SYSTEM_TYPES = (*DocumentType.SystemType.values, None, "")
 
 

@@ -163,7 +163,6 @@ class TestCreateOrUpdateSnapshotBranches:
         dt = DocumentType.objects.create(
             facility=facility,
             name="Kontakt-JG",
-            system_type=DocumentType.SystemType.CONTACT,
             report_key="contact",
         )
         jan = datetime(2025, 1, 15, 10, 0)
@@ -185,8 +184,8 @@ class TestCreateOrUpdateSnapshotBranches:
         """
         dt = DocumentType.objects.create(
             facility=facility,
-            name="Begleitung",
-            system_type=DocumentType.SystemType.ACCOMPANIMENT,
+            name="Krisengespräch",
+            system_type=DocumentType.SystemType.CRISIS,
         )
         jan = datetime(2025, 1, 15, 10, 0)
         _make_event(facility, client_identified, dt, staff_user, jan)
@@ -196,8 +195,8 @@ class TestCreateOrUpdateSnapshotBranches:
         # Genau ein Entry, korrekt enriched
         assert len(entries) == 1
         entry = entries[0]
-        assert entry["name"] == "Begleitung"
-        assert entry["system_type"] == "accompaniment"
+        assert entry["name"] == "Krisengespräch"
+        assert entry["system_type"] == "crisis"
         assert entry["document_type_id"] == str(dt.id)
 
     def test_by_document_type_enriched_empty_when_no_system_type(

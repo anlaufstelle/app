@@ -230,13 +230,37 @@ MILESTONE_TITLES = [
 ]
 
 # Typ-spezifische Event-Daten-Pools für Bulk-Generierung.
+# Der Schlüssel ist der ``system_type``, solange es einen gibt, sonst der Name
+# des Dokumentationstyps aus ``core/packages/default.yaml`` (E4, Refs #1850:
+# die sieben Berichts-Systemtypen sind entfallen — ``crisis`` und ``ban``
+# bleiben, weil sie App-Verhalten steuern). Ein Name-Schlüssel muss deshalb
+# EXAKT dem ``name``-Wert im Paket entsprechen, sonst greift der Pool nicht und
+# der Seed füllt den Typ über die generische Fallback-Generierung.
 # Refs #1730: explizit annotiert — die Pools je Typ haben unterschiedliche
+# Realistische Ereignis-Gewichtung je Dokumentationstyp: Hausverbote extrem
+# selten. Geschluesselt wie ``EVENT_DATA_POOLS`` — ``system_type``, solange es
+# einen gibt (``crisis``/``ban``), sonst der ``name`` aus ``default.yaml``
+# (E4, Refs #1850). Die Namens-Kopplung ist byte-genau und per Test gegen die
+# default.yaml gepinnt (test_seed_pool_name_pinning) — ein Rename dort wuerde
+# die Seed-Daten sonst still auf Fallbacks degradieren.
+EVENT_TYPE_WEIGHTS: dict[str, float] = {
+    "Kontakt": 40,
+    "crisis": 12,
+    "Medizinische Versorgung": 10,
+    "Spritzentausch": 10,
+    "Begleitung": 8,
+    "Beratungsgespräch": 8,
+    "Vermittlung": 5,
+    "Notiz": 6,
+    "ban": 0.2,
+}
+
 # Value-Shapes (str/int/bool/list je Key); ohne Annotation joint mypy die
 # Werttypen ueber alle Top-Level-Keys hinweg bis zu ``object`` zusammen, was
 # transitiv (ueber den seed-Command) in core.seed.events zu Folgefehlern beim
 # Konsum (``random.choice``/``deepcopy``) führt.
 EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
-    "contact": [
+    "Kontakt": [
         {
             "dauer": 15,
             "leistungen": ["beratung", "essen"],
@@ -342,7 +366,7 @@ EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
             "weitervermittlung": "Flüchtlingsberatung",
         },
     ],
-    "medical": [
+    "Medizinische Versorgung": [
         {
             "art-der-versorgung": "wundversorgung",
             "notiz-medizin": "Schnittwunde am Unterarm gereinigt und verbunden.",
@@ -384,7 +408,7 @@ EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
             "krankenhaus": True,
         },
     ],
-    "needle_exchange": [
+    "Spritzentausch": [
         {"ausgabe": 10, "rueckgabe": 10},
         {"ausgabe": 5, "rueckgabe": 3},
         {"ausgabe": 20, "rueckgabe": 18},
@@ -396,7 +420,7 @@ EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
         {"ausgabe": 10, "rueckgabe": 10},
         {"ausgabe": 25, "rueckgabe": 20},
     ],
-    "accompaniment": [
+    "Begleitung": [
         {"ziel": "Jobcenter", "notiz-begleitung": "Termin zur Leistungsklärung, Unterlagen dabei."},
         {"ziel": "Hausarzt Dr. Müller", "notiz-begleitung": "Blutabnahme und Befundbesprechung."},
         {"ziel": "Amtsgericht", "notiz-begleitung": "Anhörung wegen offener Geldstrafe."},
@@ -408,7 +432,7 @@ EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
         {"ziel": "Ausländerbehörde", "notiz-begleitung": "Duldung verlängern, alle Dokumente dabei."},
         {"ziel": "Wohnungsamt", "notiz-begleitung": "Antrag auf Dringlichkeitsschein eingereicht."},
     ],
-    "counseling": [
+    "Beratungsgespräch": [
         {
             "thema": "Wohnsituation und Mietschulden",
             "dauer": 45,
@@ -460,7 +484,7 @@ EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
             "vereinbarungen": "Wochenplan erstellen, regelmäßig zum Frühstück kommen.",
         },
     ],
-    "note": [
+    "Notiz": [
         {"notiz": "Team-Info: Klientel wirkte heute sehr aufgelöst, bitte im Blick behalten."},
         {"notiz": "Neue Telefonnummer hinterlegt."},
         {"notiz": "Hat sich länger nicht blicken lassen. Bei nächstem Kontakt nachfragen."},

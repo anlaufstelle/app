@@ -544,7 +544,7 @@ Kontakte,42
   "population_note": "alle Ereignisse im Zeitraum",
   "field_specs": [{"key": "document_type", "label": "Dokumentationstyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
-  "records": [{"document_type": "Kontakt", "system_type": "contact", "count": 42}],
+  "records": [{"document_type": "Kontakt", "system_type": "", "count": 42}],
   "completeness": [{"code": "…", "message": "…", "severity": "warning"}]
 }
 ```
@@ -602,9 +602,9 @@ Examples from the activity report:
 - **No generic PDF pipeline.** The pipeline formats are CSV, JSON and XML; the activity report PDF remains a separate, unchanged path.
 - **`core/reporting` lies outside the mypy strict zone and outside the mutmut paths.** The code is annotated strict-compatibly; adding it to those gates changes build configuration and is an open maintainer decision.
 - **The mapping is hard-coded.** The key → report row mapping (`CATEGORY_MAP`) lives in the backend module; there is **no** configuration field for it. Since #1849 only **which key** a type or field carries is configurable — not what a key maps to ([ADR-042](../adr/042-report-key-berichtszuordnung.md), German). That is a decision, not a transitional state ([ADR-038](../adr/038-reporting-plugin-backends.md), update of 2026-08-04): a config UI would make report figures movable by a click. Changing a mapping is therefore a code change with review — and `DocumentType.category` was never used for reporting and no longer exists ([ADR-040](../adr/040-documenttype-category-entfernt.md), German).
-- **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new values** — an additional report category is no reason to extend a core data-model enum; that is what `report_key` is for. Since #1849 only `ban` and `crisis` have any effect at all; the remaining seven values are inert and are scheduled for removal (stage E4, #1850). A freeze guard pins the list (`src/tests/test_system_type.py`).
+- **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03) — and reduced to **two** values as of #1850: `ban` and `crisis`, the two that carry application behaviour (ban logic, crisis highlight, `ban-overview`). **No new values** — an additional report category is no reason to extend a core data-model enum; that is what `report_key` is for. A freeze guard pins the list (`src/tests/test_system_type.py`).
 
- The preparatory stages E1–E3 are done: declarative binding (#1824), visibility (#1848) and the `report_key` introduction (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)). The report mapping no longer runs through `system_type`/`slug` at all; what is left for stage E4 (#1850) is removing the seven now-inert enum values.
+ The full track from concept #1847 is thereby complete: declarative binding (#1824), visibility (#1848), the `report_key` introduction (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)) and the reduction (#1850). The report mapping no longer runs through `system_type`/`slug` at all. A package that still carries one of the seven former values remains loadable: the value is dropped with a warning in the load report.
 
 
 ---
@@ -664,4 +664,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-12 -->
-<!-- source-hash: 8ee4c188e745b61673eb3f4c338c68ed35465414 -->
+<!-- source-hash: 1b75541bb74049d6f1006cb38ac30517ed99e23d -->

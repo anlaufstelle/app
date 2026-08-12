@@ -17,7 +17,13 @@
 # * ``system_type`` muss bei allen Typen mitgefuehrt werden, die einen haben:
 #   der Loader erlaubt ``None`` -> Wert (Bestand ohne Systemtyp), aber weder
 #   Wechsel noch Entfernen (E13). Ein fehlender Schluessel waere beim
-#   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler.
+#   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler. Seit E4 (Refs #1850)
+#   sind das nur noch ``krisengespraech`` (``crisis``) und ``hausverbot``
+#   (``ban``) — die uebrigen sieben Werte sind aus dem Enum entfernt, ihre
+#   Zeilen hier entfallen ersatzlos. Gegen einen Bestand, den Migration
+#   ``0147`` bereits genullt hat, ist das kein E13-Konflikt (leer bleibt
+#   leer); ein aelteres Paket, das sie noch mitfuehrt, laedt weiterhin — der
+#   Wert entfaellt dann mit einer Warnung im Load-Report.
 # * ``report_key`` (E3, Refs #1849) muss EXAKT dem Ergebnis des Backfills aus
 #   Migration ``0145`` entsprechen — Typ-Ebene wie Feld-Ebene. Ein abweichender
 #   Wert waere gegen eine aktualisierte Bestands-Einrichtung ein
@@ -252,7 +258,6 @@ document_types:
   - slug: kontakt
     name: Kontakt
     entity_type: event
-    system_type: contact
     report_key: contact
     sensitivity: normal
     icon: users
@@ -295,7 +300,6 @@ document_types:
   - slug: medizinische-versorgung
     name: Medizinische Versorgung
     entity_type: event
-    system_type: medical
     report_key: medical
     sensitivity: high
     icon: heart
@@ -309,7 +313,6 @@ document_types:
   - slug: spritzentausch
     name: Spritzentausch
     entity_type: event
-    system_type: needle_exchange
     report_key: needle_exchange
     sensitivity: normal
     icon: repeat
@@ -322,7 +325,6 @@ document_types:
   - slug: begleitung
     name: Begleitung
     entity_type: event
-    system_type: accompaniment
     report_key: accompaniment
     sensitivity: normal
     icon: map-pin
@@ -337,7 +339,6 @@ document_types:
   - slug: beratungsgespraech
     name: Beratungsgespräch
     entity_type: event
-    system_type: counseling
     report_key: counseling
     sensitivity: elevated
     min_contact_stage: qualified
@@ -355,7 +356,6 @@ document_types:
   - slug: vermittlung
     name: Vermittlung
     entity_type: event
-    system_type: referral
     report_key: referral
     sensitivity: normal
     icon: share-2
@@ -365,7 +365,6 @@ document_types:
   - slug: notiz
     name: Notiz
     entity_type: event
-    system_type: note
     report_key: excluded
     sensitivity: normal
     icon: file-text

@@ -63,20 +63,19 @@ def _berlin(jahr, monat, tag, stunde=12, minute=0):
 def doc_type_kontakt(facility):
     """Erstschluessel-Fall: gesetzter ``report_key`` (Erststufe seit E3, #1849).
 
-    ``system_type`` laeuft mit, wie der Backfill ihn hinterlaesst — die beiden
-    duerfen auseinanderlaufen (E-D), hier tun sie es nicht.
+    Einen begleitenden ``system_type`` gibt es dazu nicht mehr — ``contact`` ist
+    mit E4 (Refs #1850) aus dem Enum entfernt.
     """
     return DocumentType.objects.create(
         facility=facility,
         name="Ambulanz",
-        system_type=DocumentType.SystemType.CONTACT,
         report_key="contact",
     )
 
 
 @pytest.fixture
-def doc_type_beratung_ohne_system_type(facility):
-    """Die beiden Achsen sind unabhaengig (E-D): Schluessel ja, Systemtyp nein."""
+def doc_type_beratung_mit_paket_slug(facility):
+    """Schluessel gesetzt, Slug aus dem Paket — der Slug traegt nichts bei (E-E)."""
     return DocumentType.objects.create(
         facility=facility,
         name="Beratungsgespräch",
@@ -167,13 +166,13 @@ class TestBuildDataset:
         assert result.summary == {"total": 2}
 
     def test_kategorien_je_monat_sortiert(
-        self, backend, facility, staff_user, doc_type_kontakt, doc_type_beratung_ohne_system_type
+        self, backend, facility, staff_user, doc_type_kontakt, doc_type_beratung_mit_paket_slug
     ):
         """Zwei Kategorien, und die Zeilenordnung ist (Monat, Kategorie) —
         wertunabhaengig, damit ``ORDER_INPUT`` traegt."""
         _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 1, 10))
-        _event(facility, doc_type_beratung_ohne_system_type, staff_user, _berlin(2026, 1, 11))
-        _event(facility, doc_type_beratung_ohne_system_type, staff_user, _berlin(2026, 1, 12))
+        _event(facility, doc_type_beratung_mit_paket_slug, staff_user, _berlin(2026, 1, 11))
+        _event(facility, doc_type_beratung_mit_paket_slug, staff_user, _berlin(2026, 1, 12))
         _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 2, 5))
 
         result = backend.build_dataset(facility, JANUAR, FEBRUAR_ENDE)
@@ -263,9 +262,7 @@ class TestBuildDataset:
 
     def test_fremde_facility_ist_unsichtbar(self, backend, facility, staff_user):
         fremd = Facility.objects.create(organization=Organization.objects.create(name="Fremd"), name="Fremdstelle")
-        fremd_typ = DocumentType.objects.create(
-            facility=fremd, name="Ambulanz", system_type=DocumentType.SystemType.CONTACT, report_key="contact"
-        )
+        fremd_typ = DocumentType.objects.create(facility=fremd, name="Ambulanz", report_key="contact")
         _event(fremd, fremd_typ, staff_user, _berlin(2026, 1, 10))
 
         assert backend.build_dataset(facility, JANUAR, FEBRUAR_ENDE).records == []
@@ -284,7 +281,7 @@ class TestIsAvailable:
     def test_positiv_ueber_den_report_key(self, backend, facility, doc_type_kontakt):
         assert backend.is_available(facility) is True
 
-    def test_positiv_ohne_system_type(self, backend, facility, doc_type_beratung_ohne_system_type):
+    def test_positiv_mit_paket_slug(self, backend, facility, doc_type_beratung_mit_paket_slug):
         assert backend.is_available(facility) is True
 
     def test_negativ_wenn_nur_der_paket_slug_passt(self, backend, facility, doc_type_nur_paket_slug):
@@ -310,13 +307,12 @@ class TestIsAvailable:
 
     def test_negativ_wenn_nur_nicht_ereignis_typen_zugeordnet_sind(self, backend, facility):
         """Refs #1754: Der Bericht zaehlt ``Event``-Zeilen. Ein Personen- oder
-        Fall-Formular mit passendem ``system_type`` erzeugt keine Ereignisse —
+        Fall-Formular mit passendem Berichtsschluessel erzeugt keine Ereignisse —
         der Bericht stuende im Dropdown und zeigte dauerhaft Nullen (dieselbe
         Regel wie in ``client-metrics``)."""
         DocumentType.objects.create(
             facility=facility,
             name="Kontaktprofil",
-            system_type=DocumentType.SystemType.CONTACT,
             report_key="contact",
             entity_type=DocumentType.EntityType.CLIENT,
         )

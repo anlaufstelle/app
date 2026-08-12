@@ -224,6 +224,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
 def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: PackageReport) -> DocumentType | None:
     identifier = doc_def.slug
     _warn_on_ignored_keys(doc_def, report, identifier)
+    _warn_on_removed_system_types(doc_def, report, identifier)
     _warn_on_normalized_report_keys(doc_def, report, identifier)
     desired: dict[str, Any] = {
         "name": doc_def.name,
@@ -592,6 +593,31 @@ def _report_key_conflicts(instance: models.Model, gewuenscht: str | None) -> lis
     if gewuenscht is None or not bestand or bestand == gewuenscht:
         return []
     return [_immutable_message(_("Berichtsschlüssel"), bestand, gewuenscht)]
+
+
+def _warn_on_removed_system_types(doc_def: DocumentTypeDef, report: PackageReport, identifier: str) -> None:
+    """Warnen, wenn ein entfallener ``system_type`` weggelassen wurde (E4, Refs #1850).
+
+    Kein Fehler — das Alt-Paket bleibt ladbar (Werte-Ebenen-Toleranz, Konzept
+    #1847 §E3.8 auf der Systemtyp-Achse). Aber auch kein stiller Wegfall: wer
+    ``system_type: medical`` pflegt, soll im Report lesen, dass der Wert nicht
+    angekommen ist und wo die Zuordnung heute steht. Dieselbe Linie wie
+    :func:`_warn_on_ignored_keys` und
+    :func:`_warn_on_normalized_report_keys`.
+    """
+    for alt in doc_def.removed_system_types:
+        report.warnings.append(
+            (
+                identifier,
+                str(
+                    _(
+                        "Der Systemtyp %(alt)r ist entfallen und wurde nicht übernommen — die "
+                        "Berichtszuordnung trägt seither der Berichtsschlüssel (report_key)."
+                    )
+                    % {"alt": alt}
+                ),
+            )
+        )
 
 
 def _warn_on_normalized_report_keys(definition, report: PackageReport, identifier: str) -> None:

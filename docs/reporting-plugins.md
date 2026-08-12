@@ -6,7 +6,7 @@ Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/co
 
 - **Warum das System so aussieht, wie es aussieht:** [ADR-038](adr/038-reporting-plugin-backends.md).
 - **Warum Kleinstfallzahlen unterdrückt werden:** [ADR-023](adr/023-k-anonymization-statistik.md) und #1278.
-- **Warum das Mapping über `system_type` (und den `slug`) läuft und nie über `category`:** [ADR-034](adr/034-config-ui-category-system-type.md), [ADR-038 § 4](adr/038-reporting-plugin-backends.md). `DocumentType.category` ist seit [ADR-040](adr/040-documenttype-category-entfernt.md) entfernt — die Regel ist damit strukturell besiegelt.
+- **Warum das Mapping über `report_key` läuft und nie über `category`:** [ADR-042](adr/042-report-key-berichtszuordnung.md) (superseded [ADR-038 § 4](adr/038-reporting-plugin-backends.md)), [ADR-034](adr/034-config-ui-category-system-type.md). `DocumentType.category` ist seit [ADR-040](adr/040-documenttype-category-entfernt.md) entfernt, und `system_type` trägt seit #1850 nur noch `ban` und `crisis` — die Regel ist damit strukturell besiegelt.
 
 > **Die wichtigste Regel vorweg.** Alles, was ein Backend über `build_dataset()` liefert, ist **roh**. Alles, was das Haus verlässt (Download **und** Panel-Vorschau), läuft vorher durch `prepare_export()`. Wer Zahlen produziert, die extern zirkulieren, muss diesen Hook implementieren — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook).
 
@@ -545,7 +545,7 @@ Kontakte,42
   "population_note": "alle Ereignisse im Zeitraum",
   "field_specs": [{"key": "document_type", "label": "Dokumentationstyp"}],
   "summary": {"total": 42, "k_anonymity_threshold": 5},
-  "records": [{"document_type": "Kontakt", "system_type": "contact", "count": 42}],
+  "records": [{"document_type": "Kontakt", "system_type": "", "count": 42}],
   "completeness": [{"code": "…", "message": "…", "severity": "warning"}]
 }
 ```
@@ -603,9 +603,9 @@ Beispiele aus dem Sachbericht:
 - **Keine generische PDF-Pipeline.** Die Formate der Pipeline sind CSV, JSON und XML; der Sachbericht-PDF bleibt ein eigener, unveränderter Pfad.
 - **`core/reporting` liegt außerhalb der mypy-strict-Zone und der mutmut-Pfade.** Der Code ist strict-kompatibel annotiert; die Aufnahme in die Gates ändert Build-Konfiguration und ist ein offener Maintainer-Entscheid.
 - **Das Mapping ist hart kodiert.** Die Zuordnung Schlüssel → Berichtszeile (`CATEGORY_MAP`) steht im Backend-Modul; es gibt **kein** Konfigurationsfeld dafür. Konfigurierbar ist seit #1849 nur, **welchen Schlüssel** ein Typ oder Feld trägt — nicht, worauf ein Schlüssel abbildet ([ADR-042](adr/042-report-key-berichtszuordnung.md)). Das ist ein Entscheid, kein Übergangszustand ([ADR-038](adr/038-reporting-plugin-backends.md), Update 2026-08-04): eine Config-UI machte Berichtszahlen per Klick verschiebbar. Eine Mapping-Änderung ist damit ein Code-Change mit Review — und `DocumentType.category` wurde fürs Reporting nie verwendet und existiert seit [ADR-040](adr/040-documenttype-category-entfernt.md) nicht mehr.
-- **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). **Keine neuen Werte** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; dafür gibt es `report_key`. Seit #1849 tragen von den neun Werten nur noch `ban` und `crisis` überhaupt eine Wirkung (Bann-Logik, Krisen-Highlight, `ban-overview`); die übrigen sieben sind wirkungslos. Ein Freeze-Guard pinnt die Liste (`src/tests/test_system_type.py`).
+- **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03) — und seit #1850 auf **zwei** Werte reduziert: `ban` und `crisis`, die beiden mit App-Wirkung (Bann-Logik, Krisen-Highlight, `ban-overview`). **Keine neuen Werte** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; dafür gibt es `report_key`. Ein Freeze-Guard pinnt die Liste (`src/tests/test_system_type.py`).
 
- Die vorbereitenden Etappen sind abgeschlossen: deklarative Bindung (#1824), Sichtbarkeit (#1848) und die `report_key`-Einführung (#1849, [ADR-042](adr/042-report-key-berichtszuordnung.md)). Die Berichtszuordnung läuft **weder über `system_type` noch über den Slug** — der Zweitschlüssel aus #1741 ist ersatzlos entfallen. Was für Etappe E4 (#1850) bleibt, ist das Entfernen der sieben jetzt wirkungslosen Enum-Werte.
+ Der Vollstrang aus Konzept #1847 ist damit abgeschlossen: deklarative Bindung (#1824), Sichtbarkeit (#1848), die `report_key`-Einführung (#1849, [ADR-042](adr/042-report-key-berichtszuordnung.md)) und die Reduktion (#1850). Die Berichtszuordnung läuft **weder über `system_type` noch über den Slug** — der Zweitschlüssel aus #1741 ist ersatzlos entfallen. Ein Paket, das einen der sieben Altwerte noch mitführt, lädt weiterhin: der Wert entfällt mit einer Warnung im Load-Report.
 
 
 ---

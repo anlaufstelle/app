@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.reporting.base import EXCLUDED_KEY
 from core.services.system import get_active_bans
 from tests._reporting_helpers import get_sample_report_1_statistics
 
@@ -35,16 +36,15 @@ def doc_type_ban(facility):
 
 @pytest.fixture
 def doc_type_contact(facility):
-    """DocumentType mit system_type=CONTACT — und dem Berichtsschluessel dazu.
+    """DocumentType mit dem Berichtsschluessel ``contact`` — ohne Systemtyp.
 
     Seit E3 (Refs #1849) ist ``report_key`` die Erststufe der
-    Berichtszuordnung; der Backfill gibt einem Bestandstyp mit
-    ``system_type=contact`` genau diesen Wert.
+    Berichtszuordnung, seit E4 (Refs #1850) die einzige: der frueher
+    zusaetzlich gesetzte ``system_type=contact`` existiert nicht mehr.
     """
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt_st",
-        system_type=DocumentType.SystemType.CONTACT,
         report_key="contact",
     )
 
@@ -53,7 +53,7 @@ def doc_type_contact(facility):
 class TestSystemTypeImmutability:
     def test_system_type_immutable_after_creation(self, doc_type_ban):
         """system_type kann nach Erstellung nicht geändert werden."""
-        doc_type_ban.system_type = "contact"
+        doc_type_ban.system_type = "crisis"
         with pytest.raises(ValidationError, match="system_type kann nach Erstellung nicht geändert werden"):
             doc_type_ban.save()
 
@@ -64,10 +64,10 @@ class TestSystemTypeImmutability:
             name="Benutzerdefiniert",
             system_type=None,
         )
-        dt.system_type = "note"
+        dt.system_type = "crisis"
         dt.save()  # Kein Fehler
         dt.refresh_from_db()
-        assert dt.system_type == "note"
+        assert dt.system_type == "crisis"
 
     def test_system_type_same_value_no_error(self, doc_type_ban):
         """Gleiches system_type nochmal setzen ist erlaubt (kein false positive)."""
@@ -156,85 +156,104 @@ class TestSystemTypeNone:
 class TestSystemTypeWertelisteEingefroren:
     """Freeze-Guard fuer die SystemType-Werteliste.
 
-    RFC #1748,
-    Option **O1**, Maintainer-Entscheid 2026-08-03.
+    RFC #1748 hatte die
+    damals neun Werte eingefroren (Option **O1**, Maintainer-Entscheid
+    2026-08-03). Mit Konzept
+    #1847 ist die
+    Richtung entschieden worden und mit E4
+    (#1850) vollzogen:
+    die sieben reinen Berichtswerte (``contact``, ``medical``,
+    ``needle_exchange``, ``accompaniment``, ``counseling``, ``referral``,
+    ``note``) sind **entfernt**; die Berichts-Zuordnung traegt seit E3 allein
+    ``report_key`` (Migration ``0145`` hat den Bestand uebernommen, ``0147``
+    die Altwerte genullt).
 
     **Redaktionsregel: keine neuen Werte ohne App-Logik — Erweiterung nur mit
     RFC-Entscheid (#1748).**
-    Neue Berichts-Zuordnungen laufen ueber das Backend-Mapping, nicht ueber
-    dieses Kern-Datenmodell-Enum.
+    Neue Berichts-Zuordnungen laufen ueber ``report_key`` und die
+    Backend-Deklarationen, nicht ueber dieses Kern-Datenmodell-Enum.
 
     Hintergrund: Die neun Werte entstanden auf einen Schlag als Abbild der
     damaligen Seed-Dokumentationstypen ([ADR-024](../../docs/adr/024-slug-based-identifiers.md)),
     weil ``system_type`` vor M2 der einzige rename-sichere Schluessel war und
-    deshalb auch die reine Berichts-Zuordnung tragen musste. Sie fuellen
-    seitdem **drei** Rollen, und genau diese Aufteilung friert der Test ein:
+    deshalb auch die reine Berichts-Zuordnung tragen musste. Genau diese
+    Doppelnutzung ist jetzt aufgeloest — uebrig bleibt **eine** Rolle:
 
     1. **Verhaltens-Schluessel** (``ban``, ``crisis``) — echte App-Logik
-       (Hausverbot-Banner/Feed/Uebergabe bzw. Krisen-Highlight).
-    2. **Berichts-Zuordnung** (die sieben Werte in ``CATEGORY_MAP``, darunter
-       ``crisis`` ein zweites Mal — die einzige bewusste Doppelrolle mit 1.).
-       Der Systemtyp ist dabei der einzige SICHTBARE, ausdruecklich waehlbare
-       Weg, mit dem eine Einrichtung einen eigenen Dokumentationstyp in den
-       Beispiel-Sachbericht bekommt; daneben greift seit
-       #1741 ein
-       hartkodierter Slug-Zweitschluessel (Refs #1820 §2.5).
-    3. **Ausschluss-Marker** (``note``) — exportseitig identisch mit ``NULL``.
+       (Hausverbot-Banner/Feed/Uebergabe bzw. Krisen-Highlight/Uebergabe).
 
-    Ein zusaetzlicher Wert wuerde die Partition unten sprengen und muesste sich
-    hier einer Rolle zuordnen lassen — das ist der Moment, in dem der
-    RFC-Entscheid faellig wird. Eine Reduktion (Option O2) haengt am offenen
-    Produktentscheid #1741
-    und wird bis dahin nicht verfolgt.
+    Ein zusaetzlicher Wert muesste sich dieser einen Rolle zuordnen lassen —
+    das ist der Moment, in dem der RFC-Entscheid faellig wird.
     """
 
     EINGEFROREN = (
         "ban",
-        "contact",
         "crisis",
-        "medical",
-        "needle_exchange",
-        "accompaniment",
-        "counseling",
-        "referral",
-        "note",
     )
     MIT_APP_LOGIK = frozenset({"ban", "crisis"})
-    AUSSCHLUSS_MARKER = frozenset({"note"})
 
     def test_werteliste_ist_exakt_und_in_reihenfolge_gepinnt(self):
         assert tuple(DocumentType.SystemType.values) == self.EINGEFROREN
 
-    def test_jeder_wert_hat_genau_eine_rolle(self):
-        """Partition ueber die drei Rollen — keine Luecke, keine Ueberlappung."""
-        from core.reporting.backends.sample_report_1 import CATEGORY_MAP
+    def test_jeder_wert_hat_genau_eine_rolle(self, facility, staff_user):
+        """Nur noch EINE Rolle — und der Bericht liest den Systemtyp nicht mehr.
 
-        berichts_zuordnung = set(CATEGORY_MAP)
-        alle = set(self.EINGEFROREN)
+        Die Partition ist nach E4 trivial (jeder Wert traegt App-Logik); der
+        Gehalt steckt in der zweiten Haelfte: ``crisis`` heisst als
+        Berichtsschluessel genauso wie als Systemtyp, ist aber eine ANDERE
+        Achse. Ein Typ mit ``system_type=crisis`` und ohne ``report_key``
+        zaehlt deshalb in keinem Bericht mit — waere der Systemtyp noch
+        Erststufe, stuende hier eine 1.
+        """
+        from core.reporting.registry import get_report_key_vocabulary
 
-        # ``crisis`` traegt App-Logik UND eine Berichts-Zuordnung — die einzige
-        # bewusste Doppelrolle. Ansonsten ist die Aufteilung disjunkt.
-        assert berichts_zuordnung <= alle, "CATEGORY_MAP mappt einen unbekannten system_type"
-        assert self.MIT_APP_LOGIK & berichts_zuordnung == {"crisis"}
-        assert self.AUSSCHLUSS_MARKER & berichts_zuordnung == set()
-        assert self.MIT_APP_LOGIK | berichts_zuordnung | self.AUSSCHLUSS_MARKER == alle
+        assert set(self.EINGEFROREN) == self.MIT_APP_LOGIK
+        # Namensgleichheit ohne Bindung: derselbe String, zwei Achsen.
+        assert "crisis" in get_report_key_vocabulary()
 
-    def test_note_ist_exportseitig_identisch_mit_keinem_systemtyp(self, facility, staff_user):
-        """Der Hilfetext behauptet „wie ohne Systemtyp" — hier ist der Beleg.
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Krise ohne Berichtsschlüssel",
+            system_type=DocumentType.SystemType.CRISIS,
+        )
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=True,
+            created_by=staff_user,
+        )
 
-        Beide Typen liefern denselben Beitrag zum Bericht (naemlich keinen) und
-        schlagen gleichermassen in der Vollstaendigkeits-Warnung auf. Der reale
-        Unterschied liegt ausserhalb des Exports: ein gesetztes ``note`` ist
-        unveraenderbar dokumentiert, ``NULL`` darf ein Paketlauf spaeter noch
-        belegen.
+        today = date.today()
+        stats = get_sample_report_1_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
+        assert stats["total"] == 0
+
+    def test_ausschluss_liegt_am_report_key_nicht_mehr_am_systemtyp(self, facility, staff_user):
+        """Der Ausschluss-Marker ist von ``note`` auf ``report_key=excluded`` gewandert.
+
+        Drei Typen, ein Beleg (E4, Refs #1850): der ausdruecklich
+        ausgeschlossene, ein Verhaltens-Typ ohne Berichtsschluessel und einer
+        ganz ohne alles liefern denselben Beitrag zum Bericht — naemlich
+        keinen. Der Unterschied liegt allein im Vollstaendigkeitshinweis: die
+        beiden schluessellosen Typen sind die echte Luecke
+        (#1819), der
+        ausgeschlossene nicht. Ein gesetzter ``system_type`` rettet dabei
+        nichts mehr — genau das ist der Vollzug dieser Etappe.
         """
         from core.reporting.registry import get_backend
 
-        for name, system_type in (("Notiz-Typ", DocumentType.SystemType.NOTE), ("Ohne Systemtyp", None)):
+        typen = (
+            ("Ausgeschlossen", None, EXCLUDED_KEY),
+            ("Krise ohne Schlüssel", DocumentType.SystemType.CRISIS, None),
+            ("Ohne alles", None, None),
+        )
+        for name, system_type, report_key in typen:
             doc_type = DocumentType.objects.create(
                 facility=facility,
                 name=name,
                 system_type=system_type,
+                report_key=report_key,
             )
             Event.objects.create(
                 facility=facility,
@@ -251,7 +270,6 @@ class TestSystemTypeWertelisteEingefroren:
 
         assert result.summary["total"] == 0
         assert result.summary["by_category"] == []
-        # Beide Ereignisse zaehlen gemeinsam in die eine Warnung — kein
-        # Sonderweg fuer den Marker.
+        # Nur die beiden schluessellosen Typen sind eine Luecke.
         (issue,) = [i for i in result.completeness if i.code == "unmapped_system_types"]
         assert issue.count == 2

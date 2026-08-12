@@ -16,7 +16,8 @@ from core.models import (
     User,
 )
 from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
-from tests._reporting_helpers import get_sample_report_1_statistics, report_key_fuer
+from core.reporting.base import EXCLUDED_KEY
+from tests._reporting_helpers import get_sample_report_1_statistics
 
 
 @pytest.fixture
@@ -47,15 +48,15 @@ def staff_user(facility):
     )
 
 
-# E3 (Refs #1849): ``report_key`` folgt dem Backfill — so sieht ein Bestand
-# nach dem Update aus (``report_key_fuer`` bildet dieselbe Regel ab).
+# E3/E4 (Refs #1849, #1850): Die Berichtszuordnung steht im ``report_key`` —
+# so sieht ein Bestand nach dem Update aus. Der ``system_type`` bleibt nur
+# dort, wo er App-Verhalten traegt (Hausverbot).
 @pytest.fixture
 def doc_type_kontakt(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        system_type=DocumentType.SystemType.CONTACT,
-        report_key=report_key_fuer(DocumentType.SystemType.CONTACT),
+        report_key="contact",
     )
 
 
@@ -64,8 +65,7 @@ def doc_type_notiz(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Notiz",
-        system_type=DocumentType.SystemType.NOTE,
-        report_key=report_key_fuer(DocumentType.SystemType.NOTE),
+        report_key=EXCLUDED_KEY,
     )
 
 
@@ -75,7 +75,7 @@ def doc_type_hausverbot(facility):
         facility=facility,
         name="Hausverbot",
         system_type=DocumentType.SystemType.BAN,
-        report_key=report_key_fuer(DocumentType.SystemType.BAN),
+        report_key=EXCLUDED_KEY,
     )
 
 
@@ -434,16 +434,15 @@ class TestSampleReport1PdfKAnonSuppression:
     Roh-Fallzahlen aus, waehrend die Suppression nur im On-Screen-Bericht lief.
     """
 
-    def _mk_events(self, facility, user, system_type, n):
+    def _mk_events(self, facility, user, report_key, n):
         from core.models import DocumentType
 
         dt = DocumentType.objects.create(
             facility=facility,
-            name=f"DT-{system_type}",
-            system_type=system_type,
+            name=f"DT-{report_key}",
             # E3 (Refs #1849): Erststufe der Berichtszuordnung ist der
-            # ``report_key`` — wie ihn der Backfill vergeben haette.
-            report_key=report_key_fuer(system_type),
+            # ``report_key`` — seit E4 (Refs #1850) die einzige Achse.
+            report_key=report_key,
         )
         for _ in range(n):
             Event.objects.create(
@@ -456,12 +455,11 @@ class TestSampleReport1PdfKAnonSuppression:
             )
 
     def test_generate_sample_report_1_pdf_routes_figures_through_suppression(self, facility, admin_user, monkeypatch):
-        from core.models import DocumentType
         from core.services.system import export as sys_export
 
-        self._mk_events(facility, admin_user, DocumentType.SystemType.CONTACT, 10)  # Kontakte = 10 (sichtbar)
-        self._mk_events(facility, admin_user, DocumentType.SystemType.CRISIS, 3)  # Beratung = 3 (< 5)
-        self._mk_events(facility, admin_user, DocumentType.SystemType.MEDICAL, 2)  # Versorgung = 2 (< 5)
+        self._mk_events(facility, admin_user, "contact", 10)  # Kontakte = 10 (sichtbar)
+        self._mk_events(facility, admin_user, "crisis", 3)  # Beratung = 3 (< 5)
+        self._mk_events(facility, admin_user, "medical", 2)  # Versorgung = 2 (< 5)
 
         captured = {}
 

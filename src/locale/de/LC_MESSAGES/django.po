@@ -1481,17 +1481,19 @@ msgstr "Farbe"
 msgid "Systemtyp"
 msgstr "Systemtyp"
 
-#: src/core/models/document_type.py:201
+#: src/core/models/document_type.py:198
 msgid ""
-"Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. "
-"Nach Erstellung unveränderbar. Nur „Hausverbot“ und „Krisengespräch“ steuern "
-"App-Logik; die übrigen Werte ordnen den Typ ausschließlich dem Beispiel-"
-"Sachbericht zu, „Notiz“ schließt ihn davon aus (wie ohne Systemtyp)."
+"Stabile Kennung für Bann-Logik und Krisen-Highlight. Nach Erstellung "
+"unveränderbar. Beide Werte steuern App-Verhalten: „Hausverbot“ speist Banner, "
+"Zeitstrom-Filter und Übergabe, „Krisengespräch“ die Krisen-Hervorhebung. Für "
+"die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig, nicht "
+"dieses Feld."
 msgstr ""
-"Stabile Kennung für Bann-Logik, Krisen-Highlight und Sachbericht-Export. "
-"Nach Erstellung unveränderbar. Nur „Hausverbot“ und „Krisengespräch“ steuern "
-"App-Logik; die übrigen Werte ordnen den Typ ausschließlich dem Beispiel-"
-"Sachbericht zu, „Notiz“ schließt ihn davon aus (wie ohne Systemtyp)."
+"Stabile Kennung für Bann-Logik und Krisen-Highlight. Nach Erstellung "
+"unveränderbar. Beide Werte steuern App-Verhalten: „Hausverbot“ speist Banner, "
+"Zeitstrom-Filter und Übergabe, „Krisengespräch“ die Krisen-Hervorhebung. Für "
+"die Zuordnung zu einem Bericht ist der Berichtsschlüssel zuständig, nicht "
+"dieses Feld."
 
 #: src/core/models/document_type.py:210 src/core/packages/loader.py:414
 #: src/templates/core/config/document_types/detail.html:41
@@ -10582,3 +10584,12 @@ msgid ""
 msgstr ""
 "{count} Ereignisse mit einem Berichtsschlüssel, den kein Bericht "
 "kennt"
+
+#: src/core/packages/loader.py:600
+#, python-format
+msgid ""
+"Der Systemtyp %(alt)r ist entfallen und wurde nicht übernommen — die "
+"Berichtszuordnung trägt seither der Berichtsschlüssel (report_key)."
+msgstr ""
+"Der Systemtyp %(alt)r ist entfallen und wurde nicht übernommen — die "
+"Berichtszuordnung trägt seither der Berichtsschlüssel (report_key)."

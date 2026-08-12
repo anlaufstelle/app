@@ -153,7 +153,7 @@ class TestFieldConditionsEndToEnd:
         _create_field_template(page, base_url, target_name, "textarea", required=True)
         _create_field_template(page, base_url, file_name, "file")
 
-        # --- Setup: Wegwerf-DocType (system_type=note) + Zuordnung ------------
+        # --- Setup: Wegwerf-DocType (ohne Systemtyp) + Zuordnung --------------
         doctype_pk = _create_doctype(page, base_url, doctype_name)
         created_event_url = None
         try:

@@ -79,7 +79,8 @@ document_types:
   - slug: kontakt            # Lookup-Key — muss exakt stimmen
     name: Kontakt
     entity_type: event       # event | client | case — unveränderlich
-    system_type: contact     # nur bei entity_type: event; immer mitführen
+    # system_type: crisis    # nur ban | crisis, nur bei entity_type: event;
+    #                        # wo einer existiert, immer mitführen
     report_key: contact      # Berichtszuordnung; leer→gesetzt ok, gesetzt→anders nicht
     sensitivity: normal
     icon: users
@@ -156,7 +157,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `slug` | Slug | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich |
 | `name` | nicht-leerer String | **Pflicht** | muss im Paket eindeutig sein |
 | `entity_type` | `event`, `client`, `case` | `event` | **Unveränderlich** nach dem Anlegen |
-| `system_type` | `ban`, `contact`, `crisis`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert` |
+| `system_type` | `ban`, `crisis` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert`. Seit #1850 nur noch die beiden Werte mit App-Wirkung |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
 | `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
 | `report_key` | Schlüssel (`a-z`, `0-9`, `_`) oder `null` | `null` | Berichtszuordnung des Typs (#1849). **Unveränderlich**, Ausnahme `null → Wert`; `null`/weglassen = keine Angabe |
@@ -171,6 +172,8 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 > **Ehemals gültige Werte werden normalisiert:** `report_key: note` und `report_key: ban` werden zu `excluded` (dem Sentinel „gehört ausdrücklich in keinen Bericht") — mit einer **Warnung** im Report, damit die Übersetzung nicht still passiert. Die sieben zählenden Werte (`contact`, `crisis`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`) heißen als Berichtsschlüssel genauso und laufen unverändert durch.
 >
 > **Weglassen heißt „keine Angabe", nicht „entfernen":** anders als bei `system_type` ist ein fehlender `report_key` gegen einen gesetzten Bestandswert **kein** Fehler — jedes vor dieser Änderung veröffentlichte Paket bleibt gegen eine aktualisierte Instanz ladbar. Ein gesetzter Schlüssel lässt sich über das Paketformat nicht entfernen; das verbietet die Änderbarkeits-Regel ohnehin.
+
+> **Entfallene `system_type`-Werte (#1850):** Die sieben reinen Berichtswerte (`contact`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note`) sind aus dem Enum entfernt. Ein Paket, das einen davon noch mitführt, **bleibt ladbar** — der Wert entfällt ersatzlos, mit einer **Warnung** im Report (dieselbe Linie wie bei `category`: kein Fehler, aber auch kein stiller Wegfall). Ein *unbekannter* Wert bleibt dagegen ein Fehler: Anders als beim `report_key` ist der Werteraum hier eine feste, eingefrorene Liste (RFC #1748) und kein Fremdvokabular. Die Berichtszuordnung, die die sieben Werte trugen, steht im `report_key`; beim Update hat sie eine Datenmigration übernommen. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
 > **Ignorierter Schlüssel `category` (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** `DocumentType.category` gibt es nicht mehr. Ein Paket darf den Schlüssel weiterhin enthalten — es bleibt gültig und ladbar, es gibt **keine** Schemaversion 2, aber der Wert wird nicht angewendet. Jeder betroffene Typ erscheint mit einer **Warnung** im Report („Diese Schlüssel gibt es im Datenmodell nicht mehr …“), damit die Zeile nicht still verschwindet. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
@@ -325,7 +328,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 **Identität**
 
 - **Slugs nie ändern.** Ein geänderter Slug ist ein neues Objekt — in jeder Bestands-Einrichtung entsteht ein Duplikat. Wer einen anderen Slug will, legt einen neuen Typ an und deaktiviert den alten.
-- **`system_type` immer mitführen**, wo einer existiert. Fehlender Schlüssel bedeutet `null`, und `Wert → null` ist ein Fehler, der den ganzen Lauf abbricht.
+- **`system_type` immer mitführen**, wo einer existiert (`ban`/`crisis`). Fehlender Schlüssel bedeutet `null`, und `Wert → null` ist ein Fehler, der den ganzen Lauf abbricht. Für die sieben entfallenen Werte gilt das **nicht** mehr: sie sind ersatzlos aus dem Paket zu nehmen (bis dahin entfallen sie beim Laden mit einer Warnung).
 - **`report_key` mitführen**, wo eine Berichtszuordnung gewollt ist. Weglassen ist gefahrlos (der Bestand bleibt unangetastet), aber dann entscheidet allein, was schon in der Einrichtung steht — ein frisch angelegter Typ erscheint in **keinem** Bericht. Ein *abweichender* Wert gegen einen gesetzten Bestandswert bricht dagegen den ganzen Lauf ab.
 - **`entity_type` immer mitführen**, wenn der Typ kein Ereignis-Typ ist. Fehlt der Schlüssel, gilt `event` — bei einem Bestandstyp mit `client`/`case` ist das ein Immutabilitäts-Fehler.
 - **`field_type` (und bei Bedarf `is_encrypted`) immer mitführen.** Fehlt `field_type`, gilt `text`; gegen eine bestehende Vorlage mit einem anderen Typ ist das ein Immutabilitäts-Fehler, der den **gesamten** Lauf abbricht. Kein stiller Footgun — der Fehler ist laut und pfadgenau, aber ein völlig vermeidbarer Abbruch, der beim Weiterreichen eines Pakets erst beim Empfänger auftritt.

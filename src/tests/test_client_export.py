@@ -77,7 +77,7 @@ def doc_type(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
-        system_type=DocumentType.SystemType.CONTACT,
+        report_key="contact",
     )
 
 

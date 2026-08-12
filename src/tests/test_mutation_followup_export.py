@@ -46,11 +46,12 @@ from core.models import (
     FieldTemplate,
 )
 from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
+from core.reporting.base import EXCLUDED_KEY
 from core.services.system import (
     _build_event_row,
     _resolve_field_value,
 )
-from tests._reporting_helpers import get_sample_report_1_statistics, report_key_fuer
+from tests._reporting_helpers import get_sample_report_1_statistics
 
 # ---------------------------------------------------------------------------
 # Helper / Factories
@@ -90,18 +91,17 @@ def _make_doc_type(
     facility,
     *,
     name: str,
-    system_type: str | None = None,
+    report_key: str | None = None,
     sensitivity: str = DocumentType.Sensitivity.NORMAL,
 ) -> DocumentType:
-    """``report_key`` folgt dem Backfill (E3, Refs #1849) — der Erststufe der
-    Berichtszuordnung seit dieser Etappe.
+    """Der ``report_key`` traegt die Berichtszuordnung (E3, Refs #1849) — seit
+    E4 (Refs #1850) als einzige Achse.
     """
     return DocumentType.objects.create(
         facility=facility,
         name=name,
         sensitivity=sensitivity,
-        system_type=system_type,
-        report_key=report_key_fuer(system_type),
+        report_key=report_key,
     )
 
 
@@ -608,18 +608,18 @@ class TestBuildEventRowVisibility:
 
 @pytest.mark.django_db
 class TestSampleReport1StatisticsCategoryAggregation:
-    """``SAMPLE_REPORT_1_CATEGORY_MAP`` faltet system_types auf Kategorien.
+    """``CATEGORY_MAP`` faltet Berichtsschluessel auf Kategorien.
 
     Erwartetes Mapping (siehe Source):
     - contact → Kontakte
     - crisis, counseling → Beratung
     - medical, needle_exchange → Versorgung
     - accompaniment, referral → Vermittlung
-    - note, ban → ausgeschlossen
+    - excluded/kein Schluessel → ausgeschlossen
     """
 
-    def _make_event(self, facility, client, when, system_type, staff_user):
-        dt = _make_doc_type(facility, name=f"DT-{system_type}", system_type=system_type)
+    def _make_event(self, facility, client, when, report_key, staff_user):
+        dt = _make_doc_type(facility, name=f"DT-{report_key}", report_key=report_key)
         return Event.objects.create(
             facility=facility,
             client=client,
@@ -629,27 +629,27 @@ class TestSampleReport1StatisticsCategoryAggregation:
             created_by=staff_user,
         )
 
-    def test_total_excludes_unmapped_system_types(self, facility, client_identified, staff_user):
-        """note + ban müssen aus ``total`` herausfallen.
+    def test_total_excludes_unmapped_report_keys(self, facility, client_identified, staff_user):
+        """Ausgeschlossene und schluessellose Typen müssen aus ``total`` herausfallen.
 
-        Mutation ``if cat is None: continue`` → ``pass`` würde unmapped
-        system_types in total mitzählen.
+        Mutation ``if cat is None: continue`` → ``pass`` würde sie in total
+        mitzählen.
         """
         today = date.today()
         when = _aware(today, 10)
-        self._make_event(facility, client_identified, when, DocumentType.SystemType.CONTACT, staff_user)
-        self._make_event(facility, client_identified, when, DocumentType.SystemType.NOTE, staff_user)
-        self._make_event(facility, client_identified, when, DocumentType.SystemType.BAN, staff_user)
+        self._make_event(facility, client_identified, when, "contact", staff_user)
+        self._make_event(facility, client_identified, when, EXCLUDED_KEY, staff_user)
+        self._make_event(facility, client_identified, when, None, staff_user)
 
         stats = get_sample_report_1_statistics(facility, today, today)
-        assert stats["total"] == 1, "Nur CONTACT zaehlt, NOTE+BAN sind im MAP nicht gelistet"
+        assert stats["total"] == 1, "Nur contact zaehlt; excluded und leer sind im MAP nicht gelistet"
 
     def test_categories_collapse_multiple_system_types_into_one_label(self, facility, client_identified, staff_user):
         """``medical`` und ``needle_exchange`` müssen beide in ``Versorgung`` zählen."""
         today = date.today()
         when = _aware(today, 10)
-        self._make_event(facility, client_identified, when, DocumentType.SystemType.MEDICAL, staff_user)
-        self._make_event(facility, client_identified, when, DocumentType.SystemType.NEEDLE_EXCHANGE, staff_user)
+        self._make_event(facility, client_identified, when, "medical", staff_user)
+        self._make_event(facility, client_identified, when, "needle_exchange", staff_user)
 
         stats = get_sample_report_1_statistics(facility, today, today)
         cats = dict(stats["by_category"])
@@ -657,20 +657,12 @@ class TestSampleReport1StatisticsCategoryAggregation:
         assert stats["total"] == 2
 
     def test_each_mapped_category_appears_with_correct_label(self, facility, client_identified, staff_user):
-        """Mutation an SAMPLE_REPORT_1_CATEGORY_MAP (z.B. ``contact: "Beratung"``)
-        würde hier auffallen."""
+        """Mutation an CATEGORY_MAP (z.B. ``contact: "Beratung"``) würde hier auffallen."""
         today = date.today()
         when = _aware(today, 11)
         # Je ein Event pro Kategorie
-        for st in [
-            DocumentType.SystemType.CONTACT,
-            DocumentType.SystemType.CRISIS,
-            DocumentType.SystemType.COUNSELING,
-            DocumentType.SystemType.MEDICAL,
-            DocumentType.SystemType.ACCOMPANIMENT,
-            DocumentType.SystemType.REFERRAL,
-        ]:
-            self._make_event(facility, client_identified, when, st, staff_user)
+        for key in ["contact", "crisis", "counseling", "medical", "accompaniment", "referral"]:
+            self._make_event(facility, client_identified, when, key, staff_user)
 
         stats = get_sample_report_1_statistics(facility, today, today)
         cats = dict(stats["by_category"])
@@ -706,7 +698,7 @@ class TestSampleReport1StatisticsDateBoundaries:
         dt = _make_doc_type(
             facility,
             name=f"DT-{when.isoformat()}",
-            system_type=DocumentType.SystemType.CONTACT,
+            report_key="contact",
         )
         return Event.objects.create(
             facility=facility,
@@ -756,7 +748,7 @@ class TestSampleReport1StatisticsAgeClusters:
     def test_anonymous_events_excluded_from_age_clusters(self, facility, staff_user):
         today = date.today()
         when = _aware(today, 10)
-        dt = _make_doc_type(facility, name="Anon", system_type=DocumentType.SystemType.CONTACT)
+        dt = _make_doc_type(facility, name="Anon", report_key="contact")
         Event.objects.create(
             facility=facility,
             client=None,  # anonym
@@ -789,7 +781,7 @@ class TestSampleReport1StatisticsAgeClusters:
                 dt = _make_doc_type(
                     facility,
                     name=f"AC-DT-{cluster}-{i}",
-                    system_type=DocumentType.SystemType.CONTACT,
+                    report_key="contact",
                 )
                 Event.objects.create(
                     facility=facility,
@@ -829,7 +821,7 @@ class TestSampleReport1StatisticsAgeClusters:
                 dt = _make_doc_type(
                     facility,
                     name=f"SO-DT-{cluster}-{i}",
-                    system_type=DocumentType.SystemType.CONTACT,
+                    report_key="contact",
                 )
                 Event.objects.create(
                     facility=facility,
@@ -859,7 +851,7 @@ class TestSampleReport1StatisticsUniqueClients:
         """
         today = date.today()
         when = _aware(today, 10)
-        dt = _make_doc_type(facility, name="UC", system_type=DocumentType.SystemType.CONTACT)
+        dt = _make_doc_type(facility, name="UC", report_key="contact")
         for _i in range(3):
             Event.objects.create(
                 facility=facility,
@@ -877,7 +869,7 @@ class TestSampleReport1StatisticsUniqueClients:
         anonyme Events mitzählen."""
         today = date.today()
         when = _aware(today, 10)
-        dt = _make_doc_type(facility, name="UC2", system_type=DocumentType.SystemType.CONTACT)
+        dt = _make_doc_type(facility, name="UC2", report_key="contact")
         # 1 identified
         Event.objects.create(
             facility=facility,
@@ -904,7 +896,7 @@ class TestSampleReport1StatisticsUniqueClients:
         """Zwei verschiedene Clients → 2; jeder mit 2 Events."""
         today = date.today()
         when = _aware(today, 10)
-        dt = _make_doc_type(facility, name="UC3", system_type=DocumentType.SystemType.CONTACT)
+        dt = _make_doc_type(facility, name="UC3", report_key="contact")
         cli_a = Client.objects.create(
             facility=facility,
             pseudonym="UC-A",

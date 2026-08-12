@@ -28,14 +28,10 @@ from core.reporting.backends.sample_report_1 import (
     CATEGORY_MAP,
     SampleReport1Backend,
 )
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import EXCLUDED_KEY, CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
-from tests._reporting_helpers import report_key_fuer
 
 pytestmark = pytest.mark.django_db
-
-# Sentinel: „nicht angegeben" — ``None`` heisst hier „kein Berichtsschluessel".
-_ABGELEITET = object()
 
 DATE_FROM = date(2025, 5, 1)
 DATE_TO = date(2025, 5, 31)
@@ -158,24 +154,24 @@ def user(facility):
 
 @pytest.fixture
 def make_doc_type(facility):
-    def _make(name, system_type, *, slug="", doc_facility=None, report_key=_ABGELEITET):
+    def _make(name, report_key=None, *, slug="", doc_facility=None):
         """``slug=""`` laesst ``save()`` den Slug aus dem Namen ableiten (Bestand).
 
         Der explizite Slug ist fuer den Zweitschluessel aus #1741 noetig: dort
         muss Name und Slug auseinanderfallen koennen, sonst prueft der Test nur
         die Namensableitung mit.
 
-        ``report_key`` folgt per Default dem Backfill (E3, Refs #1849) — so
-        sieht ein migrierter Bestand aus, und nur so pruefen die Zahlen-Tests
-        weiterhin den Erstschluessel statt bloss den Slug-Zweitschluessel. Die
-        Zweitschluessel-Tests setzen ihn ausdruecklich auf ``None``.
+        Der **Berichtsschluessel** ist das zweite Positionsargument (E4, Refs
+        #1850): er ist die Achse, auf der dieser Bericht bindet. Bis E4 stand
+        dort der ``system_type``, aus dem der Schluessel abgeleitet wurde — die
+        sieben Werte gibt es nicht mehr, und der Umweg verschleierte, was den
+        Treffer erzeugt. ``None`` heisst „keine Zuordnung".
         """
         return DocumentType.objects.create(
             facility=doc_facility or facility,
             name=name,
-            system_type=system_type,
             slug=slug,
-            report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+            report_key=report_key,
         )
 
     return _make
@@ -218,13 +214,13 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
     still uebersprungene (nicht gemappte) Typen, Ereignisse ohne Person,
     Zeitraum-/``is_deleted``-/Facility-Filter.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    krise = make_doc_type("Krisengespräch", DocumentType.SystemType.CRISIS)
-    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    medizin = make_doc_type("Medizinische Versorgung", DocumentType.SystemType.MEDICAL)
-    spritzen = make_doc_type("Spritzentausch", DocumentType.SystemType.NEEDLE_EXCHANGE)
-    begleitung = make_doc_type("Begleitung", DocumentType.SystemType.ACCOMPANIMENT)
-    vermittlung = make_doc_type("Vermittlung", DocumentType.SystemType.REFERRAL)
+    kontakt = make_doc_type("Kontakt", "contact")
+    krise = make_doc_type("Krisengespräch", "crisis")
+    beratung = make_doc_type("Beratungsgespräch", "counseling")
+    medizin = make_doc_type("Medizinische Versorgung", "medical")
+    spritzen = make_doc_type("Spritzentausch", "needle_exchange")
+    begleitung = make_doc_type("Begleitung", "accompaniment")
+    vermittlung = make_doc_type("Vermittlung", "referral")
     # Zwei Typen OHNE jede Berichtszuordnung — die echte Luecke (Refs #1819).
     # Bis E3 stand hier ein ``note``-Typ; der traegt seit dem Backfill den
     # Sentinel ``excluded`` und ist damit eine Aussage, keine Luecke.
@@ -263,7 +259,7 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
     fremder_typ = DocumentType.objects.create(
         facility=fremde_facility,
         name="Kontakt",
-        system_type=DocumentType.SystemType.CONTACT,
+        report_key="contact",
     )
     make_event(fremder_typ, None, event_facility=fremde_facility)
 
@@ -278,8 +274,8 @@ def kleine_daten(facility, make_doc_type, make_client, make_event):
     ohne Personenbezug) mit Rohzahl 1 — beide muessen im Export ohne Zahl
     erscheinen.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    kontakt = make_doc_type("Kontakt", "contact")
+    beratung = make_doc_type("Beratungsgespräch", "counseling")
     ohne_zuordnung = make_doc_type("Sonstiges", None)
     person = make_client("JA-50", Client.AgeCluster.U18)
 
@@ -295,8 +291,8 @@ def kleine_daten(facility, make_doc_type, make_client, make_event):
 @pytest.fixture
 def grosse_daten(facility, make_doc_type, make_client, make_event):
     """Datensatz vollstaendig **ab** der Schwelle — nichts wird unterdrueckt."""
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    kontakt = make_doc_type("Kontakt", "contact")
+    beratung = make_doc_type("Beratungsgespräch", "counseling")
     personen = [make_client(f"JA-6{index}", Client.AgeCluster.AGE_18_26) for index in range(5)]
 
     for person in personen:
@@ -314,8 +310,8 @@ def sekundaer_daten(facility, make_doc_type, make_client, make_event):
     Kontakte 6 (>= k), Beratung 2 (< k): waere nur Beratung unterdrueckt, liesse
     sie sich aus der Randsumme zurueckrechnen, also faellt auch Kontakte.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    kontakt = make_doc_type("Kontakt", "contact")
+    beratung = make_doc_type("Beratungsgespräch", "counseling")
     personen = [make_client(f"JA-7{index}", Client.AgeCluster.AGE_18_26) for index in range(5)]
 
     for person in personen:
@@ -335,7 +331,7 @@ def rueckrechnungs_daten(facility, make_doc_type, make_client, make_event):
     sie ueber ``9 − 5`` exakt zurueck. Sekundaer-Suppression greift bei nur
     einer Cluster-Zeile nicht.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+    kontakt = make_doc_type("Kontakt", "contact")
     person = make_client("JA-80", Client.AgeCluster.U18)
 
     for _index in range(4):
@@ -353,7 +349,7 @@ def unterdrueckte_randsumme_daten(facility, make_doc_type, make_client, make_eve
     Bliebe die Unmapped-Zahl stehen, waere die unterdrueckte Randsumme als
     ``events_in_period − 5`` ablesbar.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+    kontakt = make_doc_type("Kontakt", "contact")
     ohne_zuordnung = make_doc_type("Sonstiges", None)
     person = make_client("JA-90", Client.AgeCluster.AGE_18_26)
 
@@ -376,8 +372,8 @@ def identitaet_a_daten(facility, make_doc_type, make_client, make_event):
     Personen ⇒ ``unique_clients`` < k bleibt unterdrueckt und faellt als
     Rechengroesse weg.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    kontakt = make_doc_type("Kontakt", "contact")
+    beratung = make_doc_type("Beratungsgespräch", "counseling")
     ohne_zuordnung = make_doc_type("Sonstiges", None)
 
     jung = make_client("JA-A1", Client.AgeCluster.U18)
@@ -405,8 +401,8 @@ def identitaet_b_daten(facility, make_doc_type, make_client, make_event):
     Zahlen kollisionsfrei: keine ±-Kombination aus bis zu drei veroeffentlichten
     Zahlen (23, 15, 8, 9, 8, 7 + Records) ergibt 4 oder 5.
     """
-    kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
+    kontakt = make_doc_type("Kontakt", "contact")
+    beratung = make_doc_type("Beratungsgespräch", "counseling")
     ohne_zuordnung = make_doc_type("Sonstiges", None)
 
     jung = make_client("JA-B1", Client.AgeCluster.U18)
@@ -528,9 +524,9 @@ class TestBuildDataset:
     def test_nur_nicht_gemappte_typen_liefern_leere_kategorien_aber_altersgruppen(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        """Bestandsverhalten: Notiz/Hausverbot zaehlen in Altersgruppen und Personen mit."""
-        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
-        hausverbot = make_doc_type("Hausverbot", DocumentType.SystemType.BAN)
+        """Bestandsverhalten: ausgeschlossene Typen zaehlen in Altersgruppen und Personen mit."""
+        notiz = make_doc_type("Notiz", EXCLUDED_KEY)
+        hausverbot = make_doc_type("Hausverbot", EXCLUDED_KEY)
         person = make_client("JA-40", Client.AgeCluster.UNKNOWN)
         make_event(notiz, person)
         make_event(hausverbot, person)
@@ -566,7 +562,7 @@ class TestBuildDataset:
 
 class TestValidateCompleteness:
     def test_ohne_luecken_keine_issues(self, backend, facility, make_doc_type, make_client, make_event):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        kontakt = make_doc_type("Kontakt", "contact")
         person = make_client("JA-10", Client.AgeCluster.AGE_18_26)
         make_event(kontakt, person)
         make_event(kontakt, person)
@@ -578,8 +574,8 @@ class TestValidateCompleteness:
     ):
         """Guard gegen Drift zwischen ``CATEGORY_MAP`` und dem Unmapped-Filter."""
         person = make_client("JA-11", Client.AgeCluster.AGE_18_26)
-        for system_type in CATEGORY_MAP:
-            make_event(make_doc_type(f"DT-{system_type}", system_type), person)
+        for key in CATEGORY_MAP:
+            make_event(make_doc_type(f"DT-{key}", key), person)
 
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
 
@@ -591,7 +587,7 @@ class TestValidateCompleteness:
         assert [issue.code for issue in issues] == ["unmapped_system_types"]
 
     def test_typen_ohne_zuordnung_erzeugen_warnung(self, backend, facility, make_doc_type, make_client, make_event):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        kontakt = make_doc_type("Kontakt", "contact")
         sonstiges = make_doc_type("Sonstiges", None)
         ohne_typ = make_doc_type("Freitext", None)
         person = make_client("JA-20", Client.AgeCluster.AGE_18_26)
@@ -612,12 +608,12 @@ class TestValidateCompleteness:
             )
         ]
 
-    def test_leerer_system_type_zaehlt_als_nicht_zugeordnet(
+    def test_leerer_report_key_zaehlt_als_nicht_zugeordnet(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        """``system_type=""`` (blank speicherbar) ist wie NULL nicht zugeordnet."""
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-        leer = make_doc_type("Leerer Systemtyp", "")
+        """``report_key=""`` (blank speicherbar) ist wie NULL nicht zugeordnet."""
+        kontakt = make_doc_type("Kontakt", "contact")
+        leer = make_doc_type("Leerer Berichtsschlüssel", "")
         person = make_client("JA-22", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
@@ -639,7 +635,7 @@ class TestValidateCompleteness:
     def test_nicht_gemappte_ereignisse_ausserhalb_des_zeitraums_zaehlen_nicht(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        kontakt = make_doc_type("Kontakt", "contact")
         sonstiges = make_doc_type("Sonstiges", None)
         person = make_client("JA-21", Client.AgeCluster.AGE_18_26)
 
@@ -653,7 +649,7 @@ class TestValidateCompleteness:
     def test_ereignisse_ohne_person_erzeugen_info_hinweis(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
+        kontakt = make_doc_type("Kontakt", "contact")
         person = make_client("JA-30", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
@@ -729,7 +725,7 @@ class TestKeinSlugZweitschluessel:
         Das ist die Zusage, die den Wegfall traegt — ohne den Backfill fielen
         genau diese Typen still aus dem Bericht.
         """
-        make_event(make_doc_type("Eigene Beratung", None, slug="beratungsgespraech", report_key="counseling"))
+        make_event(make_doc_type("Eigene Beratung", "counseling", slug="beratungsgespraech"))
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
@@ -752,8 +748,8 @@ class TestKeinSlugZweitschluessel:
         inklusive seiner Ausschluesse"). Heute gibt es schlicht nichts, was den
         Schluessel hintergehen koennte.
         """
-        make_event(make_doc_type("Erstkontakt", None, slug="beratungsgespraech", report_key="contact"))
-        make_event(make_doc_type("Hausnotiz", None, slug="kontakt", report_key="excluded"))
+        make_event(make_doc_type("Erstkontakt", "contact", slug="beratungsgespraech"))
+        make_event(make_doc_type("Hausnotiz", EXCLUDED_KEY, slug="kontakt"))
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
@@ -769,7 +765,7 @@ class TestKeinSlugZweitschluessel:
         oder nicht — die Umstellung des Erstschluessels aendert daran nichts.
         """
         person = make_client("JA-82", Client.AgeCluster.U18)
-        make_event(make_doc_type("Eigene Begleitung", None, report_key="accompaniment"), person)
+        make_event(make_doc_type("Eigene Begleitung", "accompaniment"), person)
         make_event(make_doc_type("Sonstiges", None), person)
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
@@ -1056,14 +1052,14 @@ class TestZeilenpositionIstDatenunabhaengig:
     (K5/Refs #1770); sichtbare Zeilen trugen ihn weiter.
     """
 
-    def _welt(self, backend, fixtures, name, system_type):
+    def _welt(self, backend, fixtures, name, report_key):
         """Ein Artefakt ueber einer frischen Einrichtung: 12/8/7 Ereignisse."""
         make_doc_type, make_event, organization = fixtures
-        fac = Facility.objects.create(organization=organization, name=f"Welt-{system_type}")
+        fac = Facility.objects.create(organization=organization, name=f"Welt-{report_key}")
         typen = [
-            (make_doc_type("Kontakt", DocumentType.SystemType.CONTACT, doc_facility=fac), 12),
-            (make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING, doc_facility=fac), 8),
-            (make_doc_type(name, system_type, doc_facility=fac), 7),
+            (make_doc_type("Kontakt", "contact", doc_facility=fac), 12),
+            (make_doc_type("Beratungsgespräch", "counseling", doc_facility=fac), 8),
+            (make_doc_type(name, report_key, doc_facility=fac), 7),
         ]
         for typ, anzahl in typen:
             for _ in range(anzahl):
@@ -1074,8 +1070,8 @@ class TestZeilenpositionIstDatenunabhaengig:
         self, backend, facility, make_doc_type, make_event
     ):
         fixtures = (make_doc_type, make_event, facility.organization)
-        welt_a = self._welt(backend, fixtures, "Begleitung", DocumentType.SystemType.ACCOMPANIMENT)
-        welt_b = self._welt(backend, fixtures, "Vermittlung", DocumentType.SystemType.REFERRAL)
+        welt_a = self._welt(backend, fixtures, "Begleitung", "accompaniment")
+        welt_b = self._welt(backend, fixtures, "Vermittlung", "referral")
 
         roh_a = backend.build_dataset(welt_a, DATE_FROM, DATE_TO)
         roh_b = backend.build_dataset(welt_b, DATE_FROM, DATE_TO)

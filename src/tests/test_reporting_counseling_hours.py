@@ -21,11 +21,7 @@ from core.reporting.backends.counseling_hours import BEITRAGENDE_KEY, Counseling
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
-from tests._reporting_helpers import feld_report_key_fuer, report_key_fuer
-
-# Sentinel: „nicht angegeben" — ``None`` ist hier ein bedeutungstragender Wert
-# (kein Berichtsschluessel), darf also nicht als Default-Marker dienen.
-_ABGELEITET = object()
+from tests._reporting_helpers import feld_report_key_fuer
 
 pytestmark = pytest.mark.django_db
 
@@ -50,22 +46,21 @@ def date_range():
     return today - timedelta(days=1), today + timedelta(days=1)
 
 
-def _typ_mit_dauer(facility, name, *, system_type, encrypted=False, mit_dauer=True, report_key=_ABGELEITET):
+def _typ_mit_dauer(facility, name, *, report_key, encrypted=False, mit_dauer=True):
     """Dokumentationstyp mit der geteilten Paket-Feldvorlage ``dauer``.
 
     Die Vorlage ist je Einrichtung eindeutig (``unique_facility_fieldtemplate_name``)
     und haengt im Standardpaket an allen drei Gespraechstypen — sie wird deshalb
     einmal je Einrichtung angelegt und wiederverwendet.
 
-    ``report_key`` folgt per Default dem Backfill (E3, Refs #1849) — so sieht
-    ein migrierter Bestand aus. Die Zweitschluessel-Tests setzen ihn bewusst auf
-    ``None``, um den Slug-Pfad zu pruefen.
+    Der ``report_key`` ist die Achse, auf der dieses Backend bindet (E3, Refs
+    #1849) — und seit E4 (Refs #1850) die einzige. Die Aufloesungstests setzen
+    ihn bewusst auf ``None``.
     """
     doc_type = DocumentType.objects.create(
         facility=facility,
         name=name,
-        system_type=system_type,
-        report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+        report_key=report_key,
     )
     if mit_dauer:
         feld, _created = FieldTemplate.objects.get_or_create(
@@ -126,9 +121,9 @@ class TestBuildDataset:
         """Drei Paket-Typen, eine Zeile je Kategorie — die Ordnung ist fest und
         damit wertunabhaengig (K5), nicht nach Anzahl sortiert.
         """
-        krise = _typ_mit_dauer(facility, "Krisengespräch", system_type=DocumentType.SystemType.CRISIS)
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
-        beratung = _typ_mit_dauer(facility, "Beratungsgespräch", system_type=DocumentType.SystemType.COUNSELING)
+        krise = _typ_mit_dauer(facility, "Krisengespräch", report_key="crisis")
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
+        beratung = _typ_mit_dauer(facility, "Beratungsgespräch", report_key="counseling")
         _events(facility, krise, admin_user, 1, 90)
         _events(facility, kontakt, admin_user, 2, 15)
         _events(facility, beratung, admin_user, 3, 60)
@@ -148,7 +143,7 @@ class TestBuildDataset:
         """Nur nichtleere Buckets — sonst waere die Zeilen-Existenz-Untergrenze
         des Inferenzmodells (``lo = 1``) falsch und der Guard liefe fail-open.
         """
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
         _events(facility, kontakt, admin_user, 2, 15)
 
         result = backend.build_dataset(facility, *date_range)
@@ -160,7 +155,7 @@ class TestBuildDataset:
         Ereignis — es zaehlt in ``events``, traegt 0 Minuten bei und erscheint
         als Vollstaendigkeits-Befund.
         """
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
         _events(facility, kontakt, admin_user, 2, 15)
         _events(facility, kontakt, admin_user, 3, None)
 
@@ -173,7 +168,7 @@ class TestBuildDataset:
         assert result.completeness[0].count == 3
 
     def test_muell_in_dauer_ist_ausschuss(self, backend, facility, admin_user, date_range):
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
         _events(facility, kontakt, admin_user, 1, "eine Stunde")
         _events(facility, kontakt, admin_user, 1, "45")
 
@@ -184,7 +179,7 @@ class TestBuildDataset:
         assert result.records[0][BEITRAGENDE_KEY] == 1
 
     def test_verschluesselte_dauer_roundtrip(self, backend, facility, admin_user, date_range):
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT, encrypted=True)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact", encrypted=True)
         _events(facility, kontakt, admin_user, 1, 45)
         event = Event.objects.get(document_type=kontakt)
         assert event.data_json["dauer"]["__encrypted__"] is True
@@ -195,7 +190,7 @@ class TestBuildDataset:
         assert result.completeness == []
 
     def test_ohne_luecke_keine_meldung(self, backend, facility, admin_user, date_range):
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
         _events(facility, kontakt, admin_user, 2, 15)
 
         result = backend.build_dataset(facility, *date_range)
@@ -203,7 +198,7 @@ class TestBuildDataset:
         assert result.completeness == []
 
     def test_leerer_zeitraum(self, backend, facility, admin_user):
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
         _events(facility, kontakt, admin_user, 2, 15)
         vorher = timezone.localdate() - timedelta(days=100)
 
@@ -213,7 +208,7 @@ class TestBuildDataset:
         assert result.summary == {"events_gesamt": 0, "minuten_gesamt": 0}
 
     def test_soft_geloeschte_events_zaehlen_nicht(self, backend, facility, admin_user, date_range):
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
         _events(facility, kontakt, admin_user, 1, 15)
         Event.objects.update(is_deleted=True)
 
@@ -224,7 +219,7 @@ class TestBuildDataset:
     def test_fremde_einrichtung_zaehlt_nicht(
         self, backend, facility, second_facility, second_facility_user, date_range
     ):
-        fremd = _typ_mit_dauer(second_facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        fremd = _typ_mit_dauer(second_facility, "Kontakt", report_key="contact")
         _events(second_facility, fremd, second_facility_user, 3, 15)
 
         result = backend.build_dataset(facility, *date_range)
@@ -233,11 +228,9 @@ class TestBuildDataset:
 
 
 class TestTypaufloesung:
-    def test_typ_ohne_system_type_zaehlt_ueber_den_report_key(
-        self, backend, facility, admin_user, sample_event, date_range
-    ):
-        """``doc_type_contact`` aus der conftest: kein ``system_type``, aber
-        ``report_key=contact`` — die beiden Achsen sind unabhaengig (E-D).
+    def test_typ_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, sample_event, date_range):
+        """``doc_type_contact`` aus der conftest: die Zuordnung kommt allein aus
+        ``report_key=contact`` (E-D; seit E4 gibt es keine zweite Achse mehr).
         """
         result = backend.build_dataset(facility, *date_range)
 
@@ -250,7 +243,7 @@ class TestTypaufloesung:
         Stundenbilanz — genau das war der Weg, ueber den in #1785 auch ein
         Notiz-Typ hereinkam.
         """
-        typ = _typ_mit_dauer(facility, "Kontakt", system_type=None, report_key=None)
+        typ = _typ_mit_dauer(facility, "Kontakt", report_key=None)
         assert typ.slug == "kontakt"
         _events(facility, typ, admin_user, 3, 15)
 
@@ -258,8 +251,8 @@ class TestTypaufloesung:
 
         assert result.records == []
 
-    def test_fremder_system_type_zaehlt_nicht(self, backend, facility, admin_user, date_range):
-        typ = _typ_mit_dauer(facility, "Spritzentausch", system_type=DocumentType.SystemType.NEEDLE_EXCHANGE)
+    def test_fremder_report_key_zaehlt_nicht(self, backend, facility, admin_user, date_range):
+        typ = _typ_mit_dauer(facility, "Spritzentausch", report_key="needle_exchange")
         _events(facility, typ, admin_user, 3, 15)
 
         result = backend.build_dataset(facility, *date_range)
@@ -379,8 +372,8 @@ class TestExportPipeline:
 
     @pytest.mark.parametrize("fmt", ["csv", "json", "xml"])
     def test_export_laeuft_und_ist_wohlgeformt(self, backend, facility, admin_user, date_range, fmt):
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
-        krise = _typ_mit_dauer(facility, "Krisengespräch", system_type=DocumentType.SystemType.CRISIS)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
+        krise = _typ_mit_dauer(facility, "Krisengespräch", report_key="crisis")
         _events(facility, kontakt, admin_user, 7, 20)
         _events(facility, krise, admin_user, 6, 90)
 
@@ -409,8 +402,8 @@ class TestExportPipeline:
         faellt ueber die zentrale Sekundaer-Suppression mit (Residuum sonst
         exakt) — der Guard entscheidet das, nicht dieses Backend.
         """
-        kontakt = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
-        krise = _typ_mit_dauer(facility, "Krisengespräch", system_type=DocumentType.SystemType.CRISIS)
+        kontakt = _typ_mit_dauer(facility, "Kontakt", report_key="contact")
+        krise = _typ_mit_dauer(facility, "Krisengespräch", report_key="crisis")
         _events(facility, kontakt, admin_user, 7, 20)
         _events(facility, krise, admin_user, 2, 90)
 
@@ -434,12 +427,12 @@ class TestIsAvailable:
         assert backend.is_available(facility) is True
 
     def test_passender_typ_ohne_dauer(self, backend, facility):
-        _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT, mit_dauer=False)
+        _typ_mit_dauer(facility, "Kontakt", report_key="contact", mit_dauer=False)
 
         assert backend.is_available(facility) is False
 
     def test_dauer_an_unpassendem_typ(self, backend, facility):
-        _typ_mit_dauer(facility, "Spritzentausch", system_type=DocumentType.SystemType.NEEDLE_EXCHANGE)
+        _typ_mit_dauer(facility, "Spritzentausch", report_key="needle_exchange")
 
         assert backend.is_available(facility) is False
 
@@ -449,6 +442,6 @@ class TestIsAvailable:
         assert backend.is_available(facility) is False
 
     def test_fremde_einrichtung_macht_nicht_verfuegbar(self, backend, facility, second_facility):
-        _typ_mit_dauer(second_facility, "Kontakt", system_type=DocumentType.SystemType.CONTACT)
+        _typ_mit_dauer(second_facility, "Kontakt", report_key="contact")
 
         assert backend.is_available(facility) is False

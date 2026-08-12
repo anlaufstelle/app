@@ -45,11 +45,15 @@ def _cfg_name(kind: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _create_doctype(page, base_url, name, system_type_value="note") -> str:
+def _create_doctype(page, base_url, name, system_type_value="") -> str:
     """Legt einen Wegwerf-Dokumentationstyp an; gibt dessen UUID (aus der URL) zurück.
 
-    ``system_type`` wird bewusst gesetzt (Plan: „system_type wählen!") — nur beim
-    Anlegen editierbar, bei der Bearbeitung serverseitig unveränderbar/disabled.
+    ``system_type`` wird bewusst mitbedient (nur beim Anlegen editierbar, bei
+    der Bearbeitung serverseitig unveränderbar/disabled). Der Default ist seit
+    E4 (Refs #1850) die **Leer-Auswahl**: das Enum kennt nur noch ``ban`` und
+    ``crisis``, und beide tragen App-Verhalten, das ein Wegwerf-Typ nicht
+    ungefragt bekommen soll (``crisis`` würde zusätzlich den Berichtsschlüssel
+    vorbelegen).
     """
     page.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
     page.fill("input#id_name", name)
@@ -211,7 +215,7 @@ class TestDocumentTypeCrud:
     def test_doctype_crud_roundtrip(self, authenticated_page, base_url):
         page = authenticated_page
         name = _cfg_name("DT")
-        pk = _create_doctype(page, base_url, name, system_type_value="note")
+        pk = _create_doctype(page, base_url, name)
         new_name = f"{name}-edit"
         try:
             # In der Liste (per Suche) sichtbar.
@@ -750,9 +754,9 @@ class TestReportBindingsAndSlugVisibility:
                 _delete_doctype(page, base_url, client_pk)
 
     def test_doctype_without_binding_shows_explicit_empty_state(self, authenticated_page, base_url):
-        """``note`` ist ein bewusster Ausschluss-Marker — kein Backend deklariert ihn."""
+        """Ohne Berichtsschlüssel erscheint der Typ in keinem Bericht — ausdrücklich gesagt."""
         page = authenticated_page
-        pk = _create_doctype(page, base_url, _cfg_name("DT-NOBIND"), system_type_value="note")
+        pk = _create_doctype(page, base_url, _cfg_name("DT-NOBIND"))
         try:
             page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
             bindings = page.locator('[data-testid="doctype-report-bindings"]')
@@ -782,10 +786,10 @@ class TestReportBindingsAndSlugVisibility:
         """E3 (Refs #1849): das ``report_key``-Select traegt die Registry-Optionen,
         und NULL→gesetzt geht ueber die UI (Entscheid E-K).
 
-        Angelegt wird bewusst OHNE Berichtsschluessel (der Wegwerf-Typ traegt
-        ``system_type=note``, die Browser-Vorbelegung greift dort nicht) — erst
-        die Bearbeitung setzt ihn. Danach ist das Feld gesperrt: derselbe
-        Durchlauf zeigt beide Haelften der Regel.
+        Angelegt wird bewusst OHNE Berichtsschluessel (der Wegwerf-Typ waehlt
+        keinen Systemtyp, die Browser-Vorbelegung greift also nicht) — erst die
+        Bearbeitung setzt ihn. Danach ist das Feld gesperrt: derselbe Durchlauf
+        zeigt beide Haelften der Regel.
         """
         page = authenticated_page
         pk = _create_doctype(page, base_url, _cfg_name("DT-RKEY"))

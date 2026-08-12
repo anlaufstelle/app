@@ -464,16 +464,18 @@ Der Systemtyp verknüpft einen Dokumentationstyp mit interner Anwendungslogik. E
 
 > **Geändert 2026-08-12 (#1849, [ADR-042](adr/042-report-key-berichtszuordnung.md)):** Die **Berichtszuordnung hat ein eigenes Feld** bekommen — den **Berichtsschlüssel** (siehe nächster Abschnitt). Der Systemtyp steuert nur noch Anwendungslogik. Wer bisher einen Typ über den Systemtyp in den Beispiel-Sachbericht gebracht hat, findet ihn dort unverändert: das Update hat allen Bestandstypen den passenden Berichtsschlüssel gegeben. **Der hartkodierte Slug-Zweitschlüssel ist entfallen** — ein Typ ohne Berichtsschlüssel erscheint in keinem Bericht, auch wenn sein Slug einer der Paket-Slugs ist.
 
-Aktuell hat der Systemtyp **eine** Funktion: **UI-Logik** (nur Hausverbot und Krisengespräch):
+Der Systemtyp hat **eine** Funktion: **UI-Logik**. Entsprechend gibt es genau zwei Werte:
 
 | Systemtyp | Auswirkung |
 |-----------|------------|
 | **Hausverbot** | Aktiviert Hausverbot-Banner auf der Personenseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe; speist die Beispiel-Hausverbots-Übersicht |
 | **Krisengespräch** | Wird als Highlight in der Übergabe angezeigt (letzte Krisen-Events) |
 
-> **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Die übrigen sieben Werte (Kontakt, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung, Notiz) haben **keine** Anwendungslogik; sie waren bis zum Update ausschließlich Berichts-Zuordnungen und sind es seither nicht mehr. Ob ein Typ in einem Bericht landet, sagt Ihnen verlässlich nur die Auskunft „Erscheint in …" in Detail- und Formularansicht.
+> **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp — die meisten kommen ohne aus. Ob ein Typ in einem Bericht landet, sagt Ihnen die Auskunft „Erscheint in …" in Detail- und Formularansicht; der Systemtyp hat damit nichts zu tun.
 
-> **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu. Eine **Reduktion** auf Hausverbot/Krisengespräch ist beschlossen (#1847 Etappe E4, Umsetzung #1850); ihre Vorbedingung — ein eigenes Berichts-Feld — ist mit dem Berichtsschlüssel erfüllt. Bis die Reduktion umgesetzt ist, bleibt die Liste unverändert; die sieben verbleibenden Werte tragen aber keine Wirkung mehr.
+> **Geändert 2026-08-12 (#1850, [ADR-042](adr/042-report-key-berichtszuordnung.md)):** Die Auswahl hatte bis zu diesem Update **neun** Werte; die übrigen sieben (Kontakt, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung, Notiz) waren reine Berichts-Zuordnungen und sind seit dem Berichtsschlüssel wirkungslos. Sie sind jetzt **entfernt**. An Bestandstypen wurde der Systemtyp dabei geleert — die Berichtszuordnung steht seit dem vorigen Update im Berichtsschlüssel und bleibt unverändert; **an den Zahlen Ihrer Berichte ändert sich nichts.** Was Sie sehen: Im Formular stehen nur noch „Hausverbot" und „Krisengespräch" zur Wahl, und in der Detailansicht eines betroffenen Typs steht beim Systemtyp jetzt „–".
+
+> **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu: Ein Wert gehört nur dann hierher, wenn er Anwendungsverhalten steuert. Berichts-Zuordnungen laufen über den Berichtsschlüssel.
 
 #### Berichtsschlüssel
 

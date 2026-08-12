@@ -216,7 +216,7 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Data portability (M4)**: CSV import wizard for persons, a complete facility export (JSON, schema v1) via `manage.py export_facility`, and an internal rectification workflow for Art. 16 GDPR requests.
 - **Report backends as a plugin system (M5)**: one file per reporting standard behind a fixed interface with mandatory k-anonymity hooks; seven example backends ship with it.
 - **File attachments on persons and cases**: the encrypted file vault, previously event-only, becomes owner-generic (exactly one owner per file — event, person or case) with a direct RLS policy.
-- **Removed (breaking)**: the documentation-type "category" field is gone; report mappings are structural (`system_type`/`slug`); type names are now unique per facility.
+- **Removed (breaking)**: the documentation-type "category" field is gone; report mappings live in their own `report_key` field (the `system_type` enum is down to `ban`/`crisis`, the slug fallback is gone); type names are now unique per facility.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.80.0 -->
