@@ -179,7 +179,8 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
         muesste dieselbe Zeile beide Slugs zugleich tragen — nie erfuellbar.
         """
         return (
-            DocumentType.objects.filter(facility=facility, is_active=True)
+            DocumentType.objects.for_facility(facility)
+            .filter(is_active=True)
             .filter(matching_q())
             .filter(fields__field_template__slug=AUSGABE_SLUG, fields__field_template__is_active=True)
             .filter(fields__field_template__slug=RUECKGABE_SLUG, fields__field_template__is_active=True)

@@ -211,7 +211,8 @@ class ServiceDistributionBackend(DatasetBackend):
     def _ist_konfiguriert(self, facility, gruppe: Feldgruppe) -> bool:
         """Haengt die Feldvorlage der Gruppe aktiv an einem passenden aktiven Typ?"""
         return (
-            DocumentType.objects.filter(facility=facility, is_active=True)
+            DocumentType.objects.for_facility(facility)
+            .filter(is_active=True)
             .filter(gruppe.matching_q())
             .filter(fields__field_template__slug=gruppe.feld_slug, fields__field_template__is_active=True)
             .exists()

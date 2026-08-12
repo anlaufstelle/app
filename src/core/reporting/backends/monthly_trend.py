@@ -288,8 +288,8 @@ class MonthlyTrendBackend(DatasetBackend):
         Dropdown und zeigte dauerhaft Nullen.
         """
         return (
-            DocumentType.objects.filter(
-                facility=facility,
+            DocumentType.objects.for_facility(facility)
+            .filter(
                 is_active=True,
                 entity_type=DocumentType.EntityType.EVENT,
             )

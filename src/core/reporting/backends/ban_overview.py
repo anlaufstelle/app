@@ -344,8 +344,11 @@ class BanOverviewBackend(DatasetBackend):
         Vergangenheit umschreibt. Kein Slug-Fallback — dieselbe Regel wie bei
         den Daten (Refs #1785).
         """
-        return DocumentType.objects.filter(
-            facility=facility,
-            is_active=True,
-            system_type=DocumentType.SystemType.BAN,
-        ).exists()
+        return (
+            DocumentType.objects.for_facility(facility)
+            .filter(
+                is_active=True,
+                system_type=DocumentType.SystemType.BAN,
+            )
+            .exists()
+        )

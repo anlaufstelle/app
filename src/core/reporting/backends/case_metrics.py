@@ -148,7 +148,7 @@ def _visible_cases(facility):
     Faellt sie, zaehlt dieser Bericht trotzdem richtig weiter — ein Bericht ist
     der schlechteste Ort, um eine solche Modellaenderung zu bemerken.
     """
-    return Case.objects.filter(facility=facility, is_deleted=False)
+    return Case.objects.for_facility(facility).filter(is_deleted=False)
 
 
 @register_backend("case-metrics")
