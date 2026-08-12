@@ -44,12 +44,18 @@ from core.models import Client, DocumentType, Event, Facility, Organization, Use
 from core.reporting import registry
 from core.reporting.backends.sample_report_1 import (
     _EXPORT_ISSUE_CODES,
-    TYP_BINDUNG,
     resolve_category,
     unknown_key_q,
     unmapped_q,
 )
-from core.reporting.base import EXCLUDED_KEY
+from core.reporting.base import (
+    EXCLUDED_KEY,
+    BindungsEintrag,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    TypBindung,
+)
 from core.reporting.export import export_dataset
 
 pytestmark = pytest.mark.django_db
@@ -64,6 +70,22 @@ def _isolated_registry(monkeypatch):
     monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
     monkeypatch.setattr(registry, "_discovered", True)
     yield
+
+
+def _nur_typ_bindung(name: str, key: str):
+    """Wegwerf-Backend mit genau einer Typ-Bindung ueber ``report_key``."""
+
+    class _Backend(DatasetBackend):
+        typ_bindung = TypBindung((BindungsEintrag(key, name),))
+
+        def get_field_specs(self):
+            return [FieldSpec("wert", "Wert")]
+
+        def build_dataset(self, facility, date_from, date_to):
+            return DatasetResult(mode="rows", records=[], summary={}, completeness=[])
+
+    _Backend.name = name
+    return _Backend
 
 
 @pytest.fixture
@@ -144,11 +166,19 @@ class TestAusdrueckenAusgeschlossen:
     def test_fremder_bekannter_schluessel_erzeugt_keinen_hinweis(self, backend, facility, typ, ereignis):
         """Ein Schluessel, den nur ein ANDERES Backend deklariert, ist ebenfalls
         eine vollstaendige Aussage — dieser Bericht zeigt den Typ nur nicht.
-        """
-        eigene = TYP_BINDUNG.keys()
-        fremd = next(key for key in registry.get_report_key_vocabulary() if key not in eigene)
-        ereignis(typ("Fremder Bericht", report_key=fremd), 3)
 
+        Der Schluessel wird hier eigens registriert (die Registry-Fixture
+        isoliert das): Im Bestand deckt der Sachbericht das gesamte
+        Typ-Vokabular ab, ein „fremder, aber bekannter" Schluessel liesse sich
+        sonst nicht bilden. Ihn aus dem Vokabular zu greifen waere ausserdem
+        eine Falle — bis zum Disclosure-Review stand dort ``ban``, der
+        ``system_type``-Schluessel von ``ban_overview``, der als ``report_key``
+        gar nichts bindet.
+        """
+        registry.register_backend("fremder-bericht-e3")(_nur_typ_bindung("Fremder Bericht", "fremd_gebunden"))
+        ereignis(typ("Fremder Bericht", report_key="fremd_gebunden"), 3)
+
+        assert "fremd_gebunden" in registry.get_report_key_vocabulary()
         assert _codes(backend, facility) == []
 
 
@@ -222,6 +252,20 @@ class TestUnbekannterSchluessel:
         ereignis(typ("Ausgeschlossen", report_key=EXCLUDED_KEY), 3)
 
         assert _codes(backend, facility) == []
+
+    def test_verhaltens_schluessel_als_report_key_ist_unbekannt(self, backend, facility, typ, ereignis):
+        """``ban`` ist der ``system_type``-Schluessel von ``ban_overview`` — als
+        ``report_key`` bindet er NICHTS.
+
+        Bis zum Disclosure-Review stand er im Typ-Vokabular: waehlbar im
+        Dropdown, ohne Wirkung, ohne Meldung und nach dem Setzen unwiderruflich.
+        Jetzt faellt er in Zustand 4 und wird gemeldet.
+        """
+        ereignis(typ("Hausverbot mit falschem Schlüssel", report_key="ban"), 3)
+
+        assert [(issue.code, issue.count) for issue in backend.validate_completeness(facility, DATE_FROM, DATE_TO)] == [
+            ("unknown_report_keys", 3)
+        ]
 
 
 class TestInvariante:

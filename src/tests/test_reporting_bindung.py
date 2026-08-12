@@ -256,7 +256,7 @@ class TestRegistryGuards:
         registry.register_backend("getrennt")(
             _dummy_cls(
                 typ_bindung=TypBindung((BindungsEintrag(_PRUEFKEY, "Prüfkontakt"),)),
-                feld_bindungen=(FeldBindung((BindungsEintrag(_PRUEFKEY, "Prüffeld"),)),),
+                feld_bindungen=(FeldBindung((BindungsEintrag(_PRUEFKEY, "Prüffeld"),), bindet="report_key"),),
             )
         )
         assert registry.get_report_key_vocabulary()[_PRUEFKEY] == "Prüfkontakt"
@@ -265,7 +265,7 @@ class TestRegistryGuards:
     def test_bindungen_aus_der_verfuegbarkeit_zaehlen_mit(self):
         """``service_distribution`` traegt seine Bindungen je Feldgruppe in ``verfuegbarkeit``."""
         bindung = TypBindung((BindungsEintrag(_PRUEFKEY, "Prüfkontakt"),))
-        feld = FeldBindung((BindungsEintrag(_PRUEFFELD, "Prüffeld", slugs=("pruef-feld",)),))
+        feld = FeldBindung((BindungsEintrag(_PRUEFFELD, "Prüffeld", slugs=("pruef-feld",)),), bindet="report_key")
         cls = _dummy_cls(verfuegbarkeit=(Anforderung(bindung, (feld,)),))
         registry.register_backend("verfuegbarkeit-test")(cls)
 
@@ -303,6 +303,37 @@ class TestRegistryGuards:
         assert EXCLUDED_KEY not in registry.get_report_key_vocabulary()
         assert EXCLUDED_KEY not in registry.get_field_key_vocabulary()
 
+    def test_verhaltens_bindung_steht_nicht_im_report_key_vokabular(self):
+        """Nur Bindungen, die ueber ``report_key`` binden, sind waehlbare Schluessel.
+
+        Sonst boete das Dropdown ``ban`` an (die Bindung von ``ban_overview``,
+        die ueber ``system_type`` laeuft): Ein so gesetzter ``report_key`` bindet
+        NICHTS, wuerde weder als „ohne Zuordnung" noch als „unbekannt" gemeldet
+        und waere nach dem Setzen unwiderruflich — genau die Silent-Nothing-
+        Klasse, die E-H schliessen soll. Das Paketformat normalisiert ``ban``
+        obendrein auf ``excluded``; ein Dropdown, das ihn anbietet, widerspraeche
+        ihm.
+        """
+        registry.register_backend("verhaltens-bindung")(
+            _dummy_cls(
+                typ_bindung=TypBindung((BindungsEintrag(_PRUEFKEY, "Prüfkontakt"),), bindet="system_type"),
+            )
+        )
+
+        assert _PRUEFKEY not in registry.get_report_key_vocabulary()
+        assert registry.backends_for_report_key(_PRUEFKEY) == []
+
+    def test_slug_gebundene_feld_bindung_steht_nicht_im_feld_vokabular(self):
+        """Dieselbe Regel auf Feld-Ebene: eine ueber den Slug gebundene
+        Deklaration reagiert nicht auf ``FieldTemplate.report_key``.
+        """
+        registry.register_backend("slug-feld-bindung")(
+            _dummy_cls(feld_bindungen=(FeldBindung((BindungsEintrag(_PRUEFFELD, "Prüffeld", slugs=("p",)),)),))
+        )
+
+        assert _PRUEFFELD not in registry.get_field_key_vocabulary()
+        assert registry.backends_for_field_key(_PRUEFFELD) == []
+
 
 class TestRegistryAuskunft:
     """Die E2-Schnittstelle: welcher Schluessel steckt in welchem Bericht?"""
@@ -323,7 +354,7 @@ class TestRegistryAuskunft:
 
     def test_backends_for_field_key(self):
         registry.register_backend("feld-auskunft")(
-            _dummy_cls(feld_bindungen=(FeldBindung((BindungsEintrag(_PRUEFFELD, "Prüffeld"),)),))
+            _dummy_cls(feld_bindungen=(FeldBindung((BindungsEintrag(_PRUEFFELD, "Prüffeld"),), bindet="report_key"),))
         )
         slugs = [backend.slug for backend in registry.backends_for_field_key(_PRUEFFELD)]
         assert slugs == ["feld-auskunft"]

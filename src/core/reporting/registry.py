@@ -58,6 +58,36 @@ def _vokabular(backends, sammler) -> dict[str, str]:
     return vokabular
 
 
+def _ueber_report_key(sammler):
+    """Sammler-Wrapper: nur Bindungen, die tatsaechlich ueber ``report_key`` binden.
+
+    **Der Werteraum von** ``report_key`` **ist nicht die Menge aller deklarierten
+    Schluessel** (Refs #1849, Disclosure-Review). ``ban_overview`` bindet ueber
+    ``system_type`` (Konzept #1847 §3) und deklariert dabei den Schluessel
+    ``ban``. Stuende der im Vokabular, boete ihn das Dropdown zur Auswahl an —
+    und ein so gesetzter ``report_key`` bindet **nichts**: Er wuerde weder als
+    „ohne Zuordnung" gemeldet (der Schluessel ist ja gesetzt) noch als
+    „unbekannt" (er steht ja im Vokabular), und waere nach dem Setzen
+    unwiderruflich. Genau die Silent-Nothing-Klasse, die Entscheid E-H
+    schliessen soll. Das Paketformat normalisiert ``ban`` obendrein auf
+    ``excluded`` — ein Dropdown, das ihn anbietet, widerspraeche ihm.
+
+    Gilt symmetrisch auf Feld-Ebene: eine ``FeldBindung`` mit ``bindet="slug"``
+    reagiert nicht auf ``FieldTemplate.report_key``.
+
+    **Nicht** angewendet auf :func:`describe_type_bindings` und den
+    Label-Guard: „erscheint in …" muss ``ban_overview`` weiterhin nennen (dort
+    entscheidet der ``system_type``, und der Treffer ist echt), und ein Label
+    darf je Schluessel auch ueber die Bindungsarten hinweg nur einmal vergeben
+    sein.
+    """
+
+    def _gefiltert(backend):
+        return tuple(bindung for bindung in sammler(backend) if bindung.bindet == "report_key")
+
+    return _gefiltert
+
+
 def _pruefe_bindungen(backend: DatasetBackend) -> None:
     """Die beiden Deklarationsregeln aus Konzept #1847 §3 — laut statt still.
 
@@ -193,35 +223,44 @@ def get_report_key_vocabulary() -> dict[str, str]:
     """Alle deklarierten **Typ**-Berichtsschluessel mit ihrem Label (E1, Refs #1824).
 
     Der Werteraum kommt aus den Backends, nicht aus einer handgepflegten Liste:
-    E2 zeigt daraus „erscheint in …", E3 speist damit das ``report_key``-Select
-    am Dokumentationstyp. :data:`~core.reporting.base.EXCLUDED_KEY` ist hier
-    nie enthalten — er ist reserviert und wird von der Auswahl gesondert
+    E3 speist damit das ``report_key``-Select am Dokumentationstyp und den
+    „kennt ein Bericht diesen Schluessel?"-Vergleich des
+    Vollstaendigkeitshinweises. :data:`~core.reporting.base.EXCLUDED_KEY` ist
+    hier nie enthalten — er ist reserviert und wird von der Auswahl gesondert
     angeboten.
+
+    **Nur Bindungen ueber** ``report_key`` (:func:`_ueber_report_key`): ein
+    ueber ``system_type`` gebundener Schluessel waere waehlbar, ohne etwas zu
+    bewirken.
     """
-    return _vokabular(get_backends(), typ_bindungen)
+    return _vokabular(get_backends(), _ueber_report_key(typ_bindungen))
 
 
 def get_field_key_vocabulary() -> dict[str, str]:
     """Alle deklarierten **Feld**-Berichtsschluessel mit ihrem Label.
 
     Eigener Werteraum neben :func:`get_report_key_vocabulary` (Konzept §3.1):
-    auf Feld-Ebene gilt dieselbe Regel, aber eine andere Kardinalitaet.
+    auf Feld-Ebene gilt dieselbe Regel, aber eine andere Kardinalitaet — und
+    dieselbe Einschraenkung auf Bindungen ueber ``report_key``.
     """
-    return _vokabular(get_backends(), feld_bindungen)
+    return _vokabular(get_backends(), _ueber_report_key(feld_bindungen))
 
 
 def backends_for_report_key(key: str) -> list[DatasetBackend]:
-    """Die Backends, in denen ein Dokumentationstyp mit diesem Schluessel erscheint."""
-    return [
-        backend for backend in get_backends() if any(key in bindung.vokabular() for bindung in typ_bindungen(backend))
-    ]
+    """Die Backends, in denen ein Dokumentationstyp mit diesem ``report_key`` erscheint.
+
+    Wie :func:`get_report_key_vocabulary` auf Bindungen ueber ``report_key``
+    beschraenkt — sonst behauptete die Auskunft einen Treffer, den ein gesetzter
+    ``report_key`` gar nicht erzeugen kann.
+    """
+    sammler = _ueber_report_key(typ_bindungen)
+    return [backend for backend in get_backends() if any(key in b.vokabular() for b in sammler(backend))]
 
 
 def backends_for_field_key(key: str) -> list[DatasetBackend]:
-    """Die Backends, in denen eine Feldvorlage mit diesem Schluessel erscheint."""
-    return [
-        backend for backend in get_backends() if any(key in bindung.vokabular() for bindung in feld_bindungen(backend))
-    ]
+    """Die Backends, in denen eine Feldvorlage mit diesem ``report_key`` erscheint."""
+    sammler = _ueber_report_key(feld_bindungen)
+    return [backend for backend in get_backends() if any(key in b.vokabular() for b in sammler(backend))]
 
 
 def describe_type_bindings(document_type, facility) -> list[str]:
