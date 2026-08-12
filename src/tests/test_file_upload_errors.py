@@ -312,6 +312,34 @@ class TestMultipleFileCountCap:
         cleaned = field.clean(files)
         assert len(cleaned) == 2
 
+    def test_default_cap_of_20_accepted_when_setting_unset(self, settings):
+        """Refs #1811 (mutmut_19, ``core.forms.dynamic.MultipleFileField.clean``):
+        die obigen Tests setzen ``FILE_VAULT_MAX_UPLOAD_FILES`` immer explizit —
+        der ``getattr(..., 20)``-Default-Zweig für ein UNGESETZTES Setting war
+        ungetestet. Genau 20 Dateien (die Default-Obergrenze) müssen noch
+        durchgehen."""
+        del settings.FILE_VAULT_MAX_UPLOAD_FILES
+        from core.forms.events import MultipleFileField
+
+        field = MultipleFileField(required=False)
+        files = [SimpleUploadedFile(f"f{i}.pdf", VALID_PDF_BYTES, content_type="application/pdf") for i in range(20)]
+        cleaned = field.clean(files)
+        assert len(cleaned) == 20
+
+    def test_default_cap_rejects_the_21st_file_when_setting_unset(self, settings):
+        """Refs #1811 (mutmut_19): Gegenprobe zum Default-Cap — die 21. Datei
+        muss den ungesetzten Default (20) überschreiten und abgewiesen werden
+        (Memory-DoS-Schutz greift auch ohne explizite Konfiguration)."""
+        del settings.FILE_VAULT_MAX_UPLOAD_FILES
+        from django import forms
+
+        from core.forms.events import MultipleFileField
+
+        field = MultipleFileField(required=False)
+        files = [SimpleUploadedFile(f"f{i}.pdf", VALID_PDF_BYTES, content_type="application/pdf") for i in range(21)]
+        with pytest.raises(forms.ValidationError):
+            field.clean(files)
+
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
