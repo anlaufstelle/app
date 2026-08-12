@@ -185,6 +185,11 @@ def doc_type_contact(facility):
     doc_type = DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
+        # E3 (Refs #1849): Die Berichtszuordnung haengt seit der Umstellung am
+        # ``report_key`` — vorher genuegte der Slug ``kontakt`` als
+        # Zweitschluessel, den es nicht mehr gibt (Entscheid E-E). ``system_type``
+        # bleibt bewusst leer: die beiden Achsen sind unabhaengig (E-D).
+        report_key="contact",
     )
 
     ft_dauer = FieldTemplate.objects.create(
@@ -193,8 +198,8 @@ def doc_type_contact(facility):
         field_type=FieldTemplate.FieldType.NUMBER,
         # E3 (Refs #1849): So sieht die Vorlage nach dem Backfill aus — der
         # Paket-Slug ``dauer`` traegt den Feld-Berichtsschluessel, ueber den
-        # ``counseling-hours`` seit E3 bindet. Der Dokumentationstyp bleibt
-        # bewusst OHNE Erstschluessel: er ist der Zweitschluessel-Fall.
+        # ``counseling-hours`` bindet; gelesen wird der Wert weiterhin unter dem
+        # Slug.
         report_key="dauer_minuten",
     )
     ft_notiz = FieldTemplate.objects.create(

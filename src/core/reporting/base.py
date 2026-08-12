@@ -125,8 +125,11 @@ class BindungsEintrag:
     „Kontakte") und ``counseling_hours`` (``contact`` → ``"contact"``) im
     Label-Guard.
 
-    ``slugs`` sind die Zweitschluessel-Slugs der Paket-Konvention (Refs #1741);
-    leer heisst „ueber den Slug ist dieser Schluessel nicht erreichbar".
+    ``slugs`` sind die Paket-Slugs der Konvention (Refs #1741). Seit E3
+    (Refs #1849) sind sie **nur noch auf Feld-Ebene** wirksam
+    (:meth:`FeldBindung.key_for_slug`); auf Typ-Ebene ist der
+    Slug-Zweitschluessel ersatzlos entfallen (Entscheid E-E) — dort trifft
+    ausschliesslich der ``report_key``.
     """
 
     key: str
@@ -144,19 +147,24 @@ class BindungsEintrag:
 class TypBindung:
     """Die Bindung eines Berichts an Dokumentationstypen — eine Deklaration, viele Sichten.
 
-    ``slug_fallback=False`` schaltet den Zweitschluessel ab: die bewusste
-    Abweichung von ``ban_overview`` (Refs #1785) ist damit ein **Feld** statt
-    eines Fliesstext-Hinweises — sichtbar und testbar.
+    **Ein Schluessel, nicht zwei** (Entscheid E-E, Konzept #1847). Bis E3 gab es
+    neben dem Erstschluessel einen Slug-Zweitschluessel (Refs #1741): ein Typ
+    ohne ``system_type``, dessen aus dem Namen abgeleiteter Slug einer der
+    Paket-Slugs war, wurde ebenfalls zugeordnet. Der Weg war unsichtbar — man
+    musste ihn aus dem Slug erschliessen — und hat in
+    #1785 ein
+    Disclosure-Leck erzeugt (ein Hausverbots-Typ mit dem Slug ``kontakt`` zog
+    seine Ereignisse in den Bericht). Mit ``report_key`` gibt es eine
+    **sichtbare, ausdrueckliche** Wahl; der Zweitschluessel ist damit ersatzlos
+    entfallen, und mit ihm die Regel „Erstschluessel gewinnt inklusive seiner
+    Ausschluesse", die das Leck ueberhaupt erst noetig machte.
 
     ``bindet`` haelt fest, ueber welchen Schluessel gebunden wird: die
-    Berichts-Backends wechseln in E3 auf ``report_key``, die Verhaltens-Berichte
-    (``ban_overview``) bleiben dauerhaft an ``system_type`` (Konzept #1847 §3).
-    In E1 hat das Feld noch keine Wirkung — es ist die Deklaration, die E3
-    auswertet.
+    Berichts-Backends ueber ``report_key``, die Verhaltens-Berichte
+    (``ban_overview``) dauerhaft ueber ``system_type`` (Konzept #1847 §3).
     """
 
     eintraege: tuple[BindungsEintrag, ...]
-    slug_fallback: bool = True
     bindet: Literal["report_key", "system_type"] = "report_key"
 
     def _erststufe(self) -> str:
@@ -188,12 +196,6 @@ class TypBindung:
         """Schluessel → Aufloesungswert (Bestandsform ``CATEGORY_MAP``)."""
         return {eintrag.key: eintrag.wert for eintrag in self.eintraege}
 
-    def slug_ziele(self) -> dict:
-        """Slug → Aufloesungswert (Bestandsform ``SLUG_MAP``); leer ohne Fallback."""
-        if not self.slug_fallback:
-            return {}
-        return {slug: eintrag.wert for eintrag in self.eintraege for slug in eintrag.slugs}
-
     def vokabular(self) -> dict[str, str]:
         """Schluessel → Label (E2-Inventar, E3-Dropdown)."""
         return {eintrag.key: eintrag.label for eintrag in self.eintraege}
@@ -201,36 +203,33 @@ class TypBindung:
     def values_fields(self, prefix: str = "") -> tuple[str, ...]:
         """Die Felder, die eine ``.values()``-Aggregation mitfuehren muss.
 
-        Ohne den Zweitschluessel in der Gruppierung koennte er nicht greifen;
-        ohne Fallback waere er nur eine ueberfluessige Gruppierungsspalte.
+        Seit E3 (Refs #1849) genau eines — der Zweitschluessel ist entfallen.
+        Die Methode bleibt trotzdem: sie ist der EINE Ort, an dem steht, was die
+        Aufloesung liest, und ``resolve_row``/``resolve_key_row`` haengen daran.
         """
-        erststufe = (f"{prefix}{self._erststufe()}",)
-        if not self.slug_fallback:
-            return erststufe
-        return (*erststufe, f"{prefix}slug")
+        return (f"{prefix}{self._erststufe()}",)
 
     def _eintrag(self, *werte) -> "BindungsEintrag | None":
         """Der zutreffende Eintrag — die EINE Auflösungsentscheidung.
 
-        Auflösungsordnung (Refs #1741): erst die Erststufe, dann — **nur** wenn
-        sie gar keine Aussage trifft (leer/NULL) — der Slug. „Gewinnt immer"
-        schliesst die **Ausschluesse** ein (Refs #1785): ein gesetzter, aber
-        nicht deklarierter Erstschluessel (``note``/``ban``) ist eine
-        vollstaendige Aussage und sperrt den Zweitschluessel. Andernfalls zoege
-        ein Hausverbots-Typ mit dem Slug ``kontakt`` seine Ereignisse in den
-        Bericht.
+        Seit dem Wegfall des Slug-Zweitschluessels (Entscheid E-E) ist das eine
+        schlichte Nachschlage: ein gesetzter, deklarierter Erstschluessel
+        trifft, alles andere nicht. Die frueher noetige Regel „ein gesetzter,
+        aber nicht deklarierter Erstschluessel sperrt den Zweitschluessel"
+        (Refs #1785) hat damit keinen Gegenstand mehr — es gibt nichts zu
+        sperren.
+
+        ``*werte`` bleibt variadisch: die Aufrufer reichen
+        :meth:`values_fields` durch, und ein Backend mit einer breiteren
+        Aufloesung braucht die Signatur nicht zu aendern.
 
         :meth:`resolve` und :meth:`resolve_key` unterscheiden sich nur darin,
         WAS sie aus dem Eintrag lesen — nicht darin, WELCHEN sie waehlen.
         """
         erststufe = werte[0] if werte else None
-        if erststufe:
-            return {eintrag.key: eintrag for eintrag in self.eintraege}.get(erststufe)
-        if not self.slug_fallback:
+        if not erststufe:
             return None
-        slug = werte[1] if len(werte) > 1 else None
-        nach_slug = {slug: eintrag for eintrag in self.eintraege for slug in eintrag.slugs}
-        return nach_slug.get(slug or "")
+        return {eintrag.key: eintrag for eintrag in self.eintraege}.get(erststufe)
 
     def resolve(self, *werte):
         """Aufloesung eines Typs auf sein ``ziel`` — ``None`` = nicht in diesem Bericht.
@@ -269,21 +268,14 @@ class TypBindung:
 
         ``matching_q()`` filtert auf ``DocumentType`` selbst,
         ``matching_q("document_type__")`` auf ``Event``. Beide Sichten lesen
-        dieselben Ableitungen (:meth:`keys`, :meth:`slug_ziele`) — das ist die
-        Invariante, die ``test_reporting_bindung.py`` ueber das gesamte
-        Werte-Universum prueft.
+        dieselbe Ableitung (:meth:`keys`) — das ist die Invariante, die
+        ``test_reporting_bindung.py`` ueber das gesamte Werte-Universum prueft.
 
-        Der ``isnull``-Zweig ist bewusst redundant: die Erststufe ist NULL-bar,
-        blankes SQL-``NOT IN`` faengt NULL-Zeilen nicht. ``slug`` ist NOT NULL
-        (``blank=True``), dort gibt es diesen Fall nicht.
+        NULL-Zeilen faengt ``IN`` ohnehin nicht; einen ``isnull``-Zweig braucht
+        es hier deshalb nicht (wohl aber im Unmapped-Filter des Sachberichts,
+        wo NULL die gesuchte Menge IST).
         """
-        erststufe = f"{prefix}{self._erststufe()}"
-        treffer = Q(**{f"{erststufe}__in": self.keys()})
-        slug_ziele = self.slug_ziele()
-        if slug_ziele:
-            unset = Q(**{f"{erststufe}__isnull": True}) | Q(**{erststufe: ""})
-            treffer |= unset & Q(**{f"{prefix}slug__in": tuple(slug_ziele)})
-        return treffer
+        return Q(**{f"{prefix}{self._erststufe()}__in": self.keys()})
 
     def unmapped_q(self, prefix: str = "") -> Q:
         """„Ohne Berichtszuordnung" — die Negation von :meth:`matching_q`.

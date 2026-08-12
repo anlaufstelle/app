@@ -193,13 +193,13 @@ class Feldgruppe:
 # nach Optionsschluessel sortiert. Beides wertunabhaengig (K5), deshalb genuegt
 # ``ORDER_INPUT`` an den Suppressions-Aufrufstellen.
 #
-# Erstschluessel zuerst und exklusiv, Paket-Slug nur bei leerem ``system_type``
-# (Refs #1741/#1785) — die Regel steckt in ``TypBindung``, nicht mehr in dieser
-# Datei.
+# Die Aufloesung — ein Berichtsschluessel je Ebene, kein Zweitschluessel mehr
+# (Entscheid E-E, Refs #1849) — steckt in ``TypBindung``/``FeldBindung``, nicht
+# in dieser Datei.
 GRUPPEN: tuple[Feldgruppe, ...] = (
     Feldgruppe(
         LEISTUNGEN_SLUG,
-        TypBindung((BindungsEintrag("contact", _("Kontakt"), slugs=("kontakt",)),)),
+        TypBindung((BindungsEintrag("contact", _("Kontakt")),)),
         FeldBindung(
             (BindungsEintrag("leistungen", _("Leistungen nach Kategorie"), slugs=(LEISTUNGEN_SLUG,)),),
             bindet="report_key",
@@ -208,7 +208,7 @@ GRUPPEN: tuple[Feldgruppe, ...] = (
     ),
     Feldgruppe(
         KRISE_SLUG,
-        TypBindung((BindungsEintrag("crisis", _("Krisengespräch"), slugs=("krisengespraech",)),)),
+        TypBindung((BindungsEintrag("crisis", _("Krisengespräch")),)),
         FeldBindung((BindungsEintrag("art_der_krise", _("Art der Krise"), slugs=(KRISE_SLUG,)),), bindet="report_key"),
         mehrfachnennung=False,
     ),

@@ -249,7 +249,7 @@ class TestBackendStringsUnterOverride:
         with override("en"):
             texts = [str(_SUPPRESSED_MESSAGES[code]) for code in _EXPORT_ISSUE_CODES]
 
-        assert len(texts) == 2
+        assert len(texts) == len(_EXPORT_ISSUE_CODES) == 3
         for text in texts:
             assert not _de_stems_in(text), text
             assert not re.search(r"\d", text), f"Ziffer im k-Anon-Ersatztext: {text!r}"

@@ -10,18 +10,19 @@ Feldwerte schreibt, kopiert dieses Modul.
 Zeitraum sowie ihre Differenz (``saldo``) — ueber alle Spritzentausch-Ereignisse
 der Einrichtung.
 
-**Feld-Adressierung.** Ausschliesslich ueber die Feld-Template-Slugs des
-Standardpakets (``core/packages/default.yaml``): ``ausgabe`` und ``rueckgabe``.
-Slugs sind je Einrichtung eindeutig und nach Erstellung unveraenderlich
-(M2, ADR-037) — dieselbe Stabilitaetszusage wie bei ``system_type``.
+**Feld-Adressierung.** Ueber den ``report_key`` der Feldvorlage
+(``ausgabe_stueck``/``rueckgabe_stueck``); gelesen wird der Wert unter dem
+**Slug** der so gebundenen Vorlage, je Dokumentationstyp aufgeloest
+(:meth:`~core.reporting.base.FeldBindung.leseschluessel`). Im Standardpaket
+sind das die Slugs ``ausgabe`` und ``rueckgabe``; eine Einrichtung mit eigener
+Feldbenennung ist seit E3 (Refs #1849) nicht mehr ausgeschlossen.
 
-**Typaufloesung — ``system_type`` zuerst, Slug nur als Zweitschluessel.**
-Exakt das Muster aus :func:`core.reporting.backends.sample_report_1.resolve_category`
-(Refs #1741/#1785): ein GESETZTER ``system_type`` ist eine vollstaendige Aussage
-und entscheidet allein — auch wenn er ``note``/``ban`` lautet und damit „gehoert
-nicht in diesen Bericht" bedeutet. Der Paket-Slug ``spritzentausch`` greift NUR,
-wenn ``system_type`` leer/NULL ist; sonst zoege ein Notiz-Typ mit dem Slug
-``spritzentausch`` seine Ereignisse in den Bericht.
+**Typaufloesung — ein Schluessel.** Exakt das Muster aus
+:func:`core.reporting.backends.sample_report_1.resolve_category`: der
+``report_key`` des Dokumentationstyps entscheidet, und zwar allein. Der frueher
+noetige Slug-Zweitschluessel (Refs #1741) ist mit E3 entfallen (Refs #1849) —
+mit ihm die Falle, dass ein Notiz-Typ mit dem Slug ``spritzentausch`` seine
+Ereignisse in den Bericht zieht (Refs #1785).
 
 **Feldwerte defensiv lesen.** ``data_json`` ist ein freies JSONB: es kann Werte
 aus Alt-Formularen, aus dem Offline-Bundle oder aus einer inzwischen geloeschten
@@ -91,12 +92,10 @@ _MISSING_VALUES_MESSAGE = _(
     "Ereignisse ohne verwertbare Zahlenwerte in „Ausgabe“/„Rückgabe“ sind in den Summen nicht enthalten"
 )
 
-# Die Typ-Bindung dieses Berichts (E1, Refs #1824): Erstschluessel
-# ``needle_exchange``, Zweitschluessel der Paket-Slug ``spritzentausch`` — nur
-# bei leerem ``system_type`` (siehe Modul-Docstring). Bewusst genau EIN Slug:
-# der Zweitschluessel darf keinen Typ hereinholen, den der Erstschluessel
-# bewusst auslaesst.
-TYP_BINDUNG = TypBindung((BindungsEintrag("needle_exchange", _("Spritzentausch"), slugs=("spritzentausch",)),))
+# Die Typ-Bindung dieses Berichts (E1, Refs #1824): der Berichtsschluessel
+# ``needle_exchange``. Einen Slug-Zweitschluessel gibt es seit E3 nicht mehr
+# (Entscheid E-E, Refs #1849) — der Bestand kam per Backfill herueber.
+TYP_BINDUNG = TypBindung((BindungsEintrag("needle_exchange", _("Spritzentausch")),))
 
 # Die beiden Feld-Bindungen — **getrennt**, nicht als eine Bindung mit zwei
 # Slugs: nur so heisst die Verfuegbarkeits-Pruefung „beide Vorlagen am

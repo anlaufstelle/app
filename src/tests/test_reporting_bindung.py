@@ -124,13 +124,6 @@ class TestTypBindungAbleitungen:
     def test_ziel_map_ist_der_bestandsalias(self):
         assert self.BINDUNG.ziel_map() == {"contact": "Kontakte", "counseling": "Beratung", "crisis": "Beratung"}
 
-    def test_slug_ziele_ist_der_zweitschluessel(self):
-        assert self.BINDUNG.slug_ziele() == {
-            "kontakt": "Kontakte",
-            "beratungsgespraech": "Beratung",
-            "krisengespraech": "Beratung",
-        }
-
     def test_vokabular_bildet_schluessel_auf_label_ab(self):
         assert self.BINDUNG.vokabular() == {
             "contact": "Kontakt",
@@ -139,87 +132,62 @@ class TestTypBindungAbleitungen:
         }
 
     def test_values_fields_mit_und_ohne_prefix(self):
-        """Seit E3 (Refs #1849) ist die Erststufe ``report_key``."""
-        assert self.BINDUNG.values_fields() == ("report_key", "slug")
-        assert self.BINDUNG.values_fields("document_type__") == ("document_type__report_key", "document_type__slug")
+        """Seit E3 (Refs #1849) genau EIN Feld: der Zweitschluessel ist entfallen."""
+        assert self.BINDUNG.values_fields() == ("report_key",)
+        assert self.BINDUNG.values_fields("document_type__") == ("document_type__report_key",)
 
     def test_values_fields_folgt_der_bindet_deklaration(self):
         """``ban_overview`` bleibt an ``system_type`` — eine Deklaration, kein Sonderweg."""
         verhalten = TypBindung((BindungsEintrag("ban", "Hausverbot"),), bindet="system_type")
-        assert verhalten.values_fields() == ("system_type", "slug")
+        assert verhalten.values_fields() == ("system_type",)
 
-    def test_ohne_slug_fallback_faellt_der_zweitschluessel_ganz_weg(self):
-        ohne = TypBindung((BindungsEintrag("ban", "Hausverbot", slugs=("hausverbot",)),), slug_fallback=False)
-        assert ohne.slug_ziele() == {}
-        assert ohne.values_fields() == ("report_key",)
-
-
-class TestAbweichungOhneSlugFallback:
-    """``slug_fallback=False`` muss **deklarierte** Slugs sperren — sonst prueft nichts.
-
-    Der Bestandsfall ``ban_overview`` deklariert gar keine Slugs; an ihm ist die
-    Abweichung nicht beobachtbar (sie faellt mit „es gibt nichts zu sperren"
-    zusammen). Diese Bindung nennt einen Slug **und** schaltet den Zweitschluessel
-    ab — nur so wird sichtbar, dass die Abschaltung wirkt und nicht bloss leer
-    laeuft.
-    """
-
-    BINDUNG = TypBindung(
-        (BindungsEintrag("ban", "Hausverbot", slugs=("hausverbot",)),),
-        slug_fallback=False,
-    )
-
-    @pytest.mark.parametrize("leer", [None, ""])
-    def test_der_deklarierte_slug_loest_nicht_auf(self, leer):
-        assert self.BINDUNG.resolve(leer, "hausverbot") is None
-        assert self.BINDUNG.resolve_key(leer, "hausverbot") is None
-
-    def test_der_erstschluessel_traegt_weiterhin(self):
-        assert self.BINDUNG.resolve("ban") == "ban"
-        assert self.BINDUNG.resolve_key("ban") == "ban"
-
-    def test_der_slug_steht_in_keiner_ableitung(self):
-        assert self.BINDUNG.slug_ziele() == {}
-        assert self.BINDUNG.values_fields() == ("report_key",)
+    def test_der_slug_steht_in_keiner_typ_ableitung_mehr(self):
+        """Entscheid E-E: auf Typ-Ebene entscheidet ausschliesslich der Schluessel."""
         assert "slug" not in str(self.BINDUNG.matching_q())
-
-    @pytest.mark.django_db
-    def test_sql_trifft_die_slug_zeile_nicht(self, facility):
-        """Dieselbe Abweichung in der Datenbank — Python- und SQL-Sicht bleiben einig."""
-        DocumentType.objects.create(facility=facility, name="Hausverbot-Notiz", slug="hausverbot", report_key=None)
-        DocumentType.objects.create(facility=facility, name="Leerer Typ", slug="hausverbot-2", report_key="")
-        assert not DocumentType.objects.filter(self.BINDUNG.matching_q()).exists()
-
-        echt = DocumentType.objects.create(facility=facility, name="Hausverbot", report_key="ban")
-        assert list(DocumentType.objects.filter(self.BINDUNG.matching_q())) == [echt]
+        assert "slug" not in str(self.BINDUNG.unmapped_q())
 
 
 class TestTypBindungResolve:
-    """Die #1785-Regel: ein GESETZTER Erstschluessel entscheidet allein."""
+    """Ein Schluessel, keine zweite Stufe (Entscheid E-E, Refs #1849)."""
 
     BINDUNG = TestTypBindungAbleitungen.BINDUNG
 
-    def test_erstschluessel_gewinnt(self):
-        assert self.BINDUNG.resolve("contact", "krisengespraech") == "Kontakte"
+    def test_deklarierter_schluessel_trifft(self):
+        assert self.BINDUNG.resolve("contact") == "Kontakte"
 
-    def test_gesetzter_aber_ausgeschlossener_erstschluessel_sperrt_den_slug(self):
-        """Ein ``ban``-Typ mit dem Slug ``kontakt`` bleibt draussen (Disclosure-Leck #1785)."""
-        assert self.BINDUNG.resolve("ban", "kontakt") is None
+    def test_nicht_deklarierter_schluessel_trifft_nicht(self):
+        """``excluded`` und jeder Fremdwert loesen zu ``None`` auf."""
+        assert self.BINDUNG.resolve("excluded") is None
+        assert self.BINDUNG.resolve("fantasie") is None
 
     @pytest.mark.parametrize("leer", [None, ""])
-    def test_slug_greift_nur_bei_leerem_erstschluessel(self, leer):
-        assert self.BINDUNG.resolve(leer, "kontakt") == "Kontakte"
+    def test_leerer_schluessel_trifft_nicht(self, leer):
+        assert self.BINDUNG.resolve(leer) is None
 
-    def test_unbekannter_slug_bleibt_ohne_zuordnung(self):
-        assert self.BINDUNG.resolve(None, "fremder-typ") is None
+    def test_ein_slug_rettet_nichts_mehr(self):
+        """Der Bestandsfall aus #1741, invertiert: frueher „Kontakte", heute nichts.
 
-    def test_ohne_slug_fallback_bleibt_der_leere_erstschluessel_ohne_zuordnung(self):
-        ohne = TypBindung((BindungsEintrag("ban", "Hausverbot"),), slug_fallback=False)
-        assert ohne.resolve(None) is None
-        assert ohne.resolve("ban") == "ban"
+        Der Aufloeser nimmt weiterhin beliebig viele Werte entgegen (die
+        Aufrufer reichen ``values_fields()`` durch) — er liest nur noch den
+        ersten.
+        """
+        assert self.BINDUNG.resolve(None, "kontakt") is None
+        assert self.BINDUNG.resolve("", "beratungsgespraech") is None
+
+    @pytest.mark.django_db
+    def test_sql_und_python_bleiben_auch_hier_einig(self, facility):
+        """Dieselbe Abweichung in der Datenbank — sonst zaehlte der Bericht anders
+        als der Vollstaendigkeitshinweis.
+        """
+        DocumentType.objects.create(facility=facility, name="Nur Slug", slug="kontakt", report_key=None)
+        DocumentType.objects.create(facility=facility, name="Leerer Schlüssel", slug="kontakt-2", report_key="")
+        assert not DocumentType.objects.filter(self.BINDUNG.matching_q()).exists()
+
+        echt = DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
+        assert list(DocumentType.objects.filter(self.BINDUNG.matching_q())) == [echt]
 
     def test_resolve_row_liest_die_deklarierten_values_felder(self):
-        row = {"document_type__report_key": "", "document_type__slug": "beratungsgespraech"}
+        row = {"document_type__report_key": "counseling"}
         assert self.BINDUNG.resolve_row(row, "document_type__") == "Beratung"
 
 
@@ -529,10 +497,10 @@ class TestAnforderung:
         assert _dummy_cls()().is_available(facility) is True
 
     def test_typ_bindung_verlangt_einen_aktiven_passenden_typ(self, facility):
-        anforderung = Anforderung(TypBindung((BindungsEintrag("contact", "Kontakt", slugs=("kontakt",)),)))
+        anforderung = Anforderung(TypBindung((BindungsEintrag("contact", "Kontakt"),)))
         assert anforderung.erfuellt(facility) is False
 
-        typ = DocumentType.objects.create(facility=facility, name="Kontakt", system_type="contact")
+        typ = DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
         assert anforderung.erfuellt(facility) is True
 
         typ.is_active = False
@@ -617,20 +585,21 @@ class TestSampleReport1Bindung:
         assert all(type(ziel) is str for ziel in TYP_BINDUNG.ziele())
 
     def test_bestandsaliasse_sind_ableitungen(self):
-        """``CATEGORY_MAP``/``SLUG_MAP``/``resolve_category`` bleiben — als Ableitung.
+        """``CATEGORY_MAP``/``resolve_category`` bleiben — als Ableitung.
 
         Ihr **Inhalt** ist literal gepinnt, wo ihn die Fremd-Importeure lesen
         (``test_reporting_sample_report_1.py``, ``test_export.py``,
         ``test_mutation_followup_export.py``); ein Vergleich gegen die
         Deklaration waere hier tautologisch, weil die Aliasse aus ihr entstehen.
-        Gepruefte Aussage ist deshalb die Aufloesungs-Semantik: der gesetzte
-        Erstschluessel gewinnt gegen den anderslautenden Slug (Refs #1785).
+        Gepruefte Aussage ist deshalb die Aufloesungs-Semantik: der
+        Berichtsschluessel entscheidet, und zwar allein (Entscheid E-E — der
+        Slug hat seit E3 keinen Zugang mehr, Refs #1849).
         """
         from core.reporting.backends import sample_report_1 as modul
 
-        assert modul.resolve_category("contact", "krisengespraech") == "Kontakte"
-        assert modul.resolve_category("ban", "kontakt") is None
-        assert modul.resolve_category(None, "beratungsgespraech") == "Beratung"
+        assert modul.resolve_category("contact") == "Kontakte"
+        assert modul.resolve_category("excluded") is None
+        assert modul.resolve_category(None, "beratungsgespraech") is None
 
     def test_backend_deklariert_die_bindung(self):
         from core.reporting.backends.sample_report_1 import TYP_BINDUNG
@@ -677,12 +646,12 @@ class TestMonthlyTrendBindung:
         DocumentType.objects.create(
             facility=facility,
             name="Kontakt-Person",
-            system_type="contact",
+            report_key="contact",
             entity_type=DocumentType.EntityType.CLIENT,
         )
         assert backend.is_available(facility) is False
 
-        DocumentType.objects.create(facility=facility, name="Kontakt", system_type="contact")
+        DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
         assert backend.is_available(facility) is True
 
 
@@ -700,15 +669,6 @@ class TestCounselingHoursBindung:
         from core.reporting.backends.counseling_hours import TYP_BINDUNG
 
         assert all(type(ziel) is str for ziel in TYP_BINDUNG.ziele())
-
-    def test_slug_zweitschluessel_bleibt_konservativ(self):
-        from core.reporting.backends import counseling_hours as modul
-
-        assert modul.SLUG_MAP == {
-            "kontakt": "contact",
-            "beratungsgespraech": "counseling",
-            "krisengespraech": "crisis",
-        }
 
     def test_feld_bindung_bindet_ueber_den_berichtsschluessel(self):
         from core.reporting.backends import counseling_hours as modul
@@ -805,7 +765,7 @@ class TestNeedleExchangeBindung:
         from core.reporting.backends.needle_exchange_balance import TYP_BINDUNG
 
         assert TYP_BINDUNG.keys() == ("needle_exchange",)
-        assert TYP_BINDUNG.slug_ziele() == {"spritzentausch": "needle_exchange"}
+        assert TYP_BINDUNG.bindet == "report_key"
 
     @pytest.mark.django_db
     def test_beide_felder_muessen_am_selben_typ_haengen(self, facility):
@@ -838,19 +798,22 @@ class TestNeedleExchangeBindung:
 
 
 class TestBanOverviewBindung:
-    """Die bewusste Abweichung ist jetzt ein Feld, kein Fliesstext-Hinweis."""
+    """Der Verhaltens-Bericht bleibt an ``system_type`` — als Deklaration, nicht als Fliesstext."""
 
-    def test_deklariert_ohne_slug_fallback_und_bindet_an_system_type(self):
+    def test_bindet_an_system_type(self):
         from core.reporting.backends.ban_overview import TYP_BINDUNG
 
         assert TYP_BINDUNG.keys() == ("ban",)
-        assert TYP_BINDUNG.slug_fallback is False
         assert TYP_BINDUNG.bindet == "system_type"
         assert registry.get_backend("ban-overview").typ_bindung is TYP_BINDUNG
 
     @pytest.mark.django_db
     def test_der_slug_holt_kein_hausverbot_herein(self, facility):
-        """Ein bewusst nicht gesetzter ``system_type`` bekommt ueber den Namen keinen Zugang (Refs #1785)."""
+        """Ein bewusst nicht gesetzter ``system_type`` bekommt ueber den Namen keinen Zugang (Refs #1785).
+
+        Seit E-E gilt das ohnehin fuer jede Bindung — hier war es von Anfang an
+        so, und der Bericht ist der Grund, warum es so sein musste.
+        """
         from core.reporting.backends.ban_overview import TYP_BINDUNG
 
         DocumentType.objects.create(facility=facility, name="Hausverbot-Notiz", slug="hausverbot", system_type=None)
@@ -1111,21 +1074,18 @@ class TestSchluesselAufloesung:
     BINDUNG = TestTypBindungAbleitungen.BINDUNG
 
     def test_schluessel_statt_ziel(self):
-        assert self.BINDUNG.resolve("crisis", "") == "Beratung"
-        assert self.BINDUNG.resolve_key("crisis", "") == "crisis"
-        assert self.BINDUNG.resolve("counseling", "") == "Beratung"
-        assert self.BINDUNG.resolve_key("counseling", "") == "counseling"
-
-    def test_slug_rueckweg_liefert_den_schluessel(self):
-        assert self.BINDUNG.resolve_key(None, "krisengespraech") == "crisis"
+        assert self.BINDUNG.resolve("crisis") == "Beratung"
+        assert self.BINDUNG.resolve_key("crisis") == "crisis"
+        assert self.BINDUNG.resolve("counseling") == "Beratung"
+        assert self.BINDUNG.resolve_key("counseling") == "counseling"
 
     def test_dieselbe_ausschlussregel_wie_resolve(self):
-        """Ein gesetzter, nicht deklarierter Erstschluessel sperrt den Slug (Refs #1785)."""
-        assert self.BINDUNG.resolve_key("ban", "kontakt") is None
-        assert self.BINDUNG.resolve_key(None, "fremder-typ") is None
+        """Nicht deklarierte und leere Schluessel liefern in beiden Sichten ``None``."""
+        assert self.BINDUNG.resolve_key("excluded") is None
+        assert self.BINDUNG.resolve_key(None) is None
 
     def test_resolve_key_row_liest_dieselben_felder(self):
-        row = {"document_type__report_key": "", "document_type__slug": "beratungsgespraech"}
+        row = {"document_type__report_key": "counseling"}
         assert self.BINDUNG.resolve_key_row(row, "document_type__") == "counseling"
 
     def test_schluessel_und_ziel_stimmen_ueberein(self):

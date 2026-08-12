@@ -253,11 +253,13 @@ class TestBuildDataset:
 
 
 class TestTypaufloesung:
-    def test_slug_zweitschluessel_ohne_system_type(self, backend, facility, admin_user, date_range):
+    def test_typ_ohne_system_type_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
+        """Die beiden Achsen sind unabhaengig (Entscheid E-D)."""
         typ = _typ_mit_feld(
             facility,
             "Kontakt",
             system_type=None,
+            report_key="contact",
             feld_name="Leistungen",
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
         )
@@ -267,6 +269,23 @@ class TestTypaufloesung:
         result = backend.build_dataset(facility, *date_range)
 
         assert result.records == [{"feld": LEISTUNGEN_SLUG, "option": "essen", "count": 1}]
+
+    def test_der_slug_allein_zaehlt_nicht_mehr(self, backend, facility, admin_user, date_range):
+        """Entscheid E-E (Refs #1849): der Paket-Slug ordnet nichts mehr zu."""
+        typ = _typ_mit_feld(
+            facility,
+            "Kontakt",
+            system_type=None,
+            report_key=None,
+            feld_name="Leistungen",
+            feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
+        )
+        assert typ.slug == "kontakt"
+        _events(facility, typ, admin_user, 1, {LEISTUNGEN_SLUG: ["essen"]})
+
+        result = backend.build_dataset(facility, *date_range)
+
+        assert result.records == []
 
     def test_gesetzter_system_type_sperrt_den_zweitschluessel(self, backend, facility, admin_user, date_range):
         """Refs #1785: ein gesetzter, aber ausgeschlossener ``system_type``

@@ -75,12 +75,23 @@ def doc_type_kontakt(facility):
 
 
 @pytest.fixture
-def doc_type_beratung_per_slug(facility):
-    """Zweitschluessel-Fall: kein ``system_type``, Slug in ``SLUG_MAP``."""
+def doc_type_beratung_ohne_system_type(facility):
+    """Die beiden Achsen sind unabhaengig (E-D): Schluessel ja, Systemtyp nein."""
     return DocumentType.objects.create(
         facility=facility,
         name="Beratungsgespräch",
         slug="beratungsgespraech",
+        report_key="counseling",
+    )
+
+
+@pytest.fixture
+def doc_type_nur_paket_slug(facility):
+    """Entscheid E-E: der Paket-Slug allein bindet seit E3 nicht mehr."""
+    return DocumentType.objects.create(
+        facility=facility,
+        name="Eigene Beratung",
+        slug="beratungsgespraech-2",
     )
 
 
@@ -156,13 +167,13 @@ class TestBuildDataset:
         assert result.summary == {"total": 2}
 
     def test_kategorien_je_monat_sortiert(
-        self, backend, facility, staff_user, doc_type_kontakt, doc_type_beratung_per_slug
+        self, backend, facility, staff_user, doc_type_kontakt, doc_type_beratung_ohne_system_type
     ):
-        """Slug-Zweitschluessel greift, und die Zeilenordnung ist
-        (Monat, Kategorie) — wertunabhaengig, damit ``ORDER_INPUT`` traegt."""
+        """Zwei Kategorien, und die Zeilenordnung ist (Monat, Kategorie) —
+        wertunabhaengig, damit ``ORDER_INPUT`` traegt."""
         _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 1, 10))
-        _event(facility, doc_type_beratung_per_slug, staff_user, _berlin(2026, 1, 11))
-        _event(facility, doc_type_beratung_per_slug, staff_user, _berlin(2026, 1, 12))
+        _event(facility, doc_type_beratung_ohne_system_type, staff_user, _berlin(2026, 1, 11))
+        _event(facility, doc_type_beratung_ohne_system_type, staff_user, _berlin(2026, 1, 12))
         _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 2, 5))
 
         result = backend.build_dataset(facility, JANUAR, FEBRUAR_ENDE)
@@ -273,8 +284,17 @@ class TestIsAvailable:
     def test_positiv_ueber_den_report_key(self, backend, facility, doc_type_kontakt):
         assert backend.is_available(facility) is True
 
-    def test_positiv_ueber_slug_zweitschluessel(self, backend, facility, doc_type_beratung_per_slug):
+    def test_positiv_ohne_system_type(self, backend, facility, doc_type_beratung_ohne_system_type):
         assert backend.is_available(facility) is True
+
+    def test_negativ_wenn_nur_der_paket_slug_passt(self, backend, facility, doc_type_nur_paket_slug):
+        """Entscheid E-E (Refs #1849): der Slug macht den Bericht nicht mehr waehlbar.
+
+        Das ist die Kehrseite des Wegfalls, auf die der Inventar-Command vor der
+        Abschaltung geschaut hat — ein Bestandstyp OHNE Schluessel laesst das
+        Backend aus dem Dropdown fallen.
+        """
+        assert backend.is_available(facility) is False
 
     def test_negativ_ohne_passenden_dokumenttyp(self, backend, facility, doc_type_hausverbot):
         assert backend.is_available(facility) is False

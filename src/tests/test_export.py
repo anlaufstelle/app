@@ -47,12 +47,15 @@ def staff_user(facility):
     )
 
 
+# E3 (Refs #1849): ``report_key`` folgt dem Backfill — so sieht ein Bestand
+# nach dem Update aus (``report_key_fuer`` bildet dieselbe Regel ab).
 @pytest.fixture
 def doc_type_kontakt(facility):
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt",
         system_type=DocumentType.SystemType.CONTACT,
+        report_key=report_key_fuer(DocumentType.SystemType.CONTACT),
     )
 
 
@@ -62,6 +65,7 @@ def doc_type_notiz(facility):
         facility=facility,
         name="Notiz",
         system_type=DocumentType.SystemType.NOTE,
+        report_key=report_key_fuer(DocumentType.SystemType.NOTE),
     )
 
 
@@ -71,6 +75,7 @@ def doc_type_hausverbot(facility):
         facility=facility,
         name="Hausverbot",
         system_type=DocumentType.SystemType.BAN,
+        report_key=report_key_fuer(DocumentType.SystemType.BAN),
     )
 
 

@@ -311,20 +311,21 @@ class TestDescribeTypeBindings:
         registry.register_backend("beschreibung-a2")(
             _mit_typ_bindung(
                 "Hausverbote",
-                TypBindung((BindungsEintrag("ban", "Hausverbot"),), slug_fallback=False, bindet="system_type"),
+                TypBindung((BindungsEintrag("ban", "Hausverbot"),), bindet="system_type"),
             )
         )
         doc_type = SimpleNamespace(report_key=None, system_type="ban", slug="")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Hausverbote (Hausverbot)"]
 
-    def test_treffer_ueber_slug_fallback(self):
+    def test_kein_slug_zweitschluessel_mehr(self):
+        """Entscheid E-E (Refs #1849): der Slug ordnet auf Typ-Ebene nichts mehr zu."""
         registry.register_backend("beschreibung-b")(
             _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt", slugs=("kontakt",)),)))
         )
         doc_type = SimpleNamespace(report_key=None, system_type=None, slug="kontakt")
 
-        assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Testbericht (Kontakt)"]
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == []
 
     def test_kein_treffer_liefert_leere_liste(self):
         registry.register_backend("beschreibung-c")(

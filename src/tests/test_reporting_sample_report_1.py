@@ -26,7 +26,6 @@ from core.reporting.backends.sample_report_1 import (
     _ISSUE_SEVERITIES,
     _SUPPRESSED_MESSAGES,
     CATEGORY_MAP,
-    SLUG_MAP,
     SampleReport1Backend,
 )
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
@@ -703,134 +702,74 @@ class TestValidateCompleteness:
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
 
 
-class TestSlugZweitschluessel:
-    """Refs #1741 (Entscheid [#1785]): ``system_type`` zuerst, ``slug`` danach.
+class TestKeinSlugZweitschluessel:
+    """Entscheid E-E (Refs #1849): der Slug-Zweitschluessel ist entfallen.
 
-    Der Zweitschluessel existiert fuer die Typen, die ueber ``system_type``
-    **keine** Zuordnung haben — einrichtungseigene Typen ohne Systemtyp und
-    solche mit ``note``. Er ist bewusst hart kodiert (kein Config-Feld) und
-    facility-agnostisch: gematcht wird der Slug-String, nicht die Einrichtung.
+    Bis E3 galt: ``system_type`` zuerst, sonst der Slug (Refs #1741). Der Weg
+    war unsichtbar — man musste ihn aus dem Slug erschliessen — und hat in
+    #1785 ein
+    Disclosure-Leck erzeugt. ``report_key`` loest dasselbe Problem sichtbar;
+    der Bestand kam per Backfill herueber. Diese Klasse ist der invertierte
+    Bestandstest: dieselben Faelle, jetzt mit der umgekehrten Erwartung.
     """
 
-    def test_slug_map_deckt_genau_die_paket_slugs_der_gemappten_typen_ab(self):
-        """Globale Slug-Konvention = die Paket-Slugs aus ``default.yaml``."""
-        assert SLUG_MAP == {
-            "kontakt": "Kontakte",
-            "krisengespraech": "Beratung",
-            "beratungsgespraech": "Beratung",
-            "medizinische-versorgung": "Versorgung",
-            "spritzentausch": "Versorgung",
-            "begleitung": "Vermittlung",
-            "vermittlung": "Vermittlung",
-        }
-        # ``notiz``/``hausverbot`` gehoeren so wenig in den Bericht wie ihre
-        # system_types — der Zweitschluessel darf sie nicht durch die Hintertuer
-        # hereinholen.
-        assert "notiz" not in SLUG_MAP
-        assert "hausverbot" not in SLUG_MAP
-
-    def test_system_type_hat_vorrang_vor_dem_slug(self, backend, facility, make_doc_type, make_event):
-        """Ein gemappter ``system_type`` gewinnt gegen einen anderslautenden Slug."""
-        typ = make_doc_type("Erstkontakt", DocumentType.SystemType.CONTACT, slug="beratungsgespraech")
-        make_event(typ)
+    def test_slug_allein_ordnet_nicht_mehr_zu(self, backend, facility, make_doc_type, make_event):
+        """Der Bestandsfall — frueher „Beratung 1", heute nichts."""
+        make_event(make_doc_type("Eigene Beratung", None, slug="beratungsgespraech"))
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
-        assert summary["by_category"] == [("Kontakte", 1)]
+        assert summary["by_category"] == []
+        assert summary["total"] == 0
 
-    def test_typ_ohne_system_type_wird_ueber_den_slug_gemappt(self, backend, facility, make_doc_type, make_event):
-        typ = make_doc_type("Eigene Beratung", None, slug="beratungsgespraech")
-        make_event(typ)
+    def test_der_backfill_hat_genau_diese_typen_gehoben(self, backend, facility, make_doc_type, make_event):
+        """Gegenprobe zur Zeile darueber: mit dem Schluessel, den Migration 0145
+        einem slug-gemappten Bestandstyp gibt, zaehlt derselbe Typ weiter.
+
+        Das ist die Zusage, die den Wegfall traegt — ohne den Backfill fielen
+        genau diese Typen still aus dem Bericht.
+        """
+        make_event(make_doc_type("Eigene Beratung", None, slug="beratungsgespraech", report_key="counseling"))
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
         assert summary["by_category"] == [("Beratung", 1)]
         assert summary["total"] == 1
 
-    def test_bewusst_ausgeschlossener_system_type_wird_nicht_ueber_den_slug_hereingeholt(
-        self, backend, facility, make_doc_type, make_event
-    ):
-        """Der Erstschluessel gewinnt AUCH seine Ausschluesse (Refs #1785, Review).
-
-        ``note`` und ``ban`` stehen bewusst nicht in ``CATEGORY_MAP``. Ein gesetzter
-        ``system_type`` ist eine Aussage — auch die Aussage „gehoert nicht in den
-        Bericht". Der Slug darf sie nicht hintergehen (sonst zoege ein
-        Hausverbots-Typ mit dem Slug ``kontakt`` Bann-Ereignisse in den Bericht —
-        ein Disclosure-Leck). Der Slug greift nur, wo der Erstschluessel GAR keine
-        Aussage trifft (``system_type`` leer/NULL, siehe
-        :meth:`test_typ_ohne_system_type_wird_ueber_den_slug_gemappt`).
-        """
-        make_event(make_doc_type("Vermittlung", DocumentType.SystemType.NOTE, slug="vermittlung"))
-        make_event(make_doc_type("Hausnotiz", DocumentType.SystemType.BAN, slug="kontakt"))
-
-        summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
-
-        assert summary["by_category"] == []
-        assert summary["total"] == 0
-
-    def test_unbekannter_slug_bleibt_ohne_zuordnung(self, backend, facility, make_doc_type, make_event):
-        typ = make_doc_type("Hausinterne Notiz", None, slug="hausinterne-notiz")
-        make_event(typ)
-
-        summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
-
-        assert summary["by_category"] == []
-        assert summary["total"] == 0
-
-    def test_slug_gemappter_typ_gilt_nicht_mehr_als_ohne_zuordnung(
+    def test_slug_allein_erzeugt_jetzt_den_vollstaendigkeitshinweis(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
-        """``validate_completeness`` zieht mit: gemappt ist gemappt."""
+        """Die andere Haelfte der Inversion: der Typ ist eine echte Luecke."""
         person = make_client("JA-80", Client.AgeCluster.AGE_18_26)
         make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
 
-        assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
-
-    def test_nur_der_slug_ohne_treffer_erzeugt_die_warnung(
-        self, backend, facility, make_doc_type, make_client, make_event
-    ):
-        """Gegenprobe: ohne Slug-Treffer bleibt die Meldung wie im Bestand."""
-        person = make_client("JA-81", Client.AgeCluster.AGE_18_26)
-        make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
-        make_event(make_doc_type("Sonstiges", None), person)
-
-        issues = backend.validate_completeness(facility, DATE_FROM, DATE_TO)
-
-        assert issues == [
-            CompletenessIssue(
-                "unmapped_system_types",
-                "1 Ereignisse in 1 Dokumentationstypen ohne Berichtszuordnung im Zeitraum",
-                "warning",
-                count=1,
-            )
+        assert [issue.code for issue in backend.validate_completeness(facility, DATE_FROM, DATE_TO)] == [
+            "unmapped_system_types"
         ]
 
-    def test_slug_matcht_facility_agnostisch(self, backend, make_doc_type, make_event):
-        """Der Slug einer anderen Einrichtung wird genauso gematcht.
-
-        Es gibt keine „Paket-Herkunft" am Datensatz — die Konvention ist global,
-        und ein einrichtungseigener Typ mit demselben Slug faellt bewusst
-        darunter (Entscheid [#1785]).
+    def test_ein_gesetzter_schluessel_entscheidet_gegen_jeden_slug(self, backend, facility, make_doc_type, make_event):
+        """Frueher brauchte es dafuer die #1785-Regel („Erstschluessel gewinnt
+        inklusive seiner Ausschluesse"). Heute gibt es schlicht nichts, was den
+        Schluessel hintergehen koennte.
         """
-        fremde_org = Organization.objects.create(name="Slug-Org")
-        fremde_facility = Facility.objects.create(organization=fremde_org, name="Slug-Einrichtung")
-        typ = make_doc_type("Eigener Kontakt", None, slug="kontakt", doc_facility=fremde_facility)
-        make_event(typ, event_facility=fremde_facility)
+        make_event(make_doc_type("Erstkontakt", None, slug="beratungsgespraech", report_key="contact"))
+        make_event(make_doc_type("Hausnotiz", None, slug="kontakt", report_key="excluded"))
 
-        summary = backend.build_dataset(fremde_facility, DATE_FROM, DATE_TO).summary
+        summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
         assert summary["by_category"] == [("Kontakte", 1)]
+        assert summary["total"] == 1
 
-    def test_slug_zuordnung_bleibt_aus_den_altersgruppen_heraus(
+    def test_zuordnung_bleibt_aus_den_altersgruppen_heraus(
         self, backend, facility, make_doc_type, make_client, make_event
     ):
         """Die Buckets entstehen weiter mapping-agnostisch (Bestandszusage).
 
         ``by_age_cluster`` zaehlt alle Ereignisse mit Personenbezug, gemappt
-        oder nicht — der Zweitschluessel darf daran nichts aendern.
+        oder nicht — die Umstellung des Erstschluessels aendert daran nichts.
         """
         person = make_client("JA-82", Client.AgeCluster.U18)
-        make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
+        make_event(make_doc_type("Eigene Begleitung", None, report_key="accompaniment"), person)
         make_event(make_doc_type("Sonstiges", None), person)
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary

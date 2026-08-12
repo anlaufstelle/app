@@ -9,8 +9,8 @@ Zeile mit Ereigniszahl und aufsummierten Minuten aus der Paket-Feldvorlage
 **Kategorien.** Die drei Paket-Dokumentationstypen, an denen ``dauer`` haengt:
 ``kontakt`` (``contact``), ``beratungsgespraech`` (``counseling``) und
 ``krisengespraech`` (``crisis``). Die Aufloesung folgt dem
-``resolve_category``-Muster (Refs #1741/#1785): ``system_type`` zuerst und
-exklusiv, der Paket-Slug nur bei leerem ``system_type``.
+``resolve_category``-Muster: seit E3 (Refs #1849) entscheidet der
+``report_key`` des Dokumentationstyps, und zwar allein.
 
 Der Zeilenschluessel ``kategorie`` traegt den **``system_type``-Wert selbst**
 (``"contact"``/``"counseling"``/``"crisis"``) und ist damit sprachunabhaengig
@@ -54,7 +54,7 @@ konkrete:
 **alle** Kontakt-Ereignisse des Zeitraums, ``events_leistungen`` in
 :mod:`core.reporting.backends.service_distribution` nur die **mit** Auswahlwert
 (die Ereignismenge ist also nicht dieselbe, wohl aber die Obermenge — der
-Erstschluessel ``system_type`` und der Slug-Zweitschluessel sind dieselben).
+Berichtsschluessel ist derselbe).
 Ihre **Differenz** ist die Zahl der Kontakte **ohne** Leistungs-Eintrag — eine
 Groesse, die in keinem der beiden Berichte steht und deshalb durch keine
 Suppressionsregel laeuft. Fuer ``crisis`` und ``events_art_der_krise`` gilt
@@ -64,8 +64,8 @@ implizit eine dritte, ungeprueft kleine Zahl.
 **(2) Reproduktion der Sachbericht-Kategorien — inklusive Aufhebung von dessen
 Sekundaer-Suppression** (Refs #1754, finale Fix-Welle). Die Kategorien dieses
 Berichts sind die Kategorien des Sachberichts
-(:mod:`core.reporting.backends.sample_report_1`): dieselbe Aufloesungsordnung,
-dieselben Slugs, dieselbe Basismenge (sichtbare Ereignisse des Zeitraums je
+(:mod:`core.reporting.backends.sample_report_1`): dieselbe Aufloesung,
+dieselben Schluessel, dieselbe Basismenge (sichtbare Ereignisse des Zeitraums je
 Typ). ``events`` je Zeile ist damit **dieselbe Zaehlgroesse** wie die
 Kategoriezahl dort, nur um die Minutenspalte verfeinert. Es ist also eine
 Verfeinerung im Sinne der Auflage aus :mod:`core.reporting.backends.monthly_trend`
@@ -141,14 +141,11 @@ from core.services.file_vault import safe_decrypt
 # sie ist fest und damit wertunabhaengig (K5), deshalb genuegt ``ORDER_INPUT``
 # an den Suppressions-Aufrufstellen.
 #
-# ``slugs`` bewusst nur die drei Paket-Slugs, deren ``system_type`` ohnehin
-# deklariert ist — der Zweitschluessel darf nichts hereinholen, was der
-# Erstschluessel bewusst auslaesst (Refs #1741/#1785).
 TYP_BINDUNG = TypBindung(
     (
-        BindungsEintrag("contact", _("Kontakt"), slugs=("kontakt",)),
-        BindungsEintrag("counseling", _("Beratungsgespräch"), slugs=("beratungsgespraech",)),
-        BindungsEintrag("crisis", _("Krisengespräch"), slugs=("krisengespraech",)),
+        BindungsEintrag("contact", _("Kontakt")),
+        BindungsEintrag("counseling", _("Beratungsgespräch")),
+        BindungsEintrag("crisis", _("Krisengespräch")),
     )
 )
 
@@ -157,9 +154,8 @@ TYP_BINDUNG = TypBindung(
 # nur eine Tabelle mit lauter Nullminuten.
 FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),), bindet="report_key")
 
-# Bestandsnamen als Ableitungen — eine Wahrheit, mehrere Sichten.
+# Bestandsname als Ableitung — eine Wahrheit, mehrere Sichten.
 KATEGORIEN: tuple[str, ...] = TYP_BINDUNG.ziele()
-SLUG_MAP = TYP_BINDUNG.slug_ziele()
 
 # Interner Zeilenschluessel: Zahl der Ereignisse, die zur Minutensumme dieser
 # Zeile beigetragen haben. Suppressions-EINGABE, nie Ausgabe — die
@@ -176,11 +172,8 @@ _MISSING_VALUES_MESSAGE = _("Ereignisse ohne verwertbare Dauer sind in den Minut
 
 
 # Kategorie eines Dokumentationstyps — ``None`` = gehoert nicht in den Bericht.
-# Aufloesungsordnung wie im Sachbericht: ein GESETZTER ``system_type``
-# entscheidet allein, auch wenn er hier gar nicht vorkommt (``note``/``ban``
-# heisst „nicht in diesen Bericht"); der Slug greift NUR bei leerem
-# ``system_type`` — sonst zoege ein Notiz-Typ mit dem Slug ``kontakt`` seine
-# Ereignisse in die Stundenbilanz (Refs #1741/#1785).
+# Aufloesung wie im Sachbericht: der ``report_key`` entscheidet, und zwar
+# allein (der Slug-Zweitschluessel ist mit E3 entfallen, Entscheid E-E).
 resolve_kategorie = TYP_BINDUNG.resolve
 
 # SQL-Entsprechung derselben Deklaration — ``matching_q()`` filtert auf
@@ -246,8 +239,8 @@ class CounselingHoursBackend(DatasetBackend):
         beitragende = dict.fromkeys(KATEGORIEN, 0)
         ohne_dauer = 0
         for zeile in payloads:
-            # Die Schluesselfelder kommen aus der Deklaration; wie viele es sind,
-            # entscheidet sie (der Zweitschluessel laesst sich abschalten).
+            # Die Schluesselfelder kommen aus der Deklaration; wie viele es
+            # sind, entscheidet sie.
             document_type_id, *schluessel, data = zeile
             kategorie = TYP_BINDUNG.resolve(*schluessel)
             if kategorie is None:  # pragma: no cover - der Filter laesst nichts anderes durch

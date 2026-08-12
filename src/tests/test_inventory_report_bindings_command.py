@@ -2,17 +2,16 @@
 
 Wertet die Reporting-Registry aus: Backend-Katalog (Typ-/Feld-Schlüssel je
 Backend) sowie je Einrichtung gebundene/ungebundene Dokumentationstypen und
-Feldvorlagen. Zugleich das Prüfwerkzeug für E3 Schritt 7 (Slug-Zweitschlüssel
-entfernen): die Kennzahl ``document_types.slug_only`` zählt Typen, deren
-Zuordnung AUSSCHLIESSLICH über den Slug-Zweitschlüssel zustande kommt
-(Erststufe/``system_type`` leer, Treffer nur über den Slug).
+Feldvorlagen. Der Command war zugleich das Gate für E3 Schritt 7; seit der
+Slug-Zweitschlüssel entfernt ist (Entscheid E-E, Refs #1849), ist die Kennzahl
+``slug_only`` gegenstandslos und aus dem Report verschwunden.
 
 **RLS-Guard** (Review-Befund #1848): ``core_facility`` ist NICHT RLS-gescoped
 — ``_resolve_facility`` gelingt also auch ohne Bypass-Kontext —, aber
 ``DocumentType``/``FieldTemplate`` stehen unter FORCE RLS. Ohne Bypass sähe
-der Lauf 0 Zeilen und meldete fälschlich ein erfülltes E3-Gate. Fail-loud wie
-``export_facility``/``purge_orphan_field_data``/``detect_breaches``
-(``TestRlsGuard`` unten).
+der Lauf 0 Zeilen und meldete fälschlich eine restlos gebundene Einrichtung.
+Fail-loud wie ``export_facility``/``purge_orphan_field_data``/
+``detect_breaches`` (``TestRlsGuard`` unten).
 """
 
 import json
@@ -33,7 +32,7 @@ def _run(*args) -> str:
 
 @pytest.mark.django_db
 class TestRlsGuard:
-    """Ohne Bypass-Kontext fail-loud — sonst falsch-grünes E3-Gate (Review-Befund #1848)."""
+    """Ohne Bypass-Kontext fail-loud — sonst falsch-grünes Inventar (Review-Befund #1848)."""
 
     def test_aborts_loud_without_bypass_context(self, facility, monkeypatch):
         from core.management.commands import inventory_report_bindings as cmd
@@ -100,7 +99,6 @@ class TestDocumentTypeInventory:
         data = json.loads(out)
         bound_names = {e["name"] for e in data["document_types"]["bound"]}
         assert "Spritzentausch" in bound_names
-        assert data["document_types"]["slug_only"] == []
 
     def test_unbound_type_has_no_binding(self, facility):
         DocumentType.objects.create(facility=facility, name="Eigene Notiz")
@@ -109,26 +107,22 @@ class TestDocumentTypeInventory:
         unbound_names = {e["name"] for e in data["document_types"]["unbound"]}
         assert "Eigene Notiz" in unbound_names
 
-    def test_slug_only_binding_is_flagged_as_own_metric(self, facility):
-        """E3-Gate (Schritt 7): Erststufe leer, Slug 'kontakt' trifft ueber den Zweitschluessel."""
+    def test_paket_slug_allein_bindet_nicht_mehr(self, facility):
+        """Entscheid E-E (Refs #1849): ohne Berichtsschlüssel keine Zuordnung —
+        auch wenn der Slug einer der Paket-Slugs ist."""
         DocumentType.objects.create(facility=facility, name="Eigener Kontakttyp", slug="kontakt", report_key=None)
         out = _run("--facility", str(facility.pk), "--format", "json")
         data = json.loads(out)
-        slug_only_names = {e["name"] for e in data["document_types"]["slug_only"]}
-        assert "Eigener Kontakttyp" in slug_only_names
-        bound_names = {e["name"] for e in data["document_types"]["bound"]}
-        assert "Eigener Kontakttyp" in bound_names  # slug_only ist eine Teilmenge von bound
+        assert "Eigener Kontakttyp" in {e["name"] for e in data["document_types"]["unbound"]}
 
-    def test_type_bound_via_report_key_is_not_slug_only(self, facility):
-        """Eine GESETZTE Erststufe zählt nicht als 'ausschließlich über Slug' —
-        auch wenn zufällig derselbe Paket-Slug gesetzt ist."""
+    def test_report_key_bindet_unabhaengig_vom_slug(self, facility):
         DocumentType.objects.create(
-            facility=facility, name="Regulärer Kontakttyp", slug="kontakt", report_key="contact"
+            facility=facility, name="Regulärer Kontakttyp", slug="eigener-name", report_key="contact"
         )
         out = _run("--facility", str(facility.pk), "--format", "json")
         data = json.loads(out)
-        slug_only_names = {e["name"] for e in data["document_types"]["slug_only"]}
-        assert "Regulärer Kontakttyp" not in slug_only_names
+        eintrag = next(e for e in data["document_types"]["bound"] if e["name"] == "Regulärer Kontakttyp")
+        assert eintrag["report_key"] == "contact"
 
     def test_client_entity_type_is_excluded(self, facility):
         """NUR entity_type=event — an Personen-Typen ist die Berichtsfrage gegenstandslos."""
@@ -175,9 +169,10 @@ class TestOutputHandling:
         data = json.loads(target.read_text(encoding="utf-8"))
         assert data["facility"]["id"] == str(facility.pk)
 
-    def test_text_summary_line_reports_gate_status(self, facility):
+    def test_text_summary_line_reports_unbound_types(self, facility):
+        DocumentType.objects.create(facility=facility, name="Ohne Zuordnung")
         out = _run("--facility", str(facility.pk))
-        assert "Slug-Zweitschlüssel" in out
+        assert "ohne Berichtszuordnung" in out
 
     def test_json_is_stable_and_ensure_ascii_false(self, facility):
         DocumentType.objects.create(facility=facility, name="Ünïcödé-Typ")

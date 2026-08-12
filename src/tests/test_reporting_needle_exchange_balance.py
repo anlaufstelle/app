@@ -212,7 +212,10 @@ class TestBuildDataset:
         ``safe_decrypt`` liefert einen String zurueck — die Koersion muss ihn fassen.
         """
         doc_type = DocumentType.objects.create(
-            facility=facility, name="Spritzentausch", system_type=DocumentType.SystemType.NEEDLE_EXCHANGE
+            facility=facility,
+            name="Spritzentausch",
+            system_type=DocumentType.SystemType.NEEDLE_EXCHANGE,
+            report_key="needle_exchange",
         )
         for feld in (_feld(facility, "Ausgabe", encrypted=True), _feld(facility, "Rückgabe", encrypted=True)):
             DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
@@ -260,10 +263,9 @@ class TestBuildDataset:
 
 
 class TestTypaufloesung:
-    def test_slug_zweitschluessel_greift_ohne_system_type(self, backend, facility, admin_user, date_range):
-        """Einrichtungseigener Typ ohne ``system_type``, aber mit Paket-Slug."""
-        doc_type = _spritzentausch_typ(facility, system_type=None)
-        assert doc_type.slug == "spritzentausch"
+    def test_typ_ohne_system_type_zaehlt_ueber_den_report_key(self, backend, facility, admin_user, date_range):
+        """Einrichtungseigener Typ ohne ``system_type``, aber mit Schluessel (E-D)."""
+        doc_type = _spritzentausch_typ(facility, system_type=None, report_key="needle_exchange")
         _event(facility, doc_type, admin_user, {"ausgabe": 8, "rueckgabe": 2})
 
         result = backend.build_dataset(facility, *date_range)
@@ -271,11 +273,9 @@ class TestTypaufloesung:
         assert result.summary["events"] == 1
         assert result.summary["saldo"] == 6
 
-    def test_gesetzter_system_type_sperrt_den_zweitschluessel(self, backend, facility, admin_user, date_range):
-        """Refs #1785: ein GESETZTER ``system_type`` ist eine vollstaendige
-        Aussage — der Slug rettet einen bewusst ausgeschlossenen Typ nicht.
-        """
-        doc_type = _spritzentausch_typ(facility, system_type=DocumentType.SystemType.NOTE)
+    def test_der_paket_slug_allein_zaehlt_nicht_mehr(self, backend, facility, admin_user, date_range):
+        """Entscheid E-E (Refs #1849): der Slug ``spritzentausch`` ordnet nichts mehr zu."""
+        doc_type = _spritzentausch_typ(facility, system_type=None, report_key=None)
         assert doc_type.slug == "spritzentausch"
         _event(facility, doc_type, admin_user, {"ausgabe": 8, "rueckgabe": 2})
 
@@ -459,7 +459,13 @@ class TestIsAvailable:
 
         assert backend.is_available(facility) is False
 
-    def test_slug_zweitschluessel_auch_hier(self, backend, facility):
-        _spritzentausch_typ(facility, system_type=None)
+    def test_report_key_ohne_system_type_genuegt(self, backend, facility):
+        _spritzentausch_typ(facility, system_type=None, report_key="needle_exchange")
 
         assert backend.is_available(facility) is True
+
+    def test_paket_slug_allein_macht_nicht_verfuegbar(self, backend, facility):
+        """Kehrseite von E-E: ohne Schluessel faellt das Backend aus dem Dropdown."""
+        _spritzentausch_typ(facility, system_type=None, report_key=None)
+
+        assert backend.is_available(facility) is False

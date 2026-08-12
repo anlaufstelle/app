@@ -61,13 +61,15 @@ from core.services.dashboard.statistics import PERSONS_KEY
 # Merge. ``label`` ist dagegen der uebersetzte Name des SCHLUESSELS und hat mit
 # der Kategorie nichts zu tun.
 #
-# **``slugs`` = Zweitschluessel** (Refs #1741, Entscheid in
-# #1785).
-# ``system_type`` ist ein Kern-Datenmodell-Enum und eingefroren (RFC #1748): ein
-# einrichtungseigener Dokumentationstyp hat oft gar keinen — oder ``note``, was
-# exportseitig identisch mit NULL ist. Genau diese Typen tauchten bisher
-# ausnahmslos als „ohne Berichtszuordnung" im Vollstaendigkeitshinweis auf,
-# obwohl ihr Slug sie eindeutig benennt.
+# **Kein Zweitschluessel mehr** (Entscheid E-E, Refs #1849). Bis E3 griff
+# neben dem Erstschluessel ein Slug-Zweitschluessel (Refs #1741): ein Typ ohne
+# ``system_type``, dessen aus dem Namen abgeleiteter Slug einer der sieben
+# Paket-Slugs war, wurde ebenfalls zugeordnet. Der Weg war noetig, weil
+# ``system_type`` ein eingefrorenes Kern-Enum ist (RFC #1748) und einrichtungs-
+# eigene Typen oft gar keinen tragen — aber er war **unsichtbar** und hat in
+# #1785 ein
+# Disclosure-Leck erzeugt. ``report_key`` loest dasselbe Problem sichtbar und
+# ausdruecklich; der Bestand kam per Backfill (Migration ``0145``) herueber.
 #
 # **Warum hart kodiert.** Die Bindung ist Fachlogik *dieses* Berichts und
 # gehoert damit ins Backend, nicht in eine Einrichtungs-Einstellung: eine
@@ -75,41 +77,26 @@ from core.services.dashboard.statistics import PERSONS_KEY
 # mit dem ``category`` fuers Reporting ausgeschlossen ist, ADR-034/ADR-038).
 # Eine spaetere Konfigurierbarkeit bleibt Ausbaupfad, nicht Bestand.
 #
-# **Globale Slug-Konvention, facility-agnostisch.** Die Slugs sind die
-# Paket-Slugs aus ``core/packages/default.yaml`` — dort tragen sie die
-# Bedeutung, die diese Bindung annimmt. Gematcht wird ausschliesslich der
-# Slug-String, unabhaengig davon, ob der Typ aus dem Paket stammt oder in der
-# Config-UI entstanden ist: es gibt am Datensatz keine Herkunftsangabe, und ein
-# einrichtungseigener Typ mit dem Slug ``beratungsgespraech`` IST ein
-# Beratungsgespraech. Die Slugs sind je Einrichtung eindeutig und nach
-# Erstellung unveraenderlich (M2, ADR-037) — dieselbe Stabilitaetszusage wie
-# bei ``system_type``.
-#
-# **Bewusst konservativ.** Nur die sieben Paket-Slugs, deren ``system_type``
-# ohnehin deklariert ist. ``notiz`` und ``hausverbot`` fehlen aus demselben
-# Grund, aus dem ``note``/``ban`` fehlen — der Zweitschluessel darf keine
-# Kategorie hereinholen, die der Erstschluessel bewusst auslaesst.
 TYP_BINDUNG = TypBindung(
     (
-        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte", slugs=("kontakt",)),
-        BindungsEintrag("crisis", _("Krisengespräch"), ziel="Beratung", slugs=("krisengespraech",)),
-        BindungsEintrag("medical", _("Medizinische Versorgung"), ziel="Versorgung", slugs=("medizinische-versorgung",)),
-        BindungsEintrag("needle_exchange", _("Spritzentausch"), ziel="Versorgung", slugs=("spritzentausch",)),
-        BindungsEintrag("accompaniment", _("Begleitung"), ziel="Vermittlung", slugs=("begleitung",)),
-        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung", slugs=("beratungsgespraech",)),
-        BindungsEintrag("referral", _("Vermittlung"), ziel="Vermittlung", slugs=("vermittlung",)),
+        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte"),
+        BindungsEintrag("crisis", _("Krisengespräch"), ziel="Beratung"),
+        BindungsEintrag("medical", _("Medizinische Versorgung"), ziel="Versorgung"),
+        BindungsEintrag("needle_exchange", _("Spritzentausch"), ziel="Versorgung"),
+        BindungsEintrag("accompaniment", _("Begleitung"), ziel="Vermittlung"),
+        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung"),
+        BindungsEintrag("referral", _("Vermittlung"), ziel="Vermittlung"),
     )
 )
 
-# Bestandsnamen als **Ableitungen** der Deklaration (Refs #1824). Sie bleiben
-# oeffentlich, weil sie ausserhalb dieses Moduls gelesen werden (Freeze-Test
-# ``test_system_type.py``, Export-Tests) — aber es gibt sie nur noch einmal.
+# Bestandsname als **Ableitung** der Deklaration (Refs #1824). Er bleibt
+# oeffentlich, weil er ausserhalb dieses Moduls gelesen wird (Export-Tests) —
+# aber es gibt ihn nur noch einmal.
 CATEGORY_MAP = TYP_BINDUNG.ziel_map()
-SLUG_MAP = TYP_BINDUNG.slug_ziele()
 
 # Berichtskategorie eines Dokumentationstyps — ``None`` = nicht in diesem
-# Bericht. ``resolve_category(report_key, slug)``: erst der Erstschluessel, dann
-# — nur bei leerem/NULL Erstschluessel — der Slug (Refs #1741/#1785).
+# Bericht. ``resolve_category(report_key)``: seit E3 (Refs #1849) entscheidet
+# genau ein Schluessel, der Slug-Zweitschluessel ist entfallen (E-E).
 #
 # **Invariante seit E3** (Refs #1849/#1819, frueher „build_dataset und der
 # Unmapped-Filter geben dieselbe Antwort"): Die Menge zerfaellt nicht mehr in
@@ -120,8 +107,8 @@ SLUG_MAP = TYP_BINDUNG.slug_ziele()
 # 2. **ausdruecklich ausgeschlossen** — Schluessel gesetzt und bekannt, aber
 #    nicht in diesem Bericht (``excluded`` oder ein Schluessel, den nur ein
 #    anderes Backend deklariert). Vollstaendige Aussage, KEIN Hinweis.
-# 3. **ohne Zuordnung** — Schluessel leer/NULL und auch ueber den Slug kein
-#    Treffer. Das ist die echte Luecke: :data:`_UNMAPPED_Q`.
+# 3. **ohne Zuordnung** — Schluessel leer/NULL. Das ist die echte Luecke:
+#    :data:`_UNMAPPED_Q`.
 # 4. **unbekannter Schluessel** — gesetzt, aber kein Backend kennt ihn
 #    (Fremdpaket, entferntes Backend, Tippfehler). Eigener Meldungs-Code
 #    (Entscheid E-H): :func:`unknown_key_q`.
@@ -170,8 +157,10 @@ def unmapped_q(prefix: str = "document_type__") -> Q:
     dieselbe Regel, die :meth:`TypBindung._eintrag` fuer die *Aufnahme* faehrt
     (Refs #1785), jetzt konsequent auch fuer die *Meldung*.
 
-    Der Slug-Zweitschluessel bleibt einbezogen (``unmapped_q`` der Bindung):
-    ein Typ ohne Schluessel, dessen Slug trifft, IST zugeordnet.
+    Seit dem Wegfall des Slug-Zweitschluessels (E-E) faellt „nicht zugeordnet"
+    mit „Erststufe leer" zusammen; ``unmapped_q`` der Bindung bleibt trotzdem
+    im Praedikat, damit die Ableitung an der Deklaration haengt und nicht an
+    einer zweiten, hier nachgebauten Bedingung.
     """
     return TYP_BINDUNG.unmapped_q(prefix) & _unset_q(prefix)
 
@@ -296,12 +285,10 @@ class SampleReport1Backend(DatasetBackend):
         """Aggregiert Ereignisse zu Berichtskategorien und Altersgruppen."""
         base_qs = _base_queryset(facility, date_from, date_to)
 
-        # Aggregation ueber die von der Bindung deklarierten Schluesselfelder
-        # (``system_type`` UND ``slug``): beide muessen in der Gruppierung
-        # stehen, sonst koennte der Zweitschluessel nicht greifen (Refs #1741).
-        # Die Ordnung bleibt system_type-fuehrend (Bestandsformat des
-        # Snapshot-Payloads); die publizierte Zeilenordnung stellt ohnehin die
-        # Artefaktgrenze her (``ORDER_CATEGORY``, Refs #1767/#1772).
+        # Aggregation ueber das von der Bindung deklarierte Schluesselfeld.
+        # Welche Felder das sind, sagt ``values_fields()`` — seit E3 genau
+        # eines. Die publizierte Zeilenordnung stellt ohnehin die Artefaktgrenze
+        # her (``ORDER_CATEGORY``, Refs #1767/#1772).
         schluessel_felder = TYP_BINDUNG.values_fields("document_type__")
         by_dt = base_qs.values(*schluessel_felder).annotate(count=Count("id")).order_by(*schluessel_felder)
 
@@ -330,9 +317,7 @@ class SampleReport1Backend(DatasetBackend):
         #
         # Die Buckets entstehen bewusst allein aus ``age_cluster`` —
         # **mapping-agnostisch**: sie zaehlen jedes Ereignis mit Personenbezug,
-        # zugeordnet oder nicht. Der Slug-Zweitschluessel (Refs #1741) aendert
-        # daran nichts; er verschiebt nur, was in ``by_category``/``total``
-        # landet.
+        # zugeordnet oder nicht.
         by_age_cluster = [
             {
                 "cluster": row["client__age_cluster"],

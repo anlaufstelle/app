@@ -266,40 +266,15 @@ def describe_type_bindings(document_type, facility) -> list[str]:
 def _typ_werte(document_type, bindung) -> tuple:
     """Die Aufloesungswerte eines Typs — Feldnamen kommen aus der Deklaration.
 
-    Seit E3 (Refs #1849) binden die Berichts-Backends ueber ``report_key``,
-    ``ban_overview`` weiterhin ueber ``system_type``. Welche Attribute zu lesen
-    sind, sagt die Bindung selbst
+    Die Berichts-Backends binden ueber ``report_key``, ``ban_overview``
+    weiterhin ueber ``system_type``. Welche Attribute zu lesen sind, sagt die
+    Bindung selbst
     (:meth:`~core.reporting.base.TypBindung.values_fields`) — ein hier fest
     verdrahtetes ``document_type.system_type`` waere wieder die zweite Wahrheit,
     die #1824 beseitigt hat, und liesse die Auskunft still am Bericht
     vorbeilaufen.
     """
     return tuple(getattr(document_type, feld) for feld in bindung.values_fields())
-
-
-def resolves_only_via_slug(document_type, facility) -> bool:
-    """Haengt die Berichtszuordnung dieses Typs AUSSCHLIESSLICH am Slug? (E3-Gate)
-
-    Vorbedingung fuer die Abschaltung des Slug-Zweitschluessels (Konzept #1847
-    §E3.7): kein Typ darf danach still aus dem Bericht fallen. „Nur ueber den
-    Slug" heisst: mindestens ein Treffer, und bei **jedem** Treffer war die
-    Erststufe leer — sonst haette sie entschieden (dieselbe Auflösungsordnung
-    wie :meth:`~core.reporting.base.TypBindung._eintrag`).
-
-    Gefiltert wie :func:`describe_type_bindings` ueber die **verfuegbaren**
-    Backends: ein Treffer in einem Bericht, den die Einrichtung gar nicht
-    aufrufen kann, ist keine Zuordnung, die verlorengehen koennte.
-    """
-    treffer = False
-    for backend in get_available_backends(facility):
-        for bindung in typ_bindungen(backend):
-            werte = _typ_werte(document_type, bindung)
-            if bindung.resolve_key(*werte) is None:
-                continue
-            if werte[0]:
-                return False
-            treffer = True
-    return treffer
 
 
 def describe_field_bindings(field_template, facility) -> list[str]:

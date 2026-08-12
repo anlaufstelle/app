@@ -233,19 +233,24 @@ class TestBuildDataset:
 
 
 class TestTypaufloesung:
-    def test_slug_zweitschluessel_ohne_system_type(self, backend, facility, admin_user, sample_event, date_range):
-        """``doc_type_contact`` aus der conftest: kein ``system_type``, Slug
-        ``kontakt``, Feldvorlage ``dauer`` — genau der Zweitschluessel-Fall.
+    def test_typ_ohne_system_type_zaehlt_ueber_den_report_key(
+        self, backend, facility, admin_user, sample_event, date_range
+    ):
+        """``doc_type_contact`` aus der conftest: kein ``system_type``, aber
+        ``report_key=contact`` — die beiden Achsen sind unabhaengig (E-D).
         """
         result = backend.build_dataset(facility, *date_range)
 
         assert [(row["kategorie"], row["events"], row["minuten"]) for row in result.records] == [("contact", 1, 15)]
 
-    def test_gesetzter_system_type_sperrt_den_zweitschluessel(self, backend, facility, admin_user, date_range):
-        """Refs #1785: ein gesetzter, aber ausgeschlossener ``system_type``
-        (hier ``note``) wird vom Slug NICHT gerettet.
+    def test_der_slug_allein_zaehlt_nicht_mehr(self, backend, facility, admin_user, date_range):
+        """Entscheid E-E (Refs #1849): der Paket-Slug ordnet nichts mehr zu.
+
+        Bis E3 zog dieser Typ seine Ereignisse ueber den Slug ``kontakt`` in die
+        Stundenbilanz — genau das war der Weg, ueber den in #1785 auch ein
+        Notiz-Typ hereinkam.
         """
-        typ = _typ_mit_dauer(facility, "Kontakt", system_type=DocumentType.SystemType.NOTE)
+        typ = _typ_mit_dauer(facility, "Kontakt", system_type=None, report_key=None)
         assert typ.slug == "kontakt"
         _events(facility, typ, admin_user, 3, 15)
 

@@ -8,22 +8,21 @@ Registry-Auskunft, die die Konfigurations-UI unter „Erscheint in …" zeigt
 :func:`~core.reporting.registry.describe_field_bindings`), hier als
 Facility-weites Inventar statt Einzelblick.
 
-**Zugleich das Prüfwerkzeug für Etappe E3 Schritt 7** (Konzept #1847): bevor
-der Slug-Zweitschlüssel entfernt werden darf, muss das Inventar zeigen, dass
-kein Dokumentationstyp mehr AUSSCHLIESSLICH über ihn gebunden ist (Erststufe
-leer, Treffer nur über den Slug — welches Feld die Erststufe ist, sagt die
-Bindung: seit E3 ``report_key``, für ``ban_overview`` weiterhin
-``system_type``). Genau diese Menge steht unter ``document_types.slug_only``
-(JSON) bzw. als eigene Zeile im Text-Report; das Gate ist erfüllt, sobald sie
-leer ist.
+**Herkunft:** Der Command war zugleich das Gate für Etappe E3 Schritt 7 — vor
+der Abschaltung des Slug-Zweitschlüssels musste er zeigen, dass kein
+Dokumentationstyp mehr ausschließlich über ihn gebunden war. Das Gate ist
+erfüllt und der Zweitschlüssel entfernt (Entscheid E-E, #1849);
+die Kennzahl ``slug_only`` ist damit gegenstandslos und aus dem Report
+verschwunden. Was bleibt, ist der laufende Nutzen: **welcher Typ und welche
+Feldvorlage erscheinen in welchem Bericht — und welche in keinem.**
 
 **Achtung beim Lesen des Text-/JSON-Reports:** Die Backend-*Verfügbarkeit*
 selbst ist NICHT durchgängig auf ``entity_type=event`` beschränkt — nur
 ``monthly_trend`` prüft das in seiner ``Anforderung`` explizit;
 ``counseling_hours``/``needle_exchange_balance``/``service_distribution``
-zählen jede Entität. Beschränkt auf ``entity_type=event`` sind ausschließlich
-diese Inventar-Sektion (``document_types``) und damit das Slug-Zweitschlüssel-
-Gate — nicht die Backend-Verfügbarkeit an sich.
+zählen jede Entität. Beschränkt auf ``entity_type=event`` ist ausschließlich
+diese Inventar-Sektion (``document_types``) — nicht die Backend-Verfügbarkeit
+an sich.
 
     python manage.py inventory_report_bindings --facility <uuid-oder-name>
     python manage.py inventory_report_bindings --facility <uuid> --format json --output inventar.json
@@ -33,10 +32,9 @@ Wie die übrigen Wartungskommandos (``export_facility``, ``load_package``,
 Admin-DB-Rolle (BYPASSRLS) erfolgen — siehe docs/ops-runbook.md § 3.5 / § 9.
 Ohne Bypass-Kontext bricht der Command fail-loud ab (Muster
 ``enforce_retention``), statt einen scheinbar vollständigen, aber tatsächlich
-leeren Report zu schreiben: der Report ist eine POSITIVE Gate-Aussage (E3
-Schritt 7) — 0 Dokumentationstypen/Feldvorlagen unter der App-Rolle ohne
-``app.current_facility_id``-GUC sähen aus wie ein erfülltes Gate
-(``slug_only`` leer), obwohl in Wahrheit gar nichts geprüft wurde. Genau
+leeren Report zu schreiben: 0 Dokumentationstypen/Feldvorlagen unter der
+App-Rolle ohne ``app.current_facility_id``-GUC sähen aus wie eine tadellos
+konfigurierte Einrichtung, obwohl in Wahrheit gar nichts geprüft wurde. Genau
 dieses Falsch-Grün wäre schlimmer als ein Absturz.
 """
 
@@ -53,7 +51,6 @@ from core.reporting.registry import (
     describe_type_bindings,
     feld_bindungen,
     get_backends,
-    resolves_only_via_slug,
     typ_bindungen,
 )
 
@@ -89,14 +86,13 @@ def _backend_catalog() -> list[dict[str, Any]]:
 
 
 def _document_type_entries(facility: Facility) -> dict[str, list[dict[str, Any]]]:
-    """Dokumentationstypen der Einrichtung, gebunden/ungebunden/slug_only.
+    """Dokumentationstypen der Einrichtung, gebunden/ungebunden.
 
     NUR ``entity_type=event`` (Plan §3, konsistent mit der Konfig-UI aus E2):
     an Personen-/Fall-Typen ist die Berichtsfrage gegenstandslos.
     """
     bound: list[dict[str, Any]] = []
     unbound: list[dict[str, Any]] = []
-    slug_only: list[dict[str, Any]] = []
     doc_types = (
         DocumentType.objects.for_facility(facility)
         .filter(entity_type=DocumentType.EntityType.EVENT)
@@ -112,19 +108,8 @@ def _document_type_entries(facility: Facility) -> dict[str, list[dict[str, Any]]
             "report_key": doc_type.report_key or None,
             "appears_in": appears_in,
         }
-        if not appears_in:
-            unbound.append(entry)
-            continue
-        bound.append(entry)
-        # E3-Gate (Schritt 7): Treffer, aber bei JEDER treffenden Bindung war
-        # die Erststufe leer — die Zuordnung kommt also ausschließlich über den
-        # Slug-Zweitschlüssel zustande. Die Entscheidung liegt in der Registry
-        # (``resolves_only_via_slug``), weil nur die Bindung selbst weiß, welches
-        # Feld ihre Erststufe ist: seit E3 ist das ``report_key``, für
-        # ``ban_overview`` weiterhin ``system_type``.
-        if resolves_only_via_slug(doc_type, facility):
-            slug_only.append(entry)
-    return {"bound": bound, "unbound": unbound, "slug_only": slug_only}
+        (bound if appears_in else unbound).append(entry)
+    return {"bound": bound, "unbound": unbound}
 
 
 def _field_template_entries(facility: Facility) -> dict[str, list[dict[str, Any]]]:
@@ -154,8 +139,8 @@ def _render_text(data: dict[str, Any]) -> str:
         f"Einrichtung: {data['facility']['name']} ({data['facility']['id']})",
         "",
         "Hinweis: Backend-Verfuegbarkeit ist NICHT durchgaengig auf entity_type=event "
-        'beschraenkt (nur "Monatsverlauf" prueft das explizit) — nur diese Dokumentationstyp-Sektion '
-        "und das Slug-Zweitschluessel-Gate unten sind es.",
+        'beschraenkt (nur "Monatsverlauf" prueft das explizit) — nur diese '
+        "Dokumentationstyp-Sektion ist es.",
         "",
         "Backends:",
     ]
@@ -178,9 +163,6 @@ def _render_text(data: dict[str, Any]) -> str:
         lines.append(f"  + {entry['name']} (slug={entry['slug']}) -> {' · '.join(entry['appears_in'])}")
     for entry in doc_types["unbound"]:
         lines.append(f"  - {entry['name']} (slug={entry['slug']})")
-    lines.append(f"  davon ausschließlich über den Slug-Zweitschlüssel gebunden: {len(doc_types['slug_only'])}")
-    for entry in doc_types["slug_only"]:
-        lines.append(f"    * {entry['name']} (slug={entry['slug']})")
 
     field_templates = data["field_templates"]
     lines.append("")
@@ -220,16 +202,15 @@ class Command(BaseCommand):
         # Review-Befund #1848: core_facility ist nicht RLS-gescoped, ``_resolve_facility``
         # gelingt also auch ohne Bypass — aber DocumentType/FieldTemplate stehen unter
         # FORCE RLS. Ohne Bypass-Kontext saehe der Lauf 0 Zeilen und meldete faelschlich
-        # ein erfuelltes E3-Gate (slug_only leer). Fail-loud wie enforce_retention/
+        # eine tadellos konfigurierte Einrichtung. Fail-loud wie enforce_retention/
         # export_facility/purge_orphan_field_data/detect_breaches.
         if not _has_rls_bypass_context():
             raise CommandError(
                 "inventory_report_bindings laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
                 "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst saehe "
-                "der Lauf 0 Dokumentationstypen/Feldvorlagen und meldete faelschlich ein erfuelltes "
-                "E3-Gate (slug_only leer, obwohl ungeprueft) statt eines tatsaechlich vollstaendigen "
-                "Inventars. Command mit der Admin-Rolle aufrufen (docs/ops-runbook.md § 3.5 / § 9 "
-                "DB-Rollenmodell)."
+                "der Lauf 0 Dokumentationstypen/Feldvorlagen und meldete faelschlich eine restlos "
+                "gebundene Einrichtung statt eines tatsaechlich vollstaendigen Inventars. Command mit "
+                "der Admin-Rolle aufrufen (docs/ops-runbook.md § 3.5 / § 9 DB-Rollenmodell)."
             )
         facility = self._resolve_facility(options["facility"])
         data: dict[str, Any] = {
@@ -249,24 +230,21 @@ class Command(BaseCommand):
             self.stdout.write(rendered)
 
         # Zaehlerzeile (Muster detect_breaches) NUR im Text-Format: stdout im
-        # JSON-Format muss stabil/parsebar bleiben (E3 nutzt --format json als
-        # Vorbedingungs-Check, Schritt 7) — die Kennzahl selbst steht dort
-        # bereits maschinenlesbar unter ``document_types.slug_only``.
+        # JSON-Format muss stabil/parsebar bleiben (ein Skript soll den Report
+        # ohne Nachbearbeitung einlesen koennen) — die Zahlen stehen dort
+        # ohnehin maschinenlesbar in den Listen.
         if not is_json:
-            slug_only_count = len(data["document_types"]["slug_only"])
-            if slug_only_count:
+            ohne_zuordnung = len(data["document_types"]["unbound"])
+            if ohne_zuordnung:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"{slug_only_count} Typ(en) ausschließlich über den Slug-Zweitschlüssel gebunden — "
-                        "Gate für E3 Schritt 7 (Slug-Zweitschlüssel entfernen) noch nicht erfüllt."
+                        f"{ohne_zuordnung} Dokumentationstyp(en) ohne Berichtszuordnung — sie erscheinen in "
+                        "keinem Bericht und im Vollständigkeitshinweis, sofern kein Berichtsschlüssel "
+                        "gesetzt ist (ausdrücklich ausgeschlossene Typen sind kein Mangel)."
                     )
                 )
             else:
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        "Kein Typ ausschließlich über den Slug-Zweitschlüssel gebunden — Gate für E3 Schritt 7 erfüllt."
-                    )
-                )
+                self.stdout.write(self.style.SUCCESS("Jeder Dokumentationstyp trägt eine Berichtszuordnung."))
 
     def _resolve_facility(self, raw: str) -> Facility:
         """Facility über UUID-Parse-Versuch, sonst Namens-Lookup (Muster ``export_facility``).

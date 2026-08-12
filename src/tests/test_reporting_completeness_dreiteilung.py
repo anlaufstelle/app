@@ -170,16 +170,16 @@ class TestOhneZuordnung:
         issue = _issue(backend, facility, "unmapped_system_types")
         assert (issue.count, "3 Ereignisse in 2 Dokumentationstypen" in str(issue.message)) == (3, True)
 
-    def test_slug_zweitschluessel_rettet_vor_dem_hinweis(self, backend, facility, typ, ereignis):
-        """Refs #1741: ein Typ ohne Schluessel, dessen Slug trifft, IST zugeordnet.
+    def test_der_paket_slug_rettet_nicht_mehr(self, backend, facility, typ, ereignis):
+        """Entscheid E-E (Refs #1849): der Slug ordnet nichts mehr zu — der Typ
+        ist damit eine echte Luecke, und der Hinweis sagt das.
 
-        Nach dem Backfill kommt dieser Fall im Bestand nicht mehr vor — solange
-        der Zweitschluessel existiert, muss er aber dieselbe Antwort geben wie
-        ``build_dataset``.
+        Bis E3 war das der Zweitschluessel-Pfad aus #1741; den Bestand hat der
+        Backfill gehoben, neue Typen brauchen die ausdrueckliche Wahl.
         """
         ereignis(typ("Eigene Begleitung", slug="begleitung"), 2)
 
-        assert _codes(backend, facility) == []
+        assert _codes(backend, facility) == ["unmapped_system_types"]
 
     def test_mischfall_zaehlt_nur_den_echten_typ(self, backend, facility, typ, ereignis):
         ereignis(typ("Hausverbot", system_type=DocumentType.SystemType.BAN, report_key=EXCLUDED_KEY), 4)

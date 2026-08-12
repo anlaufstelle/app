@@ -44,9 +44,10 @@ die zentrale Schwelle.
   nachtraeglich veraendert.
 
 **Datengrundlage.** ``Event`` mit ``document_type__system_type == "ban"``,
-``is_deleted=False``, Facility-gefiltert. **Kein Slug-Fallback**: ein bewusst
-nicht gesetzter ``system_type`` darf sich nicht ueber die Namenskonvention
-Zugang verschaffen (Refs #1785). Die ``data_json``-Lesart folgt exakt
+``is_deleted=False``, Facility-gefiltert. Ein Slug-Fallback existiert seit E3
+(Refs #1849) nirgends mehr; hier gab es ihn ohnehin nie — ein bewusst nicht
+gesetzter ``system_type`` durfte sich nie ueber die Namenskonvention Zugang
+verschaffen (Refs #1785). Die ``data_json``-Lesart folgt exakt
 ``_collect_active_bans`` (``core/services/system/bans.py``) — inklusive
 ``safe_decrypt`` (die Felder koennen feldverschluesselt sein) und der
 Behandlung eines defekt gespeicherten ``bis``-Datums als „kein Ablauf".
@@ -140,15 +141,14 @@ logger = logging.getLogger(__name__)
 # tragen hier je eine bewusste Entscheidung, die frueher nur im Fliesstext
 # stand:
 #
-# * ``slug_fallback=False`` — **kein Slug-Zweitschluessel**. Ein bewusst nicht
-#   gesetzter ``system_type`` darf sich nicht ueber die Namenskonvention Zugang
-#   verschaffen (Refs #1785). Die Abweichung ist damit sichtbar und testbar.
-# * ``bindet="system_type"`` — dieser Bericht ist ein **Verhaltens**-Bericht und
-#   bleibt dauerhaft an ``system_type=ban`` gebunden; er wechselt in E3 NICHT
-#   auf ``report_key`` (Konzept #1847 §3).
+# ``bindet="system_type"`` — dieser Bericht ist ein **Verhaltens**-Bericht und
+# bleibt dauerhaft an ``system_type=ban`` gebunden; er ist mit E3 NICHT auf
+# ``report_key`` gewechselt (Konzept #1847 §3). Die frueher noetige zweite
+# Deklaration ``slug_fallback=False`` ist entfallen: seit E3 gibt es den
+# Slug-Zweitschluessel ueberhaupt nicht mehr (Entscheid E-E), und damit auch
+# nichts mehr abzuschalten.
 TYP_BINDUNG = TypBindung(
     (BindungsEintrag("ban", _("Hausverbot")),),
-    slug_fallback=False,
     bindet="system_type",
 )
 
@@ -179,7 +179,7 @@ _POINT_IN_TIME_ISSUE = CompletenessIssue(
 
 
 def _ban_events(facility):
-    """Sichtbare Hausverbots-Ereignisse der Einrichtung — ohne Slug-Fallback.
+    """Sichtbare Hausverbots-Ereignisse der Einrichtung.
 
     Bewusst **ohne** ``is_active``: der Bericht beschreibt, was passiert ist;
     die Konfigurationsfrage steckt in :attr:`BanOverviewBackend.verfuegbarkeit`.
@@ -235,8 +235,7 @@ class BanOverviewBackend(DatasetBackend):
     # das an?") und darf nicht mit dem Datenfilter verwechselt werden:
     # ``build_dataset`` zaehlt bewusst auch Hausverbote unter einem inzwischen
     # deaktivierten Typ, damit ein Konfigurationsschalter keine Vergangenheit
-    # umschreibt. Kein Slug-Fallback — dieselbe Regel wie bei den Daten, und
-    # jetzt garantiert dieselbe Deklaration (Refs #1785).
+    # umschreibt. Dieselbe Deklaration wie bei den Daten (Refs #1785).
     verfuegbarkeit = (Anforderung(TYP_BINDUNG),)
 
     def get_field_specs(self) -> list[FieldSpec]:
