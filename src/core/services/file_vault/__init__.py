@@ -36,6 +36,7 @@ from core.services.file_vault.encryption import (
     is_encrypted_value,
     safe_decrypt,
 )
+from core.services.file_vault.rotation import rotate_all
 from core.services.file_vault.storage import (
     StagedUpload,
     _facility_dir,  # noqa: F401 — verwendet in test_file_vault.py::TestStorageOrphanCleanup
@@ -87,6 +88,7 @@ __all__ = [
     "is_encrypted_value",
     "ping",
     "prepare_encrypted_upload",
+    "rotate_all",
     "safe_decrypt",
     "scan_file",
     "signature_info",

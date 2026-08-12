@@ -34,6 +34,7 @@ from django.utils import timezone
 
 from core.models import Case, Client, Event
 from core.services.file_vault import generate_key, is_encrypted_value, safe_decrypt
+from core.services.file_vault.rotation import rotate_all
 
 
 def raw_client_data_json(client) -> dict:
@@ -298,6 +299,55 @@ def test_reencrypt_output_line_includes_client_and_case_counts(
     output = out.getvalue()
     assert "1 clients" in output
     assert "1 cases" in output
+
+
+@pytest.mark.django_db
+class TestRotateAll:
+    """``rotate_all()`` (Refs #1835) — die Business-Logik hinter dem Command.
+
+    Der Command bleibt Thin-Wrapper (Argument-Parsing, RLS-Guard, Ausgabe);
+    diese Tests decken die Service-Funktion direkt ab, ohne den Command-Pfad
+    zu durchlaufen.
+    """
+
+    def test_dict_shape_has_all_seven_counters(self, facility):
+        """Die sieben Rotationspfade landen unter stabilen, benannten Schluesseln."""
+        counts = rotate_all(dry_run=True)
+        assert counts == {
+            "events": 0,
+            "event_history": 0,
+            "attachments": 0,
+            "totp_devices": 0,
+            "clients": 0,
+            "cases": 0,
+            "rectification_requests": 0,
+        }
+
+    def test_dry_run_writes_nothing(self, facility, doc_type_client_profile, staff_user):
+        """``dry_run=True`` zaehlt den Client, schreibt aber nichts in die DB."""
+        key = generate_key()
+        with override_settings(ENCRYPTION_KEY=key):
+            client = Client.objects.create(
+                facility=facility,
+                pseudonym="P6-RotateAll-DryRun-01",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"diagnose": "Unveraendert"},
+            )
+        token_before = raw_client_data_json(client)["diagnose"]["value"]
+
+        with override_settings(ENCRYPTION_KEY=key):
+            counts = rotate_all(dry_run=True)
+
+        assert counts["clients"] == 1
+        client.refresh_from_db()
+        assert raw_client_data_json(client)["diagnose"]["value"] == token_before
+
+    def test_on_totp_contended_callback_not_invoked_without_contention(self, facility):
+        """Der optionale Kontentions-Callback bleibt bei einem sauberen Lauf ungerufen."""
+        calls = []
+        rotate_all(dry_run=True, on_totp_contended=calls.append)
+        assert calls == []
 
 
 @pytest.mark.django_db
