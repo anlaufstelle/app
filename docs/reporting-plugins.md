@@ -242,25 +242,49 @@ Drei Punkte, die leicht untergehen:
 
 #### Wenn dein Bericht Dokumentationstypen auf Kategorien abbildet
 
-Der Beispiel-Sachbericht zeigt das Muster: **zwei Schlüssel, in fester Reihenfolge, `category` nie** ([ADR-038](adr/038-reporting-plugin-backends.md), #1741).
+Die Bindung wird **deklariert, nicht ausprogrammiert** (#1824): eine `TypBindung` je Bericht, aus der Auflösung, SQL-Filter, Verfügbarkeit und Schlüssel-Vokabular abgeleitet werden. Es gilt weiterhin: **zwei Schlüssel, in fester Reihenfolge, `category` nie** ([ADR-038](adr/038-reporting-plugin-backends.md), #1741).
 
 ```python
-CATEGORY_MAP = {"contact": "Kontakte", "counseling": "Beratung", ...}   # system_type
-SLUG_MAP = {"kontakt": "Kontakte", "beratungsgespraech": "Beratung", ...}  # slug
+from core.reporting.base import Anforderung, BindungsEintrag, FeldBindung, TypBindung
+
+TYP_BINDUNG = TypBindung(
+    (
+        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte", slugs=("kontakt",)),
+        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung", slugs=("beratungsgespraech",)),
+    )
+)
+# Optional, wenn dein Bericht Feldwerte liest:
+FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),))
 
 
-def resolve_category(system_type, slug):
-    if system_type:
-        return CATEGORY_MAP.get(system_type)
-    return SLUG_MAP.get(slug or "")
+@register_backend("mein-bericht")
+class MeinBackend(DatasetBackend):
+    typ_bindung = TYP_BINDUNG
+    feld_bindungen = (FELD_DAUER,)
+    # Nur setzen, wenn der Bericht ohne passende Konfiguration sinnlos wäre —
+    # `is_available` wird daraus abgeleitet (leer = immer wählbar).
+    verfuegbarkeit = (Anforderung(TYP_BINDUNG, (FELD_DAUER,)),)
 ```
 
-- **`system_type` zuerst — und zwar exklusiv, sobald er gesetzt ist.** Die Systemkennung ist stabil, nach Erstellung unveränderlich und die stärkere Aussage. Trägt ein Typ einen **gesetzten** `system_type`, entscheidet ausschließlich `CATEGORY_MAP` — auch gegen einen anderslautenden Slug, und auch wenn der `system_type` selbst gar nicht in `CATEGORY_MAP` steht (`note`/`ban`, siehe „`category` nie" unten): der Slug rettet einen bewusst ausgeschlossenen `system_type` NICHT (Refs #1785, Disclosure-Leck-Fix).
-- **`slug` als Zweitschlüssel — nur wenn `system_type` leer/`NULL` ist.** Die `system_type`-Werteliste ist eingefroren; einrichtungseigene Typen haben oft gar keinen. Der Slug holt genau diese Typen in den Bericht, aber nur dann — ein gesetzter `system_type` (auch `note`) sperrt den Zweitschlüssel. Konvention sind die **Paket-Slugs** aus [`core/packages/default.yaml`](../src/core/packages/default.yaml): dort steht, was ein Slug bedeutet. Gematcht wird der Slug-String **facility-agnostisch** — ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` ist ein Beratungsgespräch. Wer das nicht will, vergibt einen anderen Slug (Slugs sind nach Erstellung unveränderlich).
+Was du daraus bekommst — und **nie** danebenschreibst:
+
+| Ableitung | wofür |
+|---|---|
+| `TYP_BINDUNG.resolve(system_type, slug)` / `.resolve_row(row, "document_type__")` | die Auflösung in `build_dataset` |
+| `TYP_BINDUNG.values_fields("document_type__")` | die Schlüsselfelder deiner `.values()`-Gruppierung |
+| `TYP_BINDUNG.matching_q(prefix)` / `.unmapped_q(prefix)` | der SQL-Filter und sein exaktes Komplement |
+| `TYP_BINDUNG.ziele()` | deine Ausgabeordnung (wertunabhängig, K5) |
+| `verfuegbarkeit` | `is_available()` — kein handgebauter Query-Chain mehr |
+
+- **`key` vs. `ziel` vs. `label` — drei verschiedene Dinge.** `key` ist der Berichtsschlüssel (heute der `system_type`-Wert). `ziel` ist, was `resolve()` liefert: **backend-eigen** und bei `snapshot_enabled`-Berichten ein **persistierter** Schlüssel — deutscher Klartext, niemals `gettext_lazy` (sonst hängt der gespeicherte Bestand an der Sprache des schreibenden Prozesses, siehe [§ 2](#2-api-referenz)). Ohne `ziel` löst der Schlüssel auf sich selbst auf. `label` ist der **übersetzte Name des Schlüssels** und einrichtungsweit kanonisch: deklarieren zwei Berichte denselben Schlüssel mit verschiedenen Labels, wirft die Registry `ImproperlyConfigured`.
+- **`system_type` zuerst — und zwar exklusiv, sobald er gesetzt ist.** Die Systemkennung ist stabil, nach Erstellung unveränderlich und die stärkere Aussage. Trägt ein Typ einen **gesetzten** `system_type`, entscheidet ausschließlich die Deklaration — auch gegen einen anderslautenden Slug, und auch wenn der `system_type` selbst gar nicht deklariert ist (`note`/`ban`, siehe „`category` nie" unten): der Slug rettet einen bewusst ausgeschlossenen `system_type` NICHT (Refs #1785, Disclosure-Leck-Fix).
+- **`slug` als Zweitschlüssel — nur wenn `system_type` leer/`NULL` ist.** Die `system_type`-Werteliste ist eingefroren; einrichtungseigene Typen haben oft gar keinen. Der Slug holt genau diese Typen in den Bericht, aber nur dann — ein gesetzter `system_type` (auch `note`) sperrt den Zweitschlüssel. Konvention sind die **Paket-Slugs** aus [`core/packages/default.yaml`](../src/core/packages/default.yaml): dort steht, was ein Slug bedeutet. Gematcht wird der Slug-String **facility-agnostisch** — ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` ist ein Beratungsgespräch. Wer das nicht will, vergibt einen anderen Slug (Slugs sind nach Erstellung unveränderlich). Braucht dein Bericht den Zweitschlüssel bewusst **nicht** (wie `ban-overview`), dann `slug_fallback=False` — die Abweichung gehört in die Deklaration, nicht in einen Kommentar.
 - **`category` nie.** Reine UI-Gruppierung, frei editierbar — eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben ([ADR-034](adr/034-config-ui-category-system-type.md)).
-- **Beide Maps konservativ halten.** Nimm nur auf, was eindeutig in eine Kategorie gehört. Was der Erstschlüssel bewusst auslässt (`note`, `ban`), darf der Zweitschlüssel nicht durch die Hintertür hereinholen.
-- **Der Unmapped-Filter muss dieselbe Antwort geben.** `validate_completeness` zählt „ohne Berichtszuordnung" auf der Datenbank — das Prädikat ist die SQL-Entsprechung derselben Auflösung (kein Treffer in **beiden** Maps). Zwei Wahrheiten hier heißen: der Hinweis zählt Ereignisse als fehlend, die im Bericht stehen.
-- **Kein Backfill für Snapshots.** Eine Mapping-Erweiterung wirkt ab dem nächsten `build_dataset`; gespeicherte `backend_data` bleiben auf ihrem Stand (siehe [§ 5](#5-snapshot-integration)).
+- **Die Deklaration konservativ halten.** Nimm nur auf, was eindeutig in eine Kategorie gehört. Was der Erstschlüssel bewusst auslässt (`note`, `ban`), darf der Zweitschlüssel nicht durch die Hintertür hereinholen. Der Schlüssel `excluded` ist reserviert („gehört ausdrücklich in keinen Bericht") und darf nicht deklariert werden.
+- **Der Unmapped-Filter muss dieselbe Antwort geben — deshalb `unmapped_q()`.** `validate_completeness` zählt „ohne Berichtszuordnung" auf der Datenbank; das Prädikat ist die exakte Negation von `matching_q()`. Schreib es **nicht** von Hand: zwei Wahrheiten hier heißen, dass der Hinweis Ereignisse als fehlend zählt, die im Bericht stehen — und genau in diesem Muster steckte das Disclosure-Leck aus #1785. Ein Guard (`src/tests/test_reporting_bindung.py`) verbietet handgebaute `system_type`-/`slug`-Prädikate in `backends/` und prüft über das ganze Wertuniversum, dass Python- und SQL-Sicht übereinstimmen.
+- **`is_active` gehört in die `Anforderung`, nie in den Datenfilter.** „Bietet die Einrichtung das an?" ist die Konfigurationsfrage; „was ist damals passiert?" ist der Datenfilter. Ein heute umgelegter Schalter darf keinen vergangenen Zeitraum umschreiben.
+- **Zwei Feldvorlagen = zwei `FeldBindung`en.** Über eine Mehrfach-Relation erzeugt Django je `filter()`-Aufruf einen eigenen JOIN; nur getrennte Bindungen prüfen „beide Felder am **demselben** Typ". Eine Bindung mit zwei Slugs wäre ein `IN` und damit ein ODER.
+- **Kein Backfill für Snapshots.** Eine Erweiterung der Deklaration wirkt ab dem nächsten `build_dataset`; gespeicherte `backend_data` bleiben auf ihrem Stand (siehe [§ 5](#5-snapshot-integration)).
 
 ### Schritt 4 — K-Anonymität sicherstellen
 
@@ -330,7 +354,7 @@ Alle Module unter [`src/core/reporting/backends/`](../src/core/reporting/backend
 |---|---|
 | [`example`](../src/core/reporting/backends/example.py) | Der Minimalfall: eine Kennzahl je Zeile plus Randsumme (`mode="rows"`). Einstiegspunkt für alles Weitere. |
 | [`sample-report-1`](../src/core/reporting/backends/sample_report_1.py) | Der Vollfall: mehrere zusammenhängende Kennzahlen, Vollständigkeitsblock, `snapshot_enabled = True`. |
-| [`monthly-trend`](../src/core/reporting/backends/monthly_trend.py) | **Zeitreihe + importiertes Mapping.** Zeigt, dass `CATEGORY_MAP`/`resolve_category` importiert und nie kopiert werden — und dokumentiert die Verfeinerungs-Beziehung zum Sachbericht (K4a, siehe [§ 6](#6-k-anonymität--der-prepare_export-hook)). |
+| [`monthly-trend`](../src/core/reporting/backends/monthly_trend.py) | **Zeitreihe + importierte Bindung.** Zeigt, dass die `TypBindung` des Sachberichts importiert und nie nachgebaut wird — und dokumentiert die Verfeinerungs-Beziehung zum Sachbericht (K4a, siehe [§ 6](#6-k-anonymität--der-prepare_export-hook)). |
 | [`client-metrics`](../src/core/reporting/backends/client_metrics.py) | **Exakte Personen-Partition + Randsummen-Doktrin.** Reine Personenzählungen (DISTINCT über `Event.client`), eine Aufschlüsselung, die ihre Randsumme exakt partitioniert — die schärfste Klasse im K-Anon-Modell. |
 | [`case-metrics`](../src/core/reporting/backends/case_metrics.py) | **Unabhängige Skalare ohne Randsumme.** Der Gegenpol: keine Zahl partitioniert eine andere, jede steht für sich an der k-Schwelle. Zeigt, wie wenig Maschinerie dieser häufige Zuschnitt braucht. |
 | [`ban-overview`](../src/core/reporting/backends/ban_overview.py) | **Hochsensibler Sonderfall.** Hausverbote sind bewusst kein Teil des Sachberichts; dieser Bericht ist ein interner Auswertungspfad per Produktentscheid. Zeilen werden datenunabhängig emittiert — schon ihre Existenz wäre sonst eine Aussage. |

@@ -245,25 +245,49 @@ Three points that are easy to miss:
 
 #### If your report maps documentation types onto categories
 
-The example activity report shows the pattern: **two keys, in a fixed order, and `category` never** ([ADR-038](../adr/038-reporting-plugin-backends.md), #1741).
+The binding is **declared, not hand-coded** (#1824): one `TypBindung` per report, from which resolution, SQL filter, availability and the key vocabulary are derived. The rule is unchanged: **two keys, in a fixed order, and `category` never** ([ADR-038](../adr/038-reporting-plugin-backends.md), #1741).
 
 ```python
-CATEGORY_MAP = {"contact": "Kontakte", "counseling": "Beratung", ...}   # system_type
-SLUG_MAP = {"kontakt": "Kontakte", "beratungsgespraech": "Beratung", ...}  # slug
+from core.reporting.base import Anforderung, BindungsEintrag, FeldBindung, TypBindung
+
+TYP_BINDUNG = TypBindung(
+    (
+        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte", slugs=("kontakt",)),
+        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung", slugs=("beratungsgespraech",)),
+    )
+)
+# Optional, if your report reads field values:
+FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),))
 
 
-def resolve_category(system_type, slug):
-    if system_type:
-        return CATEGORY_MAP.get(system_type)
-    return SLUG_MAP.get(slug or "")
+@register_backend("my-report")
+class MyBackend(DatasetBackend):
+    typ_bindung = TYP_BINDUNG
+    feld_bindungen = (FELD_DAUER,)
+    # Only set this if the report would be pointless without a matching
+    # configuration — `is_available` is derived from it (empty = always offered).
+    verfuegbarkeit = (Anforderung(TYP_BINDUNG, (FELD_DAUER,)),)
 ```
 
-- **`system_type` first — and exclusively, once it is set.** The system identifier is stable, immutable after creation and the stronger statement. If a type carries a **set** `system_type`, `CATEGORY_MAP` alone decides — even against a slug that says something else, and even when that `system_type` itself is not in `CATEGORY_MAP` (`note`/`ban`, see "`category` never" below): the slug does NOT rescue a deliberately excluded `system_type` (#1785, disclosure-leak fix).
-- **`slug` as the secondary key — only while `system_type` is empty/`NULL`.** The `system_type` value list is frozen; a facility's own types often have none at all. The slug brings exactly those types into the report, but only then — a set `system_type` (including `note`) locks out the secondary key. The convention is the **package slugs** from [`core/packages/default.yaml`](../../src/core/packages/default.yaml): that is where the meaning of a slug is defined. Matching happens on the slug string alone, **regardless of facility** — a facility's own type with the slug `beratungsgespraech` *is* a counselling session. If you do not want that, choose a different slug (slugs are immutable after creation).
+What you get from it — and must **never** write next to it:
+
+| Derivation | used for |
+|---|---|
+| `TYP_BINDUNG.resolve(system_type, slug)` / `.resolve_row(row, "document_type__")` | the resolution in `build_dataset` |
+| `TYP_BINDUNG.values_fields("document_type__")` | the key columns of your `.values()` grouping |
+| `TYP_BINDUNG.matching_q(prefix)` / `.unmapped_q(prefix)` | the SQL filter and its exact complement |
+| `TYP_BINDUNG.ziele()` | your output order (value-independent, K5) |
+| `verfuegbarkeit` | `is_available()` — no hand-built query chain any more |
+
+- **`key` vs. `ziel` vs. `label` — three different things.** `key` is the report key (today the `system_type` value). `ziel` is what `resolve()` returns: **backend-specific**, and for `snapshot_enabled` reports a **persisted** key — German plain text, never `gettext_lazy` (otherwise the stored data depends on the language of the writing process, see [§ 2](#2-api-reference)). Without `ziel` a key resolves to itself. `label` is the **translated name of the key** and is canonical facility-wide: if two reports declare the same key with different labels, the registry raises `ImproperlyConfigured`.
+- **`system_type` first — and exclusively, once it is set.** The system identifier is stable, immutable after creation and the stronger statement. If a type carries a **set** `system_type`, the declaration alone decides — even against a slug that says something else, and even when that `system_type` itself is not declared (`note`/`ban`, see "`category` never" below): the slug does NOT rescue a deliberately excluded `system_type` (#1785, disclosure-leak fix).
+- **`slug` as the secondary key — only while `system_type` is empty/`NULL`.** The `system_type` value list is frozen; a facility's own types often have none at all. The slug brings exactly those types into the report, but only then — a set `system_type` (including `note`) locks out the secondary key. The convention is the **package slugs** from [`core/packages/default.yaml`](../../src/core/packages/default.yaml): that is where the meaning of a slug is defined. Matching happens on the slug string alone, **regardless of facility** — a facility's own type with the slug `beratungsgespraech` *is* a counselling session. If you do not want that, choose a different slug (slugs are immutable after creation). If your report deliberately does **not** want the secondary key (like `ban-overview`), use `slug_fallback=False` — the deviation belongs in the declaration, not in a comment.
 - **`category` never.** It is pure UI grouping, freely editable — regrouping in the config UI must never move report figures ([ADR-034](../adr/034-config-ui-category-system-type.md)).
-- **Keep both maps conservative.** Only add what unambiguously belongs to a category. Whatever the primary key deliberately leaves out (`note`, `ban`) must not be pulled in through the back door by the secondary key.
-- **The unmapped filter must give the same answer.** `validate_completeness` counts "no report category" in the database — that predicate is the SQL equivalent of the same resolution (no hit in **either** map). Two truths here mean the notice counts events as missing that are in fact in the report.
-- **No backfill for snapshots.** Extending a mapping takes effect from the next `build_dataset` onwards; stored `backend_data` stays as it was (see [§ 5](#5-snapshot-integration)).
+- **Keep the declaration conservative.** Only add what unambiguously belongs to a category. Whatever the primary key deliberately leaves out (`note`, `ban`) must not be pulled in through the back door by the secondary key. The key `excluded` is reserved ("explicitly belongs in no report") and must not be declared.
+- **The unmapped filter must give the same answer — that is what `unmapped_q()` is for.** `validate_completeness` counts "no report category" in the database; the predicate is the exact negation of `matching_q()`. Do **not** write it by hand: two truths here mean the notice counts events as missing that are in fact in the report — and that is exactly the pattern the #1785 disclosure leak lived in. A guard (`src/tests/test_reporting_bindung.py`) forbids hand-built `system_type`/`slug` predicates inside `backends/` and checks across the whole value universe that the Python and SQL views agree.
+- **`is_active` belongs in the `Anforderung`, never in the data filter.** "Does the facility offer this?" is the configuration question; "what happened back then?" is the data filter. A switch flipped today must not rewrite a past reporting period.
+- **Two field templates = two `FeldBindung`s.** Across a multi-valued relation Django creates a separate JOIN per `filter()` call; only separate bindings check "both fields on the **same** type". A single binding with two slugs would be an `IN`, and therefore an OR.
+- **No backfill for snapshots.** Extending the declaration takes effect from the next `build_dataset` onwards; stored `backend_data` stays as it was (see [§ 5](#5-snapshot-integration)).
 
 ### Step 4 — Guarantee k-anonymity
 
@@ -333,7 +357,7 @@ Every module under [`src/core/reporting/backends/`](../../src/core/reporting/bac
 |---|---|
 | [`example`](../../src/core/reporting/backends/example.py) | The minimal case: one metric per row plus a margin total (`mode="rows"`). The entry point for everything else. |
 | [`sample-report-1`](../../src/core/reporting/backends/sample_report_1.py) | The full case: several interrelated metrics, a completeness block, `snapshot_enabled = True`. |
-| [`monthly-trend`](../../src/core/reporting/backends/monthly_trend.py) | **Time series + imported mapping.** Shows that `CATEGORY_MAP`/`resolve_category` are imported and never copied — and documents the refinement relationship to the activity report (K4a, see [§ 6](#6-k-anonymity--the-prepare_export-hook)). |
+| [`monthly-trend`](../../src/core/reporting/backends/monthly_trend.py) | **Time series + imported binding.** Shows that the activity report's `TypBindung` is imported and never rebuilt — and documents the refinement relationship to the activity report (K4a, see [§ 6](#6-k-anonymity--the-prepare_export-hook)). |
 | [`client-metrics`](../../src/core/reporting/backends/client_metrics.py) | **Exact person partition + margin doctrine.** Pure person counts (DISTINCT over `Event.client`) and a breakdown that partitions its margin total exactly — the strictest class in the k-anonymity model. |
 | [`case-metrics`](../../src/core/reporting/backends/case_metrics.py) | **Independent scalars without a margin total.** The opposite pole: no figure partitions another, each stands on its own at the k threshold. Shows how little machinery this common shape needs. |
 | [`ban-overview`](../../src/core/reporting/backends/ban_overview.py) | **Highly sensitive special case.** Facility bans are deliberately not part of the activity report; this report is an internal analysis path by product decision. Rows are emitted data-independently — otherwise their very existence would be an assertion. |
@@ -624,4 +648,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-11 -->
-<!-- source-hash: 41283f154820941a2b59484118af071061672aa1 -->
+<!-- source-hash: 867117516491f98280e65c3e60e04074fb423810 -->

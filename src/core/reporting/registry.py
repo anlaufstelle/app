@@ -25,7 +25,7 @@ from collections.abc import Callable
 
 from django.core.exceptions import ImproperlyConfigured
 
-from core.reporting.base import DatasetBackend
+from core.reporting.base import EXCLUDED_KEY, DatasetBackend, feld_bindungen, typ_bindungen
 
 # Kleinbuchstaben/Ziffern, getrennt durch einzelne ``-``/``_`` (Refs #1739:
 # ``sample-report-1`` braucht den Bindestrich). Trennzeichen am Rand oder
@@ -43,12 +43,75 @@ _REGISTRY: dict[str, DatasetBackend] = {}
 _discovered = False
 
 
+def _vokabular(backends, sammler) -> dict[str, str]:
+    """Schluessel → Label ueber alle von ``sammler`` gelieferten Bindungen.
+
+    Die Reihenfolge folgt ``get_backends()`` (slug-sortiert) und innerhalb eines
+    Backends der Deklaration — deterministisch, damit ein Dropdown nicht je
+    Prozessstart anders aussieht. Kollisionen sind unkritisch, weil
+    :func:`_pruefe_bindungen` identische Labels je Schluessel erzwingt.
+    """
+    vokabular: dict[str, str] = {}
+    for backend in backends:
+        for bindung in sammler(backend):
+            vokabular.update(bindung.vokabular())
+    return vokabular
+
+
+def _pruefe_bindungen(backend: DatasetBackend) -> None:
+    """Die beiden Deklarationsregeln aus Konzept #1847 §3 — laut statt still.
+
+    1. ``excluded`` ist reserviert („gehoert ausdruecklich in keinen Bericht",
+       E3). Ein Backend, das ihn deklariert, machte den Ausschluss selbst zu
+       einer Berichtszeile.
+    2. **Ein Schluessel, ein Label.** Mehrfach-Deklaration ist der Normalfall
+       (``contact`` steckt in ``sample_report_1`` UND ``counseling_hours``) —
+       zwei verschiedene Labels dazu waeren zwei Dropdown-Eintraege fuer
+       dieselbe Sache. Verglichen wird ueber ``str()``: Labels sind
+       ``gettext_lazy``-Proxies und muessen fuer den Vergleich in der beim
+       Import aktiven Sprache ausgewertet werden.
+    3. **Kein Schluessel doppelt in EINER Deklaration.** ``vokabular()``,
+       ``ziel_map()`` und ``_eintrag()`` sind Dicts — ein zweiter Eintrag mit
+       demselben Schluessel verschwindet dort still, und die Aufloesung folgt
+       ihm nicht. Das faellt sonst erst auf, wenn Zahlen fehlen.
+
+    Typ- und Feld-Schluessel sind **getrennte Werteraeume** (Konzept §3.1):
+    derselbe Name darf auf beiden Ebenen etwas anderes bedeuten.
+    """
+    for sammler in (typ_bindungen, feld_bindungen):
+        bestand = _vokabular(_REGISTRY.values(), sammler)
+        for bindung in sammler(backend):
+            keys = bindung.keys()
+            doppelt = sorted({key for key in keys if keys.count(key) > 1})
+            if doppelt:
+                raise ImproperlyConfigured(
+                    f"Reporting-Backend {backend.slug!r} deklariert Berichtsschlüssel mehrfach in "
+                    f"derselben Bindung: {doppelt} — der zweite Eintrag würde in den abgeleiteten "
+                    "Dicts still verschwinden."
+                )
+            for key, label in bindung.vokabular().items():
+                if key == EXCLUDED_KEY:
+                    raise ImproperlyConfigured(
+                        f"Reporting-Backend {backend.slug!r} deklariert den reservierten "
+                        f"Berichtsschlüssel {EXCLUDED_KEY!r} — er bedeutet: gehört in keinen Bericht."
+                    )
+                bekannt = bestand.get(key)
+                if bekannt is not None and str(bekannt) != str(label):
+                    raise ImproperlyConfigured(
+                        f"Berichtsschlüssel {key!r} ist mit zwei verschiedenen Labels deklariert "
+                        f"({str(bekannt)!r} vs. {str(label)!r}, zuletzt in {backend.slug!r}) — "
+                        "das Vokabular-Label muss je Schlüssel eindeutig sein."
+                    )
+                bestand[key] = label
+
+
 def register_backend(slug: str) -> Callable[[type[DatasetBackend]], type[DatasetBackend]]:
     """Decorator: registriert eine ``DatasetBackend``-Klasse unter ``slug``.
 
     Setzt ``cls.slug = slug`` auf der Klasse und legt eine Instanz im
     Registry-Dict ab. Wirft :class:`ImproperlyConfigured` bei ungueltigem
-    Slug-Format oder Doppelregistrierung desselben Slugs.
+    Slug-Format, bei Doppelregistrierung desselben Slugs und bei einer
+    ungueltigen Bindungs-Deklaration (:func:`_pruefe_bindungen`).
     """
 
     def decorator(cls: type[DatasetBackend]) -> type[DatasetBackend]:
@@ -57,7 +120,9 @@ def register_backend(slug: str) -> Callable[[type[DatasetBackend]], type[Dataset
         if slug in _REGISTRY:
             raise ImproperlyConfigured(f"Reporting-Backend-Slug {slug!r} ist bereits registriert.")
         cls.slug = slug
-        _REGISTRY[slug] = cls()
+        backend = cls()
+        _pruefe_bindungen(backend)
+        _REGISTRY[slug] = backend
         return cls
 
     return decorator
@@ -122,3 +187,38 @@ def get_available_backends(facility: object) -> list[DatasetBackend]:
     Erreichbarkeit nicht auseinanderlaufen.
     """
     return [backend for backend in get_backends() if backend.is_available(facility)]
+
+
+def get_report_key_vocabulary() -> dict[str, str]:
+    """Alle deklarierten **Typ**-Berichtsschluessel mit ihrem Label (E1, Refs #1824).
+
+    Der Werteraum kommt aus den Backends, nicht aus einer handgepflegten Liste:
+    E2 zeigt daraus „erscheint in …", E3 speist damit das ``report_key``-Select
+    am Dokumentationstyp. :data:`~core.reporting.base.EXCLUDED_KEY` ist hier
+    nie enthalten — er ist reserviert und wird von der Auswahl gesondert
+    angeboten.
+    """
+    return _vokabular(get_backends(), typ_bindungen)
+
+
+def get_field_key_vocabulary() -> dict[str, str]:
+    """Alle deklarierten **Feld**-Berichtsschluessel mit ihrem Label.
+
+    Eigener Werteraum neben :func:`get_report_key_vocabulary` (Konzept §3.1):
+    auf Feld-Ebene gilt dieselbe Regel, aber eine andere Kardinalitaet.
+    """
+    return _vokabular(get_backends(), feld_bindungen)
+
+
+def backends_for_report_key(key: str) -> list[DatasetBackend]:
+    """Die Backends, in denen ein Dokumentationstyp mit diesem Schluessel erscheint."""
+    return [
+        backend for backend in get_backends() if any(key in bindung.vokabular() for bindung in typ_bindungen(backend))
+    ]
+
+
+def backends_for_field_key(key: str) -> list[DatasetBackend]:
+    """Die Backends, in denen eine Feldvorlage mit diesem Schluessel erscheint."""
+    return [
+        backend for backend in get_backends() if any(key in bindung.vokabular() for bindung in feld_bindungen(backend))
+    ]

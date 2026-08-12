@@ -27,7 +27,15 @@ from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
+from core.reporting.base import (
+    BindungsEintrag,
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    TypBindung,
+    stamp_threshold,
+)
 from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
 
@@ -37,45 +45,38 @@ from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import _get_threshold, suppress_sample_report_1_stats
 from core.services.dashboard.statistics import PERSONS_KEY
 
-# Mapping: DocumentType.system_type -> Berichtskategorie (fehlend = ausgeschlossen).
-# ``ban``/``note``/NULL fehlen bewusst — sie gehoeren nicht in den Bericht.
-# Zweitschluessel ist ``DocumentType.slug`` (:data:`SLUG_MAP`, Refs #1741).
+# Die Typ-Bindung dieses Berichts (E1, Refs #1824): welcher Dokumentationstyp
+# in welche Berichtskategorie faellt — EINE Deklaration, aus der Aufloesung
+# (``resolve_category``), SQL-Filter (:data:`_UNMAPPED_Q`), Verfuegbarkeit und
+# Schluessel-Vokabular abgeleitet werden. ``ban``/``note``/NULL fehlen bewusst;
+# sie gehoeren nicht in den Bericht.
 #
-# Die Kategoriennamen bleiben bewusst **deutscher Klartext** und werden NICHT
-# ``gettext_lazy`` (Refs #1744): sie landen als Schluessel in
-# ``summary["by_category"]`` und damit im persistierten Snapshot-Payload
-# (``StatisticsSnapshot.backend_data``) sowie im monatsuebergreifenden Merge
-# (``_merge_sample_report_1_stats``). Ein locale-abhaengiger Wert machte den
-# gespeicherten Bestand von der Sprache des schreibenden Prozesses abhaengig —
-# zwei Monate, zwei Kategoriennamen, kein Merge.
-CATEGORY_MAP = {
-    "contact": "Kontakte",
-    "crisis": "Beratung",
-    "medical": "Versorgung",
-    "needle_exchange": "Versorgung",
-    "accompaniment": "Vermittlung",
-    "counseling": "Beratung",
-    "referral": "Vermittlung",
-}
-
-# Zweitschluessel: DocumentType.slug -> Berichtskategorie (Refs #1741, Entscheid
-# in #1785).
+# **``ziel`` = deutscher Klartext, NIE ``gettext_lazy``** (Refs #1744): die
+# Kategoriennamen landen als Schluessel in ``summary["by_category"]`` und damit
+# im persistierten Snapshot-Payload (``StatisticsSnapshot.backend_data``) sowie
+# im monatsuebergreifenden Merge (``_merge_sample_report_1_stats``). Ein
+# locale-abhaengiger Wert machte den gespeicherten Bestand von der Sprache des
+# schreibenden Prozesses abhaengig — zwei Monate, zwei Kategoriennamen, kein
+# Merge. ``label`` ist dagegen der uebersetzte Name des SCHLUESSELS und hat mit
+# der Kategorie nichts zu tun.
 #
-# **Wofuer er da ist.** ``system_type`` ist ein Kern-Datenmodell-Enum und
-# eingefroren (RFC #1748): ein einrichtungseigener Dokumentationstyp hat oft
-# gar keinen — oder ``note``, was exportseitig identisch mit NULL ist. Genau
-# diese Typen tauchten bisher ausnahmslos als „ohne Berichtszuordnung" im
-# Vollstaendigkeitshinweis auf, obwohl ihr Slug sie eindeutig benennt.
+# **``slugs`` = Zweitschluessel** (Refs #1741, Entscheid in
+# #1785).
+# ``system_type`` ist ein Kern-Datenmodell-Enum und eingefroren (RFC #1748): ein
+# einrichtungseigener Dokumentationstyp hat oft gar keinen — oder ``note``, was
+# exportseitig identisch mit NULL ist. Genau diese Typen tauchten bisher
+# ausnahmslos als „ohne Berichtszuordnung" im Vollstaendigkeitshinweis auf,
+# obwohl ihr Slug sie eindeutig benennt.
 #
-# **Warum hart kodiert.** Das Mapping ist Fachlogik *dieses* Berichts und
+# **Warum hart kodiert.** Die Bindung ist Fachlogik *dieses* Berichts und
 # gehoert damit ins Backend, nicht in eine Einrichtungs-Einstellung: eine
 # Config-UI machte Berichtszahlen per Klick verschiebbar (dasselbe Argument,
 # mit dem ``category`` fuers Reporting ausgeschlossen ist, ADR-034/ADR-038).
 # Eine spaetere Konfigurierbarkeit bleibt Ausbaupfad, nicht Bestand.
 #
-# **Globale Slug-Konvention, facility-agnostisch.** Die Schluessel sind die
+# **Globale Slug-Konvention, facility-agnostisch.** Die Slugs sind die
 # Paket-Slugs aus ``core/packages/default.yaml`` — dort tragen sie die
-# Bedeutung, die dieses Mapping annimmt. Gematcht wird ausschliesslich der
+# Bedeutung, die diese Bindung annimmt. Gematcht wird ausschliesslich der
 # Slug-String, unabhaengig davon, ob der Typ aus dem Paket stammt oder in der
 # Config-UI entstanden ist: es gibt am Datensatz keine Herkunftsangabe, und ein
 # einrichtungseigener Typ mit dem Slug ``beratungsgespraech`` IST ein
@@ -84,45 +85,33 @@ CATEGORY_MAP = {
 # bei ``system_type``.
 #
 # **Bewusst konservativ.** Nur die sieben Paket-Slugs, deren ``system_type``
-# ohnehin in ``CATEGORY_MAP`` steht. ``notiz`` und ``hausverbot`` fehlen aus
-# demselben Grund, aus dem ``note``/``ban`` oben fehlen — der Zweitschluessel
-# darf keine Kategorie hereinholen, die der Erstschluessel bewusst auslaesst.
-# Werte sind dieselben deutschen Klartext-Kategorien wie oben (Snapshot-
-# Stabilitaet, siehe Kommentar an ``CATEGORY_MAP``).
-SLUG_MAP = {
-    "kontakt": "Kontakte",
-    "krisengespraech": "Beratung",
-    "beratungsgespraech": "Beratung",
-    "medizinische-versorgung": "Versorgung",
-    "spritzentausch": "Versorgung",
-    "begleitung": "Vermittlung",
-    "vermittlung": "Vermittlung",
-}
+# ohnehin deklariert ist. ``notiz`` und ``hausverbot`` fehlen aus demselben
+# Grund, aus dem ``note``/``ban`` fehlen — der Zweitschluessel darf keine
+# Kategorie hereinholen, die der Erstschluessel bewusst auslaesst.
+TYP_BINDUNG = TypBindung(
+    (
+        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte", slugs=("kontakt",)),
+        BindungsEintrag("crisis", _("Krisengespräch"), ziel="Beratung", slugs=("krisengespraech",)),
+        BindungsEintrag("medical", _("Medizinische Versorgung"), ziel="Versorgung", slugs=("medizinische-versorgung",)),
+        BindungsEintrag("needle_exchange", _("Spritzentausch"), ziel="Versorgung", slugs=("spritzentausch",)),
+        BindungsEintrag("accompaniment", _("Begleitung"), ziel="Vermittlung", slugs=("begleitung",)),
+        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung", slugs=("beratungsgespraech",)),
+        BindungsEintrag("referral", _("Vermittlung"), ziel="Vermittlung", slugs=("vermittlung",)),
+    )
+)
 
+# Bestandsnamen als **Ableitungen** der Deklaration (Refs #1824). Sie bleiben
+# oeffentlich, weil sie ausserhalb dieses Moduls gelesen werden (Freeze-Test
+# ``test_system_type.py``, Export-Tests) — aber es gibt sie nur noch einmal.
+CATEGORY_MAP = TYP_BINDUNG.ziel_map()
+SLUG_MAP = TYP_BINDUNG.slug_ziele()
 
-def resolve_category(system_type: str | None, slug: str | None) -> str | None:
-    """Berichtskategorie eines Dokumentationstyps — ``None`` = ohne Zuordnung.
-
-    Auflösungsordnung (Refs #1741): erst :data:`CATEGORY_MAP` ueber
-    ``system_type``, dann :data:`SLUG_MAP` ueber ``slug``. Der Erstschluessel
-    gewinnt immer — er ist die Systemkennung, der Slug nur eine Konvention.
-
-    „Gewinnt immer" schliesst seine **Ausschluesse** ein (Refs #1785, Review):
-    ein GESETZTER ``system_type`` ist eine vollstaendige Aussage — auch wenn er
-    ``note``/``ban`` lautet und damit „gehoert nicht in den Bericht" bedeutet.
-    Der Slug greift deshalb NUR, wenn der Erstschluessel gar keine Aussage
-    trifft (``system_type`` leer/NULL). Andernfalls zoege ein Hausverbots-Typ
-    mit dem Slug ``kontakt`` seine Bann-Ereignisse in den Bericht — ein
-    Disclosure-Leck.
-
-    Einzige Auflösungsstelle des Backends: ``build_dataset`` und der
-    Unmapped-Filter (:data:`_UNMAPPED_Q`) muessen dieselbe Antwort geben, sonst
-    zaehlt der Vollstaendigkeitshinweis Ereignisse als fehlend, die im Bericht
-    stehen (oder umgekehrt).
-    """
-    if system_type:
-        return CATEGORY_MAP.get(system_type)
-    return SLUG_MAP.get(slug or "")
+# Berichtskategorie eines Dokumentationstyps — ``None`` = ohne Zuordnung.
+# ``resolve_category(system_type, slug)``: erst der Erstschluessel, dann — nur
+# bei leerem/NULL Erstschluessel — der Slug (Refs #1741/#1785). Der
+# Unmapped-Filter unten ist die SQL-Entsprechung DERSELBEN Deklaration; zwei
+# Wahrheiten kann es hier nicht mehr geben.
+resolve_category = TYP_BINDUNG.resolve
 
 
 # Anzeigelabels der Altersgruppen — lazy wie bisher, damit der Snapshot-Payload
@@ -136,29 +125,13 @@ _AGE_LABELS = {
 
 
 # Ereignisse, deren Dokumenttyp keiner Berichtskategorie zugeordnet ist —
-# ``system_type`` NULL/leer eingeschlossen. Das ``isnull``-ODER ist bewusst
-# redundant: Django rendert ``~Q(...__in=[...])`` auf einer NULL-baren Spalte
-# als ``NOT (x IN (...) AND x IS NOT NULL)`` und faengt NULL-Zeilen damit
-# bereits mit ein. Blankes SQL-``NOT IN`` tut das nicht — der explizite Zweig
-# haelt die Absicht unabhaengig von diesem ORM-Detail fest.
-#
-# Seit dem Slug-Zweitschluessel (Refs #1741) ist „gemappt" eine Disjunktion —
-# die exakte SQL-Entsprechung von :func:`resolve_category`:
-#
-#   gemappt = system_type IN CATEGORY_MAP
-#             ODER (system_type leer/NULL UND slug IN SLUG_MAP)
-#
-# Der zweite Zweig ist an ``system_type`` leer/NULL **gebunden** (Refs #1785,
-# Review): ein gesetzter, aber bewusst ausgeschlossener ``system_type``
-# (``note``/``ban``) darf NICHT ueber den Slug hereingeholt werden. „Ohne
-# Zuordnung" ist die Negation. ``slug`` ist nicht NULL-bar (``blank=True``, aber
-# ``NOT NULL``) und ``document_type`` ein PROTECT-FK ohne ``null=True``, es gibt
-# hier also keine Outer-Join-NULLs.
-_SYSTEM_TYPE_UNSET_Q = Q(document_type__system_type__isnull=True) | Q(document_type__system_type="")
-_UNMAPPED_Q = ~(
-    Q(document_type__system_type__in=tuple(CATEGORY_MAP))
-    | (_SYSTEM_TYPE_UNSET_Q & Q(document_type__slug__in=tuple(SLUG_MAP)))
-)
+# ``system_type`` NULL/leer eingeschlossen. **Abgeleitet** aus derselben
+# Deklaration wie :func:`resolve_category` (Refs #1824): das frueher
+# handgeschriebene ``Q`` war die zweite Wahrheit, die driften konnte.
+# ``TypBindung.unmapped_q`` ist die Negation von ``matching_q`` und traegt den
+# ``isnull``-Zweig sowie die #1785-Bindung des Zweitschluessels an den leeren
+# Erstschluessel selbst.
+_UNMAPPED_Q = TYP_BINDUNG.unmapped_q("document_type__")
 
 # Export-Fassung der Vollstaendigkeits-Meldungen (K6, Refs #1769). Sie ist die
 # EINZIGE Fassung, die ein externer Empfaenger je zu sehen bekommt: der Block
@@ -219,10 +192,17 @@ class SampleReport1Backend(DatasetBackend):
     description = _("Fasst die Ereignisse mit Berichtszuordnung zu den Kategorien eines Sachberichts zusammen.")
     snapshot_enabled = True
     # K3-A3 (Refs #1770): Die ``records``-Projektion sind die Berichtskategorien
-    # — sie zaehlen nur Ereignisse mit Berichtszuordnung (``CATEGORY_MAP``),
+    # — sie zaehlen nur Ereignisse mit Berichtszuordnung (:data:`TYP_BINDUNG`),
     # nicht alle Ereignisse des Zeitraums. Ohne diesen Ausweis liest sich
     # "Gesamtkontakte" wie eine Gesamtzahl, die es nicht ist.
     population = MAPPED_EVENTS
+    # E1 (Refs #1824): Die Bindung wird deklariert, die Verfuegbarkeit bewusst
+    # NICHT (``verfuegbarkeit`` bleibt leer). Der Sachbericht hat absichtlich
+    # kein ``is_available``: er bleibt auch dann waehlbar, wenn eine Einrichtung
+    # keinen zugeordneten Typ fuehrt — dann zeigt er eben Nullen und den
+    # Vollstaendigkeitshinweis, statt aus dem Dropdown zu verschwinden (und
+    # ueber ``get_available_backends`` einen 404 zu erzeugen).
+    typ_bindung = TYP_BINDUNG
 
     def get_field_specs(self) -> list[FieldSpec]:
         """Spalten der tabellarischen Projektion (eine Zeile je Kategorie)."""
@@ -235,23 +215,20 @@ class SampleReport1Backend(DatasetBackend):
         """Aggregiert Ereignisse zu Berichtskategorien und Altersgruppen."""
         base_qs = _base_queryset(facility, date_from, date_to)
 
-        # Aggregation ueber DocumentType.system_type UND .slug — beide Schluessel
-        # der Auflösung (Refs #1741) muessen in der Gruppierung stehen, sonst
-        # koennte der Zweitschluessel nicht greifen. Die Ordnung bleibt
-        # system_type-fuehrend (Bestandsformat des Snapshot-Payloads); die
-        # publizierte Zeilenordnung stellt ohnehin die Artefaktgrenze her
-        # (``ORDER_CATEGORY``, Refs #1767/#1772).
-        by_dt = (
-            base_qs.values("document_type__system_type", "document_type__slug")
-            .annotate(count=Count("id"))
-            .order_by("document_type__system_type", "document_type__slug")
-        )
+        # Aggregation ueber die von der Bindung deklarierten Schluesselfelder
+        # (``system_type`` UND ``slug``): beide muessen in der Gruppierung
+        # stehen, sonst koennte der Zweitschluessel nicht greifen (Refs #1741).
+        # Die Ordnung bleibt system_type-fuehrend (Bestandsformat des
+        # Snapshot-Payloads); die publizierte Zeilenordnung stellt ohnehin die
+        # Artefaktgrenze her (``ORDER_CATEGORY``, Refs #1767/#1772).
+        schluessel_felder = TYP_BINDUNG.values_fields("document_type__")
+        by_dt = base_qs.values(*schluessel_felder).annotate(count=Count("id")).order_by(*schluessel_felder)
 
         # Konsolidierung auf die Berichtskategorien
         category_counts: OrderedDict[str, int] = OrderedDict()
         total = 0
         for row in by_dt:
-            cat = resolve_category(row["document_type__system_type"], row["document_type__slug"])
+            cat = TYP_BINDUNG.resolve_row(row, "document_type__")
             if cat is None:
                 # Nicht zugeordnete Typen still ueberspringen — auch ``total``
                 # zaehlt sie nicht mit (Bestandsverhalten). Sichtbar werden sie

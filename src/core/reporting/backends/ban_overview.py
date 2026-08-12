@@ -57,7 +57,7 @@ zusaetzlich auf ``DocumentType.is_active`` — sie steuert die **Durchsetzung**
 Dieser Bericht beschreibt, was **passiert ist**; ein heute umgelegter
 Konfigurationsschalter darf einen vergangenen Zeitraum nicht umschreiben. Die
 Konfiguration steuert stattdessen die **Sichtbarkeit** des Berichts
-(:meth:`BanOverviewBackend.is_available`).
+(:attr:`BanOverviewBackend.verfuegbarkeit`).
 
 **K-Anonymitaet.** Alle drei Zahlen fallen unter der Schwelle auf ``None``, ueber
 die zentrale :func:`_suppress_small` auf den ``records``-Zeilen; ``summary``
@@ -111,12 +111,15 @@ from datetime import date
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
+from core.models import Event
 from core.reporting.base import (
+    Anforderung,
+    BindungsEintrag,
     CompletenessIssue,
     DatasetBackend,
     DatasetResult,
     FieldSpec,
+    TypBindung,
     project_records,
     stamp_threshold,
 )
@@ -132,6 +135,22 @@ from core.services.dashboard.external_report import (
 from core.services.file_vault import safe_decrypt
 
 logger = logging.getLogger(__name__)
+
+# Die Typ-Bindung dieses Berichts (E1, Refs #1824). Zwei Deklarationsfelder
+# tragen hier je eine bewusste Entscheidung, die frueher nur im Fliesstext
+# stand:
+#
+# * ``slug_fallback=False`` — **kein Slug-Zweitschluessel**. Ein bewusst nicht
+#   gesetzter ``system_type`` darf sich nicht ueber die Namenskonvention Zugang
+#   verschaffen (Refs #1785). Die Abweichung ist damit sichtbar und testbar.
+# * ``bindet="system_type"`` — dieser Bericht ist ein **Verhaltens**-Bericht und
+#   bleibt dauerhaft an ``system_type=ban`` gebunden; er wechselt in E3 NICHT
+#   auf ``report_key`` (Konzept #1847 §3).
+TYP_BINDUNG = TypBindung(
+    (BindungsEintrag("ban", _("Hausverbot")),),
+    slug_fallback=False,
+    bindet="system_type",
+)
 
 # Kanonische, datenunabhaengige Zeilenreihenfolge. Die Bezeichner sind
 # sprachunabhaengiger Klartext (Record-Wert und ``summary``-Schluessel in einem);
@@ -160,10 +179,13 @@ _POINT_IN_TIME_ISSUE = CompletenessIssue(
 
 
 def _ban_events(facility):
-    """Sichtbare Hausverbots-Ereignisse der Einrichtung — ohne Slug-Fallback."""
-    return Event.objects.for_facility(facility).filter(
-        is_deleted=False,
-        document_type__system_type=DocumentType.SystemType.BAN,
+    """Sichtbare Hausverbots-Ereignisse der Einrichtung — ohne Slug-Fallback.
+
+    Bewusst **ohne** ``is_active``: der Bericht beschreibt, was passiert ist;
+    die Konfigurationsfrage steckt in :attr:`BanOverviewBackend.verfuegbarkeit`.
+    """
+    return (
+        Event.objects.for_facility(facility).filter(is_deleted=False).filter(TYP_BINDUNG.matching_q("document_type__"))
     )
 
 
@@ -201,6 +223,21 @@ class BanOverviewBackend(DatasetBackend):
     # Zahlen werten ``occurred_at`` ueberhaupt nicht aus (Stichtag bzw.
     # Ablaufdatum). ``BANS_IN_PERIOD`` sagt beides.
     population = BANS_IN_PERIOD
+    typ_bindung = TYP_BINDUNG
+    # Waehlbar, sobald die Einrichtung einen **aktiven** Dokumentationstyp mit
+    # ``system_type="ban"`` fuehrt (Seed-/Paket-Bindung, Maintainer-Entscheid
+    # 2026-08-05). Ohne einen solchen Typ kann sie gar keine Hausverbote
+    # dokumentieren, und ein Bericht ueber ein Thema, das es dort nicht gibt,
+    # gehoert nicht ins Dropdown — bei diesem Thema auch aus Gruenden der
+    # Erwartungshaltung, nicht nur der Ergonomie.
+    #
+    # ``is_active`` ist hier die **Konfigurationsfrage** ("bietet die Einrichtung
+    # das an?") und darf nicht mit dem Datenfilter verwechselt werden:
+    # ``build_dataset`` zaehlt bewusst auch Hausverbote unter einem inzwischen
+    # deaktivierten Typ, damit ein Konfigurationsschalter keine Vergangenheit
+    # umschreibt. Kein Slug-Fallback — dieselbe Regel wie bei den Daten, und
+    # jetzt garantiert dieselbe Deklaration (Refs #1785).
+    verfuegbarkeit = (Anforderung(TYP_BINDUNG),)
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
@@ -325,29 +362,3 @@ class BanOverviewBackend(DatasetBackend):
         summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
         summary = stamp_threshold(summary, threshold)
         return dataclasses.replace(result, records=records, summary=summary, completeness=[_POINT_IN_TIME_ISSUE])
-
-    def is_available(self, facility) -> bool:
-        """Waehlbar, sobald die Einrichtung einen **aktiven** Dokumentationstyp
-        mit ``system_type="ban"`` fuehrt (Seed-/Paket-Bindung, Maintainer-Entscheid
-        2026-08-05).
-
-        Ohne einen solchen Typ kann die Einrichtung gar keine Hausverbote
-        dokumentieren, und ein Bericht ueber ein Thema, das es dort nicht gibt,
-        gehoert nicht ins Dropdown — bei diesem Thema auch aus Gruenden der
-        Erwartungshaltung, nicht nur der Ergonomie.
-
-        ``is_active`` ist hier die **Konfigurationsfrage** ("bietet die
-        Einrichtung das an?") und darf nicht mit dem Datenfilter verwechselt
-        werden: ``build_dataset`` zaehlt bewusst auch Hausverbote unter einem
-        inzwischen deaktivierten Typ, damit ein Konfigurationsschalter keine
-        Vergangenheit umschreibt. Kein Slug-Fallback — dieselbe Regel wie bei
-        den Daten (Refs #1785).
-        """
-        return (
-            DocumentType.objects.for_facility(facility)
-            .filter(
-                is_active=True,
-                system_type=DocumentType.SystemType.BAN,
-            )
-            .exists()
-        )

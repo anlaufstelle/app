@@ -62,19 +62,24 @@ Fuer Jahreszeitraeume grosser Einrichtungen ist das die dokumentierte Grenze
 
 import dataclasses
 
-from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
+from core.models import Event
+from core.reporting.base import (
+    Anforderung,
+    BindungsEintrag,
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FeldBindung,
+    FieldSpec,
+    TypBindung,
+    stamp_threshold,
+)
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import _get_threshold, apply_residual_guard
 from core.services.file_vault import safe_decrypt
-
-# Feld-Template-Slugs des Standardpakets (``core/packages/default.yaml``).
-AUSGABE_SLUG = "ausgabe"
-RUECKGABE_SLUG = "rueckgabe"
 
 # Sprachunabhaengiger Code (Vertrag: ``CompletenessIssue.code`` ist Klartext,
 # nie uebersetzt) und die eine, ziffernfreie Meldung dazu. Die Ziffernfreiheit
@@ -85,29 +90,33 @@ _MISSING_VALUES_MESSAGE = _(
     "Ereignisse ohne verwertbare Zahlenwerte in „Ausgabe“/„Rückgabe“ sind in den Summen nicht enthalten"
 )
 
-# Erstschluessel der Typaufloesung.
-SYSTEM_TYPE = DocumentType.SystemType.NEEDLE_EXCHANGE
-# Zweitschluessel: der Paket-Slug — nur bei leerem ``system_type`` (siehe
-# Modul-Docstring). Bewusst genau EIN Slug: der Zweitschluessel darf keinen Typ
-# hereinholen, den der Erstschluessel bewusst auslaesst.
-PAKET_SLUG = "spritzentausch"
+# Die Typ-Bindung dieses Berichts (E1, Refs #1824): Erstschluessel
+# ``needle_exchange``, Zweitschluessel der Paket-Slug ``spritzentausch`` — nur
+# bei leerem ``system_type`` (siehe Modul-Docstring). Bewusst genau EIN Slug:
+# der Zweitschluessel darf keinen Typ hereinholen, den der Erstschluessel
+# bewusst auslaesst.
+TYP_BINDUNG = TypBindung((BindungsEintrag("needle_exchange", _("Spritzentausch"), slugs=("spritzentausch",)),))
 
+# Die beiden Feld-Bindungen — **getrennt**, nicht als eine Bindung mit zwei
+# Slugs: nur so heisst die Verfuegbarkeits-Pruefung „beide Vorlagen am
+# DEMSELBEN Typ" (je ``filter()``-Aufruf ein eigener JOIN, siehe
+# ``FeldBindung.template_q``). Eine Bindung mit ``slugs=("ausgabe",
+# "rueckgabe")`` waere ein ``IN`` und damit ein ODER.
+FELD_AUSGABE = FeldBindung((BindungsEintrag("ausgabe_stueck", _("Ausgabe gesamt"), slugs=("ausgabe",)),))
+FELD_RUECKGABE = FeldBindung((BindungsEintrag("rueckgabe_stueck", _("Rückgabe gesamt"), slugs=("rueckgabe",)),))
 
-def matching_q(prefix: str = "") -> Q:
-    """SQL-Entsprechung der Typaufloesung — ``prefix`` fuer JOIN-Pfade.
+# Leseschluessel in ``data_json`` (Feld-Template-Slugs des Standardpakets
+# ``core/packages/default.yaml``). In E1 identisch mit den Slugs; wechselt der
+# Lesepfad je Dokumentationstyp, ist ``data_json_keys()`` die eine Stelle (E3).
+(AUSGABE_SLUG,) = FELD_AUSGABE.data_json_keys()
+(RUECKGABE_SLUG,) = FELD_RUECKGABE.data_json_keys()
 
-    ``matching_q()`` filtert auf :class:`~core.models.DocumentType` selbst,
-    ``matching_q("document_type__")`` auf :class:`~core.models.Event`. EINE
-    Definition fuer beide Aufrufstellen: liefen Ereignis-Filter und
-    Verfuegbarkeits-Pruefung auseinander, waere das Backend fuer eine Einrichtung
-    waehlbar, fuer die es nie eine Zeile liefert (oder umgekehrt).
-
-    Der ``isnull``-ODER-Zweig ist bewusst redundant (Muster ``_UNMAPPED_Q`` in
-    ``sample_report_1``): ``system_type`` ist NULL-bar, und blankes SQL-``NOT IN``
-    faengt NULL-Zeilen nicht.
-    """
-    unset = Q(**{f"{prefix}system_type__isnull": True}) | Q(**{f"{prefix}system_type": ""})
-    return Q(**{f"{prefix}system_type": SYSTEM_TYPE}) | (unset & Q(**{f"{prefix}slug": PAKET_SLUG}))
+# SQL-Entsprechung der Typaufloesung — ``matching_q()`` filtert auf
+# ``DocumentType`` selbst, ``matching_q("document_type__")`` auf ``Event``. EINE
+# Definition fuer beide Aufrufstellen: liefen Ereignis-Filter und
+# Verfuegbarkeits-Pruefung auseinander, waere das Backend fuer eine Einrichtung
+# waehlbar, fuer die es nie eine Zeile liefert (oder umgekehrt).
+matching_q = TYP_BINDUNG.matching_q
 
 
 def as_number(raw):
@@ -156,6 +165,15 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
     # jeder anderen Tabelle ein — ``base.py`` verlangt deshalb, dass ein enger
     # zaehlendes Backend seine Grundgesamtheit explizit ueberschreibt.
     population = TYPED_EVENTS
+    typ_bindung = TYP_BINDUNG
+    feld_bindungen = (FELD_AUSGABE, FELD_RUECKGABE)
+    # Nur waehlbar, wenn BEIDE Feldvorlagen an einem passenden **aktiven** Typ
+    # haengen. Ohne beide Felder waere der ``saldo`` eine Differenz gegen eine
+    # konstante Null — ein Bericht, der aussieht, als haette die Einrichtung nie
+    # etwas zurueckgenommen. Lieber gar nicht anbieten. Die zwei Bindungen
+    # werden in ZWEI ``filter()``-Aufrufe uebersetzt (``Anforderung.erfuellt``),
+    # damit „an DEMSELBEN Typ" geprueft wird.
+    verfuegbarkeit = (Anforderung(TYP_BINDUNG, (FELD_AUSGABE, FELD_RUECKGABE)),)
 
     def get_field_specs(self) -> list[FieldSpec]:
         """Eine Aggregatzeile; die Spalten sind die vier Kennzahlen."""
@@ -165,27 +183,6 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
             FieldSpec("summe_rueckgabe", _("Rückgabe gesamt")),
             FieldSpec("saldo", _("Saldo")),
         ]
-
-    def is_available(self, facility) -> bool:
-        """Nur waehlbar, wenn BEIDE Feldvorlagen an einem passenden Typ haengen.
-
-        Ohne beide Felder waere der ``saldo`` eine Differenz gegen eine
-        konstante Null — ein Bericht, der aussieht, als haette die Einrichtung
-        nie etwas zurueckgenommen. Lieber gar nicht anbieten.
-
-        Die zwei ``filter``-Aufrufe sind bewusst getrennt: ueber eine
-        Mehrfach-Relation erzeugt Django je Aufruf einen eigenen JOIN, sodass
-        „beide Slugs an DEMSELBEN Typ" geprueft wird. In EINEM ``filter``
-        muesste dieselbe Zeile beide Slugs zugleich tragen — nie erfuellbar.
-        """
-        return (
-            DocumentType.objects.for_facility(facility)
-            .filter(is_active=True)
-            .filter(matching_q())
-            .filter(fields__field_template__slug=AUSGABE_SLUG, fields__field_template__is_active=True)
-            .filter(fields__field_template__slug=RUECKGABE_SLUG, fields__field_template__is_active=True)
-            .exists()
-        )
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Summiert ``ausgabe``/``rueckgabe`` ueber die Spritzentausch-Ereignisse."""

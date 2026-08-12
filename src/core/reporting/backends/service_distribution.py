@@ -92,12 +92,16 @@ import dataclasses
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
+from core.models import Event
 from core.reporting.base import (
+    Anforderung,
+    BindungsEintrag,
     CompletenessIssue,
     DatasetBackend,
     DatasetResult,
+    FeldBindung,
     FieldSpec,
+    TypBindung,
     project_records,
     stamp_threshold,
 )
@@ -126,17 +130,37 @@ _MISSING_VALUES_MESSAGE = _("Ereignisse ohne Auswahlwert sind in der Verteilung 
 class Feldgruppe:
     """Eine auswertbare Feld-Konfiguration — Fachlogik dieses Berichts.
 
-    ``system_type``/``paket_slug`` bilden die Typaufloesung ab (Erstschluessel
-    zuerst und exklusiv, Slug nur bei leerem ``system_type`` — Muster
-    ``resolve_category``, Refs #1741/#1785). ``mehrfachnennung`` entscheidet
-    ueber die Randsummen-Deklaration und ist damit **die** sicherheitsrelevante
+    Diese Struktur war die **Vorlage** der Generalisierung (Refs #1824): sie
+    buendelte schon vorher ``(feld_slug, system_type, paket_slug)`` und leitete
+    ``matching_q`` daraus ab, statt es erneut hinzuschreiben. Seit E1 sind die
+    beiden Haelften ausgelagert — :class:`~core.reporting.base.TypBindung`
+    (welcher Dokumentationstyp) und :class:`~core.reporting.base.FeldBindung`
+    (welche Feldvorlage) — und die Gruppe komponiert sie.
+
+    ``mehrfachnennung`` bleibt hier: es entscheidet ueber die
+    Randsummen-Deklaration und ist damit **die** sicherheitsrelevante
     Eigenschaft dieser Struktur, nicht bloss Metadatum.
+
+    ``feld_slug`` bleibt ebenfalls ein **eigenes deklariertes Feld** und wird
+    NICHT aus der Feld-Bindung abgeleitet: es ist der **publizierte** Schluessel
+    (Spaltenwert ``feld`` in ``records``, Praefix von ``summary_key``) und damit
+    Teil des Artefakt- und Snapshot-Formats. ``FeldBindung.data_json_keys()``
+    ist dagegen der reine **Lesepfad** und darf in E3 auf den
+    Berichtsschluessel wechseln — kaeme der publizierte Wert von dort, benennte
+    dieser Wechsel still Export-Spalten und ``summary``-Schluessel um. Heute
+    sind beide derselbe String; das ist eine Tatsache, keine Kopplung.
     """
 
     feld_slug: str
-    system_type: str
-    paket_slug: str
+    typ_bindung: TypBindung
+    feld_bindung: FeldBindung
     mehrfachnennung: bool
+
+    @property
+    def lese_schluessel(self) -> str:
+        """Der ``data_json``-Leseschluessel dieser Gruppe (genau einer je Gruppe)."""
+        (schluessel,) = self.feld_bindung.data_json_keys()
+        return schluessel
 
     @property
     def summary_key(self) -> str:
@@ -148,6 +172,11 @@ class Feldgruppe:
         """Interner Schluessel der Aufschluesselung in der Guard-Sicht."""
         return f"records_{self.feld_slug.replace('-', '_')}"
 
+    @property
+    def anforderung(self) -> Anforderung:
+        """„Gruppe ist konfiguriert" — passender aktiver Typ MIT aktiver Feldvorlage."""
+        return Anforderung(self.typ_bindung, (self.feld_bindung,))
+
     def matching_q(self, prefix: str = "") -> Q:
         """SQL-Entsprechung der Typaufloesung — ``prefix`` fuer JOIN-Pfade.
 
@@ -156,16 +185,29 @@ class Feldgruppe:
         Definition fuer beide Aufrufstellen, damit Ereignis-Filter und
         Konfigurations-Pruefung nie auseinanderlaufen.
         """
-        unset = Q(**{f"{prefix}system_type__isnull": True}) | Q(**{f"{prefix}system_type": ""})
-        return Q(**{f"{prefix}system_type": self.system_type}) | (unset & Q(**{f"{prefix}slug": self.paket_slug}))
+        return self.typ_bindung.matching_q(prefix)
 
 
 # Feste Reihenfolge = Ausgabeordnung der Gruppen; innerhalb einer Gruppe wird
 # nach Optionsschluessel sortiert. Beides wertunabhaengig (K5), deshalb genuegt
 # ``ORDER_INPUT`` an den Suppressions-Aufrufstellen.
+#
+# Erstschluessel zuerst und exklusiv, Paket-Slug nur bei leerem ``system_type``
+# (Refs #1741/#1785) — die Regel steckt in ``TypBindung``, nicht mehr in dieser
+# Datei.
 GRUPPEN: tuple[Feldgruppe, ...] = (
-    Feldgruppe(LEISTUNGEN_SLUG, DocumentType.SystemType.CONTACT, "kontakt", mehrfachnennung=True),
-    Feldgruppe(KRISE_SLUG, DocumentType.SystemType.CRISIS, "krisengespraech", mehrfachnennung=False),
+    Feldgruppe(
+        LEISTUNGEN_SLUG,
+        TypBindung((BindungsEintrag("contact", _("Kontakt"), slugs=("kontakt",)),)),
+        FeldBindung((BindungsEintrag("leistungen", _("Leistungen nach Kategorie"), slugs=(LEISTUNGEN_SLUG,)),)),
+        mehrfachnennung=True,
+    ),
+    Feldgruppe(
+        KRISE_SLUG,
+        TypBindung((BindungsEintrag("crisis", _("Krisengespräch"), slugs=("krisengespraech",)),)),
+        FeldBindung((BindungsEintrag("art_der_krise", _("Art der Krise"), slugs=(KRISE_SLUG,)),)),
+        mehrfachnennung=False,
+    ),
 )
 
 
@@ -200,6 +242,11 @@ class ServiceDistributionBackend(DatasetBackend):
     # jeweiligen Feld-Typen MIT Auswahlwert, also eine Teilmenge einer
     # Teilmenge. ``ALL_EVENTS`` waere hier doppelt falsch.
     population = TYPED_EVENTS
+    # Die Bindungen liegen je Gruppe in ``verfuegbarkeit`` — dieses Backend hat
+    # keine einzelne Typ-Bindung, sondern zwei nebeneinander. Die ODER-Semantik
+    # von ``is_available`` (Basisklasse) ist genau die Bestandsregel: waehlbar,
+    # sobald MINDESTENS eine der beiden Gruppen konfiguriert ist.
+    verfuegbarkeit = tuple(gruppe.anforderung for gruppe in GRUPPEN)
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
@@ -210,17 +257,7 @@ class ServiceDistributionBackend(DatasetBackend):
 
     def _ist_konfiguriert(self, facility, gruppe: Feldgruppe) -> bool:
         """Haengt die Feldvorlage der Gruppe aktiv an einem passenden aktiven Typ?"""
-        return (
-            DocumentType.objects.for_facility(facility)
-            .filter(is_active=True)
-            .filter(gruppe.matching_q())
-            .filter(fields__field_template__slug=gruppe.feld_slug, fields__field_template__is_active=True)
-            .exists()
-        )
-
-    def is_available(self, facility) -> bool:
-        """Waehlbar, sobald MINDESTENS eine der beiden Gruppen konfiguriert ist."""
-        return any(self._ist_konfiguriert(facility, gruppe) for gruppe in GRUPPEN)
+        return gruppe.anforderung.erfuellt(facility)
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Eine Zeile je (Feld, Option); Randsumme je Feld sind die Ereignisse mit Wert.
@@ -255,7 +292,9 @@ class ServiceDistributionBackend(DatasetBackend):
             counts: dict[str, int] = {}
             events_mit_wert = 0
             for data in payloads:
-                optionen = as_options(safe_decrypt((data or {}).get(gruppe.feld_slug), default=None))
+                # Lesepfad aus der Bindung, Ausgabe unter dem publizierten
+                # Schluessel — die beiden duerfen nicht dieselbe Quelle haben.
+                optionen = as_options(safe_decrypt((data or {}).get(gruppe.lese_schluessel), default=None))
                 if not optionen:
                     ohne_wert += 1
                     continue

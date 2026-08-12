@@ -3124,6 +3124,10 @@ msgstr "Field"
 msgid "Option"
 msgstr "Option"
 
+#: src/core/reporting/backends/service_distribution.py:208
+msgid "Art der Krise"
+msgstr "Type of crisis"
+
 #: src/core/reporting/data_source.py:36
 msgid "Live-Abfrage zum Erstellungszeitpunkt"
 msgstr "Live query at the time of creation"

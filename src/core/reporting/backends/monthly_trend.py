@@ -11,11 +11,14 @@ Datei ablegen, ``@register_backend`` setzen, fertig.
 **Was hier zu kopieren ist.** Drei Dinge, die ein Nachahmer leicht uebersieht:
 
 1. **Die Kategorie-Aufloesung wird importiert, nicht kopiert.**
-   ``CATEGORY_MAP``/``SLUG_MAP``/``resolve_category`` leben im Sachbericht-
-   Backend und bleiben dort die einzige Wahrheit. Eine zweite Kopie driftet
-   garantiert — und eine driftende Kopie ist hier kein Schoenheitsfehler,
-   sondern ein Disclosure-Risiko: sie koennte ``ban``/``note`` hereinholen, die
-   der Erstschluessel bewusst ausschliesst (Refs #1785).
+   ``TYP_BINDUNG`` lebt im Sachbericht-Backend und bleibt dort die einzige
+   Wahrheit; dieses Modul importiert die Deklaration und leitet Aufloesung UND
+   SQL-Praedikat daraus ab. Eine zweite Kopie driftet garantiert — und eine
+   driftende Kopie ist hier kein Schoenheitsfehler, sondern ein
+   Disclosure-Risiko: sie koennte ``ban``/``note`` hereinholen, die der
+   Erstschluessel bewusst ausschliesst (Refs #1785). Bis E1 (Refs #1824) hatte
+   dieses Modul genau deshalb noch ein eigenes ``_MAPPED_DOC_TYPE_Q`` — die
+   Warnung stand hier, die zweite Wahrheit auch.
 2. **Monatsbuckets entstehen in lokaler Zeit.** ``TruncMonth`` trunkiert ohne
    ``tzinfo``-Argument in der aktiven Zeitzone (``TIME_ZONE = Europe/Berlin``) —
    dieselbe Semantik, die die ``occurred_at__date``-Zeitraumgrenzen ohnehin
@@ -104,27 +107,15 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
 
-# DRY (Refs #1741/#1785): Die Kategorie-Aufloesung ist Fachlogik des
-# Sachberichts und wird importiert, nicht nachgebaut.
-from core.reporting.backends.sample_report_1 import (
-    _SUPPRESSED_MESSAGES,
-    CATEGORY_MAP,
-    SLUG_MAP,
-    resolve_category,
-)
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+# DRY (Refs #1741/#1785/#1824): Die Typ-Bindung ist Fachlogik des Sachberichts
+# und wird importiert, nicht nachgebaut. Aus der einen Deklaration kommen hier
+# BEIDE Sichten — die Python-Aufloesung in ``build_dataset`` und das
+# SQL-Praedikat in ``validate_completeness``/``verfuegbarkeit``.
+from core.reporting.backends.sample_report_1 import _SUPPRESSED_MESSAGES, TYP_BINDUNG
+from core.reporting.base import Anforderung, CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import ORDER_INPUT, _Breakdown, suppress_single_margin
-
-# SQL-Entsprechung von ``resolve_category`` auf ``DocumentType`` (nicht auf
-# ``Event`` wie ``_UNMAPPED_Q`` im Sachbericht): gemappt ist ein Typ, wenn sein
-# ``system_type`` in ``CATEGORY_MAP`` steht ODER — nur bei leerem/NULL
-# ``system_type`` — sein Slug in ``SLUG_MAP``. Der zweite Zweig ist an den
-# leeren Erstschluessel gebunden; ein gesetzter, bewusst ausgeschlossener
-# ``system_type`` (``ban``/``note``) darf nicht ueber den Slug hereinkommen.
-_SYSTEM_TYPE_UNSET_Q = Q(system_type__isnull=True) | Q(system_type="")
-_MAPPED_DOC_TYPE_Q = Q(system_type__in=tuple(CATEGORY_MAP)) | (_SYSTEM_TYPE_UNSET_Q & Q(slug__in=tuple(SLUG_MAP)))
 
 # Export-Fassung des Vollstaendigkeitshinweises (K6, Refs #1769) — ohne Zahl.
 # Die Formulierung sagt bewusst NICHT, dass es solche Ereignisse gibt: der
@@ -160,6 +151,23 @@ class MonthlyTrendBackend(DatasetBackend):
     # Berichtszuordnung. Ohne diesen Ausweis liest sich ``total`` wie eine
     # Gesamtzahl aller Ereignisse des Zeitraums, die es nicht ist.
     population = MAPPED_EVENTS
+    # Dieselbe Deklaration wie der Sachbericht (Refs #1824) — sichtbar gemacht,
+    # nicht nur importiert: E2 liest daraus „dieser Typ erscheint in …".
+    typ_bindung = TYP_BINDUNG
+    # Waehlbar, sobald die Einrichtung mindestens einen **aktiven**
+    # Dokumentationstyp mit Berichtszuordnung UND ``entity_type="event"``
+    # fuehrt (Seed-/Paket-Bindung, Maintainer-Entscheid 2026-08-05).
+    #
+    # Ohne einen solchen Typ waere der Bericht konstruktionsbedingt leer — jedes
+    # Ereignis fiele in den Vollstaendigkeitshinweis. ``is_active`` ist die
+    # Konfigurationsfrage: ein deaktivierter Typ ist Altlast und begruendet kein
+    # Angebot im Dropdown; fuer die **Daten** gilt das nicht, dort zaehlt die
+    # historische Zuordnung (siehe ``build_dataset``). ``entity_type`` ist die
+    # zweite Bedingung (Refs #1754, analog ``client-metrics``):
+    # ``build_dataset`` zaehlt ``Event``-Zeilen, und ein Personen- oder
+    # Fall-Formular kann denselben Systemtyp tragen, ohne je ein Ereignis zu
+    # erzeugen — der Bericht stuende im Dropdown und zeigte dauerhaft Nullen.
+    verfuegbarkeit = (Anforderung(TYP_BINDUNG, entity_type=DocumentType.EntityType.EVENT),)
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
@@ -180,13 +188,13 @@ class MonthlyTrendBackend(DatasetBackend):
         rows = (
             _base_queryset(facility, date_from, date_to)
             .annotate(monat=TruncMonth("occurred_at"))
-            .values("monat", "document_type__system_type", "document_type__slug")
+            .values("monat", *TYP_BINDUNG.values_fields("document_type__"))
             .annotate(count=Count("id"))
         )
 
         buckets: defaultdict[tuple[str, str], int] = defaultdict(int)
         for row in rows:
-            kategorie = resolve_category(row["document_type__system_type"], row["document_type__slug"])
+            kategorie = TYP_BINDUNG.resolve_row(row, "document_type__")
             if kategorie is None:
                 # Nicht zugeordnete Typen still ueberspringen — auch ``total``
                 # zaehlt sie nicht mit. Sichtbar werden sie ueber
@@ -217,7 +225,7 @@ class MonthlyTrendBackend(DatasetBackend):
         zaehlt, die im Bericht stehen (oder umgekehrt).
         """
         unmapped = _base_queryset(facility, date_from, date_to).aggregate(
-            count=Count("id", filter=~Q(document_type__in=DocumentType.objects.filter(_MAPPED_DOC_TYPE_Q)))
+            count=Count("id", filter=~Q(document_type__in=DocumentType.objects.filter(TYP_BINDUNG.matching_q())))
         )["count"]
         if not unmapped:
             return []
@@ -268,30 +276,3 @@ class MonthlyTrendBackend(DatasetBackend):
         )
         completeness = [CompletenessIssue(_UNMAPPED_CODE, _UNMAPPED_EXPORT_MESSAGE, "warning", count=None)]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
-
-    def is_available(self, facility) -> bool:
-        """Waehlbar, sobald die Einrichtung mindestens einen Dokumentationstyp
-        mit Berichtszuordnung fuehrt (Seed-/Paket-Bindung, Maintainer-Entscheid
-        2026-08-05).
-
-        Ohne einen solchen Typ waere der Bericht konstruktionsbedingt leer —
-        jedes Ereignis fiele in den Vollstaendigkeitshinweis. Gefiltert wird auf
-        ``is_active``: ein deaktivierter Typ ist Konfigurations-Altlast und
-        begruendet kein Angebot im Dropdown. Fuer die **Daten** gilt das nicht,
-        dort zaehlt die historische Zuordnung (siehe ``build_dataset``).
-
-        ``entity_type="event"`` ist die zweite Bedingung (Refs #1754, analog
-        ``client-metrics``): ``build_dataset`` zaehlt ``Event``-Zeilen. Ein
-        Personen- oder Fall-Formular kann denselben ``system_type`` tragen und
-        erzeugt trotzdem kein einziges Ereignis — der Bericht stuende im
-        Dropdown und zeigte dauerhaft Nullen.
-        """
-        return (
-            DocumentType.objects.for_facility(facility)
-            .filter(
-                is_active=True,
-                entity_type=DocumentType.EntityType.EVENT,
-            )
-            .filter(_MAPPED_DOC_TYPE_Q)
-            .exists()
-        )

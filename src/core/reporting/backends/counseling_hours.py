@@ -99,10 +99,9 @@ gegen **jedes** Bestandsartefakt neu.
 
 import dataclasses
 
-from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, Event
+from core.models import Event
 
 # Die Zahl-Koersion wird bewusst aus dem Referenz-Backend importiert statt
 # kopiert: sie definiert, was „beitragendes Ereignis" heisst, und genau diese
@@ -112,10 +111,14 @@ from core.models import DocumentType, Event
 # ``as_number`` mit oder importiert es weiter von hier.
 from core.reporting.backends.needle_exchange_balance import as_number
 from core.reporting.base import (
+    Anforderung,
+    BindungsEintrag,
     CompletenessIssue,
     DatasetBackend,
     DatasetResult,
+    FeldBindung,
     FieldSpec,
+    TypBindung,
     project_records,
     stamp_threshold,
 )
@@ -130,27 +133,35 @@ from core.services.dashboard.external_report import (
 )
 from core.services.file_vault import safe_decrypt
 
-# Feld-Template-Slug des Standardpakets (``core/packages/default.yaml``);
-# Feldtyp ``number``, Einheit Minuten.
-DAUER_SLUG = "dauer"
-
-# Erstschluessel UND Ausgabeordnung in einem: die Reihenfolge ist fest und damit
-# wertunabhaengig (K5) — die Zeilenposition traegt keinen Rangkanal, deshalb
-# genuegt ``ORDER_INPUT`` an den Suppressions-Aufrufstellen.
-KATEGORIEN: tuple[str, ...] = (
-    DocumentType.SystemType.CONTACT,
-    DocumentType.SystemType.COUNSELING,
-    DocumentType.SystemType.CRISIS,
+# Die Typ-Bindung dieses Berichts (E1, Refs #1824). ``ziel`` bleibt der
+# Schluessel selbst — der Zeilenschluessel ``kategorie`` ist eine
+# Maschinenschnittstelle und darf sich nicht mit der Oberflaechensprache aendern
+# (siehe Modul-Docstring). Die Deklarationsreihenfolge IST die Ausgabeordnung:
+# sie ist fest und damit wertunabhaengig (K5), deshalb genuegt ``ORDER_INPUT``
+# an den Suppressions-Aufrufstellen.
+#
+# ``slugs`` bewusst nur die drei Paket-Slugs, deren ``system_type`` ohnehin
+# deklariert ist — der Zweitschluessel darf nichts hereinholen, was der
+# Erstschluessel bewusst auslaesst (Refs #1741/#1785).
+TYP_BINDUNG = TypBindung(
+    (
+        BindungsEintrag("contact", _("Kontakt"), slugs=("kontakt",)),
+        BindungsEintrag("counseling", _("Beratungsgespräch"), slugs=("beratungsgespraech",)),
+        BindungsEintrag("crisis", _("Krisengespräch"), slugs=("krisengespraech",)),
+    )
 )
 
-# Zweitschluessel: Paket-Slug -> Kategorie. Bewusst genau die drei Slugs, deren
-# ``system_type`` ohnehin oben steht — der Zweitschluessel darf nichts
-# hereinholen, was der Erstschluessel bewusst auslaesst.
-SLUG_MAP = {
-    "kontakt": DocumentType.SystemType.CONTACT,
-    "beratungsgespraech": DocumentType.SystemType.COUNSELING,
-    "krisengespraech": DocumentType.SystemType.CRISIS,
-}
+# Die Feld-Bindung: ohne die Feldvorlage ``dauer`` (Standardpaket
+# ``core/packages/default.yaml``, Feldtyp ``number``, Einheit Minuten) gaebe es
+# nur eine Tabelle mit lauter Nullminuten.
+FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),))
+
+# Bestandsnamen als Ableitungen — eine Wahrheit, mehrere Sichten.
+KATEGORIEN: tuple[str, ...] = TYP_BINDUNG.ziele()
+SLUG_MAP = TYP_BINDUNG.slug_ziele()
+# Leseschluessel in ``data_json``. In E1 der Feldvorlagen-Slug; wechselt der
+# Lesepfad je Dokumentationstyp, ist ``data_json_keys()`` die eine Stelle (E3).
+(DAUER_SLUG,) = FELD_DAUER.data_json_keys()
 
 # Interner Zeilenschluessel: Zahl der Ereignisse, die zur Minutensumme dieser
 # Zeile beigetragen haben. Suppressions-EINGABE, nie Ausgabe — die
@@ -166,33 +177,18 @@ MISSING_VALUES_CODE = "missing_field_values"
 _MISSING_VALUES_MESSAGE = _("Ereignisse ohne verwertbare Dauer sind in den Minutensummen nicht enthalten")
 
 
-def resolve_kategorie(system_type: str | None, slug: str | None) -> str | None:
-    """Kategorie eines Dokumentationstyps — ``None`` = gehoert nicht in den Bericht.
+# Kategorie eines Dokumentationstyps — ``None`` = gehoert nicht in den Bericht.
+# Aufloesungsordnung wie im Sachbericht: ein GESETZTER ``system_type``
+# entscheidet allein, auch wenn er hier gar nicht vorkommt (``note``/``ban``
+# heisst „nicht in diesen Bericht"); der Slug greift NUR bei leerem
+# ``system_type`` — sonst zoege ein Notiz-Typ mit dem Slug ``kontakt`` seine
+# Ereignisse in die Stundenbilanz (Refs #1741/#1785).
+resolve_kategorie = TYP_BINDUNG.resolve
 
-    Aufloesungsordnung wie
-    :func:`core.reporting.backends.sample_report_1.resolve_category`: ein
-    GESETZTER ``system_type`` entscheidet allein, auch wenn er hier gar nicht
-    vorkommt (``note``/``ban`` heisst „nicht in diesen Bericht"). Der Slug greift
-    NUR bei leerem ``system_type`` — sonst zoege ein Notiz-Typ mit dem Slug
-    ``kontakt`` seine Ereignisse in die Stundenbilanz.
-    """
-    if system_type:
-        return system_type if system_type in KATEGORIEN else None
-    return SLUG_MAP.get(slug or "")
-
-
-def matching_q(prefix: str = "") -> Q:
-    """SQL-Entsprechung von :func:`resolve_kategorie` — ``prefix`` fuer JOIN-Pfade.
-
-    ``matching_q()`` filtert auf :class:`~core.models.DocumentType`,
-    ``matching_q("document_type__")`` auf :class:`~core.models.Event`. Eine
-    Definition fuer beide Aufrufstellen, damit Ereignis-Filter und
-    Verfuegbarkeits-Pruefung nie auseinanderlaufen. Der ``isnull``-Zweig ist
-    bewusst redundant: ``system_type`` ist NULL-bar, blankes SQL-``NOT IN``
-    faengt NULL-Zeilen nicht.
-    """
-    unset = Q(**{f"{prefix}system_type__isnull": True}) | Q(**{f"{prefix}system_type": ""})
-    return Q(**{f"{prefix}system_type__in": KATEGORIEN}) | (unset & Q(**{f"{prefix}slug__in": tuple(SLUG_MAP)}))
+# SQL-Entsprechung derselben Deklaration — ``matching_q()`` filtert auf
+# ``DocumentType``, ``matching_q("document_type__")`` auf ``Event``. Ereignis-
+# Filter und Verfuegbarkeits-Pruefung koennen nicht mehr auseinanderlaufen.
+matching_q = TYP_BINDUNG.matching_q
 
 
 @register_backend("counseling-hours")
@@ -207,6 +203,12 @@ class CounselingHoursBackend(DatasetBackend):
     # stuende "alle Ereignisse im Zeitraum" neben einer echten Teilmenge —
     # genau die irrefuehrende Angabe, die K3-A3 beseitigen sollte.
     population = TYPED_EVENTS
+    typ_bindung = TYP_BINDUNG
+    feld_bindungen = (FELD_DAUER,)
+    # Nur waehlbar, wenn ``dauer`` an mindestens einem passenden **aktiven** Typ
+    # haengt: ohne die Feldvorlage gaebe es nur eine Tabelle mit lauter
+    # Nullminuten — ein Bericht, der aussieht, als daure kein Gespraech.
+    verfuegbarkeit = (Anforderung(TYP_BINDUNG, (FELD_DAUER,)),)
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [
@@ -214,20 +216,6 @@ class CounselingHoursBackend(DatasetBackend):
             FieldSpec("events", _("Ereignisse")),
             FieldSpec("minuten", _("Minuten")),
         ]
-
-    def is_available(self, facility) -> bool:
-        """Nur waehlbar, wenn ``dauer`` an mindestens einem passenden Typ haengt.
-
-        Ohne die Feldvorlage gaebe es nur eine Tabelle mit lauter Nullminuten —
-        ein Bericht, der aussieht, als daure kein Gespraech.
-        """
-        return (
-            DocumentType.objects.for_facility(facility)
-            .filter(is_active=True)
-            .filter(matching_q())
-            .filter(fields__field_template__slug=DAUER_SLUG, fields__field_template__is_active=True)
-            .exists()
-        )
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Eine Zeile je nichtleerer Kategorie, plus Ereignis- und Minuten-Randsumme.
@@ -248,15 +236,18 @@ class CounselingHoursBackend(DatasetBackend):
                 occurred_at__date__lte=date_to,
             )
             .filter(matching_q("document_type__"))
-            .values_list("document_type__system_type", "document_type__slug", "data_json")
+            .values_list(*TYP_BINDUNG.values_fields("document_type__"), "data_json")
         )
 
         events = dict.fromkeys(KATEGORIEN, 0)
         minuten = dict.fromkeys(KATEGORIEN, 0)
         beitragende = dict.fromkeys(KATEGORIEN, 0)
         ohne_dauer = 0
-        for system_type, slug, data in payloads:
-            kategorie = resolve_kategorie(system_type, slug)
+        for zeile in payloads:
+            # Die Schluesselfelder kommen aus der Deklaration; wie viele es sind,
+            # entscheidet sie (E3 kann den Zweitschluessel abschalten).
+            *schluessel, data = zeile
+            kategorie = TYP_BINDUNG.resolve(*schluessel)
             if kategorie is None:  # pragma: no cover - der Filter laesst nichts anderes durch
                 continue
             events[kategorie] += 1
