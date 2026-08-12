@@ -613,8 +613,14 @@ class TestPrecachedShellBumpGuard:
     # Split-Brain-Generation nicht, gegen die der Bump schuetzt. Ein Bump waere
     # hier Ritual statt Wirkung. Sobald v34 einmal ausgeliefert ist, gilt
     # wieder: Shell-Aenderung => neuer CACHE_NAME.
+    #
+    # Refs #1845: Der Hash deckt seit der Rekursion (siehe ``_shell_sources``)
+    # auch die Include-Ziele der Shells ab und aendert sich allein dadurch.
+    # KEIN CACHE_NAME-Bump — es hat sich kein einziges Byte ausgeliefertes
+    # Markup geaendert, nur die Abdeckung des Guards ist gewachsen. Ein Bump
+    # schuetzt gegen geaenderte Shells im Feld; hier gibt es keine.
     _PINNED_CACHE_NAME = "anlaufstelle-v34"
-    _PINNED_SHELL_HASH = "b028b5dbaba34ecadd25912facf3496d4f61c393792f0284b40b6eacfb1bbce3"
+    _PINNED_SHELL_HASH = "374d42e64f980b92d396a8435b4fbec37981a8b56241950d4264fb501349fb10"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -622,10 +628,65 @@ class TestPrecachedShellBumpGuard:
         assert match, "CACHE_NAME-Definition nicht in sw.js gefunden (Quell-Drift?)."
         return match.group(1)
 
+    # Literale {% include "..." %}-Ziele. Nicht-literale Includes ({% include
+    # variable %}) sind statisch nicht aufloesbar und werden hart abgewiesen
+    # (siehe _include_targets) — ein still uebersprungenes Ziel waere genau der
+    # blinde Fleck, den dieser Guard verhindern soll.
+    _INCLUDE_RE = re.compile(r"{%\s*include\s+(?P<rest>[^%]*?)%}")
+    _INCLUDE_LITERAL_RE = re.compile(r"""^\s*(?P<quote>["'])(?P<target>.+?)(?P=quote)""")
+
+    @classmethod
+    def _include_targets(cls, source: str, origin: str) -> list[str]:
+        """Liest die literalen Include-Ziele einer Template-Quelle aus."""
+        targets = []
+        for match in cls._INCLUDE_RE.finditer(source):
+            rest = match.group("rest")
+            literal = cls._INCLUDE_LITERAL_RE.match(rest)
+            assert literal, (
+                f"Nicht-literales {{% include %}} in {origin}: {match.group(0)!r}. "
+                "Der Shell-Hash-Guard kann ein solches Ziel statisch nicht "
+                "aufloesen — es waere ein blinder Fleck fuer die 26078b7-Bugklasse "
+                "(Refs #1845). So beheben: Include-Ziel als Literal schreiben oder "
+                "das Template aus der precachten Shell heraushalten."
+            )
+            targets.append(literal.group("target"))
+        return targets
+
+    @classmethod
+    def _shell_sources(cls, templates_dir: Path) -> list[tuple[str, str]]:
+        """Sammelt jede Shell UND rekursiv jedes ihrer Include-Ziele.
+
+        Refs #1845: Bis dahin hashte der Guard nur die neun Dateien aus
+        ``_SHELL_TEMPLATES`` woertlich. Deren ``{% include %}``-Ziele — u. a.
+        ``components/_empty_state.html``, ``core/clients/_offline_event_fields.html``,
+        ``_offline_workitem_fields.html``, ``components/_contact_stage_legend.html``
+        — landen aber genauso im precachten Markup. Eine Aenderung dort war
+        damit exakt der 26078b7-Fall: geaenderte Shell, unveraenderter Hash,
+        kein CACHE_NAME-Bump, Split-Brain im Feld.
+
+        Reihenfolge ist deterministisch (Shell-Reihenfolge, dann Tiefensuche in
+        Auftretensreihenfolge); jede Datei geht genau einmal in den Hash ein.
+        """
+        collected: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        def walk(name: str) -> None:
+            if name in seen:
+                return
+            seen.add(name)
+            source = (templates_dir / name).read_text()
+            collected.append((name, source))
+            for target in cls._include_targets(source, name):
+                walk(target)
+
+        for shell in cls._SHELL_TEMPLATES:
+            walk(shell)
+        return collected
+
     @classmethod
     def _shell_hash(cls, sw_src: str) -> str:
         templates_dir = Path(settings.BASE_DIR) / "templates"
-        shell_contents = [(templates_dir / name).read_text() for name in cls._SHELL_TEMPLATES]
+        shell_contents = [source for _name, source in cls._shell_sources(templates_dir)]
         app_shell_block = _app_shell_block(sw_src)
         # NUL-Trenner, damit ein Inhalt, der zufaellig am Ende des einen Teils
         # den Anfang des anderen imitiert, den Hash nicht kollidieren laesst.
@@ -654,6 +715,39 @@ class TestPrecachedShellBumpGuard:
             "TestPrecachedShellBumpGuard (src/tests/test_pwa_views.py) auf "
             "die neuen Werte aktualisieren."
         )
+
+    def test_shell_hash_covers_included_partials(self):
+        """Refs #1845: Die Include-Ziele der Shells gehoeren in den Hash.
+
+        Nagelt die Rekursion selbst fest — ohne diesen Test koennte
+        ``_shell_sources`` wieder auf die woertliche ``_SHELL_TEMPLATES``-Liste
+        zusammenschrumpfen, und der Guard haette denselben blinden Fleck
+        zurueck, ohne dass ein Test anschlaegt.
+        """
+        templates_dir = Path(settings.BASE_DIR) / "templates"
+        collected = self._shell_sources(templates_dir)
+        names = [name for name, _source in collected]
+
+        assert len(names) == len(set(names)), f"Doppelte Eintraege im Shell-Hash (Reihenfolge/Dedup kaputt): {names}"
+
+        # Transitiver Abschluss: zu jeder erfassten Quelle sind auch deren
+        # Include-Ziele erfasst. Faengt jede kuenftige Verschachtelungsebene mit,
+        # ohne dass hier eine Liste nachgepflegt werden muss.
+        for name, source in collected:
+            for target in self._include_targets(source, name):
+                assert target in names, (
+                    f"{name} bindet {target} per {{% include %}} ein, aber {target} "
+                    "steckt nicht im Shell-Hash — genau der blinde Fleck aus #1845."
+                )
+
+        # Konkreter Anker: die vier Partials, die den Guard bis #1845 umgingen.
+        for partial in (
+            "components/_empty_state.html",
+            "components/_contact_stage_legend.html",
+            "core/clients/_offline_event_fields.html",
+            "core/clients/_offline_workitem_fields.html",
+        ):
+            assert partial in names, f"{partial} fehlt im Shell-Hash (Refs #1845)."
 
 
 @pytest.mark.django_db
