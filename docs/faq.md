@@ -619,10 +619,10 @@ Die Doku liegt auf drei Ebenen — je nachdem, ob Sie Berichte **erzeugen**, **b
 | Statistik-Dashboard | Zeitraumwahl, Jahresnavigation, Trend-Charts, Dokumentationstyp-Filter |
 | CSV-Export / PDF-Export | Ereignisliste bzw. Statistikbericht zum gewählten Zeitraum |
 | Beispiel-Sachbericht | Vorlage im festen Layout — ausdrücklich **kein** verbindlicher Behördennachweis |
-| **Berichte (CSV / JSON / XML)** | Bericht im Dropdown wählen → Vorschau → Download; Vollständigkeitshinweise + K-Anonymität |
+| **Datensatz-Berichte (CSV / JSON / XML / PDF)** | Reiter „Datensatz-Berichte" → Berichtskarte wählen → Vorschau → Download; Vollständigkeitshinweise + K-Anonymität |
 | Externe Berichte | `/statistics/external/` — datensparsames Profil für die Weitergabe nach außen |
 
-**Der wichtigste Stolperstein: zwei Datenquellen.** Die Sachbericht-PDFs lesen aus den gespeicherten **Monats-Auswertungen** (Zahlen bleiben nach Ablauf von Löschfristen erhalten; Monatswerte werden addiert, Personen also mehrfach gezählt). Die Berichte der Berichte-Sektion (CSV/JSON/XML) rechnen dagegen **live**. Derselbe Zeitraum kann deshalb unterschiedliche Zahlen liefern — welche Quelle gilt, steht jeweils im Bericht selbst (PDF-Fußzeile bzw. Feld `data_source`).
+**Der wichtigste Stolperstein: zwei Datenquellen.** Die Sachbericht-PDFs lesen aus den gespeicherten **Monats-Auswertungen** (Zahlen bleiben nach Ablauf von Löschfristen erhalten; Monatswerte werden addiert, Personen also mehrfach gezählt). Die Berichte des Reiters „Datensatz-Berichte" (CSV/JSON/XML) rechnen dagegen **live**. Derselbe Zeitraum kann deshalb unterschiedliche Zahlen liefern — welche Quelle gilt, steht jeweils im Bericht selbst (PDF-Fußzeile bzw. Feld `data_source`).
 
 #### 2. Berichte betreiben (Administration)
 

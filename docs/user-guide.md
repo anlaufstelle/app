@@ -550,21 +550,23 @@ Der PDF-Export erstellt einen strukturierten Statistikbericht für den oben im D
 
 Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem festen Beispiel-Layout. Er ist ein anpassbares Beispiel bzw. eine Vorlage — kein verbindlicher oder aktueller Behördennachweis und keine Garantie für landesspezifische Anforderungen.
 
-1. Wählen Sie im Statistik-Dashboard den Zeitraum.
-2. Klicken Sie auf **Beispiel-Sachbericht**.
-3. Die PDF-Datei wird heruntergeladen (Dateiname: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
+1. Wählen Sie den Zeitraum. Er gilt für den gesamten Statistik-Bereich und bleibt beim Wechsel zwischen den Reitern erhalten.
+2. Öffnen Sie den Reiter **Datensatz-Berichte** und wählen Sie die Karte **Beispiel-Sachbericht**.
+3. Klicken Sie unter der Vorschau auf **PDF-Export**. Die Datei wird heruntergeladen (Dateiname: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tipp:** Für Halbjahresberichte wählen Sie „Eigener Zeitraum" und setzen Start- und Enddatum auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.). „Letzte 180 Tage" ist ein rollierendes Fenster und trifft nie exakt ein Kalenderhalbjahr.
 
-**Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Die Sachbericht-PDFs — der Beispiel-Sachbericht wie auch der Halbjahresbericht-Export — lesen aus den gespeicherten **Monats-Auswertungen**. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Die Berichte der Berichte-Sektion (CSV/JSON/XML, siehe unten) rechnen dagegen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
+**Datenquelle: Monats-Aggregate.** In der Fußzeile des PDFs steht, woher die Zahlen kommen. Die Sachbericht-PDFs — der Beispiel-Sachbericht wie auch der Halbjahresbericht-Export — lesen aus den gespeicherten **Monats-Auswertungen**. Zwei Folgen: Zeiträume, deren Ereignisse nach Ablauf der Löschfristen entfernt wurden, zeigt das PDF weiterhin mit Zahlen — und über mehrere Monate hinweg werden die Monatswerte addiert, wer in zwei Monaten erschienen ist, zählt bei „Einzigartige Personen" zweimal. Die Berichte des Reiters „Datensatz-Berichte" (CSV/JSON/XML, siehe unten) rechnen dagegen live und können deshalb im selben Zeitraum andere Zahlen zeigen.
 
-### Berichte (CSV / JSON / XML)
+### Datensatz-Berichte (CSV / JSON / XML / PDF)
 
-Unterhalb der Diagramme finden Sie den Bereich **Berichte**. Dort stehen alle Berichtsstandards zur Verfügung, die für Ihre Einrichtung eingerichtet sind — der Beispiel-Sachbericht ebenso wie weitere, die Ihre Administration ergänzt hat.
+Der Reiter **Datensatz-Berichte** listet alle Berichtsstandards, die für Ihre Einrichtung eingerichtet sind — der Beispiel-Sachbericht ebenso wie weitere, die Ihre Administration ergänzt hat.
 
-1. Wählen Sie im Dropdown **Bericht** den gewünschten Bericht aus.
-2. Direkt darunter erscheint eine **Vorschau** mit den Zahlen des oben gewählten Zeitraums.
-3. Über die Schaltflächen **CSV-Export**, **JSON-Export** und **XML-Export** laden Sie denselben Datenstand als Datei herunter. CSV eignet sich für Tabellenkalkulationen, JSON und XML für die Weiterverarbeitung in anderen Systemen.
+1. Wählen Sie die **Karte** des gewünschten Berichts. Jede Karte nennt in einem Satz, was der Bericht zeigt, welche Grundgesamtheit er auswertet und ob er live rechnet oder aus Monats-Auswertungen liest.
+2. Darunter erscheint eine **Vorschau** mit den Zahlen des gewählten Zeitraums. Die Adresse merkt sich die Auswahl (`?ansicht=datensaetze&bericht=…`), Lesezeichen und Zurück-Taste funktionieren.
+3. Über die Schaltflächen **CSV-Export**, **JSON-Export** und **XML-Export** laden Sie denselben Datenstand als Datei herunter. CSV eignet sich für Tabellenkalkulationen, JSON und XML für die Weiterverarbeitung in anderen Systemen. Beim Beispiel-Sachbericht kommt **PDF-Export** hinzu.
+
+Ein Zeitraum-Klick verwirft die Berichtsauswahl nicht — Karte und Vorschau bleiben stehen, die Zahlen aktualisieren sich.
 
 **Vollständigkeitshinweise:** Über der Vorschau steht, was der Bericht *nicht* zeigt — zum Beispiel Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist, oder Ereignisse ohne Personenbezug. Eine gelbe **Hinweis**-Markierung bedeutet: Es fehlen Daten, die Zahlen sind also zu niedrig. Eine graue **Info**-Markierung bedeutet: Die Daten sind enthalten, fehlen aber in einzelnen Teilauswertungen. Steht dort „Keine Vollständigkeitsprobleme erkannt", ist der Bericht lückenlos.
 

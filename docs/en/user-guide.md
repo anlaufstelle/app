@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804).
 
 # Anlaufstelle -- User Guide
 
@@ -553,21 +553,23 @@ The PDF export generates a structured statistics report for the period selected 
 
 The example activity report generates a structured report based on a fixed example layout. It is a customizable example or template -- not a binding or current official proof, and no guarantee for state-specific requirements.
 
-1. Select the time period in the statistics dashboard.
-2. Click **Example Activity Report**.
-3. The PDF file is downloaded (filename: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
+1. Select the time period. It applies to the entire statistics area and is kept when you switch tabs.
+2. Open the **Dataset Reports** tab and pick the **Example Activity Report** card.
+3. Click **PDF export** below the preview. The file is downloaded (filename: `sample-report-1_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tip:** For semi-annual reports, select "Custom period" and set the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31). "Last 180 days" is a rolling window and never lines up exactly with a calendar half-year.
 
-**Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The activity report PDFs -- both the example activity report and the semi-annual report export -- read from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". The reports in the reports section (CSV/JSON/XML, see below) are calculated live and can therefore show different figures for the same period.
+**Data source: monthly aggregates.** The footer of the PDF states where the figures come from. The activity report PDFs -- both the example activity report and the semi-annual report export -- read from the stored **monthly aggregates**. Two consequences: periods whose events were removed after the retention deadlines still show figures in the PDF -- and across several months the monthly values are added up, so anyone who appeared in two months is counted twice under "Unique persons". The reports in the "Dataset Reports" tab (CSV/JSON/XML, see below) are calculated live and can therefore show different figures for the same period.
 
-### Reports (CSV / JSON / XML)
+### Dataset Reports (CSV / JSON / XML / PDF)
 
-Below the charts you will find the **Reports** section. It offers every reporting standard configured for your facility -- the example activity report as well as any others your administrator has added.
+The **Dataset Reports** tab lists every reporting standard configured for your facility -- the example activity report as well as any others your administrator has added.
 
-1. Select the report you want from the **Report** dropdown.
-2. A **preview** with the figures for the period selected above appears right below it.
-3. Use the **CSV export**, **JSON export**, and **XML export** buttons to download the same data as a file. CSV suits spreadsheets; JSON and XML are meant for further processing in other systems.
+1. Pick the **card** of the report you want. Each card states in one sentence what the report shows, which population it evaluates, and whether it is calculated live or read from monthly aggregates.
+2. A **preview** with the figures for the selected period appears below. The address remembers your choice (`?ansicht=datensaetze&bericht=…`), so bookmarks and the back button work.
+3. Use the **CSV export**, **JSON export**, and **XML export** buttons to download the same data as a file. CSV suits spreadsheets; JSON and XML are meant for further processing in other systems. The example activity report adds **PDF export**.
+
+Clicking a time period does not discard your report selection -- the card and preview stay in place and the figures update.
 
 **Completeness notices:** Above the preview you can see what the report does *not* show -- for example events whose documentation type maps to no report category, or events without a person reference. A yellow **Note** badge means data is missing, so the figures are too low. A grey **Info** badge means the data is included but missing from individual sub-analyses. If it says "No completeness issues detected", the report has no gaps.
 
@@ -888,5 +890,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-11 -->
-<!-- source-hash: e52a41fd8db778c45739b4fe1bf928d52ac99a71 -->
+<!-- source-hash: d938b2308556f4dc41c9cf0858793c6a24ec0d2f -->
 
