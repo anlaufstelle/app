@@ -18,6 +18,11 @@
 #   der Loader erlaubt ``None`` -> Wert (Bestand ohne Systemtyp), aber weder
 #   Wechsel noch Entfernen (E13). Ein fehlender Schluessel waere beim
 #   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler.
+# * ``report_key`` (E3, Refs #1849) muss EXAKT dem Ergebnis des Backfills aus
+#   Migration ``0145`` entsprechen — Typ-Ebene wie Feld-Ebene. Ein abweichender
+#   Wert waere gegen eine aktualisierte Bestands-Einrichtung ein
+#   Immutabilitaets-Fehler (leer -> gesetzt ist erlaubt, gesetzt -> anders
+#   nicht). Der Doppellauf-Test in ``test_packages_loader.py`` haelt das fest.
 # * Bei ``select``/``multi_select`` ist der ``options``-Schluessel PFLICHT —
 #   Weglassen leert ``options_json`` mit blosser Warnung.
 # * KEINE ``conditions``-Schluessel: der Seed bringt keine Feldbedingungen
@@ -39,6 +44,7 @@ field_templates:
   # Kopien waren wertgleich — hier stehen sie deshalb genau einmal.
   - slug: dauer
     name: Dauer
+    report_key: dauer_minuten
     field_type: number
     is_encrypted: false
     sensitivity: ""
@@ -53,6 +59,7 @@ field_templates:
   # --- Kontakt -------------------------------------------------------------
   - slug: leistungen
     name: Leistungen
+    report_key: leistungen
     field_type: multi_select
     is_encrypted: false
     sensitivity: ""
@@ -104,6 +111,7 @@ field_templates:
   # --- Krisengespraech -----------------------------------------------------
   - slug: art-der-krise
     name: Art der Krise
+    report_key: art_der_krise
     field_type: select
     is_encrypted: false
     sensitivity: ""
@@ -154,6 +162,7 @@ field_templates:
   # --- Spritzentausch ------------------------------------------------------
   - slug: ausgabe
     name: Ausgabe
+    report_key: ausgabe_stueck
     field_type: number
     is_required: true
     is_encrypted: false
@@ -161,6 +170,7 @@ field_templates:
 
   - slug: rueckgabe
     name: Rückgabe
+    report_key: rueckgabe_stueck
     field_type: number
     is_required: true
     is_encrypted: false
@@ -243,6 +253,7 @@ document_types:
     name: Kontakt
     entity_type: event
     system_type: contact
+    report_key: contact
     sensitivity: normal
     icon: users
     color: indigo
@@ -266,6 +277,7 @@ document_types:
     name: Krisengespräch
     entity_type: event
     system_type: crisis
+    report_key: crisis
     sensitivity: elevated
     icon: alert-triangle
     color: amber
@@ -284,6 +296,7 @@ document_types:
     name: Medizinische Versorgung
     entity_type: event
     system_type: medical
+    report_key: medical
     sensitivity: high
     icon: heart
     color: rose
@@ -297,6 +310,7 @@ document_types:
     name: Spritzentausch
     entity_type: event
     system_type: needle_exchange
+    report_key: needle_exchange
     sensitivity: normal
     icon: repeat
     color: teal
@@ -309,6 +323,7 @@ document_types:
     name: Begleitung
     entity_type: event
     system_type: accompaniment
+    report_key: accompaniment
     sensitivity: normal
     icon: map-pin
     color: green
@@ -323,6 +338,7 @@ document_types:
     name: Beratungsgespräch
     entity_type: event
     system_type: counseling
+    report_key: counseling
     sensitivity: elevated
     min_contact_stage: qualified
     icon: message-circle
@@ -340,6 +356,7 @@ document_types:
     name: Vermittlung
     entity_type: event
     system_type: referral
+    report_key: referral
     sensitivity: normal
     icon: share-2
     color: blue
@@ -349,6 +366,7 @@ document_types:
     name: Notiz
     entity_type: event
     system_type: note
+    report_key: excluded
     sensitivity: normal
     icon: file-text
     color: gray
@@ -360,6 +378,7 @@ document_types:
     name: Hausverbot
     entity_type: event
     system_type: ban
+    report_key: excluded
     sensitivity: elevated
     icon: slash
     color: red

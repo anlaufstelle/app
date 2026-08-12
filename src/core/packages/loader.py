@@ -191,6 +191,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
     templates: dict[str, FieldTemplate] = {}
     for template_def in package.field_templates:
         identifier = template_def.slug
+        _warn_on_normalized_report_keys(template_def, report, identifier)
         desired = _desired_template_values(template_def)
         existing = FieldTemplate.objects.filter(facility=facility, slug=template_def.slug).first()
 
@@ -204,6 +205,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
         _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
         _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
         conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
+        conflicts += _report_key_conflicts(existing, template_def.report_key)
         if conflicts:
             # Haertung (Refs #1058, Review-Punkt 3): NICHT in die Erfolgs-Map
             # eintragen — DocumentType-Muster (None + Kinder-Skip) gespiegelt.
@@ -221,6 +223,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
 def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: PackageReport) -> DocumentType | None:
     identifier = doc_def.slug
     _warn_on_ignored_keys(doc_def, report, identifier)
+    _warn_on_normalized_report_keys(doc_def, report, identifier)
     desired: dict[str, Any] = {
         "name": doc_def.name,
         "entity_type": doc_def.entity_type,
@@ -231,6 +234,10 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
         "color": doc_def.color,
         "sort_order": doc_def.sort_order,
     }
+    # E3 (Refs #1849): NUR aufnehmen, wenn das Paket etwas sagt — siehe
+    # ``_report_key_conflicts``.
+    if doc_def.report_key is not None:
+        desired["report_key"] = doc_def.report_key
     existing = DocumentType.objects.filter(facility=facility, slug=doc_def.slug).first()
 
     if existing is None:
@@ -247,6 +254,7 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
     # es selbst erzwingt.
     if existing.system_type and existing.system_type != doc_def.system_type:
         conflicts.append(_immutable_message(_("Systemtyp"), existing.system_type, doc_def.system_type))
+    conflicts += _report_key_conflicts(existing, doc_def.report_key)
     if conflicts:
         report.errors.extend((identifier, message) for message in conflicts)
         return None
@@ -430,7 +438,7 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
         or template_def.field_type == FieldTemplate.FieldType.FILE
         or template_def.sensitivity == DocumentType.Sensitivity.HIGH
     )
-    return {
+    desired: dict[str, Any] = {
         "name": template_def.name,
         "field_type": template_def.field_type,
         "is_required": template_def.is_required,
@@ -441,6 +449,11 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
         "help_text": template_def.help_text,
         "default_value": template_def.default_value,
     }
+    # E3 (Refs #1849): NUR aufnehmen, wenn das Paket etwas sagt — siehe
+    # ``_report_key_conflicts``.
+    if template_def.report_key is not None:
+        desired["report_key"] = template_def.report_key
+    return desired
 
 
 def _immutable_conflicts(
@@ -533,6 +546,53 @@ def _warn_on_ignored_keys(doc_def: DocumentTypeDef, report: PackageReport, ident
             ),
         )
     )
+
+
+def _report_key_conflicts(instance: models.Model, gewuenscht: str | None) -> list[str]:
+    """E13 fuer den Berichtsschluessel (E3, Refs #1849, Konzept #1847 §2.1).
+
+    **leer→gesetzt erlaubt, gesetzt→anders Fehler.** Dieselbe Regel wie am
+    Modell-Guard, nur mit lesbarer Report-Meldung statt ``ValidationError``.
+
+    Ein FEHLENDER (bzw. ``null``) Schluessel im Paket heisst „keine Angabe" und
+    laesst den Bestand unangetastet — bewusst anders als bei ``system_type``,
+    wo ein fehlender Schluessel gegen einen gesetzten Bestandswert ein Fehler
+    ist. Der Grund ist der Zeitpunkt: ``system_type`` gibt es seit Schema v1,
+    ``report_key`` kommt mit E3 dazu, und der Backfill vergibt ihn an
+    **Bestandszeilen**. Waere das Weglassen ein Fehler, machte E3 jedes bereits
+    veroeffentlichte Fremdpaket gegen eine aktualisierte Instanz unladbar —
+    ohne dass das Paket etwas falsch macht. Ein Entfernen laesst sich damit
+    nicht ausdruecken; das ist kein Verlust, weil es ohnehin verboten ist.
+
+    ``getattr`` mit Default: die Funktion laeuft gegen beide Traeger.
+    """
+    bestand = getattr(instance, "report_key", None)
+    if gewuenscht is None or not bestand or bestand == gewuenscht:
+        return []
+    return [_immutable_message(_("Berichtsschlüssel"), bestand, gewuenscht)]
+
+
+def _warn_on_normalized_report_keys(definition, report: PackageReport, identifier: str) -> None:
+    """Warnen, wenn ein „ehemals gueltiger" Berichtswert uebersetzt wurde (Refs #1849).
+
+    Kein Fehler — das Paket bleibt ladbar (Werte-Ebenen-Toleranz, Konzept #1847
+    §E3.8). Aber auch kein Silent-Rewrite: wer ``report_key: note`` pflegt,
+    soll im Report sehen, dass daraus der Sentinel geworden ist. Dieselbe Linie
+    wie :func:`_warn_on_ignored_keys`.
+    """
+    for alt, neu in definition.normalized_report_keys:
+        report.warnings.append(
+            (
+                identifier,
+                str(
+                    _(
+                        "Der Berichtsschlüssel %(alt)r ist ein ehemals gültiger Wert und wurde auf "
+                        "%(neu)r normalisiert. Im Paket direkt %(neu)r eintragen."
+                    )
+                    % {"alt": alt, "neu": neu}
+                ),
+            )
+        )
 
 
 def _warn_on_disappearing_options(

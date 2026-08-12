@@ -80,6 +80,7 @@ document_types:
     name: Kontakt
     entity_type: event       # event | client | case — unveränderlich
     system_type: contact     # nur bei entity_type: event; immer mitführen
+    report_key: contact      # Berichtszuordnung; leer→gesetzt ok, gesetzt→anders nicht
     sensitivity: normal
     icon: users
     color: indigo
@@ -138,6 +139,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `options` | Liste | *(leer)* | Nur bei `select`/`multi_select`. **Weglassen leert die Liste** |
 | `help_text` | String | `""` | |
 | `default_value` | String | `""` | Wird bei jedem Lauf aus dem Paket geschrieben |
+| `report_key` | Schlüssel (`a-z`, `0-9`, `_`) oder `null` | `null` | Berichtszuordnung der Feldvorlage (#1849). **Nicht** gegen eine Werteliste geprüft — s. Hinweis unter der Typ-Tabelle. `null`/weglassen = keine Angabe (Bestand bleibt unangetastet) |
 
 `options[]`-Einträge: `slug` (Pflicht, Slug-Format, eindeutig je Vorlage), `label` (Pflicht, nicht leer), `is_active` (Bool, Default `true`).
 
@@ -157,11 +159,18 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `system_type` | `ban`, `contact`, `crisis`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert` |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
 | `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
+| `report_key` | Schlüssel (`a-z`, `0-9`, `_`) oder `null` | `null` | Berichtszuordnung des Typs (#1849). **Unveränderlich**, Ausnahme `null → Wert`; `null`/weglassen = keine Angabe |
 | `icon`, `color` | String | `""` | |
 | `sort_order` | Int | `0` | Position des Typs in der Typ-Auswahl |
 | `groups` | Liste | *(leer)* | additiv — siehe unten |
 | `field_refs` | Liste | *(leer)* | additiv — siehe unten |
 | `conditions` | Liste **oder Schlüssel weglassen** | *(nicht anfassen)* | Tri-State, siehe § 3 |
+
+> **Berichtsschlüssel `report_key` (#1849):** Der Wert wird **nicht** gegen eine Werteliste geprüft. Der Werteraum kommt aus den Deklarationen der Reporting-Backends (`docs/reporting-plugins.md`) und kann in einem Fremdpaket ein anderer sein; ein Parserfehler machte dort das **ganze** Paket unladbar, obwohl nur eine Zeile fremd ist. Geprüft wird nur das **Format** (`a-z`, `0-9`, `_`) — das fängt den Tippfehler, ohne die Konvention zu erzwingen. Ein Schlüssel, den kein Backend kennt, erscheint stattdessen im Vollständigkeitshinweis des Berichts (`unknown_report_keys`).
+>
+> **Ehemals gültige Werte werden normalisiert:** `report_key: note` und `report_key: ban` werden zu `excluded` (dem Sentinel „gehört ausdrücklich in keinen Bericht") — mit einer **Warnung** im Report, damit die Übersetzung nicht still passiert. Die sieben zählenden Werte (`contact`, `crisis`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`) heißen als Berichtsschlüssel genauso und laufen unverändert durch.
+>
+> **Weglassen heißt „keine Angabe", nicht „entfernen":** anders als bei `system_type` ist ein fehlender `report_key` gegen einen gesetzten Bestandswert **kein** Fehler — jedes vor dieser Änderung veröffentlichte Paket bleibt gegen eine aktualisierte Instanz ladbar. Ein gesetzter Schlüssel lässt sich über das Paketformat nicht entfernen; das verbietet die Änderbarkeits-Regel ohnehin.
 
 > **Ignorierter Schlüssel `category` (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** `DocumentType.category` gibt es nicht mehr. Ein Paket darf den Schlüssel weiterhin enthalten — es bleibt gültig und ladbar, es gibt **keine** Schemaversion 2, aber der Wert wird nicht angewendet. Jeder betroffene Typ erscheint mit einer **Warnung** im Report („Diese Schlüssel gibt es im Datenmodell nicht mehr …“), damit die Zeile nicht still verschwindet. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
@@ -231,8 +240,8 @@ Weicht einer dieser Werte vom Bestand ab, ist das ein **Fehler** — der Loader 
 
 | Objekt | Unveränderlich | Ausnahme |
 |---|---|---|
-| Feldvorlage | `slug`, `field_type`, `is_encrypted` ||
-| Dokumentationstyp | `slug`, `entity_type`, `system_type` | `system_type: null → Wert` (Bestandsdaten vor M2) |
+| Feldvorlage | `slug`, `field_type`, `is_encrypted`, `report_key` | `report_key: null → Wert`; Schlüssel im Paket weglassen = keine Angabe |
+| Dokumentationstyp | `slug`, `entity_type`, `system_type`, `report_key` | `system_type: null → Wert` (Bestandsdaten vor M2); `report_key: null → Wert`, Weglassen = keine Angabe |
 | Feldgruppe | `slug` ||
 
 `is_encrypted` wird **vor** dieser Prüfung nach oben normalisiert: `field_type: file` und `sensitivity: high` erzwingen `true` (wie im Modell). Ein Paket mit `field_type: file` ohne `is_encrypted: true` bleibt dadurch idempotent. Ein *explizites* `is_encrypted: false` an einem `file`-Feld ist dagegen ein Schema-Fehler.
@@ -317,6 +326,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 
 - **Slugs nie ändern.** Ein geänderter Slug ist ein neues Objekt — in jeder Bestands-Einrichtung entsteht ein Duplikat. Wer einen anderen Slug will, legt einen neuen Typ an und deaktiviert den alten.
 - **`system_type` immer mitführen**, wo einer existiert. Fehlender Schlüssel bedeutet `null`, und `Wert → null` ist ein Fehler, der den ganzen Lauf abbricht.
+- **`report_key` mitführen**, wo eine Berichtszuordnung gewollt ist. Weglassen ist gefahrlos (der Bestand bleibt unangetastet), aber dann entscheidet allein, was schon in der Einrichtung steht — ein frisch angelegter Typ erscheint in **keinem** Bericht. Ein *abweichender* Wert gegen einen gesetzten Bestandswert bricht dagegen den ganzen Lauf ab.
 - **`entity_type` immer mitführen**, wenn der Typ kein Ereignis-Typ ist. Fehlt der Schlüssel, gilt `event` — bei einem Bestandstyp mit `client`/`case` ist das ein Immutabilitäts-Fehler.
 - **`field_type` (und bei Bedarf `is_encrypted`) immer mitführen.** Fehlt `field_type`, gilt `text`; gegen eine bestehende Vorlage mit einem anderen Typ ist das ein Immutabilitäts-Fehler, der den **gesamten** Lauf abbricht. Kein stiller Footgun — der Fehler ist laut und pfadgenau, aber ein völlig vermeidbarer Abbruch, der beim Weiterreichen eines Pakets erst beim Empfänger auftritt.
 

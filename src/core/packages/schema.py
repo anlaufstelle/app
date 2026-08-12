@@ -52,6 +52,7 @@ Referenzformat siehe ``docs``/Brief; Kurzfassung:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,6 +60,7 @@ from core.constants import CONTACT_STAGE_CHOICES
 from core.models.document_type import DocumentType
 from core.models.field_condition import FieldCondition
 from core.models.field_template import FieldTemplate
+from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE
 
 SCHEMA_VERSION = 1
@@ -89,8 +91,29 @@ _FIELD_TEMPLATE_KEYS = frozenset(
         "options",
         "help_text",
         "default_value",
+        "report_key",
     }
 )
+
+# Formatregel der Berichtsschluessel (E3, Refs #1849). Bewusst NICHT gegen eine
+# Werteliste geprueft: der Werteraum kommt aus den Backend-Deklarationen, und
+# ein Fremdpaket mit eigenem Vokabular muss ladbar bleiben (Konzept #1847 §2,
+# Entscheid E-H) — die Sichtbarkeit unbekannter Schluessel uebernimmt der
+# Vollstaendigkeitshinweis, nicht der Parser. Geprueft wird nur das FORMAT: ein
+# Leerzeichen oder Grossbuchstabe ist ein Tippfehler, keine fremde Konvention.
+_REPORT_KEY_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+
+# Werte-Ebenen-Toleranz (Konzept #1847 §E3.8) — das Gegenstueck zu
+# :data:`_IGNORED_DOCUMENT_TYPE_KEYS`, aber auf der WERT-Ebene: „ehemals
+# gueltige Berichtswerte" werden normalisiert statt abgelehnt. Ohne den
+# Mechanismus machte ein einziger Altwert das GANZE Paket unladbar
+# (``parse_package`` wirft, bevor ein ``PackageV1`` existiert).
+#
+# Die sieben zaehlenden Systemtypen (``contact``, ``crisis``, …) brauchen keinen
+# Eintrag: sie heissen als Berichtsschluessel genauso und laufen ohnehin
+# unveraendert durch. Uebrig bleiben die beiden Ausschluss-Werte, fuer die der
+# Backfill denselben Sentinel setzt.
+_FORMER_REPORT_KEY_VALUES: dict[str, str] = {"note": EXCLUDED, "ban": EXCLUDED}
 _OPTION_KEYS = frozenset({"slug", "label", "is_active"})
 # Refs #1749 (ADR-040): Schluessel, die v1 weiterhin ANNIMMT, aber nicht mehr
 # anwendet. ``category`` ist mit dem Wegfall von ``DocumentType.category``
@@ -109,6 +132,7 @@ _DOCUMENT_TYPE_KEYS = frozenset(
         "system_type",
         "sensitivity",
         "min_contact_stage",
+        "report_key",
         "icon",
         "color",
         "sort_order",
@@ -164,6 +188,8 @@ class FieldTemplateDef:
     options: tuple[dict[str, Any], ...] = ()
     help_text: str = ""
     default_value: str = ""
+    report_key: str | None = None
+    normalized_report_keys: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -232,6 +258,7 @@ class DocumentTypeDef:
     system_type: str | None = None
     sensitivity: str = DocumentType.Sensitivity.NORMAL.value
     min_contact_stage: str | None = None
+    report_key: str | None = None
     icon: str = ""
     color: str = ""
     sort_order: int = 0
@@ -239,6 +266,7 @@ class DocumentTypeDef:
     field_refs: tuple[FieldRefDef, ...] = ()
     conditions: tuple[ConditionDef, ...] | None = None
     ignored_keys: tuple[str, ...] = ()
+    normalized_report_keys: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -359,6 +387,60 @@ def _optional_enum_value(
     return value
 
 
+def _tolerant_key_value(
+    data: dict[str, Any],
+    key: str,
+    path: str,
+    errors: Errors,
+    *,
+    normalisierung: dict[str, str],
+) -> tuple[str | None, tuple[tuple[str, str], ...]]:
+    """Toleranter Schluesselwert mit Normalisierung statt Werteliste (Refs #1849).
+
+    Anders als :func:`_optional_enum_value`: ein **unbekannter** Wert ist KEIN
+    Fehler. Der Werteraum der Berichtsschluessel kommt aus den
+    Backend-Deklarationen und kann in einem Fremdpaket ein anderer sein; ein
+    harter Parserfehler machte das ganze Paket unladbar, obwohl nur eine Zeile
+    fremd ist (Konzept #1847 §2, Entscheid E-H).
+
+    Geprueft wird deshalb nur der **Typ** (Zeichenkette) und das **Format**;
+    Werte aus ``normalisierung`` werden uebersetzt und als ``(alt, neu)``-Paar
+    zurueckgegeben, damit der Loader daraus eine sichtbare Warnung macht (kein
+    Silent-Rewrite — dieselbe Linie wie bei ``ignored_keys``).
+
+    Fehlender Schluessel und ``null`` sind gleichbedeutend „keine Angabe": das
+    Format kennt keinen Weg, einen gesetzten Schluessel zu ENTFERNEN — das
+    verbietet die Aenderbarkeits-Regel ohnehin (Konzept §2.1).
+
+    **Fuer E4 wiederverwendbar:** dieselbe Mechanik traegt dort die Reduktion
+    des ``system_type``-Enums (Alt-Pakete mit ``system_type: medical`` bleiben
+    ladbar) — sie ist die Vorbedingung jener Etappe, nicht bloss eine
+    Bequemlichkeit hier.
+    """
+    value = data.get(key)
+    if value is None:
+        return None, ()
+    if not isinstance(value, str) or not _REPORT_KEY_RE.fullmatch(value):
+        errors.append(
+            (
+                _join(path, key),
+                "Ungültiger Schlüssel — erlaubt sind a-z, 0-9 und Unterstriche (oder null).",
+            )
+        )
+        return None, ()
+    ersatz = normalisierung.get(value)
+    if ersatz is None:
+        return value, ()
+    return ersatz, ((value, ersatz),)
+
+
+def _optional_report_key_value(
+    data: dict[str, Any], key: str, path: str, errors: Errors
+) -> tuple[str | None, tuple[tuple[str, str], ...]]:
+    """:func:`_tolerant_key_value` mit der Berichtsschluessel-Normalisierung."""
+    return _tolerant_key_value(data, key, path, errors, normalisierung=_FORMER_REPORT_KEY_VALUES)
+
+
 def _allowed(allowed: frozenset[str]) -> str:
     return ", ".join(repr(value) for value in sorted(allowed))
 
@@ -423,6 +505,7 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
     sensitivity = _enum_value(data, "sensitivity", path, errors, _TEMPLATE_SENSITIVITIES, default="")
     help_text = _str_value(data, "help_text", path, errors)
     default_value = _str_value(data, "default_value", path, errors)
+    report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
 
     options: list[dict[str, Any]] = []
     raw_options = data.get("options")
@@ -478,6 +561,8 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
         options=tuple(options),
         help_text=help_text,
         default_value=default_value,
+        report_key=report_key,
+        normalized_report_keys=normalized_report_keys,
     )
 
 
@@ -549,6 +634,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
     )
     system_type = _optional_enum_value(data, "system_type", path, errors, _SYSTEM_TYPES)
     min_contact_stage = _optional_enum_value(data, "min_contact_stage", path, errors, _CONTACT_STAGES)
+    report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
     icon = _str_value(data, "icon", path, errors)
     color = _str_value(data, "color", path, errors)
     sort_order = _int_value(data, "sort_order", path, errors)
@@ -577,6 +663,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         system_type=system_type,
         sensitivity=sensitivity,
         min_contact_stage=min_contact_stage,
+        report_key=report_key,
         icon=icon,
         color=color,
         sort_order=sort_order,
@@ -584,6 +671,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         field_refs=field_refs,
         conditions=conditions,
         ignored_keys=ignored_keys,
+        normalized_report_keys=normalized_report_keys,
     )
 
 
