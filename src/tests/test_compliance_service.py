@@ -15,7 +15,7 @@ from core.services import compliance
 
 def _make_role_check(label: str, role: str, actual_super: bool | None, actual_bypassrls: bool | None):
     """Mock fuer ``RoleCheck`` ohne Postgres-Roundtrip."""
-    from core.management.commands.check_db_roles import RoleCheck
+    from core.services.compliance.db_roles import RoleCheck
 
     return RoleCheck(
         role=role,
@@ -85,7 +85,7 @@ class TestDbRoleChecks:
     def test_ok_when_app_role_correct(self):
         app = _make_role_check("App", "anlaufstelle", actual_super=False, actual_bypassrls=False)
         admin = _make_role_check("Admin", "anlaufstelle_admin", actual_super=False, actual_bypassrls=True)
-        with patch("core.management.commands.check_db_roles.check_db_roles", return_value=([app, admin], [])):
+        with patch("core.services.compliance.db_roles.check_db_roles", return_value=([app, admin], [])):
             checks = compliance._db_role_checks()
         # 2 App-Attribute + 1 Admin = 3 Checks.
         assert len(checks) == 3
@@ -93,7 +93,7 @@ class TestDbRoleChecks:
 
     def test_critical_when_app_is_superuser(self):
         app = _make_role_check("App", "anlaufstelle", actual_super=True, actual_bypassrls=False)
-        with patch("core.management.commands.check_db_roles.check_db_roles", return_value=([app], [])):
+        with patch("core.services.compliance.db_roles.check_db_roles", return_value=([app], [])):
             checks = compliance._db_role_checks()
         super_check = next(c for c in checks if c.key == "db_role_app_nosuperuser")
         assert super_check.status == compliance.ComplianceStatus.CRITICAL
@@ -101,7 +101,7 @@ class TestDbRoleChecks:
 
     def test_critical_when_app_has_bypassrls(self):
         app = _make_role_check("App", "anlaufstelle", actual_super=False, actual_bypassrls=True)
-        with patch("core.management.commands.check_db_roles.check_db_roles", return_value=([app], [])):
+        with patch("core.services.compliance.db_roles.check_db_roles", return_value=([app], [])):
             checks = compliance._db_role_checks()
         bypass_check = next(c for c in checks if c.key == "db_role_app_nobypassrls")
         assert bypass_check.status == compliance.ComplianceStatus.CRITICAL
@@ -109,7 +109,7 @@ class TestDbRoleChecks:
     def test_warning_when_admin_role_missing(self):
         app = _make_role_check("App", "anlaufstelle", actual_super=False, actual_bypassrls=False)
         with patch(
-            "core.management.commands.check_db_roles.check_db_roles",
+            "core.services.compliance.db_roles.check_db_roles",
             return_value=([app], ["POSTGRES_ADMIN_USER ist nicht gesetzt"]),
         ):
             checks = compliance._db_role_checks()
@@ -119,7 +119,7 @@ class TestDbRoleChecks:
 
     def test_unknown_when_app_role_not_in_pg_roles(self):
         app = _make_role_check("App", "ghost", actual_super=None, actual_bypassrls=None)
-        with patch("core.management.commands.check_db_roles.check_db_roles", return_value=([app], [])):
+        with patch("core.services.compliance.db_roles.check_db_roles", return_value=([app], [])):
             checks = compliance._db_role_checks()
         assert all(c.status == compliance.ComplianceStatus.UNKNOWN for c in checks)
 

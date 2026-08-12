@@ -225,6 +225,46 @@ class TestServiceLayerDirectionGuard:
         )
 
 
+class TestComplianceServiceLayerDirectionGuard:
+    """``core/services/compliance/`` darf nicht aus ``core.management.commands`` importieren.
+
+    Refs #1835: ``core/services/compliance/db_roles.py`` importierte vorher per
+    Lazy-Import (innerhalb ``_db_role_checks()``) aus
+    ``core.management.commands.check_db_roles`` — der einzige Command-Import
+    im Nicht-Test-Code und eine invertierte Abhaengigkeit (Commands sind duenne
+    CLI-Wrapper UM den Service-Layer, nicht umgekehrt, Muster
+    ``enforce_retention.py``/``reencrypt_fields.py``). Die Rollen-Pruef-Logik
+    (``RoleCheck``, ``check_db_roles``, ``check_db_ownership``,
+    ``current_connection_bypasses_rls``) lebt seither im Service selbst; der
+    Command re-exportiert sie fuer den CLI-Aufruf.
+
+    Geprueft wird die GANZE Datei, nicht nur der Modul-Kopf (anders als
+    :class:`TestServiceLayerDirectionGuard`): der urspruengliche Verstoss war
+    bewusst ein Lazy-Import INNERHALB einer Funktion, um den damaligen Zirkel
+    zu vermeiden — ein reiner Kopf-Scan haette ihn nie gefunden.
+    """
+
+    _COMPLIANCE_DIR = Path("src/core/services/compliance")
+    _COMMAND_IMPORT = re.compile(
+        r"^\s*(from core\.management\.commands|import core\.management\.commands)", re.MULTILINE
+    )
+
+    def test_no_management_command_imports_in_compliance_service(self):
+        if not self._COMPLIANCE_DIR.exists():
+            pytest.skip(f"{self._COMPLIANCE_DIR} nicht vorhanden")
+        violations = []
+        for py_file in self._COMPLIANCE_DIR.glob("*.py"):
+            source = py_file.read_text()
+            if self._COMMAND_IMPORT.search(source):
+                violations.append(py_file.name)
+        assert not violations, (
+            "Diese core/services/compliance/-Module importieren aus "
+            "core.management.commands — invertierte Abhaengigkeit (Commands "
+            "sind duenne CLI-Wrapper UM den Service-Layer, nicht umgekehrt).\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestKAnonBridgeRedactionParity:
     """Der K-Anon-Retention-Pfad muss dieselbe Redaktionskaskade fahren wie der Hard-Pfad.
 

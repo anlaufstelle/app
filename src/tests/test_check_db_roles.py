@@ -6,6 +6,16 @@ mit den prod-aehnlichen Rollen geseedet ist, was in pytest/Django nicht
 selbstverstaendlich ist. Stattdessen mocken wir ``_query_role`` und
 verifizieren, dass die Klassifikation (App=NOSUPERUSER/NOBYPASSRLS,
 Admin=NOSUPERUSER/BYPASSRLS) korrekt ausgewertet wird.
+
+Refs #1835: die Rollen-Pruef-Logik (``RoleCheck``, ``check_db_roles``,
+``check_db_ownership`` sowie die privaten Query-Helfer) lebt seither in
+:mod:`core.services.compliance.db_roles`; der Command re-exportiert nur noch
+die vier oeffentlichen Namen. ``cmd`` bleibt fuer alles, was ueber den
+Command-Pfad laeuft (``call_command``, direkte Aufrufe der re-exportierten
+Funktionen); die privaten Helfer (``_query_role``/``_query_db_owner``/
+``_query_table_owner``) werden am Verwendungsort — dem Service-Modul, wo
+``check_db_roles()``/``check_db_ownership()`` sie unqualifiziert nachschlagen
+— gepatcht, sonst liefe der Monkeypatch ins Leere.
 """
 
 from __future__ import annotations
@@ -13,6 +23,7 @@ from __future__ import annotations
 import pytest
 
 from core.management.commands import check_db_roles as cmd
+from core.services.compliance import db_roles
 
 
 class TestRoleCheckDataclass:
@@ -100,7 +111,7 @@ class TestCheckDbRolesFunction:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (False, False),
@@ -117,7 +128,7 @@ class TestCheckDbRolesFunction:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (True, False),  # <-- problematisch
@@ -134,7 +145,7 @@ class TestCheckDbRolesFunction:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (False, True),  # <-- problematisch
@@ -151,7 +162,7 @@ class TestCheckDbRolesFunction:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (False, False),
@@ -166,7 +177,7 @@ class TestCheckDbRolesFunction:
     def test_missing_admin_env_is_config_error_but_not_fatal(self, monkeypatch, settings):
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.delenv("POSTGRES_ADMIN_USER", raising=False)
-        monkeypatch.setattr(cmd, "_query_role", lambda role: (False, False))
+        monkeypatch.setattr(db_roles, "_query_role", lambda role: (False, False))
 
         checks, config_errors = cmd.check_db_roles()
         # App-Check existiert weiterhin, Admin-Check entfaellt.
@@ -178,7 +189,7 @@ class TestCheckDbRolesFunction:
     def test_nonexistent_role_appears_as_failure(self, monkeypatch, settings):
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "ghost_user")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "ghost_admin")
-        monkeypatch.setattr(cmd, "_query_role", lambda role: (None, None))
+        monkeypatch.setattr(db_roles, "_query_role", lambda role: (None, None))
 
         checks, _ = cmd.check_db_roles()
         assert len(checks) == 2
@@ -193,7 +204,7 @@ class TestCommandExitCodes:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {"app": (False, False), "admin": (False, True)}[role],
         )
@@ -211,7 +222,7 @@ class TestCommandExitCodes:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {"app": (True, False), "admin": (False, True)}[role],
         )
@@ -249,7 +260,7 @@ class TestAppRoleIdentification:
         monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (False, False),
@@ -270,7 +281,7 @@ class TestAppRoleIdentification:
         monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (False, False),
@@ -290,7 +301,7 @@ class TestAppRoleIdentification:
         monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (True, False),  # App faelschlich Superuser
@@ -318,8 +329,8 @@ class TestCheckDbOwnership:
     """
 
     def _patch_owners(self, monkeypatch, *, db_owner: str, table_owner: str):
-        monkeypatch.setattr(cmd, "_query_db_owner", lambda: db_owner)
-        monkeypatch.setattr(cmd, "_query_table_owner", lambda table: table_owner)
+        monkeypatch.setattr(db_roles, "_query_db_owner", lambda: db_owner)
+        monkeypatch.setattr(db_roles, "_query_table_owner", lambda table: table_owner)
 
     def test_app_owning_appendonly_table_is_flagged(self, monkeypatch, settings):
         # Drei-Rollen-Modell: Admin != App. App besitzt faelschlich die
@@ -374,9 +385,11 @@ class TestCheckDbOwnership:
         monkeypatch.delenv("POSTGRES_ADMIN_USER", raising=False)
         monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
         # Query-Helfer wuerden bei einem Bug die reale DB treffen -> hart failen.
-        monkeypatch.setattr(cmd, "_query_db_owner", lambda: (_ for _ in ()).throw(AssertionError("DB nicht abfragen")))
         monkeypatch.setattr(
-            cmd, "_query_table_owner", lambda table: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
+            db_roles, "_query_db_owner", lambda: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
+        )
+        monkeypatch.setattr(
+            db_roles, "_query_table_owner", lambda table: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
         )
 
         assert cmd.check_db_ownership() == []
@@ -387,9 +400,11 @@ class TestCheckDbOwnership:
         monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle")
         monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
-        monkeypatch.setattr(cmd, "_query_db_owner", lambda: (_ for _ in ()).throw(AssertionError("DB nicht abfragen")))
         monkeypatch.setattr(
-            cmd, "_query_table_owner", lambda table: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
+            db_roles, "_query_db_owner", lambda: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
+        )
+        monkeypatch.setattr(
+            db_roles, "_query_table_owner", lambda table: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
         )
 
         assert cmd.check_db_ownership() == []
@@ -401,7 +416,7 @@ class TestCheckDbOwnership:
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
         monkeypatch.setattr(
-            cmd,
+            db_roles,
             "_query_role",
             lambda role: {
                 "anlaufstelle_app": (False, False),

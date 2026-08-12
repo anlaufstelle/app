@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from core.management.commands.check_db_roles import RoleCheck
 from core.services import compliance
 from core.services.compliance import ComplianceStatus
+from core.services.compliance.db_roles import RoleCheck
 
 
 def _app_role_check(role: str, *, actual_super: bool | None, actual_bypassrls: bool | None) -> RoleCheck:
@@ -125,7 +125,7 @@ class TestDbRoleChecksAdminDedup:
         app = _app_role_check("anlaufstelle_app", actual_super=False, actual_bypassrls=False)
         admin = _admin_role_check("anlaufstelle_admin", actual_super=False, actual_bypassrls=True)
         with patch(
-            "core.management.commands.check_db_roles.check_db_roles",
+            "core.services.compliance.db_roles.check_db_roles",
             return_value=([app, admin], ["irrelevanter Konfigurationshinweis"]),
         ):
             checks = compliance._db_role_checks()
