@@ -16,11 +16,15 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 | 2 | Port 8844 frei | `lsof -i :8844` | Keine Ausgabe |
 | 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i :8844` danach leer |
 | 4 | Venv aktiv | `source .venv/bin/activate` | `which python` zeigt `.venv/` |
-| 5 | Playwright installiert | `python -m playwright install chromium` | Kein „browser not found" |
+| 5 | Playwright-Browser passend zur Version | `python -m playwright install chromium` | Kein „Executable doesn't exist at …" |
 | 6 | Tailwind gebaut | `make tailwind-build` | `src/static/css/styles.css` existiert |
-| 7 | Tests starten | `make test-e2e` | Grüne Ausgabe |
+| 7 | Tests starten | `make test-e2e-locked` (bzw. `make test-e2e-halves-locked`) | Grüne Ausgabe |
 
 > **Hinweis:** Docker benötigt auf manchen Systemen `sudo`. Der Dev-Server (Port 8000/8443) muss **nicht** laufen — E2E nutzt Port 8844.
+
+> **Schritt 5 ist nicht einmalig.** Jeder Playwright-Bump bindet einen **neuen Browser-Build** — die Paketversion allein reicht nicht. Nach `playwright 1.61 → 1.62` verlangte der Lauf `chromium_headless_shell-1234`, installiert waren 1223 und 1228; Folge waren **312 Setup-Fehler** in einem einzigen Lauf, alle mit „Executable doesn't exist". Nach jedem Bump der Playwright-Version in `requirements-dev.in` also `python -m playwright install chromium` nachziehen. Ein Blick ins Verzeichnis `~/.cache/ms-playwright/` genügt **nicht**: dort liegen die alten Builds weiterhin und sehen aus wie ein vollständiges Setup.
+
+> **Lock nicht umgehen.** Die `-locked`-Targets serialisieren über ein globales `flock` (Refs #1840). Ein zweiter E2E-Lauf würde sonst dieselbe Datenbank `anlaufstelle_e2e` und denselben Port 8844 belegen — die Isolation über die xdist-Worker-Nummer wirkt nur **innerhalb** eines Laufs, nicht zwischen Sessions.
 
 ---
 
