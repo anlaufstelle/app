@@ -45,6 +45,16 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
         readonly = self.readonly_fields
         if obj and obj.system_type:
             readonly = (*readonly, "system_type")
+        if obj and obj.report_key:
+            # E3 (Refs #1849), Entscheid E-K: gesperrt wird NUR ein bereits
+            # gesetzter Berichtsschluessel — leer→gesetzt bleibt auch hier der
+            # Reparaturpfad. Dieselbe Mechanik wie ``system_type``: Django
+            # schliesst ``readonly_fields`` von ``modelform_factory`` aus, ein
+            # POST kann den Guard also gar nicht mehr erreichen. Ohne diese
+            # Zeile leerte JEDER Change-Speichervorgang im Admin das Feld (der
+            # POST traegt es nicht) und liefe in den Guard — HTTP 500 auf einer
+            # voellig unbeteiligten Aenderung.
+            readonly = (*readonly, "report_key")
         if obj:
             # Fix-Runde 1 (Refs #1058, B-1): slug/entity_type sind nach dem
             # Anlegen unveraenderlich (Guard in DocumentType.save()). Ohne
@@ -103,15 +113,21 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "sensitivity",
         "options_json",
         "default_value",
+        "report_key",
         "help_text",
         "is_active",
     )
     actions = ("deactivate_selected", "activate_selected")
 
     def get_readonly_fields(self, request, obj=None):
+        readonly = self.readonly_fields
         if obj:
-            return (*self.readonly_fields, "slug")
-        return self.readonly_fields
+            readonly = (*readonly, "slug")
+        # E3 (Refs #1849), Entscheid E-K — dieselbe Regel wie am
+        # Dokumentationstyp: gesperrt erst, wenn ein Wert dasteht.
+        if obj and obj.report_key:
+            readonly = (*readonly, "report_key")
+        return readonly
 
     def delete_model(self, request, obj):
         """ProtectedError aus dem pre_delete-Signal abfangen und als Admin-Meldung anzeigen (Issue #356)."""

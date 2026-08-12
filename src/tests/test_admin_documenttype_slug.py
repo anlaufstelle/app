@@ -71,6 +71,25 @@ class TestChangeFormSlugEntityTypeReadonly:
         readonly = _admin().get_readonly_fields(request, doc_type_contact)
         assert "system_type" in readonly
 
+    def test_gesetzter_report_key_wird_readonly(self, rf, admin_user, doc_type_contact):
+        """E3 (Refs #1849), Entscheid E-K: gesperrt erst, wenn ein Wert dasteht.
+
+        Django schliesst ``readonly_fields`` von ``modelform_factory`` aus —
+        ohne diese Sperre leerte jeder Change-Speichervorgang das Feld (der POST
+        traegt es nicht) und liefe in den Modell-Guard.
+        """
+        request = _request(rf, admin_user)
+        assert doc_type_contact.report_key  # Fixture traegt den Backfill-Wert
+        assert "report_key" in _admin().get_readonly_fields(request, doc_type_contact)
+
+    def test_leerer_report_key_bleibt_editierbar(self, rf, admin_user, facility):
+        """Das Nachtragen ist der Reparaturpfad und muss auch im Admin offen bleiben."""
+        ohne = DocumentType.objects.create(facility=facility, name="Ohne Schlüssel")
+        request = _request(rf, admin_user)
+
+        assert "report_key" not in _admin().get_readonly_fields(request, ohne)
+        assert "report_key" in _admin().get_form(request, ohne).base_fields
+
     def test_change_form_still_allows_name_edit(self, rf, admin_user, doc_type_contact):
         request = _request(rf, admin_user)
         form_class = _admin().get_form(request, doc_type_contact)
