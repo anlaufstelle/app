@@ -20,6 +20,7 @@ from __future__ import annotations
 from itertools import combinations
 
 from django.urls import reverse
+from django.urls.resolvers import URLResolver
 
 from core import nav
 from core.models.user import User
@@ -53,18 +54,74 @@ NAV_ROUTE_PREFIXES = (
 )
 
 
+# Gesamtzahl der ``path()``-Bloetter unter ``core.urls`` (Refs #1835,
+# Package-Split von ``core/urls.py``). Reiner Smoke-Test: der Split ist eine
+# reine Verschiebung, kein Pattern darf dabei verloren gehen oder sich
+# verdoppeln. Bei einer bewussten Aenderung der Routenzahl hier mitziehen.
+_EXPECTED_TOTAL_PATTERNS = 147
+
+
 def _prefixed_route_names() -> dict[str, str]:
-    """``{url_name: pattern}`` aller ``core:``-Routen unter ``NAV_ROUTE_PREFIXES``."""
+    """``{url_name: pattern}`` aller ``core:``-Routen unter ``NAV_ROUTE_PREFIXES``.
+
+    Rekursiv (Refs #1835): Der Package-Split von ``core/urls.py`` bindet
+    System-/Config-/Offline-Routen ueber ``include()`` ein — in der flachen
+    ``core.urls.urlpatterns``-Liste stehen sie dadurch als ``URLResolver``
+    ohne eigenes ``.name``. Eine reine Top-Level-Iteration saehe diese Routen
+    nicht mehr; die Rekursion summiert ``str(entry.pattern)`` je Ebene auf und
+    ist damit unabhaengig davon, ob eine Route flach oder ueber ``include()``
+    eingebunden ist. Gegen die heutige (noch flache) Struktur verhaelt sie
+    sich identisch zur alten Implementierung.
+    """
     found: dict[str, str] = {}
-    for entry in core_urlpatterns:
-        name = getattr(entry, "name", None)
-        if not name:
-            continue
-        pattern = str(entry.pattern)
-        if pattern.startswith(NAV_ROUTE_PREFIXES):
-            found[name] = pattern
+
+    def _walk(patterns, prefix: str) -> None:
+        for entry in patterns:
+            full_pattern = prefix + str(entry.pattern)
+            if isinstance(entry, URLResolver):
+                _walk(entry.url_patterns, full_pattern)
+                continue
+            name = getattr(entry, "name", None)
+            if not name:
+                continue
+            if full_pattern.startswith(NAV_ROUTE_PREFIXES):
+                found[name] = full_pattern
+
+    _walk(core_urlpatterns, "")
     assert found, "Keine Routen unter NAV_ROUTE_PREFIXES gefunden — Guard blind (URLconf umgebaut?)."
     return found
+
+
+def _count_all_patterns(patterns) -> int:
+    """Zaehlt alle ``URLPattern``-Blaetter rekursiv (inkl. ``include()``-Gruppen)."""
+    total = 0
+    for entry in patterns:
+        if isinstance(entry, URLResolver):
+            total += _count_all_patterns(entry.url_patterns)
+        else:
+            total += 1
+    return total
+
+
+def test_total_pattern_count_is_stable():
+    """Smoke-Test (Refs #1835): der ``urls.py``-Package-Split ist reine Verschiebung.
+
+    Zaehlt rekursiv ueber flache Patterns UND ``include()``-Gruppen — faellt,
+    sobald beim Split ein Pattern verloren geht oder sich verdoppelt.
+    """
+    assert _count_all_patterns(core_urlpatterns) == _EXPECTED_TOTAL_PATTERNS
+
+
+def test_offline_client_list_shell_resolves_to_its_own_path():
+    """Ordnungs-Waechter (Refs #1835): ``offline_client_list_shell`` bleibt erreichbar.
+
+    Der Kommentar an der Originalstelle (vor dem Split) verlangt, dass
+    ``offline/clients/`` vor ``offline/clients/<uuid:pk>/`` registriert ist
+    (Liste vor Detail). Ein Package-Split, der die interne Reihenfolge der
+    Offline-Gruppe verschiebt, faellt hier auf: ``reverse()`` muss weiterhin
+    exakt den literalen, pk-losen Pfad liefern.
+    """
+    assert reverse("core:offline_client_list_shell") == "/offline/clients/"
 
 
 def _all_families() -> list[tuple[str, frozenset[str]]]:

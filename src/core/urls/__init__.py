@@ -1,6 +1,14 @@
-"""URL configuration for the core app."""
+"""URL configuration for the core app.
 
-from django.urls import path
+Refs #1835: Package-Split von ehemals ``core/urls.py`` (592 Zeilen,
+147 Patterns) in ``_config.py``/``_system.py``/``_offline.py``. Eingebunden
+per ``include()`` **ohne eigenen Namespace** — die Submodule setzen bewusst
+kein ``app_name``, damit ``include()`` keinen Sub-Namespace aufspannt und
+``app_name = "core"`` (unten) der einzige Namespace bleibt. Jedes
+``{% url "core:…" %}``/``reverse("core:…")`` verhaelt sich damit unveraendert.
+"""
+
+from django.urls import include, path
 from django.views.generic import RedirectView
 
 from core.views.account import AccountProfileView
@@ -52,40 +60,6 @@ from core.views.clients import (
     ClientListView,
     ClientUpdateView,
 )
-from core.views.config.conditions import (
-    ConditionBoardView,
-    ConditionCreateView,
-    ConditionDeleteView,
-    ConditionOperatorInputView,
-    ConditionUpdateView,
-    ConditionValueInputView,
-)
-from core.views.config.document_types import (
-    ConfigDocTypeFieldAddView,
-    ConfigDocTypeFieldRemoveView,
-    ConfigDocumentTypeCreateView,
-    ConfigDocumentTypeDeleteView,
-    ConfigDocumentTypeDetailView,
-    ConfigDocumentTypeListView,
-    ConfigDocumentTypeUpdateView,
-)
-from core.views.config.field_groups import (
-    ConfigFieldGroupCreateView,
-    ConfigFieldGroupDeleteView,
-    ConfigFieldGroupUpdateView,
-)
-from core.views.config.field_templates import (
-    ConfigFieldTemplateCreateView,
-    ConfigFieldTemplateDeleteView,
-    ConfigFieldTemplateListView,
-    ConfigFieldTemplateToggleActiveView,
-    ConfigFieldTemplateUpdateView,
-)
-from core.views.config.reorder import (
-    ConfigMoveFieldView,
-    ConfigReorderBlocksView,
-    ConfigReorderFieldsView,
-)
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
 from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
@@ -113,23 +87,6 @@ from core.views.lockout_recovery import (
     LockoutRecoveryRequestView,
     LockoutRecoverySentView,
 )
-from core.views.offline import (
-    OfflineClientBundleView,
-    OfflineClientDetailView,
-    OfflineClientListShellView,
-    OfflineClientRevocationsView,
-    OfflineClientShellView,
-    OfflineConflictListView,
-    OfflineConflictReviewView,
-    OfflineConflictShellView,
-    OfflineCsrfTokenView,
-    OfflineEventCreateShellView,
-    OfflineFacilityBundleView,
-    OfflineNoteExportAuditView,
-    OfflineWorkItemCreateShellView,
-    OfflineWorkItemListShellView,
-    OfflineZeitstromShellView,
-)
 from core.views.rectification import (
     RectificationCreateView,
     RectificationListView,
@@ -155,20 +112,6 @@ from core.views.statistics import (
     ReportReleaseLogView,
     SampleReport1ExportView,
     StatisticsView,
-)
-from core.views.system import (
-    SystemAuditLogDetailView,
-    SystemAuditLogExportView,
-    SystemAuditLogListView,
-    SystemComplianceView,
-    SystemDashboardView,
-    SystemLegalHoldListView,
-    SystemLockoutListView,
-    SystemMaintenanceView,
-    SystemOrganizationView,
-    SystemRetentionView,
-    SystemUnlockView,
-    SystemVVTView,
 )
 from core.views.workitem_actions import (
     WorkItemCreateView,
@@ -293,128 +236,10 @@ urlpatterns = [
     # Audit
     path("audit/", AuditLogListView.as_view(), name="audit_log"),
     path("audit/<uuid:pk>/", AuditLogDetailView.as_view(), name="audit_detail"),
-    # System (super_admin / installations-weit, Refs #867)
-    path("system/", SystemDashboardView.as_view(), name="system_dashboard"),
-    path("system/audit/", SystemAuditLogListView.as_view(), name="system_audit_list"),
-    path("system/audit/<uuid:pk>/", SystemAuditLogDetailView.as_view(), name="system_audit_detail"),
-    # Refs #873: AuditLog-Export (CSV/JSON via ?format=...).
-    path("system/audit/export/", SystemAuditLogExportView.as_view(), name="system_audit_export"),
-    path("system/organization/", SystemOrganizationView.as_view(), name="system_organization"),
-    # Refs #872: Sperrkonten-Uebersicht + Unlock-Button.
-    path("system/lockouts/", SystemLockoutListView.as_view(), name="system_lockout_list"),
-    path("system/lockouts/unlock/", SystemUnlockView.as_view(), name="system_unlock"),
-    # Refs #874: Wartungsmodus-Toggle.
-    path("system/maintenance/", SystemMaintenanceView.as_view(), name="system_maintenance"),
-    # Refs #875: Cross-Facility-Retention.
-    path("system/retention/", SystemRetentionView.as_view(), name="system_retention"),
-    # Refs #876: Verzeichnis Verarbeitungstaetigkeiten (Art. 30).
-    path("system/vvt/", SystemVVTView.as_view(), name="system_vvt"),
-    # Refs #877: Cross-Facility-Legal-Holds.
-    path("system/legal-holds/", SystemLegalHoldListView.as_view(), name="system_legal_hold_list"),
-    # Refs #919: Compliance-Dashboard (DB-Rollen, Backup, ClamAV, Retention, MFA, Audit-Events).
-    path("system/compliance/", SystemComplianceView.as_view(), name="system_compliance"),
-    # Config — Formular-Konfiguration (M0, Refs #1056): facility_admin only.
-    path("config/document-types/", ConfigDocumentTypeListView.as_view(), name="config_doctype_list"),
-    path("config/document-types/new/", ConfigDocumentTypeCreateView.as_view(), name="config_doctype_create"),
-    path("config/document-types/<uuid:pk>/", ConfigDocumentTypeDetailView.as_view(), name="config_doctype_detail"),
-    path("config/document-types/<uuid:pk>/edit/", ConfigDocumentTypeUpdateView.as_view(), name="config_doctype_update"),
-    path(
-        "config/document-types/<uuid:pk>/delete/",
-        ConfigDocumentTypeDeleteView.as_view(),
-        name="config_doctype_delete",
-    ),
-    # P6: Feld-Zuordnung + FieldGroup-Verwaltung im DocumentType-Detail (HTMX-Board).
-    path(
-        "config/document-types/<uuid:pk>/fields/add/",
-        ConfigDocTypeFieldAddView.as_view(),
-        name="config_doctype_field_add",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/fields/<uuid:dtf_pk>/remove/",
-        ConfigDocTypeFieldRemoveView.as_view(),
-        name="config_doctype_field_remove",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/groups/new/",
-        ConfigFieldGroupCreateView.as_view(),
-        name="config_fieldgroup_create",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/groups/<uuid:group_pk>/edit/",
-        ConfigFieldGroupUpdateView.as_view(),
-        name="config_fieldgroup_update",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/groups/<uuid:group_pk>/delete/",
-        ConfigFieldGroupDeleteView.as_view(),
-        name="config_fieldgroup_delete",
-    ),
-    # P7 / #1713: Drag-and-Drop-Batch-Reorder (globale Block-Sequenz, Felder,
-    # Feld verschieben).
-    path(
-        "config/document-types/<uuid:pk>/reorder/blocks/",
-        ConfigReorderBlocksView.as_view(),
-        name="config_reorder_blocks",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/reorder/fields/",
-        ConfigReorderFieldsView.as_view(),
-        name="config_reorder_fields",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/reorder/move-field/",
-        ConfigMoveFieldView.as_view(),
-        name="config_move_field",
-    ),
-    # M1 P6 (Refs #1057): Regel-Editor für bedingte Feldsichtbarkeit im
-    # DocumentType-Detail (HTMX-Board). facility_admin only.
-    path(
-        "config/document-types/<uuid:pk>/conditions/new/",
-        ConditionCreateView.as_view(),
-        name="config_condition_create",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/conditions/<uuid:condition_pk>/edit/",
-        ConditionUpdateView.as_view(),
-        name="config_condition_update",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/conditions/<uuid:condition_pk>/delete/",
-        ConditionDeleteView.as_view(),
-        name="config_condition_delete",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/conditions/value-input/",
-        ConditionValueInputView.as_view(),
-        name="config_condition_value_input",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/conditions/board/",
-        ConditionBoardView.as_view(),
-        name="config_condition_board",
-    ),
-    path(
-        "config/document-types/<uuid:pk>/conditions/operator-input/",
-        ConditionOperatorInputView.as_view(),
-        name="config_condition_operator_input",
-    ),
-    path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
-    path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),
-    path(
-        "config/field-templates/<uuid:pk>/edit/",
-        ConfigFieldTemplateUpdateView.as_view(),
-        name="config_fieldtemplate_update",
-    ),
-    path(
-        "config/field-templates/<uuid:pk>/delete/",
-        ConfigFieldTemplateDeleteView.as_view(),
-        name="config_fieldtemplate_delete",
-    ),
-    path(
-        "config/field-templates/<uuid:pk>/toggle-active/",
-        ConfigFieldTemplateToggleActiveView.as_view(),
-        name="config_fieldtemplate_toggle",
-    ),
+    # System (super_admin / installations-weit, Refs #867) — ausgelagert, Refs #1835.
+    path("", include("core.urls._system")),
+    # Config — Formular-Konfiguration (M0, Refs #1056) — ausgelagert, Refs #1835.
+    path("", include("core.urls._config")),
     # Statistics
     path("statistics/", StatisticsView.as_view(), name="statistics"),
     path("statistics/export/csv/", CSVExportView.as_view(), name="statistics_csv_export"),
@@ -482,117 +307,6 @@ urlpatterns = [
         RetentionDismissHoldView.as_view(),
         name="retention_dismiss_hold",
     ),
-    # Offline (Streetwork Stage 2) — JSON-API für Service Worker
-    path(
-        "api/v1/offline/bundle/client/<uuid:pk>/",
-        OfflineClientBundleView.as_view(),
-        name="offline_bundle",
-    ),
-    # Refs #1518 (#1499): personenloses Facility-Meta-Bundle (Offline-Create-
-    # Katalog) — kein pk, kein Roster-PII.
-    path(
-        "api/v1/offline/bundle/facility/",
-        OfflineFacilityBundleView.as_view(),
-        name="offline_facility_bundle",
-    ),
-    # Refs #1760: personen-genaue Widerrufsliste — was ein Geraet aus seinem
-    # IndexedDB loeschen MUSS (Gegenrichtung zum Bundle-Endpoint). PII-frei,
-    # daher audit-frei; der Client pollt bei jedem Sync und beim Boot.
-    path(
-        "api/v1/offline/revocations/",
-        OfflineClientRevocationsView.as_view(),
-        name="offline_revocations",
-    ),
-    # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
-    # Refresh-Pfad (loest das fragile /login/-HTML-Scraping ab).
-    path(
-        "api/v1/offline/csrf/",
-        OfflineCsrfTokenView.as_view(),
-        name="offline_csrf",
-    ),
-    # Refs #1476 (R10): Audit-Spur fuer den Offline-Notiz-Export
-    # (entschluesselte Art.-9-PII als Klartext-Datei). Client meldet online
-    # direkt, offline ueber die Replay-Queue.
-    path(
-        "api/v1/offline/audit/note-export/",
-        OfflineNoteExportAuditView.as_view(),
-        name="offline_note_export_audit",
-    ),
-    # Refs #1531 (#1499): generischer, pk-loser Shell fuer In-Place-
-    # Offline-Rendern der Personenliste an der kanonischen URL /clients/
-    # (Service Worker serviert ihn offline) — Muster #1322. MUSS vor
-    # offline_client_detail stehen (Liste vor Detail, wie clients/ vor
-    # clients/<uuid:pk>/ online) — kollidiert nicht: literal ohne pk-Segment
-    # vs. <uuid:pk>-Segment sind disjunkte Patterns.
-    path(
-        "offline/clients/",
-        OfflineClientListShellView.as_view(),
-        name="offline_client_list_shell",
-    ),
-    path(
-        "offline/clients/<uuid:pk>/",
-        OfflineClientDetailView.as_view(),
-        name="offline_client_detail",
-    ),
-    # Refs #1322: generischer, pk-loser Shell fuer In-Place-Rendern an der
-    # kanonischen URL /clients/<pk>/ (Service Worker serviert ihn offline).
-    path(
-        "offline/client-shell/",
-        OfflineClientShellView.as_view(),
-        name="offline_client_shell",
-    ),
-    # Refs #1521 (#1499): generischer, pk-loser Shell fuer die In-Place-
-    # Offline-Erfassung eines Ereignisses an der kanonischen URL /events/new/
-    # (Service Worker serviert ihn offline) — Muster #1322.
-    path(
-        "offline/event-shell/",
-        OfflineEventCreateShellView.as_view(),
-        name="offline_event_shell",
-    ),
-    # Refs #1522 (#1499): generischer, pk-loser Shell fuer die In-Place-
-    # Offline-Erfassung einer Aufgabe an der kanonischen URL /workitems/new/
-    # (Service Worker serviert ihn offline) — Muster #1322. Staff+-Gate liegt
-    # im Client (assignable_users == Staff+-Marker), nicht am Server-View.
-    path(
-        "offline/workitem-shell/",
-        OfflineWorkItemCreateShellView.as_view(),
-        name="offline_workitem_shell",
-    ),
-    # Refs #1541 (#1499): generischer, pk-loser Shell fuer In-Place-
-    # Offline-Rendern der Aufgabenliste an der kanonischen URL /workitems/
-    # (Service Worker serviert ihn offline) — Muster #1322. PII-frei; die
-    # aggregierten Offline-Aufgaben liest die Alpine-Komponente aus IndexedDB.
-    path(
-        "offline/workitems/",
-        OfflineWorkItemListShellView.as_view(),
-        name="offline_workitem_list_shell",
-    ),
-    # Refs #1542 (#1499): generischer, pk-loser Shell fuer In-Place-
-    # Offline-Rendern des Zeitstrom-Feeds an der kanonischen URL / (Service
-    # Worker serviert ihn offline) — Muster #1322. PII-frei; die aggregierte
-    # lokale Chronik liest die Alpine-Komponente aus IndexedDB.
-    path(
-        "offline/zeitstrom/",
-        OfflineZeitstromShellView.as_view(),
-        name="offline_zeitstrom_shell",
-    ),
-    # Offline (Streetwork Stage 3) — conflict review UI
-    path(
-        "offline/conflicts/",
-        OfflineConflictListView.as_view(),
-        name="offline_conflict_list",
-    ),
-    path(
-        "offline/conflicts/<uuid:pk>/",
-        OfflineConflictReviewView.as_view(),
-        name="offline_conflict_review",
-    ),
-    # Refs #1396: generischer, pk-loser Shell fuer In-Place-Rendern an der
-    # kanonischen URL /offline/conflicts/<pk>/ (Service Worker serviert ihn
-    # offline) — Muster #1322 (OfflineClientShellView).
-    path(
-        "offline/conflict-shell/",
-        OfflineConflictShellView.as_view(),
-        name="offline_conflict_shell",
-    ),
+    # Offline (Streetwork Stage 2/3) + JSON-API — ausgelagert, Refs #1835.
+    path("", include("core.urls._offline")),
 ]
