@@ -258,11 +258,11 @@ def verwaltung_overview(facility: Any, user: Any) -> dict[str, Any]:
     :func:`facility_admin_dashboard_context` — die Anwendungsbetreuung verliert
     beim Umzug ihrer Rollen-Seite hierher nichts.
 
-    Befund N3: dieser Context hat ein N+1 (``has_confirmed_totp_device`` je
-    User). Es wandert bewusst unverändert mit, statt hier nebenbei „mitgefixt"
-    zu werden: dieselbe Rolle trug die Last bisher unter ``/start/``, das
-    künftig genau hierher weiterleitet — die Last wird verschoben, nicht
-    erhöht. Der Fix (``annotate`` über ``EncryptedTOTPDevice``) ist eine eigene
-    Änderung mit eigenem Rot-Grün-Zyklus und hat ein Folgeticket.
+    Befund N3 (N+1 über ``has_confirmed_totp_device`` je User) ist mit
+    [#1816] behoben: ``facility_admin_dashboard_context`` annotiert die
+    TOTP-Prüfung als ``Exists``-Subquery, die Query-Zahl ist unabhängig von
+    der Nutzerzahl der Einrichtung.
+
+    [#1816]: https://github.com/anlaufstelle/app/issues/1816
     """
     return {"metrics": verwaltung_metrics(facility), **facility_admin_dashboard_context(user, facility)}

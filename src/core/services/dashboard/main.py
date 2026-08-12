@@ -11,13 +11,14 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from django.db.models import F
+from django.db.models import Exists, F, OuterRef
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from core.models import (
     AuditLog,
     DeletionRequest,
+    EncryptedTOTPDevice,
     Event,
     Facility,
     RetentionProposal,
@@ -93,8 +94,15 @@ def facility_admin_dashboard_context(user, facility) -> dict:
     Karten: User ohne MFA, Settings-Warnungen (z.B. MFA nicht erzwungen,
     keine K-Anon), aktive Login-Lockouts.
     """
-    users_qs = User.objects.filter(facility=facility, is_active=True)
-    users_without_mfa = sum(1 for u in users_qs if not u.has_confirmed_totp_device)
+    # Refs #1816: Die Pruefung auf ein bestaetigtes TOTP-Device laeuft als
+    # Subquery mit, statt je Nutzer die Python-Property
+    # ``User.has_confirmed_totp_device`` zu befragen — die kostete eine eigene
+    # Query pro aktivem Nutzer (N+1 auf einer Seite, die jede Leitung bei jedem
+    # Aufruf von /verwaltung/ sieht).
+    users_qs = User.objects.filter(facility=facility, is_active=True).annotate(
+        hat_bestaetigtes_totp=Exists(EncryptedTOTPDevice.objects.filter(user=OuterRef("pk"), confirmed=True))
+    )
+    users_without_mfa = users_qs.filter(hat_bestaetigtes_totp=False).count()
 
     warnings: list[str] = []
     try:

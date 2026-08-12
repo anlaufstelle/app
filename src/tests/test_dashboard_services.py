@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import (
@@ -181,6 +183,42 @@ class TestFacilityAdminDashboardContext:
 
         warnings = ctx["settings_warnings"]
         assert any("MFA" in w or "2FA" in w for w in warnings)
+
+    def test_mfa_zaehler_skaliert_nicht_mit_der_nutzerzahl(self, facility, admin_user):
+        """Refs #1816: Der MFA-Zaehler darf kein N+1 ausloesen.
+
+        ``users_without_mfa`` lief ueber die Python-Property
+        ``User.has_confirmed_totp_device``, die pro Nutzer eine eigene Query
+        gegen ``EncryptedTOTPDevice`` absetzt. Die Kachel kostete damit eine
+        Query je aktivem Nutzer der Einrichtung — auf ``/verwaltung/``, das
+        jede Leitung bei jedem Aufruf sieht.
+
+        Der Test pinnt keine absolute Query-Zahl (die driftet mit jeder
+        Kachel), sondern die Invariante: dieselbe Zahl bei 1 und bei 8
+        Nutzern.
+        """
+        Settings.objects.create(facility=facility, mfa_enforced_facility_wide=True)
+
+        with CaptureQueriesContext(connection) as wenige:
+            facility_admin_dashboard_context(admin_user, facility)
+
+        for i in range(7):
+            User.objects.create_user(
+                username=f"mfa-last-{i}",
+                role=User.Role.STAFF,
+                facility=facility,
+            )
+
+        with CaptureQueriesContext(connection) as viele:
+            ctx = facility_admin_dashboard_context(admin_user, facility)
+
+        assert ctx["users_without_mfa"] == 8, "Der Zaehler muss alle acht Nutzer ohne TOTP-Device erfassen."
+        assert len(viele) == len(wenige), (
+            f"MFA-Zaehler skaliert mit der Nutzerzahl (N+1): {len(wenige)} Queries bei 1 Nutzer, "
+            f"{len(viele)} bei 8. Erwartet ist eine konstante Zahl — die Pruefung auf ein "
+            f"bestaetigtes TOTP-Device gehoert als Exists()-Annotation ins Queryset, "
+            f"nicht in eine Python-Property je Nutzer (Refs #1816)."
+        )
 
 
 @pytest.mark.django_db
