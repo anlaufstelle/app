@@ -174,11 +174,14 @@ class TestBuildDataset:
         ]
         assert result.summary == {"total": 4}
 
-    def test_ban_ereignis_erscheint_nicht_und_wird_als_luecke_gemeldet(
+    def test_ausdruecklich_ausgeschlossener_typ_erscheint_nicht_und_meldet_nichts(
         self, backend, facility, staff_user, doc_type_kontakt, doc_type_hausverbot
     ):
-        """``ban`` fehlt bewusst in ``CATEGORY_MAP`` — der Slug-Zweitschluessel
-        darf es nicht hereinholen (Disclosure-Lehre #1785)."""
+        """Hausverbote gehoeren nicht in diesen Bericht — und sind seit Refs #1819
+        auch keine Luecke: der Sentinel ``excluded`` ist eine vollstaendige
+        Aussage. Der Slug-Zweitschluessel darf sie weiterhin nicht hereinholen
+        (Disclosure-Lehre #1785).
+        """
         _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 1, 10))
         _event(facility, doc_type_hausverbot, staff_user, _berlin(2026, 1, 11))
 
@@ -186,8 +189,27 @@ class TestBuildDataset:
 
         assert result.records == [{"monat": "2026-01", "kategorie": "Kontakte", "count": 1}]
         assert result.summary == {"total": 1}
-        assert [issue.code for issue in result.completeness] == ["unmapped_system_types"]
-        assert result.completeness[0].count == 1
+        assert result.completeness == []
+
+    def test_typ_ohne_jede_zuordnung_wird_als_luecke_gemeldet(self, backend, facility, staff_user, doc_type_kontakt):
+        """Der dritte Zustand: keine Aussage getroffen (Refs #1819)."""
+        ohne = DocumentType.objects.create(facility=facility, name="Freitext", report_key=None)
+        _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 1, 10))
+        _event(facility, ohne, staff_user, _berlin(2026, 1, 11))
+
+        result = backend.build_dataset(facility, JANUAR, FEBRUAR_ENDE)
+
+        assert [(issue.code, issue.count) for issue in result.completeness] == [("unmapped_system_types", 1)]
+
+    def test_unbekannter_schluessel_bekommt_einen_eigenen_code(self, backend, facility, staff_user, doc_type_kontakt):
+        """Entscheid E-H: „ich habe zugeordnet, es passiert nur nichts"."""
+        fremd = DocumentType.objects.create(facility=facility, name="Fremdpaket-Typ", report_key="fantasie")
+        _event(facility, doc_type_kontakt, staff_user, _berlin(2026, 1, 10))
+        _event(facility, fremd, staff_user, _berlin(2026, 1, 11))
+
+        result = backend.build_dataset(facility, JANUAR, FEBRUAR_ENDE)
+
+        assert [(issue.code, issue.count) for issue in result.completeness] == [("unknown_report_keys", 1)]
 
     def test_gesetzter_erstschluessel_schlaegt_den_slug(self, backend, facility, staff_user):
         """Ein ausdruecklich ausgeschlossener Typ mit dem Slug ``kontakt`` bleibt draussen."""
@@ -376,12 +398,13 @@ class TestPrepareExport:
             ),
         )
 
-        assert [issue.code for issue in ohne_luecke.completeness] == ["unmapped_system_types"]
-        assert [issue.code for issue in mit_luecke.completeness] == ["unmapped_system_types"]
+        erwartet = ["unmapped_system_types", "unknown_report_keys"]
+        assert [issue.code for issue in ohne_luecke.completeness] == erwartet
+        assert [issue.code for issue in mit_luecke.completeness] == erwartet
         for prepared in (ohne_luecke, mit_luecke):
-            issue = prepared.completeness[0]
-            assert issue.count is None
-            assert not any(zeichen.isdigit() for zeichen in str(issue.message))
+            for issue in prepared.completeness:
+                assert issue.count is None
+                assert not any(zeichen.isdigit() for zeichen in str(issue.message))
 
 
 class TestEndeZuEndeUeberBuildDataset:

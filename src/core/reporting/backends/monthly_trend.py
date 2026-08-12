@@ -100,7 +100,7 @@ werden (kein Monats-Merge-Thema, siehe Vertrag an
 import dataclasses
 from collections import defaultdict
 
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.db.models.functions import TruncMonth
 from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
@@ -111,7 +111,13 @@ from core.models import DocumentType, Event
 # und wird importiert, nicht nachgebaut. Aus der einen Deklaration kommen hier
 # BEIDE Sichten — die Python-Aufloesung in ``build_dataset`` und das
 # SQL-Praedikat in ``validate_completeness``/``verfuegbarkeit``.
-from core.reporting.backends.sample_report_1 import _SUPPRESSED_MESSAGES, TYP_BINDUNG
+from core.reporting.backends.sample_report_1 import (
+    _ISSUE_SEVERITIES,
+    _SUPPRESSED_MESSAGES,
+    TYP_BINDUNG,
+    unknown_key_q,
+    unmapped_q,
+)
 from core.reporting.base import Anforderung, CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
@@ -123,12 +129,15 @@ from core.services.dashboard.external_report import ORDER_INPUT, _Breakdown, sup
 # Faelle unterscheidbar, verriete die blosse Gestalt des Blocks wieder, ob die
 # Luecke > 0 ist.
 _UNMAPPED_CODE = "unmapped_system_types"
-# Importiert statt kopiert (Refs #1754): Es ist **derselbe** Code in beiden
-# Berichten, und die K6-Auflage „ziffernfrei in JEDER Sprache" gilt je Code. Zwei
-# gleichlautende Literale waeren zwei Uebersetzungseintraege, die getrennt
-# driften koennen — und ein Empfaenger, der beide Artefakte hat, laese zu
-# demselben Code zwei verschiedene Saetze.
-_UNMAPPED_EXPORT_MESSAGE = _SUPPRESSED_MESSAGES[_UNMAPPED_CODE]
+_UNKNOWN_CODE = "unknown_report_keys"
+# Kanonische, datenunabhaengige Reihenfolge des Export-Blocks dieses Berichts
+# (K6, Refs #1769). Beide Codes teilen sich mit dem Sachbericht Text UND
+# Severity: importiert statt kopiert (Refs #1754), denn es ist **derselbe** Code
+# in beiden Berichten, und die K6-Auflage „ziffernfrei in JEDER Sprache" gilt je
+# Code. Zwei gleichlautende Literale waeren zwei Uebersetzungseintraege, die
+# getrennt driften koennen — und ein Empfaenger, der beide Artefakte hat, laese
+# zu demselben Code zwei verschiedene Saetze.
+_EXPORT_ISSUE_CODES = (_UNMAPPED_CODE, _UNKNOWN_CODE)
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -216,30 +225,49 @@ class MonthlyTrendBackend(DatasetBackend):
         )
 
     def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
-        """Beziffert, was der Bericht **nicht** zeigt: Ereignisse ohne Berichtszuordnung.
+        """Beziffert, was der Bericht **nicht** zeigt — in derselben Dreiteilung
+        wie der Sachbericht (Refs #1819/#1849).
 
-        Der Check laeuft gegen die Rohdaten, nicht gegen den Datensatz — dort
-        fehlen die betroffenen Ereignisse per Definition. Das Praedikat ist die
-        SQL-Entsprechung derselben Aufloesung, die ``build_dataset`` verwendet;
-        zwei Wahrheiten hier hiessen, dass der Hinweis Ereignisse als fehlend
-        zaehlt, die im Bericht stehen (oder umgekehrt).
+        Beide Praedikate kommen aus ``sample_report_1``, aus derselben
+        Deklaration wie die Aufloesung in ``build_dataset``: zwei Wahrheiten
+        hier hiessen, dass der Hinweis Ereignisse als fehlend zaehlt, die im
+        Bericht stehen (oder umgekehrt) — und dass zwei Berichte ueber dieselben
+        Daten sich widersprechen.
+
+        Ein **gesetzter** Berichtsschluessel ist eine vollstaendige Aussage und
+        erzeugt keinen Hinweis mehr, auch wenn sie „gehoert in keinen Bericht"
+        lautet. Ein gesetzter, aber unbekannter Schluessel bekommt dagegen einen
+        eigenen Code (E-H).
         """
-        unmapped = _base_queryset(facility, date_from, date_to).aggregate(
-            count=Count("id", filter=~Q(document_type__in=DocumentType.objects.filter(TYP_BINDUNG.matching_q())))
-        )["count"]
-        if not unmapped:
-            return []
-        return [
-            CompletenessIssue(
-                _UNMAPPED_CODE,
-                # ``format_lazy`` statt f-String (Refs #1744): der Text folgt
-                # der Sprache der Empfaengerin, nicht der des schreibenden
-                # Prozesses.
-                format_lazy(_("{count} Ereignisse ohne Berichtszuordnung im Zeitraum"), count=unmapped),
-                "warning",
-                count=unmapped,
+        counts = _base_queryset(facility, date_from, date_to).aggregate(
+            unmapped=Count("id", filter=unmapped_q()),
+            unknown=Count("id", filter=unknown_key_q()),
+        )
+        issues: list[CompletenessIssue] = []
+        # ``format_lazy`` statt f-String (Refs #1744): der Text folgt der
+        # Sprache der Empfaengerin, nicht der des schreibenden Prozesses.
+        if counts["unmapped"]:
+            issues.append(
+                CompletenessIssue(
+                    _UNMAPPED_CODE,
+                    format_lazy(_("{count} Ereignisse ohne Berichtszuordnung im Zeitraum"), count=counts["unmapped"]),
+                    "warning",
+                    count=counts["unmapped"],
+                )
             )
-        ]
+        if counts["unknown"]:
+            issues.append(
+                CompletenessIssue(
+                    _UNKNOWN_CODE,
+                    format_lazy(
+                        _("{count} Ereignisse mit einem Berichtsschlüssel, den kein Bericht kennt"),
+                        count=counts["unknown"],
+                    ),
+                    "warning",
+                    count=counts["unknown"],
+                )
+            )
+        return issues
 
     # Deklaration fuer den zentralen Residual-Guard (K1, Refs #1770):
     # ``total`` ist die Summe aller Zeilen-``count``s, ``records`` also die
@@ -274,5 +302,8 @@ class MonthlyTrendBackend(DatasetBackend):
         records, summary = suppress_single_margin(
             facility, result, breakdown=self._EXPORT_BREAKDOWN, field_specs=self.get_field_specs()
         )
-        completeness = [CompletenessIssue(_UNMAPPED_CODE, _UNMAPPED_EXPORT_MESSAGE, "warning", count=None)]
+        completeness = [
+            CompletenessIssue(code, _SUPPRESSED_MESSAGES[code], _ISSUE_SEVERITIES[code], count=None)
+            for code in _EXPORT_ISSUE_CODES
+        ]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

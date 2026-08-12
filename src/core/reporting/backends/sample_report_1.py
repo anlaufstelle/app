@@ -28,6 +28,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
 from core.reporting.base import (
+    EXCLUDED_KEY,
     BindungsEintrag,
     CompletenessIssue,
     DatasetBackend,
@@ -37,7 +38,7 @@ from core.reporting.base import (
     stamp_threshold,
 )
 from core.reporting.data_source import MAPPED_EVENTS
-from core.reporting.registry import register_backend
+from core.reporting.registry import get_report_key_vocabulary, register_backend
 
 # Modul-Ebenen-Import ist zyklusfrei: ``core.services.dashboard`` verweist
 # nirgends zur Importzeit auf ``core.reporting`` — der einzige Rueckverweis
@@ -106,11 +107,28 @@ TYP_BINDUNG = TypBindung(
 CATEGORY_MAP = TYP_BINDUNG.ziel_map()
 SLUG_MAP = TYP_BINDUNG.slug_ziele()
 
-# Berichtskategorie eines Dokumentationstyps — ``None`` = ohne Zuordnung.
-# ``resolve_category(system_type, slug)``: erst der Erstschluessel, dann — nur
-# bei leerem/NULL Erstschluessel — der Slug (Refs #1741/#1785). Der
-# Unmapped-Filter unten ist die SQL-Entsprechung DERSELBEN Deklaration; zwei
-# Wahrheiten kann es hier nicht mehr geben.
+# Berichtskategorie eines Dokumentationstyps — ``None`` = nicht in diesem
+# Bericht. ``resolve_category(report_key, slug)``: erst der Erstschluessel, dann
+# — nur bei leerem/NULL Erstschluessel — der Slug (Refs #1741/#1785).
+#
+# **Invariante seit E3** (Refs #1849/#1819, frueher „build_dataset und der
+# Unmapped-Filter geben dieselbe Antwort"): Die Menge zerfaellt nicht mehr in
+# zwei Teile, sondern in VIER (Konzept #1847 §2), und ``resolve_category is
+# None`` ist die Vereinigung der letzten drei:
+#
+# 1. **zugeordnet** — ``resolve_category`` liefert eine Kategorie.
+# 2. **ausdruecklich ausgeschlossen** — Schluessel gesetzt und bekannt, aber
+#    nicht in diesem Bericht (``excluded`` oder ein Schluessel, den nur ein
+#    anderes Backend deklariert). Vollstaendige Aussage, KEIN Hinweis.
+# 3. **ohne Zuordnung** — Schluessel leer/NULL und auch ueber den Slug kein
+#    Treffer. Das ist die echte Luecke: :data:`_UNMAPPED_Q`.
+# 4. **unbekannter Schluessel** — gesetzt, aber kein Backend kennt ihn
+#    (Fremdpaket, entferntes Backend, Tippfehler). Eigener Meldungs-Code
+#    (Entscheid E-H): :func:`unknown_key_q`.
+#
+# Wer die Invariante als „deckungsgleich" liest, liest sie falsch — 2 und 4
+# loesen ebenfalls zu ``None`` auf, erzeugen aber keinen bzw. einen ANDEREN
+# Hinweis.
 resolve_category = TYP_BINDUNG.resolve
 
 
@@ -124,14 +142,67 @@ _AGE_LABELS = {
 }
 
 
-# Ereignisse, deren Dokumenttyp keiner Berichtskategorie zugeordnet ist —
-# ``system_type`` NULL/leer eingeschlossen. **Abgeleitet** aus derselben
-# Deklaration wie :func:`resolve_category` (Refs #1824): das frueher
-# handgeschriebene ``Q`` war die zweite Wahrheit, die driften konnte.
-# ``TypBindung.unmapped_q`` ist die Negation von ``matching_q`` und traegt den
-# ``isnull``-Zweig sowie die #1785-Bindung des Zweitschluessels an den leeren
-# Erstschluessel selbst.
-_UNMAPPED_Q = TYP_BINDUNG.unmapped_q("document_type__")
+def _erststufen_feld(prefix: str) -> str:
+    """Der Feldname der Erststufe — aus der Deklaration, nicht verdrahtet."""
+    return TYP_BINDUNG.values_fields(prefix)[0]
+
+
+def _unset_q(prefix: str) -> Q:
+    """„Es wurde keine Aussage getroffen" — NULL **und** Leerstring.
+
+    Der ``isnull``-Zweig ist bewusst redundant zum Leerstring-Zweig: blankes
+    SQL-``NOT IN`` faengt NULL-Zeilen nicht, und die NULL-/Leerstring-Semantik
+    ist der Kern des dritten Zustands (Refs #1819). Beim Umbau nicht
+    wegoptimieren.
+    """
+    feld = _erststufen_feld(prefix)
+    return Q(**{f"{feld}__isnull": True}) | Q(**{feld: ""})
+
+
+def unmapped_q(prefix: str = "document_type__") -> Q:
+    """Zustand 3: **ohne jede Zuordnung** — die echte Luecke (Refs #1819).
+
+    Frueher war das schlicht die Negation von ``matching_q``; damit zaehlten
+    auch die bewusst ausgeschlossenen Typen mit. Eine Einrichtung, die
+    Hausverbote dokumentiert — also praktisch jede —, sah den Hinweis dauerhaft
+    und hoerte auf hinzusehen. Ein **gesetzter** Schluessel ist eine
+    vollstaendige Aussage, auch wenn sie „gehoert nicht in den Bericht" lautet:
+    dieselbe Regel, die :meth:`TypBindung._eintrag` fuer die *Aufnahme* faehrt
+    (Refs #1785), jetzt konsequent auch fuer die *Meldung*.
+
+    Der Slug-Zweitschluessel bleibt einbezogen (``unmapped_q`` der Bindung):
+    ein Typ ohne Schluessel, dessen Slug trifft, IST zugeordnet.
+    """
+    return TYP_BINDUNG.unmapped_q(prefix) & _unset_q(prefix)
+
+
+def unknown_key_q(prefix: str = "document_type__") -> Q:
+    """Zustand 4: Schluessel gesetzt, aber **kein Backend kennt ihn** (E-H).
+
+    Entsteht auf genau drei Wegen — Fremdpaket mit anderem Vokabular,
+    entferntes/umbenanntes Backend, Tippfehler in einer YAML. In allen dreien
+    *glaubt* jemand, zugeordnet zu haben; das stille Nichts waere exakt die
+    Falle, die dieser Umbau beseitigen soll.
+
+    „Bekannt" heisst **registry-weit**, nicht backend-lokal: ein Schluessel, den
+    nur ein anderes Backend deklariert, ist eine vollstaendige Aussage („dieser
+    Typ gehoert in jenen Bericht") und keine Luecke. Das Vokabular wird
+    deshalb bei jedem Aufruf frisch gelesen — es ist Registry-Zustand, kein
+    Modul-Konstante.
+
+    Gilt nur, wo die Erststufe der Berichtsschluessel ist; ein
+    Verhaltens-Bericht (``ban_overview``) hat diesen Zustand nicht.
+    """
+    feld = _erststufen_feld(prefix)
+    bekannt = sorted({*get_report_key_vocabulary(), EXCLUDED_KEY})
+    return ~_unset_q(prefix) & ~Q(**{f"{feld}__in": bekannt})
+
+
+# Ereignisse, deren Dokumenttyp gar keine Berichtszuordnung traegt.
+# **Abgeleitet** aus derselben Deklaration wie :func:`resolve_category`
+# (Refs #1824): das frueher handgeschriebene ``Q`` war die zweite Wahrheit, die
+# driften konnte.
+_UNMAPPED_Q = unmapped_q()
 
 # Export-Fassung der Vollstaendigkeits-Meldungen (K6, Refs #1769). Sie ist die
 # EINZIGE Fassung, die ein externer Empfaenger je zu sehen bekommt: der Block
@@ -154,6 +225,9 @@ _UNMAPPED_Q = TYP_BINDUNG.unmapped_q("document_type__")
 # eine Bezugsgroesse ergaenzen.
 _SUPPRESSED_MESSAGES = {
     "unmapped_system_types": _("Angabe zu Ereignissen ohne Berichtszuordnung im Zeitraum unterdrückt (k-Anonymität)"),
+    "unknown_report_keys": _(
+        "Angabe zu Ereignissen mit unbekanntem Berichtsschlüssel im Zeitraum unterdrückt (k-Anonymität)"
+    ),
     "events_without_client": _(
         "Angabe zu Ereignissen ohne Personenbezug im Zeitraum unterdrückt (k-Anonymität) "
         "— nicht in Altersgruppen/Personenzahl enthalten"
@@ -164,12 +238,19 @@ _SUPPRESSED_MESSAGES = {
 # sie uebernommen werden koennte.
 _ISSUE_SEVERITIES: dict[str, Literal["info", "warning"]] = {
     "unmapped_system_types": "warning",
+    "unknown_report_keys": "warning",
     "events_without_client": "info",
 }
 
-# Kanonische Reihenfolge des Export-Blocks (unmapped zuerst) — Single Source of
-# Truth fuer den datenunabhaengigen Aufbau in ``prepare_export``.
-_EXPORT_ISSUE_CODES = ("unmapped_system_types", "events_without_client")
+# Kanonische Reihenfolge des Export-Blocks — Single Source of Truth fuer den
+# datenunabhaengigen Aufbau in ``prepare_export``.
+#
+# Der Bestandsname ``unmapped_system_types`` BLEIBT, obwohl die Erststufe seit
+# E3 ``report_key`` heisst: der Code ist eine Maschinenschnittstelle (JSON/XML,
+# von ``monthly_trend`` importiert). Ein Rename waere ein Bruch fuer jeden
+# Empfaenger, der auf ihm parst — und brachte keine Zeile Klarheit, die der
+# Meldungstext nicht schon traegt.
+_EXPORT_ISSUE_CODES = ("unmapped_system_types", "unknown_report_keys", "events_without_client")
 
 
 def _base_queryset(facility, date_from, date_to):
@@ -282,10 +363,15 @@ class SampleReport1Backend(DatasetBackend):
     def validate_completeness(self, facility, date_from, date_to) -> list[CompletenessIssue]:
         """Beziffert, was der Bericht **nicht** zeigt.
 
-        Beide Checks laufen gegen die Rohdaten, nicht gegen den Datensatz:
-        nicht zugeordnete Dokumenttypen fehlen dort per Definition, und
-        Ereignisse ohne Personenbezug sind in den Kategorien enthalten, in
+        Drei Checks, alle gegen die Rohdaten statt gegen den Datensatz: die
+        betroffenen Ereignisse fehlen dort per Definition, und Ereignisse ohne
+        Personenbezug sind in den Kategorien enthalten, in
         Altersgruppen/Personenzahl aber nicht.
+
+        **Bewusst ausgeschlossene Typen zaehlen NICHT mit** (Refs #1819): ein
+        gesetzter Schluessel ist eine vollstaendige Aussage. Wer den Hinweis
+        dauerhaft sieht, weil er Hausverbote dokumentiert, hoert auf hinzusehen
+        — und dann traegt er nichts mehr.
         """
         # Alle vier Kennzahlen in *einer* Aggregation: ``build_dataset`` ruft
         # diese Methode immer mit, und der Hybrid-/Snapshot-Pfad ruft
@@ -295,11 +381,14 @@ class SampleReport1Backend(DatasetBackend):
         # ``events_in_period`` statt ``total``: der gleichnamige Summary-Key
         # zaehlt nur die *gemappten* Ereignisse — hier ist die Bezugsgroesse
         # aber alles Sichtbare im Zeitraum.
+        unbekannt_q = unknown_key_q()
         counts = _base_queryset(facility, date_from, date_to).aggregate(
             events_in_period=Count("id"),
             without_client=Count("id", filter=Q(client__isnull=True)),
             unmapped_events=Count("id", filter=_UNMAPPED_Q),
             unmapped_types=Count("document_type_id", filter=_UNMAPPED_Q, distinct=True),
+            unknown_events=Count("id", filter=unbekannt_q),
+            unknown_types=Count("document_type_id", filter=unbekannt_q, distinct=True),
         )
         issues: list[CompletenessIssue] = []
 
@@ -320,6 +409,27 @@ class SampleReport1Backend(DatasetBackend):
                     ),
                     "warning",
                     count=counts["unmapped_events"],
+                )
+            )
+
+        # (a2) Gesetzter, aber registry-weit unbekannter Berichtsschluessel
+        # (E-H). Eigener Code: „ich habe zugeordnet, es passiert nur nichts" ist
+        # ein anderer Befund als „ich habe nichts gesagt" — und er verlangt eine
+        # andere Reaktion (Schluessel korrigieren statt einen setzen).
+        if counts["unknown_events"]:
+            issues.append(
+                CompletenessIssue(
+                    "unknown_report_keys",
+                    format_lazy(
+                        _(
+                            "{events} Ereignisse in {types} Dokumentationstypen mit einem Berichtsschlüssel, "
+                            "den kein Bericht kennt"
+                        ),
+                        events=counts["unknown_events"],
+                        types=counts["unknown_types"],
+                    ),
+                    "warning",
+                    count=counts["unknown_events"],
                 )
             )
 
@@ -358,7 +468,7 @@ class SampleReport1Backend(DatasetBackend):
         CSV-Export die Rohzahlen weiterhin gezeigt.
 
         Der Vollstaendigkeits-Block ist **datenunabhaengig** (K6, Refs #1769):
-        beide Meldungen immer, nie mit Zahl, in fester Reihenfolge — er wird
+        alle Meldungen immer, nie mit Zahl, in fester Reihenfolge — er wird
         aus ``_EXPORT_ISSUE_CODES`` gebaut und nicht aus ``result.completeness``
         abgeleitet. Damit sagt weder seine Gestalt noch sein Inhalt etwas ueber
         die Rohdaten aus. Der Hinweis auf die Luecke bleibt in jedem Fall

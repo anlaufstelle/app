@@ -222,11 +222,13 @@ class TestSampleReport1:
             {"category": "Versorgung", "count": 20},
         ]
 
-    def test_vollstaendigkeitshinweis_beziffert_die_luecke(self, paritaets_daten):
-        issues = _dataset("sample-report-1", paritaets_daten).completeness
-
-        # Notiz (10) und Hausverbot (10) tragen keine Berichtszuordnung.
-        assert [(issue.code, issue.count) for issue in issues] == [("unmapped_system_types", 20)]
+    def test_bewusst_ausgeschlossene_typen_erzeugen_keinen_hinweis(self, paritaets_daten):
+        """Refs #1819 (in E3 strukturell geloest): „Notiz" und „Hausverbot"
+        tragen den Sentinel ``excluded`` — eine vollstaendige Aussage, keine
+        Luecke. Der Bestand hier hat keinen Typ OHNE Zuordnung, also schweigt
+        der Hinweis. Die BERICHTSZAHLEN oben aendert das nicht.
+        """
+        assert _dataset("sample-report-1", paritaets_daten).completeness == []
 
     def test_export_bleibt_unsuppressiert(self, paritaets_daten):
         result = _export("sample-report-1", paritaets_daten)
@@ -283,7 +285,8 @@ class TestMonthlyTrend:
             {"monat": "2025-06", "kategorie": "Versorgung", "count": 10},
         ]
         assert result.summary["total"] == 71
-        assert [(issue.code, issue.count) for issue in result.completeness] == [("unmapped_system_types", 20)]
+        # Siehe Sachbericht: ``excluded`` ist eine Aussage, keine Luecke (#1819).
+        assert result.completeness == []
 
     def test_export_bleibt_unsuppressiert(self, paritaets_daten):
         result = _export("monthly-trend", paritaets_daten)

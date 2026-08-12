@@ -829,7 +829,10 @@ class TestReportBindingsDisplay:
         # Name bewusst NICHT "Spritzentausch" — sonst waere die Body-Assertion
         # tautologisch (der Typname selbst taucht ueberall auf der Seite auf,
         # unabhaengig davon, ob die Bindungslogik je gelaufen ist).
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange")
+        # E3 (Refs #1849): Erststufe der Berichtszuordnung ist der ``report_key``.
+        dt = DocumentType.objects.create(
+            facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange", report_key="needle_exchange"
+        )
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] != []
@@ -863,7 +866,9 @@ class TestReportBindingsDisplay:
         assert "Erscheint in" not in body
 
     def test_edit_form_shows_bindings_above_the_form_fields(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange")
+        dt = DocumentType.objects.create(
+            facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange", report_key="needle_exchange"
+        )
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_update", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] != []

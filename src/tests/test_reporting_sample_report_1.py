@@ -226,7 +226,10 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
     spritzen = make_doc_type("Spritzentausch", DocumentType.SystemType.NEEDLE_EXCHANGE)
     begleitung = make_doc_type("Begleitung", DocumentType.SystemType.ACCOMPANIMENT)
     vermittlung = make_doc_type("Vermittlung", DocumentType.SystemType.REFERRAL)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+    # Zwei Typen OHNE jede Berichtszuordnung — die echte Luecke (Refs #1819).
+    # Bis E3 stand hier ein ``note``-Typ; der traegt seit dem Backfill den
+    # Sentinel ``excluded`` und ist damit eine Aussage, keine Luecke.
+    ohne_zuordnung = make_doc_type("Sonstiges", None)
     ohne_typ = make_doc_type("Freitext", None)
 
     jung = make_client("JA-01", Client.AgeCluster.U18)
@@ -248,7 +251,7 @@ def parity_daten(facility, user, make_doc_type, make_client, make_event):
 
     # Nicht gemappte Typen im Zeitraum: zaehlen NICHT in total/by_category,
     # aber sehr wohl in by_age_cluster/unique_clients (Bestandsverhalten).
-    make_event(notiz, mittel)
+    make_event(ohne_zuordnung, mittel)
     make_event(ohne_typ, None)
 
     # Ausserhalb des Zeitraums / geloescht / fremde Einrichtung -> unsichtbar.
@@ -278,14 +281,14 @@ def kleine_daten(facility, make_doc_type, make_client, make_event):
     """
     kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+    ohne_zuordnung = make_doc_type("Sonstiges", None)
     person = make_client("JA-50", Client.AgeCluster.U18)
 
     make_event(kontakt, person)
     make_event(kontakt, person)
     make_event(kontakt, None)  # ohne Personenbezug
     make_event(beratung, person)
-    make_event(notiz, person)  # nicht gemappter Typ
+    make_event(ohne_zuordnung, person)  # Typ ohne jede Berichtszuordnung
 
     return facility
 
@@ -352,13 +355,13 @@ def unterdrueckte_randsumme_daten(facility, make_doc_type, make_client, make_eve
     ``events_in_period − 5`` ablesbar.
     """
     kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+    ohne_zuordnung = make_doc_type("Sonstiges", None)
     person = make_client("JA-90", Client.AgeCluster.AGE_18_26)
 
     for _index in range(3):
         make_event(kontakt, person)
     for _index in range(5):
-        make_event(notiz, person)
+        make_event(ohne_zuordnung, person)
 
     return facility
 
@@ -376,7 +379,7 @@ def identitaet_a_daten(facility, make_doc_type, make_client, make_event):
     """
     kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+    ohne_zuordnung = make_doc_type("Sonstiges", None)
 
     jung = make_client("JA-A1", Client.AgeCluster.U18)
     mittel = make_client("JA-A2", Client.AgeCluster.AGE_18_26)
@@ -386,10 +389,10 @@ def identitaet_a_daten(facility, make_doc_type, make_client, make_event):
         make_event(kontakt, jung)
     for _index in range(9):  # 18_26: 9 + 1 = 10
         make_event(kontakt, mittel)
-    make_event(notiz, mittel)
+    make_event(ohne_zuordnung, mittel)
     for _index in range(5):  # 27_plus: 5 + 1 = 6
         make_event(beratung, alt)
-    make_event(notiz, alt)
+    make_event(ohne_zuordnung, alt)
 
     return facility
 
@@ -405,7 +408,7 @@ def identitaet_b_daten(facility, make_doc_type, make_client, make_event):
     """
     kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
     beratung = make_doc_type("Beratungsgespräch", DocumentType.SystemType.COUNSELING)
-    notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+    ohne_zuordnung = make_doc_type("Sonstiges", None)
 
     jung = make_client("JA-B1", Client.AgeCluster.U18)
     mittel = make_client("JA-B2", Client.AgeCluster.AGE_18_26)
@@ -414,11 +417,11 @@ def identitaet_b_daten(facility, make_doc_type, make_client, make_event):
     for _index in range(6):  # u18: 6 + 3 = 9
         make_event(kontakt, jung)
     for _index in range(3):
-        make_event(notiz, jung)
+        make_event(ohne_zuordnung, jung)
     for _index in range(6):  # 18_26: 6 + 2 = 8
         make_event(kontakt, mittel)
     for _index in range(2):
-        make_event(notiz, mittel)
+        make_event(ohne_zuordnung, mittel)
     for _index in range(7):  # 27_plus: 7
         make_event(beratung, alt)
     for _index in range(3):  # ohne Personenbezug: 3 + 1 = 4
@@ -581,22 +584,22 @@ class TestValidateCompleteness:
 
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
 
-        # Gegenprobe: Hausverbot ist bewusst nicht zugeordnet.
-        make_event(make_doc_type("Hausverbot", DocumentType.SystemType.BAN), person)
+        # Gegenprobe: ein Typ OHNE jede Zuordnung erzeugt weiterhin den Hinweis.
+        # (Ein Hausverbots-Typ taugt dafuer seit Refs #1819 nicht mehr — er
+        # traegt den Sentinel und ist damit eine Aussage.)
+        make_event(make_doc_type("Sonstiges", None), person)
         issues = backend.validate_completeness(facility, DATE_FROM, DATE_TO)
         assert [issue.code for issue in issues] == ["unmapped_system_types"]
 
-    def test_nicht_gemappte_system_types_erzeugen_warnung(
-        self, backend, facility, make_doc_type, make_client, make_event
-    ):
+    def test_typen_ohne_zuordnung_erzeugen_warnung(self, backend, facility, make_doc_type, make_client, make_event):
         kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+        sonstiges = make_doc_type("Sonstiges", None)
         ohne_typ = make_doc_type("Freitext", None)
         person = make_client("JA-20", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
-        make_event(notiz, person)
-        make_event(notiz, person)
+        make_event(sonstiges, person)
+        make_event(sonstiges, person)
         make_event(ohne_typ, person)
 
         issues = backend.validate_completeness(facility, DATE_FROM, DATE_TO)
@@ -638,13 +641,13 @@ class TestValidateCompleteness:
         self, backend, facility, make_doc_type, make_client, make_event
     ):
         kontakt = make_doc_type("Kontakt", DocumentType.SystemType.CONTACT)
-        notiz = make_doc_type("Notiz", DocumentType.SystemType.NOTE)
+        sonstiges = make_doc_type("Sonstiges", None)
         person = make_client("JA-21", Client.AgeCluster.AGE_18_26)
 
         make_event(kontakt, person)
-        make_event(notiz, person, month=4, day=30)
-        make_event(notiz, person, month=6, day=1)
-        make_event(notiz, person, is_deleted=True)
+        make_event(sonstiges, person, month=4, day=30)
+        make_event(sonstiges, person, month=6, day=1)
+        make_event(sonstiges, person, is_deleted=True)
 
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
 
@@ -694,11 +697,7 @@ class TestValidateCompleteness:
         """Luecken einer anderen Einrichtung duerfen nicht durchschlagen."""
         fremde_org = Organization.objects.create(name="Fremde-Org-2")
         fremde_facility = Facility.objects.create(organization=fremde_org, name="Fremde-Einrichtung-2")
-        fremder_typ = DocumentType.objects.create(
-            facility=fremde_facility,
-            name="Notiz",
-            system_type=DocumentType.SystemType.NOTE,
-        )
+        fremder_typ = DocumentType.objects.create(facility=fremde_facility, name="Sonstiges")
         make_event(fremder_typ, None, event_facility=fremde_facility)
 
         assert backend.validate_completeness(facility, DATE_FROM, DATE_TO) == []
@@ -793,7 +792,7 @@ class TestSlugZweitschluessel:
         """Gegenprobe: ohne Slug-Treffer bleibt die Meldung wie im Bestand."""
         person = make_client("JA-81", Client.AgeCluster.AGE_18_26)
         make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
-        make_event(make_doc_type("Notiz", DocumentType.SystemType.NOTE), person)
+        make_event(make_doc_type("Sonstiges", None), person)
 
         issues = backend.validate_completeness(facility, DATE_FROM, DATE_TO)
 
@@ -832,7 +831,7 @@ class TestSlugZweitschluessel:
         """
         person = make_client("JA-82", Client.AgeCluster.U18)
         make_event(make_doc_type("Eigene Begleitung", None, slug="begleitung"), person)
-        make_event(make_doc_type("Notiz", DocumentType.SystemType.NOTE), person)
+        make_event(make_doc_type("Sonstiges", None), person)
 
         summary = backend.build_dataset(facility, DATE_FROM, DATE_TO).summary
 
@@ -852,14 +851,14 @@ class TestVollstaendigkeitsblockIstDatenunabhaengig:
     Randsummen, sondern aus einer selbst eingefuehrten, datenabhaengigen
     Verzweigung im Suppressionscode.
 
-    Beide Meldungen erscheinen deshalb **immer** und **nie mit Zahl**. Kosten:
+    Alle Meldungen erscheinen deshalb **immer** und **nie mit Zahl**. Kosten:
     der Bericht meldet die Luecke auch dann unbeziffert, wenn es keine gibt —
     genau das war fuer den frueheren Platzhalter-Pfad bereits als gewollt
     dokumentiert (waeren die Faelle unterscheidbar, verriete der Wortlaut
     selbst, ob die Luecke > 0 ist).
     """
 
-    ERWARTETE_CODES = ["unmapped_system_types", "events_without_client"]
+    ERWARTETE_CODES = ["unmapped_system_types", "unknown_report_keys", "events_without_client"]
 
     def _prepared(self, backend, facility, threshold=None):
         if threshold is not None:
@@ -872,13 +871,13 @@ class TestVollstaendigkeitsblockIstDatenunabhaengig:
         "fixture_name",
         ["kleine_daten", "grosse_daten", "parity_daten", "rueckrechnungs_daten", "unterdrueckte_randsumme_daten"],
     )
-    def test_immer_beide_meldungen_immer_ohne_zahl(self, backend, request, fixture_name):
+    def test_immer_alle_meldungen_immer_ohne_zahl(self, backend, request, fixture_name):
         einrichtung = request.getfixturevalue(fixture_name)
 
         issues = self._prepared(backend, einrichtung).completeness
 
         assert [issue.code for issue in issues] == self.ERWARTETE_CODES
-        assert [issue.severity for issue in issues] == ["warning", "info"]
+        assert [issue.severity for issue in issues] == ["warning", "warning", "info"]
         for issue in issues:
             assert issue.count is None
             assert not any(char.isdigit() for char in str(issue.message))
@@ -1008,13 +1007,13 @@ class TestPrepareExport:
     def test_completeness_unter_der_schwelle_ohne_rohzahl(self, backend, kleine_daten):
         issues = self._prepared(backend, kleine_daten).completeness
 
-        assert [issue.code for issue in issues] == ["unmapped_system_types", "events_without_client"]
+        assert [issue.code for issue in issues] == list(_EXPORT_ISSUE_CODES)
         for issue in issues:
             assert issue.count is None
             assert not any(char.isdigit() for char in issue.message)
             assert "k-Anonymität" in issue.message
         # Severity bleibt erhalten — nur die Zahl verschwindet.
-        assert [issue.severity for issue in issues] == ["warning", "info"]
+        assert [issue.severity for issue in issues] == ["warning", "warning", "info"]
 
     def test_werte_ab_der_schwelle_bleiben_exakt_erhalten(self, backend, grosse_daten):
         """Werte unveraendert — die **Reihenfolge** ist kanonisch (Refs #1772).
@@ -1089,7 +1088,7 @@ class TestPrepareExport:
         # Vollstaendigkeits-Block ist seit K6 (Refs #1769) datenunabhaengig und
         # bleibt auch bei k=1 unbeziffert (eigene Klasse
         # ``TestVollstaendigkeitsblockIstDatenunabhaengig``).
-        assert [issue.count for issue in self._prepared(backend, kleine_daten).completeness] == [None, None]
+        assert [issue.count for issue in self._prepared(backend, kleine_daten).completeness] == [None, None, None]
 
     def test_build_dataset_bleibt_roh(self, backend, kleine_daten):
         """Snapshot-Paritaet: die Suppression darf nicht in den Roh-Pfad lecken."""
