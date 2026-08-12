@@ -33,6 +33,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 **D. Administration & Betrieb**
 17. [Wie funktionieren Aufbewahrungsfristen?](#17-wie-funktionieren-aufbewahrungsfristen)
 18. [Welche automatisierten Scripts gibt es?](#18-welche-automatisierten-scripts-gibt-es)
+18a. [Wo finde ich eine Anleitung zu den Berichten (Reports)?](#18a-wo-finde-ich-eine-anleitung-zu-den-berichten-reports)
 
 **E. Fehlermeldungen**
 19. [Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?](#19-was-bedeutet-datensatz-wurde-zwischenzeitlich-geändert)
@@ -604,6 +605,49 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 | [`seed`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/seed.py) | Demo-/Testdaten erzeugen | Nur Dev |
 
 **Dokumentation:** [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
+
+### 18a. Wo finde ich eine Anleitung zu den Berichten (Reports)?
+
+Die Doku liegt auf drei Ebenen — je nachdem, ob Sie Berichte **erzeugen**, **betreiben** oder **neue Berichtsstandards entwickeln** wollen.
+
+#### 1. Berichte erzeugen (Leitung / Administration)
+
+[User-Guide § 7 „Statistik und Export"](user-guide.md#7-statistik-und-export) — die Schritt-für-Schritt-Anleitung an der Oberfläche:
+
+| Abschnitt | Inhalt |
+|---|---|
+| Statistik-Dashboard | Zeitraumwahl, Jahresnavigation, Trend-Charts, Dokumentationstyp-Filter |
+| CSV-Export / PDF-Export | Ereignisliste bzw. Statistikbericht zum gewählten Zeitraum |
+| Beispiel-Sachbericht | Vorlage im festen Layout — ausdrücklich **kein** verbindlicher Behördennachweis |
+| **Berichte (CSV / JSON / XML)** | Bericht im Dropdown wählen → Vorschau → Download; Vollständigkeitshinweise + K-Anonymität |
+| Externe Berichte | `/statistics/external/` — datensparsames Profil für die Weitergabe nach außen |
+
+**Der wichtigste Stolperstein: zwei Datenquellen.** Die Sachbericht-PDFs lesen aus den gespeicherten **Monats-Auswertungen** (Zahlen bleiben nach Ablauf von Löschfristen erhalten; Monatswerte werden addiert, Personen also mehrfach gezählt). Die Berichte der Berichte-Sektion (CSV/JSON/XML) rechnen dagegen **live**. Derselbe Zeitraum kann deshalb unterschiedliche Zahlen liefern — welche Quelle gilt, steht jeweils im Bericht selbst (PDF-Fußzeile bzw. Feld `data_source`).
+
+#### 2. Berichte betreiben (Administration)
+
+[Admin-Guide § 8 „Statistik-Snapshots & Materialized View"](admin-guide.md#8-statistik-snapshots--materialized-view) — Snapshot-Erzeugung, Refresh-Intervall (stündlich vs. nächtlich) und der Abschnitt **„Herausgabe von Berichten: was Sie wissen müssen"**.
+
+#### 3. Eigene Berichts-Backends entwickeln
+
+[`docs/reporting-plugins.md`](reporting-plugins.md) — die vollständige Entwickler-Anleitung:
+
+- **Architektur + API-Referenz:** `DatasetBackend`, `DatasetResult`, `FieldSpec`, `CompletenessIssue`
+- **„Eigenes Backend in fünf Schritten":** Modul registrieren → Spalten deklarieren → Datensatz bauen → K-Anonymität sicherstellen → Tests schreiben
+- **Discovery-Regeln** und die mitgelieferten Beispiel-Backends
+- **K-Anonymität** über den `prepare_export`-Hook inkl. der bekannten Fallstricke (Summen über Feldwerte, Mehrfachnennungen, Zusicherung je Artefakt statt artefaktübergreifend)
+- **Export-Formate** (CSV-Metadatenzeile, JSON, XML), **Completeness**, Grenzen und eine **Test-Checkliste** für neue Backends
+
+Die Design-Entscheidung dahinter: [ADR-038 — Reporting-Backends als Plugin-System](adr/038-reporting-plugin-backends.md).
+
+**Relevante Dateien:**
+- [`src/core/reporting/registry.py`](https://github.com/anlaufstelle/app/blob/main/src/core/reporting/registry.py) — Registrierung + Discovery der Backends
+- [`src/core/reporting/base.py`](https://github.com/anlaufstelle/app/blob/main/src/core/reporting/base.py) — `DatasetBackend`, `DatasetResult`, `FieldSpec`
+- [`src/core/reporting/export.py`](https://github.com/anlaufstelle/app/blob/main/src/core/reporting/export.py) — CSV-/JSON-/XML-Serialisierung
+- [`src/core/reporting/backends/`](https://github.com/anlaufstelle/app/tree/main/src/core/reporting/backends) — mitgelieferte Beispiel-Backends
+- [`src/core/views/statistics.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/statistics.py) — Dashboard, Vorschau, Download-Routen
+
+> **Englisch:** User-Guide, Admin-Guide und die Plugin-Anleitung gibt es auch unter [`docs/en/`](en/) — diese FAQ nicht.
 
 ---
 

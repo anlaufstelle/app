@@ -197,6 +197,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **FAQ-Wegweiser zu den Berichten** (#474) — neuer FAQ-Eintrag 18a bündelt die bislang auf drei Dokumente verteilte Berichts-Doku: Erzeugen an der Oberfläche ([User-Guide § 7](docs/user-guide.md#7-statistik-und-export)), Betrieb der Snapshots ([Admin-Guide § 8](docs/admin-guide.md#8-statistik-snapshots--materialized-view)) und Entwicklung eigener Berichts-Backends ([`docs/reporting-plugins.md`](docs/reporting-plugins.md), [ADR-038](docs/adr/038-reporting-plugin-backends.md)). Hebt den häufigsten Stolperstein hervor: Sachbericht-PDFs lesen aus Monats-Auswertungen, die Berichte-Sektion (CSV/JSON/XML) rechnet live — derselbe Zeitraum kann deshalb unterschiedliche Zahlen liefern.
 - **Datei-Vault-Verschlüsselung in der Doku korrigiert (Fernet statt AES-GCM)** (#1784) — EN-Admin-Guide und User-Guide behaupteten AES-GCM; tatsächlich Fernet (AES-128-CBC + HMAC-SHA256, [ADR-014](docs/adr/014-encrypted-file-vault.md)).
 - **RLS-Tabellenzahl in der Doku auf den Ist-Stand gehoben** (#1784) — zunächst auf 25; zum Release-Schnitt auf 27 (die M4-Modelle `ImportJob` und `RectificationRequest` tragen eigene RLS-Policies), konsistent in Threat-Model, Admin-Guide, Fachkonzept und Release-Checkliste.
 
