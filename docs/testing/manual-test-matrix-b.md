@@ -221,26 +221,28 @@
 |---------|-------|---------|--------|-----|
 | Auth | fachkraft (`miriam`) | C || `test_security_hardening.py` |
 
-**Voraussetzung:** Test-Setting `SESSION_COOKIE_AGE=10` (Sekunden) ODER Cookie manuell ablaufen lassen.
+**Voraussetzung:** Schnellvariante: `facility.settings.session_timeout_minutes = 1` setzen (Admin → Core → Einstellungen) und neu einloggen — ein globales `SESSION_COOKIE_AGE`-Test-Setting wirkt NICHT, weil der Login es per `set_expiry(facility-Wert)` immer überschreibt.
 
 **Vorbereitung:**
 - Login als `miriam`.
-- Session-Cookie inspizieren: `Max-Age=1800` (oder Wert aus Test-Setting).
+- Session-Cookie inspizieren: `Max-Age=1800` (bzw. `60` in der Schnellvariante).
 - Optional: facility.settings.session_timeout_minutes anders gesetzt → bestätigen, dass `CustomLoginView.form_valid` `request.session.set_expiry(timeout)` mit dem Facility-Wert aufruft.
 
 **Schritte:**
-1. 31 Min nichts klicken (oder Test-Cookie 11s ablaufen lassen).
+1. 31 Min nichts klicken (Schnellvariante: 61 s).
 2. Beliebige Seite z.B. `/clients/` aufrufen.
 
 **Erwartetes Ergebnis:**
 - HTTP 302 Redirect auf `/login/?next=/clients/` (Django-Default für `LOGIN_URL=/login/`).
 - Vorherige Session ist invalide.
-- `SESSION_SAVE_EVERY_REQUEST=False` — HTMX-Microrequests verlängern die Session NICHT (nur tatsächliche Änderungen). Inaktivitätsfenster bleibt 30 Min ab letzter Mutation.
+- Aktivität verlängert die Session: `SessionIdleRefreshMiddleware` (#1858) erneuert das Fenster bei authentifizierten Requests, gedrosselt auf einen Session-Write je 10 % der Laufzeit (Default: alle 3 Min). Wer aktiv arbeitet, bleibt beliebig lange eingeloggt; der Logout kommt erst nach 27–30 Min echter Inaktivität.
+- Gegenprobe: >30 Min aktiv weiterklicken (mind. alle paar Minuten ein Request) → KEIN Logout mitten in der Arbeit.
 - Nach Re-Login wird `next` korrekt aufgelöst.
 
 **DSGVO/Security-Note:**
 - Setting `SESSION_COOKIE_AGE=1800` in `src/anlaufstelle/settings/base.py`.
-- `SESSION_SAVE_EVERY_REQUEST=False` reduziert DB-Write-Amplifikation, lässt Inaktivitäts-Timeout aber wirken (Refs #733).
+- `SESSION_SAVE_EVERY_REQUEST=False` reduziert DB-Write-Amplifikation (Refs #733); das Inaktivitäts-Fenster liefert NICHT dieses Flag, sondern allein die `SessionIdleRefreshMiddleware` (#1858).
+- Hintergrund-Sync zählt nicht als Aktivität: Offline-Replays (`X-Offline-Replay`) und die Sync-API (`/api/v1/offline/…`) erneuern das Fenster nicht.
 - Login speichert ggf. `session.set_expiry(facility.settings.session_timeout_minutes * 60)` (override).
 
 **Status:** ☐ Offen

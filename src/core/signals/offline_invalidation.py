@@ -54,8 +54,10 @@ logger = logging.getLogger(__name__)
 # ist das O(alle aktiven Sessions) je Revocation (DoS-Flaeche, wenn ein
 # Angreifer viele anonyme Sessions erzeugt). Der Default liegt weit ueber dem
 # realistischen Bestand (Pilot < 30 User); wird er ueberschritten, wird das
-# laut geloggt (Salt-Rotation entwertet den Offline-Schluessel ohnehin global,
-# der ungeflushte Rest ist durch die Session-TTL begrenzt).
+# laut geloggt (Salt-Rotation entwertet den Offline-Schluessel ohnehin global;
+# der ungeflushte Rest laeuft nur noch bei Inaktivitaet ab — aktiv genutzte
+# Sessions erneuern sich seit #1858, Restrisiko siehe
+# docs/security-notes.md und #1868).
 _SESSION_SCAN_CAP_DEFAULT = 10000
 _SESSION_SCAN_CHUNK = 2000
 
@@ -134,8 +136,10 @@ def _flush_user_sessions(user) -> None:
     Spalten (``.only``), gestreamt (``.iterator``) statt materialisiert, und
     hart gedeckelt (``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``). Wird der Deckel
     erreicht, wird laut geloggt und abgebrochen; die bereits gerotierte Salt
-    entwertet den Offline-Schlüssel global, ein etwaiger ungeflushter
-    Session-Rest ist durch die Session-TTL begrenzt.
+    entwertet den Offline-Schlüssel global. Ein etwaiger ungeflushter
+    Session-Rest läuft seit #1858 nur noch bei Inaktivität ab — aktiv
+    genutzte Sessions erneuern sich (Restrisiko: docs/security-notes.md,
+    Evaluation #1868).
     """
     user_id = str(user.pk)
     cap = getattr(settings, "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", _SESSION_SCAN_CAP_DEFAULT)
@@ -162,7 +166,7 @@ def _flush_user_sessions(user) -> None:
     if capped:
         logger.error(
             "Offline-Invalidierung: Session-Scan-Obergrenze (%d) für User %s erreicht — "
-            "Rest nicht geflusht (Salt ist rotiert, Rest durch Session-TTL begrenzt).",
+            "Rest nicht geflusht (Salt ist rotiert; Rest läuft nur bei Inaktivität ab, Refs #1858/#1868).",
             cap,
             user.pk,
         )

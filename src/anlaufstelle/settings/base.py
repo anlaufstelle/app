@@ -132,6 +132,11 @@ MIDDLEWARE = [
     # bereits explizit gesetzte Cache-Control-Header (z.B. Offline-CSRF-Endpoint)
     # unangetastet.
     "core.middleware.no_store_cache.NoStoreCacheMiddleware",
+    # Refs #1858: Erneuert das Session-Fenster bei authentifizierter Aktivitaet
+    # (Inaktivitaets- statt Absolut-Timeout), gedrosselt auf einen Write je
+    # Bruchteil der Laufzeit. Nach AuthenticationMiddleware (braucht
+    # request.user); den Save uebernimmt SessionMiddleware ausgangsseitig.
+    "core.middleware.session_idle.SessionIdleRefreshMiddleware",
     "django_otp.middleware.OTPMiddleware",
     "core.middleware.htmx_session.HtmxSessionMiddleware",
     "core.middleware.facility_scope.FacilityScopeMiddleware",
@@ -331,8 +336,11 @@ MAINTENANCE_RETRY_AFTER = int(os.environ.get("MAINTENANCE_RETRY_AFTER", "600"))
 SESSION_COOKIE_AGE = 1800  # 30 Minuten
 # False reduziert DB-Write-Amplifikation bei HTMX-Microrequests
 # (Polling, Autocomplete) — Session wird nur bei tatsaechlichen
-# Aenderungen geschrieben. Inaktivitaets-Timeout bleibt erhalten:
-# der Cookie laeuft 30 Min nach der letzten Modifikation ab. Refs #733.
+# Aenderungen geschrieben. Das Inaktivitaets-Fenster liefert NICHT dieses
+# Flag: ohne weitere Session-Writes wirkte der Timeout absolut ab Login
+# (Refs #1858). SessionIdleRefreshMiddleware erneuert das Fenster bei
+# authentifizierter Aktivitaet, gedrosselt auf einen Write je
+# RENEWAL_FRACTION-Anteil der Laufzeit. Refs #733.
 SESSION_SAVE_EVERY_REQUEST = False
 
 # R18 (Refs #1476/#1666): Obergrenze fuer den Session-Scan der Offline-Revocation

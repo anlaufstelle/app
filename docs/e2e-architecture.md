@@ -85,7 +85,7 @@ base.py → dev.py → e2e.py
 | `DEBUG` || `True` | geerbt | Dev-Verhalten |
 | `PASSWORD_HASHERS` | PBKDF2 (Default) | geerbt | geerbt | **Nicht** MD5 wie in test.py |
 | `RATELIMIT_ENABLE` | `True` | geerbt | `False` | E2E macht viele Logins |
-| `SESSION_SAVE_EVERY_REQUEST` | `True` | geerbt | `False` | Reduziert DB-Writes |
+| `SESSION_SAVE_EVERY_REQUEST` | `False` | geerbt | `False` (redundant) | Reduziert DB-Writes; Inaktivitäts-Fenster liefert die `SessionIdleRefreshMiddleware` (#1858) |
 
 **Warum nicht `test.py`?**
 `test.py` nutzt `MD5PasswordHasher` als primären Hasher fuer schnelle Unit-Tests. Django rehashed Passwoerter bei jedem Login automatisch auf den primären Hasher. Wenn der E2E-Server mit test-Settings läuft, werden alle Seed-Passwoerter auf MD5 umgeschrieben — danach funktioniert der Login im Dev-Server (PBKDF2) nicht mehr.

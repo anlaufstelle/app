@@ -1814,6 +1814,26 @@ Zwei Sicherheitsflächen kommen dazu:
 
 ---
 
+## Session-Timeout: Inaktivitäts-Fenster statt Absolut-Limit (Issue #1858)
+
+**Verhaltenswechsel (2026-08):** Bis #1858 endete jede Sitzung — unbeabsichtigt, aber faktisch — **absolut** `session_timeout_minutes` nach dem Login: mit `SESSION_SAVE_EVERY_REQUEST = False` (Refs #733) schrieb im Request-Pfad nichts die Session, Django verlängert das Fenster aber nur bei Session-Writes. `SessionIdleRefreshMiddleware` ([`src/core/middleware/session_idle.py`](../src/core/middleware/session_idle.py)) liefert seither das dokumentierte **Inaktivitäts**-Fenster: authentifizierte Aktivität stempelt einen Erneuerungs-Zeitstempel, gedrosselt auf höchstens einen Session-Write je 10 % der konfigurierten Laufzeit (kein Rückfall in die #733-Write-Amplifikation). Abgemeldet wird nach 90–100 % der konfigurierten Inaktivitätszeit.
+
+**Nicht als Aktivität zählen:** Offline-Queue-Replays (`X-Offline-Replay`) und die gesamte Offline-Sync-API (`/api/v1/offline/…` — Widerrufsliste, CSRF-Refresh, Bundle-Revalidierung). Die Sync-Sequenz feuert beim `online`-Event ohne Nutzerinteraktion; ohne den Ausschluss hielte ein Gerät mit flappender Verbindung seine Sitzung unbegrenzt offen.
+
+**Bewusst eingegangene Restrisiken** (Evaluation: #1868):
+
+- **Kein absolutes Sitzungs-Maximum mehr.** Der frühere 30-Minuten-Deckel war nirgends zugesichert, wirkte aber als hartes Cap für entwendete Cookies; die Session-Hijack-Bewertung im [Threat-Model](threat-model.md) stützte sich implizit darauf.
+- **Pre-MFA-Sessions** (Passwort passiert, `mfa_verified=False`) werden mitverlängert — ein Gate auf das Flag ist nicht möglich, weil es für Nutzer ohne MFA-Gerät dauerhaft `False` bleibt. Delta gering (Passwort-Besitzer könnten sich jederzeit neu anmelden).
+- **Revocation-Scan-Rest:** der ungeflushte Rest jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` ist nicht mehr TTL-begrenzt, solange er aktiv genutzt wird (Kommentare in [`offline_invalidation.py`](../src/core/signals/offline_invalidation.py) nachgezogen; praktisch relevant erst bei >10 000 aktiven Sessions).
+- **Parallele Session-Writes:** bisher rein lesende Requests schreiben jetzt gelegentlich die Session (Last-Write-Wins-Semantik von `django_session`, winziges Race-Fenster bei parallelem Logout). Django-inhärent, durch die 10-%-Drosselung selten.
+
+### Verifikation
+
+- Erneuerung/Drosselung/Ausnahmen: [`test_middleware_session_idle.py`](../src/tests/test_middleware_session_idle.py) (Unit + Integration über den vollen Middleware-Stack).
+- Handtest: `ENT-AUTH-07` in [manual-test-matrix-b.md](testing/manual-test-matrix-b.md).
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

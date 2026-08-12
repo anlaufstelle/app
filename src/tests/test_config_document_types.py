@@ -797,6 +797,11 @@ class TestBlockFieldConditionCounters:
         client.force_login(admin_user)
         url = reverse("core:config_doctype_list")
 
+        # Warm-up (Refs #1858): der erste authentifizierte Request nach
+        # force_login stempelt einmalig das Idle-Fenster (Session-Write) —
+        # der Zaehlvergleich soll nur die Listen-Queries messen.
+        client.get(url)
+
         with CaptureQueriesContext(connection) as baseline_ctx:
             response = client.get(url)
         assert response.status_code == 200

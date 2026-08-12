@@ -1,11 +1,15 @@
 """Regressionstest fuer die TTL-Erneuerung der E2E-Storage-States.
 
-Hintergrund (v0.80.0-Schnitt): Die Server-Session laeuft absolut nach
+Hintergrund (v0.80.0-Schnitt): Die Server-Session lief damals absolut nach
 ``session_timeout_minutes`` (Seed: 30 min) ab — ein am Lauf-Anfang erzeugter
 Storage-State war auf langsamen Runnern (Stage-CI, 38 min Gesamtlauf) ab
 Minute 30 tot, und jeder Test mit geteiltem Storage-State landete auf
-``/login/``. ``_fresh_storage_state`` muss den State deshalb nach Ablauf der
-TTL per Neu-Login ersetzen, innerhalb der TTL aber cachen.
+``/login/``. Seit ``SessionIdleRefreshMiddleware`` (Refs #1858) erneuert
+Aktivitaet zwar das SERVER-Fenster — der Cookie im eingefrorenen Snapshot
+behaelt aber sein ``expires`` vom Login-Zeitpunkt, ein gecachter State ist
+also ~30 Minuten nach seiner ERZEUGUNG tot, unabhaengig von jeder Nutzung.
+``_fresh_storage_state`` muss den State deshalb nach Ablauf der TTL per
+Neu-Login ersetzen, innerhalb der TTL aber cachen.
 """
 
 import importlib.util
@@ -66,7 +70,9 @@ class TestFreshStorageState:
         assert calls == ["admin", "emma"]
 
     def test_ttl_leaves_headroom_before_server_expiry(self, e2e_conftest):
-        # Server-Fenster: 30 min absolut ab Login (Seed session_timeout_minutes).
-        # Die TTL muss deutlich darunter liegen, damit auch ein Test, der einen
-        # gerade-noch-gecachten State erhaelt, sicher im Fenster bleibt.
+        # Der Cookie im Snapshot laeuft ~30 min nach ERZEUGUNG ab (Seed
+        # session_timeout_minutes; das Server-Sliding aus #1858 erreicht den
+        # eingefrorenen Snapshot nicht). Die TTL muss deutlich darunter
+        # liegen, damit auch ein Test, der einen gerade-noch-gecachten State
+        # erhaelt, sicher im Fenster bleibt.
         assert e2e_conftest._STORAGE_STATE_TTL_S <= 15 * 60

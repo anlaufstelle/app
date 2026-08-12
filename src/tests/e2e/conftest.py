@@ -317,16 +317,19 @@ def _create_storage_state(launch_browser, base_url, username, password="anlaufst
     return storage
 
 
-# Die Server-Session laeuft ABSOLUT ab: der Login-View setzt
-# ``set_expiry(session_timeout_minutes * 60)`` (Seed: 30 Minuten), und ohne
-# ``SESSION_SAVE_EVERY_REQUEST`` verlaengert kein Request das Fenster. Ein am
-# Lauf-Anfang erzeugter Storage-State ist damit nach 30 Minuten Wall-Clock tot
-# — auf langsamen Runnern (Stage-CI: 38 min Gesamtlauf) landete ab Minute 30
-# jeder Test mit geteiltem Storage-State auf ``/login/`` (v0.80.0-Schnitt).
-# Deshalb sind die Storage-States function-scoped mit session-weitem Cache:
-# ein State wird wiederverwendet, bis er _STORAGE_STATE_TTL_S alt ist, und
-# dann per frischem Login ersetzt. TTL = halbes Session-Fenster, damit auch
-# der langsamste Einzeltest (Timeout 120 s) nie in den Ablauf laeuft.
+# Der Login-View setzt ``set_expiry(session_timeout_minutes * 60)`` (Seed:
+# 30 Minuten). Bis #1858 lief die Server-Session ABSOLUT ab — auf langsamen
+# Runnern (Stage-CI: 38 min Gesamtlauf) landete ab Minute 30 jeder Test mit
+# geteiltem Storage-State auf ``/login/`` (v0.80.0-Schnitt). Seit #1858
+# erneuert Aktivitaet das SERVER-Fenster, der Cookie im hier eingefrorenen
+# Snapshot behaelt aber sein ``expires`` vom Login-Zeitpunkt: ein gecachter
+# State ist ~30 Minuten nach seiner ERZEUGUNG tot, egal wie oft er benutzt
+# wurde (Set-Cookie-Refreshes erreichen nur den lebenden Kontext, nie den
+# Snapshot). Deshalb sind die Storage-States function-scoped mit
+# session-weitem Cache: ein State wird wiederverwendet, bis er
+# _STORAGE_STATE_TTL_S alt ist, und dann per frischem Login ersetzt.
+# TTL = halbes Session-Fenster, damit auch der langsamste Einzeltest
+# (Timeout 120 s) nie in den Ablauf laeuft.
 _STORAGE_STATE_TTL_S = 15 * 60
 
 
