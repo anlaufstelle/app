@@ -46,11 +46,13 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import DocumentType, Facility, FieldTemplate
+from core.models.report_key import EXCLUDED
 from core.reporting.registry import (
     describe_field_bindings,
     describe_type_bindings,
     feld_bindungen,
     get_backends,
+    get_report_key_vocabulary,
     typ_bindungen,
 )
 
@@ -86,13 +88,22 @@ def _backend_catalog() -> list[dict[str, Any]]:
 
 
 def _document_type_entries(facility: Facility) -> dict[str, list[dict[str, Any]]]:
-    """Dokumentationstypen der Einrichtung, gebunden/ungebunden.
+    """Dokumentationstypen der Einrichtung, nach den vier Zuständen sortiert.
 
     NUR ``entity_type=event`` (Plan §3, konsistent mit der Konfig-UI aus E2):
     an Personen-/Fall-Typen ist die Berichtsfrage gegenstandslos.
+
+    **Vier Buckets, nicht zwei** (Konzept #1847 §2, Disclosure-Review-Befund):
+    „erscheint in keinem Bericht" ist kein einheitlicher Zustand. Ein Typ mit
+    dem Sentinel ``excluded`` ist eine vollständige Aussage und **kein Mangel**;
+    landete er mit den echten Lücken in einem Topf, warnte der Command bei jeder
+    default-geseedeten Einrichtung dauerhaft — dieselbe Vermengung, die #1819
+    für den Vollständigkeitshinweis beseitigt hat. Ein gesetzter, aber
+    registry-weit unbekannter Schlüssel ist wiederum ein **anderer** Befund als
+    ein leerer (Entscheid E-H): Schlüssel korrigieren statt einen setzen.
     """
-    bound: list[dict[str, Any]] = []
-    unbound: list[dict[str, Any]] = []
+    bekannt = set(get_report_key_vocabulary())
+    buckets: dict[str, list[dict[str, Any]]] = {"bound": [], "excluded": [], "unknown": [], "unbound": []}
     doc_types = (
         DocumentType.objects.for_facility(facility)
         .filter(entity_type=DocumentType.EntityType.EVENT)
@@ -108,8 +119,20 @@ def _document_type_entries(facility: Facility) -> dict[str, list[dict[str, Any]]
             "report_key": doc_type.report_key or None,
             "appears_in": appears_in,
         }
-        (bound if appears_in else unbound).append(entry)
-    return {"bound": bound, "unbound": unbound}
+        buckets[_zustand(doc_type, appears_in, bekannt)].append(entry)
+    return buckets
+
+
+def _zustand(doc_type: DocumentType, appears_in: list[str], bekannt: set[str]) -> str:
+    """Der Zustand eines Typs — dieselbe Vierteilung wie im Bericht."""
+    if appears_in:
+        return "bound"
+    key = doc_type.report_key or ""
+    if key == EXCLUDED:
+        return "excluded"
+    if key and key not in bekannt:
+        return "unknown"
+    return "unbound"
 
 
 def _field_template_entries(facility: Facility) -> dict[str, list[dict[str, Any]]]:
@@ -156,11 +179,17 @@ def _render_text(data: dict[str, Any]) -> str:
     doc_types = data["document_types"]
     lines.append("")
     lines.append(
-        f"Dokumentationstypen (entity_type=event) — {len(doc_types['bound'])} gebunden, "
-        f"{len(doc_types['unbound'])} ungebunden:"
+        f"Dokumentationstypen (entity_type=event) — {len(doc_types['bound'])} zugeordnet, "
+        f"{len(doc_types['excluded'])} ausdrücklich ausgeschlossen, "
+        f"{len(doc_types['unknown'])} mit unbekanntem Schlüssel, "
+        f"{len(doc_types['unbound'])} ohne Zuordnung:"
     )
     for entry in doc_types["bound"]:
         lines.append(f"  + {entry['name']} (slug={entry['slug']}) -> {' · '.join(entry['appears_in'])}")
+    for entry in doc_types["excluded"]:
+        lines.append(f"  ° {entry['name']} (slug={entry['slug']}) -> ausdrücklich in keinem Bericht")
+    for entry in doc_types["unknown"]:
+        lines.append(f"  ? {entry['name']} (slug={entry['slug']}) -> unbekannter Schlüssel {entry['report_key']!r}")
     for entry in doc_types["unbound"]:
         lines.append(f"  - {entry['name']} (slug={entry['slug']})")
 
@@ -235,16 +264,22 @@ class Command(BaseCommand):
         # ohnehin maschinenlesbar in den Listen.
         if not is_json:
             ohne_zuordnung = len(data["document_types"]["unbound"])
-            if ohne_zuordnung:
+            unbekannt = len(data["document_types"]["unknown"])
+            if ohne_zuordnung or unbekannt:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"{ohne_zuordnung} Dokumentationstyp(en) ohne Berichtszuordnung — sie erscheinen in "
-                        "keinem Bericht und im Vollständigkeitshinweis, sofern kein Berichtsschlüssel "
-                        "gesetzt ist (ausdrücklich ausgeschlossene Typen sind kein Mangel)."
+                        f"{ohne_zuordnung} Dokumentationstyp(en) ohne Berichtszuordnung, "
+                        f"{unbekannt} mit unbekanntem Berichtsschlüssel — beide erscheinen im "
+                        "Vollständigkeitshinweis der Berichte. Ausdrücklich ausgeschlossene Typen "
+                        "sind KEIN Mangel und zählen hier nicht mit."
                     )
                 )
             else:
-                self.stdout.write(self.style.SUCCESS("Jeder Dokumentationstyp trägt eine Berichtszuordnung."))
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        "Jeder Dokumentationstyp trägt eine Aussage — zugeordnet oder ausdrücklich ausgeschlossen."
+                    )
+                )
 
     def _resolve_facility(self, raw: str) -> Facility:
         """Facility über UUID-Parse-Versuch, sonst Namens-Lookup (Muster ``export_facility``).

@@ -107,6 +107,27 @@ class TestDocumentTypeInventory:
         unbound_names = {e["name"] for e in data["document_types"]["unbound"]}
         assert "Eigene Notiz" in unbound_names
 
+    def test_ausdruecklich_ausgeschlossener_typ_ist_kein_mangel(self, facility):
+        """Vier Zustände statt zwei (Konzept #1847 §2, Disclosure-Review).
+
+        Landete der Sentinel bei den echten Lücken, warnte der Command bei jeder
+        default-geseedeten Einrichtung dauerhaft — dieselbe Vermengung, die
+        #1819 für den Vollständigkeitshinweis beseitigt hat.
+        """
+        DocumentType.objects.create(facility=facility, name="Hausnotiz", report_key="excluded")
+        data = json.loads(_run("--facility", str(facility.pk), "--format", "json"))
+
+        assert "Hausnotiz" in {e["name"] for e in data["document_types"]["excluded"]}
+        assert "Hausnotiz" not in {e["name"] for e in data["document_types"]["unbound"]}
+
+    def test_unbekannter_schluessel_bekommt_einen_eigenen_bucket(self, facility):
+        """Entscheid E-H: „ich habe zugeordnet, es passiert nur nichts"."""
+        DocumentType.objects.create(facility=facility, name="Fremdpaket-Typ", report_key="fantasie")
+        data = json.loads(_run("--facility", str(facility.pk), "--format", "json"))
+
+        assert "Fremdpaket-Typ" in {e["name"] for e in data["document_types"]["unknown"]}
+        assert "Fremdpaket-Typ" not in {e["name"] for e in data["document_types"]["unbound"]}
+
     def test_paket_slug_allein_bindet_nicht_mehr(self, facility):
         """Entscheid E-E (Refs #1849): ohne Berichtsschlüssel keine Zuordnung —
         auch wenn der Slug einer der Paket-Slugs ist."""
@@ -173,6 +194,18 @@ class TestOutputHandling:
         DocumentType.objects.create(facility=facility, name="Ohne Zuordnung")
         out = _run("--facility", str(facility.pk))
         assert "ohne Berichtszuordnung" in out
+
+    def test_success_zweig_ist_erreichbar(self, facility):
+        """Eine Einrichtung, deren Typen alle eine Aussage tragen, meldet Erfolg —
+        auch wenn einige ausdrücklich in keinen Bericht gehören.
+        """
+        DocumentType.objects.create(facility=facility, name="Kontaktdoku", report_key="contact")
+        DocumentType.objects.create(facility=facility, name="Hausnotiz", report_key="excluded")
+
+        out = _run("--facility", str(facility.pk))
+
+        assert "trägt eine Aussage" in out
+        assert "ohne Berichtszuordnung" not in out
 
     def test_json_is_stable_and_ensure_ascii_false(self, facility):
         DocumentType.objects.create(facility=facility, name="Ünïcödé-Typ")
