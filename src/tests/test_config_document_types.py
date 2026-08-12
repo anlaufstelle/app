@@ -443,10 +443,15 @@ class TestEntityScopedFieldVisibility:
 
     def test_scope_attributes_come_from_the_form_constant(self, client, admin_user):
         """EINE Wahrheitsquelle: die Feldliste steht im Formular, nicht im JS/Template."""
-        assert DocumentTypeForm.EVENT_ONLY_FIELDS == ("system_type", "min_contact_stage", "retention_days")
+        assert DocumentTypeForm.EVENT_ONLY_FIELDS == (
+            "system_type",
+            "report_key",
+            "min_contact_stage",
+            "retention_days",
+        )
         client.force_login(admin_user)
         content = client.get(reverse("core:config_doctype_create")).content.decode()
-        assert 'data-entity-scoped-fields="system_type min_contact_stage retention_days"' in content
+        assert 'data-entity-scoped-fields="system_type report_key min_contact_stage retention_days"' in content
         assert 'data-entity-scope-value="event"' in content
 
     def test_scoped_fields_stay_real_inputs(self, client, admin_user):
@@ -476,7 +481,7 @@ class TestEntityScopedFieldVisibility:
         client.force_login(admin_user)
         content = client.get(reverse("core:config_doctype_update", args=[doc_type.pk])).content.decode()
         assert 'x-data="documentTypeEntityFields"' in content
-        assert 'data-entity-scoped-fields="system_type min_contact_stage retention_days"' in content
+        assert 'data-entity-scoped-fields="system_type report_key min_contact_stage retention_days"' in content
 
     def test_hiding_never_drops_a_value_from_the_post(self, client, admin_user):
         """Regressionsschutz POST-Semantik: ``sensitivity`` faellt nie auf den Modell-Default.
@@ -865,8 +870,8 @@ class TestReportBindingsDisplay:
         body = response.content.decode()
         assert 'data-testid="doctype-report-bindings-form"' in body
         assert "Beispiel-Sachbericht (Spritzentausch)" in body
-        # E3 fügt hier später das report_key-Feld ein — der Block muss daher
-        # OBERHALB der ersten Formularfeld-Eingabe stehen.
+        # Die Auskunft steht OBERHALB der Formularfelder — sie zeigt den
+        # Ist-Stand, geändert wird über das ``report_key``-Feld (E3, #1849).
         assert body.index('data-testid="doctype-report-bindings-form"') < body.index('id="id_name"')
 
     def test_create_form_has_no_binding_block(self, client, admin_user):

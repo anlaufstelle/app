@@ -10,16 +10,19 @@ UI-Validierung (Widget-CSS, freundliche Unique-Fehler, Immutabilitäten).
 from __future__ import annotations
 
 import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
+from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, slug_base
+from core.reporting.registry import get_field_key_vocabulary, get_report_key_vocabulary
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
@@ -62,7 +65,102 @@ def validate_slugifiable_name(name: str) -> str:
     return name
 
 
-class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
+class ReportKeyFormMixin:
+    """Gemeinsame Formularmechanik des ``report_key`` (E3, Refs #1849).
+
+    Beide Traeger (Dokumentationstyp und Feldvorlage) bekommen dieselbe Auswahl
+    und dieselbe Sperrlogik — sie unterscheiden sich nur im **Vokabular**
+    (Typ- bzw. Feld-Berichtsschluessel sind getrennte Werteraeume, Konzept
+    #1847 §3.1).
+
+    Drei Entscheidungen, die hier zusammenkommen:
+
+    * **Der Werteraum kommt aus der Registry**, nicht aus dem Modell. Das
+      Modellfeld traegt bewusst kein ``choices`` (sonst waere jeder Fremdwert im
+      ``full_clean()`` hart); die Auswahl entsteht erst hier.
+    * **Sperre nur bei gesetztem Wert** (Entscheid E-K) — nicht pauschal bei
+      jeder Bearbeitung wie bei ``system_type``. Das Nachtragen ist der
+      Reparaturpfad fuer die stille Nicht-Zuordnung und muss offen bleiben.
+    * **Toleranz-Option** fuer einen Bestandswert, den kein Backend (mehr)
+      kennt. Ohne sie waere die Zeile **unbearbeitbar**: ein ``disabled``-Feld
+      wird weiterhin gegen die Optionsliste validiert
+      (``ChoiceField.validate``), und ein unbekannter Wert schluege als
+      „Ungueltige Auswahl" auf einem Feld auf, das die Nutzerin gar nicht
+      aendern kann. Genau diese Falle war bisher nirgends abgesichert.
+    """
+
+    if TYPE_CHECKING:
+        # Kommen von der ModelForm, neben der das Mixin steht — nur fuer mypy.
+        fields: dict[str, forms.Field]
+        instance: Any
+        cleaned_data: dict[str, Any]
+
+        def apply_tailwind_classes(self) -> None: ...
+
+    #: Vorbelegung beim Anlegen: ``system_type`` → ``report_key`` (leer = keine).
+    REPORT_KEY_DEFAULTS: dict[str, str] = {}
+
+    def _append_help_text(self, field_name: str, hint) -> None:
+        """Haengt ``hint`` an den (Modell-)``help_text`` des Feldes an."""
+        existing = self.fields[field_name].help_text
+        self.fields[field_name].help_text = f"{existing} {hint}".strip() if existing else hint
+
+    def _setup_report_key(self, vokabular: dict[str, str]) -> None:
+        """Ersetzt das generierte Textfeld durch die Registry-Auswahl."""
+        bestand = self.fields["report_key"]
+        auswahl = forms.ChoiceField(
+            required=False,
+            label=bestand.label,
+            # Label und Hilfetext kommen aus dem Modellfeld — sie stehen sonst
+            # ein zweites Mal im Uebersetzungskatalog und driften.
+            help_text=bestand.help_text,
+            choices=self._report_key_choices(vokabular),
+        )
+        gesetzt = bool(self.instance.report_key)
+        bearbeitung = not self.instance._state.adding
+        if bearbeitung and gesetzt:
+            auswahl.disabled = True
+        self.fields["report_key"] = auswahl
+        if bearbeitung and not gesetzt:
+            # Nur im Nachtrag-Fall: beim Anlegen gibt es noch keine Berichte,
+            # und bei gesperrtem Feld waere der Hinweis gegenstandslos.
+            self._append_help_text(
+                "report_key",
+                _("Nachträglich gesetzt wirkt der Schlüssel auf künftig erzeugte Berichte über alle Zeiträume."),
+            )
+        # Der Feldtausch passiert NACH ``TailwindFormMixin.__init__`` — das neue
+        # Widget haette sonst keine Eingabe-Klasse. ``setdefault`` macht den
+        # zweiten Lauf gefahrlos.
+        self.apply_tailwind_classes()
+
+    def _report_key_choices(self, vokabular: dict[str, str]) -> list[tuple[str, Any]]:
+        """Leer-Option, Sentinel, Registry-Vokabular — plus Toleranz-Option."""
+        auswahl: list[tuple[str, Any]] = [
+            ("", _("— Erscheint in keinem Bericht —")),
+            (EXCLUDED, _("Gehört ausdrücklich in keinen Bericht")),
+            *vokabular.items(),
+        ]
+        aktuell = self.instance.report_key
+        if aktuell and aktuell not in {key for key, _label in auswahl}:
+            auswahl.append(
+                (
+                    aktuell,
+                    format_lazy(_("{key} — kein Backend kennt diesen Schlüssel"), key=aktuell),
+                )
+            )
+        return auswahl
+
+    def clean_report_key(self) -> str | None:
+        """Leere Auswahl als ``NULL`` speichern, nicht als Leerstring.
+
+        Beides gilt ueberall als „keine Aussage getroffen" (Modell-Guard,
+        Backfill, Unmapped-Filter) — aber zwei Schreibweisen fuer denselben
+        Zustand im Bestand sind eine Fehlerquelle ohne Gegenwert.
+        """
+        return self.cleaned_data.get("report_key") or None
+
+
+class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
     """Anlegen/Bearbeiten eines Dokumentationstyps.
 
     * ``facility`` kommt aus dem Request-Scope (kein Formularfeld) und wird für
@@ -101,7 +199,21 @@ class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
     #: Paketschema nur bei ``entity_type=event`` zulässig (``clean()``).
     #: Rein visuell — an der serverseitigen Validierung/Semantik ändert das
     #: Ausblenden nichts, die Werte werden unverändert mitgepostet.
-    EVENT_ONLY_FIELDS = ("system_type", "min_contact_stage", "retention_days")
+    #: ``report_key`` (E3, Refs #1849) gehört ebenfalls hierher: alle
+    #: Berichts-Backends zählen ``Event``-Zeilen, an einem Personen-/Fall-Typ ist
+    #: die Berichtsfrage gegenstandslos.
+    EVENT_ONLY_FIELDS = ("system_type", "report_key", "min_contact_stage", "retention_days")
+
+    #: Vorbelegung beim Anlegen (Entscheid E-D/E-I, Konzept #1847 §E3.5).
+    #: Ohne sie verlören neu angelegte ``crisis``-Typen still die Parität zum
+    #: Bestand (den sichert nur der Backfill), und neue ``ban``-Typen erzeugten
+    #: den Dauerhinweis aus #1819 erneut. Beides bleibt **änderbar** — die
+    #: Vorbelegung ist ein Vorschlag im Browser, kein serverseitiges Nachfüllen
+    #: in ``clean()``: das überschriebe die ausdrückliche Wahl der Nutzerin.
+    REPORT_KEY_DEFAULTS = {
+        DocumentType.SystemType.CRISIS.value: "crisis",
+        DocumentType.SystemType.BAN.value: EXCLUDED,
+    }
 
     class Meta:
         model = DocumentType
@@ -117,6 +229,7 @@ class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
             "entity_type",
             "sensitivity",
             "system_type",
+            "report_key",
             "min_contact_stage",
             "retention_days",
             "description",
@@ -147,6 +260,10 @@ class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
         if not self.instance._state.adding:
             self.fields["system_type"].disabled = True
             self.fields["entity_type"].disabled = True
+        # ``report_key`` folgt bewusst NICHT dem Pauschalblock darüber: gesperrt
+        # wird nur ein bereits gesetzter Wert (Entscheid E-K, Konzept #1847
+        # §2.1). Das Vokabular ist das der **Typ**-Ebene.
+        self._setup_report_key(get_report_key_vocabulary())
         # Final-Review H (Refs #1058): beide Felder werden ausschliesslich im
         # Ereignis-Pfad ausgewertet (``enforce_document_type_retention`` zaehlt
         # ``Event``; ``min_contact_stage`` greift nur in der Ereignis-Anlage).
@@ -171,11 +288,6 @@ class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
             _("Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."),
         )
 
-    def _append_help_text(self, field_name: str, hint) -> None:
-        """Haengt ``hint`` an den (Modell-)``help_text`` des Feldes an."""
-        existing = self.fields[field_name].help_text
-        self.fields[field_name].help_text = f"{existing} {hint}".strip() if existing else hint
-
     # -- Template-Brücke für die Alpine-Komponente (Refs #1757) --------------
     #
     # Beide Werte kommen aus dem Formular, damit die Zuordnung
@@ -193,6 +305,19 @@ class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
     def event_entity_type_value(self) -> str:
         """Entitätstyp-Wert, bei dem diese Felder sichtbar bleiben."""
         return str(DocumentType.EntityType.EVENT)
+
+    @property
+    def report_key_defaults_attr(self) -> str:
+        """Vorbelegungen für ``data-report-key-defaults`` (``systemtyp:schlüssel``).
+
+        Dasselbe Muster wie :attr:`event_only_fields_attr` (Refs #1757): die
+        Zuordnung steht EINMAL im Formular, das Template reicht sie als
+        ``data``-Attribut durch, die Alpine-Komponente kennt weder Systemtypen
+        noch Berichtsschlüssel. Ohne JavaScript greift die Vorbelegung nicht —
+        das Feld bleibt dann leer, was der sichere Zustand ist (keine
+        Berichtszuordnung statt einer ungefragt gesetzten).
+        """
+        return " ".join(f"{system_type}:{report_key}" for system_type, report_key in self.REPORT_KEY_DEFAULTS.items())
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]
@@ -254,7 +379,7 @@ class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
         return cleaned
 
 
-class FieldTemplateForm(TailwindFormMixin, forms.ModelForm):
+class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
     """Anlegen/Bearbeiten einer Feldvorlage.
 
     * ``facility`` kommt aus dem Request-Scope (kein Formularfeld) — der Service
@@ -266,6 +391,11 @@ class FieldTemplateForm(TailwindFormMixin, forms.ModelForm):
     * Die inhaltlichen Regeln (HIGH-Sensibilität ⇒ verschlüsselt,
       ``default_value``-Registry-Validierung, Slug-Zeichensatz) liegen im Model
       (``FieldTemplate.clean``) und laufen über den ModelForm-``_post_clean``.
+    * ``report_key`` (E3, Refs #1849) steht an der Stelle des entfernten
+      ``statistics_category`` — dieselbe Position im Formular, aber mit
+      Wirkung: der Schlüssel entscheidet, welche Feldvorlage die Minutensummen,
+      den Spritzensaldo bzw. die Options-Verteilung speist. Das Vokabular ist
+      das der **Feld**-Ebene (eigener Werteraum, Konzept #1847 §3.1).
     """
 
     class Meta:
@@ -278,6 +408,7 @@ class FieldTemplateForm(TailwindFormMixin, forms.ModelForm):
             "sensitivity",
             "options_json",
             "default_value",
+            "report_key",
             "help_text",
             "is_active",
         ]
@@ -293,6 +424,7 @@ class FieldTemplateForm(TailwindFormMixin, forms.ModelForm):
     def __init__(self, *args, facility=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
+        self._setup_report_key(get_field_key_vocabulary())
 
     def clean_name(self):
         name = self.cleaned_data["name"]

@@ -60,6 +60,10 @@ document.addEventListener("alpine:init", () => {
         select: null,
         scopeValue: "",
         wrappers: [],
+        systemTypeSelect: null,
+        reportKeySelect: null,
+        reportKeyDefaults: {},
+        reportKeyTouched: false,
         init() {
             const root = this.$el;
             this.select = root.querySelector("select[name='entity_type']");
@@ -70,6 +74,7 @@ document.addEventListener("alpine:init", () => {
                 .filter((el) => el !== null)
                 .map((el) => el.closest("div"))
                 .filter((el) => el !== null && el !== root);
+            this.initReportKeyDefaults(root);
             if (!this.select) {
                 // Bearbeiten-Formular ohne Select (theoretisch) oder fremdes
                 // Markup: nichts ausblenden — sichtbar ist der sichere Zustand.
@@ -77,6 +82,55 @@ document.addEventListener("alpine:init", () => {
             }
             this.select.addEventListener("change", () => this.applyScope());
             this.applyScope();
+        },
+        /**
+         * Vorbelegung des Berichtsschlüssels beim Anlegen (E3, Refs #1849).
+         *
+         * Auch hier kennt die Komponente WEDER Systemtypen NOCH Schlüssel: die
+         * Paare kommen als ``data-report-key-defaults`` vom Wurzelelement und
+         * stammen dort aus ``DocumentTypeForm.REPORT_KEY_DEFAULTS``.
+         *
+         *   data-report-key-defaults  "systemtyp:schlüssel systemtyp:schlüssel"
+         *
+         * Drei Grenzen, die den Vorschlag von einem Zwang unterscheiden
+         * (Entscheide E-D/E-I):
+         *
+         * 1. Sobald die Nutzerin den Schlüssel selbst angefasst hat, greift die
+         *    Vorbelegung nicht mehr — ihre Wahl gewinnt.
+         * 2. Ein bereits gesetzter Wert wird nie überschrieben (beim Bearbeiten
+         *    ist das Feld ohnehin gesperrt).
+         * 3. Serverseitig wird NICHTS nachgefüllt: ohne JavaScript bleibt das
+         *    Feld leer, und „leer" ist die sichere Richtung (keine
+         *    Berichtszuordnung statt einer ungefragt gesetzten).
+         */
+        initReportKeyDefaults(root) {
+            this.systemTypeSelect = root.querySelector("select[name='system_type']");
+            this.reportKeySelect = root.querySelector("select[name='report_key']");
+            if (!this.systemTypeSelect || !this.reportKeySelect || this.reportKeySelect.disabled) {
+                return;
+            }
+            (root.dataset.reportKeyDefaults || "")
+                .split(/\s+/)
+                .filter(Boolean)
+                .forEach((pair) => {
+                    const [systemType, reportKey] = pair.split(":");
+                    if (systemType && reportKey) {
+                        this.reportKeyDefaults[systemType] = reportKey;
+                    }
+                });
+            this.reportKeySelect.addEventListener("change", () => {
+                this.reportKeyTouched = true;
+            });
+            this.systemTypeSelect.addEventListener("change", () => this.applyReportKeyDefault());
+        },
+        applyReportKeyDefault() {
+            if (this.reportKeyTouched || this.reportKeySelect.value) {
+                return;
+            }
+            const vorschlag = this.reportKeyDefaults[this.systemTypeSelect.value];
+            if (vorschlag) {
+                this.reportKeySelect.value = vorschlag;
+            }
         },
         applyScope() {
             const inScope = this.select.value === this.scopeValue;

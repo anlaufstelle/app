@@ -778,6 +778,38 @@ class TestReportBindingsAndSlugVisibility:
         expect(bindings).to_be_visible(timeout=10000)
         expect(bindings).to_contain_text("Beratungsstunden")
 
+    def test_report_key_select_is_editable_until_it_carries_a_value(self, authenticated_page, base_url):
+        """E3 (Refs #1849): das ``report_key``-Select traegt die Registry-Optionen,
+        und NULL→gesetzt geht ueber die UI (Entscheid E-K).
+
+        Angelegt wird bewusst OHNE Berichtsschluessel (der Wegwerf-Typ traegt
+        ``system_type=note``, die Browser-Vorbelegung greift dort nicht) — erst
+        die Bearbeitung setzt ihn. Danach ist das Feld gesperrt: derselbe
+        Durchlauf zeigt beide Haelften der Regel.
+        """
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-RKEY"))
+        try:
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")
+            auswahl = page.locator("select#id_report_key")
+            expect(auswahl).to_be_visible(timeout=10000)
+            expect(auswahl).to_be_enabled()
+            # Sentinel + mindestens ein Registry-Schluessel stehen zur Wahl.
+            expect(auswahl.locator("option[value='excluded']")).to_have_count(1)
+            expect(auswahl.locator("option[value='counseling']")).to_have_count(1)
+
+            page.select_option("select#id_report_key", value="counseling")
+            page.locator(FORM_SUBMIT).click()
+            page.wait_for_url(re.compile(rf"/config/document-types/{pk}/$"))
+
+            # Gesetzt → gesperrt; die Registry-Auskunft nennt jetzt den Bericht.
+            bindings = page.locator('[data-testid="doctype-report-bindings"]')
+            expect(bindings).to_contain_text("Beispiel-Sachbericht", timeout=10000)
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")
+            expect(page.locator("select#id_report_key")).to_be_disabled()
+        finally:
+            _delete_doctype(page, base_url, pk)
+
     def test_doctype_detail_and_list_show_slug(self, authenticated_page, base_url):
         """Slug (E-F) sichtbar in Detail- UND Listenansicht, nicht editierbar."""
         page = authenticated_page

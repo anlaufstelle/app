@@ -14,8 +14,9 @@
         {% include "core/_form_errors.html" %}
 
         {% if is_edit and doc_type.entity_type == "event" %}
-        {# E2 (Refs #1848): informative Registry-Auskunft VOR den Formularfeldern — #}
-        {# E3 fügt hier später das editierbare report_key-Feld ein.                 #}
+        {# E2 (Refs #1848): informative Registry-Auskunft VOR den Formularfeldern. #}
+        {# Sie zeigt den IST-Stand; geändert wird die Zuordnung über das           #}
+        {# ``report_key``-Feld weiter unten (E3, Refs #1849).                      #}
         <div class="card p-4 bg-canvas" data-testid="doctype-report-bindings-form">
             <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
             <p class="text-[13px] text-ink">
@@ -42,11 +43,13 @@
         <div class="card p-5 space-y-4"
              x-data="documentTypeEntityFields"
              data-entity-scope-value="{{ form.event_entity_type_value }}"
-             data-entity-scoped-fields="{{ form.event_only_fields_attr }}">
+             data-entity-scoped-fields="{{ form.event_only_fields_attr }}"
+             data-report-key-defaults="{{ form.report_key_defaults_attr }}">
             {% include "components/_form_field.html" with field=form.name %}
             {% include "components/_form_field.html" with field=form.entity_type %}
             {% include "components/_form_field.html" with field=form.sensitivity %}
             {% include "components/_form_field.html" with field=form.system_type %}
+            {% include "components/_form_field.html" with field=form.report_key %}
             {% include "components/_form_field.html" with field=form.min_contact_stage %}
             {% include "components/_form_field.html" with field=form.retention_days %}
             {% include "components/_form_field.html" with field=form.description %}
