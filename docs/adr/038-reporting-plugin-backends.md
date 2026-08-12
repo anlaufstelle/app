@@ -65,6 +65,8 @@ Backfill [`0122`](../../src/core/migrations/0122_backfill_backend_data.py) hebt 
 
 ### 4. Mapping: `system_type` zuerst, `slug` als Zweitschlüssel, `category` nie
 
+> **Superseded am 2026-08-12 durch [ADR-042](042-report-key-berichtszuordnung.md)** (#1849, Konzept #1847). Die Berichtszuordnung läuft seither über die eigene Achse **`report_key`** an `DocumentType` **und** `FieldTemplate`; der Slug-Zweitschlüssel ist ersatzlos entfallen, `system_type` bindet nur noch die Verhaltens-Berichte (`ban-overview`). **Der Kern dieses Abschnitts bleibt in Kraft:** Berichtszahlen sind nicht per Klick verschiebbar — die Einrichtung wählt, **welchen Schlüssel** ein Typ trägt, nicht, **worauf ein Schlüssel abbildet**. Der Rest des Abschnitts steht als historischer Stand.
+
 Das Reporting-Mapping läuft über **`DocumentType.system_type`** — die stabile, nach Erstellung unveränderliche Systemkennung. **`DocumentType.category` wird fürs Reporting nie verwendet**: es ist laut Feld-`help_text` eine reine UI-Gruppierung, frei editierbar, und eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben. Das löst die in [ADR-034](034-config-ui-category-system-type.md) beschriebene Überlappung der beiden Klassifikationsfelder für den Reporting-Kontext auf.
 
 **`DocumentType.slug`** (seit M2, [ADR-037](037-konfigurationspakete-dynamische-felder.md)) ist der **dokumentierte Zweitschlüssel** und bleibt Folgearbeit: Er ist ebenfalls stabil und unveränderlich, deckt aber auch einrichtungseigene Typen ohne `system_type` ab — genau die, die heute als „ohne Zuordnung" im Vollständigkeitshinweis auftauchen. Der Integrationspunkt ist im Code an `CATEGORY_MAP` markiert (damals `backends/jugendamt.py`, heute [`backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py)). *Eingelöst am 2026-08-04 — siehe Update unten (#1741).*
@@ -215,7 +217,7 @@ Die Disclosure-Analyse #1742 hat mehrere Kanäle in der oben beschriebenen Suppr
 
 | Frage | Entscheid | Verworfene Alternative |
 |---|---|---|
-| Woher kommt das Mapping? | **Hart kodiert im Backend** (`SLUG_MAP` neben `CATEGORY_MAP`) | Config-UI/Einstellungsfeld — machte Berichtszahlen per Klick verschiebbar, dasselbe Argument, mit dem `category` fürs Reporting ausgeschlossen ist ([ADR-034](034-config-ui-category-system-type.md)). Bleibt als Ausbaupfad denkbar, nicht als Bestand |
+| Woher kommt das Mapping? | **Hart kodiert im Backend** (`SLUG_MAP` neben `CATEGORY_MAP`; seit [ADR-042](042-report-key-berichtszuordnung.md) nur noch `CATEGORY_MAP` — der Slug-Zweitschlüssel ist entfallen) | Config-UI/Einstellungsfeld — machte Berichtszahlen per Klick verschiebbar, dasselbe Argument, mit dem `category` fürs Reporting ausgeschlossen ist ([ADR-034](034-config-ui-category-system-type.md)). Bleibt als Ausbaupfad denkbar, nicht als Bestand |
 | Welche Slugs gelten? | **Die Paket-Slugs aus [`core/packages/default.yaml`](../../src/core/packages/default.yaml)** als globale Konvention | Ein eigenes, frei erfundenes Vokabular — es gäbe keinen Ort, an dem die Bedeutung eines Slugs steht, und keine Erwartung, der ein Paket folgen könnte |
 | Facility-Slug oder globaler Slug? | **Rein per Slug-String, facility-agnostisch** | Eine Herkunftsprüfung „stammt aus dem Paket" — es gibt am Datensatz keine Herkunftsangabe (der Loader schreibt keine), und ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` **ist** ein Beratungsgespräch |
 

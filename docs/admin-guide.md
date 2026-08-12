@@ -462,22 +462,26 @@ Die Sensibilitätsstufe steuert, welche Rollen auf Einträge dieses Typs zugreif
 
 Der Systemtyp verknüpft einen Dokumentationstyp mit interner Anwendungslogik. Er wird bei der Erstellung gesetzt und ist danach **nicht mehr änderbar**.
 
-> **Die neun Werte füllen drei verschiedene Rollen** — das ist die häufigste Verwechslung, dazu kommt eine Doppelrolle: **Zwei** Werte lösen Anwendungslogik aus (Hausverbot, Krisengespräch). **Sieben** Werte ordnen den Typ dem Beispiel-Sachbericht zu — **darunter Krisengespräch ein zweites Mal**: Krisengespräch trägt beide Rollen zugleich (Highlight in der Übergabe UND Berichtszuordnung), die übrigen **sechs** (Kontakt, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung) sind reine Zuordnungen ohne jede sonstige Wirkung. Der Systemtyp ist dabei der einzige **sichtbare, ausdrücklich wählbare** Weg, einen selbst angelegten Dokumentationstyp mit **frei gewähltem Namen** in diesen Bericht zu bekommen (Beispiel: eigener Typ „Sozialberatung" mit Systemtyp „Beratungsgespräch"). Daneben greift seit #1741 ein hartkodierter Slug-Zweitschlüssel: Ein Typ **ohne** Systemtyp, dessen aus dem Namen abgeleiteter Slug einer der sieben Paket-Slugs ist (z. B. `kontakt`, `beratungsgespraech`), wird ebenfalls zugeordnet — auch wenn er in der Konfigurations-UI entstanden ist. Welche Zuordnung tatsächlich greift, müssen Sie seither nicht mehr aus dem Slug erschließen: Detail- und Formularansicht des Dokumentationstyps zeigen unter „Erscheint in …", in welchem Bericht er landet (oder ausdrücklich „Erscheint in keinem Bericht."); Detail- und Listenansicht zeigen zusätzlich den Slug selbst. **Notiz** ist ein Ausschluss-Marker und wirkt exportseitig genauso wie *kein* Systemtyp — der Unterschied ist allein, dass ein einmal gesetztes „Notiz" dauerhaft festgeschrieben ist, während ein leerer Systemtyp später noch belegt werden darf.
+> **Geändert 2026-08-12 (#1849, [ADR-042](adr/042-report-key-berichtszuordnung.md)):** Die **Berichtszuordnung hat ein eigenes Feld** bekommen — den **Berichtsschlüssel** (siehe nächster Abschnitt). Der Systemtyp steuert nur noch Anwendungslogik. Wer bisher einen Typ über den Systemtyp in den Beispiel-Sachbericht gebracht hat, findet ihn dort unverändert: das Update hat allen Bestandstypen den passenden Berichtsschlüssel gegeben. **Der hartkodierte Slug-Zweitschlüssel ist entfallen** — ein Typ ohne Berichtsschlüssel erscheint in keinem Bericht, auch wenn sein Slug einer der Paket-Slugs ist.
 
-Aktuell hat der Systemtyp zwei Funktionen:
-
-**1. UI-Logik** (nur Hausverbot und Krisengespräch):
+Aktuell hat der Systemtyp **eine** Funktion: **UI-Logik** (nur Hausverbot und Krisengespräch):
 
 | Systemtyp | Auswirkung |
 |-----------|------------|
-| **Hausverbot** | Aktiviert Hausverbot-Banner auf der Personenseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe |
+| **Hausverbot** | Aktiviert Hausverbot-Banner auf der Personenseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe; speist die Beispiel-Hausverbots-Übersicht |
 | **Krisengespräch** | Wird als Highlight in der Übergabe angezeigt (letzte Krisen-Events) |
 
-**2. Beispiel-Sachbericht-Export** (Zuordnung zu Berichtskategorien):
+> **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Die übrigen sieben Werte (Kontakt, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung, Notiz) haben **keine** Anwendungslogik; sie waren bis zum Update ausschließlich Berichts-Zuordnungen und sind es seither nicht mehr. Ob ein Typ in einem Bericht landet, sagt Ihnen verlässlich nur die Auskunft „Erscheint in …" in Detail- und Formularansicht.
 
-Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein verbindlicher oder aktueller Behördennachweis.
+> **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu. Eine **Reduktion** auf Hausverbot/Krisengespräch ist beschlossen (#1847 Etappe E4, Umsetzung #1850); ihre Vorbedingung — ein eigenes Berichts-Feld — ist mit dem Berichtsschlüssel erfüllt. Bis die Reduktion umgesetzt ist, bleibt die Liste unverändert; die sieben verbleibenden Werte tragen aber keine Wirkung mehr.
 
-| Systemtyp | Export-Kategorie |
+#### Berichtsschlüssel
+
+Der **Berichtsschlüssel** (`report_key`) entscheidet, in welchem Bericht ein Dokumentationstyp erscheint — und in welcher Zeile. Er ist ein eigenes Auswahlfeld im Formular des Dokumentationstyps; **Feldvorlagen haben es ebenfalls** (dazu unten).
+
+Die Auswahl kommt aus den Berichten selbst: Was ein Bericht auswertet, deklariert er im Code, und genau diese Schlüssel stehen zur Wahl. Sie wählen also, **welchen Schlüssel** Ihr Typ trägt — nicht, worauf ein Schlüssel abbildet. Ein eigener Typ „Sozialberatung" mit dem Schlüssel „Beratungsgespräch" landet in derselben Berichtszeile wie „Schuldnerberatung" mit demselben Schlüssel.
+
+| Berichtsschlüssel | Zeile im Beispiel-Sachbericht |
 |-----------|-----------------|
 | **Kontakt** | Kontakte |
 | **Beratungsgespräch** | Beratung |
@@ -486,24 +490,30 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 | **Spritzentausch** | Versorgung |
 | **Begleitung** | Vermittlung |
 | **Vermittlung** | Vermittlung |
-| **Hausverbot** | *(wird ausgeschlossen)* |
-| **Notiz** | *(wird ausgeschlossen)* |
+| **Gehört ausdrücklich in keinen Bericht** | *(ausgeschlossen — und **kein** Mangel)* |
+| *(leer)* | *(erscheint in keinem Bericht — und wird als Lücke gemeldet)* |
 
-> **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Typen ohne Systemtyp haben keine spezielle interne Logik und funktionieren ganz normal für die Dokumentation — **vom Beispiel-Sachbericht-Export ausgeschlossen sind sie nicht automatisch**: Trifft der aus dem Namen abgeleitete Slug einen der sieben Paket-Slugs (Slug-Zweitschlüssel, siehe oben), landet der Typ trotzdem im Bericht. Verlässlich ist nur die Registry-Auskunft direkt am Typ („Erscheint in …" in Detail- und Formularansicht) — nicht die Anwesenheit eines Systemtyps allein.
->
-> Systemtypen wie `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Beispiel-Sachbericht-Export. **`note` gehört ausdrücklich *nicht* zu dieser Whitelist**: Ereignisse dieses Typs bleiben — wie `ban` und wie Typen ganz ohne Systemtyp — außen vor.
->
-> **Ereignisse ohne Berichtszuordnung erzeugen einen Vollständigkeitshinweis.** Der Bericht weist unter „Berichte" aus, wie viele Ereignisse er *nicht* zeigt. Darin zählen auch die bewusst ausgeschlossenen (`ban`, `note`) mit — eine Einrichtung mit vielen Hausverboten sieht diesen Hinweis also dauerhaft, ohne dass etwas falsch konfiguriert wäre. Die Trennung von „bewusst ausgeschlossen" und „nicht zugeordnet" ist als eigene Frage erfasst (#1748).
+Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein verbindlicher oder aktueller Behördennachweis.
 
-> **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen ohne echte Anwendungslogik** hinzu — eine zusätzliche Berichtskategorie wäre kein Grund, das Kern-Datenmodell zu erweitern; solche Zuordnungen laufen über das Berichts-Backend. Für Ihre Konfigurationsarbeit heißt das: Was hier steht, bleibt — **vorerst**. Eine Reduktion ist für eine spätere Etappe beschlossen (#1847 Etappe E4, Umsetzung #1850): `system_type` soll auf Hausverbot/Krisengespräch schrumpfen, sobald ein neues, eigenes Berichts-Feld die Zuordnung übernommen hat — aber ausdrücklich erst danach. Bis diese Vorarbeit abgeschlossen ist, bleibt die Liste unverändert: Die sieben Mapping-Werte (Krisengespräch in Doppelrolle, siehe oben) sind heute tragend, weil der Systemtyp der einzige sichtbare, ausdrücklich wählbare Weg ist, einen eigenen Dokumentationstyp mit frei gewähltem Namen in den Bericht zu bekommen; der hartkodierte Slug-Zweitschlüssel bleibt daneben bestehen.
+> **Leer und „ausdrücklich ausgeschlossen" sind zwei verschiedene Dinge.** Der Bericht weist unter „Berichte" aus, wie viele Ereignisse er *nicht* zeigt. Gezählt werden dort **nur** Typen, die gar keine Aussage treffen (Schlüssel leer) — ein Typ mit „Gehört ausdrücklich in keinen Bericht" ist eine vollständige Aussage und erscheint **nicht** im Hinweis (#1819). Bis zum Update zählten Hausverbote und Notizen mit; eine Einrichtung, die Hausverbote dokumentiert, sah den Hinweis dauerhaft, ohne dass etwas falsch konfiguriert war.
+>
+> Einen **dritten** Fall gibt es seither ebenfalls: Trägt ein Typ einen Schlüssel, den kein Bericht (mehr) kennt — etwa aus einem fremden Konfigurationspaket oder nach einem Tippfehler, meldet der Bericht das gesondert. „Ich habe zugeordnet, es passiert nur nichts" ist ein anderer Befund als „ich habe nichts gesagt".
+
+> **Nachtragen ja, ändern nein.** Ein leerer Berichtsschlüssel kann **jederzeit nachgetragen** werden — das ist der Reparaturweg, wenn ein Typ versehentlich in keinem Bericht auftauchte. Ein **gesetzter** Schlüssel ist danach fest (auch „Gehört ausdrücklich in keinen Bericht"): Berichte über vergangene Zeiträume sollen nicht rückwirkend andere Zahlen liefern. Das Formular weist beim Nachtragen darauf hin, dass der Schlüssel auf künftig erzeugte Berichte über **alle** Zeiträume wirkt.
+>
+> Beim **Anlegen** schlägt das Formular passende Werte vor: „Krisengespräch" als Systemtyp schlägt den Schlüssel „Krisengespräch" vor, „Hausverbot" schlägt „Gehört ausdrücklich in keinen Bericht" vor. Beides ist ein Vorschlag, kein Zwang — Systemtyp und Berichtsschlüssel dürfen bewusst auseinanderlaufen.
+
+**Berichtsschlüssel an Feldvorlagen.** Berichte, die **Feldwerte** auswerten (Minutensummen, Spritzensaldo, Verteilung der Auswahlfelder), brauchen zusätzlich zu wissen, **welches Feld** sie lesen sollen. Bis zum Update ging das nur über den Feld-Slug: Wer sein Zahlenfeld „Gesprächsdauer" statt „Dauer" nannte, bekam einen Bericht, der dauerhaft null Minuten auswies — ohne jede Rückmeldung. Seit dem Update trägt die Feldvorlage ihren eigenen Berichtsschlüssel (z. B. „Minuten"), und der Name ist frei wählbar. Das frühere Freitextfeld **„Statistik-Kategorie"** an der Feldvorlage ist im selben Zug entfallen: Es wurde von keiner Auswertung gelesen.
+
+> **Je Dokumentationstyp höchstens eine Feldvorlage je Berichtsschlüssel.** Zwei Felder mit dem Schlüssel „Minuten" am selben Typ hießen doppelt gezählte Minuten. Die Zuordnung wird deshalb abgewiesen; entsteht die Doppelung trotzdem (z. B. über ein Konfigurationspaket), zählt der Bericht **keines** der beiden Felder und weist das aus. Dieselbe Feldvorlage an **verschiedenen** Typen ist unproblematisch, ebenso zwei gleich benannte Felder mit **verschiedenen** Schlüsseln.
 
 #### Mindest-Kontaktstufe
 
 Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Mit Zusatzangaben", weil zusätzliche persönliche Angaben zur Person vorliegen müssen.
 
-> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Aufbewahrungsfrist (`retention_days`)** und **Systemtyp** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Für **Personen** greifen stattdessen die einrichtungsweiten Regeln aus den Einstellungen: die Papierkorb-Frist (`client_trash_days`) und die Anonymisierung, sobald die Ereignis-Retention den Bestand einer Person abgeräumt hat. **Fälle haben überhaupt keine eigene Aufbewahrungsfrist** — der Aufbewahrungslauf fasst sie nicht an; ihre Inhalte werden erst mit der Anonymisierung der zugehörigen Person redigiert ([ADR-039](adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` knüpft zwar an den Abschluss eines Falls an, löscht aber dessen Ereignisse, nicht den Fall.
+> **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Aufbewahrungsfrist (`retention_days`)**, **Systemtyp** und **Berichtsschlüssel** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Für **Personen** greifen stattdessen die einrichtungsweiten Regeln aus den Einstellungen: die Papierkorb-Frist (`client_trash_days`) und die Anonymisierung, sobald die Ereignis-Retention den Bestand einer Person abgeräumt hat. **Fälle haben überhaupt keine eigene Aufbewahrungsfrist** — der Aufbewahrungslauf fasst sie nicht an; ihre Inhalte werden erst mit der Anonymisierung der zugehörigen Person redigiert ([ADR-039](adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` knüpft zwar an den Abschluss eines Falls an, löscht aber dessen Ereignisse, nicht den Fall.
 >
-> Das Formular **blendet diese drei Felder aus**, sobald Sie als Entitätstyp **Person** oder **Fall** wählen (Refs #1757) — Sie füllen also keine Felder mehr aus, die nie greifen. Das Ausblenden ist rein optisch: bereits gesetzte Werte bleiben unverändert am Datensatz, und ein Feld mit Fehlermeldung bleibt sichtbar. Ohne JavaScript bleiben alle Felder sichtbar und tragen wie bisher den erklärenden Hilfetext.
+> Das Formular **blendet diese vier Felder aus**, sobald Sie als Entitätstyp **Person** oder **Fall** wählen (Refs #1757) — Sie füllen also keine Felder mehr aus, die nie greifen. Das Ausblenden ist rein optisch: bereits gesetzte Werte bleiben unverändert am Datensatz, und ein Feld mit Fehlermeldung bleibt sichtbar. Ohne JavaScript bleiben alle Felder sichtbar und tragen wie bisher den erklärenden Hilfetext.
 
 #### Feldebenen-Sensibilität (`FieldTemplate.sensitivity`)
 

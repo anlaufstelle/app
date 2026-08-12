@@ -73,6 +73,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-039](039-owner-generische-dateianhaenge.md) | Owner-generische Dateianhänge (Attachment an Ereignis, Person, Fall) | Accepted |
 | [ADR-040](040-documenttype-category-entfernt.md) | `DocumentType.category` wird entfernt (Natural Key `(facility, name)`) | Accepted |
 | [ADR-041](041-berichtigungsworkflow-intern.md) | Interner Art.-16-Berichtigungsworkflow (ergänzt ADR-013, kein Self-Service) | Accepted |
+| [ADR-042](042-report-key-berichtszuordnung.md) | `report_key` als eigene Achse der Berichtszuordnung (supersedes ADR-038 § 4) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 

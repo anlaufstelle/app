@@ -242,19 +242,23 @@ Drei Punkte, die leicht untergehen:
 
 #### Wenn dein Bericht Dokumentationstypen auf Kategorien abbildet
 
-Die Bindung wird **deklariert, nicht ausprogrammiert** (#1824): eine `TypBindung` je Bericht, aus der Auflösung, SQL-Filter, Verfügbarkeit und Schlüssel-Vokabular abgeleitet werden. Es gilt weiterhin: **zwei Schlüssel, in fester Reihenfolge, `category` nie** ([ADR-038](adr/038-reporting-plugin-backends.md), #1741).
+Die Bindung wird **deklariert, nicht ausprogrammiert** (#1824): eine `TypBindung` je Bericht, aus der Auflösung, SQL-Filter, Verfügbarkeit und Schlüssel-Vokabular abgeleitet werden. Seit #1849 gilt: **ein Schlüssel je Ebene** — `DocumentType.report_key` am Typ, `FieldTemplate.report_key` am Feld ([ADR-042](adr/042-report-key-berichtszuordnung.md)). Der frühere Slug-Zweitschlüssel (#1741) ist entfallen; `category` war nie ein Schlüssel und existiert nicht mehr.
 
 ```python
 from core.reporting.base import Anforderung, BindungsEintrag, FeldBindung, TypBindung
 
 TYP_BINDUNG = TypBindung(
     (
-        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte", slugs=("kontakt",)),
-        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung", slugs=("beratungsgespraech",)),
+        BindungsEintrag("contact", _("Kontakt"), ziel="Kontakte"),
+        BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung"),
     )
 )
-# Optional, wenn dein Bericht Feldwerte liest:
-FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),))
+# Optional, wenn dein Bericht Feldwerte liest. ``slugs`` ist hier die
+# Herkunftsangabe (welcher Paket-Slug diesen Schlüssel per Backfill bekam) und
+# der Rückweg für "erscheint in …" — gebunden wird über ``bindet``.
+FELD_DAUER = FeldBindung(
+    (BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),), bindet="report_key"
+)
 
 
 @register_backend("mein-bericht")
@@ -270,7 +274,7 @@ Was du daraus bekommst — und **nie** danebenschreibst:
 
 | Ableitung | wofür |
 |---|---|
-| `TYP_BINDUNG.resolve(system_type, slug)` / `.resolve_row(row, "document_type__")` | die Auflösung in `build_dataset` |
+| `TYP_BINDUNG.resolve(report_key)` / `.resolve_row(row, "document_type__")` | die Auflösung in `build_dataset` |
 | `TYP_BINDUNG.values_fields("document_type__")` | die Schlüsselfelder deiner `.values()`-Gruppierung |
 | `TYP_BINDUNG.matching_q(prefix)` / `.unmapped_q(prefix)` | der SQL-Filter und sein exaktes Komplement |
 | `TYP_BINDUNG.ziele()` | deine Ausgabeordnung (wertunabhängig, K5) |
@@ -280,17 +284,20 @@ Was du daraus bekommst — und **nie** danebenschreibst:
 
 | Ableitung | wofür |
 |---|---|
-| `TYP_BINDUNG.resolve_key(system_type, slug)` / `.resolve_key_row(row, prefix)` | derselbe Treffer wie `resolve()`, aber als **Schlüssel** statt `ziel` — Grundlage von `describe_type_bindings()` in [`registry.py`](../src/core/reporting/registry.py) und des `inventory_report_bindings`-Commands |
-| `FELD_BINDUNG.key_for_slug(feldvorlagen_slug)` | Feldvorlagen-Slug → Feld-Berichtsschlüssel, dieselbe Rolle auf Feld-Ebene (`describe_field_bindings()`) |
+| `TYP_BINDUNG.resolve_key(report_key)` / `.resolve_key_row(row, prefix)` | derselbe Treffer wie `resolve()`, aber als **Schlüssel** statt `ziel` — Grundlage von `describe_type_bindings()` in [`registry.py`](../src/core/reporting/registry.py) und des `inventory_report_bindings`-Commands |
+| `FELD_BINDUNG.key_for_template(feldvorlage)` | Feldvorlage → Feld-Berichtsschlüssel, dieselbe Rolle auf Feld-Ebene (`describe_field_bindings()`); liest die Erststufe der Deklaration |
+| `FELD_BINDUNG.leseschluessel(facility)` | der `data_json`-**Lesepfad** je Dokumentationstyp — gebunden wird über den Schlüssel, gelesen unter dem Slug der so gebundenen Vorlage |
 
 Konsumenten, die „erscheint dieser Typ/diese Feldvorlage in einem Bericht?" beantworten wollen, bauen auf diesen beiden — **nicht** auf einer eigenen Kopie von `resolve()`.
 
-- **`key` vs. `ziel` vs. `label` — drei verschiedene Dinge.** `key` ist der Berichtsschlüssel (heute der `system_type`-Wert). `ziel` ist, was `resolve()` liefert: **backend-eigen** und bei `snapshot_enabled`-Berichten ein **persistierter** Schlüssel — deutscher Klartext, niemals `gettext_lazy` (sonst hängt der gespeicherte Bestand an der Sprache des schreibenden Prozesses, siehe [§ 2](#2-api-referenz)). Ohne `ziel` löst der Schlüssel auf sich selbst auf. `label` ist der **übersetzte Name des Schlüssels** und einrichtungsweit kanonisch: deklarieren zwei Berichte denselben Schlüssel mit verschiedenen Labels, wirft die Registry `ImproperlyConfigured`.
-- **`system_type` zuerst — und zwar exklusiv, sobald er gesetzt ist.** Die Systemkennung ist stabil, nach Erstellung unveränderlich und die stärkere Aussage. Trägt ein Typ einen **gesetzten** `system_type`, entscheidet ausschließlich die Deklaration — auch gegen einen anderslautenden Slug, und auch wenn der `system_type` selbst gar nicht deklariert ist (`note`/`ban`, siehe „`category` nie" unten): der Slug rettet einen bewusst ausgeschlossenen `system_type` NICHT (Refs #1785, Disclosure-Leck-Fix).
-- **`slug` als Zweitschlüssel — nur wenn `system_type` leer/`NULL` ist.** Die `system_type`-Werteliste ist eingefroren; einrichtungseigene Typen haben oft gar keinen. Der Slug holt genau diese Typen in den Bericht, aber nur dann — ein gesetzter `system_type` (auch `note`) sperrt den Zweitschlüssel. Konvention sind die **Paket-Slugs** aus [`core/packages/default.yaml`](../src/core/packages/default.yaml): dort steht, was ein Slug bedeutet. Gematcht wird der Slug-String **facility-agnostisch** — ein einrichtungseigener Typ mit dem Slug `beratungsgespraech` ist ein Beratungsgespräch. Wer das nicht will, vergibt einen anderen Slug (Slugs sind nach Erstellung unveränderlich). Braucht dein Bericht den Zweitschlüssel bewusst **nicht** (wie `ban-overview`), dann `slug_fallback=False` — die Abweichung gehört in die Deklaration, nicht in einen Kommentar.
-- **`category` nie.** Reine UI-Gruppierung, frei editierbar — eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben ([ADR-034](adr/034-config-ui-category-system-type.md)).
-- **Die Deklaration konservativ halten.** Nimm nur auf, was eindeutig in eine Kategorie gehört. Was der Erstschlüssel bewusst auslässt (`note`, `ban`), darf der Zweitschlüssel nicht durch die Hintertür hereinholen. Der Schlüssel `excluded` ist reserviert („gehört ausdrücklich in keinen Bericht") und darf nicht deklariert werden.
-- **Der Unmapped-Filter muss dieselbe Antwort geben — deshalb `unmapped_q()`.** `validate_completeness` zählt „ohne Berichtszuordnung" auf der Datenbank; das Prädikat ist die exakte Negation von `matching_q()`. Schreib es **nicht** von Hand: zwei Wahrheiten hier heißen, dass der Hinweis Ereignisse als fehlend zählt, die im Bericht stehen — und genau in diesem Muster steckte das Disclosure-Leck aus #1785. Ein Guard (`src/tests/test_reporting_bindung.py`) verbietet handgebaute `system_type`-/`slug`-Prädikate in `backends/` und prüft über das ganze Wertuniversum, dass Python- und SQL-Sicht übereinstimmen.
+- **`key` vs. `ziel` vs. `label` — drei verschiedene Dinge.** `key` ist der Berichtsschlüssel (der Wert in `report_key`; bei einem Verhaltens-Bericht der `system_type`-Wert). `ziel` ist, was `resolve()` liefert: **backend-eigen** und bei `snapshot_enabled`-Berichten ein **persistierter** Schlüssel — deutscher Klartext, niemals `gettext_lazy` (sonst hängt der gespeicherte Bestand an der Sprache des schreibenden Prozesses, siehe [§ 2](#2-api-referenz)). Ohne `ziel` löst der Schlüssel auf sich selbst auf. `label` ist der **übersetzte Name des Schlüssels** und einrichtungsweit kanonisch: deklarieren zwei Berichte denselben Schlüssel mit verschiedenen Labels, wirft die Registry `ImproperlyConfigured`.
+- **Ein Schlüssel, kein zweiter Weg** (#1849, Entscheid E-E). Es entscheidet ausschließlich `report_key`: gesetzt und deklariert ⇒ Treffer, alles andere ⇒ kein Treffer. Der frühere Slug-Zweitschlüssel war unsichtbar (man musste ihn aus dem Slug erschließen) und hat in #1785 ein Disclosure-Leck erzeugt — ein Hausverbots-Typ mit dem Slug `kontakt` zog seine Ereignisse in den Bericht. Mit ihm ist auch die Reparaturregel „ein gesetzter Erstschlüssel gewinnt inklusive seiner Ausschlüsse" entfallen: es gibt nichts mehr zu sperren.
+- **`bindet="system_type"` nur für Verhaltens-Berichte.** `ban-overview` berichtet über Hausverbote und bleibt dauerhaft an der Systemkennung — die Abweichung gehört in die Deklaration, nicht in einen Kommentar.
+- **`category` nie.** Reine UI-Gruppierung, frei editierbar — eine Umgruppierung in der Config-UI dürfte niemals Berichtszahlen verschieben ([ADR-034](adr/034-config-ui-category-system-type.md)); das Feld existiert seit [ADR-040](adr/040-documenttype-category-entfernt.md) nicht mehr.
+- **Die Deklaration konservativ halten.** Nimm nur auf, was eindeutig in eine Kategorie gehört. Der Schlüssel `excluded` ist reserviert („gehört ausdrücklich in keinen Bericht") und darf nicht deklariert werden — die Registry wirft sonst `ImproperlyConfigured`.
+- **Je (Typ, Feld-Schlüssel) höchstens eine Feldvorlage** (Entscheid E-J). Auf Typ-Ebene ist Mehrfachbelegung der Zweck der Übung; auf Feld-Ebene liest das Backend **Werte je Ereignis**, zwei Vorlagen mit demselben Schlüssel hießen doppelte Minuten. Validiert wird an Formular, Service und Paket-Loader; entsteht die Doppelbindung trotzdem, zählt das Backend **keines** der Felder und meldet `duplicate_field_binding` (`doppelbindungs_issues()` in [`base.py`](../src/core/reporting/base.py)).
+- **Der Unmapped-Filter muss dieselbe Antwort geben — deshalb `unmapped_q()`.** `validate_completeness` zählt „ohne Berichtszuordnung" auf der Datenbank; das Prädikat ist die exakte Negation von `matching_q()`. Schreib es **nicht** von Hand: zwei Wahrheiten hier heißen, dass der Hinweis Ereignisse als fehlend zählt, die im Bericht stehen — und genau in diesem Muster steckte das Disclosure-Leck aus #1785. Ein Guard (`src/tests/test_reporting_bindung.py`) verbietet handgebaute Schlüssel-Prädikate in `backends/` und prüft über das ganze Wertuniversum, dass Python- und SQL-Sicht übereinstimmen.
+- **„Nicht zugeordnet" ist nicht „ausgeschlossen".** Der Vollständigkeitshinweis meldet nur Typen, die **gar keine** Aussage treffen (`report_key` leer/`NULL`). Ein gesetzter Schlüssel ist eine vollständige Aussage — auch der Sentinel `excluded` (#1819). Ein gesetzter, aber registry-weit **unbekannter** Schlüssel bekommt den eigenen Code `unknown_report_keys` (Entscheid E-H): „ich habe zugeordnet, es passiert nur nichts" verlangt eine andere Reaktion als „ich habe nichts gesagt".
 - **`is_active` gehört in die `Anforderung`, nie in den Datenfilter.** „Bietet die Einrichtung das an?" ist die Konfigurationsfrage; „was ist damals passiert?" ist der Datenfilter. Ein heute umgelegter Schalter darf keinen vergangenen Zeitraum umschreiben.
 - **Zwei Feldvorlagen = zwei `FeldBindung`en.** Über eine Mehrfach-Relation erzeugt Django je `filter()`-Aufruf einen eigenen JOIN; nur getrennte Bindungen prüfen „beide Felder am **demselben** Typ". Eine Bindung mit zwei Slugs wäre ein `IN` und damit ein ODER.
 - **Kein Backfill für Snapshots.** Eine Erweiterung der Deklaration wirkt ab dem nächsten `build_dataset`; gespeicherte `backend_data` bleiben auf ihrem Stand (siehe [§ 5](#5-snapshot-integration)).
@@ -571,7 +578,9 @@ Beispiele aus dem Sachbericht:
 
 | `code` | `severity` | Meldet |
 |---|---|---|
-| `unmapped_system_types` | `warning` | Ereignisse, deren Dokumentationstyp keiner Berichtskategorie zugeordnet ist — weder über `system_type` (inkl. NULL/leer) noch über den Slug. Sie fehlen im Bericht vollständig. |
+| `unmapped_system_types` | `warning` | Ereignisse, deren Dokumentationstyp **gar keine** Berichtszuordnung trägt (`report_key` leer/`NULL`). Sie fehlen im Bericht vollständig. Der Code-Name stammt aus der Zeit vor `report_key` und **bleibt** — er ist eine Maschinenschnittstelle (JSON/XML, von `monthly-trend` importiert), ein Rename wäre ein Bruch für jeden Empfänger, der darauf parst. |
+| `unknown_report_keys` | `warning` | Ereignisse, deren Dokumentationstyp einen `report_key` trägt, den **kein** Backend (mehr) kennt — Fremdpaket, entferntes Backend, Tippfehler (#1849, Entscheid E-H). |
+| `duplicate_field_binding` | `warning` | Mindestens ein Dokumentationstyp trägt **mehrere** Feldvorlagen mit demselben Feld-Berichtsschlüssel. Das Backend zählt dann keines der Felder (fail-safe, Entscheid E-J). |
 | `events_without_client` | `info` | Ereignisse ohne Personenbezug — sie zählen in den Kategorien mit, fehlen aber in Altersgruppen und Personenzahl. |
 
 **Semantik der Severity:** `warning` = im Bericht fehlende Daten (Zahlen sind zu niedrig). `info` = enthaltene, aber ungleich verteilte Daten (Teilauswertungen weichen ab). Das Panel rendert `warning` als gelbes „Hinweis"-Badge, `info` grau.
@@ -593,7 +602,7 @@ Beispiele aus dem Sachbericht:
 - **Keine externen Plugin-Pakete.** Discovery scannt ausschließlich `core/reporting/backends/`; `entry_points` von Drittpaketen sind nicht vorgesehen. Ein fremdes Paket mit Lesezugriff auf Sozialdaten wäre eine Vertrauensentscheidung eigener Güte (Signatur, Freigabe, Sandbox) — als spätere Erweiterung denkbar, dann mit eigenem Sicherheitskonzept.
 - **Keine generische PDF-Pipeline.** Die Formate der Pipeline sind CSV, JSON und XML; der Sachbericht-PDF bleibt ein eigener, unveränderter Pfad.
 - **`core/reporting` liegt außerhalb der mypy-strict-Zone und der mutmut-Pfade.** Der Code ist strict-kompatibel annotiert; die Aufnahme in die Gates ändert Build-Konfiguration und ist ein offener Maintainer-Entscheid.
-- **Das Mapping ist hart kodiert.** Beide Maps (`CATEGORY_MAP` über `system_type`, `SLUG_MAP` über `slug`) stehen im Backend-Modul; es gibt **kein** Konfigurationsfeld dafür. Das ist ein Entscheid, kein Übergangszustand ([ADR-038](adr/038-reporting-plugin-backends.md), Update 2026-08-04): eine Config-UI machte Berichtszahlen per Klick verschiebbar. Eine Mapping-Änderung ist damit ein Code-Change mit Review — und `DocumentType.category` wurde fürs Reporting nie verwendet und existiert seit [ADR-040](adr/040-documenttype-category-entfernt.md) nicht mehr.
+- **Das Mapping ist hart kodiert.** Die Zuordnung Schlüssel → Berichtszeile (`CATEGORY_MAP`) steht im Backend-Modul; es gibt **kein** Konfigurationsfeld dafür. Konfigurierbar ist seit #1849 nur, **welchen Schlüssel** ein Typ oder Feld trägt — nicht, worauf ein Schlüssel abbildet ([ADR-042](adr/042-report-key-berichtszuordnung.md)). Das ist ein Entscheid, kein Übergangszustand ([ADR-038](adr/038-reporting-plugin-backends.md), Update 2026-08-04): eine Config-UI machte Berichtszahlen per Klick verschiebbar. Eine Mapping-Änderung ist damit ein Code-Change mit Review — und `DocumentType.category` wurde fürs Reporting nie verwendet und existiert seit [ADR-040](adr/040-documenttype-category-entfernt.md) nicht mehr.
 - **Die `system_type`-Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03) — heute unverändert in Kraft. **Keine neuen Werte ohne echte App-Logik** — eine zusätzliche Berichtskategorie ist kein Grund, ein Kern-Datenmodell-Enum zu erweitern; solche Zuordnungen gehören ins Backend-Mapping deines Berichts. Von den neun Werten tragen nur `ban` und `crisis` App-Logik; `crisis` ist zugleich einer der sieben Werte in `CATEGORY_MAP` (Doppelrolle: Highlight in der Übergabe UND Berichtszuordnung) — die übrigen sechs sind reine Bericht-Opt-ins ohne App-Logik, `note` ist exportseitig identisch mit `NULL`. Ein Freeze-Guard pinnt die Liste und diese Rollenaufteilung (`src/tests/test_system_type.py`). Seit dem Slug-Zweitschlüssel (#1741) ist `system_type` **nicht mehr der einzige Weg**, einen einrichtungseigenen Dokumentationstyp in den Sachbericht zu bekommen — der Slug tut es auch.
 
  Zwei getrennte Aussagen, die hier früher vermischt waren (#1820 §2.2): **Erstens** — die vom ursprünglichen RFC verlangte Vorbedingung für eine Reduktion (ein *konfigurierbares* Slug-Mapping) ist **nicht** erfüllt; der Entscheid in #1741 fiel auf hartkodiert, nicht auf konfigurierbar. **Zweitens und unabhängig davon** — #1847 hat die Richtung auf eine spätere Reduktion festgelegt (Etappe E4, Umsetzung #1850: `system_type` auf `ban`/`crisis`, Berichtszuordnung über ein neues, eigenes `report_key`-Feld statt über `system_type`/`slug`) — ausdrücklich erst **nach** den vorbereitenden Etappen E1–E3 (deklarative Bindung, Sichtbarkeit, `report_key`-Einführung). Bis E3 abgeschlossen ist, bleibt diese Seite unverändert gültig.

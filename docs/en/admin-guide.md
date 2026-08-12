@@ -465,22 +465,26 @@ The sensitivity level controls which roles can access entries of this type:
 
 The system type links a documentation type to internal application logic. It is set at creation and **cannot be changed afterwards**.
 
-> **The nine values fill three different roles** -- this is the most common misunderstanding, plus a dual role: **Two** values trigger application logic (Ban, Crisis). **Seven** values map the type into the example activity report -- **Crisis a second time among them**: Crisis carries both roles at once (highlight in the handover AND report mapping), while the remaining **six** (Contact, Medical, Needle Exchange, Accompaniment, Counseling, Referral) are pure mappings with no other effect. The system type is the only **visible, explicitly selectable** way to get a self-created documentation type with a **freely chosen name** into that report (example: your own type "Social counseling" with system type "Counseling"). Alongside it, a hardcoded slug fallback has applied since #1741: a type **without** a system type whose name-derived slug matches one of the seven package slugs (e.g. `kontakt`, `beratungsgespraech`) is mapped too -- even if it was created in the configuration UI. You no longer have to work this out from the slug yourself: the type's detail and form views show under "Appears in …" which report it lands in (or explicitly "Does not appear in any report."); the detail and list views additionally display the slug itself. **Note** is an exclusion marker and behaves in the export exactly like *no* system type -- the only difference is that a "Note" once set is permanently fixed, whereas an empty system type may still be filled in later.
+> **Changed on 2026-08-12 (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)):** The **report mapping now has a field of its own** -- the **report key** (see the next section). The system type only drives application logic. If you previously brought a type into the example activity report via the system type, you will find it there unchanged: the update gave every existing type the matching report key. **The hardcoded slug fallback is gone** -- a type without a report key appears in no report, even if its slug is one of the package slugs.
 
-Currently, the system type serves two purposes:
-
-**1. UI logic** (only Ban and Crisis):
+Currently, the system type serves **one** purpose: **UI logic** (only Ban and Crisis):
 
 | System Type | Effect |
 |-------------|--------|
-| **Ban** | Activates a ban banner on the person page, dedicated filter in the timeline, count and highlight in the handover |
+| **Ban** | Activates a ban banner on the person page, dedicated filter in the timeline, count and highlight in the handover; feeds the example ban overview |
 | **Crisis** | Displayed as a highlight in the handover (recent crisis events) |
 
-**2. Example activity report export** (mapping to report categories):
+> **Note:** Not every documentation type needs a system type. The remaining seven values (Contact, Medical, Needle Exchange, Accompaniment, Counseling, Referral, Note) carry **no** application logic; until the update they were purely report mappings, and they are not that any more. Whether a type lands in a report is answered reliably only by the "Appears in …" information in the detail and form views.
 
-The example activity report is a customizable example or template -- not a binding or current official proof.
+> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added.** A **reduction** to Ban/Crisis has been decided (#1847 stage E4, implementation #1850); its precondition -- a dedicated report field -- is met by the report key. Until the reduction is implemented the list stays unchanged, but the seven remaining values no longer have any effect.
 
-| System Type | Export Category |
+#### Report Key
+
+The **report key** (`report_key`) decides which report a documentation type appears in -- and in which row. It is a select field of its own on the documentation type form; **field templates have one too** (see below).
+
+The choices come from the reports themselves: what a report evaluates is declared in code, and exactly those keys are offered. So you choose **which key** your type carries -- not what a key maps to. Your own type "Social counseling" with the key "Counseling" lands in the same report row as "Debt counseling" with the same key.
+
+| Report key | Row in the example activity report |
 |-------------|---------------|
 | **Contact** | Contacts |
 | **Counseling** | Counseling |
@@ -489,24 +493,30 @@ The example activity report is a customizable example or template -- not a bindi
 | **Needle Exchange** | Care |
 | **Accompaniment** | Referral |
 | **Referral** | Referral |
-| **Ban** | *(excluded)* |
-| **Note** | *(excluded)* |
+| **Explicitly belongs in no report** | *(excluded -- and **not** a defect)* |
+| *(empty)* | *(appears in no report -- and is reported as a gap)* |
 
-> **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and work normally for documentation -- **they are not automatically excluded from the example activity report export**: if the name-derived slug matches one of the seven package slugs (slug fallback, see above), the type still lands in the report. The only reliable answer is the registry information directly on the type ("Appears in …" in the detail and form views) -- not the mere absence of a system type.
->
-> System types such as `contact`, `counseling` or `medical` have **no visible UI logic** (unlike `ban` and `crisis`). They serve solely as a whitelist for the example activity report export. **`note` is explicitly *not* part of that whitelist**: events of that type stay out, just like `ban` and like types with no system type at all.
->
-> **Events without a report mapping produce a completeness notice.** Under "Reports" the report states how many events it does *not* show. Deliberately excluded ones (`ban`, `note`) are counted there as well -- so a facility with many entry bans permanently sees that notice without anything being misconfigured. Separating "deliberately excluded" from "unmapped" is tracked as a question of its own (#1748).
+The example activity report is a customizable example or template -- not a binding or current official proof.
 
-> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added without real application logic** -- an additional report category is no reason to extend the core data model; such mappings go through the report backend. For your configuration work this means: what is listed here stays -- **for now**. A reduction has been decided for a later stage (#1847 stage E4, implementation #1850): `system_type` is meant to shrink to Ban/Crisis once a new, dedicated report field has taken over the mapping -- but explicitly only after that. Until that groundwork is complete, the list stays unchanged: the seven mapping values (Crisis in its dual role, see above) carry weight today because the system type is the only visible, explicitly selectable way to get a custom documentation type with a freely chosen name into the report; the hardcoded slug fallback remains alongside it.
+> **Empty and "explicitly excluded" are two different things.** Under "Reports" the report states how many events it does *not* show. Counted there are **only** types that make no statement at all (key empty) -- a type set to "Explicitly belongs in no report" is a complete statement and does **not** appear in the notice (#1819). Until the update, bans and notes were counted; a facility that documents entry bans saw the notice permanently without anything being misconfigured.
+>
+> There is a **third** case since the update: if a type carries a key that no report (any longer) knows -- from a foreign configuration package, or after a typo -- the report says so separately. "I did map it, nothing just happens" is a different finding from "I said nothing".
+
+> **Adding later yes, changing no.** An empty report key can be **added at any time** -- that is the repair path when a type unintentionally appeared in no report. A **set** key is fixed afterwards (including "Explicitly belongs in no report"): reports about past periods must not retroactively produce different figures. When you add a key, the form points out that it affects reports generated in the future across **all** periods.
+>
+> When **creating** a type the form suggests matching values: system type "Crisis" suggests the key "Crisis", "Ban" suggests "Explicitly belongs in no report". Both are suggestions, not constraints -- system type and report key are allowed to diverge on purpose.
+
+**Report keys on field templates.** Reports that evaluate **field values** (minute totals, needle-exchange balance, distribution of selection fields) additionally need to know **which field** to read. Until the update that only worked through the field slug: naming your numeric field "Session duration" instead of "Duration" produced a report that permanently showed zero minutes -- without any feedback. Since the update the field template carries its own report key (e.g. "Minutes") and the name is free. The former free-text field **"Statistics category"** on the field template was removed in the same step: no evaluation ever read it.
+
+> **At most one field template per report key and documentation type.** Two fields with the key "Minutes" on the same type would mean double-counted minutes. The assignment is therefore rejected; if the duplication arises anyway (e.g. through a configuration package), the report counts **neither** field and says so. The same field template on **different** types is fine, as are two similarly named fields with **different** keys.
 
 #### Minimum Contact Stage
 
 Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "With additional details" because additional personal details about the person must be on record.
 
-> **Effective for event types only (Refs #1058).** **Minimum contact stage**, **retention period (`retention_days`)** and **system type** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own at all** — the retention run never touches them; their contents are only redacted when the associated person is anonymised ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` does key off a case being closed, but it deletes that case's events, not the case.
+> **Effective for event types only (Refs #1058).** **Minimum contact stage**, **retention period (`retention_days`)**, **system type** and **report key** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own at all** — the retention run never touches them; their contents are only redacted when the associated person is anonymised ([ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). `retention_qualified_days` does key off a case being closed, but it deletes that case's events, not the case.
 >
-> The form **hides these three fields** as soon as you pick **person** or **case** as the entity type (Refs #1757) — so you no longer fill in fields that never apply. Hiding is purely visual: values already set stay unchanged on the record, and a field carrying an error message stays visible. Without JavaScript all fields remain visible and keep their explanatory help text as before.
+> The form **hides these four fields** as soon as you pick **person** or **case** as the entity type (Refs #1757) — so you no longer fill in fields that never apply. Hiding is purely visual: values already set stay unchanged on the record, and a field carrying an error message stays visible. Without JavaScript all fields remain visible and keep their explanatory help text as before.
 
 #### Field-Level Sensitivity (`FieldTemplate.sensitivity`)
 
@@ -1608,4 +1618,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-12 -->
-<!-- source-hash: f2fd32755ddeeaf3206d59ab7e4e621c9ba1576b -->
+<!-- source-hash: 88988edadf1a9996344bacce60972c94c3a0987b -->
