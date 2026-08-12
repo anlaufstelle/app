@@ -159,14 +159,15 @@ class TypBindung:
     bindet: Literal["report_key", "system_type"] = "report_key"
 
     def _erststufe(self) -> str:
-        """Der Modellfeldname der Erststufe — **der** E3-Schalter, eine Stelle.
+        """Der Modellfeldname der Erststufe — **der** Schalter, eine Stelle.
 
-        E3 macht daraus ``"report_key" if self.bindet == "report_key" else
-        "system_type"``. Solange das Feld nicht existiert, binden alle
-        Deklarationen ueber ``system_type``; ``bindet`` wird bereits korrekt
-        deklariert, damit die Umstellung eine Aenderung an dieser Zeile ist.
+        Seit E3 (Refs #1849) binden die Berichts-Backends ueber
+        ``DocumentType.report_key``; ``ban_overview`` bleibt als
+        Verhaltens-Bericht dauerhaft an ``system_type`` (Konzept #1847 §3).
+        Beide Sichten — Python-Aufloesung und ``Q``-Praedikat — lesen diese eine
+        Zeile, deshalb war die Umstellung hier eine Aenderung und nicht fuenf.
         """
-        return "system_type"
+        return "report_key" if self.bindet == "report_key" else "system_type"
 
     def keys(self) -> tuple[str, ...]:
         """Die deklarierten Berichtsschluessel, in Deklarationsreihenfolge."""
@@ -312,13 +313,13 @@ class FeldBindung:
     bindet: Literal["report_key", "slug"] = "slug"
 
     def _erststufe(self) -> str:
-        """Der Modellfeldname der Erststufe — der E3-Schalter der Feld-Ebene.
+        """Der Modellfeldname der Erststufe — der Schalter der Feld-Ebene.
 
-        E3 macht daraus ``"report_key" if self.bindet == "report_key" else
-        "slug"``. Solange ``FieldTemplate.report_key`` nicht existiert, binden
-        alle Deklarationen ueber den Slug.
+        Seit E3 (Refs #1849) binden die Feldwert-Backends ueber
+        ``FieldTemplate.report_key``. Der Default ``"slug"`` bleibt als
+        Rueckfallebene fuer Deklarationen ohne Meinung stehen.
         """
-        return "slug"
+        return "report_key" if self.bindet == "report_key" else "slug"
 
     def keys(self) -> tuple[str, ...]:
         """Die deklarierten Feld-Berichtsschluessel, in Deklarationsreihenfolge."""
@@ -339,6 +340,19 @@ class FeldBindung:
         Typ-Ebene aus derselben Eintragsliste abgeleitet, nicht danebengepflegt.
         """
         return {slug: eintrag.key for eintrag in self.eintraege for slug in eintrag.slugs}.get(slug or "")
+
+    def key_for_template(self, field_template) -> str | None:
+        """Feldvorlage → Feld-Berichtsschluessel; ``None`` = nicht gebunden.
+
+        Liest die Erststufe der Deklaration statt fest den Slug (E3, Refs
+        #1849) — sonst liefe die „erscheint in …"-Auskunft am tatsaechlichen
+        Bindungsschluessel vorbei. Bindet die Deklaration ueber ``report_key``,
+        ist der Schluessel der Wert selbst, sofern er deklariert ist.
+        """
+        wert = getattr(field_template, self._erststufe())
+        if self._erststufe() == "report_key":
+            return wert if wert in self.keys() else None
+        return self.key_for_slug(wert)
 
     def _erststufen_werte(self) -> tuple[str, ...]:
         """Die Werte, gegen die :meth:`template_q` filtert — passend zur Erststufe."""
@@ -364,21 +378,63 @@ class FeldBindung:
             }
         )
 
-    def data_json_keys(self) -> tuple[str, ...]:
-        """Die Leseschluessel in ``Event.data_json`` — E3-Nachziehstelle.
+    def leseschluessel(self, facility) -> "Leseschluessel":
+        """Der ``data_json``-Lesepfad dieser Bindung, aufgeloest **je Dokumentationstyp**.
 
-        In E1 identisch mit :meth:`slugs`: ``data_json`` ist nach dem
-        Feldvorlagen-Slug indiziert. Bleibt das so, aendert E3 hier nichts;
-        soll der Berichtsschluessel den Lesepfad uebernehmen, ist dies die eine
-        Stelle, an der er je Dokumentationstyp aufzuloesen ist.
+        ``data_json`` ist nach dem Feldvorlagen-**Slug** indiziert, gebunden wird
+        seit E3 aber ueber den ``report_key`` (Refs #1849). Beides faellt nur im
+        Standardpaket zusammen: Wer sein Zahlenfeld „Gesprächsdauer" nennt und
+        ihm den Schluessel ``dauer_minuten`` gibt, speichert unter
+        ``gespraechsdauer`` — genau der Fall, den dieser Umbau erst moeglich
+        macht. Ein fest verdrahteter Slug laese dort dauerhaft nichts und waere
+        schlimmer als der Zustand davor (das Backend waere jetzt *verfuegbar*
+        und zeigte trotzdem Nullen).
 
         **Reiner Lesepfad.** Was ein Backend *veroeffentlicht* (Spaltenwerte,
-        ``summary``-Schluessel) darf hier NICHT herkommen: sonst benennt der
-        E3-Wechsel des Lesepfades still publizierte Schluessel um. Ein Backend,
-        das einen Slug auch ausgibt, deklariert ihn dafuer getrennt (Muster
+        ``summary``-Schluessel) darf hier NICHT herkommen: sonst benennte der
+        Lesepfad still publizierte Schluessel um. Ein Backend, das einen Slug
+        auch ausgibt, deklariert ihn dafuer getrennt (Muster
         ``Feldgruppe.feld_slug`` in ``service_distribution``).
+
+        Nur **aktive** Feldvorlagen: eine deaktivierte Vorlage wird in
+        Formularen nicht mehr angeboten und ist dieselbe Konfigurationsfrage,
+        die :meth:`template_q` stellt.
         """
-        return self.slugs()
+        # Lokaler Import wie in ``Anforderung.erfuellt``: ``core.models`` zur
+        # Modul-Importzeit zoege den Reporting-Vertrag in den Model-Importgraphen.
+        from core.models import DocumentTypeField
+
+        treffer: dict[object, set[str]] = {}
+        zeilen = DocumentTypeField.objects.filter(
+            document_type__facility=facility,
+            field_template__is_active=True,
+            **{f"field_template__{self._erststufe()}__in": self._erststufen_werte()},
+        ).values_list("document_type_id", "field_template__slug")
+        for document_type_id, slug in zeilen:
+            treffer.setdefault(document_type_id, set()).add(slug)
+
+        je_typ = {typ_id: next(iter(slugs)) for typ_id, slugs in treffer.items() if len(slugs) == 1}
+        doppelt = tuple(sorted((typ_id for typ_id, slugs in treffer.items() if len(slugs) > 1), key=str))
+        return Leseschluessel(je_typ, doppelt)
+
+
+@dataclass(frozen=True)
+class Leseschluessel:
+    """Ergebnis von :meth:`FeldBindung.leseschluessel` (E3, Refs #1849).
+
+    ``je_typ`` bildet die Dokumentationstyp-ID auf den ``data_json``-Schluessel
+    ab; ein Typ ohne Eintrag traegt fuer diese Bindung kein Feld.
+
+    ``doppelt`` sind die Dokumentationstypen, an denen **mehrere** Feldvorlagen
+    denselben Feld-Berichtsschluessel tragen (Entscheid E-J, Konzept #1847
+    §3.1). Sie fehlen bewusst in ``je_typ``: welches der beiden Felder gemeint
+    ist, kann das Backend nicht wissen, und „irgendeines nehmen" hiesse je nach
+    Zeilenordnung mal die eine, mal die andere Zahl. Fail-safe heisst hier:
+    keines zaehlen und den Zustand melden — nie doppelte Minuten.
+    """
+
+    je_typ: dict[object, str]
+    doppelt: tuple[object, ...] = ()
 
 
 @dataclass(frozen=True)

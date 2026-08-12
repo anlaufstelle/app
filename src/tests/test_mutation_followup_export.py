@@ -50,7 +50,7 @@ from core.services.system import (
     _build_event_row,
     _resolve_field_value,
 )
-from tests._reporting_helpers import get_sample_report_1_statistics
+from tests._reporting_helpers import get_sample_report_1_statistics, report_key_fuer
 
 # ---------------------------------------------------------------------------
 # Helper / Factories
@@ -93,11 +93,15 @@ def _make_doc_type(
     system_type: str | None = None,
     sensitivity: str = DocumentType.Sensitivity.NORMAL,
 ) -> DocumentType:
+    """``report_key`` folgt dem Backfill (E3, Refs #1849) — der Erststufe der
+    Berichtszuordnung seit dieser Etappe.
+    """
     return DocumentType.objects.create(
         facility=facility,
         name=name,
         sensitivity=sensitivity,
         system_type=system_type,
+        report_key=report_key_fuer(system_type),
     )
 
 

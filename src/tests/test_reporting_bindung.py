@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -137,13 +139,19 @@ class TestTypBindungAbleitungen:
         }
 
     def test_values_fields_mit_und_ohne_prefix(self):
-        assert self.BINDUNG.values_fields() == ("system_type", "slug")
-        assert self.BINDUNG.values_fields("document_type__") == ("document_type__system_type", "document_type__slug")
+        """Seit E3 (Refs #1849) ist die Erststufe ``report_key``."""
+        assert self.BINDUNG.values_fields() == ("report_key", "slug")
+        assert self.BINDUNG.values_fields("document_type__") == ("document_type__report_key", "document_type__slug")
+
+    def test_values_fields_folgt_der_bindet_deklaration(self):
+        """``ban_overview`` bleibt an ``system_type`` — eine Deklaration, kein Sonderweg."""
+        verhalten = TypBindung((BindungsEintrag("ban", "Hausverbot"),), bindet="system_type")
+        assert verhalten.values_fields() == ("system_type", "slug")
 
     def test_ohne_slug_fallback_faellt_der_zweitschluessel_ganz_weg(self):
         ohne = TypBindung((BindungsEintrag("ban", "Hausverbot", slugs=("hausverbot",)),), slug_fallback=False)
         assert ohne.slug_ziele() == {}
-        assert ohne.values_fields() == ("system_type",)
+        assert ohne.values_fields() == ("report_key",)
 
 
 class TestAbweichungOhneSlugFallback:
@@ -172,17 +180,17 @@ class TestAbweichungOhneSlugFallback:
 
     def test_der_slug_steht_in_keiner_ableitung(self):
         assert self.BINDUNG.slug_ziele() == {}
-        assert self.BINDUNG.values_fields() == ("system_type",)
+        assert self.BINDUNG.values_fields() == ("report_key",)
         assert "slug" not in str(self.BINDUNG.matching_q())
 
     @pytest.mark.django_db
     def test_sql_trifft_die_slug_zeile_nicht(self, facility):
         """Dieselbe Abweichung in der Datenbank — Python- und SQL-Sicht bleiben einig."""
-        DocumentType.objects.create(facility=facility, name="Hausverbot-Notiz", slug="hausverbot", system_type=None)
-        DocumentType.objects.create(facility=facility, name="Leerer Typ", slug="hausverbot-2", system_type="")
+        DocumentType.objects.create(facility=facility, name="Hausverbot-Notiz", slug="hausverbot", report_key=None)
+        DocumentType.objects.create(facility=facility, name="Leerer Typ", slug="hausverbot-2", report_key="")
         assert not DocumentType.objects.filter(self.BINDUNG.matching_q()).exists()
 
-        echt = DocumentType.objects.create(facility=facility, name="Hausverbot", system_type="ban")
+        echt = DocumentType.objects.create(facility=facility, name="Hausverbot", report_key="ban")
         assert list(DocumentType.objects.filter(self.BINDUNG.matching_q())) == [echt]
 
 
@@ -211,7 +219,7 @@ class TestTypBindungResolve:
         assert ohne.resolve("ban") == "ban"
 
     def test_resolve_row_liest_die_deklarierten_values_felder(self):
-        row = {"document_type__system_type": "", "document_type__slug": "beratungsgespraech"}
+        row = {"document_type__report_key": "", "document_type__slug": "beratungsgespraech"}
         assert self.BINDUNG.resolve_row(row, "document_type__") == "Beratung"
 
 
@@ -227,13 +235,18 @@ class TestFeldBindung:
     def test_slugs_sind_die_feldvorlagen_slugs(self):
         assert self.BINDUNG.slugs() == ("dauer",)
 
-    def test_data_json_keys_ist_in_e1_der_slug(self):
-        """E3-Nachziehstelle: heute Slug, spaeter je Dokumentationstyp aufgeloest."""
-        assert self.BINDUNG.data_json_keys() == self.BINDUNG.slugs()
-
     def test_template_q_verlangt_aktive_feldvorlage(self):
         kinder = dict(self.BINDUNG.template_q().children)
         assert kinder == {"fields__field_template__slug__in": ("dauer",), "fields__field_template__is_active": True}
+
+    def test_template_q_folgt_der_bindet_deklaration(self):
+        """Seit E3 (Refs #1849) binden die Feldwert-Backends ueber ``report_key``."""
+        ueber_key = FeldBindung((BindungsEintrag("dauer_minuten", "Minuten", slugs=("dauer",)),), bindet="report_key")
+        kinder = dict(ueber_key.template_q().children)
+        assert kinder == {
+            "fields__field_template__report_key__in": ("dauer_minuten",),
+            "fields__field_template__is_active": True,
+        }
 
 
 # --- Registry-Guards ---------------------------------------------------------
@@ -379,9 +392,31 @@ class TestSammler:
 # „ohne Aussage"-Faelle. ``slug`` ist NOT NULL — dort gibt es kein ``None``.
 _SYSTEM_TYPES = (*DocumentType.SystemType.values, None, "")
 
+
+def _deklarierte_report_keys() -> tuple[str | None, ...]:
+    """Alle in irgendeiner Typ-Bindung deklarierten Schluessel, plus die Raender.
+
+    Seit E3 (Refs #1849) ist ``report_key`` die Erststufe der Berichts-Backends
+    — das Universum der Strukturinvarianz muss ihn deshalb variieren, sonst
+    prueften die Tests nur noch den Slug-Zweitschluessel und liefen fuer die
+    eigentliche Aufloesung leer. ``excluded`` und ein Fantasiewert stehen fuer
+    die beiden Sonderzustaende aus Konzept #1847 §2 (bewusst ausgeschlossen /
+    unbekannter Schluessel).
+    """
+    keys: set[str] = set()
+    for backend in registry.get_backends():
+        for bindung in typ_bindungen(backend):
+            keys.update(bindung.keys())
+    return (*sorted(keys), EXCLUDED_KEY, "fantasie", None, "")
+
+
 # Universum der Zweitstufe: alle in irgendeinem Backend deklarierten Slugs plus
 # einer, den keines kennt.
 _FREMDER_SLUG = "fremder-typ"
+
+# Formatregel der Berichtsschluessel: Kleinbuchstaben/Ziffern/Unterstrich. Sie
+# landen im Dropdown, in Paket-YAMLs und im Inventar-Report.
+_KEY_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 
 
 def _deklarierte_slugs() -> tuple[str, ...]:
@@ -403,15 +438,23 @@ def _deklarierte_slugs() -> tuple[str, ...]:
 
 @pytest.fixture
 def universum(db):
-    """Ein Dokumentationstyp je (``system_type``, ``slug``)-Kombination.
+    """Ein Dokumentationstyp je (Erststufe, ``slug``)-Kombination.
+
+    Zwei Erststufen sind im Spiel: ``report_key`` (die Berichts-Backends seit
+    E3) und ``system_type`` (``ban_overview``). Beide werden variiert, damit
+    jede Bindung ihr eigenes Wertefeld ausgeschoepft sieht — eine Kombination
+    aus beidem waere ein Kreuzprodukt ohne zusaetzliche Aussage, weil keine
+    Bindung beide Felder liest.
 
     ``slug`` ist je Einrichtung eindeutig — die Kombinationen brauchen deshalb
-    eine Einrichtung je ``system_type``-Wert.
+    eine Einrichtung je Erststufen-Wert.
     """
     organization = Organization.objects.create(name="Bindungs-Universum")
     slugs = _deklarierte_slugs()
     typen = []
-    for index, system_type in enumerate(_SYSTEM_TYPES):
+    erststufen = [{"system_type": wert} for wert in _SYSTEM_TYPES]
+    erststufen += [{"report_key": wert} for wert in _deklarierte_report_keys()]
+    for index, felder in enumerate(erststufen):
         facility = Facility.objects.create(organization=organization, name=f"Stelle {index}")
         for slug in slugs:
             typen.append(
@@ -419,7 +462,7 @@ def universum(db):
                     facility=facility,
                     name=f"Typ {slug}",
                     slug=slug,
-                    system_type=system_type,
+                    **felder,
                 )
             )
     return typen
@@ -500,7 +543,7 @@ class TestAnforderung:
         DocumentType.objects.create(
             facility=facility,
             name="Kontakt-Person",
-            system_type="contact",
+            report_key="contact",
             entity_type=DocumentType.EntityType.CLIENT,
         )
         bindung = TypBindung((BindungsEintrag("contact", "Kontakt"),))
@@ -511,28 +554,38 @@ class TestAnforderung:
         """JOIN-Falle: zwei Bindungen sind zwei ``filter()``-Aufrufe, kein gemeinsames."""
         from core.models import DocumentTypeField, FieldTemplate
 
-        typ = DocumentType.objects.create(facility=facility, name="Spritzentausch", system_type="needle_exchange")
-        ausgabe = FieldTemplate.objects.create(facility=facility, name="Ausgabe", slug="ausgabe", field_type="number")
+        typ = DocumentType.objects.create(facility=facility, name="Spritzentausch", report_key="needle_exchange")
+        ausgabe = FieldTemplate.objects.create(
+            facility=facility, name="Ausgabe", slug="ausgabe", field_type="number", report_key="ausgabe_stueck"
+        )
         DocumentTypeField.objects.create(document_type=typ, field_template=ausgabe, sort_order=0)
 
         anforderung = Anforderung(
             TypBindung((BindungsEintrag("needle_exchange", "Spritzentausch"),)),
             (
-                FeldBindung((BindungsEintrag("ausgabe_stueck", "Ausgabe gesamt", slugs=("ausgabe",)),)),
-                FeldBindung((BindungsEintrag("rueckgabe_stueck", "Rückgabe gesamt", slugs=("rueckgabe",)),)),
+                FeldBindung(
+                    (BindungsEintrag("ausgabe_stueck", "Ausgabe gesamt", slugs=("ausgabe",)),), bindet="report_key"
+                ),
+                FeldBindung(
+                    (BindungsEintrag("rueckgabe_stueck", "Rückgabe gesamt", slugs=("rueckgabe",)),), bindet="report_key"
+                ),
             ),
         )
         assert anforderung.erfuellt(facility) is False
 
         rueckgabe = FieldTemplate.objects.create(
-            facility=facility, name="Rückgabe", slug="rueckgabe", field_type="number"
+            facility=facility,
+            name="Rückgabe",
+            slug="rueckgabe",
+            field_type="number",
+            report_key="rueckgabe_stueck",
         )
         DocumentTypeField.objects.create(document_type=typ, field_template=rueckgabe, sort_order=1)
         assert anforderung.erfuellt(facility) is True
 
     def test_verfuegbarkeit_ist_eine_oder_verknuepfung(self, facility):
         """``service_distribution``: eine konfigurierte Gruppe genuegt."""
-        DocumentType.objects.create(facility=facility, name="Kontakt", system_type="contact")
+        DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
         backend = _dummy_cls(
             verfuegbarkeit=(
                 Anforderung(TypBindung((BindungsEintrag("contact", "Kontakt"),))),
@@ -657,11 +710,14 @@ class TestCounselingHoursBindung:
             "krisengespraech": "crisis",
         }
 
-    def test_feld_bindung_traegt_den_dauer_slug(self):
+    def test_feld_bindung_bindet_ueber_den_berichtsschluessel(self):
         from core.reporting.backends import counseling_hours as modul
 
+        assert modul.FELD_DAUER.keys() == ("dauer_minuten",)
+        # Der Paket-Slug bleibt deklariert (Backfill-Herkunft, E2-Auskunft),
+        # gebunden wird seit E3 aber ueber den Schluessel.
         assert modul.FELD_DAUER.slugs() == ("dauer",)
-        assert modul.DAUER_SLUG == "dauer"
+        assert modul.FELD_DAUER.bindet == "report_key"
         assert registry.get_backend("counseling-hours").feld_bindungen == (modul.FELD_DAUER,)
 
     @pytest.mark.django_db
@@ -673,10 +729,12 @@ class TestCounselingHoursBindung:
         backend = registry.get_backend("counseling-hours")
         assert backend.is_available(facility) is False
 
-        typ = DocumentType.objects.create(facility=facility, name="Beratung", system_type="counseling")
+        typ = DocumentType.objects.create(facility=facility, name="Beratung", report_key="counseling")
         assert backend.is_available(facility) is False
 
-        dauer = FieldTemplate.objects.create(facility=facility, name="Dauer", slug="dauer", field_type="number")
+        dauer = FieldTemplate.objects.create(
+            facility=facility, name="Dauer", slug="dauer", field_type="number", report_key="dauer_minuten"
+        )
         DocumentTypeField.objects.create(document_type=typ, field_template=dauer, sort_order=0)
         assert backend.is_available(facility) is True
 
@@ -719,9 +777,13 @@ class TestServiceDistributionBindung:
         backend = registry.get_backend("service-distribution")
         assert backend.is_available(facility) is False
 
-        typ = DocumentType.objects.create(facility=facility, name="Krisengespräch", system_type="crisis")
+        typ = DocumentType.objects.create(facility=facility, name="Krisengespräch", report_key="crisis")
         vorlage = FieldTemplate.objects.create(
-            facility=facility, name="Art der Krise", slug="art-der-krise", field_type="select"
+            facility=facility,
+            name="Art der Krise",
+            slug="art-der-krise",
+            field_type="select",
+            report_key="art_der_krise",
         )
         DocumentTypeField.objects.create(document_type=typ, field_template=vorlage, sort_order=0)
         assert backend.is_available(facility) is True
@@ -735,9 +797,9 @@ class TestNeedleExchangeBindung:
 
         backend = registry.get_backend("needle-exchange-balance")
         assert backend.feld_bindungen == (modul.FELD_AUSGABE, modul.FELD_RUECKGABE)
-        assert modul.FELD_AUSGABE.slugs() == ("ausgabe",)
-        assert modul.FELD_RUECKGABE.slugs() == ("rueckgabe",)
-        assert (modul.AUSGABE_SLUG, modul.RUECKGABE_SLUG) == ("ausgabe", "rueckgabe")
+        assert modul.FELD_AUSGABE.keys() == ("ausgabe_stueck",)
+        assert modul.FELD_RUECKGABE.keys() == ("rueckgabe_stueck",)
+        assert (modul.FELD_AUSGABE.bindet, modul.FELD_RUECKGABE.bindet) == ("report_key", "report_key")
 
     def test_typ_bindung_bleibt_konservativ(self):
         from core.reporting.backends.needle_exchange_balance import TYP_BINDUNG
@@ -753,11 +815,17 @@ class TestNeedleExchangeBindung:
         assert "is_available" not in NeedleExchangeBalanceBackend.__dict__
         backend = registry.get_backend("needle-exchange-balance")
 
-        typ = DocumentType.objects.create(facility=facility, name="Spritzentausch", system_type="needle_exchange")
-        anderer = DocumentType.objects.create(facility=facility, name="Kontakt", system_type="contact")
-        ausgabe = FieldTemplate.objects.create(facility=facility, name="Ausgabe", slug="ausgabe", field_type="number")
+        typ = DocumentType.objects.create(facility=facility, name="Spritzentausch", report_key="needle_exchange")
+        anderer = DocumentType.objects.create(facility=facility, name="Kontakt", report_key="contact")
+        ausgabe = FieldTemplate.objects.create(
+            facility=facility, name="Ausgabe", slug="ausgabe", field_type="number", report_key="ausgabe_stueck"
+        )
         rueckgabe = FieldTemplate.objects.create(
-            facility=facility, name="Rückgabe", slug="rueckgabe", field_type="number"
+            facility=facility,
+            name="Rückgabe",
+            slug="rueckgabe",
+            field_type="number",
+            report_key="rueckgabe_stueck",
         )
         DocumentTypeField.objects.create(document_type=typ, field_template=ausgabe, sort_order=0)
         DocumentTypeField.objects.create(document_type=anderer, field_template=rueckgabe, sort_order=0)
@@ -956,18 +1024,36 @@ class TestStrukturLatch:
             "SQL-Filter, Verfuegbarkeit und Vokabular — und erst sie zieht die Strukturinvarianz-Tests."
         )
 
-    def test_alle_typ_schluessel_sind_in_e1_system_type_werte(self):
-        """E1-Invariante: die Erststufe ist ``system_type``, also muss jeder Schluessel dort vorkommen.
+    def test_schluessel_passen_zur_deklarierten_erststufe(self):
+        """Nachfolger der E1-Invariante, umgestellt mit E3 (Refs #1849).
 
-        Faellt weg, sobald E3 ``report_key`` einfuehrt — bis dahin faengt sie
-        genau den Tippfehler, den ein String-Literal in der Deklaration
-        ermoeglicht.
+        Bis E3 war die Erststufe ausnahmslos ``system_type``, und jeder
+        deklarierte Schluessel musste im Kern-Enum vorkommen — das fing den
+        Tippfehler, den ein String-Literal in der Deklaration ermoeglicht. Seit
+        E3 kommt der Werteraum der Berichts-Backends aus den Deklarationen
+        selbst (genau das ist der Zweck des Umbaus), es gibt dort also keine
+        Aussenliste mehr zum Vergleichen. Was bleibt, ist zweigeteilt:
+
+        * ``bindet="system_type"`` (``ban_overview``) prueft weiter gegen das
+          Enum — dort IST die Aussenliste noch die Wahrheit.
+        * ``bindet="report_key"`` prueft das Format und den reservierten
+          Sentinel: ein Schluessel wandert in Dropdown, Paket-YAML und
+          Inventar, ein Leerzeichen oder Grossbuchstabe darin faellt sonst erst
+          dort auf.
         """
-        bekannt = set(DocumentType.SystemType.values)
+        enum_werte = set(DocumentType.SystemType.values)
         for backend in registry.get_backends():
             for bindung in typ_bindungen(backend):
-                unbekannt = set(bindung.keys()) - bekannt
-                assert not unbekannt, f"{backend.slug} deklariert unbekannte system_type-Werte: {sorted(unbekannt)}"
+                if bindung.bindet == "system_type":
+                    unbekannt = set(bindung.keys()) - enum_werte
+                    assert not unbekannt, (
+                        f"{backend.slug} bindet ueber system_type und deklariert unbekannte Werte: {sorted(unbekannt)}"
+                    )
+                    continue
+                schluessel = bindung.keys()
+                for key in schluessel:
+                    assert _KEY_RE.fullmatch(key), f"{backend.slug}: Berichtsschluessel {key!r} verletzt das Format"
+                    assert key != EXCLUDED_KEY, f"{backend.slug}: {EXCLUDED_KEY!r} ist reserviert"
 
     @pytest.mark.architecture
     def test_kein_backend_baut_ein_eigenes_schluessel_praedikat(self):
@@ -1039,7 +1125,7 @@ class TestSchluesselAufloesung:
         assert self.BINDUNG.resolve_key(None, "fremder-typ") is None
 
     def test_resolve_key_row_liest_dieselben_felder(self):
-        row = {"document_type__system_type": "", "document_type__slug": "beratungsgespraech"}
+        row = {"document_type__report_key": "", "document_type__slug": "beratungsgespraech"}
         assert self.BINDUNG.resolve_key_row(row, "document_type__") == "counseling"
 
     def test_schluessel_und_ziel_stimmen_ueberein(self):
@@ -1079,21 +1165,33 @@ class TestFeldBindungSchluessel:
             "fields__field_template__is_active": True,
         }
 
-    def test_bindet_report_key_ist_deklarierbar_ohne_wirkung(self):
-        """E3 wertet ``bindet`` aus; in E1 bleibt das Praedikat unveraendert."""
-        kuenftig = dataclasses.replace(self.BINDUNG, bindet="report_key")
-        assert kuenftig._erststufe() == "slug"
-        assert kuenftig.template_q().children == self.BINDUNG.template_q().children
+    def test_bindet_report_key_schaltet_erststufe_und_praedikat_um(self):
+        """Seit E3 (Refs #1849) wertet ``_erststufe()`` die Deklaration aus."""
+        ueber_key = dataclasses.replace(self.BINDUNG, bindet="report_key")
+        assert ueber_key._erststufe() == "report_key"
+        assert dict(ueber_key.template_q().children) == {
+            "fields__field_template__report_key__in": ("dauer_minuten", "ausgabe_stueck"),
+            "fields__field_template__is_active": True,
+        }
+
+    def test_key_for_template_liest_die_erststufe(self):
+        """Der Rueckweg fuer „erscheint in …" folgt derselben Deklaration."""
+        ueber_key = dataclasses.replace(self.BINDUNG, bindet="report_key")
+
+        assert self.BINDUNG.key_for_template(SimpleNamespace(slug="dauer", report_key=None)) == "dauer_minuten"
+        assert ueber_key.key_for_template(SimpleNamespace(slug="dauer", report_key=None)) is None
+        assert ueber_key.key_for_template(SimpleNamespace(slug="fremd", report_key="dauer_minuten")) == "dauer_minuten"
+        assert ueber_key.key_for_template(SimpleNamespace(slug="dauer", report_key="fantasie")) is None
 
 
 class TestFeldgruppePublikationsSlug:
     """Publizierter Schluessel und ``data_json``-Lesepfad sind zwei Dinge.
 
-    Beide sind heute derselbe String — aber ``feld_slug`` steht in
+    Im Standardpaket sind beide derselbe String — aber ``feld_slug`` steht in
     ``records["feld"]``, ``summary["events_…"]`` und damit im Artefakt, waehrend
-    ``data_json_keys()`` in E3 auf den Berichtsschluessel wechseln kann. Kaeme
-    der publizierte Wert aus dem Lesepfad, benennte dieser Wechsel still
-    Export-Spalten und Snapshot-Schluessel um.
+    der Lesepfad seit E3 (Refs #1849) je Dokumentationstyp aufgeloest wird.
+    Kaeme der publizierte Wert aus dem Lesepfad, benennte eine Einrichtung mit
+    eigener Feldbenennung still Export-Spalten und Snapshot-Schluessel um.
     """
 
     def test_publikations_slug_ist_ein_eigenes_deklariertes_feld(self):
@@ -1111,18 +1209,37 @@ class TestFeldgruppePublikationsSlug:
 
         umgestellt = dataclasses.replace(
             gruppe,
-            feld_bindung=FeldBindung((BindungsEintrag("art_der_krise", "Art der Krise", slugs=("kuenftiger-key",)),)),
+            feld_bindung=FeldBindung(
+                (BindungsEintrag("art_der_krise", "Art der Krise", slugs=("kuenftiger-key",)),), bindet="report_key"
+            ),
         )
-        assert umgestellt.lese_schluessel == "kuenftiger-key"
         assert umgestellt.feld_slug == "art-der-krise"
         assert umgestellt.summary_key == "events_art_der_krise"
         assert umgestellt.records_key == "records_art_der_krise"
 
-    def test_lesepfad_kommt_aus_der_bindung(self):
+    @pytest.mark.django_db
+    def test_lesepfad_kommt_aus_der_bindung(self, facility):
+        """Der Lesepfad ist der Slug DER Vorlage, die den Schluessel traegt — nicht
+        der in der Deklaration notierte Paket-Slug.
+        """
+        from core.models import DocumentTypeField, FieldTemplate
         from core.reporting.backends import service_distribution as modul
 
-        for gruppe in modul.GRUPPEN:
-            assert gruppe.lese_schluessel == gruppe.feld_bindung.data_json_keys()[0]
+        typ = DocumentType.objects.create(facility=facility, name="Krisengespräch", report_key="crisis")
+        vorlage = FieldTemplate.objects.create(
+            facility=facility,
+            name="Art der Krise (eigene Benennung)",
+            slug="art-der-krise-eigen",
+            field_type="select",
+            report_key="art_der_krise",
+        )
+        DocumentTypeField.objects.create(document_type=typ, field_template=vorlage, sort_order=0)
+
+        gruppe = modul.GRUPPEN[1]
+        lese = gruppe.leseschluessel(facility)
+
+        assert lese.je_typ == {typ.id: "art-der-krise-eigen"}
+        assert lese.doppelt == ()
 
     @pytest.mark.architecture
     def test_kein_backend_nutzt_eine_bindung_ohne_sie_zu_deklarieren(self):

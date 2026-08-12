@@ -27,6 +27,10 @@ from core.reporting.backends.service_distribution import (
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
+from tests._reporting_helpers import feld_report_key_fuer, report_key_fuer
+
+# Sentinel: „nicht angegeben" — ``None`` heisst hier „kein Berichtsschluessel".
+_ABGELEITET = object()
 
 pytestmark = pytest.mark.django_db
 
@@ -51,11 +55,19 @@ def date_range():
     return today - timedelta(days=1), today + timedelta(days=1)
 
 
-def _typ_mit_feld(facility, name, *, system_type, feld_name, feld_typ, anhaengen=True):
-    doc_type = DocumentType.objects.create(facility=facility, name=name, system_type=system_type)
+def _typ_mit_feld(facility, name, *, system_type, feld_name, feld_typ, anhaengen=True, report_key=_ABGELEITET):
+    """``report_key`` folgt per Default dem Backfill (E3, Refs #1849)."""
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        name=name,
+        system_type=system_type,
+        report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+    )
     if anhaengen:
         feld, _created = FieldTemplate.objects.get_or_create(
-            facility=facility, name=feld_name, defaults={"field_type": feld_typ}
+            facility=facility,
+            name=feld_name,
+            defaults={"field_type": feld_typ, "report_key": feld_report_key_fuer(feld_name)},
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
     return doc_type
@@ -273,7 +285,12 @@ class TestTypaufloesung:
             feld_typ=FieldTemplate.FieldType.MULTI_SELECT,
         )
         notiz = DocumentType.objects.create(
-            facility=facility, name="Kontaktnotiz", slug="kontakt", system_type=DocumentType.SystemType.NOTE
+            facility=facility,
+            name="Kontaktnotiz",
+            slug="kontakt",
+            system_type=DocumentType.SystemType.NOTE,
+            # Wie der Backfill: „Notiz" heisst ausdruecklich „in keinen Bericht".
+            report_key=report_key_fuer(DocumentType.SystemType.NOTE),
         )
         feld = FieldTemplate.objects.get(facility=facility, slug=LEISTUNGEN_SLUG)
         DocumentTypeField.objects.create(document_type=notiz, field_template=feld)

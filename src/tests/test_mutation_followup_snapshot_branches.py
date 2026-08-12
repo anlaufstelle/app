@@ -164,6 +164,7 @@ class TestCreateOrUpdateSnapshotBranches:
             facility=facility,
             name="Kontakt-JG",
             system_type=DocumentType.SystemType.CONTACT,
+            report_key="contact",
         )
         jan = datetime(2025, 1, 15, 10, 0)
         _make_event(facility, client_identified, dt, staff_user, jan)

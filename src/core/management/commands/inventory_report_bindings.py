@@ -11,9 +11,11 @@ Facility-weites Inventar statt Einzelblick.
 **Zugleich das Prüfwerkzeug für Etappe E3 Schritt 7** (Konzept #1847): bevor
 der Slug-Zweitschlüssel entfernt werden darf, muss das Inventar zeigen, dass
 kein Dokumentationstyp mehr AUSSCHLIESSLICH über ihn gebunden ist (Erststufe
-— heute ``system_type`` — leer, Treffer nur über den Slug). Genau diese
-Menge steht unter ``document_types.slug_only`` (JSON) bzw. als eigene Zeile
-im Text-Report; das Gate ist erfüllt, sobald sie leer ist.
+leer, Treffer nur über den Slug — welches Feld die Erststufe ist, sagt die
+Bindung: seit E3 ``report_key``, für ``ban_overview`` weiterhin
+``system_type``). Genau diese Menge steht unter ``document_types.slug_only``
+(JSON) bzw. als eigene Zeile im Text-Report; das Gate ist erfüllt, sobald sie
+leer ist.
 
 **Achtung beim Lesen des Text-/JSON-Reports:** Die Backend-*Verfügbarkeit*
 selbst ist NICHT durchgängig auf ``entity_type=event`` beschränkt — nur
@@ -51,6 +53,7 @@ from core.reporting.registry import (
     describe_type_bindings,
     feld_bindungen,
     get_backends,
+    resolves_only_via_slug,
     typ_bindungen,
 )
 
@@ -106,19 +109,20 @@ def _document_type_entries(facility: Facility) -> dict[str, list[dict[str, Any]]
             "name": doc_type.name,
             "slug": doc_type.slug,
             "system_type": doc_type.system_type or None,
+            "report_key": doc_type.report_key or None,
             "appears_in": appears_in,
         }
         if not appears_in:
             unbound.append(entry)
             continue
         bound.append(entry)
-        # E3-Gate (Schritt 7): Erststufe (system_type) leer UND trotzdem ein
-        # Treffer -> die Zuordnung kommt AUSSCHLIESSLICH über den
-        # Slug-Zweitschlüssel zustande — dieselbe Auflösungsordnung wie
-        # TypBindung._eintrag()/resolve_key (E1-API): die Erststufe gewinnt
-        # immer, wenn sie gesetzt ist; der Treffer trotz leerer Erststufe
-        # kann also nur über den Slug entstanden sein.
-        if not doc_type.system_type:
+        # E3-Gate (Schritt 7): Treffer, aber bei JEDER treffenden Bindung war
+        # die Erststufe leer — die Zuordnung kommt also ausschließlich über den
+        # Slug-Zweitschlüssel zustande. Die Entscheidung liegt in der Registry
+        # (``resolves_only_via_slug``), weil nur die Bindung selbst weiß, welches
+        # Feld ihre Erststufe ist: seit E3 ist das ``report_key``, für
+        # ``ban_overview`` weiterhin ``system_type``.
+        if resolves_only_via_slug(doc_type, facility):
             slug_only.append(entry)
     return {"bound": bound, "unbound": unbound, "slug_only": slug_only}
 
@@ -138,6 +142,7 @@ def _field_template_entries(facility: Facility) -> dict[str, list[dict[str, Any]
             "id": str(field_template.id),
             "name": field_template.name,
             "slug": field_template.slug,
+            "report_key": field_template.report_key or None,
             "appears_in": appears_in,
         }
         (bound if appears_in else unbound).append(entry)

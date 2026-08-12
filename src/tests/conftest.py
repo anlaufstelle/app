@@ -191,6 +191,11 @@ def doc_type_contact(facility):
         facility=facility,
         name="Dauer",
         field_type=FieldTemplate.FieldType.NUMBER,
+        # E3 (Refs #1849): So sieht die Vorlage nach dem Backfill aus — der
+        # Paket-Slug ``dauer`` traegt den Feld-Berichtsschluessel, ueber den
+        # ``counseling-hours`` seit E3 bindet. Der Dokumentationstyp bleibt
+        # bewusst OHNE Erstschluessel: er ist der Zweitschluessel-Fall.
+        report_key="dauer_minuten",
     )
     ft_notiz = FieldTemplate.objects.create(
         facility=facility,

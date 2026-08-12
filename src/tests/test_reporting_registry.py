@@ -297,19 +297,32 @@ def _mit_feld_bindung(name: str, bindung: FeldBindung) -> type[DatasetBackend]:
 class TestDescribeTypeBindings:
     """``describe_type_bindings(document_type, facility)`` — E2s „erscheint in …" am Typ."""
 
-    def test_treffer_ueber_system_type(self):
+    def test_treffer_ueber_den_report_key(self):
+        """Seit E3 (Refs #1849) liest die Auskunft die Erststufe der Bindung."""
         registry.register_backend("beschreibung-a")(
             _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt"),)))
         )
-        doc_type = SimpleNamespace(system_type="contact", slug="")
+        doc_type = SimpleNamespace(report_key="contact", system_type=None, slug="")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Testbericht (Kontakt)"]
+
+    def test_verhaltens_bindung_liest_weiterhin_den_system_type(self):
+        """``ban_overview``-Muster: ``bindet="system_type"`` bleibt unberuehrt."""
+        registry.register_backend("beschreibung-a2")(
+            _mit_typ_bindung(
+                "Hausverbote",
+                TypBindung((BindungsEintrag("ban", "Hausverbot"),), slug_fallback=False, bindet="system_type"),
+            )
+        )
+        doc_type = SimpleNamespace(report_key=None, system_type="ban", slug="")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Hausverbote (Hausverbot)"]
 
     def test_treffer_ueber_slug_fallback(self):
         registry.register_backend("beschreibung-b")(
             _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt", slugs=("kontakt",)),)))
         )
-        doc_type = SimpleNamespace(system_type=None, slug="kontakt")
+        doc_type = SimpleNamespace(report_key=None, system_type=None, slug="kontakt")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Testbericht (Kontakt)"]
 
@@ -317,7 +330,7 @@ class TestDescribeTypeBindings:
         registry.register_backend("beschreibung-c")(
             _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt"),)))
         )
-        doc_type = SimpleNamespace(system_type="unbekannt", slug="")
+        doc_type = SimpleNamespace(report_key="unbekannt", system_type=None, slug="")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == []
 
@@ -326,7 +339,7 @@ class TestDescribeTypeBindings:
         registry.register_backend("beschreibung-d")(
             _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt", slugs=("kontakt",)),)))
         )
-        doc_type = SimpleNamespace(system_type="ban", slug="kontakt")
+        doc_type = SimpleNamespace(report_key="excluded", system_type=None, slug="kontakt")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == []
 
@@ -335,7 +348,7 @@ class TestDescribeTypeBindings:
         bindung = TypBindung((BindungsEintrag("crisis", "Krisengespräch"),))
         registry.register_backend("beschreibung-e1")(_mit_typ_bindung("Sachbericht", bindung))
         registry.register_backend("beschreibung-e2")(_mit_typ_bindung("Monatsverlauf", bindung))
-        doc_type = SimpleNamespace(system_type="crisis", slug="")
+        doc_type = SimpleNamespace(report_key="crisis", system_type=None, slug="")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == [
             "Sachbericht (Krisengespräch)",
@@ -344,7 +357,7 @@ class TestDescribeTypeBindings:
 
     def test_backend_ohne_bindung_wird_nicht_gemeldet(self):
         registry.register_backend("beschreibung-f")(_make_backend_cls())
-        doc_type = SimpleNamespace(system_type="contact", slug="")
+        doc_type = SimpleNamespace(report_key="contact", system_type=None, slug="")
 
         assert registry.describe_type_bindings(doc_type, _FACILITY) == []
 

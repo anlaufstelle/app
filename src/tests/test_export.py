@@ -16,7 +16,7 @@ from core.models import (
     User,
 )
 from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
-from tests._reporting_helpers import get_sample_report_1_statistics
+from tests._reporting_helpers import get_sample_report_1_statistics, report_key_fuer
 
 
 @pytest.fixture
@@ -436,6 +436,9 @@ class TestSampleReport1PdfKAnonSuppression:
             facility=facility,
             name=f"DT-{system_type}",
             system_type=system_type,
+            # E3 (Refs #1849): Erststufe der Berichtszuordnung ist der
+            # ``report_key`` — wie ihn der Backfill vergeben haette.
+            report_key=report_key_fuer(system_type),
         )
         for _ in range(n):
             Event.objects.create(

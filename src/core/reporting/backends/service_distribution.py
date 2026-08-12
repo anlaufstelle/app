@@ -144,11 +144,13 @@ class Feldgruppe:
     ``feld_slug`` bleibt ebenfalls ein **eigenes deklariertes Feld** und wird
     NICHT aus der Feld-Bindung abgeleitet: es ist der **publizierte** Schluessel
     (Spaltenwert ``feld`` in ``records``, Praefix von ``summary_key``) und damit
-    Teil des Artefakt- und Snapshot-Formats. ``FeldBindung.data_json_keys()``
-    ist dagegen der reine **Lesepfad** und darf in E3 auf den
-    Berichtsschluessel wechseln — kaeme der publizierte Wert von dort, benennte
-    dieser Wechsel still Export-Spalten und ``summary``-Schluessel um. Heute
-    sind beide derselbe String; das ist eine Tatsache, keine Kopplung.
+    Teil des Artefakt- und Snapshot-Formats.
+    :meth:`~core.reporting.base.FeldBindung.leseschluessel` ist dagegen der
+    reine **Lesepfad** und loest seit E3 je Dokumentationstyp auf — kaeme der
+    publizierte Wert von dort, benennte eine Einrichtung mit eigener
+    Feldbenennung still Export-Spalten und ``summary``-Schluessel um. Im
+    Standardpaket sind beide derselbe String; das ist eine Tatsache, keine
+    Kopplung.
     """
 
     feld_slug: str
@@ -156,11 +158,9 @@ class Feldgruppe:
     feld_bindung: FeldBindung
     mehrfachnennung: bool
 
-    @property
-    def lese_schluessel(self) -> str:
-        """Der ``data_json``-Leseschluessel dieser Gruppe (genau einer je Gruppe)."""
-        (schluessel,) = self.feld_bindung.data_json_keys()
-        return schluessel
+    def leseschluessel(self, facility):
+        """Der ``data_json``-Lesepfad dieser Gruppe, je Dokumentationstyp (E3)."""
+        return self.feld_bindung.leseschluessel(facility)
 
     @property
     def summary_key(self) -> str:
@@ -199,13 +199,16 @@ GRUPPEN: tuple[Feldgruppe, ...] = (
     Feldgruppe(
         LEISTUNGEN_SLUG,
         TypBindung((BindungsEintrag("contact", _("Kontakt"), slugs=("kontakt",)),)),
-        FeldBindung((BindungsEintrag("leistungen", _("Leistungen nach Kategorie"), slugs=(LEISTUNGEN_SLUG,)),)),
+        FeldBindung(
+            (BindungsEintrag("leistungen", _("Leistungen nach Kategorie"), slugs=(LEISTUNGEN_SLUG,)),),
+            bindet="report_key",
+        ),
         mehrfachnennung=True,
     ),
     Feldgruppe(
         KRISE_SLUG,
         TypBindung((BindungsEintrag("crisis", _("Krisengespräch"), slugs=("krisengespraech",)),)),
-        FeldBindung((BindungsEintrag("art_der_krise", _("Art der Krise"), slugs=(KRISE_SLUG,)),)),
+        FeldBindung((BindungsEintrag("art_der_krise", _("Art der Krise"), slugs=(KRISE_SLUG,)),), bindet="report_key"),
         mehrfachnennung=False,
     ),
 )
@@ -279,6 +282,7 @@ class ServiceDistributionBackend(DatasetBackend):
         for gruppe in GRUPPEN:
             if not self._ist_konfiguriert(facility, gruppe):
                 continue
+            lese = gruppe.leseschluessel(facility)
             payloads = (
                 Event.objects.for_facility(facility)
                 .filter(
@@ -287,14 +291,17 @@ class ServiceDistributionBackend(DatasetBackend):
                     occurred_at__date__lte=date_to,
                 )
                 .filter(gruppe.matching_q("document_type__"))
-                .values_list("data_json", flat=True)
+                .values_list("document_type_id", "data_json")
             )
             counts: dict[str, int] = {}
             events_mit_wert = 0
-            for data in payloads:
-                # Lesepfad aus der Bindung, Ausgabe unter dem publizierten
-                # Schluessel — die beiden duerfen nicht dieselbe Quelle haben.
-                optionen = as_options(safe_decrypt((data or {}).get(gruppe.lese_schluessel), default=None))
+            for document_type_id, data in payloads:
+                # Lesepfad aus der Bindung (je Dokumentationstyp aufgeloest),
+                # Ausgabe unter dem publizierten Schluessel — die beiden duerfen
+                # nicht dieselbe Quelle haben.
+                lese_schluessel = lese.je_typ.get(document_type_id)
+                roh = (data or {}).get(lese_schluessel) if lese_schluessel else None
+                optionen = as_options(safe_decrypt(roh, default=None))
                 if not optionen:
                     ohne_wert += 1
                     continue

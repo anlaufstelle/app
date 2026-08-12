@@ -29,9 +29,12 @@ Aufloesung, nicht die Suppressionsarithmetik. Genau eine Zelle je Backend
 verlaesst diesen Rahmen bewusst nicht.
 """
 
+import importlib
 from datetime import date, datetime
 
 import pytest
+from django.apps import apps as django_apps
+from django.db import connection
 from django.utils import timezone
 
 from core.models import Client, Event, Facility, Organization, User
@@ -40,6 +43,13 @@ from core.seed.doc_types import seed_document_types
 from core.services.dashboard.snapshot import _merge_sample_report_1_stats
 
 pytestmark = pytest.mark.django_db
+
+# Der Bestands-Backfill selbst (E3, Refs #1849) — nicht nachgebaut, sondern
+# aufgerufen: die Paritaets-Aussage lautet „Backfill plus Umstellung aendern die
+# Zahlen nicht", und eine zweite Kopie der Regel im Test koennte genau dort
+# abweichen, wo es darauf ankommt. Die Testdatenbank ist beim Anlegen der
+# Fixture-Zeilen laengst durchmigriert; der Backfill hat sie also nie gesehen.
+_BACKFILL = importlib.import_module("core.migrations.0145_backfill_report_key")
 
 MAI_VON = date(2025, 5, 1)
 MAI_BIS = date(2025, 5, 31)
@@ -101,10 +111,20 @@ def _isolated_registry(monkeypatch):
 
 @pytest.fixture
 def paket_facility(db):
-    """Einrichtung mit dem **Standardpaket** — der Seed-Weg, nicht handgebaute Typen."""
+    """Einrichtung mit dem **Standardpaket** — der Seed-Weg, nicht handgebaute Typen.
+
+    Anschliessend laeuft der Bestands-Backfill aus Migration ``0145`` ueber die
+    frisch angelegten Zeilen: so sieht eine Instanz nach dem Update aus, und
+    genau darueber macht dieser Test seine Aussage. Sobald das Standardpaket
+    ``report_key`` selbst mitbringt, ist der Aufruf ein No-op (der Backfill
+    fasst nur leere Schluessel an) — dass beide Wege dasselbe Ergebnis liefern
+    muessen, ist die tragende Zusage aus Konzept #1847 §E3.8.
+    """
     org = Organization.objects.create(name="Paritaets-Org")
     facility = Facility.objects.create(organization=org, name="Paritaets-Stelle")
     seed_document_types(facility)
+    with connection.schema_editor() as schema_editor:
+        _BACKFILL.backfill_report_key(django_apps, schema_editor)
     return facility
 
 

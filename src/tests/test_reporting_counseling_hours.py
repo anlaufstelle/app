@@ -21,6 +21,11 @@ from core.reporting.backends.counseling_hours import BEITRAGENDE_KEY, Counseling
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
+from tests._reporting_helpers import feld_report_key_fuer, report_key_fuer
+
+# Sentinel: „nicht angegeben" — ``None`` ist hier ein bedeutungstragender Wert
+# (kein Berichtsschluessel), darf also nicht als Default-Marker dienen.
+_ABGELEITET = object()
 
 pytestmark = pytest.mark.django_db
 
@@ -45,19 +50,32 @@ def date_range():
     return today - timedelta(days=1), today + timedelta(days=1)
 
 
-def _typ_mit_dauer(facility, name, *, system_type, encrypted=False, mit_dauer=True):
+def _typ_mit_dauer(facility, name, *, system_type, encrypted=False, mit_dauer=True, report_key=_ABGELEITET):
     """Dokumentationstyp mit der geteilten Paket-Feldvorlage ``dauer``.
 
     Die Vorlage ist je Einrichtung eindeutig (``unique_facility_fieldtemplate_name``)
     und haengt im Standardpaket an allen drei Gespraechstypen — sie wird deshalb
     einmal je Einrichtung angelegt und wiederverwendet.
+
+    ``report_key`` folgt per Default dem Backfill (E3, Refs #1849) — so sieht
+    ein migrierter Bestand aus. Die Zweitschluessel-Tests setzen ihn bewusst auf
+    ``None``, um den Slug-Pfad zu pruefen.
     """
-    doc_type = DocumentType.objects.create(facility=facility, name=name, system_type=system_type)
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        name=name,
+        system_type=system_type,
+        report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+    )
     if mit_dauer:
         feld, _created = FieldTemplate.objects.get_or_create(
             facility=facility,
             name="Dauer",
-            defaults={"field_type": FieldTemplate.FieldType.NUMBER, "is_encrypted": encrypted},
+            defaults={
+                "field_type": FieldTemplate.FieldType.NUMBER,
+                "is_encrypted": encrypted,
+                "report_key": feld_report_key_fuer("Dauer"),
+            },
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
     return doc_type

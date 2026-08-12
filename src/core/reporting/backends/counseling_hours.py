@@ -154,14 +154,11 @@ TYP_BINDUNG = TypBindung(
 # Die Feld-Bindung: ohne die Feldvorlage ``dauer`` (Standardpaket
 # ``core/packages/default.yaml``, Feldtyp ``number``, Einheit Minuten) gaebe es
 # nur eine Tabelle mit lauter Nullminuten.
-FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),))
+FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),), bindet="report_key")
 
 # Bestandsnamen als Ableitungen — eine Wahrheit, mehrere Sichten.
 KATEGORIEN: tuple[str, ...] = TYP_BINDUNG.ziele()
 SLUG_MAP = TYP_BINDUNG.slug_ziele()
-# Leseschluessel in ``data_json``. In E1 der Feldvorlagen-Slug; wechselt der
-# Lesepfad je Dokumentationstyp, ist ``data_json_keys()`` die eine Stelle (E3).
-(DAUER_SLUG,) = FELD_DAUER.data_json_keys()
 
 # Interner Zeilenschluessel: Zahl der Ereignisse, die zur Minutensumme dieser
 # Zeile beigetragen haben. Suppressions-EINGABE, nie Ausgabe — die
@@ -228,6 +225,10 @@ class CounselingHoursBackend(DatasetBackend):
         Intervall gilt dort als begruendete Ausnahme, der Guard liefe also
         fail-open.
         """
+        # Lesepfad je Dokumentationstyp (E3, Refs #1849): gebunden wird ueber
+        # den Berichtsschluessel, gelesen wird unter dem Feldvorlagen-Slug —
+        # beides faellt nur im Standardpaket zusammen.
+        lese = FELD_DAUER.leseschluessel(facility)
         payloads = (
             Event.objects.for_facility(facility)
             .filter(
@@ -236,7 +237,7 @@ class CounselingHoursBackend(DatasetBackend):
                 occurred_at__date__lte=date_to,
             )
             .filter(matching_q("document_type__"))
-            .values_list(*TYP_BINDUNG.values_fields("document_type__"), "data_json")
+            .values_list("document_type_id", *TYP_BINDUNG.values_fields("document_type__"), "data_json")
         )
 
         events = dict.fromkeys(KATEGORIEN, 0)
@@ -245,13 +246,14 @@ class CounselingHoursBackend(DatasetBackend):
         ohne_dauer = 0
         for zeile in payloads:
             # Die Schluesselfelder kommen aus der Deklaration; wie viele es sind,
-            # entscheidet sie (E3 kann den Zweitschluessel abschalten).
-            *schluessel, data = zeile
+            # entscheidet sie (der Zweitschluessel laesst sich abschalten).
+            document_type_id, *schluessel, data = zeile
             kategorie = TYP_BINDUNG.resolve(*schluessel)
             if kategorie is None:  # pragma: no cover - der Filter laesst nichts anderes durch
                 continue
             events[kategorie] += 1
-            dauer = as_number(safe_decrypt((data or {}).get(DAUER_SLUG), default=None))
+            dauer_slug = lese.je_typ.get(document_type_id)
+            dauer = as_number(safe_decrypt((data or {}).get(dauer_slug), default=None)) if dauer_slug else None
             if dauer is None:
                 ohne_dauer += 1
                 continue

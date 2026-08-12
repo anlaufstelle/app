@@ -61,11 +61,16 @@ def _berlin(jahr, monat, tag, stunde=12, minute=0):
 
 @pytest.fixture
 def doc_type_kontakt(facility):
-    """Erstschluessel-Fall: gesetzter ``system_type`` in ``CATEGORY_MAP``."""
+    """Erstschluessel-Fall: gesetzter ``report_key`` (Erststufe seit E3, #1849).
+
+    ``system_type`` laeuft mit, wie der Backfill ihn hinterlaesst — die beiden
+    duerfen auseinanderlaufen (E-D), hier tun sie es nicht.
+    """
     return DocumentType.objects.create(
         facility=facility,
         name="Ambulanz",
         system_type=DocumentType.SystemType.CONTACT,
+        report_key="contact",
     )
 
 
@@ -81,11 +86,12 @@ def doc_type_beratung_per_slug(facility):
 
 @pytest.fixture
 def doc_type_hausverbot(facility):
-    """Bewusst ausgeschlossen: ``ban`` fehlt in ``CATEGORY_MAP``."""
+    """Bewusst ausgeschlossen: der Sentinel ``excluded`` (Backfill-Ergebnis)."""
     return DocumentType.objects.create(
         facility=facility,
         name="Hausverbot",
         system_type=DocumentType.SystemType.BAN,
+        report_key="excluded",
     )
 
 
@@ -183,13 +189,14 @@ class TestBuildDataset:
         assert [issue.code for issue in result.completeness] == ["unmapped_system_types"]
         assert result.completeness[0].count == 1
 
-    def test_gesetzter_system_type_schlaegt_den_slug(self, backend, facility, staff_user):
-        """Ein Hausverbots-Typ mit dem Slug ``kontakt`` bleibt draussen."""
+    def test_gesetzter_erstschluessel_schlaegt_den_slug(self, backend, facility, staff_user):
+        """Ein ausdruecklich ausgeschlossener Typ mit dem Slug ``kontakt`` bleibt draussen."""
         doc_type = DocumentType.objects.create(
             facility=facility,
             name="Hausverbot",
             slug="kontakt",
             system_type=DocumentType.SystemType.BAN,
+            report_key="excluded",
         )
         _event(facility, doc_type, staff_user, _berlin(2026, 1, 10))
 
@@ -224,7 +231,7 @@ class TestBuildDataset:
     def test_fremde_facility_ist_unsichtbar(self, backend, facility, staff_user):
         fremd = Facility.objects.create(organization=Organization.objects.create(name="Fremd"), name="Fremdstelle")
         fremd_typ = DocumentType.objects.create(
-            facility=fremd, name="Ambulanz", system_type=DocumentType.SystemType.CONTACT
+            facility=fremd, name="Ambulanz", system_type=DocumentType.SystemType.CONTACT, report_key="contact"
         )
         _event(fremd, fremd_typ, staff_user, _berlin(2026, 1, 10))
 
@@ -241,7 +248,7 @@ class TestBuildDataset:
 
 
 class TestIsAvailable:
-    def test_positiv_ueber_system_type(self, backend, facility, doc_type_kontakt):
+    def test_positiv_ueber_den_report_key(self, backend, facility, doc_type_kontakt):
         assert backend.is_available(facility) is True
 
     def test_positiv_ueber_slug_zweitschluessel(self, backend, facility, doc_type_beratung_per_slug):
@@ -268,6 +275,7 @@ class TestIsAvailable:
             facility=facility,
             name="Kontaktprofil",
             system_type=DocumentType.SystemType.CONTACT,
+            report_key="contact",
             entity_type=DocumentType.EntityType.CLIENT,
         )
 

@@ -149,6 +149,8 @@ class TestSampleReport1DataStored:
             facility=facility,
             name="Kontaktaufnahme",
             system_type="contact",
+            # E3 (Refs #1849): Erststufe der Berichtszuordnung.
+            report_key="contact",
         )
 
         jan = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
@@ -180,6 +182,8 @@ class TestBackendData:
             facility=facility,
             name="Kontaktaufnahme",
             system_type="contact",
+            # E3 (Refs #1849): Erststufe der Berichtszuordnung.
+            report_key="contact",
         )
         jan = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
         _create_event(facility, staff_user, dt_contact, client=client_identified, occurred_at=jan)

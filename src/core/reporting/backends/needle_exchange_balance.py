@@ -102,14 +102,12 @@ TYP_BINDUNG = TypBindung((BindungsEintrag("needle_exchange", _("Spritzentausch")
 # DEMSELBEN Typ" (je ``filter()``-Aufruf ein eigener JOIN, siehe
 # ``FeldBindung.template_q``). Eine Bindung mit ``slugs=("ausgabe",
 # "rueckgabe")`` waere ein ``IN`` und damit ein ODER.
-FELD_AUSGABE = FeldBindung((BindungsEintrag("ausgabe_stueck", _("Ausgabe gesamt"), slugs=("ausgabe",)),))
-FELD_RUECKGABE = FeldBindung((BindungsEintrag("rueckgabe_stueck", _("Rückgabe gesamt"), slugs=("rueckgabe",)),))
-
-# Leseschluessel in ``data_json`` (Feld-Template-Slugs des Standardpakets
-# ``core/packages/default.yaml``). In E1 identisch mit den Slugs; wechselt der
-# Lesepfad je Dokumentationstyp, ist ``data_json_keys()`` die eine Stelle (E3).
-(AUSGABE_SLUG,) = FELD_AUSGABE.data_json_keys()
-(RUECKGABE_SLUG,) = FELD_RUECKGABE.data_json_keys()
+FELD_AUSGABE = FeldBindung(
+    (BindungsEintrag("ausgabe_stueck", _("Ausgabe gesamt"), slugs=("ausgabe",)),), bindet="report_key"
+)
+FELD_RUECKGABE = FeldBindung(
+    (BindungsEintrag("rueckgabe_stueck", _("Rückgabe gesamt"), slugs=("rueckgabe",)),), bindet="report_key"
+)
 
 # SQL-Entsprechung der Typaufloesung — ``matching_q()`` filtert auf
 # ``DocumentType`` selbst, ``matching_q("document_type__")`` auf ``Event``. EINE
@@ -152,6 +150,19 @@ def as_number(raw):
     return None
 
 
+def _feldwert(werte: dict, slug: str | None):
+    """Zahlwert unter ``slug`` — ``None``, wenn der Typ kein solches Feld traegt.
+
+    ``slug is None`` heisst: dieser Dokumentationstyp hat fuer die Bindung keine
+    (eindeutige) Feldvorlage. Der Fall ist nach E3 regulaer — ein Typ kann
+    ``needle_exchange`` tragen und trotzdem nur eines der beiden Zahlenfelder
+    fuehren, und bei einer Doppelbindung zaehlt bewusst keines (E-J).
+    """
+    if not slug:
+        return None
+    return as_number(safe_decrypt(werte.get(slug), default=None))
+
+
 @register_backend("needle-exchange-balance")
 class NeedleExchangeBalanceBackend(DatasetBackend):
     """Ausgabe/Ruecknahme und Saldo je Zeitraum — Referenz fuer Feldwert-Berichte."""
@@ -186,6 +197,10 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
 
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Summiert ``ausgabe``/``rueckgabe`` ueber die Spritzentausch-Ereignisse."""
+        # Lesepfad je Dokumentationstyp (E3, Refs #1849): gebunden wird ueber den
+        # Berichtsschluessel, gelesen wird unter dem Feldvorlagen-Slug.
+        lese_ausgabe = FELD_AUSGABE.leseschluessel(facility)
+        lese_rueckgabe = FELD_RUECKGABE.leseschluessel(facility)
         payloads = (
             Event.objects.for_facility(facility)
             .filter(
@@ -194,18 +209,18 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
                 occurred_at__date__lte=date_to,
             )
             .filter(matching_q("document_type__"))
-            .values_list("data_json", flat=True)
+            .values_list("document_type_id", "data_json")
         )
 
         events = 0
         summe_ausgabe: float = 0
         summe_rueckgabe: float = 0
         ohne_werte = 0
-        for data in payloads:
+        for document_type_id, data in payloads:
             events += 1
             werte = data or {}
-            ausgabe = as_number(safe_decrypt(werte.get(AUSGABE_SLUG), default=None))
-            rueckgabe = as_number(safe_decrypt(werte.get(RUECKGABE_SLUG), default=None))
+            ausgabe = _feldwert(werte, lese_ausgabe.je_typ.get(document_type_id))
+            rueckgabe = _feldwert(werte, lese_rueckgabe.je_typ.get(document_type_id))
             if ausgabe is None and rueckgabe is None:
                 # Beide Werte unbrauchbar: das Ereignis traegt zu KEINER Summe
                 # bei und zaehlt deshalb nicht als beitragend. Ein Ereignis mit

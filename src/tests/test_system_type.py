@@ -35,11 +35,17 @@ def doc_type_ban(facility):
 
 @pytest.fixture
 def doc_type_contact(facility):
-    """DocumentType mit system_type=CONTACT."""
+    """DocumentType mit system_type=CONTACT — und dem Berichtsschluessel dazu.
+
+    Seit E3 (Refs #1849) ist ``report_key`` die Erststufe der
+    Berichtszuordnung; der Backfill gibt einem Bestandstyp mit
+    ``system_type=contact`` genau diesen Wert.
+    """
     return DocumentType.objects.create(
         facility=facility,
         name="Kontakt_st",
         system_type=DocumentType.SystemType.CONTACT,
+        report_key="contact",
     )
 
 
@@ -92,7 +98,12 @@ class TestRenameSafety:
         assert len(bans) == 1
 
     def test_rename_doctype_export_still_works(self, facility, staff_user, doc_type_contact):
-        """DocumentType.name ändern → Sachbericht-Export funktioniert weiterhin über system_type."""
+        """DocumentType.name ändern → Sachbericht-Export funktioniert weiterhin.
+
+        Der Export haengt am stabilen Schluessel, nicht am Namen — seit E3
+        (Refs #1849) am ``report_key`` statt am ``system_type``. Die
+        Rename-Sicherheit ist dieselbe.
+        """
         # Kontakt-Event erstellen
         Event.objects.create(
             facility=facility,
@@ -107,7 +118,7 @@ class TestRenameSafety:
         doc_type_contact.name = "Erstgespräch"
         doc_type_contact.save()
 
-        # Export mappt weiterhin über system_type
+        # Export mappt weiterhin über den stabilen Schlüssel
         today = date.today()
         stats = get_sample_report_1_statistics(facility, today - timedelta(days=1), today + timedelta(days=1))
         assert stats["total"] == 1

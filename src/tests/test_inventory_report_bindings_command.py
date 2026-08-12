@@ -94,8 +94,8 @@ class TestBackendCatalog:
 
 @pytest.mark.django_db
 class TestDocumentTypeInventory:
-    def test_bound_type_via_system_type(self, facility):
-        DocumentType.objects.create(facility=facility, name="Spritzentausch", system_type="needle_exchange")
+    def test_bound_type_via_report_key(self, facility):
+        DocumentType.objects.create(facility=facility, name="Spritzentausch", report_key="needle_exchange")
         out = _run("--facility", str(facility.pk), "--format", "json")
         data = json.loads(out)
         bound_names = {e["name"] for e in data["document_types"]["bound"]}
@@ -110,8 +110,8 @@ class TestDocumentTypeInventory:
         assert "Eigene Notiz" in unbound_names
 
     def test_slug_only_binding_is_flagged_as_own_metric(self, facility):
-        """E3-Gate (Schritt 7): system_type leer, Slug 'kontakt' trifft ueber den Zweitschluessel."""
-        DocumentType.objects.create(facility=facility, name="Eigener Kontakttyp", slug="kontakt", system_type=None)
+        """E3-Gate (Schritt 7): Erststufe leer, Slug 'kontakt' trifft ueber den Zweitschluessel."""
+        DocumentType.objects.create(facility=facility, name="Eigener Kontakttyp", slug="kontakt", report_key=None)
         out = _run("--facility", str(facility.pk), "--format", "json")
         data = json.loads(out)
         slug_only_names = {e["name"] for e in data["document_types"]["slug_only"]}
@@ -119,11 +119,11 @@ class TestDocumentTypeInventory:
         bound_names = {e["name"] for e in data["document_types"]["bound"]}
         assert "Eigener Kontakttyp" in bound_names  # slug_only ist eine Teilmenge von bound
 
-    def test_type_bound_via_system_type_is_not_slug_only(self, facility):
-        """Ein GESETZTER system_type zählt nicht als 'ausschließlich über Slug' —
+    def test_type_bound_via_report_key_is_not_slug_only(self, facility):
+        """Eine GESETZTE Erststufe zählt nicht als 'ausschließlich über Slug' —
         auch wenn zufällig derselbe Paket-Slug gesetzt ist."""
         DocumentType.objects.create(
-            facility=facility, name="Regulärer Kontakttyp", slug="kontakt", system_type="contact"
+            facility=facility, name="Regulärer Kontakttyp", slug="kontakt", report_key="contact"
         )
         out = _run("--facility", str(facility.pk), "--format", "json")
         data = json.loads(out)
@@ -145,12 +145,14 @@ class TestDocumentTypeInventory:
 
 @pytest.mark.django_db
 class TestFieldTemplateInventory:
-    def test_bound_field_via_slug(self, facility):
-        # counseling-hours ist nur verfügbar, wenn "dauer" tatsächlich einem
+    def test_bound_field_via_report_key(self, facility):
+        # counseling-hours ist nur verfügbar, wenn die Vorlage tatsächlich einem
         # passenden Dokumentationstyp zugeordnet ist (Review-Befund #1848: seit
-        # der Verfügbarkeits-Filterung genügt der blosse Slug-Match nicht mehr).
-        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number")
-        dt = DocumentType.objects.create(facility=facility, name="Beratung", system_type="counseling")
+        # der Verfügbarkeits-Filterung genügt der blosse Schluessel-Match nicht).
+        ft = FieldTemplate.objects.create(
+            facility=facility, name="Dauer", field_type="number", report_key="dauer_minuten"
+        )
+        dt = DocumentType.objects.create(facility=facility, name="Beratung", report_key="counseling")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         out = _run("--facility", str(facility.pk), "--format", "json")
         data = json.loads(out)

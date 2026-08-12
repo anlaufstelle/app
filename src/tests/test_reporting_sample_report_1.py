@@ -31,8 +31,12 @@ from core.reporting.backends.sample_report_1 import (
 )
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
+from tests._reporting_helpers import report_key_fuer
 
 pytestmark = pytest.mark.django_db
+
+# Sentinel: „nicht angegeben" — ``None`` heisst hier „kein Berichtsschluessel".
+_ABGELEITET = object()
 
 DATE_FROM = date(2025, 5, 1)
 DATE_TO = date(2025, 5, 31)
@@ -155,18 +159,24 @@ def user(facility):
 
 @pytest.fixture
 def make_doc_type(facility):
-    def _make(name, system_type, *, slug="", doc_facility=None):
+    def _make(name, system_type, *, slug="", doc_facility=None, report_key=_ABGELEITET):
         """``slug=""`` laesst ``save()`` den Slug aus dem Namen ableiten (Bestand).
 
         Der explizite Slug ist fuer den Zweitschluessel aus #1741 noetig: dort
         muss Name und Slug auseinanderfallen koennen, sonst prueft der Test nur
         die Namensableitung mit.
+
+        ``report_key`` folgt per Default dem Backfill (E3, Refs #1849) — so
+        sieht ein migrierter Bestand aus, und nur so pruefen die Zahlen-Tests
+        weiterhin den Erstschluessel statt bloss den Slug-Zweitschluessel. Die
+        Zweitschluessel-Tests setzen ihn ausdruecklich auf ``None``.
         """
         return DocumentType.objects.create(
             facility=doc_facility or facility,
             name=name,
             system_type=system_type,
             slug=slug,
+            report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
         )
 
     return _make

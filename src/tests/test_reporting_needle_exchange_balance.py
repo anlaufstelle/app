@@ -33,6 +33,10 @@ from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanc
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
+from tests._reporting_helpers import feld_report_key_fuer, report_key_fuer
+
+# Sentinel: „nicht angegeben" — ``None`` heisst hier „kein Berichtsschluessel".
+_ABGELEITET = object()
 
 pytestmark = pytest.mark.django_db
 
@@ -63,12 +67,28 @@ def _feld(facility, name, *, encrypted=False):
         name=name,
         field_type=FieldTemplate.FieldType.NUMBER,
         is_encrypted=encrypted,
+        report_key=feld_report_key_fuer(name),
     )
 
 
-def _spritzentausch_typ(facility, *, system_type=DocumentType.SystemType.NEEDLE_EXCHANGE, name="Spritzentausch"):
-    """Dokumentationstyp mit den Paket-Feldern ``ausgabe``/``rueckgabe``."""
-    doc_type = DocumentType.objects.create(facility=facility, name=name, system_type=system_type)
+def _spritzentausch_typ(
+    facility,
+    *,
+    system_type=DocumentType.SystemType.NEEDLE_EXCHANGE,
+    name="Spritzentausch",
+    report_key=_ABGELEITET,
+):
+    """Dokumentationstyp mit den Paket-Feldern ``ausgabe``/``rueckgabe``.
+
+    ``report_key`` folgt per Default dem Backfill (E3, Refs #1849); die
+    Zweitschluessel-Tests setzen ihn bewusst auf ``None``.
+    """
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        name=name,
+        system_type=system_type,
+        report_key=report_key_fuer(system_type) if report_key is _ABGELEITET else report_key,
+    )
     for feld in (_feld(facility, "Ausgabe"), _feld(facility, "Rückgabe")):
         DocumentTypeField.objects.create(document_type=doc_type, field_template=feld)
     return doc_type
