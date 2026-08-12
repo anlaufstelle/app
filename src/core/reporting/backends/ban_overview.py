@@ -161,8 +161,7 @@ _POINT_IN_TIME_ISSUE = CompletenessIssue(
 
 def _ban_events(facility):
     """Sichtbare Hausverbots-Ereignisse der Einrichtung — ohne Slug-Fallback."""
-    return Event.objects.filter(
-        facility=facility,
+    return Event.objects.for_facility(facility).filter(
         is_deleted=False,
         document_type__system_type=DocumentType.SystemType.BAN,
     )

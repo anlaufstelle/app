@@ -827,9 +827,9 @@ def find_adhoc_facility_filter(source: str) -> list[str]:
 class TestForFacilityConventionGuard:
     """Der Facility-Scope wird als ``for_facility()`` geschrieben (Refs #1834)."""
 
-    # Refs #1834/#1835: ``core/reporting/`` zieht der Backend-Sweep nach; der
-    # Guard wird dort in einem eigenen Schritt scharf gestellt.
-    @pytest.mark.parametrize("scan_dir", ["src/core/services", "src/core/views"])
+    # Refs #1834/#1835: ``core/reporting/`` ist seit dem Backend-Sweep
+    # (Merge beider Worktrees) ebenfalls auf der Hausform und wird mitbewacht.
+    @pytest.mark.parametrize("scan_dir", ["src/core/services", "src/core/views", "src/core/reporting"])
     def test_no_adhoc_facility_filter(self, scan_dir: str) -> None:
         root = Path(scan_dir)
         violations = []

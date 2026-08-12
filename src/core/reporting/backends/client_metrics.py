@@ -179,12 +179,15 @@ _COUNT_KEY = "personen"
 
 def _events_with_person(facility, date_from, date_to):
     """Sichtbare Ereignisse **mit** Personenbezug im Zeitraum."""
-    return Event.objects.filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__date__gte=date_from,
-        occurred_at__date__lte=date_to,
-    ).exclude(client__isnull=True)
+    return (
+        Event.objects.for_facility(facility)
+        .filter(
+            is_deleted=False,
+            occurred_at__date__gte=date_from,
+            occurred_at__date__lte=date_to,
+        )
+        .exclude(client__isnull=True)
+    )
 
 
 @register_backend("client-metrics")
@@ -219,12 +222,15 @@ class ClientMetricsBackend(DatasetBackend):
 
         aktive_personen = base_qs.values("client").distinct().count()
 
-        neuaufnahmen = Client.objects.filter(
-            facility=facility,
-            is_deleted=False,
-            created_at__date__gte=date_from,
-            created_at__date__lte=date_to,
-        ).count()
+        neuaufnahmen = (
+            Client.objects.for_facility(facility)
+            .filter(
+                is_deleted=False,
+                created_at__date__gte=date_from,
+                created_at__date__lte=date_to,
+            )
+            .count()
+        )
 
         records = [
             {"alterscluster": row["client__age_cluster"], _COUNT_KEY: row[_COUNT_KEY]}
@@ -338,8 +344,11 @@ class ClientMetricsBackend(DatasetBackend):
         (``entity_type`` ``client``/``case``) genuegen dafuer ausdruecklich
         nicht — sie beschreiben Stammdatenformulare, keine Ereignisse.
         """
-        return DocumentType.objects.filter(
-            facility=facility,
-            is_active=True,
-            entity_type=DocumentType.EntityType.EVENT,
-        ).exists()
+        return (
+            DocumentType.objects.for_facility(facility)
+            .filter(
+                is_active=True,
+                entity_type=DocumentType.EntityType.EVENT,
+            )
+            .exists()
+        )

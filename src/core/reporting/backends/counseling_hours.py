@@ -241,8 +241,8 @@ class CounselingHoursBackend(DatasetBackend):
         fail-open.
         """
         payloads = (
-            Event.objects.filter(
-                facility=facility,
+            Event.objects.for_facility(facility)
+            .filter(
                 is_deleted=False,
                 occurred_at__date__gte=date_from,
                 occurred_at__date__lte=date_to,

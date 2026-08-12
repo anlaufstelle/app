@@ -50,8 +50,8 @@ class ExampleBackend(DatasetBackend):
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Eine Zeile je Dokumenttyp mit Ereignissen im Zeitraum, Gesamtzahl im Summary."""
         rows = (
-            Event.objects.filter(
-                facility=facility,
+            Event.objects.for_facility(facility)
+            .filter(
                 is_deleted=False,
                 occurred_at__date__gte=date_from,
                 occurred_at__date__lte=date_to,

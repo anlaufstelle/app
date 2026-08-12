@@ -142,8 +142,7 @@ _UNMAPPED_EXPORT_MESSAGE = _SUPPRESSED_MESSAGES[_UNMAPPED_CODE]
 
 def _base_queryset(facility, date_from, date_to):
     """Sichtbare Ereignisse der Einrichtung im Zeitraum (Basis aller Auswertungen)."""
-    return Event.objects.filter(
-        facility=facility,
+    return Event.objects.for_facility(facility).filter(
         is_deleted=False,
         occurred_at__date__gte=date_from,
         occurred_at__date__lte=date_to,
