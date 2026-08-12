@@ -66,7 +66,7 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import _get_threshold, apply_residual_guard
@@ -282,7 +282,7 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
         }
         apply_residual_guard(view, threshold, ())
 
-        summary = {**result.summary, **view, "k_anonymity_threshold": threshold}
+        summary = stamp_threshold({**result.summary, **view}, threshold)
         records = [{spec.key: view[spec.key] for spec in self.get_field_specs()}]
         # K6 (Refs #1769): datenunabhaengig und unbeziffert — die Meldung steht
         # immer, auch wenn es gar keine Luecke gibt. Waeren beide Faelle

@@ -5,7 +5,14 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from core.reporting import registry
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import (
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    project_records,
+    stamp_threshold,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -140,3 +147,60 @@ class TestDatasetBackendABC:
     def test_default_slug_und_name_leer(self):
         assert _CompleteBackend.slug == ""
         assert _CompleteBackend.name == ""
+
+
+class TestProjectRecords:
+    """``project_records()`` (Refs #1835) — Rueckprojektion auf FieldSpec-Keys.
+
+    Wiederkehrendes Muster in ``prepare_export`` ueber alle Reporting-
+    Backends: Suppressionsfunktionen haengen interne Flags (``suppressed``,
+    ``persons``) an, die keine eigene Spalte sind und sonst ungefiltert in
+    CSV/JSON/XML landen wuerden.
+    """
+
+    def test_projiziert_nur_deklarierte_keys(self):
+        specs = [FieldSpec("a", "A"), FieldSpec("b", "B")]
+        rows = [{"a": 1, "b": 2, "suppressed": False}, {"a": 3, "b": None, "suppressed": True}]
+        result = project_records(rows, specs)
+        assert result == [{"a": 1, "b": 2}, {"a": 3, "b": None}]
+
+    def test_leere_zeilen_liste_bleibt_leer(self):
+        assert project_records([], [FieldSpec("a", "A")]) == []
+
+    def test_erhaelt_zeilenreihenfolge(self):
+        specs = [FieldSpec("key", "Key")]
+        rows = [{"key": "z"}, {"key": "a"}, {"key": "m"}]
+        assert [row["key"] for row in project_records(rows, specs)] == ["z", "a", "m"]
+
+    def test_gibt_neue_dicts_zurueck_kein_alias(self):
+        """Die Eingabezeilen bleiben unveraendert — kein Seiteneffekt auf ``rows``."""
+        specs = [FieldSpec("a", "A")]
+        original = {"a": 1, "suppressed": True}
+        rows = [original]
+        result = project_records(rows, specs)
+        assert result[0] is not original
+        assert original == {"a": 1, "suppressed": True}
+
+
+class TestStampThreshold:
+    """``stamp_threshold()`` (Refs #1835) — ``k_anonymity_threshold`` im Export-Summary.
+
+    Wiederkehrendes Muster nach der Suppression in allen 9 Backends: der
+    Schwellenwert gehoert in den Export, damit eine Empfaengerin sieht, ab
+    welcher Zellengroesse unterdrueckt wurde.
+    """
+
+    def test_ergaenzt_den_schwellenwert(self):
+        result = stamp_threshold({"total": 42}, 5)
+        assert result == {"total": 42, "k_anonymity_threshold": 5}
+
+    def test_ueberschreibt_vorhandenen_schluessel(self):
+        result = stamp_threshold({"total": 42, "k_anonymity_threshold": 1}, 5)
+        assert result["k_anonymity_threshold"] == 5
+
+    def test_gibt_neues_dict_zurueck_kein_alias(self):
+        """Kein Seiteneffekt auf ``summary`` — der Aufrufer haelt oft noch eine Referenz."""
+        original = {"total": 42}
+        result = stamp_threshold(original, 5)
+        assert result is not original
+        assert original == {"total": 42}

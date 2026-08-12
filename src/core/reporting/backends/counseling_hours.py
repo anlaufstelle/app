@@ -111,7 +111,14 @@ from core.models import DocumentType, Event
 # nach verschiedenen Massstaeben. Wer dieses Modul als Vorlage kopiert, nimmt
 # ``as_number`` mit oder importiert es weiter von hier.
 from core.reporting.backends.needle_exchange_balance import as_number
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import (
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    project_records,
+    stamp_threshold,
+)
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -330,13 +337,14 @@ class CounselingHoursBackend(DatasetBackend):
                 row["minuten"] = None
                 minuten_vollstaendig = False
 
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in zeilen or ()]
-        summary = {
-            **result.summary,
-            "events_gesamt": view["events_gesamt"],
-            "minuten_gesamt": result.summary["minuten_gesamt"] if minuten_vollstaendig else None,
-            "k_anonymity_threshold": threshold,
-        }
+        records = project_records(zeilen or (), self.get_field_specs())
+        summary = stamp_threshold(
+            {
+                **result.summary,
+                "events_gesamt": view["events_gesamt"],
+                "minuten_gesamt": result.summary["minuten_gesamt"] if minuten_vollstaendig else None,
+            },
+            threshold,
+        )
         completeness = [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None)]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

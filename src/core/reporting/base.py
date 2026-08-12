@@ -160,3 +160,30 @@ class DatasetBackend(ABC):
         nutzen ``build_dataset()`` direkt (Roh-Payload). Default: unveraendert.
         """
         return result
+
+
+def project_records(rows, field_specs: list[FieldSpec]) -> list[dict]:
+    """Projiziert ``rows`` auf die von ``field_specs`` deklarierten Keys (Refs #1835).
+
+    Wiederkehrendes Muster in ``prepare_export`` ueber alle Backends: die
+    zentralen Suppressionsfunktionen (``_suppress_small`` & Co, siehe
+    :mod:`core.services.dashboard.external_report`) haengen interne Flags wie
+    ``suppressed``/``persons`` an, die keine eigene Spalte sind und sonst
+    ungefiltert in CSV/JSON/XML landen wuerden. Gibt neue Dicts zurueck —
+    ``rows`` bleibt unveraendert.
+    """
+    field_keys = [spec.key for spec in field_specs]
+    return [{key: row[key] for key in field_keys} for row in rows]
+
+
+def stamp_threshold(summary: dict, threshold: int) -> dict:
+    """Neue ``summary``-Kopie mit gestempelter ``k_anonymity_threshold`` (Refs #1835).
+
+    Wiederkehrendes Muster nach der Suppression in allen 9 Backends — der
+    Schwellenwert gehoert in den Export, damit eine Empfaengerin sieht, ab
+    welcher Zellengroesse unterdrueckt wurde. Gibt ein neues Dict zurueck —
+    ``summary`` bleibt unveraendert.
+    """
+    out = dict(summary)
+    out["k_anonymity_threshold"] = threshold
+    return out

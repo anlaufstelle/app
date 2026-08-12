@@ -115,13 +115,7 @@ from core.reporting.backends.sample_report_1 import (
 from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import (
-    ORDER_INPUT,
-    _Breakdown,
-    _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
-)
+from core.services.dashboard.external_report import ORDER_INPUT, _Breakdown, suppress_single_margin
 
 # SQL-Entsprechung von ``resolve_category`` auf ``DocumentType`` (nicht auf
 # ``Event`` wie ``_UNMAPPED_Q`` im Sachbericht): gemappt ist ein Typ, wenn sein
@@ -252,22 +246,14 @@ class MonthlyTrendBackend(DatasetBackend):
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
         """K-Anon-Suppression fuer Export und Panel-Vorschau (Refs #1278/#1770).
 
-        Vorlage ist ``ExampleBackend.prepare_export`` — dieselbe Reihenfolge,
-        dieselben Pflicht-Keywords, kein Eigenbau:
-
-        * Randsumme < *k* wird ``None`` (R14) — sie ist selbst eine
-          Kleinstfallzahl.
-        * :func:`_suppress_small` nullt Zellen < *k* und fuehrt das
-          Machbarkeits-Audit (K2) gleich mit aus; ``margin`` ist die
-          **publizierte** Randsumme, ``order`` die kanonische Ausgabeordnung
-          unterdrueckter Zeilen.
-        * :func:`apply_residual_guard` ist der **letzte** Schritt: er fuehrt die
-          Empfaenger-Inferenz aus und laesst notfalls die Randsumme oder die
-          ganze Aufschluesselung fallen.
-
-        Danach wird auf die deklarierten FieldSpec-Keys zurueckprojiziert — das
-        interne ``suppressed``-Flag aus ``_suppress_small`` ist keine Spalte und
-        landete sonst ungefiltert in CSV/JSON/XML.
+        Vorlage ist ``ExampleBackend.prepare_export`` — dieselbe zentrale
+        Maschinerie ueber :func:`suppress_single_margin` (Refs #1835):
+        Randsumme < *k* wird ``None`` (R14), ``_suppress_small`` nullt Zellen
+        < *k* inkl. Machbarkeits-Audit (K2, ``margin``/``order`` als
+        Pflicht-Keywords), :func:`~core.services.dashboard.external_report.apply_residual_guard`
+        (K1) ist der letzte Schritt, danach die Rueckprojektion auf die
+        deklarierten FieldSpec-Keys — das interne ``suppressed``-Flag ist
+        keine Spalte und landete sonst ungefiltert in CSV/JSON/XML.
 
         Der Vollstaendigkeitsblock wird **datenunabhaengig** aus dem festen Code
         gebaut (K6, Refs #1769), nicht aus ``result.completeness`` abgeleitet:
@@ -278,22 +264,9 @@ class MonthlyTrendBackend(DatasetBackend):
         Erwartet das **rohe** ``build_dataset``-Ergebnis; zweimal aufrufen ist
         kein sinnvoller Aufruf (``prepare_export`` ist nicht idempotent).
         """
-        threshold = _get_threshold(facility)
-        total = result.summary["total"]
-        published_total = None if total < threshold else total
-        view = {
-            "total": published_total,
-            "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
-
-        summary = dict(result.summary)
-        summary["total"] = view["total"]
-        summary["k_anonymity_threshold"] = threshold
-
+        records, summary = suppress_single_margin(
+            facility, result, breakdown=self._EXPORT_BREAKDOWN, field_specs=self.get_field_specs()
+        )
         completeness = [CompletenessIssue(_UNMAPPED_CODE, _UNMAPPED_EXPORT_MESSAGE, "warning", count=None)]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
 

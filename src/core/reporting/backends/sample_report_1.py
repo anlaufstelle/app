@@ -27,7 +27,7 @@ from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.data_source import MAPPED_EVENTS
 from core.reporting.registry import register_backend
 
@@ -399,7 +399,7 @@ class SampleReport1Backend(DatasetBackend):
         summary = suppress_sample_report_1_stats(facility, result.summary)
         # Transparenz analog ``build_external_report``-Metadaten: der Empfaenger
         # soll erkennen, ab welcher Fallzahl unterdrueckt wurde.
-        summary["k_anonymity_threshold"] = threshold
+        summary = stamp_threshold(summary, threshold)
 
         records = [{"category": row["name"], "count": row["count"]} for row in summary["by_category"]]
 

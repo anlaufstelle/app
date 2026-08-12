@@ -974,6 +974,58 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     return report
 
 
+def suppress_single_margin(
+    facility, result, *, breakdown: _Breakdown, field_specs: Sequence[Any]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """K-Anon-Suppression fuer Backends mit GENAU einer Randsumme (Refs #1835).
+
+    Kapselt die 14 byte-identischen Zeilen, die ``ExampleBackend.prepare_export``
+    und ``MonthlyTrendBackend.prepare_export`` bis auf einen Kommentar Wort fuer
+    Wort wiederholten: Schwelle ermitteln, Randsumme gegen R14 pruefen, Zeilen
+    ueber :func:`_suppress_small` unterdruecken (inkl. Machbarkeits-Audit K2
+    gegen die **publizierte** Randsumme), :func:`apply_residual_guard` (K1) als
+    letzter Schritt, Rueckprojektion auf die deklarierten FieldSpec-Keys.
+
+    Gilt NUR fuer Backends mit genau einer Randsumme (``result.summary["total"]``)
+    UND genau einer Aufschluesselung, die sie exakt partitioniert. Backends mit
+    mehreren zusammenhaengenden Kennzahlen (z. B. ``ClientMetricsBackend``,
+    ``SampleReport1Backend``) oder ganz ohne Randsumme (``CaseMetricsBackend``,
+    ``BanOverviewBackend``) bauen ihre Suppression weiterhin selbst — eine
+    zweite Suppressions-Basisklasse/-Helferfunktion fuer diese Faelle gibt es
+    bewusst nicht (der Architektur-Guard
+    ``test_kein_artefakt_baut_eigene_unterdrueckung`` erlaubt genau EINE
+    Suppressionsstelle; diese Funktion lebt deshalb hier im zentralen Modul,
+    nicht als Basisklasse in ``core/reporting/base.py``).
+
+    ``order`` ist bewusst kein Parameter, sondern fest :data:`ORDER_INPUT`:
+    beide heutigen Aufrufer sortieren schon wertunabhaengig, und ein
+    Namens-Literal an der Aufrufstelle (statt ``breakdown.order``) haelt den
+    ``test_order_kommt_aus_der_zentralen_liste``-Guard zufrieden, der an der
+    ``_suppress_small``-Aufrufstelle einen AST-``Name`` erwartet.
+
+    Rueckgabe: ``(records, summary)`` — der Aufrufer setzt ``completeness``
+    selbst (K6: manche Berichte geben einen datenunabhaengigen Hinweis mit,
+    andere gar keinen) und ruft ``dataclasses.replace``.
+    """
+    threshold = _get_threshold(facility)
+    total = result.summary["total"]
+    # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+    published_total = None if total < threshold else total
+    view: dict[str, Any] = {
+        "total": published_total,
+        "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
+    }
+    apply_residual_guard(view, threshold, (breakdown,))
+
+    field_keys = [spec.key for spec in field_specs]
+    records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+
+    summary = dict(result.summary)
+    summary["total"] = view["total"]
+    summary["k_anonymity_threshold"] = threshold
+    return records, summary
+
+
 def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     """K-Anon-Kleinstfallzahl-Suppression fuer das Sachbericht-PDF (Refs #1278, T1).
 

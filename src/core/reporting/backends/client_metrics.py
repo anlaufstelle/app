@@ -158,7 +158,7 @@ from django.db.models import Count
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Client, DocumentType, Event
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, project_records, stamp_threshold
 from core.reporting.data_source import PERSONS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -318,14 +318,13 @@ class ClientMetricsBackend(DatasetBackend):
         #    genau dann ``None``, wenn der Fail-safe greifen muss.
         _drop_person_derived_breakdowns(view, aktive, threshold, breakdown_keys=("records",))
 
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+        records = project_records(view.get("records", []), self.get_field_specs())
 
         neuaufnahmen = result.summary["neuaufnahmen"]
         summary = dict(result.summary)
         summary["aktive_personen"] = view["aktive_personen"]
         summary["neuaufnahmen"] = None if neuaufnahmen < threshold else neuaufnahmen
-        summary["k_anonymity_threshold"] = threshold
+        summary = stamp_threshold(summary, threshold)
         return dataclasses.replace(result, records=records, summary=summary)
 
     def is_available(self, facility) -> bool:

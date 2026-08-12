@@ -112,7 +112,14 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import (
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    project_records,
+    stamp_threshold,
+)
 from core.reporting.data_source import BANS_IN_PERIOD
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -307,8 +314,7 @@ class BanOverviewBackend(DatasetBackend):
         }
         apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
 
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+        records = project_records(view.get("records", []), self.get_field_specs())
 
         summary = dict(result.summary)
         # Fail-safe-Reihenfolge wie in ``case_metrics``: erst alles auf ``None``,
@@ -318,7 +324,7 @@ class BanOverviewBackend(DatasetBackend):
         # ``build_dataset``.
         summary.update(dict.fromkeys(_KENNZAHLEN, None))
         summary.update({row["kennzahl"]: row[_COUNT_KEY] for row in records})
-        summary["k_anonymity_threshold"] = threshold
+        summary = stamp_threshold(summary, threshold)
         return dataclasses.replace(result, records=records, summary=summary, completeness=[_POINT_IN_TIME_ISSUE])
 
     def is_available(self, facility) -> bool:

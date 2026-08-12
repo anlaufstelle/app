@@ -93,7 +93,14 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import (
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    project_records,
+    stamp_threshold,
+)
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.registry import register_backend
 from core.services.dashboard.external_report import (
@@ -347,17 +354,10 @@ class ServiceDistributionBackend(DatasetBackend):
 
         apply_residual_guard(view, threshold, tuple(breakdowns))
 
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [
-            {key: row[key] for key in field_keys}
-            # Der Guard kann eine ganze Aufschluesselung fallen lassen (Key weg,
-            # fail-safe) — deshalb ``get`` statt Indexzugriff.
-            for gruppe in aktive
-            for row in view.get(gruppe.records_key, ())
-        ]
-        summary = {
-            **{gruppe.summary_key: view[gruppe.summary_key] for gruppe in aktive},
-            "k_anonymity_threshold": threshold,
-        }
+        # Der Guard kann eine ganze Aufschluesselung fallen lassen (Key weg,
+        # fail-safe) — deshalb ``get`` statt Indexzugriff.
+        rows = [row for gruppe in aktive for row in view.get(gruppe.records_key, ())]
+        records = project_records(rows, self.get_field_specs())
+        summary = stamp_threshold({gruppe.summary_key: view[gruppe.summary_key] for gruppe in aktive}, threshold)
         completeness = [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None)]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

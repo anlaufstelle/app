@@ -565,8 +565,15 @@ class TestZentraleSuppressionsfunktion:
                     continue
                 # Wrapper, die die zentrale Suppression komplett delegieren
                 # (``suppress_sample_report_1_stats`` ruft den Guard intern),
-                # sind erfuellt.
-                if calls & {"suppress_sample_report_1_stats", "suppress_report_stats", "build_external_report"}:
+                # sind erfuellt. ``suppress_single_margin`` (Refs #1835) ebenso —
+                # sie kapselt Schwelle/R14/``_suppress_small``/Residual-Guard fuer
+                # Backends mit genau einer Randsumme.
+                if calls & {
+                    "suppress_sample_report_1_stats",
+                    "suppress_report_stats",
+                    "build_external_report",
+                    "suppress_single_margin",
+                }:
                     continue
                 violations.append(f"{module}:{node.lineno} prepare_export ohne Residual-Guard")
         assert not violations, (

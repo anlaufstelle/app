@@ -26,13 +26,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Event
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
-from core.services.dashboard.external_report import (
-    ORDER_INPUT,
-    _Breakdown,
-    _get_threshold,
-    _suppress_small,
-    apply_residual_guard,
-)
+from core.services.dashboard.external_report import ORDER_INPUT, _Breakdown, suppress_single_margin
 
 
 @register_backend("example")
@@ -100,14 +94,11 @@ class ExampleBackend(DatasetBackend):
         Zeilen-Suppression roh stehen, waere eine unterdrueckte Zelle exakt als
         Differenz zu den sichtbaren Zeilen rueckrechenbar. Genau dafuer gibt es
         die **zentrale** Maschinerie, und dieses Backend zeigt ihre Benutzung:
-
-        * :func:`_suppress_small` mit ``margin`` (die publizierte Randsumme, an
-          der das Machbarkeits-Audit rechnet) und ``order`` (kanonische
-          Ausgabeordnung unterdrueckter Zeilen, K5) — beides Pflicht-Keywords,
-          damit eine neue Aufrufstelle nicht still fail-open laeuft.
-        * :func:`apply_residual_guard` als letzter Schritt: er fuehrt die
-          Empfaenger-Inferenz aus und laesst notfalls die Randsumme oder die
-          ganze Aufschluesselung fallen.
+        :func:`suppress_single_margin` (Refs #1835) kapselt Schwelle, R14,
+        :func:`~core.services.dashboard.external_report._suppress_small`
+        (``margin``/``order`` als Pflicht-Keywords, K2/K5) und
+        :func:`~core.services.dashboard.external_report.apply_residual_guard`
+        (K1, letzter Schritt) fuer Backends mit genau einer Randsumme.
 
         Die fruehere Eigenbau-Regel „faellt eine Zelle, faellt auch ``total``"
         ist damit entfallen (Refs #1770): sie war eine zweite, pauschalere
@@ -120,20 +111,7 @@ class ExampleBackend(DatasetBackend):
         ``suppressed``-Flag aus ``_suppress_small`` ist keine eigene Spalte und
         wuerde sonst ungefiltert in CSV/JSON/XML landen.
         """
-        threshold = _get_threshold(facility)
-        total = result.summary["total"]
-        # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-        published_total = None if total < threshold else total
-        view = {
-            "total": published_total,
-            "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
-
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
-
-        summary = dict(result.summary)
-        summary["total"] = view["total"]
-        summary["k_anonymity_threshold"] = threshold
+        records, summary = suppress_single_margin(
+            facility, result, breakdown=self._EXPORT_BREAKDOWN, field_specs=self.get_field_specs()
+        )
         return dataclasses.replace(result, records=records, summary=summary)
