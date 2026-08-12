@@ -44,9 +44,21 @@ Dieses ADR hat den Enum eingeführt, seine **Werteliste** aber nie begründet. S
 
 - **Redaktionsregel: keine neuen `SystemType`-Werte ohne echte App-Logik.** Neue Berichts-Zuordnungen laufen über das Backend-Mapping, nicht über dieses Enum. Ein Freeze-Guard pinnt Werteliste und Rollenaufteilung (`src/tests/test_system_type.py`); eine Erweiterung braucht einen neuen RFC-Entscheid.
 - **Keine Reduktion.** Der naheliegende Rückbau auf `ban`/`crisis` (Bericht mappt dann über `slug`) ist **nicht** geplant: Das `system_type`-Dropdown ist heute der einzige Weg, mit dem eine Einrichtung einen eigenen Dokumentationstyp in den Sachbericht bekommt. Ein hartkodiertes Slug-Dict im Backend könnte das nicht ersetzen — die Option wird erst wieder bewertet, wenn der offene Produktentscheid zum Slug-Zweitschlüssel (#1741) auf ein **konfigurierbares** Mapping fällt. Sie wäre zudem eine kenntlich zu machende Abweichung von [ADR-038](038-reporting-plugin-backends.md) („Slug als *Ersatz* verworfen").
+
+ > **Überholt seit 2026-08-12** — siehe das Update unten. Die Begründung („einziger Weg") ist mit `report_key` entfallen, die Reduktion ist beschlossen.
 - **Capability-Flags** (`ban`/`crisis` als Fähigkeitsschalter) bleiben verworfen — wie schon unter „Alternatives considered": Die Bann-Logik hängt zusätzlich am Feld-Kontrakt (Aktiv/Bis/Grund), ein Flag allein reicht nicht.
 
 Der `help_text` des Feldes benennt die Rollentrennung jetzt selbst (Migration [`0125`](../../src/core/migrations/0125_systemtype_help_text_rollen.py)), der [Admin-Guide § Systemtyp](../admin-guide.md) ebenso.
+
+## Update 2026-08-12: Die Berichtsrolle ist weg — Reduktion beschlossen ([ADR-042](042-report-key-berichtszuordnung.md))
+
+Der Punkt „Keine Reduktion" oben stand auf **einer** Begründung: `system_type` sei der einzige sichtbare Weg, einen eigenen Dokumentationstyp in den Sachbericht zu bekommen. Diese Begründung ist mit #1849 entfallen — die Berichtszuordnung hat mit `report_key` eine **eigene Achse** an `DocumentType` und `FieldTemplate`, deren Werteraum aus den Backend-Deklarationen kommt. Auch der Slug-Zweitschlüssel aus #1741, auf den der Absatz als Alternative verweist, existiert nicht mehr (Entscheid E-E).
+
+Für dieses ADR gilt damit:
+
+- **Die Redaktionsregel bleibt — mit neuer Begründung.** Keine neuen `SystemType`-Werte; nicht mehr, weil das Enum die Berichtsrolle mitträgt, sondern weil es sie **nicht mehr** trägt: Eine neue Berichtskategorie ist ein Eintrag in einer Backend-Deklaration und braucht das Kern-Enum nicht.
+- **Die Reduktion ist beschlossen**, nicht mehr abgelehnt: `system_type` schrumpft auf `ban`/`crisis` (Konzept #1847 Etappe E4, Umsetzung #1850). Die sieben übrigen Werte tragen seit E3 keine Wirkung mehr.
+- **Die Slug-Rolle dieses ADR ist unberührt.** `slug` bleibt der stabile, rename-sichere Identifikator für Paket-Lookup und `data_json`-Schlüssel — er war nie der Berichtsschlüssel und ist es nach E3 erst recht nicht. Was entfallen ist, war seine **Zweitrolle** in der Berichtsauflösung, nicht seine Identität.
 
 ## References
 

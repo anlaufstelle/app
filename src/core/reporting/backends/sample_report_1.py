@@ -377,7 +377,9 @@ class SampleReport1Backend(DatasetBackend):
         )
         issues: list[CompletenessIssue] = []
 
-        # (a) Dokumenttypen ohne Berichtszuordnung (inkl. system_type NULL/leer).
+        # (a) Dokumentationstypen, die GAR KEINE Aussage treffen (``report_key``
+        # NULL oder leer). Ausdruecklich ausgeschlossene und solche mit einem
+        # Schluessel eines anderen Berichts zaehlen hier NICHT mit (Refs #1819).
         #
         # ``format_lazy`` statt f-String (Refs #1744): der Text erscheint in
         # Panel und JSON-/XML-Export und muss der Sprache des Empfaengers

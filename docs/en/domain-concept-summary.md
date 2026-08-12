@@ -40,7 +40,7 @@ Each facility configures its own set of documentation types (e.g. "Contact", "Cr
 | Sensitivity level | Low / medium / high |
 | Encryption flag | Field-level Fernet/AES-128 encryption |
 | Retention period | Automated deletion after N months |
-| Statistics category | Mapping for reports and aggregations |
+| Report key | Mapping for reports and aggregations (`report_key`) |
 
 Field values are stored as JSONB in PostgreSQL, keyed by field UUID. A pre-configured [domain library](glossary.md) ships with the system so facilities do not start from an empty database.
 
@@ -220,5 +220,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-09 -->
-<!-- source-hash: 36a8227c2272edba42e837c8dbf13f669175127c -->
+<!-- translation-date: 2026-08-12 -->
+<!-- source-hash: 89bf1d3c5ad3eabb75fc9ee6747713a3d141315a -->

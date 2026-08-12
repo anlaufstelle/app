@@ -46,6 +46,12 @@ Im Einzelnen:
 - **−** `E-I` lässt eine scharfe Kombination zu (`system_type=ban` mit Zähl-Schlüssel). Bewusst so entschieden: es wäre eine sichtbare Wahl, abgefedert durch die `excluded`-Vorbelegung und die „Erscheint in …"-Anzeige. Erweist sich das in der Praxis als Fehlkonfigurationsquelle, ist eine harte Validierung ein kleiner, rückwärtskompatibler Nachschlag.
 - **~** **K-Anon-Nähe.** Die Auflösung steckt in Vollständigkeitspfaden und Suppressions-Eingaben. Der Umbau ist deshalb durch einen Golden-Pin über alle sechs Backends abgesichert (`test_reporting_report_key_parity.py`), und der Disclosure-Prüfpunkt aus #1819 ist als Regressionstest festgeschrieben: die Bezugsgröße `events_in_period` steht in keinem Artefakt, der „bewusst ausgeschlossen"-Rest bleibt unberechenbar.
 
+## Abgrenzung
+
+- **E-H gilt nur auf Typ-Ebene.** Ein `FieldTemplate.report_key`, den kein Backend kennt, wird **nicht** gemeldet — es gibt kein Feld-Pendant zu `unknown_report_keys`. Das ist konzepttreu (E-H spricht ausdrücklich von Dokumentationstypen) und hat einen sachlichen Grund: Auf Typ-Ebene ist die Zahl der betroffenen **Ereignisse** die Aussage, auf Feld-Ebene wäre sie es nicht — ein Feld mit unbekanntem Schlüssel liefert schlicht keine Werte, ohne dass sich sagen ließe, wie viele es hätten sein sollen. Sichtbar bleibt der Zustand trotzdem: „Erscheint in keinem Bericht." an der Feldvorlage (E2) und der `unbound`-Bucket des Inventar-Commands. Kommt die Meldung später doch, ist sie ein additiver Nachschlag, kein Umbau.
+- **Kein Feld-Pendant zur Typ-Mehrfachbelegung.** Auf Typ-Ebene ist sie der Zweck (mehrere Typen in eine Berichtszeile), auf Feld-Ebene ist sie ein Fehler (E-J).
+- **Die Bann-Logik bleibt unberührt.** `ban_overview`, Banner, Zeitstrom-Filter und Übergabe hängen weiter an `system_type=ban`; `ban` bleibt im Enum. Er ist deshalb ausdrücklich **kein** wählbarer `report_key`: ein über `system_type` gebundener Schlüssel im `report_key`-Dropdown wäre wählbar, ohne etwas zu bewirken.
+
 ## Alternatives considered
 
 - **O1 — `system_type` einfach auf `ban`/`crisis` reduzieren, ohne Ersatz.** Verworfen: der Slug kann die Berichtszuordnung nicht tragen (Befund 1), und alle heute über den Systemtyp zugeordneten Typen fielen still aus dem Bericht.

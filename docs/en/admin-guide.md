@@ -508,7 +508,9 @@ The example activity report is a customizable example or template -- not a bindi
 
 **Report keys on field templates.** Reports that evaluate **field values** (minute totals, needle-exchange balance, distribution of selection fields) additionally need to know **which field** to read. Until the update that only worked through the field slug: naming your numeric field "Session duration" instead of "Duration" produced a report that permanently showed zero minutes -- without any feedback. Since the update the field template carries its own report key (e.g. "Minutes") and the name is free. The former free-text field **"Statistics category"** on the field template was removed in the same step: no evaluation ever read it.
 
-> **At most one field template per report key and documentation type.** Two fields with the key "Minutes" on the same type would mean double-counted minutes. The assignment is therefore rejected; if the duplication arises anyway (e.g. through a configuration package), the report counts **neither** field and says so. The same field template on **different** types is fine, as are two similarly named fields with **different** keys.
+> **At most one field template per report key and documentation type.** Two fields with the key "Minutes" on the same type would mean double-counted minutes. The assignment is therefore rejected -- as is setting a key later that is already taken on a shared type; if the duplication arises anyway (e.g. through a configuration package), the report counts **neither** field and says so. The same field template on **different** types is fine, as are two similarly named fields with **different** keys.
+>
+> **A deliberate gap:** If a **field template** carries a key that no report knows, the report does *not* say so separately -- unlike for a documentation type. The reason is that no meaningful figure could be given there: a field with an unknown key simply yields no values, and nobody knows how many there should have been. The state stays visible through "Appears in …" on the field template itself, which then reads "Does not appear in any report."
 
 #### Minimum Contact Stage
 
@@ -1618,4 +1620,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-12 -->
-<!-- source-hash: 88988edadf1a9996344bacce60972c94c3a0987b -->
+<!-- source-hash: 6db98abc2b3f28e96ff2cb839b01db6f5d8864b8 -->

@@ -187,9 +187,9 @@ Anlaufstelle denkt von der Einrichtung her: ein konkreter Standort mit eigenem T
 
 ### Prinzip 3: Semantik vor freiem Feldchaos
 
-Dokumentationsfelder haben eine Bedeutung. Sie sind nicht einfach benannte Textfelder, sondern tragen Metadaten: Datentyp, Zuordnung zu einem Dokumentationstyp, Sensitivitätsstufe, Löschfrist, Statistik-Kategorie. Diese Semantik ermöglicht automatische Auswertung, Datenschutzsteuerung und typenübergreifende Suche.
+Dokumentationsfelder haben eine Bedeutung. Sie sind nicht einfach benannte Textfelder, sondern tragen Metadaten: Datentyp, Zuordnung zu einem Dokumentationstyp, Sensitivitätsstufe, Löschfrist, Berichtsschlüssel. Diese Semantik ermöglicht automatische Auswertung, Datenschutzsteuerung und typenübergreifende Suche.
 
-*Das bedeutet konkret:* Wenn eine Einrichtung ein Feld „Vermittlung an" definiert, weiß das System, dass dies ein Freitextfeld ist, das zur Statistik-Kategorie „Vermittlungen" gehört und nach 36 Monaten gelöscht werden muss. Es ist nicht einfach Spalte 7 in einer Excel-Tabelle.
+*Das bedeutet konkret:* Wenn eine Einrichtung ein Feld „Dauer" definiert und ihm den Berichtsschlüssel „Minuten" gibt, weiß das System, dass dessen Werte in die Minutensummen des Beratungsberichts gehören — unabhängig davon, wie die Einrichtung das Feld nennt. Es ist nicht einfach Spalte 7 in einer Excel-Tabelle.
 
 ### Prinzip 4: Arbeitsinfo neben Dokumentation
 
@@ -587,9 +587,9 @@ Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen defi
 
 #### FieldTemplate — Die Feldvorlage
 
-Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean,...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welcher Statistik-Kategorie es zugeordnet ist.
+Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean,...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welchen Berichtsschlüssel es trägt (`report_key`).
 
-FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Vermittlung an" ein Freitextfeld ist, das zur Statistik-Kategorie „Vermittlungen" gehört und als nicht-sensibel eingestuft ist.
+FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Dauer" ein Zahlenfeld mit dem Berichtsschlüssel „Minuten" ist und als nicht-sensibel eingestuft gilt — der Bericht liest es deshalb, auch wenn die Einrichtung es „Gesprächsdauer" nennt.
 
 #### DocumentTypeField — Die Zuordnung
 

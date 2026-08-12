@@ -188,11 +188,11 @@ class MonthlyTrendBackend(DatasetBackend):
     def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
         """Eine Zeile je (Monat, Kategorie); Gesamtzahl der gemappten Ereignisse im Summary.
 
-        Eine Aggregation ueber (Monat, ``system_type``, ``slug``) — beide
-        Schluessel der Aufloesung muessen in der Gruppierung stehen, sonst
-        koennte der Zweitschluessel nicht greifen. Die Konsolidierung auf
-        Kategorien passiert danach in Python (wenige Zeilen je Monat), das
-        Zaehlen bleibt in der Datenbank.
+        Eine Aggregation ueber (Monat, Berichtsschluessel). Welche Felder in
+        die Gruppierung gehoeren, sagt die Deklaration selbst
+        (``values_fields()``) — seit E3 (Refs #1849) genau eines. Die
+        Konsolidierung auf Kategorien passiert danach in Python (wenige Zeilen
+        je Monat), das Zaehlen bleibt in der Datenbank.
         """
         rows = (
             _base_queryset(facility, date_from, date_to)

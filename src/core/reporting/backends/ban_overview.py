@@ -1,10 +1,10 @@
 """Beispiel-Backend „Hausverbots-Übersicht" (Refs #1754).
 
 **Zweck und Abgrenzung — bitte zuerst lesen.** Hausverbote sind bewusst **kein**
-Teil des Sachberichts: ``ban`` fehlt in ``CATEGORY_MAP``
-(:mod:`~core.reporting.backends.sample_report_1`) mit Absicht, und der
-Slug-Zweitschluessel darf sie auch nicht durch die Hintertuer hereinholen
-(Disclosure-Lehre, Refs #1785). Dieser Bericht ist ein **interner**
+Teil des Sachberichts: der Backfill gibt Hausverbots-Typen den Sentinel
+``excluded``, und seit E3 (Refs #1849) gibt es auch keinen Slug-Zweitschluessel
+mehr, ueber den sie durch die Hintertuer hereinkaemen (Disclosure-Lehre,
+Refs #1785). Dieser Bericht ist ein **interner**
 Auswertungspfad und existiert per ausdruecklichem Produktentscheid (Maintainer,
 2026-08-05, #1754) — nicht, weil die Ausschluss-Entscheidung des Sachberichts
 aufgeweicht worden waere. Wer dieses Modul als Vorlage nimmt, uebernimmt damit
