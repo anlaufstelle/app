@@ -1,7 +1,18 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
+# Globales Lock fuer ressourcenschwere Laeufe (Refs #1840). EIN fester,
+# absoluter Pfad — absichtlich AUSSERHALB jedes Worktrees: das Lock schuetzt
+# Host-RAM/CPU, die E2E-Datenbank und Port 8844, also genau die Ressourcen, die
+# sich NICHT isolieren lassen. Ein Lock je Worktree waere kein Lock.
+# Unter /work statt /tmp, weil /tmp keinen Reboot ueberlebt; projektpraefixiert,
+# weil der Host /work mit anderen Containern teilt.
+CI_LOCK ?= /work/anlaufstelle-ci.lock
+# 4 h — am laengsten bekannten Gate-Lauf ausgerichtet. Zu kurz hiesse stiller
+# Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
+CI_LOCK_TIMEOUT ?= 14400
+
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -196,6 +207,22 @@ check:
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
 ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
+
+# Serialisierte Varianten der ressourcenschweren Gates (Refs #1840).
+# Wer einen vollen Gate-Lauf startet, nimmt DIESE Targets — sonst kollidieren
+# zwei Sessions am selben Host-RAM, an derselben E2E-Datenbank und an Port 8844.
+# Genau das ist am 2026-08-11 passiert: beide Sessions hielten ein flock, nur
+# eben nicht dasselbe. Wrapper statt flock direkt in `ci`, damit die bestehenden
+# Targets unberuehrt bleiben und lockfreie Laeufe moeglich sind, wo sie richtig
+# sind (CI-Runner, Einzelhost).
+ci-locked:
+	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) ci
+
+test-e2e-locked:
+	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) test-e2e
+
+test-e2e-halves-locked:
+	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) test-e2e-halves
 
 # Schneller Gate: statische Prüfung + Unit-Ebene, ohne E2E/Browser.
 # Enge Feedback-Schleife + Pre-Commit. Beziehung: ci ⊇ verify-fast
