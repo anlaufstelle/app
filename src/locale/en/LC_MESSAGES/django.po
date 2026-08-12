@@ -1607,10 +1607,6 @@ msgstr ""
 "Pre-filled when creating a new event. Leave empty = no default. For SELECT/"
 "MULTI_SELECT: option slug(s), comma-separated. Not supported for FILE."
 
-#: src/core/models/document_type.py:349
-msgid "Statistik-Kategorie"
-msgstr "Statistics category"
-
 #: src/core/models/document_type.py:354
 msgid "Hilfetext"
 msgstr "Help text"
@@ -10376,3 +10372,111 @@ msgstr "Filtered by documentation type: %(name)s"
 #: src/templates/core/statistics/report_releases.html:26
 msgid "Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen."
 msgstr "This overview shows the most recent releases regardless of the selected period; the period is preserved and applies again as soon as you open another tab."
+
+#: src/core/models/report_key.py:78
+#: src/core/packages/loader.py:594
+msgid "Berichtsschlüssel"
+msgstr "Report key"
+
+#: src/core/models/report_key.py:79
+msgid ""
+"Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in "
+"keinem Bericht. Ein leerer Schlüssel kann nachgetragen werden; ein "
+"gesetzter ist danach unveränderbar."
+msgstr ""
+"Assigns this entry to a report row. Empty = appears in no report. An "
+"empty key can be added later; once set it can no longer be changed."
+
+#: src/core/models/report_key.py:93
+msgid ""
+"Der Berichtsschlüssel kann nach dem Setzen nicht mehr geändert "
+"werden."
+msgstr "The report key can no longer be changed once it is set."
+
+#: src/core/forms/config.py:129
+msgid ""
+"Nachträglich gesetzt wirkt der Schlüssel auf künftig erzeugte "
+"Berichte über alle Zeiträume."
+msgstr ""
+"Added later, the key affects reports generated in the future across "
+"all periods."
+
+#: src/core/forms/config.py:139
+msgid "— Erscheint in keinem Bericht —"
+msgstr "— Appears in no report —"
+
+#: src/core/forms/config.py:140
+msgid "Gehört ausdrücklich in keinen Bericht"
+msgstr "Explicitly belongs in no report"
+
+#: src/core/forms/config.py:148
+#, python-brace-format
+msgid "{key} — kein Backend kennt diesen Schlüssel"
+msgstr "{key} — no report knows this key"
+
+#: src/core/forms/config.py:559
+#: src/core/services/config.py:576
+#, python-format
+msgid ""
+"„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits "
+"zugeordnete Feldvorlage „%(bestand)s“. Je Dokumentationstyp ist "
+"höchstens eine Feldvorlage je Berichtsschlüssel zulässig — sonst "
+"zählt der Bericht keine von beiden."
+msgstr ""
+"“%(neu)s” carries the same report key as the already assigned field "
+"template “%(bestand)s”. At most one field template per report key is "
+"allowed per document type — otherwise the report counts neither of "
+"them."
+
+#: src/core/packages/loader.py:345
+#, python-format
+msgid ""
+"Berichtsschlüssel %(key)r ist an diesem Dokumentationstyp bereits "
+"durch die Feldvorlage %(bestand)r belegt — je Typ ist höchstens eine "
+"Feldvorlage je Berichtsschlüssel zulässig."
+msgstr ""
+"Report key %(key)r is already taken on this document type by the "
+"field template %(bestand)r — at most one field template per report "
+"key is allowed per type."
+
+#: src/core/packages/loader.py:610
+#, python-format
+msgid ""
+"Der Berichtsschlüssel %(alt)r ist ein ehemals gültiger Wert und wurde "
+"auf %(neu)r normalisiert. Im Paket direkt %(neu)r eintragen."
+msgstr ""
+"The report key %(alt)r is a formerly valid value and was normalised "
+"to %(neu)r. Enter %(neu)r directly in the package."
+
+#: src/core/reporting/base.py:453
+msgid ""
+"Mindestens ein Dokumentationstyp trägt mehrere Feldvorlagen mit "
+"demselben Berichtsschlüssel — deren Werte bleiben in diesem Bericht "
+"unberücksichtigt"
+msgstr ""
+"At least one document type carries several field templates with the "
+"same report key — their values are left out of this report"
+
+#: src/core/reporting/backends/sample_report_1.py:217
+msgid ""
+"Angabe zu Ereignissen mit unbekanntem Berichtsschlüssel im Zeitraum "
+"unterdrückt (k-Anonymität)"
+msgstr ""
+"Figure for events with an unknown report key in the period suppressed "
+"(k-anonymity)"
+
+#: src/core/reporting/backends/sample_report_1.py:409
+#, python-brace-format
+msgid ""
+"{events} Ereignisse in {types} Dokumentationstypen mit einem "
+"Berichtsschlüssel, den kein Bericht kennt"
+msgstr ""
+"{events} events in {types} document types with a report key that no "
+"report knows"
+
+#: src/core/reporting/backends/monthly_trend.py:263
+#, python-brace-format
+msgid ""
+"{count} Ereignisse mit einem Berichtsschlüssel, den kein Bericht "
+"kennt"
+msgstr "{count} events with a report key that no report knows"

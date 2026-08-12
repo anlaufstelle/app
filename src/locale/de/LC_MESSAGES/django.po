@@ -1618,10 +1618,6 @@ msgstr ""
 "Default. Für SELECT/MULTI_SELECT: Option-Slug(s) (mehrere durch Komma "
 "trennen). Für FILE nicht unterstützt."
 
-#: src/core/models/document_type.py:349
-msgid "Statistik-Kategorie"
-msgstr "Statistik-Kategorie"
-
 #: src/core/models/document_type.py:354
 msgid "Hilfetext"
 msgstr "Hilfetext"
@@ -10472,3 +10468,117 @@ msgstr "Gefiltert nach Dokumentationstyp: %(name)s"
 #: src/templates/core/statistics/report_releases.html:26
 msgid "Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen."
 msgstr "Diese Übersicht zeigt die jüngsten Herausgaben unabhängig vom gewählten Zeitraum; der Zeitraum bleibt erhalten und gilt wieder, sobald Sie einen anderen Reiter öffnen."
+
+#: src/core/models/report_key.py:78
+#: src/core/packages/loader.py:594
+msgid "Berichtsschlüssel"
+msgstr "Berichtsschlüssel"
+
+#: src/core/models/report_key.py:79
+msgid ""
+"Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in "
+"keinem Bericht. Ein leerer Schlüssel kann nachgetragen werden; ein "
+"gesetzter ist danach unveränderbar."
+msgstr ""
+"Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in "
+"keinem Bericht. Ein leerer Schlüssel kann nachgetragen werden; ein "
+"gesetzter ist danach unveränderbar."
+
+#: src/core/models/report_key.py:93
+msgid ""
+"Der Berichtsschlüssel kann nach dem Setzen nicht mehr geändert "
+"werden."
+msgstr ""
+"Der Berichtsschlüssel kann nach dem Setzen nicht mehr geändert "
+"werden."
+
+#: src/core/forms/config.py:129
+msgid ""
+"Nachträglich gesetzt wirkt der Schlüssel auf künftig erzeugte "
+"Berichte über alle Zeiträume."
+msgstr ""
+"Nachträglich gesetzt wirkt der Schlüssel auf künftig erzeugte "
+"Berichte über alle Zeiträume."
+
+#: src/core/forms/config.py:139
+msgid "— Erscheint in keinem Bericht —"
+msgstr "— Erscheint in keinem Bericht —"
+
+#: src/core/forms/config.py:140
+msgid "Gehört ausdrücklich in keinen Bericht"
+msgstr "Gehört ausdrücklich in keinen Bericht"
+
+#: src/core/forms/config.py:148
+#, python-brace-format
+msgid "{key} — kein Backend kennt diesen Schlüssel"
+msgstr "{key} — kein Backend kennt diesen Schlüssel"
+
+#: src/core/forms/config.py:559
+#: src/core/services/config.py:576
+#, python-format
+msgid ""
+"„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits "
+"zugeordnete Feldvorlage „%(bestand)s“. Je Dokumentationstyp ist "
+"höchstens eine Feldvorlage je Berichtsschlüssel zulässig — sonst "
+"zählt der Bericht keine von beiden."
+msgstr ""
+"„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits "
+"zugeordnete Feldvorlage „%(bestand)s“. Je Dokumentationstyp ist "
+"höchstens eine Feldvorlage je Berichtsschlüssel zulässig — sonst "
+"zählt der Bericht keine von beiden."
+
+#: src/core/packages/loader.py:345
+#, python-format
+msgid ""
+"Berichtsschlüssel %(key)r ist an diesem Dokumentationstyp bereits "
+"durch die Feldvorlage %(bestand)r belegt — je Typ ist höchstens eine "
+"Feldvorlage je Berichtsschlüssel zulässig."
+msgstr ""
+"Berichtsschlüssel %(key)r ist an diesem Dokumentationstyp bereits "
+"durch die Feldvorlage %(bestand)r belegt — je Typ ist höchstens eine "
+"Feldvorlage je Berichtsschlüssel zulässig."
+
+#: src/core/packages/loader.py:610
+#, python-format
+msgid ""
+"Der Berichtsschlüssel %(alt)r ist ein ehemals gültiger Wert und wurde "
+"auf %(neu)r normalisiert. Im Paket direkt %(neu)r eintragen."
+msgstr ""
+"Der Berichtsschlüssel %(alt)r ist ein ehemals gültiger Wert und wurde "
+"auf %(neu)r normalisiert. Im Paket direkt %(neu)r eintragen."
+
+#: src/core/reporting/base.py:453
+msgid ""
+"Mindestens ein Dokumentationstyp trägt mehrere Feldvorlagen mit "
+"demselben Berichtsschlüssel — deren Werte bleiben in diesem Bericht "
+"unberücksichtigt"
+msgstr ""
+"Mindestens ein Dokumentationstyp trägt mehrere Feldvorlagen mit "
+"demselben Berichtsschlüssel — deren Werte bleiben in diesem Bericht "
+"unberücksichtigt"
+
+#: src/core/reporting/backends/sample_report_1.py:217
+msgid ""
+"Angabe zu Ereignissen mit unbekanntem Berichtsschlüssel im Zeitraum "
+"unterdrückt (k-Anonymität)"
+msgstr ""
+"Angabe zu Ereignissen mit unbekanntem Berichtsschlüssel im Zeitraum "
+"unterdrückt (k-Anonymität)"
+
+#: src/core/reporting/backends/sample_report_1.py:409
+#, python-brace-format
+msgid ""
+"{events} Ereignisse in {types} Dokumentationstypen mit einem "
+"Berichtsschlüssel, den kein Bericht kennt"
+msgstr ""
+"{events} Ereignisse in {types} Dokumentationstypen mit einem "
+"Berichtsschlüssel, den kein Bericht kennt"
+
+#: src/core/reporting/backends/monthly_trend.py:263
+#, python-brace-format
+msgid ""
+"{count} Ereignisse mit einem Berichtsschlüssel, den kein Bericht "
+"kennt"
+msgstr ""
+"{count} Ereignisse mit einem Berichtsschlüssel, den kein Bericht "
+"kennt"
