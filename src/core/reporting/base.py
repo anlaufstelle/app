@@ -407,15 +407,14 @@ class FeldBindung:
         from core.models import DocumentTypeField
 
         treffer: dict[object, set[str]] = {}
-        zeilen = DocumentTypeField.objects.filter(
+        zuordnungen = DocumentTypeField.objects.filter(
             document_type__facility=facility,
             field_template__is_active=True,
             **{f"field_template__{self._erststufe()}__in": self._erststufen_werte()},
         )
         if typ_bindung is not None:
-            zeilen = zeilen.filter(typ_bindung.matching_q("document_type__"))
-        zeilen = zeilen.values_list("document_type_id", "field_template__slug")
-        for document_type_id, slug in zeilen:
+            zuordnungen = zuordnungen.filter(typ_bindung.matching_q("document_type__"))
+        for document_type_id, slug in zuordnungen.values_list("document_type_id", "field_template__slug"):
             treffer.setdefault(document_type_id, set()).add(slug)
 
         je_typ = {typ_id: next(iter(slugs)) for typ_id, slugs in treffer.items() if len(slugs) == 1}
