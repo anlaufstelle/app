@@ -1,11 +1,21 @@
 """Tests fuer ``core.reporting.registry`` — Decorator, Lookup, Lazy-Discovery (M5 P1, Refs #1061)."""
 
+from types import SimpleNamespace
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from core.reporting import backends as backends_pkg
 from core.reporting import registry
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import (
+    Anforderung,
+    BindungsEintrag,
+    DatasetBackend,
+    DatasetResult,
+    FeldBindung,
+    FieldSpec,
+    TypBindung,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -217,3 +227,214 @@ class TestDiscovery:
         assert excinfo.value is ursache
         assert "nicht importierbar" not in str(excinfo.value)
         assert registry._discovered is False
+
+
+# ---------------------------------------------------------------------------
+# describe_type_bindings / describe_field_bindings (E2, Refs #1848)
+# ---------------------------------------------------------------------------
+#
+# „Erscheint in …" fuer die Konfigurations-UI: je VERFUEGBAREM Backend mit
+# Treffer eine Zeile "Backend-Name (Label)". Beide Funktionen bauen
+# AUSSCHLIESSLICH auf der E1-API auf (``resolve_key``/``key_for_slug``/
+# ``vokabular()``/``get_available_backends``) — keine eigene Aufloesungslogik.
+# Duck-typing statt echter Model-Instanzen fuer den Dokumentationstyp/die
+# Feldvorlage: beide Funktionen brauchen nur ``system_type``/``slug`` (Typ)
+# bzw. ``slug`` (Feld) und duerfen dafuer keine DB-Objekte voraussetzen.
+#
+# ``facility`` ist seit dem Review zu #1848 Pflichtargument: ohne
+# Verfuegbarkeits-Filter behauptete die Auskunft „erscheint in X" auch fuer
+# ein Backend, dessen ``is_available(facility)`` False ist (Panel/Export
+# lieferten fuer X dann 404). Die Dummy-Backends unten deklarieren per
+# Default KEINE ``verfuegbarkeit`` (leeres Tupel) — ``is_available`` ist dann
+# immer True, OHNE die Facility anzufassen (kurzschliessendes ``not () or
+# ...``), ein Sentinel-``object()`` genuegt also fuer die meisten Tests ohne
+# DB. Nur der explizite Verfuegbarkeits-Test unten braucht eine echte
+# Facility (``Anforderung.erfuellt`` fragt die DB).
+
+_FACILITY = object()
+
+
+def _dummy_cls_ohne_is_available_override(**attrs) -> type[DatasetBackend]:
+    """Wie ``_make_backend_cls``, aber OHNE ``is_available``-Override.
+
+    ``_make_backend_cls`` (M5-Bestand) ueberschreibt ``is_available`` mit einem
+    hartkodierten Stub (``available``-Flag) — genau fuer DEN Zweck gebaut, damit
+    ``TestGetAvailableBackends`` das Praedikat isoliert von der echten
+    ``verfuegbarkeit``-Logik testen kann. Ein Test, der umgekehrt die ECHTE,
+    ``verfuegbarkeit``-gesteuerte ``DatasetBackend.is_available`` pruefen will
+    (hier: der Verfuegbarkeits-Filter von ``describe_type_bindings``), braucht
+    deshalb eine Klasse OHNE diesen Override — sonst setzt ``cls.verfuegbarkeit``
+    nichts in Kraft, das der Stub ueberhaupt liest. Muster ``_dummy_cls`` in
+    ``test_reporting_bindung.py``.
+    """
+
+    class _DummyBackend(DatasetBackend):
+        def get_field_specs(self) -> list[FieldSpec]:
+            return []
+
+        def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+            return DatasetResult(mode="rows", records=[], summary={}, completeness=[])
+
+    for name, value in attrs.items():
+        setattr(_DummyBackend, name, value)
+    return _DummyBackend
+
+
+def _mit_typ_bindung(name: str, bindung: TypBindung) -> type[DatasetBackend]:
+    cls = _make_backend_cls()
+    cls.name = name
+    cls.typ_bindung = bindung
+    return cls
+
+
+def _mit_feld_bindung(name: str, bindung: FeldBindung) -> type[DatasetBackend]:
+    cls = _make_backend_cls()
+    cls.name = name
+    cls.feld_bindungen = (bindung,)
+    return cls
+
+
+class TestDescribeTypeBindings:
+    """``describe_type_bindings(document_type, facility)`` — E2s „erscheint in …" am Typ."""
+
+    def test_treffer_ueber_system_type(self):
+        registry.register_backend("beschreibung-a")(
+            _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt"),)))
+        )
+        doc_type = SimpleNamespace(system_type="contact", slug="")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Testbericht (Kontakt)"]
+
+    def test_treffer_ueber_slug_fallback(self):
+        registry.register_backend("beschreibung-b")(
+            _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt", slugs=("kontakt",)),)))
+        )
+        doc_type = SimpleNamespace(system_type=None, slug="kontakt")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == ["Testbericht (Kontakt)"]
+
+    def test_kein_treffer_liefert_leere_liste(self):
+        registry.register_backend("beschreibung-c")(
+            _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt"),)))
+        )
+        doc_type = SimpleNamespace(system_type="unbekannt", slug="")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == []
+
+    def test_gesetzter_erstschluessel_sperrt_slug_treffer(self):
+        """Dieselbe #1785-Ausschlussregel gilt auch fuer die Beschreibung."""
+        registry.register_backend("beschreibung-d")(
+            _mit_typ_bindung("Testbericht", TypBindung((BindungsEintrag("contact", "Kontakt", slugs=("kontakt",)),)))
+        )
+        doc_type = SimpleNamespace(system_type="ban", slug="kontakt")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == []
+
+    def test_mehrere_backends_mit_treffer_ergeben_mehrere_zeilen(self):
+        """``monthly_trend`` importiert ``sample_report_1``s Bindung — zwei Zeilen, zwei Instanzen."""
+        bindung = TypBindung((BindungsEintrag("crisis", "Krisengespräch"),))
+        registry.register_backend("beschreibung-e1")(_mit_typ_bindung("Sachbericht", bindung))
+        registry.register_backend("beschreibung-e2")(_mit_typ_bindung("Monatsverlauf", bindung))
+        doc_type = SimpleNamespace(system_type="crisis", slug="")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == [
+            "Sachbericht (Krisengespräch)",
+            "Monatsverlauf (Krisengespräch)",
+        ]
+
+    def test_backend_ohne_bindung_wird_nicht_gemeldet(self):
+        registry.register_backend("beschreibung-f")(_make_backend_cls())
+        doc_type = SimpleNamespace(system_type="contact", slug="")
+
+        assert registry.describe_type_bindings(doc_type, _FACILITY) == []
+
+    @pytest.mark.django_db
+    def test_nicht_verfuegbares_backend_wird_nicht_gemeldet(self, facility):
+        """Review-Befund #1848: ein Treffer allein genuegt nicht — das Backend muss
+        fuer die Facility auch ``is_available`` sein, sonst antworten Panel/Export
+        mit 404 und die Auskunft waere eine falsche Zusage (Beispiel im echten
+        Bestand: ``needle-exchange-balance`` ohne konfigurierte ausgabe-/
+        rueckgabe-Feldvorlagen am Typ).
+
+        Baut ueber :func:`_dummy_cls_ohne_is_available_override`, NICHT ueber
+        :func:`_mit_typ_bindung` (das stuende auf dem ``_make_backend_cls``-Stub,
+        der ``is_available`` hartkodiert und ``verfuegbarkeit`` gar nicht liest).
+        """
+        bindung = TypBindung((BindungsEintrag("contact", "Kontakt"),))
+        # Anforderung, die diese (leere) Facility nie erfuellt: kein Dokumentationstyp
+        # mit dem Schluessel "niemals" existiert.
+        cls = _dummy_cls_ohne_is_available_override(
+            name="Testbericht",
+            typ_bindung=bindung,
+            verfuegbarkeit=(Anforderung(TypBindung((BindungsEintrag("niemals", "Niemals"),))),),
+        )
+        registry.register_backend("beschreibung-g")(cls)
+        doc_type = SimpleNamespace(system_type="contact", slug="")
+
+        assert registry.describe_type_bindings(doc_type, facility) == []
+
+
+class TestDescribeFieldBindings:
+    """``describe_field_bindings(field_template, facility)`` — dasselbe auf Feld-Ebene."""
+
+    def test_treffer_ueber_slug(self):
+        registry.register_backend("feldbeschreibung-a")(
+            _mit_feld_bindung(
+                "Beratungsstunden", FeldBindung((BindungsEintrag("dauer_minuten", "Minuten", slugs=("dauer",)),))
+            )
+        )
+        field_template = SimpleNamespace(slug="dauer")
+
+        assert registry.describe_field_bindings(field_template, _FACILITY) == ["Beratungsstunden (Minuten)"]
+
+    def test_kein_treffer_liefert_leere_liste(self):
+        registry.register_backend("feldbeschreibung-b")(
+            _mit_feld_bindung(
+                "Beratungsstunden", FeldBindung((BindungsEintrag("dauer_minuten", "Minuten", slugs=("dauer",)),))
+            )
+        )
+        field_template = SimpleNamespace(slug="anderer-slug")
+
+        assert registry.describe_field_bindings(field_template, _FACILITY) == []
+
+    def test_backend_ohne_feld_bindung_wird_nicht_gemeldet(self):
+        registry.register_backend("feldbeschreibung-c")(_make_backend_cls())
+        field_template = SimpleNamespace(slug="dauer")
+
+        assert registry.describe_field_bindings(field_template, _FACILITY) == []
+
+    def test_zwei_backends_mit_treffer_ergeben_zwei_zeilen(self):
+        registry.register_backend("feldbeschreibung-d1")(
+            _mit_feld_bindung(
+                "Bericht A", FeldBindung((BindungsEintrag("ausgabe_stueck", "Ausgabe", slugs=("ausgabe",)),))
+            )
+        )
+        registry.register_backend("feldbeschreibung-d2")(
+            _mit_feld_bindung(
+                "Bericht B", FeldBindung((BindungsEintrag("ausgabe_stueck", "Ausgabe", slugs=("ausgabe",)),))
+            )
+        )
+        field_template = SimpleNamespace(slug="ausgabe")
+
+        assert registry.describe_field_bindings(field_template, _FACILITY) == [
+            "Bericht A (Ausgabe)",
+            "Bericht B (Ausgabe)",
+        ]
+
+    @pytest.mark.django_db
+    def test_nicht_verfuegbares_backend_wird_nicht_gemeldet(self, facility):
+        """Dieselbe Verfuegbarkeits-Filterung wie auf Typ-Ebene (Review-Befund #1848).
+
+        Baut ueber :func:`_dummy_cls_ohne_is_available_override` — s. Docstring der
+        Typ-Ebenen-Entsprechung oben.
+        """
+        bindung = FeldBindung((BindungsEintrag("dauer_minuten", "Minuten", slugs=("dauer",)),))
+        cls = _dummy_cls_ohne_is_available_override(
+            name="Beratungsstunden",
+            feld_bindungen=(bindung,),
+            verfuegbarkeit=(Anforderung(TypBindung((BindungsEintrag("niemals", "Niemals"),))),),
+        )
+        registry.register_backend("feldbeschreibung-e")(cls)
+        field_template = SimpleNamespace(slug="dauer")
+
+        assert registry.describe_field_bindings(field_template, facility) == []

@@ -13,13 +13,25 @@
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
 
+        {% if is_edit %}
+        {# E2 (Refs #1848): informative Registry-Auskunft VOR den Formularfeldern — #}
+        {# E3 fügt hier später das editierbare report_key-Feld ein. OHNE          #}
+        {# entity_type-Filter: FieldTemplate hat kein entity_type-Feld.           #}
+        <div class="card p-4 bg-canvas" data-testid="fieldtemplate-report-bindings">
+            <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
+            <p class="text-[13px] text-ink">
+                {% if field_bindings %}{{ field_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
+            </p>
+        </div>
+        {% endif %}
+
         <div class="card p-5 space-y-4">
             {% if is_edit %}
             {# Slug ist nach dem Anlegen unveränderbar — read-only anzeigen. #}
             <div>
                 <span class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Slug" %}</span>
                 <p class="font-mono text-[13px] text-ink-muted" data-testid="fieldtemplate-slug">{{ field_template.slug }}</p>
-                <p class="mt-1 text-[12px] text-ink-muted">{% trans "Der Slug ist nach dem Anlegen unveränderbar." %}</p>
+                <p class="mt-1 text-[12px] text-ink-muted">{% trans "Der Slug entsteht beim Anlegen aus dem Namen und ist danach unveränderbar." %}</p>
             </div>
             {% endif %}
             {% for field in form %}

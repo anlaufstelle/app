@@ -129,6 +129,16 @@ class TestUpdate:
         assert ft.slug == "original"
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(ft.pk)).exists()
 
+    def test_slug_hint_names_its_origin(self, client, admin_user, facility):
+        """Nachgeschärft (Refs #1848): der Hinweis nennt jetzt auch die Herkunft
+        des Slugs (aus dem Namen), nicht nur seine Unveränderbarkeit."""
+        ft = FieldTemplate.objects.create(facility=facility, name="Original", field_type="text")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}))
+        body = response.content.decode()
+        assert "entsteht beim Anlegen aus dem Namen" in body
+        assert "unveränderbar" in body
+
 
 # ---------------------------------------------------------------------------
 # Modell-Validierungen über den ModelForm
@@ -443,3 +453,50 @@ class TestFieldTypeSwitchToFile:
         assert response.status_code == 302
         ft.refresh_from_db()
         assert ft.field_type == FieldTemplate.FieldType.TEXTAREA
+
+
+# ---------------------------------------------------------------------------
+# „Erscheint in …" — Registry-Auskunft im Formular (E2, Refs #1848)
+# ---------------------------------------------------------------------------
+#
+# OHNE entity_type-Filter: FieldTemplate hat kein entity_type-Feld (facility-
+# weit, M:N über DocumentTypeField) — anders als bei DocumentType gilt hier
+# keine Ereignis-Einschränkung.
+
+
+@pytest.mark.django_db
+class TestReportBindingsDisplay:
+    def test_edit_form_shows_field_bindings_above_the_form_fields(self, client, admin_user, facility):
+        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number")
+        assert ft.slug == "dauer"
+        # counseling-hours ist nur verfügbar, wenn "dauer" tatsächlich an einem
+        # passenden Dokumentationstyp hängt (Review-Befund #1848: reiner
+        # Slug-Match ohne Zuordnung reicht seit der Verfügbarkeits-Filterung
+        # nicht mehr) — sonst bliebe die Liste trotz Slug-Treffer leer.
+        dt = DocumentType.objects.create(facility=facility, name="Beratung", system_type="counseling")
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}))
+        assert response.context["field_bindings"] != []
+        body = response.content.decode()
+        assert 'data-testid="fieldtemplate-report-bindings"' in body
+        assert "Beispiel: Beratungsstunden (Minuten)" in body
+        assert "Erscheint in keinem Bericht." not in body
+        # E3 fügt hier später das report_key-Feld ein — der Block muss daher
+        # OBERHALB der ersten Formularfeld-Eingabe stehen.
+        assert body.index('data-testid="fieldtemplate-report-bindings"') < body.index('id="id_name"')
+
+    def test_field_without_binding_shows_explicit_empty_state(self, client, admin_user, facility):
+        ft = FieldTemplate.objects.create(facility=facility, name="Sonstiges Feld", field_type="text")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}))
+        assert response.context["field_bindings"] == []
+        body = response.content.decode()
+        assert 'data-testid="fieldtemplate-report-bindings"' in body
+        assert "Erscheint in keinem Bericht." in body
+
+    def test_create_form_has_no_binding_block(self, client, admin_user):
+        """Ohne existierende Feldvorlage gibt es nichts zu beschreiben."""
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_fieldtemplate_create"))
+        assert 'data-testid="fieldtemplate-report-bindings"' not in response.content.decode()

@@ -809,3 +809,103 @@ class TestBlockFieldConditionCounters:
             f"Query-Zahl wächst mit der Zeilenzahl: 1 Typ => {baseline_count} Queries, "
             f"3 Typen => {full_count} Queries. Das deutet auf N+1 pro Zeile hin."
         )
+
+
+# ---------------------------------------------------------------------------
+# „Erscheint in …" — Registry-Auskunft in Detail + Formular (E2, Refs #1848)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestReportBindingsDisplay:
+    """Nur bei ``entity_type=event`` — an Personen-/Fall-Typen ist die Frage gegenstandslos."""
+
+    def test_event_type_with_binding_shows_backends_in_detail(self, client, admin_user, facility):
+        # Name bewusst NICHT "Spritzentausch" — sonst waere die Body-Assertion
+        # tautologisch (der Typname selbst taucht ueberall auf der Seite auf,
+        # unabhaengig davon, ob die Bindungslogik je gelaufen ist).
+        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
+        assert response.context["report_bindings"] != []
+        body = response.content.decode()
+        assert 'data-testid="doctype-report-bindings"' in body
+        # Exaktes Format "Backend-Name (Label)" — sample-report-1 hat keine
+        # Verfuegbarkeits-Anforderung und ist deshalb immer verfuegbar.
+        assert "Beispiel-Sachbericht (Spritzentausch)" in body
+        assert "Erscheint in keinem Bericht." not in body
+
+    def test_event_type_without_binding_shows_explicit_empty_state(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Eigenes Notizfeld")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
+        assert response.context["report_bindings"] == []
+        body = response.content.decode()
+        assert 'data-testid="doctype-report-bindings"' in body
+        assert "Erscheint in keinem Bericht." in body
+
+    def test_non_event_type_hides_the_block_entirely(self, client, admin_user, doc_type_client_profile):
+        """FieldTemplate/DocumentType-Berichtsfrage gilt nur für Ereignis-Typen."""
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_client_profile.pk}))
+        # Scharf gepinnt (Review-Befund #1848): der Context-SCHLÜSSEL fehlt
+        # komplett, statt auf eine leere Liste zu fallen — "keine Aussage"
+        # (Key fehlt) und "keine Bindung" (Liste leer) sollen sich nicht
+        # vermischen. Das Template-{% if %} bleibt die zweite Sicherung.
+        assert "report_bindings" not in response.context
+        body = response.content.decode()
+        assert 'data-testid="doctype-report-bindings"' not in body
+        assert "Erscheint in" not in body
+
+    def test_edit_form_shows_bindings_above_the_form_fields(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", system_type="needle_exchange")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_update", kwargs={"pk": dt.pk}))
+        assert response.context["report_bindings"] != []
+        body = response.content.decode()
+        assert 'data-testid="doctype-report-bindings-form"' in body
+        assert "Beispiel-Sachbericht (Spritzentausch)" in body
+        # E3 fügt hier später das report_key-Feld ein — der Block muss daher
+        # OBERHALB der ersten Formularfeld-Eingabe stehen.
+        assert body.index('data-testid="doctype-report-bindings-form"') < body.index('id="id_name"')
+
+    def test_create_form_has_no_binding_block(self, client, admin_user):
+        """Ohne existierenden Dokumentationstyp gibt es nichts zu beschreiben."""
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_create"))
+        assert 'data-testid="doctype-report-bindings-form"' not in response.content.decode()
+
+
+# ---------------------------------------------------------------------------
+# Slug sichtbar (Entscheid E-F, Refs #1848) — nicht editierbar, kein Formularfeld
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestSlugDisplay:
+    def test_detail_shows_the_slug(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Sozialberatung")
+        assert dt.slug == "sozialberatung"
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
+        body = response.content.decode()
+        assert 'data-testid="doctype-slug"' in body
+        assert "sozialberatung" in body
+
+    def test_detail_shows_the_slug_origin_hint(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Sozialberatung")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
+        body = response.content.decode()
+        assert "entsteht beim Anlegen aus dem Namen" in body
+        assert "unveränderbar" in body
+
+    def test_list_table_shows_the_slug(self, client, admin_user, facility):
+        DocumentType.objects.create(facility=facility, name="Sozialberatung")
+        DocumentType.objects.create(facility=facility, name="Schuldnerberatung")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_list"))
+        body = response.content.decode()
+        assert body.count('data-testid="doctype-slug"') == 2
+        assert "sozialberatung" in body
+        assert "schuldnerberatung" in body

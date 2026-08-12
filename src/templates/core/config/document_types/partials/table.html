@@ -6,6 +6,7 @@
         <thead>
             <tr class="text-[12px] font-bold text-ink-muted uppercase tracking-wider bg-canvas border-b border-subtle">
                 <th scope="col" class="px-4 py-2.5">{% trans "Name" %}</th>
+                <th scope="col" class="px-4 py-2.5 hidden sm:table-cell">{% trans "Slug" %}</th>
                 <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Entität" %}</th>
                 <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Systemtyp" %}</th>
                 <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Ereignisse" %}</th>
@@ -30,6 +31,7 @@
                         {% endif %}
                     </p>
                 </td>
+                <td class="px-4 py-3 text-[13px] font-mono text-ink-muted hidden sm:table-cell" data-testid="doctype-slug">{{ dt.slug }}</td>
                 <td class="px-4 py-3 hidden md:table-cell" data-testid="doctype-entity-type-badge">
                     {% if dt.entity_type == "client" %}
                     {% include "components/_badge.html" with text=dt.get_entity_type_display color="purple" %}

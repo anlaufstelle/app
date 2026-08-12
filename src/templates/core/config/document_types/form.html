@@ -13,6 +13,17 @@
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
 
+        {% if is_edit and doc_type.entity_type == "event" %}
+        {# E2 (Refs #1848): informative Registry-Auskunft VOR den Formularfeldern — #}
+        {# E3 fügt hier später das editierbare report_key-Feld ein.                 #}
+        <div class="card p-4 bg-canvas" data-testid="doctype-report-bindings-form">
+            <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
+            <p class="text-[13px] text-ink">
+                {% if report_bindings %}{{ report_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
+            </p>
+        </div>
+        {% endif %}
+
         {% comment %}
         Refs #1757 (Option C aus #1731): Die Felder werden EINZELN gerendert (kein
         generischer Feld-Loop über das Formular mehr), damit die Komponente

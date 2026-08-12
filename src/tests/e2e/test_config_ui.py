@@ -709,6 +709,95 @@ class TestEventFormInterleaving:
 
 
 # ---------------------------------------------------------------------------
+# Registry-Auskunft „Erscheint in …" + Slug-Sichtbarkeit (E2, Refs #1848)
+# ---------------------------------------------------------------------------
+
+
+class TestReportBindingsAndSlugVisibility:
+    """Konfigurations-UI zeigt jetzt die Registry-Auskunft + den Slug an.
+
+    Detailseite ist reines Server-Render (kein HTMX-Swap für die neuen
+    Blöcke; nur die Live-Vorschau-Pane bleibt HTMX und ist hier unberührt) —
+    ``to_be_visible``/``to_contain_text`` genügen ohne Swap-bewusste Waits.
+    """
+
+    def test_doctype_detail_shows_report_bindings_only_for_event(self, authenticated_page, base_url):
+        """Wegwerf-Typ crisis/event → Badge sichtbar; entity_type=client → Abschnitt fehlt."""
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-BIND"), system_type_value="crisis")
+        client_pk = None
+        try:
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
+            bindings = page.locator('[data-testid="doctype-report-bindings"]')
+            expect(bindings).to_be_visible(timeout=10000)
+            expect(bindings).not_to_contain_text("Erscheint in keinem Bericht.")
+
+            # entity_type=client: der Abschnitt fehlt komplett — an Personen-Typen
+            # ist die Berichtsfrage gegenstandslos (Konzept #1847 §E2).
+            client_name = _cfg_name("DT-BIND-CLIENT")
+            page.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
+            page.fill("input#id_name", client_name)
+            page.select_option("select#id_entity_type", value="client")
+            page.locator(FORM_SUBMIT).click()
+            page.wait_for_url(_DETAIL_RE)
+            match = _DETAIL_RE.search(page.url)
+            assert match, f"Detail-URL nicht erkannt: {page.url}"
+            client_pk = match.group(1)
+            expect(page.locator('[data-testid="doctype-report-bindings"]')).to_have_count(0)
+        finally:
+            _delete_doctype(page, base_url, pk)
+            if client_pk:
+                _delete_doctype(page, base_url, client_pk)
+
+    def test_doctype_without_binding_shows_explicit_empty_state(self, authenticated_page, base_url):
+        """``note`` ist ein bewusster Ausschluss-Marker — kein Backend deklariert ihn."""
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-NOBIND"), system_type_value="note")
+        try:
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
+            bindings = page.locator('[data-testid="doctype-report-bindings"]')
+            expect(bindings).to_be_visible(timeout=10000)
+            expect(bindings).to_contain_text("Erscheint in keinem Bericht.")
+        finally:
+            _delete_doctype(page, base_url, pk)
+
+    def test_fieldtemplate_edit_shows_report_binding(self, authenticated_page, base_url):
+        """Seed-Feldvorlage „Dauer" (Slug ``dauer``) speist Beispiel: Beratungsstunden (E1).
+
+        GET-only — der Slug ist facility-weit eindeutig (kein Wegwerf-Duplikat
+        möglich), deshalb an der Seed-Vorlage selbst geprüft statt an einer neu
+        angelegten. Mutiert den Seed-Bestand nicht (Modul-Konvention).
+        """
+        page = authenticated_page
+        page.goto(f"{base_url}{FIELDTEMPLATE_LIST}?q=Dauer", wait_until="domcontentloaded")
+        row = page.locator('[data-testid="fieldtemplate-row"]:has-text("Dauer")').first
+        expect(row).to_be_visible(timeout=10000)
+        row.locator('[data-testid="fieldtemplate-edit-link"]').click()
+        page.wait_for_url(re.compile(r"/config/field-templates/[0-9a-f-]+/edit/$"))
+        bindings = page.locator('[data-testid="fieldtemplate-report-bindings"]')
+        expect(bindings).to_be_visible(timeout=10000)
+        expect(bindings).to_contain_text("Beratungsstunden")
+
+    def test_doctype_detail_and_list_show_slug(self, authenticated_page, base_url):
+        """Slug (E-F) sichtbar in Detail- UND Listenansicht, nicht editierbar."""
+        page = authenticated_page
+        name = _cfg_name("DT-SLUG")
+        pk = _create_doctype(page, base_url, name)
+        try:
+            expected_slug = name.lower()  # keine Umlaute → slugify == lower()
+
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
+            expect(page.locator('[data-testid="doctype-slug"]')).to_contain_text(expected_slug, timeout=10000)
+
+            page.goto(f"{base_url}{DOCTYPE_LIST}?q={name}", wait_until="domcontentloaded")
+            row = page.locator(f'[data-testid="doctype-row"]:has-text("{name}")')
+            expect(row).to_be_visible(timeout=10000)
+            expect(row.locator('[data-testid="doctype-slug"]')).to_contain_text(expected_slug)
+        finally:
+            _delete_doctype(page, base_url, pk)
+
+
+# ---------------------------------------------------------------------------
 # Regression: obfuskierter Django-Admin bleibt erreichbar
 # ---------------------------------------------------------------------------
 

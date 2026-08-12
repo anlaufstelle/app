@@ -161,9 +161,13 @@ class TestSystemTypeWertelisteEingefroren:
 
     1. **Verhaltens-Schluessel** (``ban``, ``crisis``) — echte App-Logik
        (Hausverbot-Banner/Feed/Uebergabe bzw. Krisen-Highlight).
-    2. **Berichts-Zuordnung** (die sechs Werte in ``CATEGORY_MAP``) — keine
-       App-Logik; sie sind das einzige Opt-in, mit dem eine Einrichtung einen
-       eigenen Dokumentationstyp in den Beispiel-Sachbericht bekommt.
+    2. **Berichts-Zuordnung** (die sieben Werte in ``CATEGORY_MAP``, darunter
+       ``crisis`` ein zweites Mal — die einzige bewusste Doppelrolle mit 1.).
+       Der Systemtyp ist dabei der einzige SICHTBARE, ausdruecklich waehlbare
+       Weg, mit dem eine Einrichtung einen eigenen Dokumentationstyp in den
+       Beispiel-Sachbericht bekommt; daneben greift seit
+       #1741 ein
+       hartkodierter Slug-Zweitschluessel (Refs #1820 §2.5).
     3. **Ausschluss-Marker** (``note``) — exportseitig identisch mit ``NULL``.
 
     Ein zusaetzlicher Wert wuerde die Partition unten sprengen und muesste sich

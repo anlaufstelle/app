@@ -31,6 +31,7 @@ from core.models import (
     FieldGroup,
     QuickTemplate,
 )
+from core.reporting.registry import describe_type_bindings
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.views.mixins import (
@@ -119,6 +120,26 @@ def board_response(request, doc_type, *, add_form=None, group_form=None, retarge
     if error is not None:
         messages.error(request, error)
     return redirect("core:config_doctype_detail", pk=doc_type.pk)
+
+
+def report_bindings_context(doc_type, facility):
+    """„Erscheint in …" (E2, Refs #1848) — Context-Fragment, NUR für Ereignis-Typen.
+
+    An Personen-/Fall-Typen ist die Berichtsfrage gegenstandslos (der
+    Sachbericht und seine Geschwister zählen Ereignisse, keine Personen/Fälle)
+    — der Context-Schlüssel ``report_bindings`` wird für sie bewusst GAR NICHT
+    gesetzt (leeres Dict, kein ``[]``-Wert): „keine Aussage" (Key fehlt) und
+    „keine Bindung" (Liste leer) sollen sich im Context nicht vermischen. Das
+    Template-``{% if %}`` bleibt die zweite, unabhängige Sicherung.
+
+    ``facility`` wird durchgereicht an :func:`~core.reporting.registry.describe_type_bindings`
+    (Review-Befund #1848): nur *verfügbare* Backends dürfen genannt werden,
+    sonst behauptete die Auskunft „erscheint in X" für ein Backend, das Panel/
+    Export mit 404 quittieren würden.
+    """
+    if doc_type.entity_type != DocumentType.EntityType.EVENT:
+        return {}
+    return {"report_bindings": describe_type_bindings(doc_type, facility)}
 
 
 def _count_sub(qs, group_field="document_type"):
@@ -224,6 +245,7 @@ class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
             **board_context(doc_type),
             **condition_board_context(doc_type),
             "usage_count": usage_count,
+            **report_bindings_context(doc_type, request.current_facility),
         }
         return render(request, "core/config/document_types/detail.html", context)
 
@@ -234,7 +256,13 @@ class ConfigDocumentTypeUpdateView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         form = DocumentTypeForm(instance=doc_type, facility=request.current_facility)
-        return render(request, FORM_TEMPLATE, {"form": form, "doc_type": doc_type, "is_edit": True})
+        context = {
+            "form": form,
+            "doc_type": doc_type,
+            "is_edit": True,
+            **report_bindings_context(doc_type, request.current_facility),
+        }
+        return render(request, FORM_TEMPLATE, context)
 
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
@@ -243,7 +271,13 @@ class ConfigDocumentTypeUpdateView(FacilityAdminRequiredMixin, View):
             config_service.save_document_type(request, form, creating=False)
             messages.success(request, _("Dokumentationstyp „%(name)s“ wurde aktualisiert.") % {"name": doc_type.name})
             return redirect("core:config_doctype_detail", pk=doc_type.pk)
-        return render(request, FORM_TEMPLATE, {"form": form, "doc_type": doc_type, "is_edit": True})
+        context = {
+            "form": form,
+            "doc_type": doc_type,
+            "is_edit": True,
+            **report_bindings_context(doc_type, request.current_facility),
+        }
+        return render(request, FORM_TEMPLATE, context)
 
 
 class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):

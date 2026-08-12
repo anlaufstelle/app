@@ -19,6 +19,7 @@ from django.views import View
 
 from core.forms.config import FieldTemplateForm
 from core.models import FieldTemplate
+from core.reporting.registry import describe_field_bindings
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.views.mixins import (
@@ -97,7 +98,18 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
         form = FieldTemplateForm(instance=field_template, facility=request.current_facility)
-        return render(request, FORM_TEMPLATE, {"form": form, "field_template": field_template, "is_edit": True})
+        context = {
+            "form": form,
+            "field_template": field_template,
+            "is_edit": True,
+            # E2 (Refs #1848): OHNE entity_type-Filter — FieldTemplate hat kein
+            # entity_type-Feld (facility-weit, M:N über DocumentTypeField), die
+            # Ereignis-Einschränkung von DocumentType gilt hier nicht.
+            # facility durchgereicht (Review-Befund): nur verfügbare Backends
+            # dürfen genannt werden, sonst 404-Widerspruch zu Panel/Export.
+            "field_bindings": describe_field_bindings(field_template, request.current_facility),
+        }
+        return render(request, FORM_TEMPLATE, context)
 
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
@@ -106,7 +118,13 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
             config_service.save_field_template(request, form, creating=False, facility=request.current_facility)
             messages.success(request, _("Feldvorlage „%(name)s“ wurde aktualisiert.") % {"name": field_template.name})
             return redirect("core:config_fieldtemplate_list")
-        return render(request, FORM_TEMPLATE, {"form": form, "field_template": field_template, "is_edit": True})
+        context = {
+            "form": form,
+            "field_template": field_template,
+            "is_edit": True,
+            "field_bindings": describe_field_bindings(field_template, request.current_facility),
+        }
+        return render(request, FORM_TEMPLATE, context)
 
 
 class ConfigFieldTemplateDeleteView(FacilityAdminRequiredMixin, View):

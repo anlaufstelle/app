@@ -7294,9 +7294,22 @@ msgstr "Edit field template"
 msgid "Neue Feldvorlage"
 msgstr "New field template"
 
-#: src/templates/core/config/field_templates/form.html:20
-msgid "Der Slug ist nach dem Anlegen unveränderbar."
-msgstr "The slug cannot be changed after creation."
+#: src/templates/core/config/document_types/detail.html:90
+#: src/templates/core/config/field_templates/form.html:34
+msgid "Der Slug entsteht beim Anlegen aus dem Namen und ist danach unveränderbar."
+msgstr "The slug is derived from the name when created and cannot be changed afterwards."
+
+#: src/templates/core/config/document_types/detail.html:63
+#: src/templates/core/config/document_types/form.html:20
+#: src/templates/core/config/field_templates/form.html:21
+msgid "Erscheint in"
+msgstr "Appears in"
+
+#: src/templates/core/config/document_types/detail.html:65
+#: src/templates/core/config/document_types/form.html:22
+#: src/templates/core/config/field_templates/form.html:23
+msgid "Erscheint in keinem Bericht."
+msgstr "Does not appear in any report."
 
 #: src/templates/core/config/field_templates/list.html:10
 msgid "Wiederverwendbare Formularfelder Ihrer Einrichtung"

@@ -52,6 +52,21 @@
                 <dd class="text-ink font-medium">{% if doc_type.system_type %}{{ doc_type.get_system_type_display }}{% else %}–{% endif %}</dd>
             </div>
             <div>
+                {# E-F (Refs #1848): Slug sichtbar, nicht editierbar — kein Formularfeld. #}
+                <dt class="text-ink-muted">{% trans "Slug" %}</dt>
+                <dd class="text-ink font-mono" data-testid="doctype-slug">{{ doc_type.slug }}</dd>
+            </div>
+            {% if doc_type.entity_type == "event" %}
+            {# E2 (Refs #1848): Registry-Auskunft „erscheint in …" — nur an Ereignis-Typen sinnvoll #}
+            {# (der Sachbericht und seine Geschwister zählen Ereignisse, keine Personen/Fälle).      #}
+            <div class="sm:col-span-2">
+                <dt class="text-ink-muted">{% trans "Erscheint in" %}</dt>
+                <dd class="text-ink font-medium" data-testid="doctype-report-bindings">
+                    {% if report_bindings %}{{ report_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
+                </dd>
+            </div>
+            {% endif %}
+            <div>
                 <dt class="text-ink-muted">{% trans "Aufbewahrungsfrist" %}</dt>
                 <dd class="text-ink font-medium">{% if doc_type.retention_days %}{% blocktrans count days=doc_type.retention_days %}{{ days }} Tag{% plural %}{{ days }} Tage{% endblocktrans %}{% else %}–{% endif %}</dd>
             </div>
@@ -72,6 +87,7 @@
                 <dd class="text-ink font-medium">{{ usage_count }}</dd>
             </div>
         </dl>
+        <p class="mt-3 text-[12px] text-ink-muted">{% trans "Der Slug entsteht beim Anlegen aus dem Namen und ist danach unveränderbar." %}</p>
         {% if doc_type.description %}
         <div class="mt-4 pt-4 border-t border-subtle">
             <dt class="text-ink-muted text-[13px]">{% trans "Beschreibung" %}</dt>

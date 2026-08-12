@@ -222,3 +222,74 @@ def backends_for_field_key(key: str) -> list[DatasetBackend]:
     return [
         backend for backend in get_backends() if any(key in bindung.vokabular() for bindung in feld_bindungen(backend))
     ]
+
+
+def describe_type_bindings(document_type, facility) -> list[str]:
+    """„Erscheint in …" fuer einen Dokumentationstyp (E2, Refs #1848).
+
+    Je **verfuegbarem** Backend mit Treffer eine Zeile ``"Backend-Name
+    (Label)"`` — die Konfigurations-UI verkettet die Liste mit ``" · "``.
+    Baut AUSSCHLIESSLICH auf der E1-API auf
+    (:meth:`~core.reporting.base.TypBindung.resolve_key`,
+    :meth:`~core.reporting.base.TypBindung.vokabular`,
+    :func:`get_available_backends`): keine eigene Aufloesungslogik, dieselbe
+    Entscheidung wie ``build_dataset``.
+
+    **Nur verfuegbare Backends** (Review-Befund #1848): gefiltert ueber
+    :func:`get_available_backends` — nicht :func:`get_backends`. Ohne den
+    Filter behauptete die Auskunft „erscheint in X" auch fuer ein Backend,
+    dessen ``is_available(facility)`` False ist (z. B. ``needle-exchange-
+    balance`` ohne die dafuer noetigen ``ausgabe``-/``rueckgabe``-
+    Feldvorlagen am Typ) — Panel und Export liefern fuer ein nicht
+    verfuegbares Backend 404 (:func:`get_available_backends` ist dieselbe
+    Praedikat-Quelle wie dort). ``facility`` ist deshalb Pflichtargument, kein
+    optionaler Zusatz.
+
+    Iteriert bewusst je **Backend** (nicht je Registry-Schluessel): zwei
+    Backends koennen denselben ``system_type`` unterschiedlich (nicht) binden
+    (z. B. ``needle_exchange`` kennt ``counseling_hours`` nicht) — nur die
+    eigene Deklaration eines Backends darf ueber seinen Treffer entscheiden.
+    ``monthly_trend`` importiert die Bindung von ``sample_report_1`` und
+    erzeugt deshalb bewusst eine zweite Zeile (Konzept #1847 §3,
+    Mehrfach-Deklaration).
+    """
+    beschreibungen: list[str] = []
+    for backend in get_available_backends(facility):
+        for bindung in typ_bindungen(backend):
+            key = bindung.resolve_key(document_type.system_type, document_type.slug)
+            if key is None:
+                continue
+            beschreibungen.append(f"{backend.name} ({bindung.vokabular()[key]})")
+    return beschreibungen
+
+
+def describe_field_bindings(field_template, facility) -> list[str]:
+    """„Erscheint in …" fuer eine Feldvorlage (E2, Refs #1848) — Entsprechung auf Feld-Ebene.
+
+    Wie :func:`describe_type_bindings`, aber ueber
+    :meth:`~core.reporting.base.FeldBindung.key_for_slug` (E1s Rueckweg
+    Feldvorlagen-Slug → Feld-Berichtsschluessel) und ebenso NUR ueber
+    :func:`get_available_backends` gefiltert (dieselbe Begruendung: eine
+    Zeile fuer ein nicht verfuegbares Backend waere eine falsche Zusage).
+
+    **Grenze des Slug-Matches (E3-Thema).** Der Treffer prueft nur, ob der
+    Slug der Feldvorlage in *irgendeiner* ``FeldBindung`` eines verfuegbaren
+    Backends deklariert ist — NICHT, ob GENAU DIESE Feldvorlage tatsaechlich
+    einem Dokumentationstyp zugeordnet ist, der die Berichtsbedingung des
+    Backends erfuellt. ``is_available`` prueft nur, dass *irgendeine*
+    passende Kombination aus Typ und Feldvorlage in der Einrichtung existiert
+    — nicht, dass ``field_template`` selbst diese Kombination stellt. Eine
+    facility-weit vorhandene, aber nirgends zugeordnete Feldvorlage mit
+    passendem Slug kann deshalb weiterhin als „erscheint in …" auftauchen,
+    obwohl sie faktisch nichts beitraegt. Erst ``report_key`` (E3) macht die
+    Zuordnung je Typ explizit statt ueber eine facility-weite
+    Slug-Konvention.
+    """
+    beschreibungen: list[str] = []
+    for backend in get_available_backends(facility):
+        for bindung in feld_bindungen(backend):
+            key = bindung.key_for_slug(field_template.slug)
+            if key is None:
+                continue
+            beschreibungen.append(f"{backend.name} ({bindung.vokabular()[key]})")
+    return beschreibungen

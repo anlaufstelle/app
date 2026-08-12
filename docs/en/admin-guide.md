@@ -465,7 +465,7 @@ The sensitivity level controls which roles can access entries of this type:
 
 The system type links a documentation type to internal application logic. It is set at creation and **cannot be changed afterwards**.
 
-> **The nine values fill three different roles** -- this is the most common misunderstanding. Only **two** values trigger application logic (Ban, Crisis). **Six** more are pure mappings into the example activity report with no other effect; at the same time they are your only way to get a self-created documentation type into that report (example: your own type "Social counseling" with system type "Counseling"). **Note** is an exclusion marker and behaves in the export exactly like *no* system type -- the only difference is that a "Note" once set is permanently fixed, whereas an empty system type may still be filled in later.
+> **The nine values fill three different roles** -- this is the most common misunderstanding, plus a dual role: **Two** values trigger application logic (Ban, Crisis). **Seven** values map the type into the example activity report -- **Crisis a second time among them**: Crisis carries both roles at once (highlight in the handover AND report mapping), while the remaining **six** (Contact, Medical, Needle Exchange, Accompaniment, Counseling, Referral) are pure mappings with no other effect. The system type is the only **visible, explicitly selectable** way to get a self-created documentation type with a **freely chosen name** into that report (example: your own type "Social counseling" with system type "Counseling"). Alongside it, a hardcoded slug fallback has applied since #1741: a type **without** a system type whose name-derived slug matches one of the seven package slugs (e.g. `kontakt`, `beratungsgespraech`) is mapped too -- even if it was created in the configuration UI. You no longer have to work this out from the slug yourself: the type's detail and form views show under "Appears in …" which report it lands in (or explicitly "Does not appear in any report."); the detail and list views additionally display the slug itself. **Note** is an exclusion marker and behaves in the export exactly like *no* system type -- the only difference is that a "Note" once set is permanently fixed, whereas an empty system type may still be filled in later.
 
 Currently, the system type serves two purposes:
 
@@ -492,13 +492,13 @@ The example activity report is a customizable example or template -- not a bindi
 | **Ban** | *(excluded)* |
 | **Note** | *(excluded)* |
 
-> **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and are excluded from the example activity report export, but work normally for documentation.
+> **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and work normally for documentation -- **they are not automatically excluded from the example activity report export**: if the name-derived slug matches one of the seven package slugs (slug fallback, see above), the type still lands in the report. The only reliable answer is the registry information directly on the type ("Appears in …" in the detail and form views) -- not the mere absence of a system type.
 >
 > System types such as `contact`, `counseling` or `medical` have **no visible UI logic** (unlike `ban` and `crisis`). They serve solely as a whitelist for the example activity report export. **`note` is explicitly *not* part of that whitelist**: events of that type stay out, just like `ban` and like types with no system type at all.
 >
 > **Events without a report mapping produce a completeness notice.** Under "Reports" the report states how many events it does *not* show. Deliberately excluded ones (`ban`, `note`) are counted there as well -- so a facility with many entry bans permanently sees that notice without anything being misconfigured. Separating "deliberately excluded" from "unmapped" is tracked as a question of its own (#1748).
 
-> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added without real application logic** -- an additional report category is no reason to extend the core data model; such mappings go through the report backend. For your configuration work this means: what is listed here stays. Reducing the list has been evaluated and is **not** planned -- the six mapping values carry weight today because they are the only opt-in for custom types into the report.
+> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added without real application logic** -- an additional report category is no reason to extend the core data model; such mappings go through the report backend. For your configuration work this means: what is listed here stays -- **for now**. A reduction has been decided for a later stage (#1847 stage E4, implementation #1850): `system_type` is meant to shrink to Ban/Crisis once a new, dedicated report field has taken over the mapping -- but explicitly only after that. Until that groundwork is complete, the list stays unchanged: the seven mapping values (Crisis in its dual role, see above) carry weight today because the system type is the only visible, explicitly selectable way to get a custom documentation type with a freely chosen name into the report; the hardcoded slug fallback remains alongside it.
 
 #### Minimum Contact Stage
 
@@ -1607,5 +1607,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-11 -->
-<!-- source-hash: d9412521d33f7c8211f15e82bb3e3d2f2a2d9406 -->
+<!-- translation-date: 2026-08-12 -->
+<!-- source-hash: f2fd32755ddeeaf3206d59ab7e4e621c9ba1576b -->
