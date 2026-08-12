@@ -9,10 +9,11 @@ from django.utils.translation import gettext_lazy as _
 from core.models.document_type import DocumentType
 from core.models.managers import FacilityScopedManager
 from core.models.mixins import SluggedModel
+from core.models.report_key import ReportKeyMixin
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE
 
 
-class FieldTemplate(SluggedModel):
+class FieldTemplate(ReportKeyMixin, SluggedModel):
     """Template for an input field within a document type."""
 
     class FieldType(models.TextChoices):
@@ -147,6 +148,12 @@ class FieldTemplate(SluggedModel):
         if not spec.allows_default:
             raise ValidationError({"default_value": _("Für Datei-Felder ist kein Default-Wert zulässig.")})
         spec.validate_default(raw, {"options_json": self.options_json})
+
+    def _check_immutable_fields(self, orig):
+        # E3 (Refs #1849): Vertrag von ``ReportKeyMixin`` — leer→gesetzt bleibt
+        # erlaubt, gesetzt→anders/weg nicht. Die Feldvorlage hatte bis hier gar
+        # keinen Unveraenderbarkeits-Guard (nur der Slug ueber ``SluggedModel``).
+        self._check_report_key_immutable(orig)
 
     def _check_new_slug(self):
         # Refs #1726: Backstop für Nicht-Form-Pfade (``.create()``/Seed/Bulk,

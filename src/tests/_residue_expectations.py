@@ -103,6 +103,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_documenttype", "sensitivity", reason="Enum (normal/elevated/high)."),
     non_pii("core_documenttype", "min_contact_stage", reason="Enum-Kontaktstufe (Marker), kein Freitext."),
     non_pii("core_documenttype", "system_type", reason="Stabile System-Kennung (Enum) fuer Bann/Export."),
+    non_pii(
+        "core_documenttype",
+        "report_key",
+        reason="Berichtsschluessel aus dem Registry-Vokabular (E3), Konfiguration — keine Klientendaten.",
+    ),
     non_pii("core_documenttype", "icon", reason="UI-Icon-Name (Konfiguration)."),
     non_pii("core_documenttype", "color", reason="UI-Farbwert (Konfiguration)."),
     non_pii(
@@ -124,6 +129,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     ),
     non_pii("core_fieldtemplate", "options_json", reason="Select/Multi-Select-Optionsdefinitionen (Schema-Konfig)."),
     non_pii("core_fieldtemplate", "statistics_category", reason="Statistik-Zuordnungs-Label (Konfiguration)."),
+    non_pii(
+        "core_fieldtemplate",
+        "report_key",
+        reason="Berichtsschluessel aus dem Registry-Vokabular (E3), Konfiguration — keine Klientendaten.",
+    ),
     non_pii("core_fieldtemplate", "help_text", reason="Admin-Hilfetext fuers Formular (Konfig-Label)."),
     # ---- core_fieldgroup (M0, Refs #1056: Konfiguration: Feldgruppen-Schema) -
     non_pii("core_fieldgroup", "name", reason="Admin-konfigurierter Gruppen-Name (Label)."),

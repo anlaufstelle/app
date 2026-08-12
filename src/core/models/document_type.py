@@ -10,9 +10,10 @@ from django.utils.translation import gettext_lazy as _
 from core.constants import CONTACT_STAGE_CHOICES
 from core.models.managers import FacilityScopedManager
 from core.models.mixins import SluggedModel
+from core.models.report_key import ReportKeyMixin
 
 
-class DocumentType(SluggedModel):
+class DocumentType(ReportKeyMixin, SluggedModel):
     """Configurable document type (e.g. contact, crisis intervention)."""
 
     class Sensitivity(models.TextChoices):
@@ -159,6 +160,10 @@ class DocumentType(SluggedModel):
         return DocumentType.objects.filter(facility=self.facility).exclude(pk=self.pk)
 
     def _check_immutable_fields(self, orig):
+        # E3 (Refs #1849): Der ``report_key``-Guard wird explizit aufgerufen
+        # (Vertrag von ``ReportKeyMixin``) — er steht vor den beiden
+        # bestehenden, weil er die haeufigere Bearbeitung betrifft.
+        self._check_report_key_immutable(orig)
         if orig.system_type and orig.system_type != self.system_type:
             raise ValidationError(_("system_type kann nach Erstellung nicht geändert werden."))
         if orig.entity_type != self.entity_type:
