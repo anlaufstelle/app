@@ -24,7 +24,7 @@ COPY deploy/fetch_supercronic.py /build/fetch_supercronic.py
 RUN python /build/fetch_supercronic.py --arch "${TARGETARCH:-amd64}" --output /build/supercronic
 
 # Stage 2: Compile Tailwind CSS
-FROM node:26-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS node
+FROM node:26-alpine@sha256:233761595746769ebfdb6090f44fc7cdf818ae0ce62d2b37e0367723b9823e36 AS node
 WORKDIR /build
 COPY package.json package-lock.json tailwind.config.js ./
 COPY src/templates/ src/templates/

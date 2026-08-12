@@ -31,7 +31,7 @@ jobs:
         language: [python, javascript]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
+      - uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3  # v4.37.6
         with:
           languages: ${{ matrix.language }}
           # python + javascript sind interpretiert -> kein Build noetig; der
@@ -42,6 +42,6 @@ jobs:
       # (Monorepo, gleiche SHA) -- gemischte Pins (init 4.36.3 / analyze 4.36.2)
       # brechen mit "config version X, running version Y". Kein autobuild-Step
       # bei build-mode: none.
-      - uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v4.37.3
+      - uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3  # v4.37.6
         with:
           category: "/language:${{ matrix.language }}"
