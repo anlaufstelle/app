@@ -14,9 +14,10 @@
         {% include "core/_form_errors.html" %}
 
         {% if is_edit %}
-        {# E2 (Refs #1848): informative Registry-Auskunft VOR den Formularfeldern — #}
-        {# E3 fügt hier später das editierbare report_key-Feld ein. OHNE          #}
-        {# entity_type-Filter: FieldTemplate hat kein entity_type-Feld.           #}
+        {# E2 (Refs #1848): informative Registry-Auskunft VOR den Formularfeldern #}
+        {# — das editierbare report_key-Feld selbst rendert seit E3 (Refs #1849)  #}
+        {# der generische Feld-Loop unten. OHNE entity_type-Filter:               #}
+        {# FieldTemplate hat kein entity_type-Feld.                               #}
         <div class="card p-4 bg-canvas" data-testid="fieldtemplate-report-bindings">
             <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
             <p class="text-[13px] text-ink">

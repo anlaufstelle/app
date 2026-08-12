@@ -160,12 +160,15 @@ def _category_key(row: dict[str, Any]) -> tuple[str]:
 # ``ORDER_INPUT`` heisst: die Eingabeordnung ist bereits **wertunabhaengig**
 # (feste Schluesselordnung) — es gibt keinen Rangkanal, den eine Umsortierung
 # schliessen koennte. Das gilt fuer ``by_contact_stage`` (feste Stufenfolge aus
-# dem Modell) und fuer ``ExampleBackend.records`` (Eingabeordnung des Backends).
+# dem Modell) und die ``records``-/``records_<feld>``-Tabellen der
+# Beispiel-Backends (Eingabeordnung des jeweiligen Backends, Refs #1754).
 #
 # NICHT mehr fuer ``by_category``: dessen Einfuegereihenfolge ist die Position
 # des alphabetisch **ersten im Zeitraum tatsaechlich vorhandenen** Quell-Typs je
-# Kategorie (``order_by("document_type__system_type", "document_type__slug")``
-# in ``backends/sample_report_1.py``) und damit datenabhaengig — zwei Welten mit
+# Kategorie (Ordnung abgeleitet ueber ``TYP_BINDUNG.values_fields()`` →
+# ``report_key`` in ``backends/sample_report_1.py``; bis Refs #1849 lieferte
+# die Ableitung ``system_type`` + Slug-Zweitschluessel) und damit
+# datenabhaengig — zwei Welten mit
 # identischen publizierten Werten, aber verschiedenen Quelltypen hinter der
 # Kleinstzelle lieferten verschiedene Zeilenpositionen. Deshalb ORDER_CATEGORY,
 # und seit Refs #1772 auch fuer die **sichtbaren** Zeilen dieser Ordnung
@@ -191,7 +194,7 @@ _CANONICAL_ORDERS: dict[str, Callable[[dict[str, Any]], tuple] | None] = {
 #   Nutzwert (die Tabellen werden als Rangliste gelesen) ohne Schutzgewinn.
 # * ``by_category`` kommt in der Reihenfolge der Konsolidierung, und die haengt
 #   an den **Rohdaten**: eine Kategorie steht dort, wo ihr alphabetisch erster
-#   im Zeitraum vorhandener ``system_type`` steht. Zwei Welten mit identischen
+#   im Zeitraum vorhandener ``report_key`` steht. Zwei Welten mit identischen
 #   publizierten Werten — „Vermittlung" aus ``accompaniment`` bzw. aus
 #   ``referral`` — lieferten verschiedene Positionen, auch wenn die Zelle
 #   sichtbar ist. Das ist ein Kanal ueber die Rohdaten, kein Nebenprodukt der
@@ -354,7 +357,7 @@ def _canonicalize_suppressed_order(rows: list[dict[str, Any]], order: str) -> li
     Freistellung sichtbarer Zeilen gilt nur, solange deren Ordnung aus den
     publizierten Werten folgt (``-count``). Bei ``by_category`` tut sie das
     nicht — dort ordnet die Konsolidierung **datenabhaengig**, und die Position
-    einer sichtbaren Zeile verriet den Quell-``system_type``. Diese Ordnungen
+    einer sichtbaren Zeile verriet den Quell-``report_key``. Diese Ordnungen
     werden vollstaendig kanonisiert; unterdrueckte Zeilen bleiben auch dann der
     Block am Ende, damit derselbe Mechanismus greift wie ueberall sonst.
 
@@ -1057,14 +1060,14 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
 
     category_rows = [{"name": name, "count": count} for name, count in stats.get("by_category", [])]
     # ``total`` akkumuliert exakt dieselben Zeilen wie ``by_category`` (die
-    # Konsolidierung ueber ``system_type`` zaehlt nur gemappte Ereignisse) —
+    # Konsolidierung ueber den ``report_key`` zaehlt nur gemappte Ereignisse) —
     # eine exakte Partition und damit eine echte Rueckrechnungs-Gleichung.
     #
     # ``ORDER_CATEGORY`` (K5, Refs #1770): die Einfuegereihenfolge der
     # Konsolidierung ist **datenabhaengig** — eine Kategorie steht dort, wo ihr
-    # alphabetisch erster im Zeitraum vorhandener ``system_type`` steht. Ohne
-    # kanonische Ordnung verriete die Zeilenposition, welcher system_type hinter
-    # einer unterdrueckten Kleinstzelle steckt.
+    # alphabetisch erster im Zeitraum vorhandener ``report_key`` steht. Ohne
+    # kanonische Ordnung verriete die Zeilenposition, welcher Berichtsschluessel
+    # hinter einer unterdrueckten Kleinstzelle steckt.
     by_category = _suppress_small(category_rows, threshold, margin=published_total, order=ORDER_CATEGORY)
     age_rows = require_person_counts(list(stats.get("by_age_cluster", [])))
     # K3-A2 (Refs #1770): HIER bleibt es bei ``margin=None`` und **ohne**

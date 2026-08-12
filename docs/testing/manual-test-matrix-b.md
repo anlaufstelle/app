@@ -6519,7 +6519,7 @@
 **Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/groups/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/` 
 **Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin` 
 **Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`) 
-**Models:** `DocumentType` (`system_type`, `category`), `FieldTemplate` (`slug`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`) 
+**Models:** `DocumentType` (`system_type`, `report_key`), `FieldTemplate` (`slug`, `report_key`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`) 
 **E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py` 
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) ist Voraussetzung für alle CRUD-Cases — das Rollen-Gate selbst wird negativ mit `emma` (lead), `miriam` (staff), `lena` (assistant) und `superadmin` getestet.
@@ -6583,11 +6583,12 @@
 
 **Schritte:**
 1. „Neuer Dokumenttyp" öffnen.
-2. Name „Manuell-TC03", Kategorie, Sensitivität und einen `system_type` (z.B. „Bann" oder „Krise") wählen, absenden.
+2. Name „Manuell-TC03", Sensitivität und einen `system_type` („Hausverbot" oder „Krisengespräch" — seit #1850 die einzigen beiden Werte) wählen, absenden.
 3. Detail-Seite des neu angelegten Typs prüfen.
 
 **Erwartetes Ergebnis:**
 - Neuer DocumentType erscheint in der Liste, mit dem gewählten `system_type`.
+- Die Auswahl des `system_type` belegt den `Berichtsschlüssel` im Formular vor („Krisengespräch" → `crisis`, „Hausverbot" → „Gehört ausdrücklich in keinen Bericht") — der Vorschlag bleibt vor dem Absenden änderbar.
 - Nach dem Anlegen Redirect auf die Detail-Seite (`/config/document-types/<uuid>/`).
 - AuditLog erhält einen `config_create`-Eintrag mit `target_id` des neuen Typs.
 
@@ -6595,24 +6596,28 @@
 
 ---
 
-### TC-ID: ENT-CONFIG-04 — DocumentType bearbeiten: system_type read-only, category editierbar
+### TC-ID: ENT-CONFIG-04 — DocumentType bearbeiten: system_type read-only, report_key nur nachtragbar
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Konfiguration | admin | C/F | ⚪ | `test_config_document_types.py` |
 
 **Vorbereitung:**
-- DocumentType mit gesetztem `system_type` existiert (z.B. aus ENT-CONFIG-03).
+- DocumentType mit gesetztem `system_type` **und** gesetztem `report_key` existiert (z.B. aus ENT-CONFIG-03).
+- Zusätzlich ein Typ **ohne** `report_key` (z.B. ein einrichtungseigener Typ ohne Berichtszuordnung) für den Nachtrag-Pfad.
 
 **Schritte:**
-1. Bearbeiten-Formular öffnen.
+1. Bearbeiten-Formular des Typs aus ENT-CONFIG-03 öffnen.
 2. Prüfen, dass `system_type` im Formular nicht editierbar ist (deaktiviert/nur Anzeige).
-3. `category` auf einen anderen Wert ändern, speichern.
+3. Prüfen, dass der bereits gesetzte `Berichtsschlüssel` ebenfalls gesperrt ist.
+4. Sensitivität auf einen anderen Wert ändern, speichern.
+5. Bearbeiten-Formular des Typs ohne `report_key` öffnen, einen `Berichtsschlüssel` wählen, speichern.
 
 **Erwartetes Ergebnis:**
-- `category` wird übernommen.
+- Die geänderte Sensitivität wird übernommen.
 - `system_type` bleibt unverändert — auch wenn versucht wird, ihn per manipuliertem POST-Body zu ändern (server-seitig immutable).
-- `config_update`-Audit-Eintrag mit `changed_fields` enthält `category`, nicht `system_type`.
+- Der gesetzte `report_key` bleibt ebenfalls unverändert (Änderbarkeits-Regel: leer→gesetzt erlaubt, gesetzt→anders und gesetzt→leer verboten, #1849); der leere lässt sich nachtragen und ist danach gesperrt.
+- `config_update`-Audit-Einträge mit `changed_fields`: einmal `sensitivity`, einmal `report_key` — nie `system_type`.
 
 **Status:** ☐ Offen
 

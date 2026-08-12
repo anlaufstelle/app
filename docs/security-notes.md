@@ -834,17 +834,21 @@ Zellen um Faktor ~47, eliminiert sie aber nicht — die Restfälle brauchen den 
 läuft als **einziger** Eingriffspunkt am Ende von `_suppress_small` — nach der Sekundär-Suppression,
 damit der Snapshot-/Hybrid-Pfad nicht driftet. Sichtbare Zeilen behalten ihre count-sortierte
 Reihenfolge, unterdrückte folgen als Block in kanonischer Ordnung (Altersgruppen aus
-`Client.AgeCluster` abgeleitet, Dokumenttypen nach `(category, name)`); Templates, JSON und XML erben
+`Client.AgeCluster` abgeleitet, Dokumenttypen nach `name` — der frühere Erstschlüssel `category` ist
+seit [ADR-040](adr/040-documenttype-category-entfernt.md) entfallen); Templates, JSON und XML erben
 das ohne eigene Anpassung. Die Ordnung benennt seit
 #1770 die **Aufrufstelle** über das
 Pflicht-Keyword `order` (die frühere Formheuristik war fail-open)
 `by_category` fällt seit #1770 unter
 `ORDER_CATEGORY` (Namensordnung): die Einfügereihenfolge der Konsolidierung ist **datenabhängig**
-eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `system_type` steht.
-Ohne kanonische Ordnung verriet die Zeilenposition, welcher `system_type` hinter einer unterdrückten
-Kleinstzelle steckt (zwei Welten mit identischen publizierten Werten, „Vermittlung" aus
-`accompaniment` bzw. aus `referral`, ergaben verschiedene Positionen). `ORDER_INPUT` gilt danach nur
-noch für Tabellen mit **fester Schlüsselordnung**: `by_contact_stage` und `ExampleBackend.records`.
+eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `report_key` steht (bis
+#1849 war die Ordnungsquelle der
+`system_type`). Ohne kanonische Ordnung verriet die Zeilenposition, welcher Berichtsschlüssel hinter
+einer unterdrückten Kleinstzelle steckt (zwei Welten mit identischen publizierten Werten,
+„Vermittlung" aus `accompaniment` bzw. aus `referral`, ergaben verschiedene Positionen). `ORDER_INPUT`
+gilt danach nur noch für Tabellen mit **fester Schlüsselordnung**: `by_contact_stage` (feste
+Stufenfolge aus dem Modell) und die `records`-/`records_<feld>`-Tabellen der Beispiel-Backends
+(Eingabeordnung des jeweiligen Backends, seit #1754).
 Test-gepinnt in
 `test_external_report_service.py::TestKanonischeOrdnungUnterdrueckterZeilen` (inkl. des geforderten
 Ordnungstests „zwei Welten mit vertauschten Zellwerten erzeugen dieselbe Ausgabe") und
@@ -857,8 +861,8 @@ Kategoriezeilen ebenfalls kanonisch.* Die Freistellung „sichtbare Zeilen dürf
 bleiben" trägt nur, solange die sichtbare Ordnung aus den publizierten Werten **folgt**. Für
 `by_category` tut sie das nicht: dort ordnet die Konsolidierung datenabhängig, und die Position einer
 **sichtbaren** „Vermittlung"-Zeile verriet weiterhin, ob sie aus `accompaniment` oder aus `referral`
-stammt — bei identischen publizierten Werten. Der Kanal ist klein (er betrifft nur die zwei
-Kategorien mit mehreren Quell-`system_type`s und sagt nichts über Fallzahlen), aber er ist derselbe
+stammt — bei identischen publizierten Werten. Der Kanal ist klein (er betrifft nur die drei
+Kategorien mit mehreren Quell-`report_key`s — Beratung, Versorgung, Vermittlung — und sagt nichts über Fallzahlen), aber er ist derselbe
 Kanaltyp, den K5 schließt, und kostenlos zu schließen. `_ORDERS_CANONICAL_FOR_VISIBLE` in
 [`external_report.py`](../src/core/services/dashboard/external_report.py) benennt die Ordnungen, deren
 sichtbare Zeilen mitsortiert werden — heute genau `ORDER_CATEGORY`. `ORDER_DOCUMENT_TYPE` und
@@ -1131,9 +1135,11 @@ entfallen — der Schutz ist stärker geworden, nicht schwächer: die Meldungs-T
 **grundsätzlich** verborgen statt nur situativ.)*
 
 *Severity-Korrektur (geprüft, nicht tragfähig):* Die Lesart „ungemappte Ereignisse ⇒ mindestens ein
-Hausverbot/eine Notiz" ist **falsch** — `_UNMAPPED_Q` umfasst auch `system_type IS NULL`, und jeder
-einrichtungseigene Dokumenttyp ohne Systemtyp fällt hinein. Korrekt ist nur „mindestens ein Ereignis
-eines Typs ohne Berichts-Mapping".
+Hausverbot" ist **falsch** — `_UNMAPPED_Q` wird aus `TYP_BINDUNG.unmapped_q()` abgeleitet und umfasst
+seit #1849 genau die Ereignisse, deren
+Dokumenttyp **keinen** Berichtsschlüssel trägt (`report_key` leer/`NULL`): jeder einrichtungseigene
+Typ ohne Schlüssel fällt hinein, ein Hausverbots-Typ mit `report_key = excluded` dagegen gar nicht.
+Korrekt ist nur „mindestens ein Ereignis eines Typs ohne Berichts-Mapping".
 
 *Empfehlung — teilweise schließen:* **(A1, M)** im Sachbericht `by_age_cluster` um eine Zeile „ohne
 Personenbezug" ergänzen, sodass Σ = `total_contacts`; W wird damit eine reguläre, suppressionsfähige
