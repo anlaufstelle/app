@@ -67,7 +67,7 @@ from core.models import (
     WorkItem,
 )
 from core.models.attachment import Attachment, owner_field_name
-from core.models.document_type import DocumentTypeField
+from core.models.document_type_field import DocumentTypeField
 from core.services.file_vault import (
     EncryptionError,
     EncryptionKeyMissing,
@@ -159,12 +159,8 @@ def _gather_attachments(facility, owner, *, with_file_hashes: bool) -> list[dict
     """
     owner_field = owner_field_name(owner)
     attachments = (
-        Attachment.objects.filter(
-            facility=facility,
-            is_current=True,
-            deleted_at__isnull=True,
-            **{owner_field: owner},
-        )
+        Attachment.objects.for_facility(facility)
+        .filter(is_current=True, deleted_at__isnull=True, **{owner_field: owner})
         .select_related("field_template")
         .order_by("sort_order", "created_at", "pk")
     )

@@ -41,19 +41,13 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
                 occurred_at__lte=end_dt,
             )
             .count(),
-            "open_cases": CaseModel.objects.filter(
-                facility=facility,
-                status=CaseModel.Status.OPEN,
-            ).count(),
-            "my_open_tasks": WorkItem.objects.filter(
-                facility=facility,
-                assigned_to=user,
-                status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-            ).count(),
-            "total_open_tasks": WorkItem.objects.filter(
-                facility=facility,
-                status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-            ).count(),
+            "open_cases": CaseModel.objects.for_facility(facility).filter(status=CaseModel.Status.OPEN).count(),
+            "my_open_tasks": WorkItem.objects.for_facility(facility)
+            .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
+            .count(),
+            "total_open_tasks": WorkItem.objects.for_facility(facility)
+            .filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
+            .count(),
         }
 
         # Recent clients widget (from dashboard)
@@ -73,22 +67,16 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
 
         # Open tasks (assigned to the user)
         context["open_workitems"] = (
-            WorkItem.objects.filter(
-                assigned_to=user,
-                status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-                facility=facility,
-            )
+            WorkItem.objects.for_facility(facility)
+            .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
             .select_related("client")
             .order_by("-created_at")[:10]
         )
 
         # Recently completed tasks
         context["done_workitems"] = (
-            WorkItem.objects.filter(
-                assigned_to=user,
-                status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
-                facility=facility,
-            )
+            WorkItem.objects.for_facility(facility)
+            .filter(assigned_to=user, status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED])
             .select_related("client")
             .order_by("-completed_at")[:5]
         )

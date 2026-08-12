@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import ApprovalStatus
 from core.models.managers import FacilityScopedManager
 from core.models.mixins import SoftDeletableModel
 
@@ -183,10 +184,9 @@ class WorkItem(SoftDeletableModel):
 class DeletionRequest(models.Model):
     """Deletion request (four-eyes principle)."""
 
-    class Status(models.TextChoices):
-        PENDING = "pending", _("Ausstehend")
-        APPROVED = "approved", _("Genehmigt")
-        REJECTED = "rejected", _("Abgelehnt")
+    #: Geteilt mit ``RectificationRequest`` (Refs #1834) — Alias, damit
+    #: ``DeletionRequest.Status.PENDING`` weiter funktioniert.
+    Status = ApprovalStatus
 
     class TargetType(models.TextChoices):
         EVENT = "Event", _("Event")

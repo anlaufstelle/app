@@ -17,9 +17,9 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
-from core.models.document_type import _RESERVED_SLUGS, slug_base
+from core.models.slug import _RESERVED_SLUGS, slug_base
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
@@ -62,7 +62,7 @@ def validate_slugifiable_name(name: str) -> str:
     return name
 
 
-class DocumentTypeForm(forms.ModelForm):
+class DocumentTypeForm(TailwindFormMixin, forms.ModelForm):
     """Anlegen/Bearbeiten eines Dokumentationstyps.
 
     * ``facility`` kommt aus dem Request-Scope (kein Formularfeld) und wird für
@@ -123,13 +123,8 @@ class DocumentTypeForm(forms.ModelForm):
             "is_active",
         ]
         widgets = {
-            "name": forms.TextInput(attrs={"class": INPUT_CSS}),
-            "entity_type": forms.Select(attrs={"class": INPUT_CSS}),
-            "sensitivity": forms.Select(attrs={"class": INPUT_CSS}),
-            "system_type": forms.Select(attrs={"class": INPUT_CSS}),
-            "min_contact_stage": forms.Select(attrs={"class": INPUT_CSS}),
-            "retention_days": forms.NumberInput(attrs={"class": INPUT_CSS, "min": 1}),
-            "description": forms.Textarea(attrs={"class": INPUT_CSS, "rows": 3}),
+            "retention_days": forms.NumberInput(attrs={"min": 1}),
+            "description": forms.Textarea(attrs={"rows": 3}),
         }
 
     def __init__(self, *args, facility=None, **kwargs):
@@ -259,7 +254,7 @@ class DocumentTypeForm(forms.ModelForm):
         return cleaned
 
 
-class FieldTemplateForm(forms.ModelForm):
+class FieldTemplateForm(TailwindFormMixin, forms.ModelForm):
     """Anlegen/Bearbeiten einer Feldvorlage.
 
     * ``facility`` kommt aus dem Request-Scope (kein Formularfeld) — der Service
@@ -288,13 +283,12 @@ class FieldTemplateForm(forms.ModelForm):
             "is_active",
         ]
         widgets = {
-            "name": forms.TextInput(attrs={"class": INPUT_CSS}),
-            "field_type": forms.Select(attrs={"class": INPUT_CSS}),
-            "sensitivity": forms.Select(attrs={"class": INPUT_CSS}),
-            "options_json": forms.Textarea(attrs={"class": INPUT_CSS, "rows": 3}),
-            "default_value": forms.TextInput(attrs={"class": INPUT_CSS}),
-            "statistics_category": forms.TextInput(attrs={"class": INPUT_CSS}),
-            "help_text": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "options_json": forms.Textarea(attrs={"rows": 3}),
+            # ``default_value`` ist am Modell ein ``TextField`` — der
+            # Django-Default waere eine Textarea. Der Default-Wert ist aber
+            # einzeilig (Refs #907: Zahl, Datum, Option-Slug), deshalb bleibt
+            # der Eintrag hier trotz fehlender Zusatz-Attribute stehen.
+            "default_value": forms.TextInput(),
         }
 
     def __init__(self, *args, facility=None, **kwargs):
@@ -330,7 +324,7 @@ class FieldTemplateForm(forms.ModelForm):
         return value
 
 
-class FieldGroupForm(forms.ModelForm):
+class FieldGroupForm(TailwindFormMixin, forms.ModelForm):
     """Anlegen/Bearbeiten einer Feldgruppe (M0 P6, Refs #1056).
 
     * ``document_type`` kommt aus dem View-Scope (kein Formularfeld) — der
@@ -348,9 +342,6 @@ class FieldGroupForm(forms.ModelForm):
     class Meta:
         model = FieldGroup
         fields = ["name", "is_collapsible"]
-        widgets = {
-            "name": forms.TextInput(attrs={"class": INPUT_CSS}),
-        }
 
     def __init__(self, *args, doc_type=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -375,7 +366,7 @@ class FieldGroupForm(forms.ModelForm):
         return name
 
 
-class DocumentTypeFieldAddForm(forms.Form):
+class DocumentTypeFieldAddForm(TailwindFormMixin, forms.Form):
     """Ordnet eine Feldvorlage einem Dokumentationstyp zu (M0 P6, Refs #1056).
 
     Kein ``ModelForm`` — das Anlegen läuft über
@@ -397,14 +388,12 @@ class DocumentTypeFieldAddForm(forms.Form):
     field_template = forms.ModelChoiceField(
         queryset=FieldTemplate.objects.none(),
         label=_("Feldvorlage"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
     field_group = forms.ModelChoiceField(
         queryset=FieldGroup.objects.none(),
         required=False,
         label=_("Feldgruppe"),
         empty_label=_("– Ohne Gruppe –"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
 
     def __init__(self, *args, doc_type=None, **kwargs):
@@ -421,7 +410,7 @@ class DocumentTypeFieldAddForm(forms.Form):
             ).order_by("sort_order", "name")
 
 
-class FieldConditionForm(forms.Form):
+class FieldConditionForm(TailwindFormMixin, forms.Form):
     """Regel-Editor-Formular für eine Feldbedingung (M1 P6, Refs #1057).
 
     Kein ``ModelForm`` — das Anlegen/Ändern läuft über
@@ -439,15 +428,21 @@ class FieldConditionForm(forms.Form):
       ``VALUELESS_OPERATORS`` (``is_empty``/``is_not_empty``) ⇒ ``value_json=None``.
     """
 
+    # Refs #1834: ``operator`` ist ein reines Validierungsfeld — gerendert wird
+    # der Operator ueber das HTMX-Partial ``condition_operator_input.html``
+    # (#1715), das seine Klassen selbst mitbringt. Ein gestyltes Widget hier
+    # waere toter Code, der beim naechsten Klassen-Wechsel stumm driftet.
+    tailwind_opt_out = ("operator",)
+
     target_field = forms.ModelChoiceField(
         queryset=DocumentTypeField.objects.none(),
         label=_("Zielfeld"),
-        widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-target"}),
+        widget=forms.Select(attrs={"data-testid": "condition-target"}),
     )
     depends_on_field = forms.ModelChoiceField(
         queryset=DocumentTypeField.objects.none(),
         label=_("Quellfeld"),
-        widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-source"}),
+        widget=forms.Select(attrs={"data-testid": "condition-source"}),
     )
     # Reines Validierungsfeld: gerendert wird der Operator über das
     # HTMX-Partial ``condition_operator_input.html`` (#1715), nicht das Widget.
@@ -458,7 +453,7 @@ class FieldConditionForm(forms.Form):
     value = forms.CharField(
         required=False,
         label=_("Vergleichswert"),
-        widget=forms.TextInput(attrs={"class": INPUT_CSS, "data-testid": "condition-value"}),
+        widget=forms.TextInput(attrs={"data-testid": "condition-value"}),
     )
     # Hidden (Plan § 5): die OR-Gruppe wird nicht getippt, sondern über die
     # Board-Affordanzen „UND-Bedingung hinzufügen" (Index der Gruppe) bzw.

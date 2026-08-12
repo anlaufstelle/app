@@ -23,7 +23,7 @@ from core.forms.dynamic import (  # noqa: F401 — Re-Export, Importpfad-Stabili
     _resolve_upload_constraints,
     _select_choices,
 )
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType
 
 
@@ -33,7 +33,7 @@ def _case_label(case: Case) -> str:
     return f"{case.title} – {pseudonym}" if pseudonym else case.title
 
 
-class EventMetaForm(forms.Form):
+class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
     """Event metadata (document type, client, timestamp)."""
 
     document_type = forms.ModelChoiceField(
@@ -41,7 +41,6 @@ class EventMetaForm(forms.Form):
         label=_("Dokumentationstyp"),  # pragma: no mutate
         widget=forms.Select(
             attrs={
-                "class": INPUT_CSS,
                 "hx-get": "",  # wird im View gesetzt
                 "hx-target": "#dynamic-fields",
                 "hx-trigger": "change",
@@ -58,7 +57,6 @@ class EventMetaForm(forms.Form):
         widget=forms.DateTimeInput(
             attrs={
                 "type": "datetime-local",
-                "class": INPUT_CSS,
                 "tabindex": "4",
             },
         ),
@@ -68,7 +66,6 @@ class EventMetaForm(forms.Form):
         required=False,
         label=_("Fall"),  # pragma: no mutate
         empty_label=_("– Keinem Fall zuordnen –"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
 
     def __init__(self, *args, facility=None, user=None, **kwargs):
@@ -102,8 +99,22 @@ class EventMetaForm(forms.Form):
             self.fields["case"].queryset = case_qs  # type: ignore[attr-defined]
             self.fields["case"].label_from_instance = _case_label  # type: ignore[attr-defined]
 
+    def get_client_facility(self):
+        """Hook aus :class:`~core.forms.mixins.PinnedClientMixin`.
+
+        Das Ereignis-Formular haelt die Facility unter ``_facility`` (kein
+        ModelForm, die Attribute sind bewusst privat) — der Hook ueberbrueckt
+        genau diese Namens-Asymmetrie, statt sie mit einem Rename quer durch
+        Views und Tests einzuebnen.
+        """
+        return self._facility
+
     def clean_client(self):
         """Refs #1423 (N11): Client-UUID facility-scoped gegen die DB aufloesen.
+
+        Kein Pinning: ``EventMetaForm`` kennt kein ``pinned_client``, das
+        Zuordnungs-Gate sitzt view-seitig (``views/events.py``). Geteilt ist
+        nur der Resolver aus :class:`~core.forms.mixins.PinnedClientMixin`.
 
         Muster analog ``CaseForm.clean_client`` (``core/forms/cases.py``):
         kein Wert ist legitim (anonyme Events bleiben erlaubt, ``client``
@@ -123,13 +134,7 @@ class EventMetaForm(forms.Form):
         client_id = self.cleaned_data.get("client")
         if not client_id:
             return None
-        # Lokaler Import: ``core.services.client`` zieht Modelle und weitere
-        # Services nach, ein Modul-Top-Level-Import riskierte einen Zirkel
-        # ueber ``core.forms``.
-        from core.services.client import resolve_writable_client
-
-        return resolve_writable_client(
-            self._facility,
+        return self.resolve_client(
             client_id,
             missing_error=_("Person existiert nicht."),  # pragma: no mutate
         )

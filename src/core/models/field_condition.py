@@ -1,6 +1,6 @@
 """Bedingte Feld-zu-Feld-Sichtbarkeit innerhalb eines Dokumentationstyps (M1, Refs #1057).
 
-``FieldCondition`` verknuepft zwei :class:`~core.models.document_type.DocumentTypeField`
+``FieldCondition`` verknuepft zwei :class:`~core.models.document_type_field.DocumentTypeField`
 desselben :class:`~core.models.document_type.DocumentType`: ``target_field`` wird ein-
 oder ausgeblendet, je nachdem, ob ``depends_on_field`` (die Quelle) den ``operator``
 gegen ``value`` erfuellt. Die eigentliche Auswertungssemantik (Operator x Typ-Matrix,
@@ -27,7 +27,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from core.models.document_type import DocumentTypeField
+from core.models.document_type_field import DocumentTypeField
 
 # Schichtregel (Architektur-Guard): Models importieren ``core.services`` nur
 # funktionslokal in den clean()-Helfern, nie auf Modul-Ebene.

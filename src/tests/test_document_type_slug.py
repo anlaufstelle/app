@@ -14,7 +14,7 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, connection, transaction
 
 from core.models import DocumentType
-from core.models.document_type import _SLUG_RE
+from core.models.slug import _SLUG_RE
 
 # Migrationsmodul hat einen ziffernstartigen Namen — nur via importlib ladbar
 # (Muster ``test_totp_secret_at_rest.py``).

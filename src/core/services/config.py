@@ -46,7 +46,7 @@ from core.models import (
     FieldGroup,
     FieldTemplate,
 )
-from core.models.document_type import _RESERVED_SLUGS
+from core.models.slug import _RESERVED_SLUGS
 from core.services.audit import log_audit_event
 
 

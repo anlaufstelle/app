@@ -424,7 +424,7 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     targets = Q(target_type="Client", target_id=client.pk)
     if event_ids:
         targets |= Q(target_type="Event", target_id__in=event_ids)
-    LegalHold.objects.filter(facility=client.facility).filter(targets).update(reason="[Anonymisiert]")
+    LegalHold.objects.for_facility(client.facility).filter(targets).update(reason="[Anonymisiert]")
 
 
 def _delete_recent_visits(client) -> None:
@@ -520,7 +520,7 @@ def _redact_activities(client, event_ids: list) -> None:
             target_type=ContentType.objects.get_for_model(Case),
             target_id__in=case_ids,
         )
-    Activity.objects.filter(facility=client.facility).filter(targets).update(summary="[Anonymisiert]")
+    Activity.objects.for_facility(client.facility).filter(targets).update(summary="[Anonymisiert]")
 
 
 @transaction.atomic
@@ -899,12 +899,9 @@ def pending_deletion_client_ids(facility, clients) -> set:
     if not ids:
         return set()
     return set(
-        DeletionRequest.objects.filter(
-            facility=facility,
-            target_type=DeletionRequest.TargetType.CLIENT,
-            target_id__in=ids,
-            status=DeletionRequest.Status.PENDING,
-        ).values_list("target_id", flat=True)
+        DeletionRequest.objects.for_facility(facility)
+        .filter(target_type=DeletionRequest.TargetType.CLIENT, target_id__in=ids, status=DeletionRequest.Status.PENDING)
+        .values_list("target_id", flat=True)
     )
 
 
@@ -1093,11 +1090,7 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     """
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
     qs = exclude_clients_with_active_holds(
-        Client.objects.filter(
-            facility=facility,
-            is_deleted=True,
-            deleted_at__lt=cutoff,
-        ),
+        Client.objects.for_facility(facility).filter(is_deleted=True, deleted_at__lt=cutoff),
         facility,
     )
     if dry_run:

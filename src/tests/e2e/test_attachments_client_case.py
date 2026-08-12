@@ -44,7 +44,8 @@ def _run_shell(code, e2e_env):
 
 _SETUP = """
 from core.models import Case, Client, DocumentType, User
-from core.models.document_type import DocumentTypeField, FieldTemplate
+from core.models.document_type_field import DocumentTypeField
+from core.models.field_template import FieldTemplate
 u = User.objects.get(username="miriam"); fac = u.facility
 ft, _ = FieldTemplate.objects.get_or_create(facility=fac, name="E2E-M24-Nachweis", defaults={"field_type": "file"})
 dts = {}
@@ -78,7 +79,7 @@ print(cli.pk, cli_h.pk, case.pk)
 
 _CLEANUP = """
 from core.models import Case, Client, DocumentType
-from core.models.document_type import FieldTemplate
+from core.models.field_template import FieldTemplate
 from core.services.file_vault import delete_attachments_for
 for cli in Client.objects.filter(pseudonym__startswith="E2E-M24-"):
     for case in Case.objects.filter(client=cli):

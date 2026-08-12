@@ -228,7 +228,7 @@ def _multiple_file_field() -> type[forms.Field]:
     return MultipleFileField
 
 
-# Codes spiegeln ``FieldTemplate.FieldType.choices`` (Refs models/document_type.py).
+# Codes spiegeln ``FieldTemplate.FieldType.choices`` (Refs models/field_template.py).
 # Wir nutzen Strings, um den zirkulaeren Model-Import zu vermeiden — der
 # Architekturtest sichert, dass beide Listen synchron bleiben (siehe
 # tests/test_architecture.py::TestFieldTypeRegistryCompleteness).

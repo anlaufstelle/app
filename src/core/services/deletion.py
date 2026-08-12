@@ -56,7 +56,7 @@ def annotate_deletion_targets(requests, facility, user) -> None:
     client_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CLIENT]
     event_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.EVENT]
 
-    clients = {c.pk: c for c in Client.objects.filter(facility=facility, pk__in=client_ids)} if client_ids else {}
+    clients = {c.pk: c for c in Client.objects.for_facility(facility).filter(pk__in=client_ids)} if client_ids else {}
     events = (
         {
             e.pk: e

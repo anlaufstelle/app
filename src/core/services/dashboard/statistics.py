@@ -232,11 +232,8 @@ def event_queryset_for_period(facility, date_from, date_to, document_type=None):
     Filter, der nur in einzelnen Aggregaten landet, erzeugt Kennzahl und Tabelle
     ueber verschiedenen Mengen — die Divergenzklasse, die #1804 schliesst.
     """
-    qs = Event.objects.filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__date__gte=date_from,
-        occurred_at__date__lte=date_to,
+    qs = Event.objects.for_facility(facility).filter(
+        is_deleted=False, occurred_at__date__gte=date_from, occurred_at__date__lte=date_to
     )
     if document_type is not None:
         qs = qs.filter(document_type=document_type)
@@ -463,11 +460,8 @@ def get_event_counts_by_month(facility, year):
             counts[int(month)] = int(count)
     else:
         rows = (
-            Event.objects.filter(
-                facility=facility,
-                is_deleted=False,
-                occurred_at__year=year,
-            )
+            Event.objects.for_facility(facility)
+            .filter(is_deleted=False, occurred_at__year=year)
             .values_list("occurred_at__month")
             .annotate(count=Count("id"))
         )

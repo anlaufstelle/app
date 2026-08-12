@@ -27,23 +27,15 @@ def _collect_stats(facility, visible_events, time_range):
         .order_by("-count")
     )
 
-    workitems_new = WorkItem.objects.filter(
-        facility=facility,
-        created_at__range=time_range,
-    ).count()
+    workitems_new = WorkItem.objects.for_facility(facility).filter(created_at__range=time_range).count()
 
-    workitems_completed = WorkItem.objects.filter(
-        facility=facility,
-        status="done",
-        updated_at__range=time_range,
-    ).count()
+    workitems_completed = (
+        WorkItem.objects.for_facility(facility).filter(status="done", updated_at__range=time_range).count()
+    )
 
     bans_new = visible_events.filter(document_type__system_type="ban").count()
 
-    clients_new = Client.objects.filter(
-        facility=facility,
-        created_at__range=time_range,
-    ).count()
+    clients_new = Client.objects.for_facility(facility).filter(created_at__range=time_range).count()
 
     return {
         "events_total": events_total,
@@ -70,11 +62,8 @@ def _collect_highlights(facility, visible_events, time_range, user):
     )
 
     urgent_tasks = (
-        WorkItem.objects.filter(
-            facility=facility,
-            priority__in=["urgent", "important"],
-            created_at__range=time_range,
-        )
+        WorkItem.objects.for_facility(facility)
+        .filter(priority__in=["urgent", "important"], created_at__range=time_range)
         .select_related("client", "assigned_to")
         .order_by("-created_at")[:10]
     )

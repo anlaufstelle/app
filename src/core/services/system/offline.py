@@ -317,7 +317,8 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     if not is_staff_or_above:
         cases = cases.filter(status=CaseModel.Status.OPEN)
     workitems = (
-        WorkItem.objects.filter(client=client, facility=facility)
+        WorkItem.objects.for_facility(facility)
+        .filter(client=client)
         .filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
         .select_related("assigned_to", "created_by")
         .order_by("-created_at")
@@ -411,7 +412,8 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
     # personenlosen Offline-Create-Picker landen und einen Replay-POST auf
     # ``event_create`` in die 422/Dead-Letter-Falle laufen lassen.
     doc_types = (
-        DocumentType.objects.filter(facility=facility, is_active=True, entity_type=DocumentType.EntityType.EVENT)
+        DocumentType.objects.for_facility(facility)
+        .filter(is_active=True, entity_type=DocumentType.EntityType.EVENT)
         .filter(sensitivity__in=allowed_sensitivities_for_user(user))
         .order_by("sort_order", "name")
     )

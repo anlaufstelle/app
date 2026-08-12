@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import ApprovalStatus
 from core.models.managers import FacilityScopedManager
 
 
@@ -38,10 +39,9 @@ class RectificationRequest(models.Model):
     Sachverhalt und traegt damit Personenbezug.
     """
 
-    class Status(models.TextChoices):
-        PENDING = "pending", _("Ausstehend")
-        APPROVED = "approved", _("Genehmigt")
-        REJECTED = "rejected", _("Abgelehnt")
+    #: Geteilt mit ``DeletionRequest`` (Refs #1834) — Alias, damit
+    #: ``RectificationRequest.Status.PENDING`` weiter funktioniert.
+    Status = ApprovalStatus
 
     objects = FacilityScopedManager()
 

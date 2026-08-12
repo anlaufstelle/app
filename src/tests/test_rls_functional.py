@@ -26,7 +26,8 @@ from django.db import connection
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, FieldCondition, FieldGroup
-from core.models.document_type import DocumentTypeField, FieldTemplate
+from core.models.document_type_field import DocumentTypeField
+from core.models.field_template import FieldTemplate
 from tests.conftest import xdist_role_suffix
 
 # Unter mutmut überspringen (Refs #1388/#930). Die ``rls_test_role``-Fixture ist
@@ -418,7 +419,7 @@ class TestAttachmentRLSIsolation:
         import uuid as _uuid
 
         from core.models import Attachment
-        from core.models.document_type import FieldTemplate
+        from core.models.field_template import FieldTemplate
 
         ft = FieldTemplate.objects.create(
             facility=facility,
@@ -480,7 +481,7 @@ class TestAttachmentRLSIsolation:
         from django.db import Error as _DjangoDBError
 
         from core.models import Client
-        from core.models.document_type import FieldTemplate
+        from core.models.field_template import FieldTemplate
 
         client_b = Client.objects.get(facility=facility_b_with_data)
         ft_b = FieldTemplate.objects.create(
@@ -535,7 +536,7 @@ class TestAttachmentRLSIsolation:
         import uuid as _uuid
 
         from core.models import Client
-        from core.models.document_type import FieldTemplate
+        from core.models.field_template import FieldTemplate
 
         client_a = Client.objects.get(facility=facility_a_with_data)
         ft_a = FieldTemplate.objects.create(

@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.dynamic import DynamicDataForm
 from core.forms.dynamic import document_type_label as _document_type_label
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType, User
 
 
@@ -25,7 +25,7 @@ class DynamicCaseDataForm(DynamicDataForm):
     """
 
 
-class CaseForm(forms.ModelForm):
+class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
     """Form for creating and editing cases."""
 
     client = forms.UUIDField(
@@ -41,14 +41,11 @@ class CaseForm(forms.ModelForm):
         model = Case
         fields = ["title", "description", "lead_user", "document_type"]
         widgets = {
-            "title": forms.TextInput(attrs={"class": INPUT_CSS}),
             "description": forms.Textarea(
                 attrs={
-                    "class": INPUT_CSS,
                     "rows": 4,
                 }
             ),
-            "lead_user": forms.Select(attrs={"class": INPUT_CSS}),
             # M2 P8 (Refs #1058): HTMX-Attribute exakt wie am Personen-/Event-
             # Select (``forms/clients.py`` / ``core/events/create.html``) —
             # CSP-strikt, also KEIN Inline-Handler; das Nachladen der
@@ -56,7 +53,6 @@ class CaseForm(forms.ModelForm):
             # zur Import-Zeit des Formulars noch nicht aufgeloest.
             "document_type": forms.Select(
                 attrs={
-                    "class": INPUT_CSS,
                     "hx-get": reverse_lazy("core:case_fields_partial"),
                     "hx-target": "#dynamic-fields",
                     "hx-trigger": "change",
@@ -138,36 +134,10 @@ class CaseForm(forms.ModelForm):
             doc_type_field.widget.attrs["hx-get"] = f"{partial_url}?case={self.instance.pk}"
 
     def clean_client(self):
-        client_id = self.cleaned_data.get("client")
-        # Refs #1786/#1791: Ist die Person gepinnt, gewinnt IMMER der
-        # gespeicherte Wert. Ein FEHLENDER Key (das Read-only-Formular rendert
-        # kein ``client``-Feld) ist der legitime Normalfall; ein VORHANDENER
-        # Key mit leerem oder abweichendem Wert ist ein manipulierter POST —
-        # Wechsel und Entfernen werden symmetrisch als Formularfehler
-        # abgewiesen, nicht still ignoriert. Die Unterscheidung braucht das
-        # rohe ``self.data``: nach ``UUIDField.to_python("")`` sind beide
-        # Faelle in ``cleaned_data`` identisch ``None``.
-        if self.pinned_client is not None:
-            raw = self.data.get("client")
-            if raw is not None and str(raw) != str(self.pinned_client.pk):
-                raise ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
-            # Der gepinnte Wert geht trotzdem durch ``resolve_writable_client``:
-            # das Pinning ersetzt das Widerrufs-Gate (#1771) nicht, es kommt
-            # dazu. Sonst schriebe ein Edit an einer inzwischen anonymisierten
-            # Person wieder frischen Klartext.
-            client_id = self.pinned_client.pk
+        # Pin-Guard und Widerrufs-Gate teilt sich der Fall mit Aufgabe und
+        # Ereignis (:class:`~core.forms.mixins.PinnedClientMixin`); eigen ist
+        # hier nur die Pflicht: ein Fall OHNE Person existiert nicht.
+        client_id = self.apply_client_pin(self.cleaned_data.get("client"))
         if not client_id:
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
-        # Refs #819: scoped Query — eine Person aus einer fremden
-        # Facility liefert direkt DoesNotExist statt der nachgelagerten
-        # Facility-Pruefung. Defense-in-Depth gegen ID-Erraten.
-        # Refs #1771: zusaetzlich das Widerrufs-Gate (Papierkorb/anonymisiert) —
-        # ein Fall an einer redigierten Person waere frischer Klartext (Titel,
-        # Beschreibung, ``data_json``, seit M24 auch Datei-Anhaenge).
-        from core.services.client import resolve_writable_client
-
-        return resolve_writable_client(
-            self.facility,
-            client_id,
-            missing_error=_("Person existiert nicht."),
-        )
+        return self.resolve_client(client_id, missing_error=_("Person existiert nicht."))

@@ -6,7 +6,7 @@ from django import forms
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import User, WorkItem
 
 
@@ -31,7 +31,7 @@ def min_workitem_date() -> date:
     return date.today()
 
 
-class WorkItemForm(forms.ModelForm):
+class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
     """Form for creating and editing WorkItems."""
 
     client = forms.UUIDField(required=False, widget=forms.HiddenInput())
@@ -49,15 +49,11 @@ class WorkItemForm(forms.ModelForm):
             "assigned_to",
         ]
         widgets = {
-            "item_type": forms.Select(attrs={"class": INPUT_CSS}),
-            "title": forms.TextInput(attrs={"class": INPUT_CSS}),
             "description": forms.Textarea(
                 attrs={
-                    "class": INPUT_CSS,
                     "rows": 4,
                 }
             ),
-            "priority": forms.Select(attrs={"class": INPUT_CSS}),
             # Explizites ISO-Format (Refs #619): HTML5 `<input type="date">`
             # akzeptiert nur `YYYY-MM-DD`; ohne `format=` nimmt Django den
             # ersten Eintrag aus DATE_INPUT_FORMATS — unter LANGUAGE_CODE=de-DE
@@ -66,7 +62,6 @@ class WorkItemForm(forms.ModelForm):
                 format="%Y-%m-%d",
                 attrs={
                     "type": "date",
-                    "class": INPUT_CSS,
                     "min": min_workitem_date().isoformat(),
                     "max": max_workitem_date().isoformat(),
                 },
@@ -75,13 +70,10 @@ class WorkItemForm(forms.ModelForm):
                 format="%Y-%m-%d",
                 attrs={
                     "type": "date",
-                    "class": INPUT_CSS,
                     "min": min_workitem_date().isoformat(),
                     "max": max_workitem_date().isoformat(),
                 },
             ),
-            "recurrence": forms.Select(attrs={"class": INPUT_CSS}),
-            "assigned_to": forms.Select(attrs={"class": INPUT_CSS}),
         }
 
     def __init__(self, *args, facility=None, pinned_client=None, **kwargs):
@@ -143,48 +135,21 @@ class WorkItemForm(forms.ModelForm):
             attrs["data-msg-too-late"] = too_late
 
     def clean_client(self):
-        client_id = self.cleaned_data.get("client")
-        # Refs #1786 (Spiegel zu ``CaseForm.clean_client``): gepinnt gewinnt
-        # der gespeicherte Wert; ein abweichender POST-Wert ist ein Wechsel-
-        # oder Entfernen-Versuch und wird als Formularfehler abgewiesen. Ohne
-        # Pin bleibt das bisherige Verhalten (freie Auswahl, leer erlaubt).
-        if self.pinned_client is not None:
-            # Refs #1791 (Maintainer-Entscheid, Punkt 1): gegen den ROHEN
-            # POST-Wert pruefen, nicht gegen ``cleaned_data``. Ein leeres
-            # ``client``-Feld ist nach dem Field-clean bereits ``None`` und
-            # rutschte durch das ``if client_id``-Short-Circuit — das Entfernen
-            # blieb damit unsichtbar (302 statt Formularfehler), waehrend der
-            # Wechsel-Versuch korrekt scheiterte. Beide sind Manipulationen und
-            # werden jetzt symmetrisch abgewiesen. Der legitime Fall bleibt
-            # fehlerfrei: das gepinnte Formular rendert gar kein
-            # ``<input name="client">``, der Key fehlt dann im POST.
-            # Bekannter Grenzfall (Review #1791): Wurde die Aufgabe ZWISCHEN
-            # Render (personenlos -> Hidden-Feld sendet ``client=""``) und
-            # Submit von jemand anderem zugeordnet, greift die Pruefung mit
-            # derselben Meldung — inhaltlich zutreffend (die Zuordnung ist
-            # jetzt fix), auch wenn der Ausloeser Nebenlaeufigkeit statt
-            # Manipulation ist; offline endet so ein Replay als 422 statt im
-            # 409-Konfliktfluss. Fail-closed ist hier bewusst in Kauf genommen.
-            raw = self.data.get("client")
-            if raw is not None and str(raw) != str(self.pinned_client.pk):
-                raise forms.ValidationError(_("Die Personenzuordnung kann nach dem Anlegen nicht geändert werden."))
-            # Wie bei ``CaseForm``: das Pinning ersetzt das Widerrufs-Gate
-            # (#1771) nicht, der gepinnte Wert laeuft ebenfalls durch
-            # ``resolve_writable_client``.
-            client_id = self.pinned_client.pk
+        # Pin-Guard und Widerrufs-Gate liegen in
+        # :class:`~core.forms.mixins.PinnedClientMixin`; eigen ist hier, dass
+        # eine personenlose Aufgabe erlaubt bleibt (Attach-Fall,
+        # Maintainer-Entscheid 2026-08-05).
+        #
+        # Refs #1771: Der WorkItem-Pfad ist der heikelste Bestand am Gate:
+        # ``title`` und ``description`` sind Freitext, und es gibt KEINEN
+        # nachgelagerten Prune — ``_redact_workitems`` laeuft ausschliesslich
+        # aus den beiden Anonymisierungs-Kaskaden. Ein Replay nach der
+        # Anonymisierung bliebe also unbefristet als Klartext an einer
+        # redigierten Person stehen (docs/security-notes.md § Offline-Widerruf).
+        client_id = self.apply_client_pin(self.cleaned_data.get("client"))
         if not client_id:
             return None
-        # Refs #1771: gemeinsames Widerrufs-Gate mit Event-/Fall-Formular. Der
-        # WorkItem-Pfad ist dabei der heikelste Bestand: ``title`` und
-        # ``description`` sind Freitext, und es gibt KEINEN nachgelagerten
-        # Prune — ``_redact_workitems`` laeuft ausschliesslich aus den beiden
-        # Anonymisierungs-Kaskaden. Ein Replay nach der Anonymisierung bliebe
-        # also unbefristet als Klartext an einer redigierten Person stehen
-        # (docs/security-notes.md § Offline-Widerruf).
-        from core.services.client import resolve_writable_client
-
-        return resolve_writable_client(
-            self.facility,
+        return self.resolve_client(
             client_id,
             missing_error=_("Ungültige Person-ID"),  # pragma: no mutate
         )

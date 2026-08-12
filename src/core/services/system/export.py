@@ -69,11 +69,8 @@ def _get_events_queryset(facility, date_from, date_to, user=None, document_type=
     ist die Voraussetzung dafuer, dass die Export-Schaltflaeche neben einer
     gefilterten Tabelle nicht mehr Zeilen ausgibt, als darueber stehen.
     """
-    qs = Event.objects.filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__date__gte=date_from,
-        occurred_at__date__lte=date_to,
+    qs = Event.objects.for_facility(facility).filter(
+        is_deleted=False, occurred_at__date__gte=date_from, occurred_at__date__lte=date_to
     )
     if document_type is not None:
         qs = qs.filter(document_type=document_type)

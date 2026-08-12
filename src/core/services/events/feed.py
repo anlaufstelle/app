@@ -69,10 +69,8 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
 
     # Activities
     if feed_type == "activities" or include_all:
-        activities_qs = Activity.objects.filter(
-            facility=facility,
-            occurred_at__gte=start_dt,
-            occurred_at__lte=end_dt,
+        activities_qs = Activity.objects.for_facility(facility).filter(
+            occurred_at__gte=start_dt, occurred_at__lte=end_dt
         )
         # In mixed feed: exclude 'created' activities (redundant with first-class object cards)
         if include_all:
@@ -94,11 +92,8 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
     # Work items
     if feed_type == "workitems" or include_all:
         workitems = (
-            WorkItem.objects.filter(
-                facility=facility,
-                created_at__gte=start_dt,
-                created_at__lte=end_dt,
-            )
+            WorkItem.objects.for_facility(facility)
+            .filter(created_at__gte=start_dt, created_at__lte=end_dt)
             .select_related("client", "assigned_to")
             .order_by("-created_at")[:FEED_MAX_PER_TYPE]
         )

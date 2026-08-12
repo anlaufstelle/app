@@ -55,7 +55,9 @@ def event_document_types(facility):
     werten Ereignisse aus, personen-/fallbezogene Typen gehoeren nicht in den
     Filter.
     """
-    return DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT).order_by("name")
+    return (
+        DocumentType.objects.for_facility(facility).filter(entity_type=DocumentType.EntityType.EVENT).order_by("name")
+    )
 
 
 def resolve_document_type_filter(facility, query_params):

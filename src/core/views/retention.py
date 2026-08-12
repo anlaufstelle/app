@@ -135,10 +135,8 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
 
     def _load_proposals(self, request, ids):
         return list(
-            RetentionProposal.objects.filter(
-                pk__in=ids,
-                facility=request.current_facility,
-                status__in=self.allowed_statuses,
+            RetentionProposal.objects.for_facility(request.current_facility).filter(
+                pk__in=ids, status__in=self.allowed_statuses
             )
         )
 
@@ -222,11 +220,11 @@ class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
         dismiss_legal_hold(hold, request.user)
 
         # Find the associated proposal
-        proposal = RetentionProposal.objects.filter(
-            facility=request.current_facility,
-            target_type=hold.target_type,
-            target_id=hold.target_id,
-        ).first()
+        proposal = (
+            RetentionProposal.objects.for_facility(request.current_facility)
+            .filter(target_type=hold.target_type, target_id=hold.target_id)
+            .first()
+        )
 
         if proposal:
             proposal.refresh_from_db()

@@ -27,12 +27,7 @@ def client_search_queryset(facility, query):
     kappt. Eine zweite, handgepflegte Filterkette waere genau die Stelle, an
     der der Papierkorb-Filter beim naechsten Mal wieder fehlt.
     """
-    return Client.objects.filter(
-        facility=facility,
-        pseudonym__icontains=query,
-        is_active=True,
-        is_deleted=False,
-    )
+    return Client.objects.for_facility(facility).filter(pseudonym__icontains=query, is_active=True, is_deleted=False)
 
 
 def event_search_queryset(facility, user, query):
@@ -66,11 +61,8 @@ def event_search_queryset(facility, user, query):
     """
     allowed_sens = allowed_sensitivities_for_user(user)
     return (
-        Event.objects.filter(
-            facility=facility,
-            is_deleted=False,
-            document_type__sensitivity__in=allowed_sens,
-        )
+        Event.objects.for_facility(facility)
+        .filter(is_deleted=False, document_type__sensitivity__in=allowed_sens)
         .exclude(client__is_deleted=True)
         .filter(Q(client__pseudonym__icontains=query) | Q(search_text__icontains=query))
         .select_related("document_type", "client")
@@ -145,7 +137,8 @@ def search_similar_clients(facility, query, exclude_pks=None, max_results=10, th
         threshold = getattr(settings_obj, "search_trigram_threshold", DEFAULT_TRIGRAM_THRESHOLD)
 
     qs = (
-        Client.objects.filter(facility=facility, is_active=True, is_deleted=False)
+        Client.objects.for_facility(facility)
+        .filter(is_active=True, is_deleted=False)
         .annotate(similarity=TrigramSimilarity("pseudonym", query))
         .filter(similarity__gte=threshold)
         .exclude(pseudonym__icontains=query)

@@ -73,7 +73,8 @@ def build_focus_box(facility) -> dict:
     today = timezone.localdate()
 
     qs = (
-        WorkItem.objects.filter(facility=facility, status__in=_OPEN_STATUSES)
+        WorkItem.objects.for_facility(facility)
+        .filter(status__in=_OPEN_STATUSES)
         .select_related("client", "assigned_to")
         .annotate(
             priority_order=Case(

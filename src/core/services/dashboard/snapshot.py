@@ -72,10 +72,7 @@ def create_or_update_snapshot(facility, year, month):
     if entries:
         dt_lookup = {
             dt.name: dt
-            for dt in DocumentType.objects.filter(
-                facility=facility,
-                name__in=[e["name"] for e in entries],
-            )
+            for dt in DocumentType.objects.for_facility(facility).filter(name__in=[e["name"] for e in entries])
         }
         for entry in entries:
             dt = dt_lookup.get(entry["name"])
@@ -118,7 +115,7 @@ def ensure_snapshots_for_months(facility, event_queryset):
 
 def get_snapshot(facility, year, month):
     """Return snapshot data dict or None if no snapshot exists."""
-    snap = StatisticsSnapshot.objects.filter(facility=facility, year=year, month=month).first()
+    snap = StatisticsSnapshot.objects.for_facility(facility).filter(year=year, month=month).first()
     return snap.data if snap else None
 
 
@@ -348,9 +345,11 @@ def get_statistics_hybrid(facility, date_from, date_to):
     for seg_from, seg_to, use_snapshot in segments:
         stats = None
         if use_snapshot:
-            snap = StatisticsSnapshot.objects.filter(
-                facility=facility, year=seg_from.year, month=seg_from.month
-            ).first()
+            snap = (
+                StatisticsSnapshot.objects.for_facility(facility)
+                .filter(year=seg_from.year, month=seg_from.month)
+                .first()
+            )
             if snap is not None:
                 stats = snap.data
                 # K4c (Refs #1770): Stand des juengsten beitragenden Aggregats.
@@ -444,11 +443,11 @@ def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
     for seg_from, seg_to, use_snapshot in segments:
         stats = None
         if use_snapshot:
-            snap = StatisticsSnapshot.objects.filter(
-                facility=facility,
-                year=seg_from.year,
-                month=seg_from.month,
-            ).first()
+            snap = (
+                StatisticsSnapshot.objects.for_facility(facility)
+                .filter(year=seg_from.year, month=seg_from.month)
+                .first()
+            )
             if snap:
                 # M5 P3 (Refs #1061) / #1740: ``backend_data`` ist die einzige
                 # Quelle — der Fallback auf das Altfeld ist mit dem Ende der

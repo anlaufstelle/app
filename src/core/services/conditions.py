@@ -48,7 +48,7 @@ VALUELESS_OPERATORS: frozenset[str] = frozenset({IS_EMPTY, IS_NOT_EMPTY})
 
 # --- Feldtyp-Strings --------------------------------------------------------
 # Bewusst als Literale gespiegelt (statt Import aus
-# ``core.models.document_type.FieldTemplate.FieldType``), damit dieser
+# ``core.models.field_template.FieldTemplate.FieldType``), damit dieser
 # Evaluator ohne Django-App-Registry importierbar bleibt. Werte MUESSEN mit
 # der ``FieldType``-TextChoices uebereinstimmen — der ``FieldCondition``-
 # Modell-clean() (P2) nutzt dieselben Konstanten aus diesem Modul.

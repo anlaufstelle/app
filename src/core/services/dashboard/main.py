@@ -39,18 +39,17 @@ def staff_dashboard_context(user, facility) -> dict:
     today_start = timezone.make_aware(datetime.combine(today, time.min))
     today_end = today_start + timedelta(days=1)
 
-    today_events_count = Event.objects.filter(
-        facility=facility,
-        occurred_at__gte=today_start,
-        occurred_at__lt=today_end,
-        is_deleted=False,
-    ).count()
+    today_events_count = (
+        Event.objects.for_facility(facility)
+        .filter(occurred_at__gte=today_start, occurred_at__lt=today_end, is_deleted=False)
+        .count()
+    )
 
-    open_qs = WorkItem.objects.filter(
-        facility=facility,
-        assigned_to=user,
-        status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-    ).select_related("client")
+    open_qs = (
+        WorkItem.objects.for_facility(facility)
+        .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
+        .select_related("client")
+    )
 
     my_open_workitems = open_qs.order_by(F("due_date").asc(nulls_last=True), "-created_at")[:5]
 
@@ -71,17 +70,15 @@ def lead_dashboard_context(user, facility) -> dict:
     hier mitgelieferte ``active_legal_holds``-Kachel war fuer die Leitung
     hinter dem #1735-Guard immer unsichtbar und ist entfernt (Refs #1759).
     """
-    pending_deletion_requests = DeletionRequest.objects.filter(
-        facility=facility,
-        status=DeletionRequest.Status.PENDING,
-    ).count()
+    pending_deletion_requests = (
+        DeletionRequest.objects.for_facility(facility).filter(status=DeletionRequest.Status.PENDING).count()
+    )
 
-    pending_retention_proposals = RetentionProposal.objects.filter(
-        facility=facility,
-        status=RetentionProposal.Status.PENDING,
-    ).count()
+    pending_retention_proposals = (
+        RetentionProposal.objects.for_facility(facility).filter(status=RetentionProposal.Status.PENDING).count()
+    )
 
-    last_snapshot = StatisticsSnapshot.objects.filter(facility=facility).order_by("-year", "-month").first()
+    last_snapshot = StatisticsSnapshot.objects.for_facility(facility).order_by("-year", "-month").first()
 
     return {
         "pending_deletion_requests": pending_deletion_requests,

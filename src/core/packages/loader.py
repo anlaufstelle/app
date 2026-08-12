@@ -51,8 +51,11 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext_lazy as _
 
-from core.models.document_type import DocumentType, DocumentTypeField, FieldGroup, FieldTemplate
+from core.models.document_type import DocumentType
+from core.models.document_type_field import DocumentTypeField
 from core.models.field_condition import FieldCondition
+from core.models.field_group import FieldGroup
+from core.models.field_template import FieldTemplate
 from core.models.organization import Facility
 from core.packages.schema import ConditionDef, DocumentTypeDef, FieldTemplateDef, PackageV1
 

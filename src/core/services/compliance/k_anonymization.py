@@ -110,7 +110,9 @@ def count_clients_in_bucket(facility, age_cluster, contact_stage=None) -> int:
     """
     from core.models.client import Client
 
-    qs = Client.objects.filter(facility=facility, age_cluster=age_cluster).exclude(pseudonym__startswith="Gelöscht-")
+    qs = (
+        Client.objects.for_facility(facility).filter(age_cluster=age_cluster).exclude(pseudonym__startswith="Gelöscht-")
+    )
     if contact_stage is not None:
         qs = qs.filter(contact_stage=contact_stage)
     return qs.count()

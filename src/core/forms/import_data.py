@@ -10,7 +10,7 @@ zweites Mal getragen.
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, ImportJob
 from core.services.import_engine import SUPPORTED_ENCODINGS
 
@@ -31,12 +31,18 @@ ENCODING_CHOICES = (("", _("Automatisch erkennen")),) + tuple(
 )
 
 
-class ImportUploadForm(forms.Form):
+class ImportUploadForm(TailwindFormMixin, forms.Form):
     """Schritt 1: Zieltyp, Dokumentationstyp und CSV-Datei.
 
     Die Facility kommt als Keyword-Argument aus der View (nie aus dem POST) —
     das Typ-Dropdown ist damit strukturell auf die eigene Einrichtung gescopt.
     """
+
+    # Refs #1834: ``target_type`` ist eine Radio-Gruppe. ``INPUT_CSS`` ist die
+    # Klasse eines Text-/Select-Feldes (volle Breite, Rahmen, Innenabstand) und
+    # landete an einer ``RadioSelect`` auf dem umschliessenden ``<ul>`` — die
+    # Auswahl saehe aus wie ein leeres Eingabefeld mit Radios darin.
+    tailwind_opt_out = ("target_type",)
 
     target_type = forms.ChoiceField(
         choices=ImportJob.TargetType.choices,
@@ -48,24 +54,21 @@ class ImportUploadForm(forms.Form):
         required=False,
         label=_("Dokumentationstyp"),
         help_text=_("Liefert die Zusatzfelder als Zuordnungsziele. Für Ereignisse Pflicht."),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
     source_file = forms.FileField(
         label=_("CSV-Datei"),
         help_text=_("Erste Zeile = Spaltenüberschriften. Maximal 5 MB und 1000 Datenzeilen."),
-        widget=forms.ClearableFileInput(attrs={"class": INPUT_CSS, "accept": ".csv,text/csv"}),
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,text/csv"}),
     )
     delimiter = forms.ChoiceField(
         choices=DELIMITER_CHOICES,
         required=False,
         label=_("Trennzeichen"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
     encoding = forms.ChoiceField(
         choices=ENCODING_CHOICES,
         required=False,
         label=_("Zeichensatz"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
 
     def __init__(self, *args, facility=None, **kwargs):

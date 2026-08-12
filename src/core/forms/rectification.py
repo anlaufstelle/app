@@ -5,11 +5,11 @@ from typing import Any
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import TailwindFormMixin
 from core.services.client.rectification import DATA_JSON_PREFIX, rectifiable_fields
 
 
-class RectificationRequestForm(forms.Form):
+class RectificationRequestForm(TailwindFormMixin, forms.Form):
     """Antragsformular: Zielfeld, Wunschwert, fachliche Begruendung.
 
     Die Feldauswahl kommt aus :func:`~core.services.client.rectification.rectifiable_fields`
@@ -27,19 +27,18 @@ class RectificationRequestForm(forms.Form):
 
     field_path = forms.ChoiceField(
         label=_("Zu berichtigendes Feld"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
     new_value = forms.CharField(
         label=_("Richtiger Wert"),
         required=False,
-        widget=forms.Textarea(attrs={"class": INPUT_CSS, "rows": 2}),
+        widget=forms.Textarea(attrs={"rows": 2}),
         help_text=_(
             "Leer lassen, wenn der Eintrag ersatzlos entfallen soll. Mehrfachauswahl: Werte mit Komma trennen."
         ),
     )
     reason = forms.CharField(
         label=_("Fachliche Begründung"),
-        widget=forms.Textarea(attrs={"class": INPUT_CSS, "rows": 4}),
+        widget=forms.Textarea(attrs={"rows": 4}),
         help_text=_("Woraus ergibt sich, dass der bisherige Eintrag unrichtig ist? Wird verschlüsselt gespeichert."),
     )
 

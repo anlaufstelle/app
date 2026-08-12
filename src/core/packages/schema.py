@@ -56,8 +56,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.constants import CONTACT_STAGE_CHOICES
-from core.models.document_type import _RESERVED_SLUGS, _SLUG_RE, DocumentType, FieldTemplate
+from core.models.document_type import DocumentType
 from core.models.field_condition import FieldCondition
+from core.models.field_template import FieldTemplate
+from core.models.slug import _RESERVED_SLUGS, _SLUG_RE
 
 SCHEMA_VERSION = 1
 

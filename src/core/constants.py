@@ -1,5 +1,6 @@
 """Shared constants used across models and services."""
 
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 # Contact stage choices — single source of truth.
@@ -8,6 +9,26 @@ CONTACT_STAGE_CHOICES = [
     ("identified", _("Nur Pseudonym")),
     ("qualified", _("Mit Zusatzangaben")),
 ]
+
+
+class ApprovalStatus(models.TextChoices):
+    """Status eines Vier-Augen-Antrags — geteilt (Refs #1834).
+
+    ``DeletionRequest`` (Löschantrag) und ``RectificationRequest``
+    (Art.-16-Berichtigungsantrag) führten dieselben drei Werte samt Labels je
+    einmal. Beide Modelle behalten ihr ``Status``-Klassenattribut als Alias auf
+    diese Klasse, damit die Aufrufstellen (``DeletionRequest.Status.PENDING``)
+    unverändert bleiben. Präzedenz: :data:`CONTACT_STAGE_CHOICES`.
+
+    **Nicht** hierher gehört ``RetentionProposal.Status``: fünf Werte,
+    ``held``/``deferred`` als eigene Zustände und „Freigegeben" statt
+    „Genehmigt" — dort ist die Namensgleichheit oberflächlich.
+    """
+
+    PENDING = "pending", _("Ausstehend")
+    APPROVED = "approved", _("Genehmigt")
+    REJECTED = "rejected", _("Abgelehnt")
+
 
 # Pagination — Listenseiten (Klient*innen, Fälle, Aufgaben)
 DEFAULT_PAGE_SIZE = 25

@@ -137,12 +137,7 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         return url
 
     def _load_workitems(self, request, ids):
-        return list(
-            WorkItem.objects.filter(
-                pk__in=ids,
-                facility=request.current_facility,
-            )
-        )
+        return list(WorkItem.objects.for_facility(request.current_facility).filter(pk__in=ids))
 
     def perform_action(self, request, workitems):  # pragma: no cover - overridden
         raise NotImplementedError

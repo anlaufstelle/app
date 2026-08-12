@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.dynamic import DynamicDataForm
 from core.forms.dynamic import document_type_label as _document_type_label
-from core.forms.widgets import INPUT_CSS
+from core.forms.mixins import TailwindFormMixin
 from core.models import Client, DocumentType
 
 # M2 P8 (Refs #1058): ``_document_type_label`` ist nach ``forms/dynamic.py``
@@ -31,17 +31,14 @@ class DynamicClientDataForm(DynamicDataForm):
     """
 
 
-class ClientForm(forms.ModelForm):
+class ClientForm(TailwindFormMixin, forms.ModelForm):
     """Form for creating and editing clients."""
 
     class Meta:
         model = Client
         fields = ["pseudonym", "contact_stage", "age_cluster", "notes", "document_type"]
         widgets = {
-            "pseudonym": forms.TextInput(attrs={"class": INPUT_CSS}),
-            "contact_stage": forms.Select(attrs={"class": INPUT_CSS}),
-            "age_cluster": forms.Select(attrs={"class": INPUT_CSS}),
-            "notes": forms.Textarea(attrs={"class": INPUT_CSS, "rows": 4}),
+            "notes": forms.Textarea(attrs={"rows": 4}),
             # M2 P7 (Refs #1058): HTMX-Attribute exakt wie am Event-Select
             # (``core/events/create.html``) — CSP-strikt, also KEIN Inline-
             # Handler; das Nachladen der Zusatzfelder macht htmx selbst.
@@ -49,7 +46,6 @@ class ClientForm(forms.ModelForm):
             # noch nicht aufgeloest.
             "document_type": forms.Select(
                 attrs={
-                    "class": INPUT_CSS,
                     "hx-get": reverse_lazy("core:client_fields_partial"),
                     "hx-target": "#dynamic-fields",
                     "hx-trigger": "change",

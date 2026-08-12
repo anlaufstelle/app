@@ -720,3 +720,159 @@ class TestSlugMutationGuard:
             "Bulk-Update auf FieldGroup/FieldTemplate/DocumentType.slug gefunden — verletzt den DB-Trigger "
             f"aus Migration 0116/0117 (Refs #1709, #1058). Betroffen: {violations}"
         )
+
+
+class TestModelModuleLayout:
+    """Guard: ein Model pro Datei (AGENTS.md § Projekt & Architektur, Refs #1834).
+
+    ``document_type.py`` hielt vier Models gleichzeitig — der groesste
+    Verstoss gegen die Konvention. Der Guard pinnt den Split: jedes der vier
+    Models lebt in seinem eigenen Modul, und die geteilten Slug-Helfer liegen
+    in ``core.models.slug`` (sonst wandern sie beim naechsten Split wieder mit
+    einem der Models mit).
+    """
+
+    _EXPECTED_MODULES = {
+        "DocumentType": "core.models.document_type",
+        "FieldTemplate": "core.models.field_template",
+        "FieldGroup": "core.models.field_group",
+        "DocumentTypeField": "core.models.document_type_field",
+    }
+
+    @pytest.mark.parametrize(("model_name", "module"), sorted(_EXPECTED_MODULES.items()))
+    def test_model_lives_in_its_own_module(self, model_name: str, module: str) -> None:
+        import core.models as core_models
+
+        assert getattr(core_models, model_name).__module__ == module
+
+    @pytest.mark.parametrize("module", sorted(set(_EXPECTED_MODULES.values())))
+    def test_module_holds_exactly_one_model(self, module: str) -> None:
+        from django.apps import apps
+
+        defined = [m.__name__ for m in apps.get_models() if m.__module__ == module]
+        assert len(defined) == 1, f"{module} definiert mehr als ein Model: {defined}"
+
+    def test_slug_helpers_live_in_their_own_module(self) -> None:
+        from core.models import slug as slug_module
+
+        for helper in ("_UMLAUT_MAP", "_SLUG_RE", "_RESERVED_SLUGS", "slug_base", "generate_unique_slug"):
+            assert hasattr(slug_module, helper), f"{helper} fehlt in core.models.slug"
+
+    def test_model_modules_do_not_re_export_the_slug_helpers(self) -> None:
+        """Kein Bequemlichkeits-Re-Export — sonst driften die Importpfade wieder."""
+        import core.models.document_type as document_type_module
+
+        for helper in ("_RESERVED_SLUGS", "slug_base", "generate_unique_slug"):
+            assert not hasattr(document_type_module, helper), (
+                f"{helper} ist aus core.models.document_type importierbar — Helfer gehoeren nach core.models.slug"
+            )
+
+
+# --- for_facility()-Konvention (Refs #1834) ----------------------------------
+#
+# ``Model.objects.filter(facility=f)`` und ``Model.objects.for_facility(f)``
+# erzeugen dasselbe SQL — die Hausform ist trotzdem ``for_facility()``: sie
+# benennt die Absicht (Mandanten-Scope, nicht irgendein Filter), sie ist die
+# Stelle, an der ein kuenftiger Scope-Zusatz EINMAL landet, und sie macht die
+# ungescopten Stellen im Review sichtbar.
+#
+# Ausnahmen: ``User`` und ``AuditLog``. Beide tragen eine ``facility``, die
+# fachlich auch NULL sein darf (Systemnutzer, systemweite Audit-Zeilen); ihre
+# Manager bieten ``for_facility`` gar nicht erst an bzw. sollen nicht so
+# gelesen werden.
+_FOR_FACILITY_EXEMPT_MODELS = frozenset({"User", "AuditLog"})
+
+
+def _for_facility_model_names() -> set[str]:
+    """Models, deren Default-Manager ``for_facility()`` anbietet."""
+    import core.models as core_models
+
+    names = set()
+    for name in core_models.__all__:
+        if name in _FOR_FACILITY_EXEMPT_MODELS:
+            continue
+        if hasattr(getattr(core_models, name)._default_manager, "for_facility"):
+            names.add(name)
+    return names
+
+
+def find_adhoc_facility_filter(source: str) -> list[str]:
+    """Findet ``<Model>.objects.filter(facility=…)`` statt ``.for_facility(…)``.
+
+    AST-basiert und bewusst eng: gesucht ist ``.filter()`` **direkt** am
+    Manager mit einem ``facility``-Keyword. Ketten wie
+    ``Event.objects.visible_to(user).filter(facility=…)`` bleiben ausserhalb —
+    sie laufen ueber einen fachlichen Einstiegspunkt, und der Guard soll die
+    Hausform einfordern, nicht jede Kette umschreiben.
+    """
+    scoped = _for_facility_model_names()
+    hits: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == "filter"):
+            continue
+        manager = func.value
+        if not (isinstance(manager, ast.Attribute) and manager.attr == "objects"):
+            continue
+        if not (isinstance(manager.value, ast.Name) and manager.value.id in scoped):
+            continue
+        if not any(kw.arg == "facility" for kw in node.keywords):
+            continue
+        hits.append(f"Zeile {node.lineno}: {manager.value.id}.objects.filter(facility=…)")
+    return hits
+
+
+class TestForFacilityConventionGuard:
+    """Der Facility-Scope wird als ``for_facility()`` geschrieben (Refs #1834)."""
+
+    # Refs #1834/#1835: ``core/reporting/`` zieht der Backend-Sweep nach; der
+    # Guard wird dort in einem eigenen Schritt scharf gestellt.
+    @pytest.mark.parametrize("scan_dir", ["src/core/services", "src/core/views"])
+    def test_no_adhoc_facility_filter(self, scan_dir: str) -> None:
+        root = Path(scan_dir)
+        violations = []
+        for py_file in sorted(root.rglob("*.py")):
+            rel = py_file.relative_to(root).as_posix()
+            for hit in find_adhoc_facility_filter(py_file.read_text()):
+                violations.append(f"{rel}: {hit}")
+        assert not violations, (
+            "objects.filter(facility=…) gefunden — bitte .for_facility(…) verwenden "
+            f"(Refs #1834). Betroffen: {violations}"
+        )
+
+    def test_guard_detects_the_pattern(self) -> None:
+        source = (
+            "from core.models import Client\n\n"
+            "def q(f):\n"
+            "    return Client.objects.filter(facility=f, is_active=True)\n"
+        )
+        assert find_adhoc_facility_filter(source)
+
+    def test_for_facility_is_not_flagged(self) -> None:
+        source = (
+            "from core.models import Client\n\n"
+            "def q(f):\n"
+            "    return Client.objects.for_facility(f).filter(is_active=True)\n"
+        )
+        assert not find_adhoc_facility_filter(source)
+
+    def test_exempt_models_are_not_flagged(self) -> None:
+        source = (
+            "from core.models import AuditLog, User\n\n"
+            "def q(f):\n"
+            "    User.objects.filter(facility=f)\n"
+            "    return AuditLog.objects.filter(facility=f)\n"
+        )
+        assert not find_adhoc_facility_filter(source)
+
+    def test_create_and_get_are_not_flagged(self) -> None:
+        """``for_facility()`` ist ein Queryset-Einstieg — Schreib-/Einzelzugriffe bleiben."""
+        source = (
+            "from core.models import Client, WorkItem\n\n"
+            "def q(f):\n"
+            "    WorkItem.objects.create(facility=f, title='x')\n"
+            "    return Client.objects.get(pk=1, facility=f)\n"
+        )
+        assert not find_adhoc_facility_filter(source)

@@ -107,10 +107,8 @@ def _document_type_retention_overrides(facility) -> list[tuple[str, int]]:
     Fall-Daten gilt der Owner-Lebenszyklus.
     """
     overrides: list[tuple[str, int]] = []
-    for dt in DocumentType.objects.filter(
-        facility=facility,
-        entity_type=DocumentType.EntityType.EVENT,
-        retention_days__isnull=False,
+    for dt in DocumentType.objects.for_facility(facility).filter(
+        entity_type=DocumentType.EntityType.EVENT, retention_days__isnull=False
     ):
         if dt.retention_days is None:
             continue

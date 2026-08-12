@@ -32,12 +32,11 @@ def request_deletion(event, user, reason):
     (Refs #932) — der DELETION_REQUESTED-Eintrag existiert bereits vom
     ersten Aufruf.
     """
-    existing = DeletionRequest.objects.filter(
-        facility=event.facility,
-        target_type="Event",
-        target_id=event.pk,
-        status=DeletionRequest.Status.PENDING,
-    ).first()
+    existing = (
+        DeletionRequest.objects.for_facility(event.facility)
+        .filter(target_type="Event", target_id=event.pk, status=DeletionRequest.Status.PENDING)
+        .first()
+    )
     if existing is not None:
         return existing
     dr = DeletionRequest.objects.create(

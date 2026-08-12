@@ -3,11 +3,14 @@ from .attachment import Attachment
 from .audit import AuditLog
 from .case import Case
 from .client import Client
-from .document_type import DocumentType, DocumentTypeField, FieldGroup, FieldTemplate
+from .document_type import DocumentType
+from .document_type_field import DocumentTypeField
 from .episode import Episode
 from .event import Event
 from .event_history import EventHistory
 from .field_condition import FieldCondition
+from .field_group import FieldGroup
+from .field_template import FieldTemplate
 from .import_job import ImportJob
 from .mfa import EncryptedTOTPDevice
 from .offline_revocation import OfflineClientRevocation

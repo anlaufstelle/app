@@ -83,21 +83,14 @@ def get_active_bans(facility, user=None):
     user's role permits viewing the document type's sensitivity level.
     Without a *user* the reason is redacted.
     """
-    ban_doc_types = DocumentType.objects.filter(
-        facility=facility,
-        system_type="ban",
-        is_active=True,
-    )
+    ban_doc_types = DocumentType.objects.for_facility(facility).filter(system_type="ban", is_active=True)
 
     if not ban_doc_types.exists():
         return []
 
     events = (
-        Event.objects.filter(
-            facility=facility,
-            document_type__in=ban_doc_types,
-            is_deleted=False,
-        )
+        Event.objects.for_facility(facility)
+        .filter(document_type__in=ban_doc_types, is_deleted=False)
         .select_related("client", "document_type")
         .order_by("-occurred_at")
     )
@@ -114,22 +107,14 @@ def get_active_bans_for_client(client, user=None):
     """
     facility = client.facility
 
-    ban_doc_types = DocumentType.objects.filter(
-        facility=facility,
-        system_type="ban",
-        is_active=True,
-    )
+    ban_doc_types = DocumentType.objects.for_facility(facility).filter(system_type="ban", is_active=True)
 
     if not ban_doc_types.exists():
         return []
 
     events = (
-        Event.objects.filter(
-            client=client,
-            facility=facility,
-            document_type__in=ban_doc_types,
-            is_deleted=False,
-        )
+        Event.objects.for_facility(facility)
+        .filter(client=client, document_type__in=ban_doc_types, is_deleted=False)
         .select_related("client", "document_type")
         .order_by("-occurred_at")
     )
