@@ -467,13 +467,19 @@ class TestFieldTypeSwitchToFile:
 @pytest.mark.django_db
 class TestReportBindingsDisplay:
     def test_edit_form_shows_field_bindings_above_the_form_fields(self, client, admin_user, facility):
-        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number")
+        # E3 (Refs #1849): gebunden wird ueber den ``report_key`` — an Typ UND
+        # Feldvorlage. Der Slug bleibt der ``data_json``-Lesepfad.
+        ft = FieldTemplate.objects.create(
+            facility=facility, name="Dauer", field_type="number", report_key="dauer_minuten"
+        )
         assert ft.slug == "dauer"
-        # counseling-hours ist nur verfügbar, wenn "dauer" tatsächlich an einem
-        # passenden Dokumentationstyp hängt (Review-Befund #1848: reiner
-        # Slug-Match ohne Zuordnung reicht seit der Verfügbarkeits-Filterung
-        # nicht mehr) — sonst bliebe die Liste trotz Slug-Treffer leer.
-        dt = DocumentType.objects.create(facility=facility, name="Beratung", system_type="counseling")
+        # counseling-hours ist nur verfügbar, wenn die Vorlage tatsächlich an
+        # einem passenden Dokumentationstyp hängt (Review-Befund #1848: der
+        # blosse Schluessel-Match ohne Zuordnung reicht nicht) — sonst bliebe
+        # die Liste trotz Treffer leer.
+        dt = DocumentType.objects.create(
+            facility=facility, name="Beratung", system_type="counseling", report_key="counseling"
+        )
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
         client.force_login(admin_user)
         response = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": ft.pk}))
@@ -482,7 +488,7 @@ class TestReportBindingsDisplay:
         assert 'data-testid="fieldtemplate-report-bindings"' in body
         assert "Beispiel: Beratungsstunden (Minuten)" in body
         assert "Erscheint in keinem Bericht." not in body
-        # E3 fügt hier später das report_key-Feld ein — der Block muss daher
+        # Die Auskunft steht OBERHALB der Formularfelder — der Block muss daher
         # OBERHALB der ersten Formularfeld-Eingabe stehen.
         assert body.index('data-testid="fieldtemplate-report-bindings"') < body.index('id="id_name"')
 

@@ -102,6 +102,7 @@ from core.reporting.base import (
     FeldBindung,
     FieldSpec,
     TypBindung,
+    doppelbindungs_issues,
     project_records,
     stamp_threshold,
 )
@@ -279,10 +280,12 @@ class ServiceDistributionBackend(DatasetBackend):
         records: list[dict] = []
         summary: dict = {}
         ohne_wert = 0
+        leseschluessel = []
         for gruppe in GRUPPEN:
             if not self._ist_konfiguriert(facility, gruppe):
                 continue
             lese = gruppe.leseschluessel(facility)
+            leseschluessel.append(lese)
             payloads = (
                 Event.objects.for_facility(facility)
                 .filter(
@@ -323,7 +326,8 @@ class ServiceDistributionBackend(DatasetBackend):
                 [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=ohne_wert)]
                 if ohne_wert
                 else []
-            ),
+            )
+            + doppelbindungs_issues(*leseschluessel),
         )
 
     @staticmethod
@@ -406,5 +410,8 @@ class ServiceDistributionBackend(DatasetBackend):
         rows = [row for gruppe in aktive for row in view.get(gruppe.records_key, ())]
         records = project_records(rows, self.get_field_specs())
         summary = stamp_threshold({gruppe.summary_key: view[gruppe.summary_key] for gruppe in aktive}, threshold)
-        completeness = [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None)]
+        completeness = [
+            CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
+            *doppelbindungs_issues(*(gruppe.leseschluessel(facility) for gruppe in aktive)),
+        ]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

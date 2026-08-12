@@ -24,9 +24,10 @@ Registrierung/Discovery der konkreten Backends lebt in
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 
 from core.reporting.data_source import ALL_EVENTS
 
@@ -435,6 +436,45 @@ class Leseschluessel:
 
     je_typ: dict[object, str]
     doppelt: tuple[object, ...] = ()
+
+
+# Feld-Kardinalitaet (Entscheid E-J, Konzept #1847 §3.1). Auf Typ-Ebene ist
+# Mehrfachbelegung der Zweck der Uebung — mehrere Typen mit demselben Schluessel
+# summieren in eine Berichtszeile. Auf Feld-Ebene liest das Backend Werte JE
+# EREIGNIS: zwei am selben Typ gebundene Felder mit demselben Feld-Schluessel
+# hiessen doppelte Minuten oder vermischte Optionsraeume.
+#
+# Die Zuordnung wird deshalb validiert (Formular, Service, Paket-Loader).
+# Entsteht die Doppelbindung trotzdem — Import, Paketlauf, Race —, zaehlt das
+# Backend KEINES der beteiligten Felder und meldet: Fehler sichtbar statt still,
+# nie doppelt gezaehlt.
+#
+# Ziffernfrei und ohne ``count`` (K6-Auflage, Refs #1769): der Hinweis haengt an
+# der KONFIGURATION, nicht am Bestand — seine blosse Existenz verraet nichts
+# ueber Fallzahlen.
+DOPPELBINDUNG_CODE = "duplicate_field_binding"
+# ``cast`` wie an :attr:`CompletenessIssue.message` begruendet: der Wert IST ein
+# ``gettext_lazy``-Proxy (er muss der Sprache der Empfaengerin folgen), verhaelt
+# sich aber an jeder Verwendungsstelle wie ein ``str``.
+DOPPELBINDUNG_MESSAGE = cast(
+    "str",
+    _(
+        "Mindestens ein Dokumentationstyp trägt mehrere Feldvorlagen mit demselben Berichtsschlüssel — "
+        "deren Werte bleiben in diesem Bericht unberücksichtigt"
+    ),
+)
+
+
+def doppelbindungs_issues(*leseschluessel: "Leseschluessel") -> list["CompletenessIssue"]:
+    """Ein Hinweis, sobald IRGENDEINE Bindung eine Doppelbindung gefunden hat (E-J).
+
+    Genau ein Hinweis, nicht einer je Bindung: der Befund ist derselbe
+    („Konfiguration klaeren"), und mehrere gleichlautende Zeilen im Artefakt
+    verrieten nur, wie viele Bindungen betroffen sind.
+    """
+    if any(schluessel.doppelt for schluessel in leseschluessel):
+        return [CompletenessIssue(DOPPELBINDUNG_CODE, DOPPELBINDUNG_MESSAGE, "warning", count=None)]
+    return []
 
 
 @dataclass(frozen=True)

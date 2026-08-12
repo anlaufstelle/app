@@ -472,6 +472,44 @@ def delete_field_group(request, group: FieldGroup) -> None:
 # ---------------------------------------------------------------------------
 
 
+def conflicting_report_key_field(doc_type: DocumentType, field_template: FieldTemplate) -> FieldTemplate | None:
+    """Die bereits zugeordnete Vorlage mit demselben Feld-Berichtsschluessel (E-J).
+
+    Feld-Kardinalitaet aus Konzept #1847 §3.1: auf Typ-Ebene ist
+    Mehrfachbelegung der Zweck der Uebung, auf Feld-Ebene hiesse sie doppelte
+    Minuten oder vermischte Optionsraeume — das Backend liest **Werte je
+    Ereignis**. Ein facility-weiter Unique-Constraint waere falsch („Dauer
+    (Beratung)" und „Dauer (Telefonat)" an verschiedenen Typen sind legitim), und
+    „je (Typ, Feld-Schluessel) hoechstens eine" ist ueber ``DocumentTypeField``
+    (M:N) nicht als DB-Regel ausdrueckbar. Deshalb diese Pruefung an jeder
+    Zuordnungs-Schicht — plus dem Fail-safe im Backend
+    (:func:`~core.reporting.base.doppelbindungs_issues`), falls die Doppelbindung
+    ueber Import, Paketlauf oder Race doch entsteht.
+
+    **Nur aktive Vorlagen**, wie der Lesepfad des Backends
+    (``FeldBindung.leseschluessel``). Das ist kein Detail, sondern der
+    Umbenennungs-Pfad: „Dauer" deaktivieren, „Gespraechsdauer" mit demselben
+    Schluessel anhaengen — sonst waere genau die Reparatur gesperrt, fuer die es
+    den Schluessel gibt.
+
+    ``None``/``excluded`` sind keine Bindung und kollidieren nie.
+    """
+    from core.models.report_key import EXCLUDED
+
+    key = field_template.report_key
+    if not key or key == EXCLUDED:
+        return None
+    return (
+        FieldTemplate.objects.filter(
+            document_type_fields__document_type=doc_type,
+            report_key=key,
+            is_active=True,
+        )
+        .exclude(pk=field_template.pk)
+        .first()
+    )
+
+
 def add_field_to_doctype(
     request,
     doc_type: DocumentType,
@@ -528,6 +566,20 @@ def add_field_to_doctype(
 
     if DocumentTypeField.objects.filter(document_type=doc_type, field_template=field_template).exists():
         raise ValidationError(_("Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."))
+
+    # E-J (Refs #1849): Feld-Kardinalitaet. Zwei Vorlagen mit demselben
+    # Berichtsschluessel am selben Typ hiessen doppelte Minuten bzw. vermischte
+    # Optionsraeume — das Backend zaehlte dann fail-safe KEINE von beiden.
+    konflikt = conflicting_report_key_field(doc_type, field_template)
+    if konflikt is not None:
+        raise ValidationError(
+            _(
+                "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+                "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                "zulässig — sonst zählt der Bericht keine von beiden."
+            )
+            % {"neu": field_template.name, "bestand": konflikt.name}
+        )
 
     if field_group is None:
         # Ende der globalen Block-Sequenz (max Blockposition + 1).

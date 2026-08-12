@@ -119,6 +119,7 @@ from core.reporting.base import (
     FeldBindung,
     FieldSpec,
     TypBindung,
+    doppelbindungs_issues,
     project_records,
     stamp_threshold,
 )
@@ -278,12 +279,14 @@ class CounselingHoursBackend(DatasetBackend):
                 "minuten_gesamt": sum(minuten.values()),
             },
             # Bezifferte INTERNE Fassung; ``prepare_export`` ersetzt sie durch
-            # die ziffernfreie Export-Fassung (K6, Refs #1769).
+            # die ziffernfreie Export-Fassung (K6, Refs #1769). Der
+            # E-J-Hinweis ist bereits ziffernfrei und laeuft unveraendert durch.
             completeness=(
                 [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=ohne_dauer)]
                 if ohne_dauer
                 else []
-            ),
+            )
+            + doppelbindungs_issues(lese),
         )
 
     # Deklaration fuer den zentralen Residual-Guard (K1, Refs #1770):
@@ -340,5 +343,8 @@ class CounselingHoursBackend(DatasetBackend):
             },
             threshold,
         )
-        completeness = [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None)]
+        completeness = [
+            CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
+            *doppelbindungs_issues(FELD_DAUER.leseschluessel(facility)),
+        ]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)

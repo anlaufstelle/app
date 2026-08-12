@@ -540,6 +540,31 @@ class DocumentTypeFieldAddForm(TailwindFormMixin, forms.Form):
                 document_type=doc_type
             ).order_by("sort_order", "name")
 
+    def clean_field_template(self) -> FieldTemplate:
+        """E-J (Refs #1849): Feld-Kardinalitaet je (Typ, Berichtsschlüssel).
+
+        Die erste von drei Schichten (Formular, Service, Paket-Loader) — hier,
+        weil eine abgewiesene Auswahl als Feldfehler neben dem Select landet
+        statt als 500. Die Regel selbst steht im Service, damit alle Schichten
+        dieselbe Antwort geben.
+        """
+        from core.services.config import conflicting_report_key_field
+
+        field_template = self.cleaned_data["field_template"]
+        if self.doc_type is None:
+            return field_template
+        konflikt = conflicting_report_key_field(self.doc_type, field_template)
+        if konflikt is not None:
+            raise ValidationError(
+                _(
+                    "„%(neu)s“ trägt denselben Berichtsschlüssel wie die bereits zugeordnete Feldvorlage "
+                    "„%(bestand)s“. Je Dokumentationstyp ist höchstens eine Feldvorlage je Berichtsschlüssel "
+                    "zulässig — sonst zählt der Bericht keine von beiden."
+                )
+                % {"neu": field_template.name, "bestand": konflikt.name}
+            )
+        return field_template
+
 
 class FieldConditionForm(TailwindFormMixin, forms.Form):
     """Regel-Editor-Formular für eine Feldbedingung (M1 P6, Refs #1057).

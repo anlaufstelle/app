@@ -58,6 +58,7 @@ from core.models.field_group import FieldGroup
 from core.models.field_template import FieldTemplate
 from core.models.organization import Facility
 from core.packages.schema import ConditionDef, DocumentTypeDef, FieldTemplateDef, PackageV1
+from core.services.config import conflicting_report_key_field
 
 if TYPE_CHECKING:
     # Refs #1058 (Review-Haertung, mypy-Schaerfe): nur fuer Typannotationen —
@@ -330,6 +331,27 @@ def _apply_field_refs(
                     (identifier, str(_("Feldgruppe konnte nicht angelegt werden — Zuordnung übersprungen.")))
                 )
                 continue
+
+        # E-J (Refs #1849): Feld-Kardinalitaet je (Typ, Berichtsschluessel) —
+        # dritte Schicht neben Formular und Service. Der Paketlauf ist der
+        # wahrscheinlichste Entstehungsweg einer Doppelbindung: er ordnet
+        # mehrere Vorlagen in einem Zug zu, ohne dass jemand hinsieht.
+        konflikt = conflicting_report_key_field(doc_type, template)
+        if konflikt is not None:
+            report.errors.append(
+                (
+                    identifier,
+                    str(
+                        _(
+                            "Berichtsschlüssel %(key)r ist an diesem Dokumentationstyp bereits durch die "
+                            "Feldvorlage %(bestand)r belegt — je Typ ist höchstens eine Feldvorlage je "
+                            "Berichtsschlüssel zulässig."
+                        )
+                        % {"key": template.report_key, "bestand": konflikt.slug}
+                    ),
+                )
+            )
+            continue
 
         desired: dict[str, Any] = {"field_group": group, "sort_order": ref_def.sort_order}
         existing = DocumentTypeField.objects.filter(document_type=doc_type, field_template=template).first()

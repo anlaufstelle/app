@@ -74,6 +74,7 @@ from core.reporting.base import (
     FeldBindung,
     FieldSpec,
     TypBindung,
+    doppelbindungs_issues,
     stamp_threshold,
 )
 from core.reporting.data_source import TYPED_EVENTS
@@ -254,7 +255,8 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
                 [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=ohne_werte)]
                 if ohne_werte
                 else []
-            ),
+            )
+            + doppelbindungs_issues(lese_ausgabe, lese_rueckgabe),
         )
 
     def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
@@ -302,5 +304,8 @@ class NeedleExchangeBalanceBackend(DatasetBackend):
         # unterscheidbar, verriete schon die Existenz der Meldung, dass der
         # Ausschuss > 0 ist, und die gerade unterdrueckte Zahl waere qualitativ
         # zurueck.
-        completeness = [CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None)]
+        completeness = [
+            CompletenessIssue(MISSING_VALUES_CODE, _MISSING_VALUES_MESSAGE, "warning", count=None),
+            *doppelbindungs_issues(FELD_AUSGABE.leseschluessel(facility), FELD_RUECKGABE.leseschluessel(facility)),
+        ]
         return dataclasses.replace(result, records=records, summary=summary, completeness=completeness)
