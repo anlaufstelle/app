@@ -12,6 +12,10 @@ Aufgabe):
 2. **Rangregel (§6.2):** primäre Aktionen (außerhalb des ⋮-Overflows)
    entsprechen der §6.3-Tabelle; folgenschwere Aktionen (Löschen, Fall
    abschließen, Löschung beantragen) stehen NIE primär.
+3. **Mobile Pixelform (Refs #1859):** jede primäre Aktion der MOBILEN Leiste
+   ist fingergroß (44 × 44 px), ihr sichtbarer Kurztext steht im zugänglichen
+   Namen (WCAG 2.5.3), und die beiden Anlege-Aktionen tragen unterscheidbare
+   Icons.
 
 Rollenwahl: ``admin_user`` (facility_admin) ist ``is_staff_or_above`` UND
 ``is_lead_or_admin`` zugleich — die einzige Rolle, die auf allen vier Seiten
@@ -91,6 +95,93 @@ def _primary(actions: list[tuple[str, str | None, bool]]) -> list[tuple[str, str
 
 def _overflow_targets(actions: list[tuple[str, str | None, bool]]) -> list[str]:
     return [a[0] for a in actions if a[2]]
+
+
+class _MobileButtonForm(HTMLParser):
+    """Pixelform der PRIMÄREN Aktionen einer mobilen Leiste (Refs #1859).
+
+    Sammelt je ``<a>``/``<button>`` außerhalb des ⋮-Panels: ``class``,
+    ``aria-label``, ``title``, ``data-testid``, den sichtbaren Text (ohne
+    ``sr-only``-Spans, die kein Auge sieht) und die SVG-``d``-Pfade.
+
+    Der Overflow-Eintritt wird am Panel-Attribut ``x-show="mobileMenu"``
+    erkannt — bewusst NICHT an einem beliebigen ``x-show`` wie in
+    :class:`_ActionSequence`: ein Alpine-Zustandswechsel INNERHALB einer
+    primären Aktion (zwei Label-Spans, die einander ablösen) würde den
+    Erkenner sonst zu früh ins Menü schicken und die Aktion aus der
+    44-px-Prüfung fallen lassen.
+    """
+
+    _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+    _INTERAKTIV = {"a", "button"}
+
+    def __init__(self, container_testid: str):
+        super().__init__(convert_charrefs=True)
+        self._gesucht = container_testid
+        self._stack: list[str] = []
+        self._eintritt: int | None = None
+        self._overflow_ab: int | None = None
+        self._button_ab: int | None = None
+        self._sr_only_ab: int | None = None
+        self._aktuell: dict | None = None
+        self.gefunden = False
+        self.buttons: list[dict] = []
+
+    def handle_starttag(self, tag, attrs):
+        attribute = dict(attrs)
+        if self._eintritt is None and attribute.get("data-testid") == self._gesucht:
+            self._eintritt = len(self._stack)
+            self.gefunden = True
+        if self._eintritt is not None:
+            if attribute.get("x-show") == "mobileMenu" and self._overflow_ab is None:
+                self._overflow_ab = len(self._stack)
+            if self._overflow_ab is None:
+                if tag in self._INTERAKTIV and self._aktuell is None:
+                    self._aktuell = {
+                        "testid": attribute.get("data-testid"),
+                        "klassen": attribute.get("class", "").split(),
+                        "aria_label": attribute.get("aria-label"),
+                        "title": attribute.get("title"),
+                        "text": "",
+                        "icons": [],
+                    }
+                    self._button_ab = len(self._stack)
+                if self._aktuell is not None:
+                    if tag == "path" and attribute.get("d"):
+                        self._aktuell["icons"].append(attribute["d"])
+                    if self._sr_only_ab is None and "sr-only" in attribute.get("class", "").split():
+                        self._sr_only_ab = len(self._stack)
+        if tag not in self._VOID:
+            self._stack.append(tag)
+
+    def handle_data(self, data):
+        if self._aktuell is not None and self._sr_only_ab is None:
+            self._aktuell["text"] += data
+
+    def handle_endtag(self, tag):
+        if tag in self._VOID:
+            return
+        while self._stack and self._stack.pop() != tag:
+            pass
+        tiefe = len(self._stack)
+        if self._sr_only_ab is not None and tiefe <= self._sr_only_ab:
+            self._sr_only_ab = None
+        if self._button_ab is not None and tiefe <= self._button_ab:
+            self._aktuell["text"] = " ".join(self._aktuell["text"].split())
+            self.buttons.append(self._aktuell)
+            self._aktuell = None
+            self._button_ab = None
+        if self._overflow_ab is not None and tiefe <= self._overflow_ab:
+            self._overflow_ab = None
+        if self._eintritt is not None and tiefe <= self._eintritt:
+            self._eintritt = None
+
+
+def _mobile_buttons(html: str, container_testid: str) -> list[dict]:
+    parser = _MobileButtonForm(container_testid)
+    parser.feed(html)
+    assert parser.gefunden, f'Container data-testid="{container_testid}" nicht im HTML'
+    return parser.buttons
 
 
 @pytest.mark.django_db
@@ -280,3 +371,107 @@ class TestWorkitemDetailActionParityAndRank:
         to_client_url = reverse("core:client_detail", kwargs={"pk": sample_workitem.client.pk})
         assert to_client_url in _overflow_targets(actions)
         assert to_client_url not in _targets(_primary(actions))
+
+
+@pytest.mark.django_db
+class TestMobileActionPixelForm:
+    """Mobile Pixelform der Kopfleisten (Refs #1859).
+
+    Der Handtest bei 390 px fand drei Befunde, die alle in den GETEILTEN
+    Komponenten sitzen und deshalb hier über alle vier Detailseiten gemeinsam
+    festgenagelt werden:
+
+    * **B1** — die beiden Anlege-Aktionen waren mobil icon-only und trugen
+      dasselbe „+"-Icon; welche welche ist, war nicht erkennbar.
+    * **B2** — der ⋮-Knopf war ~34 px hoch statt 44 px wie seine Nachbarn.
+    * **WCAG 2.5.3** — sobald mobil ein Kurztext sichtbar wird, MUSS er im
+      zugänglichen Namen stecken, sonst kann Sprachsteuerung den Knopf nicht
+      ansprechen. Die Regel gilt in jeder Sprache, deshalb die EN-Gegenprobe.
+    """
+
+    def _seiten(self, client_identified, case_open, sample_event, sample_workitem):
+        return (
+            (reverse("core:client_detail", kwargs={"pk": client_identified.pk}), "client-actions-mobile"),
+            (reverse("core:case_detail", kwargs={"pk": case_open.pk}), "case-actions-mobile"),
+            (reverse("core:event_detail", kwargs={"pk": sample_event.pk}), "event-actions-mobile"),
+            (reverse("core:workitem_detail", kwargs={"pk": sample_workitem.pk}), "workitem-actions-mobile"),
+        )
+
+    def test_every_mobile_primary_action_is_a_44px_touch_target(
+        self, client, admin_user, client_identified, case_open, sample_event, sample_workitem
+    ):
+        client.force_login(admin_user)
+        for url, container in self._seiten(client_identified, case_open, sample_event, sample_workitem):
+            html = client.get(url).content.decode()
+            buttons = _mobile_buttons(html, container)
+            assert buttons, f"Keine mobile Primäraktion in {container} gefunden ({url})"
+            for button in buttons:
+                kennung = button["testid"] or button["text"] or button["aria_label"]
+                assert "min-h-[44px]" in button["klassen"], f"{container}/{kennung}: min-h-[44px] fehlt ({url})"
+                assert "min-w-[44px]" in button["klassen"], f"{container}/{kennung}: min-w-[44px] fehlt ({url})"
+
+    def test_visible_mobile_text_is_part_of_the_accessible_name(
+        self, client, admin_user, client_identified, case_open, sample_event, sample_workitem
+    ):
+        client.force_login(admin_user)
+        geprueft = 0
+        for url, container in self._seiten(client_identified, case_open, sample_event, sample_workitem):
+            html = client.get(url).content.decode()
+            for button in _mobile_buttons(html, container):
+                if not (button["aria_label"] and button["text"]):
+                    continue
+                geprueft += 1
+                assert button["text"].lower() in button["aria_label"].lower(), (
+                    f"WCAG 2.5.3 verletzt in {container}: sichtbar {button['text']!r}, "
+                    f"zugänglicher Name {button['aria_label']!r} ({url})"
+                )
+        assert geprueft, "Gegenprobe: kein einziger mobiler Kurztext gefunden — prüft der Test noch etwas?"
+
+    def test_visible_mobile_text_is_part_of_the_accessible_name_in_english(
+        self, client, admin_user, client_identified, case_open, sample_event, sample_workitem
+    ):
+        """Die Kurzlabels sind eigene msgids — „Kontakt" ⊂ „Kontakt dokumentieren"
+        sagt nichts darüber, ob „Contact" ⊂ „Document contact" gilt."""
+        admin_user.preferred_language = "en"
+        admin_user.save(update_fields=["preferred_language"])
+        client.force_login(admin_user)
+        geprueft = 0
+        for url, container in self._seiten(client_identified, case_open, sample_event, sample_workitem):
+            html = client.get(url).content.decode()
+            for button in _mobile_buttons(html, container):
+                if not (button["aria_label"] and button["text"]):
+                    continue
+                geprueft += 1
+                assert button["text"].lower() in button["aria_label"].lower(), (
+                    f"WCAG 2.5.3 verletzt in {container} (EN): sichtbar {button['text']!r}, "
+                    f"zugänglicher Name {button['aria_label']!r} ({url})"
+                )
+        assert geprueft, "Gegenprobe: kein einziger mobiler Kurztext gefunden (EN)"
+
+    def test_contact_and_task_actions_have_distinguishable_icons(
+        self, client, admin_user, client_identified, case_open
+    ):
+        """B1: beide trugen ``M12 4v16m8-8H4`` — ein „+" neben einem „+"."""
+        client.force_login(admin_user)
+        for url, container, kontakt, aufgabe in (
+            (
+                reverse("core:client_detail", kwargs={"pk": client_identified.pk}),
+                "client-actions-mobile",
+                "client-action-contact",
+                "client-action-task",
+            ),
+            (
+                reverse("core:case_detail", kwargs={"pk": case_open.pk}),
+                "case-actions-mobile",
+                "case-action-contact",
+                "case-action-task",
+            ),
+        ):
+            html = client.get(url).content.decode()
+            icons = {b["testid"]: b["icons"] for b in _mobile_buttons(html, container)}
+            assert icons.get(kontakt), f"{kontakt} hat kein Icon ({url})"
+            assert icons.get(aufgabe), f"{aufgabe} hat kein Icon ({url})"
+            assert icons[kontakt] != icons[aufgabe], (
+                f"{kontakt} und {aufgabe} tragen dasselbe Icon {icons[kontakt]!r} — "
+                f"mobil sind die beiden Anlege-Aktionen damit ununterscheidbar ({url})"
+            )

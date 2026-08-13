@@ -4,12 +4,31 @@ Prüft Layout, Navigation und Overflow auf mobilen Viewports.
 Refs #382, #418.
 """
 
+import os
+import subprocess
+import sys
+import uuid
+
 import pytest
 from django.utils import timezone
 
 from ._selectors import action_bar, open_mobile_overflow, wait_for_settled
 
 pytestmark = pytest.mark.e2e
+
+
+def _shell(e2e_env, script):
+    """``manage.py shell -c`` gegen die E2E-Datenbank (Muster aus test_client_export.py)."""
+    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+    out = subprocess.run(
+        [python, "src/manage.py", "shell", "--no-imports", "-c", script],
+        capture_output=True,
+        text=True,
+        env=e2e_env,
+        check=True,
+    )
+    return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
+
 
 # Deutscher Monatsname für Datums-Asserts (locale-frei, Refs #761).
 _MONTHS_DE = {
@@ -564,6 +583,103 @@ class TestMobileDetailOverflowMenu:
         # Refs #1734: die Fall-Anlage war auf Mobil praktisch unauffindbar
         # (Textlink unterhalb der kompletten Kontakt-Chronik).
         assert menu.locator("[data-testid='mobile-client-new-case-btn']").is_visible()
+
+
+class TestMobileDetailActionBarGeometry:
+    """Geometrie der mobilen Kopfleiste bei 375 px (Refs #1859).
+
+    Der Handtest bei 390 px fand drei Befunde, die sich nur an echter
+    Pixel-Geometrie zeigen und die kein Render-Test sieht:
+
+    * **B1** — die beiden Anlege-Aktionen waren mobil icon-only mit demselben
+      „+"; jetzt tragen sie sichtbare Kurzlabels („Kontakt"/„Aufgabe").
+    * **B2** — der ⋮-Knopf war ~34 px hoch, seine Nachbarn 44 px.
+    * **B3** — bei langem Pseudonym bricht die Leiste in eine eigene Zeile;
+      war sie dort linksbuendig, begann das ``right-0``-Panel (224 px breit)
+      bei etwa −18 px und wurde von ``main``s ``overflow-x-hidden``
+      abgeschnitten. Genau deshalb legt der Test eine Person mit BEWUSST
+      langem Pseudonym an — mit einem kurzen bliebe die Leiste in der
+      Titelzeile und der Fehler unsichtbar.
+    """
+
+    @staticmethod
+    def _seed_client_with_long_pseudonym(e2e_env):
+        pseudonym = f"E2E-Kopfleiste-Sehr-Langes-Pseudonym-{uuid.uuid4().hex[:8]}"
+        script = (
+            "from core.models import Client, Facility;"
+            " from core.models.user import User;"
+            " f = Facility.objects.get(name='Hauptstelle');"
+            " u = User.objects.get(username='emma');"
+            f" c = Client.objects.create(facility=f, contact_stage='identified',"
+            f" pseudonym='{pseudonym}', created_by=u);"
+            " print(c.pk)"
+        )
+        return _shell(e2e_env, script)[-1].strip()
+
+    def _bar_buttons(self, page):
+        bar = action_bar(page, "client", "mobile")
+        return bar, [
+            bar.locator("[data-testid='client-action-contact']"),
+            bar.locator("[data-testid='client-action-task']"),
+            bar.locator("[data-testid='client-action-edit']"),
+            bar.locator("[data-testid='mobile-overflow-menu']"),
+        ]
+
+    def test_all_header_buttons_share_one_44px_height(self, mobile_page, base_url, e2e_env):
+        pk = self._seed_client_with_long_pseudonym(e2e_env)
+        page = mobile_page
+        page.goto(f"{base_url}/clients/{pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bar, buttons = self._bar_buttons(page)
+        bar.wait_for(state="visible", timeout=10000)
+
+        boxen = []
+        for locator in buttons:
+            locator.wait_for(state="visible", timeout=10000)
+            box = locator.bounding_box()
+            assert box is not None
+            boxen.append(box)
+
+        for box in boxen:
+            assert box["height"] >= 44, f"Kopfknopf zu flach: {box}"
+            assert box["width"] >= 44, f"Kopfknopf zu schmal: {box}"
+
+        hoehen = [round(b["height"]) for b in boxen]
+        assert len(set(hoehen)) == 1, f"Kopfknoepfe unterschiedlich hoch (B2): {hoehen}"
+
+    def test_short_labels_name_the_two_create_actions(self, mobile_page, base_url, e2e_env):
+        """B1: ohne sichtbaren Text waren „Kontakt dokumentieren" und „Aufgabe
+        erstellen" mobil zwei identische Knoepfe."""
+        pk = self._seed_client_with_long_pseudonym(e2e_env)
+        page = mobile_page
+        page.goto(f"{base_url}/clients/{pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bar = action_bar(page, "client", "mobile")
+        kontakt = bar.locator("[data-testid='client-action-contact']")
+        aufgabe = bar.locator("[data-testid='client-action-task']")
+        assert kontakt.inner_text().strip() == "Kontakt"
+        assert aufgabe.inner_text().strip() == "Aufgabe"
+        # WCAG 2.5.3: der sichtbare Kurztext steckt im zugaenglichen Namen.
+        assert "Kontakt" in kontakt.get_attribute("aria-label")
+        assert "Aufgabe" in aufgabe.get_attribute("aria-label")
+
+    def test_overflow_panel_stays_inside_the_viewport(self, mobile_page, base_url, e2e_env):
+        pk = self._seed_client_with_long_pseudonym(e2e_env)
+        page = mobile_page
+        page.goto(f"{base_url}/clients/{pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bar = open_mobile_overflow(page, "client")
+        panel = bar.locator("[data-testid='mobile-overflow-menu'] + div")
+        wait_for_settled(panel)
+
+        box = panel.bounding_box()
+        assert box is not None
+        assert box["x"] >= 0, f"⋮-Menue laeuft links aus dem Bild (B3): {box}"
+        assert box["x"] + box["width"] <= 375, f"⋮-Menue laeuft rechts aus dem Bild: {box}"
+        _assert_no_horizontal_overflow(page)
 
 
 class TestMobileNoHorizontalScroll:

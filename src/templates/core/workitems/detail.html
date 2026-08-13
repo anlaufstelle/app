@@ -21,13 +21,17 @@
             </div>
             {% endif %}
         </div>
-        <div class="flex items-center gap-2">
+        {# Refs #1859 (B3/B4): ``ml-auto`` haelt die Leiste auch als umgebrochene #}
+        {# eigene Zeile rechtsbuendig (``right-0``-Panel bleibt im Bild),         #}
+        {# ``flex-wrap`` laesst die langen Status-Knoepfe umbrechen statt         #}
+        {# ueberzulaufen.                                                          #}
+        <div class="flex items-center gap-2 ml-auto">
             {# --- Desktop-Aktionen (md+) --- #}
             <div class="hidden md:flex md:items-center md:gap-2" data-testid="workitem-actions-desktop">
                 {% include "core/workitems/partials/_actions.html" with variant="desktop" %}
             </div>
             {# --- Mobile-Aktionen (< md) --- #}
-            <div class="flex items-center gap-2 md:hidden" data-testid="workitem-actions-mobile">
+            <div class="flex flex-wrap items-center justify-end gap-2 md:hidden" data-testid="workitem-actions-mobile">
                 {% include "core/workitems/partials/_actions.html" with variant="mobile" %}
             </div>
         </div>

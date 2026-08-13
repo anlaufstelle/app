@@ -12,9 +12,16 @@ dieser Include schlicht nicht aufgerufen (kein leerer ⋮-Knopf).
 Parameter: variant ("desktop"|"mobile"). Eigene Testids je Variante
 (``desktop-overflow-menu``/``mobile-overflow-menu``) — Bestands-E2E-Selektoren
 zielen exklusiv auf ``mobile-overflow-menu``.
+
+Refs #1859 (B2): Der Mobil-Zweig trug weder ``min-h-[44px]`` noch
+``justify-center`` und mass dadurch ca. 34 px — sichtbar kleiner und hoeher
+sitzend als seine 44-px-Nachbarn aus ``_action_button.html``. Das 44-px-Ziel
+(Refs #810) gilt hier genauso. Der Desktop-Zweig bleibt bewusst unveraendert:
+dort sind ALLE Kopfknoepfe ca. 34 px hoch (Maus statt Finger) — ein 44-px-⋮
+waere dort die neue Ausreisserform.
 {% endcomment %}
 <button @click="toggle" type="button"
-        class="inline-flex items-center {% if variant == 'mobile' %}bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2{% else %}bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas{% endif %}"
+        class="inline-flex items-center {% if variant == 'mobile' %}justify-center min-h-[44px] min-w-[44px] bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2{% else %}bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas{% endif %}"
         aria-label="{% trans 'Weitere Aktionen' %}"
         data-testid="{% if variant == 'mobile' %}mobile-overflow-menu{% else %}desktop-overflow-menu{% endif %}">
     <svg aria-hidden="true" class="w-4 h-4{% if variant == 'desktop' %} mr-1.5{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>

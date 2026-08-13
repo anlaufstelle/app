@@ -41,13 +41,16 @@
                 </span>
             </div>
         </div>
-        <div class="flex gap-2">
+        {# Refs #1859 (B3): ``ml-auto`` haelt die Leiste auch dann rechtsbuendig, #}
+        {# wenn sie neben einem langen Pseudonym als eigene Zeile umbricht —      #}
+        {# sonst sitzt der ⋮ links und sein ``right-0``-Panel ragt aus dem Bild.  #}
+        <div class="flex gap-2 ml-auto">
             {# --- Desktop-Aktionen (md+) --- #}
             <div class="hidden md:flex md:gap-2" data-testid="client-actions-desktop">
                 {% include "core/clients/partials/_actions.html" with variant="desktop" %}
             </div>
             {# --- Mobile-Aktionen (< md) --- #}
-            <div class="flex gap-2 md:hidden" data-testid="client-actions-mobile">
+            <div class="flex flex-wrap justify-end gap-2 md:hidden" data-testid="client-actions-mobile">
                 {% include "core/clients/partials/_actions.html" with variant="mobile" %}
             </div>
         </div>

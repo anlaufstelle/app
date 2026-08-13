@@ -15,6 +15,16 @@ Parameter:
   (z. B. ``?client=<pk>``); ohne Wert bleibt die URL unverändert — R8 verlangt
   genau das für ein anonymes Ereignis.
 - label: sichtbares/aria-Label (immer über ``{% trans … as … %}`` befüllen).
+- label_short: optionales KURZLABEL, das mobil SICHTBAR neben dem Icon steht
+  (Refs #1859). Ohne diesen Parameter bleibt die Mobilform icon-only.
+  **WCAG 2.5.3 (Label in Name):** ``label_short`` MUSS — in JEDER Sprache,
+  Groß-/Kleinschreibung egal — ein Teilstring von ``label`` sein, denn
+  ``aria-label`` traegt weiterhin den vollen Text. „Kontakt" ⊂ „Kontakt
+  dokumentieren" und „Contact" ⊂ „Document contact" halten das ein; ein
+  Kurzlabel, das den Langtext NICHT enthaelt, macht den Knopf per
+  Sprachsteuerung unansprechbar. Der Guard dazu:
+  ``tests/test_detail_actions_parity.py::TestMobileActionPixelForm``
+  (inkl. EN-Gegenprobe).
 - testid: data-testid; testid_mobile überschreibt ihn nur für variant="mobile"
   (Bestandscode hat eigene "mobile-"-Präfixe für einzelne Buttons).
 - icon_path: SVG-"d"-Pfad als reiner String (kein Markup, kein ``|safe``
@@ -24,10 +34,11 @@ Parameter:
   (die häufigste, §6.2 Rangregel). Wird in "overflow" ignoriert.
 - extra_class: zusätzliche Klassen (z. B. "text-red-600" für Löschen).
 
-Mobil verliert eine PRIMARY-Aktion nur ihr sichtbares Label (Icon +
-aria-label bleiben) — nie ihren Eintrag (§6.4 Paritätsregel). Overflow-Zeilen
-zeigen auf beiden Varianten Icon + Label (identisch zur bisherigen
-Mobil-Menü-Optik) und tragen ein einheitliches ``min-h-[44px]``-Ziel.
+Mobil verliert eine PRIMARY-Aktion höchstens ihr volles Label (Icon +
+aria-label bleiben, mit ``label_short`` zusätzlich ein sichtbarer Kurztext) —
+nie ihren Eintrag (§6.4 Paritätsregel). Overflow-Zeilen zeigen auf beiden
+Varianten Icon + Label (identisch zur bisherigen Mobil-Menü-Optik). Jede
+Trefferfläche misst mindestens 44 × 44 px (Refs #810, #1859).
 {% endcomment %}
 {% if position == 'overflow' %}
 <a href="{{ base_url }}{% if query_param_value %}?{{ query_param_name }}={{ query_param_value }}{% endif %}"
@@ -38,10 +49,11 @@ Mobil-Menü-Optik) und tragen ein einheitliches ``min-h-[44px]``-Ziel.
 </a>
 {% elif variant == 'mobile' %}
 <a href="{{ base_url }}{% if query_param_value %}?{{ query_param_name }}={{ query_param_value }}{% endif %}"
-   class="inline-flex items-center justify-center min-h-[44px] {% if highlight %}btn-primary{% else %}bg-surface border border-subtle text-ink-soft{% endif %} rounded-md px-3 py-2{% if extra_class %} {{ extra_class }}{% endif %}"
-   aria-label="{{ label }}"
+   class="inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] {% if highlight %}btn-primary{% else %}bg-surface border border-subtle text-ink-soft{% endif %} rounded-md {% if label_short %}px-2.5{% else %}px-3{% endif %} py-2{% if extra_class %} {{ extra_class }}{% endif %}"
+   aria-label="{{ label }}"{% if not label_short %}
+   title="{{ label }}"{% endif %}
    data-testid="{{ testid_mobile|default:testid }}">
-    {% if icon_path %}<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="{{ icon_stroke_width|default:'2' }}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ icon_path }}"/></svg>{% endif %}
+    {% if icon_path %}<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="{{ icon_stroke_width|default:'2' }}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="{{ icon_path }}"/></svg>{% endif %}{% if label_short %}<span class="text-[13px] font-medium">{{ label_short }}</span>{% endif %}
 </a>
 {% else %}
 <a href="{{ base_url }}{% if query_param_value %}?{{ query_param_name }}={{ query_param_value }}{% endif %}"

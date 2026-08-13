@@ -29,7 +29,7 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="in_progress">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
         {% trans "Aufgabe übernehmen" %}
     </button>
 </form>
@@ -40,7 +40,7 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="done">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
         {% trans "Als erledigt markieren" %}
     </button>
 </form>
@@ -51,7 +51,7 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="dismissed">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
         {% trans "Als nicht relevant schließen" %}
     </button>
 </form>
@@ -63,7 +63,7 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="done">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
         {% trans "Erledigt" %}
     </button>
 </form>
@@ -72,7 +72,7 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="open">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
         {% trans "Zurücksetzen" %}
     </button>
 </form>
@@ -88,8 +88,9 @@ Truth Source").
 {% if workitem.client %}
 <div x-data="mobileOverflowMenu" class="relative">
     {% include "components/_action_overflow.html" with variant=variant %}
+    {# Refs #1859 (B3): max-w klemmt das 224-px-Panel auf die Viewportbreite. #}
     <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
-         class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
+         class="absolute right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
         {% url 'core:client_detail' workitem.client.pk as client_detail_url %}
         {% include "components/_action_button.html" with variant=variant position="overflow" base_url=client_detail_url label=label_to_client testid="workitem-action-to-client" %}
     </div>

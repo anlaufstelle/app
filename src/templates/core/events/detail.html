@@ -34,13 +34,18 @@
                 {% endif %}
             </div>
         </div>
-        <div class="flex space-x-2">
+        {# Refs #1859 (B3): ``ml-auto`` haelt die Leiste auch als umgebrochene    #}
+        {# eigene Zeile rechtsbuendig — sonst sitzt der ⋮ links und sein          #}
+        {# ``right-0``-Panel ragt aus dem Bild. ``space-x-2`` ist dabei durch     #}
+        {# ``gap-2`` ersetzt: der Geschwister-Selektor von ``space-x`` setzt bei  #}
+        {# ``flex-wrap`` auch am Zeilenanfang einen linken Abstand.               #}
+        <div class="flex gap-2 ml-auto">
             {# --- Desktop-Aktionen (md+) --- #}
-            <div class="hidden md:flex md:space-x-2" data-testid="event-actions-desktop">
+            <div class="hidden md:flex md:gap-2" data-testid="event-actions-desktop">
                 {% include "core/events/partials/_actions.html" with variant="desktop" %}
             </div>
             {# --- Mobile-Aktionen (< md) --- #}
-            <div class="flex space-x-2 md:hidden" data-testid="event-actions-mobile">
+            <div class="flex flex-wrap justify-end gap-2 md:hidden" data-testid="event-actions-mobile">
                 {% include "core/events/partials/_actions.html" with variant="mobile" %}
             </div>
         </div>
