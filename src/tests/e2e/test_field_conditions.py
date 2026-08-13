@@ -34,7 +34,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors
+from ._helpers import django_shell, track_console_errors
 
 # M0-Muster wiederverwenden (test_config_ui.py bleibt unangetastet): DocType-CRUD
 # und Feld-Board-Zuordnung sind dort stabil etabliert.
@@ -43,7 +43,6 @@ from .test_config_ui import (
     FORM_SUBMIT,
     _add_group,
     _assign_field,
-    _assign_free_field,
     _create_doctype,
     _delete_doctype,
 )
@@ -268,48 +267,58 @@ class TestFieldConditionsEndToEnd:
                 _delete_field_template(page, base_url, name)
 
 
-def _with_board_refresh(page, action):
-    """Führt eine board-mutierende Aktion aus und wartet IHREN Board-Refresh ab.
+def _seed_group_visibility_doctype(e2e_env, names):
+    """Baut das #1867-Szenario direkt im ORM; liefert die DocType-pk.
 
-    Gruppen anlegen und Felder zuordnen antworten mit ``HX-Trigger:
-    refresh-conditions`` — das Bedingungs-Board lädt sich daraufhin per hx-get
-    komplett neu (outerHTML, ``condition_board.html``). Die Bestands-Helfer
-    ``_add_group``/``_assign_field`` warten nur auf ihre eigene Zeile, nicht auf
-    diesen Zweit-Swap. Wer danach sofort mit der „Neue Bedingung“-Karte spricht,
-    verliert sie mitten im Gespräch: der verspätete Board-Swap ersetzt die
-    Karte, laufende operator-/value-input-Antworten zielen auf entfernte
-    Elemente und verpuffen kommentarlos (#1867-Diagnose per Netzwerk-Trace —
-    im Trace fehlt nach dem Reset jede value-input-Anfrage, das Wert-Feld
-    bleibt der Default-``text``-Slot der frischen Karte). Deshalb wird hier
-    JEDE dieser Aktionen mit ihrem Board-GET verklammert; den Rest erledigt
-    die Settle-Probe im Test (Ziel-Option des zuletzt zugeordneten Felds).
+    Absichtlich KEINE Klickstrecke: Die erste Fassung legte Gruppen,
+    Zuordnungen und beide Bedingungen über das Bedingungs-Board an und war
+    unter Volllast doppelt racy — (a) ``HX-Trigger: refresh-conditions`` lädt
+    das Board nach jeder Zuordnung KOMPLETT neu und ersetzte die „Neue
+    Bedingung“-Karte mitten in der Interaktion (laufende operator-/value-
+    input-Antworten zielten auf entfernte Elemente und verpufften), (b) selbst
+    mit Response-Verklammerung + Settle-Probe blieb der operator-input-
+    Roundtrip im Voll-Suite-Lauf über dem Timeout. Der Board-UI-Fluss selbst
+    ist oben in ``TestFieldConditionsEndToEnd`` abgedeckt — Prüfgegenstand
+    HIER ist ausschließlich das Event-Formular, also kommt das Arrange aus
+    dem ORM (``django_shell``-Muster wie in ``test_mobile.py``).
+
+    ``names``: dict mit source/solo_target/mixed_target/mixed_free/doctype/
+    solo_group/mixed_group.
     """
-    with page.expect_response(lambda r: "/conditions/board/" in r.url and r.request.method == "GET"):
-        action()
+    script = (
+        "from core.models import DocumentType, DocumentTypeField, Facility,"
+        " FieldCondition, FieldGroup, FieldTemplate;"
+        " f = Facility.objects.get(name='Hauptstelle');"
+        f" quelle = FieldTemplate.objects.create(facility=f, name='{names['source']}', field_type='number');"
+        f" solo = FieldTemplate.objects.create(facility=f, name='{names['solo_target']}', field_type='textarea');"
+        f" mixt = FieldTemplate.objects.create(facility=f, name='{names['mixed_target']}', field_type='text');"
+        f" frei = FieldTemplate.objects.create(facility=f, name='{names['mixed_free']}', field_type='text');"
+        f" dt = DocumentType.objects.create(facility=f, name='{names['doctype']}');"
+        f" g_solo = FieldGroup.objects.create(document_type=dt, name='{names['solo_group']}', sort_order=1);"
+        f" g_mixt = FieldGroup.objects.create(document_type=dt, name='{names['mixed_group']}', sort_order=2);"
+        " mk = DocumentTypeField.objects.create;"
+        " dtf_quelle = mk(document_type=dt, field_template=quelle, sort_order=1);"
+        " dtf_solo = mk(document_type=dt, field_template=solo, field_group=g_solo, sort_order=2);"
+        " dtf_mixt = mk(document_type=dt, field_template=mixt, field_group=g_mixt, sort_order=3);"
+        " mk(document_type=dt, field_template=frei, field_group=g_mixt, sort_order=4);"
+        " cond = FieldCondition.objects.create;"
+        " cond(target_field=dtf_solo, depends_on_field=dtf_quelle, operator='greater_than', value=10);"
+        " cond(target_field=dtf_mixt, depends_on_field=dtf_quelle, operator='greater_than', value=10);"
+        " print(dt.pk)"
+    )
+    return django_shell(e2e_env, script)[-1].strip()
 
 
-def _add_greater_than_10_condition(page, target_name, source_name):
-    """Legt über das Bedingungs-Board die Regel „Wenn <source_name> > 10 → zeige <target_name>" an.
-
-    Quelle wählen lädt den typabhängigen Operator-Slot nach (#1715) — auf diese
-    Antwort wird explizit gewartet, ebenso auf die value-input-Antwort des
-    Operator-Wechsels. Voraussetzung: kein Board-Refresh mehr in flight (siehe
-    ``_with_board_refresh``). Der DocType braucht mindestens zwei zugeordnete
-    Felder, sonst rendert die „Neue Bedingung"-Karte gar nicht (#1718).
-    """
-    add_card = page.locator('[data-testid="condition-add-card"]')
-    expect(add_card).to_be_visible(timeout=10000)
-    target_select = add_card.locator('[data-testid="condition-target"]')
-    source_select = add_card.locator('[data-testid="condition-source"]')
-    target_select.select_option(value=_option_value_by_text(target_select, target_name))
-    with page.expect_response(lambda r: "operator-input" in r.url and r.request.method == "GET"):
-        source_select.select_option(value=_option_value_by_text(source_select, source_name))
-    operator_select = add_card.locator('[data-testid="condition-operator"]')
-    expect(operator_select.locator("option[value='greater_than']")).to_have_count(1, timeout=10000)
-    with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
-        operator_select.select_option(value="greater_than")
-    _wait_value_input(add_card, "number").fill("10")
-    add_card.locator('[data-testid="condition-submit"]').click()
+def _delete_group_visibility_doctype(e2e_env, doctype_pk, names):
+    """ORM-Cleanup des Wegwerf-Szenarios (DocType zuerst — PROTECT der Vorlagen)."""
+    name_list = ", ".join(f"'{names[k]}'" for k in ("source", "solo_target", "mixed_target", "mixed_free"))
+    script = (
+        "from core.models import DocumentType, FieldTemplate;"
+        f" DocumentType.objects.filter(pk='{doctype_pk}').delete();"
+        f" FieldTemplate.objects.filter(name__in=[{name_list}]).delete();"
+        " print('ok')"
+    )
+    django_shell(e2e_env, script)
 
 
 class TestFieldGroupVisibilityEndToEnd:
@@ -317,50 +326,30 @@ class TestFieldGroupVisibilityEndToEnd:
     wenn ALLE ihre Felder per Bedingung ausgeblendet sind; eine gemischte
     Gruppe (Bedingungs-Ziel + freies Feld) bleibt dagegen immer stehen.
 
-    Wegwerf-DocType ``E2E-Cond-…`` wie im Fluss oben; kein Formular-Submit
-    nötig — die Sichtbarkeits-/Toggle-Checks kommen ohne Event-Anlage aus.
+    Arrange im ORM (siehe ``_seed_group_visibility_doctype``), Act/Assert im
+    Event-Formular; kein Formular-Submit nötig — die Sichtbarkeits-/Toggle-
+    Checks kommen ohne Event-Anlage aus.
     """
 
-    def test_solo_group_hides_completely_mixed_group_stays_visible(self, authenticated_page, base_url):
+    def test_solo_group_hides_completely_mixed_group_stays_visible(self, authenticated_page, base_url, e2e_env):
         page = authenticated_page
         errors = track_console_errors(page)
 
-        source_name = _cond_name("dauer")  # number, ungruppierte Quelle
-        solo_target_name = _cond_name("solo")  # textarea, EINZIGES Feld seiner Gruppe
-        mixed_target_name = _cond_name("mixt")  # text, Ziel in einer gemischten Gruppe
-        mixed_free_name = _cond_name("frei")  # text, unkonditioniertes Feld derselben Gruppe
-        doctype_name = f"E2E-Cond-{uuid.uuid4().hex[:8]}"
-        solo_group_name = _cond_name("grpsolo")
-        mixed_group_name = _cond_name("grpmixed")
+        names = {
+            "source": _cond_name("dauer"),  # number, ungruppierte Quelle
+            "solo_target": _cond_name("solo"),  # textarea, EINZIGES Feld seiner Gruppe
+            "mixed_target": _cond_name("mixt"),  # text, Ziel in einer gemischten Gruppe
+            "mixed_free": _cond_name("frei"),  # text, unkonditioniertes Feld derselben Gruppe
+            "doctype": f"E2E-Cond-{uuid.uuid4().hex[:8]}",
+            "solo_group": _cond_name("grpsolo"),
+            "mixed_group": _cond_name("grpmixed"),
+        }
+        doctype_name = names["doctype"]
+        solo_group_name = names["solo_group"]
+        mixed_group_name = names["mixed_group"]
 
-        _create_field_template(page, base_url, source_name, "number")
-        _create_field_template(page, base_url, solo_target_name, "textarea")
-        _create_field_template(page, base_url, mixed_target_name, "text")
-        _create_field_template(page, base_url, mixed_free_name, "text")
-
-        doctype_pk = _create_doctype(page, base_url, doctype_name)
+        doctype_pk = _seed_group_visibility_doctype(e2e_env, names)
         try:
-            _with_board_refresh(page, lambda: _add_group(page, solo_group_name))
-            _with_board_refresh(page, lambda: _add_group(page, mixed_group_name))
-            _with_board_refresh(page, lambda: _assign_free_field(page, source_name))
-            _with_board_refresh(page, lambda: _assign_field(page, solo_target_name, solo_group_name))
-            _with_board_refresh(page, lambda: _assign_field(page, mixed_target_name, mixed_group_name))
-            _with_board_refresh(page, lambda: _assign_field(page, mixed_free_name, mixed_group_name))
-
-            # Settle-Probe: Der LETZTE Board-Swap ist erst angewendet, wenn die
-            # frische Karte das zuletzt zugeordnete Feld als Ziel-Option führt
-            # (target_field-Queryset = alle Felder des DocTypes). Erst danach
-            # ist die Interaktion mit der Karte racefrei.
-            add_card = page.locator('[data-testid="condition-add-card"]')
-            expect(
-                add_card.locator('[data-testid="condition-target"] option', has_text=mixed_free_name)
-            ).to_have_count(1, timeout=10000)
-
-            _add_greater_than_10_condition(page, solo_target_name, source_name)
-            expect(page.locator('[data-testid="condition-row"]')).to_have_count(1, timeout=10000)
-            _add_greater_than_10_condition(page, mixed_target_name, source_name)
-            expect(page.locator('[data-testid="condition-row"]')).to_have_count(2, timeout=10000)
-
             # --- Event-Formular: Gruppen-Sichtbarkeit ohne Reload -----------
             page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
             with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
@@ -398,6 +387,4 @@ class TestFieldGroupVisibilityEndToEnd:
 
             assert errors == [], f"Konsolen-Errors/CSP-Verstöße: {errors}"
         finally:
-            _delete_doctype(page, base_url, doctype_pk)
-            for name in (source_name, solo_target_name, mixed_target_name, mixed_free_name):
-                _delete_field_template(page, base_url, name)
+            _delete_group_visibility_doctype(e2e_env, doctype_pk, names)
