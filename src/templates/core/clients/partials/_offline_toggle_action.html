@@ -30,7 +30,7 @@ Parameter:
 <button type="button"
         @click="{% if position == 'primary' %}toggleOffline{% else %}closeAndToggleOffline{% endif %}"
         :disabled="busy"
-        class="{% if position == 'primary' %}inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] bg-surface border border-subtle text-ink-soft rounded-md py-2 {% if variant == 'mobile' %}px-3{% else %}px-3.5 text-[13px] font-medium hover:bg-canvas{% endif %}{% else %}w-full text-left flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas{% endif %} disabled:opacity-50"
+        class="{% if position == 'primary' %}inline-flex items-center justify-center gap-1.5 bg-surface border border-subtle text-ink-soft rounded-md py-2 {% if variant == 'mobile' %}min-h-[44px] min-w-[44px] px-3{% else %}px-3.5 text-[13px] font-medium hover:bg-canvas{% endif %}{% else %}w-full text-left flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas{% endif %} disabled:opacity-50"
         data-testid="{% if variant == 'mobile' %}mobile-take-offline-btn{% else %}take-offline-btn{% endif %}">
     <svg aria-hidden="true" class="w-4 h-4{% if position != 'primary' %} mr-2 text-ink-muted{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
     <span{% if position == 'primary' and variant == 'mobile' %} class="sr-only"{% endif %} x-show="notOffline">{% trans "Offline mitnehmen" %}</span>

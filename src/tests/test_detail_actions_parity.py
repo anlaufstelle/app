@@ -458,6 +458,27 @@ class TestMobileActionPixelForm:
                 assert "min-h-[44px]" in button["klassen"], f"{container}/{kennung}: min-h-[44px] fehlt ({url})"
                 assert "min-w-[44px]" in button["klassen"], f"{container}/{kennung}: min-w-[44px] fehlt ({url})"
 
+    def test_desktop_client_actions_keep_the_compact_height_for_assistants(
+        self, client, assistant_user, client_identified
+    ):
+        """Gegenprobe am Desktop (Review-Befund zu #1864): „Offline mitnehmen“
+        steht für die Assistenz inline in der Desktop-Leiste — mit einem
+        unbedingten 44-px-Touch-Ziel zöge er über das Flex-Default-``stretch``
+        den Nachbarn „Kontakt dokumentieren“ mit hoch (nachgemessen: 44 statt
+        37,5 px, rollenabhängig unterschiedlich hohe Kopfleisten). Das
+        44-px-Ziel gehört der MOBILEN Leiste. Bewusst auf die
+        Personen-Desktop-Leiste gescopet: die Aufgaben-Statusknöpfe tragen ihr
+        ``min-h`` seit jeher und werden dort durch ``items-center`` gefangen."""
+        client.force_login(assistant_user)
+        html = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
+        buttons = _mobile_buttons(html, "client-actions-desktop")
+        assert buttons, "Gegenprobe leer — Desktop-Leiste ohne Aktionen?"
+        for button in buttons:
+            kennung = button["testid"] or button["text"] or button["aria_label"]
+            assert "min-h-[44px]" not in button["klassen"], (
+                f"client-actions-desktop/{kennung}: 44-px-Touch-Ziel in der Desktop-Leiste"
+            )
+
     def test_visible_mobile_text_is_part_of_the_accessible_name(
         self, client, admin_user, client_identified, case_open, sample_event, sample_workitem
     ):
