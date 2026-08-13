@@ -20,7 +20,7 @@ Anhänge hängen jetzt an Ereignis, Person ODER Fall; jeder Entry trägt seine
 ``download_url`` selbst (``services/attachments.attachment_download_url``), das
 Partial kennt den Owner-Typ nicht mehr.
 
-Rendert je Gruppe eine Sektion via ``data_form.grouped_fields``. Gruppen-Header
+Rendert je Gruppe eine Sektion via ``data_form.grouped_blocks``. Gruppen-Header
 erscheinen nur, wenn benannte Gruppen existieren — ohne Gruppen bleibt die
 Darstellung flach (eine „Felder"-Sektion, wie zuvor). Einklappbare Gruppen
 (``is_collapsible``) tragen die CSP-kompatible Alpine-Komponente
@@ -35,18 +35,27 @@ liest den globalen ``fieldConditions``-Store). Beim DocType-Wechsel ersetzt HTMX
 Wurzelknoten samt Payload — ohne Payload leert der Evaluator den Store (alles sichtbar),
 sodass ein neuer DocType nie Sichtbarkeiten des vorherigen erbt. CSP-strikt: nur die
 Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
+
+Gruppen-Sichtbarkeit (Refs #1867): Sind ALLE Felder eines Blocks (benannte Gruppe
+ODER die Ungruppiert-Karte) Bedingungs-Ziele, liefert ``block.condition_slugs``
+eine kommagetrennte Slugliste (``dynamic.py:grouped_blocks``) — die Karte wird dann
+zusätzlich in ``<div x-data="conditionalGroup" data-group-slugs="…" x-show="visible"
+x-cloak>`` gewrappt, sonst bleibt sie unverändert (kein zusätzliches DOM-Level im
+Normalfall). ``x-cloak`` ist hier konsistent, weil in genau diesem Fall ohnehin alle
+inneren Felder selbst ``x-cloak`` tragen (siehe unten).
 {% endcomment %}
 
 <div x-data="conditionEvaluator">
 {% if data_form.conditions_payload %}{{ data_form.conditions_payload|json_script:"field-conditions" }}{% endif %}
 {% if data_form and data_form.fields %}
-{% with grouped=data_form.grouped_fields target_slugs=data_form.condition_target_slugs %}
-{% for group, fields in grouped %}
-<div class="card p-4 space-y-4"{% if group.is_collapsible %} x-data="collapsibleGroup" data-start-open="true"{% endif %}>
-    {% if group.is_collapsible %}
+{% with blocks=data_form.grouped_blocks target_slugs=data_form.condition_target_slugs %}
+{% for block in blocks %}
+{% if block.condition_slugs %}<div x-data="conditionalGroup" data-group-slugs="{{ block.condition_slugs }}" x-show="visible" x-cloak>{% endif %}
+<div class="card p-4 space-y-4"{% if block.group.is_collapsible %} x-data="collapsibleGroup" data-start-open="true"{% endif %}>
+    {% if block.group.is_collapsible %}
     <button type="button" @click="toggle" aria-expanded="true" :aria-expanded="ariaExpanded"
             class="w-full flex items-center justify-between gap-2 text-left">
-        <span class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{{ group.name }}</span>
+        <span class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{{ block.group.name }}</span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
              class="w-4 h-4 shrink-0 text-ink-muted transition-transform" :class="rotateClass">
             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -54,11 +63,11 @@ Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
     </button>
     {% else %}
     <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">
-        {% if group %}{{ group.name }}{% elif grouped|length > 1 %}{% trans "Weitere Angaben" %}{% else %}{% trans "Angaben" %}{% endif %}
+        {% if block.group %}{{ block.group.name }}{% elif blocks|length > 1 %}{% trans "Weitere Angaben" %}{% else %}{% trans "Angaben" %}{% endif %}
     </h2>
     {% endif %}
-    <div class="space-y-4"{% if group.is_collapsible %} x-show="open"{% endif %}>
-        {% for field in fields %}
+    <div class="space-y-4"{% if block.group.is_collapsible %} x-show="open"{% endif %}>
+        {% for field in block.fields %}
         {# M1/P5 (Refs #1057): conditionalField-Wrapper je Feld; x-show liest den Store. x-cloak NUR an Bedingungs-Zielen (Flacker-Schutz); unkonditionierte/Quellfelder bleiben bei Alpine-Ausfall sichtbar. #}
         <div x-data="conditionalField" data-field-slug="{{ field.name }}" x-show="visible"{% if field.name in target_slugs %} x-cloak{% endif %}>
         {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
@@ -118,6 +127,7 @@ Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
         {% endfor %}
     </div>
 </div>
+{% if block.condition_slugs %}</div>{# x-data="conditionalGroup" #}{% endif %}
 {% endfor %}
 {% endwith %}
 {% endif %}

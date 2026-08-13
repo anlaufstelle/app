@@ -11,13 +11,17 @@
  *      ``evaluate(fields, conditions, values)`` mit den Vektoren auf). Prozessregel
  *      (ADR-035): jede Semantikänderung zuerst dort als Vektor.
  *
- *   2. Zwei CSP-konforme Alpine-Komponenten plus der Store ``fieldConditions``:
+ *   2. Drei CSP-konforme Alpine-Komponenten plus der Store ``fieldConditions``:
  *      - ``conditionEvaluator`` (Partial-Wurzelknoten) liest das E12-Payload aus
  *        ``#field-conditions`` (json_script), reduziert es auf die Kurzform
  *        ``{slug: field_type}``, liest die Initialwerte aus dem DOM, füllt den
  *        Store-Map **einmalig vollständig** und lauscht delegiert auf input/change.
  *      - ``conditionalField`` (Feld-Wrapper) liest über ``x-show="visible"`` NUR
  *        aus dem Store; ohne Eintrag (z.B. DocType ohne Bedingungen) sichtbar.
+ *      - ``conditionalGroup`` (Refs #1867, Gruppen-/Ungruppiert-Karten-Wrapper)
+ *        blendet eine Karte komplett aus, wenn ALLE ihre Felder verborgene
+ *        Bedingungs-Ziele sind (``dynamic.py:grouped_blocks``); sonst bleibt sie
+ *        immer sichtbar. Gleiche Store-only-Fallback-Semantik wie ``conditionalField``.
  *
  * CSP-strikt (``script-src 'self'``, ``@alpinejs/csp``): keine Inline-Expressions,
  * nur benannte Komponenten, argumentlose Getter, Event-Parameter-Methoden. Die
@@ -373,6 +377,33 @@ document.addEventListener("alpine:init", () => {
             }
             const state = store.map[this.slug];
             return state === undefined ? true : state;
+        },
+    }));
+
+    /**
+     * Gruppen-Wrapper (Refs #1867). Sitzt NUR um Gruppen-/Ungruppiert-Karten,
+     * deren Felder ALLE Bedingungs-Ziele sind (``dynamic.py:grouped_blocks`` —
+     * ``data-group-slugs`` ist in jedem anderen Fall leer, das Template
+     * verzichtet dann ganz auf diesen Wrapper). ``get visible()`` liest — wie
+     * ``conditionalField`` — NUR aus dem Store: eine Karte gilt als sichtbar,
+     * sobald für MINDESTENS EINEN ihrer Slugs der Store NICHT ``false`` sagt
+     * (unbekannter Slug ⇒ sichtbar, gleiche Fallback-Semantik). Ohne
+     * Store/Map oder mit leerer Slugliste bleibt die Karte sichtbar.
+     */
+    Alpine.data("conditionalGroup", () => ({
+        slugs: [],
+
+        init() {
+            const raw = this.$el.dataset.groupSlugs || "";
+            this.slugs = raw === "" ? [] : raw.split(",");
+        },
+
+        get visible() {
+            const store = this.$store.fieldConditions;
+            if (!store || !store.map || this.slugs.length === 0) {
+                return true;
+            }
+            return this.slugs.some((slug) => store.map[slug] !== false);
         },
     }));
 });

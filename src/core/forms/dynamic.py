@@ -384,6 +384,40 @@ class DynamicDataForm(forms.Form):
                 result.append((group, list(bounds)))
         return result
 
+    def grouped_blocks(self) -> list[dict[str, Any]]:
+        """``grouped_fields()`` angereichert um die Bedingungs-Slugliste je Block (#1867).
+
+        Liefert ``[{"group": FieldGroup | None, "fields": [BoundField, ...],
+        "condition_slugs": "slug-a,slug-b"}, ...]`` — ein Eintrag je Block aus
+        :meth:`grouped_fields` (die bleibt unverändert, inkl. ihrer Sortierung/
+        Skip-leerer-Gruppen-Logik und ihrer eigenen Tests).
+
+        ``condition_slugs`` ist eine kommagetrennte Liste NUR dann, wenn JEDES
+        Feld des Blocks in :attr:`condition_target_slugs` liegt (Payload-basiert,
+        also nach ``remove_restricted_fields``/#774) — sonst ein leerer String.
+        Grund: eine Karte kann clientseitig nur komplett verschwinden, wenn
+        ALLE ihre Felder Bedingungs-Ziele sind; enthält sie ein unkonditioniertes
+        Feld, bleibt sie unabhängig vom Store immer sichtbar und braucht keinen
+        Sichtbarkeits-Wrapper (Template entscheidet anhand dieses Strings, ob die
+        Karte in die Alpine-Komponente ``conditionalGroup`` gewrappt wird).
+
+        Gilt gleichermaßen für benannte Gruppen UND den ``group=None``-Block der
+        ungruppierten Felder — beide teilen dasselbe Karten-Markup.
+        """
+        targets = self.condition_target_slugs
+        blocks: list[dict[str, Any]] = []
+        for group, fields in self.grouped_fields():
+            slugs = [bf.name for bf in fields]
+            all_targets = bool(slugs) and all(slug in targets for slug in slugs)
+            blocks.append(
+                {
+                    "group": group,
+                    "fields": fields,
+                    "condition_slugs": ",".join(slugs) if all_targets else "",
+                }
+            )
+        return blocks
+
     def conditions_payload(self) -> dict[str, Any] | None:
         """E12-Payload der Feld-Bedingungen für das AKTUELLE Feldset — oder ``None``.
 

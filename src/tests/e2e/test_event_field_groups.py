@@ -47,8 +47,11 @@ class TestKontaktFieldGroups:
 
         # „Weitere Angaben" ist die letzte Sektion und enthält „Straßenkontakt".
         # Seit M1 wrappt der conditionEvaluator-Wurzelknoten die Gruppen-Cards
-        # (eine Ebene unter #dynamic-fields, Refs #1057).
-        cards = page.locator("#dynamic-fields > div > div.card")
+        # (eine Ebene unter #dynamic-fields, Refs #1057). Seit #1867 zieht ein
+        # optionaler conditionalGroup-Wrapper (nur bei all-konditionalen
+        # Blöcken) eine WEITERE Ebene ein — der Selektor bleibt daher
+        # tiefen-unabhängig statt auf eine feste Verschachtelung zu pinnen.
+        cards = page.locator("#dynamic-fields .card")
         expect(cards).to_have_count(3, timeout=10000)
         last_card = cards.last
         expect(last_card.locator("h2")).to_contain_text("Weitere Angaben")

@@ -43,6 +43,7 @@ from .test_config_ui import (
     FORM_SUBMIT,
     _add_group,
     _assign_field,
+    _assign_free_field,
     _create_doctype,
     _delete_doctype,
 )
@@ -264,4 +265,139 @@ class TestFieldConditionsEndToEnd:
                 _delete_event(page, base_url, created_event_url)
             _delete_doctype(page, base_url, doctype_pk)
             for name in (source_name, target_name, file_name):
+                _delete_field_template(page, base_url, name)
+
+
+def _with_board_refresh(page, action):
+    """Führt eine board-mutierende Aktion aus und wartet IHREN Board-Refresh ab.
+
+    Gruppen anlegen und Felder zuordnen antworten mit ``HX-Trigger:
+    refresh-conditions`` — das Bedingungs-Board lädt sich daraufhin per hx-get
+    komplett neu (outerHTML, ``condition_board.html``). Die Bestands-Helfer
+    ``_add_group``/``_assign_field`` warten nur auf ihre eigene Zeile, nicht auf
+    diesen Zweit-Swap. Wer danach sofort mit der „Neue Bedingung“-Karte spricht,
+    verliert sie mitten im Gespräch: der verspätete Board-Swap ersetzt die
+    Karte, laufende operator-/value-input-Antworten zielen auf entfernte
+    Elemente und verpuffen kommentarlos (#1867-Diagnose per Netzwerk-Trace —
+    im Trace fehlt nach dem Reset jede value-input-Anfrage, das Wert-Feld
+    bleibt der Default-``text``-Slot der frischen Karte). Deshalb wird hier
+    JEDE dieser Aktionen mit ihrem Board-GET verklammert; den Rest erledigt
+    die Settle-Probe im Test (Ziel-Option des zuletzt zugeordneten Felds).
+    """
+    with page.expect_response(lambda r: "/conditions/board/" in r.url and r.request.method == "GET"):
+        action()
+
+
+def _add_greater_than_10_condition(page, target_name, source_name):
+    """Legt über das Bedingungs-Board die Regel „Wenn <source_name> > 10 → zeige <target_name>" an.
+
+    Quelle wählen lädt den typabhängigen Operator-Slot nach (#1715) — auf diese
+    Antwort wird explizit gewartet, ebenso auf die value-input-Antwort des
+    Operator-Wechsels. Voraussetzung: kein Board-Refresh mehr in flight (siehe
+    ``_with_board_refresh``). Der DocType braucht mindestens zwei zugeordnete
+    Felder, sonst rendert die „Neue Bedingung"-Karte gar nicht (#1718).
+    """
+    add_card = page.locator('[data-testid="condition-add-card"]')
+    expect(add_card).to_be_visible(timeout=10000)
+    target_select = add_card.locator('[data-testid="condition-target"]')
+    source_select = add_card.locator('[data-testid="condition-source"]')
+    target_select.select_option(value=_option_value_by_text(target_select, target_name))
+    with page.expect_response(lambda r: "operator-input" in r.url and r.request.method == "GET"):
+        source_select.select_option(value=_option_value_by_text(source_select, source_name))
+    operator_select = add_card.locator('[data-testid="condition-operator"]')
+    expect(operator_select.locator("option[value='greater_than']")).to_have_count(1, timeout=10000)
+    with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
+        operator_select.select_option(value="greater_than")
+    _wait_value_input(add_card, "number").fill("10")
+    add_card.locator('[data-testid="condition-submit"]').click()
+
+
+class TestFieldGroupVisibilityEndToEnd:
+    """Refs #1867: eine Gruppenkarte verschwindet komplett (inkl. Überschrift),
+    wenn ALLE ihre Felder per Bedingung ausgeblendet sind; eine gemischte
+    Gruppe (Bedingungs-Ziel + freies Feld) bleibt dagegen immer stehen.
+
+    Wegwerf-DocType ``E2E-Cond-…`` wie im Fluss oben; kein Formular-Submit
+    nötig — die Sichtbarkeits-/Toggle-Checks kommen ohne Event-Anlage aus.
+    """
+
+    def test_solo_group_hides_completely_mixed_group_stays_visible(self, authenticated_page, base_url):
+        page = authenticated_page
+        errors = track_console_errors(page)
+
+        source_name = _cond_name("dauer")  # number, ungruppierte Quelle
+        solo_target_name = _cond_name("solo")  # textarea, EINZIGES Feld seiner Gruppe
+        mixed_target_name = _cond_name("mixt")  # text, Ziel in einer gemischten Gruppe
+        mixed_free_name = _cond_name("frei")  # text, unkonditioniertes Feld derselben Gruppe
+        doctype_name = f"E2E-Cond-{uuid.uuid4().hex[:8]}"
+        solo_group_name = _cond_name("grpsolo")
+        mixed_group_name = _cond_name("grpmixed")
+
+        _create_field_template(page, base_url, source_name, "number")
+        _create_field_template(page, base_url, solo_target_name, "textarea")
+        _create_field_template(page, base_url, mixed_target_name, "text")
+        _create_field_template(page, base_url, mixed_free_name, "text")
+
+        doctype_pk = _create_doctype(page, base_url, doctype_name)
+        try:
+            _with_board_refresh(page, lambda: _add_group(page, solo_group_name))
+            _with_board_refresh(page, lambda: _add_group(page, mixed_group_name))
+            _with_board_refresh(page, lambda: _assign_free_field(page, source_name))
+            _with_board_refresh(page, lambda: _assign_field(page, solo_target_name, solo_group_name))
+            _with_board_refresh(page, lambda: _assign_field(page, mixed_target_name, mixed_group_name))
+            _with_board_refresh(page, lambda: _assign_field(page, mixed_free_name, mixed_group_name))
+
+            # Settle-Probe: Der LETZTE Board-Swap ist erst angewendet, wenn die
+            # frische Karte das zuletzt zugeordnete Feld als Ziel-Option führt
+            # (target_field-Queryset = alle Felder des DocTypes). Erst danach
+            # ist die Interaktion mit der Karte racefrei.
+            add_card = page.locator('[data-testid="condition-add-card"]')
+            expect(
+                add_card.locator('[data-testid="condition-target"] option', has_text=mixed_free_name)
+            ).to_have_count(1, timeout=10000)
+
+            _add_greater_than_10_condition(page, solo_target_name, source_name)
+            expect(page.locator('[data-testid="condition-row"]')).to_have_count(1, timeout=10000)
+            _add_greater_than_10_condition(page, mixed_target_name, source_name)
+            expect(page.locator('[data-testid="condition-row"]')).to_have_count(2, timeout=10000)
+
+            # --- Event-Formular: Gruppen-Sichtbarkeit ohne Reload -----------
+            page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+            with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
+                page.select_option("select#id_document_type", label=doctype_name)
+
+            dynamic = page.locator("#dynamic-fields")
+            source_input = dynamic.locator("input[type='number']")
+            source_input.wait_for(state="visible", timeout=10000)
+
+            # Solo-Gruppe traegt den conditionalGroup-Wrapper (data-group-slugs);
+            # die gemischte Gruppe traegt KEINEN — ihre Karte ist ein reines
+            # ``.card``-Element ohne diesen Wrapper.
+            solo_card = dynamic.locator(f"[data-group-slugs]:has(h2:has-text('{solo_group_name}'))")
+            mixed_card = dynamic.locator(f".card:has(h2:has-text('{mixed_group_name}'))")
+
+            # Beweiskraft: VOR jeder Eingabe ist die Solo-Gruppe komplett weg
+            # (inkl. Überschrift), die gemischte Gruppe steht von Anfang an.
+            expect(solo_card).to_be_hidden(timeout=10000)
+            expect(mixed_card).to_be_visible(timeout=10000)
+            expect(mixed_card.locator("h2")).to_contain_text(mixed_group_name)
+
+            # Quellwert über die Schwelle (15 > 10) → Solo-Gruppe erscheint SOFORT.
+            source_input.fill("")
+            source_input.press_sequentially("15", delay=30)
+            expect(solo_card).to_be_visible(timeout=10000)
+            expect(solo_card.locator("h2")).to_contain_text(solo_group_name)
+
+            # Wieder darunter (5 < 10) → Solo-Gruppe verschwindet erneut.
+            source_input.fill("")
+            source_input.press_sequentially("5", delay=30)
+            expect(solo_card).to_be_hidden(timeout=10000)
+
+            # Kontrollfall: die gemischte Gruppe blieb die ganze Zeit sichtbar.
+            expect(mixed_card).to_be_visible(timeout=10000)
+
+            assert errors == [], f"Konsolen-Errors/CSP-Verstöße: {errors}"
+        finally:
+            _delete_doctype(page, base_url, doctype_pk)
+            for name in (source_name, solo_target_name, mixed_target_name, mixed_free_name):
                 _delete_field_template(page, base_url, name)

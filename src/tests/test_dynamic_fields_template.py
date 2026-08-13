@@ -25,7 +25,7 @@ import re
 import pytest
 from django.urls import reverse
 
-from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
+from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
 
 FieldType = FieldTemplate.FieldType
 Operator = FieldCondition.Operator
@@ -41,11 +41,12 @@ def _ft(facility, name, field_type, *, required=False, options=None):
     )
 
 
-def _assign(doc_type, field_template, sort_order=0):
+def _assign(doc_type, field_template, sort_order=0, group=None):
     return DocumentTypeField.objects.create(
         document_type=doc_type,
         field_template=field_template,
         sort_order=sort_order,
+        field_group=group,
     )
 
 
@@ -87,6 +88,45 @@ def _wrapper_tag(body, slug):
     )
     assert match, f"conditionalField-Wrapper für {slug} fehlt"
     return match.group(0)
+
+
+# Refs #1867: öffnendes ``conditionalGroup``-Wrapper-Tag (Gruppen-/Ungruppiert-
+# Karte, komplett ausblendbar NUR wenn ALLE ihre Felder Bedingungs-Ziele sind).
+_GROUP_WRAPPER_RE = re.compile(r'<div x-data="conditionalGroup"[^>]*>')
+
+
+@pytest.fixture
+def cond_doctype_grouped(facility):
+    """Refs #1867: eine Gruppe, deren EINZIGES Feld ein Bedingungs-Ziel ist
+    (komplett ausblendbar), und eine Gruppe mit einem Ziel PLUS einem freien
+    Feld (bleibt immer sichtbar — Kontrollfall gemischter Block).
+
+    Beide Ziele hängen an derselben freien Quelle ``dauer`` (ungruppiert).
+    """
+    dt = DocumentType.objects.create(facility=facility, name="Bedingt-Gruppiert")
+    g_all = FieldGroup.objects.create(document_type=dt, name="Nur-Ziel", sort_order=0)
+    g_mixed = FieldGroup.objects.create(document_type=dt, name="Gemischt", sort_order=1)
+    _assign(dt, _ft(facility, "Dauer", FieldType.NUMBER), sort_order=0)
+    _assign(dt, _ft(facility, "Ziel A", FieldType.TEXTAREA), sort_order=0, group=g_all)
+    _assign(dt, _ft(facility, "Ziel B", FieldType.TEXT), sort_order=0, group=g_mixed)
+    _assign(dt, _ft(facility, "Frei", FieldType.TEXT), sort_order=1, group=g_mixed)
+    _condition(dt, target="ziel-a", source="dauer", operator=Operator.GREATER_THAN, value=10)
+    _condition(dt, target="ziel-b", source="dauer", operator=Operator.GREATER_THAN, value=10)
+    return dt
+
+
+@pytest.fixture
+def cond_doctype_ungrouped_target(facility):
+    """Refs #1867: die Quelle steckt in einer Gruppe, das Ziel bleibt allein im
+    freien Block — deckt die ungruppierte „Angaben"/„Weitere Angaben"-Karte ab,
+    die dasselbe Markup teilt und denselben Fehler hatte.
+    """
+    dt = DocumentType.objects.create(facility=facility, name="Bedingt-Flach")
+    g_source = FieldGroup.objects.create(document_type=dt, name="Quelle-Gruppe", sort_order=0)
+    _assign(dt, _ft(facility, "Dauer", FieldType.NUMBER), sort_order=0, group=g_source)
+    _assign(dt, _ft(facility, "Ziel", FieldType.TEXT), sort_order=1)
+    _condition(dt, target="ziel", source="dauer", operator=Operator.GREATER_THAN, value=10)
+    return dt
 
 
 @pytest.mark.django_db
@@ -160,3 +200,65 @@ class TestDynamicFieldsTemplate:
         assert 'x-show="visible"' in body
         # Ohne Bedingungen kein Ziel → gar kein x-cloak (volle Resilienz).
         assert "x-cloak" not in body
+
+
+@pytest.mark.django_db
+class TestConditionalGroupWrapper:
+    """Refs #1867: die Gruppen-/Ungruppiert-Karte trägt den ``conditionalGroup``-
+    Wrapper NUR, wenn ALLE ihre Felder Bedingungs-Ziele sind — sonst bleibt sie
+    unverändert (kein zusätzliches DOM-Level für den Normalfall).
+    """
+
+    def test_wraps_named_group_whose_only_field_is_a_target(self, client, staff_user, facility, cond_doctype_grouped):
+        """Gruppe „Nur-Ziel" (einziges Feld = Ziel) bekommt den Wrapper mit ihrem Slug."""
+        client.force_login(staff_user)
+        body = _partial(client, cond_doctype_grouped).content.decode()
+
+        matches = _GROUP_WRAPPER_RE.findall(body)
+        assert len(matches) == 1, f"Erwartet genau EIN conditionalGroup-Wrapper, gefunden: {matches}"
+        assert 'data-group-slugs="ziel-a"' in matches[0]
+        assert 'x-show="visible"' in matches[0]
+        assert "x-cloak" in matches[0]
+
+    def test_no_wrapper_on_mixed_group(self, client, staff_user, facility, cond_doctype_grouped):
+        """Gruppe „Gemischt" (Ziel + freies Feld) bleibt ungewrappt — bereits durch
+        den Einzeltreffer-Assert oben mitbewiesen (sonst gäbe es zwei Wrapper);
+        hier zusätzlich explizit über den Gruppennamen geprüft.
+        """
+        client.force_login(staff_user)
+        body = _partial(client, cond_doctype_grouped).content.decode()
+
+        mixed_card = re.search(r'<div class="card p-4 space-y-4">\s*<h2[^>]*>\s*Gemischt', body)
+        assert mixed_card, "Gemischt-Gruppenkarte nicht gefunden"
+        # Kein conditionalGroup-x-data unmittelbar VOR der Gemischt-Karte (kein
+        # eigener Wrapper) — die einzige Fundstelle im Dokument gehört „Nur-Ziel".
+        assert body.count('data-group-slugs="ziel-b,frei"') == 0
+        assert body.count('data-group-slugs="ziel-b"') == 0
+
+    def test_wraps_ungrouped_target_only_block(self, client, staff_user, facility, cond_doctype_ungrouped_target):
+        """Der freie Block „Weitere Angaben" mit dem alleinigen Ziel-Feld wird ebenso gewrappt."""
+        client.force_login(staff_user)
+        body = _partial(client, cond_doctype_ungrouped_target).content.decode()
+
+        matches = _GROUP_WRAPPER_RE.findall(body)
+        assert len(matches) == 1
+        assert 'data-group-slugs="ziel"' in matches[0]
+
+    def test_no_wrapper_without_all_target_block(self, client, staff_user, facility, cond_doctype):
+        """``cond_doctype`` (Refs #1057) ist komplett flach/gemischt — nirgends ein Wrapper."""
+        client.force_login(staff_user)
+        body = _partial(client, cond_doctype).content.decode()
+
+        assert 'x-data="conditionalGroup"' not in body
+
+    def test_no_wrapper_without_any_conditions(self, client, staff_user, facility):
+        """DocType ganz ohne Bedingungen: nie ein conditionalGroup-Wrapper."""
+        dt = DocumentType.objects.create(facility=facility, name="Ohne Bedingung Gruppiert")
+        g = FieldGroup.objects.create(document_type=dt, name="Gruppe", sort_order=0)
+        _assign(dt, _ft(facility, "Solo", FieldType.TEXT), sort_order=0, group=g)
+
+        client.force_login(staff_user)
+        body = _partial(client, dt).content.decode()
+
+        assert 'x-data="conditionalGroup"' not in body
+        assert "Gruppe" in body

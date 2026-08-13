@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.forms.events import DynamicEventDataForm
-from core.models import DocumentType, DocumentTypeField, Event, FieldGroup, FieldTemplate
+from core.models import DocumentType, DocumentTypeField, Event, FieldCondition, FieldGroup, FieldTemplate
 from core.services.events.fields import remove_restricted_fields
 
 
@@ -40,6 +40,28 @@ def _group_names(grouped):
 
 def _field_names_of(grouped, index):
     return [bf.name for bf in grouped[index][1]]
+
+
+def _condition(doc_type, *, target, source, operator=FieldCondition.Operator.IS_NOT_EMPTY, value=None, group_index=0):
+    """Legt eine ``FieldCondition`` per Slug an (Muster test_dynamic_fields_template.py).
+
+    Default-Operator ``is_not_empty`` braucht keinen ``value`` — für die
+    ``grouped_blocks()``-Tests unten zählt nur, DASS ein Feld Bedingungs-Ziel
+    ist, nicht die konkrete Regel-Semantik (die ist in test_conditions.py /
+    den JS-Paritätstests abgedeckt).
+    """
+    return FieldCondition.objects.create(
+        target_field=doc_type.fields.get(field_template__slug=target),
+        depends_on_field=doc_type.fields.get(field_template__slug=source),
+        operator=operator,
+        value=value,
+        group_index=group_index,
+    )
+
+
+def _blocks_by_group_name(blocks):
+    """``{gruppenname_oder_None: condition_slugs}`` — Kurzform für Assertions."""
+    return {b["group"].name if b["group"] is not None else None: b["condition_slugs"] for b in blocks}
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +211,105 @@ class TestGroupedFields:
         """Form ohne document_type → keine Felder, leere Gruppierung."""
         form = DynamicEventDataForm()
         assert form.grouped_fields() == []
+
+
+# ---------------------------------------------------------------------------
+# grouped_blocks — condition_slugs je Block (#1867)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestGroupedBlocks:
+    """``condition_slugs`` ist NUR gefüllt, wenn ALLE Felder eines Blocks
+    Bedingungs-Ziele sind — die Voraussetzung dafür, dass das Template die
+    Karte per ``conditionalGroup``-Wrapper komplett ausblenden darf.
+    """
+
+    def test_condition_slugs_filled_when_all_fields_are_targets(self, facility):
+        """Gruppe mit zwei Zielfeldern (keines davon die freie Quelle) → beide Slugs, komma-getrennt."""
+        dt = DocumentType.objects.create(facility=facility, name="Bedingt-Alle-Ziele")
+        g = FieldGroup.objects.create(document_type=dt, name="Gruppe", sort_order=1)
+        _assign(dt, _text_field(facility, "Quelle"), group=None, sort_order=0)
+        _assign(dt, _text_field(facility, "Ziel A"), group=g, sort_order=0)
+        _assign(dt, _text_field(facility, "Ziel B"), group=g, sort_order=1)
+        _condition(dt, target="ziel-a", source="quelle")
+        _condition(dt, target="ziel-b", source="quelle")
+
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+        by_group = _blocks_by_group_name(form.grouped_blocks())
+
+        assert by_group["Gruppe"] == "ziel-a,ziel-b"
+        # Die freie Quelle ist nie Bedingungs-Ziel → ihr eigener Block bleibt leer.
+        assert by_group[None] == ""
+
+    def test_condition_slugs_empty_for_mixed_block(self, facility):
+        """Gruppe mit Ziel- UND freiem Feld → condition_slugs leer (Karte bleibt immer sichtbar)."""
+        dt = DocumentType.objects.create(facility=facility, name="Bedingt-Gemischt")
+        g = FieldGroup.objects.create(document_type=dt, name="Gemischt", sort_order=0)
+        _assign(dt, _text_field(facility, "Quelle"), group=None, sort_order=0)
+        _assign(dt, _text_field(facility, "Ziel"), group=g, sort_order=0)
+        _assign(dt, _text_field(facility, "Frei In Gruppe"), group=g, sort_order=1)
+        _condition(dt, target="ziel", source="quelle")
+
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+        by_group = _blocks_by_group_name(form.grouped_blocks())
+
+        assert by_group["Gemischt"] == ""
+
+    def test_condition_slugs_empty_without_any_conditions(self, facility):
+        """DocType ganz ohne Bedingungen → jeder Block hat condition_slugs == ''."""
+        dt = DocumentType.objects.create(facility=facility, name="Ohne-Bedingung")
+        g = FieldGroup.objects.create(document_type=dt, name="Gruppe", sort_order=0)
+        _assign(dt, _text_field(facility, "Feld"), group=g, sort_order=0)
+        _assign(dt, _text_field(facility, "Frei"), group=None, sort_order=1)
+
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+        blocks = form.grouped_blocks()
+
+        assert blocks  # Gegenprobe: es gibt überhaupt Blöcke.
+        assert all(b["condition_slugs"] == "" for b in blocks)
+
+    def test_condition_slugs_empty_after_target_dropped_by_sensitivity(self, facility, assistant_user):
+        """Fällt das Ziel per ``remove_restricted_fields`` (#774) aus dem Feldset,
+        verschwindet seine Gruppe komplett (wie ``grouped_fields``) und KEINE
+        verbleibende Gruppe wird fälschlich als all-konditional markiert.
+
+        ``conditions_payload()`` ist lazy-gecacht und darf laut Vertrag
+        (dynamic.py) erst NACH dem Restrict-Schritt zum ersten Mal aufgerufen
+        werden — deshalb zwei getrennte Form-Instanzen statt derselben Form
+        vor/nach ``remove_restricted_fields``.
+        """
+        dt = DocumentType.objects.create(
+            facility=facility, name="Bedingt-Sensibel", sensitivity=DocumentType.Sensitivity.NORMAL
+        )
+        g_target = FieldGroup.objects.create(document_type=dt, name="Ziel-Gruppe", sort_order=0)
+        g_source = FieldGroup.objects.create(document_type=dt, name="Quell-Gruppe", sort_order=1)
+        _assign(dt, _text_field(facility, "Quelle"), group=g_source, sort_order=0)
+        ft_secret = FieldTemplate.objects.create(
+            facility=facility,
+            name="Geheimes Ziel",
+            field_type=FieldTemplate.FieldType.TEXTAREA,
+            is_encrypted=True,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        _assign(dt, ft_secret, group=g_target, sort_order=0)
+        _condition(dt, target="geheimes-ziel", source="quelle")
+
+        # Volle Rechte (facility_admin-artiger Zugriff, keine Restriktion):
+        # Ziel-Gruppe ist all-konditional.
+        form_full = DynamicEventDataForm(document_type=dt, facility=facility)
+        full = _blocks_by_group_name(form_full.grouped_blocks())
+        assert full["Ziel-Gruppe"] == "geheimes-ziel"
+        assert full["Quell-Gruppe"] == ""
+
+        # Assistant: HIGH-Feld fällt VOR dem ersten Payload-Zugriff weg.
+        form_restricted = DynamicEventDataForm(document_type=dt, facility=facility)
+        removed = remove_restricted_fields(assistant_user, dt, form_restricted)
+        assert "geheimes-ziel" in removed
+        restricted = _blocks_by_group_name(form_restricted.grouped_blocks())
+
+        assert "Ziel-Gruppe" not in restricted
+        assert restricted["Quell-Gruppe"] == ""
 
 
 # ---------------------------------------------------------------------------
