@@ -9,10 +9,17 @@ import warnings
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
+from ._env import env_bool, env_csv, env_int
 from ._sentry import before_send as _sentry_before_send
 from ._sentry import before_send_transaction as _sentry_before_send_transaction
 from .base import *  # noqa: F401, F403
 from .base import LOGGING  # noqa: F401
+
+# Refs #1827: 6x wiederholtes "collectstatic" not in sys.argv — collectstatic
+# laeuft im Image-Build ohne die produktiven Secrets/Hosts (der Build-Schritt
+# braucht nur STATIC_ROOT), die Fail-closed-Guards unten wuerden den Build
+# sonst grundlos abbrechen und sind daher waehrend collectstatic ausgesetzt.
+_IS_COLLECTSTATIC = "collectstatic" in sys.argv
 
 # --- Logging-Override für Produktion ---
 # base.py setzt den ``core``-Logger auf DEBUG (dev-freundlich). In Produktion
@@ -51,17 +58,17 @@ MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))  # noqa: F40
 DEBUG = False
 
 # Fail-closed: Prod darf nicht mit unsicheren Defaults oder leerer Konfiguration starten.
-if "collectstatic" not in sys.argv and not SECRET_KEY:  # noqa: F405
+if not _IS_COLLECTSTATIC and not SECRET_KEY:  # noqa: F405
     raise ImproperlyConfigured("DJANGO_SECRET_KEY muss in Produktion gesetzt sein.")
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
-if "collectstatic" not in sys.argv and not ALLOWED_HOSTS:
+ALLOWED_HOSTS = env_csv("ALLOWED_HOSTS")
+if not _IS_COLLECTSTATIC and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS muss in Produktion gesetzt sein (Kommaseparierte Liste).")
 # Fail-closed (Refs #1376 C4/I4): "*" ist in Django ein Match-all-Eintrag und
 # hebelt die einzige Huerde gegen Host-Header-Poisoning aus (z. B. gefaelschte
 # Passwort-Reset-Links). Subdomain-Patterns wie ".example.com" sind KEIN
 # Match-all und bleiben erlaubt.
-if "collectstatic" not in sys.argv and "*" in ALLOWED_HOSTS:
+if not _IS_COLLECTSTATIC and "*" in ALLOWED_HOSTS:
     raise ImproperlyConfigured(
         "ALLOWED_HOSTS darf in Produktion kein Wildcard '*' enthalten (Match-all, "
         "hebelt die Host-Header-Validierung aus). Subdomain-Patterns wie '.example.com' "
@@ -88,9 +95,7 @@ OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "") or next(iter(_conc
 # Origins lassen sich nur aus konkreten Hosts ableiten — eine Wildcard nennt
 # keinen konkreten Ursprung. Reine Wildcard-Deployments MUESSEN daher
 # OTP_WEBAUTHN_ALLOWED_ORIGINS explizit setzen.
-OTP_WEBAUTHN_ALLOWED_ORIGINS = [
-    o.strip() for o in os.environ.get("OTP_WEBAUTHN_ALLOWED_ORIGINS", "").split(",") if o.strip()
-] or [f"https://{h}" for h in _concrete_hosts]
+OTP_WEBAUTHN_ALLOWED_ORIGINS = env_csv("OTP_WEBAUTHN_ALLOWED_ORIGINS") or [f"https://{h}" for h in _concrete_hosts]
 
 # --- Security ---
 
@@ -176,10 +181,10 @@ if _file_upload_temp_dir:
 #   EMAIL_USE_TLS, DEFAULT_FROM_EMAIL
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_PORT = env_int("EMAIL_PORT", 587)
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.app")
 
 # --- Database ---
@@ -251,7 +256,7 @@ RATELIMIT_USE_CACHE = "default"
 # --- Encryption Key (mandatory in production) ---
 # Akzeptiert ENCRYPTION_KEYS (Plural, MultiFernet-Rotation) oder ENCRYPTION_KEY (Singular, Legacy).
 # Mindestens eins muss gesetzt sein.
-if "collectstatic" not in sys.argv and not (ENCRYPTION_KEY or ENCRYPTION_KEYS):  # noqa: F405
+if not _IS_COLLECTSTATIC and not (ENCRYPTION_KEY or ENCRYPTION_KEYS):  # noqa: F405
     raise ImproperlyConfigured(
         "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
         'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
@@ -263,7 +268,7 @@ if "collectstatic" not in sys.argv and not (ENCRYPTION_KEY or ENCRYPTION_KEYS): 
 # Defense-Erosion: ein SECRET_KEY-Leak könnte rückwirkend die Audit-Hashes
 # (z.B. pseudonymisierte E-Mails in Passwort-Reset-Audits) knacken. Daher
 # fail-closed — lieber Server-Start-Fehler als unbemerkt schwächere Audit-PII.
-if "collectstatic" not in sys.argv and not AUDIT_HASH_KEY:  # noqa: F405
+if not _IS_COLLECTSTATIC and not AUDIT_HASH_KEY:  # noqa: F405
     raise ImproperlyConfigured(
         "DJANGO_AUDIT_HASH_KEY muss in Produktion gesetzt sein (separat von "
         'DJANGO_SECRET_KEY). Generate one with: python -c "import secrets; '
@@ -282,7 +287,7 @@ if "collectstatic" not in sys.argv and not AUDIT_HASH_KEY:  # noqa: F405
 # (nur von ``deploy/postgres-init`` + compose gelesen), daher direkt aus
 # ``os.environ``; identische change-me-/Mindestlaengen-Logik.
 _SECRET_MIN_LENGTH = 32
-if "collectstatic" not in sys.argv:
+if not _IS_COLLECTSTATIC:
     for _name, _value in (
         ("DJANGO_SECRET_KEY", SECRET_KEY),  # noqa: F405
         ("DJANGO_AUDIT_HASH_KEY", AUDIT_HASH_KEY),  # noqa: F405
@@ -306,7 +311,7 @@ if "collectstatic" not in sys.argv:
 # und der Default daher „true". Ein explizites CLAMAV_ENABLED=false würde Uploads
 # ungescannt durchwinken — daher fail-closed: lieber Server-Start-Fehler als
 # stiller Scanner-Bypass (analog zu SUDO_MODE_ENABLED / AUDIT_HASH_KEY).
-CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "true").lower() in ("true", "1", "yes")
+CLAMAV_ENABLED = env_bool("CLAMAV_ENABLED", default=True)
 if not CLAMAV_ENABLED:
     raise ImproperlyConfigured(
         "CLAMAV_ENABLED muss in Produktion True sein. Der Virenscan darf nicht "
@@ -319,7 +324,7 @@ if not CLAMAV_ENABLED:
 # Produktion uebernommen wird, kippt es MFA-Disable, DSGVO-Export und
 # Pseudonym-Daten-Download in einem Schritt. Hier explizit fail-fast: lieber
 # Server-Start-Fehler als stille Defense-Erosion.
-if os.environ.get("SUDO_MODE_ENABLED", "true").lower() not in ("true", "1", "yes"):
+if not env_bool("SUDO_MODE_ENABLED", default=True):
     raise ImproperlyConfigured(
         "SUDO_MODE_ENABLED muss in Produktion True sein. Test-Setting versehentlich uebernommen?"
     )

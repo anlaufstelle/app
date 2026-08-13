@@ -87,6 +87,7 @@ markers = [
     "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922).",
     "architecture: Meta-Tests, die Source-Files scannen (z.B. ``AuditLog.objects.create()``-Vorkommen zählen). Werden in Mutmut-Runs (#930) deselektiert, weil mutmut die gezählten Patterns vervielfacht.",
     "authz_audit: Einmaliger/wiederholbarer Live-AuthZ-Audit am E2E-Server (Refs #1055). Läuft nur mit AUTHZ_AUDIT=1, schreibt den Matrix-Report nach docs/archive/audits/.",
+    "postgres: Tests, die echtes PostgreSQL brauchen (RLS/Trigger/GUC/pg_-Katalogabfragen). Werden per pytest_collection_modifyitems-Hook (src/tests/conftest.py) automatisch übersprungen, wenn ``connection.vendor != 'postgresql'`` (Refs #1829) — ersetzt die frühere Inline-Skip-Guard-Wiederholung je Klasse/Test.",
 ]
 
 [tool.coverage.run]

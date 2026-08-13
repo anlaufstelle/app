@@ -40,7 +40,7 @@ import uuid
 import pytest
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, close_old_connections, connection
+from django.db import IntegrityError, close_old_connections
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
@@ -526,6 +526,7 @@ class TestIdempotencyDbBackstop:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestIntegrityErrorScopedToConstraint:
     """R6-Haertung (Refs #1443): der ``IntegrityError``-Fang in den Create-Views
     darf NUR den Idempotenz-Unique-Constraint (``idem_key_per_user_uniq``, deckt
@@ -540,13 +541,11 @@ class TestIntegrityErrorScopedToConstraint:
     gepatchtes ``create_event``/``create_workitem``) einen IntegrityError wirft.
     Traegt dessen Meldung den Constraint-Namen -> Duplikat-Redirect; ist sie
     fachfremd -> Propagation.
-    """
 
-    def setup_method(self):
-        # Der Race braucht eine zweite, echt committende Connection — nur unter
-        # PostgreSQL (SQLite/Autocommit-in-memory verhaelt sich anders).
-        if connection.vendor != "postgresql":
-            pytest.skip("Race-Test erfordert PostgreSQL (eigene Thread-Connection)")
+    Der Race braucht eine zweite, echt committende Connection — nur unter
+    PostgreSQL (SQLite/Autocommit-in-memory verhaelt sich anders); Refs #1829:
+    ``@pytest.mark.postgres`` oben ersetzt die vormalige Inline-Guard.
+    """
 
     @staticmethod
     def _insert_event_in_thread(*, facility, doc_type, user, key, sink=None):

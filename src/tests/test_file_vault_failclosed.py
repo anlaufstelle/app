@@ -14,7 +14,6 @@ Uploads ohne Operator-Konfiguration nicht broken sind.
 from __future__ import annotations
 
 import pytest
-from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -53,12 +52,6 @@ VALID_PDF_BYTES = (
     b"startxref\n9\n%%EOF\n"
 )
 PE_EXECUTABLE_BYTES = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00" + b"\x00" * 128
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 @pytest.fixture

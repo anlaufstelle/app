@@ -57,6 +57,7 @@ from core.reporting.base import (
     TypBindung,
 )
 from core.reporting.export import export_dataset
+from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -66,10 +67,7 @@ DATE_TO = date(2025, 5, 31)
 
 @pytest.fixture(autouse=True)
 def _isolated_registry(monkeypatch):
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 def _nur_typ_bindung(name: str, key: str):

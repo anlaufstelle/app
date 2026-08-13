@@ -12,6 +12,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event, FieldTemplate
 from core.services.compliance import user_can_see_field
+from core.services.dynamic_data import option_label_map
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 
@@ -129,12 +130,11 @@ def _resolve_field_value(value, ft):
         return safe_decrypt(value)
     if isinstance(value, list):
         if ft and ft.options_json:
-            label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict)}
+            label_map = option_label_map(ft.options_json)
             return ", ".join(label_map.get(str(v), str(v)) for v in value)
         return ", ".join(str(v) for v in value)
     if isinstance(value, str) and ft and ft.options_json:
-        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict)}
-        return label_map.get(value, value)
+        return option_label_map(ft.options_json).get(value, value)
     return value
 
 

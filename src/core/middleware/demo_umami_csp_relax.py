@@ -31,10 +31,11 @@ bereits gesetzten ``Content-Security-Policy``-Header noch umschreiben kann.
 
 from __future__ import annotations
 
-import re
 from urllib.parse import urlsplit
 
 from django.conf import settings
+
+from core.middleware._csp import extend_directive, rewrite_csp_headers
 
 
 def _umami_host() -> str:
@@ -50,22 +51,6 @@ def _umami_host() -> str:
     if not (split.scheme and split.netloc):
         return ""
     return f"{split.scheme}://{split.netloc}"
-
-
-def _extend_directive(csp: str, directive: str, token: str) -> str:
-    """Fügt ``token`` in die genannte CSP-Directive ein (idempotent).
-
-    Ist die Directive nicht vorhanden oder der Token bereits enthalten, bleibt
-    die Policy unverändert.
-    """
-    pattern = re.compile(rf"({re.escape(directive)}\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE)
-
-    def _repl(match: re.Match[str]) -> str:
-        if token in match.group(1):
-            return match.group(1)
-        return f"{match.group(1)} {token}"
-
-    return pattern.sub(_repl, csp, count=1)
 
 
 class DemoUmamiCSPRelaxMiddleware:
@@ -99,11 +84,9 @@ class DemoUmamiCSPRelaxMiddleware:
         if not umami_host:
             return response
 
-        for header in ("Content-Security-Policy", "Content-Security-Policy-Report-Only"):
-            csp = response.headers.get(header)
-            if not csp:
-                continue
-            csp = _extend_directive(csp, "script-src", umami_host)
-            csp = _extend_directive(csp, "connect-src", umami_host)
-            response.headers[header] = csp
+        def _relax(csp: str) -> str:
+            csp = extend_directive(csp, "script-src", umami_host)
+            return extend_directive(csp, "connect-src", umami_host)
+
+        rewrite_csp_headers(response, _relax)
         return response

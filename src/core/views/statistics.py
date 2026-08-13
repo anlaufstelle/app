@@ -4,7 +4,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
@@ -25,7 +25,7 @@ from core.reporting.data_source import (
     table_note,
 )
 from core.reporting.export import SUPPORTED_FORMATS, export_dataset
-from core.reporting.registry import get_available_backends, get_backend
+from core.reporting.registry import get_available_backends, get_backend_or_404
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
     EXTERNAL_REPORT_TARGET,
@@ -38,12 +38,10 @@ from core.services.dashboard import (
     get_statistics_hybrid,
     get_statistics_trend,
     release_detail,
-    validate_statistics_range,
 )
 from core.services.system import export_events_csv, generate_report_pdf, generate_sample_report_1_pdf
 from core.utils.downloads import safe_download_response
-from core.utils.formatting import parse_date
-from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
+from core.views.mixins import ExportRangeMixin, HTMXPartialMixin, LeadOrAdminRequiredMixin, log_export
 
 logger = logging.getLogger(__name__)
 
@@ -421,22 +419,18 @@ def export_document_type_detail(document_type) -> dict:
     return {"document_type": document_type.name, "document_type_id": str(document_type.pk)}
 
 
-class CSVExportView(LeadOrAdminRequiredMixin, View):
+class CSVExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
     """Streaming CSV export of all events in the period."""
 
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = parse_date(request.GET.get("date_from"), None)
-        date_to = parse_date(request.GET.get("date_to"), None)
-        if not date_from or not date_to:
-            return HttpResponse(_("date_from und date_to erforderlich"), status=400)
         # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
         # die Export-Views lesen date_from/date_to direkt aus der Query.
-        try:
-            validate_statistics_range(date_from, date_to)
-        except InvalidStatisticsPeriodError as exc:
-            return HttpResponse(str(exc), status=400)
+        range_result = self.resolve_range(request)
+        if isinstance(range_result, HttpResponse):
+            return range_result
+        date_from, date_to = range_result
 
         # R2 (Refs #1804): Der Export gibt aus, was am Bildschirm steht. Die
         # Aufloesung laeuft ueber dieselbe fail-closed, facility-skopierte
@@ -450,42 +444,34 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
             export_events_csv(facility, date_from, date_to, user=request.user, document_type=document_type),
         )
 
-        log_audit_event(
+        # K4a (Refs #1770): Empfaenger/Zweck wandern ins bestehende
+        # ``detail``-JSON (kein Schema-Eingriff auf dem append-only,
+        # hash-verketteten Audit-Log). Ohne sie erzeugt die
+        # Freigabe-Uebersicht Alarme, die niemand bewerten kann.
+        log_export(
             request,
-            AuditLog.Action.EXPORT,
-            target_type="CSV",
-            # K4a (Refs #1770): Empfaenger/Zweck wandern ins bestehende
-            # ``detail``-JSON (kein Schema-Eingriff auf dem append-only,
-            # hash-verketteten Audit-Log). Ohne sie erzeugt die
-            # Freigabe-Uebersicht Alarme, die niemand bewerten kann.
-            detail={
-                "format": "CSV",
-                "date_from": str(date_from),
-                "date_to": str(date_to),
-                **export_document_type_detail(document_type),
-                **release_detail(request.GET, artifact_released=True),
-            },
+            "CSV",
+            format="CSV",
+            date_from=date_from,
+            date_to=date_to,
+            extra=export_document_type_detail(document_type),
         )
 
         return response
 
 
-class PDFExportView(LeadOrAdminRequiredMixin, View):
+class PDFExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
     """PDF semi-annual report as download."""
 
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = parse_date(request.GET.get("date_from"), None)
-        date_to = parse_date(request.GET.get("date_to"), None)
-        if not date_from or not date_to:
-            return HttpResponse(_("date_from und date_to erforderlich"), status=400)
         # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
         # die Export-Views lesen date_from/date_to direkt aus der Query.
-        try:
-            validate_statistics_range(date_from, date_to)
-        except InvalidStatisticsPeriodError as exc:
-            return HttpResponse(str(exc), status=400)
+        range_result = self.resolve_range(request)
+        if isinstance(range_result, HttpResponse):
+            return range_result
+        date_from, date_to = range_result
 
         # R2 (Refs #1804): Dasselbe Regime wie die Uebersicht — bei gesetztem
         # Filter live rechnen, weil Monats-Aggregate keine Zerlegung nach
@@ -511,38 +497,30 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
             pdf_bytes,
         )
 
-        log_audit_event(
+        log_export(
             request,
-            AuditLog.Action.EXPORT,
-            target_type="PDF",
-            detail={
-                "format": "PDF",
-                "date_from": str(date_from),
-                "date_to": str(date_to),
-                **export_document_type_detail(document_type),
-                **release_detail(request.GET, artifact_released=True),
-            },
+            "PDF",
+            format="PDF",
+            date_from=date_from,
+            date_to=date_to,
+            extra=export_document_type_detail(document_type),
         )
 
         return response
 
 
-class SampleReport1ExportView(LeadOrAdminRequiredMixin, View):
+class SampleReport1ExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
     """Beispiel-Sachbericht als PDF-Download."""
 
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = parse_date(request.GET.get("date_from"), None)
-        date_to = parse_date(request.GET.get("date_to"), None)
-        if not date_from or not date_to:
-            return HttpResponse(_("date_from und date_to erforderlich"), status=400)
         # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
         # die Export-Views lesen date_from/date_to direkt aus der Query.
-        try:
-            validate_statistics_range(date_from, date_to)
-        except InvalidStatisticsPeriodError as exc:
-            return HttpResponse(str(exc), status=400)
+        range_result = self.resolve_range(request)
+        if isinstance(range_result, HttpResponse):
+            return range_result
+        date_from, date_to = range_result
 
         pdf_bytes = generate_sample_report_1_pdf(facility, date_from, date_to)
 
@@ -552,17 +530,7 @@ class SampleReport1ExportView(LeadOrAdminRequiredMixin, View):
             pdf_bytes,
         )
 
-        log_audit_event(
-            request,
-            AuditLog.Action.EXPORT,
-            target_type="Sachbericht-PDF",
-            detail={
-                "format": "Sachbericht-PDF",
-                "date_from": str(date_from),
-                "date_to": str(date_to),
-                **release_detail(request.GET, artifact_released=True),
-            },
-        )
+        log_export(request, "Sachbericht-PDF", format="Sachbericht-PDF", date_from=date_from, date_to=date_to)
 
         return response
 
@@ -692,16 +660,11 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
         slug = request.GET.get("backend", "").strip()
         if not slug:
             return HttpResponse(_("backend erforderlich"), status=400)
-        try:
-            backend = get_backend(slug)
-        except KeyError:
-            raise Http404(_("Unbekanntes Berichts-Backend.")) from None
         # Truthiness (nicht ``is False``): dasselbe Praedikat wie der
         # Dropdown-Filter in ``registry.get_available_backends`` — sonst wuerde
         # ein falsy Nicht-``False``-Rueckgabewert (z. B. ``None`` aus einem
         # nullable BooleanField) das Backend nur verstecken, nicht sperren.
-        if not backend.is_available(facility):
-            raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
+        backend = get_backend_or_404(facility, slug)
 
         today = timezone.localdate()
         try:
@@ -755,7 +718,7 @@ class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):
         )
 
 
-class DatasetExportView(LeadOrAdminRequiredMixin, View):
+class DatasetExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
     """Generischer Berichts-Download (M5 P5, Refs #1061): CSV/JSON/XML via ``export_dataset``.
 
     Format-/Backend-Verfuegbarkeitspruefung analog ``DatasetReportPanelView``;
@@ -766,24 +729,15 @@ class DatasetExportView(LeadOrAdminRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = parse_date(request.GET.get("date_from"), None)
-        date_to = parse_date(request.GET.get("date_to"), None)
-        if not date_from or not date_to:
-            return HttpResponse(_("date_from und date_to erforderlich"), status=400)
         # Refs #1589: gleiche Range-Validierung wie die uebrigen Export-Views.
-        try:
-            validate_statistics_range(date_from, date_to)
-        except InvalidStatisticsPeriodError as exc:
-            return HttpResponse(str(exc), status=400)
+        range_result = self.resolve_range(request)
+        if isinstance(range_result, HttpResponse):
+            return range_result
+        date_from, date_to = range_result
 
         slug = request.GET.get("backend", "").strip()
-        try:
-            backend = get_backend(slug)
-        except KeyError:
-            raise Http404(_("Unbekanntes Berichts-Backend.")) from None
         # Truthiness wie im Panel/in der Registry — siehe DatasetReportPanelView.
-        if not backend.is_available(facility):
-            raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
+        backend = get_backend_or_404(facility, slug)
 
         fmt = request.GET.get("format", "")
         if fmt not in SUPPORTED_FORMATS:
@@ -791,17 +745,6 @@ class DatasetExportView(LeadOrAdminRequiredMixin, View):
 
         response = export_dataset(backend, facility, date_from, date_to, format=fmt)
 
-        log_audit_event(
-            request,
-            AuditLog.Action.EXPORT,
-            target_type="DatasetExport",
-            detail={
-                "backend": slug,
-                "format": fmt,
-                "date_from": str(date_from),
-                "date_to": str(date_to),
-                **release_detail(request.GET, artifact_released=True),
-            },
-        )
+        log_export(request, "DatasetExport", format=fmt, date_from=date_from, date_to=date_to, extra={"backend": slug})
 
         return response

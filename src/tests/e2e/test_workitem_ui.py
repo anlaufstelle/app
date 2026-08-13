@@ -1,19 +1,14 @@
 """E2E-Tests: WorkItem-UI — Navigation, Inbox, Status, Badge, Klickbarkeit, Erledigungsdatum."""
 
-import os
 import re
 import subprocess
-import sys
 
 import pytest
 
+from tests.e2e._helpers import python_bin as _python
 from tests.e2e._selectors import action_bar, find_client_link
 
 pytestmark = pytest.mark.e2e
-
-
-def _python():
-    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
 def _run_shell(code, e2e_env):

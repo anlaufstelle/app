@@ -27,7 +27,7 @@ def create_goal(case, user, title, description=""):
 
 
 @transaction.atomic
-def update_goal(goal, user, title=None, description=None):
+def update_goal(goal, title=None, description=None):
     """Update mutable fields on a goal (title, description)."""
     if title is not None:
         goal.title = title
@@ -38,7 +38,7 @@ def update_goal(goal, user, title=None, description=None):
 
 
 @transaction.atomic
-def achieve_goal(goal, user):
+def achieve_goal(goal):
     """Mark a goal as achieved. Idempotent — returns early if already achieved."""
     if goal.is_achieved:
         return goal
@@ -49,7 +49,7 @@ def achieve_goal(goal, user):
 
 
 @transaction.atomic
-def unachieve_goal(goal, user):
+def unachieve_goal(goal):
     """Mark a goal as not achieved."""
     goal.is_achieved = False
     goal.achieved_at = None
@@ -58,7 +58,7 @@ def unachieve_goal(goal, user):
 
 
 @transaction.atomic
-def create_milestone(goal, user, title, sort_order=0):
+def create_milestone(goal, title, sort_order=0):
     """Create a new Milestone for a goal."""
     milestone = Milestone(
         goal=goal,
@@ -70,7 +70,7 @@ def create_milestone(goal, user, title, sort_order=0):
 
 
 @transaction.atomic
-def toggle_milestone(milestone, user):
+def toggle_milestone(milestone):
     """Toggle milestone completion. Sets/clears completed_at accordingly."""
     if milestone.is_completed:
         milestone.is_completed = False

@@ -21,16 +21,15 @@ parallelisieren.
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
-import sys
 import uuid
 from contextlib import suppress
 from pathlib import Path
 
 import pytest
 
+from ._helpers import python_bin as _python
 from ._helpers import wait_until
 
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
@@ -54,10 +53,6 @@ def _bootstrap_store(page, base_url):
             await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
         }"""
     )
-
-
-def _python():
-    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
 def _shell(e2e_env, script):

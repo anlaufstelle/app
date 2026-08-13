@@ -213,3 +213,71 @@ class HTMXPartialMixin:
         if template is None:
             raise ValueError("HTMXPartialMixin erfordert partial_template_name und template_name.")
         return render(self.request, template, context)
+
+
+class ExportRangeMixin:
+    """Gemeinsame ``date_from``/``date_to``-Aufloesung der Statistik-Export-Views.
+
+    Refs #1827: CSV-, PDF-, Sachbericht- und Dataset-Export lasen die beiden
+    Query-Parameter, validierten sie gegen ``validate_statistics_range`` und
+    antworteten bei Fehlern identisch mit einer 400-``HttpResponse`` — 4x
+    wortgleich kopiert (Anlass: vier Folgefixes am selben Block in
+    ``statistics.py``, siehe #1827-Rationale).
+
+    ``resolve_range`` gibt entweder das ``(date_from, date_to)``-Tupel zurueck
+    oder direkt die fertige 400-Antwort; die Aufrufstelle unterscheidet per
+    ``isinstance``, weil die Views hier bewusst mit einer Antwort statt einer
+    Exception abbrechen (kein neuer Kontrollfluss-Mechanismus fuer eine
+    Handvoll Aufrufer)::
+
+        result = self.resolve_range(request)
+        if isinstance(result, HttpResponse):
+            return result
+        date_from, date_to = result
+    """
+
+    def resolve_range(self, request):
+        from django.http import HttpResponse
+        from django.utils.translation import gettext as _
+
+        from core.services.dashboard import InvalidStatisticsPeriodError, validate_statistics_range
+        from core.utils.formatting import parse_date
+
+        date_from = parse_date(request.GET.get("date_from"), None)
+        date_to = parse_date(request.GET.get("date_to"), None)
+        if not date_from or not date_to:
+            return HttpResponse(_("date_from und date_to erforderlich"), status=400)
+        try:
+            validate_statistics_range(date_from, date_to)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
+        return date_from, date_to
+
+
+def log_export(request, target_type, *, format, date_from, date_to, extra=None, artifact_released=True):
+    """Export-Audit-Zeile: Basisdetail + optionale Zusatzfelder + Freigabe-Metadaten.
+
+    Refs #1827: buendelt den 4x identischen
+    ``log_audit_event(..., AuditLog.Action.EXPORT, ...)``-Aufruf aus CSV-,
+    PDF-, Sachbericht- und Dataset-Export. ``extra`` haengt View-spezifische
+    Detail-Felder an (z. B. den Doktyp-Filter oder den Backend-Slug); die
+    Reihenfolge der Dict-Keys ist irrelevant, weil der Audit-Hash die Details
+    ueber ``json.dumps(..., sort_keys=True)`` kanonisiert (Refs
+    ``services/audit/chain.py``).
+    """
+    from core.models import AuditLog
+    from core.services.audit import log_audit_event
+    from core.services.dashboard import release_detail
+
+    log_audit_event(
+        request,
+        AuditLog.Action.EXPORT,
+        target_type=target_type,
+        detail={
+            "format": format,
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+            **(extra or {}),
+            **release_detail(request.GET, artifact_released=artifact_released),
+        },
+    )

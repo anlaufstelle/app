@@ -16,20 +16,16 @@ WICHTIG: E2E seriell ausführen (RAM-Limit der Container) — nicht parallelisie
 
 from __future__ import annotations
 
-import os
 import subprocess
-import sys
 import time
 import uuid
 from contextlib import suppress
 
 import pytest
 
+from ._helpers import python_bin as _python
+
 pytestmark = pytest.mark.e2e
-
-
-def _python():
-    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
 def _shell(e2e_env, script):

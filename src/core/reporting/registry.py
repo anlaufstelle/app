@@ -219,6 +219,28 @@ def get_available_backends(facility: object) -> list[DatasetBackend]:
     return [backend for backend in get_backends() if backend.is_available(facility)]
 
 
+def get_backend_or_404(facility: object, slug: str) -> DatasetBackend:
+    """``slug`` → verfuegbares Backend dieser Facility, sonst ``Http404``.
+
+    Refs #1827: Panel- und Export-View loesten das Backend bislang mit
+    identischem ``try/except KeyError`` + ``is_available``-Guard auf (siehe
+    :func:`get_available_backends`-Docstring: dasselbe Praedikat, damit
+    Sichtbarkeit und Erreichbarkeit nicht auseinanderlaufen). Lazy-Import von
+    ``django.http``/``gettext``, damit dieses Modul webframework-frei bleibt
+    (siehe Modul-Docstring zur Lazy-Discovery).
+    """
+    from django.http import Http404
+    from django.utils.translation import gettext as _
+
+    try:
+        backend = get_backend(slug)
+    except KeyError:
+        raise Http404(_("Unbekanntes Berichts-Backend.")) from None
+    if not backend.is_available(facility):
+        raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
+    return backend
+
+
 def get_report_key_vocabulary() -> dict[str, str]:
     """Alle deklarierten **Typ**-Berichtsschluessel mit ihrem Label (E1, Refs #1824).
 

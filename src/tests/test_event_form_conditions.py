@@ -30,7 +30,8 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.forms.events import DynamicEventDataForm, _coerce_condition_number
+from core.forms.dynamic import _coerce_condition_number
+from core.forms.events import DynamicEventDataForm
 from core.models import DocumentType, DocumentTypeField, Event, FieldCondition, FieldTemplate
 from core.services.conditions import evaluate_condition
 from core.services.events.fields import file_marker_slugs, remove_restricted_fields

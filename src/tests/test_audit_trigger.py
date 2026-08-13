@@ -18,11 +18,8 @@ from core.models import AuditLog
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestAuditLogImmutableTrigger:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("AuditLog-Trigger existiert nur auf PostgreSQL")
-
     def _create_log(self, facility):
         return AuditLog.objects.create(
             facility=facility,

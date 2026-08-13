@@ -341,6 +341,23 @@ def decrypt_dynamic_text_data(data_json: Mapping[str, Any] | None) -> dict[str, 
     return result
 
 
+def option_label_map(options_json: Iterable[Any] | None) -> dict[str, Any]:
+    """``options_json`` → ``{slug: label}``.
+
+    Refs #1827: Vier Aufrufstellen (hier zweimal — SELECT/MULTI_SELECT —,
+    ``views/config/conditions.py``, ``services/events/feed.py``,
+    ``services/system/export.py``) bauten dieselbe Reduktion mit drei leicht
+    unterschiedlichen defensiven Filtern (mal ohne ``"slug"``-Check, mal ohne
+    ``"label"``-Check). Vereinheitlicht auf den staerksten Filter — ein
+    Eintrag muss ein Dict mit BEIDEN Schluesseln sein, sonst faellt er aus der
+    Map und der Aufrufer faellt auf den rohen Wert zurueck statt mit
+    ``KeyError`` zu crashen (kein Test — auch keiner der mutmut-Follow-ups —
+    exerciert bisher eine Dict-Option ohne ``"slug"``/``"label"``; diese
+    Verschaerfung ist eine reine Robustheits-Verbesserung).
+    """
+    return {o["slug"]: o["label"] for o in (options_json or []) if isinstance(o, dict) and "slug" in o and "label" in o}
+
+
 def format_dynamic_display_value(value: Any, ft: FieldTemplate | None) -> Any:
     """Formatiere einen ``data_json``-Wert für die lesbare Detail-Anzeige.
 
@@ -359,11 +376,10 @@ def format_dynamic_display_value(value: Any, ft: FieldTemplate | None) -> Any:
         return _("Ja") if value else _("Nein")
 
     if ft.field_type == ft.FieldType.SELECT and ft.options_json:
-        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
-        return label_map.get(value, value)
+        return option_label_map(ft.options_json).get(value, value)
 
     if ft.field_type == ft.FieldType.MULTI_SELECT and ft.options_json and isinstance(value, list):
-        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
+        label_map = option_label_map(ft.options_json)
         return ", ".join(label_map.get(v, str(v)) for v in value)
 
     return value
@@ -428,6 +444,70 @@ def _file_display_entry(
     }
 
 
+def _display_entry(
+    label: str,
+    value: Any,
+    *,
+    field_sensitivity: str,
+    is_encrypted: bool,
+    ft: FieldTemplate | None,
+    user: Any,
+    doc_sensitivity: str,
+    attachments_by_pk: Mapping[Any, Any],
+    predecessor_index: Mapping[Any, Any],
+    orphaned: bool = False,
+) -> dict[str, Any] | None:
+    """Anzeige-Dict eines einzelnen dynamischen Feldwerts — der Drei-Fall
+    (restricted/Datei/normal).
+
+    Refs #1827: 2x identisch dupliziert in ``build_dynamic_fields_display``/
+    ``build_orphan_fields_display`` (entstanden mit #1738s FILE-Zweig). Gibt
+    ``None`` zurück, wenn ein Datei-Eintrag verworfen wird (kein Attachment
+    mehr auflösbar) — die Aufrufstelle überspringt den Slug dann wie zuvor.
+
+    Der ``"orphaned"``-Schlüssel erscheint in restricted-/normal-Einträgen NUR
+    wenn ``orphaned=True`` (unverändert gegenüber vorher — der reguläre Aufruf
+    trug diesen Schlüssel dort nie); ``_file_display_entry`` trägt ihn ohnehin
+    immer (Default ``False``).
+    """
+    from core.services.file_vault import safe_decrypt
+
+    if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+        entry = {
+            "label": label,
+            "value": _("[Eingeschränkt]"),
+            "is_sensitive": bool(field_sensitivity),
+            "is_encrypted": is_encrypted,
+            "restricted": True,
+        }
+        if orphaned:
+            entry["orphaned"] = True
+        return entry
+
+    if is_file_marker(value):
+        return _file_display_entry(
+            label,
+            value,
+            field_sensitivity=field_sensitivity,
+            is_encrypted=is_encrypted,
+            attachments_by_pk=attachments_by_pk,
+            predecessor_index=predecessor_index,
+            orphaned=orphaned,
+        )
+
+    decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
+    entry = {
+        "label": label,
+        "value": format_dynamic_display_value(decrypted, ft),
+        "is_sensitive": bool(field_sensitivity),
+        "is_encrypted": is_encrypted,
+        "restricted": False,
+    }
+    if orphaned:
+        entry["orphaned"] = True
+    return entry
+
+
 def build_dynamic_fields_display(
     document_type: DocumentType,
     data_json: Mapping[str, Any] | None,
@@ -464,8 +544,6 @@ def build_dynamic_fields_display(
     Reihenfolge. Slugs ohne Feld am aktuellen Typ (Bestandsreste vor der
     Whitelist) werden dabei nicht angezeigt.
     """
-    from core.services.file_vault import safe_decrypt
-
     values = data_json or {}
     doc_sensitivity = document_type.sensitivity
     field_templates = build_field_template_lookup(document_type, ordered=True)
@@ -475,41 +553,19 @@ def build_dynamic_fields_display(
     for slug, ft in field_templates.items():
         if slug not in values:
             continue
-        field_sensitivity = ft.sensitivity or ""
-        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
-            entries.append(
-                {
-                    "label": ft.name,
-                    "value": _("[Eingeschränkt]"),
-                    "is_sensitive": bool(field_sensitivity),
-                    "is_encrypted": ft.is_encrypted,
-                    "restricted": True,
-                }
-            )
-            continue
-        value = values[slug]
-        if is_file_marker(value):
-            file_entry = _file_display_entry(
-                ft.name,
-                value,
-                field_sensitivity=field_sensitivity,
-                is_encrypted=ft.is_encrypted,
-                attachments_by_pk=attachments_by_pk,
-                predecessor_index=predecessor_index,
-            )
-            if file_entry is not None:
-                entries.append(file_entry)
-            continue
-        decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
-        entries.append(
-            {
-                "label": ft.name,
-                "value": format_dynamic_display_value(decrypted, ft),
-                "is_sensitive": bool(field_sensitivity),
-                "is_encrypted": ft.is_encrypted,
-                "restricted": False,
-            }
+        entry = _display_entry(
+            ft.name,
+            values[slug],
+            field_sensitivity=ft.sensitivity or "",
+            is_encrypted=ft.is_encrypted,
+            ft=ft,
+            user=user,
+            doc_sensitivity=doc_sensitivity,
+            attachments_by_pk=attachments_by_pk,
+            predecessor_index=predecessor_index,
         )
+        if entry is not None:
+            entries.append(entry)
     return entries
 
 
@@ -540,8 +596,6 @@ def build_orphan_fields_display(
     Reihenfolge: nach Slug sortiert (stabil, Refs #1729). Entry-Form identisch zu
     :func:`build_dynamic_fields_display` plus ``orphaned=True``.
     """
-    from core.services.file_vault import safe_decrypt
-
     values = data_json or {}
     field_templates = build_field_template_lookup(document_type)
     orphan_slugs = sorted(set(values.keys()) - set(field_templates.keys()))
@@ -557,47 +611,22 @@ def build_orphan_fields_display(
         ft = resolved.get(slug)
         # Ohne auffindbares Template konservativ als HIGH gaten (Löschschutz
         # sollte das verhindern) — lieber verbergen als versehentlich offenlegen.
-        field_sensitivity = orphan_gating_sensitivity(ft)
-        label = ft.name if ft is not None else slug
-        is_encrypted = ft.is_encrypted if ft is not None else False
-        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
-            entries.append(
-                {
-                    "label": label,
-                    "value": _("[Eingeschränkt]"),
-                    "is_sensitive": bool(field_sensitivity),
-                    "is_encrypted": is_encrypted,
-                    "restricted": True,
-                    "orphaned": True,
-                }
-            )
-            continue
         # M24/AP4 (Refs #1738): derselbe FILE-Zweig wie für zugeordnete Felder —
         # ein verwaister Datei-Slug darf ebenso wenig als Roh-Dict erscheinen.
-        if is_file_marker(values[slug]):
-            file_entry = _file_display_entry(
-                label,
-                values[slug],
-                field_sensitivity=field_sensitivity,
-                is_encrypted=is_encrypted,
-                attachments_by_pk=attachments_by_pk,
-                predecessor_index=predecessor_index,
-                orphaned=True,
-            )
-            if file_entry is not None:
-                entries.append(file_entry)
-            continue
-        decrypted = safe_decrypt(values[slug], default=_("[verschlüsselt]"))
-        entries.append(
-            {
-                "label": label,
-                "value": format_dynamic_display_value(decrypted, ft),
-                "is_sensitive": bool(field_sensitivity),
-                "is_encrypted": is_encrypted,
-                "restricted": False,
-                "orphaned": True,
-            }
+        entry = _display_entry(
+            ft.name if ft is not None else slug,
+            values[slug],
+            field_sensitivity=orphan_gating_sensitivity(ft),
+            is_encrypted=ft.is_encrypted if ft is not None else False,
+            ft=ft,
+            user=user,
+            doc_sensitivity=doc_sensitivity,
+            attachments_by_pk=attachments_by_pk,
+            predecessor_index=predecessor_index,
+            orphaned=True,
         )
+        if entry is not None:
+            entries.append(entry)
     return entries
 
 

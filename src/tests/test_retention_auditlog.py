@@ -19,11 +19,8 @@ from core.services.retention import prune_auditlog
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestPruneAuditlog:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("AuditLog-Trigger und prune_auditlog erfordern PostgreSQL")
-
     def _create_log_with_timestamp(self, facility, ts, action=AuditLog.Action.LOGIN):
         """Erstellt AuditLog und ueberschreibt timestamp via Raw SQL.
 

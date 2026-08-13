@@ -30,6 +30,7 @@ from core.reporting.backends.sample_report_1 import (
 )
 from core.reporting.base import EXCLUDED_KEY, CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
+from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -125,10 +126,7 @@ def _isolated_registry(monkeypatch):
     (``@register_backend`` ist ein Import-Seiteneffekt und laeuft je Modul nur
     beim *ersten* Import), dann mit einer Kopie isolieren.
     """
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

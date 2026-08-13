@@ -138,11 +138,8 @@ class TestImportJobFacilityScoping:
 
 
 @pytest.mark.django_db
+@pytest.mark.postgres
 class TestImportJobRLSPolicy:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
-
     def test_policy_and_force_flags_exist(self):
         with connection.cursor() as cursor:
             cursor.execute("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'core_importjob'")

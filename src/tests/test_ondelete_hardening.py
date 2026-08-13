@@ -143,14 +143,11 @@ class TestLegalHoldUniqueActiveConstraint:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestOnDeleteDbLevelConstraints:
     """DAT-03 Defense-in-Depth: die echten Postgres-``ON DELETE``-Constraints
     fuer die drei Compliance-FKs greifen auch bei einer Raw-SQL-Loeschung,
     die den Python-ORM-Collector komplett umgeht (Migration 0104)."""
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("ON DELETE-Constraints existieren nur auf PostgreSQL")
 
     def _lone_user(self, facility, username):
         """Frischer User ohne weitere FK-Referenzen (Client/Event/Case etc.),

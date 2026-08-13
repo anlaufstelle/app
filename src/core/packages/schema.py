@@ -531,6 +531,44 @@ def _parse_option(raw: Any, path: str, errors: Errors) -> dict[str, Any] | None:
     return {"slug": slug, "label": label, "is_active": is_active}
 
 
+def _parse_option_list(data: dict[str, Any], path: str, errors: Errors, field_type: str) -> tuple[dict[str, Any], ...]:
+    """``options``-Liste einer Feldvorlage (Refs #1827).
+
+    Der einzige verbliebene Inline-Listen-Parser neben den drei ausgelagerten
+    Schwester-Parsern (:func:`_parse_group_list`, :func:`_parse_field_ref_list`,
+    :func:`_parse_condition_list`) — dedupliziert per Slug (Duplikate werden
+    als Fehler gemeldet und übersprungen) und meldet nicht-leere ``options`` an
+    Feldtypen außerhalb :data:`_OPTION_FIELD_TYPES` als Fehler (Optionen
+    ergeben nur bei select/multi_select Sinn).
+    """
+    raw_options = data.get("options")
+    if raw_options is None:
+        return ()
+    entries = _sequence(raw_options, _join(path, "options"), errors)
+    if entries is None:
+        return ()
+    options: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, raw_option in enumerate(entries):
+        option_path = f"{_join(path, 'options')}[{index}]"
+        option = _parse_option(raw_option, option_path, errors)
+        if option is None:
+            continue
+        if option["slug"] in seen:
+            errors.append((_join(option_path, "slug"), f"Doppelter Options-Slug {option['slug']!r}."))
+            continue
+        seen.add(option["slug"])
+        options.append(option)
+    if entries and field_type not in _OPTION_FIELD_TYPES:
+        errors.append(
+            (
+                _join(path, "options"),
+                "Optionen sind nur für die Feldtypen 'select' und 'multi_select' zulässig.",
+            )
+        )
+    return tuple(options)
+
+
 def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateDef | None:
     data = _mapping(raw, path, errors)
     if data is None:
@@ -554,29 +592,7 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
     default_value = _str_value(data, "default_value", path, errors)
     report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
 
-    options: list[dict[str, Any]] = []
-    raw_options = data.get("options")
-    if raw_options is not None:
-        entries = _sequence(raw_options, _join(path, "options"), errors)
-        if entries is not None:
-            seen: set[str] = set()
-            for index, raw_option in enumerate(entries):
-                option_path = f"{_join(path, 'options')}[{index}]"
-                option = _parse_option(raw_option, option_path, errors)
-                if option is None:
-                    continue
-                if option["slug"] in seen:
-                    errors.append((_join(option_path, "slug"), f"Doppelter Options-Slug {option['slug']!r}."))
-                    continue
-                seen.add(option["slug"])
-                options.append(option)
-            if entries and field_type not in _OPTION_FIELD_TYPES:
-                errors.append(
-                    (
-                        _join(path, "options"),
-                        "Optionen sind nur für die Feldtypen 'select' und 'multi_select' zulässig.",
-                    )
-                )
+    options = _parse_option_list(data, path, errors, field_type)
 
     # Spiegelt ``FieldTemplate._validate_high_sensitivity_requires_encryption``
     # früh: HIGH-Felder ohne Verschlüsselung würden beim Laden ohnehin am
@@ -605,7 +621,7 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
         is_required=is_required,
         is_encrypted=is_encrypted,
         sensitivity=sensitivity,
-        options=tuple(options),
+        options=options,
         help_text=help_text,
         default_value=default_value,
         report_key=report_key,

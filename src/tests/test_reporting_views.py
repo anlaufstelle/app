@@ -18,6 +18,7 @@ from core.models import AuditLog
 from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
+from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -31,10 +32,7 @@ def _isolated_registry(monkeypatch):
     *ersten* Import), dann mit einer Kopie isolieren, damit ad-hoc registrierte
     Test-Backends (Zeilen-Modus, Pflichtfall 8) nicht in andere Tests leaken.
     """
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 def _mapped(doc_type):

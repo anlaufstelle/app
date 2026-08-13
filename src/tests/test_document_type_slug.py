@@ -117,13 +117,10 @@ class TestEntityTypeImmutability:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestDocumentTypeSlugImmutableTrigger:
     """DB-Trigger (Migration 0117), Muster ``test_slug_immutable_trigger.py``
     (Refs #1709) — schließt ORM-Bypasses, die an ``save()`` vorbeigehen."""
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Slug-Immutable-Trigger existiert nur auf PostgreSQL")
 
     def _create(self, facility, **kwargs):
         return DocumentType.objects.create(facility=facility, name="Beratung", **kwargs)

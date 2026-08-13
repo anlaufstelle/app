@@ -18,7 +18,7 @@ Policy sonst per Postgres-Default bypasst wuerde.
 import uuid
 
 import pytest
-from django.db import IntegrityError, connection, transaction
+from django.db import IntegrityError, transaction
 
 from core.models import Client, RectificationRequest
 from core.services.file_vault import encrypt_field
@@ -122,6 +122,7 @@ class TestFacilityScoping:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestRectificationRequestRLSIsolation:
     """Cross-Tenant-Probe unter der NOSUPERUSER-Rolle (Muster ``test_rls.py``).
 
@@ -129,10 +130,6 @@ class TestRectificationRequestRLSIsolation:
     verschluesselten Wertpaare — schon seine blosse Existenz ueber die
     Mandantengrenze hinweg waere ein Metadaten-Leak.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
 
     def test_request_invisible_across_facility(
         self,

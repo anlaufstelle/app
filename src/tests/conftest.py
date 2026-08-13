@@ -3,6 +3,7 @@
 import os
 
 import pytest
+from cryptography.fernet import Fernet
 from django.conf import settings as django_settings
 from django.utils import timezone, translation
 
@@ -36,6 +37,28 @@ from core.models import (
     User,
     WorkItem,
 )
+
+
+def pytest_collection_modifyitems(items):
+    """``@pytest.mark.postgres``-Items automatisch skippen, wenn die laufende
+    DB kein PostgreSQL ist (Refs #1829).
+
+    Ersetzt die vormals je Testklasse/-funktion wiederholte Inline-Guard
+    (``if connection.vendor != "postgresql": pytest.skip(...)``) fuer
+    RLS-/Trigger-/GUC-/``pg_``-Katalog-Tests — eine Stelle statt ~50 Kopien.
+    ``connection.vendor`` liest nur das konfigurierte Backend (kein
+    Verbindungsaufbau), daher zur Collection-Zeit sicher aufrufbar.
+    """
+    from django.db import connection
+
+    if connection.vendor == "postgresql":
+        return
+    skip_postgres = pytest.mark.skip(
+        reason="Benötigt PostgreSQL (RLS/Trigger/GUC) — connection.vendor != 'postgresql'."
+    )
+    for item in items:
+        if "postgres" in item.keywords:
+            item.add_marker(skip_postgres)
 
 
 @pytest.fixture(autouse=True)
@@ -409,6 +432,18 @@ def milestone(outcome_goal):
         goal=outcome_goal,
         title="Erstgespräch geführt",
     )
+
+
+@pytest.fixture
+def _encryption_key(settings):
+    """Frischer Fernet-Key fuer Tests, die echte Verschluesselung brauchen
+    (File-Vault, Attachments) — Refs #1829: identischer Zweizeiler stand in
+    10 Testdateien einzeln (``@pytest.fixture`` + Erzeugung), jetzt einmal
+    hier. Aufrufweg (``usefixtures("_encryption_key")`` bzw. als
+    Funktionsparameter) bleibt an den Aufrufstellen unveraendert.
+    """
+    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
+    settings.ENCRYPTION_KEYS = ""
 
 
 # ---- AuthZ-Matrix-Fixtures (Refs #1055) ---------------------------------
@@ -931,3 +966,29 @@ def foreign_rectification_request(second_facility, foreign_client, foreign_staff
         "AuthZ-IDOR-Wunschwert",
         "AuthZ-IDOR-Test",
     )
+
+
+def isolate_reporting_registry(monkeypatch, *, empty: bool = False) -> None:
+    """Kernlogik der Reporting-Registry-Isolation je Test (Refs #1829).
+
+    14 Reporting-Testdateien definierten dieselbe ``_isolated_registry``-
+    ``@pytest.fixture(autouse=True)`` byte-identisch (bis auf Docstring-Text):
+    erst die echte Discovery ausloesen (``@register_backend`` ist ein
+    Import-Seiteneffekt und laeuft je Modul nur beim *ersten* Import), dann
+    mit einer **Kopie** von ``_REGISTRY`` isolieren, damit ad-hoc registrierte
+    Test-Backends nicht in Folgetests leaken, echte Backends aber sichtbar
+    bleiben. ``empty=True`` (nur ``test_reporting_registry.py::TestDiscovery``
+    -Muster) isoliert stattdessen mit einem leeren Dict.
+
+    Bewusst eine **Funktion**, keine Conftest-Fixture: die 14 Aufrufer
+    binden sie ``autouse=True`` — als Conftest-Autouse-Fixture liefe sie fuer
+    die GESAMTE Testsuite statt nur fuer Reporting-Tests (Performance- und
+    Isolations-Ueberraschung fuer reporting-fremde Tests). Jede Datei behaelt
+    deshalb ihre eigene, jetzt einzeilige ``autouse``-Fixture, die diese
+    Funktion aufruft.
+    """
+    from core.reporting import registry
+
+    registry._discover()
+    monkeypatch.setattr(registry, "_REGISTRY", {} if empty else dict(registry._REGISTRY))
+    monkeypatch.setattr(registry, "_discovered", True)

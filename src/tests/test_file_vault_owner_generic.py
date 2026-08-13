@@ -9,7 +9,6 @@ Ereignis-Anhaenge bitgleich bleiben MUSS (keine Datei-Moves beim Umbau).
 """
 
 import pytest
-from cryptography.fernet import Fernet
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 # ``prepare_encrypted_upload`` ruft seit #610 libmagic fuer die
@@ -45,12 +44,6 @@ PDF_HEADER = (
     b"trailer<</Size 3/Root 1 0 R>>\n"
     b"startxref\n9\n%%EOF\n"
 )
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 @pytest.fixture

@@ -28,16 +28,12 @@ from core.models.attachment import owner_field_name
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
+from core.utils.formatting import isoformat_or_none as _isoformat
 
 
 def _username(user):
     """Username eines optionalen User-FKs (``None`` bei ``SET_NULL``-Waisen)."""
     return user.username if user else None
-
-
-def _isoformat(value):
-    """ISO-8601 eines optionalen Datums-/Zeitstempels."""
-    return value.isoformat() if value else None
 
 
 def _soft_delete_meta(obj):

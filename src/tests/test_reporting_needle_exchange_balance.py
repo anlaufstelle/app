@@ -34,6 +34,7 @@ from core.reporting.base import DatasetResult
 from core.reporting.data_source import TYPED_EVENTS
 from core.reporting.export import export_dataset
 from tests._reporting_helpers import feld_report_key_fuer
+from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -41,10 +42,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def _isolated_registry(monkeypatch):
     """Registry je Test isolieren, echte Backends bleiben verfuegbar (Doku § 10)."""
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

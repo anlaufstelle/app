@@ -45,7 +45,7 @@ prueft die Formel gegen eine Brute-Force-Aufzaehlung nach).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 # K2-Produktentscheid (#1770): eine unterdrueckte Zelle gilt als geschuetzt,
 # sobald ihr mindestens ZWEI Werte offenstehen. Die Analyse hatte auch die
@@ -139,6 +139,28 @@ def _bounds(cells: Sequence[Cell], residual: int, index: int) -> tuple[int, int]
     return lower, upper
 
 
+def _hidden_bounds(partition: Partition, margin: int | None) -> Iterator[tuple[Cell, int | None, int | None]]:
+    """Verdeckte Zellen einer Aufschluesselung samt Intervallgrenzen.
+
+    Refs #1827: gemeinsamer Kern von :func:`feasible_spans`/:func:`findings`
+    — beide iterierten dieselben verdeckten Zellen und berechneten bei
+    bekannter Randsumme dieselben Grenzen ueber :func:`_bounds`; nur die
+    Auswertung des Intervalls unterscheidet sich (Spannweite vs. die drei
+    Ausnahme-Pruefungen in ``findings``). Ist ``margin`` unbekannt, liefert
+    dieser Generator ``(cell, None, None)`` je verdeckter Zelle — „unbeschraenkt"
+    — statt Grenzen zu berechnen.
+    """
+    hidden = [cell for cell in partition.cells if cell.published is None]
+    if margin is None:
+        for cell in hidden:
+            yield cell, None, None
+        return
+    residual = margin - sum(cell.published for cell in partition.cells if cell.published is not None)
+    for index, cell in enumerate(hidden):
+        lower, upper = _bounds(hidden, residual, index)
+        yield cell, lower, upper
+
+
 def feasible_spans(partitions: Sequence[Partition]) -> dict[tuple[str, str], int | None]:
     """Anzahl der Werte, die jeder unterdrueckten Zelle noch offenstehen.
 
@@ -151,15 +173,8 @@ def feasible_spans(partitions: Sequence[Partition]) -> dict[tuple[str, str], int
     spans: dict[tuple[str, str], int | None] = {}
     for partition in partitions:
         margin = margins.get(partition.margin_key) if partition.margin_key is not None else None
-        hidden = [cell for cell in partition.cells if cell.published is None]
-        if margin is None:
-            for cell in hidden:
-                spans[(partition.name, cell.key)] = None
-            continue
-        residual = margin - sum(cell.published for cell in partition.cells if cell.published is not None)
-        for index, cell in enumerate(hidden):
-            lower, upper = _bounds(hidden, residual, index)
-            spans[(partition.name, cell.key)] = max(0, upper - lower + 1)
+        for cell, lower, upper in _hidden_bounds(partition, margin):
+            spans[(partition.name, cell.key)] = None if lower is None or upper is None else max(0, upper - lower + 1)
     return spans
 
 
@@ -194,12 +209,14 @@ def findings(partitions: Sequence[Partition], *, threshold: int) -> list[tuple[s
     result: list[tuple[str, str]] = []
     for partition in partitions:
         margin = margins.get(partition.margin_key) if partition.margin_key is not None else None
-        hidden = [cell for cell in partition.cells if cell.published is None]
         if margin is None:
             continue
-        residual = margin - sum(cell.published for cell in partition.cells if cell.published is not None)
-        for index, cell in enumerate(hidden):
-            lower, upper = _bounds(hidden, residual, index)
+        for cell, lower, upper in _hidden_bounds(partition, margin):
+            if lower is None or upper is None:
+                # Unerreichbar: ``margin`` ist hier bereits als nicht-None
+                # geprueft, und _hidden_bounds liefert lower/upper nur dann
+                # als None, wenn margin None ist. Typreinigung fuer mypy.
+                continue
             if upper - lower + 1 >= MIN_FEASIBLE_SPAN or upper < lower:
                 continue
             if upper == 0:

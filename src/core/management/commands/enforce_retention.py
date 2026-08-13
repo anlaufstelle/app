@@ -245,10 +245,3 @@ class Command(BaseCommand):
             total_created += created_count
 
         self.stdout.write(self.style.SUCCESS(f"Total: {total_created} proposal(s) created."))
-
-    # -- Backwards-compatible shim -----------------------------------------
-    # Kept so that ``test_collect_doomed_events_covers_all_strategies`` in
-    # ``src/tests/test_retention.py`` continues to work. New callers should
-    # import ``collect_doomed_events`` from ``core.services.retention`` directly.
-    def _collect_doomed_events(self, facility, settings_obj, now):
-        return collect_doomed_events(facility, settings_obj, now)

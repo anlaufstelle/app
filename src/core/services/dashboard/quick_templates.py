@@ -5,6 +5,7 @@ Refs #494.
 
 from core.models import DocumentType, QuickTemplate
 from core.services.compliance import effective_sensitivity, user_can_see_document_type
+from core.services.system.field_types import active_option_slugs
 
 
 def list_templates_for_user(user, facility):
@@ -36,11 +37,6 @@ def list_templates_for_user(user, facility):
     ]
 
 
-def _active_option_slugs(field_template):
-    """Hilfsfunktion: Gibt die Slugs aller aktiven Options zurück."""
-    return {o["slug"] for o in (field_template.options_json or []) if o.get("is_active", True) and "slug" in o}
-
-
 def _filter_active_choices(field_template, value):
     """Entfernt deaktivierte SELECT/MULTI_SELECT-Werte.
 
@@ -49,7 +45,7 @@ def _filter_active_choices(field_template, value):
     """
     from core.models import FieldTemplate
 
-    active = _active_option_slugs(field_template)
+    active = active_option_slugs(field_template.options_json)
     if field_template.field_type == FieldTemplate.FieldType.SELECT:
         return value if value in active else None
     if field_template.field_type == FieldTemplate.FieldType.MULTI_SELECT:

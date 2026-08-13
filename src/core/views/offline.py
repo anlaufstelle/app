@@ -20,6 +20,7 @@ from django.utils.decorators import method_decorator
 from django.utils.http import parse_etags
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.generic import TemplateView
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_OFFLINE_BUNDLE, RATELIMIT_OFFLINE_REVOCATIONS
@@ -317,170 +318,118 @@ class OfflineClientDetailView(AssistantOrAboveRequiredMixin, View):
         )
 
 
-class OfflineClientShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline rendering at the canonical
-    ``/clients/<uuid>/`` URL (Refs #1322).
+class OfflineShellView(TemplateView):
+    """Basis fuer die generischen, pk-losen In-Place-Offline-Scaffolds (Muster #1322).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to a client detail page **without** redirecting to
-    ``/offline/clients/<pk>/`` — so the URL stays canonical and the offline/
-    online split disappears. ``offline-client-view.js`` then derives the client
-    pk from ``location.pathname`` (its ``data-pk`` is empty here).
+    Sieben Konkretisierungen teilten bis Refs #1827 denselben Aufbau
+    (``http_method_names = ["get"]`` + ``def get`` mit einem einzeiligen
+    ``render(...)``) und denselben Sicherheits-Absatz wortgleich — hier einmal:
 
-    Public on purpose, exactly like :class:`~core.views.pwa.OfflineFallbackView`:
-    the shell carries no PII (data is decrypted client-side from IndexedDB) and
-    must be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make
-    the install-time fetch redirect to ``/login/`` and fail ``addAll``.
+    Der Service Worker precacht diese Shells und serviert sie offline IN-PLACE
+    an der kanonischen URL (kein Redirect auf ``/offline/...``) — die
+    Online-/Offline-URL faellt zusammen. Ein zugehoeriges JS-Modul liest die
+    eigentlichen Daten client-seitig aus IndexedDB (entschluesselt) und
+    rendert sie; die Shell selbst traegt **kein PII**.
+
+    **Public on purpose**, exakt wie :class:`~core.views.pwa.OfflineFallbackView`:
+    ein Auth-Gate wuerde den install-time ``cache.addAll``-Fetch auf
+    ``/login/`` umleiten und das Precaching atomar scheitern lassen (die ganze
+    Shell-Liste haengt an einem einzigen ``addAll``-Aufruf).
+
+    ``extra_context`` (Klassenattribut) traegt die Konkretisierungen mit
+    fester pk-freier Auszeichnung (z. B. ``{"client_pk": ""}``); die
+    Basis-Implementierung von ``get_context_data`` reicht bewusst NICHT den
+    ``ContextMixin``-Default (``view``-Key) durch — die Scaffolds hatten vor
+    #1827 nie einen ``view``-Eintrag im Kontext.
     """
 
     http_method_names = ["get"]
+    extra_context: dict = {}
 
-    def get(self, request):
-        return render(request, "core/clients/offline_detail.html", {"client_pk": ""})
+    def get_context_data(self, **kwargs):
+        return dict(self.extra_context or {})
 
 
-class OfflineEventCreateShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline event authoring at the
-    canonical ``/events/new/`` URL (Refs #1521, #1499, Muster #1322).
+class OfflineClientShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/clients/<uuid>/``-URL (Refs #1322).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to the event-create page **without** redirecting to
-    ``/offline/`` — so the URL stays canonical and the offline/online split
-    disappears. ``offline-create.js`` (Alpine ``offlineEventCreate``) then reads
-    the person-less facility bundle (DocumentTypes/field schema/assignable
-    users) and the offline-taken clients from IndexedDB and lets the user author
-    a new event cold-offline, with no client having been opened first.
-
-    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
-    carries no PII (the catalogue is decrypted client-side from IndexedDB) and
-    must be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make
-    the install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
-    (killing the whole precache). Online this view is never reached: the SW only
-    serves it on a network failure for ``/events/new/``.
+    ``offline-client-view.js`` leitet die Client-pk aus ``location.pathname``
+    ab (``data-pk`` bleibt hier leer).
     """
 
-    http_method_names = ["get"]
-
-    def get(self, request):
-        return render(request, "core/events/offline_create.html", {})
+    template_name = "core/clients/offline_detail.html"
+    extra_context = {"client_pk": ""}
 
 
-class OfflineWorkItemCreateShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline work-item authoring at the
-    canonical ``/workitems/new/`` URL (Refs #1522, #1499, Muster #1322).
+class OfflineEventCreateShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/events/new/``-URL (Refs #1521, #1499).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to the work-item-create page **without** redirecting to
-    ``/offline/`` — so the URL stays canonical and the offline/online split
-    disappears. ``offline-create.js`` (Alpine ``offlineWorkItemCreate``) then
-    reads the person-less facility bundle (assignable-user roster) and the
-    offline-taken clients from IndexedDB and lets the user author a new work item
-    cold-offline, with no client having been opened first (a person picker plus a
-    standalone "without person" option).
-
-    Staff+-gate parity (Risiko #7 der Design-Spec): the online
-    :class:`~core.views.workitem_actions.WorkItemCreateView` is
-    ``StaffRequiredMixin``, so a work item queued by an Assistant would replay to
-    ``403`` ("revoked"). The facility bundle ships ``assignable_users`` **only**
-    for Staff+ (Assistant gets ``[]``), so the Alpine component hides the whole
-    form for an empty roster — an Assistant never reaches the authoring path.
-
-    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
-    carries no PII (the roster is decrypted client-side from IndexedDB) and must
-    be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make the
-    install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
-    (killing the whole precache). Online this view is never reached: the SW only
-    serves it on a network failure for ``/workitems/new/``.
+    ``offline-create.js`` (Alpine ``offlineEventCreate``) liest das
+    personenlose Facility-Bundle (DocumentTypes/Feldschema/zuweisbare
+    Nutzer:innen) und die offline aufgenommenen Clients aus IndexedDB und
+    laesst kalt-offline ein neues Ereignis anlegen, ohne dass zuvor ein
+    Client geoeffnet wurde.
     """
 
-    http_method_names = ["get"]
-
-    def get(self, request):
-        return render(request, "core/workitems/offline_create.html", {})
+    template_name = "core/events/offline_create.html"
 
 
-class OfflineClientListShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline rendering of the client
-    list at the canonical ``/clients/`` URL (Refs #1531, #1499,
-    Muster #1322).
+class OfflineWorkItemCreateShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/workitems/new/``-URL (Refs #1522, #1499).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to the client-list page **without** redirecting to
-    ``/offline/`` — so the URL stays canonical and the offline/online split
-    disappears. ``offline-client-list.js`` then reads the offline-taken
-    clients from IndexedDB (``listOfflineClientsDetailed``) and renders the
-    standard ``role=table`` list client-side, including client-side search/
-    filter (no HTMX live-search offline — the server would need to render
-    HTML, which is unavailable without network).
+    ``offline-create.js`` (Alpine ``offlineWorkItemCreate``) liest das
+    personenlose Facility-Bundle (zuweisbare Nutzer:innen) und die offline
+    aufgenommenen Clients aus IndexedDB.
 
-    Public on purpose, exactly like :class:`OfflineClientShellView`: the
-    shell carries no PII (the list is decrypted client-side from IndexedDB)
-    and must be pre-cacheable via the SW ``cache.addAll`` — an auth gate
-    would make the install-time fetch redirect to ``/login/`` and fail
-    ``addAll`` atomically (killing the whole precache). Online this view is
-    never reached: the SW only serves it on a network failure for
-    ``/clients/``.
+    Staff+-Gate-Paritaet (Risiko #7 der Design-Spec): die Online-View
+    :class:`~core.views.workitem_actions.WorkItemCreateView` ist
+    ``StaffRequiredMixin`` — ein von einer Assistenz angelegter Arbeitsauftrag
+    wuerde beim Replay auf ``403`` laufen. Das Facility-Bundle liefert
+    ``assignable_users`` nur ab Staff (Assistenz bekommt ``[]``), sodass die
+    Alpine-Komponente das Formular bei leerem Roster ausblendet — eine
+    Assistenz erreicht den Anlage-Pfad nie.
     """
 
-    http_method_names = ["get"]
-
-    def get(self, request):
-        return render(request, "core/clients/offline_list.html", {})
+    template_name = "core/workitems/offline_create.html"
 
 
-class OfflineWorkItemListShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline rendering of the work-item
-    list at the canonical ``/workitems/`` URL (Refs #1541, #1499,
-    Muster #1322).
+class OfflineClientListShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/clients/``-URL (Refs #1531, #1499).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to the work-item inbox **without** redirecting to ``/offline/``
-    — so the URL stays canonical and the offline/online split disappears.
-    ``offline-workitem-list.js`` then reads the aggregated offline work items
-    from IndexedDB (``listOfflineWorkItemsAggregated`` — the bundle work items of
-    every offline-taken client merged with their local overlays, plus person-less
-    standalone items) and renders the list client-side, a local excerpt of the
-    work taken offline.
-
-    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
-    carries no PII (the list is decrypted client-side from IndexedDB) and must be
-    pre-cacheable via the SW ``cache.addAll`` — an auth gate would make the
-    install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
-    (killing the whole precache). Online this view is never reached: the SW only
-    serves it on a network failure for ``/workitems/`` (SW flip in W3-E).
+    ``offline-client-list.js`` liest die offline aufgenommenen Clients aus
+    IndexedDB (``listOfflineClientsDetailed``) und rendert die
+    ``role=table``-Liste inkl. client-seitiger Suche/Filter client-seitig
+    (kein HTMX-Live-Search offline — dafuer muesste der Server HTML rendern,
+    was ohne Netzwerk nicht geht).
     """
 
-    http_method_names = ["get"]
-
-    def get(self, request):
-        return render(request, "core/workitems/offline_workitem_list.html", {})
+    template_name = "core/clients/offline_list.html"
 
 
-class OfflineZeitstromShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline rendering of the Zeitstrom
-    feed at the canonical ``/`` URL (Refs #1542, #1499, Muster #1322).
+class OfflineWorkItemListShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/workitems/``-URL (Refs #1541, #1499).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to the Zeitstrom home **without** redirecting to ``/offline/`` —
-    so the URL stays canonical and the offline/online split disappears.
-    ``offline-zeitstrom.js`` then reads the aggregated offline events from
-    IndexedDB (``listOfflineEventsAggregated`` — events across every offline-taken
-    client plus person-less/anonymous local entries, newest first) and renders a
-    local chronicle client-side: only the operations taken offline, not the full
-    facility timeline.
-
-    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
-    carries no PII (the chronicle is decrypted client-side from IndexedDB) and
-    must be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make
-    the install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
-    (killing the whole precache). Online this view is never reached: the SW only
-    serves it on a network failure for ``/`` (SW flip in W3-E).
+    ``offline-workitem-list.js`` liest die aggregierten Offline-Arbeitsauftraege
+    aus IndexedDB (``listOfflineWorkItemsAggregated`` — Bundle-Arbeitsauftraege
+    jedes offline aufgenommenen Clients gemergt mit ihren lokalen Overlays,
+    plus personenlose Standalone-Eintraege) und rendert die Liste client-seitig
+    (SW-Flip in W3-E).
     """
 
-    http_method_names = ["get"]
+    template_name = "core/workitems/offline_workitem_list.html"
 
-    def get(self, request):
-        return render(request, "core/zeitstrom/offline_zeitstrom.html", {})
+
+class OfflineZeitstromShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/``-URL (Refs #1542, #1499).
+
+    ``offline-zeitstrom.js`` liest die aggregierten Offline-Ereignisse aus
+    IndexedDB (``listOfflineEventsAggregated`` — Ereignisse ueber alle offline
+    aufgenommenen Clients plus personenlose/anonyme lokale Eintraege, neueste
+    zuerst) und rendert eine lokale Chronik client-seitig: nur die offline
+    getaetigten Vorgaenge, nicht die volle Facility-Timeline (SW-Flip in W3-E).
+    """
+
+    template_name = "core/zeitstrom/offline_zeitstrom.html"
 
 
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
@@ -507,45 +456,26 @@ class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
         )
 
 
-class OfflineConflictShellView(View):
-    """Generic, pk-less scaffold for IN-PLACE offline rendering at the canonical
-    ``/offline/conflicts/<uuid>/`` URL (Refs #1396, Muster #1322).
+class OfflineConflictShellView(OfflineShellView):
+    """Scaffold an der kanonischen ``/offline/conflicts/<uuid>/``-URL (Refs #1396).
 
-    The Service Worker pre-caches this shell and serves it for offline
-    navigations to a conflict-review page **without** redirecting to
-    ``/offline/`` — so the URL stays canonical and the offline/online split
-    disappears. ``conflict-resolver.js`` then derives the event pk from
-    ``location.pathname`` (its ``data-event-pk`` is empty here).
-
-    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
-    carries no PII (the conflict envelope is decrypted client-side from
-    IndexedDB) and must be pre-cacheable via the SW ``cache.addAll`` — an auth
-    gate would make the install-time fetch redirect to ``/login/`` and fail
-    ``addAll``. The auth-gated pk route :class:`OfflineConflictReviewView`
-    survives unchanged as the explicit workspace entry point.
+    ``conflict-resolver.js`` leitet die Event-pk aus ``location.pathname`` ab
+    (``data-event-pk`` bleibt hier leer). Die auth-gated pk-Route
+    :class:`OfflineConflictReviewView` bleibt unveraendert als expliziter
+    Arbeitsplatz-Einstieg bestehen.
     """
 
-    http_method_names = ["get"]
-
-    def get(self, request):
-        return render(request, "core/events/conflict_review.html", {"event_pk": ""})
+    template_name = "core/events/conflict_review.html"
+    extra_context = {"event_pk": ""}
 
 
-class OfflineConflictListView(View):
-    """Shell page for the conflict overview at ``/offline/conflicts/``.
+class OfflineConflictListView(OfflineShellView):
+    """Uebersicht an ``/offline/conflicts/`` (Refs #1396).
 
-    Lists all events currently sitting in ``localStatus: "conflict"`` (plus the
-    dead-letter and blocked-queue sections since #1385). The list is rendered
-    entirely from IndexedDB in JavaScript; the view supplies only the skeleton.
-
-    Public on purpose, exactly like :class:`OfflineClientShellView` (Refs
-    #1396): the page is pk-less and carries no PII (data is decrypted
-    client-side from IndexedDB) and must be pre-cacheable via the SW
-    ``cache.addAll`` so a badge click reaches it offline — an auth gate would
-    make the install-time fetch redirect to ``/login/`` and fail ``addAll``.
+    Listet alle Events in ``localStatus: "conflict"`` (plus Dead-Letter- und
+    Blocked-Queue-Abschnitte seit #1385) — vollstaendig aus IndexedDB
+    client-seitig gerendert, die View liefert nur das Geruest, damit ein
+    Badge-Klick auch offline erreichbar ist.
     """
 
-    http_method_names = ["get"]
-
-    def get(self, request):
-        return render(request, "core/events/conflict_list.html")
+    template_name = "core/events/conflict_list.html"

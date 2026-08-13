@@ -299,7 +299,7 @@ def assign_event_to_case(case, event, user):  # user reserved for future audit t
 
 
 @transaction.atomic
-def remove_event_from_case(event, user):  # user reserved for future audit trail
+def remove_event_from_case(event):
     """Remove an event from its case."""
     event.case = None
     event.save()

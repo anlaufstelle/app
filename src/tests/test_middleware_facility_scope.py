@@ -59,16 +59,13 @@ class TestFacilityScopeRequestAttribute:
 
 
 @pytest.mark.django_db
+@pytest.mark.postgres
 class TestFacilityScopeDbVariable:
     """Prüft, dass die Postgres-Session-Variable korrekt gesetzt wird.
 
     Echtes RLS-Filtering wird in Tests durch Superuser-Bypass umgangen; die
     Session-Variable ist trotzdem der Policy-Input für Produktion.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Session-Variable-Check erfordert PostgreSQL")
 
     def test_db_session_variable_is_set_for_authenticated_user(self, facility, staff_user):
         rf = RequestFactory()
@@ -104,6 +101,7 @@ class TestFacilityScopeDbVariable:
 
 
 @pytest.mark.django_db
+@pytest.mark.postgres
 class TestFacilityScopeCursorHygiene:
     """Defense-in-Depth (Refs #733): Variable pro Request
     stets neu setzen — auch fuer anonyme Requests, damit Connection-Pooling
@@ -116,8 +114,6 @@ class TestFacilityScopeCursorHygiene:
     """
 
     def test_anonymous_request_clears_stale_facility_id(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Variable-Clearing erfordert PostgreSQL")
         # Stale-Wert simulieren, wie ihn eine frühere authentifizierte
         # Request bei Connection-Reuse hinterlassen koennte.
         with connection.cursor() as cursor:
@@ -138,8 +134,6 @@ class TestFacilityScopeCursorHygiene:
         )
 
     def test_anonymous_request_opens_cursor_for_clearing(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Cursor-Open-Check nur auf PostgreSQL relevant")
         rf = RequestFactory()
         request = rf.get("/login/")
         request.user = AnonymousUser()
@@ -153,8 +147,6 @@ class TestFacilityScopeCursorHygiene:
         )
 
     def test_authenticated_request_opens_cursor(self, facility, staff_user):
-        if connection.vendor != "postgresql":
-            pytest.skip("Cursor-Open-Check nur auf PostgreSQL relevant")
         rf = RequestFactory()
         request = rf.get("/")
         request.user = staff_user

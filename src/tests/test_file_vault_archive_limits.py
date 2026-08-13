@@ -16,7 +16,6 @@ import struct
 import zipfile
 
 import pytest
-from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -55,12 +54,6 @@ def _zip_with_entries(name, count, *, content_type="application/zip"):
         for i in range(count):
             zf.writestr(f"e{i}.txt", b"x")
     return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 @pytest.fixture

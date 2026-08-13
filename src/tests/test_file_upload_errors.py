@@ -38,7 +38,6 @@ except Exception as _libmagic_exc:  # noqa: BLE001
         allow_module_level=True,
     )
 
-from cryptography.fernet import Fernet  # noqa: E402
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
 from core.models.attachment import Attachment  # noqa: E402
@@ -52,12 +51,6 @@ VALID_PDF_BYTES = (
     b"trailer<</Size 3/Root 1 0 R>>\n"
     b"startxref\n9\n%%EOF\n"
 )
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 @pytest.fixture

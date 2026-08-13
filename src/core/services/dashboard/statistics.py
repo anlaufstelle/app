@@ -263,26 +263,14 @@ def count_unique_clients(facility, date_from, date_to, document_type=None) -> in
     )
 
 
-def get_statistics(facility, date_from, date_to, document_type=None):
-    """Statistics data for a facility in the given period.
+def _aggregate_contact_stage(base_qs) -> tuple[dict, dict]:
+    """``(by_contact_stage, persons_by_contact_stage)`` — Refs #1827, aus
+    ``get_statistics`` extrahiert (einer von vier Aggregat-Helfern).
 
-    Returns dict with: total_contacts, by_contact_stage, persons_by_contact_stage,
-    by_document_type, by_age_cluster (inkl. ``persons``), top_clients,
-    unique_clients.
-
-    K0-b (Refs #1770): Jede personenabgeleitete Aufschluesselung traegt
-    zusaetzlich zur Ereigniszahl die **DISTINCT-Personenzahl** ihres Buckets —
-    die Groesse, gegen die die k-Schwelle im Export-/PDF-Pfad prueft. Sie ist
-    Suppressions-*Eingabe*, kein publizierter Wert: ``_suppress_small``
-    entfernt sie, bevor eine Zeile in ein Artefakt geht.
+    Contact stages: anonymous = is_anonymous OR client IS NULL. Ereignis- und
+    Personenzahlen in EINER Aggregation — dieselben Filter, damit Zaehler und
+    k-Kriterium nicht auseinanderlaufen koennen.
     """
-    base_qs = event_queryset_for_period(facility, date_from, date_to, document_type)
-
-    total_contacts = base_qs.count()
-
-    # Contact stages: anonymous = is_anonymous OR client IS NULL.
-    # Ereignis- und Personenzahlen in EINER Aggregation — dieselben Filter,
-    # damit Zaehler und k-Kriterium nicht auseinanderlaufen koennen.
     stage_qs = base_qs.aggregate(
         anonym=Count("id", filter=_STAGE_ANONYM_Q),
         identifiziert=Count("id", filter=_STAGE_IDENTIFIED_Q),
@@ -308,35 +296,37 @@ def get_statistics(facility, date_from, date_to, document_type=None):
         "identifiziert": stage_qs["identifiziert_persons"],
         "qualifiziert": stage_qs["qualifiziert_persons"],
     }
+    return by_contact_stage, persons_by_contact_stage
 
-    # By document type
-    # Refs #1749 (ADR-040): Gruppierung allein ueber ``name`` — seit dem Wegfall
-    # von ``category`` ist der Name je Einrichtung eindeutig (UniqueConstraint
-    # ``unique_facility_documenttype_name``), das Paar war nur dessen
-    # Zweitschluessel.
-    by_document_type = list(base_qs.values("document_type__name").annotate(count=Count("id")).order_by("-count"))
-    by_document_type = [
-        {
-            "name": row["document_type__name"],
-            "count": row["count"],
-        }
-        for row in by_document_type
-    ]
 
-    # By age cluster (only events with a client)
+def _aggregate_by_document_type(base_qs) -> list[dict]:
+    """``by_document_type`` — Refs #1827, aus ``get_statistics`` extrahiert.
+
+    Refs #1749 (ADR-040): Gruppierung allein ueber ``name`` — seit dem Wegfall
+    von ``category`` ist der Name je Einrichtung eindeutig (UniqueConstraint
+    ``unique_facility_documenttype_name``), das Paar war nur dessen
+    Zweitschluessel.
+    """
+    rows = base_qs.values("document_type__name").annotate(count=Count("id")).order_by("-count")
+    return [{"name": row["document_type__name"], "count": row["count"]} for row in rows]
+
+
+def _aggregate_by_age_cluster(base_qs) -> list[dict]:
+    """``by_age_cluster`` (nur Ereignisse mit Klientenbezug) — Refs #1827, aus
+    ``get_statistics`` extrahiert."""
     age_labels = {
         "u18": _("Unter 18"),
         "18_26": _("18–26"),
         "27_plus": _("27+"),
         "unknown": _("Unbekannt"),
     }
-    by_age_cluster_qs = (
+    rows = (
         base_qs.exclude(client__isnull=True)
         .values("client__age_cluster")
         .annotate(count=Count("id"), persons=Count("client", distinct=True))
         .order_by("-count")
     )
-    by_age_cluster = [
+    return [
         {
             "cluster": row["client__age_cluster"],
             "label": age_labels.get(row["client__age_cluster"], row["client__age_cluster"]),
@@ -344,17 +334,47 @@ def get_statistics(facility, date_from, date_to, document_type=None):
             # K0-b (Refs #1770): DISTINCT-Personenzahl des Buckets im Zeitraum.
             PERSONS_KEY: row["persons"],
         }
-        for row in by_age_cluster_qs
+        for row in rows
     ]
 
-    # Top 5 Clients
-    top_clients = list(
+
+def _aggregate_top_clients(base_qs) -> list[dict]:
+    """Top-5-Klient:innen nach Ereigniszahl — Refs #1827, aus
+    ``get_statistics`` extrahiert."""
+    rows = (
         base_qs.exclude(client__isnull=True)
         .values("client__pseudonym")
         .annotate(count=Count("id"))
         .order_by("-count")[:5]
     )
-    top_clients = [{"pseudonym": row["client__pseudonym"], "count": row["count"]} for row in top_clients]
+    return [{"pseudonym": row["client__pseudonym"], "count": row["count"]} for row in rows]
+
+
+def get_statistics(facility, date_from, date_to, document_type=None):
+    """Statistics data for a facility in the given period.
+
+    Returns dict with: total_contacts, by_contact_stage, persons_by_contact_stage,
+    by_document_type, by_age_cluster (inkl. ``persons``), top_clients,
+    unique_clients.
+
+    K0-b (Refs #1770): Jede personenabgeleitete Aufschluesselung traegt
+    zusaetzlich zur Ereigniszahl die **DISTINCT-Personenzahl** ihres Buckets —
+    die Groesse, gegen die die k-Schwelle im Export-/PDF-Pfad prueft. Sie ist
+    Suppressions-*Eingabe*, kein publizierter Wert: ``_suppress_small``
+    entfernt sie, bevor eine Zeile in ein Artefakt geht.
+
+    Refs #1827: die vier unabhaengigen Aggregationen (Kontaktstufen,
+    Dokumentationstyp, Altersgruppe, Top-Klient:innen) sind in eigene private
+    Helfer ausgelagert — jede liest denselben ``base_qs``, schreibt aber einen
+    eigenen, unabhaengigen Teil des Rueckgabe-Dicts.
+    """
+    base_qs = event_queryset_for_period(facility, date_from, date_to, document_type)
+
+    total_contacts = base_qs.count()
+    by_contact_stage, persons_by_contact_stage = _aggregate_contact_stage(base_qs)
+    by_document_type = _aggregate_by_document_type(base_qs)
+    by_age_cluster = _aggregate_by_age_cluster(base_qs)
+    top_clients = _aggregate_top_clients(base_qs)
 
     # Unique clients
     # Refs #1804 (F3): eigener Query-Zweig — ohne den Filter zaehlte er weiter

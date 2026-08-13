@@ -52,7 +52,7 @@ class GoalUpdateView(StaffRequiredMixin, View):
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         title = request.POST.get("title", "").strip() or None
         description = request.POST.get("description")
-        update_goal(goal, request.user, title=title, description=description)
+        update_goal(goal, title=title, description=description)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -64,9 +64,9 @@ class GoalToggleView(StaffRequiredMixin, View):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         if goal.is_achieved:
-            unachieve_goal(goal, request.user)
+            unachieve_goal(goal)
         else:
-            achieve_goal(goal, request.user)
+            achieve_goal(goal)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -79,7 +79,7 @@ class MilestoneCreateView(StaffRequiredMixin, View):
         goal = get_object_or_404(OutcomeGoal, pk=goal_pk, case=case)
         title = request.POST.get("title", "").strip()
         if title:
-            create_milestone(goal=goal, user=request.user, title=title)
+            create_milestone(goal=goal, title=title)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -90,7 +90,7 @@ class MilestoneToggleView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
-        toggle_milestone(milestone, request.user)
+        toggle_milestone(milestone)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 

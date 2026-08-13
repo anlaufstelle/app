@@ -552,6 +552,7 @@ class TestExportUeberlebtDieAuditRetention:
             )
             cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
 
+    @pytest.mark.postgres
     def test_nur_berichts_freigaben_sind_prune_exempt(self, facility, settings_obj, lead_user):
         """Die Ausnahme ist **so eng wie ihre Begründung**.
 
@@ -563,12 +564,7 @@ class TestExportUeberlebtDieAuditRetention:
         der K4a-Zweckbindung („Nachweis herausgegebener Statistiken") gedeckt.
         Ausgenommen ist deshalb nur, was einen **Berichtszeitraum** trägt.
         """
-        from django.db import connection
-
         from core.retention.audit_pruning import prune_auditlog
-
-        if connection.vendor != "postgresql":
-            pytest.skip("prune_auditlog erfordert PostgreSQL")
 
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
@@ -597,15 +593,11 @@ class TestExportUeberlebtDieAuditRetention:
         )
         assert not AuditLog.objects.filter(pk=generisch.pk).exists()
 
+    @pytest.mark.postgres
     def test_bildschirmaufruf_ist_nicht_prune_exempt(self, facility, settings_obj, lead_user):
         """Sonst waechst der Log mit jedem Reload unbegrenzt weiter — inklusive
         Beschaeftigten-Username, dauerhaft und nicht redigierbar."""
-        from django.db import connection
-
         from core.retention.audit_pruning import prune_auditlog
-
-        if connection.vendor != "postgresql":
-            pytest.skip("prune_auditlog erfordert PostgreSQL")
 
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
@@ -620,6 +612,7 @@ class TestExportUeberlebtDieAuditRetention:
         assert not AuditLog.objects.filter(pk=ansicht.pk).exists(), "Bildschirmaufrufe bleiben befristet"
         assert AuditLog.objects.filter(pk=download.pk).exists(), "das herausgegebene Artefakt bleibt"
 
+    @pytest.mark.postgres
     def test_json_ansicht_ist_nicht_prune_exempt(self, facility, settings_obj, lead_user):
         """Refs #1772: die Abwertung nimmt der JSON-Ansicht auch die Ausnahme.
 
@@ -627,12 +620,7 @@ class TestExportUeberlebtDieAuditRetention:
         nie eine; die Dauer-Aufbewahrung war an eine Klassifikation gebunden,
         die es nicht mehr gibt.
         """
-        from django.db import connection
-
         from core.retention.audit_pruning import prune_auditlog
-
-        if connection.vendor != "postgresql":
-            pytest.skip("prune_auditlog erfordert PostgreSQL")
 
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
@@ -649,6 +637,7 @@ class TestExportUeberlebtDieAuditRetention:
         assert not AuditLog.objects.filter(pk=altzeile.pk).exists()
         assert AuditLog.objects.filter(pk=download.pk).exists(), "das herausgegebene Artefakt bleibt"
 
+    @pytest.mark.postgres
     def test_altzeilen_vor_der_marker_einfuehrung_bleiben_befristet(self, facility, settings_obj, lead_user):
         """Die Kehrseite derselben Rollout-Grenze: Bestands-Freigaben laufen
         nach der normalen Frist aus dem Log.
@@ -659,12 +648,7 @@ class TestExportUeberlebtDieAuditRetention:
         Ketten-Hash ein (``test_audit_chain.py::test_inplace_detail_mutation_breaks_chain``),
         eine nachtraegliche Markierung braeche also die Tamper-Evidenz.
         """
-        from django.db import connection
-
         from core.retention.audit_pruning import prune_auditlog
-
-        if connection.vendor != "postgresql":
-            pytest.skip("prune_auditlog erfordert PostgreSQL")
 
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()

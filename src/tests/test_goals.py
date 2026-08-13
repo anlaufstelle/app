@@ -54,41 +54,41 @@ class TestGoalService:
         assert goal.description == ""
 
     def test_update_goal_title(self, outcome_goal, staff_user):
-        updated = update_goal(outcome_goal, staff_user, title="Neuer Titel")
+        updated = update_goal(outcome_goal, title="Neuer Titel")
         assert updated.title == "Neuer Titel"
 
     def test_update_goal_description(self, outcome_goal, staff_user):
-        updated = update_goal(outcome_goal, staff_user, description="Neue Beschreibung")
+        updated = update_goal(outcome_goal, description="Neue Beschreibung")
         assert updated.description == "Neue Beschreibung"
         # Title should remain unchanged
         assert updated.title == "Stabile Wohnsituation"
 
     def test_update_goal_none_values_unchanged(self, outcome_goal, staff_user):
         original_title = outcome_goal.title
-        updated = update_goal(outcome_goal, staff_user, title=None, description=None)
+        updated = update_goal(outcome_goal, title=None, description=None)
         assert updated.title == original_title
 
     def test_achieve_goal(self, outcome_goal, staff_user):
-        achieved = achieve_goal(outcome_goal, staff_user)
+        achieved = achieve_goal(outcome_goal)
         assert achieved.is_achieved is True
         assert achieved.achieved_at == timezone.localdate()
 
     def test_achieve_goal_idempotent(self, outcome_goal, staff_user):
-        achieve_goal(outcome_goal, staff_user)
+        achieve_goal(outcome_goal)
         outcome_goal.refresh_from_db()
         original_date = outcome_goal.achieved_at
         # Call again — should be idempotent
-        result = achieve_goal(outcome_goal, staff_user)
+        result = achieve_goal(outcome_goal)
         assert result.achieved_at == original_date
 
     def test_unachieve_goal(self, outcome_goal, staff_user):
-        achieve_goal(outcome_goal, staff_user)
-        unachieved = unachieve_goal(outcome_goal, staff_user)
+        achieve_goal(outcome_goal)
+        unachieved = unachieve_goal(outcome_goal)
         assert unachieved.is_achieved is False
         assert unachieved.achieved_at is None
 
     def test_create_milestone(self, outcome_goal, staff_user):
-        ms = create_milestone(goal=outcome_goal, user=staff_user, title="Schritt 1")
+        ms = create_milestone(goal=outcome_goal, title="Schritt 1")
         assert ms.pk is not None
         assert ms.title == "Schritt 1"
         assert ms.goal == outcome_goal
@@ -96,17 +96,17 @@ class TestGoalService:
         assert ms.sort_order == 0
 
     def test_create_milestone_with_sort_order(self, outcome_goal, staff_user):
-        ms = create_milestone(goal=outcome_goal, user=staff_user, title="Schritt 2", sort_order=5)
+        ms = create_milestone(goal=outcome_goal, title="Schritt 2", sort_order=5)
         assert ms.sort_order == 5
 
     def test_toggle_milestone_complete(self, milestone, staff_user):
-        toggled = toggle_milestone(milestone, staff_user)
+        toggled = toggle_milestone(milestone)
         assert toggled.is_completed is True
         assert toggled.completed_at == timezone.localdate()
 
     def test_toggle_milestone_uncomplete(self, milestone, staff_user):
-        toggle_milestone(milestone, staff_user)  # complete
-        toggled = toggle_milestone(milestone, staff_user)  # uncomplete
+        toggle_milestone(milestone)  # complete
+        toggled = toggle_milestone(milestone)  # uncomplete
         assert toggled.is_completed is False
         assert toggled.completed_at is None
 
@@ -229,7 +229,7 @@ class TestGoalToggleView:
         assert outcome_goal.is_achieved is True
 
     def test_toggle_goal_unachieve(self, client, staff_user, case_open, outcome_goal):
-        achieve_goal(outcome_goal, staff_user)
+        achieve_goal(outcome_goal)
         client.force_login(staff_user)
         response = client.post(
             reverse(
@@ -320,7 +320,7 @@ class TestMilestoneToggleView:
         assert milestone.completed_at is not None
 
     def test_toggle_milestone_uncomplete(self, client, staff_user, case_open, milestone):
-        toggle_milestone(milestone, staff_user)  # complete first
+        toggle_milestone(milestone)  # complete first
         client.force_login(staff_user)
         response = client.post(
             reverse(

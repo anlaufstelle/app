@@ -147,9 +147,24 @@ def _validate_boolean(raw: str, context: dict) -> None:  # noqa: ARG001
         raise ValidationError({"default_value": _("Default-Wert muss 'true' oder 'false' sein.")})
 
 
+def active_option_slugs(options_json) -> set[str]:
+    """Slugs aller aktiven Optionen aus einer ``options_json``-Liste.
+
+    Refs #1827: identisch dupliziert in ``_validate_select``/
+    ``_validate_multi_select`` (hier) sowie
+    ``services/dashboard/quick_templates._active_option_slugs`` (dort
+    schwaecher gefiltert — ohne ``isinstance(o, dict)``-Guard). Nimmt bewusst
+    die rohe ``options_json``-Liste entgegen statt eines ``FieldTemplate``:
+    hier kommt sie aus einem ``context``-Dict (Pre-Save-Validierung ohne
+    Modell-Instanz), in ``quick_templates.py`` aus ``field_template.options_json``
+    — ein gemeinsamer Helfer muss auf dem kleinsten gemeinsamen Nenner
+    (der Liste selbst) arbeiten.
+    """
+    return {o["slug"] for o in (options_json or []) if isinstance(o, dict) and o.get("is_active", True) and "slug" in o}
+
+
 def _validate_select(raw: str, context: dict) -> None:
-    options = context.get("options_json") or []
-    active = {o["slug"] for o in options if isinstance(o, dict) and o.get("is_active", True) and "slug" in o}
+    active = active_option_slugs(context.get("options_json"))
     if raw not in active:
         raise ValidationError(
             {"default_value": _("Default-Wert '%(value)s' ist kein aktiver Options-Slug.") % {"value": raw}}
@@ -157,8 +172,7 @@ def _validate_select(raw: str, context: dict) -> None:
 
 
 def _validate_multi_select(raw: str, context: dict) -> None:
-    options = context.get("options_json") or []
-    active = {o["slug"] for o in options if isinstance(o, dict) and o.get("is_active", True) and "slug" in o}
+    active = active_option_slugs(context.get("options_json"))
     for v in [v.strip() for v in raw.split(",")]:
         if v not in active:
             raise ValidationError(

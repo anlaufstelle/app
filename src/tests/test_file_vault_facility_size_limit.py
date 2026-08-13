@@ -17,7 +17,6 @@ JEDEN Aufrufer von ``store_encrypted_file``, nicht nur den Formular-Pfad.
 from __future__ import annotations
 
 import pytest
-from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -48,12 +47,6 @@ def _pdf_bytes(marker=b""):
         b"trailer<</Size 3/Root 1 0 R>>\n"
         b"startxref\n9\n%%EOF\n" + marker
     )
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 @pytest.fixture

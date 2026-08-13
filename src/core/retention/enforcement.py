@@ -131,6 +131,26 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     return len(deleted_event_ids), deleted_event_ids
 
 
+def _enforce(qs, *, facility, category, retention_days, dry_run, extra_detail=None):
+    """Zaehlen, bei Bedarf loeschen, Result-Dict — gemeinsamer Rumpf der vier
+    ``enforce_*``-Strategien (Refs #1827).
+
+    ``enforce_anonymous``/``enforce_identified``/``enforce_qualified`` sowie
+    der Schleifenrumpf in ``enforce_document_type_retention`` wiederholten
+    denselben Ablauf identisch: ``qs.count()`` -> ``_soft_delete_events()``
+    nur bei ``count and not dry_run`` -> ``{"count": N}`` (Modul-Konvention,
+    siehe Modul-Docstring). Die QuerySet-Konstruktion je Strategie bleibt
+    bewusst bei den Aufrufern (Refs #275: gewollte Dopplung zu
+    ``strategies.py``, siehe ``enforce_document_type_retention``-Docstring).
+    """
+    count = qs.count()
+    if count and not dry_run:
+        _soft_delete_events(
+            qs, facility=facility, category=category, retention_days=retention_days, extra_detail=extra_detail
+        )
+    return {"count": count}
+
+
 def enforce_anonymous(facility, settings_obj, now, dry_run):
     """Soft-delete anonymous events older than ``retention_anonymous_days``.
 
@@ -160,15 +180,13 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
         .exclude(pk__in=held_ids)
         .exclude(client_id__in=held_client_ids)
     )
-    count = qs.count()
-    if count and not dry_run:
-        _soft_delete_events(
-            qs,
-            facility=facility,
-            category="anonymous",
-            retention_days=settings_obj.retention_anonymous_days,
-        )
-    return {"count": count}
+    return _enforce(
+        qs,
+        facility=facility,
+        category="anonymous",
+        retention_days=settings_obj.retention_anonymous_days,
+        dry_run=dry_run,
+    )
 
 
 def enforce_identified(facility, settings_obj, now, dry_run):
@@ -200,15 +218,13 @@ def enforce_identified(facility, settings_obj, now, dry_run):
         .exclude(pk__in=held_ids)
         .exclude(client_id__in=held_client_ids)
     )
-    count = qs.count()
-    if count and not dry_run:
-        _soft_delete_events(
-            qs,
-            facility=facility,
-            category="identified",
-            retention_days=settings_obj.retention_identified_days,
-        )
-    return {"count": count}
+    return _enforce(
+        qs,
+        facility=facility,
+        category="identified",
+        retention_days=settings_obj.retention_identified_days,
+        dry_run=dry_run,
+    )
 
 
 def enforce_qualified(facility, settings_obj, now, dry_run):
@@ -248,15 +264,13 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
         .exclude(pk__in=held_ids)
         .exclude(client_id__in=held_client_ids)
     )
-    count = qs.count()
-    if count and not dry_run:
-        _soft_delete_events(
-            qs,
-            facility=facility,
-            category="qualified",
-            retention_days=settings_obj.retention_qualified_days,
-        )
-    return {"count": count}
+    return _enforce(
+        qs,
+        facility=facility,
+        category="qualified",
+        retention_days=settings_obj.retention_qualified_days,
+        dry_run=dry_run,
+    )
 
 
 def enforce_document_type_retention(facility, now, dry_run):
@@ -306,16 +320,14 @@ def enforce_document_type_retention(facility, now, dry_run):
             .exclude(pk__in=held_ids)
             .exclude(client_id__in=held_client_ids)
         )
-        dt_count = qs.count()
-        if dt_count and not dry_run:
-            _soft_delete_events(
-                qs,
-                facility=facility,
-                category="document_type",
-                retention_days=dt.retention_days,
-                extra_detail={"document_type": dt.name},
-            )
-        count += dt_count
+        count += _enforce(
+            qs,
+            facility=facility,
+            category="document_type",
+            retention_days=dt.retention_days,
+            dry_run=dry_run,
+            extra_detail={"document_type": dt.name},
+        )["count"]
 
     return {"count": count}
 

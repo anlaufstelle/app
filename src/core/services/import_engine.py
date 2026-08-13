@@ -58,6 +58,7 @@ from django.utils import timezone
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import DATA_JSON_PREFIX
 from core.models import AuditLog, Client, FieldTemplate, ImportJob
 from core.services.audit import audit_event
 from core.services.client import create_client
@@ -81,9 +82,6 @@ STALE_DAYS = 7
 
 #: Zeilen der Vorschau in Schritt 1/2 des Wizards.
 PREVIEW_ROWS = 5
-
-#: Praefix der dynamischen Zuordnungsziele (``data_json.<slug>``).
-DATA_JSON_PREFIX = "data_json."
 
 #: Unterstuetzte Encodings (Reihenfolge = Fallback-Kette). Die Auswahlliste des
 #: Upload-Formulars leitet sich davon ab (``core/forms/import_data.py``).

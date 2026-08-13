@@ -53,10 +53,9 @@ def _table_owner(name: str) -> str | None:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestNormalizeDbOwnership:
     def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Ownership-Normalisierung benötigt PostgreSQL")
         self._cleanup()
 
     def teardown_method(self):

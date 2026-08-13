@@ -44,6 +44,38 @@ _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif"
 _ARCHIVE_EXTENSIONS = frozenset({"zip", "docx", "xlsx", "pptx"})
 
 
+def _extension(uploaded_file) -> str:
+    """Dateiendung (lowercased, ohne Punkt) aus dem Upload-Namen — leer, wenn keine vorhanden.
+
+    Refs #1827: 4x identisch dupliziert (``enforce_image_limits``,
+    ``enforce_archive_limits``, ``enforce_allowed_file_types``,
+    ``enforce_magic_bytes``). Der ``or ""``-Fallback bleibt erhalten —
+    ``uploaded_file.name`` kann leer sein.
+    """
+    name = uploaded_file.name or ""
+    return name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+
+def _reject(facility, user, owner, *, reason: str, message, cause: Exception | None = None, **detail):
+    """Loggt eine ``SECURITY_VIOLATION`` und wirft die zugehoerige ``ValidationError``.
+
+    Refs #1827: 9 Aufrufstellen wiederholten denselben
+    ``log_attachment_violation(...)`` + ``raise ValidationError(...)``-Zweizeiler
+    identisch — nur ``reason``, die Detail-Felder und die (bereits
+    interpolierte) Meldung unterschieden sich. Die %-Interpolation bleibt an
+    der Aufrufstelle, weil ihre Platzhalter/Werte je Regel verschieden sind.
+    ``cause`` erhaelt die ``raise ... from cause``-Verkettung fuer den einzigen
+    Aufrufer, der aus einem ``except``-Block heraus ablehnt
+    (``run_virus_scan``/``virus_scanner_unavailable``); alle anderen lassen es
+    weg (kein Verhaltenswechsel gegenueber dem bisherigen ``raise ValidationError(...)``
+    ohne ``from``).
+    """
+    log_attachment_violation(facility, user, owner, reason=reason, **detail)
+    if cause is not None:
+        raise ValidationError(message) from cause
+    raise ValidationError(message)
+
+
 def enforce_upload_size(facility, uploaded_file, owner, user):
     """Reject uploads exceeding ``min(Facility-Limit, globaler Cap)``.
 
@@ -81,18 +113,16 @@ def enforce_upload_size(facility, uploaded_file, owner, user):
     if size is None or size <= max_bytes:
         return
 
-    log_attachment_violation(
+    _reject(
         facility,
         user,
         owner,
         reason="file_too_large",
+        message=_("Datei zu groß (%(mb)d MB). Maximum: %(max)d MB.")
+        % {"mb": size // (1024 * 1024), "max": max_bytes // (1024 * 1024)},
         filename=uploaded_file.name,
         size=size,
         max_bytes=max_bytes,
-    )
-    raise ValidationError(
-        _("Datei zu groß (%(mb)d MB). Maximum: %(max)d MB.")
-        % {"mb": size // (1024 * 1024), "max": max_bytes // (1024 * 1024)}
     )
 
 
@@ -106,7 +136,7 @@ def enforce_image_limits(facility, uploaded_file, owner, user):
     bleiben Extension-/Magic-/Virus-Checks zustaendig.
     """
     name = uploaded_file.name or ""
-    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    ext = _extension(uploaded_file)
     if ext not in _IMAGE_EXTENSIONS:
         return
 
@@ -138,18 +168,16 @@ def enforce_image_limits(facility, uploaded_file, owner, user):
         uploaded_file.seek(0)
 
     if pixels > max_pixels:
-        log_attachment_violation(
+        _reject(
             facility,
             user,
             owner,
             reason="image_too_large",
+            message=_("Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-Bomb-Upload.")
+            % {"px": pixels, "max": max_pixels},
             filename=name,
             pixels=pixels,
             max_pixels=max_pixels,
-        )
-        raise ValidationError(
-            _("Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-Bomb-Upload.")
-            % {"px": pixels, "max": max_pixels}
         )
 
 
@@ -204,7 +232,7 @@ def enforce_archive_limits(facility, uploaded_file, owner, user):
     gelagerte Verschluesselung die Datei noch lesen kann.
     """
     name = uploaded_file.name or ""
-    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    ext = _extension(uploaded_file)
     if ext not in _ARCHIVE_EXTENSIONS:
         return
 
@@ -219,18 +247,16 @@ def enforce_archive_limits(facility, uploaded_file, owner, user):
     # Guard selbst ein Memory-DoS auf RAM-limitierten Hosts. Refs #1310 (S4).
     entries = _zip_entry_count(uploaded_file)
     if entries is not None and entries > max_entries:
-        log_attachment_violation(
+        _reject(
             facility,
             user,
             owner,
             reason="archive_too_many_entries",
+            message=_("Archiv enthält zu viele Einträge (%(entries)d). Maximum: %(max)d — möglicher Zip-Bomb-Upload.")
+            % {"entries": entries, "max": max_entries},
             filename=name,
             entries=entries,
             max_entries=max_entries,
-        )
-        raise ValidationError(
-            _("Archiv enthält zu viele Einträge (%(entries)d). Maximum: %(max)d — möglicher Zip-Bomb-Upload.")
-            % {"entries": entries, "max": max_entries}
         )
 
     uploaded_file.seek(0)
@@ -254,21 +280,19 @@ def enforce_archive_limits(facility, uploaded_file, owner, user):
     ratio = (total_uncompressed / total_compressed) if total_compressed else 0
 
     if total_uncompressed > max_bytes or ratio > max_ratio:
-        log_attachment_violation(
+        _reject(
             facility,
             user,
             owner,
             reason="archive_bomb",
+            message=_("Archiv expandiert zu stark (%(unc)d Bytes, Faktor %(ratio).0f) — möglicher Zip-Bomb-Upload.")
+            % {"unc": total_uncompressed, "ratio": ratio},
             filename=name,
             uncompressed=total_uncompressed,
             compressed=total_compressed,
             ratio=round(ratio, 2),
             max_bytes=max_bytes,
             max_ratio=max_ratio,
-        )
-        raise ValidationError(
-            _("Archiv expandiert zu stark (%(unc)d Bytes, Faktor %(ratio).0f) — möglicher Zip-Bomb-Upload.")
-            % {"unc": total_uncompressed, "ratio": ratio}
         )
 
 
@@ -296,22 +320,20 @@ def enforce_allowed_file_types(facility, uploaded_file, owner, user):
         allowed = set(DEFAULT_ALLOWED_FILE_TYPES)
 
     name = uploaded_file.name or ""
-    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    ext = _extension(uploaded_file)
     if ext in allowed:
         return
 
-    log_attachment_violation(
+    _reject(
         facility,
         user,
         owner,
         reason="extension_not_allowed",
+        message=_("Dateityp .%(ext)s ist nicht erlaubt. Erlaubt: %(allowed)s")
+        % {"ext": ext or "?", "allowed": ", ".join(sorted(allowed))},
         filename=name,
         extension=ext,
         allowed=sorted(allowed),
-    )
-    raise ValidationError(
-        _("Dateityp .%(ext)s ist nicht erlaubt. Erlaubt: %(allowed)s")
-        % {"ext": ext or "?", "allowed": ", ".join(sorted(allowed))}
     )
 
 
@@ -409,8 +431,7 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
     detected_mime = magic.from_buffer(buffer, mime=True) or "application/octet-stream"
     declared_mime = uploaded_file.content_type or "application/octet-stream"
 
-    name = uploaded_file.name or ""
-    extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    extension = _extension(uploaded_file)
 
     # S3 (#1310): Positive Magic-Byte-Allowlist fuer Endungen mit eindeutiger
     # Signatur. Fuer diese MUSS libmagic einen erlaubten MIME bestaetigen — ein
@@ -419,19 +440,17 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
     # nur noch fuer mehrdeutige Container-Formate (OOXML/ZIP) gilt.
     allowed_strong = _STRONG_MAGIC.get(extension)
     if allowed_strong is not None and detected_mime not in allowed_strong:
-        log_attachment_violation(
+        _reject(
             facility,
             user,
             owner,
             reason="magic_not_allowlisted",
+            message=_("Datei-Inhalt passt nicht zur Endung .%(ext)s (erkannt: %(detected)s).")
+            % {"ext": extension, "detected": detected_mime},
             filename=uploaded_file.name,
             declared=declared_mime,
             detected=detected_mime,
             allowed=sorted(allowed_strong),
-        )
-        raise ValidationError(
-            _("Datei-Inhalt passt nicht zur Endung .%(ext)s (erkannt: %(detected)s).")
-            % {"ext": extension, "detected": detected_mime}
         )
 
     # libmagic returns "application/octet-stream" when it cannot confidently
@@ -447,18 +466,18 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
     if _mime_equivalent(extension, declared_mime, detected_mime):
         return detected_mime
 
-    log_attachment_violation(
+    _reject(
         facility,
         user,
         owner,
         reason="mime_mismatch",
+        message=_(
+            "Datei-Inhalt stimmt nicht mit dem angegebenen Typ überein (erkannt: %(detected)s, erwartet: %(declared)s)."
+        )
+        % {"detected": detected_mime, "declared": declared_mime},
         filename=uploaded_file.name,
         declared=declared_mime,
         detected=detected_mime,
-    )
-    raise ValidationError(
-        _("Datei-Inhalt stimmt nicht mit dem angegebenen Typ überein (erkannt: %(detected)s, erwartet: %(declared)s).")
-        % {"detected": detected_mime, "declared": declared_mime}
     )
 
 
@@ -477,25 +496,25 @@ def run_virus_scan(facility, uploaded_file, owner, user):
             "Virenscanner nicht erreichbar — Upload wird abgewiesen (fail-closed): %s",
             exc,
         )
-        log_attachment_violation(
+        _reject(
             facility,
             user,
             owner,
             reason="virus_scanner_unavailable",
+            message=_("Datei-Upload abgelehnt: Virenscanner ist nicht erreichbar."),
+            cause=exc,
             filename=uploaded_file.name,
             error=str(exc),
         )
-        raise ValidationError(_("Datei-Upload abgelehnt: Virenscanner ist nicht erreichbar.")) from exc
 
     if result.infected:
-        log_attachment_violation(
+        _reject(
             facility,
             user,
             owner,
             reason="virus_detected",
+            message=_("Datei wurde von Virenscanner abgewiesen: %(signature)s")
+            % {"signature": result.signature or "unknown"},
             filename=uploaded_file.name,
             signature=result.signature or "",
-        )
-        raise ValidationError(
-            _("Datei wurde von Virenscanner abgewiesen: %(signature)s") % {"signature": result.signature or "unknown"}
         )

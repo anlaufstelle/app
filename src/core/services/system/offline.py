@@ -28,6 +28,7 @@ from core.services.compliance import allowed_sensitivities_for_user, user_can_se
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import orphan_gating_sensitivity, resolve_orphan_field_templates
 from core.services.file_vault import safe_decrypt
+from core.utils.formatting import isoformat_or_none
 
 # Include at most this many events per client, or all events within the
 # lookback window — whichever is smaller. Caps the offline bundle size.
@@ -165,7 +166,7 @@ def _serialize_event(user, event) -> dict[str, Any]:
         # serverseitige Konflikt-Check (``check_version_conflict``) auch für
         # offline entstandene Edits greift. Ohne ihn bliebe der Token leer und
         # der Check würde übersprungen → stilles Last-Write-Wins.
-        "updated_at": event.updated_at.isoformat() if event.updated_at else None,
+        "updated_at": isoformat_or_none(event.updated_at),
         "document_type_pk": str(event.document_type_id),
         "document_type_name": event.document_type.name,
         "created_by_display": (
@@ -198,7 +199,7 @@ def _serialize_case(user, case) -> dict[str, Any]:
         "status": case.status,
         "status_display": case.get_status_display(),
         "created_at": case.created_at.isoformat(),
-        "closed_at": case.closed_at.isoformat() if case.closed_at else None,
+        "closed_at": isoformat_or_none(case.closed_at),
         "lead_user_display": (case.lead_user.get_full_name() or case.lead_user.username if case.lead_user else ""),
     }
 
@@ -219,11 +220,11 @@ def _serialize_workitem(user, workitem) -> dict[str, Any]:
         "status": workitem.status,
         "priority": workitem.priority,
         "item_type": workitem.item_type,
-        "due_date": workitem.due_date.isoformat() if workitem.due_date else None,
+        "due_date": isoformat_or_none(workitem.due_date),
         # Refs #1398: Offline-Edit-Metadaten — Konflikt-Token (updated_at, wie
         # Events F-07) + die restlichen editierbaren WorkItemForm-Felder.
-        "updated_at": workitem.updated_at.isoformat() if workitem.updated_at else None,
-        "remind_at": workitem.remind_at.isoformat() if workitem.remind_at else None,
+        "updated_at": isoformat_or_none(workitem.updated_at),
+        "remind_at": isoformat_or_none(workitem.remind_at),
         "recurrence": workitem.recurrence,
         "assigned_to_pk": str(workitem.assigned_to_id) if workitem.assigned_to_id else None,
         "can_edit": can_edit,
@@ -354,7 +355,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
             "age_cluster_display": client.get_age_cluster_display(),
             "notes": client.notes if is_staff_or_above else "",
             "is_active": client.is_active,
-            "last_contact": last_contact.isoformat() if last_contact else None,
+            "last_contact": isoformat_or_none(last_contact),
         },
         "cases": [_serialize_case(user, c) for c in cases],
         "workitems": [_serialize_workitem(user, w) for w in workitems],

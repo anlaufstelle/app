@@ -14,7 +14,6 @@ Doc-Type-Gate geschuetzt ist.
 """
 
 import pytest
-from cryptography.fernet import Fernet
 from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import Http404
@@ -46,12 +45,6 @@ PDF_HEADER = (
     b"trailer<</Size 3/Root 1 0 R>>\n"
     b"startxref\n9\n%%EOF\n"
 )
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 def _file_template(facility, *, sensitivity="", name="Beleg (Gate)"):

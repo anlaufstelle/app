@@ -14,7 +14,6 @@ Docker-Image (siehe Dockerfile).
 """
 
 import pytest
-from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -73,12 +72,6 @@ VALID_DOCX_BYTES = (
     b"[Content_Types].xml"
     b"PK\x05\x06" + b"\x00" * 18  # central directory end signature
 )
-
-
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
 
 
 @pytest.fixture

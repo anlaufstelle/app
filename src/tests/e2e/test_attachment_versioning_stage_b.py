@@ -6,18 +6,14 @@ Verifiziert die Multi-File-UI im Event-Create und -Edit:
 - Zwei existierende Dateien parallel sichtbar.
 """
 
-import os
 import subprocess
-import sys
 import uuid
 
 import pytest
 
+from ._helpers import python_bin as _python
+
 pytestmark = pytest.mark.e2e
-
-
-def _python():
-    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
 def _create_doc_type_with_file(e2e_env, name_suffix):

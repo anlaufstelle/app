@@ -18,6 +18,7 @@ from core.models import DocumentType, Event, Facility, Organization, Settings
 from core.reporting import registry
 from core.reporting.base import CompletenessIssue, DatasetResult
 from core.reporting.data_source import MAPPED_EVENTS
+from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -31,10 +32,7 @@ def _isolated_registry(monkeypatch):
     Import-Seiteneffekt und feuert je Modul nur beim *ersten* Import), dann mit
     einer Kopie isolieren.
     """
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

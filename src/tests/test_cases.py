@@ -128,7 +128,7 @@ class TestCaseService:
 
     def test_remove_event_from_case(self, facility, staff_user, case_open, sample_event):
         assign_event_to_case(case_open, sample_event, staff_user)
-        remove_event_from_case(sample_event, staff_user)
+        remove_event_from_case(sample_event)
         sample_event.refresh_from_db()
         assert sample_event.case is None
 

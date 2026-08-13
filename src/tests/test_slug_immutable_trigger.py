@@ -20,11 +20,8 @@ from core.models import FieldGroup, FieldTemplate
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestFieldGroupSlugImmutableTrigger:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Slug-Immutable-Trigger existiert nur auf PostgreSQL")
-
     def _create_group(self, doc_type_contact, **kwargs):
         return FieldGroup.objects.create(document_type=doc_type_contact, name="Gruppe", **kwargs)
 
@@ -96,11 +93,8 @@ class TestFieldGroupSlugImmutableTrigger:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestFieldTemplateSlugImmutableTrigger:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Slug-Immutable-Trigger existiert nur auf PostgreSQL")
-
     def _create_template(self, facility, **kwargs):
         return FieldTemplate.objects.create(facility=facility, name="Vorlage", **kwargs)
 

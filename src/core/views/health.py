@@ -51,6 +51,19 @@ def _detail_authorized(request) -> bool:
     return bool(user and user.is_authenticated)
 
 
+def _degrade(status: str, condition) -> str:
+    """Eskalationsleiter-Schritt: hebt ``status`` von ``"ok"`` auf ``"degraded"``,
+    wenn ``condition`` erfuellt ist — sonst bleibt ``status`` unveraendert.
+
+    Refs #1827: ``HealthView.get`` wiederholte ``if <Bedingung> and status ==
+    "ok": status = "degraded"`` 7x identisch (ClamAV, RLS-Bypass, Cache, SMTP,
+    Backup-Alter, Disk-Frei, Scheduler-Staleness). ``status`` eskaliert nie
+    zurueck — ein bereits ``"error"``/``"degraded"`` bleibt es, weil der
+    Vergleich strikt gegen ``"ok"`` prueft (unveraendert gegenueber vorher).
+    """
+    return "degraded" if condition and status == "ok" else status
+
+
 def _check_database() -> tuple[str, bool]:
     try:
         with connection.cursor() as cursor:
@@ -283,8 +296,7 @@ class HealthView(View):
                 virus_scanner, clamav_status = "connected", "ok"
             else:
                 virus_scanner, clamav_status = "unavailable", "error"
-                if status == "ok":
-                    status = "degraded"
+                status = _degrade(status, True)
         else:
             virus_scanner, clamav_status = "disabled", "disabled"
 
@@ -315,8 +327,7 @@ class HealthView(View):
                 db_user_is_superuser,
                 db_role_bypassrls,
             )
-            if status == "ok":
-                status = "degraded"
+            status = _degrade(status, True)
         else:
             db_role_posture = "ok"
 
@@ -348,35 +359,30 @@ class HealthView(View):
             cache_payload = _check_cache()
             cache_alive = cache_payload["status"] == "ok"
             payload["cache"] = cache_payload
-            if not cache_alive and status == "ok":
-                # Ohne Cache zaehlt django-ratelimit nicht mehr — der
-                # Bruteforce-Schutz auf Login/Sudo ist dann faktisch aus.
-                status = "degraded"
+            # Ohne Cache zaehlt django-ratelimit nicht mehr — der
+            # Bruteforce-Schutz auf Login/Sudo ist dann faktisch aus.
+            status = _degrade(status, not cache_alive)
 
             # SMTP-CONNECT (Refs #796), gecacht (A7.2).
             smtp_payload = _cached_detail("health:smtp", _check_smtp, cache_alive=cache_alive)
             payload["smtp"] = smtp_payload
-            if smtp_payload["status"] == "unreachable" and status == "ok":
-                status = "degraded"
+            status = _degrade(status, smtp_payload["status"] == "unreachable")
 
             # Backup-Alter (Refs #796), gecacht (A7.2).
             backup_age = _cached_detail("health:backup_age", _check_backup_age, cache_alive=cache_alive)
             payload["last_backup_age_hours"] = backup_age
-            if backup_age is not None and backup_age > BACKUP_WARN_HOURS and status == "ok":
-                status = "degraded"
+            status = _degrade(status, backup_age is not None and backup_age > BACKUP_WARN_HOURS)
 
             # Disk-Frei (Refs #796), gecacht (A7.2).
             disk_pct = _cached_detail("health:disk_free_pct", _check_disk_free_pct, cache_alive=cache_alive)
             payload["disk_free_pct"] = disk_pct
-            if disk_pct is not None and disk_pct < DISK_WARN_PCT and status == "ok":
-                status = "degraded"
+            status = _degrade(status, disk_pct is not None and disk_pct < DISK_WARN_PCT)
 
             # Scheduler-Staleness (Refs #1335), gecacht (A7.2). ``unknown`` degradet
             # bewusst nicht (frische Installation), nur bestaetigtes ``critical``.
             stale_jobs = _cached_detail("health:stale_jobs", _check_stale_jobs, cache_alive=cache_alive)
             payload["stale_jobs"] = stale_jobs
-            if stale_jobs and status == "ok":
-                status = "degraded"
+            status = _degrade(status, bool(stale_jobs))
 
         payload["status"] = status
         return JsonResponse(payload, status=http_status)

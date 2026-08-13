@@ -62,13 +62,9 @@ from __future__ import annotations
 
 import re
 
+from core.middleware._csp import extend_directive, rewrite_csp_headers
+
 ADMIN_PREFIX = "/admin-mgmt/"
-# script-src: pro Direktive genau eine angehängte Lockerung, idempotent —
-# die globale script-src führt weder Hashes noch Nonces, Anhängen wirkt.
-_SCRIPT_RELAX = (
-    re.compile(r"(script-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE),
-    "'unsafe-eval'",
-)
 # style-src: Direktive wird umgebaut (Hashes raus, 'unsafe-inline' rein) —
 # siehe Modul-Docstring, Hand-Check-Befund 2026-08-01.
 _STYLE_SRC = re.compile(r"style-src\s+([^;]*?)(?=\s*;|$)", re.IGNORECASE)
@@ -93,18 +89,11 @@ class AdminCSPRelaxMiddleware:
         if not response.headers.get("Content-Type", "").lower().startswith("text/html"):
             return response
 
-        for header in ("Content-Security-Policy", "Content-Security-Policy-Report-Only"):
-            csp = response.headers.get(header)
-            if not csp:
-                continue
+        def _relax(csp: str) -> str:
             # script-src: 'unsafe-eval' anhaengen. Idempotent: der Token darf
             # nur genau einmal in seiner Direktive landen (Middleware kann bei
-            # Retry/Rewrite doppelt laufen). Geprueft wird gegen die Direktive
-            # selbst, nicht gegen die ganze Policy.
-            pattern, token = _SCRIPT_RELAX
-            match = pattern.search(csp)
-            if match is not None and token not in match.group(1):
-                csp = pattern.sub(lambda m, _t=token: f"{m.group(1)} {_t}", csp, count=1)
+            # Retry/Rewrite doppelt laufen).
+            csp = extend_directive(csp, "script-src", "'unsafe-eval'")
             # style-src: Hash-/Nonce-Tokens entfernen (sie wuerden
             # 'unsafe-inline' laut CSP-Spezifikation wirkungslos machen) und
             # 'unsafe-inline' ergaenzen. Idempotent per Konstruktion.
@@ -115,5 +104,7 @@ class AdminCSPRelaxMiddleware:
                 if "'unsafe-inline'" not in tokens:
                     tokens.append("'unsafe-inline'")
                 csp = csp[: match.start()] + "style-src " + " ".join(tokens) + csp[match.end() :]
-            response.headers[header] = csp
+            return csp
+
+        rewrite_csp_headers(response, _relax)
         return response

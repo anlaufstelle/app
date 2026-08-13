@@ -899,6 +899,44 @@ def _drop_breakdowns(report: dict[str, Any], breakdowns: Sequence[_Breakdown]) -
         report[PERSON_MARGIN_KEY] = None
 
 
+def _published_if_above(value: int | None, threshold: int) -> int | None:
+    """Security R14: Eine Randsumme < *k* ist selbst eine Kleinstfallzahl → ``None``.
+
+    Vier Aufrufer wiederholten dieselbe Regel in zwei Varianten — mit und ohne
+    ``is not None``-Guard. ``value`` ist an zwei Stellen (``build_external_report``,
+    ``suppress_single_margin``) immer ein ``.count()``-Ergebnis, also nie
+    ``None``; der Guard ist dort ein No-Op. An den anderen beiden
+    (``suppress_sample_report_1_stats``, ``suppress_report_stats``) kommt der
+    Wert aus einem bereits gebauten Stats-Dict und **kann** ``None`` sein —
+    dort ist der Guard notwendig. Eine einzige, defensive Fassung deckt beide
+    Faelle ab, ohne fuer die ersten beiden Aufrufer etwas zu aendern.
+    """
+    return value if value is not None and value >= threshold else None
+
+
+def _finalize_report(
+    report: dict[str, Any],
+    unique_clients: int | None,
+    age_rows: Sequence[dict[str, Any]],
+    threshold: int,
+    breakdowns: Sequence[_Breakdown],
+) -> dict[str, Any]:
+    """K0-Fail-safe-Abschluss + K1-Residual-Guard — 3x identisch kopiert.
+
+    ``build_external_report``, ``suppress_sample_report_1_stats`` und
+    ``suppress_report_stats`` schlossen alle drei mit derselben Reihenfolge ab:
+    erst die Personen-abgeleiteten Tabellen faellen lassen (K0-Fail-safe, Refs
+    #1768), dann die Personen-Randsumme bei Personen-Suppression (Refs #1770),
+    dann als letzter Schritt der Residual-Guard (K1, Refs #1770). Mutiert
+    ``report`` in place und gibt es zurueck (Aufrufer schreiben ``return
+    _finalize_report(...)``).
+    """
+    _drop_person_derived_breakdowns(report, unique_clients, threshold)
+    drop_person_margin_on_person_suppression(report, age_rows, threshold)
+    apply_residual_guard(report, threshold, breakdowns, age_rows=age_rows)
+    return report
+
+
 def build_external_report(facility, date_from: date, date_to: date) -> dict[str, Any]:
     """Baut einen datenschutzfreundlichen externen Bericht.
 
@@ -911,7 +949,7 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
 
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl — und was
     # nicht publiziert wird, kann das K2-Audit auch nicht als Gleichung nutzen.
-    published_total = raw["total_contacts"] if raw["total_contacts"] >= threshold else None
+    published_total = _published_if_above(raw["total_contacts"], threshold)
 
     # by_document_type + by_age_cluster durch K-Anon-Filter
     by_document_type = _suppress_small(
@@ -936,7 +974,7 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
 
     report = {
         "total_contacts": published_total,
-        "unique_clients": raw["unique_clients"] if raw["unique_clients"] >= threshold else None,
+        "unique_clients": _published_if_above(raw["unique_clients"], threshold),
         "by_contact_stage": by_contact_stage,
         "by_document_type": by_document_type,
         "by_age_cluster": by_age_cluster,
@@ -971,10 +1009,7 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     }
     # K0-Fail-safe (Refs #1768) — nach dem Aufbau, damit der Guard genau eine
     # Stelle hat und beide Personen-Tabellen gemeinsam trifft.
-    _drop_person_derived_breakdowns(report, raw["unique_clients"], threshold)
-    drop_person_margin_on_person_suppression(report, age_rows, threshold)
-    apply_residual_guard(report, threshold, _EXTERNAL_REPORT_BREAKDOWNS, age_rows=age_rows)
-    return report
+    return _finalize_report(report, raw["unique_clients"], age_rows, threshold, _EXTERNAL_REPORT_BREAKDOWNS)
 
 
 def suppress_single_margin(
@@ -1013,7 +1048,7 @@ def suppress_single_margin(
     threshold = _get_threshold(facility)
     total = result.summary["total"]
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-    published_total = None if total < threshold else total
+    published_total = _published_if_above(total, threshold)
     view: dict[str, Any] = {
         "total": published_total,
         "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
@@ -1056,7 +1091,7 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
     unique = stats.get("unique_clients", 0)
     total = stats.get("total", 0)
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-    published_total = total if total is not None and total >= threshold else None
+    published_total = _published_if_above(total, threshold)
 
     category_rows = [{"name": name, "count": count} for name, count in stats.get("by_category", [])]
     # ``total`` akkumuliert exakt dieselben Zeilen wie ``by_category`` (die
@@ -1081,15 +1116,12 @@ def suppress_sample_report_1_stats(facility, stats: dict[str, Any]) -> dict[str,
         **stats,
         "by_category": by_category,
         "by_age_cluster": by_age_cluster,
-        "unique_clients": unique if unique is not None and unique >= threshold else None,
+        "unique_clients": _published_if_above(unique, threshold),
         "total": published_total,
     }
     # K0-Fail-safe (Refs #1768): hier gibt es nur ``by_age_cluster`` — der
     # Beispiel-Sachbericht fuehrt keine Kontaktstufen.
-    _drop_person_derived_breakdowns(out, unique, threshold)
-    drop_person_margin_on_person_suppression(out, age_rows, threshold)
-    apply_residual_guard(out, threshold, _SAMPLE_REPORT_1_BREAKDOWNS, age_rows=age_rows)
-    return out
+    return _finalize_report(out, unique, age_rows, threshold, _SAMPLE_REPORT_1_BREAKDOWNS)
 
 
 def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
@@ -1107,7 +1139,7 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     out = dict(stats)
     total = stats.get("total_contacts", 0)
     # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
-    published_total = total if total is not None and total >= threshold else None
+    published_total = _published_if_above(total, threshold)
     out["by_document_type"] = _suppress_small(
         list(stats.get("by_document_type", [])), threshold, margin=published_total, order=ORDER_DOCUMENT_TYPE
     )
@@ -1131,11 +1163,8 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     # duerfen den Wrapper nicht verlassen (K0-b, Refs #1770).
     out.pop("persons_by_contact_stage", None)
     unique = stats.get("unique_clients", 0)
-    out["unique_clients"] = unique if unique is not None and unique >= threshold else None
+    out["unique_clients"] = _published_if_above(unique, threshold)
     out["total_contacts"] = published_total
     # K0-Fail-safe (Refs #1768): Altersgruppen UND Kontaktstufen sind
     # personenabgeleitet und fallen gemeinsam mit der Personenzahl.
-    _drop_person_derived_breakdowns(out, unique, threshold)
-    drop_person_margin_on_person_suppression(out, age_rows, threshold)
-    apply_residual_guard(out, threshold, _EXTERNAL_REPORT_BREAKDOWNS, age_rows=age_rows)
-    return out
+    return _finalize_report(out, unique, age_rows, threshold, _EXTERNAL_REPORT_BREAKDOWNS)

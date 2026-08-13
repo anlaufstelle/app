@@ -17,9 +17,9 @@ DATABASES["default"] = {**DATABASES["default"], "NAME": _db_name}  # noqa: F405
 # Rate-Limiting deaktivieren (E2E-Tests machen viele Logins auf einer IP)
 RATELIMIT_ENABLE = False
 
-# Session nicht bei jedem Request speichern (reduziert DB-Writes und
-# verhindert Background-Netzwerkaktivität, die networkidle-Waits stört)
-SESSION_SAVE_EVERY_REQUEST = False
+# Session-Save-Verhalten (kein Write bei jedem Request) erbt unveraendert von
+# base.py — dort bereits SESSION_SAVE_EVERY_REQUEST = False (Refs #1827: war
+# hier redundant wiederholt).
 
 # MFA-Rollen-Enforcement ist in E2E (wie dev) standardmäßig AUS, damit die
 # Default-Logins MFA-frei bleiben. Der dedizierte enforced-Server (Refs #1019)

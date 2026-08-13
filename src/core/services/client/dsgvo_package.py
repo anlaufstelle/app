@@ -52,6 +52,25 @@ DOCUMENTS = {
 }
 
 
+def _retention_values(settings_obj) -> dict[str, int]:
+    """Retention-relevante Settings-Felder mit ihren Defaults (Refs #1827).
+
+    Sechs ``getattr(settings_obj, name, default)``-Paare standen in
+    ``_settings_hash()`` (Hash-Payload) und ``render_document()`` (Template-
+    Platzhalter) je einmal wortgleich. Die Defaults spiegeln die
+    ``Settings``-Model-Defaults; bei fehlender Facility-``Settings``-Row
+    (``settings_obj is None``) greift ``getattr`` fail-open auf sie zurueck.
+    """
+    return {
+        "retention_anonymous_days": getattr(settings_obj, "retention_anonymous_days", 90),
+        "retention_identified_days": getattr(settings_obj, "retention_identified_days", 365),
+        "retention_qualified_days": getattr(settings_obj, "retention_qualified_days", 3650),
+        "retention_activities_days": getattr(settings_obj, "retention_activities_days", 365),
+        "client_trash_days": getattr(settings_obj, "client_trash_days", 30),
+        "auditlog_retention_months": getattr(settings_obj, "auditlog_retention_months", 24),
+    }
+
+
 def _settings_hash(settings_obj, document_type_overrides=()) -> str:
     """Refs #840 (C-73), erweitert Refs #1762: kurzer Hash der retention-
     relevanten Settings plus der abgeleiteten Dokumentationstyp-Ausnahmen.
@@ -73,12 +92,7 @@ def _settings_hash(settings_obj, document_type_overrides=()) -> str:
     siehe :func:`_document_type_retention_overrides`).
     """
     payload = {
-        "retention_anonymous_days": getattr(settings_obj, "retention_anonymous_days", 90),
-        "retention_identified_days": getattr(settings_obj, "retention_identified_days", 365),
-        "retention_qualified_days": getattr(settings_obj, "retention_qualified_days", 3650),
-        "retention_activities_days": getattr(settings_obj, "retention_activities_days", 365),
-        "client_trash_days": getattr(settings_obj, "client_trash_days", 30),
-        "auditlog_retention_months": getattr(settings_obj, "auditlog_retention_months", 24),
+        **_retention_values(settings_obj),
         "facility_full_name": getattr(settings_obj, "facility_full_name", "") or "",
         "document_type_overrides": [list(pair) for pair in document_type_overrides],
     }
@@ -158,17 +172,18 @@ def render_document(slug, facility):
     facility_name = resolve_facility_display_name(facility)
     document_type_overrides = _document_type_retention_overrides(facility)
 
+    retention = _retention_values(settings_obj)
     replacements = {
         "{{ facility_name }}": facility_name,
         "{{ date }}": date.today().strftime("%d.%m.%Y"),
-        "{{ retention_anonymous_days }}": str(getattr(settings_obj, "retention_anonymous_days", 90)),
-        "{{ retention_identified_days }}": str(getattr(settings_obj, "retention_identified_days", 365)),
-        "{{ retention_qualified_days }}": str(getattr(settings_obj, "retention_qualified_days", 3650)),
+        "{{ retention_anonymous_days }}": str(retention["retention_anonymous_days"]),
+        "{{ retention_identified_days }}": str(retention["retention_identified_days"]),
+        "{{ retention_qualified_days }}": str(retention["retention_qualified_days"]),
         # Refs #1762: vormals "Standardwert mit Pruefauftrag"-Prosa in
         # dsfa.md § 2.3 Zeilen 4-7, jetzt echte Ist-Wert-Platzhalter.
-        "{{ retention_activities_days }}": str(getattr(settings_obj, "retention_activities_days", 365)),
-        "{{ client_trash_days }}": str(getattr(settings_obj, "client_trash_days", 30)),
-        "{{ auditlog_retention_months }}": str(getattr(settings_obj, "auditlog_retention_months", 24)),
+        "{{ retention_activities_days }}": str(retention["retention_activities_days"]),
+        "{{ client_trash_days }}": str(retention["client_trash_days"]),
+        "{{ auditlog_retention_months }}": str(retention["auditlog_retention_months"]),
         "{{ retention_document_type_overrides }}": _format_document_type_overrides(document_type_overrides),
     }
 

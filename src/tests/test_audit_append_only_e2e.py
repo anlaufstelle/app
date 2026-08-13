@@ -20,17 +20,14 @@ zurueck, was das Trigger-Verhalten verfaelscht.
 from __future__ import annotations
 
 import pytest
-from django.db import DatabaseError, IntegrityError, connection, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 
 from core.models import AuditLog
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestAuditAppendOnlyE2E:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("AuditLog-Trigger existiert nur auf PostgreSQL")
-
     def _create_audit(self, facility, user=None):
         return AuditLog.objects.create(
             facility=facility,

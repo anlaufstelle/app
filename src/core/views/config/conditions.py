@@ -28,6 +28,7 @@ from core.forms.config import FieldConditionForm
 from core.models import DocumentType, DocumentTypeField, FieldCondition
 from core.services import config as config_service
 from core.services.conditions import OPERATORS_BY_FIELD_TYPE, VALUELESS_OPERATORS
+from core.services.dynamic_data import option_label_map
 from core.views.mixins import FacilityAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -71,12 +72,7 @@ def _condition_display_value(condition):
     if field_type == types.BOOLEAN:
         return _("Ja") if value else _("Nein")
     if field_type in (types.SELECT, types.MULTI_SELECT) and isinstance(value, str):
-        label_map = {
-            option["slug"]: option["label"]
-            for option in (template.options_json or [])
-            if isinstance(option, dict) and "slug" in option and "label" in option
-        }
-        return label_map.get(value, value)
+        return option_label_map(template.options_json).get(value, value)
     return str(value)
 
 
@@ -334,6 +330,29 @@ class ConditionDeleteView(FacilityAdminRequiredMixin, View):
         return condition_board_response(request, doc_type, message=_("Bedingung wurde gelöscht."))
 
 
+def _resolve_source_dtf(request, pk):
+    """Löst ``DocumentType`` + Quell-``DocumentTypeField`` + Operator aus der Query.
+
+    Gemeinsamer Ablauf von ``ConditionValueInputView.get`` und
+    ``ConditionOperatorInputView.get`` (#1715/E19): ``DocumentType`` per
+    ``pk``+facility (IDOR → 404), dann ``depends_on_field``/``source``-Alias
+    als Quell-DTF-UUID, 400 bei fehlendem/ungültigem Wert. Rückgabe entweder
+    ``(doc_type, dtf, operator)`` oder eine fertige 400-Antwort — die
+    Aufrufstelle unterscheidet per ``isinstance``.
+    """
+    doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
+    source_raw = request.GET.get("depends_on_field") or request.GET.get("source") or ""
+    operator = request.GET.get("operator", "")
+    if not source_raw:
+        return HttpResponseBadRequest(_("Kein Quellfeld angegeben."))
+    try:
+        source_uuid = uuid.UUID(source_raw)
+    except (ValueError, TypeError):
+        return HttpResponseBadRequest(_("Ungültige Quellfeld-ID."))
+    dtf = get_object_or_404(DocumentTypeField, pk=source_uuid, document_type=doc_type)
+    return doc_type, dtf, operator
+
+
 class ConditionValueInputView(FacilityAdminRequiredMixin, View):
     """Liefert das typisierte Wert-Eingabe-Partial (E19) — HTMX-GET.
 
@@ -345,16 +364,10 @@ class ConditionValueInputView(FacilityAdminRequiredMixin, View):
     """
 
     def get(self, request, pk):
-        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
-        source_raw = request.GET.get("depends_on_field") or request.GET.get("source") or ""
-        operator = request.GET.get("operator", "")
-        if not source_raw:
-            return HttpResponseBadRequest(_("Kein Quellfeld angegeben."))
-        try:
-            source_uuid = uuid.UUID(source_raw)
-        except (ValueError, TypeError):
-            return HttpResponseBadRequest(_("Ungültige Quellfeld-ID."))
-        dtf = get_object_or_404(DocumentTypeField, pk=source_uuid, document_type=doc_type)
+        result = _resolve_source_dtf(request, pk)
+        if isinstance(result, HttpResponseBadRequest):
+            return result
+        _doc_type, dtf, operator = result
         return render(
             request,
             VALUE_INPUT_TEMPLATE,
@@ -373,16 +386,10 @@ class ConditionOperatorInputView(FacilityAdminRequiredMixin, View):
     """
 
     def get(self, request, pk):
-        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
-        source_raw = request.GET.get("depends_on_field") or request.GET.get("source") or ""
-        operator = request.GET.get("operator", "")
-        if not source_raw:
-            return HttpResponseBadRequest(_("Kein Quellfeld angegeben."))
-        try:
-            source_uuid = uuid.UUID(source_raw)
-        except (ValueError, TypeError):
-            return HttpResponseBadRequest(_("Ungültige Quellfeld-ID."))
-        dtf = get_object_or_404(DocumentTypeField, pk=source_uuid, document_type=doc_type)
+        result = _resolve_source_dtf(request, pk)
+        if isinstance(result, HttpResponseBadRequest):
+            return result
+        doc_type, dtf, operator = result
         return render(
             request,
             OPERATOR_INPUT_TEMPLATE,

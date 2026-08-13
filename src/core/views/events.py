@@ -53,6 +53,7 @@ from core.services.events import (
 from core.services.events.fields import file_marker_slugs
 from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
+from core.utils.formatting import isoformat_or_none
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -133,7 +134,7 @@ def _event_conflict_response(user, event, client_expected, *, error="conflict"):
     """
     server_state = {
         "data_json": filtered_server_data_json(user, event),
-        "updated_at": event.updated_at.isoformat() if event.updated_at else None,
+        "updated_at": isoformat_or_none(event.updated_at),
         "document_type_name": event.document_type.name,
     }
     return _conflict_response(server_state, client_expected, error=error)

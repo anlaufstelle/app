@@ -26,7 +26,7 @@ from unittest import mock
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.db import connection, connections, transaction
+from django.db import connections, transaction
 
 from core.models import AuditLog, Event, WorkItem
 from core.services.case import update_workitem
@@ -249,6 +249,7 @@ class TestCheckVersionConflictErrorCodes:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestUpdateEventConcurrentRace:
     """Race-Repro fuer den TOCTOU-Bug in ``check_version_conflict`` (Refs #1338).
 
@@ -277,10 +278,6 @@ class TestUpdateEventConcurrentRace:
 
     Refs #1338.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("select_for_update erfordert PostgreSQL")
 
     def test_concurrent_update_with_same_token_exactly_one_conflicts(self, sample_event, staff_user):
         sample_event.refresh_from_db()

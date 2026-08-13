@@ -1,21 +1,16 @@
 """E2E-Tests: Klientel-Datenauskunft (Art. 15/20 DSGVO)."""
 
-import os
 import subprocess
-import sys
 import uuid
 from pathlib import Path
 
 import pytest
 
 from tests.e2e._helpers import enter_sudo_mode
+from tests.e2e._helpers import python_bin as _python
 from tests.e2e._selectors import find_client_link, open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
-
-
-def _python():
-    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
 def _shell(e2e_env, script):

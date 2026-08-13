@@ -683,7 +683,7 @@ class CaseRemoveEventView(StaffRequiredMixin, View):
         facility = request.current_facility
         case = get_scoped_object(cases_with_live_client(), request, pk=pk)
         event = get_visible_event_or_404(request.user, facility, event_pk)
-        remove_event_from_case(event, request.user)
+        remove_event_from_case(event)
 
         context = {"case": case, **_get_case_event_context(case, facility, request.user)}
         return render(request, "core/cases/partials/event_list.html", context)

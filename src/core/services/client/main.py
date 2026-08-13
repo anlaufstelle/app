@@ -643,7 +643,7 @@ def create_client(facility, user, **data):
     return client
 
 
-def update_client_stage(client, old_stage, new_stage, facility, user):
+def update_client_stage(client, old_stage, new_stage, user):
     """Log a stage change if the contact stage has changed."""
     if old_stage == new_stage:
         return
@@ -732,7 +732,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     client.save(update_fields=[*fields.keys(), "updated_at"])
 
     new_stage = client.contact_stage
-    update_client_stage(client, old_stage, new_stage, client.facility, user)
+    update_client_stage(client, old_stage, new_stage, user)
 
     if old_stage != new_stage and new_stage == Client.ContactStage.QUALIFIED:
         log_activity(

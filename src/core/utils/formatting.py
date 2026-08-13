@@ -3,6 +3,18 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
+
+
+def isoformat_or_none(value: Any) -> str | None:
+    """ISO-8601 eines optionalen Datums-/Zeitstempels — ``None`` bleibt ``None``.
+
+    Refs #1827: ``value.isoformat() if value else None`` stand als benannte
+    Funktion zweimal (``services/system/facility_export.py``,
+    ``services/client/export.py``) und inline an acht weiteren Stellen
+    (JSON-Serialisierung von Offline-Bundles/Kontexten).
+    """
+    return value.isoformat() if value else None
 
 
 def format_file_size(size_bytes: int) -> str:

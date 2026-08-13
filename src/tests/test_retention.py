@@ -667,8 +667,8 @@ def test_statistics_correct_after_retention(facility_with_settings, doc_type_con
 def test_collect_doomed_events_covers_all_strategies(
     facility_with_settings, client_identified, client_qualified, doc_type_contact, staff_user
 ):
-    """_collect_doomed_events returns events matching all 4 retention strategies."""
-    from core.management.commands.enforce_retention import Command
+    """collect_doomed_events returns events matching all 4 retention strategies."""
+    from core.services.retention import collect_doomed_events
 
     now = timezone.now()
 
@@ -733,8 +733,7 @@ def test_collect_doomed_events_covers_all_strategies(
     )
 
     settings_obj = facility_with_settings.settings
-    cmd = Command()
-    doomed_qs = cmd._collect_doomed_events(facility_with_settings, settings_obj, now)
+    doomed_qs = collect_doomed_events(facility_with_settings, settings_obj, now)
     doomed_ids = set(doomed_qs.values_list("pk", flat=True))
 
     assert ev_anon.pk in doomed_ids, "Anonymous expired event not in doomed set"

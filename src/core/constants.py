@@ -127,3 +127,9 @@ DEFAULT_MAX_FILE_SIZE_MB = 10
 # verbreitet. Beide Defaults sind deckungsgleich; der Drift-Guard sichert das
 # per Gleichheits-Assertion ab, statt eine Divergenz zu pinnen.
 DEFAULT_SETTINGS_ALLOWED_FILE_TYPES = "pdf,jpg,jpeg,png,docx,odt"
+
+# Praefix, unter dem dynamische Feld-Pfade (``data_json.<slug>``) als
+# CSV-Import-Ziel bzw. Art.-16-Berichtigungspfad auftreten (Refs #1827).
+# War in import_engine.py und services/client/rectification.py je einmal
+# wortgleich definiert.
+DATA_JSON_PREFIX = "data_json."

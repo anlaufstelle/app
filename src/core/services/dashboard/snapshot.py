@@ -190,6 +190,22 @@ def _empty_stats():
     }
 
 
+def _accumulate_age_cluster(age_cluster_map, age_persons, entry):
+    """Einen ``by_age_cluster``-Eintrag in die Merge-Akkumulatoren einsortieren.
+
+    Refs #1827: zweifach kopiert (``_merge_stats``/``_merge_sample_report_1_stats``)
+    — die K0-b-Regel „Personen nie summieren" (Maximum statt Summe, ueber
+    :func:`_merge_person_count`) musste deshalb zweimal nachgezogen werden
+    (Fehlerklasse von #1770). Mutiert beide Dicts in place.
+    """
+    cluster = entry["cluster"]
+    age_persons[cluster] = _merge_person_count(age_persons.get(cluster, 0), entry.get(PERSONS_KEY))
+    if cluster in age_cluster_map:
+        age_cluster_map[cluster]["count"] += entry["count"]
+    else:
+        age_cluster_map[cluster] = {**entry}
+
+
 def _merge_stats(stats_list):
     """Merge multiple statistics dicts into one.
 
@@ -247,12 +263,7 @@ def _merge_stats(stats_list):
 
         # by_age_cluster – merge by cluster
         for entry in stats.get("by_age_cluster", []):
-            cluster = entry["cluster"]
-            age_persons[cluster] = _merge_person_count(age_persons.get(cluster, 0), entry.get(PERSONS_KEY))
-            if cluster in age_cluster_map:
-                age_cluster_map[cluster]["count"] += entry["count"]
-            else:
-                age_cluster_map[cluster] = {**entry}
+            _accumulate_age_cluster(age_cluster_map, age_persons, entry)
 
     merged["persons_by_contact_stage"] = stage_persons
     merged["by_document_type"] = sorted(doc_type_map.values(), key=lambda e: e["count"], reverse=True)
@@ -316,12 +327,7 @@ def _merge_sample_report_1_stats(stats_list):
 
         # by_age_cluster
         for entry in stats.get("by_age_cluster", []):
-            cluster = entry["cluster"]
-            age_persons[cluster] = _merge_person_count(age_persons.get(cluster, 0), entry.get(PERSONS_KEY))
-            if cluster in age_cluster_map:
-                age_cluster_map[cluster]["count"] += entry["count"]
-            else:
-                age_cluster_map[cluster] = {**entry}
+            _accumulate_age_cluster(age_cluster_map, age_persons, entry)
 
     merged["by_category"] = [(name, count) for name, count in category_map.items()]
     merged["by_age_cluster"] = _with_merged_persons(age_cluster_map, age_persons)

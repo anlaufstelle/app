@@ -39,15 +39,15 @@ parallelisieren.
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
-import sys
 import time
 import uuid
 from contextlib import suppress
 
 import pytest
+
+from ._helpers import python_bin as _python
 
 pytestmark = pytest.mark.e2e
 
@@ -59,10 +59,6 @@ ANDROID_UA = (
 
 # ---------------------------------------------------------------------------
 # Server-seitiges Seed/Inspektion ueber manage.py shell (Worker-DB via e2e_env)
-
-
-def _python():
-    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
 def _shell(e2e_env, script):

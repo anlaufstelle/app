@@ -17,6 +17,7 @@ from core.models import Client, DocumentType, Event, Facility, Organization, Set
 from core.reporting import registry
 from core.reporting.base import DatasetResult
 from core.reporting.data_source import PERSONS
+from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -24,10 +25,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def _isolated_registry(monkeypatch):
     """Registry je Test isolieren, echte Backends bleiben verfuegbar (§ 10)."""
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

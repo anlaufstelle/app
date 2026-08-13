@@ -20,16 +20,16 @@ import threading
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import connection, connections
+from django.db import connections
 from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate
 
-pytestmark = pytest.mark.skipif(
-    connection.vendor != "postgresql",
-    reason="Advisory-Lock-Serialisierung ist nur auf PostgreSQL beobachtbar",
-)
+# Refs #1829: @pytest.mark.postgres ersetzt den vormaligen
+# connection.vendor-Skipif (Advisory-Lock-Serialisierung ist nur auf
+# PostgreSQL beobachtbar, siehe Modul-Docstring).
+pytestmark = pytest.mark.postgres
 
 
 PDF_MINIMAL = (

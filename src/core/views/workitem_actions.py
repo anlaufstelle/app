@@ -34,6 +34,7 @@ from core.services.events import (
     remember_idempotent_result,
 )
 from core.services.scoping import get_scoped_object
+from core.utils.formatting import isoformat_or_none
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -77,7 +78,7 @@ def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
         "title": workitem.title,
         "description": workitem.description,
         "status": workitem.status,
-        "updated_at": workitem.updated_at.isoformat() if workitem.updated_at else None,
+        "updated_at": isoformat_or_none(workitem.updated_at),
     }
     return _conflict_response(server_state, client_expected, error=error)
 

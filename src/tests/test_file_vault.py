@@ -60,12 +60,6 @@ HTML_HEADER = b"<!DOCTYPE html>\n<html><body>"
 
 
 @pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
-
-
-@pytest.fixture
 def doc_type_with_file(facility):
     dt = DocumentType.objects.create(
         facility=facility,

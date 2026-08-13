@@ -43,6 +43,7 @@ from core.reporting.base import (
     feld_bindungen,
     typ_bindungen,
 )
+from tests.conftest import isolate_reporting_registry
 
 
 @pytest.fixture(autouse=True)
@@ -56,10 +57,7 @@ def _isolated_registry(monkeypatch):
     Strukturtests unten die echten Backends sehen, ad-hoc registrierte
     Test-Backends aber nicht in Folgetests leaken.
     """
-    registry._discover()
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
+    isolate_reporting_registry(monkeypatch)
 
 
 # Synthetische Schluessel fuer die Guard-Tests: die Registry-Isolation arbeitet

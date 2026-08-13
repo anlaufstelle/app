@@ -26,7 +26,6 @@ from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
-from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -453,8 +452,3 @@ class MFAPasskeyDeleteView(LoginRequiredMixin, RequireSudoModeMixin, View):
         )
         messages.success(request, _("Passkey entfernt."))
         return redirect("mfa_settings")
-
-
-def mfa_settings_url() -> str:
-    """Helper for templates/tests: absolute URL to the MFA settings page."""
-    return reverse("mfa_settings")

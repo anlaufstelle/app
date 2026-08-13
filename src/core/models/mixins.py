@@ -95,8 +95,10 @@ class SoftDeletableModel(models.Model):
 
     Provides ``is_deleted``, ``deleted_at``, ``deleted_by`` plus
     ``soft_delete()`` and ``restore()`` convenience methods. Combine with
-    :class:`core.models.managers.SoftDeletableFacilityScopedManager` to
-    filter soft-deleted rows out of the default queryset.
+    :class:`core.models.managers.FacilityScopedManager` — its
+    ``.active()``/``.deleted()`` queryset methods filter soft-deleted rows
+    (the manager itself does not filter by default, consistent with the
+    ``Event`` pattern).
     """
 
     is_deleted = models.BooleanField(default=False, verbose_name=_("Gelöscht"))

@@ -15,12 +15,6 @@ from core.services.file_vault import (
 )
 
 
-@pytest.fixture
-def _encryption_key(settings):
-    settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
-    settings.ENCRYPTION_KEYS = ""
-
-
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestFileEncryption:

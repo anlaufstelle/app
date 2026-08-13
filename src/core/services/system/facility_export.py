@@ -75,6 +75,7 @@ from core.services.file_vault import (
     is_encrypted_value,
     safe_decrypt,
 )
+from core.utils.formatting import isoformat_or_none as _isoformat
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +87,6 @@ SCHEMA_VERSION = 1
 def _uuid_str(pk: Any) -> str | None:
     """FK-PK als UUID-String, ``None`` bei fehlendem Verweis (SET_NULL-Waise)."""
     return str(pk) if pk is not None else None
-
-
-def _isoformat(value: Any) -> str | None:
-    """ISO-8601 eines optionalen Datums-/Zeitstempels."""
-    return value.isoformat() if value else None
 
 
 def _decrypt_data_json(data_json: dict | None) -> dict:

@@ -23,6 +23,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import DATA_JSON_PREFIX
 from core.models import AuditLog, Client, FieldTemplate, RectificationRequest
 from core.services.audit import audit_event
 from core.services.compliance import user_can_see_field
@@ -38,9 +39,6 @@ from core.services.file_vault import encrypt_field, safe_decrypt
 #: ``document_type`` fehlt ebenso — ein Typwechsel ist eine Konfigurations-,
 #: keine Datenberichtigung, und verwirft nach E11-Merge-Policy fremde Slugs.
 CORE_FIELDS: tuple[str, ...] = ("pseudonym", "age_cluster", "notes")
-
-#: Praefix der dynamischen Feldpfade (``data_json.<slug>``).
-DATA_JSON_PREFIX = "data_json."
 
 
 def _core_field_label(name: str) -> Any:

@@ -84,11 +84,8 @@ EXPECTED_TABLES = sorted(_direct_scoped_tables() | JOIN_SCOPED_TABLES)
 
 
 @pytest.mark.django_db
+@pytest.mark.postgres
 class TestRLSSetup:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
-
     def test_rls_enabled_on_all_facility_scoped_tables(self):
         with connection.cursor() as cursor:
             cursor.execute(
@@ -239,6 +236,7 @@ class TestRLSSetup:
 
 
 @pytest.mark.django_db
+@pytest.mark.postgres
 class TestRLSCoverageGuard:
     """Refs #1096: Reverse-Guard zur ableitungsbasierten ``EXPECTED_TABLES``.
 
@@ -251,10 +249,6 @@ class TestRLSCoverageGuard:
     beide Richtungen Gleichheit, sodass die Abdeckung vollstaendig-by-
     construction bleibt.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
 
     def test_expected_tables_equals_live_db_rls_set(self):
         with connection.cursor() as cur:
@@ -271,6 +265,7 @@ class TestRLSCoverageGuard:
 
 
 @pytest.mark.django_db
+@pytest.mark.postgres
 class TestRLSFunctional:
     """Funktionale Regression-Guards für die FacilityScopeMiddleware.
 
@@ -278,10 +273,6 @@ class TestRLSFunctional:
     Superuser und bypasst RLS). Diese Klasse testet daher das Verhalten der
     Session-Variable direkt — was die Policies in Produktion nutzen.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
 
     def test_anonymous_request_does_not_set_facility_variable(self):
         """Regression ffb5666: Ein anonymer Request darf keinen DB-Cursor
@@ -355,6 +346,7 @@ class TestRLSFunctional:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestAppendOnlyTriggerOwnership:
     """Refs #1026 (A1.4): Nur der Table-Owner darf die Append-Only-Trigger per
     ``ALTER TABLE ... DISABLE TRIGGER`` abschalten. Die Runtime-App-Rolle ist in
@@ -376,10 +368,6 @@ class TestAppendOnlyTriggerOwnership:
         ("core_eventhistory", "eventhistory_no_update"),
         ("core_eventhistory", "eventhistory_no_delete"),
     )
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Trigger-/Owner-Test benoetigt PostgreSQL")
 
     # Refs #1479 (TST-03): Worker-Suffix — Postgres-Rollen sind cluster-global,
     # ohne Suffix kollidieren zwei xdist-Worker beim CREATE/DROP.
@@ -430,6 +418,7 @@ class TestAppendOnlyTriggerOwnership:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestSlugImmutableTriggerOwnership:
     """Refs #1709, #1058: analog ``TestAppendOnlyTriggerOwnership`` — die Slug-
     Immutable-Trigger (Migration 0116 FieldGroup/FieldTemplate, Migration 0117
@@ -446,10 +435,6 @@ class TestSlugImmutableTriggerOwnership:
         ("core_fieldtemplate", "fieldtemplate_slug_immutable"),
         ("core_documenttype", "documenttype_slug_immutable"),
     )
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Trigger-/Owner-Test benoetigt PostgreSQL")
 
     @property
     def _runtime_role(self):
@@ -494,6 +479,7 @@ class TestSlugImmutableTriggerOwnership:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestSuperAdminRLSBypass:
     """Refs #867: ``app.is_super_admin='true'`` bypasst die facility_isolation-
     Policy ueber alle facility-gescopten Tabellen.
@@ -506,10 +492,6 @@ class TestSuperAdminRLSBypass:
     ``transaction=True`` ist Pflicht: ``SET ROLE`` muss session-weit aktiv
     bleiben, damit die Policies tatsaechlich greifen.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
 
     def test_super_admin_session_var_bypasses_rls_policy(
         self,
@@ -680,6 +662,7 @@ class TestSuperAdminRLSBypass:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestDeletionRequestRLSIsolation:
     """Refs Matrix DEV-SEC-RLS-07: ``core_deletionrequest`` ist
     facility-gescopt (siehe ``EXPECTED_TABLES`` oben + Migration
@@ -693,10 +676,6 @@ class TestDeletionRequestRLSIsolation:
     die ``facility_isolation``-Policy tatsaechlich greift. ``transaction
     =True`` ist Pflicht — siehe Klassendoc in ``TestRLSCrossTenantIsolation``.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS requires PostgreSQL")
 
     def test_deletion_request_invisible_across_facility(
         self,

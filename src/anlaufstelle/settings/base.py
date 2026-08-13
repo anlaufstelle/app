@@ -9,6 +9,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from ._env import env_bool, env_csv, env_int
 from ._mfa_roles import parse_enforced_role_sets
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -21,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # abschaltbar (Default: laden, damit Dev/Test unverändert funktionieren; in
 # Prod ``DJANGO_LOAD_DOTENV=false`` setzen bzw. keine .env mounten).
 _DOTENV_PATH = BASE_DIR.parent / ".env"
-if os.environ.get("DJANGO_LOAD_DOTENV", "true").lower() in ("true", "1", "yes") and _DOTENV_PATH.exists():
+if env_bool("DJANGO_LOAD_DOTENV", default=True) and _DOTENV_PATH.exists():
     load_dotenv(_DOTENV_PATH)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
@@ -55,12 +56,12 @@ HEALTH_DETAIL_TOKEN = os.environ.get("DJANGO_HEALTH_DETAIL_TOKEN", "")
 # lang. Default hier 2 h; per ENV anpassbar. Invites sind davon ENTKOPPELT
 # (eigener Generator + INVITE_TOKEN_TIMEOUT), sonst wuerde der kurze Reset-Timeout
 # auch die Einladungs-Gueltigkeit verkuerzen.
-PASSWORD_RESET_TIMEOUT = int(os.environ.get("DJANGO_PASSWORD_RESET_TIMEOUT", str(2 * 60 * 60)))
+PASSWORD_RESET_TIMEOUT = env_int("DJANGO_PASSWORD_RESET_TIMEOUT", 2 * 60 * 60)
 
 # L4 (Refs #1375): Getrennte Gueltigkeit fuer Einladungs-Setup-Links. Ein neu
 # eingeladener Mitarbeitender braucht realistisch Tage, um den Link zu oeffnen —
 # daher laenger als der Reset-Timeout. Default 3 Tage; per ENV anpassbar.
-INVITE_TOKEN_TIMEOUT = int(os.environ.get("DJANGO_INVITE_TOKEN_TIMEOUT", str(3 * 24 * 60 * 60)))
+INVITE_TOKEN_TIMEOUT = env_int("DJANGO_INVITE_TOKEN_TIMEOUT", 3 * 24 * 60 * 60)
 
 # AGPL §13 (Refs #835): Quellcode-Link im Footer. Forks/Self-Hoster MUESSEN
 # SOURCE_CODE_URL auf ihren eigenen Quellcode-Spiegel zeigen lassen, sonst
@@ -230,9 +231,7 @@ OTP_TOTP_ISSUER = "Anlaufstelle"
 # domaingebunden — dev/demo/prod-Credentials sind bewusst nicht uebertragbar.
 OTP_WEBAUTHN_RP_NAME = "Anlaufstelle"
 OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "")
-OTP_WEBAUTHN_ALLOWED_ORIGINS = [
-    o.strip() for o in os.environ.get("OTP_WEBAUTHN_ALLOWED_ORIGINS", "").split(",") if o.strip()
-]
+OTP_WEBAUTHN_ALLOWED_ORIGINS = env_csv("OTP_WEBAUTHN_ALLOWED_ORIGINS")
 # Der Passkey ist bei uns ein Zweitfaktor NACH dem Passwort. In diesem
 # Second-Factor-Zuschnitt verlangt django-otp-webauthn keine User-Verification
 # (die Assertion laeuft in einer bereits per Passwort authentifizierten Session)
@@ -282,37 +281,37 @@ AUTH_PASSWORD_VALIDATORS = [
 # Re-Auth-Fenster fuer sensible Aktionen (MFA-Disable, DSGVO-Export).
 # In Tests deaktiviert (settings/test.py setzt False), in Prod/Dev aktiv.
 SUDO_MODE_ENABLED = True
-SUDO_MODE_TTL_SECONDS = int(os.environ.get("SUDO_MODE_TTL_SECONDS", "900"))
+SUDO_MODE_TTL_SECONDS = env_int("SUDO_MODE_TTL_SECONDS", 900)
 
 # --- Breach-Detection (Refs #685) ---
-BREACH_DETECTION_WINDOW_MINUTES = int(os.environ.get("BREACH_DETECTION_WINDOW_MINUTES", "60"))
-BREACH_FAILED_LOGIN_THRESHOLD = int(os.environ.get("BREACH_FAILED_LOGIN_THRESHOLD", "20"))
-BREACH_EXPORT_THRESHOLD = int(os.environ.get("BREACH_EXPORT_THRESHOLD", "10"))
-BREACH_DELETE_THRESHOLD = int(os.environ.get("BREACH_DELETE_THRESHOLD", "50"))
+BREACH_DETECTION_WINDOW_MINUTES = env_int("BREACH_DETECTION_WINDOW_MINUTES", 60)
+BREACH_FAILED_LOGIN_THRESHOLD = env_int("BREACH_FAILED_LOGIN_THRESHOLD", 20)
+BREACH_EXPORT_THRESHOLD = env_int("BREACH_EXPORT_THRESHOLD", 10)
+BREACH_DELETE_THRESHOLD = env_int("BREACH_DELETE_THRESHOLD", 50)
 # Sekundaeres Langzeitfenster gegen low-and-slow (Refs #1368): dieselben
 # per-User-/facility-weiten Heuristiken laufen zusaetzlich ueber ein breiteres
 # Fenster mit hoeheren Schwellen, damit Angriffe unter der 60-min-Schwelle nicht
 # durchrutschen. Default 24h.
-BREACH_DETECTION_LONG_WINDOW_MINUTES = int(os.environ.get("BREACH_DETECTION_LONG_WINDOW_MINUTES", "1440"))
-BREACH_FAILED_LOGIN_THRESHOLD_LONG = int(os.environ.get("BREACH_FAILED_LOGIN_THRESHOLD_LONG", "60"))
-BREACH_EXPORT_THRESHOLD_LONG = int(os.environ.get("BREACH_EXPORT_THRESHOLD_LONG", "30"))
-BREACH_DELETE_THRESHOLD_LONG = int(os.environ.get("BREACH_DELETE_THRESHOLD_LONG", "150"))
+BREACH_DETECTION_LONG_WINDOW_MINUTES = env_int("BREACH_DETECTION_LONG_WINDOW_MINUTES", 1440)
+BREACH_FAILED_LOGIN_THRESHOLD_LONG = env_int("BREACH_FAILED_LOGIN_THRESHOLD_LONG", 60)
+BREACH_EXPORT_THRESHOLD_LONG = env_int("BREACH_EXPORT_THRESHOLD_LONG", 30)
+BREACH_DELETE_THRESHOLD_LONG = env_int("BREACH_DELETE_THRESHOLD_LONG", 150)
 # Massen-Client-Destruktion facility-weit (Refs #1368): CLIENT_SOFT_DELETED /
 # CLIENT_ANONYMIZED / DELETION_APPROVED schreiben KEIN Action.DELETE und blieben
 # fuer detect_mass_delete unsichtbar. Eigene, niedrigere Schwelle (gezieltes
 # Vernichten von Personendaten wiegt schwerer als generische Loeschungen).
-BREACH_CLIENT_DESTRUCTION_THRESHOLD = int(os.environ.get("BREACH_CLIENT_DESTRUCTION_THRESHOLD", "20"))
-BREACH_CLIENT_DESTRUCTION_THRESHOLD_LONG = int(os.environ.get("BREACH_CLIENT_DESTRUCTION_THRESHOLD_LONG", "60"))
+BREACH_CLIENT_DESTRUCTION_THRESHOLD = env_int("BREACH_CLIENT_DESTRUCTION_THRESHOLD", 20)
+BREACH_CLIENT_DESTRUCTION_THRESHOLD_LONG = env_int("BREACH_CLIENT_DESTRUCTION_THRESHOLD_LONG", 60)
 # Anonyme Login-Bursts (Refs #1368): fehlgeschlagene Logins gegen UNBEKANNTE
 # Usernames (user IS NULL, facility IS NULL) — Credential-Stuffing/Enumeration.
 # Pro Quell-IP + installationsweites Gesamtvolumen.
-BREACH_ANON_LOGIN_IP_THRESHOLD = int(os.environ.get("BREACH_ANON_LOGIN_IP_THRESHOLD", "20"))
-BREACH_ANON_LOGIN_TOTAL_THRESHOLD = int(os.environ.get("BREACH_ANON_LOGIN_TOTAL_THRESHOLD", "100"))
+BREACH_ANON_LOGIN_IP_THRESHOLD = env_int("BREACH_ANON_LOGIN_IP_THRESHOLD", 20)
+BREACH_ANON_LOGIN_TOTAL_THRESHOLD = env_int("BREACH_ANON_LOGIN_TOTAL_THRESHOLD", 100)
 # Verteilter Login-Angriff auf EINEN Account von vielen IPs (Refs #1372):
 # Victim-Lockout-/Distributed-Bruteforce-Signatur. Monitor-only-Gegenstueck zum
 # bewusst beibehaltenen 10/h-Username-Ratelimit (Anti-Botnet, #598). Zahl
 # distinkter Quell-IPs je User im Fenster.
-BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD = int(os.environ.get("BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD", "10"))
+BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD = env_int("BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD", 10)
 # Optional: Webhook fuer externe Eskalation. Leer = kein Webhook.
 BREACH_NOTIFICATION_WEBHOOK_URL = os.environ.get("BREACH_NOTIFICATION_WEBHOOK_URL") or None
 
@@ -327,11 +326,11 @@ CSRF_FAILURE_VIEW = "core.views.errors.csrf_failure"
 # Middleware ist No-Op (kein Disk-Check).
 MAINTENANCE_FLAG_FILE = os.environ.get("MAINTENANCE_FLAG_FILE") or None
 # Komma-separierte IP-Liste fuer Ops-Zugriff waehrend der Wartung.
-MAINTENANCE_ALLOW_IPS = [ip.strip() for ip in os.environ.get("MAINTENANCE_ALLOW_IPS", "").split(",") if ip.strip()]
+MAINTENANCE_ALLOW_IPS = env_csv("MAINTENANCE_ALLOW_IPS")
 # Caching der Flag-Datei-Pruefung (Sekunden).
-MAINTENANCE_CACHE_TTL = int(os.environ.get("MAINTENANCE_CACHE_TTL", "5"))
+MAINTENANCE_CACHE_TTL = env_int("MAINTENANCE_CACHE_TTL", 5)
 # Retry-After-Header-Wert (Sekunden).
-MAINTENANCE_RETRY_AFTER = int(os.environ.get("MAINTENANCE_RETRY_AFTER", "600"))
+MAINTENANCE_RETRY_AFTER = env_int("MAINTENANCE_RETRY_AFTER", 600)
 
 SESSION_COOKIE_AGE = 1800  # 30 Minuten
 # False reduziert DB-Write-Amplifikation bei HTMX-Microrequests
@@ -348,7 +347,7 @@ SESSION_SAVE_EVERY_REQUEST = False
 # DB-Session-Backend hat keinen queryable User-Index, daher muss jede aktive
 # Session dekodiert werden — der Deckel bounded den Worst-Case je Revocation.
 # Default weit ueber realistischem Bestand; bei Ueberschreitung wird laut geloggt.
-OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = int(os.environ.get("OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", "10000"))
+OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = env_int("OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", 10000)
 
 # --- Trusted Proxy Hops (Client-IP-Ermittlung) ---
 # Anzahl der vertrauenswürdigen Proxy-Hops vor der Django-App. Bestimmt, welcher
@@ -370,7 +369,7 @@ OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = int(os.environ.get("OFFLINE_REVOCATION_S
 # unterläuft IP-Ratelimits, Login-Lockout (N9) und die Audit-Client-IP. Jeder
 # gezählte Hop muss ein bekannter Proxy sein. Ein Django-System-Check
 # (``core.checks.check_trusted_proxy_hops``) warnt bei ungewöhnlich hohen Werten.
-TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
+TRUSTED_PROXY_HOPS = env_int("TRUSTED_PROXY_HOPS", 1)
 
 # django-ratelimit: die per-IP-Eimer (key="ip") sollen auf der ECHTEN Client-IP
 # schlüsseln, nicht auf REMOTE_ADDR. Hinter dem Caddy-Reverse-Proxy ist
@@ -432,15 +431,15 @@ ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 # Prüft jede hochgeladene Datei VOR der Verschlüsselung gegen einen ClamAV-Daemon.
 # In Dev/Test per Default deaktiviert; prod.py aktiviert es.
 # Bei aktivem Scan und unerreichbarem Daemon wird der Upload abgewiesen (fail-closed).
-CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "false").lower() in ("true", "1", "yes")
+CLAMAV_ENABLED = env_bool("CLAMAV_ENABLED", default=False)
 CLAMAV_HOST = os.environ.get("CLAMAV_HOST", "clamav")
-CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))
+CLAMAV_PORT = env_int("CLAMAV_PORT", 3310)
 # Refs #1283: MUSS unter dem Gunicorn-Worker-Timeout (GUNICORN_TIMEOUT, Default
 # 30s — siehe docker-entrypoint.sh) bleiben, inkl. Marge für die
 # Fehlerbehandlung. scan_file erzwingt diesen Wert als harte Wall-Clock-Deadline;
 # liegt er >= dem Worker-Timeout, killt Gunicorn den Worker bei langsamem clamd
 # zuerst → 500 statt fail-closed "Scanner nicht erreichbar".
-CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "15"))
+CLAMAV_TIMEOUT = env_int("CLAMAV_TIMEOUT", 15)
 
 # --- File-Vault Upload-Limits (Refs #1268) ---
 # Service-Layer-Obergrenzen als Defense-in-Depth gegen authentifizierten
@@ -467,12 +466,12 @@ CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "15"))
 #   Eintraege, billig aus dem EOCD-Record gelesen, BEVOR zipfile.ZipFile() pro
 #   Eintrag ein ZipInfo materialisiert — sonst waere der Archiv-Guard selbst ein
 #   Memory-DoS (~1 Mio Mini-Eintraege => hunderte MB transient) auf RAM-limitierten Hosts.
-FILE_VAULT_MAX_UPLOAD_BYTES = int(os.environ.get("FILE_VAULT_MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
-FILE_VAULT_MAX_UPLOAD_FILES = int(os.environ.get("FILE_VAULT_MAX_UPLOAD_FILES", "20"))
-FILE_VAULT_MAX_IMAGE_PIXELS = int(os.environ.get("FILE_VAULT_MAX_IMAGE_PIXELS", str(40_000_000)))
-FILE_VAULT_MAX_ARCHIVE_BYTES = int(os.environ.get("FILE_VAULT_MAX_ARCHIVE_BYTES", str(200 * 1024 * 1024)))
-FILE_VAULT_MAX_ARCHIVE_RATIO = int(os.environ.get("FILE_VAULT_MAX_ARCHIVE_RATIO", "100"))
-FILE_VAULT_MAX_ARCHIVE_ENTRIES = int(os.environ.get("FILE_VAULT_MAX_ARCHIVE_ENTRIES", "10000"))
+FILE_VAULT_MAX_UPLOAD_BYTES = env_int("FILE_VAULT_MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
+FILE_VAULT_MAX_UPLOAD_FILES = env_int("FILE_VAULT_MAX_UPLOAD_FILES", 20)
+FILE_VAULT_MAX_IMAGE_PIXELS = env_int("FILE_VAULT_MAX_IMAGE_PIXELS", 40_000_000)
+FILE_VAULT_MAX_ARCHIVE_BYTES = env_int("FILE_VAULT_MAX_ARCHIVE_BYTES", 200 * 1024 * 1024)
+FILE_VAULT_MAX_ARCHIVE_RATIO = env_int("FILE_VAULT_MAX_ARCHIVE_RATIO", 100)
+FILE_VAULT_MAX_ARCHIVE_ENTRIES = env_int("FILE_VAULT_MAX_ARCHIVE_ENTRIES", 10000)
 
 # --- Default PK ---
 

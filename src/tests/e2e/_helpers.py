@@ -5,6 +5,18 @@ import subprocess
 import sys
 
 
+def python_bin() -> str:
+    """Pfad zum Python-Interpreter fuer ``subprocess``-Aufrufe aus E2E-Tests.
+
+    Refs #1829: ``.venv/bin/python`` falls vorhanden, sonst ``sys.executable``
+    — stand als ``_python()`` byte-identisch in 10 E2E-Testdateien. Diese
+    Fassung wird ueberall unter dem lokalen Namen ``_python`` importiert
+    (``from ._helpers import python_bin as _python``), damit die Aufrufstellen
+    unveraendert bleiben.
+    """
+    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+
+
 def django_shell(e2e_env, script):
     """``manage.py shell -c`` gegen die E2E-Datenbank; liefert die Ausgabezeilen.
 
@@ -14,9 +26,8 @@ def django_shell(e2e_env, script):
     ``DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e``, ohne das das Skript
     die falsche Datenbank träfe.
     """
-    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
     out = subprocess.run(
-        [python, "src/manage.py", "shell", "--no-imports", "-c", script],
+        [python_bin(), "src/manage.py", "shell", "--no-imports", "-c", script],
         capture_output=True,
         text=True,
         env=e2e_env,

@@ -5,7 +5,18 @@ M2 (Refs #1058): Die dynamische ``data_json``-Form ist nach
 auch von Client/Case genutzt. :class:`DynamicEventDataForm` ist nur noch die
 event-seitige Auspraegung (leerer Body, FILE-Felder bleiben aktiv), damit alle
 Bestands-Importpfade und das Verhalten des Event-Pfads unveraendert bleiben.
-Die Modul-Helfer der Form werden hier ebenfalls re-exportiert.
+Ein Teil der Modul-Helfer wird hier ebenfalls re-exportiert — ausschliesslich
+diejenigen mit einem echten Verbraucher ausserhalb dieses Moduls
+(``core.services.system.field_types`` importiert ``MultipleFileField``/
+``MultipleFileInput`` weiterhin von hier, ebenso einzelne
+``test_mutation_followup_event_form.py``-Tests die uebrigen internen Helfer —
+Refs #1827: dieses Test-File bleibt gemaess mutmut-Vertrag unangetastet, daher
+bleiben ``_build_dynamic_field``/``_file_upload_errors``/
+``_resolve_upload_constraints``/``_select_choices`` re-exportiert). Der reine
+Test-only-Re-Export ``_coerce_condition_number`` (einziger Verbraucher:
+``test_event_form_conditions.py``) importiert seitdem direkt von
+:mod:`core.forms.dynamic`; ``_PAYLOAD_UNSET`` hatte ueberhaupt keinen
+Verbraucher ausserhalb dieses Moduls und ist ersatzlos entfallen.
 """
 
 from django import forms
@@ -13,12 +24,10 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.dynamic import (  # noqa: F401 — Re-Export, Importpfad-Stabilitaet (Refs #1058)
-    _PAYLOAD_UNSET,
     DynamicDataForm,
     MultipleFileField,
     MultipleFileInput,
     _build_dynamic_field,
-    _coerce_condition_number,
     _file_upload_errors,
     _resolve_upload_constraints,
     _select_choices,
@@ -138,10 +147,6 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
             client_id,
             missing_error=_("Person existiert nicht."),  # pragma: no mutate
         )
-
-    def clean(self):
-        cleaned = super().clean()
-        return cleaned
 
 
 class DynamicEventDataForm(DynamicDataForm):

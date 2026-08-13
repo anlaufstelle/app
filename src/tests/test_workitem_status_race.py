@@ -12,7 +12,7 @@ import threading
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
-from django.db import close_old_connections, connection
+from django.db import close_old_connections
 
 from core.models import Activity, WorkItem
 from core.services.case import update_workitem_status
@@ -64,6 +64,7 @@ class TestUpdateWorkitemStatusIdempotency:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
 class TestUpdateWorkitemStatusRace:
     """Concurrency: zwei zeitgleiche Status-Updates auf dasselbe WorkItem.
 
@@ -72,10 +73,6 @@ class TestUpdateWorkitemStatusRace:
     COMMIT erledigt hat. Anschliessend sieht Thread B den neuen Status und
     der Idempotenz-Guard verhindert Doppelarbeit.
     """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("select_for_update erfordert PostgreSQL")
 
     def test_concurrent_done_results_in_single_activity(self, facility, staff_user):
         wi = WorkItem.objects.create(
