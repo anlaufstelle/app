@@ -19,6 +19,9 @@ A full tour of Anlaufstelle. All images come from the demo environment
 ### Client history
 ![Client history](screenshots/personendetail-en.webp)
 
+### Search — the full results page
+![Search](screenshots/suche-en.webp)
+
 ## Case work
 
 ### Case file with episodes and goals
@@ -35,11 +38,22 @@ A full tour of Anlaufstelle. All images come from the demo environment
 ### Statistics
 ![Statistics](screenshots/statistiken-en.webp)
 
+### Dataset reports — ready-made exports as cards
+![Dataset reports](screenshots/statistik-berichte-en.webp)
+
 ### Privacy-friendly external report
 ![External report](screenshots/statistik-extern-en.webp)
 
 ### GDPR data package
 ![GDPR package](screenshots/dsgvo-paket-en.webp)
+
+## Area overviews
+
+### Privacy — data-subject rights, deadlines and records
+![Privacy area](screenshots/datenschutz-uebersicht-en.webp)
+
+### Administration — forms, fields, data import
+![Administration area](screenshots/verwaltung-uebersicht-en.webp)
 
 ## Access
 

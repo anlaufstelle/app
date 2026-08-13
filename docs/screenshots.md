@@ -20,6 +20,9 @@ pseudonymisierte Beispieldaten.
 ### Personenverlauf
 ![Personenverlauf](screenshots/personendetail.webp)
 
+### Suche — die vollständige Ergebnisseite
+![Suche](screenshots/suche.webp)
+
 ## Fallarbeit
 
 ### Fallakte mit Episoden und Zielen
@@ -36,11 +39,22 @@ pseudonymisierte Beispieldaten.
 ### Statistiken
 ![Statistiken](screenshots/statistiken.webp)
 
+### Datensatz-Berichte — fertige Auswertungen als Karten
+![Datensatz-Berichte](screenshots/statistik-berichte.webp)
+
 ### Datenschutzfreundlicher externer Bericht
 ![Externer Bericht](screenshots/statistik-extern.webp)
 
 ### DSGVO-Datenpaket
 ![DSGVO-Paket](screenshots/dsgvo-paket.webp)
+
+## Bereichs-Übersichten
+
+### Datenschutz — Betroffenenrechte, Fristen und Nachweise
+![Datenschutz-Bereich](screenshots/datenschutz-uebersicht.webp)
+
+### Verwaltung — Formulare, Felder, Datenübernahme
+![Verwaltungs-Bereich](screenshots/verwaltung-uebersicht.webp)
 
 ## Zugang
 
