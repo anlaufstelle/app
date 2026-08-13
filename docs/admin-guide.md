@@ -512,6 +512,8 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 >
 > **Bewusste Lücke:** Trägt eine **Feldvorlage** einen Schlüssel, den kein Bericht kennt, sagt der Bericht das *nicht* eigens — anders als beim Dokumentationstyp. Der Grund ist, dass sich dort keine sinnvolle Zahl nennen ließe: Ein Feld mit unbekanntem Schlüssel liefert schlicht keine Werte, und wie viele es hätten sein sollen, weiß niemand. Sichtbar bleibt der Zustand über „Erscheint in …" an der Feldvorlage selbst — dort steht dann „Erscheint in keinem Bericht."
 
+**Alle Zuordnungen auf einen Blick.** Wer den Stand nicht Typ für Typ über „Erscheint in …" abfragen will, nutzt den Wartungsbefehl **`inventory_report_bindings`** (#1848). Er listet für eine Einrichtung (`--facility`, Pflichtangabe) auf, welcher Berichtsschlüssel in welchem Berichts-Backend steckt und welche Dokumentationstypen und Feldvorlagen ihn tragen — bzw. welche keinen tragen und damit in keinem Bericht erscheinen; `--format json` und `--output` schreiben das Ergebnis maschinenlesbar in eine Datei. Er ist reine Auskunft und verändert keine Daten, muss aber wie die übrigen Wartungskommandos (z. B. `purge_orphan_field_data`, unten) mit der **Admin-DB-Rolle** laufen und bricht sonst mit einer klaren Meldung ab (Row-Level-Security). Ausführung: siehe `docs/ops-runbook.md` § 3.5.
+
 #### Mindest-Kontaktstufe
 
 Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Mit Zusatzangaben", weil zusätzliche persönliche Angaben zur Person vorliegen müssen.
@@ -522,7 +524,7 @@ Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Erei
 
 #### Feldebenen-Sensibilität (`FieldTemplate.sensitivity`)
 
-Neben der Sensibilität des Dokumenttyps kann jedes einzelne Feld einer Feldvorlage eine **eigene** Sensibilitätsstufe erhalten (`FieldTemplate.sensitivity`). Effektiv gilt für die Sichtbarkeit des Feldes das **Maximum** aus Dokumenttyp- und Feld-Sensibilität — ein als `HIGH` markiertes Feld bleibt für Fachkräfte unsichtbar, auch wenn der Dokumenttyp selbst nur `NORMAL` ist.
+Neben der Sensibilität des Dokumentationstyps kann jedes einzelne Feld einer Feldvorlage eine **eigene** Sensibilitätsstufe erhalten (`FieldTemplate.sensitivity`). Effektiv gilt für die Sichtbarkeit des Feldes das **Maximum** aus Dokumentationstyp- und Feld-Sensibilität — ein als `HIGH` markiertes Feld bleibt für Fachkräfte unsichtbar, auch wenn der Dokumentationstyp selbst nur `NORMAL` ist.
 
 **Entkopplung Verschlüsselung ↔ Sichtbarkeit** (Refs #356): Die beiden Flags `is_encrypted` (Ruhe-Verschlüsselung des Werts in der Datenbank) und `sensitivity` (Sichtbarkeit im UI) sind **unabhängig** voneinander konfigurierbar:
 
@@ -533,7 +535,7 @@ Neben der Sensibilität des Dokumenttyps kann jedes einzelne Feld einer Feldvorl
 
 Felder, zu denen bereits Werte in Ereignissen, Personen oder Fällen existieren, können **nicht ohne Weiteres gelöscht** werden. Beim Versuch, eine Feldvorlage zu entfernen, greift ein Schutzmechanismus, der auf gespeicherte Werte prüft. Wird das Feld dennoch benötigt zu entfernen, muss vorher eine Daten-Migration laufen, die die Werte aufräumt oder in ein anderes Feld überführt.
 
-> **Pragmatische Alternative:** Statt zu löschen, das Feld im Dokumenttyp-Mapping deaktivieren — bestehende Daten bleiben erhalten, neue Ereignisse/Personen/Fälle bekommen das Feld nicht mehr angeboten.
+> **Pragmatische Alternative:** Statt zu löschen, das Feld im Dokumentationstyp-Mapping deaktivieren — bestehende Daten bleiben erhalten, neue Ereignisse/Personen/Fälle bekommen das Feld nicht mehr angeboten.
 
 ##### Verwaiste Feldwerte („Nicht mehr zugeordnet")
 
@@ -1356,18 +1358,18 @@ Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein A
 
 Jede Vergabe und jeder Entzug des Rechts sowie jede Genehmigung werden im unveränderlichen Audit-Log protokolliert. Existiert für einen offenen Antrag außer der antragstellenden Person keine aktive Person mit dem Recht, zeigt die Löschantragsliste eine deutliche Warnung („Kein möglicher Genehmiger") — vergeben Sie das Recht dann an eine weitere Person.
 
-#### Wer den Menüpunkt „Löschanträge" sieht (Refs #1736)
+#### Wer den Reiter „Löschanträge" sieht (Refs #1736)
 
-Die Sichtbarkeit folgt nicht mehr der Rolle allein, sondern dem tatsächlichen Bedarf:
+Löschanträge liegen als Reiter **„Löschanträge"** im Bereich **„Datenschutz"** (`/datenschutz/`). In der Sidebar steht nicht der einzelne Reiter, sondern der Bereichs-Eintrag „Datenschutz" — er erscheint, sobald mindestens einer seiner Reiter sichtbar ist. Die Sichtbarkeit des Reiters folgt nicht mehr der Rolle allein, sondern dem tatsächlichen Bedarf:
 
-| Wer | Sieht den Menüpunkt | Sieht in der Liste |
+| Wer | Sieht den Reiter | Sieht in der Liste |
 |---|---|---|
 | Leitung, Anwendungsbetreuung | ja | **alle** Anträge der Einrichtung |
 | Träger:in des Rechts *Löschbestätigung* (ohne Leitungsrolle) | ja | **alle** Anträge der Einrichtung |
 | Antragstellende Person mit mindestens einem **offenen** eigenen Antrag | ja, solange der Antrag offen ist | **nur die eigenen** Anträge |
 | Alle übrigen | nein ||
 
-Der letzte Fall ist der **Rückkanal**: Wer einen Antrag stellt, findet ihn danach über die Navigation und über einen Hinweisbanner am betroffenen Datensatz wieder und sieht seinen Status — ohne dadurch Zugriff auf fremde Begründungen und Ziel-Pseudonyme zu bekommen. Ist der Antrag entschieden, verschwindet der Menüpunkt wieder.
+Der letzte Fall ist der **Rückkanal**: Wer einen Antrag stellt, findet ihn danach über die Navigation und über einen Hinweisbanner am betroffenen Datensatz wieder und sieht seinen Status — ohne dadurch Zugriff auf fremde Begründungen und Ziel-Pseudonyme zu bekommen. Ist der Antrag entschieden, verschwindet der Reiter wieder — und mit ihm der Bereichs-Eintrag „Datenschutz", sofern kein anderer Reiter des Bereichs sichtbar bleibt.
 
 Am Datensatz selbst ist ein laufender Antrag jetzt ebenfalls sichtbar (Kennzeichnung in der Personenliste, Banner mit Datum und antragstellender Person im Personen-Detail); die Aktion „Löschen beantragen" ist währenddessen deaktiviert, ein zweiter Antrag ist nicht möglich.
 
@@ -1591,7 +1593,7 @@ Jedes Artefakt weist deshalb **Quelle und Stand** aus („Datenquelle: Monats-Ag
 
 Werden für dieselbe Einrichtung Berichte über Teilzeiträume **und** über deren Vereinigung herausgegeben (zwölf Monatsberichte plus ein Jahresbericht), lässt sich jede in einem Teilbericht unterdrückte Zelle aus der Summe der übrigen exakt zurückrechnen — auch dann, wenn in **keinem** der beteiligten Berichte eine einzige Zelle unterdrückt wurde. Das ist eine Eigenschaft des Verfahrens, kein Fehler: k-Anonymität ist eine Eigenschaft *einer* Tabelle über *einer* Grundgesamtheit.
 
-Die **Freigabe-Übersicht** (Statistik → „Freigabe-Übersicht", Rolle: Leitung/Einrichtungsverwaltung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
+Die **Freigabe-Übersicht** (Statistik → Reiter „Freigaben", Rolle: Leitung/Einrichtungsverwaltung) listet die bereits herausgegebenen Berichtszeiträume aus der Audit-Spur und markiert Überschneidungen. Sie verhindert nichts — sie zeigt Ihnen, wo Sie hinsehen müssen. Damit die Meldung bewertbar bleibt, erfassen Sie beim Export die optionalen Felder **Empfänger** und **Zweck**; überlappende Zeiträume an *verschiedene* Empfänger sind unkritisch, an denselben nicht.
 
 > **Aufbewahrung — drei Klassen, nicht zwei.** Unter der Audit-Aktion „Export" laufen drei verschiedene Dinge, und nur das erste ist eine Herausgabe im Sinne dieser Übersicht:
 >

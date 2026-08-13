@@ -20,7 +20,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 8. [Was bedeutet die „Wiedervorlage" bei einer Aufgabe?](#8-was-bedeutet-die-wiedervorlage-bei-einer-aufgabe)
 9. [Wie lade ich eine Datei an ein Ereignis an?](#9-wie-lade-ich-eine-datei-an-ein-ereignis-an)
 10. [Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?](#10-kann-ich-offline-arbeiten-wenn-ich-im-einsatz-unterwegs-bin)
-11. [Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.](#11-die-suche-findet-meinen-klienten-nicht-obwohl-der-name-fast-passt)
+11. [Die Suche findet die Person nicht, obwohl der Name fast passt.](#11-die-suche-findet-die-person-nicht-obwohl-der-name-fast-passt)
 12. [Wie lege ich eine Schnell-Vorlage (Quick-Template) an?](#12-wie-lege-ich-eine-schnell-vorlage-quick-template-an)
 
 **C. Rollen & Datenschutz**
@@ -44,7 +44,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 ### 1. Wie stelle ich den Standard-Dokumentationstyp ein?
 
-**Administration → Einstellungen → Feld „Standard-Dokumentationstyp"** auswählen. Der gewählte Typ wird beim Öffnen von „Neuer Kontakt" automatisch vorausgewählt und die dynamischen Felder direkt geladen.
+**Administration → Einstellungen → Feld „Standard-Dokumentationstyp"** auswählen. Der gewählte Typ wird beim Öffnen von „Kontakt dokumentieren" automatisch vorausgewählt und die dynamischen Felder direkt geladen.
 
 **Relevante Dateien:**
 - [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py) — `default_document_type` ForeignKey
@@ -162,23 +162,23 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 
 ### 5a. Was zeigt mir die Arbeitszentrale (Startseite `/start/`)?
 
-Die **Arbeitszentrale** (`/start/`) ist die rollenbezogene Landingpage (Refs #920) — nicht zu verwechseln mit dem **Zeitstrom** (`/`, der chronologische Tages-Feed, siehe [Frage 5](#5-wie-funktioniert-der-zeitstrom)). Die Arbeitszentrale verdichtet stattdessen die für **deine Rolle** wichtigsten Kennzahlen zu Karten. Zugang ab Rolle `assistant` aufwärts; jede Person sieht **ausschließlich** die Karten ihrer eigenen Rolle. Alle Daten sind auf die aktuelle Einrichtung (`current_facility`) gescoped — Ausnahme: der Super-Admin sieht einrichtungsübergreifend.
+Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** (Refs #920, Zuschnitt seit #1813) — nicht zu verwechseln mit dem **Zeitstrom** (`/`, der chronologische Tages-Feed, siehe [Frage 5](#5-wie-funktioniert-der-zeitstrom)). Sie trägt den Titel „Leitungs-Arbeitszentrale" und verdichtet die Aufsichts-Kennzahlen der Einrichtung zu Karten. Alle Daten sind auf die aktuelle Einrichtung (`current_facility`) gescoped.
 
-Welche Karten je Rolle erscheinen:
+**Nur die Leitung sieht diese Seite.** Alle anderen Rollen werden beim Aufruf von `/start/` auf ihren eigenen Einstieg umgeleitet — die früher dort gezeigten Karten leben auf der jeweiligen Zielseite:
 
-| Rolle | Karten (Inhalt) |
-|-------|-----------------|
-| **Fachkraft / Assistent** (`staff`, `assistant`) | Heutige Kontakte (Anzahl Ereignisse von heute) · Meine offenen Aufgaben (eigene WorkItems OPEN/IN_PROGRESS, Top 5 nach Fälligkeit + Gesamtzahl) · Zuletzt bearbeitete Personen (5 zuletzt geänderte aktive Klienten) |
-| **Leitung** (`lead`) | Ausstehende Löschanträge (PENDING) · Offene Retention-Vorschläge (PENDING) · Aktive Legal Holds · Jüngster Statistik-Snapshot |
-| **Facility-Admin** (`facility_admin`) | User ohne MFA (Anzahl + Gesamtzahl aktiver User) · Settings-Warnungen (keine Settings konfiguriert / MFA nicht einrichtungsweit erzwungen / K-Anonymisierung deaktiviert) |
-| **Super-Admin** (`super_admin`) — cross-facility | Anzahl Einrichtungen · Aktive User gesamt · Audit-Ereignisse der letzten 24 h · Kritische Audit-Aktionen der letzten 24 h (LOGIN_FAILED, SECURITY_VIOLATION, DELETE, DELETION_APPROVED) |
+| Rolle | Was `/start/` tut |
+|-------|-------------------|
+| **Leitung** (`lead`) | Zeigt die Arbeitszentrale: Ausstehende Löschanträge (PENDING) · Offene Retention-Vorschläge (PENDING) · Aktive Legal Holds · Jüngster Statistik-Snapshot |
+| **Fachkraft / Assistenz** (`staff`, `assistant`) | Weiterleitung auf den **Zeitstrom** (`/`) — heutige Kontakte, eigene offene Aufgaben und zuletzt bearbeitete Personen stehen dort als Cockpit-Block über dem Feed |
+| **Anwendungsbetreuung** (`facility_admin`) | Weiterleitung auf die **Verwaltung** (`/verwaltung/`) — dort stehen u. a. User ohne MFA und die Settings-Warnungen |
+| **Systemadministration** (`super_admin`) | Weiterleitung auf den **Systembereich** (`/system/`) mit der einrichtungsübergreifenden Sicht |
 
-Die Template-Auswahl erfolgt strikt über `user.role`; es gibt kein eigenes Rechte-Konzept außer dem Login- bzw. Rollen-Gate.
+Entsprechend erscheint auch der Sidebar-Eintrag „Arbeitszentrale" ausschließlich bei der Leitung. Die Weiche erfolgt strikt über `user.role`; es gibt kein eigenes Rechte-Konzept außer dem Login- bzw. Rollen-Gate.
 
 **Relevante Dateien:**
-- [`src/core/views/dashboard.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dashboard.py) — `RoleDashboardView` (Template-Dispatch nach Rolle)
-- [`src/core/services/dashboard/main.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/main.py) — `staff_/lead_/facility_admin_/super_admin_dashboard_context()`
-- [`src/templates/core/dashboard/`](https://github.com/anlaufstelle/app/tree/main/src/templates/core/dashboard) — vier rollenspezifische Templates
+- [`src/core/views/dashboard.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dashboard.py) — `RoleDashboardView` (Rollen-Weiche mit den drei Redirects)
+- [`src/core/services/dashboard/main.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/main.py) — `lead_dashboard_context()` (die übrigen Kontext-Funktionen versorgen Zeitstrom und Verwaltung)
+- [`src/templates/core/dashboard/role_lead.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/dashboard/role_lead.html) — das einzige Arbeitszentrale-Template
 
 ---
 
@@ -198,7 +198,7 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 | Bereich | Inhalt | Zeitscope |
 |---------|--------|-----------|
-| **Statistik-Grid** | Kontakte, Aktivitäten, neue Aufgaben, neue Klienten | Nur innerhalb der Schicht |
+| **Statistik-Grid** | Kontakte, Aktivitäten, neue Aufgaben, neue Personen | Nur innerhalb der Schicht |
 | **Wichtige Vorkommnisse** | Krisengespräche (gelb), Hausverbote (rot), dringende Aufgaben (blau) | Nur innerhalb der Schicht |
 | **Offene Aufgaben** | Sortiert nach Priorität (dringend → wichtig → normal), max. 10 | Einrichtungsweit, alle Zeiten |
 | **Event-Aufschlüsselung** | Kontakte nach Dokumentationstyp mit farbigen Badges | Nur innerhalb der Schicht |
@@ -301,7 +301,7 @@ Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und m
 
 ---
 
-### 11. Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.
+### 11. Die Suche findet die Person nicht, obwohl der Name fast passt.
 
 Die Suche ist **tippfehler-tolerant** (Fuzzy Search): „Muller" findet auch „Müller", „Tomas" auch „Thomas". Sie müssen den Namen nicht exakt kennen.
 
@@ -387,12 +387,14 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 
 Navigation und Aktions-Buttons passen sich automatisch der Rolle an:
 
-- **Sidebar/Navigation:**
+- **Sidebar/Navigation** (Ziel-IA seit #1813):
+ - „Arbeitszentrale" ausschließlich für die Leitung (siehe [Frage 5a](#5a-was-zeigt-mir-die-arbeitszentrale-startseite-start))
  - „Fälle" erscheint erst ab Fachkraft
- - „Statistiken" und „Löschanträge" ab Leitung
- - „Audit-Log", „DSGVO" und „Administration" für `facility_admin` (nur eigene Einrichtung)
- - „Systembereich" (`/system/`) ausschließlich für `super_admin`
-- **Erstellen-Menü:** „Neue Person", „Neuer Arbeitsauftrag" und „Neuer Fall" erst ab Fachkraft sichtbar
+ - „Statistik" ab Leitung
+ - Bereich „Datenschutz" (`/datenschutz/`) erscheint, sobald mindestens einer seiner Reiter sichtbar ist — „Löschanträge" ab Leitung, „Audit-Log" und „DSGVO-Paket" für die Anwendungsbetreuung
+ - Bereich „Verwaltung" (`/verwaltung/`) für die Anwendungsbetreuung
+ - „Systembereich" (`/system/`) und „Administration ↗" (Django-Admin) ausschließlich für die Systemadministration — die Anwendungsbetreuung erreicht den Django-Admin über eine eigens markierte Zeile auf der Verwaltungs-Übersicht
+- **Erstellen-Menü:** „Person anlegen", „Aufgabe erstellen" und „Fall anlegen" erst ab Fachkraft sichtbar
 - **Detail-Seiten:** „Bearbeiten"- und „Löschen"-Buttons je nach Rolle und Eigentümerschaft ein-/ausgeblendet
 - **Banner im `/system/`-Bereich:** Permanenter Hinweis auf facility-übergreifenden Zugriff und Audit-Protokollierung (`SYSTEM_VIEW`)
 
@@ -458,7 +460,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | **Personen-Datenexport** (JSON + PDF, DSGVO Art. 15) | `ClientDataExportJSONView`, `ClientDataExportPDFView` | Datenauskunft über die Kernbestände einer Person — Stammdaten, Fälle, Episoden, Ereignisse, Änderungshistorie, Aufgaben, Aktivitäten und Aufbewahrungs-Metadaten, jeweils inkl. der entschlüsselten dynamischen Felder ([Umfang und bewusste Ausschlüsse: Admin-Guide § 7.6](admin-guide.md#umfang-der-auskunft-art-15)) |
 | **2FA deaktivieren** | `MFADisableView` | Entzieht den eigenen 2FA-Schutz — Account wäre danach nur noch passwort-geschützt |
 
-Andere Aktionen (Klient-Detail anzeigen, Kontakte anlegen, Aufgaben bearbeiten …) brauchen **keinen** Sudo-Mode — die normale Session reicht.
+Andere Aktionen (Personen-Detail anzeigen, Kontakte anlegen, Aufgaben bearbeiten …) brauchen **keinen** Sudo-Mode — die normale Session reicht.
 
 #### Wozu — was ist das Bedrohungsmodell?
 
@@ -521,16 +523,16 @@ Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationse
 
 ### 15. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
 
-Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt von der **Kontaktstufe des Klienten** ab:
+Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt von der **Kontaktstufe der Person** ab:
 
 | Kontaktstufe | Löschung | Genehmigung nötig? |
 |--------------|----------|---------------------|
-| **Qualifiziert** | Löschantrag → Leitung/Admin muss genehmigen | Ja (4-Augen) |
-| **Identifiziert** | Sofort Soft-Delete | Nein |
+| **Mit Zusatzangaben** | Löschantrag → Leitung/Admin muss genehmigen | Ja (4-Augen) |
+| **Nur Pseudonym** | Sofort Soft-Delete | Nein |
 | **Anonym** (`is_anonymous`) | Sofort Soft-Delete | Nein |
 | **Kein Client** | Sofort Soft-Delete | Nein |
 
-**Ablauf bei qualifizierten Klienten:**
+**Ablauf bei Personen der Stufe „Mit Zusatzangaben":**
 1. Staff kann nur **eigene** Events löschen, Lead/Admin kann **alle** löschen
 2. System erstellt `DeletionRequest` mit Status `pending`
 3. Lead/Admin reviewed — DB-Constraint `deletion_request_different_reviewer` erzwingt: **Reviewer ≠ Antragsteller**
@@ -570,8 +572,8 @@ Konfigurierbar pro Facility in **Administration → Einstellungen**:
 | Kontaktstufe | Default | Setting |
 |--------------|---------|---------|
 | Anonym | 90 Tage | `retention_anonymous_days` |
-| Identifiziert | 365 Tage | `retention_identified_days` |
-| Qualifiziert | 3.650 Tage (10 Jahre) | `retention_qualified_days` |
+| Nur Pseudonym | 365 Tage | `retention_identified_days` |
+| Mit Zusatzangaben | 3.650 Tage (10 Jahre) | `retention_qualified_days` |
 | Activity-Logs | 365 Tage | `retention_activities_days` |
 
 Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
@@ -604,6 +606,7 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 | [`setup_facility`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/setup_facility.py) | Ersteinrichtung einer Einrichtung | Manuell |
 | [`generate_dsgvo_package`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/generate_dsgvo_package.py) | DSGVO-Dokumentation generieren | Manuell |
 | [`reencrypt_fields`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py) | Key-Rotation für verschlüsselte Felder | Manuell |
+| [`inventory_report_bindings`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/inventory_report_bindings.py) | Inventar der Berichtszuordnung einer Einrichtung: welcher Berichtsschlüssel steckt in welchem Backend, welche Dokumentationstypen und Feldvorlagen tragen ihn — und welche in keinem Bericht erscheinen | Manuell |
 | [`seed`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/seed.py) | Demo-/Testdaten erzeugen | Nur Dev |
 
 **Dokumentation:** [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)

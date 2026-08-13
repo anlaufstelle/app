@@ -149,34 +149,19 @@ Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, werden diese als rotes Ba
 
 ## 2a. Arbeitszentrale
 
-Neben dem Zeitstrom gibt es die **Arbeitszentrale** (`/start/`) — eine rollenspezifische Übersichtsseite, die bestehende Daten zu kompakten Kacheln verdichtet. Sie erreichen sie über den Sidebar-Link **„Arbeitszentrale"** (oberhalb des Zeitstroms). Der Zeitstrom unter `/` bleibt unverändert — die Arbeitszentrale ist ein zusätzlicher Einstieg, keine Verdrängung.
+Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** — eine Übersichtsseite, die bestehende Daten zu kompakten Kacheln verdichtet. Der Sidebar-Link **„Arbeitszentrale"** (oberhalb des Zeitstroms) erscheint deshalb nur für die Leitung. Der Zeitstrom unter `/` bleibt unverändert.
 
-Je nach Rolle erscheint eine andere Variante:
+Alle übrigen Rollen werden von `/start/` direkt an ihren Arbeitsplatz umgeleitet:
 
-**Fachkraft / Assistenz** — Titel „Arbeitszentrale", heutige Aufgaben und Kontakte auf einen Blick:
-
-- **Heutige Kontakte** — Anzahl der heute erfassten Ereignisse (führt zum Zeitstrom)
-- **Meine Aufgaben** — eigene offene bzw. in Bearbeitung befindliche Aufgaben (führt zum Aufgaben-Posteingang)
-- **Zuletzt bearbeitet** — Anzahl kürzlich aktualisierter Personen (führt zur Personenliste)
-- darunter die Listen **„Meine offenen Aufgaben"** (bis zu 5, mit Fälligkeit) und **„Zuletzt bearbeitete Personen"** (bis zu 5)
+- **Fachkraft / Assistenz** — zum Zeitstrom (`/`); die bisherigen Kacheln „Heutige Kontakte", „Meine Aufgaben" und „Zuletzt bearbeitet" samt der Listen „Meine offenen Aufgaben" und „Zuletzt bearbeitete Personen" leben dort als Cockpit-Block oberhalb des Feeds weiter.
+- **Anwendungsbetreuung** (`facility_admin`) — zur Verwaltungs-Übersicht (`/verwaltung/`).
+- **Systemadministration** (`super_admin`) — zum Systembereich (`/system/`).
 
 **Leitung** — Titel „Leitungs-Arbeitszentrale", DSGVO-Workflows, Retention und Statistik:
 
 - **Löschanträge** — ausstehende Anträge (führt zur Löschantrags-Liste)
 - **Löschvorschläge** — ausstehende Retention-Vorschläge (führt zum Retention-Dashboard)
 - **Statistik** — Monat/Jahr des letzten Statistik-Snapshots
-
-**Facility-Admin** — Titel „Admin-Arbeitszentrale", Benutzer, Sicherheit und Konfiguration:
-
-- **Benutzer ohne MFA** — aktive Benutzer ohne bestätigte 2FA (orange hervorgehoben, sobald > 0)
-- **Konfigurations-Warnungen** — z. B. MFA nicht einrichtungsweit erzwungen oder K-Anonymisierung deaktiviert; die einzelnen Hinweise stehen darunter als Liste
-
-**Super-Admin** — Titel „System-Arbeitszentrale", Cross-Facility-Status und Audit-Aktivität:
-
-- **Mandanten** — Anzahl Einrichtungen
-- **Benutzer aktiv** — über alle Mandanten
-- **Audit-Events 24h** — Audit-Einträge der letzten 24 Stunden
-- **Kritische Events** — sicherheitsrelevante Aktionen der letzten 24 Stunden (fehlgeschlagene Logins, Sicherheitsverstöße, Löschungen, genehmigte Löschanträge; orange hervorgehoben, sobald > 0)
 
 ---
 
@@ -468,7 +453,11 @@ Das Suchfeld ist **permanent in der Sidebar** sichtbar (Desktop). Auf dem Smartp
 
 ### Vollständige Suchseite
 
-Für umfangreichere Recherchen steht weiterhin die Suchseite unter `/search/` zur Verfügung. Sie zeigt alle Treffer (bis zu 20 Personen und 20 Ereignisse) und ist auch über den Link „Alle Ergebnisse anzeigen" in der Schnellsuche erreichbar.
+Für umfangreichere Recherchen steht die Suchseite unter `/search/` zur Verfügung. Sie ist über den Link „Alle Ergebnisse anzeigen" in der Schnellsuche erreichbar; ebenso führt die Eingabetaste in beiden Suchfeldern der Navigation (Sidebar und mobiles Overlay) direkt dorthin.
+
+- Die **Gruppenübersicht** zeigt je Gruppe bis zu **10 Treffer**, nennt in der Gruppenüberschrift aber immer die **Gesamtzahl**.
+- Über die Filter-Chips **„Alle Typen · Nur Personen (N) · Nur Ereignisse (N)"** schränken Sie auf einen Typ ein (`?type=person` bzw. `?type=event`); in der gefilterten Liste blättern Sie seitenweise durch alle Treffer.
+- Am Seitenende erklärt der Block **„Was die Suche nicht findet"**, welche Daten bewusst nicht durchsucht werden.
 
 > **Hinweis:** Felder, die als verschlüsselt konfiguriert sind, werden in der Suche nicht durchsucht.
 

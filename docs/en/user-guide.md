@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
 
@@ -152,34 +152,19 @@ If there are active entry bans in your facility, they are displayed as a red ban
 
 ## 2a. Work Center
 
-Alongside the Zeitstrom there is the **Work Center** (`/start/`) -- a role-specific overview page that condenses existing data into compact tiles. You can reach it via the sidebar link **"Work Center"** (above the Zeitstrom). The Zeitstrom at `/` remains unchanged -- the Work Center is an additional entry point, not a replacement.
+The **Work Center** (`/start/`) is the landing page of the **Lead** role -- an overview page that condenses existing data into compact tiles. The sidebar link **"Work Center"** (above the Zeitstrom) therefore only appears for Leads. The Zeitstrom at `/` remains unchanged.
 
-Depending on your role, a different variant is shown:
+All other roles are redirected from `/start/` straight to their own workplace:
 
-**Social Worker / Assistant** -- title "Work Center", today's tasks and contacts at a glance:
-
-- **Today's contacts** -- number of events recorded today (links to the Zeitstrom)
-- **My tasks** -- your own open or in-progress tasks (links to the task inbox)
-- **Recently edited** -- number of recently updated persons (links to the client list)
-- Below these tiles: the lists **"My open tasks"** (up to 5, with due dates) and **"Recently edited persons"** (up to 5)
+- **Social Worker / Assistant** -- to the Zeitstrom (`/`); the former tiles "Today's contacts", "My tasks", and "Recently edited" together with the lists "My open tasks" and "Recently edited persons" live on there as a cockpit block above the feed.
+- **Facility Admin** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
+- **System Admin** (`super_admin`) -- to the system area (`/system/`).
 
 **Lead** -- title "Lead Work Center", GDPR workflows, retention, and statistics:
 
 - **Deletion requests** -- pending requests (links to the deletion-request list)
 - **Retention proposals** -- pending retention proposals (links to the retention dashboard)
 - **Statistics** -- month/year of the last statistics snapshot
-
-**Facility Admin** -- title "Admin Work Center", users, security, and configuration:
-
-- **Users without MFA** -- active users with no confirmed 2FA (highlighted orange when > 0)
-- **Configuration warnings** -- e.g. MFA not enforced facility-wide or k-anonymization disabled; individual warnings are listed below the tile
-
-**Super Admin** -- title "System Work Center", cross-facility status and audit activity:
-
-- **Tenants** -- number of facilities
-- **Active users** -- across all tenants
-- **Audit events 24h** -- audit entries from the last 24 hours
-- **Critical events** -- security-relevant actions in the last 24 hours (failed logins, security violations, deletions, approved deletion requests; highlighted orange when > 0)
 
 ---
 
@@ -471,7 +456,11 @@ The search field is **permanently visible in the sidebar** (desktop). On smartph
 
 ### Full Search Page
 
-For more extensive research, the search page at `/search/` is available. It shows all results (up to 20 clients and 20 events) and is also accessible via the "Show all results" link in the quick search.
+For more extensive research, the search page at `/search/` is available. It is accessible via the "Show all results" link in the quick search; pressing Enter in either navigation search field (sidebar and mobile overlay) also takes you straight there.
+
+- The **grouped overview** shows up to **10 results** per group, but the group heading always states the **total number**.
+- The filter chips **"All types · Persons only (N) · Events only (N)"** narrow the page to one type (`?type=person` or `?type=event`); within the filtered list you page through all results.
+- At the bottom of the page, the block **"What search does not find"** explains which data is deliberately excluded from search.
 
 > **Note:** Fields configured as encrypted are not included in search results.
 
@@ -890,5 +879,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-11 -->
-<!-- source-hash: d938b2308556f4dc41c9cf0858793c6a24ec0d2f -->
+<!-- source-hash: f4745bf3e52dea2ba9c49aaeb84a526a615a7166 -->
 

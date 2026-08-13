@@ -534,6 +534,23 @@ docker compose -f docker-compose.prod.yml exec \
  -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
  web python manage.py export_facility \
  --facility "Beratungsstelle Nord" --output /tmp/facility-export.json --indent 2
+
+# Inventar der Berichtszuordnung (Refs #1848): listet fuer EINE Einrichtung
+# auf, welcher Berichtsschluessel in welchem Berichts-Backend steckt (Typ- und
+# Feld-Ebene) und welche Dokumentationstypen und Feldvorlagen ihn tragen
+# bzw. welche keinen tragen und damit in keinem Bericht erscheinen. Reine
+# Auskunft, veraendert keine Daten. MUSS mit der Admin-DB-Rolle laufen
+# (BYPASSRLS) — sonst fail-loud (§ 9 DB-Rollenmodell): unter der App-Rolle
+# ohne Facility-Kontext saehe ein leeres/gefiltertes Inventar wie eine
+# tadellos konfigurierte Einrichtung aus.
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py inventory_report_bindings \
+ --facility "Beratungsstelle Nord" # Textreport auf stdout
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py inventory_report_bindings \
+ --facility "Beratungsstelle Nord" --format json --output /tmp/report-bindings.json
 ```
 
 ---
@@ -791,7 +808,7 @@ docker compose -f docker-compose.prod.yml exec web \
 
 Refs #1363 (N10 + Review-Nachschlag): Caddy weist Request-Bodies oberhalb von `1100MiB` bereits am Edge ab (Defense-in-Depth gegen Disk-Fill/OOM, bevor Django/Gunicorn den Body ueberhaupt sieht). Das App-seitige Hart-Limit ist `FILE_VAULT_MAX_UPLOAD_BYTES` (Default 50 MiB, `settings/base.py`) — aber Datei-Upload-Felder duerfen laut `FILE_VAULT_MAX_UPLOAD_FILES` (Default 20, `MultipleFileInput`/Refs #622) **mehrere Dateien pro Feld** enthalten. Der Caddy-Cap ist deshalb auf den Worst-Case eines vollen Multi-File-Felds dimensioniert: `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` (= 1000 MiB bei Default) + 10 % Marge fuer Multipart-Overhead (Boundaries, Feld-Header, CSRF-Token, weitere Formularfelder im selben Request). Ein nur auf EINE Datei dimensionierter Cap (die urspruengliche `55MiB`) weist legitime, bereits unterstuetzte Multi-File-Uploads am Edge ab, obwohl jede einzelne Datei alle App-seitigen Groessen-/Typ-Checks bestehen wuerde.
 
-**Restrisiko (bewusst dokumentiert, nicht gefixt):** Ein `DocumentType` kann — nur konfigurierbar durch `facility_admin`/`super_admin` — **mehrere** FILE-Felder tragen; jedes traegt unabhaengig bis zu `FILE_VAULT_MAX_UPLOAD_FILES` Dateien. Der theoretische Worst-Case je Request waechst dann um weitere `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` pro zusaetzlichem FILE-Feld. Deployments mit vielfeldigen Datei-Dokumenttypen sollten den Caddy-Cap entsprechend hochskalieren (kein automatischer Abgleich).
+**Restrisiko (bewusst dokumentiert, nicht gefixt):** Ein `DocumentType` kann — nur konfigurierbar durch `facility_admin`/`super_admin` — **mehrere** FILE-Felder tragen; jedes traegt unabhaengig bis zu `FILE_VAULT_MAX_UPLOAD_FILES` Dateien. Der theoretische Worst-Case je Request waechst dann um weitere `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` pro zusaetzlichem FILE-Feld. Deployments mit vielfeldigen Datei-Dokumentationstypen sollten den Caddy-Cap entsprechend hochskalieren (kein automatischer Abgleich).
 
 ```bash
 # 1. Aktuellen Caddy-Wert pruefen (alle vier Varianten: Caddyfile,
@@ -805,7 +822,7 @@ docker compose -f docker-compose.prod.yml exec web \
 
 Ein Test-Guard haelt beide Settings synchron zum statischen Caddy-Wert (Entwickler-Repo: `src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit`) — schlaegt fehl, sobald `FILE_VAULT_MAX_UPLOAD_BYTES`/`FILE_VAULT_MAX_UPLOAD_FILES` geaendert werden, ohne den Caddy-Cap nachzuziehen.
 
-**WICHTIG — Maintainer-Handoff:** Der Caddy-Wert ist statisch im Caddyfile hinterlegt und folgt **nicht** automatisch, wenn `FILE_VAULT_MAX_UPLOAD_BYTES` **oder** `FILE_VAULT_MAX_UPLOAD_FILES` per Env ueberschrieben wird. Bei Aenderung eines der beiden App-Limits (oder bei einem Deployment mit mehrfeldigen Datei-Dokumenttypen, s. Restrisiko oben) den Wert im jeweiligen Caddyfile manuell nachziehen und Caddy neu laden:
+**WICHTIG — Maintainer-Handoff:** Der Caddy-Wert ist statisch im Caddyfile hinterlegt und folgt **nicht** automatisch, wenn `FILE_VAULT_MAX_UPLOAD_BYTES` **oder** `FILE_VAULT_MAX_UPLOAD_FILES` per Env ueberschrieben wird. Bei Aenderung eines der beiden App-Limits (oder bei einem Deployment mit mehrfeldigen Datei-Dokumentationstypen, s. Restrisiko oben) den Wert im jeweiligen Caddyfile manuell nachziehen und Caddy neu laden:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec caddy \
