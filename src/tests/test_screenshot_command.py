@@ -41,3 +41,54 @@ class TestStatistikenWaitJs:
     def test_statistik_extern_shot_unaffected(self):
         """external_report.html hat keine Charts — kein wait_js noetig."""
         assert _shot("statistik-extern").wait_js is None
+
+
+class TestNeueFlaechenV081:
+    """Refs #1843/#1900: die vier mit #1803/#1813 entstandenen Flaechen —
+    Bereichs-Uebersichten, Statistik-Reiterzeile (Datensatz-Berichte-Reiter)
+    und die ``/search/``-Vollseite — gehoeren in die Doku-Screenshots.
+    """
+
+    def test_hub_shots_exist_with_admin_role(self):
+        """Beide Hubs zeigen Verwaltungs-Statuslisten; ``/verwaltung/`` sitzt
+        hinter ``FacilityAdminRequiredMixin`` — wie beim dsgvo-paket-Shot
+        braucht es den admin-Login (emma ist nur LEAD).
+        """
+        assert _shot("datenschutz-uebersicht").role == "admin"
+        assert _shot("verwaltung-uebersicht").role == "admin"
+
+    def test_statistik_berichte_shot_uses_german_tab_param(self):
+        """Der Datensatz-Berichte-Reiter zeigt Reiterzeile + Berichtskarten;
+        die Adresse ist seit #1804 deutsch (``?ansicht=datensaetze``).
+        """
+        assert _shot("statistik-berichte").route == "/statistics/?ansicht=datensaetze"
+
+    def test_suche_shot_resolves_query_from_seed_client(self):
+        """Der Bulk-Seed wuerfelt Pseudonyme — eine hartkodierte Query faende
+        je nach Lauf nichts. Der Shot traegt deshalb einen Platzhalter, den
+        ``_url`` aus dem ersten Seed-Client aufloest (Wortteil, damit die
+        Ergebnisseite mehrere Treffer zeigt).
+        """
+        shot = _shot("suche")
+        assert "{client_pseudonym}" in shot.route
+        assert shot.full_page is True
+
+    def test_url_substitutes_client_pseudonym_placeholder(self):
+        from core.management.commands.screenshot import Command
+
+        class _FakeClient:
+            pseudonym = "Fuchs-12"
+
+        cmd = Command()
+        shot = _shot("suche")
+        url = cmd._url("http://x", shot, {"client": _FakeClient()})
+        assert url == "http://x/search/?q=Fuchs"
+
+    def test_url_returns_none_without_client(self):
+        """Kein Seed-Client → Shot wird uebersprungen statt eine leere
+        Ergebnisseite zu dokumentieren (Muster der pk_kind-Aufloesung).
+        """
+        from core.management.commands.screenshot import Command
+
+        cmd = Command()
+        assert cmd._url("http://x", _shot("suche"), {"client": None}) is None

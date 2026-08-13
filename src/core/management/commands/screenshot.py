@@ -27,6 +27,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 # Refs #1730: nur fuer mypy — playwright ist eine optionale Dev/E2E-Abhaengigkeit
 # und wird unten in ``handle()`` lazy importiert (Guard gegen ``ImportError`` in
@@ -99,6 +100,20 @@ SHOTS: list[Shot] = [
     # Refs #1595: FacilityAdminRequiredMixin verlangt mehr als die Default-Rolle
     # "emma" (LEAD) — sonst 403 statt der DSGVO-Paket-Uebersicht.
     Shot("dsgvo-paket", "core:dsgvo_package", role="admin"),
+    # --- Neue Flaechen aus #1803/#1813 (Refs #1843/#1900) ---
+    # Beide Hubs als admin: /verwaltung/ sitzt hinter FacilityAdminRequiredMixin,
+    # und die Statuslisten beider Uebersichten richten sich an die
+    # Anwendungsbetreuung (Muster dsgvo-paket, Refs #1595).
+    Shot("datenschutz-uebersicht", "core:datenschutz_uebersicht", role="admin"),
+    Shot("verwaltung-uebersicht", "core:verwaltung_uebersicht", role="admin"),
+    # Reiterzeile + Berichtskarten des Datensatz-Berichte-Reiters; die Adresse
+    # ist seit #1804 deutsch (?ansicht=datensaetze, alte Schreibweise bleibt
+    # still akzeptiert).
+    Shot("statistik-berichte", "/statistics/?ansicht=datensaetze"),
+    # /search/-Vollseite: die Query kommt aus dem ersten Seed-Client (der
+    # Bulk-Seed wuerfelt Pseudonyme); der Wortteil vor dem Suffix liefert
+    # mehrere Treffer statt genau einem.
+    Shot("suche", "/search/?q={client_pseudonym}", full_page=True),
     # NOTE: /system/-Screens (compliance, systembereich) brauchen Sudo-Mode und
     # sind hier (noch) ausgeklammert — Follow-up.
 ]
@@ -159,7 +174,13 @@ class Command(BaseCommand):
 
     def _url(self, base_url: str, shot: Shot, pks: dict) -> str | None:
         if shot.route.startswith("/"):
-            return base_url + shot.route
+            path = shot.route
+            if "{client_pseudonym}" in path:
+                client = pks.get("client")
+                if client is None:
+                    return None
+                path = path.replace("{client_pseudonym}", quote(client.pseudonym.split("-")[0]))
+            return base_url + path
         kwargs = {}
         if shot.pk_kind:
             obj = pks.get(shot.pk_kind)
