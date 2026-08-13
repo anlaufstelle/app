@@ -117,6 +117,10 @@ class _MobileButtonForm(HTMLParser):
     primären Aktion (zwei Label-Spans, die einander ablösen) würde den
     Erkenner sonst zu früh ins Menü schicken und die Aktion aus der
     44-px-Prüfung fallen lassen.
+
+    Der Name nennt den Anlass, nicht die Grenze: der Parser ist
+    container-agnostisch und liest genauso die ``*-actions-desktop``-Leiste —
+    Refs #1865 vergleicht damit die Beschriftungen beider Varianten.
     """
 
     _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
@@ -389,6 +393,32 @@ class TestWorkitemDetailActionParityAndRank:
         to_client_url = reverse("core:client_detail", kwargs={"pk": sample_workitem.client.pk})
         assert to_client_url in _targets(_primary(actions))
         assert to_client_url not in _overflow_targets(actions)
+
+    def test_status_buttons_are_short_on_mobile_and_full_on_desktop(self, client, admin_user, sample_workitem):
+        """Refs #1865: Die drei Status-Knöpfe im Status „Offen“ sind die
+        einzigen Kopfaktionen der Anwendung, die mobil den vollen Desktop-Satz
+        rendern („Als nicht relevant schließen“) — sie sind rohe POST-Forms und
+        laufen nicht durch ``_action_button.html``. Bei 390 px ergab das eine
+        Wunschbreite von ca. 605 px auf 358 px verfügbarer Fläche.
+
+        Die Paritätsregel §6.4 bleibt: dieselben Knöpfe in derselben
+        Reihenfolge, nur kürzer beschriftet. Dass der Kurztext im
+        ``aria-label`` steckt, prüft
+        :class:`TestMobileActionPixelForm` (DE und EN)."""
+        assert sample_workitem.status == "open"
+        client.force_login(admin_user)
+        html = client.get(reverse("core:workitem_detail", kwargs={"pk": sample_workitem.pk})).content.decode()
+
+        mobil = [b["text"] for b in _mobile_buttons(html, "workitem-actions-mobile")]
+        assert "Übernehmen" in mobil
+        assert "Erledigt" in mobil
+        assert "Nicht relevant" in mobil
+        assert "Als nicht relevant schließen" not in mobil, "Langtext steht noch in der mobilen Leiste"
+
+        desktop = [b["text"] for b in _mobile_buttons(html, "workitem-actions-desktop")]
+        assert "Aufgabe übernehmen" in desktop
+        assert "Als erledigt markieren" in desktop
+        assert "Als nicht relevant schließen" in desktop
 
 
 @pytest.mark.django_db

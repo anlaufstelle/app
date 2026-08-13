@@ -667,6 +667,127 @@ class TestMobileDetailActionBarGeometry:
         _assert_no_horizontal_overflow(page)
 
 
+@pytest.fixture
+def iphone14_page(browser, base_url, _login_storage_state):
+    """Playwright-Page mit iPhone-14-Viewport (390x844) und Admin-Login.
+
+    Refs #1865: Der Handtest lief bei 390 px, nicht bei den 375 px der
+    uebrigen Faelle dieser Datei. Der Unterschied ist klein, aber die
+    Aufgaben-Kopfzeile lief auf BEIDEN Breiten ueber — der Fall wird deshalb
+    bei genau der Breite festgenagelt, bei der er gemeldet wurde.
+    """
+    context = browser.new_context(
+        storage_state=_login_storage_state,
+        viewport={"width": 390, "height": 844},
+        device_scale_factor=2,
+        locale="de-DE",
+    )
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    page.set_default_navigation_timeout(30000)
+    yield page
+    context.close()
+
+
+class TestWorkitemHeaderFitsNarrowViewport:
+    """Aufgaben-Kopfzeile bei 390 px (Refs #1865).
+
+    Im Status **Offen** stehen dort drei lange Status-Knoepfe („Als nicht
+    relevant schliessen“) neben Bearbeiten und „Zur Person“ — die einzigen
+    Kopfaktionen, die mobil den vollen Desktop-Satz rendern (rohe POST-Forms,
+    kein ``_action_button.html``). Wunschbreite ca. 605 px auf 358 px
+    verfuegbarer Flaeche, und weil ``main`` ``overflow-x-hidden`` traegt, war
+    der Ueberstand nicht einmal scrollbar, sondern schlicht weg.
+
+    Deshalb misst dieser Test Geometrie statt Sichtbarkeit: ein Knopf, der
+    halb hinter dem rechten Rand liegt, gilt Playwright weiterhin als
+    ``visible``.
+    """
+
+    @staticmethod
+    def _seed_open_workitem(e2e_env):
+        titel = f"E2E-Kopfzeile-Offen-{uuid.uuid4().hex[:8]}"
+        script = (
+            "from core.models import Client, Facility, WorkItem;"
+            " from core.models.user import User;"
+            " f = Facility.objects.get(name='Hauptstelle');"
+            " u = User.objects.get(username='emma');"
+            " c = Client.objects.filter(facility=f).first();"
+            f" w = WorkItem.objects.create(facility=f, client=c, created_by=u, title='{titel}',"
+            " item_type='task', status='open');"
+            " print(w.pk)"
+        )
+        return django_shell(e2e_env, script)[-1].strip()
+
+    def test_action_bar_stays_inside_the_viewport(self, iphone14_page, base_url, e2e_env):
+        page = iphone14_page
+        pk = self._seed_open_workitem(e2e_env)
+        page.goto(f"{base_url}/workitems/{pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bar = action_bar(page, "workitem", "mobile")
+        bar.wait_for(state="visible", timeout=10000)
+        box = bar.bounding_box()
+        assert box is not None
+        assert box["x"] >= 0, f"Aktionsleiste beginnt links ausserhalb: {box}"
+        assert box["x"] + box["width"] <= 390, f"Aktionsleiste laeuft rechts aus dem Bild: {box}"
+
+    def test_main_does_not_overflow_horizontally(self, iphone14_page, base_url, e2e_env):
+        page = iphone14_page
+        pk = self._seed_open_workitem(e2e_env)
+        page.goto(f"{base_url}/workitems/{pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        masse = page.evaluate(
+            "() => { const m = document.querySelector('main'); return {scroll: m.scrollWidth, client: m.clientWidth}; }"
+        )
+        assert masse["scroll"] <= masse["client"], f"``main`` laeuft horizontal ueber: {masse}"
+        _assert_no_horizontal_overflow(page)
+
+    def test_every_header_button_is_readable_and_finger_sized(self, iphone14_page, base_url, e2e_env):
+        """Kurzbeschriftungen statt voller Saetze — jeder Knopf steht
+        vollstaendig im Bild, ist >= 44 px hoch und traegt den vollen Text als
+        zugaenglichen Namen (WCAG 2.5.3)."""
+        page = iphone14_page
+        pk = self._seed_open_workitem(e2e_env)
+        page.goto(f"{base_url}/workitems/{pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        bar = action_bar(page, "workitem", "mobile")
+        bar.wait_for(state="visible", timeout=10000)
+        knoepfe = bar.locator("button[type='submit'], a")
+        anzahl = knoepfe.count()
+        assert anzahl >= 5, f"Erwartet drei Status-Knoepfe + Bearbeiten + Zur Person, gefunden {anzahl}"
+
+        for i in range(anzahl):
+            knopf = knoepfe.nth(i)
+            box = knopf.bounding_box()
+            assert box is not None
+            assert box["x"] >= 0 and box["x"] + box["width"] <= 390, f"Knopf {i} ausserhalb: {box}"
+            assert box["height"] >= 44, f"Knopf {i} zu flach: {box}"
+            text = (knopf.inner_text() or "").strip()
+            aria = knopf.get_attribute("aria-label")
+            if text and aria:
+                assert text.lower() in aria.lower(), f"WCAG 2.5.3: {text!r} nicht in {aria!r}"
+
+        texte = {(knoepfe.nth(i).inner_text() or "").strip() for i in range(anzahl)}
+        assert {"Übernehmen", "Erledigt", "Nicht relevant"} <= texte, texte
+
+    def test_desktop_keeps_the_full_labels(self, authenticated_page, base_url, e2e_env):
+        """Gegenprobe: ab ``md`` aendert sich nichts — gleiche Knoepfe, gleiche
+        vollen Beschriftungen, gleiche Reihenfolge."""
+        page = authenticated_page
+        pk = self._seed_open_workitem(e2e_env)
+        page.goto(f"{base_url}/workitems/{pk}/", wait_until="domcontentloaded")
+
+        bar = action_bar(page, "workitem", "desktop")
+        bar.wait_for(state="visible", timeout=10000)
+        text = bar.inner_text()
+        assert "Aufgabe übernehmen" in text
+        assert "Als erledigt markieren" in text
+        assert "Als nicht relevant schließen" in text
+
+
 class TestMobileNoHorizontalScroll:
     """Kein horizontaler Overflow auf den wichtigsten Seiten."""
 

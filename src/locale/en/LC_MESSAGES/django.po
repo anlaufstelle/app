@@ -5891,6 +5891,10 @@ msgstr "Due:"
 msgid "Zugewiesen:"
 msgstr "Assigned:"
 
+#: src/templates/core/workitems/partials/_actions.html:57
+msgid "Nicht relevant"
+msgstr "Not relevant"
+
 #: src/templates/components/_workitem_row.html:102
 msgid "Übernehmen"
 msgstr "Take over"
@@ -5903,13 +5907,13 @@ msgid ""
 "Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert "
 "und erscheint nicht mehr bei offenen Aufgaben."
 msgstr ""
-"Mark task as done? The task will be saved as done and will no longer appear "
-"among open tasks."
+"Mark task as completed? The task will be saved as completed and will no "
+"longer appear among open tasks."
 
 #: src/templates/components/_workitem_row.html:111
 #: src/templates/core/workitems/partials/_actions.html:44
 msgid "Als erledigt markieren"
-msgstr "Mark as done"
+msgstr "Mark as completed"
 
 #: src/templates/components/_workitem_row.html:115
 #: src/templates/core/workitems/partials/_actions.html:49

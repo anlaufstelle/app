@@ -5947,6 +5947,10 @@ msgstr "Fällig:"
 msgid "Zugewiesen:"
 msgstr "Zugewiesen:"
 
+#: src/templates/core/workitems/partials/_actions.html:57
+msgid "Nicht relevant"
+msgstr "Nicht relevant"
+
 #: src/templates/components/_workitem_row.html:102
 msgid "Übernehmen"
 msgstr "Übernehmen"

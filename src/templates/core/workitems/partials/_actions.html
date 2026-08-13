@@ -28,8 +28,28 @@ Löschfunktion zu bauen wäre ein eigenständiges Feature (Berechtigung,
 Bestätigungstext, Audit) und keine reine Umwidmung bestehender Aktionen —
 daher hier bewusst ausgelassen statt erfunden (AGENTS.md „Code ist einzige
 Truth Source").
+
+Mobile Kurzbeschriftungen der Status-Knoepfe (Refs #1865): Die drei Formulare
+im Status „Offen“ sind rohe POST-Forms und laufen NICHT durch
+``components/_action_button.html`` — sie rendern deshalb als einzige
+Kopfaktionen der Anwendung mobil denselben vollen Satz wie am Desktop
+(„Als nicht relevant schliessen“). Bei 390 px stehen 358 px zur Verfuegung,
+die Leiste wollte ca. 605 px. Mobil steht jetzt „Uebernehmen“ · „Erledigt“ ·
+„Nicht relevant“; der volle Text bleibt als ``aria-label`` und enthaelt den
+Kurztext (WCAG 2.5.3 „Label in Name“, in JEDER Sprache — der EN-Fall haengt
+daran, dass „Mark as completed“ das Wort „Completed“ enthaelt). Am Desktop
+traegt der Knopf KEIN ``aria-label``: dort ist der sichtbare Text schon der
+volle, ein zusaetzliches Attribut waere nur eine zweite Pflegestelle.
+Mitgliedschaft und Reihenfolge bleiben unveraendert (SS6.4) — die Aktionen
+mobil ins ⋮ zu schieben haette die Paritaetsregel gebrochen.
 {% endcomment %}
 {% trans "Zur Person" as label_to_client %}
+{% trans "Aufgabe übernehmen" as label_take_over %}
+{% trans "Als erledigt markieren" as label_mark_done %}
+{% trans "Als nicht relevant schließen" as label_dismiss %}
+{% trans "Übernehmen" as short_take_over %}
+{% trans "Erledigt" as short_done %}
+{% trans "Nicht relevant" as short_dismiss %}
 
 {% if user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user %}
 {% if workitem.status == "open" %}
@@ -39,8 +59,8 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="in_progress">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
-        {% trans "Aufgabe übernehmen" %}
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100"{% if variant == 'mobile' %} aria-label="{{ label_take_over }}"{% endif %}>
+        {% if variant == 'mobile' %}{{ short_take_over }}{% else %}{{ label_take_over }}{% endif %}
     </button>
 </form>
 {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung, daher kein versehentlicher Klick (data-confirm, confirm-action.js, CSP-konform). #}
@@ -50,8 +70,8 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="done">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
-        {% trans "Als erledigt markieren" %}
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100"{% if variant == 'mobile' %} aria-label="{{ label_mark_done }}"{% endif %}>
+        {% if variant == 'mobile' %}{{ short_done }}{% else %}{{ label_mark_done }}{% endif %}
     </button>
 </form>
 {# Refs #1130: data-confirm erklärt, dass nicht gelöscht und nur aus den offenen Aufgaben entfernt wird (confirm-action.js, CSP-konform). #}
@@ -61,8 +81,8 @@ Truth Source").
     <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
     <input type="hidden" name="status" value="dismissed">
     <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
-    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
-        {% trans "Als nicht relevant schließen" %}
+    <button type="submit" class="px-3 py-1 min-h-[44px] min-w-[44px] text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas"{% if variant == 'mobile' %} aria-label="{{ label_dismiss }}"{% endif %}>
+        {% if variant == 'mobile' %}{{ short_dismiss }}{% else %}{{ label_dismiss }}{% endif %}
     </button>
 </form>
 {% elif workitem.status == "in_progress" %}
