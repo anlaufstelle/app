@@ -18,6 +18,7 @@ _AUDIT_FIELDS = (
     "default_document_type",
     # Session / MFA
     "session_timeout_minutes",
+    "session_absolute_hours",
     "mfa_enforced_facility_wide",
     # Retention-Basisfristen
     "retention_anonymous_days",
@@ -55,6 +56,10 @@ _AUDIT_EXEMPT = ("facility", "updated_at")
 _AUDIT_VALUE_FIELDS = frozenset(
     {
         "session_timeout_minutes",
+        # Refs #1868: das absolute Sitzungs-Maximum ist ein rein numerischer
+        # Sicherheits-Schwellwert ohne PII — ein Hochsetzen (Aufweichen des
+        # Caps) muss forensisch rekonstruierbar sein.
+        "session_absolute_hours",
         "mfa_enforced_facility_wide",
         "retention_anonymous_days",
         "retention_identified_days",

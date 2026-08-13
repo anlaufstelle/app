@@ -21,6 +21,8 @@ def seed_settings(facility: Facility) -> None:
         defaults={
             "facility_full_name": f"Anlaufstelle {facility.name}",
             "session_timeout_minutes": 30,
+            # Refs #1868: absolutes Maximum ab Login, unabhaengig von Aktivitaet.
+            "session_absolute_hours": 12,
             "retention_anonymous_days": 90,
             "retention_identified_days": 365,
             "retention_qualified_days": 3650,

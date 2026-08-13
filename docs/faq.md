@@ -406,7 +406,8 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | **Zuweisungs-Berechtigung** | Arbeitsauftrag-Status kann vom Ersteller, Zugewiesenen oder der Leitung geändert werden |
 | **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #14](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
-| **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf automatischer Logout |
+| **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf **ohne Aktivität** automatischer Logout |
+| **Maximale Sitzungsdauer** | Zweite, aktivitätsunabhängige Grenze pro Einrichtung (Standard: 12 Std. ab Anmeldung); danach ist eine neue Anmeldung nötig, auch bei durchgehender Nutzung |
 | **Account-Sperre (Lockout)** | Nach 10 fehlgeschlagenen Logins wird der Account gesperrt. Recovery: `manage.py unlock <username>` (CLI) oder `facility_admin` für User der eigenen Einrichtung |
 
 #### Technische Steuerungsparameter
@@ -428,7 +429,8 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | `DocumentType.sensitivity` | Dokumentationstyp | Steuert Feld-Sichtbarkeit nach Rolle |
 | `FieldTemplate.sensitivity` | Feldvorlage | Feld-Level Sichtbarkeits-Override (leer = erbt vom Dokumentationstyp) |
 | `FieldTemplate.is_encrypted` | Feldvorlage | Steuert nur Verschlüsselung at rest, nicht Sichtbarkeit |
-| `FacilitySettings.session_timeout_minutes` | Einrichtungs-Settings | Session-Dauer pro Einrichtung |
+| `FacilitySettings.session_timeout_minutes` | Einrichtungs-Settings | Inaktivitäts-Fenster pro Einrichtung (Default 30 Min) |
+| `FacilitySettings.session_absolute_hours` | Einrichtungs-Settings | Absolute Obergrenze einer Sitzung ab Login, unabhängig von Aktivität (Default 12 h) |
 | `AuditLog.action == SYSTEM_VIEW` | AuditLog | Protokolliert jeden Aufruf einer `/system/`-View (Rechenschaftspflicht) |
 
 **Relevante Dateien:**

@@ -267,6 +267,86 @@ def test_settings_retention_days_db_constraint(facility):
 
 
 @pytest.mark.django_db
+def test_settings_session_absolute_hours_default(facility):
+    """Refs #1868: Das absolute Sitzungs-Maximum ist per Default 12 Stunden.
+
+    Der Wert kommt aus der Modul-Konstante, damit Tests nicht gegen ein
+    zweites Literal driften (Muster ``DEFAULT_RETENTION_*_DAYS``, #1205).
+    """
+    from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
+
+    assert DEFAULT_SESSION_ABSOLUTE_HOURS == 12
+    assert Settings(facility=facility).session_absolute_hours == DEFAULT_SESSION_ABSOLUTE_HOURS
+
+
+@pytest.mark.django_db
+def test_settings_session_absolute_hours_validator_bounds(facility):
+    """Refs #1868: 1 <= session_absolute_hours <= 168 (eine Woche).
+
+    Untergrenze: 0 wuerde jede Sitzung sofort nach dem Login beenden.
+    Obergrenze: ohne Deckel liesse sich das Cap faktisch abschalten, was
+    genau das Restrisiko aus #1868 zurueckholte.
+    """
+    from django.core.exceptions import ValidationError
+
+    for bad in (0, 169, 100000):
+        s = Settings(facility=facility, session_absolute_hours=bad)
+        with pytest.raises(ValidationError):
+            s.full_clean()
+
+    for good in (1, 12, 168):
+        Settings(facility=facility, session_absolute_hours=good).full_clean()
+
+
+@pytest.mark.django_db
+def test_settings_clean_rejects_cap_below_idle_timeout(facility):
+    """Refs #1868: Das absolute Maximum muss GROESSER sein als das
+    Inaktivitaets-Fenster.
+
+    Ein Cap <= Idle-Timeout macht das Inaktivitaets-Fenster wirkungslos: die
+    Sitzung waere immer schon absolut abgelaufen, bevor die Inaktivitaet
+    greift — eine stille Fehlkonfiguration, die wie ein Bug aussieht.
+    """
+    from django.core.exceptions import ValidationError
+
+    # 2 h Cap vs. 180 min (= 3 h) Idle -> Cap kleiner: unzulaessig. ``clean()``
+    # direkt gerufen, damit der Test die Model-Regel belegt und nicht bloss die
+    # Constraint-Validierung, die ``full_clean()`` seit Django 4.1 mitzieht.
+    s = Settings(facility=facility, session_absolute_hours=2, session_timeout_minutes=180)
+    with pytest.raises(ValidationError) as exc:
+        s.clean()
+    assert "session_absolute_hours" in exc.value.error_dict
+    with pytest.raises(ValidationError):
+        s.full_clean()
+
+    # Gleichstand (1 h Cap vs. 60 min Idle) ist ebenfalls unzulaessig.
+    s = Settings(facility=facility, session_absolute_hours=1, session_timeout_minutes=60)
+    with pytest.raises(ValidationError):
+        s.clean()
+
+    # Echt groesser laeuft durch.
+    Settings(facility=facility, session_absolute_hours=1, session_timeout_minutes=59).full_clean()
+
+
+@pytest.mark.django_db
+def test_settings_session_absolute_hours_db_constraint(facility):
+    """Refs #1868: DB-CheckConstraint faengt den Direct-Insert ab, an dem
+    ``full_clean()`` vorbeigeht (Muster Security N8, Refs #1445)."""
+    from django.db import transaction
+
+    # Cap kleiner als das Inaktivitaets-Fenster.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Settings.objects.create(facility=facility, session_absolute_hours=1, session_timeout_minutes=120)
+
+    # Cap ausserhalb 1..168.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Settings.objects.create(facility=facility, session_absolute_hours=0)
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Settings.objects.create(facility=facility, session_absolute_hours=169)
+
+
+@pytest.mark.django_db
 def test_documenttype_retention_days_db_constraint(facility):
     """Security N8 (Refs #1445): DocumentType.retention_days < 1 wird per
     DB-Constraint abgelehnt; None (keine Frist) bleibt erlaubt."""

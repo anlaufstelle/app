@@ -47,6 +47,10 @@ class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "facility",
         "facility_full_name",
         "session_timeout_minutes",
+        # Refs #1868: absolutes Sitzungs-Maximum direkt neben dem
+        # Inaktivitaets-Fenster — die beiden Werte haengen zusammen (Cap muss
+        # groesser sein) und sollen ohne Detailaufruf vergleichbar sein.
+        "session_absolute_hours",
         "allowed_file_types",
         "max_file_size_mb",
     )

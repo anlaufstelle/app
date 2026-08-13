@@ -358,7 +358,11 @@ class TestSettingsHash:
             session_timeout_minutes=30,
         )
         h_before = _settings_hash(s)
-        s.session_timeout_minutes = 999
+        # Refs #1868: 600 statt der frueheren 999 — der Wert ist hier beliebig
+        # (es geht nur um „veraendert, aber nicht hash-relevant"), 999 Minuten
+        # verletzen aber den CheckConstraint gegen das absolute Sitzungs-Maximum
+        # (Default 12 h = 720 min).
+        s.session_timeout_minutes = 600
         s.save()
         s.refresh_from_db()
         h_after = _settings_hash(s)

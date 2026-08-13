@@ -380,6 +380,7 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 | Vollständiger Name || Wird in Berichten angezeigt |
 | Standard-Dokumentationstyp || Vorausgewählter Typ bei neuem Eintrag |
 | Session-Timeout (Minuten) | 30 | Automatischer Logout nach Inaktivität |
+| Maximale Sitzungsdauer (Stunden) | 12 | Obergrenze ab der Anmeldung, unabhängig von der Aktivität: Nach dieser Zeit endet die Sitzung in jedem Fall und es ist eine neue Anmeldung nötig. Zulässig 1–168; muss **größer** sein als das Session-Timeout (in Minuten gerechnet), sonst lehnt das Formular die Eingabe ab. Eine Änderung greift erst beim **nächsten** Login — bereits laufende Sitzungen behalten ihre beim Anmelden festgelegte Frist |
 | Aufbewahrung anonym (Tage) | 90 | Löschfrist für anonyme Kontakte |
 | Aufbewahrung identifiziert (Tage) | 365 | Löschfrist für Kontakte zu Personen der Stufe „Nur Pseudonym" |
 | Aufbewahrung qualifiziert (Tage) | 3650 | Löschfrist nach Fallabschluss (Stufe „Mit Zusatzangaben") |

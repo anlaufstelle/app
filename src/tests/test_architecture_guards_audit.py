@@ -123,8 +123,8 @@ class TestAuditLogCreationAllowlist:
             141: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
-            131: "update_settings-Body — Settings-Diff-Helper",
-            157: "log_settings_change-Body — zweite create-Stelle",
+            136: "update_settings-Body — Settings-Diff-Helper",
+            162: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {

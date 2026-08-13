@@ -1,4 +1,9 @@
-"""Tests fuer SessionIdleRefreshMiddleware (Refs #1858).
+"""Tests fuer SessionIdleRefreshMiddleware (Refs #1858, #1868).
+
+Die Middleware traegt zwei Mechanismen: das absolute Sitzungs-Maximum ab
+Login (#1868, ``TestSessionAbsoluteCap*``) und das Inaktivitaets-Fenster
+(#1858, ``TestSessionIdleRefresh*``). Beide Kopfteile unten beschreiben das
+Inaktivitaets-Fenster; das Cap laeuft davor und ohne dessen Ausnahmen.
 
 Mit ``SESSION_SAVE_EVERY_REQUEST = False`` (Refs #733) verlaengerte bisher
 nichts im Request-Pfad das Session-Fenster — der Timeout wirkte ABSOLUT ab
@@ -26,31 +31,47 @@ from django.test import RequestFactory
 from django.utils import timezone
 
 from core.middleware.session_idle import (
+    ABSOLUTE_DEADLINE_KEY,
     LAST_RENEWAL_KEY,
     RENEWAL_FRACTION,
     SessionIdleRefreshMiddleware,
 )
+from core.models import AuditLog
+from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 
 WINDOW = 1800  # Seed-Default: 30 Minuten
+
+# Refs #1868: Deadline weit in der Zukunft — der Default fuer alle Tests, die
+# das Inaktivitaets-Fenster (nicht das absolute Maximum) pruefen.
+FAR_FUTURE = 12 * 3600
 
 
 def _make_middleware():
     return SessionIdleRefreshMiddleware(lambda r: HttpResponse("ok"))
 
 
-def _request_with_session(user, *, expiry=WINDOW, renewed_ago=None, headers=None):
+def _request_with_session(
+    user, *, expiry=WINDOW, renewed_ago=None, headers=None, deadline_in=FAR_FUTURE, path="/clients/"
+):
     """RequestFactory-Request mit frischer (ungespeicherter) DB-Session.
 
     ``renewed_ago=None`` laesst den Erneuerungs-Zeitstempel weg
     (Alt-Session von vor dem Deploy), sonst liegt er ``renewed_ago``
     Sekunden in der Vergangenheit.
+
+    ``deadline_in`` stempelt das absolute Sitzungs-Maximum (Refs #1868) so
+    viele Sekunden in die Zukunft; ``None`` laesst den Schluessel weg
+    (Alt-Session / ``force_login``), negative Werte legen ihn in die
+    Vergangenheit.
     """
-    request = RequestFactory().get("/clients/", headers=headers or {})
+    request = RequestFactory().get(path, headers=headers or {})
     request.user = user
     session = SessionStore()
     session.set_expiry(expiry)
     if renewed_ago is not None:
         session[LAST_RENEWAL_KEY] = timezone.now().timestamp() - renewed_ago
+    if deadline_in is not None:
+        session[ABSOLUTE_DEADLINE_KEY] = timezone.now().timestamp() + deadline_in
     session.modified = False
     request.session = session
     return request
@@ -131,6 +152,7 @@ class TestSessionIdleRefreshUnit:
         request.user = staff_user
         session = SessionStore()
         session.set_expiry(WINDOW)
+        session[ABSOLUTE_DEADLINE_KEY] = timezone.now().timestamp() + FAR_FUTURE
         session.modified = False
         request.session = session
 
@@ -190,6 +212,11 @@ class TestSessionIdleRefreshIntegration:
         client.force_login(staff_user)
         session = client.session
         session[LAST_RENEWAL_KEY] = timezone.now().timestamp()
+        # Refs #1868: ``force_login`` stempelt das absolute Maximum nicht (nur
+        # der echte Login-View tut das) — ohne diesen Setup-Stempel schriebe
+        # die Middleware einmalig den Grace-Stempel und der Test maesse ihn
+        # statt der Erneuerungs-Drosselung.
+        session[ABSOLUTE_DEADLINE_KEY] = timezone.now().timestamp() + FAR_FUTURE
         session.save()
         expiry_before = Session.objects.get(session_key=session.session_key).expire_date
 
@@ -198,3 +225,151 @@ class TestSessionIdleRefreshIntegration:
         assert response.status_code == 200
         expiry_after = Session.objects.get(session_key=session.session_key).expire_date
         assert expiry_after == expiry_before
+
+
+class TestSessionAbsoluteCap:
+    """Absolutes Sitzungs-Maximum ab Login (Refs #1868).
+
+    Das Inaktivitaets-Fenster aus #1858 kennt keine Obergrenze: eine Sitzung
+    lebt, solange irgendetwas pingt. Das Cap friert beim Login eine Deadline
+    in der Session ein (``ABSOLUTE_DEADLINE_KEY``); ab ihr beendet die
+    Middleware die Sitzung, unabhaengig von jeder Aktivitaet.
+    """
+
+    def test_expired_deadline_ends_session_without_renewal(self, staff_user):
+        """Ueberschritten -> Session geflusht, Request laeuft anonym weiter,
+        und die Erneuerungs-Logik stempelt NICHTS mehr."""
+        request = _request_with_session(staff_user, renewed_ago=WINDOW, deadline_in=-1)
+
+        response = _make_middleware()(request)
+
+        assert response.status_code == 200
+        assert request.user.is_anonymous
+        # Flush raeumt die ganze Session — insbesondere darf die Erneuerung
+        # danach nicht doch noch gestempelt haben.
+        assert LAST_RENEWAL_KEY not in request.session
+        assert ABSOLUTE_DEADLINE_KEY not in request.session
+
+    @pytest.mark.parametrize(
+        ("headers", "path"),
+        [
+            ({"X-Offline-Replay": "1"}, "/clients/"),
+            (None, "/api/v1/offline/bundle/facility/"),
+        ],
+        ids=["offline-replay-header", "offline-sync-api-path"],
+    )
+    def test_cap_ignores_the_background_sync_exemptions(self, staff_user, headers, path):
+        """Die Ausnahmen des Inaktivitaets-Fensters gelten fuer das Cap NICHT.
+
+        Hintergrund-Sync darf das Fenster nicht *verlaengern* — aber ein
+        abgelaufenes absolutes Maximum muss die Sitzung auch dann beenden,
+        wenn der Request ein Replay oder ein Sync-Aufruf ist. Sonst haette
+        ein dauersyncendes Geraet ein Schlupfloch am Cap vorbei.
+        """
+        request = _request_with_session(staff_user, renewed_ago=WINDOW, deadline_in=-1, headers=headers, path=path)
+
+        _make_middleware()(request)
+
+        assert request.user.is_anonymous
+        assert ABSOLUTE_DEADLINE_KEY not in request.session
+
+    def test_future_deadline_leaves_renewal_untouched(self, staff_user):
+        """Deadline in der Zukunft -> die bestehende Erneuerungs-Logik laeuft
+        unveraendert weiter."""
+        request = _request_with_session(staff_user, renewed_ago=WINDOW * RENEWAL_FRACTION + 1, deadline_in=FAR_FUTURE)
+        deadline_before = request.session[ABSOLUTE_DEADLINE_KEY]
+
+        _make_middleware()(request)
+
+        assert request.user.is_authenticated
+        assert request.session.modified is True
+        assert request.session[LAST_RENEWAL_KEY] == pytest.approx(timezone.now().timestamp(), abs=5)
+        # Die Erneuerung darf die Deadline NIE nachschieben — sonst waere das
+        # Maximum wieder ein Sliding Window.
+        assert request.session[ABSOLUTE_DEADLINE_KEY] == deadline_before
+
+    def test_missing_deadline_gets_grace_stamp_instead_of_logout(self, staff_user):
+        """Alt-Sessions (Bestand vor dem Deploy) und ``force_login`` tragen
+        keine Deadline. Sie werden nicht sofort ausgeloggt, sondern bekommen
+        einmalig den Default-Cap ab jetzt gestempelt."""
+        request = _request_with_session(staff_user, renewed_ago=10, deadline_in=None)
+
+        _make_middleware()(request)
+
+        assert request.user.is_authenticated
+        assert request.session.modified is True
+        assert request.session[ABSOLUTE_DEADLINE_KEY] == pytest.approx(
+            timezone.now().timestamp() + DEFAULT_SESSION_ABSOLUTE_HOURS * 3600, abs=5
+        )
+
+    def test_anonymous_request_is_not_stamped(self):
+        request = _request_with_session(AnonymousUser(), renewed_ago=None, deadline_in=None)
+
+        _make_middleware()(request)
+
+        assert request.session.modified is False
+        assert ABSOLUTE_DEADLINE_KEY not in request.session
+
+
+@pytest.mark.django_db
+class TestSessionAbsoluteCapIntegration:
+    """Cap ueber den vollen Middleware-Stack (Refs #1868)."""
+
+    def _expire(self, client, staff_user):
+        client.force_login(staff_user)
+        session = client.session
+        session[ABSOLUTE_DEADLINE_KEY] = timezone.now().timestamp() - 1
+        session.save()
+        return session.session_key
+
+    def test_expired_cap_redirects_to_login_and_deletes_session_row(self, client, staff_user):
+        session_key = self._expire(client, staff_user)
+
+        response = client.get("/clients/")
+
+        assert response.status_code == 302
+        assert response.url.startswith("/login/")
+        assert not Session.objects.filter(session_key=session_key).exists()
+        assert AuditLog.objects.filter(action=AuditLog.Action.LOGOUT, user=staff_user).exists()
+
+    def test_expired_cap_gives_htmx_an_hx_redirect(self, client, staff_user):
+        """Die Middleware antwortet NICHT selbst — der LoginRequiredMixin-302
+        laeuft durch ``HtmxSessionMiddleware``, die ihn fuer HTMX in
+        ``200 + HX-Redirect`` uebersetzt (sonst landete die Login-Seite im
+        Partial-Swap)."""
+        self._expire(client, staff_user)
+
+        response = client.get("/clients/", headers={"HX-Request": "true"})
+
+        assert response.status_code == 200
+        assert response["HX-Redirect"].startswith("/login/")
+
+    def test_expired_cap_gives_offline_replay_the_raw_302(self, client, staff_user):
+        """Ein Offline-Replay traegt den eingefrorenen ``HX-Request``-Header,
+        braucht aber den ROHEN 302: nur daran haelt der Queue-Klassifikator an,
+        ohne die Zeile zu loeschen (ADR-030 §3, Refs #1419)."""
+        self._expire(client, staff_user)
+
+        response = client.get(
+            "/clients/",
+            headers={"HX-Request": "true", "X-Offline-Replay": "1"},
+        )
+
+        assert response.status_code == 302
+        assert response["Location"].startswith("/login/")
+
+    def test_login_view_stamps_the_deadline(self, client, staff_user, settings_obj):
+        """Der echte Login-Pfad stempelt die Deadline aus den Facility-Settings
+        — ohne ihn griffe nur der Grace-Stempel der Middleware."""
+        settings_obj.session_absolute_hours = 3
+        settings_obj.save()
+        staff_user.set_password("testpass123")
+        staff_user.save()
+
+        response = client.post(
+            "/login/",
+            {"username": staff_user.username, "password": "testpass123"},
+        )
+
+        assert response.status_code == 302
+        assert client.session[ABSOLUTE_DEADLINE_KEY] == pytest.approx(timezone.now().timestamp() + 3 * 3600, abs=30)

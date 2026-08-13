@@ -1826,17 +1826,44 @@ Zwei Sicherheitsflächen kommen dazu:
 
 **Nicht als Aktivität zählen:** Offline-Queue-Replays (`X-Offline-Replay`) und die gesamte Offline-Sync-API (`/api/v1/offline/…` — Widerrufsliste, CSRF-Refresh, Bundle-Revalidierung). Die Sync-Sequenz feuert beim `online`-Event ohne Nutzerinteraktion; ohne den Ausschluss hielte ein Gerät mit flappender Verbindung seine Sitzung unbegrenzt offen.
 
-**Bewusst eingegangene Restrisiken** (Evaluation: #1868):
+**Bewusst eingegangene Restrisiken:**
 
-- **Kein absolutes Sitzungs-Maximum mehr.** Der frühere 30-Minuten-Deckel war nirgends zugesichert, wirkte aber als hartes Cap für entwendete Cookies; die Session-Hijack-Bewertung im [Threat-Model](threat-model.md) stützte sich implizit darauf.
 - **Pre-MFA-Sessions** (Passwort passiert, `mfa_verified=False`) werden mitverlängert — ein Gate auf das Flag ist nicht möglich, weil es für Nutzer ohne MFA-Gerät dauerhaft `False` bleibt. Delta gering (Passwort-Besitzer könnten sich jederzeit neu anmelden).
-- **Revocation-Scan-Rest:** der ungeflushte Rest jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` ist nicht mehr TTL-begrenzt, solange er aktiv genutzt wird (Kommentare in [`offline_invalidation.py`](../src/core/signals/offline_invalidation.py) nachgezogen; praktisch relevant erst bei >10 000 aktiven Sessions).
 - **Parallele Session-Writes:** bisher rein lesende Requests schreiben jetzt gelegentlich die Session (Last-Write-Wins-Semantik von `django_session`, winziges Race-Fenster bei parallelem Logout). Django-inhärent, durch die 10-%-Drosselung selten.
+
+Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum** — ist mit #1868 aufgelöst (nächster Abschnitt). Damit ist auch der **Revocation-Scan-Rest** jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` wieder nach oben begrenzt: eine aktiv weitergenutzte Session überdauert den Rechteentzug höchstens bis zu ihrem absoluten Ende (Kommentare in [`offline_invalidation.py`](../src/core/signals/offline_invalidation.py) nachgezogen; praktisch relevant erst bei >10 000 aktiven Sessions).
 
 ### Verifikation
 
 - Erneuerung/Drosselung/Ausnahmen: [`test_middleware_session_idle.py`](../src/tests/test_middleware_session_idle.py) (Unit + Integration über den vollen Middleware-Stack).
 - Handtest: `ENT-AUTH-07` in [manual-test-matrix-b.md](testing/manual-test-matrix-b.md).
+
+---
+
+## Absolutes Sitzungs-Maximum ab Login (Issue #1868)
+
+**Warum überhaupt:** Ein Inaktivitäts-Fenster hat keine Obergrenze. Eine Sitzung lebt, solange häufiger als `session_timeout_minutes` irgendein authentifizierter Request kommt — ein entwendetes oder auf einem vergessenen Gerät zurückgelassenes Session-Cookie damit potenziell unbegrenzt. Das absolute Maximum zieht eine zweite, aktivitätsunabhängige Grenze ein.
+
+**Konfiguration:** `Settings.session_absolute_hours` je Einrichtung, Default **12 Stunden**, zulässige Spanne 1–168 h (eine Woche). Die Cross-Field-Regel **Maximum > Inaktivitäts-Fenster** steht doppelt: als `Settings.clean()` (Admin-Formular, feldgenaue Meldung) und als DB-`CheckConstraint` `settings_session_absolute_cap` (Direct-Insert aus Shell, Fixture oder Datenmigration). Ohne sie wäre jede Sitzung schon absolut abgelaufen, bevor die Inaktivität greifen kann — eine stille Fehlkonfiguration, die im Betrieb wie ein Bug aussieht. Migration `0148` hebt beim Update das Maximum an, wo ein Bestands-Timeout es verletzen würde — ein Deploy soll keine vorhandene Einstellung verschärfen. **Eine getestete Ausnahme:** Liegt ein Bestands-Fenster jenseits des Feld-Maximums von 168 h, lässt sich der Constraint nur anlegen, indem die Migration `session_timeout_minutes` auf 10 079 Minuten klemmt; das protokolliert sie als `WARNING` im Deploy-Log ([`0148_session_absolute_hours.py`](../src/core/migrations/0148_session_absolute_hours.py)).
+
+**Mechanik:** Der Login stempelt die Deadline **einmal** in die Session (`ABSOLUTE_DEADLINE_KEY = "_session_absolute_deadline"`, Unix-Zeitstempel = Login + Cap) — im View, wo `facility.settings` ohnehin geladen ist, also ohne Extra-Query. Nutzer ohne Einrichtung (`super_admin`) und Einrichtungen ohne Settings-Zeile bekommen den Default; „kein Cap" ist kein erreichbarer Zustand. `SessionIdleRefreshMiddleware` prüft die Deadline **vor** der Erneuerungs-Logik und beendet die Sitzung per `django.contrib.auth.logout()` — Session-Zeile geflusht, `LOGOUT`-AuditLog über das `user_logged_out`-Signal, dieselbe Spur wie ein Abmelde-Klick. **Die Erneuerung stempelt die Deadline nie nach**, sonst wäre das Maximum nur ein zweites Sliding Window. Eine Änderung des Settings-Werts wirkt deshalb erst ab dem nächsten Login (so auch im Hilfetext des Feldes gesagt).
+
+**Zwei bewusste Entwurfsentscheidungen:**
+
+- **Das Cap kennt die Hintergrund-Sync-Ausnahmen des Inaktivitäts-Fensters nicht.** `X-Offline-Replay` und `/api/v1/offline/…` dürfen das Fenster nicht *verlängern* — aber ein abgelaufenes Maximum beendet die Sitzung auch dort. Sonst hätte ein dauersyncendes Gerät ein Schlupfloch am Cap vorbei.
+- **Die Middleware antwortet nicht selbst mit einem Redirect.** Nach dem `logout()` läuft der Request anonym weiter und die getroffene View liefert ihren eigenen `LoginRequiredMixin`-302. Nur so kommt der Standardpfad zum Zug: [`HtmxSessionMiddleware`](../src/core/middleware/htmx_session.py) übersetzt ihn für HTMX in `200 + HX-Redirect` und lässt ihn für ein Offline-Replay als rohen 302 durch — daran hält der Queue-Klassifikator an, **ohne** die Zeile zu löschen ([ADR-030](adr/030-offline-sync-orchestration-replay-contract.md) §3, Refs #1419). Ein eigener Redirect aus der Middleware würde beides umgehen und im schlimmsten Fall einen ungesyncten Write still verwerfen.
+
+**Sessions ohne den Schlüssel** bekommen beim nächsten Request einmalig den **Default**-Cap ab jetzt gestempelt, statt sofort ausgeloggt zu werden — ein Deploy soll keine Massenabmeldung auslösen, und der Facility-Wert wäre hier nur mit einem DB-Roundtrip pro Request zu haben. Betrifft zwei Fälle: **Bestands-Sessions** (angelegt vor dem Update) und Anmeldungen über das **Django-Admin-Login** (`/admin-mgmt/login/`), das an `CustomLoginView` vorbeigeht. Der zweite Fall ist keine neue Lücke: dieser Pfad setzt schon vorher `session_timeout_minutes` nicht (dort greift `SESSION_COOKIE_AGE`) — der Cap wirkt dort also mit dem Default statt mit dem Facility-Wert, aber er wirkt.
+
+**Was das Cap nicht leistet:** Es begrenzt die Server-Session, nicht das Zeitfenster eines Angreifers *innerhalb* dieser Session. Wer ein Cookie stiehlt, hat bis zur Deadline vollen Zugriff; die Grenze verhindert nur den unbegrenzten Dauerzugriff. Kürzere absolute Fenster sind je Einrichtung konfigurierbar, gegen den Preis regelmäßiger Neuanmeldungen mitten in der Arbeit.
+
+### Verifikation
+
+- Feld, Validator-Grenzen, `clean()`-Regel, DB-Constraint: [`test_models.py`](../src/tests/test_models.py) (`test_settings_session_absolute_*`, `test_settings_clean_rejects_cap_below_idle_timeout`).
+- Login-Stempel (Facility-Wert, Default ohne Settings-Zeile, `super_admin`): [`test_views_auth_branches.py`](../src/tests/test_views_auth_branches.py) (`TestCustomLoginViewAbsoluteDeadline`).
+- Durchsetzung inkl. Sync-Pfaden, HTMX-`HX-Redirect`, rohem 302 für Replays, Grace-Stempel: [`test_middleware_session_idle.py`](../src/tests/test_middleware_session_idle.py) (`TestSessionAbsoluteCap`, `TestSessionAbsoluteCapIntegration`).
+- Migrations-Anpassung des Bestands (Anheben, 168-h-Klemmung): [`test_0148_session_absolute_hours.py`](../src/tests/migrations/test_0148_session_absolute_hours.py).
+- Handtest: `ENT-AUTH-11` in [manual-test-matrix-b.md](testing/manual-test-matrix-b.md) (Abgrenzung zum Inaktivitäts-Fenster: `ENT-AUTH-07`).
 
 ---
 

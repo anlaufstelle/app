@@ -1,5 +1,6 @@
 """Facility settings (singleton per facility)."""
 
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -12,6 +13,13 @@ from core.models.managers import FacilityScopedManager
 DEFAULT_RETENTION_ANONYMOUS_DAYS = 90
 DEFAULT_RETENTION_IDENTIFIED_DAYS = 365
 DEFAULT_RETENTION_QUALIFIED_DAYS = 3650
+
+# Absolutes Sitzungs-Maximum ab Login in Stunden (Refs #1868). Gleiches Muster
+# wie DEFAULT_RETENTION_*_DAYS: die Konstante ist die einzige Quelle des
+# Literals — der Login-View und der Grace-Stempel der
+# SessionIdleRefreshMiddleware greifen fuer Nutzer ohne Einrichtung bzw. ohne
+# Settings-Zeile darauf zurueck.
+DEFAULT_SESSION_ABSOLUTE_HOURS = 12
 
 
 class Settings(models.Model):
@@ -47,6 +55,22 @@ class Settings(models.Model):
         default=30,
         validators=[MinValueValidator(1)],
         verbose_name=_("Session-Timeout (Minuten)"),
+    )
+    # Refs #1868: Obergrenze fuer die Lebensdauer EINER Sitzung, gemessen ab
+    # Login. Das Inaktivitaets-Fenster aus #1858 kennt keine — eine Sitzung
+    # lebt, solange irgendetwas pingt; ein entwendetes Cookie damit beliebig
+    # lange. Obergrenze 168 h (eine Woche), damit sich das Cap nicht durch
+    # einen absurd hohen Wert faktisch abschalten laesst.
+    session_absolute_hours = models.PositiveIntegerField(
+        default=DEFAULT_SESSION_ABSOLUTE_HOURS,
+        validators=[MinValueValidator(1), MaxValueValidator(168)],
+        verbose_name=_("Maximale Sitzungsdauer (Stunden)"),
+        help_text=_(
+            "Nach dieser Zeit ab der Anmeldung endet die Sitzung in jedem Fall — "
+            "unabhängig von der Aktivität. Muss größer sein als das "
+            "Session-Timeout. Eine Änderung greift erst beim nächsten Login, "
+            "weil die Frist beim Anmelden eingefroren wird."
+        ),
     )
     retention_anonymous_days = models.IntegerField(
         default=DEFAULT_RETENTION_ANONYMOUS_DAYS,
@@ -179,7 +203,47 @@ class Settings(models.Model):
                 ),
                 name="settings_retention_days_min_1",
             ),
+            # Refs #1868: dieselbe Doppelung wie Security N8 — Validatoren
+            # greifen nur ueber Form/full_clean, ein Direct-Insert (Shell,
+            # Datenmigration, Fixture) laeuft daran vorbei. Der Constraint haelt
+            # die Spanne 1..168 h UND die Cross-Field-Regel „Maximum echt
+            # groesser als das Inaktivitaets-Fenster" auch dort.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(session_absolute_hours__gte=1)
+                    & models.Q(session_absolute_hours__lte=168)
+                    & models.Q(session_timeout_minutes__lt=models.F("session_absolute_hours") * 60)
+                ),
+                name="settings_session_absolute_cap",
+            ),
         ]
+
+    def clean(self):
+        """Cross-Field-Regel: absolutes Maximum > Inaktivitaets-Fenster (#1868).
+
+        Ein Cap kleiner/gleich dem Idle-Timeout macht das Inaktivitaets-Fenster
+        wirkungslos — die Sitzung waere immer schon absolut abgelaufen, bevor
+        die Inaktivitaet ueberhaupt greifen kann. Das sieht im Betrieb wie ein
+        Bug aus („ich werde staendig ausgeloggt, obwohl ich arbeite"), ist aber
+        eine stille Fehlkonfiguration. Der CheckConstraint in ``Meta`` haelt
+        dieselbe Regel auf DB-Ebene.
+        """
+        super().clean()
+        cap_hours = self.session_absolute_hours
+        idle_minutes = self.session_timeout_minutes
+        if cap_hours is None or idle_minutes is None:
+            return
+        if cap_hours * 60 <= idle_minutes:
+            raise ValidationError(
+                {
+                    "session_absolute_hours": _(
+                        "Die maximale Sitzungsdauer muss größer sein als das "
+                        "Session-Timeout (%(idle)s Minuten). Sonst endet jede "
+                        "Sitzung, bevor der Inaktivitäts-Timeout greifen kann."
+                    )
+                    % {"idle": idle_minutes}
+                }
+            )
 
     def __str__(self):
         return f"Einstellungen: {self.facility.name}"

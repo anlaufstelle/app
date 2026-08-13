@@ -55,9 +55,10 @@ logger = logging.getLogger(__name__)
 # Angreifer viele anonyme Sessions erzeugt). Der Default liegt weit ueber dem
 # realistischen Bestand (Pilot < 30 User); wird er ueberschritten, wird das
 # laut geloggt (Salt-Rotation entwertet den Offline-Schluessel ohnehin global;
-# der ungeflushte Rest laeuft nur noch bei Inaktivitaet ab — aktiv genutzte
-# Sessions erneuern sich seit #1858, Restrisiko siehe
-# docs/security-notes.md und #1868).
+# der ungeflushte Rest laeuft bei Inaktivitaet ab — aktiv genutzte Sessions
+# erneuern sich seit #1858, enden aber spaetestens am absoluten
+# Sitzungs-Maximum aus #1868 [Default 12 h ab Login]. Das Zeitfenster des
+# Rests ist damit wieder nach oben begrenzt; siehe docs/security-notes.md).
 _SESSION_SCAN_CAP_DEFAULT = 10000
 _SESSION_SCAN_CHUNK = 2000
 
@@ -137,9 +138,9 @@ def _flush_user_sessions(user) -> None:
     hart gedeckelt (``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``). Wird der Deckel
     erreicht, wird laut geloggt und abgebrochen; die bereits gerotierte Salt
     entwertet den Offline-Schlüssel global. Ein etwaiger ungeflushter
-    Session-Rest läuft seit #1858 nur noch bei Inaktivität ab — aktiv
-    genutzte Sessions erneuern sich (Restrisiko: docs/security-notes.md,
-    Evaluation #1868).
+    Session-Rest läuft seit #1858 bei Inaktivität ab — aktiv genutzte
+    Sessions erneuern sich, enden aber spätestens am absoluten
+    Sitzungs-Maximum (#1868, Default 12 h ab Login).
     """
     user_id = str(user.pk)
     cap = getattr(settings, "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", _SESSION_SCAN_CAP_DEFAULT)
@@ -166,7 +167,8 @@ def _flush_user_sessions(user) -> None:
     if capped:
         logger.error(
             "Offline-Invalidierung: Session-Scan-Obergrenze (%d) für User %s erreicht — "
-            "Rest nicht geflusht (Salt ist rotiert; Rest läuft nur bei Inaktivität ab, Refs #1858/#1868).",
+            "Rest nicht geflusht (Salt ist rotiert; Rest läuft bei Inaktivität ab, spätestens am "
+            "absoluten Sitzungs-Maximum, Refs #1858/#1868).",
             cap,
             user.pk,
         )

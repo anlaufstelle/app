@@ -2265,6 +2265,32 @@ msgstr "Default document type"
 msgid "Session-Timeout (Minuten)"
 msgstr "Session timeout (minutes)"
 
+#: src/core/models/settings.py:67
+msgid "Maximale Sitzungsdauer (Stunden)"
+msgstr "Maximum session duration (hours)"
+
+#: src/core/models/settings.py:69
+msgid ""
+"Nach dieser Zeit ab der Anmeldung endet die Sitzung in jedem Fall — "
+"unabhängig von der Aktivität. Muss größer sein als das Session-Timeout. Eine "
+"Änderung greift erst beim nächsten Login, weil die Frist beim Anmelden "
+"eingefroren wird."
+msgstr ""
+"After this time from sign-in, the session always ends — regardless of "
+"activity. Must be greater than the session timeout. A change only takes "
+"effect at the next login, because the deadline is frozen at sign-in."
+
+#: src/core/models/settings.py:240
+#, python-format
+msgid ""
+"Die maximale Sitzungsdauer muss größer sein als das Session-Timeout "
+"(%(idle)s Minuten). Sonst endet jede Sitzung, bevor der Inaktivitäts-Timeout "
+"greifen kann."
+msgstr ""
+"The maximum session duration must be greater than the session timeout "
+"(%(idle)s minutes). Otherwise every session ends before the inactivity "
+"timeout can take effect."
+
 #: src/core/models/settings.py:54
 msgid "Aufbewahrung anonym (Tage)"
 msgstr "Retention anonymous (days)"

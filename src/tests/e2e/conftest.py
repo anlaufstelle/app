@@ -329,7 +329,10 @@ def _create_storage_state(launch_browser, base_url, username, password="anlaufst
 # session-weitem Cache: ein State wird wiederverwendet, bis er
 # _STORAGE_STATE_TTL_S alt ist, und dann per frischem Login ersetzt.
 # TTL = halbes Session-Fenster, damit auch der langsamste Einzeltest
-# (Timeout 120 s) nie in den Ablauf laeuft.
+# (Timeout 120 s) nie in den Ablauf laeuft. Das absolute Sitzungs-Maximum aus
+# #1868 (Default 12 h ab Login) liegt um Groessenordnungen darueber und ist
+# fuer diese TTL folgenlos — es begrenzt die Server-Session, nicht den
+# eingefrorenen Snapshot.
 _STORAGE_STATE_TTL_S = 15 * 60
 
 

@@ -12,7 +12,7 @@
 > AUTH → MFA → ACCT → SUDO → PWA → CLIENT → CASE → EPI → GOAL → EVT → ATT → WI → DEL → RET → SRCH → ZS → HOV → STAT → AUDIT → DSGVO → OFFL → SYS → CONFIG → COND → CLIENT-DYN/CASE-DYN → IMPORT → RECT.
 
 <details open>
-<summary><strong>🔐 AUTH — Authentifizierung (10 Cases)</strong></summary>
+<summary><strong>🔐 AUTH — Authentifizierung (11 Cases)</strong></summary>
 
 **Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/` 
 **Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`) 
@@ -244,6 +244,7 @@
 - `SESSION_SAVE_EVERY_REQUEST=False` reduziert DB-Write-Amplifikation (Refs #733); das Inaktivitäts-Fenster liefert NICHT dieses Flag, sondern allein die `SessionIdleRefreshMiddleware` (#1858).
 - Hintergrund-Sync zählt nicht als Aktivität: Offline-Replays (`X-Offline-Replay`) und die Sync-API (`/api/v1/offline/…`) erneuern das Fenster nicht.
 - Login speichert ggf. `session.set_expiry(facility.settings.session_timeout_minutes * 60)` (override).
+- Das Inaktivitäts-Fenster ist NICHT die einzige Grenze: darüber liegt das absolute Sitzungs-Maximum aus #1868 — eigener Case `ENT-AUTH-11`.
 
 **Status:** ☐ Offen
 
@@ -353,6 +354,50 @@
 **DSGVO/Security-Note:**
 - Mittelweg gegen frische Initial-Passwörter, die im Klartext (Onboarding-PDF, Admin-Mail) existieren — User muss sofort eigenes Pwd setzen.
 - Initial-Generator: `generate_initial_password(length=12)` aus `services/password.py` (12 Zeichen, ASCII letters+digits, BSI-konform).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-AUTH-11 — Absolutes Sitzungs-Maximum (Cap ab Login, aktivitätsunabhängig)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Auth | fachkraft (`miriam`) | C || — (Unit/Integration: `test_middleware_session_idle.py`) |
+
+**Voraussetzung:** Schnellvariante über den Admin — sonst wären es 12 Stunden Wartezeit.
+
+**Vorbereitung:**
+- Admin → Core → Einstellungen → eigene Einrichtung:
+ - `Session-Timeout (Minuten)` auf **1** setzen (das Maximum muss größer sein als das Timeout, gerechnet in Minuten).
+ - `Maximale Sitzungsdauer (Stunden)` auf **1** setzen → wirksames Cap 60 Min, Inaktivität 1 Min. Speichern.
+- Gegenprobe der Validierung: `Maximale Sitzungsdauer (Stunden)` = 1 **bei** `Session-Timeout` = 60 speichern wollen.
+- Frisch als `miriam` einloggen (die Frist wird beim **Login** eingefroren — eine Settings-Änderung wirkt NICHT auf eine schon laufende Sitzung).
+- Für die schnellste Variante (60 s statt 60 min) stattdessen direkt in der Session-Zeile arbeiten: in der Django-Shell die eigene `django_session`-Zeile dekodieren und `_session_absolute_deadline` (Unix-Zeitstempel) auf `time.time() - 1` setzen und die Zeile speichern.
+
+**Schritte:**
+1. Validierungs-Gegenprobe speichern (Maximum 1 h bei Timeout 60 min).
+2. Nach dem Login **durchgehend aktiv bleiben**: alle ~30 s eine Seite aufrufen (z.B. `/clients/` ↔ `/zeitstrom/`), bis die Stunde ab Login voll ist (bzw. sofort, wenn die Deadline per Shell in die Vergangenheit gesetzt wurde).
+3. Nächste Seite aufrufen.
+4. Im Admin → Core → Audit-Logs den letzten Eintrag prüfen.
+5. Optional (HTMX-Pfad): statt einer Vollseite eine HTMX-getriebene Aktion auslösen (z.B. Tippen in die Suche der Seitenleiste), während die Deadline überschritten ist.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: Das Formular **lehnt ab** mit einer Meldung am Feld „Maximale Sitzungsdauer (Stunden)" („muss größer sein als das Session-Timeout (60 Minuten)"). Werte außerhalb 1–168 werden ebenfalls abgelehnt.
+- Schritt 2: Kein Logout — solange die Deadline nicht erreicht ist, hält die Aktivität die Sitzung offen (Verhalten aus `ENT-AUTH-07` unverändert).
+- Schritt 3: HTTP 302 auf `/login/?next=…` **trotz durchgehender Aktivität**. Genau das ist der Unterschied zu `ENT-AUTH-07`.
+- Die Session-Zeile in `django_session` ist **weg** (nicht nur abgelaufen).
+- Schritt 4: Ein `LOGOUT`-Eintrag für `miriam` mit dem Zeitpunkt des letzten Requests — dieselbe Spur wie bei einem Abmelde-Klick.
+- Schritt 5: Die HTMX-Aktion führt zu einem **vollständigen Seitenwechsel** auf `/login/` (Server antwortet `200` + `HX-Redirect`), nicht zu einer Login-Seite im Partial-Bereich.
+- Nach Re-Login läuft eine frische Frist; die Anwendung ist normal nutzbar.
+- **Aufräumen:** `Session-Timeout` auf 30 und `Maximale Sitzungsdauer` auf 12 zurücksetzen.
+
+**DSGVO/Security-Note:**
+- Feld `Settings.session_absolute_hours` (Default 12 h, 1–168), Cross-Field-Regel doppelt abgesichert: `Settings.clean()` + DB-`CheckConstraint` `settings_session_absolute_cap`.
+- Deadline liegt als `_session_absolute_deadline` in der Session und wird **nur beim Login** gestempelt; die Aktivitäts-Erneuerung schiebt sie nie nach (sonst wäre das Maximum ein zweites Sliding Window).
+- Das Cap gilt **auch** für die Pfade, die als Hintergrund-Sync vom Inaktivitäts-Fenster ausgenommen sind (`X-Offline-Replay`, `/api/v1/offline/…`) — ein dauersyncendes Gerät hat kein Schlupfloch.
+- Bestands-Sessions ohne den Schlüssel (angelegt vor dem Update) werden nicht abgemeldet, sondern bekommen einmalig den Default-Cap ab dem nächsten Request.
+- Hintergrund: #1868, Trade-offs in [`security-notes.md`](../security-notes.md).
 
 **Status:** ☐ Offen
 

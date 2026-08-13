@@ -13,8 +13,9 @@ from django.views.decorators.http import require_POST
 from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
 
-from core.middleware.session_idle import LAST_RENEWAL_KEY
+from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import AuditLog, User
+from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.security import clear_sudo, invite_token_generator, is_locked
 from core.services.security import unlock as unlock_user
@@ -118,10 +119,16 @@ class CustomLoginView(auth_views.LoginView):
         response = super().form_valid(form)
         # Load session timeout from facility settings
         facility = getattr(user, "facility", None)
+        # Refs #1868: Default fuer alle, die keine Facility-Settings haben
+        # (super_admin ohne Einrichtung, Einrichtung ohne Settings-Zeile) —
+        # „kein Cap" ist hier bewusst KEINE Option.
+        absolute_hours = DEFAULT_SESSION_ABSOLUTE_HOURS
         if facility is not None:
             try:
-                timeout = facility.settings.session_timeout_minutes * 60
+                facility_settings = facility.settings
+                timeout = facility_settings.session_timeout_minutes * 60
                 self.request.session.set_expiry(timeout)
+                absolute_hours = facility_settings.session_absolute_hours
             except facility._meta.model.settings.RelatedObjectDoesNotExist:
                 pass  # No settings -> default session timeout
         # Refs #1858: Erneuerungs-Zeitstempel des Inaktivitaets-Fensters direkt
@@ -129,7 +136,15 @@ class CustomLoginView(auth_views.LoginView):
         # erste Folge-Request keinen zusaetzlichen Session-Write aus.
         from django.utils import timezone
 
-        self.request.session[LAST_RENEWAL_KEY] = timezone.now().timestamp()
+        now = timezone.now().timestamp()
+        self.request.session[LAST_RENEWAL_KEY] = now
+        # Refs #1868: absolutes Sitzungs-Ende EINMAL einfrieren. Bewusst hier
+        # und nicht in der Middleware: ``facility.settings`` ist an dieser
+        # Stelle ohnehin geladen (keine Extra-Query), und die Frist muss ab
+        # dem Login-Zeitpunkt laufen — nicht ab dem ersten Folge-Request. Ein
+        # spaeter geaenderter Settings-Wert wirkt deshalb erst ab dem naechsten
+        # Login (so dokumentiert im help_text des Feldes).
+        self.request.session[ABSOLUTE_DEADLINE_KEY] = now + absolute_hours * 3600
         # 2FA: Die Session startet immer unverifiziert — die MFA-Middleware
         # leitet bei Bedarf nach /mfa/verify/ oder /mfa/setup/ weiter.
         self.request.session["mfa_verified"] = False

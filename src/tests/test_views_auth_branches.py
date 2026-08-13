@@ -137,6 +137,65 @@ class TestCustomLoginViewSessionTimeout:
 
 
 @pytest.mark.django_db
+class TestCustomLoginViewAbsoluteDeadline:
+    """Refs #1868: Der Login friert das absolute Sitzungs-Maximum ein.
+
+    Die Deadline wird EINMAL beim Login gestempelt (aus den bereits geladenen
+    ``facility.settings``, also ohne Extra-Query) und danach von nichts mehr
+    verschoben — sonst waere das Maximum nur ein zweites Sliding Window.
+    """
+
+    def _login(self, client, user):
+        user.set_password("testpass123")
+        user.save()
+        response = client.post(
+            reverse("login"),
+            {"username": user.username, "password": "testpass123"},
+        )
+        assert response.status_code == 302
+        return response
+
+    def test_deadline_comes_from_facility_settings(self, client, staff_user, settings_obj):
+        from django.utils import timezone
+
+        from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY
+
+        settings_obj.session_absolute_hours = 6
+        settings_obj.save()
+
+        self._login(client, staff_user)
+
+        assert client.session[ABSOLUTE_DEADLINE_KEY] == pytest.approx(timezone.now().timestamp() + 6 * 3600, abs=30)
+
+    def test_missing_settings_row_falls_back_to_default(self, client, staff_user):
+        """Ohne ``Settings``-Zeile (Fixture bewusst nicht angefordert) gilt die
+        Modul-Konstante — nicht „kein Cap"."""
+        from django.utils import timezone
+
+        from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY
+        from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
+
+        self._login(client, staff_user)
+
+        assert client.session[ABSOLUTE_DEADLINE_KEY] == pytest.approx(
+            timezone.now().timestamp() + DEFAULT_SESSION_ABSOLUTE_HOURS * 3600, abs=30
+        )
+
+    def test_facility_less_super_admin_falls_back_to_default(self, client, super_admin_user):
+        """``super_admin`` hat keine Einrichtung — der Default gilt trotzdem."""
+        from django.utils import timezone
+
+        from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY
+        from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
+
+        self._login(client, super_admin_user)
+
+        assert client.session[ABSOLUTE_DEADLINE_KEY] == pytest.approx(
+            timezone.now().timestamp() + DEFAULT_SESSION_ABSOLUTE_HOURS * 3600, abs=30
+        )
+
+
+@pytest.mark.django_db
 class TestPasswordResetUserLookupException:
     def test_user_lookup_exception_is_caught(self, client):
         """Lines 146-148: ``User.objects.filter(...)`` Exception darf nicht durchschlagen.

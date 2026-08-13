@@ -12,7 +12,7 @@ CI_LOCK ?= /work/anlaufstelle-ci.lock
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -206,7 +206,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
+ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
 
 # Serialisierte Varianten der ressourcenschweren Gates (Refs #1840).
 # Wer einen vollen Gate-Lauf startet, nimmt DIESE Targets — sonst kollidieren
@@ -247,6 +247,14 @@ ci-coverage:
 # Refs #922.
 verify-matrix-drift:
 	$(PYTHON) scripts/verify_test_matrix_drift.py
+
+# EN-Doku-Sync gegen den ECHTEN Baum (translation-version + source-hash).
+# Ergaenzt src/tests/test_translation_source_hash_guard.py, das bewusst nur
+# tmp-Fixtures prueft — #1869 (stale Stempel nach E4-Nacharbeit) blieb dadurch
+# lokal unsichtbar; der reale Check lief nur im (deaktivierten) GH-Workflow.
+# Refs #1869.
+verify-translation-versions:
+	$(PYTHON) scripts/check_translation_versions.py
 
 # Guard (Refs #1137): kein ausgelieferter Test (src/tests/) darf hart auf
 # Pfade verweisen, die der Public-/Stage-Release-Snapshot strippt
