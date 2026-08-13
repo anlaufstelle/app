@@ -37,9 +37,16 @@ class _ActionSequence(HTMLParser):
 
     Muster analog ``tests.test_button_permissions._ContainerInhalt``: eine
     Tiefen-Stack-Verfolgung isoliert erst den Container, danach zusätzlich das
-    ⋮-Dropdown-Panel (jedes Element mit einem ``x-show``-Attribut markiert den
-    Eintritt in den Overflow — ``mobileOverflowMenu`` wird für BEIDE Varianten
-    verwendet, siehe ``components/_action_overflow.html``).
+    ⋮-Dropdown-Panel (``x-show="mobileMenu"`` markiert den Eintritt in den
+    Overflow — ``mobileOverflowMenu`` wird für BEIDE Varianten verwendet, siehe
+    ``components/_action_overflow.html``).
+
+    Refs #1864: Der Erkenner hing bis dahin an einem BELIEBIGEN ``x-show``.
+    Das trug, solange ``x-show`` ausschließlich am Dropdown-Panel vorkam —
+    seit „Offline mitnehmen“ als Einzelaktion INLINE in der Leiste stehen kann
+    (mit zwei zustandsabhängigen Labels), gibt es ``x-show`` auch außerhalb
+    des Menüs, und der Erkenner hätte alles danach fälschlich in den Overflow
+    gerechnet. Er zielt jetzt auf den konkreten Panel-Ausdruck.
     """
 
     _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
@@ -59,7 +66,7 @@ class _ActionSequence(HTMLParser):
             self._eintritt = len(self._stack)
             self.gefunden = True
         if self._eintritt is not None:
-            if "x-show" in attribute and self._overflow_ab is None:
+            if attribute.get("x-show") == "mobileMenu" and self._overflow_ab is None:
                 self._overflow_ab = len(self._stack)
             target = attribute.get("href") if tag == "a" else (attribute.get("action") if tag == "form" else None)
             if target:
@@ -360,17 +367,28 @@ class TestWorkitemDetailActionParityAndRank:
         primary = _targets(_primary(_actions(html, "workitem-actions-desktop")))
         status_url = reverse("core:workitem_status_update", kwargs={"pk": sample_workitem.pk})
         edit_url = reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk})
+        to_client_url = reverse("core:client_detail", kwargs={"pk": sample_workitem.client.pk})
         # Drei Status-Buttons (übernehmen/erledigt/verwerfen) posten alle auf
-        # dieselbe Route, danach Bearbeiten.
-        assert primary == [status_url, status_url, status_url, edit_url]
+        # dieselbe Route, danach Bearbeiten — und seit Refs #1864 „Zur Person“
+        # als letzter Eintrag: die Aufgabenseite hat kein ⋮ mehr, weil dort nur
+        # dieser eine, harmlose Eintrag lag.
+        assert primary == [status_url, status_url, status_url, edit_url, to_client_url]
 
-    def test_to_client_is_overflow_only(self, client, admin_user, sample_workitem):
+    def test_to_client_is_primary_because_it_is_the_only_secondary_action(self, client, admin_user, sample_workitem):
+        """ANFORDERUNGSWECHSEL (Refs #1864): „Zur Person“ lag hinter dem ⋮ und
+        war dort — sobald ``workitem.client`` gesetzt ist, also praktisch
+        immer — der EINZIGE Eintrag. Zwei Klicks fuer eine Aktion, die genauso
+        gut direkt in der Leiste stehen kann; der Knopf versprach „weitere
+        Aktionen" und hielt genau eine bereit. Die Vorgaengerfassung dieses
+        Tests (``test_to_client_is_overflow_only``) hielt die alte Regel fest.
+        Folgenschwere Aktionen bleiben unveraendert immer im ⋮ — das prueft
+        :class:`TestOverflowOnlyForTwoOrMoreEntries`."""
         client.force_login(admin_user)
         html = client.get(reverse("core:workitem_detail", kwargs={"pk": sample_workitem.pk})).content.decode()
         actions = _actions(html, "workitem-actions-desktop")
         to_client_url = reverse("core:client_detail", kwargs={"pk": sample_workitem.client.pk})
-        assert to_client_url in _overflow_targets(actions)
-        assert to_client_url not in _targets(_primary(actions))
+        assert to_client_url in _targets(_primary(actions))
+        assert to_client_url not in _overflow_targets(actions)
 
 
 @pytest.mark.django_db
@@ -382,7 +400,7 @@ class TestMobileActionPixelForm:
     festgenagelt werden:
 
     * **B1** — die beiden Anlege-Aktionen waren mobil icon-only und trugen
-      dasselbe „+"-Icon; welche welche ist, war nicht erkennbar.
+      dasselbe „+“-Icon; welche welche ist, war nicht erkennbar.
     * **B2** — der ⋮-Knopf war ~34 px hoch statt 44 px wie seine Nachbarn.
     * **WCAG 2.5.3** — sobald mobil ein Kurztext sichtbar wird, MUSS er im
       zugänglichen Namen stecken, sonst kann Sprachsteuerung den Knopf nicht
@@ -430,8 +448,8 @@ class TestMobileActionPixelForm:
     def test_visible_mobile_text_is_part_of_the_accessible_name_in_english(
         self, client, admin_user, client_identified, case_open, sample_event, sample_workitem
     ):
-        """Die Kurzlabels sind eigene msgids — „Kontakt" ⊂ „Kontakt dokumentieren"
-        sagt nichts darüber, ob „Contact" ⊂ „Document contact" gilt."""
+        """Die Kurzlabels sind eigene msgids — „Kontakt“ ⊂ „Kontakt dokumentieren“
+        sagt nichts darüber, ob „Contact“ ⊂ „Document contact“ gilt."""
         admin_user.preferred_language = "en"
         admin_user.save(update_fields=["preferred_language"])
         client.force_login(admin_user)
@@ -451,7 +469,7 @@ class TestMobileActionPixelForm:
     def test_contact_and_task_actions_have_distinguishable_icons(
         self, client, admin_user, client_identified, case_open
     ):
-        """B1: beide trugen ``M12 4v16m8-8H4`` — ein „+" neben einem „+"."""
+        """B1: beide trugen ``M12 4v16m8-8H4`` — ein „+“ neben einem „+“."""
         client.force_login(admin_user)
         for url, container, kontakt, aufgabe in (
             (
@@ -475,3 +493,135 @@ class TestMobileActionPixelForm:
                 f"{kontakt} und {aufgabe} tragen dasselbe Icon {icons[kontakt]!r} — "
                 f"mobil sind die beiden Anlege-Aktionen damit ununterscheidbar ({url})"
             )
+
+
+@pytest.mark.django_db
+class TestOverflowOnlyForTwoOrMoreEntries:
+    """Das ⋮ erscheint nur, wenn es wirklich eine Auswahl bündelt (Refs #1864).
+
+    Die Gates in den ``_actions.html`` waren reine „ist die Menge nicht
+    leer"-Bedingungen. In Alltagskonstellationen lag hinter dem ⋮ deshalb
+    **genau ein** Eintrag: auf der Aufgabe immer, auf der Personenakte für die
+    Assistenz, auf dem Ereignis ohne Fallbezug bzw. ohne Löschrecht. Ein Knopf,
+    der „weitere Aktionen“ verspricht und eine bereithält, versteckt, ohne zu
+    entlasten.
+
+    Ausnahme bleibt **folgenschwer**: Löschen, Fall schließen/wiedereröffnen
+    und Löschung beantragen kosten weiterhin den bewussten Zwischenschritt —
+    auch als Einzeleintrag (§6.2).
+    """
+
+    @staticmethod
+    def _hat_overflow(html: str) -> bool:
+        return "overflow-menu" in html
+
+    def test_workitem_with_client_drops_the_overflow_entirely(self, client, admin_user, sample_workitem):
+        client.force_login(admin_user)
+        html = client.get(reverse("core:workitem_detail", kwargs={"pk": sample_workitem.pk})).content.decode()
+        assert not self._hat_overflow(html), "⋮ bleibt stehen, obwohl nur „Zur Person“ dahinter liegt"
+        bar = _mobile_buttons(html, "workitem-actions-mobile")
+        assert "workitem-action-to-client" in [b["testid"] for b in bar]
+
+    def test_client_detail_shows_the_single_offline_action_inline_for_assistants(
+        self, client, assistant_user, client_identified
+    ):
+        """Assistenz sieht weder „Fall anlegen“ noch „Löschung beantragen“ noch
+        die Datenauskunft — übrig bleibt „Offline mitnehmen“, eine harmlose
+        Aktion."""
+        client.force_login(assistant_user)
+        html = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
+        assert not self._hat_overflow(html), "⋮ bleibt stehen, obwohl nur „Offline mitnehmen“ dahinter liegt"
+        testids = [b["testid"] for b in _mobile_buttons(html, "client-actions-mobile")]
+        assert "mobile-take-offline-btn" in testids
+
+    def test_client_detail_keeps_the_overflow_for_staff(self, client, staff_user, client_identified):
+        """Gegenprobe: ab Fachkraft sind es drei Einträge (Fall anlegen ·
+        Offline mitnehmen · Löschung beantragen) — das ⋮ bleibt."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
+        assert self._hat_overflow(html)
+        testids = [b["testid"] for b in _mobile_buttons(html, "client-actions-mobile")]
+        assert "mobile-take-offline-btn" not in testids, "Offline mitnehmen gehört bei ≥ 2 Einträgen ins Menü"
+
+    def test_event_keeps_the_overflow_when_a_delete_right_joins_the_link(self, client, admin_user, sample_event):
+        """Zwei Einträge (Zur Person + Löschen) — das ⋮ bleibt."""
+        client.force_login(admin_user)
+        html = client.get(reverse("core:event_detail", kwargs={"pk": sample_event.pk})).content.decode()
+        assert self._hat_overflow(html)
+        actions = _actions(html, "event-actions-desktop")
+        assert reverse("core:client_detail", kwargs={"pk": sample_event.client.pk}) in _overflow_targets(actions)
+
+    def test_event_shows_the_single_link_inline_without_a_delete_right(self, client, assistant_user, sample_event):
+        """Assistenz: „Zum Fall“ ist staff-gegated, „Löschen“ auch — übrig
+        bleibt „Zur Person“ als einziger, harmloser Eintrag."""
+        client.force_login(assistant_user)
+        html = client.get(reverse("core:event_detail", kwargs={"pk": sample_event.pk})).content.decode()
+        assert not self._hat_overflow(html), "⋮ bleibt stehen, obwohl nur „Zur Person“ dahinter liegt"
+        actions = _actions(html, "event-actions-desktop")
+        assert reverse("core:client_detail", kwargs={"pk": sample_event.client.pk}) in _targets(_primary(actions))
+
+    def test_event_shows_the_single_case_link_inline(
+        self, client, staff_user, admin_user, facility, case_open, doc_type_contact
+    ):
+        """Spiegelbild: Ereignis mit Fall- statt Personenbezug. ``created_by``
+        ist bewusst NICHT die prüfende Fachkraft — sonst griffe deren
+        Löschrecht am eigenen Ereignis und das ⋮ bliebe zu Recht stehen."""
+        from django.utils import timezone
+
+        from core.models import Event
+
+        event = Event.objects.create(
+            facility=facility,
+            case=case_open,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+        client.force_login(staff_user)
+        html = client.get(reverse("core:event_detail", kwargs={"pk": event.pk})).content.decode()
+        assert not self._hat_overflow(html), "⋮ bleibt stehen, obwohl nur „Zum Fall“ dahinter liegt"
+        actions = _actions(html, "event-actions-desktop")
+        assert reverse("core:case_detail", kwargs={"pk": case_open.pk}) in _targets(_primary(actions))
+
+    def test_case_keeps_the_overflow_for_its_single_consequential_entry(self, client, admin_user, case_open):
+        """„Schließen“ steht allein im Menü und bleibt trotzdem dort: ein
+        versehentlicher Klick auf eine folgenschwere Aktion soll weiterhin
+        einen bewussten Zwischenschritt kosten. „Wiedereröffnen“ ebenso, sonst
+        spränge die Aktion je nach Fallstatus zwischen Leiste und Menü."""
+        client.force_login(admin_user)
+        html = client.get(reverse("core:case_detail", kwargs={"pk": case_open.pk})).content.decode()
+        assert self._hat_overflow(html)
+        actions = _actions(html, "case-actions-desktop")
+        assert reverse("core:case_close", kwargs={"pk": case_open.pk}) in _overflow_targets(actions)
+
+    def test_consequential_actions_are_never_primary_in_any_role(
+        self, client, assistant_user, staff_user, lead_user, admin_user, client_identified, case_open, sample_event
+    ):
+        """Verschärfte Rangregel: die vier folgenschweren Ziele stehen auf
+        KEINER Seite und in KEINER Rolle außerhalb des ⋮ — auch nicht, wenn
+        sie dort allein liegen."""
+        verboten = {
+            reverse("core:case_close", kwargs={"pk": case_open.pk}),
+            reverse("core:case_reopen", kwargs={"pk": case_open.pk}),
+            reverse("core:event_delete", kwargs={"pk": sample_event.pk}),
+            reverse("core:client_delete_request", kwargs={"pk": client_identified.pk}),
+        }
+        seiten = (
+            (reverse("core:client_detail", kwargs={"pk": client_identified.pk}), "client-actions-desktop"),
+            (reverse("core:case_detail", kwargs={"pk": case_open.pk}), "case-actions-desktop"),
+            (reverse("core:event_detail", kwargs={"pk": sample_event.pk}), "event-actions-desktop"),
+        )
+        geprueft = 0
+        for user in (assistant_user, staff_user, lead_user, admin_user):
+            client.force_login(user)
+            for url, container in seiten:
+                response = client.get(url)
+                # Nicht jede Rolle sieht jede Seite (Fallakte ist STAFF_PLUS).
+                if response.status_code != 200:
+                    continue
+                geprueft += 1
+                primary = set(_targets(_primary(_actions(response.content.decode(), container))))
+                treffer = primary & verboten
+                assert not treffer, f"{user.username} sieht folgenschwere Aktion(en) primär auf {url}: {treffer}"
+        assert geprueft >= 8, f"Zu wenige Seiten geprüft ({geprueft}) — Gegenprobe verpufft"

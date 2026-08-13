@@ -10,7 +10,8 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._selectors import action_bar, open_desktop_overflow
+from ._helpers import django_shell
+from ._selectors import action_bar, action_in_bar, open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
 
@@ -248,6 +249,101 @@ class TestClientDetailPermissions:
         page.wait_for_url(re.compile(r"/cases/new/\?client=[0-9a-f-]+"))
         # Person ist im Zielformular vorbelegt (``?client=<pk>``).
         expect(page.locator("input[name='client']")).not_to_have_value("")
+
+
+# ---------------------------------------------------------------------------
+# ⋮-Regel: Menue erst ab zwei Eintraegen (Refs #1864)
+# ---------------------------------------------------------------------------
+
+
+class TestOverflowOnlyForTwoOrMoreEntries:
+    """Der ⋮-Knopf „Weitere Aktionen" erscheint nur, wenn er wirklich eine
+    Auswahl buendelt.
+
+    Vorher galt eine reine „ist die Menge nicht leer"-Bedingung: die
+    Aufgabenseite zeigte ein ⋮ mit genau einem Eintrag („Zur Person"), die
+    Personenakte fuer die Assistenz eines mit genau „Offline mitnehmen". Zwei
+    Klicks fuer eine Aktion, die genauso gut direkt in der Leiste steht.
+
+    Diese Klasse prueft beide Richtungen — dass das ⋮ verschwindet, wo es
+    nichts buendelt, UND dass die Einzelaktion an seiner Stelle wirklich
+    klickbar ist (ein blosses „Element existiert" saehe ein verstecktes
+    Menue-Kind nicht vom sichtbaren Leisten-Knopf unterschieden).
+    """
+
+    def _seed_workitem_with_client(self, e2e_env):
+        titel = f"E2E-Kopfleiste-Aufgabe-{uuid.uuid4().hex[:8]}"
+        script = (
+            "from core.models import Client, Facility, WorkItem;"
+            " from core.models.user import User;"
+            " f = Facility.objects.get(name='Hauptstelle');"
+            " u = User.objects.get(username='emma');"
+            " c = Client.objects.filter(facility=f).first();"
+            f" w = WorkItem.objects.create(facility=f, client=c, created_by=u, title='{titel}',"
+            " item_type='task', status='open');"
+            " print(w.pk)"
+        )
+        return django_shell(e2e_env, script)[-1].strip()
+
+    def test_workitem_detail_shows_to_client_without_any_overflow(self, authenticated_page, base_url, e2e_env):
+        """Die Aufgabenseite hat nach der Regel gar kein ⋮ mehr — „Zur Person"
+        ist dort der einzige und harmlose Eintrag."""
+        page = authenticated_page
+        pk = self._seed_workitem_with_client(e2e_env)
+        page.goto(f"{base_url}/workitems/{pk}/", wait_until="domcontentloaded")
+
+        expect(page.locator("[data-testid='desktop-overflow-menu']")).to_have_count(0)
+        expect(page.locator("[data-testid='mobile-overflow-menu']")).to_have_count(0)
+
+        ziel = action_bar(page, "workitem").locator("[data-testid='workitem-action-to-client']")
+        expect(ziel).to_be_visible()
+        ziel.click()
+        page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/"))
+
+    def test_assistant_reaches_take_offline_without_an_overflow(self, assistant_page, base_url):
+        """Assistenz: „Fall anlegen", „Loeschung beantragen" und die
+        Datenauskunft sind rollengegated — uebrig bleibt „Offline mitnehmen",
+        jetzt direkt in der Leiste."""
+        page = assistant_page
+        _navigate_to_first_client_detail(page, base_url)
+
+        expect(page.locator("[data-testid='desktop-overflow-menu']")).to_have_count(0)
+        expect(action_bar(page, "client").locator("[data-testid='take-offline-btn']")).to_be_visible()
+
+    def test_staff_still_finds_the_bundled_menu_on_a_client(self, staff_page, base_url):
+        """Gegenprobe: ab Fachkraft sind es drei Eintraege — das ⋮ bleibt, und
+        ``action_in_bar`` findet die Aktion trotzdem, ohne zu wissen, wo sie
+        liegt."""
+        page = staff_page
+        _navigate_to_first_client_detail(page, base_url)
+
+        expect(page.locator("[data-testid='desktop-overflow-menu']")).to_have_count(1)
+        expect(action_in_bar(page, "client", "take-offline-btn")).to_be_visible()
+
+    def _seed_open_case(self, e2e_env):
+        titel = f"E2E-Kopfleiste-Fall-{uuid.uuid4().hex[:8]}"
+        script = (
+            "from core.models import Case, Client, Facility;"
+            " from core.models.user import User;"
+            " f = Facility.objects.get(name='Hauptstelle');"
+            " u = User.objects.get(username='emma');"
+            " c = Client.objects.filter(facility=f).first();"
+            f" k = Case.objects.create(facility=f, client=c, created_by=u, title='{titel}', status='open');"
+            " print(k.pk)"
+        )
+        return django_shell(e2e_env, script)[-1].strip()
+
+    def test_case_keeps_its_menu_for_the_single_consequential_entry(self, lead_page, base_url, e2e_env):
+        """„Schliessen" steht allein im Menue und bleibt trotzdem dort:
+        folgenschwere Aktionen kosten weiterhin einen bewussten
+        Zwischenschritt (§6.2)."""
+        page = lead_page
+        pk = self._seed_open_case(e2e_env)
+        page.goto(f"{base_url}/cases/{pk}/", wait_until="domcontentloaded")
+
+        expect(page.locator("[data-testid='desktop-overflow-menu']")).to_have_count(1)
+        bar = open_desktop_overflow(page, "case")
+        expect(bar.locator("button:has-text('Schließen')")).to_be_visible()
 
 
 # ---------------------------------------------------------------------------

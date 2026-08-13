@@ -6,8 +6,30 @@ components/_action_overflow.html — ⋮-Trigger-Button für die Overflow-Aktion
 viewport-agnostisch; Umbenennen wuerde vier weitere Templates anfassen, YAGNI)
 und das Dropdown-Panel selbst bleiben bei der aufrufenden ``_actions.html`` —
 sie umschliessen fachliche Sonderformen (POST-Forms, data-confirm), die ein
-generischer Include nicht transportieren kann. Bei leerem Overflow wird
-dieser Include schlicht nicht aufgerufen (kein leerer ⋮-Knopf).
+generischer Include nicht transportieren kann.
+
+WANN dieser Include ueberhaupt aufgerufen wird (Refs #1864) — die Regel gilt
+fuer alle vier ``core/<entity>/partials/_actions.html``:
+
+1. Massgeblich ist die fuer Rolle UND Datenlage TATSAECHLICH sichtbare Menge,
+   nicht die Zahl der im Template stehenden Eintraege.
+2. >= 2 Eintraege -> ⋮ „Weitere Aktionen“ wie gehabt.
+3. Genau 1 Eintrag und nicht folgenschwer -> der Eintrag wird als SEKUNDAERER
+   Knopf direkt in die Aktionsleiste gerendert (``position="primary"``, nie
+   ``highlight`` — die Hervorhebung bleibt der haeufigsten Aktion, SS6.2);
+   dieser Include und sein Panel entfallen dann vollstaendig.
+4. Folgenschwere Aktionen bleiben IMMER hinter dem ⋮, auch als Einzeleintrag:
+   Loeschen, Fall schliessen/wiedereroeffnen, Loeschung beantragen. Auch
+   „Wiedereroeffnen“ — sonst spraenge die Aktion je nach Fallstatus zwischen
+   Leiste und Menue.
+5. Leerer Overflow -> ebenfalls kein Aufruf (kein leerer ⋮-Knopf).
+
+Die Paritaetsregel SS6.4 bleibt davon unberuehrt: Desktop und mobil zeigen
+dieselbe Menge in derselben Reihenfolge, die inline gezogene Aktion folgt
+mobil derselben Pixelform wie die uebrigen primaeren Aktionen (Refs #1859).
+Guards: ``tests/test_detail_actions_parity.py::TestOverflowOnlyForTwoOrMoreEntries``
+und ``tests/e2e/test_button_permissions.py`` (dort adressiert
+``_selectors.action_in_bar`` eine Aktion, ohne ihren Ort zu kennen).
 
 Parameter: variant ("desktop"|"mobile"). Eigene Testids je Variante
 (``desktop-overflow-menu``/``mobile-overflow-menu``) — Bestands-E2E-Selektoren

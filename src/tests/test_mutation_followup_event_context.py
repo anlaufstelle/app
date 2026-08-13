@@ -552,7 +552,18 @@ class TestBuildEventDetailContext:
         _attach(doc_type, ft)
         event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         ctx = build_event_detail_context(event, staff_user)
-        assert set(ctx.keys()) == {"event", "fields_display", "history"}
+        # Refs #1864: dazu die Sichtbarkeits-/Positions-Flags der
+        # Sekundaeraktionen (``_build_secondary_action_flags``) — sie stehen
+        # bewusst hier statt als Operatorvorrang-Ausdruck im Template.
+        assert set(ctx.keys()) == {
+            "event",
+            "fields_display",
+            "history",
+            "show_to_client",
+            "show_to_case",
+            "can_delete_event",
+            "secondary_action_position",
+        }
         assert ctx["event"] is event
 
     def test_empty_data_json_yields_empty_fields(self, facility, client_identified, staff_user):

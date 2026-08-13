@@ -206,12 +206,44 @@ def _build_history_with_slug_info(event):
     return history
 
 
+def _build_secondary_action_flags(event, user):
+    """Sichtbarkeit und Position der Sekundäraktionen des Ereignis-Details.
+
+    Refs #1864: Das ⋮ „Weitere Aktionen" soll nur erscheinen, wenn es
+    wirklich eine Auswahl bündelt (>= 2 Einträge). Für ein Ereignis heißt das
+    zählen — und die Bedingung im Template
+    (``event.client or event.case and user.is_staff_or_above or ...``) war
+    schon vor der Zählung nur über Operatorvorrang lesbar. Sie hier einmal
+    auseinanderzunehmen ist billiger, als sie im Template ein zweites Mal zu
+    formulieren: Template und Test lesen jetzt aus derselben Quelle.
+
+    ``Löschen`` ist folgenschwer und bleibt IMMER im Menü (§6.2) — auch als
+    Einzeleintrag. Sobald es sichtbar ist, gibt es also ein ⋮, egal wie viele
+    Einträge daneben stehen.
+    """
+    show_to_client = event.client_id is not None
+    # ``case_detail`` ist STAFF_PLUS — die Assistenz sähe sonst einen 403-Link.
+    show_to_case = event.case_id is not None and user.is_staff_or_above
+    can_delete_event = user.is_lead_or_admin or (user.is_staff_or_above and event.created_by_id == user.pk)
+    bleibt_im_menue = can_delete_event or (show_to_client and show_to_case)
+    return {
+        "show_to_client": show_to_client,
+        "show_to_case": show_to_case,
+        "can_delete_event": can_delete_event,
+        # "overflow" -> ⋮-Rahmen rendern; "primary" -> der eine Rest steht
+        # direkt in der Leiste. Bleibt gar nichts sichtbar, rendert keine der
+        # Aktionen und der Wert ist folgenlos.
+        "secondary_action_position": "overflow" if bleibt_im_menue else "primary",
+    }
+
+
 def build_event_detail_context(event, user):
     """Build the template context dict for :class:`EventDetailView`.
 
     Returns a dict with ``event``, ``fields_display`` (list of per-field dicts
-    with decrypted values / file markers / sensitivity flags) and ``history``
-    (reverse-chronological :class:`EventHistory` queryset).
+    with decrypted values / file markers / sensitivity flags), ``history``
+    (reverse-chronological :class:`EventHistory` queryset) and the secondary
+    action flags from :func:`_build_secondary_action_flags`.
     """
     field_templates = build_field_template_lookup(event.document_type, ordered=True)
     doc_sensitivity = event.document_type.sensitivity
@@ -268,4 +300,5 @@ def build_event_detail_context(event, user):
         "event": event,
         "fields_display": fields_display,
         "history": _build_history_with_slug_info(event),
+        **_build_secondary_action_flags(event, user),
     }

@@ -4,30 +4,15 @@ Prüft Layout, Navigation und Overflow auf mobilen Viewports.
 Refs #382, #418.
 """
 
-import os
-import subprocess
-import sys
 import uuid
 
 import pytest
 from django.utils import timezone
 
+from ._helpers import django_shell
 from ._selectors import action_bar, open_mobile_overflow, wait_for_settled
 
 pytestmark = pytest.mark.e2e
-
-
-def _shell(e2e_env, script):
-    """``manage.py shell -c`` gegen die E2E-Datenbank (Muster aus test_client_export.py)."""
-    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    out = subprocess.run(
-        [python, "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
-        env=e2e_env,
-        check=True,
-    )
-    return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 
 
 # Deutscher Monatsname für Datums-Asserts (locale-frei, Refs #761).
@@ -614,7 +599,7 @@ class TestMobileDetailActionBarGeometry:
             f" pseudonym='{pseudonym}', created_by=u);"
             " print(c.pk)"
         )
-        return _shell(e2e_env, script)[-1].strip()
+        return django_shell(e2e_env, script)[-1].strip()
 
     def _bar_buttons(self, page):
         bar = action_bar(page, "client", "mobile")

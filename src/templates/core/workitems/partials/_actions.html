@@ -7,8 +7,18 @@ Mitgliedschaft und Reihenfolge stehen GENAU HIER — die Detailseite ruft diese
 Datei zweimal auf (``variant="desktop"``/``"mobile"``). Primär: Status
 umschalten (bestehende Forms aus dem Body, unverändert übernommen — Gate wie
 bisher ``user.is_lead_or_admin or workitem.created_by == user or
-workitem.assigned_to == user``) · Bearbeiten (``can_edit``, aus der View).
-Overflow: Zur Person.
+workitem.assigned_to == user``) · Bearbeiten (``can_edit``, aus der View) ·
+Zur Person.
+
+⋮-Regel (Refs #1864): Der ⋮-Knopf erscheint nur, wenn er wirklich eine
+Auswahl buendelt (>= 2 Eintraege). „Zur Person“ war hier — sobald
+``workitem.client`` gesetzt ist, also praktisch immer — der EINZIGE Eintrag:
+zwei Klicks und ein zusaetzliches Bedienelement in der engen mobilen Leiste
+fuer eine Aktion, die genauso gut direkt dort steht. Sie ist harmlos (ein
+Navigationsziel, nichts Irreversibles), steht deshalb jetzt als SEKUNDAERER
+Knopf in der Leiste; ``highlight`` bleibt der haeufigsten Aktion vorbehalten
+(§6.2). Diese Seite hat damit ueberhaupt keinen Overflow mehr — kaeme je
+eine folgenschwere Aktion dazu (z. B. Loeschen), muesste der ⋮-Rahmen zurueck.
 
 Abweichung vom Plan (§E.3-Tabelle nennt zusätzlich „Löschen"): es existiert
 **keine** WorkItem-Löschfunktion im Bestandscode (kein View, keine Route,
@@ -86,13 +96,6 @@ Truth Source").
 {% endif %}
 
 {% if workitem.client %}
-<div x-data="mobileOverflowMenu" class="relative">
-    {% include "components/_action_overflow.html" with variant=variant %}
-    {# Refs #1859 (B3): max-w klemmt das 224-px-Panel auf die Viewportbreite. #}
-    <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
-         class="absolute right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
-        {% url 'core:client_detail' workitem.client.pk as client_detail_url %}
-        {% include "components/_action_button.html" with variant=variant position="overflow" base_url=client_detail_url label=label_to_client testid="workitem-action-to-client" %}
-    </div>
-</div>
+{% url 'core:client_detail' workitem.client.pk as client_detail_url %}
+{% include "components/_action_button.html" with variant=variant position="primary" base_url=client_detail_url label=label_to_client testid="workitem-action-to-client" icon_path="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" %}
 {% endif %}

@@ -157,6 +157,11 @@ def subnav_tab(page: Page, key: str) -> Locator:
 # Template-Haken: ``components/_action_overflow.html``
 # (``desktop-overflow-menu``/``mobile-overflow-menu``) und
 # ``core/<entity>/partials/_actions.html``.
+#
+# Refs #1864: Ob es ueberhaupt ein ⋮ gibt, haengt jetzt von Rolle und Datenlage
+# ab (>= 2 Eintraege). Wer nur EINE Aktion adressieren will, nimmt deshalb
+# ``action_in_bar`` statt ``open_*_overflow`` — das ist gegen kuenftige
+# Umsortierungen zwischen Leiste und Menue robust.
 
 ACTION_ENTITIES = ("client", "case", "event", "workitem")
 
@@ -185,6 +190,32 @@ def open_desktop_overflow(page: Page, entity: str) -> Locator:
 def open_mobile_overflow(page: Page, entity: str) -> Locator:
     """Oeffnet das ⋮-Menue der mobilen Aktionsleiste (siehe :func:`open_desktop_overflow`)."""
     return _open_overflow(page, entity, "mobile")
+
+
+def action_in_bar(page: Page, entity: str, testid: str, variant: str = "desktop") -> Locator:
+    """Adressiert EINE Kopfaktion, egal ob sie in der Leiste oder im ⋮ liegt.
+
+    Refs #1864: Das ⋮ „Weitere Aktionen" erscheint nur noch ab ZWEI
+    Eintraegen — bleibt genau einer uebrig und ist er nicht folgenschwer,
+    steht er direkt in der Leiste und es gibt gar kein ⋮ mehr (Aufgabenseite,
+    Personenakte fuer die Assistenz, Ereignis ohne Fallbezug/Loeschrecht).
+    ``open_*_overflow`` liefe dort ins Leere.
+
+    Der Helfer oeffnet das Menue deshalb nur, wenn die Aktion nicht schon
+    sichtbar ist UND ein ⋮ existiert. Damit bleiben kuenftige Umsortierungen
+    zwischen Leiste und Menue testneutral — der Aufrufer sagt, WELCHE Aktion
+    er will, nicht WO sie liegt.
+
+    ``count()`` allein genuegt nicht: Overflow-Eintraege stehen auch bei
+    geschlossenem Menue im DOM (``x-show`` setzt nur ``display: none``).
+    """
+    bar = action_bar(page, entity, variant)
+    ziel = bar.locator(f"[data-testid='{testid}']")
+    if ziel.count() and ziel.first.is_visible():
+        return ziel
+    if bar.locator(f"[data-testid='{variant}-overflow-menu']").count():
+        _open_overflow(page, entity, variant)
+    return ziel
 
 
 def _open_overflow(page: Page, entity: str, variant: str) -> Locator:

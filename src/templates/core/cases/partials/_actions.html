@@ -11,6 +11,15 @@ POST-Forms, lead+) — eine folgenschwere Aktion ist nie primär (§6.2).
 ``CaseDetailView`` ist bereits ``StaffRequiredMixin``, deshalb kein
 zusätzliches Rollen-Gate auf den primären Aktionen (wie im Bestandscode).
 
+⋮-Regel (Refs #1864): Das ⋮ erscheint sonst nur ab ZWEI Einträgen — diese
+Seite ist die begründete AUSNAHME und bleibt unverändert. Hinter dem ⋮ liegt
+hier immer genau ein Eintrag („Schließen“ bzw. „Wiedereröffnen“, je nach
+Fallstatus), aber beide sind folgenschwer: Ein versehentlicher Klick soll
+weiterhin einen bewussten Zwischenschritt kosten (§6.2). Auch
+„Wiedereröffnen“ bleibt im Menü — stünde es in der Leiste und „Schließen“
+im Menü, spränge die Aktion je nach Fallstatus zwischen beiden Orten. Die
+vollständige Regel steht in ``components/_action_overflow.html``.
+
 Mobile Kurzlabels und Icons (Refs #1859): wie in der Personenakte tragen die
 beiden Anlege-Aktionen eigene Icons (Sprechblase/Klemmbrett) und mobil ein
 sichtbares ``label_short``; „Bearbeiten" bleibt icon-only. Das Kurzlabel MUSS

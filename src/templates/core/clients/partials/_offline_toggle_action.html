@@ -1,0 +1,38 @@
+{% load i18n %}
+{% comment %}
+core/clients/partials/_offline_toggle_action.html — „Offline mitnehmen“ /
+„Aus Offline-Cache entfernen“ als EIN Renderort (Refs #1864).
+
+Seit der ⋮-Regel (>= 2 Eintraege) steht dieser Knopf je nach Rolle an zwei
+Orten: fuer die Assistenz — dort ist er der EINZIGE Overflow-Eintrag — direkt
+in der Aktionsleiste, ab Fachkraft weiterhin im ⋮-Menue. Ihn dafuer zweimal
+auszuschreiben waere genau die Drift, die §6.4 verhindern soll; stattdessen
+verzweigt hier nur die Pixelform.
+
+Warum kein ``components/_action_button.html``: das ist kein Link, sondern ein
+Alpine-Toggle mit ZWEI zustandsabhaengigen Labels (``notOffline``/
+``isOffline`` aus der umschliessenden ``offlineClientBadge``-Komponente) und
+einem ``:disabled="busy"``. Ein dynamisches ``:aria-label`` ist mit dem
+``@alpinejs/csp``-Build nicht moeglich — der zugaengliche Name folgt dem
+Zustand deshalb ueber die Spans selbst: mobil als ``sr-only`` (sichtbar bleibt
+das Icon, wie bei „Bearbeiten“), am Desktop als sichtbares Label. Genau
+deshalb traegt der Knopf KEIN ``aria-label``: ein statischer Langtext neben
+wechselndem sichtbarem Text brauche WCAG 2.5.3 (dieselbe Ueberlegung wie in
+Refs #1863).
+
+Parameter:
+- variant: "desktop" | "mobile".
+- position: "primary" (in der Leiste) | "overflow" (Menuezeile).
+  ``overflow`` ruft ``closeAndToggleOffline`` — das Menue muss sich mit
+  schliessen; inline gibt es kein Menue, dort genuegt ``toggleOffline``
+  (Refs #1763: ``;``-Verkettung bricht unter @alpinejs/csp silent).
+{% endcomment %}
+<button type="button"
+        @click="{% if position == 'primary' %}toggleOffline{% else %}closeAndToggleOffline{% endif %}"
+        :disabled="busy"
+        class="{% if position == 'primary' %}inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] bg-surface border border-subtle text-ink-soft rounded-md py-2 {% if variant == 'mobile' %}px-3{% else %}px-3.5 text-[13px] font-medium hover:bg-canvas{% endif %}{% else %}w-full text-left flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas{% endif %} disabled:opacity-50"
+        data-testid="{% if variant == 'mobile' %}mobile-take-offline-btn{% else %}take-offline-btn{% endif %}">
+    <svg aria-hidden="true" class="w-4 h-4{% if position != 'primary' %} mr-2 text-ink-muted{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+    <span{% if position == 'primary' and variant == 'mobile' %} class="sr-only"{% endif %} x-show="notOffline">{% trans "Offline mitnehmen" %}</span>
+    <span{% if position == 'primary' and variant == 'mobile' %} class="sr-only"{% endif %} x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
+</button>

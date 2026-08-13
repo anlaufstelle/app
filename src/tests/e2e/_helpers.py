@@ -1,5 +1,29 @@
 """Wiederverwendbare Helfer für E2E-Tests."""
 
+import os
+import subprocess
+import sys
+
+
+def django_shell(e2e_env, script):
+    """``manage.py shell -c`` gegen die E2E-Datenbank; liefert die Ausgabezeilen.
+
+    Für Vorbedingungen, die sich nicht durchklicken lassen (eine Person mit
+    einem bestimmten Pseudonym, ein Ereignis genau ohne Fallbezug). ``e2e_env``
+    ist die Session-Fixture aus ``conftest.py`` — sie trägt
+    ``DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e``, ohne das das Skript
+    die falsche Datenbank träfe.
+    """
+    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+    out = subprocess.run(
+        [python, "src/manage.py", "shell", "--no-imports", "-c", script],
+        capture_output=True,
+        text=True,
+        env=e2e_env,
+        check=True,
+    )
+    return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
+
 
 def wait_until(page, predicate, timeout_ms=15000, interval_ms=250):
     """Python-seitig auf eine Bedingung pollen; ``True`` wenn sie eintrat.
