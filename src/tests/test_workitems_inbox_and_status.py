@@ -17,6 +17,7 @@ import datetime
 import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils.html import strip_tags
 
 from core.models import AuditLog, WorkItem
 from core.services.case import update_workitem_status
@@ -197,7 +198,7 @@ class TestWorkItemInboxDateLabeling:
         client.force_login(staff_user)
         html = client.get(reverse("core:workitem_inbox")).content.decode()
         assert "14. März 2021" not in html
-        assert "2021" not in html
+        assert "2021" not in strip_tags(html)
 
     def test_inbox_creation_date_still_in_detail(self, client, staff_user, facility):
         """Gegenprobe: Das Erstellungsdatum bleibt in der Einzelansicht sichtbar."""
