@@ -473,27 +473,93 @@ class TestSerienerfassung:
 
 
 class TestTallyPanel:
-    """Strichlisten-/Tally-Panel auf der Zeitstrom-Startseite (Refs #1349, Stufe 2)."""
+    """Strichlisten-/Tally-Panel auf der Zeitstrom-Startseite (Refs #1349/#1906)."""
 
-    def test_increment_raises_counter(self, authenticated_page, base_url):
+    @staticmethod
+    def _wait_until_htmx_bound(page, locator):
+        """Nach einem Swap bis zur HTMX-Settle-Phase pollen."""
+        for _ in range(100):
+            if locator.evaluate("el => !!el['htmx-internal-data']"):
+                return
+            page.wait_for_timeout(50)
+        raise AssertionError("HTMX hat das Inline-Formular nicht verarbeitet")
+
+    def test_direct_increment_raises_counter(self, staff_page, base_url):
         """„+1" legt über den regulären Erfassungspfad einen anonymen Kontakt an
         und rendert den erhöhten Zählerstand als HTMX-Partial zurück."""
-        page = authenticated_page
+        page = staff_page
 
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
         panel = page.locator('[data-testid="tally-panel"]')
         panel.wait_for(state="visible", timeout=5000)
 
-        # Ersten „+1"-Button greifen und dessen Dokumentationstyp bestimmen.
-        button = page.locator('[data-testid^="tally-increment-"]').first
+        row = panel.locator('[data-testid^="tally-row-"]').filter(has_text=re.compile(r"^\s*Kontakt\b"))
+        expect(row).to_have_count(1)
+        button = row.locator('[data-testid^="tally-increment-"]')
         button.wait_for(state="visible", timeout=5000)
         dt_id = button.get_attribute("data-testid").replace("tally-increment-", "")
 
-        count = page.locator(f'[data-testid="tally-count-{dt_id}"]')
+        count = row.locator(f'[data-testid="tally-count-{dt_id}"]')
         before = int(count.inner_text().strip())
 
-        button.click()
+        with page.expect_response(
+            lambda response: response.request.method == "POST" and "/partials/tally/increment/" in response.url
+        ) as response_info:
+            button.click()
+        assert response_info.value.status == 200
 
         # Nach dem HTMX-outerHTML-Swap zeigt derselbe Zähler einen mehr.
-        expect(page.locator(f'[data-testid="tally-count-{dt_id}"]')).to_have_text(str(before + 1), timeout=5000)
+        expect(row.locator(f'[data-testid="tally-count-{dt_id}"]')).to_have_text(str(before + 1), timeout=5000)
+
+    def test_number_increment_validates_then_raises_counter(self, staff_page, base_url):
+        """Spritzentausch erfasst Pflichtzahlen inline und zählt erst nach gültigem POST."""
+        page = staff_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+
+        panel = page.locator('[data-testid="tally-panel"]')
+        row = panel.locator('[data-testid^="tally-row-"]').filter(has_text=re.compile(r"^\s*Spritzentausch\b"))
+        expect(row).to_have_count(1)
+        button = row.locator('[data-testid^="tally-increment-"]')
+        dt_id = button.get_attribute("data-testid").replace("tally-increment-", "")
+        count = row.locator(f'[data-testid="tally-count-{dt_id}"]')
+        before = int(count.inner_text().strip())
+
+        with page.expect_response(
+            lambda response: response.request.method == "GET" and "/partials/tally/increment/" in response.url
+        ) as response_info:
+            button.click()
+        assert response_info.value.status == 200
+
+        form = row.locator(f'[data-testid="tally-inline-form-{dt_id}"]')
+        expect(form).to_be_visible()
+        self._wait_until_htmx_bound(page, form)
+        assert form.locator('input[type="number"]').evaluate_all("els => els.map(el => el.name)") == [
+            "ausgabe",
+            "rueckgabe",
+        ]
+        expect(count).to_have_text(str(before))
+
+        form.locator('input[name="ausgabe"]').fill("1.5")
+        form.locator('input[name="rueckgabe"]').fill("4")
+        with page.expect_response(
+            lambda response: response.request.method == "POST" and "/partials/tally/increment/" in response.url
+        ) as response_info:
+            form.locator(f'[data-testid="tally-submit-{dt_id}"]').click()
+        assert response_info.value.status == 200
+
+        expect(form).to_be_visible()
+        expect(form.locator('input[name="ausgabe"] + p[role="alert"]')).to_be_visible()
+        expect(count).to_have_text(str(before))
+        self._wait_until_htmx_bound(page, form)
+
+        form.locator('input[name="ausgabe"]').fill("10")
+        form.locator('input[name="rueckgabe"]').fill("4")
+        with page.expect_response(
+            lambda response: response.request.method == "POST" and "/partials/tally/increment/" in response.url
+        ) as response_info:
+            form.locator(f'[data-testid="tally-submit-{dt_id}"]').click()
+        assert response_info.value.status == 200
+
+        expect(row.locator(f'[data-testid="tally-count-{dt_id}"]')).to_have_text(str(before + 1), timeout=5000)
+        expect(row.locator(f'[data-testid="tally-inline-form-{dt_id}"]')).to_have_count(0)

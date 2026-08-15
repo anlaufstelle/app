@@ -87,7 +87,7 @@ class TestTallyConfiguration:
         definitions = parse_package(load_default_package_data()).document_types
         enabled_slugs = {definition.slug for definition in definitions if definition.tally_enabled}
 
-        assert enabled_slugs == {"kontakt", "vermittlung", "notiz"}
+        assert enabled_slugs == {"kontakt", "spritzentausch", "vermittlung", "notiz"}
 
     def test_facility_export_includes_tally_flag(self, facility):
         document_type = DocumentType.objects.create(

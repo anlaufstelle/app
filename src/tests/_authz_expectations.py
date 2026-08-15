@@ -692,11 +692,10 @@ EXPECTATIONS = (
     # auch die Feldflaeche dieses Formulars nicht tiefer aufgehen.
     E("core:client_fields_partial", "partials-htmx", get=STAFF_PLUS),
     E("core:event_fields_partial", "partials-htmx", get=ASSISTANT_PLUS),
-    # Strichlisten-„+1" (Refs #1349): document_type kommt im POST-Body (nicht als
-    # URL-kwarg), daher liefert der matrix-Leer-POST für berechtigte Rollen ein
-    # 404 (get_object_or_404) — als extra_ok deklariert. Scoping/IDOR wird
-    # body-basiert in test_tally.py geprüft (Muster event_fields_partial).
-    E("core:tally_increment", "partials-htmx", post=ASSISTANT_PLUS, extra_ok=(404,)),
+    # Strichlisten-„+1" (Refs #1349/#1906): document_type kommt in Query/POST
+    # statt als URL-kwarg, daher liefern die Matrix-Leerrequests für berechtigte
+    # Rollen 404. Scoping/IDOR wird in den Tally-Tests body-basiert geprüft.
+    E("core:tally_increment", "partials-htmx", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS, extra_ok=(404,)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
     # M2 P8 (Refs #1058): STAFF_PLUS — bewusst enger als das Event-Partial,
     # analog ``client_fields_partial``. Faelle anlegen/bearbeiten ist STAFF_PLUS
