@@ -8,6 +8,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 
 1. [Login und Passwort](#1-login-und-passwort)
 2. [Startseite – Zeitstrom](#2-startseite--zeitstrom)
+ - [Strichliste](#strichliste)
  - [Arbeitszentrale](#2a-arbeitszentrale)
 3. [Kontakt dokumentieren (Event erstellen)](#3-kontakt-dokumentieren-event-erstellen)
  - [Dateien-Übersicht](#3a-dateien-übersicht)
@@ -120,6 +121,14 @@ Der Feed fasst vier Quellen des aktuellen Tages zusammen:
 | **Hausverbote** | Aktive Hausverbote — zusätzlich als rotes Banner oben |
 
 In der rechten Seitenspalte stehen Ihre **5 dringendsten offenen Aufgaben** (sortiert nach Priorität, Fälligkeit und Erstelldatum) — ein Schnellzugriff während der Schicht.
+
+### Strichliste
+
+Wenn die Verwaltung geeignete Dokumentationstypen freigegeben hat, steht im Zeitstrom die **Strichliste**. Sie zählt anonyme Kontakte je Typ im aktuellen Zeitfenster. Läuft gerade eine Schicht, gilt deren Zeitfenster; sonst der heutige Kalendertag.
+
+- **Ohne Pflichtfelder:** `+1` legt sofort einen anonymen Kontakt an.
+- **Mit Zahlen-Pflichtfeldern:** `+1` öffnet eine kompakte Werteingabe. Tragen Sie alle Pflichtwerte ein und wählen Sie **Kontakt zählen**. Das erzeugt genau einen anonymen Kontakt. Bei einem Spritzentausch gehören zum Beispiel Ausgabe und Rückgabe zu demselben Kontakt, statt mehrere Kontakte zu zählen.
+- Ein Typ ist nur sichtbar, wenn er für die Strichliste freigegeben ist und Ihre Rolle ihn sowie alle erforderlichen Felder sehen darf. Typen mit anderen Pflichtfeldarten erscheinen nicht in der Strichliste.
 
 ### Datum wechseln
 

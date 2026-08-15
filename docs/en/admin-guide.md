@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Most recently synchronized on 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)).
 
 # Anlaufstelle -- Admin Guide
@@ -461,6 +462,16 @@ The sensitivity level controls which roles can access entries of this type:
 | **Normal** | All roles (including assistants) | General contacts, services |
 | **Elevated** | Staff, lead, application manager | Counseling sessions, medical care |
 | **High** | Lead and application manager | Crisis interventions, highly sensitive data |
+
+#### Tally
+
+The **"Include in tally"** checkbox explicitly enables a documentation type for the tally in the Zeitstrom. New types are not enabled by default. The setting takes effect only for active **event** types without a minimum contact stage; it has no effect on person or case types.
+
+- If the type has no required fields, `+1` directly creates an anonymous contact.
+- If every required field is a number, `+1` opens a compact value form; the entered values are stored with exactly one anonymous contact. Optional fields are not captured in this workflow.
+- If the type has a required field of another kind (for example text, selection, date, yes/no, or file), it does not appear in the tally.
+
+Enabling a type does not override visibility rules: it appears only to roles that may see the type and all of its required fields. Check the sensitivity levels of the assigned field templates before enabling a type.
 
 #### System Type
 
@@ -1624,5 +1635,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-13 -->
-<!-- source-hash: 0b401e6dae1054b0c245ee43ab756a2149579675 -->
+<!-- translation-date: 2026-08-15 -->
+<!-- source-hash: bd42a1607c111cff49fcf28e96acf1b1ded1105d -->

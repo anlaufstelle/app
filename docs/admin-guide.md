@@ -459,6 +459,16 @@ Die Sensibilitätsstufe steuert, welche Rollen auf Einträge dieses Typs zugreif
 | **Erhöht** | Fachkraft, Leitung, Anwendungsbetreuung | Beratungsgespräche, medizinische Versorgung |
 | **Hoch** | Leitung und Anwendungsbetreuung | Krisengespräche, besonders sensible Daten |
 
+#### Strichliste
+
+Das Kontrollkästchen **„In Strichliste anbieten“** schaltet einen Dokumentationstyp ausdrücklich für die Strichliste im Zeitstrom frei. Neue Typen sind standardmäßig nicht freigegeben. Die Freigabe wirkt nur bei aktiven **Ereignis**-Typen ohne Mindest-Kontaktstufe; bei Personen- oder Fall-Typen bleibt sie ohne Wirkung.
+
+- Hat der Typ keine Pflichtfelder, erzeugt `+1` direkt einen anonymen Kontakt.
+- Bestehen alle Pflichtfelder aus Zahlen, öffnet `+1` eine kompakte Werteingabe; die eingegebenen Werte werden zusammen mit genau einem anonymen Kontakt gespeichert. Optionale Felder werden dabei nicht erfasst.
+- Hat der Typ ein Pflichtfeld eines anderen Typs (etwa Text, Auswahl, Datum, Ja/Nein oder Datei), erscheint er nicht in der Strichliste.
+
+Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Rollen, die den Typ und alle seine Pflichtfelder sehen dürfen. Prüfen Sie daher auch die Sensibilitätsstufen der zugeordneten Feldvorlagen, bevor Sie einen Typ freigeben.
+
 #### Systemtyp
 
 Der Systemtyp verknüpft einen Dokumentationstyp mit interner Anwendungslogik. Er wird bei der Erstellung gesetzt und ist danach **nicht mehr änderbar**.

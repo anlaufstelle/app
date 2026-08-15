@@ -33,7 +33,7 @@ exported_at: ISO-8601 UTC
 facility: {id, name, organization: {id, name}}
 configuration:
   document_types[]: {id, name, slug, entity_type, sensitivity, min_contact_stage,
-                     system_type, report_key, retention_days, icon, color, description,
+                     system_type, tally_enabled, report_key, retention_days, icon, color, description,
                      is_active, sort_order,
                      fields[]: {id, field_template_id, field_group_id, sort_order}}
   field_templates[]: {id, name, slug, field_type, is_required, is_encrypted,

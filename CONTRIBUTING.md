@@ -134,6 +134,8 @@ gefunden wird über den `slug` (nicht den Namen), Properties werden bei jedem La
 zurücksynchronisiert (früher `get_or_create` — Defaults griffen nur beim Anlegen),
 und ein zweiter Lauf meldet alles als `unverändert`.
 
+Der Standardkatalog bietet `Kontakt`, `Spritzentausch`, `Vermittlung` und `Notiz` mit `tally_enabled: true` in der Strichliste an. Beim Spritzentausch führt `+1` wegen der beiden Zahlen-Pflichtfelder zur kompakten Eingabe von Ausgabe und Rückgabe; die übrigen drei Typen haben keine Pflichtwerte und werden direkt gezählt.
+
 > **Katalog ändern:** Werte in `default.yaml` anpassen, nicht in `core/seed/doc_types.py`.
 > Bestehende `slug`-Werte sind **unveränderbar** (Migration 0117/#1710 + DB-Trigger)
 > ein geänderter Slug legt in jeder Bestands-Einrichtung ein Duplikat an statt zu
@@ -156,6 +158,7 @@ Rücksync gegen `default.yaml`. Was das im Betrieb bedeutet:
 | `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` eines Katalog-Typs | wird auf den Katalogwert **zurückgesetzt** (früher nur beim Anlegen gesetzt) |
 | `sort_order` von Gruppen **und** Feldzuordnungen — auch bei Typen ohne Gruppen | wird auf die Katalogposition zurückgesetzt (früher blieb eine per UI umsortierte, gruppenlose Feldliste stehen) |
 | `default_value` einer Katalog-Feldvorlage | wird auf den Paketwert (im Katalog durchgehend leer) **zurückgesetzt** — ein per Config-UI gepflegter Vorbelegungswert überlebt den Seed **nicht**. Paketformat v1 kann „nicht anfassen" für dieses Feld nicht ausdrücken (anders als `conditions`). |
+| `tally_enabled` eines Katalog-Typs | Ein explizites `true`/`false` wird auf den Paketwert zurückgesetzt. Fehlt der Schlüssel, bleibt ein in der Admin-Oberfläche gepflegtes Opt-in am Bestandstyp erhalten; beim Anlegen gilt `false`. |
 | Felder, die eine Einrichtung einem Katalog-Typ **zusätzlich** zugeordnet hat | bleiben unangetastet (der Loader fasst nur an, was im Paket steht) |
 | `retention_days`, `description`, `is_active` (Typ) bzw. `is_active` (Vorlage) | nicht Teil von Schema v1 — werden weder gesetzt noch zurückgesetzt |
 

@@ -1,4 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
+> Most recently synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
@@ -11,6 +12,7 @@ This guide is intended for social workers, managers, and assistants working in d
 
 1. [Login and Password](#1-login-and-password)
 2. [Home -- Zeitstrom](#2-home--zeitstrom)
+ - [Tally](#tally)
  - [Work Center](#2a-work-center)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
  - [Files Overview](#3a-files-overview)
@@ -123,6 +125,14 @@ The feed combines four sources for the current day:
 | **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
 
 The right sidebar shows your **5 most urgent open tasks** (sorted by priority, due date, and created date) for quick access during a shift.
+
+### Tally
+
+When the administration has enabled suitable documentation types, the **tally** appears in the Zeitstrom. It counts anonymous contacts per type for the current time window. When a shift is currently running, its time window applies; otherwise the current calendar day applies.
+
+- **Without required fields:** `+1` immediately creates one anonymous contact.
+- **With required number fields:** `+1` opens a compact value form. Enter every required value and select **Count contact**. This creates exactly one anonymous contact. For a needle exchange, for example, issued and returned needles belong to the same contact rather than counting multiple contacts.
+- A type appears only when it is enabled for the tally and your role may see it as well as every required field. Types with other required field types do not appear in the tally.
 
 ### Changing the date
 
@@ -878,6 +888,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-11 -->
-<!-- source-hash: f4745bf3e52dea2ba9c49aaeb84a526a615a7166 -->
-
+<!-- translation-date: 2026-08-15 -->
+<!-- source-hash: d66eb9386e80a392cec2a86edc50000b18d61886 -->

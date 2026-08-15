@@ -133,6 +133,8 @@ objects are looked up by `slug` (not by name), properties are re-synced on every
 run (previously `get_or_create` — defaults only took effect on creation), and a
 second run reports everything as unchanged.
 
+The standard catalogue offers `Contact`, `Needle Exchange`, `Referral`, and `Note` in the tally with `tally_enabled: true`. For Needle Exchange, `+1` opens the compact issued/returned-numbers form because both fields are required; the other three types have no required values and are counted directly.
+
 > **Changing the catalogue:** edit the values in `default.yaml`, not in
 > `core/seed/doc_types.py`. Existing `slug` values are **immutable** (migration
 > 0117/#1710 plus a DB trigger) — a changed slug creates a duplicate in every
@@ -155,6 +157,7 @@ Since M2 the seed is no longer a plain "create if missing" but a re-sync against
 | `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` of a catalogue type | **reset** to the catalogue value (previously only set on creation) |
 | `sort_order` of groups **and** field assignments — including types without groups | reset to the catalogue position (previously a manually reordered, group-less field list survived) |
 | `default_value` of a catalogue field template | **reset** to the package value (empty throughout the catalogue) — a default maintained through the config UI does **not** survive the seed. Package format v1 cannot express "do not touch" for this field (unlike `conditions`). |
+| `tally_enabled` of a catalogue type | An explicit `true`/`false` is reset to the package value. If the key is absent, a tally opt-in maintained in the admin UI remains on an existing type; a new type defaults to `false`. |
 | Fields a facility has **additionally** assigned to a catalogue type | left untouched (the loader only touches what the package declares) |
 | `retention_days`, `description`, `is_active` (type) and `is_active` (template) | not part of schema v1 — neither set nor reset |
 
@@ -767,5 +770,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-12 -->
-<!-- source-hash: 6c7eb9aaace60ca0fb1943d30f00c74efc4853c4 -->
+<!-- translation-date: 2026-08-15 -->
+<!-- source-hash: 177d228d438e0becfb61dad516aff8a57b8421f7 -->
