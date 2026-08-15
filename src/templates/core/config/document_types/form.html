@@ -54,6 +54,7 @@
             {% include "components/_form_field.html" with field=form.retention_days %}
             {% include "components/_form_field.html" with field=form.description %}
             {% include "components/_form_field.html" with field=form.is_active %}
+            {% include "components/_form_field.html" with field=form.tally_enabled %}
             {% if is_edit %}
             <p class="text-[12px] text-ink-muted">{% trans "Der Systemtyp und der Entitätstyp sind nach dem Anlegen unveränderbar." %}</p>
             {% endif %}

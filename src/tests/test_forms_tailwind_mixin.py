@@ -100,6 +100,7 @@ EXPECTED = {
         "retention_days": ("NumberInput", True, {"min": 1}),
         "description": ("Textarea", True, {"rows": 3, "cols": "40"}),
         "is_active": ("CheckboxInput", False, {}),
+        "tally_enabled": ("CheckboxInput", False, {}),
     },
     "FieldTemplateForm": {
         "name": ("TextInput", True, {"maxlength": "200"}),

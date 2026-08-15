@@ -201,8 +201,15 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
     #: Ausblenden nichts, die Werte werden unverändert mitgepostet.
     #: ``report_key`` (E3, Refs #1849) gehört ebenfalls hierher: alle
     #: Berichts-Backends zählen ``Event``-Zeilen, an einem Personen-/Fall-Typ ist
-    #: die Berichtsfrage gegenstandslos.
-    EVENT_ONLY_FIELDS = ("system_type", "report_key", "min_contact_stage", "retention_days")
+    #: die Berichtsfrage gegenstandslos. ``tally_enabled`` steuert eine
+    #: Ereignis-Schnellerfassung und ist damit ebenso event-only.
+    EVENT_ONLY_FIELDS = (
+        "system_type",
+        "report_key",
+        "min_contact_stage",
+        "retention_days",
+        "tally_enabled",
+    )
 
     #: Vorbelegung beim Anlegen (Entscheid E-D/E-I, Konzept #1847 §E3.5).
     #: Ohne sie verlören neu angelegte ``crisis``-Typen still die Parität zum
@@ -234,6 +241,7 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
             "retention_days",
             "description",
             "is_active",
+            "tally_enabled",
         ]
         widgets = {
             "retention_days": forms.NumberInput(attrs={"min": 1}),
@@ -286,6 +294,14 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         self._append_help_text(
             "system_type",
             _("Nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."),
+        )
+        self._append_help_text(
+            "tally_enabled",
+            _(
+                "In der Strichliste erscheinen nur aktive Ereignistypen ohne Mindest-Kontaktstufe. "
+                "Vorhandene Pflichtfelder müssen Zahlen-Pflichtfelder sein. "
+                "Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
+            ),
         )
 
     # -- Template-Brücke für die Alpine-Komponente (Refs #1757) --------------
@@ -364,6 +380,11 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         entity_type = cleaned.get("entity_type")
         if entity_type and entity_type != DocumentType.EntityType.EVENT:
             cleaned["retention_days"] = None
+            # Die Strichliste legt ausschliesslich Events an. Das Feld wird im
+            # UI fuer Personen-/Fall-Typen ausgeblendet; manipulierte Posts und
+            # wirkungslose Legacy-Werte werden deshalb wie retention_days in
+            # den kanonischen, deaktivierten Zustand ueberfuehrt.
+            cleaned["tally_enabled"] = False
 
         # Refs #1749 (ADR-040): Vorpruefung der Unique-Regel, seit dem Wegfall
         # von ``category`` auf ``(facility, name)``.

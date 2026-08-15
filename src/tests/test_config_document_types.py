@@ -163,6 +163,16 @@ class TestCreate:
         obj = DocumentType.objects.get(name="Krisenbogen")
         assert obj.system_type == DocumentType.SystemType.CRISIS
 
+    def test_create_persists_tally_opt_in(self, client, admin_user):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(name="Strichlisten-Kontakt", tally_enabled="on"),
+        )
+
+        assert response.status_code == 302
+        assert DocumentType.objects.get(name="Strichlisten-Kontakt").tally_enabled is True
+
     def test_empty_post_re_renders_without_500(self, client, admin_user):
         client.force_login(admin_user)
         response = client.post(reverse("core:config_doctype_create"), {})
@@ -215,6 +225,131 @@ class TestUpdate:
         dt.refresh_from_db()
         assert dt.name == "Gewandelt"
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(dt.pk)).exists()
+
+    def test_update_persists_tally_opt_in(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Strichlisten-Kontakt")
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
+            _valid_post(name=dt.name, tally_enabled="on"),
+        )
+
+        assert response.status_code == 302
+        dt.refresh_from_db()
+        assert dt.tally_enabled is True
+
+    def test_update_clears_unchecked_tally_opt_in_and_audits_change(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Strichlisten-Kontakt",
+            tally_enabled=True,
+        )
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
+            _valid_post(name=dt.name),
+        )
+
+        assert response.status_code == 302
+        dt.refresh_from_db()
+        assert dt.tally_enabled is False
+        audit_entry = AuditLog.objects.get(
+            action=AuditLog.Action.CONFIG_UPDATE,
+            target_id=str(dt.pk),
+        )
+        assert "tally_enabled" in audit_entry.detail["changed_fields"]
+
+
+@pytest.mark.django_db
+class TestTallyConfigurationUI:
+    def test_form_exposes_tally_opt_in_with_eligibility_hint(self, facility):
+        form = DocumentTypeForm(facility=facility)
+
+        assert form.fields["tally_enabled"].label == "In Strichliste anbieten"
+        help_text = str(form.fields["tally_enabled"].help_text)
+        assert "aktiv" in help_text
+        assert "Mindest-Kontaktstufe" in help_text
+        assert "Zahlen-Pflichtfelder" in help_text
+        assert "jeweilige Rolle sichtbar" in help_text
+
+    @pytest.mark.parametrize(
+        ("enabled", "expected_status"),
+        [(True, "Angeboten"), (False, "Nicht angeboten")],
+    )
+    def test_event_detail_shows_tally_status(self, client, admin_user, facility, enabled, expected_status):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name=f"Strichlistenstatus {enabled}",
+            tally_enabled=enabled,
+        )
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
+
+        assert response.status_code == 200
+        assert 'data-testid="doctype-tally-status"' in response.content.decode()
+        assert expected_status in response.content.decode()
+
+    def test_non_event_detail_hides_tally_status(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Personentyp ohne Strichliste",
+            entity_type=DocumentType.EntityType.CLIENT,
+            tally_enabled=True,
+        )
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
+
+        assert response.status_code == 200
+        assert 'data-testid="doctype-tally-status"' not in response.content.decode()
+
+    @pytest.mark.parametrize("entity_type", [DocumentType.EntityType.CLIENT, DocumentType.EntityType.CASE])
+    def test_non_event_create_normalizes_posted_tally_opt_in_to_false(
+        self,
+        client,
+        admin_user,
+        entity_type,
+    ):
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(
+                name=f"Kein Strichlistentyp {entity_type}",
+                entity_type=entity_type,
+                tally_enabled="on",
+            ),
+        )
+
+        assert response.status_code == 302
+        assert DocumentType.objects.get(name=f"Kein Strichlistentyp {entity_type}").tally_enabled is False
+
+    @pytest.mark.parametrize("entity_type", [DocumentType.EntityType.CLIENT, DocumentType.EntityType.CASE])
+    def test_non_event_update_clears_legacy_tally_opt_in(
+        self,
+        client,
+        admin_user,
+        facility,
+        entity_type,
+    ):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name=f"Legacy-Strichlistentyp {entity_type}",
+            entity_type=entity_type,
+            tally_enabled=True,
+        )
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
+            _valid_post(name=dt.name, tally_enabled="on"),
+        )
+
+        assert response.status_code == 302
+        dt.refresh_from_db()
+        assert dt.tally_enabled is False
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +560,7 @@ class TestEntityScopedFieldVisibility:
         for field_name in DocumentTypeForm.Meta.fields:
             assert f"field=form.{field_name}" in source, f"{field_name} wird nicht einzeln gerendert"
 
-    def test_form_page_still_renders_all_nine_fields(self, client, admin_user):
+    def test_form_page_still_renders_all_fields(self, client, admin_user):
         """Der Umbau darf kein Feld verlieren (Anlage-Formular, alle editierbar)."""
         client.force_login(admin_user)
         content = client.get(reverse("core:config_doctype_create")).content.decode()
@@ -451,10 +586,14 @@ class TestEntityScopedFieldVisibility:
             "report_key",
             "min_contact_stage",
             "retention_days",
+            "tally_enabled",
         )
         client.force_login(admin_user)
         content = client.get(reverse("core:config_doctype_create")).content.decode()
-        assert 'data-entity-scoped-fields="system_type report_key min_contact_stage retention_days"' in content
+        assert (
+            'data-entity-scoped-fields="system_type report_key min_contact_stage retention_days tally_enabled"'
+            in content
+        )
         assert 'data-entity-scope-value="event"' in content
 
     def test_scoped_fields_stay_real_inputs(self, client, admin_user):
@@ -484,7 +623,10 @@ class TestEntityScopedFieldVisibility:
         client.force_login(admin_user)
         content = client.get(reverse("core:config_doctype_update", args=[doc_type.pk])).content.decode()
         assert 'x-data="documentTypeEntityFields"' in content
-        assert 'data-entity-scoped-fields="system_type report_key min_contact_stage retention_days"' in content
+        assert (
+            'data-entity-scoped-fields="system_type report_key min_contact_stage retention_days tally_enabled"'
+            in content
+        )
 
     def test_hiding_never_drops_a_value_from_the_post(self, client, admin_user):
         """Regressionsschutz POST-Semantik: ``sensitivity`` faellt nie auf den Modell-Default.

@@ -242,6 +242,56 @@ class TestDocumentTypeCrud:
         finally:
             _delete_doctype(page, base_url, pk)
 
+    def test_tally_opt_in_controls_zeitstrom_visibility(self, authenticated_page, staff_page, base_url):
+        """Die fachliche Config-UI schaltet einen geeigneten Typ in der Strichliste ein und aus."""
+        admin = authenticated_page
+        admin_errors = track_console_errors(admin)
+        staff_errors = track_console_errors(staff_page)
+        name = _cfg_name("Tally")
+        pk = None
+        try:
+            admin.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
+            admin.fill("input#id_name", name)
+            tally = admin.locator("input#id_tally_enabled")
+            expect(tally).to_be_visible()
+            expect(tally).not_to_be_checked()
+            tally.check()
+            admin.locator(FORM_SUBMIT).click()
+            admin.wait_for_url(_DETAIL_RE)
+            match = _DETAIL_RE.search(admin.url)
+            assert match, f"Detail-URL nicht erkannt: {admin.url}"
+            pk = match.group(1)
+            expect(admin.locator('[data-testid="doctype-tally-status"]')).to_contain_text("Angeboten")
+
+            staff_page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            tally_row = staff_page.locator(
+                '[data-testid="tally-panel"] [data-testid^="tally-row-"]',
+                has_text=name,
+            )
+            expect(tally_row).to_have_count(1)
+            expect(tally_row.locator('[data-testid^="tally-count-"]')).to_have_text("0")
+
+            admin.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")
+            tally = admin.locator("input#id_tally_enabled")
+            expect(tally).to_be_checked()
+            tally.uncheck()
+            admin.locator(FORM_SUBMIT).click()
+            admin.wait_for_url(re.compile(rf"/config/document-types/{pk}/$"))
+            expect(admin.locator('[data-testid="doctype-tally-status"]')).to_contain_text("Nicht angeboten")
+
+            staff_page.reload(wait_until="domcontentloaded")
+            expect(
+                staff_page.locator(
+                    '[data-testid="tally-panel"] [data-testid^="tally-row-"]',
+                    has_text=name,
+                )
+            ).to_have_count(0)
+            assert admin_errors == [], f"Konsolen-Errors in der Dokumentationstyp-Konfiguration: {admin_errors}"
+            assert staff_errors == [], f"Konsolen-Errors in der Strichliste: {staff_errors}"
+        finally:
+            if pk:
+                _delete_doctype(admin, base_url, pk)
+
 
 # ---------------------------------------------------------------------------
 # Entitätstyp-abhängige Feld-Sichtbarkeit (Refs #1757, Option C aus #1731)
@@ -249,7 +299,7 @@ class TestDocumentTypeCrud:
 
 
 class TestDocumentTypeEntityScopedFields:
-    """``system_type``/``min_contact_stage``/``retention_days`` folgen dem Entitätstyp.
+    """Nur für Ereignisse wirksame Felder folgen dem Entitätstyp.
 
     Die drei Felder wirken ausschließlich an ``entity_type=event``-Typen. Das
     Formular blendet sie deshalb aus, sobald „Person" oder „Fall" gewählt ist —
@@ -274,6 +324,7 @@ class TestDocumentTypeEntityScopedFields:
             expect(page.locator("select#id_system_type")).to_be_visible(timeout=10000)
             expect(page.locator("select#id_min_contact_stage")).to_be_visible()
             expect(page.locator("input#id_retention_days")).to_be_visible()
+            expect(page.locator("input#id_tally_enabled")).to_be_visible()
 
             # Werte setzen, SOLANGE die Felder sichtbar sind.
             page.select_option("select#id_sensitivity", value="elevated")
@@ -284,6 +335,7 @@ class TestDocumentTypeEntityScopedFields:
             expect(page.locator("select#id_system_type")).to_be_hidden(timeout=10000)
             expect(page.locator("select#id_min_contact_stage")).to_be_hidden()
             expect(page.locator("input#id_retention_days")).to_be_hidden()
+            expect(page.locator("input#id_tally_enabled")).to_be_hidden()
             # … alles Übrige bleibt stehen (``sensitivity`` steuert den Zugriff).
             expect(page.locator("input#id_name")).to_be_visible()
             expect(page.locator("select#id_entity_type")).to_be_visible()
@@ -296,6 +348,7 @@ class TestDocumentTypeEntityScopedFields:
             expect(page.locator("input#id_retention_days")).to_be_hidden(timeout=10000)
             page.select_option("select#id_entity_type", value="event")
             expect(page.locator("input#id_retention_days")).to_be_visible(timeout=10000)
+            expect(page.locator("input#id_tally_enabled")).to_be_visible()
             expect(page.locator("input#id_retention_days")).to_have_value("30")
 
             # Speichern MIT ausgeblendeten Feldern als „Person": ``sensitivity``

@@ -74,6 +74,18 @@
                 <dt class="text-ink-muted">{% trans "Status" %}</dt>
                 <dd>{% if doc_type.is_active %}{% include "components/_badge.html" with text=_("Aktiv") color="green" %}{% else %}{% include "components/_badge.html" with text=_("Inaktiv") color="gray" %}{% endif %}</dd>
             </div>
+            {% if doc_type.entity_type == "event" %}
+            <div>
+                <dt class="text-ink-muted">{% trans "Strichliste" %}</dt>
+                <dd data-testid="doctype-tally-status">
+                    {% if doc_type.tally_enabled %}
+                    {% include "components/_badge.html" with text=_("Angeboten") color="green" %}
+                    {% else %}
+                    {% include "components/_badge.html" with text=_("Nicht angeboten") color="gray" %}
+                    {% endif %}
+                </dd>
+            </div>
+            {% endif %}
             <div>
                 {# #1728: Label folgt der entity_type-Weiche (Muster Badge oben) — #}
                 {# usage_count zählt je nach Typ Client-/Case-/Event-Referenzen.     #}
