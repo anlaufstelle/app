@@ -1,8 +1,8 @@
 {% load i18n %}
-{% comment %}Strichlisten-/Tally-Panel (Refs #1349, Stufe 2): je anonymfähigem
-Dokumentationstyp ein „+1"-Button. Jeder Klick läuft per HTMX-POST durch den
-regulären create_event-Pfad und tauscht dieses Panel mit dem aktualisierten
-Zählerstand aus (hx-swap outerHTML).{% endcomment %}
+{% comment %}Strichlisten-/Tally-Panel (Refs #1349, #1906): Typen ohne
+Pflichtwerte bleiben direkte „+1"-POSTs. Typen mit ausschließlich erforderlichen
+Zahlenfeldern öffnen zuerst das kompakte HTMX-Formular; dessen POST läuft danach
+durch denselben create_event-Pfad.{% endcomment %}
 {% if tally_summary.rows %}
 <section id="tally-panel" class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden"
          data-testid="tally-panel" aria-labelledby="tally-heading">
@@ -15,23 +15,13 @@ Zählerstand aus (hx-swap outerHTML).{% endcomment %}
     </div>
     <div class="px-4 py-3 flex flex-col gap-2">
         {% for row in tally_summary.rows %}
-        <div class="flex items-center justify-between gap-3">
+        <div id="tally-row-{{ row.document_type.pk }}" class="flex items-center justify-between gap-3 flex-wrap"
+             data-testid="tally-row-{{ row.document_type.pk }}">
             <span class="text-[13px] text-ink truncate">{{ row.document_type.name }}</span>
-            <div class="flex items-center gap-2 flex-shrink-0">
-                <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right"
-                      data-testid="tally-count-{{ row.document_type.pk }}"
-                      aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
-                <button type="button"
-                        class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
-                        data-testid="tally-increment-{{ row.document_type.pk }}"
-                        hx-post="{% url 'core:tally_increment' %}"
-                        hx-vals='{"document_type": "{{ row.document_type.pk }}"}'
-                        hx-target="#tally-panel"
-                        hx-swap="outerHTML"
-                        aria-label="{% blocktrans with name=row.document_type.name %}Anonymen Kontakt für {{ name }} zählen{% endblocktrans %}">
-                    +1
-                </button>
-            </div>
+            <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right ml-auto"
+                  data-testid="tally-count-{{ row.document_type.pk }}"
+                  aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
+            {% include "core/zeitstrom/partials/tally_action.html" %}
         </div>
         {% endfor %}
     </div>

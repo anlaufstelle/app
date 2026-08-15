@@ -1,0 +1,45 @@
+{% load i18n %}
+<div id="tally-action-{{ document_type.pk }}" class="basis-full flex flex-col gap-3 pt-2"
+     data-testid="tally-inline-row-{{ document_type.pk }}">
+    <form method="post"
+          action="{% url 'core:tally_increment' %}"
+          class="flex flex-col gap-3"
+          data-testid="tally-inline-form-{{ document_type.pk }}"
+          hx-post="{% url 'core:tally_increment' %}"
+          hx-target="#tally-action-{{ document_type.pk }}"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="document_type" value="{{ document_type.pk }}">
+        <div data-testid="tally-form-errors-{{ document_type.pk }}">
+            {% include "core/_form_errors.html" with form=tally_form %}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% for field in tally_form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block text-[12px] font-semibold text-ink-soft mb-1">
+                    {{ field.label }}
+                </label>
+                {{ field }}
+                {% for error in field.errors %}
+                <p class="mt-1 text-[12px] text-red-700" role="alert">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex items-center justify-end gap-2">
+            <button type="button"
+                    class="btn-secondary min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
+                    data-testid="tally-cancel-{{ document_type.pk }}"
+                    hx-get="{% url 'core:tally_increment' %}"
+                    hx-vals='{"document_type": "{{ document_type.pk }}", "cancel": "1"}'
+                    hx-target="#tally-action-{{ document_type.pk }}"
+                    hx-swap="outerHTML">
+                {% trans "Abbrechen" %}
+            </button>
+            <button type="submit" class="btn-primary min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
+                    data-testid="tally-submit-{{ document_type.pk }}">
+                {% trans "Kontakt zählen" %}
+            </button>
+        </div>
+    </form>
+</div>

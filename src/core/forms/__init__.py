@@ -3,3 +3,4 @@ from core.forms.clients import ClientForm  # noqa: F401
 from core.forms.episodes import EpisodeForm  # noqa: F401
 from core.forms.events import DynamicEventDataForm, EventMetaForm  # noqa: F401
 from core.forms.rectification import RectificationRequestForm  # noqa: F401
+from core.forms.tally import TallyNumberDataForm  # noqa: F401

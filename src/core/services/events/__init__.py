@@ -76,6 +76,7 @@ from core.services.events.tally import (
     build_tally_summary,
     current_tally_window,
     tally_document_types,
+    tally_required_fields,
 )
 
 __all__ = [
@@ -118,6 +119,7 @@ __all__ = [
     "resolve_default_document_type",
     "soft_delete_event",
     "split_file_and_text_data",
+    "tally_required_fields",
     "stage_index",
     "tally_document_types",
     "update_event",

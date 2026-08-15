@@ -16,12 +16,14 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
-from core.models import Client, DocumentType, Event
+from core.forms.tally import TallyNumberDataForm
+from core.models import Client, DocumentType, Event, FieldTemplate
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.compliance import (
     get_visible_event_or_404,
     user_can_see_document_type,
+    user_can_see_field,
 )
 from core.services.dashboard import (
     apply_template,
@@ -48,6 +50,7 @@ from core.services.events import (
     resolve_default_document_type,
     soft_delete_event,
     split_file_and_text_data,
+    tally_required_fields,
     update_event,
 )
 from core.services.events.fields import file_marker_slugs
@@ -510,26 +513,23 @@ class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
 
 @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
 class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
-    """Strichlisten-„+1" für anonyme Massenkontakte (Refs #1349, Stufe 2).
+    """Strichlisten-Erfassung anonymer Massenkontakte (Refs #1349/#1906).
 
-    Legt pro Klick über den regulären ``create_event``-Service (NICHT per
-    Direkt-ORM/Bulk-Insert) einen anonymen Kontakt an — Audit, EventHistory und
-    Activity-Log greifen damit pro Kontakt wie bei jeder Einzelerfassung — und
-    rendert das Strichlisten-Panel mit dem aktualisierten Zählerstand als
-    HTMX-Partial zurück.
+    Typen ohne Pflichtfelder bleiben ein direkter ``+1``-POST. Bestehen alle
+    Pflichtfelder aus Zahlen, liefert GET das kompakte Inline-Formular und POST
+    legt mit dessen bereinigten Werten genau ein Event über ``create_event`` an.
+    Audit, EventHistory und Activity-Log greifen damit unverändert pro Kontakt.
     """
 
-    def post(self, request):
-        facility = request.current_facility
-
+    def _resolve_document_type(self, request, params):
         # Facility-Scope: unbekannter/fremder Typ → 404 (verrät keine Existenz
         # in anderer Einrichtung). M2 (Refs #1058): entity_type=event zusaetzlich
         # — die Strichliste legt Events an, ein client-/case-Typ darf hier
-        # nicht per manipuliertem POST unterschoben werden.
+        # nicht per manipuliertem Request unterschoben werden.
         doc_type = get_scoped_object(
             DocumentType,
             request,
-            pk=request.POST.get("document_type"),
+            pk=params.get("document_type"),
             is_active=True,
             entity_type=DocumentType.EntityType.EVENT,
         )
@@ -542,34 +542,112 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             raise PermissionDenied
 
         # Typen mit Mindest-Kontaktstufe sind NIE anonym (create_event erzwingt
-        # das): die Strichliste bietet sie nicht an, ein POST darauf ist Missbrauch.
+        # das): die Strichliste bietet sie nicht an, ein Request darauf ist
+        # Missbrauch.
         if doc_type.min_contact_stage:
-            return HttpResponseBadRequest(_("Dieser Dokumentationstyp erfordert eine Person."))
+            return doc_type, (), HttpResponseBadRequest(_("Dieser Dokumentationstyp erfordert eine Person."))
 
         # Refs #1637: Panel-Filter sind kein Sicherheitsrand. Manipulierte
-        # Direkt-POSTs müssen dieselben Opt-in-/Datenqualitätsregeln erzwingen.
+        # Requests müssen dieselben Opt-in-/Datenqualitätsregeln erzwingen.
         if not doc_type.tally_enabled:
-            return HttpResponseBadRequest(_("Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben."))
-
-        if doc_type.fields.filter(field_template__is_required=True).exists():
-            return HttpResponseBadRequest(
-                _("Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste erfasst werden.")
+            return (
+                doc_type,
+                (),
+                HttpResponseBadRequest(_("Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben.")),
             )
+
+        required_fields = tuple(tally_required_fields(doc_type))
+        if any(
+            assignment.field_template.field_type != FieldTemplate.FieldType.NUMBER for assignment in required_fields
+        ):
+            return (
+                doc_type,
+                required_fields,
+                HttpResponseBadRequest(
+                    _("Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste erfasst werden.")
+                ),
+            )
+
+        # #1906: Ein sichtbarer NORMAL-Typ kann ein höher eingestuftes Feld
+        # tragen. Dessen Name und Eingabe dürfen im Inline-Formular nicht an
+        # Rollen unterhalb der Feld-Sensibilität offengelegt werden.
+        if any(
+            not user_can_see_field(
+                request.user,
+                doc_type.sensitivity,
+                assignment.field_template.sensitivity,
+            )
+            for assignment in required_fields
+        ):
+            raise PermissionDenied
+
+        return doc_type, required_fields, None
+
+    def get(self, request):
+        doc_type, required_fields, error_response = self._resolve_document_type(request, request.GET)
+        if error_response is not None:
+            return error_response
+        if not required_fields:
+            return HttpResponseBadRequest(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe."))
+
+        if request.GET.get("cancel"):
+            summary = build_tally_summary(request.current_facility, request.user)
+            row = next(
+                (entry for entry in summary["rows"] if entry["document_type"].pk == doc_type.pk),
+                None,
+            )
+            if row is None:
+                return HttpResponseBadRequest(_("Dieser Dokumentationstyp kann nicht per Strichliste erfasst werden."))
+            return render(
+                request,
+                "core/zeitstrom/partials/tally_action.html",
+                {"row": row},
+            )
+
+        return render(
+            request,
+            "core/zeitstrom/partials/tally_inline_form.html",
+            {
+                "document_type": doc_type,
+                "tally_form": TallyNumberDataForm(document_type=doc_type),
+            },
+        )
+
+    def post(self, request):
+        facility = request.current_facility
+        doc_type, required_fields, error_response = self._resolve_document_type(request, request.POST)
+        if error_response is not None:
+            return error_response
+
+        data_json = {}
+        if required_fields:
+            tally_form = TallyNumberDataForm(request.POST, document_type=doc_type)
+            if not tally_form.is_valid():
+                return render(
+                    request,
+                    "core/zeitstrom/partials/tally_inline_form.html",
+                    {"document_type": doc_type, "tally_form": tally_form},
+                )
+            data_json = tally_form.cleaned_data
 
         create_event(
             facility=facility,
             user=request.user,
             document_type=doc_type,
             occurred_at=timezone.now(),
-            data_json={},
+            data_json=data_json,
             is_anonymous=True,
         )
 
-        return render(
+        response = render(
             request,
             "core/zeitstrom/partials/tally_panel.html",
             {"tally_summary": build_tally_summary(facility, request.user)},
         )
+        if required_fields:
+            response["HX-Retarget"] = "#tally-panel"
+            response["HX-Reswap"] = "outerHTML"
+        return response
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):

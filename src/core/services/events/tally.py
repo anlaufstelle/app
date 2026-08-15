@@ -13,8 +13,9 @@ from datetime import timedelta
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 
-from core.models import DocumentType, DocumentTypeField, Event, TimeFilter
+from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, TimeFilter
 from core.services.compliance import allowed_sensitivities_for_user
+from core.services.config import block_ordered_dtf_queryset
 from core.services.events.feed import get_time_range
 
 
@@ -42,29 +43,43 @@ def tally_document_types(facility, user):
 
     Nur explizit freigegebene, aktive Typen der Facility, die (a) der User
     seiner Rolle nach sehen darf (Sensitivity-Guard), (b) anonymfähig sind und
-    (c) keine Pflichtfelder besitzen (Refs #1637) — Typen mit einer
-    Mindest-Kontaktstufe (``min_contact_stage``) sind NIE anonym
-    (``create_event`` erzwingt das) und dürfen daher nicht per „+1" erfassbar
-    sein.
+    (c) keine nichtnumerischen Pflichtfelder besitzen (Refs #1637/#1906).
+    Zahlen-Pflichtfelder werden über das Inline-Formular erfasst. Ein Typ fällt
+    für die jeweilige Rolle außerdem heraus, sobald eines seiner Pflichtfelder
+    eine höhere Feld-Sensibilität hat. Typen mit einer Mindest-Kontaktstufe
+    (``min_contact_stage``) sind NIE anonym (``create_event`` erzwingt das).
     """
+    allowed_sensitivities = allowed_sensitivities_for_user(user)
     required_fields = DocumentTypeField.objects.filter(
         document_type=OuterRef("pk"),
         field_template__is_required=True,
     )
+    non_number_required_fields = required_fields.exclude(
+        field_template__field_type=FieldTemplate.FieldType.NUMBER,
+    )
+    restricted_required_fields = required_fields.exclude(
+        Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed_sensitivities)
+    )
     return (
         DocumentType.objects.for_facility(facility)
-        .filter(~Exists(required_fields))
+        .annotate(requires_number_input=Exists(required_fields))
+        .filter(~Exists(non_number_required_fields), ~Exists(restricted_required_fields))
         .filter(
             Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
             is_active=True,
             # M2 (Refs #1058): die Strichliste legt Events an — nur event-Typen
             # gehoeren ins Panel (Entscheid E21, Muster EventMetaForm).
             entity_type=DocumentType.EntityType.EVENT,
-            sensitivity__in=allowed_sensitivities_for_user(user),
+            sensitivity__in=allowed_sensitivities,
             tally_enabled=True,
         )
         .order_by("name")
     )
+
+
+def tally_required_fields(document_type):
+    """Pflichtfelder eines Tally-Typs in derselben Block-Reihenfolge wie im Formular."""
+    return block_ordered_dtf_queryset(document_type).filter(field_template__is_required=True)
 
 
 def build_tally_summary(facility, user):
@@ -72,9 +87,10 @@ def build_tally_summary(facility, user):
 
     Liefert ein Dict ``{"window_start", "window_end", "rows"}`` — ``rows`` ist
     je anonymfähigem, sichtbarem Dokumentationstyp ein
-    ``{"document_type", "count"}`` mit der Anzahl anonymer Kontakte im
-    aktuellen Zeitfenster. Gezählt werden ausschließlich für den User sichtbare
-    (``Event.objects.visible_to``), nicht gelöschte, anonyme Events.
+    ``{"document_type", "count", "requires_number_input"}`` mit der Anzahl
+    anonymer Kontakte im aktuellen Zeitfenster. Gezählt werden ausschließlich
+    für den User sichtbare (``Event.objects.visible_to``), nicht gelöschte,
+    anonyme Events.
     """
     start_dt, end_dt = current_tally_window(facility)
     doc_types = list(tally_document_types(facility, user))
@@ -91,5 +107,12 @@ def build_tally_summary(facility, user):
         .annotate(n=Count("id"))
     )
 
-    rows = [{"document_type": dt, "count": counts.get(dt.pk, 0)} for dt in doc_types]
+    rows = [
+        {
+            "document_type": dt,
+            "count": counts.get(dt.pk, 0),
+            "requires_number_input": dt.requires_number_input,
+        }
+        for dt in doc_types
+    ]
     return {"window_start": start_dt, "window_end": end_dt, "rows": rows}

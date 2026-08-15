@@ -1,0 +1,19 @@
+{% load i18n %}
+<div id="tally-action-{{ row.document_type.pk }}" class="flex items-center flex-shrink-0"
+     data-testid="tally-action-{{ row.document_type.pk }}">
+    <button type="button"
+            class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
+            data-testid="tally-increment-{{ row.document_type.pk }}"
+            {% if row.requires_number_input %}
+            hx-get="{% url 'core:tally_increment' %}"
+            hx-target="#tally-action-{{ row.document_type.pk }}"
+            {% else %}
+            hx-post="{% url 'core:tally_increment' %}"
+            hx-target="#tally-panel"
+            {% endif %}
+            hx-vals='{"document_type": "{{ row.document_type.pk }}"}'
+            hx-swap="outerHTML"
+            aria-label="{% if row.requires_number_input %}{% blocktrans with name=row.document_type.name %}Werte für {{ name }} eingeben{% endblocktrans %}{% else %}{% blocktrans with name=row.document_type.name %}Anonymen Kontakt für {{ name }} zählen{% endblocktrans %}{% endif %}">
+        +1
+    </button>
+</div>

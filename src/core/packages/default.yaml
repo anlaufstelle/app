@@ -314,6 +314,7 @@ document_types:
   - slug: spritzentausch
     name: Spritzentausch
     entity_type: event
+    tally_enabled: true
     report_key: needle_exchange
     sensitivity: normal
     icon: repeat
