@@ -36,8 +36,16 @@ class DocumentTypeFieldInline(TabularInline):
 
 @admin.register(DocumentType, site=anlaufstelle_admin_site)
 class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
-    list_display = ("name", "sensitivity", "system_type", "facility", "is_active", "sort_order")
-    list_filter = ("sensitivity", "is_active", "facility", "system_type")
+    list_display = (
+        "name",
+        "sensitivity",
+        "system_type",
+        "tally_enabled",
+        "facility",
+        "is_active",
+        "sort_order",
+    )
+    list_filter = ("sensitivity", "is_active", "tally_enabled", "facility", "system_type")
     search_fields = ("name",)
     inlines = [DocumentTypeFieldInline]
 

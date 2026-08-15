@@ -142,6 +142,7 @@ _DOCUMENT_TYPE_KEYS = frozenset(
         "entity_type",
         *_IGNORED_DOCUMENT_TYPE_KEYS,
         "system_type",
+        "tally_enabled",
         "sensitivity",
         "min_contact_stage",
         "report_key",
@@ -270,6 +271,8 @@ class DocumentTypeDef:
     name: str
     entity_type: str = DocumentType.EntityType.EVENT.value
     system_type: str | None = None
+    # Refs #1637: ``None`` bedeutet E13-konform: Schlüssel fehlt, Bestand unangetastet.
+    tally_enabled: bool | None = None
     sensitivity: str = DocumentType.Sensitivity.NORMAL.value
     min_contact_stage: str | None = None
     report_key: str | None = None
@@ -696,6 +699,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         data, "sensitivity", path, errors, _SENSITIVITIES, default=DocumentType.Sensitivity.NORMAL.value
     )
     system_type, removed_system_types = _optional_system_type_value(data, "system_type", path, errors)
+    tally_enabled = _bool_value(data, "tally_enabled", path, errors) if "tally_enabled" in data else None
     min_contact_stage = _optional_enum_value(data, "min_contact_stage", path, errors, _CONTACT_STAGES)
     report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
     icon = _str_value(data, "icon", path, errors)
@@ -726,6 +730,7 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         name=name,
         entity_type=entity_type,
         system_type=system_type,
+        tally_enabled=tally_enabled,
         sensitivity=sensitivity,
         min_contact_stage=min_contact_stage,
         report_key=report_key,

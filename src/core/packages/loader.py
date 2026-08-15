@@ -236,6 +236,9 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
         "color": doc_def.color,
         "sort_order": doc_def.sort_order,
     }
+    # Refs #1637, E13: Fehlt der Schlüssel, bleibt ein im Admin gepflegtes Opt-in erhalten.
+    if doc_def.tally_enabled is not None:
+        desired["tally_enabled"] = doc_def.tally_enabled
     # E3 (Refs #1849): NUR aufnehmen, wenn das Paket etwas sagt — siehe
     # ``_report_key_conflicts``.
     if doc_def.report_key is not None:

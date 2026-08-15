@@ -10,10 +10,10 @@ aktuellen Zeitpunkt abdeckt), sonst der komplette heutige Tag.
 
 from datetime import timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 
-from core.models import DocumentType, Event, TimeFilter
+from core.models import DocumentType, DocumentTypeField, Event, TimeFilter
 from core.services.compliance import allowed_sensitivities_for_user
 from core.services.events.feed import get_time_range
 
@@ -40,14 +40,20 @@ def current_tally_window(facility):
 def tally_document_types(facility, user):
     """Für die Strichliste anbietbare Dokumentationstypen.
 
-    Nur aktive Typen der Facility, die (a) der User seiner Rolle nach sehen
-    darf (Sensitivity-Guard) und (b) anonymfähig sind — Typen mit einer
+    Nur explizit freigegebene, aktive Typen der Facility, die (a) der User
+    seiner Rolle nach sehen darf (Sensitivity-Guard), (b) anonymfähig sind und
+    (c) keine Pflichtfelder besitzen (Refs #1637) — Typen mit einer
     Mindest-Kontaktstufe (``min_contact_stage``) sind NIE anonym
     (``create_event`` erzwingt das) und dürfen daher nicht per „+1" erfassbar
     sein.
     """
+    required_fields = DocumentTypeField.objects.filter(
+        document_type=OuterRef("pk"),
+        field_template__is_required=True,
+    )
     return (
         DocumentType.objects.for_facility(facility)
+        .filter(~Exists(required_fields))
         .filter(
             Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
             is_active=True,
@@ -55,6 +61,7 @@ def tally_document_types(facility, user):
             # gehoeren ins Panel (Entscheid E21, Muster EventMetaForm).
             entity_type=DocumentType.EntityType.EVENT,
             sensitivity__in=allowed_sensitivities_for_user(user),
+            tally_enabled=True,
         )
         .order_by("name")
     )

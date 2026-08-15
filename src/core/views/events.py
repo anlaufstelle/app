@@ -546,6 +546,16 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         if doc_type.min_contact_stage:
             return HttpResponseBadRequest(_("Dieser Dokumentationstyp erfordert eine Person."))
 
+        # Refs #1637: Panel-Filter sind kein Sicherheitsrand. Manipulierte
+        # Direkt-POSTs müssen dieselben Opt-in-/Datenqualitätsregeln erzwingen.
+        if not doc_type.tally_enabled:
+            return HttpResponseBadRequest(_("Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben."))
+
+        if doc_type.fields.filter(field_template__is_required=True).exists():
+            return HttpResponseBadRequest(
+                _("Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste erfasst werden.")
+            )
+
         create_event(
             facility=facility,
             user=request.user,

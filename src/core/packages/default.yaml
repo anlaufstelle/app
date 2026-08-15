@@ -258,6 +258,7 @@ document_types:
   - slug: kontakt
     name: Kontakt
     entity_type: event
+    tally_enabled: true
     report_key: contact
     sensitivity: normal
     icon: users
@@ -356,6 +357,7 @@ document_types:
   - slug: vermittlung
     name: Vermittlung
     entity_type: event
+    tally_enabled: true
     report_key: referral
     sensitivity: normal
     icon: share-2
@@ -365,6 +367,7 @@ document_types:
   - slug: notiz
     name: Notiz
     entity_type: event
+    tally_enabled: true
     report_key: excluded
     sensitivity: normal
     icon: file-text

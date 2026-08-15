@@ -114,6 +114,7 @@ class DocumentType(ReportKeyMixin, SluggedModel):
             "Berichtsschlüssel zuständig, nicht dieses Feld."
         ),
     )
+    tally_enabled = models.BooleanField(default=False, verbose_name=_("In Strichliste anbieten"))
     entity_type = models.CharField(
         max_length=20,
         choices=EntityType.choices,

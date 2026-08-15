@@ -178,6 +178,7 @@ def _serialize_document_type(document_type: DocumentType) -> dict:
         "sensitivity": document_type.sensitivity,
         "min_contact_stage": document_type.min_contact_stage,
         "system_type": document_type.system_type,
+        "tally_enabled": document_type.tally_enabled,
         # E3 (Refs #1849): der Berichtsschluessel ersetzt ``statistics_category``
         # an der Vorlage und kommt am Typ neu hinzu — er ist Teil der
         # Konfiguration und muss in einem Vollexport rekonstruierbar sein.
