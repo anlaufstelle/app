@@ -356,7 +356,7 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen und der erst
 Die Adminoberfläche ist erreichbar unter:
 
 ```
-https://anlaufstelle.meine-einrichtung.de/admin/
+https://anlaufstelle.meine-einrichtung.de/admin-mgmt/
 ```
 
 Hier können Sie verwalten:
@@ -367,7 +367,7 @@ Hier können Sie verwalten:
 | Einrichtungen | Core → Einrichtungen | Standorte einer Organisation |
 | Einstellungen | Core → Einstellungen | Konfiguration pro Einrichtung |
 | Benutzer | Core → Benutzer | Benutzerkonten und Rollen |
-| Dokumentationstypen | Core → Dokumentationstypen | Konfigurierbare Vorlagen |
+| Dokumentationstypen | Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
 | Zeitfenster | Core → Zeitfenster | Benannte Zeiträume für Auswertungen |
 | Audit-Log | Core → Audit-Logs | Unveränderliches Protokoll |
 
@@ -435,7 +435,7 @@ Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-überg
 
 ### 2.5 Dokumentationstypen konfigurieren
 
-Unter **Core → Dokumentationstypen** legen Sie fest, welche Arten von Dokumentation in der Einrichtung erfasst werden können. Jeder Typ besteht aus:
+Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen Sie fest, welche Arten von Dokumentation in der Einrichtung erfasst werden können. Die gleichnamige Ansicht unter **Core → Dokumentationstypen** im Django-Admin bleibt als technischer Fallback erhalten, ist aber nicht der reguläre Pflegeweg. Jeder Typ besteht aus:
 
 - **Name und Beschreibung**
 - **Feldvorlagen** (Freitextfelder, Auswahlfelder etc.)
@@ -461,7 +461,7 @@ Die Sensibilitätsstufe steuert, welche Rollen auf Einträge dieses Typs zugreif
 
 #### Strichliste
 
-Das Kontrollkästchen **„In Strichliste anbieten“** schaltet einen Dokumentationstyp ausdrücklich für die Strichliste im Zeitstrom frei. Neue Typen sind standardmäßig nicht freigegeben. Die Freigabe wirkt nur bei aktiven **Ereignis**-Typen ohne Mindest-Kontaktstufe; bei Personen- oder Fall-Typen bleibt sie ohne Wirkung.
+Öffnen Sie unter **Verwaltung → Dokumentationstypen** den gewünschten Typ und wählen Sie **Bearbeiten**. Das Kontrollkästchen **„In Strichliste anbieten“** schaltet ihn ausdrücklich für die Strichliste im Zeitstrom frei; die Detailansicht zeigt anschließend den gespeicherten Status. Neue Typen sind standardmäßig nicht freigegeben. Die Freigabe wirkt nur bei aktiven **Ereignis**-Typen ohne Mindest-Kontaktstufe; bei Personen- oder Fall-Typen wird die Option ausgeblendet und beim Speichern deaktiviert.
 
 - Hat der Typ keine Pflichtfelder, erzeugt `+1` direkt einen anonymen Kontakt.
 - Bestehen alle Pflichtfelder aus Zahlen, öffnet `+1` eine kompakte Werteingabe; die eingegebenen Werte werden zusammen mit genau einem anonymen Kontakt gespeichert. Optionale Felder werden dabei nicht erfasst.

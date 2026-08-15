@@ -360,7 +360,7 @@ Afterwards, the organization, facility, default settings, and the first `facilit
 The admin interface is available at:
 
 ```
-https://anlaufstelle.meine-einrichtung.de/admin/
+https://anlaufstelle.meine-einrichtung.de/admin-mgmt/
 ```
 
 Here you can manage:
@@ -371,7 +371,7 @@ Here you can manage:
 | Facilities | Core > Facilities | Locations within an organization |
 | Settings | Core > Settings | Configuration per facility |
 | Users | Core > Users | User accounts and roles |
-| Documentation types | Core > Documentation types | Configurable templates |
+| Documentation types | Core > Documentation types | Technical fallback; maintained primarily under Administration > Documentation types |
 | Time filters | Core > Time filters | Named time periods for reports |
 | Audit log | Core > Audit logs | Immutable protocol |
 
@@ -439,7 +439,7 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 
 ### 2.5 Configure Documentation Types
 
-Under **Core > Documentation types**, you define which kinds of documentation can be recorded in the facility. Each type consists of:
+Under **Administration > Documentation types** (`/config/document-types/`), you define which kinds of documentation can be recorded in the facility. The matching **Core > Documentation types** view in the Django admin remains available as a technical fallback, but is not the regular configuration path. Each type consists of:
 
 - **Name and description**
 - **Field templates** (free-text fields, selection fields, etc.)
@@ -465,7 +465,7 @@ The sensitivity level controls which roles can access entries of this type:
 
 #### Tally
 
-The **"Include in tally"** checkbox explicitly enables a documentation type for the tally in the Zeitstrom. New types are not enabled by default. The setting takes effect only for active **event** types without a minimum contact stage; it has no effect on person or case types.
+Under **Administration > Documentation types**, open the relevant type and select **Edit**. The **"Include in tally"** checkbox explicitly enables it for the tally in the Zeitstrom; the detail view then shows the saved state. New types are not enabled by default. The setting takes effect only for active **event** types without a minimum contact stage; for person or case types the option is hidden and cleared when the type is saved.
 
 - If the type has no required fields, `+1` directly creates an anonymous contact.
 - If every required field is a number, `+1` opens a compact value form; the entered values are stored with exactly one anonymous contact. Optional fields are not captured in this workflow.
@@ -1636,4 +1636,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-15 -->
-<!-- source-hash: bd42a1607c111cff49fcf28e96acf1b1ded1105d -->
+<!-- source-hash: fa9bac299af1bbbf405ea7544d35c3f811be5a5d -->

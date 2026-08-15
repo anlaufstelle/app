@@ -158,7 +158,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `slug` | Slug | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich |
 | `name` | nicht-leerer String | **Pflicht** | muss im Paket eindeutig sein |
 | `entity_type` | `event`, `client`, `case` | `event` | **Unveränderlich** nach dem Anlegen |
-| `tally_enabled` | Bool oder Schlüssel weglassen | *(nicht anfassen)* | Explizites Opt-in für die Strichliste. `true`/`false` wird geschrieben; fehlt der Schlüssel, bleibt ein bestehender Admin-Wert erhalten, bei einem neuen Typ gilt der Modell-Default `false` |
+| `tally_enabled` | Bool oder Schlüssel weglassen | *(nicht anfassen)* | Explizites Opt-in für die Strichliste. `true`/`false` wird geschrieben; fehlt der Schlüssel, bleibt ein bestehender Konfigurationswert erhalten, bei einem neuen Typ gilt der Modell-Default `false` |
 | `system_type` | `ban`, `crisis` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert`. Seit #1850 nur noch die beiden Werte mit App-Wirkung |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
 | `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
@@ -175,7 +175,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 >
 > **Weglassen heißt „keine Angabe", nicht „entfernen":** anders als bei `system_type` ist ein fehlender `report_key` gegen einen gesetzten Bestandswert **kein** Fehler — jedes vor dieser Änderung veröffentlichte Paket bleibt gegen eine aktualisierte Instanz ladbar. Ein gesetzter Schlüssel lässt sich über das Paketformat nicht entfernen; das verbietet die Änderbarkeits-Regel ohnehin.
 
-> **Strichlisten-Opt-in `tally_enabled` (#1637, #1906):** Der Schlüssel akzeptiert nur die YAML-Wahrheitswerte `true` und `false`. Bei einem bestehenden Typ ist sein Fehlen absichtlich nicht gleichbedeutend mit `false`: Das Paket lässt ein in der Admin-Oberfläche gepflegtes Opt-in unverändert. Ein explizites `true` oder `false` synchronisiert den Wert dagegen zurück. Die Freigabe allein reicht nicht für die Anzeige: Die Strichliste nimmt nur aktive Ereignis-Typen ohne Mindest-Kontaktstufe; sie kann Pflichtwerte nur dann inline erfassen, wenn **alle** Pflichtfelder Zahlen sind.
+> **Strichlisten-Opt-in `tally_enabled` (#1637, #1906):** Der Schlüssel akzeptiert nur die YAML-Wahrheitswerte `true` und `false`. Bei einem bestehenden Typ ist sein Fehlen absichtlich nicht gleichbedeutend mit `false`: Das Paket lässt ein in der Konfigurationsoberfläche gepflegtes Opt-in unverändert. Ein explizites `true` oder `false` synchronisiert den Wert dagegen zurück. Die Freigabe allein reicht nicht für die Anzeige: Die Strichliste nimmt nur aktive Ereignis-Typen ohne Mindest-Kontaktstufe; sie kann Pflichtwerte nur dann inline erfassen, wenn **alle** Pflichtfelder Zahlen sind.
 
 > **Entfallene `system_type`-Werte (#1850):** Die sieben reinen Berichtswerte (`contact`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note`) sind aus dem Enum entfernt. Ein Paket, das einen davon noch mitführt, **bleibt ladbar** — der Wert entfällt ersatzlos, mit einer **Warnung** im Report (dieselbe Linie wie bei `category`: kein Fehler, aber auch kein stiller Wegfall). Ein *unbekannter* Wert bleibt dagegen ein Fehler: Anders als beim `report_key` ist der Werteraum hier eine feste, eingefrorene Liste (RFC #1748) und kein Fremdvokabular. Die Berichtszuordnung, die die sieben Werte trugen, steht im `report_key`; beim Update hat sie eine Datenmigration übernommen. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
@@ -235,7 +235,7 @@ Der Loader ist ein Upsert über den Slug mit Diff: nur bei echter Abweichung wir
 |---|---|
 | Wert steht drin | wird geschrieben (auch wenn er per UI geändert wurde — **Rücksync**) |
 | Einzelwert-Schlüssel fehlt (z. B. `icon`, `help_text`, `options`, `default_value`) | Der **Modell-Default** wird geschrieben; das ist **nicht** „unangetastet lassen" |
-| `tally_enabled` fehlt | Ausnahme: Am bestehenden Typ bleibt ein in der Admin-Oberfläche gepflegter Wert **unangetastet**; beim Anlegen gilt der Modell-Default `false` |
+| `tally_enabled` fehlt | Ausnahme: Am bestehenden Typ bleibt ein in der Konfigurationsoberfläche gepflegter Wert **unangetastet**; beim Anlegen gilt der Modell-Default `false` |
 | `conditions`-Schlüssel fehlt | Bestehende Bedingungen bleiben **unangetastet** |
 | `conditions: []` | Alle Bedingungen des Typs werden **gelöscht** |
 | `conditions: [ … ]` | Wholesale-Replace; bei inhaltlicher Gleichheit passiert nichts (`unverändert`) |
