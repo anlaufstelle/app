@@ -42,6 +42,7 @@ class TestBuildTallySummary:
             facility=facility,
             name="Beratung mit Person",
             min_contact_stage="identified",
+            tally_enabled=True,
         )
         summary = build_tally_summary(facility, staff_user)
         assert all(r["document_type"].pk != dt.pk for r in summary["rows"])
@@ -51,6 +52,7 @@ class TestBuildTallySummary:
             facility=facility,
             name="Hochsensibel",
             sensitivity=DocumentType.Sensitivity.HIGH,
+            tally_enabled=True,
         )
         summary = build_tally_summary(facility, assistant_user)
         assert all(r["document_type"].pk != high.pk for r in summary["rows"])
@@ -89,6 +91,7 @@ class TestTallyIncrementView:
             facility=facility,
             name="Beratung mit Person",
             min_contact_stage="identified",
+            tally_enabled=True,
         )
         client.force_login(staff_user)
         response = client.post(
@@ -104,6 +107,7 @@ class TestTallyIncrementView:
             facility=facility,
             name="Hochsensibel",
             sensitivity=DocumentType.Sensitivity.HIGH,
+            tally_enabled=True,
         )
         client.force_login(assistant_user)
         response = client.post(
@@ -118,7 +122,7 @@ class TestTallyIncrementView:
         from core.models import Facility
 
         other = Facility.objects.create(organization=organization, name="Fremd")
-        foreign_dt = DocumentType.objects.create(facility=other, name="Fremd-Kontakt")
+        foreign_dt = DocumentType.objects.create(facility=other, name="Fremd-Kontakt", tally_enabled=True)
         client.force_login(staff_user)
         response = client.post(
             reverse("core:tally_increment"),

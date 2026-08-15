@@ -213,6 +213,7 @@ def doc_type_contact(facility):
         # Zweitschluessel, den es nicht mehr gibt (Entscheid E-E). ``system_type``
         # bleibt bewusst leer: die beiden Achsen sind unabhaengig (E-D).
         report_key="contact",
+        tally_enabled=True,
     )
 
     ft_dauer = FieldTemplate.objects.create(
