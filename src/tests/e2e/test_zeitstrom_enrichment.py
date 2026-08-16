@@ -191,21 +191,25 @@ class TestCurrentShiftInZeitstrom:
         # Beliebigen Schicht-Filter ermitteln, der NICHT der laufende Dienst ist,
         # und per Voll-Navigation (anderer Tag) ansteuern.
         tabs = page.locator(".time-filter-tab")
-        other_label = None
+        other_filter_id = None
         for i in range(tabs.count()):
             label = tabs.nth(i).inner_text().strip()
             if label.startswith("Alle"):
                 continue
             # running_shift_label = "Spätdienst · 16:00 – 22:00"; Tab = "Spätdienst 16:00–22:00"
             if label.split()[0] not in running_shift_label:
-                other_label = label
+                other_filter_id = tabs.nth(i).get_attribute("data-zeitstrom-time-filter")
                 break
 
+        assert other_filter_id is not None, "Kein vom laufenden Dienst abweichender Schichtfilter gefunden"
         yesterday = (date.today() - timedelta(days=1)).isoformat()
-        if other_label:
-            page.locator(".time-filter-tab", has_text=other_label.split()[0]).first.click()
-        # Voll-Navigation auf einen anderen Tag (Datums-Pfeile beziehen den Filter mit ein).
-        page.goto(f"{base_url}/?date={yesterday}", wait_until="domcontentloaded")
+        # Datum und abweichende Schicht in EINER Voll-Navigation ansteuern.
+        # Ein vorausgehender HTMX-Klick würde absichtlich eine zweite,
+        # konkurrierende Navigation starten und nicht diesen Vertrag testen.
+        page.goto(
+            f"{base_url}/?date={yesterday}&time_filter={other_filter_id}",
+            wait_until="domcontentloaded",
+        )
 
         card = page.locator("[data-testid='current-shift']")
         card.wait_for(state="visible", timeout=10000)

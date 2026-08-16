@@ -414,6 +414,46 @@ describe("Zeitstrom live watch", () => {
         expect(document.querySelector('[name="type"]').value).toBe("events");
     });
 
+    it("preserves individual feed-card expansion state across a live swap", async () => {
+        document.getElementById("feed-list").innerHTML = `
+            <div x-data="expandableCard">
+                <button aria-controls="event-detail-1" aria-expanded="true">offen</button>
+            </div>
+            <div x-data="expandableActivityCard">
+                <button aria-controls="activity-detail-2" aria-expanded="false">zu</button>
+            </div>`;
+        window.htmx = {
+            swap: vi.fn((target, html) => {
+                target.innerHTML = html;
+            }),
+        };
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(watchResponse(["feed"], { feed: '"feed-v2"' }))
+            .mockResolvedValueOnce(
+                response({
+                    text: `
+                        <div x-data="expandableCard">
+                            <button aria-controls="event-detail-1" aria-expanded="false">neu offen</button>
+                        </div>
+                        <div x-data="expandableActivityCard">
+                            <button aria-controls="activity-detail-2" aria-expanded="false">neu zu</button>
+                        </div>`,
+                    headers: { "Content-Type": "text/html", ETag: '"feed-v2"' },
+                }),
+            );
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+        });
+
+        await watcher.pollNow();
+
+        const freshEvent = document.querySelector('[x-data="expandableCard"]');
+        const freshActivity = document.querySelector('[x-data="expandableActivityCard"]');
+        expect(freshEvent.dataset.zeitstromExpanded).toBe("true");
+        expect(freshActivity.dataset.zeitstromExpanded).toBe("false");
+    });
+
     it("invalidates a local zeitstrom change without starting a competing immediate refresh cascade", async () => {
         const fetchMock = vi
             .fn()

@@ -23,6 +23,21 @@ document.addEventListener("alpine:init", () => {
     }
 
     /**
+     * Ein Live-Feed-Swap darf den lokalen Zustand einer bereits sichtbaren
+     * Karte nicht verwerfen. Der Watcher markiert passende neue Karten einmalig;
+     * neue Einträge folgen weiterhin dem globalen Ausgangszustand.
+     */
+    function applyCardCollapseState(component) {
+        const restored = component.$el.dataset.zeitstromExpanded;
+        if (restored === "true" || restored === "false") {
+            component.expanded = restored === "true";
+            delete component.$el.dataset.zeitstromExpanded;
+            return;
+        }
+        component.expanded = component.$store.zeitstromCollapse.allExpanded;
+    }
+
+    /**
      * Globaler Zeitstrom-Auf-/Zuklapp-Store (Refs #1588). `allExpanded` ist
      * die Single Source of Truth fuer den Ausgangszustand aller Feed-Cards.
      * Aenderungen persistieren nach localStorage und feuern das Fensterevent
@@ -115,7 +130,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("expandableCard", () => ({
         expanded: false,
         applyGlobalCollapse() {
-            this.expanded = this.$store.zeitstromCollapse.allExpanded;
+            applyCardCollapseState(this);
         },
         toggle() {
             this.expanded = !this.expanded;
@@ -128,7 +143,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("expandableActivityCard", () => ({
         expanded: false,
         applyGlobalCollapse() {
-            this.expanded = this.$store.zeitstromCollapse.allExpanded;
+            applyCardCollapseState(this);
         },
         toggle() {
             this.expanded = !this.expanded;

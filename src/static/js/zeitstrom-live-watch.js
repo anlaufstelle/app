@@ -223,6 +223,37 @@
             }
         }
 
+        function preserveFeedCardState(target, html) {
+            const states = new Map();
+            target
+                .querySelectorAll(
+                    'button[aria-controls^="event-detail-"], button[aria-controls^="activity-detail-"]',
+                )
+                .forEach(function (button) {
+                    states.set(
+                        button.getAttribute("aria-controls"),
+                        button.getAttribute("aria-expanded") === "true",
+                    );
+                });
+            if (states.size === 0) return html;
+
+            const template = document.createElement("template");
+            template.innerHTML = html;
+            template.content
+                .querySelectorAll(
+                    'button[aria-controls^="event-detail-"], button[aria-controls^="activity-detail-"]',
+                )
+                .forEach(function (button) {
+                    const controls = button.getAttribute("aria-controls");
+                    if (!states.has(controls)) return;
+                    const card = button.closest(
+                        '[x-data="expandableCard"], [x-data="expandableActivityCard"]',
+                    );
+                    if (card) card.dataset.zeitstromExpanded = String(states.get(controls));
+                });
+            return template.innerHTML;
+        }
+
         async function refreshFeed(signal, expectedGeneration, expectedValidator) {
             const response = await fetchRequest(urlWithState(root.dataset.feedUrl, { feed_only: "1" }), {
                 method: "GET",
@@ -247,7 +278,7 @@
             }
             if (expectedGeneration !== generation || signal.aborted) return;
             const target = document.getElementById("feed-list");
-            if (target) swapRegion(target, html, "innerHTML");
+            if (target) swapRegion(target, preserveFeedCardState(target, html), "innerHTML");
         }
 
         async function refreshTallyCounts(signal, expectedGeneration, expectedValidator) {
