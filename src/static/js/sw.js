@@ -101,7 +101,11 @@ importScripts("/static/js/url-patterns.js");
 // Genau wie beim v25 -> v26-Bump (crypto.js/sync-orchestrator.js) erzwingt der
 // Bump Re-Install + Re-Precache und raeumt zugleich den SWR-Runtime-Cache
 // (autosave.js liegt dort) weg.
-const CACHE_NAME = "anlaufstelle-v34";
+// Refs #1912: v34 -> v35 -- url-patterns.js nimmt den exakt geankerten Tally-
+// POST auf; offline-store.js wechselt das Facility-Bundle auf Schema v2 und
+// offline-tally.js rendert cold/warm Pending-Zustaende. Alle drei liegen im
+// cache-first APP_SHELL und muessen atomar erneuert werden.
+const CACHE_NAME = "anlaufstelle-v35";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -220,6 +224,9 @@ const APP_SHELL = [
     // SW-Update ohne Renderer.
     "/static/js/offline-workitem-list.js",
     "/static/js/offline-zeitstrom.js",
+    // #1912: gemeinsamer Renderer fuer die kalte Tally-Shell und die
+    // progressive Pending-/Blocked-Anzeige im warmen Online-Zeitstrom.
+    "/static/js/offline-tally.js",
     // Refs #1396: Die Konflikt-/Dead-Letter-Verwaltung (/offline/conflicts/)
     // und der pk-lose Review-Shell rendern client-seitig aus der
     // verschluesselten IndexedDB. Ihre Renderer werden NUR von den
@@ -342,13 +349,29 @@ async function _trimRuntimeCache() {
     }
 }
 
-function shouldQueueRequest(url) {
-    return self.URL_PATTERNS.QUEUE_PATTERNS.some((pattern) => pattern.test(url));
+function shouldQueueRequest(request) {
+    return self.URL_PATTERNS.isQueueableWriteRequest(request.url, request.method);
 }
 
 function isMultipart(request) {
     const ct = request.headers.get("content-type") || "";
     return ct.toLowerCase().startsWith("multipart/form-data");
+}
+
+const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+// #1912: No-JS-Tally traegt den stabilen Key als URL-encoded Body-Fallback.
+// Fehlt nur der Header, muss dieser Body-Key bereits den ERSTVERSUCH und spaeter
+// den Queue-Replay verbinden; ein neu geminteter Header waere ein vom SW selbst
+// erzeugter Header/Body-Widerspruch und der Server lehnt korrekt mit 400 ab.
+function tallyBodyIdempotencyKey(request, body) {
+    const patterns = self.URL_PATTERNS;
+    const contentType = request.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().startsWith("application/x-www-form-urlencoded")) return null;
+    if (!patterns.TALLY_INCREMENT.test(new URL(request.url).pathname)) return null;
+    const params = new URLSearchParams(body);
+    const candidate = params.get("idempotency_key");
+    return candidate && IDEMPOTENCY_KEY_RE.test(candidate) ? candidate : null;
 }
 
 // Refs #1351 (Bug #1): Request-Header sind immutabel — einen neuen Request aus
@@ -406,7 +429,7 @@ self.addEventListener("fetch", (event) => {
     const { request } = event;
 
     // POST/PUT bei Netzausfall queuen (nur fuer relevante URLs)
-    if ((request.method === "POST" || request.method === "PUT") && shouldQueueRequest(request.url)) {
+    if (shouldQueueRequest(request)) {
         // Refs #1351 (Bug #5): A's EIGENE Replays (offline-queue._send /
         // offline-edit._postForm) tragen den Marker X-Offline-Replay. Solche
         // Requests NIE erneut abfangen/queuen — network-only durchreichen und
@@ -453,68 +476,87 @@ self.addEventListener("fetch", (event) => {
             return;
         }
 
-        // Refs #1351 (Bug #1): EINEN Idempotency-Key fuer BEIDE Kanaele minten,
-        // BEVOR der Erstversuch rausgeht. Denselben Key traegt (a) der
-        // Erstversuch-fetch (X-Idempotency-Key-Header) und (b) — falls der
-        // Erstversuch nach >6s abbricht, gunicorn aber weiter committet — der
-        // in die Queue persistierte Replay. So dedupliziert der Server den
-        // Slow-Commit gegen den Replay statt zwei Objekte anzulegen. Einen vom
-        // Client bereits gesetzten Key NICHT ueberschreiben (offline-edit-/
-        // Queue-Replays bringen ihren eigenen mit).
-        const clientIdemKey = request.headers.get("X-Idempotency-Key");
-        const idempotencyKey = clientIdemKey || crypto.randomUUID();
-        const firstAttempt = clientIdemKey
-            ? request.clone()
-            : _withHeader(request, "X-Idempotency-Key", idempotencyKey);
-
         event.respondWith(
-            fetch(firstAttempt, { signal: AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS) }).catch(async () => {
+            (async () => {
+                // Den vollstaendigen Body einmal aus einem Clone lesen. Er bleibt
+                // unveraendert fuer Erstversuch und verschluesselte Queue erhalten.
                 const body = await request.clone().text();
-                const headers = {};
-                request.headers.forEach((value, key) => {
-                    if (
-                        [
-                            "content-type",
-                            "x-csrftoken",
-                            "hx-request",
-                            "hx-target",
-                            "hx-current-url",
-                            "x-idempotency-key",
-                        ].includes(key.toLowerCase())
-                    ) {
-                        headers[key] = value;
+                const clientIdemKey = request.headers.get("X-Idempotency-Key");
+                const bodyIdempotencyKey = tallyBodyIdempotencyKey(request, body);
+                // Refs #1351/#1912: Prioritaet ist expliziter Header, danach
+                // valider Tally-Body-Fallback, erst zuletzt ein neuer SW-Key.
+                const idempotencyKey = clientIdemKey || bodyIdempotencyKey || crypto.randomUUID();
+                const firstAttempt = clientIdemKey
+                    ? request.clone()
+                    : _withHeader(request, "X-Idempotency-Key", idempotencyKey);
+
+                try {
+                    return await fetch(firstAttempt, {
+                        signal: AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS),
+                    });
+                } catch (_networkError) {
+                    const headers = {};
+                    request.headers.forEach((value, key) => {
+                        if (
+                            [
+                                "content-type",
+                                "x-csrftoken",
+                                "hx-request",
+                                "hx-target",
+                                "hx-current-url",
+                                "x-idempotency-key",
+                            ].includes(key.toLowerCase())
+                        ) {
+                            headers[key] = value;
+                        }
+                    });
+                    // Refs #1351 (Bug #1): denselben Key wie der Erstversuch in die
+                    // Queue-Payload — hat der Client keinen gesetzt, steht der
+                    // SW-generierte Key NICHT in request.headers und fehlte sonst.
+                    // enqueueRequest bevorzugt diesen eingehenden Key.
+                    headers["x-idempotency-key"] = idempotencyKey;
+
+                    const ack = await requestQueueAck(
+                        {
+                            type: "QUEUE_REQUEST",
+                            url: request.url,
+                            method: request.method,
+                            body: body,
+                            headers: headers,
+                        },
+                        event.clientId
+                    );
+
+                    if (!ack.ok) {
+                        // Persistieren ist gescheitert (NoSessionKey, kein
+                        // offlineQueue, IndexedDB-Fehler, Timeout). Roter Banner
+                        // statt stummem Datenverlust (#662).
+                        return new Response(
+                            '<div id="flash-messages">' +
+                                '<div class="rounded-md bg-red-50 p-4 mb-4">' +
+                                '<p class="text-sm text-red-800">' +
+                                SW_I18N.queuePersistFailed.replace("{reason}", ack.reason) +
+                                "</p></div></div>",
+                            {
+                                status: 503,
+                                statusText: "Offline-Queue persistence failed",
+                                headers: {
+                                    "Content-Type": "text/html; charset=utf-8",
+                                    "HX-Retarget": "#flash-messages",
+                                    "HX-Reswap": "outerHTML",
+                                },
+                            }
+                        );
                     }
-                });
-                // Refs #1351 (Bug #1): denselben Key wie der Erstversuch in die
-                // Queue-Payload — hat der Client keinen gesetzt, steht der
-                // SW-generierte Key NICHT in request.headers und fehlte sonst.
-                // enqueueRequest bevorzugt diesen eingehenden Key.
-                headers["x-idempotency-key"] = idempotencyKey;
 
-                const ack = await requestQueueAck(
-                    {
-                        type: "QUEUE_REQUEST",
-                        url: request.url,
-                        method: request.method,
-                        body: body,
-                        headers: headers,
-                    },
-                    event.clientId
-                );
-
-                if (!ack.ok) {
-                    // Persistieren ist gescheitert (NoSessionKey, kein
-                    // offlineQueue, IndexedDB-Fehler, Timeout). Roter Banner
-                    // statt stummem Datenverlust (#662).
                     return new Response(
                         '<div id="flash-messages">' +
-                            '<div class="rounded-md bg-red-50 p-4 mb-4">' +
-                            '<p class="text-sm text-red-800">' +
-                            SW_I18N.queuePersistFailed.replace("{reason}", ack.reason) +
+                            '<div class="rounded-md bg-yellow-50 p-4 mb-4">' +
+                            '<p class="text-sm text-yellow-800">' +
+                            SW_I18N.queuedOk +
                             "</p></div></div>",
                         {
-                            status: 503,
-                            statusText: "Offline-Queue persistence failed",
+                            status: 200,
                             headers: {
                                 "Content-Type": "text/html; charset=utf-8",
                                 "HX-Retarget": "#flash-messages",
@@ -523,23 +565,7 @@ self.addEventListener("fetch", (event) => {
                         }
                     );
                 }
-
-                return new Response(
-                    '<div id="flash-messages">' +
-                        '<div class="rounded-md bg-yellow-50 p-4 mb-4">' +
-                        '<p class="text-sm text-yellow-800">' +
-                        SW_I18N.queuedOk +
-                        "</p></div></div>",
-                    {
-                        status: 200,
-                        headers: {
-                            "Content-Type": "text/html; charset=utf-8",
-                            "HX-Retarget": "#flash-messages",
-                            "HX-Reswap": "outerHTML",
-                        },
-                    }
-                );
-            })
+            })()
         );
         return;
     }
@@ -673,12 +699,12 @@ self.addEventListener("fetch", (event) => {
                 // caches.match(request.url)-Stufe, die sonst die /offline/-Home
                 // statt der echten Erfassungs-Shell liefern wuerde. Muster wie
                 // die OFFLINE_*_SHELL_URL-Zweige darueber.
-                if (self.URL_PATTERNS.EVENT_NEW.test(request.url)) {
+                if (self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)) {
                     return caches
                         .match(OFFLINE_EVENT_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
-                if (self.URL_PATTERNS.WORKITEM_NEW.test(request.url)) {
+                if (self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)) {
                     return caches
                         .match(OFFLINE_WORKITEM_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));

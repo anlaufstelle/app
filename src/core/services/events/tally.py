@@ -10,7 +10,7 @@ aktuellen Zeitpunkt abdeckt), sonst der komplette heutige Tag.
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 
 from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Prefetch, Q, When
@@ -273,6 +273,29 @@ def tally_request_matches_live_context(facility, params, *, context: TallyLiveCo
     braucht das lokale heutige Datum. Abweichende Parameter werden abgewiesen
     statt als Nacherfassung zu wirken.
     """
+    marker_names = ("tally_window_start", "tally_window_end")
+    has_window_marker = any(name in params for name in marker_names)
+    if has_window_marker:
+        marker_start = params.get(marker_names[0])
+        marker_end = params.get(marker_names[1])
+        if not marker_start or not marker_end:
+            return False
+        try:
+            parsed_start = datetime.fromisoformat(marker_start)
+            parsed_end = datetime.fromisoformat(marker_end)
+        except (TypeError, ValueError):
+            return False
+        if parsed_start.utcoffset() is None or parsed_end.utcoffset() is None:
+            return False
+        context = context or current_tally_context(facility)
+        # ISO serialisiert den Offset, aber nicht ZoneInfo/fold. Ein direkter
+        # Vergleich mit dem Berliner Kontext ist an DST-Uebergaengen deshalb
+        # trotz identischem Zeitpunkt falsch. Die Bindung gilt dem Instant.
+        parsed_window = (parsed_start.astimezone(UTC), parsed_end.astimezone(UTC))
+        context_window = (context.window_start.astimezone(UTC), context.window_end.astimezone(UTC))
+        if parsed_window != context_window:
+            return False
+
     if not params.get("date") and not params.get("time_filter"):
         return True
 

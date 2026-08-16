@@ -59,15 +59,35 @@ describe("QUEUE_PATTERNS", () => {
     ];
 
     it.each(notQueueable)("queued %s nicht", (url) => {
-        expect(PATTERNS.QUEUE_PATTERNS.some((re) => re.test(url))).toBe(false);
+        expect(PATTERNS.QUEUE_PATTERNS.some((re) => PATTERNS.matchesPath(re, url))).toBe(false);
     });
 
     it("queued den Event-Pfad weiterhin", () => {
-        expect(PATTERNS.QUEUE_PATTERNS.some((re) => re.test(`${ORIGIN}/events/new/`))).toBe(true);
-        expect(PATTERNS.QUEUE_PATTERNS.some((re) => re.test(`${ORIGIN}/events/${UUID_A}/edit/`))).toBe(true);
+        expect(PATTERNS.QUEUE_PATTERNS.some((re) => PATTERNS.matchesPath(re, `${ORIGIN}/events/new/`))).toBe(true);
+        expect(
+            PATTERNS.QUEUE_PATTERNS.some((re) => PATTERNS.matchesPath(re, `${ORIGIN}/events/${UUID_A}/edit/`))
+        ).toBe(true);
     });
 
     it("queued keinen Anhang-Download", () => {
-        expect(PATTERNS.QUEUE_PATTERNS.some((re) => re.test(downloadUrl("clients")))).toBe(false);
+        expect(PATTERNS.QUEUE_PATTERNS.some((re) => PATTERNS.matchesPath(re, downloadUrl("clients")))).toBe(false);
+    });
+
+    it("queued nur den exakten Tally-Pfad", () => {
+        expect(PATTERNS.matchesPath(PATTERNS.TALLY_INCREMENT, `${ORIGIN}/partials/tally/increment/`)).toBe(true);
+        expect(PATTERNS.matchesPath(PATTERNS.TALLY_INCREMENT, `${ORIGIN}/partials/tally/increment/extra/`)).toBe(
+            false
+        );
+        expect(PATTERNS.matchesPath(PATTERNS.TALLY_INCREMENT, `${ORIGIN}/partials/tally/increment-evil/`)).toBe(
+            false
+        );
+    });
+
+    it.each(["POST", "PUT"])("erlaubt die Write-Methode %s zentral", (method) => {
+        expect(PATTERNS.isQueueableWriteRequest(`${window.location.origin}/events/new/`, method)).toBe(true);
+    });
+
+    it.each(["GET", "DELETE", "PATCH", ""])("verwirft die Methode %s zentral", (method) => {
+        expect(PATTERNS.isQueueableWriteRequest(`${window.location.origin}/events/new/`, method)).toBe(false);
     });
 });

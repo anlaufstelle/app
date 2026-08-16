@@ -42,7 +42,7 @@ function resp(overrides) {
 function record(overrides) {
     return {
         id: 1,
-        url: "https://example.test/api/v1/events/create/",
+        url: `${window.location.origin}/events/new/`,
         attempts: 0,
         retryAfter: 0,
         idempotencyKey: "idem-1",
@@ -52,6 +52,7 @@ function record(overrides) {
 }
 
 beforeAll(async () => {
+    await import("../../src/static/js/url-patterns.js");
     window.offlineStore = makeStore([]);
     window.crypto_session = { ready: async () => {}, hasSessionKey: () => true };
     window.csrfUtils = { fromMeta: () => "META-TOKEN", refresh: async () => "FRESH-TOKEN" };
@@ -90,19 +91,110 @@ describe("enqueueRequest (guards)", () => {
     it("schreibt einen Queue-Eintrag mit Idempotenz-Schluessel", async () => {
         const store = makeStore([]);
         window.offlineStore = store;
-        await offlineQueue.enqueueRequest("/api/v1/events/create/", "POST", "{}", {
+        await offlineQueue.enqueueRequest("/events/new/", "POST", "{}", {
             "content-type": "application/json",
         });
         expect(store.putEncrypted).toHaveBeenCalledTimes(1);
         const [storeName, row] = store.putEncrypted.mock.calls[0];
         expect(storeName).toBe("queue");
-        expect(row.url).toBe("/api/v1/events/create/");
+        expect(row.url).toBe("/events/new/");
         expect(row.idempotencyKey).toBeTruthy();
         expect(row.attempts).toBe(0);
+    });
+
+    it.each([
+        "https://evil.example/events/new/",
+        `${window.location.origin}/partials/tally/increment/extra/`,
+    ])("weist unsichere Queue-URL %s vor dem Speichern ab", async (url) => {
+        const store = makeStore([]);
+        window.offlineStore = store;
+
+        await expect(
+            offlineQueue.enqueueRequest(url, "POST", "secret=never-store", {
+                "content-type": "application/x-www-form-urlencoded",
+            })
+        ).rejects.toMatchObject({ name: "UnsafeQueueUrlError" });
+        expect(store.putEncrypted).not.toHaveBeenCalled();
+    });
+
+    it.each(["GET", "DELETE", "PATCH"])(
+        "weist unsichere Queue-Methode %s vor dem Speichern ab",
+        async (method) => {
+            const store = makeStore([]);
+            window.offlineStore = store;
+
+            await expect(
+                offlineQueue.enqueueRequest("/events/new/", method, "secret=never-store", {
+                    "content-type": "application/x-www-form-urlencoded",
+                })
+            ).rejects.toMatchObject({ name: "UnsafeQueueMethodError" });
+            expect(store.putEncrypted).not.toHaveBeenCalled();
+        }
+    );
+
+    it.each([
+        "/events/new/",
+        `/workitems/${"11111111-1111-4111-8111-111111111111"}/edit/`,
+        `/partials/workitems/${"11111111-1111-4111-8111-111111111111"}/status/`,
+        "/partials/tally/increment/",
+        "/api/v1/offline/audit/note-export/",
+    ])("erlaubt bestehenden Write-Pfad %s", async (url) => {
+        const store = makeStore([]);
+        window.offlineStore = store;
+        await offlineQueue.enqueueRequest(url, "POST", "x=1", {
+            "content-type": "application/x-www-form-urlencoded",
+        });
+        expect(store.putEncrypted).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["POST", "PUT"])("erlaubt Write-Methode %s", async (method) => {
+        const store = makeStore([]);
+        window.offlineStore = store;
+
+        await offlineQueue.enqueueRequest("/events/new/", method, "x=1", {
+            "content-type": "application/x-www-form-urlencoded",
+        });
+
+        expect(store.putEncrypted).toHaveBeenCalledTimes(1);
+        expect(store.putEncrypted.mock.calls[0][1].data.method).toBe(method);
     });
 });
 
 describe("replayQueue (classification)", () => {
+    it.each([
+        "https://evil.example/events/new/",
+        `${window.location.origin}/partials/tally/increment-evil/`,
+    ])("dead-lettert manipulierte gespeicherte URL %s ohne Fetch", async (url) => {
+        const store = makeStore([record({ url, data: { method: "POST", body: "secret=value", headers: {} } })]);
+        window.offlineStore = store;
+        global.fetch = vi.fn();
+
+        await offlineQueue.replayQueue();
+
+        expect(global.fetch).not.toHaveBeenCalled();
+        const saved = store.putEncrypted.mock.calls.find((call) => call[1].localStatus === "dead");
+        expect(saved[1].deadReason).toBe("unsafe-url");
+        expect(saved[1].lastError).not.toContain("secret");
+        expect(saved[1].lastError).not.toContain("evil.example");
+    });
+
+    it("dead-lettert manipulierte DELETE-Methode ohne Fetch", async () => {
+        const store = makeStore([
+            record({ data: { method: "DELETE", body: "secret=value", headers: {} } }),
+        ]);
+        window.offlineStore = store;
+        global.fetch = vi.fn();
+
+        await offlineQueue.replayQueue();
+
+        expect(global.fetch).not.toHaveBeenCalled();
+        const saved = store.putEncrypted.mock.calls.find((call) => call[1].localStatus === "dead");
+        expect(saved[1].deadReason).toBe("unsafe-method");
+        expect(saved[1].lastError).toBe("blocked");
+        expect(saved[1].lastError).not.toContain("DELETE");
+        expect(saved[1].lastError).not.toContain("secret");
+    });
+
     it("200 (HTMX) -> Erfolg, Eintrag geloescht", async () => {
         const store = makeStore([record()]);
         window.offlineStore = store;
@@ -133,6 +225,19 @@ describe("replayQueue (classification)", () => {
         const saved = store.putEncrypted.mock.calls.find((c) => c[1].localStatus === "dead");
         expect(saved).toBeTruthy();
         expect(saved[1].deadReason).toBe("invalid");
+    });
+
+    it.each([404, 410])("%s -> sichtbares dead-letter fuer geloeschtes/deaktiviertes Ziel", async (status) => {
+        const store = makeStore([record()]);
+        window.offlineStore = store;
+        global.fetch = vi.fn(async () => resp({ status }));
+
+        await offlineQueue.replayQueue();
+
+        const saved = store.putEncrypted.mock.calls.find((call) => call[1].localStatus === "dead");
+        expect(saved).toBeTruthy();
+        expect(saved[1].deadReason).toBe("not-found");
+        expect(saved[1].lastError).toBe(String(status));
     });
 
     it("429 -> Backoff gesetzt, Schleife bricht ab", async () => {

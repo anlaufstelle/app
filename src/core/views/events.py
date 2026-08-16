@@ -570,8 +570,20 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         return f"{reverse('core:zeitstrom')}?{urlencode(filter_state)}"
 
     @staticmethod
-    def _tally_increment_url(document_type, filter_state, tally_next, idempotency_key=None):
-        params = {"document_type": document_type.pk, **filter_state, "next": tally_next}
+    def _tally_increment_url(
+        document_type,
+        filter_state,
+        tally_next,
+        idempotency_key=None,
+        *,
+        tally_context=None,
+    ):
+        params = {
+            "document_type": document_type.pk,
+            **filter_state,
+            **(tally_context or {}),
+            "next": tally_next,
+        }
         if idempotency_key:
             params["idempotency_key"] = idempotency_key
         return "{}?{}".format(
@@ -587,13 +599,19 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             return None
         filter_state = cls._filter_state(params, live_context, request_is_live=request_is_live)
         tally_next = cls._tally_next(params, filter_state, request_is_live=request_is_live)
+        tally_context = cls._tally_context_values(live_context)
         row["tally_increment_url"] = cls._tally_increment_url(
-            event.document_type, filter_state, tally_next, row["idempotency_key"]
+            event.document_type,
+            filter_state,
+            tally_next,
+            row["idempotency_key"],
+            tally_context=tally_context,
         )
         return {
             "row": row,
             "tally_summary": summary,
             "tally_filter_state": filter_state,
+            "tally_context": tally_context,
             "tally_next": tally_next,
             # #1913 kann die Provenienz/Undo-Darstellung an diesen wirklich
             # erzeugten (auch Replay-/Race-)Event-Kontext anbinden.
@@ -649,6 +667,14 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             return None
         return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
 
+    @staticmethod
+    def _tally_context_values(live_context):
+        """Serialisiere das einmal erfasste Live-Fenster für Folgeaktionen."""
+        return {
+            "tally_window_start": live_context.window_start.isoformat(),
+            "tally_window_end": live_context.window_end.isoformat(),
+        }
+
     def get(self, request):
         facility = request.current_facility
         live_context = current_tally_context(facility)
@@ -671,7 +697,9 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             filter_state = self._filter_state(request.GET, live_context, request_is_live=request_is_live)
             context = {
                 "row": row,
+                "tally_summary": summary,
                 "tally_filter_state": filter_state,
+                "tally_context": self._tally_context_values(live_context),
                 "tally_next": self._tally_next(request.GET, filter_state, request_is_live=request_is_live),
             }
             context["row"]["tally_increment_url"] = self._tally_increment_url(
@@ -679,6 +707,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 context["tally_filter_state"],
                 context["tally_next"],
                 context["row"]["idempotency_key"],
+                tally_context=context["tally_context"],
             )
             if not request.headers.get("HX-Request"):
                 return redirect(context["tally_next"])
@@ -705,10 +734,15 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             "tally_form": TallyNumberDataForm(eligibility=eligibility),
             "idempotency_key": idempotency_key or new_tally_idempotency_key(),
             "tally_filter_state": self._filter_state(request.GET, live_context, request_is_live=True),
+            "tally_context": self._tally_context_values(live_context),
             "tally_next": self._tally_next(request.GET, {}, request_is_live=True),
         }
         context["tally_increment_url"] = self._tally_increment_url(
-            doc_type, context["tally_filter_state"], context["tally_next"], context["idempotency_key"]
+            doc_type,
+            context["tally_filter_state"],
+            context["tally_next"],
+            context["idempotency_key"],
+            tally_context=context["tally_context"],
         )
         if request.headers.get("HX-Request"):
             return render(request, "core/zeitstrom/partials/tally_inline_form.html", context)
@@ -773,10 +807,15 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                     "tally_form": tally_form,
                     "idempotency_key": idempotency_key,
                     "tally_filter_state": self._filter_state(request.POST, live_context, request_is_live=True),
+                    "tally_context": self._tally_context_values(live_context),
                     "tally_next": self._tally_next(request.POST, {}, request_is_live=True),
                 }
                 context["tally_increment_url"] = self._tally_increment_url(
-                    doc_type, context["tally_filter_state"], context["tally_next"], context["idempotency_key"]
+                    doc_type,
+                    context["tally_filter_state"],
+                    context["tally_next"],
+                    context["idempotency_key"],
+                    tally_context=context["tally_context"],
                 )
                 if request.headers.get("HX-Request"):
                     return render(request, "core/zeitstrom/partials/tally_inline_form.html", context)

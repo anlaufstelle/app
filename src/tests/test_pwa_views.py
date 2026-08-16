@@ -150,7 +150,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v34"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v35"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#1774: offline-store.js ist precached und traegt die erweiterte "
             "Reichweite des Offline-Widerrufs — die Ereignis->Person-Aufloesung "
@@ -198,16 +198,16 @@ class TestServiceWorkerCachesOfflineFallback:
         statt der echten Erfassungs-Shell.
         """
         body = client.get(reverse("service_worker")).content.decode()
-        assert "self.URL_PATTERNS.EVENT_NEW.test(request.url)" in body
+        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)" in body
         assert ".match(OFFLINE_EVENT_SHELL_URL)" in body
-        assert "self.URL_PATTERNS.WORKITEM_NEW.test(request.url)" in body
+        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)" in body
         assert ".match(OFFLINE_WORKITEM_SHELL_URL)" in body
         # Die Create-Shell-Zweige muessen VOR der generischen
         # ``.match(request.url)``-Stufe stehen (sonst gewinnt /offline/). Die
         # tatsaechliche generische Stufe ist das LETZTE ``.match(request.url)``
         # (frueheres Vorkommen steht nur im erklaerenden Kommentar).
-        event_branch = body.index("self.URL_PATTERNS.EVENT_NEW.test(request.url)")
-        workitem_branch = body.index("self.URL_PATTERNS.WORKITEM_NEW.test(request.url)")
+        event_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)")
+        workitem_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)")
         generic_match = body.rindex(".match(request.url)")
         assert event_branch < generic_match, "EVENT_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
         assert workitem_branch < generic_match, "WORKITEM_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
@@ -246,7 +246,7 @@ class TestServiceWorkerCachesOfflineFallback:
             "WORKITEM_LIST-Zweig muss vor dem generischen /offline/-Match stehen."
         )
         assert zeitstrom_branch < generic_match, "ZEITSTROM-Zweig muss vor dem generischen /offline/-Match stehen."
-        workitem_new_branch = body.index("self.URL_PATTERNS.WORKITEM_NEW.test(request.url)")
+        workitem_new_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)")
         assert workitem_new_branch < workitem_list_branch, "WORKITEM_NEW-Zweig muss VOR dem WORKITEM_LIST-Zweig stehen."
 
     def test_sw_caches_manifest_and_favicon(self, client):
@@ -619,8 +619,12 @@ class TestPrecachedShellBumpGuard:
     # KEIN CACHE_NAME-Bump — es hat sich kein einziges Byte ausgeliefertes
     # Markup geaendert, nur die Abdeckung des Guards ist gewachsen. Ein Bump
     # schuetzt gegen geaenderte Shells im Feld; hier gibt es keine.
-    _PINNED_CACHE_NAME = "anlaufstelle-v34"
-    _PINNED_SHELL_HASH = "374d42e64f980b92d396a8435b4fbec37981a8b56241950d4264fb501349fb10"
+    # Refs #1912: Offline-Strichlisten-Shell und ihr Renderer sind Teil des
+    # Precaches; v35 erzwingt deren atomare Aktualisierung im Feld. Der
+    # Fenster-Marker gehoert zum selben noch unveroeffentlichten #1912-Atom,
+    # daher beschreibt dieser Hash den finalen Inhalt derselben v35-Generation.
+    _PINNED_CACHE_NAME = "anlaufstelle-v35"
+    _PINNED_SHELL_HASH = "830c13ec6806b24927346802ccac142da1a7107341ac6cd62b8a12f0175c16d4"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

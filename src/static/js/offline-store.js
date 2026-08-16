@@ -65,7 +65,9 @@
     // FACILITY_BUNDLE_SCHEMA_VERSION in core/services/system/offline.py
     // synchron bleiben (kein Build-Sync, wie BUNDLE_SCHEMA_VERSION). Ein
     // Mismatch zwingt den Lesepfad zum Purge, siehe _isFacilitySchemaMismatch.
-    const FACILITY_BUNDLE_SCHEMA_VERSION = 1;
+    // #1912: v1->v2 fuegt den policy-gefilterten Tally-Snapshot hinzu. Der
+    // bestehende Lesepfad verwirft Alt-v1 fail-closed.
+    const FACILITY_BUNDLE_SCHEMA_VERSION = 2;
     // (#1520/#1499): das Facility-Bundle ist ein Singleton (genau eine
     // Facility pro Session) -> fixer Primaerkey, kein pk-Fan-out.
     const FACILITY_ROW_KEY = "self";
@@ -1224,7 +1226,7 @@
      * speichern (Analog `saveClientBundle`, aber ein Singleton ohne
      * Roster/PII):
      *   {schema_version, generated_at, ttl, expires_at, document_types,
-     *    assignable_users}
+     *    assignable_users, tally}
      *
      * Das GESAMTE Envelope wird VOR `db.transaction` verschluesselt (#1414):
      * ein WebCrypto-`await` innerhalb einer Dexie-`rw`-Transaktion schliesst
@@ -1242,6 +1244,10 @@
         const envelope = await crypto.encryptPayload({
             document_types: bundle.document_types || [],
             assignable_users: bundle.assignable_users || [],
+            // #1912: Tally-Metadaten + bestaetigte Counts bleiben im selben
+            // AES-GCM-Umschlag wie der Facility-Katalog. Keine zweite oder
+            // Klartext-Ablage.
+            tally: bundle.tally || null,
             generatedAt: bundle.generated_at,
             expiresAt: bundle.expires_at,
             ttl: bundle.ttl,
@@ -1307,6 +1313,7 @@
             lastSynced: row.lastSynced,
             documentTypes: envelope.document_types || [],
             assignableUsers: envelope.assignable_users || [],
+            tally: envelope.tally || null,
             generatedAt: envelope.generatedAt,
             expiresAt: envelope.expiresAt,
             ttl: envelope.ttl,
@@ -1806,6 +1813,86 @@
 
     /* ─── generische Queue: Listing + Nutzeraktionen (Refs #1351/#1384) ──── */
 
+    function _isTallyQueueUrl(url) {
+        const patterns = (typeof self !== "undefined" && self.URL_PATTERNS) || null;
+        if (!patterns || !patterns.TALLY_INCREMENT) return false;
+        try {
+            const parsed = new URL(url, window.location.origin);
+            return (
+                parsed.origin === window.location.origin &&
+                patterns.TALLY_INCREMENT.test(parsed.pathname)
+            );
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    const _CANONICAL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+    /*
+     * #1912: Schmale, wertfreie UI-Sicht auf Tally-Queue-Eintraege. Quelle ist
+     * ausschliesslich die bestehende verschluesselte Queue; Body und
+     * Zahlenwerte werden nur zum Gruppieren entschluesselt und nie
+     * zurueckgegeben. Permanenter Key-Verlust bleibt ueber den bereits
+     * vorhandenen dead-Tombstone als unzuordenbarer Blocker sichtbar.
+     */
+    async function listTallyQueueState() {
+        const rows = await listDecrypted("queue");
+        // Null-Prototyp verhindert, dass selbst ein manipulierter Queue-Body
+        // Property-Pfade wie __proto__ oder constructor erreichen kann.
+        const byDocumentType = Object.create(null);
+        let pending = 0;
+        let blocked = 0;
+        let unassignedPending = 0;
+        let unassignedBlocked = 0;
+        const decryptedIds = new Set();
+
+        for (const row of rows) {
+            if (!_isTallyQueueUrl(row.url || "")) continue;
+            decryptedIds.add(row.id);
+            let documentType = null;
+            try {
+                const params = new URLSearchParams((row.data && row.data.body) || "");
+                const candidate = params.get("document_type");
+                documentType = candidate && _CANONICAL_UUID_RE.test(candidate) ? candidate : null;
+            } catch (_e) {
+                /* kaputter Body bleibt als unzuordenbarer Queue-Zustand sichtbar */
+            }
+            const isBlocked = row.localStatus === "conflict" || row.localStatus === "dead";
+            if (isBlocked) blocked += 1;
+            else pending += 1;
+            if (!documentType) {
+                if (isBlocked) unassignedBlocked += 1;
+                else unassignedPending += 1;
+                continue;
+            }
+            const state = byDocumentType[documentType] || { pending: 0, blocked: 0 };
+            if (isBlocked) state.blocked += 1;
+            else state.pending += 1;
+            byDocumentType[documentType] = state;
+        }
+
+        // ``listDecrypted`` tombstoned permanent unlesbare Queue-Rows, gibt
+        // deren Body aber absichtlich nicht zurueck. Die URL ist bereits ein
+        // bestehendes unverschluesseltes Queue-Indexfeld und reicht, um sie als
+        // Tally-Blocker sichtbar zu halten — ohne Werte oder Typ-ID auszugeben.
+        const rawRows = await db.queue.toArray();
+        for (const row of rawRows) {
+            if (decryptedIds.has(row.id) || !_isTallyQueueUrl(row.url || "")) continue;
+            if (row.localStatus === "conflict" || row.localStatus === "dead") {
+                blocked += 1;
+                unassignedBlocked += 1;
+            }
+        }
+        return {
+            byDocumentType: byDocumentType,
+            pending: pending,
+            blocked: blocked,
+            unassignedPending: unassignedPending,
+            unassignedBlocked: unassignedBlocked,
+        };
+    }
+
     /*
      * Duenne, UI-taugliche Sicht auf die Queue fuer die M8-Dead-Letter-UI
      * (Task 4). `method` kommt aus dem verschluesselten `data`-Feld (muss
@@ -1835,7 +1922,10 @@
             const serverState = (conflict && conflict.serverState) || null;
             if (serverState && serverState.updated_at) {
                 const isStatus = !!(
-                    patterns && patterns.WORKITEM_STATUS && patterns.WORKITEM_STATUS.test(r.url || "")
+                    patterns &&
+                    patterns.WORKITEM_STATUS &&
+                    patterns.matchesPath &&
+                    patterns.matchesPath(patterns.WORKITEM_STATUS, r.url || "")
                 );
                 let intended = null;
                 if (isStatus) {
@@ -2179,6 +2269,7 @@
         discardDeadEvent: discardDeadEvent,
         // Refs #1351/#1384 — generische Queue: Listing + Nutzeraktionen (M8/Task 4)
         listQueueEntries: listQueueEntries,
+        listTallyQueueState: listTallyQueueState,
         coalescePendingQueueByUrl: coalescePendingQueueByUrl,
         retryQueueEntry: retryQueueEntry,
         reapplyQueueEntryWithServerVersion: reapplyQueueEntryWithServerVersion,

@@ -46,6 +46,7 @@
 
     const LOCK_NAME = "anlaufstelle-offline-mutex";
     const CHANNEL_NAME = "anlaufstelle-offline";
+    const SYNC_FINISHED_EVENT = "offline-sync-finished";
 
     const _hasLocks =
         typeof navigator !== "undefined" &&
@@ -58,11 +59,24 @@
     let _channel = null;
     const _listeners = [];
 
+    function _dispatchSyncFinished(facilityRevalidation) {
+        if (typeof window !== "undefined" && window.dispatchEvent) {
+            window.dispatchEvent(
+                new CustomEvent(SYNC_FINISHED_EVENT, {
+                    detail: { facilityRevalidation: facilityRevalidation || "skipped" },
+                })
+            );
+        }
+    }
+
     function _channelObj() {
         if (!_hasBroadcastChannel) return null;
         if (!_channel) {
             _channel = new BroadcastChannel(CHANNEL_NAME);
             _channel.onmessage = function (ev) {
+                if (ev.data && ev.data.type === "sync-finished") {
+                    _dispatchSyncFinished(ev.data.facilityRevalidation);
+                }
                 for (let i = 0; i < _listeners.length; i += 1) {
                     try {
                         _listeners[i](ev.data);
@@ -181,6 +195,7 @@
         }
         // purgeExpired + revalidate NUR mit Session-Key (1:1 wie der heutige
         // offline-store-online-Listener) — ohne Key keine Loeschentscheidung.
+        let facilityRevalidation = "skipped";
         try {
             const cs = window.crypto_session;
             if (cs && cs.ready) await cs.ready();
@@ -192,12 +207,16 @@
                 // SELBEN Lock/Key-Gate revalidieren (billig: 304 bei
                 // unveraendertem Katalog) — damit die Offline-Create-Shell auch
                 // ohne "Person mitnehmen" einen frischen Katalog vorhaelt.
-                if (st.revalidateCachedFacility) await st.revalidateCachedFacility();
+                if (st.revalidateCachedFacility) {
+                    facilityRevalidation = await st.revalidateCachedFacility();
+                }
             }
         } catch (_e) {
             // eslint-disable-next-line no-console
             console.debug("[sync-orchestrator] revalidation skipped");
+            facilityRevalidation = "error";
         }
+        return facilityRevalidation;
     }
 
     let _running = false;
@@ -206,12 +225,21 @@
 
     async function _drive() {
         try {
+            let facilityRevalidation = "skipped";
             do {
                 _rerun = false;
-                await runExclusive(_runSyncSequence);
+                facilityRevalidation = await runExclusive(_runSyncSequence);
             } while (_rerun);
-            // Danach: Cross-Tab-Badges (M8/Task 4) refreshen lassen.
-            broadcast({ type: "sync-finished" });
+            // Same-tab hat beim BroadcastChannel bewusst kein Eigen-Echo.
+            // Deshalb den lokalen Abschluss als DOM-Lifecycle-Event melden;
+            // Feature-Scripts koennen diesen bereits VOR dem Orchestrator
+            // abonnieren. Der verschluesselte Facility-Snapshot ist hier
+            // schon genau einmal innerhalb der Sequenz revalidiert.
+            _dispatchSyncFinished(facilityRevalidation);
+            // Danach: Cross-Tab-Badges (M8/Task 4) refreshen lassen. Der
+            // empfangende Orchestrator spiegelt die Nachricht in dasselbe
+            // DOM-Event seines Tabs.
+            broadcast({ type: "sync-finished", facilityRevalidation: facilityRevalidation });
         } finally {
             _running = false;
             _current = null;
@@ -382,5 +410,6 @@
         _startupRevocationCheck: _startupRevocationCheck,
         _BOOT_REVOCATION_META_KEY: BOOT_REVOCATION_META_KEY,
         _BOOT_REVOCATION_MIN_INTERVAL_MS: BOOT_REVOCATION_MIN_INTERVAL_MS,
+        SYNC_FINISHED_EVENT: SYNC_FINISHED_EVENT,
     };
 })();

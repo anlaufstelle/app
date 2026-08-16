@@ -90,6 +90,23 @@
         );
     }
 
+    function _queueRequestBlockReason(url, method) {
+        const patterns = (typeof self !== "undefined" && self.URL_PATTERNS) || null;
+        if (!patterns || !patterns.isQueueableWriteUrl || !patterns.isQueueableWriteUrl(url)) {
+            return "unsafe-url";
+        }
+        if (!patterns.isQueueableWriteMethod || !patterns.isQueueableWriteMethod(method)) {
+            return "unsafe-method";
+        }
+        if (
+            !patterns.isQueueableWriteRequest ||
+            !patterns.isQueueableWriteRequest(url, method)
+        ) {
+            return "unsafe-request";
+        }
+        return null;
+    }
+
     async function enqueueRequest(url, method, body, headers) {
         if (window.crypto_session && window.crypto_session.ready) {
             await window.crypto_session.ready();
@@ -105,6 +122,15 @@
             err.name = "OfflineUploadError";
             throw err;
         }
+        const blockedReason = _queueRequestBlockReason(url, method);
+        if (blockedReason) {
+            const err = new Error("Queue request is not allowlisted");
+            err.name =
+                blockedReason === "unsafe-method"
+                    ? "UnsafeQueueMethodError"
+                    : "UnsafeQueueUrlError";
+            throw err;
+        }
         // Refs #1466: Sequentielle WORKITEM_STATUS-POSTs derselben Aufgabe
         // (pk == URL) zu EINER Row zusammenfassen (Last-Write-Wins des Offline-
         // Intents). Beide Klicks tragen denselben eingefrorenen Token T0; mit
@@ -112,7 +138,12 @@
         // Phantom-Selbstkonflikt mehr. Nur fuer Status-URLs (idempotenter
         // Ziel-Status); Edits/Anlagen bleiben eigenstaendige Rows.
         const patterns = (typeof self !== "undefined" && self.URL_PATTERNS) || null;
-        if (patterns && patterns.WORKITEM_STATUS && patterns.WORKITEM_STATUS.test(url)) {
+        if (
+            patterns &&
+            patterns.WORKITEM_STATUS &&
+            patterns.matchesPath &&
+            patterns.matchesPath(patterns.WORKITEM_STATUS, url)
+        ) {
             const coalesced = await _store().coalescePendingQueueByUrl(url, method, body, headers);
             if (coalesced) {
                 await _updateQueueCount();
@@ -172,6 +203,17 @@
     // Server einen Wiederholungs-POST nach Verbindungsabbruch als solchen
     // erkennt.
     function _send(record, csrf) {
+        // Zweite Grenze unmittelbar vor dem Netz: Altbestand oder manipulierte
+        // IndexedDB-Zeilen duerfen die Enqueue-Pruefung nie umgehen.
+        const blockedReason = _queueRequestBlockReason(
+            record.url,
+            record.data && record.data.method
+        );
+        if (blockedReason) {
+            const err = new Error("Queue request is not allowlisted");
+            err.name = "UnsafeQueueRequestError";
+            throw err;
+        }
         const headers = Object.assign({}, record.data.headers);
         // Refs #1351: Der Service Worker reicht den Idempotency-Key
         // KLEINGESCHRIEBEN (``x-idempotency-key``) in die Record-Header durch
@@ -250,6 +292,16 @@
 
         for (const record of records) {
             if (!(await _isReady(record))) continue;
+            const blockedReason = _queueRequestBlockReason(
+                record.url,
+                record.data && record.data.method
+            );
+            if (blockedReason) {
+                // Keine URL-/Methoden-/Body-Werte in Klartext-Statusfeldern
+                // ablegen.
+                await _markQueueDead(record, blockedReason, "blocked");
+                continue;
+            }
             try {
                 let response = await _send(record, csrf);
                 // Refs #1332: analog #1330 — ein 403 kann an einem zur

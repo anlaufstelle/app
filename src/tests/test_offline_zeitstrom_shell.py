@@ -83,3 +83,23 @@ class TestOfflineZeitstromShellMarkup:
 
     def test_alpine_script_included(self, body):
         assert "js/offline-zeitstrom.js" in body
+
+    def test_pii_free_tally_scaffold_has_confirmed_pending_and_conflict_link(self, body):
+        assert 'x-data="offlineTally"' in body
+        assert 'data-testid="offline-tally"' in body
+        assert 'x-for="row in rows"' in body
+        assert 'x-text="row.confirmedLabel"' in body
+        assert 'x-text="row.pendingLabel"' in body
+        assert 'href="/offline/conflicts/"' in body
+        assert "bestätigt" in body
+        assert "ausstehend" in body
+        assert "Nicht übertragbar" in body
+
+    def test_tally_shell_contains_no_server_data_or_tally_values(self, body):
+        assert "document_type_name" not in body
+        assert "confirmed_count" not in body
+        assert "data_json" not in body
+        assert "idempotency_key" not in body
+
+    def test_offline_tally_script_included(self, body):
+        assert "js/offline-tally.js" in body

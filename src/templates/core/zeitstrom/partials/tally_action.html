@@ -5,6 +5,8 @@
     <a href="{{ row.tally_increment_url }}"
        class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
        data-testid="tally-increment-{{ row.document_type.pk }}"
+       {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
+       data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}
        hx-get="{{ row.tally_increment_url }}"
        hx-target="#tally-action-{{ row.document_type.pk }}"
        hx-swap="outerHTML"
@@ -22,9 +24,15 @@
         {% for name, value in tally_filter_state.items %}
         <input type="hidden" name="{{ name }}" value="{{ value }}">
         {% endfor %}
+        {% if tally_summary %}
+        <input type="hidden" name="tally_window_start" value="{{ tally_summary.window_start|date:'c' }}">
+        <input type="hidden" name="tally_window_end" value="{{ tally_summary.window_end|date:'c' }}">
+        {% endif %}
     <button
             class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
             data-testid="tally-increment-{{ row.document_type.pk }}"
+            {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
+            data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}
             type="submit"
             aria-label="{% blocktrans with name=row.document_type.name %}Anonymen Kontakt für {{ name }} zählen{% endblocktrans %}">
         +1

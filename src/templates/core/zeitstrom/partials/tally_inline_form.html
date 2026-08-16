@@ -16,6 +16,8 @@
         {% for name, value in tally_filter_state.items %}
         <input type="hidden" name="{{ name }}" value="{{ value }}">
         {% endfor %}
+        <input type="hidden" name="tally_window_start" value="{{ tally_context.tally_window_start }}">
+        <input type="hidden" name="tally_window_end" value="{{ tally_context.tally_window_end }}">
         <div data-testid="tally-form-errors-{{ document_type.pk }}">
             {% include "core/_form_errors.html" with form=tally_form %}
         </div>

@@ -201,6 +201,10 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
 
     @staticmethod
     def _add_tally_action_urls(tally_summary, filter_state, tally_next):
+        tally_context = {
+            "tally_window_start": tally_summary["window_start"].isoformat(),
+            "tally_window_end": tally_summary["window_end"].isoformat(),
+        }
         for row in tally_summary["rows"]:
             row["tally_increment_url"] = "{}?{}".format(
                 reverse("core:tally_increment"),
@@ -209,6 +213,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                         "document_type": row["document_type"].pk,
                         "idempotency_key": row["idempotency_key"],
                         **filter_state,
+                        **tally_context,
                         "next": tally_next,
                     }
                 ),

@@ -22,6 +22,71 @@
         {% trans "Lokale Chronik — nur die offline mitgenommenen Vorgänge, nicht der vollständige Zeitstrom." %}
     </p>
 
+    {# #1912: PII-freies Tally-Geruest. Typen/Felder/Counts kommen erst nach   #}
+    {# AES-GCM-Decrypt aus Facility-v2; Queue-Werte werden nie gerendert.      #}
+    <section x-data="offlineTally" x-init="load"
+             data-testid="offline-tally"
+             data-label-confirmed="{% trans 'bestätigt' %}"
+             data-label-pending="{% trans 'ausstehend' %}"
+             data-label-blocked="{% trans 'nicht übertragbar' %}"
+             data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
+             class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden">
+        <div class="px-4 py-3 border-b border-subtle">
+            <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Strichliste" %}</h2>
+        </div>
+        <div x-show="loading" x-cloak class="px-4 py-3 text-[13px] text-ink-muted">
+            {% trans "Lade Offline-Strichliste..." %}
+        </div>
+        <div x-show="isUnavailable" x-cloak class="px-4 py-3 text-[13px] text-ink-muted">
+            {% trans "Strichliste offline nicht verfügbar — zuerst online aktualisieren." %}
+        </div>
+        <div x-show="hasRows" x-cloak class="divide-y divide-subtle">
+            <template x-for="row in rows" :key="row.documentTypeId">
+                <div class="px-4 py-3" data-testid="offline-tally-row">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <span class="text-[13px] font-semibold text-ink" x-text="row.documentTypeName"></span>
+                        <span class="text-[13px] font-bold text-ink tabular-nums">
+                            <span x-text="row.confirmedLabel"></span>
+                            <span aria-hidden="true"> · </span>
+                            <span x-text="row.pendingLabel"></span>
+                        </span>
+                        <a x-show="row.hasBlocked" x-cloak :href="row.conflictHref"
+                           class="text-[12px] font-semibold text-red-700 underline"
+                           x-text="row.blockedLabel"></a>
+                    </div>
+                    <form @submit.prevent="submit"
+                          :data-document-type="row.documentTypeId"
+                          :data-tally-date="row.shiftDate"
+                          :data-tally-time-filter="row.timeFilterId"
+                          :data-tally-window-start="row.windowStart"
+                          :data-tally-window-end="row.windowEnd"
+                          class="mt-2 flex flex-wrap items-end gap-2">
+                        <template x-for="field in row.fields" :key="field.slug">
+                            <label class="text-[12px] font-semibold text-ink-soft">
+                                <span class="block mb-1" x-text="field.name"></span>
+                                <input type="number" step="1" required
+                                       :name="field.slug" :min="field.minValue" :max="field.maxValue"
+                                       class="rounded-md border border-subtle bg-surface px-2 py-1.5 text-[13px] w-28">
+                            </label>
+                        </template>
+                        <button type="submit" :disabled="submitting"
+                                class="btn-primary min-h-[36px] px-3 rounded-md text-[13px] font-semibold">
+                            {% trans "Kontakt zählen" %}
+                        </button>
+                    </form>
+                </div>
+            </template>
+        </div>
+        <a x-show="hasPendingOutsideRows" x-cloak :href="conflictHref"
+           class="block px-4 py-2 text-[12px] font-semibold text-ink-muted underline"
+           x-text="pendingOutsideRowsLabel"></a>
+        <a x-show="hasBlocked" x-cloak :href="conflictHref"
+           class="block px-4 py-2 text-[12px] font-semibold text-red-700 underline"
+           data-testid="offline-tally-blocked" x-text="blockedLabel">{% trans "Nicht übertragbar" %}</a>
+        <p x-show="hasFeedback" x-cloak role="alert" class="px-4 py-2 text-[12px] text-red-700"
+           x-text="feedback"></p>
+    </section>
+
     {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}
     <div x-show="loading" x-cloak class="py-8 text-center text-ink-muted" data-testid="offline-zeitstrom-loading">
         {% trans "Lade Offline-Daten..." %}
@@ -78,4 +143,10 @@
 {# Ausgelagert wegen CSP (Refs #672). W3-E nimmt die Datei in den SW-Precache    #}
 {# (APP_SHELL) auf und macht den Offline-Flip fuer /.                           #}
 <script src="{% static 'js/offline-zeitstrom.js' %}"></script>
+<script src="{% static 'js/offline-tally.js' %}"
+        data-label-confirmed="{% trans 'bestätigt' %}"
+        data-label-pending="{% trans 'ausstehend' %}"
+        data-label-blocked="{% trans 'nicht übertragbar' %}"
+        data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
+        data-label-count-contact="{% trans 'Kontakt zählen' %}"></script>
 {% endblock %}

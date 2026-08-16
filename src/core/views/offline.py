@@ -52,6 +52,13 @@ def _bundle_etag(bundle: dict) -> str:
     verpasst) den Hash aendert.
     """
     canonical_source = {k: v for k, v in bundle.items() if k not in _ETAG_VOLATILE_FIELDS}
+    # #1912: ``tally.snapshot_at`` dokumentiert den Zeitpunkt des
+    # autoritativen Snapshots, ist aber wie ``generated_at`` pro Request neu.
+    # Nur dieses verschachtelte volatile Feld ausblenden; Fenster, Counts,
+    # Policy-Metadaten und Schema bleiben voll ETag-wirksam.
+    tally = canonical_source.get("tally")
+    if isinstance(tally, dict):
+        canonical_source["tally"] = {key: value for key, value in tally.items() if key != "snapshot_at"}
     canonical = json.dumps(canonical_source, sort_keys=True, ensure_ascii=False, default=str)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return f'"{digest}"'

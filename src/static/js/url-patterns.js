@@ -32,14 +32,26 @@
     // ebenso wenig faengt (kein /clients/-Segment).
     var CONFLICT_REVIEW_RE = new RegExp("/offline/conflicts/(" + UUID + ")/(?:$|\\?)", "i");
     self.URL_PATTERNS = {
-        EVENT_NEW: /\/events\/new\//,
-        EVENT_EDIT: new RegExp("/events/" + UUID + "/edit/", "i"),
-        WORKITEM_NEW: /\/workitems\/new\//,
-        WORKITEM_EDIT: new RegExp("/workitems/" + UUID + "/edit/", "i"),
+        // Schreibpfade sind auf den VOLLSTAENDIGEN pathname geankert. Der
+        // Service Worker prueft vor diesen Regexen zusaetzlich die Origin.
+        // Dadurch matchen weder /partials/tally/increment/extra/ noch
+        // /partials/tally/increment-evil/; auch
+        // https://evil.example/partials/tally/increment/ bleibt ausgeschlossen.
+        EVENT_NEW: /^\/events\/new\/$/,
+        EVENT_EDIT: new RegExp("^/events/" + UUID + "/edit/$", "i"),
+        WORKITEM_NEW: /^\/workitems\/new\/$/,
+        WORKITEM_EDIT: new RegExp("^/workitems/" + UUID + "/edit/$", "i"),
         // Refs #1419: Status-Uebergaenge (Uebernehmen/Erledigt/Verwerfen/
         // Zuruecksetzen) — HTMX-POSTs der Inbox-Karten bzw. Formular-POSTs
         // der Detailseite, unter dem /partials/-Praefix (urls.py).
-        WORKITEM_STATUS: new RegExp("/partials/workitems/" + UUID + "/status/", "i"),
+        WORKITEM_STATUS: new RegExp("^/partials/workitems/" + UUID + "/status/$", "i"),
+        // #1912: einziger Strichlisten-Schreibpfad; GET und POST teilen die
+        // Route, gequeued werden im SW weiterhin ausschliesslich POST/PUT.
+        TALLY_INCREMENT: /^\/partials\/tally\/increment\/$/,
+        // Refs #1476: Die Konfliktliste legt diesen Audit-POST direkt in die
+        // verschluesselte Queue. Er muss dieselbe exakte Replay-Policy
+        // durchlaufen wie vom SW abgefangene Schreibrequests.
+        OFFLINE_AUDIT_NOTE_EXPORT: /^\/api\/v1\/offline\/audit\/note-export\/$/,
         CLIENT_DETAIL: CLIENT_DETAIL_RE,
         CLIENT_LIST: CLIENT_LIST_RE,
         WORKITEM_LIST: WORKITEM_LIST_RE,
@@ -80,7 +92,43 @@
         self.URL_PATTERNS.WORKITEM_NEW,
         self.URL_PATTERNS.WORKITEM_EDIT,
         self.URL_PATTERNS.WORKITEM_STATUS,
+        self.URL_PATTERNS.TALLY_INCREMENT,
+        self.URL_PATTERNS.OFFLINE_AUDIT_NOTE_EXPORT,
     ];
+    self.URL_PATTERNS.matchesPath = function (pattern, url) {
+        try {
+            return pattern.test(new URL(url, self.location.origin).pathname);
+        } catch (e) {
+            return false;
+        }
+    };
+    self.URL_PATTERNS.isQueueableWriteUrl = function (url) {
+        try {
+            var parsed = new URL(url, self.location.origin);
+            // Origin-Gate bewusst VOR den exakten Path-Regexen. Diese Policy
+            // gilt gemeinsam fuer SW, Enqueue und Replay.
+            if (parsed.origin !== self.location.origin) return false;
+            return self.URL_PATTERNS.QUEUE_PATTERNS.some(function (pattern) {
+                return pattern.test(parsed.pathname);
+            });
+        } catch (e) {
+            return false;
+        }
+    };
+    self.URL_PATTERNS.isQueueableWriteMethod = function (method) {
+        try {
+            var normalized = String(method).toUpperCase();
+            return normalized === "POST" || normalized === "PUT";
+        } catch (e) {
+            return false;
+        }
+    };
+    self.URL_PATTERNS.isQueueableWriteRequest = function (url, method) {
+        return (
+            self.URL_PATTERNS.isQueueableWriteMethod(method) &&
+            self.URL_PATTERNS.isQueueableWriteUrl(url)
+        );
+    };
     self.URL_PATTERNS.extractClientPk = function (url) {
         var m = CLIENT_DETAIL_RE.exec(url);
         return m ? m[1] : null;

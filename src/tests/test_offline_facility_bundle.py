@@ -21,8 +21,10 @@ import json
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
-from core.models import AuditLog, DocumentType, DocumentTypeField, FieldTemplate
+from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldCondition, FieldTemplate
+from core.services.events import create_event
 from core.services.system import (
     BUNDLE_TTL_SECONDS,
     FACILITY_BUNDLE_SCHEMA_VERSION,
@@ -113,6 +115,7 @@ class TestBuildFacilityOfflineBundleService:
             "expires_at",
             "document_types",
             "assignable_users",
+            "tally",
         }
 
     def test_bundle_lists_active_document_types(self, facility, staff_user, doc_type_contact):
@@ -364,6 +367,205 @@ class TestOfflineFacilityBundleView:
         get = OfflineFacilityBundleView.get
         assert hasattr(get, "__wrapped__"), "get() should be wrapped by ratelimit"
         assert RATELIMIT_OFFLINE_BUNDLE == "120/h"
+
+
+@pytest.mark.django_db
+class TestFacilityOfflineTallySnapshot:
+    """#1912: Tally-Daten bleiben ein enges Derivat der zentralen Policy."""
+
+    @staticmethod
+    def _number_type(facility, *, name="Zahlenzählung"):
+        document_type = DocumentType.objects.create(
+            facility=facility,
+            name=name,
+            tally_enabled=True,
+        )
+        required = FieldTemplate.objects.create(
+            facility=facility,
+            name=f"{name} Anzahl",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            is_required=True,
+            min_value=0,
+            max_value=25,
+        )
+        DocumentTypeField.objects.create(
+            document_type=document_type,
+            field_template=required,
+            sort_order=1,
+        )
+        optional = FieldTemplate.objects.create(
+            facility=facility,
+            name=f"{name} optionale Zahl",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            is_required=False,
+            min_value=-100,
+            max_value=100,
+        )
+        DocumentTypeField.objects.create(
+            document_type=document_type,
+            field_template=optional,
+            sort_order=2,
+        )
+        return document_type, required, optional
+
+    def test_schema_v2_contains_authoritative_window_and_confirmed_counts(
+        self,
+        facility,
+        staff_user,
+        doc_type_contact,
+    ):
+        for _ in range(2):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={},
+                is_anonymous=True,
+            )
+
+        bundle = build_facility_offline_bundle(staff_user, facility)
+
+        assert bundle["schema_version"] == FACILITY_BUNDLE_SCHEMA_VERSION == 2
+        assert set(bundle["tally"]) == {
+            "snapshot_at",
+            "shift_date",
+            "time_filter",
+            "window_start",
+            "window_end",
+            "rows",
+        }
+        tally = bundle["tally"]
+        assert tally["snapshot_at"] == bundle["generated_at"]
+        assert tally["window_start"] < tally["window_end"]
+        assert tally["shift_date"]
+        row = next(row for row in tally["rows"] if row["document_type_id"] == str(doc_type_contact.pk))
+        assert row == {
+            "document_type_id": str(doc_type_contact.pk),
+            "document_type_name": doc_type_contact.name,
+            "mode": "direct",
+            "fields": [],
+            "confirmed_count": 2,
+        }
+
+    def test_number_mode_ships_only_required_visible_number_bounds(self, facility, staff_user):
+        document_type, required, optional = self._number_type(facility)
+
+        bundle = build_facility_offline_bundle(staff_user, facility)
+
+        row = next(row for row in bundle["tally"]["rows"] if row["document_type_id"] == str(document_type.pk))
+        assert row["mode"] == "number"
+        assert row["fields"] == [
+            {
+                "slug": required.slug,
+                "name": required.name,
+                "min_value": 0,
+                "max_value": 25,
+            }
+        ]
+        assert optional.slug not in json.dumps(row)
+        assert set(row) == {
+            "document_type_id",
+            "document_type_name",
+            "mode",
+            "fields",
+            "confirmed_count",
+        }
+
+    def test_ineligible_types_and_rejection_metadata_never_leave_tally_snapshot(self, facility, staff_user):
+        eligible, _, _ = self._number_type(facility, name="Erlaubt")
+        conditional, conditional_field, _ = self._number_type(facility, name="Bedingt verboten")
+        source = FieldTemplate.objects.create(
+            facility=facility,
+            name="Geheime Bedingungsquelle",
+            field_type=FieldTemplate.FieldType.NUMBER,
+        )
+        source_assignment = DocumentTypeField.objects.create(
+            document_type=conditional,
+            field_template=source,
+            sort_order=0,
+        )
+        target_assignment = conditional.fields.get(field_template=conditional_field)
+        FieldCondition.objects.create(
+            target_field=target_assignment,
+            depends_on_field=source_assignment,
+            operator=FieldCondition.Operator.GREATER_THAN,
+            value=0,
+        )
+        restricted = DocumentType.objects.create(
+            facility=facility,
+            name="Nur Leitung",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            tally_enabled=True,
+        )
+        disabled = DocumentType.objects.create(
+            facility=facility,
+            name="Nicht freigegeben",
+            tally_enabled=False,
+        )
+
+        serialized = json.dumps(build_facility_offline_bundle(staff_user, facility)["tally"], default=str)
+
+        assert str(eligible.pk) in serialized
+        for forbidden in (conditional, restricted, disabled):
+            assert str(forbidden.pk) not in serialized
+            assert forbidden.name not in serialized
+        assert "conditions" not in serialized
+        assert "reasons" not in serialized
+        assert "Geheime Bedingungsquelle" not in serialized
+
+    def test_etag_changes_for_confirmed_visible_tally_count(self, client, facility, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        first = client.get(reverse("core:offline_facility_bundle"))
+
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            created_by=staff_user,
+            occurred_at=timezone.now(),
+            is_anonymous=True,
+        )
+        second = client.get(reverse("core:offline_facility_bundle"), HTTP_IF_NONE_MATCH=first.headers["ETag"])
+
+        assert second.status_code == 200
+        assert second.headers["ETag"] != first.headers["ETag"]
+        row = next(row for row in second.json()["tally"]["rows"] if row["document_type_id"] == str(doc_type_contact.pk))
+        assert row["confirmed_count"] == 1
+
+    def test_unchanged_tally_snapshot_returns_304(self, client, staff_user, doc_type_contact):
+        """Das volatile Snapshot-Datum darf den relevanten ETag nicht aendern."""
+        client.force_login(staff_user)
+        first = client.get(reverse("core:offline_facility_bundle"))
+        assert any(row["document_type_id"] == str(doc_type_contact.pk) for row in first.json()["tally"]["rows"])
+
+        second = client.get(
+            reverse("core:offline_facility_bundle"),
+            HTTP_IF_NONE_MATCH=first.headers["ETag"],
+        )
+
+        assert second.status_code == 304
+        assert second.headers["ETag"] == first.headers["ETag"]
+
+    def test_etag_ignores_tally_changes_invisible_to_role(self, client, facility, assistant_user, lead_user):
+        restricted = DocumentType.objects.create(
+            facility=facility,
+            name="Unsichtbare Hochzählung",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            tally_enabled=True,
+        )
+        client.force_login(assistant_user)
+        first = client.get(reverse("core:offline_facility_bundle"))
+
+        Event.objects.create(
+            facility=facility,
+            document_type=restricted,
+            created_by=lead_user,
+            occurred_at=timezone.now(),
+            is_anonymous=True,
+        )
+        second = client.get(reverse("core:offline_facility_bundle"), HTTP_IF_NONE_MATCH=first.headers["ETag"])
+
+        assert second.status_code == 304
 
 
 @pytest.mark.django_db

@@ -50,7 +50,10 @@ BUNDLE_SCHEMA_VERSION = 2
 # Bundle. Bewusst UNABHAENGIG von ``BUNDLE_SCHEMA_VERSION`` — Klient- und
 # Facility-Bundle evolvieren getrennt, ein Layout-Wechsel im einen darf den
 # Cache des anderen nicht invalidieren.
-FACILITY_BUNDLE_SCHEMA_VERSION = 1
+# v1->v2 (#1912): enger, policy-abgeleiteter Tally-Snapshot samt bestaetigtem
+# Serverstand und autoritativem Live-Fenster. Alt-v1 wird im Offline-Store
+# fail-closed verworfen.
+FACILITY_BUNDLE_SCHEMA_VERSION = 2
 
 
 def _serialize_field_template(field_template) -> dict[str, Any]:
@@ -423,7 +426,43 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
 
     is_staff_or_above = getattr(user, "is_staff_or_above", False)
 
+    # #1912: Der Offline-Tally-Vertrag wird NICHT aus dem breiten Create-
+    # Katalog oben abgeleitet. ``build_tally_summary`` ist derselbe zentrale
+    # Policy-/Zaehlerpfad wie das Online-Panel und liefert ausschliesslich fuer
+    # diese Rolle geeignete Typen. Die an den DocumentType-Objekten
+    # vorgeprefetchten Policy-Zuordnungen reichen fuer die schmale
+    # Feldserialisierung aus; optionale/versteckte/sensitive Felder,
+    # Bedingungen und Ablehnungsgruende verlassen den Server nicht.
+    from core.services.events import build_tally_summary, evaluate_tally_eligibility
+
+    tally_summary = build_tally_summary(facility, user)
     generated_at = timezone.now()
+    tally_rows = []
+    for row in tally_summary["rows"]:
+        eligibility = evaluate_tally_eligibility(row["document_type"], user)
+        # Defense-in-depth gegen einen kuenftigen Drift zwischen Summary und
+        # Einzeltyp-Policy: ein nicht mehr geeigneter Typ wird nie serialisiert.
+        if not eligibility.eligible or eligibility.mode is None:
+            continue
+        tally_rows.append(
+            {
+                "document_type_id": str(row["document_type"].pk),
+                "document_type_name": row["document_type"].name,
+                "mode": eligibility.mode.value,
+                "fields": [
+                    {
+                        "slug": assignment.field_template.slug,
+                        "name": assignment.field_template.name,
+                        "min_value": assignment.field_template.min_value,
+                        "max_value": assignment.field_template.max_value,
+                    }
+                    for assignment in eligibility.required_number_fields
+                ],
+                "confirmed_count": row["count"],
+            }
+        )
+
+    time_filter = tally_summary["time_filter"]
 
     return {
         "schema_version": FACILITY_BUNDLE_SCHEMA_VERSION,
@@ -435,4 +474,14 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
         # legen WorkItems an/weisen zu) — begrenzt die Roster-Exposition und
         # speist den Staff+-Gate der Offline-WorkItem-Shell.
         "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
+        "tally": {
+            "snapshot_at": generated_at.isoformat(),
+            "shift_date": tally_summary["shift_date"].isoformat(),
+            "time_filter": (
+                {"id": str(time_filter.pk), "label": time_filter.label} if time_filter is not None else None
+            ),
+            "window_start": tally_summary["window_start"].isoformat(),
+            "window_end": tally_summary["window_end"].isoformat(),
+            "rows": tally_rows,
+        },
     }

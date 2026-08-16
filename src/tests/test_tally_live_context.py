@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime, time
 from unittest.mock import Mock, patch
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.db import connection
@@ -10,7 +11,12 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, TimeFilter  # noqa: I001
-from core.services.events import TallyLiveContext, build_tally_summary, current_tally_context
+from core.services.events import (
+    TallyLiveContext,
+    build_tally_summary,
+    current_tally_context,
+    tally_request_matches_live_context,
+)
 from tests._tally_helpers import post_tally
 
 LOCAL_NIGHT_INSTANT = datetime(2026, 6, 21, 23, 30, tzinfo=UTC)
@@ -40,6 +46,24 @@ def _number_tally_type(facility):
 
 @pytest.mark.django_db
 class TestTallyLiveContext:
+    def test_iso_window_marker_matches_same_ambiguous_dst_instant(self, facility):
+        berlin = ZoneInfo("Europe/Berlin")
+        context = TallyLiveContext(
+            time_filter=None,
+            shift_date=date(2026, 10, 25),
+            window_start=datetime(2026, 10, 25, 2, 0, tzinfo=berlin, fold=0),
+            window_end=datetime(2026, 10, 25, 3, 0, tzinfo=berlin),
+        )
+        params = {
+            "tally_window_start": context.window_start.isoformat(),
+            "tally_window_end": context.window_end.isoformat(),
+        }
+
+        with patch("core.services.events.tally.current_tally_context", return_value=context):
+            matches = tally_request_matches_live_context(facility, params)
+
+        assert matches is True
+
     def test_night_shift_uses_local_previous_shift_date_and_exact_window(self, facility):
         night_shift = _night_shift(facility)
 
@@ -100,6 +124,80 @@ class TestTallyLiveContext:
 
 @pytest.mark.django_db
 class TestTallyLiveContextView:
+    def test_marked_offline_all_payload_is_rejected_after_shift_window_changes(
+        self,
+        client,
+        facility,
+        staff_user,
+    ):
+        TimeFilter.objects.create(
+            facility=facility,
+            label="Frühdienst",
+            start_time=time(8, 0),
+            end_time=time(16, 0),
+        )
+        document_type = DocumentType.objects.create(facility=facility, name="Direkt", tally_enabled=True)
+        client.force_login(staff_user)
+        before_shift = datetime(2026, 6, 22, 5, 59, tzinfo=UTC)  # 07:59 lokal
+        after_shift = datetime(2026, 6, 22, 6, 1, tzinfo=UTC)  # 08:01 lokal
+        with patch("django.utils.timezone.now", return_value=before_shift):
+            snapshot = current_tally_context(facility)
+
+        stale_payload = {
+            "document_type": document_type.pk,
+            "date": "2026-06-22",
+            "time_filter": "all",
+            "tally_window_start": snapshot.window_start.isoformat(),
+            "tally_window_end": snapshot.window_end.isoformat(),
+        }
+        with patch("django.utils.timezone.now", return_value=after_shift):
+            stale = post_tally(client, stale_payload, HTTP_HX_REQUEST="true")
+            fresh_unmarked = post_tally(
+                client,
+                {
+                    "document_type": document_type.pk,
+                    "date": "2026-06-22",
+                    "time_filter": "all",
+                },
+                HTTP_HX_REQUEST="true",
+            )
+
+        assert stale.status_code == 400
+        assert fresh_unmarked.status_code == 200
+        assert Event.objects.filter(document_type=document_type).count() == 1
+
+    def test_live_panel_and_number_form_carry_exact_window_marker(self, client, facility, staff_user):
+        direct_type = DocumentType.objects.create(facility=facility, name="Direkt", tally_enabled=True)
+        number_type = _number_tally_type(facility)
+        client.force_login(staff_user)
+
+        with patch("django.utils.timezone.now", return_value=LOCAL_NIGHT_INSTANT):
+            page = client.get(reverse("core:zeitstrom"))
+            summary = page.context["tally_summary"]
+            marker = {
+                "tally_window_start": summary["window_start"].isoformat(),
+                "tally_window_end": summary["window_end"].isoformat(),
+            }
+            number_form = client.get(
+                reverse("core:tally_increment"),
+                {
+                    "document_type": number_type.pk,
+                    "date": summary["shift_date"].isoformat(),
+                    "time_filter": str(summary["time_filter"].pk) if summary["time_filter"] else "all",
+                    **marker,
+                },
+            )
+
+        content = page.content.decode()
+        for document_type in (direct_type, number_type):
+            action = content[content.index(f"tally-increment-{document_type.pk}") :]
+            action = action[: action.index("</button>")]
+            assert marker["tally_window_start"] in action
+            assert marker["tally_window_end"] in action
+        form_content = number_form.content.decode()
+        assert f'name="tally_window_start" value="{marker["tally_window_start"]}"' in form_content
+        assert f'name="tally_window_end" value="{marker["tally_window_end"]}"' in form_content
+
     def test_historical_date_hides_the_tally_panel(self, client, facility, staff_user):
         DocumentType.objects.create(facility=facility, name="Kontakt", tally_enabled=True)
         client.force_login(staff_user)

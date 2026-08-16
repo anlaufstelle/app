@@ -252,4 +252,11 @@
 {% block extra_js %}
 <script src="{% static 'js/time-filter-tabs.js' %}"></script>
 <script src="{% static 'js/zeitstrom-filter-state.js' %}"></script>
+{# #1912: progressive Pending-/Blocked-Anzeige und lokales Zahlenformular im warm geladenen Zeitstrom. #}
+<script src="{% static 'js/offline-tally.js' %}"
+        data-label-confirmed="{% trans 'bestätigt' %}"
+        data-label-pending="{% trans 'ausstehend' %}"
+        data-label-blocked="{% trans 'nicht übertragbar' %}"
+        data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
+        data-label-count-contact="{% trans 'Kontakt zählen' %}"></script>
 {% endblock %}
