@@ -8,6 +8,7 @@ Zeitfenster ist die gerade laufende Schicht (falls ein ``TimeFilter`` den
 aktuellen Zeitpunkt abdeckt), sonst der komplette heutige Tag.
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import StrEnum
@@ -20,6 +21,9 @@ from django.utils.translation import gettext_lazy as _
 from core.models import DocumentType, DocumentTypeField, Event, FieldCondition, FieldTemplate, TimeFilter
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_document_type, user_can_see_field
 from core.services.events.feed import get_time_range
+from core.services.events.idempotency import normalize_idempotency_key
+
+TALLY_IDEMPOTENCY_SCOPE = "tally_increment"
 
 
 class TallyMode(StrEnum):
@@ -289,6 +293,14 @@ def tally_request_matches_live_context(facility, params) -> bool:
     return parsed_date is None or parsed_date == timezone.localdate()
 
 
+def new_tally_idempotency_key() -> str:
+    """Erzeuge einen serverseitigen, zentral normalisierten Aktionsschlüssel."""
+    key = normalize_idempotency_key(uuid.uuid4().hex)
+    if key is None:  # pragma: no cover - UUID-hex erfüllt den zentralen Vertrag per Definition
+        raise RuntimeError("Servergenerierter Tally-Idempotenzschlüssel ist ungültig")
+    return key
+
+
 def tally_document_types(facility, user):
     """Für die Strichliste anbietbare Dokumentationstypen.
 
@@ -347,6 +359,7 @@ def build_tally_summary(facility, user, *, context: TallyLiveContext | None = No
             "document_type": eligibility.document_type,
             "count": counts.get(eligibility.document_type.pk, 0),
             "requires_number_input": eligibility.mode is TallyMode.NUMBER,
+            "idempotency_key": new_tally_idempotency_key(),
         }
         for eligibility in eligibilities
     ]

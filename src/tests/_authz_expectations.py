@@ -693,9 +693,10 @@ EXPECTATIONS = (
     E("core:client_fields_partial", "partials-htmx", get=STAFF_PLUS),
     E("core:event_fields_partial", "partials-htmx", get=ASSISTANT_PLUS),
     # Strichlisten-„+1" (Refs #1349/#1906): document_type kommt in Query/POST
-    # statt als URL-kwarg, daher liefern die Matrix-Leerrequests für berechtigte
-    # Rollen 404. Scoping/IDOR wird in den Tally-Tests body-basiert geprüft.
-    E("core:tally_increment", "partials-htmx", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS, extra_ok=(404,)),
+    # statt als URL-kwarg: GET-Leerrequests liefern 404, POST-Leerrequests seit
+    # #1909 wegen des zwingenden Idempotenz-Schlüssels bereits 400. Scoping/IDOR
+    # wird in den Tally-Tests body-basiert geprüft.
+    E("core:tally_increment", "partials-htmx", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS, extra_ok=(400, 404)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
     # M2 P8 (Refs #1058): STAFF_PLUS — bewusst enger als das Event-Partial,
     # analog ``client_fields_partial``. Faelle anlegen/bearbeiten ist STAFF_PLUS

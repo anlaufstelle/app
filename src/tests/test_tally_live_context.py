@@ -11,6 +11,7 @@ from django.urls import reverse
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, TimeFilter  # noqa: I001
 from core.services.events import TallyLiveContext, build_tally_summary, current_tally_context
+from tests._tally_helpers import post_tally
 
 LOCAL_NIGHT_INSTANT = datetime(2026, 6, 21, 23, 30, tzinfo=UTC)
 
@@ -252,8 +253,8 @@ class TestTallyLiveContextView:
                 reverse("core:tally_increment"),
                 {"document_type": number_type.pk, **params},
             )
-            post_response = client.post(
-                reverse("core:tally_increment"),
+            post_response = post_tally(
+                client,
                 {"document_type": direct_type.pk, **params},
                 HTTP_HX_REQUEST="true",
             )

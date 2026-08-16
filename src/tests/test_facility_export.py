@@ -87,6 +87,17 @@ class TestSchemaShape:
         export = build_facility_export(facility)
         assert set(export["entities"].keys()) == {"clients", "events", "cases", "episodes", "goals", "work_items"}
 
+    def test_event_transport_metadata_is_not_exported(self, facility, sample_event):
+        sample_event.idempotency_key = "facility-export-internal-key"
+        sample_event.idempotency_payload_hash = "b" * 64
+        sample_event.save(update_fields=["idempotency_key", "idempotency_payload_hash"])
+
+        export = build_facility_export(facility)
+        entry = next(event for event in export["entities"]["events"] if event["id"] == str(sample_event.pk))
+
+        assert "idempotency_key" not in entry
+        assert "idempotency_payload_hash" not in entry
+
 
 @pytest.mark.django_db
 class TestConfiguration:

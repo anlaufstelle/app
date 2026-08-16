@@ -31,6 +31,7 @@ from core.services.dashboard import (
     list_templates_for_user,
 )
 from core.services.events import (
+    TALLY_IDEMPOTENCY_SCOPE,
     apply_attachment_changes,
     build_attachment_context,
     build_event_detail_context,
@@ -41,13 +42,16 @@ from core.services.events import (
     filtered_server_data_json,
     finalize_staged_files,
     get_idempotent_result,
+    has_idempotency_payload_mismatch,
     merge_update_payload,
+    new_tally_idempotency_key,
     normalize_idempotency_key,
     payload_fingerprint,
     remember_idempotent_result,
     remove_restricted_fields,
     request_deletion,
     resolve_default_document_type,
+    resolve_idempotency_key,
     soft_delete_event,
     split_file_and_text_data,
     tally_request_matches_live_context,
@@ -269,21 +273,19 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 # Letter-UI; Rationale 422 vs. 409 im Helper-Docstring).
                 # Legacy-Eintraege (payload_hash is None, Cache-Wert aus der
                 # Zeit vor N14) passieren ohne Hash-Pruefung.
-                if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
+                if has_idempotency_payload_mismatch(hit.payload_hash, idem_payload_hash):
                     return _idempotency_mismatch_response()
                 return redirect("core:event_detail", pk=hit.pk)
-            # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
-            # sonst legt der Replay nach Cache-Verlust ein Duplikat an. Die
-            # DB-Spalte traegt bewusst KEINEN Payload-Hash (N14-Grenze, siehe
-            # Modul-Docstring idempotency.py): Treffer ohne Payload-Pruefung.
-            existing_pk = (
-                Event.objects.for_facility(facility)
-                .filter(created_by=request.user, idempotency_key=idem_key)
-                .values_list("pk", flat=True)
-                .first()
+            # R5/#1909: Cache-Eviction/Neustart ueberlebt der DB-Backstop;
+            # neue Events tragen dort auch den Payload-Hash. Legacy-NULL bleibt
+            # ein kompatibler Treffer ohne Hash-Prüfung.
+            existing = (
+                Event.objects.for_facility(facility).filter(created_by=request.user, idempotency_key=idem_key).first()
             )
-            if existing_pk:
-                return redirect("core:event_detail", pk=existing_pk)
+            if existing:
+                if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, idem_payload_hash):
+                    return _idempotency_mismatch_response()
+                return redirect("core:event_detail", pk=existing.pk)
 
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
@@ -420,6 +422,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     client=client,
                     case=case,
                     idempotency_key=idem_key,
+                    idempotency_payload_hash=idem_payload_hash,
                 )
                 finalize_staged_files(event, request.user, staged_by_slug, doc_type)
             committed = True
@@ -454,6 +457,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     .first()
                 )
                 if existing:
+                    if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, idem_payload_hash):
+                        return _idempotency_mismatch_response()
                     return redirect("core:event_detail", pk=existing.pk)
             raise
         finally:
@@ -537,6 +542,20 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         return eligibility, None
 
     @staticmethod
+    def _success_response(request, facility):
+        """Liefere für Erstschreibvorgang und Replay dieselbe HTMX-Erfolgsform."""
+        response = render(
+            request,
+            "core/zeitstrom/partials/tally_panel.html",
+            {"tally_summary": build_tally_summary(facility, request.user)},
+        )
+        # Für das Zahlenformular ist das Retarget zwingend; beim direkten +1
+        # entspricht es dem bereits gesetzten hx-target und bleibt wirkungsgleich.
+        response["HX-Retarget"] = "#tally-panel"
+        response["HX-Reswap"] = "outerHTML"
+        return response
+
+    @staticmethod
     def _live_context_error(request, params):
         if tally_request_matches_live_context(request.current_facility, params):
             return None
@@ -567,12 +586,15 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 {"row": row},
             )
 
+        idempotency_key = normalize_idempotency_key(request.GET.get("idempotency_key"))
+
         return render(
             request,
             "core/zeitstrom/partials/tally_inline_form.html",
             {
                 "document_type": doc_type,
                 "tally_form": TallyNumberDataForm(eligibility=eligibility),
+                "idempotency_key": idempotency_key or new_tally_idempotency_key(),
             },
         )
 
@@ -580,6 +602,30 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         facility = request.current_facility
         if error_response := self._live_context_error(request, request.POST):
             return error_response
+        try:
+            idempotency_key = resolve_idempotency_key(
+                request.headers.get("X-Idempotency-Key"),
+                request.POST.get("idempotency_key"),
+                required=True,
+            )
+        except ValueError:
+            return HttpResponseBadRequest(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."))
+
+        payload_hash = payload_fingerprint(request)
+        hit = get_idempotent_result(TALLY_IDEMPOTENCY_SCOPE, request.user.pk, idempotency_key)
+        if hit is not None:
+            if has_idempotency_payload_mismatch(hit.payload_hash, payload_hash):
+                return _idempotency_mismatch_response()
+            return self._success_response(request, facility)
+        existing = (
+            Event.objects.for_facility(facility)
+            .filter(created_by=request.user, idempotency_key=idempotency_key)
+            .first()
+        )
+        if existing is not None:
+            if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, payload_hash):
+                return _idempotency_mismatch_response()
+            return self._success_response(request, facility)
         eligibility, error_response = self._resolve_document_type(request, request.POST)
         if error_response is not None:
             return error_response
@@ -593,28 +639,46 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 return render(
                     request,
                     "core/zeitstrom/partials/tally_inline_form.html",
-                    {"document_type": doc_type, "tally_form": tally_form},
+                    {
+                        "document_type": doc_type,
+                        "tally_form": tally_form,
+                        "idempotency_key": idempotency_key,
+                    },
                 )
             data_json = tally_form.cleaned_data
 
-        create_event(
-            facility=facility,
-            user=request.user,
-            document_type=doc_type,
-            occurred_at=timezone.now(),
-            data_json=data_json,
-            is_anonymous=True,
-        )
+        try:
+            event = create_event(
+                facility=facility,
+                user=request.user,
+                document_type=doc_type,
+                occurred_at=timezone.now(),
+                data_json=data_json,
+                is_anonymous=True,
+                idempotency_key=idempotency_key,
+                idempotency_payload_hash=payload_hash,
+            )
+        except IntegrityError as exc:
+            if "event_idem_key_per_user_uniq" in str(exc):
+                existing = (
+                    Event.objects.for_facility(facility)
+                    .filter(created_by=request.user, idempotency_key=idempotency_key)
+                    .first()
+                )
+                if existing is not None:
+                    if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, payload_hash):
+                        return _idempotency_mismatch_response()
+                    return self._success_response(request, facility)
+            raise
 
-        response = render(
-            request,
-            "core/zeitstrom/partials/tally_panel.html",
-            {"tally_summary": build_tally_summary(facility, request.user)},
+        remember_idempotent_result(
+            TALLY_IDEMPOTENCY_SCOPE,
+            request.user.pk,
+            idempotency_key,
+            event.pk,
+            payload_hash=payload_hash,
         )
-        if required_fields:
-            response["HX-Retarget"] = "#tally-panel"
-            response["HX-Reswap"] = "outerHTML"
-        return response
+        return self._success_response(request, facility)
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):

@@ -312,12 +312,18 @@ class TestClientExportCoreCategories:
         assert case_entry["deleted_by"] is None
 
     def test_event_small_fields(self, sample_client, facility, sample_event, admin_user):
+        sample_event.idempotency_key = "export-internal-key"
+        sample_event.idempotency_payload_hash = "a" * 64
+        sample_event.save(update_fields=["idempotency_key", "idempotency_payload_hash"])
+
         data = export_client_data(sample_client, facility, admin_user)
         event_entry = data["events"][0]
         assert event_entry["created_at"] is not None
         assert event_entry["updated_at"] is not None
         assert event_entry["is_deleted"] is False
         assert event_entry["is_anonymous"] is False
+        assert "idempotency_key" not in event_entry
+        assert "idempotency_payload_hash" not in event_entry
 
     def test_event_case_and_episode_reference(self, sample_client, facility, sample_case, doc_type, admin_user):
         episode = Episode.objects.create(

@@ -493,10 +493,14 @@ class TestEventCreateSerienerfassung:
 @pytest.mark.django_db
 class TestEventDetailView:
     def test_event_detail_renders(self, client, staff_user, sample_event):
+        payload_hash = "c" * 64
+        sample_event.idempotency_payload_hash = payload_hash
+        sample_event.save(update_fields=["idempotency_payload_hash"])
         client.force_login(staff_user)
         response = client.get(reverse("core:event_detail", kwargs={"pk": sample_event.pk}))
         assert response.status_code == 200
         assert "Kontakt" in response.content.decode()
+        assert payload_hash not in response.content.decode()
 
     def test_event_detail_facility_scoping(self, client, staff_user, facility, organization, doc_type_contact):
         from core.models import Facility

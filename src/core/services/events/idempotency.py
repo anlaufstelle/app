@@ -33,15 +33,13 @@ die abweichende Anlage nicht still unter dem falschen Datensatz verschwindet.
   ``settings/prod.py``); im LocMem-Default (dev/test) gilt der Fast-Path pro
   Prozess — für den seriellen Replay-Fall ausreichend, den harten Rand deckt
   der Constraint.
-* Der **DB-Backstop trägt bewusst KEINEN Payload-Hash**: die Spalte
-  ``idempotency_key`` bekommt keine Hash-Erweiterung (keine Migration — N14 ist
-  Info-Schwere). Fällt der Cache aus (Eviction/Neustart) und greift nur noch
-  der DB-Lookup, wird ein Key-Treffer daher OHNE Payload-Prüfung als Duplikat
-  behandelt (Redirect aufs Original) — ein abweichender Body im seltenen
-  Cache-Verlust-Fenster bleibt unentdeckt. Ebenso gehen **Legacy-Cache-Einträge**
-  (nackter PK-String aus der Zeit vor N14, TTL bis 72 h nach Deploy) als
-  Treffer ohne Hash-Prüfung durch (Abwärtskompatibilität, kein False-Positive-
-  422). Beides ist der akzeptierte Rand des Payload-Vergleichs.
+* ``Event`` trägt den Payload-Hash seit #1909 zusätzlich persistent. Damit
+  erkennen EventCreate und Tally eine Kollision auch nach Cache-Verlust und im
+  parallelen Constraint-Race. Bestehende Event-Zeilen mit ``NULL`` sowie
+  **Legacy-Cache-Einträge** (nackter PK-String aus der Zeit vor N14) gelten aus
+  Abwärtskompatibilität weiter als Treffer ohne Hash-Prüfung. ``WorkItem`` hat
+  unverändert keinen persistenten Payload-Hash; dort bleibt diese Grenze für
+  den DB-Backstop bestehen.
 * Das Zeitfenster ist die TTL (72 h, Refs #1329). Sie ist bewusst **länger**
   als die Offline-Bundle-Lease (``BUNDLE_TTL_SECONDS = 48 h`` in
   :mod:`core.services.system.offline`) plus ein Retry-Fenster für einen
@@ -62,11 +60,13 @@ from typing import NamedTuple
 
 from django.core.cache import cache
 
-# Feld, das aus dem Payload-Fingerprint ausgeschlossen wird: Der CSRF-Token
-# wird beim legitimen Stale-CSRF-Retry (Refs #1331/#1333) nach einem 403 neu
-# geholt. Fliesst er in den Hash ein, schlaegt der konforme Replay
-# faelschlich als Payload-Mismatch (422) fehl — deshalb hart ausgeklammert.
 CSRF_FIELD = "csrfmiddlewaretoken"
+IDEMPOTENCY_FORM_FIELD = "idempotency_key"
+
+# Transport-Metadaten sind kein fachlicher Payload: CSRF rotiert bei einem
+# Stale-CSRF-Retry; der Tally-Key kann kanonisch im Header und für No-JS als
+# Formular-Fallback ankommen. Beides darf keinen False-Positive-422 erzeugen.
+PAYLOAD_FINGERPRINT_EXCLUDED_FIELDS = frozenset({CSRF_FIELD, IDEMPOTENCY_FORM_FIELD})
 
 # R6/N14: Der Client generiert UUIDs — alles ausserhalb dieses engen Formats
 # (ueberlang/binaer/Steuerzeichen) wird verworfen statt in DB-Spalte
@@ -80,6 +80,38 @@ def normalize_idempotency_key(raw: str | None) -> str | None:
     if not raw or not IDEMPOTENCY_KEY_RE.fullmatch(raw):
         return None
     return raw
+
+
+def resolve_idempotency_key(
+    header_value: str | None,
+    fallback_value: str | None,
+    *,
+    required: bool = False,
+) -> str | None:
+    """Löse kanonischen Header und Formular-Fallback widerspruchsfrei auf.
+
+    Der Header ist der kanonische Transport für Service-Worker-Replays. Ein
+    gleichlautendes Formularfeld hält klassische No-JS-POSTs idempotent. Sind
+    beide vorhanden, müssen beide einzeln gültig und identisch sein; andernfalls
+    darf keine der beiden Angaben still bevorzugt werden.
+    """
+    header_key = normalize_idempotency_key(header_value)
+    fallback_key = normalize_idempotency_key(fallback_value)
+    if header_value is not None and header_key is None:
+        raise ValueError("invalid idempotency header")
+    if fallback_value is not None and fallback_key is None:
+        raise ValueError("invalid idempotency fallback")
+    if header_key is not None and fallback_key is not None and header_key != fallback_key:
+        raise ValueError("conflicting idempotency keys")
+    key = header_key or fallback_key
+    if required and key is None:
+        raise ValueError("missing idempotency key")
+    return key
+
+
+def has_idempotency_payload_mismatch(stored_hash: str | None, request_hash: str | None) -> bool:
+    """Legacy-NULL bleibt kompatibel; nur zwei vorhandene ungleiche Hashes kollidieren."""
+    return stored_hash is not None and stored_hash != request_hash
 
 
 # Wie lange ein Idempotenz-Schlüssel als „erledigt" gilt. Muss >= der
@@ -120,16 +152,19 @@ class IdempotentHit(NamedTuple):
 def payload_fingerprint(request) -> str:
     """SHA-256-Fingerprint über die kanonische Form des Request-Payloads (N14).
 
-    Kanonisierung: alle ``request.POST.lists()``-Paare **außer**
-    :data:`CSRF_FIELD` (der Stale-CSRF-Retry #1331/#1333 erneuert den Token —
-    er darf den Hash nicht beeinflussen), als sortierte ``(name, wert)``-Paare;
+    Kanonisierung: alle ``request.POST.lists()``-Paare **außer** den
+    :data:`PAYLOAD_FINGERPRINT_EXCLUDED_FIELDS`, als sortierte
+    ``(name, wert)``-Paare;
     plus je Upload in ``request.FILES`` das Tripel ``(feldname, dateiname,
     größe)``, ebenfalls sortiert. Beides eindeutig via JSON serialisiert
     (kompakte Separatoren, feste Struktur), dann gehasht — die Feld-Reihenfolge
     im Formular ist damit irrelevant, jede Wert-/Datei-Änderung nicht.
     """
     post_pairs = sorted(
-        (name, value) for name, values in request.POST.lists() if name != CSRF_FIELD for value in values
+        (name, value)
+        for name, values in request.POST.lists()
+        if name not in PAYLOAD_FINGERPRINT_EXCLUDED_FIELDS
+        for value in values
     )
     file_triples = sorted((name, f.name, f.size) for name, files in request.FILES.lists() for f in files)
     canonical = json.dumps({"post": post_pairs, "files": file_triples}, ensure_ascii=False, separators=(",", ":"))

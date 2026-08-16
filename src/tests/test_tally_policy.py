@@ -16,6 +16,7 @@ from core.services.events import (
     tally_eligibilities,
 )
 from core.services.events import tally as tally_service
+from tests._tally_helpers import post_tally
 
 
 def _assignment(
@@ -298,8 +299,8 @@ class TestTallyPolicyConsumers:
         )
         client.force_login(staff_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {
                 "document_type": str(document_type.pk),
                 source.field_template.slug: "1",

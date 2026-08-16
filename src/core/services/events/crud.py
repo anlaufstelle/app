@@ -126,13 +126,14 @@ def create_event(
     is_anonymous=False,
     case=None,
     idempotency_key=None,
+    idempotency_payload_hash=None,
 ):
     """Create an event + EventHistory(CREATE).
 
-    ``idempotency_key`` (Review R5/R6): der normalisierte X-Idempotency-Key des
-    Offline-Replays wird als persistenter DB-Backstop mitgeschrieben. Der
-    partielle Unique-Constraint (``event_idem_key_per_user_uniq``, je
-    ``created_by``) fängt Duplikate ab, wenn der Cache-Dedup ausfällt.
+    ``idempotency_key`` und ``idempotency_payload_hash`` (Review R5/R6, #1909):
+    Der normalisierte Schlüssel und der SHA-256-Fingerprint des Requests werden
+    als persistenter DB-Backstop mitgeschrieben. Constraint und Hash fangen
+    Duplikate sowie Payload-Kollisionen auch bei Cache-Ausfall ab.
     """
     if document_type.facility_id != facility.pk:
         raise ValueError("DocumentType gehört nicht zur Facility")
@@ -168,6 +169,7 @@ def create_event(
         created_by=user,
         case=case,
         idempotency_key=idempotency_key,
+        idempotency_payload_hash=idempotency_payload_hash,
     )
     event.save()
     EventHistory.objects.create(

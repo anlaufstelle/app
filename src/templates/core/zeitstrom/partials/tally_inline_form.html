@@ -7,9 +7,11 @@
           data-testid="tally-inline-form-{{ document_type.pk }}"
           hx-post="{% url 'core:tally_increment' %}"
           hx-target="#tally-action-{{ document_type.pk }}"
+          hx-headers='{"X-Idempotency-Key": "{{ idempotency_key }}"}'
           hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="document_type" value="{{ document_type.pk }}">
+        <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
         <div data-testid="tally-form-errors-{{ document_type.pk }}">
             {% include "core/_form_errors.html" with form=tally_form %}
         </div>

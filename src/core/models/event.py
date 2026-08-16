@@ -72,6 +72,18 @@ class Event(DynamicDataEncryptionMixin):
             "gegen Duplikate bei Cache-Verlust oder parallelen Replays (Review R5/R6)."
         ),
     )
+    idempotency_payload_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        default=None,
+        editable=False,
+        verbose_name=_("Idempotenz-Payload-Hash"),
+        help_text=_(
+            "SHA-256-Fingerabdruck des fachlichen Request-Payloads — erkennt "
+            "abweichende Wiederverwendung eines Idempotenz-Schlüssels auch nach Cache-Verlust."
+        ),
+    )
     occurred_at = models.DateTimeField(verbose_name=_("Zeitpunkt"))
     data_json = models.JSONField(default=dict, verbose_name=_("Daten (JSON)"))
     # Refs #827 (C-60): expliziter Suchindex statt JSONB-icontains.

@@ -70,6 +70,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         "idempotency_key",
         reason="Client-generierter Zufalls-Dedup-Key (Replay, Review R5/R6), Format-Whitelist, kein Freitext.",
     ),
+    non_pii(
+        "core_event",
+        "idempotency_payload_hash",
+        reason="Serverinterner SHA-256-Fingerabdruck des kanonischen Request-Payloads, kein Klartext.",
+    ),
     # ---- core_case -------------------------------------------------------
     pii("core_case", "title"),
     pii("core_case", "description"),

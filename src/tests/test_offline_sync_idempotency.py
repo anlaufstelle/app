@@ -171,6 +171,27 @@ class TestEventCreateIdempotency:
         assert "__all__" in r2.json()["errors"]
         assert Event.objects.filter(document_type=doc_type_contact).count() == 1
 
+    def test_db_replay_after_cache_clear_rejects_different_body(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Der persistente DB-Backstop muss Payload-Kollisionen erkennen."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = _create_payload(doc_type_contact, client_identified)
+
+        first = client.post(self._url(), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        cache.clear()
+        conflict = client.post(
+            self._url(),
+            {**payload, "notiz": "GEAENDERT-NACH-CACHE-CLEAR"},
+            HTTP_X_IDEMPOTENCY_KEY=key,
+        )
+
+        assert first.status_code == 302
+        assert conflict.status_code == 422
+        event = Event.objects.get(document_type=doc_type_contact)
+        assert event.idempotency_payload_hash is not None
+
     def test_same_key_same_body_different_csrf_stays_idempotent(
         self, client, staff_user, doc_type_contact, client_identified
     ):
@@ -369,6 +390,14 @@ class TestPayloadFingerprint:
         c = payload_fingerprint(self._req({"a": "1"}))
         assert a == b == c
 
+    def test_idempotency_body_fallback_excluded(self):
+        from core.services.events.idempotency import payload_fingerprint
+
+        header_only = payload_fingerprint(self._req({"a": "1"}))
+        header_and_body = payload_fingerprint(self._req({"a": "1", "idempotency_key": "same-key"}))
+        body_only = payload_fingerprint(self._req({"a": "1", "idempotency_key": "other-transport-key"}))
+        assert header_only == header_and_body == body_only
+
     def test_body_change_changes_hash(self):
         from core.services.events.idempotency import payload_fingerprint
 
@@ -441,6 +470,26 @@ class TestIdempotencyDbBackstop:
         assert r2.status_code == 302
         assert Event.objects.count() == 1
         assert r1["Location"] == r2["Location"]
+
+    def test_legacy_event_without_persistent_hash_remains_compatible(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = _create_payload(doc_type_contact, client_identified)
+        first = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        Event.objects.update(idempotency_payload_hash=None)
+        cache.clear()
+
+        legacy_replay = client.post(
+            reverse("core:event_create"),
+            {**payload, "notiz": "legacy-hat-keinen-vergleichbaren-hash"},
+            HTTP_X_IDEMPOTENCY_KEY=key,
+        )
+
+        assert legacy_replay.status_code == 302
+        assert legacy_replay["Location"] == first["Location"]
+        assert Event.objects.count() == 1
 
     def test_workitem_replay_after_cache_loss_creates_no_duplicate(self, client, staff_user):
         client.force_login(staff_user)

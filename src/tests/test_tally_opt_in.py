@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from django.urls import reverse
 
 from core.admin.documents import DocumentTypeAdmin
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
@@ -12,6 +11,7 @@ from core.packages.schema import PackageValidationError, parse_package
 from core.seed.doc_types import load_default_package_data
 from core.services.events import build_tally_summary
 from core.services.system.facility_export import build_facility_export
+from tests._tally_helpers import post_tally
 
 
 def _package_document_type(**overrides):
@@ -156,8 +156,8 @@ class TestTallyIncrementOptInGuards:
         document_type = DocumentType.objects.create(facility=facility, name="Nicht freigegeben")
         client.force_login(staff_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(document_type.pk)},
             HTTP_HX_REQUEST="true",
         )
@@ -174,8 +174,8 @@ class TestTallyIncrementOptInGuards:
     ):
         client.force_login(staff_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(tally_required_type.pk)},
             HTTP_HX_REQUEST="true",
         )

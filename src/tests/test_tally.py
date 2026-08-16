@@ -1,11 +1,11 @@
 """Tests für die Strichlisten-/Tally-Erfassung anonymer Massenkontakte (Refs #1349, Stufe 2)."""
 
 import pytest
-from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentType, Event
 from core.services.events import build_tally_summary, create_event
+from tests._tally_helpers import post_tally
 
 
 @pytest.mark.django_db
@@ -63,8 +63,8 @@ class TestTallyIncrementView:
     def test_increment_creates_anonymous_event_and_audit_per_click(self, client, staff_user, doc_type_contact):
         client.force_login(staff_user)
         audit_before = AuditLog.objects.filter(action=AuditLog.Action.EVENT_CREATE).count()
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(doc_type_contact.pk)},
             HTTP_HX_REQUEST="true",
         )
@@ -79,9 +79,8 @@ class TestTallyIncrementView:
 
     def test_increment_twice_counts_two(self, client, staff_user, doc_type_contact):
         client.force_login(staff_user)
-        url = reverse("core:tally_increment")
-        client.post(url, {"document_type": str(doc_type_contact.pk)}, HTTP_HX_REQUEST="true")
-        response = client.post(url, {"document_type": str(doc_type_contact.pk)}, HTTP_HX_REQUEST="true")
+        post_tally(client, {"document_type": str(doc_type_contact.pk)}, HTTP_HX_REQUEST="true")
+        response = post_tally(client, {"document_type": str(doc_type_contact.pk)}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert Event.objects.filter(document_type=doc_type_contact, is_anonymous=True).count() == 2
         assert "2" in response.content.decode()
@@ -94,8 +93,8 @@ class TestTallyIncrementView:
             tally_enabled=True,
         )
         client.force_login(staff_user)
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(dt.pk)},
             HTTP_HX_REQUEST="true",
         )
@@ -110,8 +109,8 @@ class TestTallyIncrementView:
             tally_enabled=True,
         )
         client.force_login(assistant_user)
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(high.pk)},
             HTTP_HX_REQUEST="true",
         )
@@ -124,8 +123,8 @@ class TestTallyIncrementView:
         other = Facility.objects.create(organization=organization, name="Fremd")
         foreign_dt = DocumentType.objects.create(facility=other, name="Fremd-Kontakt", tally_enabled=True)
         client.force_login(staff_user)
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(foreign_dt.pk)},
             HTTP_HX_REQUEST="true",
         )

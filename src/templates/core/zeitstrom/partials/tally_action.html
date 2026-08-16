@@ -11,7 +11,8 @@
             hx-post="{% url 'core:tally_increment' %}"
             hx-target="#tally-panel"
             {% endif %}
-            hx-vals='{"document_type": "{{ row.document_type.pk }}"}'
+            hx-vals='{"document_type": "{{ row.document_type.pk }}", "idempotency_key": "{{ row.idempotency_key }}"}'
+            hx-headers='{"X-Idempotency-Key": "{{ row.idempotency_key }}"}'
             hx-swap="outerHTML"
             aria-label="{% if row.requires_number_input %}{% blocktrans with name=row.document_type.name %}Werte für {{ name }} eingeben{% endblocktrans %}{% else %}{% blocktrans with name=row.document_type.name %}Anonymen Kontakt für {{ name }} zählen{% endblocktrans %}{% endif %}">
         +1

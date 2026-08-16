@@ -9,6 +9,7 @@ from django.utils import timezone
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, EventHistory, FieldTemplate
 from core.reporting.backends.needle_exchange_balance import NeedleExchangeBalanceBackend
 from core.services.events import build_tally_summary
+from tests._tally_helpers import post_tally
 
 
 def _add_field(
@@ -188,8 +189,8 @@ class TestTallyNumberIncrementView:
         client.force_login(staff_user)
         audit_before = AuditLog.objects.filter(action=AuditLog.Action.EVENT_CREATE).count()
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {
                 "document_type": str(document_type.pk),
                 ausgabe.slug: "12",
@@ -241,8 +242,8 @@ class TestTallyNumberIncrementView:
         document_type, ausgabe_field, rueckgabe = _number_tally_type(facility)
         client.force_login(staff_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {
                 "document_type": str(document_type.pk),
                 ausgabe_field.slug: ausgabe,
@@ -266,8 +267,8 @@ class TestTallyNumberIncrementView:
         )
         client.force_login(staff_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {
                 "document_type": str(document_type.pk),
                 ausgabe.slug: "3",
@@ -304,8 +305,8 @@ class TestTallyNumberIncrementView:
             {"document_type": str(document_type.pk)},
             HTTP_HX_REQUEST="true",
         )
-        post_response = client.post(
-            url,
+        post_response = post_tally(
+            client,
             {"document_type": str(document_type.pk), required.slug: "4"},
             HTTP_HX_REQUEST="true",
         )
@@ -321,8 +322,8 @@ class TestTallyNumberIncrementView:
         )
         client.force_login(admin_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {
                 "document_type": str(document_type.pk),
                 ausgabe.slug: "12",
@@ -369,8 +370,8 @@ class TestTallyNumberIncrementView:
         )
         client.force_login(admin_user)
 
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {
                 "document_type": str(document_type.pk),
                 ausgabe.slug: "-1",

@@ -22,6 +22,7 @@ from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, S
 from core.services.events import create_event
 from core.services.events.context import resolve_default_document_type
 from core.services.events.tally import tally_document_types
+from tests._tally_helpers import post_tally
 
 
 @pytest.fixture
@@ -241,8 +242,8 @@ class TestTallyIncrementEntityTypeFilter:
 
     def test_client_type_404(self, client, staff_user, doc_type_client):
         client.force_login(staff_user)
-        response = client.post(
-            reverse("core:tally_increment"),
+        response = post_tally(
+            client,
             {"document_type": str(doc_type_client.pk)},
             HTTP_HX_REQUEST="true",
         )

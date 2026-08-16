@@ -207,6 +207,8 @@ class TestBuildClientOfflineBundleService:
             occurred_at=timezone.now(),
             data_json={"dauer": 5, "notiz": "ok"},
             created_by=staff_user,
+            idempotency_key="offline-bundle-internal-key",
+            idempotency_payload_hash="d" * 64,
         )
         # Event locked away for staff (HIGH doc type)
         hidden_event = Event.objects.create(
@@ -222,6 +224,9 @@ class TestBuildClientOfflineBundleService:
         event_pks = {e["pk"] for e in bundle["events"]}
         assert str(visible_event.pk) in event_pks
         assert str(hidden_event.pk) not in event_pks
+        serialized = next(event for event in bundle["events"] if event["pk"] == str(visible_event.pk))
+        assert "idempotency_key" not in serialized
+        assert "idempotency_payload_hash" not in serialized
 
     def test_bundle_fields_filtered_by_field_sensitivity(
         self, facility, client_identified, doc_type_normal_with_high_field, staff_user
