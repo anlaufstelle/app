@@ -33,11 +33,14 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+
+if TYPE_CHECKING:
+    from django.utils.functional import _StrPromise
 
 # Bewusst keine Import-Schleife auf ``FieldTemplate`` — wir importieren das
 # Enum lazy ueber den ``code``-String. ``register()`` und ``get()`` bekommen
@@ -141,7 +144,7 @@ def validate_number_value(
     service-seitigen ``data_json``-Schreibpfad. Formulare setzen dieselben
     Grenzen zusätzlich als HTML-Eingabehilfe.
     """
-    message = None
+    message: str | _StrPromise | None = None
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))

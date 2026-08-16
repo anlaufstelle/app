@@ -87,15 +87,18 @@ class Command(BaseCommand):
                 document_type__isnull=False,
             ).select_related("document_type")
             for entity in queryset.iterator(chunk_size=500):
+                document_type = entity.document_type
+                if document_type is None:
+                    continue
                 for slug, reason in _range_violations(entity, templates_by_document_type) or ():
-                    findings[(label, entity.document_type.name, slug, reason)] += 1
+                    findings[(label, document_type.name, slug, reason)] += 1
 
         if not findings:
             self.stdout.write(self.style.SUCCESS("Keine Werte außerhalb konfigurierter Zahlenbereiche gefunden."))
             return
         self.stdout.write(self.style.WARNING("Gefundene Werte außerhalb konfigurierter Zahlenbereiche:"))
-        for (label, document_type, slug, reason), count in sorted(findings.items()):
-            self.stdout.write(f"- {label} · {document_type} · {slug}: {count} ({reason})")
+        for (label, document_type_name, slug, reason), count in sorted(findings.items()):
+            self.stdout.write(f"- {label} · {document_type_name} · {slug}: {count} ({reason})")
 
     @staticmethod
     def _resolve_facility(raw: str) -> Facility:
