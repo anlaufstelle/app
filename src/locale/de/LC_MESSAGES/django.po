@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 21:38+0200\n"
+"POT-Creation-Date: 2026-08-16 16:17+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5014,21 +5014,9 @@ msgstr "Kontakt gespeichert – bereit für den nächsten."
 msgid "Kontakt wurde dokumentiert."
 msgstr "Kontakt wurde dokumentiert."
 
-#: src/core/views/events.py:548
-msgid "Dieser Dokumentationstyp erfordert eine Person."
-msgstr "Dieser Dokumentationstyp erfordert eine Person."
-
 #: src/core/views/events.py:556
 msgid "Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben."
 msgstr "Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben."
-
-#: src/core/views/events.py:567
-msgid ""
-"Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste "
-"erfasst werden."
-msgstr ""
-"Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste "
-"erfasst werden."
 
 #: src/core/views/events.py:591
 msgid "Dieser Dokumentationstyp benötigt keine Wert-Eingabe."
@@ -7420,10 +7408,6 @@ msgstr "Inaktiv"
 msgid "Strichliste"
 msgstr "Strichliste"
 
-#: src/templates/core/config/document_types/detail.html:82
-msgid "Angeboten"
-msgstr "Angeboten"
-
 #: src/templates/core/config/document_types/detail.html:84
 msgid "Nicht angeboten"
 msgstr "Nicht angeboten"
@@ -8002,13 +7986,6 @@ msgid ""
 msgstr ""
 "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%%"
 "(stage)s\" auswählbar."
-
-# Translators: Runtime lookup uses a single percent; Django's template
-# extractor emits the escaped double-percent entry above.
-#: src/templates/core/events/create.html:18
-#, python-format
-msgid "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
-msgstr "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
 
 #: src/templates/core/events/create.html:47
 msgid "Schnell-Vorlagen"
@@ -10778,3 +10755,123 @@ msgstr "Dummy Lazybericht"
 #: src/tests/test_reporting_export.py:683
 msgid "Lücke im Zeitraum"
 msgstr "Lücke im Zeitraum"
+
+#: src/core/models/event.py:87
+msgid "Idempotenz-Payload-Hash"
+msgstr "Idempotenz-Payload-Hash"
+
+#: src/core/models/event.py:89
+msgid "SHA-256-Fingerabdruck des fachlichen Request-Payloads — erkennt abweichende Wiederverwendung eines Idempotenz-Schlüssels auch nach Cache-Verlust."
+msgstr "SHA-256-Fingerabdruck des fachlichen Request-Payloads — erkennt abweichende Wiederverwendung eines Idempotenz-Schlüssels auch nach Cache-Verlust."
+
+#: src/core/models/event.py:98
+msgid "Erstellt über"
+msgstr "Erstellt über"
+
+#: src/core/models/field_template.py:54
+msgid "Minimalwert"
+msgstr "Minimalwert"
+
+#: src/core/models/field_template.py:55
+msgid "Nur für Zahlenfelder. Leer = keine Untergrenze."
+msgstr "Nur für Zahlenfelder. Leer = keine Untergrenze."
+
+#: src/core/models/field_template.py:60
+msgid "Maximalwert"
+msgstr "Maximalwert"
+
+#: src/core/models/field_template.py:61
+msgid "Nur für Zahlenfelder. Leer = keine Obergrenze."
+msgstr "Nur für Zahlenfelder. Leer = keine Obergrenze."
+
+#: src/core/models/field_template.py:142 src/core/models/field_template.py:144
+msgid "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."
+msgstr "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."
+
+#: src/core/models/field_template.py:146
+msgid "Der Minimalwert darf nicht größer als der Maximalwert sein."
+msgstr "Der Minimalwert darf nicht größer als der Maximalwert sein."
+
+#: src/core/services/events/tally.py:51
+msgid "Der Dokumentationstyp ist deaktiviert."
+msgstr "Der Dokumentationstyp ist deaktiviert."
+
+#: src/core/services/events/tally.py:53
+msgid "Die Strichliste unterstützt nur Dokumentationstypen für Ereignisse."
+msgstr "Die Strichliste unterstützt nur Dokumentationstypen für Ereignisse."
+
+#: src/core/services/events/tally.py:55
+msgid "Der Dokumentationstyp erfordert eine zugeordnete Person."
+msgstr "Der Dokumentationstyp erfordert eine zugeordnete Person."
+
+#: src/core/services/events/tally.py:56
+msgid "Der Dokumentationstyp ist für diese Rolle nicht sichtbar."
+msgstr "Der Dokumentationstyp ist für diese Rolle nicht sichtbar."
+
+#: src/core/services/events/tally.py:58
+msgid "Ein bedingtes Pflichtfeld kann im kompakten Strichlisten-Formular nicht sicher abgebildet werden."
+msgstr "Ein bedingtes Pflichtfeld kann im kompakten Strichlisten-Formular nicht sicher abgebildet werden."
+
+#: src/core/services/events/tally.py:61
+msgid "Nicht unterstütztes Pflichtfeld: Dieser Dokumentationstyp hat Pflichtfelder, aber in der Strichliste sind nur Zahlen-Pflichtfelder zulässig."
+msgstr "Nicht unterstütztes Pflichtfeld: Dieser Dokumentationstyp hat Pflichtfelder, aber in der Strichliste sind nur Zahlen-Pflichtfelder zulässig."
+
+#: src/core/services/events/tally.py:65
+msgid "Mindestens ein Pflichtfeld ist für diese Rolle nicht sichtbar."
+msgstr "Mindestens ein Pflichtfeld ist für diese Rolle nicht sichtbar."
+
+#: src/core/services/system/field_types.py:153
+msgid "Wert muss eine ganze Zahl sein."
+msgstr "Wert muss eine ganze Zahl sein."
+
+#: src/core/services/system/field_types.py:155
+#, python-format
+msgid "Wert muss mindestens %(minimum)d sein."
+msgstr "Wert muss mindestens %(minimum)d sein."
+
+#: src/core/services/system/field_types.py:157
+#, python-format
+msgid "Wert darf höchstens %(maximum)d sein."
+msgstr "Wert darf höchstens %(maximum)d sein."
+
+#: src/core/views/events.py:781 src/core/views/events.py:797
+msgid "Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."
+msgstr "Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."
+
+#: src/templates/core/config/document_types/detail.html:84
+msgid "Angeboten für berechtigte Rollen"
+msgstr "Angeboten für berechtigte Rollen"
+
+#: src/templates/core/config/document_types/detail.html:86
+msgid "Opt-in aktiv, aber nicht verfügbar"
+msgstr "Opt-in aktiv, aber nicht verfügbar"
+
+#: src/templates/core/zeitstrom/index.html:259
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:29
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:147
+msgid "bestätigt"
+msgstr "bestätigt"
+
+#: src/templates/core/zeitstrom/index.html:261
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:31
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:149
+msgid "nicht übertragbar"
+msgstr "nicht übertragbar"
+
+#: src/templates/core/zeitstrom/index.html:262
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:32
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:150
+msgid "Erfassung konnte nicht gespeichert werden."
+msgstr "Erfassung konnte nicht gespeichert werden."
+
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:38
+msgid "Lade Offline-Strichliste..."
+msgstr "Lade Offline-Strichliste..."
+
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:41
+msgid "Strichliste offline nicht verfügbar — zuerst online aktualisieren."
+msgstr "Strichliste offline nicht verfügbar — zuerst online aktualisieren."
+
+#: src/templates/core/zeitstrom/partials/tally_row.html:25
+msgid "Rückgängig"
+msgstr "Rückgängig"

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 21:38+0200\n"
+"POT-Creation-Date: 2026-08-16 16:17+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -4970,20 +4970,9 @@ msgstr "Contact saved – ready for the next one."
 msgid "Kontakt wurde dokumentiert."
 msgstr "Contact has been documented."
 
-#: src/core/views/events.py:548
-msgid "Dieser Dokumentationstyp erfordert eine Person."
-msgstr "This document type requires a person."
-
 #: src/core/views/events.py:556
 msgid "Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben."
 msgstr "This document type is not enabled for the tally."
-
-#: src/core/views/events.py:567
-msgid ""
-"Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste "
-"erfasst werden."
-msgstr ""
-"This document type has required fields and cannot be captured via the tally."
 
 #: src/core/views/events.py:591
 msgid "Dieser Dokumentationstyp benötigt keine Wert-Eingabe."
@@ -7349,10 +7338,6 @@ msgstr "Inactive"
 msgid "Strichliste"
 msgstr "Tally"
 
-#: src/templates/core/config/document_types/detail.html:82
-msgid "Angeboten"
-msgstr "Included"
-
 #: src/templates/core/config/document_types/detail.html:84
 msgid "Nicht angeboten"
 msgstr "Not included"
@@ -7924,13 +7909,6 @@ msgid ""
 msgstr ""
 "For this documentation type, only people at contact stage \"%%(stage)s\" or "
 "above can be selected."
-
-# Translators: Runtime lookup uses a single percent; Django's template
-# extractor emits the escaped double-percent entry above.
-#: src/templates/core/events/create.html:18
-#, python-format
-msgid "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
-msgstr "For this documentation type, only people at contact stage \"%(stage)s\" or above can be selected."
 
 #: src/templates/core/events/create.html:47
 msgid "Schnell-Vorlagen"
@@ -10676,3 +10654,123 @@ msgstr "Dummy lazy report"
 #: src/tests/test_reporting_export.py:683
 msgid "Lücke im Zeitraum"
 msgstr "Gap in the period"
+
+#: src/core/models/event.py:87
+msgid "Idempotenz-Payload-Hash"
+msgstr "Idempotency payload hash"
+
+#: src/core/models/event.py:89
+msgid "SHA-256-Fingerabdruck des fachlichen Request-Payloads — erkennt abweichende Wiederverwendung eines Idempotenz-Schlüssels auch nach Cache-Verlust."
+msgstr "SHA-256 fingerprint of the business request payload — detects divergent reuse of an idempotency key even after cache loss."
+
+#: src/core/models/event.py:98
+msgid "Erstellt über"
+msgstr "Created via"
+
+#: src/core/models/field_template.py:54
+msgid "Minimalwert"
+msgstr "Minimum value"
+
+#: src/core/models/field_template.py:55
+msgid "Nur für Zahlenfelder. Leer = keine Untergrenze."
+msgstr "For number fields only. Leave empty for no lower bound."
+
+#: src/core/models/field_template.py:60
+msgid "Maximalwert"
+msgstr "Maximum value"
+
+#: src/core/models/field_template.py:61
+msgid "Nur für Zahlenfelder. Leer = keine Obergrenze."
+msgstr "For number fields only. Leave empty for no upper bound."
+
+#: src/core/models/field_template.py:142 src/core/models/field_template.py:144
+msgid "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."
+msgstr "Minimum and maximum values are only allowed for number fields."
+
+#: src/core/models/field_template.py:146
+msgid "Der Minimalwert darf nicht größer als der Maximalwert sein."
+msgstr "The minimum value must not be greater than the maximum value."
+
+#: src/core/services/events/tally.py:51
+msgid "Der Dokumentationstyp ist deaktiviert."
+msgstr "This documentation type is disabled."
+
+#: src/core/services/events/tally.py:53
+msgid "Die Strichliste unterstützt nur Dokumentationstypen für Ereignisse."
+msgstr "The tally supports only documentation types for events."
+
+#: src/core/services/events/tally.py:55
+msgid "Der Dokumentationstyp erfordert eine zugeordnete Person."
+msgstr "This documentation type requires an assigned person."
+
+#: src/core/services/events/tally.py:56
+msgid "Der Dokumentationstyp ist für diese Rolle nicht sichtbar."
+msgstr "This documentation type is not visible to this role."
+
+#: src/core/services/events/tally.py:58
+msgid "Ein bedingtes Pflichtfeld kann im kompakten Strichlisten-Formular nicht sicher abgebildet werden."
+msgstr "A conditional required field cannot be safely represented in the compact tally form."
+
+#: src/core/services/events/tally.py:61
+msgid "Nicht unterstütztes Pflichtfeld: Dieser Dokumentationstyp hat Pflichtfelder, aber in der Strichliste sind nur Zahlen-Pflichtfelder zulässig."
+msgstr "Unsupported required field: This documentation type has required fields, but the tally only supports numeric required fields."
+
+#: src/core/services/events/tally.py:65
+msgid "Mindestens ein Pflichtfeld ist für diese Rolle nicht sichtbar."
+msgstr "At least one required field is not visible to this role."
+
+#: src/core/services/system/field_types.py:153
+msgid "Wert muss eine ganze Zahl sein."
+msgstr "Value must be an integer."
+
+#: src/core/services/system/field_types.py:155
+#, python-format
+msgid "Wert muss mindestens %(minimum)d sein."
+msgstr "Value must be at least %(minimum)d."
+
+#: src/core/services/system/field_types.py:157
+#, python-format
+msgid "Wert darf höchstens %(maximum)d sein."
+msgstr "Value must be at most %(maximum)d."
+
+#: src/core/views/events.py:781 src/core/views/events.py:797
+msgid "Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."
+msgstr "Idempotency key is missing, invalid, or inconsistent."
+
+#: src/templates/core/config/document_types/detail.html:84
+msgid "Angeboten für berechtigte Rollen"
+msgstr "Included for authorized roles"
+
+#: src/templates/core/config/document_types/detail.html:86
+msgid "Opt-in aktiv, aber nicht verfügbar"
+msgstr "Opt-in enabled but unavailable"
+
+#: src/templates/core/zeitstrom/index.html:259
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:29
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:147
+msgid "bestätigt"
+msgstr "confirmed"
+
+#: src/templates/core/zeitstrom/index.html:261
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:31
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:149
+msgid "nicht übertragbar"
+msgstr "non-transferable"
+
+#: src/templates/core/zeitstrom/index.html:262
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:32
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:150
+msgid "Erfassung konnte nicht gespeichert werden."
+msgstr "The entry could not be saved."
+
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:38
+msgid "Lade Offline-Strichliste..."
+msgstr "Loading offline tally..."
+
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:41
+msgid "Strichliste offline nicht verfügbar — zuerst online aktualisieren."
+msgstr "Offline tally unavailable — update online first."
+
+#: src/templates/core/zeitstrom/partials/tally_row.html:25
+msgid "Rückgängig"
+msgstr "Undo"
