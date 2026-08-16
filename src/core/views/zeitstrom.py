@@ -1,14 +1,22 @@
 """Views for the Zeitstrom (unified activity stream) start page."""
 
-import logging
-from datetime import date, timedelta
+import json
+from contextlib import contextmanager
+from datetime import timedelta
 from urllib.parse import urlencode
 
+from django.conf import settings
+from django.db import connection, transaction
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
+from django.utils.http import parse_etags
+from django.views import View
 from django.views.generic import TemplateView
 
-from core.models import DocumentType, TimeFilter
+from core.models import DocumentType
 from core.services.case import build_handover_summary
 from core.services.dashboard import build_focus_box, staff_dashboard_context
 from core.services.events import (
@@ -18,22 +26,17 @@ from core.services.events import (
     enrich_events_with_preview,
 )
 from core.services.system import get_active_bans
-from core.services.zeitstrom_filters import zeitstrom_filter_state
+from core.services.zeitstrom_filters import resolve_zeitstrom_state
+from core.services.zeitstrom_watch import (
+    WATCH_COMPONENTS,
+    build_current_shift_summary,
+    build_zeitstrom_component_validator,
+    build_zeitstrom_page_scope,
+    build_zeitstrom_tally_topology_validator,
+    build_zeitstrom_watch_snapshot,
+    zeitstrom_page_scope_matches,
+)
 from core.views.mixins import AssistantOrAboveRequiredMixin
-
-logger = logging.getLogger(__name__)
-
-
-def _is_live_tally_context(target_date, selected_filter, live_context) -> bool:
-    """Ob die sichtbare Auswahl die serverseitige Live-Erfassung meint."""
-    live_filter = live_context.time_filter
-    if selected_filter is not None:
-        return (
-            live_filter is not None and selected_filter.pk == live_filter.pk and target_date == live_context.shift_date
-        )
-    # Der ganze heutige Tag bleibt eine zulässige Ergebnisansicht. Das Panel
-    # benennt daneben sein engeres, ggf. laufendes Schichtfenster.
-    return target_date == timezone.localdate()
 
 
 class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
@@ -44,26 +47,22 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         facility = self.request.current_facility
-
-        target_date = self._get_target_date()
-        feed_type = self.request.GET.get("type", "")
+        today = timezone.localdate()
+        now = timezone.localtime()
         live_context = current_tally_context(facility)
-
-        # TimeFilter tabs (from Timeline)
-        time_filters = TimeFilter.objects.for_facility(facility).filter(is_active=True).order_by("sort_order", "pk")
-        selected_filter_id = self.request.GET.get("time_filter")
-
-        selected_filter = None
-        if selected_filter_id and selected_filter_id != "all":
-            selected_filter = time_filters.filter(pk=selected_filter_id).first()
-        if not selected_filter and selected_filter_id != "all" and target_date == timezone.localdate():
-            # Auto-Select und Tally teilen genau dieselbe Live-Schicht samt
-            # Mitternachts- und Tie-Breaker-Semantik.
-            selected_filter = live_context.time_filter
-            if selected_filter is not None:
-                target_date = live_context.shift_date
-
-        selected_filter_id = str(selected_filter.pk) if selected_filter else "all"
+        state = resolve_zeitstrom_state(
+            self.request.GET,
+            facility,
+            today=today,
+            now=now,
+            live_context=live_context,
+        )
+        target_date = state.target_date
+        feed_type = state.feed_type
+        live_context = state.live_context
+        time_filters = state.time_filters
+        selected_filter = state.time_filter
+        selected_filter_id = state.time_filter_id
 
         # Build feed items
         feed_items = build_feed_items(
@@ -76,7 +75,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         enrich_events_with_preview(feed_items, self.request.user)
 
         # Document type filter (from Timeline)
-        doc_type_id = self.request.GET.get("doc_type")
+        doc_type_id = state.doc_type_id
         if doc_type_id:
             feed_items = [
                 item
@@ -114,7 +113,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         # Bewusst unabhängig von der Datums-/Schicht-Auswahl im Zeitstrom:
         # Die Box bezieht sich immer auf den gerade laufenden Dienst, damit sie
         # beim Durchklicken anderer Tage/Schichten nicht mitwechselt.
-        current_shift_summary = self._build_current_shift_summary(facility, time_filters)
+        current_shift_summary = build_current_shift_summary(facility, self.request.user, state)
 
         # Die teure Eignungs-/Count-Summary wird erst gebaut, wenn das Panel
         # im finalen Kontext tatsächlich gerendert wird.
@@ -124,7 +123,6 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         # Active bans (from Dashboard)
         active_bans = get_active_bans(facility, user=self.request.user)
 
-        today = timezone.localdate()
         # Pills für die Type-Filter im Zeitstrom (Design: als-screens.jsx Filter-Pills)
         from django.utils.translation import gettext as _
 
@@ -156,11 +154,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "events_partial_url": "core:zeitstrom_feed_partial",
                 "focus_box": focus_box,
                 "active_bans": active_bans,
-                "zeitstrom_filter_state": zeitstrom_filter_state(
-                    self.request.GET,
-                    target_date=target_date,
-                    time_filter_id=selected_filter_id,
-                ),
+                "zeitstrom_filter_state": state.params,
             }
         )
 
@@ -171,21 +165,17 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             context["cockpit"] = staff_dashboard_context(self.request.user, facility)
 
         # Übergabe-Modus: Schicht-Zusammenfassung als Primärinhalt (Refs #1124).
-        if self.request.GET.get("view") == "uebergabe":
-            uebergabe_filter = self._select_handover_shift(time_filters, target_date)
+        if state.is_handover:
+            uebergabe_filter = selected_filter
             context["uebergabe_mode"] = True
             context["uebergabe_summary"] = build_handover_summary(
                 facility, target_date, uebergabe_filter, self.request.user
             )
             context["selected_filter"] = uebergabe_filter
             context["selected_filter_id"] = str(uebergabe_filter.pk) if uebergabe_filter else "all"
-            context["zeitstrom_filter_state"] = zeitstrom_filter_state(
-                self.request.GET,
-                target_date=target_date,
-                time_filter_id=context["selected_filter_id"],
-            )
+            context["zeitstrom_filter_state"] = state.params
         else:
-            show_tally_panel = _is_live_tally_context(target_date, selected_filter, live_context)
+            show_tally_panel = state.is_live_tally_context
             if show_tally_panel:
                 tally_summary = build_tally_summary(facility, self.request.user, context=live_context)
             context["show_tally_panel"] = show_tally_panel
@@ -197,6 +187,16 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 context["tally_summary"], context["zeitstrom_filter_state"], context["tally_next"]
             )
 
+        context["zeitstrom_page_scope"] = build_zeitstrom_page_scope(
+            self.request.user,
+            facility,
+        )
+        context["zeitstrom_tally_topology"] = build_zeitstrom_tally_topology_validator(
+            self.request.user,
+            facility,
+            state,
+            tally_summary=context["tally_summary"],
+        )
         return context
 
     @staticmethod
@@ -219,73 +219,93 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 ),
             )
 
-    def _get_target_date(self):
-        date_str = self.request.GET.get("date")
-        if date_str:
-            try:
-                return date.fromisoformat(date_str)
-            except ValueError:
-                pass
-        return timezone.localdate()
 
-    def _build_current_shift_summary(self, facility, time_filters):
-        """Handover-Summary der gerade laufenden Schicht (Refs #1138).
-
-        Unabhängig von der Datums-/Schicht-Auswahl im Request: ermittelt die
-        Schicht, die den *aktuellen* Zeitpunkt abdeckt, und baut dafür die
-        Dienst-Übersicht. Mitternachts-Überlappung wird berücksichtigt — in den
-        frühen Morgenstunden gehört der Zeitpunkt zum Nachtdienst des Vortags.
-        Läuft gerade keine Schicht, wird ``None`` zurückgegeben.
-        """
-        now = timezone.localtime()
-        for tf in time_filters:
-            if not tf.covers_time(now):
-                continue
-            shift_date = timezone.localdate()
-            if tf.start_time > tf.end_time and now.time() <= tf.end_time:
-                shift_date = shift_date - timedelta(days=1)
-            return build_handover_summary(facility, shift_date, tf, self.request.user)
-        return None
-
-    def _select_handover_shift(self, time_filters, target_date):
-        """Vorschicht-Auto-Wahl fuer den Uebergabe-Modus (Port aus HandoverView)."""
-        time_filter_id = self.request.GET.get("time_filter")
-        if time_filter_id and time_filter_id != "all":
-            return time_filters.filter(pk=time_filter_id).first()
-        if target_date == timezone.localdate():
-            now = timezone.localtime()
-            prev_filter = None
-            for tf in time_filters:
-                if tf.covers_time(now):
-                    break
-                prev_filter = tf
-            return prev_filter
-        return None
+def _reload_required(*, json_response):
+    if json_response:
+        return _watch_cache_headers(JsonResponse({"detail": "reload_required"}, status=409))
+    return _watch_cache_headers(HttpResponse(status=409))
 
 
-class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
+def _scope_matches_request(request):
+    facility = request.current_facility
+    return facility is not None and zeitstrom_page_scope_matches(
+        request.headers.get("X-Zeitstrom-Page-Scope", ""),
+        request.user,
+        facility,
+    )
+
+
+@contextmanager
+def _consistent_watch_render():
+    """Use one DB snapshot for a Watch follow-up body and its ETag."""
+
+    nested = connection.in_atomic_block
+    with transaction.atomic():
+        if not nested:
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        yield
+
+
+class ZeitstromWatchFollowupMixin:
+    """Bind Watch-triggered HTML to page scope and the advertised snapshot."""
+
+    watch_component: str
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.headers.get("X-Zeitstrom-Watch") == "1" and not _scope_matches_request(request):
+            return _reload_required(json_response=False)
+        return super().dispatch(request, *args, **kwargs)
+
+    def render_watch_followup(
+        self,
+        request,
+        template_name,
+        context,
+        state,
+        *,
+        tally_summary=None,
+        status=200,
+    ):
+        response = render(request, template_name, context, status=status) if status != 204 else HttpResponse(status=204)
+        validator = build_zeitstrom_component_validator(
+            request.user,
+            request.current_facility,
+            state,
+            self.watch_component,
+            tally_summary=tally_summary,
+        )
+        response["ETag"] = validator
+        if request.headers.get("X-Zeitstrom-Watch") == "1":
+            candidates = parse_etags(request.headers.get("If-Match", ""))
+            if validator not in candidates:
+                response = HttpResponse(status=412)
+                response["ETag"] = validator
+        return _watch_cache_headers(response)
+
+
+class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, TemplateView):
     """HTMX partial: feed list for the Zeitstrom."""
 
     template_name = "core/zeitstrom/partials/feed_list.html"
+    watch_component = "feed"
+
+    def get(self, request, *args, **kwargs):
+        if request.headers.get("X-Zeitstrom-Watch") != "1":
+            return super().get(request, *args, **kwargs)
+        with _consistent_watch_render():
+            self._watch_state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            context = self.get_context_data(**kwargs)
+            return self.render_watch_followup(request, self.template_name, context, self._watch_state)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         facility = self.request.current_facility
-        live_context = current_tally_context(facility)
-
-        target_date_str = self.request.GET.get("date")
-        try:
-            target_date = date.fromisoformat(target_date_str) if target_date_str else timezone.localdate()
-        except ValueError:
-            target_date = timezone.localdate()
-
-        feed_type = self.request.GET.get("type", "")
-
-        # TimeFilter support for HTMX partial
-        time_filter = None
-        time_filter_id = self.request.GET.get("time_filter")
-        if time_filter_id and time_filter_id != "all":
-            time_filter = TimeFilter.objects.for_facility(facility).filter(pk=time_filter_id).first()
+        state = getattr(self, "_watch_state", None) or resolve_zeitstrom_state(self.request.GET, facility)
+        live_context = state.live_context
+        target_date = state.target_date
+        feed_type = state.feed_type
+        time_filter = state.time_filter
 
         feed_items = build_feed_items(
             facility,
@@ -297,7 +317,7 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
         enrich_events_with_preview(feed_items, self.request.user)
 
         # Document type filter
-        doc_type_id = self.request.GET.get("doc_type")
+        doc_type_id = state.doc_type_id
         if doc_type_id:
             feed_items = [
                 item
@@ -306,15 +326,11 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
             ]
 
         context["feed_items"] = feed_items
-        show_tally_panel = _is_live_tally_context(target_date, time_filter, live_context)
+        show_tally_panel = state.is_live_tally_context
         tally_summary = (
             build_tally_summary(facility, self.request.user, context=live_context) if show_tally_panel else None
         )
-        filter_state = zeitstrom_filter_state(
-            self.request.GET,
-            target_date=target_date,
-            time_filter_id=time_filter_id or "all",
-        )
+        filter_state = state.params
         tally_next = f"{reverse('core:zeitstrom')}?{urlencode(filter_state)}"
         if tally_summary is not None:
             ZeitstromView._add_tally_action_urls(tally_summary, filter_state, tally_next)
@@ -327,4 +343,130 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
         # gerade ein offenes Formular enthalten. Normale Filterwechsel
         # behalten den OOB-Mechanismus.
         context["tally_panel_oob"] = self.request.GET.get("feed_only") != "1"
+        context["zeitstrom_filter_state"] = filter_state
         return context
+
+
+def _watch_cache_headers(response):
+    response["Cache-Control"] = "no-store, private"
+    patch_vary_headers(response, ("Cookie",))
+    return response
+
+
+class ZeitstromWatchView(View):
+    """PII-free conditional JSON endpoint for multi-user Zeitstrom updates."""
+
+    http_method_names = ["get"]
+
+    def dispatch(self, request, *args, **kwargs):
+        user = getattr(request, "user", None)
+        if user is None or not user.is_authenticated:
+            return _watch_cache_headers(
+                JsonResponse(
+                    {"detail": "authentication_required", "login_url": settings.LOGIN_URL},
+                    status=401,
+                )
+            )
+        if not user.is_assistant_or_above or request.current_facility is None:
+            return _watch_cache_headers(JsonResponse({"detail": "forbidden"}, status=403))
+        if not _scope_matches_request(request):
+            return _reload_required(json_response=True)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request):
+        state = resolve_zeitstrom_state(request.GET, request.current_facility)
+        previous = {}
+        raw_validators = request.headers.get("X-Zeitstrom-Validators", "")
+        if raw_validators and len(raw_validators) <= 4096:
+            try:
+                parsed_validators = json.loads(raw_validators)
+            except (TypeError, ValueError):
+                parsed_validators = {}
+            if isinstance(parsed_validators, dict):
+                previous = {
+                    component: value
+                    for component, value in parsed_validators.items()
+                    if component in WATCH_COMPONENTS and isinstance(value, str) and len(value) <= 256
+                }
+        snapshot = build_zeitstrom_watch_snapshot(
+            request.user,
+            request.current_facility,
+            state,
+            previous_validators=previous,
+        )
+        if_none_match = request.headers.get("If-None-Match")
+        if if_none_match:
+            candidates = parse_etags(if_none_match)
+            if "*" in candidates or snapshot.etag in candidates:
+                response = HttpResponse(status=304)
+                response["ETag"] = snapshot.etag
+                return _watch_cache_headers(response)
+
+        response = JsonResponse(
+            {
+                "components": list(snapshot.changed_components),
+                "validators": snapshot.changed_validators,
+            }
+        )
+        response["ETag"] = snapshot.etag
+        return _watch_cache_headers(response)
+
+
+class ZeitstromTallyCountsPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
+    """Authoritative live counts only; never rows, actions, or forms."""
+
+    http_method_names = ["get"]
+    watch_component = "tally_counts"
+
+    def get(self, request):
+        with _consistent_watch_render():
+            state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            if not state.is_live_tally_context:
+                return self.render_watch_followup(request, "", {}, state, status=204)
+            summary = build_tally_summary(request.current_facility, request.user, context=state.live_context)
+            return self.render_watch_followup(
+                request,
+                "core/zeitstrom/partials/tally_counts.html",
+                {"rows": summary["rows"]},
+                state,
+                tally_summary=summary,
+            )
+
+
+class ZeitstromBansPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
+    template_name = "core/zeitstrom/partials/bans_slot.html"
+    watch_component = "bans"
+
+    def get(self, request):
+        with _consistent_watch_render():
+            state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            context = {"active_bans": get_active_bans(request.current_facility, user=request.user)}
+            return self.render_watch_followup(request, self.template_name, context, state)
+
+
+class ZeitstromCurrentShiftPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
+    template_name = "core/zeitstrom/partials/current_shift_slot.html"
+    watch_component = "current_shift"
+
+    def get(self, request):
+        with _consistent_watch_render():
+            state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            context = {
+                "current_shift_summary": build_current_shift_summary(
+                    request.current_facility,
+                    request.user,
+                    state,
+                )
+            }
+            return self.render_watch_followup(request, self.template_name, context, state)
+
+
+class ZeitstromFocusBoxPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
+    template_name = "core/zeitstrom/partials/focus_box_slot.html"
+    watch_component = "focus_box"
+
+    def get(self, request):
+        with _consistent_watch_render():
+            state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            context = {"focus_box": build_focus_box(request.current_facility)}
+            return self.render_watch_followup(request, self.template_name, context, state)

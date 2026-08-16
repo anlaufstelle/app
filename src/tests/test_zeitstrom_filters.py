@@ -1,10 +1,25 @@
-"""Tests für Zeitstrom-Dokumentationstyp-Filter."""
+"""Tests für den kanonischen Zeitstrom-Zustand und Dokumentationstyp-Filter."""
+
+from datetime import date, datetime
 
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Event
+from core.models import Event, TimeFilter
+from core.services.zeitstrom_filters import resolve_zeitstrom_state
+
+
+@pytest.fixture
+def time_filter_frueh(facility):
+    return TimeFilter.objects.create(
+        facility=facility,
+        label="Frühdienst",
+        start_time="08:00",
+        end_time="16:00",
+        is_default=True,
+        sort_order=0,
+    )
 
 
 @pytest.mark.django_db
@@ -76,3 +91,79 @@ class TestZeitstromDocTypeFilter:
         response = client.get(reverse("core:zeitstrom"))
         assert response.status_code == 200
         assert "document_types" in response.context
+
+
+@pytest.mark.django_db
+class TestResolveZeitstromState:
+    def test_normalizes_all_five_contract_fields(self, facility, time_filter_frueh):
+        state = resolve_zeitstrom_state(
+            {
+                "date": "2025-06-15",
+                "time_filter": str(time_filter_frueh.pk),
+                "type": "events",
+                "doc_type": "A1DCE83F-3DDB-418F-AC24-2A6BF67CB2D4",
+                "view": "unsupported",
+            },
+            facility,
+        )
+
+        assert state.target_date == date(2025, 6, 15)
+        assert state.time_filter == time_filter_frueh
+        assert state.params == {
+            "date": "2025-06-15",
+            "time_filter": str(time_filter_frueh.pk),
+            "type": "events",
+            "doc_type": "a1dce83f-3ddb-418f-ac24-2a6bf67cb2d4",
+            "view": "",
+        }
+
+    def test_invalid_values_fall_back_to_canonical_defaults(self, facility):
+        state = resolve_zeitstrom_state(
+            {
+                "date": "invalid",
+                "time_filter": "not-a-uuid",
+                "type": "not-a-feed-type",
+                "doc_type": "not-a-uuid",
+                "view": "not-a-view",
+            },
+            facility,
+        )
+
+        assert state.params == {
+            "date": timezone.localdate().isoformat(),
+            "time_filter": "all",
+            "type": "",
+            "doc_type": "",
+            "view": "",
+        }
+
+    def test_full_and_feed_partial_share_the_same_normalized_state(
+        self, client, staff_user, facility, time_filter_frueh
+    ):
+        client.force_login(staff_user)
+        params = {
+            "date": "2025-06-15",
+            "time_filter": str(time_filter_frueh.pk),
+            "type": "events",
+            "doc_type": "",
+            "view": "",
+        }
+
+        full = client.get(reverse("core:zeitstrom"), params)
+        partial = client.get(reverse("core:zeitstrom_feed_partial"), params)
+
+        assert full.context["zeitstrom_filter_state"] == partial.context["zeitstrom_filter_state"]
+
+    def test_explicit_feed_view_keeps_live_shift_selection(self, facility, time_filter_frueh):
+        now = timezone.make_aware(datetime(2025, 6, 15, 10, 0))
+
+        state = resolve_zeitstrom_state(
+            {"date": "2025-06-15", "view": "feed"},
+            facility,
+            today=date(2025, 6, 15),
+            now=now,
+        )
+
+        assert state.view == "feed"
+        assert state.time_filter == time_filter_frueh
+        assert state.is_handover is False

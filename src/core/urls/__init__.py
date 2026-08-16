@@ -128,7 +128,15 @@ from core.views.workitems import (
     WorkItemDetailView,
     WorkItemInboxView,
 )
-from core.views.zeitstrom import ZeitstromFeedPartialView, ZeitstromView
+from core.views.zeitstrom import (
+    ZeitstromBansPartialView,
+    ZeitstromCurrentShiftPartialView,
+    ZeitstromFeedPartialView,
+    ZeitstromFocusBoxPartialView,
+    ZeitstromTallyCountsPartialView,
+    ZeitstromView,
+    ZeitstromWatchView,
+)
 
 app_name = "core"
 
@@ -299,6 +307,23 @@ urlpatterns = [
     path("partials/tally/increment/", TallyIncrementView.as_view(), name="tally_increment"),
     path("partials/tally/undo/", TallyUndoView.as_view(), name="tally_undo"),
     path("partials/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
+    path(
+        "partials/zeitstrom/tally-counts/",
+        ZeitstromTallyCountsPartialView.as_view(),
+        name="zeitstrom_tally_counts_partial",
+    ),
+    path("partials/zeitstrom/bans/", ZeitstromBansPartialView.as_view(), name="zeitstrom_bans_partial"),
+    path(
+        "partials/zeitstrom/current-shift/",
+        ZeitstromCurrentShiftPartialView.as_view(),
+        name="zeitstrom_current_shift_partial",
+    ),
+    path(
+        "partials/zeitstrom/focus-box/",
+        ZeitstromFocusBoxPartialView.as_view(),
+        name="zeitstrom_focus_box_partial",
+    ),
+    path("api/v1/zeitstrom/watch/", ZeitstromWatchView.as_view(), name="zeitstrom_watch"),
     path("partials/cases/fields/", CaseFieldsPartialView.as_view(), name="case_fields_partial"),
     path("partials/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
     path("partials/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),

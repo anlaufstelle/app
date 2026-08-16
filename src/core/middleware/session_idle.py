@@ -80,6 +80,27 @@ RENEWAL_FRACTION = 0.1
 # bewusst in Kauf genommen (die Seite, von der er ausgeht, hat erneuert).
 BACKGROUND_SYNC_PATH_PREFIX = "/api/v1/offline/"
 
+# #1916: der bedingte Watch-GET und ausschließlich seine markierten
+# Folge-Partials sind Hintergrundverkehr. Der enge Pfad/Header-Vertrag
+# verhindert, dass ein normaler Nutzerrequest sich durch einen beliebigen
+# Header selbst von der Idle-Erneuerung ausnimmt.
+ZEITSTROM_WATCH_PATH = "/api/v1/zeitstrom/watch/"
+ZEITSTROM_WATCH_FOLLOWUP_PATHS = frozenset(
+    {
+        "/partials/zeitstrom/feed/",
+        "/partials/zeitstrom/tally-counts/",
+        "/partials/zeitstrom/bans/",
+        "/partials/zeitstrom/current-shift/",
+        "/partials/zeitstrom/focus-box/",
+    }
+)
+
+
+def _is_zeitstrom_watch_background_request(request) -> bool:
+    if request.path == ZEITSTROM_WATCH_PATH:
+        return True
+    return request.path in ZEITSTROM_WATCH_FOLLOWUP_PATHS and request.headers.get("X-Zeitstrom-Watch") == "1"
+
 
 class SessionIdleRefreshMiddleware:
     """Deckelt Sessions absolut und verlaengert sie bei Aktivitaet.
@@ -107,6 +128,9 @@ class SessionIdleRefreshMiddleware:
                 not request.headers.get("X-Offline-Replay")
                 # ... ebenso die restliche Sync-Sequenz (laeuft ohne den Marker).
                 and not request.path.startswith(BACKGROUND_SYNC_PATH_PREFIX)
+                # Der Live-Watcher und seine eng markierten Folge-Partials
+                # sind ebenfalls keine Nutzeraktivitaet (#1916).
+                and not _is_zeitstrom_watch_background_request(request)
             ):
                 self._renew_idle_window(request.session)
         return self.get_response(request)

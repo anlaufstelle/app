@@ -34,6 +34,8 @@ from core.middleware.session_idle import (
     ABSOLUTE_DEADLINE_KEY,
     LAST_RENEWAL_KEY,
     RENEWAL_FRACTION,
+    ZEITSTROM_WATCH_FOLLOWUP_PATHS,
+    ZEITSTROM_WATCH_PATH,
     SessionIdleRefreshMiddleware,
 )
 from core.models import AuditLog
@@ -160,6 +162,44 @@ class TestSessionIdleRefreshUnit:
 
         assert request.session.modified is False
 
+    @pytest.mark.parametrize(
+        ("path", "headers"),
+        [
+            (ZEITSTROM_WATCH_PATH, None),
+            *[(path, {"X-Zeitstrom-Watch": "1"}) for path in sorted(ZEITSTROM_WATCH_FOLLOWUP_PATHS)],
+        ],
+    )
+    def test_zeitstrom_watch_requests_are_not_user_activity(self, staff_user, path, headers):
+        request = _request_with_session(
+            staff_user,
+            renewed_ago=WINDOW,
+            path=path,
+            headers=headers,
+        )
+
+        _make_middleware()(request)
+
+        assert request.session.modified is False
+
+    @pytest.mark.parametrize(
+        ("path", "headers"),
+        [
+            ("/partials/zeitstrom/feed/", None),
+            ("/clients/", {"X-Zeitstrom-Watch": "1"}),
+        ],
+    )
+    def test_watch_exemption_requires_exact_path_and_header_contract(self, staff_user, path, headers):
+        request = _request_with_session(
+            staff_user,
+            renewed_ago=WINDOW,
+            path=path,
+            headers=headers,
+        )
+
+        _make_middleware()(request)
+
+        assert request.session.modified is True
+
     def test_anonymous_user_is_not_touched(self):
         request = _request_with_session(AnonymousUser(), renewed_ago=None)
 
@@ -273,6 +313,28 @@ class TestSessionAbsoluteCap:
         assert request.user.is_anonymous
         assert ABSOLUTE_DEADLINE_KEY not in request.session
 
+    @pytest.mark.parametrize(
+        ("headers", "path"),
+        [
+            (None, ZEITSTROM_WATCH_PATH),
+            ({"X-Zeitstrom-Watch": "1"}, "/partials/zeitstrom/feed/"),
+        ],
+        ids=["watch-endpoint", "watch-followup"],
+    )
+    def test_cap_still_applies_to_watch_background_requests(self, staff_user, headers, path):
+        request = _request_with_session(
+            staff_user,
+            renewed_ago=WINDOW,
+            deadline_in=-1,
+            headers=headers,
+            path=path,
+        )
+
+        _make_middleware()(request)
+
+        assert request.user.is_anonymous
+        assert ABSOLUTE_DEADLINE_KEY not in request.session
+
     def test_future_deadline_leaves_renewal_untouched(self, staff_user):
         """Deadline in der Zukunft -> die bestehende Erneuerungs-Logik laeuft
         unveraendert weiter."""
@@ -357,6 +419,17 @@ class TestSessionAbsoluteCapIntegration:
 
         assert response.status_code == 302
         assert response["Location"].startswith("/login/")
+
+    def test_expired_cap_gives_watch_json_401_and_deletes_session(self, client, staff_user):
+        session_key = self._expire(client, staff_user)
+
+        response = client.get(ZEITSTROM_WATCH_PATH, headers={"Accept": "application/json"})
+
+        assert response.status_code == 401
+        assert response["Content-Type"].startswith("application/json")
+        assert response.json()["detail"] == "authentication_required"
+        assert not Session.objects.filter(session_key=session_key).exists()
+        assert AuditLog.objects.filter(action=AuditLog.Action.LOGOUT, user=staff_user).exists()
 
     def test_login_view_stamps_the_deadline(self, client, staff_user, settings_obj):
         """Der echte Login-Pfad stempelt die Deadline aus den Facility-Settings

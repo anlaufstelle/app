@@ -3,7 +3,9 @@
      data-testid="tally-row-{{ row.document_type.pk }}">
     <span class="text-[13px] text-ink truncate">{{ row.document_type.name }}</span>
     <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right ml-auto"
+          id="tally-count-{{ row.document_type.pk }}"
           data-testid="tally-count-{{ row.document_type.pk }}"
+          data-confirmed-count="{{ row.count }}"
           aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
     {% include "core/zeitstrom/partials/tally_action.html" %}
     {% if tally_undo_token %}

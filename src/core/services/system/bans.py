@@ -36,26 +36,13 @@ def _collect_active_bans(events, user, *, include_client_in_result):
 
     for event in events:
         data = event.data_json or {}
-
-        aktiv_raw = safe_decrypt(data.get("aktiv", False), default=False)
-        if not aktiv_raw:
+        active, bis_date, grund = _project_ban_data(
+            data,
+            today=today,
+            may_see_grund=_user_may_see_grund(user, event),
+        )
+        if not active:
             continue
-
-        bis_raw = safe_decrypt(data.get("bis", ""), default="")
-        bis_date = None
-        if bis_raw:
-            try:
-                bis_date = date.fromisoformat(str(bis_raw))
-                if bis_date < today:
-                    continue
-            except (ValueError, TypeError):
-                # Defekt gespeichertes Datum -> als "kein Ablauf" behandeln,
-                # aber fuer die Diagnose protokollieren (Refs #1011).
-                logger.debug("Ungueltiges Ban-'bis'-Datum ignoriert: %r", bis_raw)
-
-        grund = ""
-        if _user_may_see_grund(user, event):
-            grund = safe_decrypt(data.get("grund", ""), default="")
 
         entry = {
             "event": event,
@@ -68,6 +55,76 @@ def _collect_active_bans(events, user, *, include_client_in_result):
         active_bans.append(entry)
 
     return active_bans
+
+
+def _project_ban_data(data, *, today, may_see_grund):
+    """Shared active/expiry/reason projection for UI and watch revisions."""
+
+    aktiv_raw = safe_decrypt(data.get("aktiv", False), default=False)
+    if not aktiv_raw:
+        return False, None, ""
+
+    bis_raw = safe_decrypt(data.get("bis", ""), default="")
+    bis_date = None
+    if bis_raw:
+        try:
+            bis_date = date.fromisoformat(str(bis_raw))
+            if bis_date < today:
+                return False, None, ""
+        except (ValueError, TypeError):
+            # Defekt gespeichertes Datum -> als "kein Ablauf" behandeln,
+            # aber fuer die Diagnose protokollieren (Refs #1011).
+            logger.debug("Ungueltiges Ban-'bis'-Datum ignoriert: %r", bis_raw)
+
+    grund = safe_decrypt(data.get("grund", ""), default="") if may_see_grund else ""
+    return True, bis_date, grund
+
+
+def get_active_bans_revision(facility, user=None):
+    """Values-only fingerprint source matching :func:`get_active_bans`.
+
+    The safety projection intentionally ignores Event sensitivity for ban
+    *presence*, exactly like the banner. The reason enters the tuple only if
+    the role may see it, so a reason-only edit cannot become a timing leak for
+    an assistant.
+    """
+
+    today = timezone.localdate()
+    rows = (
+        Event.objects.for_facility(facility)
+        .filter(document_type__system_type="ban", document_type__is_active=True, is_deleted=False)
+        .values(
+            "id",
+            "client_id",
+            "client__pseudonym",
+            "document_type__sensitivity",
+            "data_json",
+        )
+        .order_by("-occurred_at")
+    )
+    revision = []
+    for row in rows:
+        may_see_grund = user is not None and user_can_see_field(
+            user,
+            row["document_type__sensitivity"],
+            field_sensitivity="",
+        )
+        active, bis_date, grund = _project_ban_data(
+            row["data_json"] or {},
+            today=today,
+            may_see_grund=may_see_grund,
+        )
+        if not active:
+            continue
+        revision.append(
+            (
+                str(row["id"]),
+                (str(row["client_id"]), row["client__pseudonym"]) if row["client_id"] else None,
+                grund,
+                bis_date,
+            )
+        )
+    return tuple(revision)
 
 
 def get_active_bans(facility, user=None):

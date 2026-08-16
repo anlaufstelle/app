@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
     await import("../../src/static/js/zeitstrom-filter-state.js");
@@ -38,6 +38,16 @@ describe("Zeitstrom filter state", () => {
 
         expect(document.querySelector('[name="doc_type"]').value).toBe("new-type");
         expect(parameters.doc_type).toBe("new-type");
+    });
+
+    it("announces the hidden SSOT change so the live watcher invalidates its generation", () => {
+        const changed = vi.fn();
+        window.addEventListener("zeitstrom:filter-changed", changed, { once: true });
+
+        configure(document.getElementById("filter-doc-type"));
+
+        expect(changed).toHaveBeenCalledOnce();
+        expect(changed.mock.calls[0][0].detail).toEqual({ name: "doc_type", value: "new-type" });
     });
 
     it("leaves unrelated requests and pages without the state source unchanged", () => {

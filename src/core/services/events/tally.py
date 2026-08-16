@@ -235,7 +235,7 @@ def tally_eligibilities(facility, user) -> list[TallyEligibility]:
     return [evaluate_tally_eligibility(document_type, user) for document_type in document_types]
 
 
-def current_tally_context(facility) -> TallyLiveContext:
+def current_tally_context(facility, *, time_filters=None, now=None) -> TallyLiveContext:
     """Liefere Schicht, Schichtdatum und Fenster der Live-Erfassung.
 
     Deckt ein aktiver ``TimeFilter`` den jetzigen Zeitpunkt ab, wird dessen
@@ -243,8 +243,10 @@ def current_tally_context(facility) -> TallyLiveContext:
     frühen Morgenstunden gehört der Zeitpunkt zum Nachtdienst des Vortags).
     Läuft gerade keine Schicht, ist das Fenster der komplette heutige Tag.
     """
-    now = timezone.localtime()
-    for tf in TimeFilter.objects.for_facility(facility).filter(is_active=True).order_by("sort_order", "pk"):
+    now = now or timezone.localtime()
+    if time_filters is None:
+        time_filters = TimeFilter.objects.for_facility(facility).filter(is_active=True).order_by("sort_order", "pk")
+    for tf in time_filters:
         if not tf.covers_time(now):
             continue
         shift_date = now.date()

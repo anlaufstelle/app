@@ -698,6 +698,13 @@ EXPECTATIONS = (
     # wird in den Tally-Tests body-basiert geprüft.
     E("core:tally_increment", "partials-htmx", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS, extra_ok=(400, 404)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    E("core:zeitstrom_tally_counts_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    E("core:zeitstrom_bans_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    E("core:zeitstrom_current_shift_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    E("core:zeitstrom_focus_box_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    # JSON-Pollingvertrag: anonyme Requests antworten bewusst mit 401 statt
+    # Login-HTML/Redirect; Rollen und Facility-Gate bleiben ASSISTANT_PLUS.
+    E("core:zeitstrom_watch", "offline-api", get=ASSISTANT_PLUS, anonymous_ok=True),
     # M2 P8 (Refs #1058): STAFF_PLUS — bewusst enger als das Event-Partial,
     # analog ``client_fields_partial``. Faelle anlegen/bearbeiten ist STAFF_PLUS
     # (``case_create``/``cases_for_client``), also darf auch die Feldflaeche

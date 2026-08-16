@@ -14,9 +14,16 @@
 
     function update(name, value, parameters) {
         var input = stateInput(name);
-        if (!input) return;
+        if (!input) return false;
+        var changed = input.value !== value;
         input.value = value;
         parameters[name] = value;
+        if (changed) {
+            window.dispatchEvent(
+                new CustomEvent("zeitstrom:filter-changed", { detail: { name: name, value: value } }),
+            );
+        }
+        return changed;
     }
 
     document.body.addEventListener("htmx:configRequest", function (event) {

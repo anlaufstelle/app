@@ -522,6 +522,12 @@
         // validiert, damit dieser globale Zaehler nicht das 120/h-Limit leert.
         refreshOnlinePanel();
     });
+    // #1916 aktualisiert ausschließlich die autoritativen Count-Spans. Der
+    // lokale Renderer setzt danach Pending/Blocked erneut darüber, ohne eine
+    // offene NUMBER-Form oder die Row-/Action-Struktur auszutauschen.
+    window.addEventListener("zeitstrom:tally-counts-updated", function () {
+        refreshOnlinePanel();
+    });
     // Dieses Event wird vom spaeter geladenen sync-orchestrator.js sowohl
     // fuer den eigenen Abschluss als auch fuer Cross-Tab-Broadcasts erzeugt.
     // Registrierung vor dessen Script ist gewollt und schliesst das
