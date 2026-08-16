@@ -75,6 +75,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         "idempotency_payload_hash",
         reason="Serverinterner SHA-256-Fingerabdruck des kanonischen Request-Payloads, kein Klartext.",
     ),
+    non_pii(
+        "core_event",
+        "created_via",
+        reason="Servergesetztes Herkunfts-Enum (standard/tally), kein Freitext und kein Personenbezug.",
+    ),
     # ---- core_case -------------------------------------------------------
     pii("core_case", "title"),
     pii("core_case", "description"),
