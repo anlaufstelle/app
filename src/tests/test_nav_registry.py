@@ -58,7 +58,7 @@ NAV_ROUTE_PREFIXES = (
 # Package-Split von ``core/urls.py``). Reiner Smoke-Test: der Split ist eine
 # reine Verschiebung, kein Pattern darf dabei verloren gehen oder sich
 # verdoppeln. Bei einer bewussten Aenderung der Routenzahl hier mitziehen.
-_EXPECTED_TOTAL_PATTERNS = 147
+_EXPECTED_TOTAL_PATTERNS = 152  # +1 Tally-Undo (#1913), +4 Zeitstrom-Watch (#1916)
 
 
 def _prefixed_route_names() -> dict[str, str]:
