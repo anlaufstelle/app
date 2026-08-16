@@ -7987,6 +7987,13 @@ msgstr ""
 "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%%"
 "(stage)s\" auswählbar."
 
+# Translators: Runtime lookup uses a single percent; Django's template
+# extractor emits the escaped double-percent entry above.
+#: src/core/views/events.py
+#, python-format
+msgid "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
+msgstr "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
+
 #: src/templates/core/events/create.html:47
 msgid "Schnell-Vorlagen"
 msgstr "Schnell-Vorlagen"

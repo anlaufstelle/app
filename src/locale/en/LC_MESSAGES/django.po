@@ -7910,6 +7910,13 @@ msgstr ""
 "For this documentation type, only people at contact stage \"%%(stage)s\" or "
 "above can be selected."
 
+# Translators: Runtime lookup uses a single percent; Django's template
+# extractor emits the escaped double-percent entry above.
+#: src/core/views/events.py
+#, python-format
+msgid "Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s\" auswählbar."
+msgstr "For this documentation type, only people at contact stage \"%(stage)s\" or above can be selected."
+
 #: src/templates/core/events/create.html:47
 msgid "Schnell-Vorlagen"
 msgstr "Quick templates"

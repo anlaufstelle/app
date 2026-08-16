@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_noop
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
@@ -81,6 +82,14 @@ from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import object_back_link, safe_redirect_path
 
 logger = logging.getLogger(__name__)
+
+# Django rendert die Vorlage mit einem einfachen Prozentzeichen, waehrend der
+# Template-Extractor den Platzhalter als ``%%(stage)s`` katalogisiert. Der
+# No-op-Marker haelt deshalb die tatsaechliche Runtime-ID im Katalog; ohne ihn
+# faellt die englische UI auf den deutschen Quelltext zurueck (Refs #1915).
+MIN_CONTACT_STAGE_HINT_MSGID = gettext_noop(
+    'Für diesen Dokumentationstyp sind nur Personen ab der Kontaktstufe „%(stage)s" auswählbar.'
+)
 
 
 def _event_back_link(event) -> dict[str, str]:
