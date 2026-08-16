@@ -75,12 +75,15 @@ from core.services.events.idempotency import (
 from core.services.events.tally import (
     TallyEligibility,
     TallyIneligibilityReason,
+    TallyLiveContext,
     TallyMode,
     build_tally_summary,
+    current_tally_context,
     current_tally_window,
     evaluate_tally_eligibility,
     tally_document_types,
     tally_eligibilities,
+    tally_request_matches_live_context,
 )
 
 __all__ = [
@@ -89,6 +92,7 @@ __all__ = [
     "RESTRICTED_PLACEHOLDER",
     "TallyEligibility",
     "TallyIneligibilityReason",
+    "TallyLiveContext",
     "TallyMode",
     "_build_prior_versions",
     "_format_field_display_value",
@@ -106,6 +110,7 @@ __all__ = [
     "build_tally_summary",
     "compute_event_diff",
     "current_tally_window",
+    "current_tally_context",
     "create_event",
     "decrypt_event_text_data",
     "enrich_events_with_preview",
@@ -128,6 +133,7 @@ __all__ = [
     "soft_delete_event",
     "split_file_and_text_data",
     "tally_eligibilities",
+    "tally_request_matches_live_context",
     "stage_index",
     "tally_document_types",
     "update_event",

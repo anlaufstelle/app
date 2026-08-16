@@ -10,7 +10,9 @@ durch denselben create_event-Pfad.{% endcomment %}
         <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"/></svg>
         <div>
             <h2 id="tally-heading" class="text-[11px] font-bold text-ink-muted uppercase tracking-wider leading-none">{% trans "Strichliste" %}</h2>
-            <span class="text-[13px] font-semibold text-ink-soft">{% trans "Anonyme Kontakte im aktuellen Zeitfenster" %}</span>
+            <span class="text-[13px] font-semibold text-ink-soft" data-testid="tally-live-context">
+                {% if tally_summary.time_filter %}{{ tally_summary.time_filter.label }} · {% endif %}{{ tally_summary.window_start|date:"d.m.Y H:i" }}–{{ tally_summary.window_end|date:"d.m.Y H:i" }}
+            </span>
         </div>
     </div>
     <div class="px-4 py-3 flex flex-col gap-2">

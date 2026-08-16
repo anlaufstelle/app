@@ -9,11 +9,28 @@ from django.views.generic import TemplateView
 from core.models import DocumentType, TimeFilter
 from core.services.case import build_handover_summary
 from core.services.dashboard import build_focus_box, staff_dashboard_context
-from core.services.events import build_feed_items, build_tally_summary, enrich_events_with_preview
+from core.services.events import (
+    build_feed_items,
+    build_tally_summary,
+    current_tally_context,
+    enrich_events_with_preview,
+)
 from core.services.system import get_active_bans
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)
+
+
+def _is_live_tally_context(target_date, selected_filter, live_context) -> bool:
+    """Ob die sichtbare Auswahl die serverseitige Live-Erfassung meint."""
+    live_filter = live_context.time_filter
+    if selected_filter is not None:
+        return (
+            live_filter is not None and selected_filter.pk == live_filter.pk and target_date == live_context.shift_date
+        )
+    # Der ganze heutige Tag bleibt eine zulässige Ergebnisansicht. Das Panel
+    # benennt daneben sein engeres, ggf. laufendes Schichtfenster.
+    return target_date == timezone.localdate()
 
 
 class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
@@ -27,24 +44,21 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
 
         target_date = self._get_target_date()
         feed_type = self.request.GET.get("type", "")
+        live_context = current_tally_context(facility)
 
         # TimeFilter tabs (from Timeline)
-        time_filters = TimeFilter.objects.for_facility(facility).filter(is_active=True)
+        time_filters = TimeFilter.objects.for_facility(facility).filter(is_active=True).order_by("sort_order", "pk")
         selected_filter_id = self.request.GET.get("time_filter")
 
         selected_filter = None
         if selected_filter_id and selected_filter_id != "all":
             selected_filter = time_filters.filter(pk=selected_filter_id).first()
         if not selected_filter and selected_filter_id != "all" and target_date == timezone.localdate():
-            # Auto-select: choose the time filter that covers the current time (today only)
-            now = timezone.localtime()
-            for tf in time_filters:
-                if tf.covers_time(now):
-                    selected_filter = tf
-                    # Midnight overlap: early morning hours belong to previous day's night shift
-                    if tf.start_time > tf.end_time and now.time() <= tf.end_time:
-                        target_date = target_date - timedelta(days=1)
-                    break
+            # Auto-Select und Tally teilen genau dieselbe Live-Schicht samt
+            # Mitternachts- und Tie-Breaker-Semantik.
+            selected_filter = live_context.time_filter
+            if selected_filter is not None:
+                target_date = live_context.shift_date
 
         selected_filter_id = str(selected_filter.pk) if selected_filter else "all"
 
@@ -99,9 +113,10 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         # beim Durchklicken anderer Tage/Schichten nicht mitwechselt.
         current_shift_summary = self._build_current_shift_summary(facility, time_filters)
 
-        # Strichlisten-/Tally-Panel (Refs #1349): anonyme Massenkontakte je
-        # anonymfähigem Dokumentationstyp im aktuellen Zeitfenster zählen.
-        tally_summary = build_tally_summary(facility, self.request.user)
+        # Die teure Eignungs-/Count-Summary wird erst gebaut, wenn das Panel
+        # im finalen Kontext tatsächlich gerendert wird.
+        tally_summary = None
+        show_tally_panel = False
 
         # Active bans (from Dashboard)
         active_bans = get_active_bans(facility, user=self.request.user)
@@ -123,6 +138,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "handover_summary": handover_summary,
                 "current_shift_summary": current_shift_summary,
                 "tally_summary": tally_summary,
+                "show_tally_panel": show_tally_panel,
                 "time_filters": time_filters,
                 "selected_filter": selected_filter,
                 "selected_filter_id": selected_filter_id,
@@ -155,6 +171,12 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             )
             context["selected_filter"] = uebergabe_filter
             context["selected_filter_id"] = str(uebergabe_filter.pk) if uebergabe_filter else "all"
+        else:
+            show_tally_panel = _is_live_tally_context(target_date, selected_filter, live_context)
+            if show_tally_panel:
+                tally_summary = build_tally_summary(facility, self.request.user, context=live_context)
+            context["show_tally_panel"] = show_tally_panel
+            context["tally_summary"] = tally_summary
 
         return context
 
@@ -210,6 +232,7 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         facility = self.request.current_facility
+        live_context = current_tally_context(facility)
 
         target_date_str = self.request.GET.get("date")
         try:
@@ -244,4 +267,11 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
             ]
 
         context["feed_items"] = feed_items
+        show_tally_panel = _is_live_tally_context(target_date, time_filter, live_context)
+        tally_summary = (
+            build_tally_summary(facility, self.request.user, context=live_context) if show_tally_panel else None
+        )
+        context["tally_summary"] = tally_summary
+        context["show_tally_panel"] = show_tally_panel
+        context["tally_panel_oob"] = True
         return context

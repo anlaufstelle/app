@@ -1,4 +1,11 @@
 {% load i18n %}
+{% if tally_panel_oob %}
+<div id="tally-panel-slot" hx-swap-oob="innerHTML">
+    {% if show_tally_panel %}
+    {% include "core/zeitstrom/partials/tally_panel.html" %}
+    {% endif %}
+</div>
+{% endif %}
 {% if feed_items %}
 <div class="space-y-2">
     {% for item in feed_items %}

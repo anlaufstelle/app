@@ -9,7 +9,7 @@ aktuellen Zeitpunkt abdeckt), sonst der komplette heutige Tag.
 """
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 
 from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Prefetch, Q, When
@@ -104,6 +104,16 @@ class TallyEligibility:
             TallyIneligibilityReason.CONDITIONAL_REQUIRED_FIELD,
             TallyIneligibilityReason.UNSUPPORTED_REQUIRED_FIELD,
         }.intersection(self.reasons)
+
+
+@dataclass(frozen=True)
+class TallyLiveContext:
+    """Autoritativer Live-Zeitraum der Strichliste."""
+
+    time_filter: TimeFilter | None
+    shift_date: date
+    window_start: datetime
+    window_end: datetime
 
 
 def _tally_assignment_queryset():
@@ -216,13 +226,13 @@ def tally_eligibilities(facility, user) -> list[TallyEligibility]:
                 to_attr="_tally_policy_assignments",
             )
         )
-        .order_by("name")
+        .order_by("sort_order", "name", "pk")
     )
     return [evaluate_tally_eligibility(document_type, user) for document_type in document_types]
 
 
-def current_tally_window(facility):
-    """Aktuelles Zeitfenster für die Strichliste als ``(start_dt, end_dt)``.
+def current_tally_context(facility) -> TallyLiveContext:
+    """Liefere Schicht, Schichtdatum und Fenster der Live-Erfassung.
 
     Deckt ein aktiver ``TimeFilter`` den jetzigen Zeitpunkt ab, wird dessen
     Schicht-Fenster verwendet (inklusive Mitternachts-Überlappung: in den
@@ -230,14 +240,53 @@ def current_tally_window(facility):
     Läuft gerade keine Schicht, ist das Fenster der komplette heutige Tag.
     """
     now = timezone.localtime()
-    for tf in TimeFilter.objects.for_facility(facility).filter(is_active=True):
+    for tf in TimeFilter.objects.for_facility(facility).filter(is_active=True).order_by("sort_order", "pk"):
         if not tf.covers_time(now):
             continue
-        shift_date = timezone.localdate()
+        shift_date = now.date()
         if tf.start_time > tf.end_time and now.time() <= tf.end_time:
             shift_date = shift_date - timedelta(days=1)
-        return get_time_range(shift_date, tf)
-    return get_time_range(timezone.localdate(), None)
+        window_start, window_end = get_time_range(shift_date, tf)
+        return TallyLiveContext(tf, shift_date, window_start, window_end)
+    shift_date = now.date()
+    window_start, window_end = get_time_range(shift_date, None)
+    return TallyLiveContext(None, shift_date, window_start, window_end)
+
+
+def current_tally_window(facility):
+    """Aktuelles Zeitfenster für die Strichliste als ``(start_dt, end_dt)``."""
+
+    context = current_tally_context(facility)
+    return context.window_start, context.window_end
+
+
+def tally_request_matches_live_context(facility, params) -> bool:
+    """Akzeptiere Kontextparameter nur, wenn sie die Live-Erfassung meinen.
+
+    Nur parameterlose Requests sind immer live: ``occurred_at`` wird
+    serverseitig auf ``timezone.now()`` gesetzt. Ein expliziter Schichtfilter
+    braucht exakt dessen Live-Schichtdatum; ``all``/kein Filter mit Datum
+    braucht das lokale heutige Datum. Abweichende Parameter werden abgewiesen
+    statt als Nacherfassung zu wirken.
+    """
+    if not params.get("date") and not params.get("time_filter"):
+        return True
+
+    context = current_tally_context(facility)
+    requested_date = params.get("date")
+    parsed_date = None
+    if requested_date:
+        try:
+            parsed_date = date.fromisoformat(requested_date)
+        except ValueError:
+            return False
+
+    requested_filter = params.get("time_filter")
+    if requested_filter and requested_filter != "all":
+        if context.time_filter is None or requested_filter != str(context.time_filter.pk):
+            return False
+        return parsed_date == context.shift_date
+    return parsed_date is None or parsed_date == timezone.localdate()
 
 
 def tally_document_types(facility, user):
@@ -268,7 +317,7 @@ def tally_document_types(facility, user):
     )
 
 
-def build_tally_summary(facility, user):
+def build_tally_summary(facility, user, *, context: TallyLiveContext | None = None):
     """Strichlisten-Aggregation für die Zeitstrom-Startseite.
 
     Liefert ein Dict ``{"window_start", "window_end", "rows"}`` — ``rows`` ist
@@ -278,7 +327,7 @@ def build_tally_summary(facility, user):
     für den User sichtbare (``Event.objects.visible_to``), nicht gelöschte,
     anonyme Events.
     """
-    start_dt, end_dt = current_tally_window(facility)
+    context = context or current_tally_context(facility)
     eligibilities = [result for result in tally_eligibilities(facility, user) if result.eligible]
 
     counts = dict(
@@ -287,7 +336,7 @@ def build_tally_summary(facility, user):
             facility=facility,
             is_deleted=False,
             is_anonymous=True,
-            occurred_at__range=(start_dt, end_dt),
+            occurred_at__range=(context.window_start, context.window_end),
         )
         .values_list("document_type_id")
         .annotate(n=Count("id"))
@@ -301,4 +350,10 @@ def build_tally_summary(facility, user):
         }
         for eligibility in eligibilities
     ]
-    return {"window_start": start_dt, "window_end": end_dt, "rows": rows}
+    return {
+        "time_filter": context.time_filter,
+        "shift_date": context.shift_date,
+        "window_start": context.window_start,
+        "window_end": context.window_end,
+        "rows": rows,
+    }

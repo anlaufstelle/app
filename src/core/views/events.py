@@ -50,6 +50,7 @@ from core.services.events import (
     resolve_default_document_type,
     soft_delete_event,
     split_file_and_text_data,
+    tally_request_matches_live_context,
     update_event,
 )
 from core.services.events.fields import file_marker_slugs
@@ -535,7 +536,15 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             return eligibility, HttpResponseBadRequest(message)
         return eligibility, None
 
+    @staticmethod
+    def _live_context_error(request, params):
+        if tally_request_matches_live_context(request.current_facility, params):
+            return None
+        return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
+
     def get(self, request):
+        if error_response := self._live_context_error(request, request.GET):
+            return error_response
         eligibility, error_response = self._resolve_document_type(request, request.GET)
         if error_response is not None:
             return error_response
@@ -569,6 +578,8 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
 
     def post(self, request):
         facility = request.current_facility
+        if error_response := self._live_context_error(request, request.POST):
+            return error_response
         eligibility, error_response = self._resolve_document_type(request, request.POST)
         if error_response is not None:
             return error_response
