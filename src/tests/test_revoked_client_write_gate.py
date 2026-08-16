@@ -355,7 +355,7 @@ class TestEventUpdateViewRejectsRevokedClient:
             document_type=doc_type,
             client=person,
             occurred_at=timezone.now(),
-            data_json={"dauer": "10", "notiz": "Ausgangsstand"},
+            data_json={"dauer": 10, "notiz": "Ausgangsstand"},
         )
 
     def test_html_edit_on_anonymized_client_is_blocked_and_writes_nothing(
