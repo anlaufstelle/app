@@ -620,6 +620,8 @@ class TestSerializeFieldTemplate:
         sensitivity: str = "",
         is_encrypted: bool = False,
         is_required: bool = False,
+        min_value: int | None = None,
+        max_value: int | None = None,
         help_text: str = "",
         choices=None,
     ):
@@ -632,6 +634,8 @@ class TestSerializeFieldTemplate:
             sensitivity=sensitivity,
             is_encrypted=is_encrypted,
             is_required=is_required,
+            min_value=min_value,
+            max_value=max_value,
             help_text=help_text,
             # ``FieldTemplate.choices`` ist eine Property, die (value, label)-
             # Tupel der aktiven Optionen liefert — hier als Attribut gestubbt.
@@ -648,6 +652,9 @@ class TestSerializeFieldTemplate:
             "is_encrypted",
             # Refs #1111: Render-Metadaten fürs Offline-Edit-Formular.
             "is_required",
+            # Refs #1914: Offline-Zahlenfelder tragen dieselben Grenzen.
+            "min_value",
+            "max_value",
             "help_text",
             "options",
         }
