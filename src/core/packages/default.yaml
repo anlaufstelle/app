@@ -170,6 +170,7 @@ field_templates:
     name: Ausgabe
     report_key: ausgabe_stueck
     field_type: number
+    min_value: 0
     is_required: true
     is_encrypted: false
     sensitivity: ""
@@ -178,6 +179,7 @@ field_templates:
     name: Rückgabe
     report_key: rueckgabe_stueck
     field_type: number
+    min_value: 0
     is_required: true
     is_encrypted: false
     sensitivity: ""

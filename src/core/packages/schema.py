@@ -85,6 +85,8 @@ _FIELD_TEMPLATE_KEYS = frozenset(
         "slug",
         "name",
         "field_type",
+        "min_value",
+        "max_value",
         "is_required",
         "is_encrypted",
         "sensitivity",
@@ -195,6 +197,8 @@ class FieldTemplateDef:
     slug: str
     name: str
     field_type: str = FieldTemplate.FieldType.TEXT.value
+    min_value: int | None = None
+    max_value: int | None = None
     is_required: bool = False
     is_encrypted: bool = False
     sensitivity: str = ""
@@ -377,6 +381,18 @@ def _int_value(
     if minimum is not None and value < minimum:
         errors.append((_join(path, key), f"Wert muss >= {minimum} sein."))
         return default
+    return value
+
+
+def _optional_int_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> int | None:
+    if key not in data:
+        return None
+    value = data[key]
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        errors.append((_join(path, key), "Erwartet wird eine ganze Zahl oder null."))
+        return None
     return value
 
 
@@ -588,6 +604,8 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
         )
     name = _required_name(data, "name", path, errors)
     field_type = _enum_value(data, "field_type", path, errors, _FIELD_TYPES, default=FieldTemplate.FieldType.TEXT.value)
+    min_value = _optional_int_value(data, "min_value", path, errors)
+    max_value = _optional_int_value(data, "max_value", path, errors)
     is_required = _bool_value(data, "is_required", path, errors)
     is_encrypted = _bool_value(data, "is_encrypted", path, errors)
     sensitivity = _enum_value(data, "sensitivity", path, errors, _TEMPLATE_SENSITIVITIES, default="")
@@ -596,6 +614,15 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
     report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
 
     options = _parse_option_list(data, path, errors, field_type)
+
+    if field_type != FieldTemplate.FieldType.NUMBER.value:
+        if min_value is not None:
+            errors.append((_join(path, "min_value"), "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."))
+        if max_value is not None:
+            errors.append((_join(path, "max_value"), "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."))
+    elif min_value is not None and max_value is not None and min_value > max_value:
+        errors.append((_join(path, "min_value"), "Wert darf nicht größer als max_value sein."))
+        errors.append((_join(path, "max_value"), "Wert darf nicht kleiner als min_value sein."))
 
     # Spiegelt ``FieldTemplate._validate_high_sensitivity_requires_encryption``
     # früh: HIGH-Felder ohne Verschlüsselung würden beim Laden ohnehin am
@@ -621,6 +648,8 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
         slug=slug,
         name=name,
         field_type=field_type,
+        min_value=min_value,
+        max_value=max_value,
         is_required=is_required,
         is_encrypted=is_encrypted,
         sensitivity=sensitivity,

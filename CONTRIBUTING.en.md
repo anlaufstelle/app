@@ -133,7 +133,7 @@ objects are looked up by `slug` (not by name), properties are re-synced on every
 run (previously `get_or_create` — defaults only took effect on creation), and a
 second run reports everything as unchanged.
 
-The standard catalogue offers `Contact`, `Needle Exchange`, `Referral`, and `Note` in the tally with `tally_enabled: true`. For Needle Exchange, `+1` opens the compact issued/returned-numbers form because both fields are required; the other three types have no required values and are counted directly.
+The standard catalogue offers `Contact`, `Needle Exchange`, `Referral`, and `Note` in the tally with `tally_enabled: true`. For Needle Exchange, `+1` opens the compact issued/returned-numbers form because both fields are required; both quantities use `min_value: 0` in the catalogue, so no write path accepts negative values. The other three types have no required values and are counted directly.
 
 > **Changing the catalogue:** edit the values in `default.yaml`, not in
 > `core/seed/doc_types.py`. Existing `slug` values are **immutable** (migration
@@ -157,6 +157,7 @@ Since M2 the seed is no longer a plain "create if missing" but a re-sync against
 | `name`, `category`, `sensitivity`, `icon`, `color`, `sort_order`, `min_contact_stage` of a catalogue type | **reset** to the catalogue value (previously only set on creation) |
 | `sort_order` of groups **and** field assignments — including types without groups | reset to the catalogue position (previously a manually reordered, group-less field list survived) |
 | `default_value` of a catalogue field template | **reset** to the package value (empty throughout the catalogue) — a default maintained through the config UI does **not** survive the seed. Package format v1 cannot express "do not touch" for this field (unlike `conditions`). |
+| `min_value`, `max_value` of a catalogue numeric field template | reset to the optional package values. The migration only adds configuration columns; existing `data_json` values in events, clients and cases remain unchanged. Before tightening a range, run the read-only inventory `python src/manage.py inventory_number_ranges --facility <UUID-or-name>` with the admin DB role. |
 | `tally_enabled` of a catalogue type | An explicit `true`/`false` is reset to the package value. If the key is absent, a tally opt-in maintained in the admin UI remains on an existing type; a new type defaults to `false`. |
 | Fields a facility has **additionally** assigned to a catalogue type | left untouched (the loader only touches what the package declares) |
 | `retention_days`, `description`, `is_active` (type) and `is_active` (template) | not part of schema v1 — neither set nor reset |
@@ -773,4 +774,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-16 -->
-<!-- source-hash: 5ecf6dbbac3c4cde3c14b41e97451247c69d74d5 -->
+<!-- source-hash: 137e7a9362c4b405bb6fd71a1f3d3c1d72cfc7d8 -->

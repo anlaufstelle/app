@@ -105,6 +105,8 @@ EXPECTED = {
     "FieldTemplateForm": {
         "name": ("TextInput", True, {"maxlength": "200"}),
         "field_type": ("Select", True, {}),
+        "min_value": ("NumberInput", True, {}),
+        "max_value": ("NumberInput", True, {}),
         "is_required": ("CheckboxInput", False, {}),
         "is_encrypted": ("CheckboxInput", False, {}),
         "sensitivity": ("Select", True, {}),

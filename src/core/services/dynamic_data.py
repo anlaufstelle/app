@@ -26,6 +26,7 @@ import logging
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from core.services.compliance import user_can_see_document_type, user_can_see_field
@@ -205,7 +206,8 @@ def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any]
 
     if not data_json:
         return {}
-    allowed_slugs = set(document_type.fields.values_list("field_template__slug", flat=True))
+    field_templates = build_field_template_lookup(document_type)
+    allowed_slugs = set(field_templates)
     # Refs #819: Choice-Konstante statt Magic-String.
     from core.models import FieldTemplate as FieldTemplateModel
 
@@ -226,7 +228,21 @@ def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any]
         elif k in file_slugs:
             continue
         else:
-            cleaned[k] = _serialize_json_value(v)
+            serialized = _serialize_json_value(v)
+            field_template = field_templates[k]
+            if field_template.field_type == FieldTemplateModel.FieldType.NUMBER and serialized is not None:
+                from core.services.file_vault import is_encrypted_value
+                from core.services.system import validate_number_value
+
+                # Ein bereits gespeichertes Token kann aus einem fuer die
+                # aktuelle Rolle unsichtbaren Feld stammen. Nur für passend
+                # verschlüsselte Vorlagen darf es erneut passieren.
+                if not (field_template.is_encrypted and is_encrypted_value(serialized)):
+                    try:
+                        validate_number_value(serialized, field_template.min_value, field_template.max_value)
+                    except ValidationError as error:
+                        raise ValidationError({k: error.messages}) from error
+            cleaned[k] = serialized
     return cleaned
 
 

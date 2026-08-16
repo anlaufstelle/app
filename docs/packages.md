@@ -37,6 +37,8 @@ field_templates:
   - slug: dauer
     name: Dauer
     field_type: number
+    min_value: 0          # optional; nur bei field_type: number
+    max_value: 480         # optional; darf nicht unter min_value liegen
     is_encrypted: false
     sensitivity: ""
     help_text: Dauer in Minuten
@@ -135,6 +137,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `slug` | Slug (`a-z`, `0-9`, `-`) | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich. **Reservierte Slugs** (feste Formularfeld-Namen) sind ein Schema-Fehler — s. Hinweis unter der Tabelle |
 | `name` | nicht-leerer String | **Pflicht** | Muss im Paket eindeutig sein (UI-Unterscheidbarkeit) |
 | `field_type` | `text`, `textarea`, `number`, `date`, `time`, `boolean`, `select`, `multi_select`, `file` | `text` | **Unveränderlich** nach dem Anlegen |
+| `min_value`, `max_value` | ganze Zahl oder `null` | `null` | Nur bei `field_type: number`; `min_value` darf nicht größer als `max_value` sein. Leere Grenzen lassen den Zahlenwert unbeschränkt. |
 | `is_required` | Bool | `false` | Pflichtfeld im Formular |
 | `is_encrypted` | Bool | `false` | **Unveränderlich**; bei `file` und `sensitivity: high` erzwungen |
 | `sensitivity` | `""`, `normal`, `elevated`, `high` | `""` | `""` = erbt vom Dokumentationstyp; `high` erfordert `is_encrypted: true` |
@@ -144,6 +147,8 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `report_key` | Schlüssel (`a-z`, `0-9`, `_`) oder `null` | `null` | Berichtszuordnung der Feldvorlage (#1849). **Nicht** gegen eine Werteliste geprüft — s. Hinweis unter der Typ-Tabelle. `null`/weglassen = keine Angabe (Bestand bleibt unangetastet) |
 
 `options[]`-Einträge: `slug` (Pflicht, Slug-Format, eindeutig je Vorlage), `label` (Pflicht, nicht leer), `is_active` (Bool, Default `true`).
+
+> **Bereichsverschärfung ohne stillen Datenumbau (#1914):** `min_value` und `max_value` gelten für künftige Schreibvorgänge; eine Migration oder ein Paketlauf verändert keine bereits gespeicherten `data_json`-Werte. Vor dem Setzen oder Verschärfen einer Grenze daher mit der Admin-DB-Rolle `python src/manage.py inventory_number_ranges --facility <UUID-oder-Name>` ausführen. Das Inventar nennt nur Entitätsart, Dokumentationstyp, Feld-Slug und Anzahl — nie gespeicherte Werte — und schreibt nichts.
 
 > **Datei-Felder an allen drei Entitäten (seit Milestone 24, #1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)):** `field_type: file` war bis dahin **nur an `entity_type: event`** zulässig; ein `field_ref` auf ein Datei-Feld unter einem Personen- oder Fall-Typ war ein Schema-Fehler. Diese Restriktion ist **ersatzlos entfallen** — Anhänge hängen jetzt an Ereignis, Person oder Fall. Ein Beispiel steht (auskommentiert) im Paket oben unter `aufnahmebogen`.
 >
@@ -360,7 +365,7 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 | `name` des Typs | wird zurückbenannt — bei einem gleichnamigen betreiber-eigenen Typ bricht der Lauf am Unique-Constraint `(facility, name)` ab, bis das manuell aufgelöst ist |
 | `icon`, `color`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt |
 | `sort_order` der Feldzuordnungen | zurückgesetzt — auch bei Typen **ohne** Gruppen; eine per Drag-and-Drop geänderte Reihenfolge geht verloren |
-| `default_value`, `help_text`, `options_json` der Vorlage | zurückgesetzt |
+| `default_value`, `help_text`, `options_json`, `min_value`, `max_value` der Vorlage | zurückgesetzt |
 | `sensitivity` der Vorlage | zurückgesetzt — eine **Absenkung** wird zusätzlich als Warnung gemeldet |
 
 **Senkt** ein Lauf die **effektive** `sensitivity` (am Typ oder an der Vorlage), meldet der Report zusätzlich eine Warnung „Zugriffsschranke gesenkt“. Die Anwendung bleibt erlaubt — aber bereits erfasste Werte werden damit für zusätzliche Rollen lesbar, und ein `--dry-run` zeigt das vorab. Anhebungen sind still.

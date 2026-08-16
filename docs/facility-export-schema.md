@@ -36,7 +36,7 @@ configuration:
                      system_type, tally_enabled, report_key, retention_days, icon, color, description,
                      is_active, sort_order,
                      fields[]: {id, field_template_id, field_group_id, sort_order}}
-  field_templates[]: {id, name, slug, field_type, is_required, is_encrypted,
+  field_templates[]: {id, name, slug, field_type, min_value, max_value, is_required, is_encrypted,
                      sensitivity, options_json, default_value,
                      report_key, help_text, is_active}
   field_groups[]:    {id, document_type_id, name, slug, sort_order, is_collapsible}

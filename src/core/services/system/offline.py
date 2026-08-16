@@ -66,6 +66,8 @@ def _serialize_field_template(field_template) -> dict[str, Any]:
         # ``value``/``label``-Paare. Es verlässt nur Schema (keine PII): die
         # Werte selbst bleiben in ``_visible_data_fields`` sensitivity-gefiltert.
         "is_required": field_template.is_required,
+        "min_value": field_template.min_value,
+        "max_value": field_template.max_value,
         "help_text": field_template.help_text or "",
         "options": [{"value": value, "label": label} for value, label in field_template.choices],
     }

@@ -467,6 +467,8 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
     desired: dict[str, Any] = {
         "name": template_def.name,
         "field_type": template_def.field_type,
+        "min_value": template_def.min_value,
+        "max_value": template_def.max_value,
         "is_required": template_def.is_required,
         "is_encrypted": is_encrypted,
         "sensitivity": template_def.sensitivity,

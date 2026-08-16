@@ -130,6 +130,7 @@ def build_dynamic_form_field(ft, initial_data):
     from core.services.system import (
         FILE,
         MULTI_SELECT,
+        NUMBER,
         SELECT,
         get_form_field_cls_for_file,
         get_spec,
@@ -158,6 +159,9 @@ def build_dynamic_form_field(ft, initial_data):
         "required": ft.is_required,
         "label": ft.name,
     }
+    if ft.field_type == NUMBER:
+        kwargs_copy["min_value"] = ft.min_value
+        kwargs_copy["max_value"] = ft.max_value
     if ft.help_text:
         kwargs_copy["help_text"] = ft.help_text
 

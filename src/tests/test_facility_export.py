@@ -115,6 +115,21 @@ class TestConfiguration:
         assert diagnose["is_encrypted"] is True
         assert diagnose["field_type"] == "textarea"
 
+    def test_field_template_includes_optional_number_ranges(self, facility):
+        field_template = FieldTemplate.objects.create(
+            facility=facility,
+            name="Stückzahl Export",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            min_value=0,
+            max_value=20,
+        )
+
+        export = build_facility_export(facility)
+        entry = next(ft for ft in export["configuration"]["field_templates"] if ft["id"] == str(field_template.pk))
+
+        assert entry["min_value"] == 0
+        assert entry["max_value"] == 20
+
     def test_report_key_ersetzt_statistics_category(self, facility, doc_type_contact, field_template):
         """E3 (Refs #1849): der Berichtsschluessel steht an BEIDEN Traegern im
         Export; das folgenlose ``statistics_category`` ist ersatzlos entfallen.

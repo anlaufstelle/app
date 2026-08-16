@@ -455,6 +455,26 @@ class TestValueCoercion:
         )
         assert Client.objects.get(pseudonym="NUM-01").data_json["betrag"] == 12.5
 
+    def test_number_range_is_checked_without_losing_decimal_csv_contract(
+        self, facility, admin_user, numeric_type, media_root
+    ):
+        template = FieldTemplate.objects.get(facility=facility, slug="betrag")
+        template.min_value = 0
+        template.max_value = 10
+        template.save(update_fields=["min_value", "max_value"])
+
+        result = self._run(
+            facility,
+            admin_user,
+            numeric_type,
+            "Pseudonym;Betrag",
+            "NUM-RANGE;12,50",
+            {"Pseudonym": "pseudonym", "Betrag": "data_json.betrag"},
+        )
+
+        assert result["errors"][0]["code"] == "validation"
+        assert not Client.objects.filter(pseudonym="NUM-RANGE").exists()
+
     def test_german_thousands_separator_without_decimals_is_accepted(
         self, facility, admin_user, numeric_type, media_root
     ):

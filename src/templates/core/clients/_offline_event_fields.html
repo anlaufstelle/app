@@ -15,6 +15,7 @@
         </template>
         <template x-if="field.isPlainInput">
             <input :type="field.inputType" x-model="editValues[field.slug]" :required="field.isRequired"
+                   :min="field.minValue" :max="field.maxValue"
                    class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
         </template>
         <template x-if="field.isTextarea">

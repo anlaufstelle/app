@@ -29,6 +29,7 @@ Inhalts-Sicherheit.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, time
@@ -121,9 +122,40 @@ def _validate_noop(raw: str, context: dict) -> None:  # noqa: ARG001 — Signatu
 
 def _validate_number(raw: str, context: dict) -> None:  # noqa: ARG001
     try:
-        int(raw)
+        value = int(raw)
     except (ValueError, TypeError):
         raise ValidationError({"default_value": _("Default-Wert muss eine ganze Zahl sein.")}) from None
+    validate_number_value(value, context.get("min_value"), context.get("max_value"), error_key="default_value")
+
+
+def validate_number_value(
+    value: int | float,
+    min_value: int | None,
+    max_value: int | None,
+    *,
+    error_key: str | None = None,
+) -> None:
+    """Validiere einen ganzzahligen Wert gegen optionale Feldgrenzen.
+
+    Der Helfer ist die gemeinsame Server-Quelle für Default-Werte und den
+    service-seitigen ``data_json``-Schreibpfad. Formulare setzen dieselben
+    Grenzen zusätzlich als HTML-Eingabehilfe.
+    """
+    message = None
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or (isinstance(value, float) and not math.isfinite(value))
+    ):
+        message = _("Wert muss eine ganze Zahl sein.")
+    elif min_value is not None and value < min_value:
+        message = _("Wert muss mindestens %(minimum)d sein.") % {"minimum": min_value}
+    elif max_value is not None and value > max_value:
+        message = _("Wert darf höchstens %(maximum)d sein.") % {"maximum": max_value}
+    if message is not None:
+        if error_key is not None:
+            raise ValidationError({error_key: message})
+        raise ValidationError(message)
 
 
 def _validate_date(raw: str, context: dict) -> None:  # noqa: ARG001
@@ -357,4 +389,5 @@ __all__ = [
     "TIME",
     "get_form_field_cls_for_file",
     "get_spec",
+    "validate_number_value",
 ]

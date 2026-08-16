@@ -48,6 +48,18 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         default=FieldType.TEXT,
         verbose_name=_("Feldtyp"),
     )
+    min_value = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Minimalwert"),
+        help_text=_("Nur für Zahlenfelder. Leer = keine Untergrenze."),
+    )
+    max_value = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Maximalwert"),
+        help_text=_("Nur für Zahlenfelder. Leer = keine Obergrenze."),
+    )
     is_required = models.BooleanField(default=False, verbose_name=_("Pflichtfeld"))
     is_encrypted = models.BooleanField(default=False, verbose_name=_("Verschlüsselt"))
     sensitivity = models.CharField(
@@ -118,8 +130,24 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
             raise ValidationError(
                 {"slug": _("Der Slug „%(slug)s“ kollidiert mit einem festen Formularfeld.") % {"slug": self.slug}}
             )
+        self._validate_number_range()
         self._validate_default_value()
         self._validate_high_sensitivity_requires_encryption()
+
+    def _validate_number_range(self):
+        """Wertebereiche gelten ausschließlich für ganze Zahlenfelder."""
+        errors = {}
+        if self.field_type != self.FieldType.NUMBER:
+            if self.min_value is not None:
+                errors["min_value"] = _("Minimal- und Maximalwert sind nur für Zahlenfelder zulässig.")
+            if self.max_value is not None:
+                errors["max_value"] = _("Minimal- und Maximalwert sind nur für Zahlenfelder zulässig.")
+        elif self.min_value is not None and self.max_value is not None and self.min_value > self.max_value:
+            message = _("Der Minimalwert darf nicht größer als der Maximalwert sein.")
+            errors["min_value"] = message
+            errors["max_value"] = message
+        if errors:
+            raise ValidationError(errors)
 
     def _validate_high_sensitivity_requires_encryption(self):
         # Refs #733: HIGH-Sensitivity-Felder muessen
@@ -142,7 +170,31 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
         spec = get_spec(self.field_type)
         if not spec.allows_default:
             raise ValidationError({"default_value": _("Für Datei-Felder ist kein Default-Wert zulässig.")})
-        spec.validate_default(raw, {"options_json": self.options_json})
+        spec.validate_default(
+            raw,
+            {
+                "options_json": self.options_json,
+                "min_value": self.min_value,
+                "max_value": self.max_value,
+            },
+        )
+
+    def _validate_persisted_number_default_range(self):
+        """Schliesst den direkten Save-Bypass nur für Zahlenbereiche."""
+        if self.field_type != self.FieldType.NUMBER:
+            return
+        raw = (self.default_value or "").strip()
+        if not raw:
+            return
+        try:
+            value = int(raw)
+        except ValueError:
+            # Direkte Saves haben historisch nur die Bereichs-Konfiguration,
+            # nicht die gesamte Default-Syntax validiert.
+            return
+        from core.services.system import validate_number_value
+
+        validate_number_value(value, self.min_value, self.max_value, error_key="default_value")
 
     def _check_immutable_fields(self, orig):
         # E3 (Refs #1849): Vertrag von ``ReportKeyMixin`` — leer→gesetzt bleibt
@@ -162,6 +214,12 @@ class FieldTemplate(ReportKeyMixin, SluggedModel):
 
     def save(self, *args, **kwargs):
         """Verschlüsselungs-Normalisierung; die Slug-Mechanik liegt in ``SluggedModel``."""
+        # Refs #1914: Nicht-Form-Pfade (Seed/Bulk/Programme) umgehen
+        # ``full_clean()``. Die Bereichs-Restriktion darf dadurch nicht zu
+        # einer Konfiguration an einem Nicht-Zahlenfeld werden.
+        self._validate_number_range()
+        self._validate_persisted_number_default_range()
+
         # FILE fields are always encrypted at rest
         if self.field_type == self.FieldType.FILE:
             self.is_encrypted = True

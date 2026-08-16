@@ -424,6 +424,8 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         fields = [
             "name",
             "field_type",
+            "min_value",
+            "max_value",
             "is_required",
             "is_encrypted",
             "sensitivity",

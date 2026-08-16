@@ -207,6 +207,8 @@ def _serialize_field_template(field_template: FieldTemplate) -> dict:
         "name": field_template.name,
         "slug": field_template.slug,
         "field_type": field_template.field_type,
+        "min_value": field_template.min_value,
+        "max_value": field_template.max_value,
         "is_required": field_template.is_required,
         "is_encrypted": field_template.is_encrypted,
         "sensitivity": field_template.sensitivity,

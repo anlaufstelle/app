@@ -37,10 +37,12 @@ from core.services.system.field_types import (
     FIELD_TYPE_REGISTRY,
     FILE,
     MULTI_SELECT,
+    NUMBER,
     SELECT,
     FieldTypeSpec,
     get_form_field_cls_for_file,
     get_spec,
+    validate_number_value,
 )
 from core.services.system.offline import (
     BUNDLE_SCHEMA_VERSION,
@@ -81,6 +83,7 @@ __all__ = [
     "FieldTypeSpec",
     "LOOKBACK_DAYS",
     "MULTI_SELECT",
+    "NUMBER",
     "SELECT",
     "MAX_EVENTS_PER_BUNDLE",
     "OFFLINE_REVOCATION_MAX_ENTRIES",
@@ -118,4 +121,5 @@ __all__ = [
     "rls_bypass_for_read",
     "snapshot_settings",
     "update_settings",
+    "validate_number_value",
 ]

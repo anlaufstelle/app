@@ -19,6 +19,7 @@ def _add_field(
     field_type=FieldTemplate.FieldType.NUMBER,
     sensitivity="",
     report_key=None,
+    min_value=None,
     sort_order=0,
 ):
     field_template = FieldTemplate.objects.create(
@@ -28,6 +29,7 @@ def _add_field(
         is_required=required,
         sensitivity=sensitivity,
         report_key=report_key,
+        min_value=min_value,
     )
     DocumentTypeField.objects.create(
         document_type=document_type,
@@ -341,3 +343,48 @@ class TestTallyNumberIncrementView:
         assert result.summary["summe_rueckgabe"] == 5
         assert result.summary["events_ohne_werte"] == 0
         assert result.completeness == []
+
+    def test_negative_tally_value_is_rejected_before_it_reaches_needle_exchange_report(
+        self, client, facility, admin_user
+    ):
+        document_type = DocumentType.objects.create(
+            facility=facility,
+            name="Spritzentausch",
+            tally_enabled=True,
+            report_key="needle_exchange",
+        )
+        ausgabe = _add_field(
+            document_type,
+            name="Ausgabe",
+            report_key="ausgabe_stueck",
+            min_value=0,
+            sort_order=0,
+        )
+        rueckgabe = _add_field(
+            document_type,
+            name="Rückgabe",
+            report_key="rueckgabe_stueck",
+            min_value=0,
+            sort_order=1,
+        )
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:tally_increment"),
+            {
+                "document_type": str(document_type.pk),
+                ausgabe.slug: "-1",
+                rueckgabe.slug: "0",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        today = timezone.localdate()
+        result = NeedleExchangeBalanceBackend().build_dataset(
+            facility,
+            today - timedelta(days=1),
+            today + timedelta(days=1),
+        )
+
+        assert response.status_code == 200
+        assert not Event.objects.filter(document_type=document_type).exists()
+        assert result.summary["events"] == 0
