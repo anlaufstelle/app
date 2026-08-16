@@ -2,7 +2,7 @@
 
 import logging
 from contextlib import suppress
-from datetime import date
+from datetime import date, timedelta
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -35,6 +35,8 @@ from core.services.dashboard import (
 )
 from core.services.events import (
     TALLY_IDEMPOTENCY_SCOPE,
+    TALLY_UNDO_SECONDS,
+    TallyUndoDenied,
     apply_attachment_changes,
     build_attachment_context,
     build_event_detail_context,
@@ -48,6 +50,7 @@ from core.services.events import (
     get_idempotent_result,
     has_idempotency_payload_mismatch,
     merge_update_payload,
+    mint_tally_undo_token,
     new_tally_idempotency_key,
     normalize_idempotency_key,
     payload_fingerprint,
@@ -59,6 +62,7 @@ from core.services.events import (
     soft_delete_event,
     split_file_and_text_data,
     tally_request_matches_live_context,
+    undo_tally_event,
     update_event,
 )
 from core.services.events.fields import file_marker_slugs
@@ -592,7 +596,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         )
 
     @classmethod
-    def _row_context(cls, request, facility, event, params, live_context, *, request_is_live):
+    def _row_context(cls, request, facility, event, params, live_context, *, request_is_live, tally_undo_token=None):
         summary = build_tally_summary(facility, request.user, context=live_context)
         row = next((entry for entry in summary["rows"] if entry["document_type"].pk == event.document_type_id), None)
         if row is None:
@@ -613,18 +617,30 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             "tally_filter_state": filter_state,
             "tally_context": tally_context,
             "tally_next": tally_next,
-            # #1913 kann die Provenienz/Undo-Darstellung an diesen wirklich
-            # erzeugten (auch Replay-/Race-)Event-Kontext anbinden.
-            "tally_event": event,
+            # Eine Capability wird ausschliesslich dem Response des wirklich
+            # frischen ``create_event``-Erfolgs mitgegeben, nie einem Replay.
+            "tally_undo_token": tally_undo_token,
+            "tally_undo_expires_at": (
+                event.created_at + timedelta(seconds=TALLY_UNDO_SECONDS) if tally_undo_token else None
+            ),
         }
 
+    @staticmethod
+    def _fresh_undo_token(event):
+        """Mint nur für den unmittelbar erfolgreichen ``create_event``-Pfad."""
+        try:
+            return mint_tally_undo_token(event)
+        except TallyUndoDenied:
+            return None
+
     @classmethod
-    def _success_response(cls, request, facility, event, live_context, *, request_is_live):
+    def _success_response(cls, request, facility, event, live_context, *, request_is_live, fresh_event=False):
         """Return the changed row, or a normal navigation without HTMX."""
         filter_state = cls._filter_state(request.POST, live_context, request_is_live=request_is_live)
         tally_next = cls._tally_next(request.POST, filter_state, request_is_live=request_is_live)
         if not request.headers.get("HX-Request"):
             return redirect(tally_next)
+        tally_undo_token = cls._fresh_undo_token(event) if fresh_event else None
         context = cls._row_context(
             request,
             facility,
@@ -632,6 +648,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             request.POST,
             live_context,
             request_is_live=request_is_live,
+            tally_undo_token=tally_undo_token,
         )
         if context is None:
             # Das Schreiben war erfolgreich, aber eine parallele Policy- oder
@@ -832,6 +849,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 is_anonymous=True,
                 idempotency_key=idempotency_key,
                 idempotency_payload_hash=payload_hash,
+                created_via=Event.CreatedVia.TALLY,
             )
         except IntegrityError as exc:
             if "event_idem_key_per_user_uniq" in str(exc):
@@ -855,7 +873,49 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             event.pk,
             payload_hash=payload_hash,
         )
-        return self._success_response(request, facility, event, live_context, request_is_live=True)
+        return self._success_response(
+            request,
+            facility,
+            event,
+            live_context,
+            request_is_live=True,
+            fresh_event=True,
+        )
+
+
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+class TallyUndoView(AssistantOrAboveRequiredMixin, View):
+    """POST-only Rücknahme einer signierten Tally-Capability (Refs #1913)."""
+
+    def post(self, request):
+        try:
+            event = undo_tally_event(request.current_facility, request.user, request.POST.get("token"))
+        except TallyUndoDenied as exc:
+            # Wie ``get_visible_event_or_404``: keine Unterscheidung zwischen
+            # gefälschtem, fremdem, abgelaufenem oder inzwischen geändertem Event.
+            raise Http404 from exc
+
+        next_url = safe_redirect_path(request.POST.get("next"))
+        if not request.headers.get("HX-Request"):
+            return redirect(next_url)
+
+        live_context = current_tally_context(request.current_facility)
+        context = TallyIncrementView._row_context(
+            request,
+            request.current_facility,
+            event,
+            request.POST,
+            live_context,
+            request_is_live=TallyIncrementView._request_matches_live_context(request, request.POST, live_context),
+        )
+        if context is None:
+            response = HttpResponse("")
+        else:
+            response = render(request, "core/zeitstrom/partials/tally_row.html", context)
+        response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
+        response["HX-Reswap"] = "outerHTML"
+        response["HX-Trigger-After-Swap"] = "zeitstrom-changed"
+        return response
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):

@@ -97,6 +97,7 @@ class TestSchemaShape:
 
         assert "idempotency_key" not in entry
         assert "idempotency_payload_hash" not in entry
+        assert "created_via" not in entry
 
 
 @pytest.mark.django_db

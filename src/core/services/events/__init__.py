@@ -89,16 +89,24 @@ from core.services.events.tally import (
     tally_eligibilities,
     tally_request_matches_live_context,
 )
+from core.services.events.tally_undo import (
+    TALLY_UNDO_SECONDS,
+    TallyUndoDenied,
+    mint_tally_undo_token,
+    undo_tally_event,
+)
 
 __all__ = [
     "CONTACT_STAGE_ORDER",
     "ENCRYPTED_PLACEHOLDER",
     "RESTRICTED_PLACEHOLDER",
     "TALLY_IDEMPOTENCY_SCOPE",
+    "TALLY_UNDO_SECONDS",
     "TallyEligibility",
     "TallyIneligibilityReason",
     "TallyLiveContext",
     "TallyMode",
+    "TallyUndoDenied",
     "_build_prior_versions",
     "_format_field_display_value",
     "_format_preview_value",
@@ -128,6 +136,7 @@ __all__ = [
     "is_multi_file_marker",
     "is_singleton_file_marker",
     "merge_update_payload",
+    "mint_tally_undo_token",
     "normalize_file_marker",
     "normalize_idempotency_key",
     "new_tally_idempotency_key",
@@ -142,6 +151,7 @@ __all__ = [
     "split_file_and_text_data",
     "tally_eligibilities",
     "tally_request_matches_live_context",
+    "undo_tally_event",
     "stage_index",
     "tally_document_types",
     "update_event",

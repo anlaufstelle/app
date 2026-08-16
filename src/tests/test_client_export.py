@@ -324,6 +324,7 @@ class TestClientExportCoreCategories:
         assert event_entry["is_anonymous"] is False
         assert "idempotency_key" not in event_entry
         assert "idempotency_payload_hash" not in event_entry
+        assert "created_via" not in event_entry
 
     def test_event_case_and_episode_reference(self, sample_client, facility, sample_case, doc_type, admin_user):
         episode = Episode.objects.create(

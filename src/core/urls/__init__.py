@@ -70,6 +70,7 @@ from core.views.events import (
     EventFieldsPartialView,
     EventUpdateView,
     TallyIncrementView,
+    TallyUndoView,
 )
 from core.views.hubs import DatenschutzUebersichtView, VerwaltungUebersichtView
 from core.views.import_wizard import (
@@ -296,6 +297,7 @@ urlpatterns = [
     path("partials/clients/fields/", ClientFieldsPartialView.as_view(), name="client_fields_partial"),
     path("partials/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
     path("partials/tally/increment/", TallyIncrementView.as_view(), name="tally_increment"),
+    path("partials/tally/undo/", TallyUndoView.as_view(), name="tally_undo"),
     path("partials/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
     path("partials/cases/fields/", CaseFieldsPartialView.as_view(), name="case_fields_partial"),
     path("partials/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),

@@ -344,6 +344,7 @@ def test_parallel_direct_tally_requests_create_one_event_and_one_audit(
     assert errors == []
     assert len(responses) == 2
     assert all(response.status_code == 200 for response in responses)
+    assert sum(b'data-testid="tally-undo"' in response.content for response in responses) == 1
     event = Event.objects.get(document_type=doc_type_contact)
     assert EventHistory.objects.filter(event=event).count() == 1
     assert AuditLog.objects.filter(action=AuditLog.Action.EVENT_CREATE, target_id=str(event.pk)).count() == 1

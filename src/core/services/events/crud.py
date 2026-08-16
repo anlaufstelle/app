@@ -127,6 +127,7 @@ def create_event(
     case=None,
     idempotency_key=None,
     idempotency_payload_hash=None,
+    created_via=Event.CreatedVia.STANDARD,
 ):
     """Create an event + EventHistory(CREATE).
 
@@ -170,6 +171,7 @@ def create_event(
         case=case,
         idempotency_key=idempotency_key,
         idempotency_payload_hash=idempotency_payload_hash,
+        created_via=created_via,
     )
     event.save()
     EventHistory.objects.create(
@@ -306,7 +308,7 @@ def merge_update_payload(event, merged, restricted_keys, document_type):
 
 
 @transaction.atomic
-def soft_delete_event(event, user):
+def soft_delete_event(event, user, *, source=None):
     """Soft-Delete + EventHistory(DELETE) + AuditLog."""
     history_payload = build_redacted_delete_history(event)
     event.is_deleted = True
@@ -320,20 +322,23 @@ def soft_delete_event(event, user):
         data_before=history_payload,
         field_metadata=_snapshot_field_metadata(event.document_type),
     )
+    audit_detail = {
+        "document_type": event.document_type.name,
+        # L13 (Refs #1375): neutrale client_id statt Klartext-Pseudonym —
+        # Data-Min-Residuum, konsistent zum gehärteten Client-Löschpfad
+        # (Refs #1093). Das append-only-AuditLog konserviert das Pseudonym
+        # sonst dauerhaft, obwohl der Löschzweck es nicht braucht.
+        "client_id": (str(event.client_id) if event.client_id else None),
+        "occurred_at": str(event.occurred_at),
+    }
+    if source is not None:
+        audit_detail["source"] = source
     audit_event(
         AuditLog.Action.DELETE,
         user=user,
         facility=event.facility,
         target_obj=event,
-        detail={
-            "document_type": event.document_type.name,
-            # L13 (Refs #1375): neutrale client_id statt Klartext-Pseudonym —
-            # Data-Min-Residuum, konsistent zum gehärteten Client-Löschpfad
-            # (Refs #1093). Das append-only-AuditLog konserviert das Pseudonym
-            # sonst dauerhaft, obwohl der Löschzweck es nicht braucht.
-            "client_id": (str(event.client_id) if event.client_id else None),
-            "occurred_at": str(event.occurred_at),
-        },
+        detail=audit_detail,
     )
     log_activity(
         facility=event.facility,

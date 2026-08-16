@@ -6,4 +6,23 @@
           data-testid="tally-count-{{ row.document_type.pk }}"
           aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
     {% include "core/zeitstrom/partials/tally_action.html" %}
+    {% if tally_undo_token %}
+    <form method="post" action="{% url 'core:tally_undo' %}"
+          hx-post="{% url 'core:tally_undo' %}"
+          hx-target="#tally-row-{{ row.document_type.pk }}"
+          hx-swap="outerHTML"
+          data-tally-undo-expires-at="{{ tally_undo_expires_at|date:'c' }}">
+        {% csrf_token %}
+        <input type="hidden" name="token" value="{{ tally_undo_token }}">
+        <input type="hidden" name="next" value="{{ tally_next }}">
+        {% for name, value in tally_filter_state.items %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+        {% for name, value in tally_context.items %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+        <button type="submit" class="inline-flex items-center justify-center min-h-[36px] px-3 rounded-[10px] btn-secondary"
+                data-testid="tally-undo">{% trans "Rückgängig" %}</button>
+    </form>
+    {% endif %}
 </div>

@@ -15,6 +15,12 @@ class Event(DynamicDataEncryptionMixin):
 
     objects = EventManager()
 
+    class CreatedVia(models.TextChoices):
+        """Nicht editierbare Entstehungsprovenienz fuer eng begrenzte Flows."""
+
+        STANDARD = "standard", _("Standard")
+        TALLY = "tally", _("Strichliste")
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     facility = models.ForeignKey(
         "core.Facility",
@@ -83,6 +89,13 @@ class Event(DynamicDataEncryptionMixin):
             "SHA-256-Fingerabdruck des fachlichen Request-Payloads — erkennt "
             "abweichende Wiederverwendung eines Idempotenz-Schlüssels auch nach Cache-Verlust."
         ),
+    )
+    created_via = models.CharField(
+        max_length=16,
+        choices=CreatedVia.choices,
+        default=CreatedVia.STANDARD,
+        editable=False,
+        verbose_name=_("Erstellt über"),
     )
     occurred_at = models.DateTimeField(verbose_name=_("Zeitpunkt"))
     data_json = models.JSONField(default=dict, verbose_name=_("Daten (JSON)"))
