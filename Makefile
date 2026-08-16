@@ -14,6 +14,8 @@ CI_LOCK_TIMEOUT ?= 14400
 
 .PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
 
+.PHONY: i18n-check i18n-update
+
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
 	@if [ -f .env ]; then echo ".env existiert bereits."; else \
@@ -95,6 +97,13 @@ ssl-cert:
 
 seed:
 	$(PYTHON) src/manage.py seed
+
+# Reorder-sicherer periodischer i18n-Vollabgleich (Refs #1915).
+i18n-check:
+	$(PYTHON) scripts/i18n_catalog.py check
+
+i18n-update:
+	$(PYTHON) scripts/i18n_catalog.py update
 
 # Doku-Screenshots (DE+EN, Desktop+Mobile, WebP) gegen einen frischen E2E-Server.
 # Schreibt nach docs/screenshots/. Braucht die Docker-DB (ggf. `sudo docker compose up -d`).

@@ -423,6 +423,8 @@ New endpoints belong in one of these two path groups. URL names stay short and f
 Both catalogs — [`src/locale/de/LC_MESSAGES/django.po`](src/locale/de/LC_MESSAGES/django.po) and [`src/locale/en/LC_MESSAGES/django.po`](src/locale/en/LC_MESSAGES/django.po) — are maintained **together**, in one `chore(i18n):` commit:
 
 - **When to regenerate:** `python src/manage.py makemessages -l de -l en --no-obsolete`, run from the **repository root** (that is where the catalog expects its `src/…` reference paths; `LOCALE_PATHS` points at `src/locale/`). At the latest at the end of a milestone or batch run, and before every release cut — not once the backlog has grown to months. Individual new strings may still be added as a catalog entry by hand; that does not replace the run, but it prevents a German fallback in the meantime.
+- **Small changes:** For one new translatable string, the matching block may be added manually in **both** catalogs. Carry over the `msgid`, current `#:` reference(s), `msgstr` (identical in DE, translated in EN), and any `msgctxt`, plural, or format flags. Then run `msgfmt --check-format` and `python src/manage.py compilemessages`. This is the fast maintenance path, not a substitute for the periodic completeness check.
+- **Full sync without reorder churn:** `python scripts/i18n_catalog.py check` extracts DE and EN in a temporary repository copy and reports new or removed `msgid`s without changing files. Semantic drift exits with status 1; reference- and position-only changes are informational and green. First translate new or changed entries in **both** catalogs, or add the DE identity translation, then run `python scripts/i18n_catalog.py update`. `update` performs the same full sync, retains the order of every unchanged PO block, and validates both PO/MO pairs fully before writing; a write failure restores files already replaced. The report separates new (`+`), removed (`-`), and semantically changed (`~`) entries from reference noise; new entries are appended at the end of the catalog.
 - **DE is the source language ([ADR-027](docs/adr/027-i18n-strategy.md)).** Every entry is an identity translation (`msgstr == msgid`), so resolving a run is mechanical: `msgattrib --clear-fuzzy --empty --clear-previous <po> | msgen`. A German `msgstr` that differs from its `msgid` is a bug (usually a msgmerge fuzzy mismatch) — exactly what the duplicate guard in [`scripts/check_translations.py`](scripts/check_translations.py) targets (Refs #1348).
 - **EN gets translated, not left fuzzy.** `msgfmt` discards fuzzy entries when compiling — the English interface falls back to German there. [`src/tests/test_i18n_catalog.py`](src/tests/test_i18n_catalog.py) forbids both `#, fuzzy` and empty `msgstr`. Take terminology from [`docs/en/glossary.md`](docs/en/glossary.md) and from what the catalog already uses.
 - **Commit the compiled files:** run `python src/manage.py compilemessages` after every run; the `.mo` files live in the repository (deployment does not build them).
@@ -770,5 +772,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-15 -->
-<!-- source-hash: 177d228d438e0becfb61dad516aff8a57b8421f7 -->
+<!-- translation-date: 2026-08-16 -->
+<!-- source-hash: 5ecf6dbbac3c4cde3c14b41e97451247c69d74d5 -->
