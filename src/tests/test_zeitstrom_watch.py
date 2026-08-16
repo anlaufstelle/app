@@ -82,7 +82,6 @@ class TestZeitstromWatchHttpContract:
             "tally_topology",
             "current_shift",
             "focus_box",
-            "bans",
         }
         assert set(payload["validators"]) == set(payload["components"])
         assert all(value.startswith('"') and value.endswith('"') for value in payload["validators"].values())
@@ -157,13 +156,13 @@ class TestZeitstromWatchHttpContract:
         unchanged = _watch(client, params=params, etag=first["ETag"])
         assert unchanged.status_code == 304
 
-    def test_uebergabe_watches_only_the_safety_banner(self, client, assistant_user):
+    def test_uebergabe_has_no_live_watch_components(self, client, assistant_user):
         client.force_login(assistant_user)
 
         response = _watch(client, params={"view": "uebergabe"})
 
-        assert response.json()["components"] == ["bans"]
-        assert set(response.json()["validators"]) == {"bans"}
+        assert response.json()["components"] == []
+        assert response.json()["validators"] == {}
 
     def test_page_scope_is_opaque_and_facility_or_role_change_requires_reload(
         self,
@@ -465,7 +464,7 @@ class TestZeitstromWatchVisibility:
         assert response.status_code == 200
         assert "feed" in response.json()["components"]
 
-    def test_elevated_ban_presence_is_visible_but_reason_change_is_not_leaked_to_assistant(
+    def test_safety_banner_changes_are_not_part_of_the_live_watcher(
         self, client, assistant_user, staff_user, facility, client_identified
     ):
         ban_type = DocumentType.objects.create(
@@ -476,7 +475,7 @@ class TestZeitstromWatchVisibility:
         )
         client.force_login(assistant_user)
         initial = _watch(client, params={"view": "uebergabe"})
-        ban = Event.objects.create(
+        Event.objects.create(
             facility=facility,
             client=client_identified,
             document_type=ban_type,
@@ -484,46 +483,9 @@ class TestZeitstromWatchVisibility:
             data_json={"aktiv": True, "bis": "", "grund": "nicht sichtbar"},
             created_by=staff_user,
         )
-        present = _watch(client, params={"view": "uebergabe"}, etag=initial["ETag"])
-        assert present.status_code == 200
-        assert present.json()["components"] == ["bans"]
+        unchanged = _watch(client, params={"view": "uebergabe"}, etag=initial["ETag"])
 
-        ban.data_json = {"aktiv": True, "bis": "", "grund": "weiterhin nicht sichtbar"}
-        ban.save(update_fields=["data_json", "updated_at"])
-        hidden_reason = _watch(client, params={"view": "uebergabe"}, etag=present["ETag"])
-        assert hidden_reason.status_code == 304
-
-    def test_elevated_ban_reason_change_is_visible_to_staff(
-        self,
-        client,
-        staff_user,
-        facility,
-        client_identified,
-    ):
-        ban_type = DocumentType.objects.create(
-            facility=facility,
-            name="Hausverbot mit Grund",
-            system_type=DocumentType.SystemType.BAN,
-            sensitivity=DocumentType.Sensitivity.ELEVATED,
-        )
-        ban = Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=ban_type,
-            occurred_at=timezone.now(),
-            data_json={"aktiv": True, "grund": "Alter sichtbarer Grund"},
-            created_by=staff_user,
-        )
-        client.force_login(staff_user)
-        params = {"view": "uebergabe"}
-        first = _watch(client, params=params)
-
-        ban.data_json = {"aktiv": True, "grund": "Neuer sichtbarer Grund"}
-        ban.save(update_fields=["data_json", "updated_at"])
-
-        response = _watch(client, params=params, etag=first["ETag"])
-        assert response.status_code == 200
-        assert response.json()["components"] == ["bans"]
+        assert unchanged.status_code == 304
 
 
 @pytest.mark.django_db
@@ -727,7 +689,7 @@ class TestZeitstromWatchRefreshPartials:
         client.force_login(staff_user)
         old_scope = _scope_for_client(client)
         missing = client.get(
-            reverse("core:zeitstrom_bans_partial"),
+            reverse("core:zeitstrom_current_shift_partial"),
             headers={"X-Zeitstrom-Watch": "1", "If-Match": '"invalid"'},
         )
         assert missing.status_code == 409
@@ -735,7 +697,7 @@ class TestZeitstromWatchRefreshPartials:
         staff_user.facility = second_facility
         staff_user.save(update_fields=["facility"])
         stale = client.get(
-            reverse("core:zeitstrom_bans_partial"),
+            reverse("core:zeitstrom_current_shift_partial"),
             headers={
                 "X-Zeitstrom-Watch": "1",
                 "X-Zeitstrom-Page-Scope": old_scope,
@@ -903,7 +865,6 @@ class TestZeitstromWatchRefreshPartials:
     @pytest.mark.parametrize(
         ("url_name", "wrapper_id"),
         [
-            ("zeitstrom_bans_partial", "zeitstrom-bans-slot"),
             ("zeitstrom_current_shift_partial", "zeitstrom-current-shift-slot"),
             ("zeitstrom_focus_box_partial", "zeitstrom-focus-box-slot"),
         ],
@@ -912,7 +873,6 @@ class TestZeitstromWatchRefreshPartials:
         client.force_login(staff_user)
         scope = _scope_for_client(client)
         component = {
-            "zeitstrom_bans_partial": "bans",
             "zeitstrom_current_shift_partial": "current_shift",
             "zeitstrom_focus_box_partial": "focus_box",
         }[url_name]
@@ -938,6 +898,7 @@ class TestZeitstromWatchRefreshPartials:
 
         assert f'data-watch-url="{reverse("core:zeitstrom_watch")}"' in content
         assert 'id="zeitstrom-bans-slot"' in content
+        assert "data-bans-url=" not in content
         assert 'id="zeitstrom-current-shift-slot"' in content
         assert 'id="zeitstrom-focus-box-slot"' in content
         assert content.index("zeitstrom-filter-state.js") < content.index("zeitstrom-live-watch.js")

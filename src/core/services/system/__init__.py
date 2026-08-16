@@ -20,7 +20,7 @@ from core.services.system._db_admin import (
     has_rls_bypass_context,
     rls_bypass_for_read,
 )
-from core.services.system.bans import get_active_bans, get_active_bans_for_client, get_active_bans_revision
+from core.services.system.bans import get_active_bans, get_active_bans_for_client
 from core.services.system.export import (
     _build_event_row,
     _build_header,
@@ -110,7 +110,6 @@ __all__ = [
     "generate_sample_report_1_pdf",
     "generate_report_pdf",
     "get_active_bans",
-    "get_active_bans_revision",
     "get_form_field_cls_for_file",
     "get_active_bans_for_client",
     "has_rls_bypass_context",

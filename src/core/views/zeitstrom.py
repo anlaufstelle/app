@@ -433,17 +433,6 @@ class ZeitstromTallyCountsPartialView(AssistantOrAboveRequiredMixin, ZeitstromWa
             )
 
 
-class ZeitstromBansPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
-    template_name = "core/zeitstrom/partials/bans_slot.html"
-    watch_component = "bans"
-
-    def get(self, request):
-        with _consistent_watch_render():
-            state = resolve_zeitstrom_state(request.GET, request.current_facility)
-            context = {"active_bans": get_active_bans(request.current_facility, user=request.user)}
-            return self.render_watch_followup(request, self.template_name, context, state)
-
-
 class ZeitstromCurrentShiftPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
     template_name = "core/zeitstrom/partials/current_shift_slot.html"
     watch_component = "current_shift"

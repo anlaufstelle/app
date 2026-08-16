@@ -45,7 +45,6 @@ function renderDom() {
               data-watch-url="/api/v1/zeitstrom/watch/"
               data-feed-url="/partials/zeitstrom/feed/"
               data-tally-counts-url="/partials/zeitstrom/tally-counts/"
-              data-bans-url="/partials/zeitstrom/bans/"
               data-current-shift-url="/partials/zeitstrom/current-shift/"
               data-focus-box-url="/partials/zeitstrom/focus-box/">
             <form id="zeitstrom-filter-state">
@@ -497,19 +496,11 @@ describe("Zeitstrom live watch", () => {
     it("keeps component validators in a compact header, never in URL state or storage", async () => {
         const fetchMock = vi
             .fn()
-            .mockResolvedValueOnce(
-                watchResponse(["feed", "bans"], { feed: '"feed-v1"', bans: '"bans-v1"' }),
-            )
+            .mockResolvedValueOnce(watchResponse(["feed"], { feed: '"feed-v1"' }))
             .mockResolvedValueOnce(
                 response({
                     text: "<article>initialer Feed</article>",
                     headers: { "Content-Type": "text/html", ETag: '"feed-v1"' },
-                }),
-            )
-            .mockResolvedValueOnce(
-                response({
-                    text: '<div id="zeitstrom-bans-slot"></div>',
-                    headers: { "Content-Type": "text/html", ETag: '"bans-v1"' },
                 }),
             )
             .mockResolvedValueOnce(response({ status: 304, headers: { ETag: '"page-v1"' } }));
@@ -520,7 +511,7 @@ describe("Zeitstrom live watch", () => {
         await watcher.pollNow();
         await watcher.pollNow();
 
-        const secondUrl = new URL(fetchMock.mock.calls[3][0]);
+        const secondUrl = new URL(fetchMock.mock.calls[2][0]);
         expect([...secondUrl.searchParams.keys()]).toEqual([
             "date",
             "time_filter",
@@ -528,9 +519,8 @@ describe("Zeitstrom live watch", () => {
             "doc_type",
             "view",
         ]);
-        expect(JSON.parse(fetchMock.mock.calls[3][1].headers["X-Zeitstrom-Validators"])).toEqual({
+        expect(JSON.parse(fetchMock.mock.calls[2][1].headers["X-Zeitstrom-Validators"])).toEqual({
             feed: '"feed-v1"',
-            bans: '"bans-v1"',
             tally_topology: '"topology-v1"',
         });
         expect(window.localStorage.length).toBe(0);
@@ -572,11 +562,10 @@ describe("Zeitstrom live watch", () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
-                watchResponse(["tally_counts", "current_shift", "focus_box", "bans"], {
+                watchResponse(["tally_counts", "current_shift", "focus_box"], {
                     tally_counts: '"count-v1"',
                     current_shift: '"shift-v1"',
                     focus_box: '"focus-v1"',
-                    bans: '"bans-v1"',
                 }),
             )
             .mockResolvedValueOnce(
@@ -595,12 +584,6 @@ describe("Zeitstrom live watch", () => {
                 response({
                     text: '<aside id="zeitstrom-focus-box-slot">Fokus</aside>',
                     headers: { "Content-Type": "text/html", ETag: '"focus-v1"' },
-                }),
-            )
-            .mockResolvedValueOnce(
-                response({
-                    text: '<div id="zeitstrom-bans-slot"></div>',
-                    headers: { "Content-Type": "text/html", ETag: '"bans-v1"' },
                 }),
             )
             .mockResolvedValueOnce(watchResponse(["feed"], { feed: '"feed-v2"' }))
@@ -629,15 +612,13 @@ describe("Zeitstrom live watch", () => {
             "/partials/zeitstrom/tally-counts/",
             "/partials/zeitstrom/current-shift/",
             "/partials/zeitstrom/focus-box/",
-            "/partials/zeitstrom/bans/",
             "/api/v1/zeitstrom/watch/",
             "/partials/zeitstrom/feed/",
         ]);
-        expect(JSON.parse(fetchMock.mock.calls[5][1].headers["X-Zeitstrom-Validators"])).toEqual({
+        expect(JSON.parse(fetchMock.mock.calls[4][1].headers["X-Zeitstrom-Validators"])).toEqual({
             tally_counts: '"count-v1"',
             current_shift: '"shift-v1"',
             focus_box: '"focus-v1"',
-            bans: '"bans-v1"',
             tally_topology: '"topology-v1"',
         });
         watcher.stop();

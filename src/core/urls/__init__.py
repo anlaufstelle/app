@@ -129,7 +129,6 @@ from core.views.workitems import (
     WorkItemInboxView,
 )
 from core.views.zeitstrom import (
-    ZeitstromBansPartialView,
     ZeitstromCurrentShiftPartialView,
     ZeitstromFeedPartialView,
     ZeitstromFocusBoxPartialView,
@@ -312,7 +311,6 @@ urlpatterns = [
         ZeitstromTallyCountsPartialView.as_view(),
         name="zeitstrom_tally_counts_partial",
     ),
-    path("partials/zeitstrom/bans/", ZeitstromBansPartialView.as_view(), name="zeitstrom_bans_partial"),
     path(
         "partials/zeitstrom/current-shift/",
         ZeitstromCurrentShiftPartialView.as_view(),

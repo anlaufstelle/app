@@ -19,7 +19,6 @@
         "tally_topology",
         "current_shift",
         "focus_box",
-        "bans",
     ]);
 
     function defaultNavigate(url) {
@@ -268,7 +267,6 @@
 
         async function refreshChrome(component, signal, expectedGeneration, expectedValidator) {
             const config = {
-                bans: [root.dataset.bansUrl, "zeitstrom-bans-slot"],
                 current_shift: [root.dataset.currentShiftUrl, "zeitstrom-current-shift-slot"],
                 focus_box: [root.dataset.focusBoxUrl, "zeitstrom-focus-box-slot"],
             }[component];

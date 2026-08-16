@@ -16,17 +16,15 @@ from core.constants import FEED_MAX_PER_TYPE
 from core.models import Activity, Client, DocumentTypeField, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.events import build_tally_summary
-from core.services.system import get_active_bans_revision
 from core.services.zeitstrom_filters import ZeitstromState
 
-WATCH_COMPONENTS = ("feed", "tally_counts", "tally_topology", "current_shift", "focus_box", "bans")
+WATCH_COMPONENTS = ("feed", "tally_counts", "tally_topology", "current_shift", "focus_box")
 _COMPONENT_STATE_KEYS = {
     "feed": ("date", "time_filter", "type", "doc_type", "view"),
     "tally_counts": ("date", "time_filter", "view"),
     "tally_topology": ("date", "time_filter", "view"),
     "current_shift": (),
     "focus_box": (),
-    "bans": (),
 }
 
 
@@ -508,12 +506,6 @@ def _focus_box_projection(facility):
     return (today, ordered, len(rows), total_open, total_open > len(rows))
 
 
-def _bans_projection(facility, user):
-    """Project exactly the role-redacted safety banner, never raw event data."""
-
-    return get_active_bans_revision(facility, user=user)
-
-
 def build_zeitstrom_component_validator(
     user,
     facility,
@@ -530,7 +522,6 @@ def build_zeitstrom_component_validator(
         "tally_topology": lambda: _tally_topology_projection(facility, user, state, summary=tally_summary),
         "current_shift": lambda: _current_shift_projection(facility, user, state),
         "focus_box": lambda: _focus_box_projection(facility),
-        "bans": lambda: _bans_projection(facility, user),
     }
     if component not in projections:
         raise ValueError(f"Unknown Zeitstrom component: {component}")
@@ -563,7 +554,7 @@ def build_zeitstrom_watch_snapshot(
     """Compute fixed-query, user-visible component validators."""
 
     if state.is_handover:
-        component_names: tuple[str, ...] = ("bans",)
+        component_names: tuple[str, ...] = ()
     else:
         component_names = tuple(
             name for name in WATCH_COMPONENTS if name != "tally_counts" or state.is_live_tally_context

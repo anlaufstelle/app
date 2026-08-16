@@ -89,7 +89,6 @@ ZEITSTROM_WATCH_FOLLOWUP_PATHS = frozenset(
     {
         "/partials/zeitstrom/feed/",
         "/partials/zeitstrom/tally-counts/",
-        "/partials/zeitstrom/bans/",
         "/partials/zeitstrom/current-shift/",
         "/partials/zeitstrom/focus-box/",
     }

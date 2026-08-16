@@ -58,7 +58,7 @@ def _collect_active_bans(events, user, *, include_client_in_result):
 
 
 def _project_ban_data(data, *, today, may_see_grund):
-    """Shared active/expiry/reason projection for UI and watch revisions."""
+    """Project active/expiry/reason values for the safety banner."""
 
     aktiv_raw = safe_decrypt(data.get("aktiv", False), default=False)
     if not aktiv_raw:
@@ -78,53 +78,6 @@ def _project_ban_data(data, *, today, may_see_grund):
 
     grund = safe_decrypt(data.get("grund", ""), default="") if may_see_grund else ""
     return True, bis_date, grund
-
-
-def get_active_bans_revision(facility, user=None):
-    """Values-only fingerprint source matching :func:`get_active_bans`.
-
-    The safety projection intentionally ignores Event sensitivity for ban
-    *presence*, exactly like the banner. The reason enters the tuple only if
-    the role may see it, so a reason-only edit cannot become a timing leak for
-    an assistant.
-    """
-
-    today = timezone.localdate()
-    rows = (
-        Event.objects.for_facility(facility)
-        .filter(document_type__system_type="ban", document_type__is_active=True, is_deleted=False)
-        .values(
-            "id",
-            "client_id",
-            "client__pseudonym",
-            "document_type__sensitivity",
-            "data_json",
-        )
-        .order_by("-occurred_at")
-    )
-    revision = []
-    for row in rows:
-        may_see_grund = user is not None and user_can_see_field(
-            user,
-            row["document_type__sensitivity"],
-            field_sensitivity="",
-        )
-        active, bis_date, grund = _project_ban_data(
-            row["data_json"] or {},
-            today=today,
-            may_see_grund=may_see_grund,
-        )
-        if not active:
-            continue
-        revision.append(
-            (
-                str(row["id"]),
-                (str(row["client_id"]), row["client__pseudonym"]) if row["client_id"] else None,
-                grund,
-                bis_date,
-            )
-        )
-    return tuple(revision)
 
 
 def get_active_bans(facility, user=None):
