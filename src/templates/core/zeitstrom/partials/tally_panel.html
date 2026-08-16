@@ -17,14 +17,7 @@ durch denselben create_event-Pfad.{% endcomment %}
     </div>
     <div class="px-4 py-3 flex flex-col gap-2">
         {% for row in tally_summary.rows %}
-        <div id="tally-row-{{ row.document_type.pk }}" class="flex items-center justify-between gap-3 flex-wrap"
-             data-testid="tally-row-{{ row.document_type.pk }}">
-            <span class="text-[13px] text-ink truncate">{{ row.document_type.name }}</span>
-            <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right ml-auto"
-                  data-testid="tally-count-{{ row.document_type.pk }}"
-                  aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
-            {% include "core/zeitstrom/partials/tally_action.html" %}
-        </div>
+        {% include "core/zeitstrom/partials/tally_row.html" %}
         {% endfor %}
     </div>
 </section>

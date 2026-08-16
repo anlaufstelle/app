@@ -6,9 +6,10 @@
 <div class="flex gap-1 mb-4 border-b border-subtle overflow-x-auto" role="tablist" aria-label="{% trans 'Zeitfilter' %}" data-testid="time-filter-tabs">
     <button
         role="tab"
+        data-zeitstrom-time-filter="all"
         class="time-filter-tab whitespace-nowrap px-3.5 py-2 text-[13px] font-medium rounded-t-md {% if selected_filter_id == 'all' %}bg-accent-light text-accent border-b-2 border-accent font-semibold{% else %}text-ink-muted hover:text-ink hover:bg-canvas{% endif %}"
         hx-get="{% url events_partial_url %}?time_filter=all&date={{ target_date|date:'Y-m-d' }}"
-        hx-include="#filter-doc-type, #filter-type"
+        hx-include="#zeitstrom-filter-state"
         hx-target="#{{ feed_target_id|default:'event-list' }}"
         hx-swap="innerHTML"
     >
@@ -17,10 +18,11 @@
     {% for tf in time_filters %}
     <button
         role="tab"
+        data-zeitstrom-time-filter="{{ tf.pk }}"
         class="time-filter-tab whitespace-nowrap px-3.5 py-2 text-[13px] font-medium rounded-t-md {% if tf == selected_filter %}bg-accent-light text-accent border-b-2 border-accent font-semibold{% else %}text-ink-muted hover:text-ink hover:bg-canvas{% endif %}"
         data-testid="time-filter-{{ tf.label|slugify }}"
         hx-get="{% url events_partial_url %}?time_filter={{ tf.pk }}&date={{ target_date|date:'Y-m-d' }}"
-        hx-include="#filter-doc-type, #filter-type"
+        hx-include="#zeitstrom-filter-state"
         hx-target="#{{ feed_target_id|default:'event-list' }}"
         hx-swap="innerHTML"
     >

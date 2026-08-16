@@ -202,7 +202,7 @@ class TestTallyNumberIncrementView:
         )
 
         assert response.status_code == 200
-        assert response["HX-Retarget"] == "#tally-panel"
+        assert response["HX-Retarget"] == f"#tally-row-{document_type.pk}"
         assert response["HX-Reswap"] == "outerHTML"
         event = Event.objects.get(document_type=document_type)
         assert event.is_anonymous is True

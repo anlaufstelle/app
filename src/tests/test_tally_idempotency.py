@@ -57,7 +57,7 @@ class TestDirectTallyIdempotency:
         key = row["idempotency_key"]
         assert normalize_idempotency_key(key) == key
         action_html = render_to_string("core/zeitstrom/partials/tally_action.html", {"row": row})
-        assert f'"idempotency_key": "{key}"' in action_html
+        assert f'name="idempotency_key" value="{key}"' in action_html
         assert f'"X-Idempotency-Key": "{key}"' in action_html
         payload = {"document_type": str(doc_type_contact.pk), "idempotency_key": key}
         audit_before = AuditLog.objects.filter(action=AuditLog.Action.EVENT_CREATE).count()

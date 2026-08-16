@@ -2,7 +2,9 @@
 
 import logging
 from datetime import date, timedelta
+from urllib.parse import urlencode
 
+from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import TemplateView
 
@@ -16,6 +18,7 @@ from core.services.events import (
     enrich_events_with_preview,
 )
 from core.services.system import get_active_bans
+from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -153,6 +156,11 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "events_partial_url": "core:zeitstrom_feed_partial",
                 "focus_box": focus_box,
                 "active_bans": active_bans,
+                "zeitstrom_filter_state": zeitstrom_filter_state(
+                    self.request.GET,
+                    target_date=target_date,
+                    time_filter_id=selected_filter_id,
+                ),
             }
         )
 
@@ -171,6 +179,11 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             )
             context["selected_filter"] = uebergabe_filter
             context["selected_filter_id"] = str(uebergabe_filter.pk) if uebergabe_filter else "all"
+            context["zeitstrom_filter_state"] = zeitstrom_filter_state(
+                self.request.GET,
+                target_date=target_date,
+                time_filter_id=context["selected_filter_id"],
+            )
         else:
             show_tally_panel = _is_live_tally_context(target_date, selected_filter, live_context)
             if show_tally_panel:
@@ -178,7 +191,28 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             context["show_tally_panel"] = show_tally_panel
             context["tally_summary"] = tally_summary
 
+        context["tally_next"] = f"{self.request.path}?{urlencode(context['zeitstrom_filter_state'])}"
+        if context["tally_summary"] is not None:
+            self._add_tally_action_urls(
+                context["tally_summary"], context["zeitstrom_filter_state"], context["tally_next"]
+            )
+
         return context
+
+    @staticmethod
+    def _add_tally_action_urls(tally_summary, filter_state, tally_next):
+        for row in tally_summary["rows"]:
+            row["tally_increment_url"] = "{}?{}".format(
+                reverse("core:tally_increment"),
+                urlencode(
+                    {
+                        "document_type": row["document_type"].pk,
+                        "idempotency_key": row["idempotency_key"],
+                        **filter_state,
+                        "next": tally_next,
+                    }
+                ),
+            )
 
     def _get_target_date(self):
         date_str = self.request.GET.get("date")
@@ -271,7 +305,21 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
         tally_summary = (
             build_tally_summary(facility, self.request.user, context=live_context) if show_tally_panel else None
         )
+        filter_state = zeitstrom_filter_state(
+            self.request.GET,
+            target_date=target_date,
+            time_filter_id=time_filter_id or "all",
+        )
+        tally_next = f"{reverse('core:zeitstrom')}?{urlencode(filter_state)}"
+        if tally_summary is not None:
+            ZeitstromView._add_tally_action_urls(tally_summary, filter_state, tally_next)
         context["tally_summary"] = tally_summary
         context["show_tally_panel"] = show_tally_panel
-        context["tally_panel_oob"] = True
+        context["tally_filter_state"] = filter_state
+        context["tally_next"] = tally_next
+        # Beim durch eine Tally-Aktion ausgelösten Feed-Refresh darf #1910
+        # nicht das komplette Panel OOB ersetzen: dort können andere Zeilen
+        # gerade ein offenes Formular enthalten. Normale Filterwechsel
+        # behalten den OOB-Mechanismus.
+        context["tally_panel_oob"] = self.request.GET.get("feed_only") != "1"
         return context

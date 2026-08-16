@@ -187,7 +187,11 @@ def test_inline_partial_posts_numbers_to_existing_increment_endpoint(facility):
 
     html = render_to_string(
         "core/zeitstrom/partials/tally_inline_form.html",
-        {"tally_form": form, "document_type": document_type},
+        {
+            "tally_form": form,
+            "document_type": document_type,
+            "tally_increment_url": f"/partials/tally/increment/?document_type={document_type.pk}",
+        },
     )
 
     assert f'data-testid="tally-inline-form-{document_type.pk}"' in html
@@ -196,8 +200,8 @@ def test_inline_partial_posts_numbers_to_existing_increment_endpoint(facility):
     assert f'name="document_type" value="{document_type.pk}"' in html
     assert f'name="{ausgabe.slug}"' in html
     assert 'type="number"' in html
-    assert "hx-vals=" in html
-    assert '"cancel": "1"' in html
+    assert 'name="idempotency_key"' in html
+    assert "cancel=1" in html
 
 
 @pytest.mark.django_db
@@ -213,15 +217,16 @@ def test_tally_panel_opens_number_form_via_htmx_get(facility):
                         "document_type": document_type,
                         "count": 4,
                         "requires_number_input": True,
+                        "tally_increment_url": f"/partials/tally/increment/?document_type={document_type.pk}",
                     }
                 ]
-            }
+            },
         },
     )
 
     assert f'data-testid="tally-increment-{document_type.pk}"' in html
     assert f'data-testid="tally-count-{document_type.pk}"' in html
-    assert 'hx-get="/partials/tally/increment/"' in html
+    assert 'hx-get="/partials/tally/increment/?document_type=' in html
     assert 'hx-post="/partials/tally/increment/"' not in html
     assert f'hx-target="#tally-action-{document_type.pk}"' in html
 
@@ -259,4 +264,4 @@ def test_tally_panel_keeps_direct_post_for_type_without_required_numbers(facilit
 
     assert 'hx-post="/partials/tally/increment/"' in html
     assert 'hx-get="/partials/tally/increment/"' not in html
-    assert 'hx-target="#tally-panel"' in html
+    assert f'hx-target="#tally-row-{document_type.pk}"' in html

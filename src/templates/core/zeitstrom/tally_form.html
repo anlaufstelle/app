@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Kontakt zählen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<section class="max-w-xl mx-auto bg-surface border border-subtle rounded-[10px] p-5">
+    <h1 class="text-lg font-bold text-ink mb-4">{% trans "Kontakt zählen" %}</h1>
+    {% include "core/zeitstrom/partials/tally_inline_form.html" %}
+</section>
+{% endblock %}

@@ -124,6 +124,11 @@
 </div>
 
 {# TimeFilter-Tabs (Schicht-Auswahl) #}
+<form id="zeitstrom-filter-state" class="contents">
+    {% for name, value in zeitstrom_filter_state.items %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+    {% endfor %}
+</form>
 {% include "components/_time_filter_dropdown.html" with feed_target_id="feed-list" events_partial_url="core:zeitstrom_feed_partial" %}
 
 {# Aktueller Dienst (Refs #1138): dauerhaft sichtbare Dienst-Übersicht der laufenden Schicht — nicht aufklappbar, nicht an die Zeitstrom-Auswahl gekoppelt. #}
@@ -164,7 +169,8 @@
             {% if document_types %}
             <select id="filter-doc-type" name="doc_type"
                 class="ml-auto rounded-md border border-subtle bg-surface text-[12px] text-ink-soft px-2.5 py-1"
-                hx-get="{% url 'core:zeitstrom_feed_partial' %}?date={{ target_date|date:'Y-m-d' }}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}"
+                hx-get="{% url 'core:zeitstrom_feed_partial' %}?feed_only=1"
+                hx-include="#zeitstrom-filter-state"
                 hx-target="#feed-list"
                 hx-swap="innerHTML"
                 hx-trigger="change"
@@ -194,7 +200,13 @@
                 <span x-show="allExpanded" x-cloak>{% trans "Alle einklappen" %}</span>
             </button>
         </div>
-        <div id="feed-list" aria-live="polite" role="region" aria-label="{% trans 'Zeitstrom Feed' %}">
+        <div id="feed-list" aria-live="polite" role="region" aria-label="{% trans 'Zeitstrom Feed' %}"
+             hx-get="{% url 'core:zeitstrom_feed_partial' %}?feed_only=1"
+             hx-trigger="zeitstrom-changed from:body"
+             hx-include="#zeitstrom-filter-state"
+             hx-target="this"
+             hx-swap="innerHTML"
+             hx-sync="this:replace">
             {% include "core/zeitstrom/partials/feed_list.html" %}
         </div>
     </div>
@@ -239,4 +251,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/time-filter-tabs.js' %}"></script>
+<script src="{% static 'js/zeitstrom-filter-state.js' %}"></script>
 {% endblock %}

@@ -264,7 +264,7 @@ def current_tally_window(facility):
     return context.window_start, context.window_end
 
 
-def tally_request_matches_live_context(facility, params) -> bool:
+def tally_request_matches_live_context(facility, params, *, context: TallyLiveContext | None = None) -> bool:
     """Akzeptiere Kontextparameter nur, wenn sie die Live-Erfassung meinen.
 
     Nur parameterlose Requests sind immer live: ``occurred_at`` wird
@@ -276,7 +276,7 @@ def tally_request_matches_live_context(facility, params) -> bool:
     if not params.get("date") and not params.get("time_filter"):
         return True
 
-    context = current_tally_context(facility)
+    context = context or current_tally_context(facility)
     requested_date = params.get("date")
     parsed_date = None
     if requested_date:

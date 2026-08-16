@@ -1,11 +1,14 @@
 """Views for event recording and management."""
 
 import logging
+from contextlib import suppress
+from datetime import date
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.http import Http404, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -37,6 +40,7 @@ from core.services.events import (
     build_event_detail_context,
     build_tally_summary,
     create_event,
+    current_tally_context,
     decrypt_event_text_data,
     evaluate_tally_eligibility,
     filtered_server_data_json,
@@ -60,6 +64,7 @@ from core.services.events import (
 from core.services.events.fields import file_marker_slugs
 from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
+from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
 from core.views._json_contracts import (
     _conflict_response,
@@ -69,7 +74,7 @@ from core.views._json_contracts import (
     _wants_raw_json_response,
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
-from core.views.utils import object_back_link
+from core.views.utils import object_back_link, safe_redirect_path
 
 logger = logging.getLogger(__name__)
 
@@ -542,27 +547,148 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         return eligibility, None
 
     @staticmethod
-    def _success_response(request, facility):
-        """Liefere für Erstschreibvorgang und Replay dieselbe HTMX-Erfolgsform."""
+    def _filter_state(params, live_context, *, request_is_live):
+        """Keep Tally requests on the server-rendered Zeitstrom contract."""
+        target_date = live_context.shift_date
+        if request_is_live and (raw_date := params.get("date")):
+            with suppress(ValueError):
+                target_date = date.fromisoformat(raw_date)
+        time_filter_id = (params.get("time_filter") if request_is_live else None) or (
+            str(live_context.time_filter.pk) if live_context.time_filter else "all"
+        )
+        return zeitstrom_filter_state(
+            params,
+            target_date=target_date,
+            time_filter_id=time_filter_id,
+        )
+
+    @staticmethod
+    def _tally_next(params, filter_state, *, request_is_live):
+        """Keep a boundary-crossing form on the current server state."""
+        if request_is_live:
+            return safe_redirect_path(params.get("next"))
+        return f"{reverse('core:zeitstrom')}?{urlencode(filter_state)}"
+
+    @staticmethod
+    def _tally_increment_url(document_type, filter_state, tally_next, idempotency_key=None):
+        params = {"document_type": document_type.pk, **filter_state, "next": tally_next}
+        if idempotency_key:
+            params["idempotency_key"] = idempotency_key
+        return "{}?{}".format(
+            reverse("core:tally_increment"),
+            urlencode(params),
+        )
+
+    @classmethod
+    def _row_context(cls, request, facility, event, params, live_context, *, request_is_live):
+        summary = build_tally_summary(facility, request.user, context=live_context)
+        row = next((entry for entry in summary["rows"] if entry["document_type"].pk == event.document_type_id), None)
+        if row is None:
+            return None
+        filter_state = cls._filter_state(params, live_context, request_is_live=request_is_live)
+        tally_next = cls._tally_next(params, filter_state, request_is_live=request_is_live)
+        row["tally_increment_url"] = cls._tally_increment_url(
+            event.document_type, filter_state, tally_next, row["idempotency_key"]
+        )
+        return {
+            "row": row,
+            "tally_summary": summary,
+            "tally_filter_state": filter_state,
+            "tally_next": tally_next,
+            # #1913 kann die Provenienz/Undo-Darstellung an diesen wirklich
+            # erzeugten (auch Replay-/Race-)Event-Kontext anbinden.
+            "tally_event": event,
+        }
+
+    @classmethod
+    def _success_response(cls, request, facility, event, live_context, *, request_is_live):
+        """Return the changed row, or a normal navigation without HTMX."""
+        filter_state = cls._filter_state(request.POST, live_context, request_is_live=request_is_live)
+        tally_next = cls._tally_next(request.POST, filter_state, request_is_live=request_is_live)
+        if not request.headers.get("HX-Request"):
+            return redirect(tally_next)
+        context = cls._row_context(
+            request,
+            facility,
+            event,
+            request.POST,
+            live_context,
+            request_is_live=request_is_live,
+        )
+        if context is None:
+            # Das Schreiben war erfolgreich, aber eine parallele Policy- oder
+            # Sichtbarkeitsänderung hat die Zeile inzwischen aus der Summary
+            # entfernt. Die alte Zeile verschwindet autoritativ; der Feed
+            # erhält trotzdem sein Erfolgssignal.
+            response = HttpResponse("")
+            response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
+            response["HX-Reswap"] = "outerHTML"
+            response["HX-Trigger-After-Swap"] = "zeitstrom-changed"
+            return response
         response = render(
             request,
-            "core/zeitstrom/partials/tally_panel.html",
-            {"tally_summary": build_tally_summary(facility, request.user)},
+            "core/zeitstrom/partials/tally_row.html",
+            context,
         )
-        # Für das Zahlenformular ist das Retarget zwingend; beim direkten +1
-        # entspricht es dem bereits gesetzten hx-target und bleibt wirkungsgleich.
-        response["HX-Retarget"] = "#tally-panel"
+        response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
         response["HX-Reswap"] = "outerHTML"
+        response["HX-Trigger-After-Swap"] = "zeitstrom-changed"
         return response
 
     @staticmethod
-    def _live_context_error(request, params):
-        if tally_request_matches_live_context(request.current_facility, params):
+    def _full_form_response(request, context):
+        return render(request, "core/zeitstrom/tally_form.html", context)
+
+    @staticmethod
+    def _request_matches_live_context(request, params, live_context):
+        return tally_request_matches_live_context(request.current_facility, params, context=live_context)
+
+    @classmethod
+    def _live_context_error(cls, request, params, live_context):
+        if cls._request_matches_live_context(request, params, live_context):
             return None
         return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
 
     def get(self, request):
-        if error_response := self._live_context_error(request, request.GET):
+        facility = request.current_facility
+        live_context = current_tally_context(facility)
+
+        if request.GET.get("cancel"):
+            eligibility, error_response = self._resolve_document_type(request, request.GET)
+            if error_response is not None:
+                return error_response
+            doc_type = eligibility.document_type
+            if not eligibility.required_number_fields:
+                return HttpResponseBadRequest(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe."))
+            request_is_live = self._request_matches_live_context(request, request.GET, live_context)
+            summary = build_tally_summary(facility, request.user, context=live_context)
+            row = next(
+                (entry for entry in summary["rows"] if entry["document_type"].pk == doc_type.pk),
+                None,
+            )
+            if row is None:
+                return HttpResponseBadRequest(_("Dieser Dokumentationstyp kann nicht per Strichliste erfasst werden."))
+            filter_state = self._filter_state(request.GET, live_context, request_is_live=request_is_live)
+            context = {
+                "row": row,
+                "tally_filter_state": filter_state,
+                "tally_next": self._tally_next(request.GET, filter_state, request_is_live=request_is_live),
+            }
+            context["row"]["tally_increment_url"] = self._tally_increment_url(
+                doc_type,
+                context["tally_filter_state"],
+                context["tally_next"],
+                context["row"]["idempotency_key"],
+            )
+            if not request.headers.get("HX-Request"):
+                return redirect(context["tally_next"])
+            return render(
+                request,
+                "core/zeitstrom/partials/tally_action.html",
+                context,
+            )
+
+        if error_response := self._live_context_error(request, request.GET, live_context):
             return error_response
         eligibility, error_response = self._resolve_document_type(request, request.GET)
         if error_response is not None:
@@ -572,36 +698,26 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         if not required_fields:
             return HttpResponseBadRequest(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe."))
 
-        if request.GET.get("cancel"):
-            summary = build_tally_summary(request.current_facility, request.user)
-            row = next(
-                (entry for entry in summary["rows"] if entry["document_type"].pk == doc_type.pk),
-                None,
-            )
-            if row is None:
-                return HttpResponseBadRequest(_("Dieser Dokumentationstyp kann nicht per Strichliste erfasst werden."))
-            return render(
-                request,
-                "core/zeitstrom/partials/tally_action.html",
-                {"row": row},
-            )
-
         idempotency_key = normalize_idempotency_key(request.GET.get("idempotency_key"))
 
-        return render(
-            request,
-            "core/zeitstrom/partials/tally_inline_form.html",
-            {
-                "document_type": doc_type,
-                "tally_form": TallyNumberDataForm(eligibility=eligibility),
-                "idempotency_key": idempotency_key or new_tally_idempotency_key(),
-            },
+        context = {
+            "document_type": doc_type,
+            "tally_form": TallyNumberDataForm(eligibility=eligibility),
+            "idempotency_key": idempotency_key or new_tally_idempotency_key(),
+            "tally_filter_state": self._filter_state(request.GET, live_context, request_is_live=True),
+            "tally_next": self._tally_next(request.GET, {}, request_is_live=True),
+        }
+        context["tally_increment_url"] = self._tally_increment_url(
+            doc_type, context["tally_filter_state"], context["tally_next"], context["idempotency_key"]
         )
+        if request.headers.get("HX-Request"):
+            return render(request, "core/zeitstrom/partials/tally_inline_form.html", context)
+        return self._full_form_response(request, context)
 
     def post(self, request):
         facility = request.current_facility
-        if error_response := self._live_context_error(request, request.POST):
-            return error_response
+        live_context = current_tally_context(facility)
+        request_is_live = self._request_matches_live_context(request, request.POST, live_context)
         try:
             idempotency_key = resolve_idempotency_key(
                 request.headers.get("X-Idempotency-Key"),
@@ -609,6 +725,8 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 required=True,
             )
         except ValueError:
+            if not request_is_live:
+                return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
             return HttpResponseBadRequest(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."))
 
         payload_hash = payload_fingerprint(request)
@@ -616,7 +734,19 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         if hit is not None:
             if has_idempotency_payload_mismatch(hit.payload_hash, payload_hash):
                 return _idempotency_mismatch_response()
-            return self._success_response(request, facility)
+            try:
+                event = (
+                    Event.objects.for_facility(facility)
+                    .filter(pk=hit.pk, created_by=request.user, idempotency_key=idempotency_key)
+                    .first()
+                )
+            except ValidationError:
+                event = None
+            if event is None:
+                return HttpResponseBadRequest(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."))
+            if has_idempotency_payload_mismatch(event.idempotency_payload_hash, payload_hash):
+                return _idempotency_mismatch_response()
+            return self._success_response(request, facility, event, live_context, request_is_live=request_is_live)
         existing = (
             Event.objects.for_facility(facility)
             .filter(created_by=request.user, idempotency_key=idempotency_key)
@@ -625,7 +755,9 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         if existing is not None:
             if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, payload_hash):
                 return _idempotency_mismatch_response()
-            return self._success_response(request, facility)
+            return self._success_response(request, facility, existing, live_context, request_is_live=request_is_live)
+        if not request_is_live:
+            return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
         eligibility, error_response = self._resolve_document_type(request, request.POST)
         if error_response is not None:
             return error_response
@@ -636,15 +768,19 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         if required_fields:
             tally_form = TallyNumberDataForm(request.POST, eligibility=eligibility)
             if not tally_form.is_valid():
-                return render(
-                    request,
-                    "core/zeitstrom/partials/tally_inline_form.html",
-                    {
-                        "document_type": doc_type,
-                        "tally_form": tally_form,
-                        "idempotency_key": idempotency_key,
-                    },
+                context = {
+                    "document_type": doc_type,
+                    "tally_form": tally_form,
+                    "idempotency_key": idempotency_key,
+                    "tally_filter_state": self._filter_state(request.POST, live_context, request_is_live=True),
+                    "tally_next": self._tally_next(request.POST, {}, request_is_live=True),
+                }
+                context["tally_increment_url"] = self._tally_increment_url(
+                    doc_type, context["tally_filter_state"], context["tally_next"], context["idempotency_key"]
                 )
+                if request.headers.get("HX-Request"):
+                    return render(request, "core/zeitstrom/partials/tally_inline_form.html", context)
+                return self._full_form_response(request, context)
             data_json = tally_form.cleaned_data
 
         try:
@@ -668,7 +804,9 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 if existing is not None:
                     if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, payload_hash):
                         return _idempotency_mismatch_response()
-                    return self._success_response(request, facility)
+                    return self._success_response(
+                        request, facility, existing, live_context, request_is_live=request_is_live
+                    )
             raise
 
         remember_idempotent_result(
@@ -678,7 +816,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             event.pk,
             payload_hash=payload_hash,
         )
-        return self._success_response(request, facility)
+        return self._success_response(request, facility, event, live_context, request_is_live=True)
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):

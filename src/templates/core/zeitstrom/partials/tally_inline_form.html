@@ -12,6 +12,10 @@
         {% csrf_token %}
         <input type="hidden" name="document_type" value="{{ document_type.pk }}">
         <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+        <input type="hidden" name="next" value="{{ tally_next }}">
+        {% for name, value in tally_filter_state.items %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
         <div data-testid="tally-form-errors-{{ document_type.pk }}">
             {% include "core/_form_errors.html" with form=tally_form %}
         </div>
@@ -29,15 +33,14 @@
             {% endfor %}
         </div>
         <div class="flex items-center justify-end gap-2">
-            <button type="button"
+            <a href="{{ tally_next }}"
                     class="btn-secondary min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
                     data-testid="tally-cancel-{{ document_type.pk }}"
-                    hx-get="{% url 'core:tally_increment' %}"
-                    hx-vals='{"document_type": "{{ document_type.pk }}", "cancel": "1"}'
+                    hx-get="{{ tally_increment_url }}&amp;cancel=1"
                     hx-target="#tally-action-{{ document_type.pk }}"
                     hx-swap="outerHTML">
                 {% trans "Abbrechen" %}
-            </button>
+            </a>
             <button type="submit" class="btn-primary min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
                     data-testid="tally-submit-{{ document_type.pk }}">
                 {% trans "Kontakt zählen" %}
