@@ -8,15 +8,217 @@ Zeitfenster ist die gerade laufende Schicht (falls ein ``TimeFilter`` den
 aktuellen Zeitpunkt abdeckt), sonst der komplette heutige Tag.
 """
 
+from dataclasses import dataclass
 from datetime import timedelta
+from enum import StrEnum
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Case, Count, Exists, IntegerField, OuterRef, Prefetch, Q, When
+from django.db.models.functions import Coalesce
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
-from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, TimeFilter
-from core.services.compliance import allowed_sensitivities_for_user
-from core.services.config import block_ordered_dtf_queryset
+from core.models import DocumentType, DocumentTypeField, Event, FieldCondition, FieldTemplate, TimeFilter
+from core.services.compliance import allowed_sensitivities_for_user, user_can_see_document_type, user_can_see_field
 from core.services.events.feed import get_time_range
+
+
+class TallyMode(StrEnum):
+    """Erfassungsmodus eines geeigneten Strichlisten-Typs."""
+
+    DIRECT = "direct"
+    NUMBER = "number"
+
+
+class TallyIneligibilityReason(StrEnum):
+    """Stabile, maschinenlesbare Codes für abgelehnte Tally-Typen."""
+
+    OPT_IN_DISABLED = "opt_in_disabled"
+    INACTIVE = "inactive"
+    UNSUPPORTED_ENTITY_TYPE = "unsupported_entity_type"
+    REQUIRES_CONTACT = "requires_contact"
+    RESTRICTED_DOCUMENT_TYPE = "restricted_document_type"
+    CONDITIONAL_REQUIRED_FIELD = "conditional_required_field"
+    UNSUPPORTED_REQUIRED_FIELD = "unsupported_required_field"
+    RESTRICTED_REQUIRED_FIELD = "restricted_required_field"
+
+
+_REASON_MESSAGES = {
+    TallyIneligibilityReason.OPT_IN_DISABLED: _("Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben."),
+    TallyIneligibilityReason.INACTIVE: _("Der Dokumentationstyp ist deaktiviert."),
+    TallyIneligibilityReason.UNSUPPORTED_ENTITY_TYPE: _(
+        "Die Strichliste unterstützt nur Dokumentationstypen für Ereignisse."
+    ),
+    TallyIneligibilityReason.REQUIRES_CONTACT: _("Der Dokumentationstyp erfordert eine zugeordnete Person."),
+    TallyIneligibilityReason.RESTRICTED_DOCUMENT_TYPE: _("Der Dokumentationstyp ist für diese Rolle nicht sichtbar."),
+    TallyIneligibilityReason.CONDITIONAL_REQUIRED_FIELD: _(
+        "Ein bedingtes Pflichtfeld kann im kompakten Strichlisten-Formular nicht sicher abgebildet werden."
+    ),
+    TallyIneligibilityReason.UNSUPPORTED_REQUIRED_FIELD: _(
+        "Nicht unterstütztes Pflichtfeld: Dieser Dokumentationstyp hat Pflichtfelder, "
+        "aber in der Strichliste sind nur Zahlen-Pflichtfelder zulässig."
+    ),
+    TallyIneligibilityReason.RESTRICTED_REQUIRED_FIELD: _(
+        "Mindestens ein Pflichtfeld ist für diese Rolle nicht sichtbar."
+    ),
+}
+
+
+@dataclass(frozen=True)
+class TallyEligibility:
+    """Vollständige Eignungsentscheidung für einen Dokumentationstyp."""
+
+    document_type: DocumentType
+    eligible: bool
+    mode: TallyMode | None
+    required_number_fields: tuple[DocumentTypeField, ...]
+    reasons: tuple[TallyIneligibilityReason, ...]
+
+    @property
+    def reason_messages(self) -> tuple[object, ...]:
+        return tuple(_REASON_MESSAGES[reason] for reason in self.reasons)
+
+    @property
+    def conceal_from_request(self) -> bool:
+        """Ob ein Request wie bei einem nicht vorhandenen Typ antworten muss."""
+        return bool(
+            {
+                TallyIneligibilityReason.INACTIVE,
+                TallyIneligibilityReason.UNSUPPORTED_ENTITY_TYPE,
+            }.intersection(self.reasons)
+        )
+
+    @property
+    def permission_denied(self) -> bool:
+        """Ob die Ablehnung aus einer Rollen-/Sensitivitätsgrenze folgt."""
+        return bool(
+            {
+                TallyIneligibilityReason.RESTRICTED_DOCUMENT_TYPE,
+                TallyIneligibilityReason.RESTRICTED_REQUIRED_FIELD,
+            }.intersection(self.reasons)
+        )
+
+    @property
+    def number_form_supported(self) -> bool:
+        """Ob die Feldstruktur sicher als kompaktes Zahlenformular darstellbar ist."""
+        return not {
+            TallyIneligibilityReason.CONDITIONAL_REQUIRED_FIELD,
+            TallyIneligibilityReason.UNSUPPORTED_REQUIRED_FIELD,
+        }.intersection(self.reasons)
+
+
+def _tally_assignment_queryset():
+    """Feldzuordnungen samt Bedingungsflag in kanonischer Block-Reihenfolge."""
+    conditions = FieldCondition.objects.filter(target_field=OuterRef("pk"))
+    return (
+        DocumentTypeField.objects.select_related("field_template", "field_group")
+        .annotate(
+            block_pos=Coalesce("field_group__sort_order", "sort_order"),
+            block_is_free=Case(
+                When(field_group__isnull=True, then=1),
+                default=0,
+                output_field=IntegerField(),
+            ),
+            has_tally_condition=Exists(conditions),
+        )
+        .order_by("document_type_id", "block_pos", "block_is_free", "sort_order", "pk")
+    )
+
+
+def _assignments_for_policy(document_type):
+    prefetched = getattr(document_type, "_tally_policy_assignments", None)
+    if prefetched is not None:
+        return tuple(prefetched)
+    return tuple(_tally_assignment_queryset().filter(document_type=document_type))
+
+
+def evaluate_tally_eligibility(document_type, user=None) -> TallyEligibility:
+    """Bewerte einen Typ zentral für Liste, Schreibpfad, Formular und Config.
+
+    ``user=None`` liefert die rollenunabhängige Strukturentscheidung für die
+    Konfigurationsansicht. Die Oberfläche weist dann ausdrücklich darauf hin,
+    dass die tatsächliche Anzeige zusätzlich von Rollen-/Sensitivitätsrechten
+    abhängt. Laufzeitpfade übergeben immer den handelnden User.
+    """
+    assignments = _assignments_for_policy(document_type)
+    required = tuple(assignment for assignment in assignments if assignment.field_template.is_required)
+    number_fields = tuple(
+        assignment for assignment in required if assignment.field_template.field_type == FieldTemplate.FieldType.NUMBER
+    )
+
+    reasons: list[TallyIneligibilityReason] = []
+    if not document_type.tally_enabled:
+        reasons.append(TallyIneligibilityReason.OPT_IN_DISABLED)
+    if not document_type.is_active:
+        reasons.append(TallyIneligibilityReason.INACTIVE)
+    if document_type.entity_type != DocumentType.EntityType.EVENT:
+        reasons.append(TallyIneligibilityReason.UNSUPPORTED_ENTITY_TYPE)
+    if document_type.min_contact_stage:
+        reasons.append(TallyIneligibilityReason.REQUIRES_CONTACT)
+    if user is not None and not user_can_see_document_type(user, document_type):
+        reasons.append(TallyIneligibilityReason.RESTRICTED_DOCUMENT_TYPE)
+    if any(assignment.has_tally_condition for assignment in required):
+        reasons.append(TallyIneligibilityReason.CONDITIONAL_REQUIRED_FIELD)
+    if len(number_fields) != len(required):
+        reasons.append(TallyIneligibilityReason.UNSUPPORTED_REQUIRED_FIELD)
+    if user is not None and any(
+        not user_can_see_field(
+            user,
+            document_type.sensitivity,
+            assignment.field_template.sensitivity,
+        )
+        for assignment in required
+    ):
+        reasons.append(TallyIneligibilityReason.RESTRICTED_REQUIRED_FIELD)
+
+    reason_tuple = tuple(reasons)
+    if reason_tuple:
+        mode = None
+    elif number_fields:
+        mode = TallyMode.NUMBER
+    else:
+        mode = TallyMode.DIRECT
+    return TallyEligibility(
+        document_type=document_type,
+        eligible=not reason_tuple,
+        mode=mode,
+        required_number_fields=number_fields,
+        reasons=reason_tuple,
+    )
+
+
+def _tally_static_candidate_queryset(facility, user):
+    """Grenze den häufigen Listenpfad auf statisch mögliche Typen ein.
+
+    Das ist bewusst nur ein konservativer DB-Performance-Filter: Die totale
+    Einzeltyp-Policy :func:`evaluate_tally_eligibility` bleibt autoritativ und
+    prüft dieselben Basisregeln erneut. Feldtypen, Bedingungen und
+    Feld-Sensitivitäten brauchen den Assignment-Prefetch und werden deshalb
+    erst dort entschieden.
+    """
+    allowed_sensitivities = allowed_sensitivities_for_user(user)
+    return DocumentType.objects.for_facility(facility).filter(
+        Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
+        tally_enabled=True,
+        is_active=True,
+        entity_type=DocumentType.EntityType.EVENT,
+        sensitivity__in=allowed_sensitivities,
+    )
+
+
+def tally_eligibilities(facility, user) -> list[TallyEligibility]:
+    """Bewerte statisch mögliche Tally-Typen ohne typabhängige Zusatzqueries."""
+    document_types = (
+        _tally_static_candidate_queryset(facility, user)
+        .prefetch_related(
+            Prefetch(
+                "fields",
+                queryset=_tally_assignment_queryset(),
+                to_attr="_tally_policy_assignments",
+            )
+        )
+        .order_by("name")
+    )
+    return [evaluate_tally_eligibility(document_type, user) for document_type in document_types]
 
 
 def current_tally_window(facility):
@@ -49,37 +251,21 @@ def tally_document_types(facility, user):
     eine höhere Feld-Sensibilität hat. Typen mit einer Mindest-Kontaktstufe
     (``min_contact_stage``) sind NIE anonym (``create_event`` erzwingt das).
     """
-    allowed_sensitivities = allowed_sensitivities_for_user(user)
+    # Kompatibilitätsvertrag: Aufrufer bekamen historisch ein lazy/filterbares
+    # QuerySet samt ``requires_number_input``-Annotation. Die Policy muss für
+    # Bedingungen/Feld-Sensitivitäten vorab die Kandidaten auswerten; ihre
+    # freigegebenen IDs begrenzen anschließend das weiterhin lazy QuerySet.
+    eligible_ids = [result.document_type.pk for result in tally_eligibilities(facility, user) if result.eligible]
     required_fields = DocumentTypeField.objects.filter(
         document_type=OuterRef("pk"),
         field_template__is_required=True,
     )
-    non_number_required_fields = required_fields.exclude(
-        field_template__field_type=FieldTemplate.FieldType.NUMBER,
-    )
-    restricted_required_fields = required_fields.exclude(
-        Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed_sensitivities)
-    )
     return (
         DocumentType.objects.for_facility(facility)
         .annotate(requires_number_input=Exists(required_fields))
-        .filter(~Exists(non_number_required_fields), ~Exists(restricted_required_fields))
-        .filter(
-            Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
-            is_active=True,
-            # M2 (Refs #1058): die Strichliste legt Events an — nur event-Typen
-            # gehoeren ins Panel (Entscheid E21, Muster EventMetaForm).
-            entity_type=DocumentType.EntityType.EVENT,
-            sensitivity__in=allowed_sensitivities,
-            tally_enabled=True,
-        )
+        .filter(pk__in=eligible_ids)
         .order_by("name")
     )
-
-
-def tally_required_fields(document_type):
-    """Pflichtfelder eines Tally-Typs in derselben Block-Reihenfolge wie im Formular."""
-    return block_ordered_dtf_queryset(document_type).filter(field_template__is_required=True)
 
 
 def build_tally_summary(facility, user):
@@ -93,7 +279,7 @@ def build_tally_summary(facility, user):
     anonyme Events.
     """
     start_dt, end_dt = current_tally_window(facility)
-    doc_types = list(tally_document_types(facility, user))
+    eligibilities = [result for result in tally_eligibilities(facility, user) if result.eligible]
 
     counts = dict(
         Event.objects.visible_to(user)
@@ -109,10 +295,10 @@ def build_tally_summary(facility, user):
 
     rows = [
         {
-            "document_type": dt,
-            "count": counts.get(dt.pk, 0),
-            "requires_number_input": dt.requires_number_input,
+            "document_type": eligibility.document_type,
+            "count": counts.get(eligibility.document_type.pk, 0),
+            "requires_number_input": eligibility.mode is TallyMode.NUMBER,
         }
-        for dt in doc_types
+        for eligibility in eligibilities
     ]
     return {"window_start": start_dt, "window_end": end_dt, "rows": rows}

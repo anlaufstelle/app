@@ -119,7 +119,7 @@ def _select_choices(ft, initial_data, select_type):
     return choices
 
 
-def _build_dynamic_field(ft, initial_data):
+def build_dynamic_form_field(ft, initial_data):
     """Refs #1160: Ein einzelnes Formularfeld aus einem ``FieldTemplate`` bauen.
 
     Aus :meth:`DynamicDataForm.__init__` herausgezogen — kapselt die
@@ -174,6 +174,11 @@ def _build_dynamic_field(ft, initial_data):
             field.initial = default_initial
 
     return field
+
+
+# Rückwärtskompatibler Alias für bestehende Event-Formular-Konsumenten. Neue
+# Formulare importieren ausschließlich den öffentlichen Namen.
+_build_dynamic_field = build_dynamic_form_field
 
 
 def _resolve_upload_constraints(facility):
@@ -307,7 +312,7 @@ class DynamicDataForm(forms.Form):
 
         for dtf in dtf_qs:
             ft = dtf.field_template
-            self.fields[ft.slug] = _build_dynamic_field(ft, initial_data)
+            self.fields[ft.slug] = build_dynamic_form_field(ft, initial_data)
             self._field_group_of[ft.slug] = dtf.field_group
             self._field_templates[ft.slug] = ft
             self._block_position[ft.slug] = dtf.sort_order

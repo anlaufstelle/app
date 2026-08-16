@@ -225,8 +225,7 @@ class TestTallyDocumentTypesEntityTypeFilter:
     """
 
     def test_client_type_excluded(self, facility, staff_user, doc_type_client, doc_type_contact):
-        qs = tally_document_types(facility, staff_user)
-        pks = list(qs.values_list("pk", flat=True))
+        pks = [document_type.pk for document_type in tally_document_types(facility, staff_user)]
         assert doc_type_client.pk not in pks
         assert doc_type_contact.pk in pks
 

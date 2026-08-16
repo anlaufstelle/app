@@ -73,16 +73,23 @@ from core.services.events.idempotency import (
     remember_idempotent_result,
 )
 from core.services.events.tally import (
+    TallyEligibility,
+    TallyIneligibilityReason,
+    TallyMode,
     build_tally_summary,
     current_tally_window,
+    evaluate_tally_eligibility,
     tally_document_types,
-    tally_required_fields,
+    tally_eligibilities,
 )
 
 __all__ = [
     "CONTACT_STAGE_ORDER",
     "ENCRYPTED_PLACEHOLDER",
     "RESTRICTED_PLACEHOLDER",
+    "TallyEligibility",
+    "TallyIneligibilityReason",
+    "TallyMode",
     "_build_prior_versions",
     "_format_field_display_value",
     "_format_preview_value",
@@ -102,6 +109,7 @@ __all__ = [
     "create_event",
     "decrypt_event_text_data",
     "enrich_events_with_preview",
+    "evaluate_tally_eligibility",
     "finalize_staged_files",
     "filtered_server_data_json",
     "get_idempotent_result",
@@ -119,7 +127,7 @@ __all__ = [
     "resolve_default_document_type",
     "soft_delete_event",
     "split_file_and_text_data",
-    "tally_required_fields",
+    "tally_eligibilities",
     "stage_index",
     "tally_document_types",
     "update_event",

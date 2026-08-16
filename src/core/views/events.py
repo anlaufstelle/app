@@ -17,13 +17,12 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
-from core.models import Client, DocumentType, Event, FieldTemplate
+from core.models import Client, DocumentType, Event
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.compliance import (
     get_visible_event_or_404,
     user_can_see_document_type,
-    user_can_see_field,
 )
 from core.services.dashboard import (
     apply_template,
@@ -38,6 +37,7 @@ from core.services.events import (
     build_tally_summary,
     create_event,
     decrypt_event_text_data,
+    evaluate_tally_eligibility,
     filtered_server_data_json,
     finalize_staged_files,
     get_idempotent_result,
@@ -50,7 +50,6 @@ from core.services.events import (
     resolve_default_document_type,
     soft_delete_event,
     split_file_and_text_data,
-    tally_required_fields,
     update_event,
 )
 from core.services.events.fields import file_marker_slugs
@@ -523,70 +522,25 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
 
     def _resolve_document_type(self, request, params):
         # Facility-Scope: unbekannter/fremder Typ → 404 (verrät keine Existenz
-        # in anderer Einrichtung). M2 (Refs #1058): entity_type=event zusaetzlich
-        # — die Strichliste legt Events an, ein client-/case-Typ darf hier
-        # nicht per manipuliertem Request unterschoben werden.
-        doc_type = get_scoped_object(
-            DocumentType,
-            request,
-            pk=params.get("document_type"),
-            is_active=True,
-            entity_type=DocumentType.EntityType.EVENT,
-        )
-
-        # Sensitivity-Guard (Muster EventFieldsPartialView): ein Assistant darf
-        # per manipuliertem POST keinen HIGH-/ELEVATED-Typ erfassen, den seine
-        # Rolle nicht sehen darf. create_event prüft das zusätzlich — hier
-        # bewusst früh, um vor dem Schreibpfad abzuweisen.
-        if not user_can_see_document_type(request.user, doc_type):
+        # in anderer Einrichtung). Alle fachlichen Regeln einschließlich
+        # Entitätstyp, Aktivstatus und Feld-Sensitivität liefert die Policy.
+        doc_type = get_scoped_object(DocumentType, request, pk=params.get("document_type"))
+        eligibility = evaluate_tally_eligibility(doc_type, request.user)
+        if eligibility.conceal_from_request:
+            raise Http404
+        if eligibility.permission_denied:
             raise PermissionDenied
-
-        # Typen mit Mindest-Kontaktstufe sind NIE anonym (create_event erzwingt
-        # das): die Strichliste bietet sie nicht an, ein Request darauf ist
-        # Missbrauch.
-        if doc_type.min_contact_stage:
-            return doc_type, (), HttpResponseBadRequest(_("Dieser Dokumentationstyp erfordert eine Person."))
-
-        # Refs #1637: Panel-Filter sind kein Sicherheitsrand. Manipulierte
-        # Requests müssen dieselben Opt-in-/Datenqualitätsregeln erzwingen.
-        if not doc_type.tally_enabled:
-            return (
-                doc_type,
-                (),
-                HttpResponseBadRequest(_("Dieser Dokumentationstyp ist nicht für die Strichliste freigegeben.")),
-            )
-
-        required_fields = tuple(tally_required_fields(doc_type))
-        if any(
-            assignment.field_template.field_type != FieldTemplate.FieldType.NUMBER for assignment in required_fields
-        ):
-            return (
-                doc_type,
-                required_fields,
-                HttpResponseBadRequest(
-                    _("Dieser Dokumentationstyp hat Pflichtfelder und kann nicht per Strichliste erfasst werden.")
-                ),
-            )
-
-        # #1906: Ein sichtbarer NORMAL-Typ kann ein höher eingestuftes Feld
-        # tragen. Dessen Name und Eingabe dürfen im Inline-Formular nicht an
-        # Rollen unterhalb der Feld-Sensibilität offengelegt werden.
-        if any(
-            not user_can_see_field(
-                request.user,
-                doc_type.sensitivity,
-                assignment.field_template.sensitivity,
-            )
-            for assignment in required_fields
-        ):
-            raise PermissionDenied
-
-        return doc_type, required_fields, None
+        if not eligibility.eligible:
+            message = " ".join(str(reason) for reason in eligibility.reason_messages)
+            return eligibility, HttpResponseBadRequest(message)
+        return eligibility, None
 
     def get(self, request):
-        doc_type, required_fields, error_response = self._resolve_document_type(request, request.GET)
+        eligibility, error_response = self._resolve_document_type(request, request.GET)
         if error_response is not None:
             return error_response
+        doc_type = eligibility.document_type
+        required_fields = eligibility.required_number_fields
         if not required_fields:
             return HttpResponseBadRequest(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe."))
 
@@ -609,19 +563,21 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             "core/zeitstrom/partials/tally_inline_form.html",
             {
                 "document_type": doc_type,
-                "tally_form": TallyNumberDataForm(document_type=doc_type),
+                "tally_form": TallyNumberDataForm(eligibility=eligibility),
             },
         )
 
     def post(self, request):
         facility = request.current_facility
-        doc_type, required_fields, error_response = self._resolve_document_type(request, request.POST)
+        eligibility, error_response = self._resolve_document_type(request, request.POST)
         if error_response is not None:
             return error_response
+        doc_type = eligibility.document_type
+        required_fields = eligibility.required_number_fields
 
         data_json = {}
         if required_fields:
-            tally_form = TallyNumberDataForm(request.POST, document_type=doc_type)
+            tally_form = TallyNumberDataForm(request.POST, eligibility=eligibility)
             if not tally_form.is_valid():
                 return render(
                     request,

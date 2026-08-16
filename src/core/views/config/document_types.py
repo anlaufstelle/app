@@ -34,6 +34,7 @@ from core.models import (
 from core.reporting.registry import describe_type_bindings
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
+from core.services.events import evaluate_tally_eligibility
 from core.views.mixins import (
     FacilityAdminRequiredMixin,
     HTMXPartialMixin,
@@ -245,6 +246,7 @@ class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
             **board_context(doc_type),
             **condition_board_context(doc_type),
             "usage_count": usage_count,
+            "tally_eligibility": evaluate_tally_eligibility(doc_type),
             **report_bindings_context(doc_type, request.current_facility),
         }
         return render(request, "core/config/document_types/detail.html", context)

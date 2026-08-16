@@ -3,9 +3,8 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from core.forms.dynamic import _build_dynamic_field
-from core.models import FieldTemplate
-from core.services.config import block_ordered_dtf_queryset
+from core.forms.dynamic import build_dynamic_form_field
+from core.services.events.tally import evaluate_tally_eligibility
 
 
 class TallyNumberDataForm(forms.Form):
@@ -16,20 +15,20 @@ class TallyNumberDataForm(forms.Form):
     POST cannot bypass the runtime eligibility filter in the view/service.
     """
 
-    def __init__(self, *args, document_type, **kwargs):
+    def __init__(self, *args, eligibility=None, document_type=None, **kwargs):
+        if eligibility is None:
+            if document_type is None:
+                raise TypeError("eligibility oder document_type ist erforderlich")
+            eligibility = evaluate_tally_eligibility(document_type)
+        document_type = eligibility.document_type
         kwargs.setdefault("auto_id", f"id_tally_{document_type.pk}_%s")
         self.document_type = document_type
-        self._has_unsupported_required_fields = False
+        self.eligibility = eligibility
         super().__init__(*args, **kwargs)
 
-        for document_type_field in block_ordered_dtf_queryset(document_type):
+        for document_type_field in eligibility.required_number_fields:
             field_template = document_type_field.field_template
-            if not field_template.is_required:
-                continue
-            if field_template.field_type != FieldTemplate.FieldType.NUMBER:
-                self._has_unsupported_required_fields = True
-                continue
-            field = _build_dynamic_field(field_template, initial_data=None)
+            field = build_dynamic_form_field(field_template, initial_data=None)
             # Der Server bleibt für Ganzzahlen maßgeblich. Ohne ``step=any``
             # wird ein zurückgerendertes ``value=1.5`` zur HTML-Step-Basis und
             # der Browser blockiert danach korrigierte Ganzzahlen wie ``10``.
@@ -42,7 +41,7 @@ class TallyNumberDataForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
-        if self._has_unsupported_required_fields:
+        if not self.eligibility.number_form_supported:
             raise forms.ValidationError(
                 _(
                     "Inline-Erfassung ist nur für Dokumentationstypen mit "
