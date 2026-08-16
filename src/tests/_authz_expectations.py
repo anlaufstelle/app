@@ -697,6 +697,7 @@ EXPECTATIONS = (
     # #1909 wegen des zwingenden Idempotenz-Schlüssels bereits 400. Scoping/IDOR
     # wird in den Tally-Tests body-basiert geprüft.
     E("core:tally_increment", "partials-htmx", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS, extra_ok=(400, 404)),
+    E("core:tally_undo", "partials-htmx", post=ASSISTANT_PLUS, extra_ok=(404,)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:zeitstrom_tally_counts_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:zeitstrom_bans_partial", "partials-htmx", get=ASSISTANT_PLUS),
