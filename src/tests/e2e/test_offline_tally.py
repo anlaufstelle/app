@@ -181,31 +181,32 @@ class TestOfflineTallyReconciliation:
 
             page.context.set_offline(True)
             page.evaluate("window.dispatchEvent(new Event('offline'))")
-            contact_row.locator(f'[data-testid="tally-increment-{contact_id}"]').click()
-
             contact_status = contact_row.locator("[data-offline-tally-status]")
-            expect(contact_status).to_have_text(f"{contact_before} bestätigt · 1 ausstehend", timeout=15000)
+            for pending in range(1, 4):
+                contact_row.locator(f'[data-testid="tally-increment-{contact_id}"]').click()
+                expect(contact_status).to_have_text(f"{contact_before} bestätigt · {pending} ausstehend", timeout=15000)
+
             contact_offline = _snapshot_and_queue_state(page, contact_id)
             assert contact_offline == {
                 "hasSnapshotRow": True,
                 "confirmed": contact_before,
-                "pending": 1,
+                "pending": 3,
                 "blocked": 0,
-                "queueCount": 1,
+                "queueCount": 3,
             }
 
             contact_replay_posts, contact_listener = _tally_post_counter(page)
             _reconnect_via_online_event(page)
-            expect(contact_status).to_have_text(f"{contact_before + 1} bestätigt · 0 ausstehend", timeout=15000)
+            expect(contact_status).to_have_text(f"{contact_before + 3} bestätigt · 0 ausstehend", timeout=15000)
             assert _snapshot_and_queue_state(page, contact_id) == {
                 "hasSnapshotRow": True,
-                "confirmed": contact_before + 1,
+                "confirmed": contact_before + 3,
                 "pending": 0,
                 "blocked": 0,
                 "queueCount": 0,
             }
-            assert len(contact_replay_posts) == 1, (
-                "Der zentrale Online-Replay darf den Kontakt genau einmal posten, "
+            assert len(contact_replay_posts) == 3, (
+                "Der zentrale Online-Replay muss die drei Offline-Kontakte einzeln posten, "
                 f"nicht {len(contact_replay_posts)}-mal: {contact_replay_posts!r}"
             )
             page.remove_listener("request", contact_listener)
