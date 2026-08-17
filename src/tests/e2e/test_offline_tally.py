@@ -466,6 +466,102 @@ class TestOfflineTallyReconciliation:
             _cleanup_offline_state(page)
             context.close()
 
+    def test_full_page_number_form_rotates_every_queued_submission_key(self, browser, base_url):
+        """Refs #1938: Auch die Vollseiten-Variante rotiert je Queue-ACK.
+
+        Ueber den No-JS-Link (Mittelklick, „in neuem Tab oeffnen") oder nach
+        einem Nicht-HTMX-POST landet dasselbe Partial als eigene Seite im
+        Browser — samt Marker und servergerendertem Schluessel. Ohne den dort
+        geladenen Rotations-Handler trugen zwei Offline-Submits denselben
+        Schluessel und der zweite Kontakt verschwand beim Replay still.
+        """
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _real_login(page, base_url)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "() => !!(window.crypto_session && window.offlineStore && window.syncOrchestrator)",
+                timeout=10000,
+            )
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            _wait_for_active_service_worker(page)
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            revalidation = page.evaluate("async () => window.offlineStore.revalidateCachedFacility()")
+            assert revalidation in {"refreshed", "not-modified"}, revalidation
+
+            number_row = _tally_row(page, "Spritzentausch")
+            number_id = _row_id(number_row)
+            number_before = int(number_row.locator(f'[data-testid="tally-count-{number_id}"]').inner_text().strip())
+
+            # Echte Navigation auf die Vollseite — genau der Weg, auf dem der
+            # Zeitstrom (und mit ihm sein Skript) nicht mehr geladen ist.
+            full_page_href = number_row.locator(f'[data-testid="tally-increment-{number_id}"]').get_attribute("href")
+            assert full_page_href
+            page.goto(f"{base_url}{full_page_href}", wait_until="domcontentloaded")
+            expect(page.locator("h1")).to_have_text("Kontakt zählen")
+            assert page.locator('script[src*="offline-tally"]').count() == 1
+
+            number_form = page.locator(f'[data-testid="tally-inline-form-{number_id}"]')
+            expect(number_form).to_be_visible(timeout=10000)
+            expect(number_form).to_have_attribute("data-offline-tally-form", "")
+            idempotency_input = number_form.locator('input[name="idempotency_key"]')
+            first_key = idempotency_input.input_value()
+            assert first_key
+
+            page.context.set_offline(True)
+            page.evaluate("window.dispatchEvent(new Event('offline'))")
+            number_form.locator('input[name="ausgabe"]').fill("10")
+            number_form.locator('input[name="rueckgabe"]').fill("4")
+            number_form.locator('button[type="submit"]').click()
+            page.wait_for_function(
+                """({selector, previous}) => {
+                    const input = document.querySelector(selector);
+                    return input && input.value && input.value !== previous;
+                }""",
+                arg={"selector": 'input[name="idempotency_key"]', "previous": first_key},
+            )
+            second_key = idempotency_input.input_value()
+
+            # Zweiter Submit mit IDENTISCHEN Werten: nur ein anderer Schluessel
+            # trennt die beiden Erfassungen serverseitig ueberhaupt noch.
+            number_form.locator('button[type="submit"]').click()
+            page.wait_for_function(
+                """({selector, previous}) => {
+                    const input = document.querySelector(selector);
+                    return input && input.value && input.value !== previous;
+                }""",
+                arg={"selector": 'input[name="idempotency_key"]', "previous": second_key},
+            )
+            assert len({first_key, second_key, idempotency_input.input_value()}) == 3
+            queued_keys = page.evaluate(
+                """async () => {
+                    const rows = await window.offlineStore.listDecrypted('queue');
+                    return rows
+                        .filter((row) => (row.url || '').includes('/partials/tally/increment/'))
+                        .map((row) => new URLSearchParams((row.data && row.data.body) || '')
+                            .get('idempotency_key'));
+                }"""
+            )
+            assert len(queued_keys) == 2
+            assert len(set(queued_keys)) == 2
+
+            _reconnect_via_online_event(page)
+            page.wait_for_function(
+                "async () => (await window.offlineStore.count('queue')) === 0",
+                timeout=20000,
+            )
+
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            reloaded_row = _tally_row(page, "Spritzentausch")
+            expect(reloaded_row.locator(f'[data-testid="tally-count-{number_id}"]')).to_have_text(
+                str(number_before + 2), timeout=15000
+            )
+        finally:
+            _cleanup_offline_state(page)
+            context.close()
+
     def test_cold_offline_tally_names_server_pending_and_snapshot_state(self, browser, base_url):
         """Kalt offline bleibt die Aufteilung bewusst sichtbar und nennt Typ
         sowie Alter des verschlüsselten Server-Snapshots."""
