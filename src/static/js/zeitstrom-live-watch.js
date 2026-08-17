@@ -436,7 +436,7 @@
         }
 
         function poll() {
-            if (!canPoll()) return Promise.resolve();
+            if (!canPoll() || pendingFilterTransition) return Promise.resolve();
             if (cycle && cycle.generation === generation) return cycle.promise;
             clearTimer();
             const currentCycle = {
@@ -537,6 +537,7 @@
                 pendingFilterTransition.generation !== generation ||
                 pendingFilterTransition.state !== stateParams().toString()
             ) {
+                rejectFilterTransition(false);
                 return;
             }
             const xhr = detail.xhr;

@@ -408,6 +408,136 @@ describe("Zeitstrom live watch", () => {
         watcher.stop();
     });
 
+    it("defers public and focus checks until a pending time-filter transition commits", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi.fn().mockImplementation(async (_url, options) => {
+            if (fetchMock.mock.calls.length <= 2) {
+                return response({ status: 304, headers: { ETag: '"page-v1"' } });
+            }
+            const sent = JSON.parse(options.headers["X-Zeitstrom-Validators"] || "{}");
+            if (sent.feed === '"feed-v2"' && sent.tally_topology === '"topology-v2"') {
+                return response({ status: 304, headers: { ETag: '"page-v2"' } });
+            }
+            return watchResponse(["tally_topology"], { tally_topology: '"topology-v2"' });
+        });
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+            navigate,
+        });
+        watcher.start();
+        await flush();
+
+        const docType = document.createElement("select");
+        docType.id = "filter-doc-type";
+        docType.innerHTML = '<option value="contact" selected>Kontakt</option>';
+        document.getElementById("zeitstrom-live-watch").append(docType);
+        const docTypeRequest = {
+            elt: docType,
+            headers: {},
+            parameters: {
+                date: "2026-08-16",
+                time_filter: "all",
+                type: "",
+                doc_type: "",
+                view: "",
+            },
+        };
+        docType.dispatchEvent(
+            new CustomEvent("htmx:configRequest", { bubbles: true, detail: docTypeRequest }),
+        );
+        await flush();
+        docType.dispatchEvent(
+            new CustomEvent("htmx:afterRequest", {
+                bubbles: true,
+                detail: { requestConfig: docTypeRequest, successful: true, xhr: { status: 200 } },
+            }),
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        const transition = configureTimeFilter("shift-v2");
+        await watcher.checkNow();
+        window.dispatchEvent(new Event("focus"));
+        await flush();
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(navigate).not.toHaveBeenCalled();
+        expect(document.getElementById("zeitstrom-live-watch").textContent).not.toBe("");
+
+        finishTimeFilterRequest(transition, {
+            etag: '"feed-v2"',
+            validators: { feed: '"feed-v2"', tally_topology: '"topology-v2"' },
+        });
+        await flush();
+
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(JSON.parse(fetchMock.mock.calls[2][1].headers["X-Zeitstrom-Validators"])).toMatchObject({
+            feed: '"feed-v2"',
+            tally_topology: '"topology-v2"',
+        });
+        expect(navigate).not.toHaveBeenCalled();
+        watcher.stop();
+    });
+
+    it.each(["hidden", "offline", "pagehide"])(
+        "discards a pending transition after %s changes the generation and resumes one poll",
+        async (lifecycle) => {
+            const navigate = vi.fn();
+            const fetchMock = vi
+                .fn()
+                .mockResolvedValueOnce(response({ status: 304, headers: { ETag: '"page-v1"' } }))
+                .mockResolvedValueOnce(
+                    watchResponse(["tally_topology"], { tally_topology: '"topology-current"' }),
+                );
+            const watcher = window.createZeitstromLiveWatch(
+                document.getElementById("zeitstrom-live-watch"),
+                { fetch: fetchMock, navigate },
+            );
+            watcher.start();
+            await flush();
+
+            const transition = configureTimeFilter("shift-v2");
+            if (lifecycle === "hidden") {
+                Object.defineProperty(document, "visibilityState", {
+                    configurable: true,
+                    value: "hidden",
+                });
+                document.dispatchEvent(new Event("visibilitychange"));
+            } else if (lifecycle === "offline") {
+                Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+                window.dispatchEvent(new Event("offline"));
+            } else {
+                window.dispatchEvent(new Event("pagehide"));
+            }
+
+            finishTimeFilterRequest(transition, {
+                etag: '"feed-stale"',
+                validators: { feed: '"feed-stale"', tally_topology: '"topology-stale"' },
+            });
+
+            if (lifecycle === "hidden") {
+                Object.defineProperty(document, "visibilityState", {
+                    configurable: true,
+                    value: "visible",
+                });
+                document.dispatchEvent(new Event("visibilitychange"));
+            } else if (lifecycle === "offline") {
+                Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+                window.dispatchEvent(new Event("online"));
+            } else {
+                window.dispatchEvent(new Event("pageshow"));
+            }
+            await flush();
+            await watcher.checkNow();
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(fetchMock.mock.calls[1][1].headers).not.toHaveProperty(
+                "X-Zeitstrom-Validators",
+            );
+            expect(navigate).toHaveBeenCalledOnce();
+            expect(document.getElementById("zeitstrom-live-watch").textContent).toBe("");
+        },
+    );
+
     it("correlates a same-value replacement after hx-sync aborts the previous request", async () => {
         let replacementSignal;
         const fetchMock = vi
