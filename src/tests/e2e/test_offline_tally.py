@@ -170,6 +170,9 @@ class TestOfflineTallyReconciliation:
             contact_id = _row_id(contact_row)
             contact_count = contact_row.locator(f'[data-testid="tally-count-{contact_id}"]')
             contact_before = int(contact_count.inner_text().strip())
+            expect(contact_row.locator(":scope > span").first).to_be_visible()
+            expect(contact_count).to_be_visible()
+            expect(contact_row.locator(f'[data-testid="tally-increment-{contact_id}"]')).to_be_visible()
             expect(contact_row.locator("[data-offline-tally-status]")).to_have_count(0)
             expect(contact_count).to_have_attribute("aria-label", re.compile(r"Kontakt"))
             expect(contact_row).not_to_contain_text("bestätigt")
@@ -209,6 +212,10 @@ class TestOfflineTallyReconciliation:
                 contact_row.locator(f'[data-testid="tally-increment-{contact_id}"]').click()
                 expected_pending = "+1 wird gesendet" if pending == 1 else f"+{pending} werden gesendet"
                 expect(contact_status).to_have_text(expected_pending, timeout=15000)
+                expect(contact_status).to_be_visible()
+                expect(contact_status).to_have_attribute("role", "status")
+                expect(contact_status).to_have_attribute("aria-live", "polite")
+                expect(contact_status).to_have_attribute("aria-atomic", "true")
                 expect(contact_status).to_have_attribute("aria-label", re.compile(r"Kontakt"))
                 expect(contact_count).to_have_text(str(contact_before))
 
@@ -264,6 +271,10 @@ class TestOfflineTallyReconciliation:
 
             number_status = number_row.locator("[data-offline-tally-status]")
             expect(number_status).to_have_text("+1 wird gesendet", timeout=15000)
+            expect(number_status).to_be_visible()
+            expect(number_status).to_have_attribute("role", "status")
+            expect(number_status).to_have_attribute("aria-live", "polite")
+            expect(number_status).to_have_attribute("aria-atomic", "true")
             expect(number_status).to_have_attribute("aria-label", re.compile(r"Spritzentausch"))
             expect(number_count).to_have_text(str(number_before))
             assert _snapshot_and_queue_state(page, number_id) == {
@@ -518,6 +529,7 @@ class TestOfflineTallyReconciliation:
             )
 
             snapshot = shell.locator('[data-testid="offline-tally-snapshot-at"]')
+            expect(snapshot).to_be_visible()
             expect(snapshot).to_have_text(snapshot_label)
             expect(snapshot).not_to_contain_text("Invalid Date")
         finally:
