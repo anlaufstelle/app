@@ -316,6 +316,145 @@ class TestOfflineTallyReconciliation:
             _cleanup_offline_state(page)
             context.close()
 
+    def test_server_number_form_rotates_every_queued_submission_key(self, browser, base_url):
+        """Ein online geöffnetes Zahlenformular vergibt nach jedem Offline-ACK
+        einen neuen Header-/Body-Schlüssel und erzeugt zwei Serverereignisse."""
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _real_login(page, base_url)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "() => !!(window.crypto_session && window.offlineStore && "
+                "window.syncOrchestrator && window.offlineTallyUi)",
+                timeout=10000,
+            )
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            _wait_for_active_service_worker(page)
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            revalidation = page.evaluate("async () => window.offlineStore.revalidateCachedFacility()")
+            assert revalidation in {"refreshed", "not-modified"}, revalidation
+            page.evaluate("async () => window.offlineTallyUi.refreshOnlinePanel({useSnapshot: true})")
+
+            number_row = _tally_row(page, "Spritzentausch")
+            number_id = _row_id(number_row)
+            number_count = number_row.locator(f'[data-testid="tally-count-{number_id}"]')
+            number_before = int(number_count.inner_text().strip())
+
+            # Entscheidend für #1926: Das Formular kommt noch ONLINE vom
+            # Server. Erst danach fällt das Netz aus; der lokale Warm-Form-
+            # Renderer wird in dieser Journey nicht benutzt.
+            number_row.locator(f'[data-testid="tally-increment-{number_id}"]').click()
+            number_form = number_row.locator(f'[data-testid="tally-inline-form-{number_id}"]')
+            expect(number_form).to_be_visible(timeout=10000)
+            expect(number_form).to_have_attribute("data-offline-tally-form", "")
+            idempotency_input = number_form.locator('input[name="idempotency_key"]')
+            first_key = idempotency_input.input_value()
+            assert first_key
+
+            page.evaluate(
+                """(documentTypeId) => {
+                    window.__e2eTallySubmitKeys = [];
+                    document.addEventListener('htmx:configRequest', (event) => {
+                        const detail = event.detail || {};
+                        const form = detail.elt && detail.elt.closest
+                            ? detail.elt.closest('[data-offline-tally-form]')
+                            : null;
+                        if (!form || form.querySelector('input[name="document_type"]')?.value !== documentTypeId) {
+                            return;
+                        }
+                        window.__e2eTallySubmitKeys.push({
+                            header: detail.headers && detail.headers['X-Idempotency-Key'],
+                            body: detail.parameters && String(detail.parameters.idempotency_key || ''),
+                        });
+                    });
+                }""",
+                number_id,
+            )
+
+            page.context.set_offline(True)
+            page.evaluate("window.dispatchEvent(new Event('offline'))")
+            number_form.locator('input[name="ausgabe"]').fill("10")
+            number_form.locator('input[name="rueckgabe"]').fill("4")
+            number_form.locator('button[type="submit"]').click()
+            number_status = number_row.locator("[data-offline-tally-status]")
+            expect(number_status).to_have_text("+1 wird gesendet", timeout=15000)
+            page.wait_for_function(
+                """({selector, previous}) => {
+                    const input = document.querySelector(selector);
+                    return input && input.value && input.value !== previous;
+                }""",
+                arg={"selector": f'#tally-row-{number_id} input[name="idempotency_key"]', "previous": first_key},
+            )
+            second_key = idempotency_input.input_value()
+
+            # Ohne künstliche Pause direkt wieder absenden: Queue-ACK 1 hat
+            # den Key rotiert, Werte und servergerendertes Formular bleiben.
+            number_form.locator('button[type="submit"]').click()
+            expect(number_status).to_have_text("+2 werden gesendet", timeout=15000)
+            page.wait_for_function(
+                """({selector, previous}) => {
+                    const input = document.querySelector(selector);
+                    return input && input.value && input.value !== previous;
+                }""",
+                arg={"selector": f'#tally-row-{number_id} input[name="idempotency_key"]', "previous": second_key},
+            )
+            third_key = idempotency_input.input_value()
+            submitted_keys = page.evaluate("window.__e2eTallySubmitKeys")
+            assert submitted_keys == [
+                {"header": first_key, "body": first_key},
+                {"header": second_key, "body": second_key},
+            ]
+            assert len({first_key, second_key, third_key}) == 3
+            assert _snapshot_and_queue_state(page, number_id) == {
+                "hasSnapshotRow": True,
+                "confirmed": number_before,
+                "pending": 2,
+                "blocked": 0,
+                "queueCount": 2,
+            }
+
+            replay_posts, replay_listener = _tally_post_counter(page)
+            _reconnect_via_online_event(page)
+            expect(number_count).to_have_text(str(number_before + 2), timeout=15000)
+            expect(number_status).to_have_count(0, timeout=15000)
+            assert _snapshot_and_queue_state(page, number_id) == {
+                "hasSnapshotRow": True,
+                "confirmed": number_before + 2,
+                "pending": 0,
+                "blocked": 0,
+                "queueCount": 0,
+            }
+            assert len(replay_posts) == 2, (
+                "Die zwei verschiedenen Queue-Schlüssel müssen genau zwei Replay-POSTs ergeben, "
+                f"nicht {len(replay_posts)}: {replay_posts!r}"
+            )
+            page.remove_listener("request", replay_listener)
+
+            query = urlencode({"date": timezone.localdate().isoformat(), "time_filter": "all"})
+            page.goto(f"{base_url}/?{query}", wait_until="domcontentloaded")
+            number_cards = page.locator("#feed-list div[x-data='expandableCard']").filter(
+                has_text=re.compile(r"\bSpritzentausch\b")
+            )
+            expect(number_cards.first).to_be_visible(timeout=15000)
+            assert number_cards.count() >= 2
+            detail_ids = []
+            for index in range(2):
+                card = number_cards.nth(index)
+                header = card.locator("button[aria-controls^='event-detail-']")
+                detail_id = header.get_attribute("aria-controls")
+                detail_ids.append(detail_id)
+                header.click()
+                details = card.locator(f"#{detail_id}")
+                expect(details).to_be_visible(timeout=5000)
+                expect(details).to_contain_text(re.compile(r"Ausgabe:\s*10"))
+                expect(details).to_contain_text(re.compile(r"Rückgabe:\s*4"))
+            assert len(set(detail_ids)) == 2
+        finally:
+            _cleanup_offline_state(page)
+            context.close()
+
     def test_cold_offline_tally_names_server_pending_and_snapshot_state(self, browser, base_url):
         """Kalt offline bleibt die Aufteilung bewusst sichtbar und nennt Typ
         sowie Alter des verschlüsselten Server-Snapshots."""
