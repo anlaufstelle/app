@@ -4,11 +4,12 @@ import re
 from unittest.mock import patch
 
 import pytest
+from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, DeletionRequest, Event, EventHistory
+from core.models import AuditLog, DeletionRequest, DocumentType, DocumentTypeField, Event, EventHistory, FieldTemplate
 from core.services.events import (
     approve_deletion,
     create_event,
@@ -535,6 +536,52 @@ class TestEventUpdateView:
             event=sample_event,
             action=EventHistory.Action.UPDATE,
         ).exists()
+
+    def test_event_update_html_redirects_for_preserved_invalid_hidden_number(self, client, staff_user, facility):
+        """A service-side field error must stay a flash/redirect, never become a 500."""
+        document_type = DocumentType.objects.create(
+            facility=facility,
+            name="Beratung mit geschützter Zahl",
+            sensitivity=DocumentType.Sensitivity.ELEVATED,
+        )
+        hidden_number = FieldTemplate.objects.create(
+            facility=facility,
+            name="Verborgene Zahl",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            min_value=0,
+        )
+        visible_text = FieldTemplate.objects.create(
+            facility=facility,
+            name="Sichtbarer Text",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        DocumentTypeField.objects.create(document_type=document_type, field_template=hidden_number, sort_order=0)
+        DocumentTypeField.objects.create(document_type=document_type, field_template=visible_text, sort_order=1)
+        event = Event.objects.create(
+            facility=facility,
+            document_type=document_type,
+            occurred_at=timezone.now(),
+            data_json={hidden_number.slug: 0, visible_text.slug: "vorher"},
+            created_by=staff_user,
+        )
+        # Historische Klartextwerte koennen den heutigen HIGH=>verschlüsselt-
+        # Backstop umgehen. Beim normalen Update bleibt das Feld für STAFF
+        # verborgen, wird aber vom Merge wieder eingesetzt und service-seitig
+        # gegen die nachträglich gesetzte Untergrenze validiert.
+        Event.objects.filter(pk=event.pk).update(data_json={hidden_number.slug: -1, visible_text.slug: "vorher"})
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {visible_text.slug: "nachher"},
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:event_update", kwargs={"pk": event.pk})
+        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 0 sein."]
+        event.refresh_from_db()
+        assert event.data_json == {hidden_number.slug: -1, visible_text.slug: "vorher"}
 
 
 @pytest.fixture

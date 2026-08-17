@@ -1088,7 +1088,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         # kein sinnvoller roher Client-Wert vorliegt.
                         return _event_conflict_response(request.user, event, None, error="missing-token")
                     return _event_conflict_response(request.user, event, expected_updated_at)
-                messages.error(request, str(e.message))
+                messages.error(request, "; ".join(str(message) for message in e.messages))
                 return redirect("core:event_update", pk=event.pk)
 
             messages.success(request, _("Ereignis wurde aktualisiert."))
