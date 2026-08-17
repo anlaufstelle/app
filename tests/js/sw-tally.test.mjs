@@ -118,6 +118,7 @@ describe("Service-Worker Body-Idempotenz-Key", () => {
         const response = await dispatchFetch(handlers.fetch, request);
 
         expect(response.status).toBe(200);
+        expect(response.headers.get("X-Offline-Queued")).toBe("1");
         expect(attempted.headers.get("X-Idempotency-Key")).toBe("body-key-123");
         expect(queued).toHaveLength(1);
         expect(queued[0].body).toBe(body);

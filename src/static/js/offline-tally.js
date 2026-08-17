@@ -11,6 +11,7 @@
 
     const TALLY_URL = "/partials/tally/increment/";
     const CONFLICT_URL = "/offline/conflicts/";
+    const OFFLINE_QUEUED_HEADER = "X-Offline-Queued";
     const scriptData = (document.currentScript && document.currentScript.dataset) || {};
     const defaultLabels = {
         confirmed: scriptData.labelConfirmed || "bestätigt",
@@ -146,6 +147,41 @@
         if (triggersZeitstromChanged(response)) {
             document.body.dispatchEvent(new CustomEvent("zeitstrom-changed", { bubbles: true }));
         }
+    }
+
+    function directTallyForm(event) {
+        const detail = (event && event.detail) || {};
+        const source = detail.elt || event.target;
+        if (!source || !source.matches || !source.closest) return null;
+        if (source.matches("[data-offline-tally-direct-form]")) return source;
+        return source.closest("[data-offline-tally-direct-form]");
+    }
+
+    function syncDirectIdempotencyKey(event) {
+        const form = directTallyForm(event);
+        if (!form) return;
+        const input = form.querySelector('input[name="idempotency_key"]');
+        const detail = event.detail || {};
+        if (!input || !input.value || !detail.headers || !detail.parameters) return;
+        detail.headers["X-Idempotency-Key"] = input.value;
+        detail.parameters.idempotency_key = input.value;
+    }
+
+    function rotateQueuedDirectIdempotencyKey(event) {
+        const form = directTallyForm(event);
+        const xhr = event && event.detail && event.detail.xhr;
+        if (
+            !form ||
+            !xhr ||
+            xhr.status < 200 ||
+            xhr.status >= 300 ||
+            typeof xhr.getResponseHeader !== "function" ||
+            xhr.getResponseHeader(OFFLINE_QUEUED_HEADER) !== "1"
+        ) {
+            return;
+        }
+        const input = form.querySelector('input[name="idempotency_key"]');
+        if (input) input.value = newIdempotencyKey();
     }
 
     async function revalidateFacilitySnapshot() {
@@ -446,6 +482,13 @@
     document.addEventListener("htmx:afterSwap", function () {
         refreshOnlinePanel();
     });
+    // #1926: Eine synthetische SW-Erfolgsantwort ersetzt absichtlich nur den
+    // Flash-Bereich, nicht die Tally-Zeile. Deshalb den Key fuer die naechste
+    // DIRECT-Aktion erst nach dem bestaetigten Queue-ACK rotieren. Header und
+    // Body werden beim naechsten HTMX-Request wieder aus derselben Quelle
+    // gesetzt. NUMBER nutzt seinen eigenen per-Submit-Key in submitForm().
+    document.addEventListener("htmx:configRequest", syncDirectIdempotencyKey);
+    document.addEventListener("htmx:afterRequest", rotateQueuedDirectIdempotencyKey);
 
     function htmxNumberButton(event) {
         const detail = (event && event.detail) || {};

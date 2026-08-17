@@ -561,6 +561,11 @@ self.addEventListener("fetch", (event) => {
                                 "Content-Type": "text/html; charset=utf-8",
                                 "HX-Retarget": "#flash-messages",
                                 "HX-Reswap": "outerHTML",
+                                // #1926: Nur ein bestaetigtes Queue-ACK darf
+                                // den DIRECT-Key fuer die naechste +1-Aktion
+                                // rotieren. Der Marker ist bewusst nicht auf
+                                // 503- oder echten Serverantworten vorhanden.
+                                "X-Offline-Queued": "1",
                             },
                         }
                     );

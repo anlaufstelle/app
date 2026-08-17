@@ -235,6 +235,85 @@ describe("warmer Online-Zeitstrom", () => {
         expect(revalidate).not.toHaveBeenCalled();
     });
 
+    it("rotiert den DIRECT-Key erst nach bestaetigtem Offline-Enqueue", () => {
+        document.body.innerHTML = `
+            <form data-offline-tally-direct-form>
+                <input name="idempotency_key" value="server-key">
+            </form>`;
+        const form = document.querySelector("form");
+        vi.spyOn(window.crypto, "randomUUID")
+            .mockReturnValueOnce("queued-action-2")
+            .mockReturnValueOnce("queued-action-3");
+
+        function queuedResponse() {
+            document.dispatchEvent(
+                new CustomEvent("htmx:afterRequest", {
+                    detail: {
+                        elt: form,
+                        xhr: {
+                            status: 200,
+                            getResponseHeader: (name) => name === "X-Offline-Queued" ? "1" : null,
+                        },
+                    },
+                })
+            );
+        }
+
+        queuedResponse();
+        const secondRequest = { elt: form, headers: {}, parameters: {} };
+        document.dispatchEvent(new CustomEvent("htmx:configRequest", { detail: secondRequest }));
+        expect(secondRequest.headers["X-Idempotency-Key"]).toBe("queued-action-2");
+        expect(secondRequest.parameters.idempotency_key).toBe("queued-action-2");
+
+        queuedResponse();
+        const thirdRequest = { elt: form, headers: {}, parameters: {} };
+        document.dispatchEvent(new CustomEvent("htmx:configRequest", { detail: thirdRequest }));
+        expect(thirdRequest.headers["X-Idempotency-Key"]).toBe("queued-action-3");
+        expect(thirdRequest.parameters.idempotency_key).toBe("queued-action-3");
+    });
+
+    it("rotiert weder nach fehlgeschlagenem Enqueue noch fuer NUMBER", () => {
+        document.body.innerHTML = `
+            <form data-offline-tally-direct-form>
+                <input name="idempotency_key" value="direct-key">
+            </form>
+            <form data-offline-tally-number-form>
+                <input name="idempotency_key" value="number-key">
+            </form>`;
+        const direct = document.querySelector("[data-offline-tally-direct-form]");
+        const number = document.querySelector("[data-offline-tally-number-form]");
+        const randomUUID = vi.spyOn(window.crypto, "randomUUID").mockReturnValue("must-not-be-used");
+
+        document.dispatchEvent(
+            new CustomEvent("htmx:afterRequest", {
+                detail: {
+                    elt: direct,
+                    xhr: { status: 503, getResponseHeader: () => null },
+                },
+            })
+        );
+        document.dispatchEvent(
+            new CustomEvent("htmx:afterRequest", {
+                detail: {
+                    elt: direct,
+                    xhr: { status: 200, getResponseHeader: () => null },
+                },
+            })
+        );
+        document.dispatchEvent(
+            new CustomEvent("htmx:afterRequest", {
+                detail: {
+                    elt: number,
+                    xhr: { status: 200, getResponseHeader: () => "1" },
+                },
+            })
+        );
+
+        expect(direct.querySelector('[name="idempotency_key"]').value).toBe("direct-key");
+        expect(number.querySelector('[name="idempotency_key"]').value).toBe("number-key");
+        expect(randomUUID).not.toHaveBeenCalled();
+    });
+
     it("baut NUMBER bei Offline-Klick lokal aus dem v2-Snapshot ohne GET", async () => {
         const bundle = facilityBundle();
         bundle.tally.shift_date = "2026-08-16";
