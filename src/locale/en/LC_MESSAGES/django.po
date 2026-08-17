@@ -10752,12 +10752,6 @@ msgstr "Included for authorized roles"
 msgid "Opt-in aktiv, aber nicht verfügbar"
 msgstr "Opt-in enabled but unavailable"
 
-#: src/templates/core/zeitstrom/index.html:259
-#: src/templates/core/zeitstrom/offline_zeitstrom.html:29
-#: src/templates/core/zeitstrom/offline_zeitstrom.html:147
-msgid "bestätigt"
-msgstr "confirmed"
-
 #: src/templates/core/zeitstrom/index.html:261
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:31
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:149
@@ -10781,3 +10775,45 @@ msgstr "Offline tally unavailable — update online first."
 #: src/templates/core/zeitstrom/partials/tally_row.html:25
 msgid "Rückgängig"
 msgstr "Undo"
+
+#: src/templates/core/zeitstrom/partials/tally_counts.html:7
+#: src/templates/core/zeitstrom/partials/tally_row.html:11
+#, python-format
+msgid "+1 wird für %(name)s gesendet"
+msgstr "+1 is being sent for %(name)s"
+
+#: src/templates/core/zeitstrom/index.html:207
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:30
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:155
+msgid "+1 wird gesendet"
+msgstr "+1 is being sent"
+
+#: src/templates/core/zeitstrom/partials/tally_counts.html:8
+#: src/templates/core/zeitstrom/partials/tally_row.html:12
+#, python-format
+msgid "+__count__ werden für %(name)s gesendet"
+msgstr "+__count__ are being sent for %(name)s"
+
+#: src/templates/core/zeitstrom/index.html:208
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:31
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:156
+msgid "+__count__ werden gesendet"
+msgstr "+__count__ are being sent"
+
+#: src/templates/core/zeitstrom/index.html:209
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:32
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:157
+msgid "Serverstand: __count__"
+msgstr "Server total: __count__"
+
+#: src/templates/core/zeitstrom/index.html:210
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:33
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:158
+msgid "Stand: __timestamp__"
+msgstr "As of: __timestamp__"
+
+#: src/templates/core/zeitstrom/index.html:206
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:29
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:154
+msgid "ausstehend: __count__"
+msgstr "pending: __count__"
