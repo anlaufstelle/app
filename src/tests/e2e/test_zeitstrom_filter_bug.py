@@ -22,8 +22,20 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
 
         # Einen spezifischen Dokumentationstyp auswählen (nicht "Alle")
         # "Kontakt" ist im Seed immer vorhanden
-        doc_type_select.select_option(label="Kontakt")
-        page.wait_for_load_state("domcontentloaded")
+        with page.expect_response(
+            lambda response: (
+                response.request.resource_type == "xhr"
+                and response.status == 200
+                and "/partials/zeitstrom/feed/" in response.url
+                and "feed_only=1" in response.url
+            ),
+            timeout=5000,
+        ):
+            doc_type_select.select_option(label="Kontakt")
+        page.wait_for_function(
+            "() => !document.querySelector('#filter-doc-type')?.classList.contains('htmx-request')",
+            timeout=5000,
+        )
         # Dropdown-Wert wird serverseitig gerendert — auf einen nicht-leeren
         # Wert warten (signalisiert abgeschlossenen HTMX-Swap).
         page.wait_for_function(
@@ -42,20 +54,38 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
 
         # Den zweiten Tab klicken (ein anderer als der aktuell aktive)
         # Finde einen Tab der nicht aktiv ist (kein bg-accent-light)
-        clicked = False
+        inactive_button = None
         for i in range(count):
             btn = time_filter_buttons.nth(i)
             classes = btn.get_attribute("class") or ""
             if "bg-accent-light" not in classes:
-                btn.click()
-                clicked = True
+                inactive_button = btn
                 break
 
-        assert clicked, "Es sollte mindestens einen inaktiven Zeitfilter-Tab geben"
+        assert inactive_button is not None, "Es sollte mindestens einen inaktiven Zeitfilter-Tab geben"
+        target_filter = inactive_button.get_attribute("data-zeitstrom-time-filter")
+        assert target_filter
 
-        # Warten auf HTMX-Response — der Event-Feed wurde neu gerendert,
-        # der doc_type-Dropdown muss den alten Wert bewahren.
-        page.wait_for_load_state("domcontentloaded")
+        # Erst ab dem abgeschlossenen Dokumenttyp-Swap darf eine Navigation
+        # dem Zeitfilterwechsel zugerechnet werden.
+        page.evaluate("window.__zeitstromFilterNavigationMarker = 'alive'")
+
+        # Der Tab-Wechsel ist ein HTMX-Partial, keine vollständige Navigation.
+        # Die Response explizit abwarten, damit der anschließende Live-Watch-Check
+        # nicht gegen einen noch laufenden Feed-Swap konkurriert (Refs #1928).
+        with page.expect_response(
+            lambda response: (
+                response.request.resource_type == "xhr"
+                and response.status == 200
+                and "/partials/zeitstrom/feed/" in response.url
+                and f"time_filter={target_filter}" in response.url
+            ),
+            timeout=5000,
+        ):
+            inactive_button.click()
+
+        page.evaluate("window.zeitstromWatch.checkNow()")
+        assert page.evaluate("window.__zeitstromFilterNavigationMarker") == "alive"
         page.wait_for_function(
             f"() => document.querySelector('#filter-doc-type')?.value === '{selected_value}'",
             timeout=5000,
