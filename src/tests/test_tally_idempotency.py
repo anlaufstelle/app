@@ -192,6 +192,29 @@ class TestDirectTallyIdempotency:
 
 @pytest.mark.django_db
 class TestNumberTallyIdempotency:
+    def test_invalid_offline_replay_returns_json_422(self, client, facility, staff_user):
+        document_type, number = _number_tally_type(facility)
+        client.force_login(staff_user)
+        key = _summary_row(facility, staff_user, document_type)["idempotency_key"]
+
+        response = client.post(
+            reverse("core:tally_increment"),
+            {
+                "document_type": str(document_type.pk),
+                "idempotency_key": key,
+                number.slug: "keine-zahl",
+            },
+            HTTP_X_IDEMPOTENCY_KEY=key,
+            HTTP_HX_REQUEST="true",
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 422
+        assert response.headers["Content-Type"].startswith("application/json")
+        assert response.json()["error"] == "invalid"
+        assert number.slug in response.json()["errors"]
+        assert not Event.objects.filter(document_type=document_type).exists()
+
     def test_key_survives_get_validation_error_and_corrected_retry(self, client, facility, staff_user):
         document_type, number = _number_tally_type(facility)
         client.force_login(staff_user)

@@ -828,6 +828,8 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         if required_fields:
             tally_form = TallyNumberDataForm(request.POST, eligibility=eligibility)
             if not tally_form.is_valid():
+                if _wants_raw_json_response(request):
+                    return _invalid_form_response(tally_form)
                 context = {
                     "document_type": doc_type,
                     "tally_form": tally_form,

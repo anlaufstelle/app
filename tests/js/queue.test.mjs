@@ -222,6 +222,8 @@ describe("replayQueue (classification)", () => {
         window.offlineStore = store;
         global.fetch = vi.fn(async () => resp({ status: 422 }));
         await offlineQueue.replayQueue();
+        expect(store.deleteRow).not.toHaveBeenCalled();
+        expect(store._rows).toHaveLength(1);
         const saved = store.putEncrypted.mock.calls.find((c) => c[1].localStatus === "dead");
         expect(saved).toBeTruthy();
         expect(saved[1].deadReason).toBe("invalid");
