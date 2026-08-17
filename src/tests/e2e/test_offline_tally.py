@@ -140,8 +140,8 @@ def _cleanup_offline_state(page):
 
 class TestOfflineTallyReconciliation:
     def test_direct_and_number_tallies_reconcile_from_warm_snapshot(self, browser, base_url):
-        """Kontakt und Spritzentausch bleiben offline strikt getrennt bestätigt/
-        ausstehend und werden nach genau einem zentralen Replay bestätigt."""
+        """Der Serverstand bleibt fachlich lesbar; nur echte Warteschlangen-
+        Deltas erscheinen je Typ und verschwinden nach dem zentralen Replay."""
         context = browser.new_context(locale="de-DE")
         page = context.new_page()
         page.set_default_timeout(30000)
@@ -170,6 +170,10 @@ class TestOfflineTallyReconciliation:
             contact_id = _row_id(contact_row)
             contact_count = contact_row.locator(f'[data-testid="tally-count-{contact_id}"]')
             contact_before = int(contact_count.inner_text().strip())
+            expect(contact_row.locator("[data-offline-tally-status]")).to_have_count(0)
+            expect(contact_count).to_have_attribute("aria-label", re.compile(r"Kontakt"))
+            expect(contact_row).not_to_contain_text("bestätigt")
+            expect(contact_row).not_to_contain_text("ausstehend")
             contact_initial = _snapshot_and_queue_state(page, contact_id)
             assert contact_initial == {
                 "hasSnapshotRow": True,
@@ -179,12 +183,34 @@ class TestOfflineTallyReconciliation:
                 "queueCount": 0,
             }
 
+            page.set_viewport_size({"width": 390, "height": 844})
+            mobile_layout = contact_row.evaluate(
+                """(row) => {
+                    const name = row.querySelector(':scope > span');
+                    const count = row.querySelector('[data-testid^="tally-count-"]');
+                    const action = row.querySelector('[data-testid^="tally-increment-"]');
+                    const center = (element) => {
+                        const box = element.getBoundingClientRect();
+                        return box.top + box.height / 2;
+                    };
+                    return {
+                        centers: [center(name), center(count), center(action)],
+                        overflow: row.scrollWidth - row.clientWidth,
+                    };
+                }"""
+            )
+            assert max(mobile_layout["centers"]) - min(mobile_layout["centers"]) < 4, mobile_layout
+            assert mobile_layout["overflow"] <= 1, mobile_layout
+
             page.context.set_offline(True)
             page.evaluate("window.dispatchEvent(new Event('offline'))")
             contact_status = contact_row.locator("[data-offline-tally-status]")
             for pending in range(1, 4):
                 contact_row.locator(f'[data-testid="tally-increment-{contact_id}"]').click()
-                expect(contact_status).to_have_text(f"{contact_before} bestätigt · {pending} ausstehend", timeout=15000)
+                expected_pending = "+1 wird gesendet" if pending == 1 else f"+{pending} werden gesendet"
+                expect(contact_status).to_have_text(expected_pending, timeout=15000)
+                expect(contact_status).to_have_attribute("aria-label", re.compile(r"Kontakt"))
+                expect(contact_count).to_have_text(str(contact_before))
 
             contact_offline = _snapshot_and_queue_state(page, contact_id)
             assert contact_offline == {
@@ -197,7 +223,10 @@ class TestOfflineTallyReconciliation:
 
             contact_replay_posts, contact_listener = _tally_post_counter(page)
             _reconnect_via_online_event(page)
-            expect(contact_status).to_have_text(f"{contact_before + 3} bestätigt · 0 ausstehend", timeout=15000)
+            expect(contact_count).to_have_text(str(contact_before + 3), timeout=15000)
+            expect(contact_status).to_have_count(0, timeout=15000)
+            expect(contact_count).to_have_attribute("aria-label", re.compile(r"Kontakt"))
+            expect(contact_row).not_to_contain_text("0 ausstehend")
             assert _snapshot_and_queue_state(page, contact_id) == {
                 "hasSnapshotRow": True,
                 "confirmed": contact_before + 3,
@@ -234,7 +263,9 @@ class TestOfflineTallyReconciliation:
             number_form.locator('button[type="submit"]').click()
 
             number_status = number_row.locator("[data-offline-tally-status]")
-            expect(number_status).to_have_text(f"{number_before} bestätigt · 1 ausstehend", timeout=15000)
+            expect(number_status).to_have_text("+1 wird gesendet", timeout=15000)
+            expect(number_status).to_have_attribute("aria-label", re.compile(r"Spritzentausch"))
+            expect(number_count).to_have_text(str(number_before))
             assert _snapshot_and_queue_state(page, number_id) == {
                 "hasSnapshotRow": True,
                 "confirmed": number_before,
@@ -245,7 +276,9 @@ class TestOfflineTallyReconciliation:
 
             number_replay_posts, number_listener = _tally_post_counter(page)
             _reconnect_via_online_event(page)
-            expect(number_status).to_have_text(f"{number_before + 1} bestätigt · 0 ausstehend", timeout=15000)
+            expect(number_count).to_have_text(str(number_before + 1), timeout=15000)
+            expect(number_status).to_have_count(0, timeout=15000)
+            expect(number_count).to_have_attribute("aria-label", re.compile(r"Spritzentausch"))
             assert _snapshot_and_queue_state(page, number_id) == {
                 "hasSnapshotRow": True,
                 "confirmed": number_before + 1,
@@ -279,6 +312,75 @@ class TestOfflineTallyReconciliation:
             expect(number_details).to_be_visible(timeout=5000)
             expect(number_details).to_contain_text(re.compile(r"Ausgabe:\s*10"))
             expect(number_details).to_contain_text(re.compile(r"Rückgabe:\s*4"))
+        finally:
+            _cleanup_offline_state(page)
+            context.close()
+
+    def test_cold_offline_tally_names_server_pending_and_snapshot_state(self, browser, base_url):
+        """Kalt offline bleibt die Aufteilung bewusst sichtbar und nennt Typ
+        sowie Alter des verschlüsselten Server-Snapshots."""
+        context = browser.new_context(locale="de-DE", viewport={"width": 390, "height": 844})
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _real_login(page, base_url)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "() => !!(window.crypto_session && window.offlineStore && window.offlineTallyUi)",
+                timeout=10000,
+            )
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            _wait_for_active_service_worker(page)
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            revalidation = page.evaluate("async () => window.offlineStore.revalidateCachedFacility()")
+            assert revalidation in {"refreshed", "not-modified"}, revalidation
+            page.evaluate("async () => window.offlineTallyUi.refreshOnlinePanel({useSnapshot: true})")
+
+            contact_row = _tally_row(page, "Kontakt")
+            contact_id = _row_id(contact_row)
+            contact_before = int(contact_row.locator(f'[data-testid="tally-count-{contact_id}"]').inner_text().strip())
+            snapshot_label = page.evaluate(
+                """async () => {
+                    const facility = await window.offlineStore.getOfflineFacility();
+                    const snapshotAt = facility && facility.tally && facility.tally.snapshot_at;
+                    const formatted = new Intl.DateTimeFormat(document.documentElement.lang || navigator.language, {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                    }).format(new Date(snapshotAt));
+                    return `Stand: ${formatted}`;
+                }"""
+            )
+
+            page.context.set_offline(True)
+            page.evaluate("window.dispatchEvent(new Event('offline'))")
+            contact_row.locator(f'[data-testid="tally-increment-{contact_id}"]').click()
+            expect(contact_row.locator("[data-offline-tally-status]")).to_have_text("+1 wird gesendet", timeout=15000)
+            assert _snapshot_and_queue_state(page, contact_id)["pending"] == 1
+
+            cdp = page.context.new_cdp_session(page)
+            cdp.send("Network.enable")
+            cdp.send("Network.clearBrowserCache")
+            cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+
+            shell = page.locator('[data-testid="offline-zeitstrom"]')
+            expect(shell).to_be_visible(timeout=10000)
+            cold_row = shell.locator('[data-testid="offline-tally-row"]').filter(has_text=re.compile(r"^\s*Kontakt\b"))
+            expect(cold_row).to_have_count(1)
+            status = cold_row.locator('[data-testid="offline-tally-server-status"]')
+            expect(status).to_have_attribute("role", "status")
+            expect(status).to_have_attribute("aria-live", "polite")
+            expect(status).to_have_attribute("aria-atomic", "true")
+            expect(status.locator(":scope > span").nth(0)).to_have_text("Kontakt:")
+            expect(status.locator(":scope > span").nth(1)).to_have_text(f"Serverstand: {contact_before}")
+            expect(status.locator(":scope > span").nth(3)).to_have_text("ausstehend: 1")
+            expect(status).to_have_text(
+                re.compile(rf"Kontakt:\s*Serverstand:\s*{contact_before}\s*·\s*ausstehend:\s*1")
+            )
+
+            snapshot = shell.locator('[data-testid="offline-tally-snapshot-at"]')
+            expect(snapshot).to_have_text(snapshot_label)
+            expect(snapshot).not_to_contain_text("Invalid Date")
         finally:
             _cleanup_offline_state(page)
             context.close()
