@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Kontakt zählen" %} – Anlaufstelle{% endblock %}
 
@@ -8,4 +8,21 @@
     <h1 class="text-lg font-bold text-ink mb-4">{% trans "Kontakt zählen" %}</h1>
     {% include "core/zeitstrom/partials/tally_inline_form.html" %}
 </section>
+{% endblock %}
+
+{% block extra_js %}
+{# Refs #1938: Diese Seite bindet dasselbe Partial ein wie der Zeitstrom — samt #}
+{# ``data-offline-tally-form`` und servergerendertem Idempotenz-Schluessel. Ohne #}
+{# ``offline-tally.js`` ist hier kein Rotations-Handler registriert, und zwei    #}
+{# Offline-Submits landeten mit demselben Schluessel in der Queue: der zweite     #}
+{# Kontakt verschwaende beim Replay still in der Server-Deduplikation.            #}
+<script src="{% static 'js/offline-tally.js' %}"
+        data-label-pending="{% trans 'ausstehend: __count__' %}"
+        data-label-pending-singular="{% trans '+1 wird gesendet' %}"
+        data-label-pending-plural="{% trans '+__count__ werden gesendet' %}"
+        data-label-server-status="{% trans 'Serverstand: __count__' %}"
+        data-label-snapshot-at="{% trans 'Stand: __timestamp__' %}"
+        data-label-blocked="{% trans 'nicht übertragbar' %}"
+        data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
+        data-label-count-contact="{% trans 'Kontakt zählen' %}"></script>
 {% endblock %}

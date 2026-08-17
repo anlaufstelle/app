@@ -156,6 +156,25 @@ class TestTallyNumberIncrementView:
         assert f'data-testid="tally-increment-{document_type.pk}"' in cancel_content
         assert f'data-testid="tally-inline-form-{document_type.pk}"' not in cancel_content
 
+    def test_full_page_form_loads_the_idempotency_key_rotation_script(self, client, facility, staff_user):
+        """Refs #1938: Die Vollseite traegt denselben Rotations-Handler wie der Zeitstrom.
+
+        Ohne ``offline-tally.js`` bleibt der servergerenderte Schluessel im
+        Markup eingefroren: zwei Offline-Submits von dieser Seite landen mit
+        demselben Key in der Queue und der zweite Kontakt verschwindet beim
+        Replay still in der Server-Deduplikation.
+        """
+        document_type, _ausgabe, _rueckgabe = _number_tally_type(facility)
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:tally_increment"), {"document_type": str(document_type.pk)})
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "data-offline-tally-form" in content
+        assert 'name="idempotency_key"' in content
+        assert "offline-tally.js" in content
+
     def test_get_rejects_type_without_required_values(self, client, facility, staff_user):
         document_type = DocumentType.objects.create(
             facility=facility,
