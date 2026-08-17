@@ -49,6 +49,7 @@ from core.services.dynamic_data import (
 from core.services.events import split_file_and_text_data
 from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
+from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.mixins import (
     FilteredPaginatedListMixin,
     HTMXPartialMixin,
@@ -534,6 +535,11 @@ class CaseUpdateView(StaffRequiredMixin, View):
         fields.pop("client", None)
         doc_type = None if type_locked else form.cleaned_data.get("document_type")
         file_fields: dict[str, list] = {}
+        # #1938: Bei gesperrtem Typ entsteht kein dynamisches Formular. Die
+        # Vorbelegung haelt den Fehler-Helfer unten fail-closed: ohne Formular
+        # gilt jeder feldbezogene Schluessel als unsichtbar.
+        data_form = None
+        restricted: list[str] = []
         # ADR-039 §7: Typwechsel/-entfernen verwirft das ``data_json`` — die
         # Versionsketten werden im selben atomic soft-geloescht, VOR den
         # Neu-Uploads des gewaehlten Typs. Der Wert steht hier oben, weil schon
@@ -618,7 +624,11 @@ class CaseUpdateView(StaffRequiredMixin, View):
                         doc_type,
                     )
         except ValidationError as e:
-            messages.error(request, "; ".join(str(message) for message in e.messages))
+            # #1938: Fehler an einem fuer diese Rolle unsichtbaren Feld duerfen
+            # weder Slug noch Grenze nennen — derselbe Vertrag wie im
+            # Ereignis-Pfad (#1936).
+            safe_messages = add_dynamic_service_errors(data_form, e, restricted)
+            messages.error(request, "; ".join(safe_messages))
             return redirect("core:case_update", pk=case.pk)
         messages.success(request, _("Fall wurde aktualisiert."))
         return redirect("core:case_detail", pk=case.pk)

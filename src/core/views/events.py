@@ -71,6 +71,7 @@ from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
+from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -84,7 +85,6 @@ from core.views.utils import object_back_link, safe_redirect_path
 logger = logging.getLogger(__name__)
 
 _VERSION_ERROR_CODES = frozenset({"missing_token", "invalid_token", "version_conflict"})
-_INVALID_EVENT_INPUT_MESSAGE = _("Ungültige Eingabe.")
 
 # Django rendert die Vorlage mit einem einfachen Prozentzeichen, waehrend der
 # Template-Extractor den Platzhalter als ``%%(stage)s`` katalogisiert. Der
@@ -166,41 +166,6 @@ def _event_conflict_response(user, event, client_expected, *, error="conflict"):
         "document_type_name": event.document_type.name,
     }
     return _conflict_response(server_state, client_expected, error=error)
-
-
-def _add_event_service_errors(data_form, error, restricted_keys):
-    """Map service validation errors back to safe Event form fields.
-
-    ``update_event`` may validate after the dynamic form (for example when a
-    NUMBER range changed concurrently or a preserved historical value is now
-    outside its range). Visible field errors retain their slug so an offline
-    editor can mark the input. Unknown or sensitivity-restricted slugs become
-    fully generic non-field errors: returning their key, original message or
-    code could disclose a field, value or internal rule the caller is not
-    allowed to know exists. The returned message list is safe for the classic
-    HTML/HTMX flash path as well.
-    """
-    if not hasattr(error, "error_dict"):
-        data_form.add_error(None, error)
-        return [str(message) for message in error.messages]
-
-    restricted = set(restricted_keys)
-    safe_messages = []
-    for field_name, field_errors in error.error_dict.items():
-        if field_name in data_form.fields and field_name not in restricted:
-            data_form.add_error(field_name, field_errors)
-            safe_messages.extend(str(message) for field_error in field_errors for message in field_error.messages)
-            continue
-
-        # Restricted und unbekannte Keys werden vollstaendig ersetzt: weder
-        # Feldname noch fachliche Meldung/Code duerfen einen fuer die Rolle
-        # unsichtbaren Wert oder eine interne Regelkennung offenlegen.
-        data_form.add_error(
-            None,
-            ValidationError(_INVALID_EVENT_INPUT_MESSAGE, code="invalid"),
-        )
-        safe_messages.append(str(_INVALID_EVENT_INPUT_MESSAGE))
-    return safe_messages
 
 
 class EventCreateView(AssistantOrAboveRequiredMixin, View):
@@ -403,7 +368,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         doc_type = meta_form.cleaned_data["document_type"]
         data_form = DynamicEventDataForm(request.POST, request.FILES, document_type=doc_type, facility=facility)
-        remove_restricted_fields(request.user, doc_type, data_form)
+        restricted_keys = remove_restricted_fields(request.user, doc_type, data_form)
 
         if not data_form.is_valid():
             # Refs #1351 Task 8, #1387: analog zum meta_form-Zweig oben.
@@ -451,7 +416,10 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             # Event zurueck. Bereits gestagte ``.enc`` wieder entfernen.
             for staged in staged_all:
                 staged.output_path.unlink(missing_ok=True)
-            meta_form.add_error(None, e.message)
+            # #1938: ``e`` kann feldbezogen sein (dict) — dann traegt es kein
+            # ``.message``. Der geteilte Helfer bildet sichtbare Slugs ab und
+            # ersetzt alles andere generisch.
+            add_dynamic_service_errors(meta_form, e, restricted_keys)
             if _wants_raw_json_response(request):
                 return _invalid_form_response(meta_form)
             return render(
@@ -483,14 +451,16 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 finalize_staged_files(event, request.user, staged_by_slug, doc_type)
             committed = True
         except ValidationError as e:
-            meta_form.add_error(None, e.message)
             # Refs #1351 Task 8, #1387: analog zu den beiden Formular-Zweigen
-            # oben. ``add_error(None, …)`` legt die Meldung unter Djangos
-            # NON_FIELD_ERRORS ab, die get_json_data() als "__all__"-Key
-            # ausgibt — der Offline-Replay-Client bekommt so einen erkennbaren
-            # (wenn auch feldlosen) Fehler statt eines stillen 200-Erfolgs.
+            # oben — der Offline-Replay-Client bekommt einen erkennbaren Fehler
+            # statt eines stillen 200-Erfolgs. #1938: ``create_event``
+            # validiert ``data_json`` ein zweites Mal und liefert den Fehler
+            # feldbezogen; er gehoert deshalb ans dynamische Formular, damit
+            # ein sichtbares Feld markiert wird und ein unsichtbares nur die
+            # generische Meldung ergibt.
+            add_dynamic_service_errors(data_form, e, restricted_keys)
             if _wants_raw_json_response(request):
-                return _invalid_form_response(meta_form)
+                return _invalid_form_response(data_form)
             return render(
                 request,
                 "core/events/create.html",
@@ -1126,7 +1096,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         # kein sinnvoller roher Client-Wert vorliegt.
                         return _event_conflict_response(request.user, event, None, error="missing-token")
                     return _event_conflict_response(request.user, event, expected_updated_at)
-                safe_messages = _add_event_service_errors(data_form, e, restricted_keys)
+                safe_messages = add_dynamic_service_errors(data_form, e, restricted_keys)
                 if _wants_raw_json_response(request):
                     return _invalid_form_response(data_form)
                 messages.error(request, "; ".join(safe_messages))

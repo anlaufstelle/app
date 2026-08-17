@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import json
 import re
+from unittest.mock import patch
 
 import pytest
 from cryptography.fernet import Fernet
 from django.contrib.messages import get_messages
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import override_settings
 from django.urls import reverse
@@ -561,11 +563,56 @@ class TestClientUpdateWithDynamicData:
 
         assert response.status_code == 302
         assert response.url == reverse("core:client_update", args=[target.pk])
-        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 0 sein."]
+        # Refs #1936-Vertrag: Die Grenze eines fuer diese Rolle unsichtbaren
+        # Feldes ist eine interne Regelkennung und wird vollstaendig ersetzt.
+        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Ungültige Eingabe."]
         target.refresh_from_db()
         assert target.pseudonym == "P7-Historische-Zahl"
         assert target.data_json == {number_field.slug: -1, visible_field.slug: "vorher"}
         assert Attachment.objects.filter(client=target).count() == 0
+
+    def test_visible_field_service_error_keeps_its_concrete_message(self, client, staff_user, facility):
+        """Refs #1936: Nur restricted/unbekannte Keys werden redigiert.
+
+        Ein Fehler an einem fuer die Rolle sichtbaren Feld bleibt wortgleich
+        erhalten — sonst koennte die Fachkraft ihre eigene Eingabe nicht
+        korrigieren.
+        """
+        document_type = DocumentType.objects.create(
+            facility=facility,
+            entity_type=DocumentType.EntityType.CLIENT,
+            name="Personen-Sichtbarfehler",
+        )
+        visible_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Sichtbare Anzahl",
+            field_type=FieldTemplate.FieldType.NUMBER,
+        )
+        DocumentTypeField.objects.create(document_type=document_type, field_template=visible_field)
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Sichtbarfehler",
+            created_by=staff_user,
+            document_type=document_type,
+            data_json={visible_field.slug: 3},
+        )
+
+        client.force_login(staff_user)
+        with patch(
+            "core.views.clients.update_client",
+            side_effect=ValidationError({visible_field.slug: ["Wert muss mindestens 5 sein."]}),
+        ):
+            response = client.post(
+                reverse("core:client_update", args=[target.pk]),
+                _client_post_data(
+                    "P7-Sichtbar-Neu",
+                    document_type=str(document_type.pk),
+                    **{visible_field.slug: "3"},
+                ),
+            )
+
+        assert response.status_code == 302
+        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 5 sein."]
 
     def test_type_switch_drops_old_keys(
         self, client, staff_user, facility, doc_type_client_profile, doc_type_client_mixed

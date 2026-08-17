@@ -68,9 +68,15 @@
         <div class="card p-4 space-y-3">
             <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Zuordnung und Zeitpunkt" %}</h2>
 
-            {% if meta_form.non_field_errors %}
+            {# Refs #1938: ``data_form`` traegt die service-seitigen Fehler, die keinem #}
+            {# sichtbaren Feld zugeordnet werden duerfen (redigierte Meldung). Ohne    #}
+            {# diese Schleife blieben sie im HTML-Pfad unsichtbar.                     #}
+            {% if meta_form.non_field_errors or data_form.non_field_errors %}
             <div class="bg-red-50 border border-red-200 rounded-[10px] p-3">
                 {% for error in meta_form.non_field_errors %}
+                <p class="text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+                {% for error in data_form.non_field_errors %}
                 <p class="text-sm text-red-600">{{ error }}</p>
                 {% endfor %}
             </div>

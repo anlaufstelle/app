@@ -52,6 +52,7 @@ from core.services.scoping import get_scoped_object
 from core.services.security import RequireSudoModeMixin
 from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
+from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     FilteredPaginatedListMixin,
@@ -571,6 +572,11 @@ class ClientUpdateView(StaffRequiredMixin, View):
         fields = dict(form.cleaned_data)
         doc_type = None if type_locked else form.cleaned_data.get("document_type")
         file_fields: dict[str, list] = {}
+        # #1938: Bei gesperrtem Typ entsteht kein dynamisches Formular. Die
+        # Vorbelegung haelt den Fehler-Helfer unten fail-closed: ohne Formular
+        # gilt jeder feldbezogene Schluessel als unsichtbar.
+        data_form = None
+        restricted: list[str] = []
         # ADR-039 §7: Ein Typwechsel (auch das Entfernen des Typs) verwirft das
         # ``data_json`` komplett — die Versionsketten blieben sonst als
         # UI-unsichtbare Waisen liegen. Bewusst SOFT-Delete, im selben atomic
@@ -658,7 +664,11 @@ class ClientUpdateView(StaffRequiredMixin, View):
                         doc_type,
                     )
         except ValidationError as e:
-            messages.error(request, "; ".join(str(message) for message in e.messages))
+            # #1938: Fehler an einem fuer diese Rolle unsichtbaren Feld duerfen
+            # weder Slug noch Grenze nennen — derselbe Vertrag wie im
+            # Ereignis-Pfad (#1936).
+            safe_messages = add_dynamic_service_errors(data_form, e, restricted)
+            messages.error(request, "; ".join(safe_messages))
             return redirect("core:client_update", pk=client.pk)
         messages.success(request, _("Person wurde aktualisiert."))
         return redirect("core:client_detail", pk=client.pk)

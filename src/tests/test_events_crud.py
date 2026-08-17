@@ -1,5 +1,6 @@
 """Tests für Events — Event-Service + CRUD-Views (Create/Detail/Update + Atomicity) (Refs #929)."""
 
+import json
 import re
 from unittest.mock import patch
 
@@ -251,6 +252,91 @@ class TestEventCreateView:
         )
         assert response.status_code == 302
         assert Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).exists()
+
+    def test_event_create_service_field_error_is_redacted_not_a_server_error(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Refs #1938: Der Anlege-Zweig darf an einer dict-ValidationError nicht zerbrechen.
+
+        ``create_event`` validiert ``data_json`` nach dem Formular. Verschaerft
+        eine Leitung eine Feldgrenze genau in diesem Fenster, kommt der Fehler
+        feldbezogen zurueck — der Zweig lief bis #1938 in ``e.message`` und
+        damit in einen ``AttributeError`` (HTTP 500).
+        """
+        client.force_login(staff_user)
+        payload = {
+            "document_type": str(doc_type_contact.pk),
+            "client": str(client_identified.pk),
+            "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+            "dauer": "15",
+            "notiz": "Testnotiz",
+        }
+        with patch(
+            "core.views.events.create_event",
+            side_effect=ValidationError({"dauer": ["Wert muss mindestens 20 sein."]}),
+        ):
+            response = client.post(reverse("core:event_create"), payload)
+
+        assert response.status_code == 200
+        assert b"Wert muss mindestens 20 sein." in response.content
+        assert not Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).exists()
+
+    def test_event_create_service_error_on_hidden_field_stays_generic(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Refs #1938/#1936: Ein unbekannter/unsichtbarer Slug wird vollstaendig ersetzt."""
+        client.force_login(staff_user)
+        payload = {
+            "document_type": str(doc_type_contact.pk),
+            "client": str(client_identified.pk),
+            "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+            "dauer": "15",
+            "notiz": "Testnotiz",
+        }
+        with patch(
+            "core.views.events.create_event",
+            side_effect=ValidationError({"geheime-zahl": ["Wert muss mindestens 20 sein."]}),
+        ):
+            response = client.post(
+                reverse("core:event_create"),
+                payload,
+                HTTP_ACCEPT="application/json",
+            )
+
+        assert response.status_code == 422
+        body = json.loads(response.content)
+        assert "geheime-zahl" not in response.content.decode()
+        assert body["errors"]["__all__"][0]["message"] == "Ungültige Eingabe."
+
+    def test_event_create_hidden_field_error_stays_visible_in_the_html_path(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Refs #1938: Die redigierte Meldung darf im Re-Render nicht verschwinden.
+
+        Sie haengt am dynamischen Formular; das Anlege-Template rendert dessen
+        ``non_field_errors`` deshalb mit.
+        """
+        client.force_login(staff_user)
+        with patch(
+            "core.views.events.create_event",
+            side_effect=ValidationError({"geheime-zahl": ["Wert muss mindestens 20 sein."]}),
+        ):
+            response = client.post(
+                reverse("core:event_create"),
+                {
+                    "document_type": str(doc_type_contact.pk),
+                    "client": str(client_identified.pk),
+                    "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                    "dauer": "15",
+                    "notiz": "Testnotiz",
+                },
+            )
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Ungültige Eingabe." in content
+        assert "geheime-zahl" not in content
+        assert "Wert muss mindestens 20 sein." not in content
 
     def test_event_create_anonymous(self, client, staff_user, doc_type_contact):
         """Without client selection, event is automatically anonymous."""
