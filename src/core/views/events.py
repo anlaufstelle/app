@@ -83,6 +83,9 @@ from core.views.utils import object_back_link, safe_redirect_path
 
 logger = logging.getLogger(__name__)
 
+_VERSION_ERROR_CODES = frozenset({"missing_token", "invalid_token", "version_conflict"})
+_INVALID_EVENT_INPUT_MESSAGE = _("Ungültige Eingabe.")
+
 # Django rendert die Vorlage mit einem einfachen Prozentzeichen, waehrend der
 # Template-Extractor den Platzhalter als ``%%(stage)s`` katalogisiert. Der
 # No-op-Marker haelt deshalb die tatsaechliche Runtime-ID im Katalog; ohne ihn
@@ -163,6 +166,41 @@ def _event_conflict_response(user, event, client_expected, *, error="conflict"):
         "document_type_name": event.document_type.name,
     }
     return _conflict_response(server_state, client_expected, error=error)
+
+
+def _add_event_service_errors(data_form, error, restricted_keys):
+    """Map service validation errors back to safe Event form fields.
+
+    ``update_event`` may validate after the dynamic form (for example when a
+    NUMBER range changed concurrently or a preserved historical value is now
+    outside its range). Visible field errors retain their slug so an offline
+    editor can mark the input. Unknown or sensitivity-restricted slugs become
+    fully generic non-field errors: returning their key, original message or
+    code could disclose a field, value or internal rule the caller is not
+    allowed to know exists. The returned message list is safe for the classic
+    HTML/HTMX flash path as well.
+    """
+    if not hasattr(error, "error_dict"):
+        data_form.add_error(None, error)
+        return [str(message) for message in error.messages]
+
+    restricted = set(restricted_keys)
+    safe_messages = []
+    for field_name, field_errors in error.error_dict.items():
+        if field_name in data_form.fields and field_name not in restricted:
+            data_form.add_error(field_name, field_errors)
+            safe_messages.extend(str(message) for field_error in field_errors for message in field_error.messages)
+            continue
+
+        # Restricted und unbekannte Keys werden vollstaendig ersetzt: weder
+        # Feldname noch fachliche Meldung/Code duerfen einen fuer die Rolle
+        # unsichtbaren Wert oder eine interne Regelkennung offenlegen.
+        data_form.add_error(
+            None,
+            ValidationError(_INVALID_EVENT_INPUT_MESSAGE, code="invalid"),
+        )
+        safe_messages.append(str(_INVALID_EVENT_INPUT_MESSAGE))
+    return safe_messages
 
 
 class EventCreateView(AssistantOrAboveRequiredMixin, View):
@@ -1071,15 +1109,15 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         event.document_type,
                     )
             except ValidationError as e:
-                # Stage 3 (#575): JSON/HTMX clients receive a 409 with the
-                # current server state so the client-side conflict resolver
-                # can show a diff. Normal browser requests fall back to the
-                # previous redirect + flash message behaviour.
-                if wants_json:
+                # #1936: Nur die drei expliziten Optimistic-Locking-Codes
+                # duerfen in den 409-Konfliktresolver. Fachliche/service-seitige
+                # ValidationErrors sind kein Versionskonflikt.
+                error_code = getattr(e, "code", None)
+                if wants_json and error_code in _VERSION_ERROR_CODES:
                     # Refresh the event so we emit the committed server state,
                     # not the in-memory copy this view started from.
                     event.refresh_from_db()
-                    if getattr(e, "code", None) == "missing_token":
+                    if error_code == "missing_token":
                         # Refs #1338: fehlender Token ist kein Merge-Konflikt
                         # im eigentlichen Sinn (es wurde nichts verglichen) —
                         # eigene Fehlerkennung, damit der Client zwischen
@@ -1088,7 +1126,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         # kein sinnvoller roher Client-Wert vorliegt.
                         return _event_conflict_response(request.user, event, None, error="missing-token")
                     return _event_conflict_response(request.user, event, expected_updated_at)
-                messages.error(request, "; ".join(str(message) for message in e.messages))
+                safe_messages = _add_event_service_errors(data_form, e, restricted_keys)
+                if _wants_raw_json_response(request):
+                    return _invalid_form_response(data_form)
+                messages.error(request, "; ".join(safe_messages))
                 return redirect("core:event_update", pk=event.pk)
 
             messages.success(request, _("Ereignis wurde aktualisiert."))

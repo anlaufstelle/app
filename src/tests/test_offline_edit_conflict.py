@@ -49,6 +49,8 @@ inline-Fehlern.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from django.urls import reverse
 from django.utils import timezone
@@ -57,6 +59,7 @@ from core.models import (
     DocumentType,
     DocumentTypeField,
     Event,
+    EventHistory,
     FieldTemplate,
     WorkItem,
 )
@@ -90,6 +93,48 @@ def doc_type_with_high_field(facility):
     return dt
 
 
+@pytest.fixture
+def event_with_restricted_invalid_number(facility, staff_user):
+    """Event mit historischem, heute ungueltigem HIGH-Zahlenwert.
+
+    Das QuerySet-Update bildet einen Bestandswert ab, der vor einer spaeteren
+    Bereichsverschaerfung gespeichert wurde. STAFF sieht den Dokumentationstyp,
+    aber nicht das HIGH-Feld; der Update-Merge muss den Wert trotzdem erhalten
+    und der Service validiert ihn erneut.
+    """
+    document_type = DocumentType.objects.create(
+        facility=facility,
+        name="Beratung mit geschuetzter Zahl",
+        sensitivity=DocumentType.Sensitivity.ELEVATED,
+    )
+    hidden_number = FieldTemplate.objects.create(
+        facility=facility,
+        name="Verborgene Zahl",
+        field_type=FieldTemplate.FieldType.NUMBER,
+        sensitivity=DocumentType.Sensitivity.HIGH,
+        min_value=0,
+    )
+    visible_text = FieldTemplate.objects.create(
+        facility=facility,
+        name="Sichtbarer Text",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    DocumentTypeField.objects.create(document_type=document_type, field_template=hidden_number, sort_order=0)
+    DocumentTypeField.objects.create(document_type=document_type, field_template=visible_text, sort_order=1)
+    event = Event.objects.create(
+        facility=facility,
+        document_type=document_type,
+        occurred_at=timezone.now(),
+        data_json={hidden_number.slug: 0, visible_text.slug: "vorher"},
+        created_by=staff_user,
+    )
+    Event.objects.filter(pk=event.pk).update(
+        data_json={hidden_number.slug: -41, visible_text.slug: "vorher"},
+    )
+    event.refresh_from_db()
+    return event, hidden_number.slug, visible_text.slug
+
+
 def _stale_timestamp():
     """Return an ISO-8601 timestamp that is guaranteed to be stale.
 
@@ -98,6 +143,29 @@ def _stale_timestamp():
     not identical triggers the concurrency branch.
     """
     return "2000-01-01T00:00:00+00:00"
+
+
+def _patch_sensitive_event_validation_error(monkeypatch, error_key, hidden_slug):
+    """Inject a field-keyed service error whose complete payload is secret."""
+    from django.core.exceptions import ValidationError
+
+    from core.views import events as event_views
+
+    sensitive_message = f"Verborgene Zahl | slug={hidden_slug} | value=-41 | min=314159 | max=271828"
+    sensitive_code = "secret_rule_314159_271828"
+
+    def reject_update(*_args, **_kwargs):
+        raise ValidationError(
+            {
+                error_key: ValidationError(
+                    sensitive_message,
+                    code=sensitive_code,
+                )
+            }
+        )
+
+    monkeypatch.setattr(event_views, "update_event", reject_update)
+    return sensitive_message, sensitive_code
 
 
 @pytest.mark.django_db
@@ -382,6 +450,274 @@ class TestEventUpdateConflict:
         payload = response.json()
         assert payload["error"] == "invalid"
         assert payload["errors"], "422-Antwort muss die Feldfehler tragen"
+
+    def test_event_update_service_range_error_returns_422_under_visible_slug(
+        self,
+        client,
+        staff_user,
+        sample_event,
+        monkeypatch,
+    ):
+        """#1936: Service-Validierung nach Form-Cleaning ist kein 409-Konflikt.
+
+        Die im Wrapper simulierte gleichzeitige Bereichsverschaerfung geschieht
+        erst nach ``data_form.is_valid()``; ``update_event`` und die NUMBER-
+        Validierung bleiben echt. So prueft der Endpoint den sonst seltenen
+        TOCTOU-Pfad ohne eine synthetische ``ValidationError`` zu mocken.
+        """
+        from core.views import events as event_views
+
+        number_field = sample_event.document_type.fields.get(field_template__slug="dauer").field_template
+        original_data = sample_event.data_json.copy()
+        original_updated_at = sample_event.updated_at
+        history_count = EventHistory.objects.filter(event=sample_event).count()
+        real_update_event = event_views.update_event
+
+        def update_after_range_tightening(*args, **kwargs):
+            FieldTemplate.objects.filter(pk=number_field.pk).update(max_value=10)
+            return real_update_event(*args, **kwargs)
+
+        monkeypatch.setattr(event_views, "update_event", update_after_range_tightening)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {
+                "dauer": "11",
+                "notiz": "darf-nicht-gespeichert-werden",
+                "expected_updated_at": original_updated_at.isoformat(),
+            },
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert set(payload["errors"]) == {"dauer"}
+        assert payload["errors"]["dauer"][0]["message"] == "Wert darf höchstens 10 sein."
+        assert payload["errors"]["dauer"][0]["code"] == ""
+        sample_event.refresh_from_db()
+        assert sample_event.data_json == original_data
+        assert sample_event.updated_at == original_updated_at
+        assert EventHistory.objects.filter(event=sample_event).count() == history_count
+
+    @pytest.mark.parametrize(
+        "request_headers",
+        [
+            pytest.param({}, id="html"),
+            pytest.param({"HTTP_HX_REQUEST": "true"}, id="htmx"),
+        ],
+    )
+    def test_event_update_visible_service_error_redirect_keeps_concrete_message(
+        self,
+        client,
+        staff_user,
+        sample_event,
+        monkeypatch,
+        request_headers,
+    ):
+        """#1936: Visible service errors stay actionable after redirects."""
+        from core.views import events as event_views
+
+        number_field = sample_event.document_type.fields.get(field_template__slug="dauer").field_template
+        real_update_event = event_views.update_event
+
+        def update_after_range_tightening(*args, **kwargs):
+            FieldTemplate.objects.filter(pk=number_field.pk).update(max_value=10)
+            return real_update_event(*args, **kwargs)
+
+        monkeypatch.setattr(event_views, "update_event", update_after_range_tightening)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {
+                "dauer": "11",
+                "notiz": "darf-nicht-gespeichert-werden",
+                "expected_updated_at": sample_event.updated_at.isoformat(),
+            },
+            follow=True,
+            **request_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "Wert darf höchstens 10 sein." in body
+        assert "Ungültige Eingabe." not in body
+
+    def test_event_update_restricted_range_error_returns_redacted_422_without_write(
+        self,
+        client,
+        staff_user,
+        event_with_restricted_invalid_number,
+    ):
+        """#1936: Unsichtbare Feldfehler werden nur als ``__all__`` gemeldet."""
+        event, hidden_slug, visible_slug = event_with_restricted_invalid_number
+        original_data = event.data_json.copy()
+        original_updated_at = event.updated_at
+        history_count = EventHistory.objects.filter(event=event).count()
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                visible_slug: "darf-nicht-gespeichert-werden",
+                "expected_updated_at": original_updated_at.isoformat(),
+            },
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert set(payload["errors"]) == {"__all__"}
+        serialized = json.dumps(payload, ensure_ascii=False)
+        assert hidden_slug not in serialized
+        assert "-41" not in serialized
+        event.refresh_from_db()
+        assert event.data_json == original_data
+        assert event.updated_at == original_updated_at
+        assert EventHistory.objects.filter(event=event).count() == history_count
+
+    @pytest.mark.parametrize("error_key_kind", ["restricted", "unknown"])
+    def test_event_update_redacts_restricted_and_unknown_service_error_json(
+        self,
+        client,
+        staff_user,
+        event_with_restricted_invalid_number,
+        monkeypatch,
+        error_key_kind,
+    ):
+        """#1936: Hidden/unknown JSON errors reveal neither key nor payload."""
+        event, hidden_slug, visible_slug = event_with_restricted_invalid_number
+        error_key = hidden_slug if error_key_kind == "restricted" else "unknown-sensitive-field"
+        sensitive_message, sensitive_code = _patch_sensitive_event_validation_error(
+            monkeypatch,
+            error_key,
+            hidden_slug,
+        )
+        original_data = event.data_json.copy()
+        original_updated_at = event.updated_at
+        history_count = EventHistory.objects.filter(event=event).count()
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                visible_slug: "darf-nicht-gespeichert-werden",
+                "expected_updated_at": original_updated_at.isoformat(),
+            },
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "error": "invalid",
+            "errors": {
+                "__all__": [
+                    {
+                        "message": "Ungültige Eingabe.",
+                        "code": "invalid",
+                    }
+                ]
+            },
+        }
+        serialized = json.dumps(response.json(), ensure_ascii=False)
+        for secret in (
+            "Verborgene Zahl",
+            hidden_slug,
+            "-41",
+            "314159",
+            "271828",
+            error_key,
+            sensitive_message,
+            sensitive_code,
+        ):
+            assert secret not in serialized
+        event.refresh_from_db()
+        assert event.data_json == original_data
+        assert event.updated_at == original_updated_at
+        assert EventHistory.objects.filter(event=event).count() == history_count
+
+    @pytest.mark.parametrize("error_key_kind", ["restricted", "unknown"])
+    @pytest.mark.parametrize(
+        "request_headers",
+        [
+            pytest.param({}, id="html"),
+            pytest.param({"HTTP_HX_REQUEST": "true"}, id="htmx"),
+        ],
+    )
+    def test_event_update_redacts_restricted_and_unknown_service_error_after_redirect(
+        self,
+        client,
+        staff_user,
+        event_with_restricted_invalid_number,
+        monkeypatch,
+        error_key_kind,
+        request_headers,
+    ):
+        """#1936: Followed HTML/HTMX redirects expose only the generic flash."""
+        event, hidden_slug, visible_slug = event_with_restricted_invalid_number
+        error_key = hidden_slug if error_key_kind == "restricted" else "unknown-sensitive-field"
+        sensitive_message, sensitive_code = _patch_sensitive_event_validation_error(
+            monkeypatch,
+            error_key,
+            hidden_slug,
+        )
+        original_data = event.data_json.copy()
+        original_updated_at = event.updated_at
+        history_count = EventHistory.objects.filter(event=event).count()
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                visible_slug: "darf-nicht-gespeichert-werden",
+                "expected_updated_at": original_updated_at.isoformat(),
+            },
+            follow=True,
+            **request_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.redirect_chain == [(reverse("core:event_update", kwargs={"pk": event.pk}), 302)]
+        body = response.content.decode()
+        assert "Ungültige Eingabe." in body
+        for secret in (
+            "Verborgene Zahl",
+            hidden_slug,
+            "-41",
+            "314159",
+            "271828",
+            error_key,
+            sensitive_message,
+            sensitive_code,
+        ):
+            assert secret not in body
+        event.refresh_from_db()
+        assert event.data_json == original_data
+        assert event.updated_at == original_updated_at
+        assert EventHistory.objects.filter(event=event).count() == history_count
+
+    def test_event_update_restricted_range_error_htmx_keeps_readable_redirect(
+        self,
+        client,
+        staff_user,
+        event_with_restricted_invalid_number,
+    ):
+        """#1936: Gewoehnliches HTMX erhaelt fuer Fachfehler kein Conflict-JSON."""
+        event, _hidden_slug, visible_slug = event_with_restricted_invalid_number
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                visible_slug: "nachher",
+                "expected_updated_at": event.updated_at.isoformat(),
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:event_update", kwargs={"pk": event.pk})
 
     def test_event_update_html_invalid_form_still_rerenders_200(self, client, staff_user, sample_event):
         """Gegenprobe: ein normaler Browser-POST (kein Accept: application/json)

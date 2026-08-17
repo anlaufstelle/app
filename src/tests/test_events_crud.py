@@ -579,7 +579,9 @@ class TestEventUpdateView:
 
         assert response.status_code == 302
         assert response.url == reverse("core:event_update", kwargs={"pk": event.pk})
-        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 0 sein."]
+        rendered_messages = [str(message) for message in get_messages(response.wsgi_request)]
+        assert rendered_messages == ["Ungültige Eingabe."]
+        assert "Wert muss mindestens 0 sein." not in rendered_messages
         event.refresh_from_db()
         assert event.data_json == {hidden_number.slug: -1, visible_text.slug: "vorher"}
 
