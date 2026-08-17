@@ -237,7 +237,7 @@ describe("warmer Online-Zeitstrom", () => {
 
     it("rotiert den DIRECT-Key erst nach bestaetigtem Offline-Enqueue", () => {
         document.body.innerHTML = `
-            <form data-offline-tally-direct-form>
+            <form data-offline-tally-form data-offline-tally-direct-form>
                 <input name="idempotency_key" value="server-key">
             </form>`;
         const form = document.querySelector("form");
@@ -272,17 +272,48 @@ describe("warmer Online-Zeitstrom", () => {
         expect(thirdRequest.parameters.idempotency_key).toBe("queued-action-3");
     });
 
-    it("rotiert weder nach fehlgeschlagenem Enqueue noch fuer NUMBER", () => {
+    it("rotiert nur markierte ACKs fuer DIRECT und servergerendertes NUMBER", () => {
         document.body.innerHTML = `
-            <form data-offline-tally-direct-form>
+            <form data-offline-tally-form data-offline-tally-direct-form>
                 <input name="idempotency_key" value="direct-key">
             </form>
-            <form data-offline-tally-number-form>
-                <input name="idempotency_key" value="number-key">
-            </form>`;
+            <div id="tally-action-${TYPE_B}" class="basis-full flex flex-col gap-3 pt-2"
+                 data-testid="tally-inline-row-${TYPE_B}">
+                <form method="post"
+                      action="${TALLY_URL}"
+                      class="flex flex-col gap-3"
+                      data-offline-tally-form
+                      data-testid="tally-inline-form-${TYPE_B}"
+                      hx-post="${TALLY_URL}"
+                      hx-target="#tally-action-${TYPE_B}"
+                      hx-headers='{"X-Idempotency-Key": "number-key"}'
+                      hx-swap="outerHTML">
+                    <input type="hidden" name="document_type" value="${TYPE_B}">
+                    <input type="hidden" name="idempotency_key" value="number-key">
+                    <input type="hidden" name="next" value="/">
+                    <input name="anzahl" value="7">
+                    <button type="submit">Kontakt zählen</button>
+                </form>
+            </div>`;
         const direct = document.querySelector("[data-offline-tally-direct-form]");
-        const number = document.querySelector("[data-offline-tally-number-form]");
-        const randomUUID = vi.spyOn(window.crypto, "randomUUID").mockReturnValue("must-not-be-used");
+        const number = document.querySelector(`[data-testid="tally-inline-form-${TYPE_B}"]`);
+        expect(number.getAttribute("method")).toBe("post");
+        expect(number.getAttribute("action")).toBe(TALLY_URL);
+        expect(number.getAttribute("hx-post")).toBe(TALLY_URL);
+        expect(number.getAttribute("hx-target")).toBe(`#tally-action-${TYPE_B}`);
+        expect(number.getAttribute("hx-swap")).toBe("outerHTML");
+        expect(number.querySelector('[name="document_type"]').value).toBe(TYPE_B);
+        vi.spyOn(window.crypto, "randomUUID")
+            .mockReturnValueOnce("direct-next")
+            .mockReturnValueOnce("number-next")
+            .mockReturnValueOnce("number-next-2");
+
+        for (const form of [direct, number]) {
+            const request = { elt: form, headers: {}, parameters: {} };
+            document.dispatchEvent(new CustomEvent("htmx:configRequest", { detail: request }));
+            expect(request.headers["X-Idempotency-Key"]).toBe(form === direct ? "direct-key" : "number-key");
+            expect(request.parameters.idempotency_key).toBe(form === direct ? "direct-key" : "number-key");
+        }
 
         document.dispatchEvent(
             new CustomEvent("htmx:afterRequest", {
@@ -296,7 +327,7 @@ describe("warmer Online-Zeitstrom", () => {
             new CustomEvent("htmx:afterRequest", {
                 detail: {
                     elt: direct,
-                    xhr: { status: 200, getResponseHeader: () => null },
+                    xhr: { status: 200, getResponseHeader: (name) => name === "X-Offline-Queued" ? "1" : null },
                 },
             })
         );
@@ -304,14 +335,40 @@ describe("warmer Online-Zeitstrom", () => {
             new CustomEvent("htmx:afterRequest", {
                 detail: {
                     elt: number,
-                    xhr: { status: 200, getResponseHeader: () => "1" },
+                    xhr: { status: 200, getResponseHeader: (name) => name === "X-Offline-Queued" ? "1" : null },
                 },
             })
         );
 
-        expect(direct.querySelector('[name="idempotency_key"]').value).toBe("direct-key");
-        expect(number.querySelector('[name="idempotency_key"]').value).toBe("number-key");
-        expect(randomUUID).not.toHaveBeenCalled();
+        expect(direct.querySelector('[name="idempotency_key"]').value).toBe("direct-next");
+        expect(number.querySelector('[name="idempotency_key"]').value).toBe("number-next");
+
+        const firstNumberRequest = { elt: number, headers: {}, parameters: {} };
+        document.dispatchEvent(new CustomEvent("htmx:configRequest", { detail: firstNumberRequest }));
+        expect(firstNumberRequest.headers["X-Idempotency-Key"]).toBe("number-next");
+        expect(firstNumberRequest.parameters.idempotency_key).toBe("number-next");
+
+        document.dispatchEvent(new CustomEvent("htmx:afterRequest", {
+            detail: {
+                elt: number,
+                xhr: { status: 200, getResponseHeader: (name) => name === "X-Offline-Queued" ? "1" : null },
+            },
+        }));
+        expect(number.querySelector('[name="idempotency_key"]').value).toBe("number-next-2");
+
+        const secondNumberRequest = { elt: number, headers: {}, parameters: {} };
+        document.dispatchEvent(new CustomEvent("htmx:configRequest", { detail: secondNumberRequest }));
+        expect(secondNumberRequest.headers["X-Idempotency-Key"]).toBe("number-next-2");
+        expect(secondNumberRequest.parameters.idempotency_key).toBe("number-next-2");
+        expect(firstNumberRequest.headers["X-Idempotency-Key"]).not.toBe(
+            secondNumberRequest.headers["X-Idempotency-Key"]
+        );
+        expect(firstNumberRequest.parameters.idempotency_key).not.toBe(secondNumberRequest.parameters.idempotency_key);
+
+        document.dispatchEvent(new CustomEvent("htmx:afterRequest", {
+            detail: { elt: direct, xhr: { status: 200, getResponseHeader: () => null } },
+        }));
+        expect(direct.querySelector('[name="idempotency_key"]').value).toBe("direct-next");
     });
 
     it("baut NUMBER bei Offline-Klick lokal aus dem v2-Snapshot ohne GET", async () => {

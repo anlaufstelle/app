@@ -57,6 +57,7 @@ class TestDirectTallyIdempotency:
         key = row["idempotency_key"]
         assert normalize_idempotency_key(key) == key
         action_html = render_to_string("core/zeitstrom/partials/tally_action.html", {"row": row})
+        assert "data-offline-tally-form" in action_html
         assert "data-offline-tally-direct-form" in action_html
         assert f'name="idempotency_key" value="{key}"' in action_html
         assert f'"X-Idempotency-Key": "{key}"' in action_html
@@ -228,8 +229,16 @@ class TestNumberTallyIdempotency:
         )
         assert inline.status_code == 200
         inline_content = inline.content.decode()
+        assert f'<div id="tally-action-{document_type.pk}"' in inline_content
+        assert '<form method="post"' in inline_content
+        assert f'action="{url}"' in inline_content
+        assert "data-offline-tally-form" in inline_content
+        assert f'hx-post="{url}"' in inline_content
+        assert f'hx-target="#tally-action-{document_type.pk}"' in inline_content
+        assert 'hx-swap="outerHTML"' in inline_content
+        assert f'name="document_type" value="{document_type.pk}"' in inline_content
         assert f'name="idempotency_key" value="{key}"' in inline_content
-        assert f'"X-Idempotency-Key": "{key}"' in inline_content
+        assert f'hx-headers=\'{{"X-Idempotency-Key": "{key}"}}\'' in inline_content
 
         invalid = client.post(
             url,

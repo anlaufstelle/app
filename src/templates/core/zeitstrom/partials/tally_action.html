@@ -13,6 +13,7 @@
        aria-label="{% blocktrans with name=row.document_type.name %}Werte für {{ name }} eingeben{% endblocktrans %}">+1</a>
     {% else %}
     <form method="post" action="{% url 'core:tally_increment' %}"
+          data-offline-tally-form
           data-offline-tally-direct-form
           hx-post="{% url 'core:tally_increment' %}"
           hx-target="#tally-row-{{ row.document_type.pk }}"

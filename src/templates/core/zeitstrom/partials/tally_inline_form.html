@@ -4,6 +4,7 @@
     <form method="post"
           action="{% url 'core:tally_increment' %}"
           class="flex flex-col gap-3"
+          data-offline-tally-form
           data-testid="tally-inline-form-{{ document_type.pk }}"
           hx-post="{% url 'core:tally_increment' %}"
           hx-target="#tally-action-{{ document_type.pk }}"

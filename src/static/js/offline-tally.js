@@ -149,16 +149,16 @@
         }
     }
 
-    function directTallyForm(event) {
+    function offlineTallyForm(event) {
         const detail = (event && event.detail) || {};
         const source = detail.elt || event.target;
         if (!source || !source.matches || !source.closest) return null;
-        if (source.matches("[data-offline-tally-direct-form]")) return source;
-        return source.closest("[data-offline-tally-direct-form]");
+        if (source.matches("[data-offline-tally-form]")) return source;
+        return source.closest("[data-offline-tally-form]");
     }
 
-    function syncDirectIdempotencyKey(event) {
-        const form = directTallyForm(event);
+    function syncOfflineTallyIdempotencyKey(event) {
+        const form = offlineTallyForm(event);
         if (!form) return;
         const input = form.querySelector('input[name="idempotency_key"]');
         const detail = event.detail || {};
@@ -167,8 +167,8 @@
         detail.parameters.idempotency_key = input.value;
     }
 
-    function rotateQueuedDirectIdempotencyKey(event) {
-        const form = directTallyForm(event);
+    function rotateQueuedOfflineTallyIdempotencyKey(event) {
+        const form = offlineTallyForm(event);
         const xhr = event && event.detail && event.detail.xhr;
         if (
             !form ||
@@ -484,11 +484,11 @@
     });
     // #1926: Eine synthetische SW-Erfolgsantwort ersetzt absichtlich nur den
     // Flash-Bereich, nicht die Tally-Zeile. Deshalb den Key fuer die naechste
-    // DIRECT-Aktion erst nach dem bestaetigten Queue-ACK rotieren. Header und
-    // Body werden beim naechsten HTMX-Request wieder aus derselben Quelle
-    // gesetzt. NUMBER nutzt seinen eigenen per-Submit-Key in submitForm().
-    document.addEventListener("htmx:configRequest", syncDirectIdempotencyKey);
-    document.addEventListener("htmx:afterRequest", rotateQueuedDirectIdempotencyKey);
+    // servergerenderte Tally-Aktion erst nach dem bestaetigten Queue-ACK
+    // rotieren. Header und Body werden beim naechsten HTMX-Request wieder aus
+    // derselben Quelle gesetzt. Lokal erzeugte Formulare bleiben per-submit.
+    document.addEventListener("htmx:configRequest", syncOfflineTallyIdempotencyKey);
+    document.addEventListener("htmx:afterRequest", rotateQueuedOfflineTallyIdempotencyKey);
 
     function htmxNumberButton(event) {
         const detail = (event && event.detail) || {};
