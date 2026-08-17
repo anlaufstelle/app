@@ -203,8 +203,11 @@
 <script src="{% static 'js/tally-undo.js' %}"></script>
 {# #1912: progressive Pending-/Blocked-Anzeige und lokales Zahlenformular im warm geladenen Zeitstrom. #}
 <script src="{% static 'js/offline-tally.js' %}"
-        data-label-confirmed="{% trans 'bestätigt' %}"
-        data-label-pending="{% trans 'ausstehend' %}"
+        data-label-pending="{% trans 'ausstehend: __count__' %}"
+        data-label-pending-singular="{% trans '+1 wird gesendet' %}"
+        data-label-pending-plural="{% trans '+__count__ werden gesendet' %}"
+        data-label-server-status="{% trans 'Serverstand: __count__' %}"
+        data-label-snapshot-at="{% trans 'Stand: __timestamp__' %}"
         data-label-blocked="{% trans 'nicht übertragbar' %}"
         data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
         data-label-count-contact="{% trans 'Kontakt zählen' %}"></script>

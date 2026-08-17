@@ -150,7 +150,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v35"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v36"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#1774: offline-store.js ist precached und traegt die erweiterte "
             "Reichweite des Offline-Widerrufs — die Ereignis->Person-Aufloesung "
@@ -619,12 +619,11 @@ class TestPrecachedShellBumpGuard:
     # KEIN CACHE_NAME-Bump — es hat sich kein einziges Byte ausgeliefertes
     # Markup geaendert, nur die Abdeckung des Guards ist gewachsen. Ein Bump
     # schuetzt gegen geaenderte Shells im Feld; hier gibt es keine.
-    # Refs #1912: Offline-Strichlisten-Shell und ihr Renderer sind Teil des
-    # Precaches; v35 erzwingt deren atomare Aktualisierung im Feld. Der
-    # Fenster-Marker gehoert zum selben noch unveroeffentlichten #1912-Atom,
-    # daher beschreibt dieser Hash den finalen Inhalt derselben v35-Generation.
-    _PINNED_CACHE_NAME = "anlaufstelle-v35"
-    _PINNED_SHELL_HASH = "830c13ec6806b24927346802ccac142da1a7107341ac6cd62b8a12f0175c16d4"
+    # Refs #1937: Die Offline-Strichlisten-Shell und ihr Renderer sind Teil des
+    # Precaches; v36 erzwingt die atomare Aktualisierung von Serverstand,
+    # Pending-Delta und Snapshot-Zeitpunkt im Feld.
+    _PINNED_CACHE_NAME = "anlaufstelle-v36"
+    _PINNED_SHELL_HASH = "966c84beae139ae76477fc359d5469ea7ebe13e0e19f8c1ba4517aa9c047c8c5"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

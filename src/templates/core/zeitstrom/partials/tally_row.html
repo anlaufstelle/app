@@ -1,11 +1,15 @@
 {% load i18n %}
-<div id="tally-row-{{ row.document_type.pk }}" class="flex items-center justify-between gap-3 flex-wrap"
+<div id="tally-row-{{ row.document_type.pk }}" class="flex flex-wrap items-center gap-2 min-w-0"
      data-testid="tally-row-{{ row.document_type.pk }}">
-    <span class="text-[13px] text-ink truncate">{{ row.document_type.name }}</span>
-    <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right ml-auto"
+    <span class="text-[13px] text-ink truncate min-w-0 flex-1">{{ row.document_type.name }}</span>
+    <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right flex-none"
           id="tally-count-{{ row.document_type.pk }}"
           data-testid="tally-count-{{ row.document_type.pk }}"
           data-confirmed-count="{{ row.count }}"
+          data-count-label-singular="{% blocktrans with name=row.document_type.name count counter=1 %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}"
+          data-count-label-plural="{% blocktrans with name=row.document_type.name count counter=2 %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}"
+          data-pending-aria-singular="{% blocktrans with name=row.document_type.name %}+1 wird für {{ name }} gesendet{% endblocktrans %}"
+          data-pending-aria-plural="{% blocktrans with name=row.document_type.name %}+__count__ werden für {{ name }} gesendet{% endblocktrans %}"
           aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
     {% include "core/zeitstrom/partials/tally_action.html" %}
     {% if tally_undo_token %}

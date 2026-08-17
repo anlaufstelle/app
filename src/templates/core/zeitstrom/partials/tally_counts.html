@@ -2,5 +2,9 @@
 {% for row in rows %}
 <span id="tally-count-{{ row.document_type.pk }}"
       data-confirmed-count="{{ row.count }}"
+      data-count-label-singular="{% blocktrans with name=row.document_type.name count counter=1 %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}"
+      data-count-label-plural="{% blocktrans with name=row.document_type.name count counter=2 %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}"
+      data-pending-aria-singular="{% blocktrans with name=row.document_type.name %}+1 wird für {{ name }} gesendet{% endblocktrans %}"
+      data-pending-aria-plural="{% blocktrans with name=row.document_type.name %}+__count__ werden für {{ name }} gesendet{% endblocktrans %}"
       aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
 {% endfor %}

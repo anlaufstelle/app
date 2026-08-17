@@ -14,8 +14,11 @@
     const OFFLINE_QUEUED_HEADER = "X-Offline-Queued";
     const scriptData = (document.currentScript && document.currentScript.dataset) || {};
     const defaultLabels = {
-        confirmed: scriptData.labelConfirmed || "bestätigt",
-        pending: scriptData.labelPending || "ausstehend",
+        pending: scriptData.labelPending || "ausstehend: __count__",
+        pendingSingular: scriptData.labelPendingSingular || "+1 wird gesendet",
+        pendingPlural: scriptData.labelPendingPlural || "+__count__ werden gesendet",
+        serverStatus: scriptData.labelServerStatus || "Serverstand: __count__",
+        snapshotAt: scriptData.labelSnapshotAt || "Stand: __timestamp__",
         blocked: scriptData.labelBlocked || "nicht übertragbar",
         submitError: scriptData.labelSubmitError || "Erfassung konnte nicht gespeichert werden.",
         countContact: scriptData.labelCountContact || "Kontakt zählen",
@@ -88,8 +91,11 @@
     function labelSet(element) {
         const data = (element && element.dataset) || {};
         return {
-            confirmed: data.labelConfirmed || defaultLabels.confirmed,
             pending: data.labelPending || defaultLabels.pending,
+            pendingSingular: data.labelPendingSingular || defaultLabels.pendingSingular,
+            pendingPlural: data.labelPendingPlural || defaultLabels.pendingPlural,
+            serverStatus: data.labelServerStatus || defaultLabels.serverStatus,
+            snapshotAt: data.labelSnapshotAt || defaultLabels.snapshotAt,
             blocked: data.labelBlocked || defaultLabels.blocked,
             submitError: data.labelSubmitError || defaultLabels.submitError,
             countContact: data.labelCountContact || defaultLabels.countContact,
@@ -114,8 +120,8 @@
                 };
             }),
             hasFields: row.mode === "number",
-            confirmedLabel: String(confirmed) + " " + labels.confirmed,
-            pendingLabel: String(pending) + " " + labels.pending,
+            confirmedLabel: replaceCount(labels.serverStatus, confirmed),
+            pendingLabel: replaceCount(labels.pending, pending),
             blockedLabel: String(blocked) + " " + labels.blocked,
             hasBlocked: blocked > 0,
             conflictHref: CONFLICT_URL,
@@ -215,10 +221,50 @@
         if (!status) {
             status = document.createElement("span");
             status.setAttribute("data-offline-tally-status", "");
-            status.className = confirmedElement.className;
+            status.setAttribute("role", "status");
+            status.setAttribute("aria-live", "polite");
+            status.setAttribute("aria-atomic", "true");
+            status.className = "text-[12px] text-ink-muted whitespace-nowrap flex-none";
             confirmedElement.insertAdjacentElement("afterend", status);
         }
         return status;
+    }
+
+    function replaceCount(template, count) {
+        return String(template || "").replace("__count__", String(count)).replace(/^\d+/, String(count));
+    }
+
+    function countAriaLabel(confirmedElement, count) {
+        const template = count === 1
+            ? confirmedElement.dataset.countLabelSingular
+            : confirmedElement.dataset.countLabelPlural;
+        return template ? replaceCount(template, count) : confirmedElement.getAttribute("aria-label");
+    }
+
+    function pendingAriaLabel(confirmedElement, pending, fallback) {
+        const template = pending === 1
+            ? confirmedElement.dataset.pendingAriaSingular
+            : confirmedElement.dataset.pendingAriaPlural;
+        return template ? replaceCount(template, pending) : fallback;
+    }
+
+    function pendingStatusLabel(pending, labels) {
+        return replaceCount(pending === 1 ? labels.pendingSingular : labels.pendingPlural, pending);
+    }
+
+    function formattedSnapshotAt(snapshotAt, label) {
+        if (typeof snapshotAt !== "string" || snapshotAt === "") return "";
+        const date = new Date(snapshotAt);
+        if (Number.isNaN(date.getTime())) return "";
+        const locale = document.documentElement.lang || navigator.language || "de";
+        const timestamp = new Intl.DateTimeFormat(locale, {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(date);
+        return String(label || "").replace("__timestamp__", timestamp);
     }
 
     function ensureBlockedLink(row, status) {
@@ -323,26 +369,26 @@
             if (snapshotRow) {
                 confirmedElement.dataset.confirmedCount = String(Number(snapshotRow.confirmed_count) || 0);
             }
+            const confirmed = Number(confirmedElement.dataset.confirmedCount) || 0;
+            confirmedElement.textContent = String(confirmed);
+            const ariaLabel = countAriaLabel(confirmedElement, confirmed);
+            if (ariaLabel) confirmedElement.setAttribute("aria-label", ariaLabel);
             const local = state.byDocumentType[documentTypeId] || { pending: 0, blocked: 0 };
             const pending = Number(local.pending) || 0;
             const blocked = Number(local.blocked) || 0;
             assignedPending += pending;
             assignedBlocked += blocked;
-            const status = ensureStatus(row, confirmedElement);
-            status.textContent =
-                confirmedElement.dataset.confirmedCount +
-                " " +
-                labels.confirmed +
-                " · " +
-                String(pending) +
-                " " +
-                labels.pending;
-            status.setAttribute("aria-label", status.textContent);
-            // Der rohe Online-Zaehler bleibt als maschinenlesbarer
-            // Regressionstest-Anker im DOM, ist visuell aber durch die strikt
-            // getrennte Statusanzeige ersetzt.
-            confirmedElement.hidden = true;
-            const link = ensureBlockedLink(row, status);
+            let status = row.querySelector("[data-offline-tally-status]");
+            if (pending > 0) {
+                status = ensureStatus(row, confirmedElement);
+                status.textContent = pendingStatusLabel(pending, labels);
+                status.setAttribute("aria-label", pendingAriaLabel(confirmedElement, pending, status.textContent));
+            } else if (status) {
+                status.remove();
+                status = null;
+            }
+            confirmedElement.hidden = false;
+            const link = ensureBlockedLink(row, status || confirmedElement);
             link.textContent = String(blocked) + " " + labels.blocked;
             link.hidden = blocked === 0;
         });
@@ -362,9 +408,7 @@
         }
         if (orphan) {
             orphan.textContent =
-                String(orphanPending) +
-                " " +
-                labels.pending +
+                replaceCount(labels.pending, orphanPending) +
                 " · " +
                 String(orphanBlocked) +
                 " " +
@@ -394,6 +438,7 @@
             return {
                 loading: true,
                 rows: [],
+                snapshotAtLabel: "",
                 blockedCount: 0,
                 pendingOutsideRows: 0,
                 feedback: "",
@@ -417,6 +462,7 @@
                             : null;
                         const tally = facility && facility.tally;
                         const state = await queueState();
+                        this.snapshotAtLabel = tally ? formattedSnapshotAt(tally.snapshot_at, this._labels.snapshotAt) : "";
                         this.rows = tally
                             ? (tally.rows || []).map((row) => rowView(row, state, tally, this._labels))
                             : [];
@@ -428,6 +474,7 @@
                         this.blockedCount = state.blocked || 0;
                     } catch (error) {
                         this.rows = [];
+                        this.snapshotAtLabel = "";
                         this.feedback = this._labels.submitError;
                         // eslint-disable-next-line no-console
                         console.error("[offline-tally] load", error);
@@ -457,6 +504,9 @@
                 get hasRows() {
                     return !this.loading && this.rows.length > 0;
                 },
+                get hasSnapshotAt() {
+                    return this.snapshotAtLabel !== "";
+                },
                 get isUnavailable() {
                     return !this.loading && this.rows.length === 0;
                 },
@@ -470,7 +520,7 @@
                     return String(this.blockedCount) + " " + this._labels.blocked;
                 },
                 get pendingOutsideRowsLabel() {
-                    return String(this.pendingOutsideRows) + " " + this._labels.pending;
+                    return replaceCount(this._labels.pending, this.pendingOutsideRows);
                 },
                 get hasFeedback() {
                     return this.feedback !== "";

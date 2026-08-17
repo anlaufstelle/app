@@ -37,6 +37,7 @@ beforeAll(async () => {
 beforeEach(async () => {
     await store.purgeAll();
     document.body.innerHTML = "";
+    document.documentElement.lang = "de";
     requestSync.mockClear();
 });
 
@@ -156,19 +157,55 @@ describe("verschluesselter Tally-Queue-State", () => {
 
 describe("warmer Online-Zeitstrom", () => {
     function onlineRow(confirmed = "12") {
-        document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_A}"><span data-testid="tally-count-${TYPE_A}">${confirmed}</span></div></section>`;
+        document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_A}"><span data-testid="tally-count-${TYPE_A}" data-count-label-singular="1 Kontakt für Kontakt" data-count-label-plural="__count__ Kontakte für Kontakt" data-pending-aria-singular="+1 wird für Kontakt gesendet" data-pending-aria-plural="+__count__ werden für Kontakt gesendet" aria-label="${confirmed} Kontakte für Kontakt">${confirmed}</span></div></section>`;
         return document.querySelector(`[data-testid="tally-row-${TYPE_A}"]`);
     }
 
-    it("zeigt bestaetigt und Queue-Pending getrennt, ohne optimistische Summe", async () => {
+    it("zeigt ohne Queue nur den grossen bestaetigten Serverstand", async () => {
+        const row = onlineRow();
+
+        await tallyUi.refreshOnlinePanel();
+
+        const count = row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`);
+        expect(count.hidden).toBe(false);
+        expect(count.textContent).toBe("12");
+        expect(count.getAttribute("aria-label")).toBe("12 Kontakte für Kontakt");
+        expect(row.querySelector("[data-offline-tally-status]")).toBeNull();
+        expect(row.querySelector("[data-offline-tally-blocked]").hidden).toBe(true);
+        expect(row.textContent).not.toContain("bestätigt");
+        expect(row.textContent).not.toContain("ausstehend");
+    });
+
+    it("zeigt Queue-Pending als nachrangiges Delta ohne optimistische Summe", async () => {
         await queueRow(TYPE_A, null);
         const row = onlineRow();
 
         await tallyUi.refreshOnlinePanel();
 
-        expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).hidden).toBe(true);
-        expect(row.querySelector("[data-offline-tally-status]").textContent).toBe("12 bestätigt · 1 ausstehend");
-        expect(row.textContent).not.toContain("13 bestätigt");
+        expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).hidden).toBe(false);
+        const status = row.querySelector("[data-offline-tally-status]");
+        expect(status.textContent).toBe("+1 wird gesendet");
+        expect(status.getAttribute("role")).toBe("status");
+        expect(status.getAttribute("aria-live")).toBe("polite");
+        expect(status.getAttribute("aria-atomic")).toBe("true");
+        expect(status.getAttribute("aria-label")).toBe(
+            "+1 wird für Kontakt gesendet"
+        );
+        expect(row.textContent).not.toContain("13");
+    });
+
+    it("pluralisiert ein Pending-Delta ohne die Serverzahl zu veraendern", async () => {
+        await queueRow(TYPE_A, null, "7");
+        await queueRow(TYPE_A, null, "8");
+        const row = onlineRow();
+
+        await tallyUi.refreshOnlinePanel();
+
+        expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).textContent).toBe("12");
+        expect(row.querySelector("[data-offline-tally-status]").textContent).toBe("+2 werden gesendet");
+        expect(row.querySelector("[data-offline-tally-status]").getAttribute("aria-label")).toBe(
+            "+2 werden für Kontakt gesendet"
+        );
     });
 
     it("zeigt blockierte Tally-Aktion verlinkt und ohne Formularwerte", async () => {
@@ -183,6 +220,17 @@ describe("warmer Online-Zeitstrom", () => {
         expect(row.textContent).not.toContain("DARF-NICHT-INS-DOM");
     });
 
+    it("formatiert ausstehende Aktionen ohne sichtbaren Typ mit dem vollen Labelvertrag", async () => {
+        await queueRow(TYPE_B, null);
+        onlineRow();
+
+        await tallyUi.refreshOnlinePanel();
+
+        expect(document.querySelector("[data-offline-tally-orphan]").textContent).toBe(
+            "ausstehend: 1 · 0 nicht übertragbar"
+        );
+    });
+
     it("enhanced einen per HTMX ersetzten Panel-Stand erneut", async () => {
         await queueRow(TYPE_A, null);
         onlineRow("12");
@@ -193,12 +241,12 @@ describe("warmer Online-Zeitstrom", () => {
 
         await vi.waitFor(() => {
             expect(document.querySelector("[data-offline-tally-status]").textContent).toBe(
-                "13 bestätigt · 1 ausstehend"
+                "+1 wird gesendet"
             );
         });
     });
 
-    it("versoehnt nach Queue-Sync auf 13 bestaetigt und 0 ausstehend", async () => {
+    it("versoehnt nach Queue-Sync auf 13 und aktualisiert das fachliche Aria-Label", async () => {
         const bundle = facilityBundle();
         await store.saveFacilityBundle(bundle);
         await queueRow(TYPE_A, null);
@@ -217,11 +265,13 @@ describe("warmer Online-Zeitstrom", () => {
         );
 
         await vi.waitFor(() => {
-            expect(row.querySelector("[data-offline-tally-status]").textContent).toBe(
-                "13 bestätigt · 0 ausstehend"
+            expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).textContent).toBe("13");
+            expect(row.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).getAttribute("aria-label")).toBe(
+                "13 Kontakte für Kontakt"
             );
+            expect(row.querySelector("[data-offline-tally-status]")).toBeNull();
         });
-        expect(row.textContent).not.toContain("14 bestätigt");
+        expect(row.textContent).not.toContain("14");
         expect(revalidate).not.toHaveBeenCalled();
     });
 
@@ -478,9 +528,8 @@ describe("warmer Online-Zeitstrom", () => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
         await vi.waitFor(() => {
-            expect(document.querySelector("[data-offline-tally-status]").textContent).toBe(
-                "13 bestätigt · 0 ausstehend"
-            );
+            expect(document.querySelector(`[data-testid="tally-count-${TYPE_A}"]`).textContent).toBe("13");
+            expect(document.querySelector("[data-offline-tally-status]")).toBeNull();
         });
         expect(store.revalidateCachedFacility).toHaveBeenCalled();
         expect(changed).toHaveBeenCalledTimes(1);
@@ -488,8 +537,21 @@ describe("warmer Online-Zeitstrom", () => {
 });
 
 describe("kalte Offline-Tally-Shell", () => {
+    it("formatiert ausstehende Queue-Aktionen ohne sichtbare Tally-Zeile mit dem vollen Label", async () => {
+        await store.saveFacilityBundle(facilityBundle());
+        await queueRow(TYPE_B, null);
+        const component = alpineFactory();
+        component.$el = { dataset: {} };
+
+        await component.load();
+
+        expect(component.pendingOutsideRows).toBe(1);
+        expect(component.pendingOutsideRowsLabel).toBe("ausstehend: 1");
+    });
+
     it("versoehnt bestaetigten Bundle-Stand mit Queue-Zustand", async () => {
         const bundle = facilityBundle();
+        bundle.tally.snapshot_at = "2026-08-17T14:32:00Z";
         bundle.tally.rows.push({
             document_type_id: TYPE_B,
             document_type_name: "Zahlenkontakt",
@@ -502,8 +564,9 @@ describe("kalte Offline-Tally-Shell", () => {
         const component = alpineFactory();
         component.$el = {
             dataset: {
-                labelConfirmed: "bestätigt",
-                labelPending: "ausstehend",
+                labelPending: "ausstehend: __count__",
+                labelServerStatus: "Serverstand: __count__",
+                labelSnapshotAt: "Stand: __timestamp__",
                 labelBlocked: "nicht übertragbar",
             },
         };
@@ -511,9 +574,10 @@ describe("kalte Offline-Tally-Shell", () => {
 
         await component.load();
 
-        expect(component.rows[0].confirmedLabel).toBe("12 bestätigt");
-        expect(component.rows[0].pendingLabel).toBe("1 ausstehend");
-        expect(component.rows[0].confirmedLabel).not.toBe("13 bestätigt");
+        expect(component.rows[0].confirmedLabel).toBe("Serverstand: 12");
+        expect(component.rows[0].pendingLabel).toBe("ausstehend: 1");
+        expect(component.rows[0].confirmedLabel).not.toBe("Serverstand: 13");
+        expect(component.snapshotAtLabel).toBe("Stand: 17.08.2026, 14:32");
         expect(component.rows).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
@@ -560,5 +624,18 @@ describe("kalte Offline-Tally-Shell", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(requestSync).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, "not-a-date"])("blendet Snapshot-Zeitpunkt %s fail-safe aus", async (snapshotAt) => {
+        const bundle = facilityBundle();
+        bundle.tally.snapshot_at = snapshotAt;
+        await store.saveFacilityBundle(bundle);
+        const component = alpineFactory();
+        component.$el = { dataset: {} };
+
+        await component.load();
+
+        expect(component.snapshotAtLabel).toBe("");
+        expect(component.hasSnapshotAt).toBe(false);
     });
 });

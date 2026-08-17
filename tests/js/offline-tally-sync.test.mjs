@@ -37,7 +37,7 @@ const reconciled = vi.fn();
 
 beforeAll(async () => {
     const readyState = vi.spyOn(document, "readyState", "get").mockReturnValue("loading");
-    document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_ID}"><span data-testid="tally-count-${TYPE_ID}">12</span></div></section>`;
+    document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_ID}"><span data-testid="tally-count-${TYPE_ID}" data-count-label-singular="1 Kontakt für Kontakt" data-count-label-plural="__count__ Kontakte für Kontakt" data-pending-aria-singular="+1 wird für Kontakt gesendet" data-pending-aria-plural="+__count__ werden für Kontakt gesendet" aria-label="12 Kontakte für Kontakt">12</span></div></section>`;
     delete window.syncOrchestrator;
     globalThis.Alpine = { data: vi.fn() };
     window.crypto_session = { ready: async () => {}, hasSessionKey: () => true };
@@ -66,7 +66,7 @@ beforeAll(async () => {
     expect(window.syncOrchestrator).toBeUndefined();
     await window.offlineTallyUi.refreshOnlinePanel();
     expect(document.querySelector("[data-offline-tally-status]").textContent).toBe(
-        "12 bestätigt · 1 ausstehend"
+        "+1 wird gesendet"
     );
     // base.html laedt den zentralen Orchestrator erst danach.
     await import("../../src/static/js/sync-orchestrator.js");
@@ -82,9 +82,11 @@ it("reconciled same-tab nach genau einem zentralen Sync und einer Bundle-Revalid
     window.dispatchEvent(new Event("online"));
 
     await vi.waitFor(() => {
-        expect(document.querySelector("[data-offline-tally-status]").textContent).toBe(
-            "13 bestätigt · 0 ausstehend"
+        expect(document.querySelector(`[data-testid="tally-count-${TYPE_ID}"]`).textContent).toBe("13");
+        expect(document.querySelector(`[data-testid="tally-count-${TYPE_ID}"]`).getAttribute("aria-label")).toBe(
+            "13 Kontakte für Kontakt"
         );
+        expect(document.querySelector("[data-offline-tally-status]")).toBeNull();
     });
     expect(replayQueue).toHaveBeenCalledTimes(1);
     expect(revalidateCachedFacility).toHaveBeenCalledTimes(1);
@@ -98,7 +100,7 @@ it("ueberschreibt bei fehlgeschlagener Revalidation keinen frischeren DOM-Stand"
         ...snapshot,
         rows: [{ ...snapshot.rows[0], confirmed_count: 11 }],
     };
-    document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_ID}"><span data-testid="tally-count-${TYPE_ID}">12</span></div></section>`;
+    document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_ID}"><span data-testid="tally-count-${TYPE_ID}" data-count-label-singular="1 Kontakt für Kontakt" data-count-label-plural="__count__ Kontakte für Kontakt" data-pending-aria-singular="+1 wird für Kontakt gesendet" data-pending-aria-plural="+__count__ werden für Kontakt gesendet" aria-label="12 Kontakte für Kontakt">12</span></div></section>`;
     const callsBefore = revalidateCachedFacility.mock.calls.length;
 
     window.dispatchEvent(
@@ -108,9 +110,8 @@ it("ueberschreibt bei fehlgeschlagener Revalidation keinen frischeren DOM-Stand"
     );
 
     await vi.waitFor(() => {
-        expect(document.querySelector("[data-offline-tally-status]").textContent).toBe(
-            "12 bestätigt · 0 ausstehend"
-        );
+        expect(document.querySelector(`[data-testid="tally-count-${TYPE_ID}"]`).textContent).toBe("12");
+        expect(document.querySelector("[data-offline-tally-status]")).toBeNull();
     });
     expect(revalidateCachedFacility).toHaveBeenCalledTimes(callsBefore);
 });

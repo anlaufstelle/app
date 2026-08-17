@@ -26,13 +26,19 @@
     {# AES-GCM-Decrypt aus Facility-v2; Queue-Werte werden nie gerendert.      #}
     <section x-data="offlineTally" x-init="load"
              data-testid="offline-tally"
-             data-label-confirmed="{% trans 'bestätigt' %}"
-             data-label-pending="{% trans 'ausstehend' %}"
+             data-label-pending="{% trans 'ausstehend: __count__' %}"
+             data-label-pending-singular="{% trans '+1 wird gesendet' %}"
+             data-label-pending-plural="{% trans '+__count__ werden gesendet' %}"
+             data-label-server-status="{% trans 'Serverstand: __count__' %}"
+             data-label-snapshot-at="{% trans 'Stand: __timestamp__' %}"
              data-label-blocked="{% trans 'nicht übertragbar' %}"
              data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
              class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden">
         <div class="px-4 py-3 border-b border-subtle">
             <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Strichliste" %}</h2>
+            <span x-show="hasSnapshotAt" x-cloak class="text-[12px] text-ink-muted"
+                  data-testid="offline-tally-snapshot-at"
+                  x-text="snapshotAtLabel"></span>
         </div>
         <div x-show="loading" x-cloak class="px-4 py-3 text-[13px] text-ink-muted">
             {% trans "Lade Offline-Strichliste..." %}
@@ -45,7 +51,10 @@
                 <div class="px-4 py-3" data-testid="offline-tally-row">
                     <div class="flex items-center justify-between gap-3 flex-wrap">
                         <span class="text-[13px] font-semibold text-ink" x-text="row.documentTypeName"></span>
-                        <span class="text-[13px] font-bold text-ink tabular-nums">
+                        <span class="text-[13px] font-bold text-ink tabular-nums"
+                              data-testid="offline-tally-server-status"
+                              role="status" aria-live="polite" aria-atomic="true">
+                            <span class="sr-only" x-text="row.documentTypeName + ': '"></span>
                             <span x-text="row.confirmedLabel"></span>
                             <span aria-hidden="true"> · </span>
                             <span x-text="row.pendingLabel"></span>
@@ -144,8 +153,11 @@
 {# (APP_SHELL) auf und macht den Offline-Flip fuer /.                           #}
 <script src="{% static 'js/offline-zeitstrom.js' %}"></script>
 <script src="{% static 'js/offline-tally.js' %}"
-        data-label-confirmed="{% trans 'bestätigt' %}"
-        data-label-pending="{% trans 'ausstehend' %}"
+        data-label-pending="{% trans 'ausstehend: __count__' %}"
+        data-label-pending-singular="{% trans '+1 wird gesendet' %}"
+        data-label-pending-plural="{% trans '+__count__ werden gesendet' %}"
+        data-label-server-status="{% trans 'Serverstand: __count__' %}"
+        data-label-snapshot-at="{% trans 'Stand: __timestamp__' %}"
         data-label-blocked="{% trans 'nicht übertragbar' %}"
         data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
         data-label-count-contact="{% trans 'Kontakt zählen' %}"></script>

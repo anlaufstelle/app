@@ -9,7 +9,10 @@ Analog zu TestOfflineClientListShellView/TestOfflineWorkItemListShellView:
 public, GET-only, Template-Smoke.
 """
 
+from pathlib import Path
+
 import pytest
+from django.conf import settings
 from django.urls import reverse
 
 
@@ -84,16 +87,38 @@ class TestOfflineZeitstromShellMarkup:
     def test_alpine_script_included(self, body):
         assert "js/offline-zeitstrom.js" in body
 
-    def test_pii_free_tally_scaffold_has_confirmed_pending_and_conflict_link(self, body):
+    def test_pii_free_tally_scaffold_has_cold_server_pending_timestamp_and_conflict_contract(self, body):
         assert 'x-data="offlineTally"' in body
         assert 'data-testid="offline-tally"' in body
         assert 'x-for="row in rows"' in body
         assert 'x-text="row.confirmedLabel"' in body
         assert 'x-text="row.pendingLabel"' in body
+        assert 'x-text="snapshotAtLabel"' in body
+        assert 'x-show="hasSnapshotAt"' in body
+        assert 'data-testid="offline-tally-server-status"' in body
+        assert 'data-testid="offline-tally-snapshot-at"' in body
         assert 'href="/offline/conflicts/"' in body
-        assert "bestätigt" in body
+        assert "Serverstand" in body
         assert "ausstehend" in body
         assert "Nicht übertragbar" in body
+
+    def test_online_tally_row_has_compact_no_wrap_contract_at_390px(self):
+        source = (Path(settings.BASE_DIR) / "templates/core/zeitstrom/partials/tally_row.html").read_text()
+        assert 'class="flex flex-wrap items-center gap-2 min-w-0"' in source
+        assert "min-w-0 flex-1" in source
+        assert "flex-none" in source
+
+    def test_cold_tally_status_live_region_contains_type_and_both_values(self, body):
+        assert 'data-testid="offline-tally-server-status"' in body
+        assert 'role="status"' in body
+        assert 'aria-live="polite"' in body
+        assert 'aria-atomic="true"' in body
+        assert 'class="sr-only" x-text="row.documentTypeName + \': \'"' in body
+        status_start = body.index('data-testid="offline-tally-server-status"')
+        type_start = body.index("row.documentTypeName + ': '", status_start)
+        confirmed_start = body.index('x-text="row.confirmedLabel"', status_start)
+        pending_start = body.index('x-text="row.pendingLabel"', status_start)
+        assert status_start < type_start < confirmed_start < pending_start
 
     def test_tally_shell_contains_no_server_data_or_tally_values(self, body):
         assert "document_type_name" not in body

@@ -105,7 +105,11 @@ importScripts("/static/js/url-patterns.js");
 // POST auf; offline-store.js wechselt das Facility-Bundle auf Schema v2 und
 // offline-tally.js rendert cold/warm Pending-Zustaende. Alle drei liegen im
 // cache-first APP_SHELL und muessen atomar erneuert werden.
-const CACHE_NAME = "anlaufstelle-v35";
+// Refs #1937: v35 -> v36 -- offline-tally.js und die kalte Zeitstrom-Shell
+// zeigen den bestaetigten Serverstand wieder getrennt von Pending-Deltas und
+// einen absoluten Snapshot-Zeitpunkt. Beide liegen cache-first im APP_SHELL;
+// ohne Bump bliebe Bestandsnutzern der alte, irrefuehrende Tally-Status.
+const CACHE_NAME = "anlaufstelle-v36";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

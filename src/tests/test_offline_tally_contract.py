@@ -81,7 +81,7 @@ class TestTallyEncryptedQueueAndSchemaContract:
         store = _js("offline-store.js")
         sw = _js("sw.js")
         assert "const FACILITY_BUNDLE_SCHEMA_VERSION = 2;" in store
-        assert 'const CACHE_NAME = "anlaufstelle-v35";' in sw
+        assert 'const CACHE_NAME = "anlaufstelle-v36";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):
@@ -102,10 +102,24 @@ class TestTallyEncryptedQueueAndSchemaContract:
 
 
 class TestTallyReconciliationContract:
+    def test_templates_pass_full_tally_status_msgids_with_sentinels(self):
+        online = _template("core/zeitstrom/index.html")
+        cold = _template("core/zeitstrom/offline_zeitstrom.html")
+        row = _template("core/zeitstrom/partials/tally_row.html")
+        for source in (online, cold):
+            assert "Serverstand: __count__" in source
+            assert "ausstehend: __count__" in source
+            assert "+1 wird gesendet" in source
+            assert "+__count__ werden gesendet" in source
+            assert "Stand: __timestamp__" in source
+        assert "count counter=1" in row
+        assert "count counter=2" in row
+
     def test_ui_never_optimistically_adds_pending_to_confirmed(self):
         source = _js("offline-tally.js")
-        assert 'confirmedLabel: String(confirmed) + " " + labels.confirmed' in source
-        assert 'pendingLabel: String(pending) + " " + labels.pending' in source
+        assert "confirmedLabel: replaceCount(labels.serverStatus, confirmed)" in source
+        assert "pendingLabel: replaceCount(labels.pending, pending)" in source
+        assert "pendingStatusLabel(pending, labels)" in source
         assert "confirmed + pending" not in source
         assert "confirmed +=" not in source
 
