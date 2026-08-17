@@ -28,6 +28,7 @@ import re
 
 import pytest
 from cryptography.fernet import Fernet
+from django.contrib.messages import get_messages
 from django.db import connection
 from django.test import override_settings
 from django.urls import reverse
@@ -39,6 +40,7 @@ from core.models import (
     FieldCondition,
     FieldTemplate,
 )
+from core.models.attachment import Attachment
 from core.services.client import _gather_client_fields, export_client_data
 from core.services.file_vault import is_encrypted_value, safe_decrypt
 
@@ -505,6 +507,65 @@ class TestClientUpdateWithDynamicData:
         target.refresh_from_db()
         assert target.data_json["sprache"] == "EN"
         assert safe_decrypt(target.data_json["gefaehrdung"]) == "nur fuer Leitung"
+
+    def test_historical_restricted_number_outside_new_range_redirects_without_writing(
+        self, client, staff_user, facility
+    ):
+        """Refs #1927: Der E11-Nachzug kann einen Feldfehler als dict auslösen.
+
+        Der historische, für Staff unsichtbare Wert entstand vor der späteren
+        Bereichsverschärfung. Sein Merge darf weder einen 500er verursachen
+        noch Personendaten oder Anhänge verändern.
+        """
+        document_type = DocumentType.objects.create(
+            facility=facility,
+            entity_type=DocumentType.EntityType.CLIENT,
+            name="Personen-Zahlengrenze",
+        )
+        number_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Historische Anzahl",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            sensitivity="high",
+        )
+        visible_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Sichtbarer Vermerk",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        DocumentTypeField.objects.create(document_type=document_type, field_template=number_field)
+        DocumentTypeField.objects.create(document_type=document_type, field_template=visible_field)
+        target = Client.objects.create(
+            facility=facility,
+            pseudonym="P7-Historische-Zahl",
+            created_by=staff_user,
+            document_type=document_type,
+            data_json={number_field.slug: 0, visible_field.slug: "vorher"},
+        )
+        # Ein historischer Klartextwert kann den heutigen HIGH=>verschlüsselt-
+        # Backstop umgangen haben. Die nachträglich gesetzte Untergrenze macht
+        # den vom Merge erneut validierten Wert ungültig.
+        Client.objects.filter(pk=target.pk).update(data_json={number_field.slug: -1, visible_field.slug: "vorher"})
+        number_field.min_value = 0
+        number_field.save(update_fields=["min_value"])
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", args=[target.pk]),
+            _client_post_data(
+                "P7-Neuer-Pseudonym",
+                document_type=str(document_type.pk),
+                **{visible_field.slug: "nachher"},
+            ),
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:client_update", args=[target.pk])
+        assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 0 sein."]
+        target.refresh_from_db()
+        assert target.pseudonym == "P7-Historische-Zahl"
+        assert target.data_json == {number_field.slug: -1, visible_field.slug: "vorher"}
+        assert Attachment.objects.filter(client=target).count() == 0
 
     def test_type_switch_drops_old_keys(
         self, client, staff_user, facility, doc_type_client_profile, doc_type_client_mixed

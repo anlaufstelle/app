@@ -603,39 +603,41 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 }
                 return render(request, "core/clients/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
-            # P4b-Review (fail-closed-Vertrag): ``update_client`` weist
-            # ``document_type=None`` bei befuelltem ``data_json``-Altbestand ab.
-            # Typ und Daten gehen deshalb IMMER als Paar raus — beim Entfernen
-            # des Typs also ``document_type=None`` + ``data_json={}``.
-            merged = (
-                merge_dynamic_data(
-                    doc_type,
-                    text_data,
-                    old_data=old_data,
-                    restricted_slugs=restricted,
-                )
-                if doc_type is not None
-                else {}
-            )
-            # M24/AP4 (Refs #1738): FILE-Felder tragen keinen Formularwert — ihr
-            # Wert IST der Marker auf die ``Attachment``-Zeilen. Ohne diese
-            # Re-Injektion wuerde bereits der erste reine Text-Edit still ALLE
-            # Bestandsanhaenge aus dem ``data_json`` werfen.
-            #
-            # Beim TYPWECHSEL bleibt sie aus (Integrations-Review Refs #1738):
-            # Feldvorlagen sind mehrfach zuordenbar — traegt der Ziel-Typ
-            # dieselbe FILE-Vorlage, stuende ihr Slug in
-            # ``_file_field_slugs(doc_type)`` und der Marker des ALTEN Typs
-            # kaeme zurueck, waehrend ``discard_type_switch_file_chains`` im
-            # selben atomic alle Ketten soft-loescht. Das ``data_json`` zeigte
-            # dann dauerhaft auf ``deleted_at``-Zeilen — Widerspruch zu
-            # ADR-039 §7 („Typwechsel verwirft das data_json").
-            if not type_switched:
-                preserve_file_markers(client, merged, old_data, _file_field_slugs(doc_type))
-            fields["data_json"] = merged
 
-        expected_updated_at = request.POST.get("expected_updated_at") or None
         try:
+            if not type_locked:
+                # P4b-Review (fail-closed-Vertrag): ``update_client`` weist
+                # ``document_type=None`` bei befuelltem ``data_json``-Altbestand ab.
+                # Typ und Daten gehen deshalb IMMER als Paar raus — beim Entfernen
+                # des Typs also ``document_type=None`` + ``data_json={}``.
+                merged = (
+                    merge_dynamic_data(
+                        doc_type,
+                        text_data,
+                        old_data=old_data,
+                        restricted_slugs=restricted,
+                    )
+                    if doc_type is not None
+                    else {}
+                )
+                # M24/AP4 (Refs #1738): FILE-Felder tragen keinen Formularwert — ihr
+                # Wert IST der Marker auf die ``Attachment``-Zeilen. Ohne diese
+                # Re-Injektion wuerde bereits der erste reine Text-Edit still ALLE
+                # Bestandsanhaenge aus dem ``data_json`` werfen.
+                #
+                # Beim TYPWECHSEL bleibt sie aus (Integrations-Review Refs #1738):
+                # Feldvorlagen sind mehrfach zuordenbar — traegt der Ziel-Typ
+                # dieselbe FILE-Vorlage, stuende ihr Slug in
+                # ``_file_field_slugs(doc_type)`` und der Marker des ALTEN Typs
+                # kaeme zurueck, waehrend ``discard_type_switch_file_chains`` im
+                # selben atomic alle Ketten soft-loescht. Das ``data_json`` zeigte
+                # dann dauerhaft auf ``deleted_at``-Zeilen — Widerspruch zu
+                # ADR-039 §7 („Typwechsel verwirft das data_json").
+                if not type_switched:
+                    preserve_file_markers(client, merged, old_data, _file_field_slugs(doc_type))
+                fields["data_json"] = merged
+
+            expected_updated_at = request.POST.get("expected_updated_at") or None
             with transaction.atomic():
                 if type_switched:
                     discard_type_switch_file_chains(client, request.user)
@@ -656,7 +658,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                         doc_type,
                     )
         except ValidationError as e:
-            messages.error(request, e.message if hasattr(e, "message") else str(e))
+            messages.error(request, "; ".join(str(message) for message in e.messages))
             return redirect("core:client_update", pk=client.pk)
         messages.success(request, _("Person wurde aktualisiert."))
         return redirect("core:client_detail", pk=client.pk)

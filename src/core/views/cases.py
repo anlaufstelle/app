@@ -567,36 +567,38 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 }
                 return render(request, "core/cases/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
-            # P5/P4b-Review (fail-closed-Vertrag): ``update_case`` weist
-            # ``document_type=None`` bei befuelltem ``data_json``-Altbestand ab.
-            # Typ und Daten gehen deshalb IMMER als Paar raus — beim Entfernen
-            # des Typs also ``document_type=None`` + ``data_json={}``.
-            merged = (
-                merge_dynamic_data(
-                    doc_type,
-                    text_data,
-                    old_data=old_data,
-                    restricted_slugs=restricted,
-                )
-                if doc_type is not None
-                else {}
-            )
-            # M24/AP4 (Refs #1738): FILE-Marker des aktuellen Typs re-injizieren
-            # — sonst wirft der erste reine Text-Edit alle Bestandsanhaenge aus
-            # dem ``data_json``.
-            #
-            # Beim TYPWECHSEL bleibt sie aus (Integrations-Review Refs #1738):
-            # teilen alter und neuer Typ dieselbe FILE-Feldvorlage, kaeme der
-            # Marker des alten Typs zurueck, waehrend
-            # ``discard_type_switch_file_chains`` im selben atomic alle Ketten
-            # soft-loescht — das ``data_json`` zeigte dauerhaft auf
-            # ``deleted_at``-Zeilen (ADR-039 §7).
-            if not type_switched:
-                preserve_file_markers(case, merged, old_data, _file_field_slugs(doc_type))
-            fields["data_json"] = merged
 
-        expected_updated_at = request.POST.get("expected_updated_at") or None
         try:
+            if not type_locked:
+                # P5/P4b-Review (fail-closed-Vertrag): ``update_case`` weist
+                # ``document_type=None`` bei befuelltem ``data_json``-Altbestand ab.
+                # Typ und Daten gehen deshalb IMMER als Paar raus — beim Entfernen
+                # des Typs also ``document_type=None`` + ``data_json={}``.
+                merged = (
+                    merge_dynamic_data(
+                        doc_type,
+                        text_data,
+                        old_data=old_data,
+                        restricted_slugs=restricted,
+                    )
+                    if doc_type is not None
+                    else {}
+                )
+                # M24/AP4 (Refs #1738): FILE-Marker des aktuellen Typs re-injizieren
+                # — sonst wirft der erste reine Text-Edit alle Bestandsanhaenge aus
+                # dem ``data_json``.
+                #
+                # Beim TYPWECHSEL bleibt sie aus (Integrations-Review Refs #1738):
+                # teilen alter und neuer Typ dieselbe FILE-Feldvorlage, kaeme der
+                # Marker des alten Typs zurueck, waehrend
+                # ``discard_type_switch_file_chains`` im selben atomic alle Ketten
+                # soft-loescht — das ``data_json`` zeigte dauerhaft auf
+                # ``deleted_at``-Zeilen (ADR-039 §7).
+                if not type_switched:
+                    preserve_file_markers(case, merged, old_data, _file_field_slugs(doc_type))
+                fields["data_json"] = merged
+
+            expected_updated_at = request.POST.get("expected_updated_at") or None
             with transaction.atomic():
                 if type_switched:
                     discard_type_switch_file_chains(case, request.user)
@@ -616,7 +618,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                         doc_type,
                     )
         except ValidationError as e:
-            messages.error(request, e.message if hasattr(e, "message") else str(e))
+            messages.error(request, "; ".join(str(message) for message in e.messages))
             return redirect("core:case_update", pk=case.pk)
         messages.success(request, _("Fall wurde aktualisiert."))
         return redirect("core:case_detail", pk=case.pk)
