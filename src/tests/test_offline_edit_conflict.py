@@ -129,7 +129,7 @@ def event_with_restricted_invalid_number(facility, staff_user):
         created_by=staff_user,
     )
     Event.objects.filter(pk=event.pk).update(
-        data_json={hidden_number.slug: -41, visible_text.slug: "vorher"},
+        data_json={hidden_number.slug: -90071992547409, visible_text.slug: "vorher"},
     )
     event.refresh_from_db()
     return event, hidden_number.slug, visible_text.slug
@@ -151,8 +151,10 @@ def _patch_sensitive_event_validation_error(monkeypatch, error_key, hidden_slug)
 
     from core.views import events as event_views
 
-    sensitive_message = f"Verborgene Zahl | slug={hidden_slug} | value=-41 | min=314159 | max=271828"
-    sensitive_code = "secret_rule_314159_271828"
+    sensitive_message = (
+        f"Verborgene Zahl | slug={hidden_slug} | value=-90071992547409 | min=31415926535897 | max=27182818284590"
+    )
+    sensitive_code = "secret_rule_31415926535897_27182818284590"
 
     def reject_update(*_args, **_kwargs):
         raise ValidationError(
@@ -571,7 +573,7 @@ class TestEventUpdateConflict:
         assert set(payload["errors"]) == {"__all__"}
         serialized = json.dumps(payload, ensure_ascii=False)
         assert hidden_slug not in serialized
-        assert "-41" not in serialized
+        assert "-90071992547409" not in serialized
         event.refresh_from_db()
         assert event.data_json == original_data
         assert event.updated_at == original_updated_at
@@ -624,9 +626,9 @@ class TestEventUpdateConflict:
         for secret in (
             "Verborgene Zahl",
             hidden_slug,
-            "-41",
-            "314159",
-            "271828",
+            "-90071992547409",
+            "31415926535897",
+            "27182818284590",
             error_key,
             sensitive_message,
             sensitive_code,
@@ -684,9 +686,9 @@ class TestEventUpdateConflict:
         for secret in (
             "Verborgene Zahl",
             hidden_slug,
-            "-41",
-            "314159",
-            "271828",
+            "-90071992547409",
+            "31415926535897",
+            "27182818284590",
             error_key,
             sensitive_message,
             sensitive_code,
