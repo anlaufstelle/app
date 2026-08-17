@@ -12,6 +12,7 @@
         hx-include="#zeitstrom-filter-state"
         hx-target="#{{ feed_target_id|default:'event-list' }}"
         hx-swap="innerHTML"
+        hx-sync="#{{ feed_target_id|default:'event-list' }}:replace"
     >
         {% trans "Alle" %}
     </button>
@@ -25,6 +26,7 @@
         hx-include="#zeitstrom-filter-state"
         hx-target="#{{ feed_target_id|default:'event-list' }}"
         hx-swap="innerHTML"
+        hx-sync="#{{ feed_target_id|default:'event-list' }}:replace"
     >
         {{ tf.label }}
         <span class="font-mono text-[12px] text-ink-muted ml-1">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span>

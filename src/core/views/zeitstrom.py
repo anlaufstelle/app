@@ -12,6 +12,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
+from django.utils.crypto import constant_time_compare
 from django.utils.http import parse_etags
 from django.views import View
 from django.views.generic import TemplateView
@@ -26,7 +27,7 @@ from core.services.events import (
     enrich_events_with_preview,
 )
 from core.services.system import get_active_bans
-from core.services.zeitstrom_filters import resolve_zeitstrom_state
+from core.services.zeitstrom_filters import ZEITSTROM_FILTER_KEYS, resolve_zeitstrom_state
 from core.services.zeitstrom_watch import (
     WATCH_COMPONENTS,
     build_current_shift_summary,
@@ -37,6 +38,10 @@ from core.services.zeitstrom_watch import (
     zeitstrom_page_scope_matches,
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin
+
+ZEITSTROM_FILTER_TRANSITION_HEADER = "X-Zeitstrom-Filter-Transition"
+ZEITSTROM_VALIDATORS_HEADER = "X-Zeitstrom-Validators"
+ZEITSTROM_PREVIOUS_STATE_HEADER = "X-Zeitstrom-Previous-State"
 
 
 class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
@@ -235,6 +240,68 @@ def _scope_matches_request(request):
     )
 
 
+def _parse_filter_state_header(raw):
+    if not raw or len(raw) > 2048:
+        return None
+    try:
+        state = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(state, dict) or set(state) != set(ZEITSTROM_FILTER_KEYS):
+        return None
+    if any(not isinstance(state[key], str) or len(state[key]) > 256 for key in ZEITSTROM_FILTER_KEYS):
+        return None
+    return {key: state[key] for key in ZEITSTROM_FILTER_KEYS}
+
+
+def _parse_transition_topology(raw):
+    if not raw or len(raw) > 1024:
+        return None
+    try:
+        validators = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(validators, dict) or set(validators) != {"tally_topology"}:
+        return None
+    topology = validators["tally_topology"]
+    if not isinstance(topology, str) or len(topology) > 256:
+        return None
+    return topology
+
+
+def _requested_filter_state(request):
+    if any(key not in request.GET for key in ZEITSTROM_FILTER_KEYS):
+        return None
+    return {key: request.GET.get(key, "") for key in ZEITSTROM_FILTER_KEYS}
+
+
+def _transition_baseline_matches(request, state, *, today, now):
+    requested = _requested_filter_state(request)
+    previous = _parse_filter_state_header(request.headers.get(ZEITSTROM_PREVIOUS_STATE_HEADER, ""))
+    previous_topology = _parse_transition_topology(request.headers.get(ZEITSTROM_VALIDATORS_HEADER, ""))
+    if requested is None or previous is None or previous_topology is None:
+        return False
+    if state.params != requested:
+        return False
+    if any(previous[key] != requested[key] for key in ZEITSTROM_FILTER_KEYS if key != "time_filter"):
+        return False
+
+    previous_state = resolve_zeitstrom_state(
+        previous,
+        request.current_facility,
+        today=today,
+        now=now,
+    )
+    if previous_state.params != previous:
+        return False
+    current_topology = build_zeitstrom_tally_topology_validator(
+        request.user,
+        request.current_facility,
+        previous_state,
+    )
+    return constant_time_compare(previous_topology, current_topology)
+
+
 @contextmanager
 def _consistent_watch_render():
     """Use one DB snapshot for a Watch follow-up body and its ETag."""
@@ -290,13 +357,59 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
     template_name = "core/zeitstrom/partials/feed_list.html"
     watch_component = "feed"
 
+    @staticmethod
+    def _is_time_filter_transition(request):
+        return (
+            request.headers.get("HX-Request") == "true"
+            and request.headers.get(ZEITSTROM_FILTER_TRANSITION_HEADER) == "time_filter"
+            and request.GET.get("feed_only") != "1"
+        )
+
     def get(self, request, *args, **kwargs):
-        if request.headers.get("X-Zeitstrom-Watch") != "1":
+        if request.headers.get("X-Zeitstrom-Watch") == "1":
+            with _consistent_watch_render():
+                self._watch_state = resolve_zeitstrom_state(request.GET, request.current_facility)
+                context = self.get_context_data(**kwargs)
+                return self.render_watch_followup(request, self.template_name, context, self._watch_state)
+        if not self._is_time_filter_transition(request):
             return super().get(request, *args, **kwargs)
+        if not _scope_matches_request(request):
+            return _reload_required(json_response=False)
         with _consistent_watch_render():
-            self._watch_state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            today = timezone.localdate()
+            now = timezone.localtime()
+            self._watch_state = resolve_zeitstrom_state(
+                request.GET,
+                request.current_facility,
+                today=today,
+                now=now,
+            )
+            if not _transition_baseline_matches(
+                request,
+                self._watch_state,
+                today=today,
+                now=now,
+            ):
+                return _reload_required(json_response=False)
             context = self.get_context_data(**kwargs)
-            return self.render_watch_followup(request, self.template_name, context, self._watch_state)
+            response = render(request, self.template_name, context)
+            validators = {
+                "feed": build_zeitstrom_component_validator(
+                    request.user,
+                    request.current_facility,
+                    self._watch_state,
+                    "feed",
+                ),
+                "tally_topology": build_zeitstrom_tally_topology_validator(
+                    request.user,
+                    request.current_facility,
+                    self._watch_state,
+                    tally_summary=context["tally_summary"],
+                ),
+            }
+            response["ETag"] = validators["feed"]
+            response[ZEITSTROM_VALIDATORS_HEADER] = json.dumps(validators, separators=(",", ":"))
+            return _watch_cache_headers(response)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

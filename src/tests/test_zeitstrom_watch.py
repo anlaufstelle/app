@@ -16,7 +16,11 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, TimeFilter, User, WorkItem
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
-from core.services.zeitstrom_watch import build_zeitstrom_page_scope, build_zeitstrom_tally_topology_validator
+from core.services.zeitstrom_watch import (
+    build_zeitstrom_component_validator,
+    build_zeitstrom_page_scope,
+    build_zeitstrom_tally_topology_validator,
+)
 
 
 def _scope_for_client(client):
@@ -44,6 +48,16 @@ def _page_scope(response):
     match = re.search(r'data-page-scope="([^"]+)"', response.content.decode())
     assert match is not None
     return match.group(1)
+
+
+def _filter_transition_headers(page):
+    return {
+        "HX-Request": "true",
+        "X-Zeitstrom-Filter-Transition": "time_filter",
+        "X-Zeitstrom-Page-Scope": _page_scope(page),
+        "X-Zeitstrom-Previous-State": json.dumps(page.context["zeitstrom_filter_state"]),
+        "X-Zeitstrom-Validators": json.dumps({"tally_topology": page.context["zeitstrom_tally_topology"]}),
+    }
 
 
 @pytest.mark.django_db
@@ -642,6 +656,238 @@ class TestZeitstromWatchChromeProjections:
 
 @pytest.mark.django_db
 class TestZeitstromWatchRefreshPartials:
+    def test_normal_time_filter_partial_advertises_its_consistent_feed_and_topology_snapshot(
+        self,
+        client,
+        staff_user,
+        facility,
+    ):
+        selected = TimeFilter.objects.create(
+            facility=facility,
+            label="Tagdienst",
+            start_time="06:00",
+            end_time="21:59",
+        )
+        client.force_login(staff_user)
+        params = {
+            "date": timezone.localdate().isoformat(),
+            "time_filter": "all",
+            "type": "events",
+            "doc_type": "",
+            "view": "",
+        }
+
+        page = client.get(reverse("core:zeitstrom"), params)
+        assert page.content.decode().count('hx-sync="#feed-list:replace"') == 2
+        requested = {**params, "time_filter": str(selected.pk)}
+
+        response = client.get(
+            reverse("core:zeitstrom_feed_partial"),
+            requested,
+            headers=_filter_transition_headers(page),
+        )
+
+        assert response.status_code == 200
+        assert 'hx-swap-oob="innerHTML"' in response.content.decode()
+        validators = json.loads(response["X-Zeitstrom-Validators"])
+        assert set(validators) == {"feed", "tally_topology"}
+        assert response["ETag"] == validators["feed"]
+        assert all(re.fullmatch(r'"[0-9a-f]{64}"', value) for value in validators.values())
+        state = resolve_zeitstrom_state(requested, facility)
+        assert validators["feed"] == build_zeitstrom_component_validator(
+            staff_user,
+            facility,
+            state,
+            "feed",
+        )
+        assert validators["tally_topology"] == build_zeitstrom_tally_topology_validator(
+            staff_user,
+            facility,
+            state,
+            tally_summary=response.context["tally_summary"],
+        )
+
+    @pytest.mark.parametrize("position", ["previous", "requested"])
+    @pytest.mark.parametrize("change", ["delete", "deactivate"])
+    def test_time_filter_transition_reloads_when_requested_filter_is_no_longer_canonical(
+        self,
+        client,
+        staff_user,
+        facility,
+        change,
+        position,
+    ):
+        previous = TimeFilter.objects.create(
+            facility=facility,
+            label="Verschwindender Dienst",
+            start_time="00:00",
+            end_time="23:59",
+        )
+        requested = TimeFilter.objects.create(
+            facility=facility,
+            label="Zieldienst",
+            start_time="00:00",
+            end_time="23:59",
+        )
+        client.force_login(staff_user)
+        params = {
+            "date": timezone.localdate().isoformat(),
+            "time_filter": str(previous.pk),
+            "type": "events",
+            "doc_type": "",
+            "view": "",
+        }
+        page = client.get(reverse("core:zeitstrom"), params)
+        headers = _filter_transition_headers(page)
+        requested_id = str(requested.pk)
+        stale = previous if position == "previous" else requested
+        if change == "delete":
+            stale.delete()
+        else:
+            stale.is_active = False
+            stale.save(update_fields=["is_active"])
+
+        response = client.get(
+            reverse("core:zeitstrom_feed_partial"),
+            {**params, "time_filter": requested_id},
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert response.content == b""
+        assert "X-Zeitstrom-Validators" not in response
+
+    @pytest.mark.parametrize("change", ["rename", "add", "eligibility"])
+    def test_time_filter_transition_reloads_when_tally_structure_changed_since_page_render(
+        self,
+        client,
+        staff_user,
+        doc_type_contact,
+        change,
+    ):
+        doc_type_contact.tally_enabled = True
+        doc_type_contact.save(update_fields=["tally_enabled"])
+        client.force_login(staff_user)
+        params = {
+            "date": timezone.localdate().isoformat(),
+            "time_filter": "all",
+            "type": "events",
+            "doc_type": "",
+            "view": "",
+        }
+        page = client.get(reverse("core:zeitstrom"), params)
+        headers = _filter_transition_headers(page)
+        if change == "rename":
+            doc_type_contact.name = "Nach Seitenaufbau umbenannt"
+            doc_type_contact.save(update_fields=["name"])
+        elif change == "add":
+            DocumentType.objects.create(
+                facility=doc_type_contact.facility,
+                name="Nach Seitenaufbau ergänzt",
+                tally_enabled=True,
+            )
+        else:
+            doc_type_contact.tally_enabled = False
+            doc_type_contact.save(update_fields=["tally_enabled"])
+
+        response = client.get(reverse("core:zeitstrom_feed_partial"), params, headers=headers)
+
+        assert response.status_code == 409
+        assert response.content == b""
+        assert "X-Zeitstrom-Validators" not in response
+
+    @pytest.mark.parametrize(
+        ("header", "value"),
+        [
+            ("X-Zeitstrom-Previous-State", None),
+            (
+                "X-Zeitstrom-Previous-State",
+                json.dumps(
+                    {
+                        "date": timezone.localdate().isoformat(),
+                        "time_filter": "all",
+                        "type": "activities",
+                        "doc_type": "",
+                        "view": "",
+                    }
+                ),
+            ),
+            ("X-Zeitstrom-Validators", json.dumps({"tally_topology": '"wrong"'})),
+        ],
+    )
+    def test_time_filter_transition_rejects_missing_or_mismatched_baseline(
+        self,
+        client,
+        staff_user,
+        header,
+        value,
+    ):
+        client.force_login(staff_user)
+        params = {
+            "date": timezone.localdate().isoformat(),
+            "time_filter": "all",
+            "type": "events",
+            "doc_type": "",
+            "view": "",
+        }
+        page = client.get(reverse("core:zeitstrom"), params)
+        headers = _filter_transition_headers(page)
+        if value is None:
+            del headers[header]
+        else:
+            headers[header] = value
+
+        response = client.get(reverse("core:zeitstrom_feed_partial"), params, headers=headers)
+
+        assert response.status_code == 409
+        assert response.content == b""
+        assert "X-Zeitstrom-Validators" not in response
+
+    def test_time_filter_snapshot_contract_is_limited_to_scoped_normal_htmx_transitions(
+        self,
+        client,
+        staff_user,
+    ):
+        client.force_login(staff_user)
+        params = {
+            "date": timezone.localdate().isoformat(),
+            "time_filter": "all",
+            "type": "events",
+            "doc_type": "",
+            "view": "",
+        }
+        scope = _scope_for_client(client)
+
+        ordinary = client.get(
+            reverse("core:zeitstrom_feed_partial"),
+            params,
+            headers={"HX-Request": "true", "X-Zeitstrom-Page-Scope": scope},
+        )
+        feed_only = client.get(
+            reverse("core:zeitstrom_feed_partial"),
+            {**params, "feed_only": "1"},
+            headers={
+                "HX-Request": "true",
+                "X-Zeitstrom-Filter-Transition": "time_filter",
+                "X-Zeitstrom-Page-Scope": scope,
+            },
+        )
+        stale_scope = client.get(
+            reverse("core:zeitstrom_feed_partial"),
+            params,
+            headers={
+                "HX-Request": "true",
+                "X-Zeitstrom-Filter-Transition": "time_filter",
+                "X-Zeitstrom-Page-Scope": "0" * 64,
+            },
+        )
+
+        assert "X-Zeitstrom-Validators" not in ordinary
+        assert "X-Zeitstrom-Validators" not in feed_only
+        assert stale_scope.status_code == 409
+        assert stale_scope.content == b""
+        assert stale_scope["Cache-Control"] == "no-store, private"
+
     def test_followup_is_bound_to_scope_and_exact_watch_snapshot(
         self,
         client,

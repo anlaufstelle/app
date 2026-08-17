@@ -13,6 +13,8 @@
     const WATCH_HEADER = "X-Zeitstrom-Watch";
     const VALIDATORS_HEADER = "X-Zeitstrom-Validators";
     const PAGE_SCOPE_HEADER = "X-Zeitstrom-Page-Scope";
+    const FILTER_TRANSITION_HEADER = "X-Zeitstrom-Filter-Transition";
+    const PREVIOUS_STATE_HEADER = "X-Zeitstrom-Previous-State";
     const WATCH_COMPONENTS = new Set([
         "feed",
         "tally_counts",
@@ -41,6 +43,8 @@
         let started = false;
         let stopped = false;
         let pageActive = true;
+        let pendingFilterTransition = null;
+        let abortedTransitionBaseline = null;
 
         // The first request carries the server-rendered topology baseline.
         // Regions whose full render cannot share one DB snapshot
@@ -55,6 +59,28 @@
                 params.set(name, input ? input.value : "");
             });
             return params;
+        }
+
+        function stateSignature(parameters) {
+            const snapshot = new URLSearchParams();
+            for (const name of FILTER_KEYS) {
+                let value;
+                if (parameters && typeof parameters.get === "function") value = parameters.get(name);
+                else value = parameters ? parameters[name] : undefined;
+                if (value === undefined || value === null || Array.isArray(value)) return null;
+                snapshot.set(name, String(value));
+            }
+            return snapshot.toString();
+        }
+
+        function stateObject(parameters) {
+            const state = {};
+            for (const name of FILTER_KEYS) {
+                const value = parameters ? parameters[name] : undefined;
+                if (typeof value !== "string") return null;
+                state[name] = value;
+            }
+            return Object.keys(parameters).length === FILTER_KEYS.length ? state : null;
         }
 
         function urlWithState(baseUrl, extra) {
@@ -445,6 +471,105 @@
             poll();
         }
 
+        function transitionValidators(xhr) {
+            if (!xhr || typeof xhr.getResponseHeader !== "function") return null;
+            const etag = xhr.getResponseHeader("ETag");
+            let advertised;
+            try {
+                advertised = JSON.parse(xhr.getResponseHeader(VALIDATORS_HEADER) || "");
+            } catch (_error) {
+                return null;
+            }
+            if (!advertised || typeof advertised !== "object" || Array.isArray(advertised)) return null;
+            const names = Object.keys(advertised);
+            if (
+                names.length !== 2 ||
+                !names.includes("feed") ||
+                !names.includes("tally_topology") ||
+                advertised.feed !== etag
+            ) {
+                return null;
+            }
+            const opaque = function (value) {
+                return typeof value === "string" && value.length <= 256 && /^"[^"\r\n]+"$/.test(value);
+            };
+            if (!opaque(advertised.feed) || !opaque(advertised.tally_topology)) return null;
+            return advertised;
+        }
+
+        function onHtmxConfigRequest(event) {
+            if (!pendingFilterTransition || stopped) return;
+            const detail = event && event.detail;
+            const source = detail && (detail.elt || event.target);
+            if (!source || !source.classList || !source.classList.contains("time-filter-tab")) return;
+            if (!detail.headers || detail.headers[FILTER_TRANSITION_HEADER] !== "time_filter") return;
+            if (stateSignature(detail.parameters) !== pendingFilterTransition.state) return;
+            detail.headers[PREVIOUS_STATE_HEADER] = JSON.stringify(
+                pendingFilterTransition.previousState,
+            );
+            detail.headers[VALIDATORS_HEADER] = JSON.stringify({
+                tally_topology: pendingFilterTransition.previousTopology,
+            });
+            pendingFilterTransition.requestConfig = detail;
+        }
+
+        function rejectFilterTransition(preserveTopology) {
+            abortedTransitionBaseline = preserveTopology && pendingFilterTransition
+                ? {
+                    previousState: pendingFilterTransition.previousState,
+                    previousTopology: pendingFilterTransition.previousTopology,
+                }
+                : null;
+            pendingFilterTransition = null;
+            delete validators.feed;
+            delete validators.tally_counts;
+            if (!preserveTopology) delete validators.tally_topology;
+            pageEtag = "";
+            failures = 0;
+            pollImmediately();
+        }
+
+        function onHtmxAfterRequest(event) {
+            if (!pendingFilterTransition || stopped) return;
+            const detail = event && event.detail;
+            if (!detail || detail.requestConfig !== pendingFilterTransition.requestConfig) return;
+            if (
+                pendingFilterTransition.generation !== generation ||
+                pendingFilterTransition.state !== stateParams().toString()
+            ) {
+                return;
+            }
+            const xhr = detail.xhr;
+            const status = xhr ? xhr.status : 0;
+            if (status === 401) {
+                pendingFilterTransition = null;
+                leaveSensitivePage("/login/");
+                return;
+            }
+            if (status === 403 || status === 409) {
+                pendingFilterTransition = null;
+                leaveSensitivePage(window.location.href);
+                return;
+            }
+            const advertised = detail.successful === true && status >= 200 && status < 300
+                ? transitionValidators(xhr)
+                : null;
+            if (!advertised) {
+                // hx-sync reports the replaced request as status 0 before it
+                // configures the replacement. Keep only the page-rendered
+                // topology proof long enough for that next request.
+                rejectFilterTransition(status === 0);
+                return;
+            }
+            pendingFilterTransition = null;
+            abortedTransitionBaseline = null;
+            validators.feed = advertised.feed;
+            validators.tally_topology = advertised.tally_topology;
+            pageEtag = "";
+            failures = 0;
+            pollImmediately();
+        }
+
         function onVisibilityChange() {
             if (document.visibilityState === "visible") pollImmediately();
             else pause();
@@ -469,9 +594,11 @@
         }
 
         function onFilterChanged(event) {
+            const detail = event && event.detail;
+            if (detail && detail.name === "time_filter" && detail.deferWatch) return;
             clearTimer();
             abortCycle(true);
-            const name = event && event.detail ? event.detail.name : "";
+            const name = detail ? detail.name : "";
             delete validators.feed;
             if (!name || name === "date" || name === "time_filter" || name === "view") {
                 delete validators.tally_counts;
@@ -479,7 +606,33 @@
             }
             pageEtag = "";
             failures = 0;
+            pendingFilterTransition = null;
+            abortedTransitionBaseline = null;
             pollImmediately();
+        }
+
+        function onFilterTransition(event) {
+            const baseline = abortedTransitionBaseline;
+            abortedTransitionBaseline = null;
+            const previousState = baseline
+                ? baseline.previousState
+                : stateObject(event && event.detail && event.detail.previousState);
+            clearTimer();
+            abortCycle(true);
+            const previousTopology = baseline
+                ? baseline.previousTopology
+                : validators.tally_topology;
+            delete validators.feed;
+            delete validators.tally_counts;
+            pageEtag = "";
+            failures = 0;
+            pendingFilterTransition = {
+                generation: generation,
+                state: stateParams().toString(),
+                previousState: previousState,
+                previousTopology: previousTopology,
+                requestConfig: null,
+            };
         }
 
         function onZeitstromChanged() {
@@ -504,7 +657,10 @@
             window.addEventListener("pageshow", onPageShow);
             window.addEventListener("pagehide", onPageHide);
             window.addEventListener("zeitstrom:filter-changed", onFilterChanged);
+            window.addEventListener("zeitstrom:filter-transition", onFilterTransition);
             window.addEventListener("zeitstrom-changed", onZeitstromChanged);
+            document.body.addEventListener("htmx:configRequest", onHtmxConfigRequest);
+            document.body.addEventListener("htmx:afterRequest", onHtmxAfterRequest);
             pollImmediately();
         }
 
