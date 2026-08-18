@@ -1,6 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Most recently synchronized on 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)).
+> Most recently synchronized on 2026-08-18 (§ 2.6 numeric range bound guidance for facility admins after tightening `min_value`/`max_value`, #1930).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)) and 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906).
 
 # Anlaufstelle -- Admin Guide
 
@@ -613,6 +613,36 @@ When an option is no longer needed, set `is_active` to `false` instead of removi
 | Statistics | Existing values continue to be included in reports |
 
 > **Important:** Do not remove options from the JSON if events with that value already exist. Use `"is_active": false` instead. This keeps historical data consistent and exports complete.
+
+#### Numeric Range Bounds (`Minimum Value`/`Maximum Value`)
+
+Field templates of type **Number** can carry optional bounds at the same location (**Core > Field Templates**): **Minimum Value** and **Maximum Value**. They apply **only to future writes** -- creating, editing, and saving through the form or the service layer. Tightening a bound never rewrites an already-stored value: existing data outside the new bound stays unchanged in the database until it is corrected on its merits.
+
+> **Before tightening a bound: run the read-only inventory.** With the admin DB role:
+>
+> ```bash
+> python src/manage.py inventory_number_ranges --facility <UUID-or-name>
+> ```
+>
+> The command changes nothing and lists, per finding, only the entity kind (clients/cases/events), the document type, the field slug, and a count -- never the stored value itself. "No values outside the configured numeric ranges found" means the field's existing data already fits the planned bound, so tightening it is safe.
+
+**What the inventory reports:**
+
+| Message | Meaning |
+|---|---|
+| `unter Minimalwert X` / `über Maximalwert X` (below minimum / above maximum) | A stored value falls outside the planned bound. |
+| `keine Zahl` (not a number) | A combined finding for three distinguishable but deliberately identically reported cases: an empty **required** value, a non-numeric stored value, or a decryption failure (corrupted/foreign ciphertext). A decryption failure is **always** reported, even on an optional field. |
+| *(no entry)* | An empty value on an **optional** field is not a finding -- "no value" is a valid state there, not a range violation. |
+
+A finding is not a repair order for the inventory command itself: it only counts, it never writes. Correct flagged records on their merits -- open the affected record and enter a valid value, or clear an optional field -- before tightening the bound.
+
+#### Save-Blocking Behavior for Existing Data
+
+Once a bound is tightened, the central validator checks **every** write -- including editing a record whose numeric field was never touched: a form submission always carries all of its current field values on save, not only the ones that actually changed. If the stored value falls outside the new bound, the form rejects it like any regular input error ("Ensure this value is greater than or equal to X." / "Ensure this value is less than or equal to X.", where X is the configured minimum/maximum) and the **entire** save is refused -- even if the intended change targeted a completely different field. That is the validator working as designed, not a bug: the only way past it is to correct the offending value (or, if the field is optional, clear it). Only the individual blocked record is affected -- other records carrying the same field remain independently editable.
+
+#### Safely Retracting a Bound
+
+If a bound turns out too tight, retract it at the same location: loosen or clear **Minimum Value**/**Maximum Value** on the field template. That takes effect immediately for future writes; previously blocked records become saveable again as soon as their stored value fits the (now wider) bound -- without anyone having to change a value after the fact. If the bound is instead maintained through a configuration package, a separate tri-state rule applies there (an omitted key leaves an existing bound untouched; only an explicit `null` removes it) -- see [docs/packages.md](packages.md).
 
 ### 2.6b Fuzzy Search (pg_trgm)
 
@@ -1635,5 +1665,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-15 -->
-<!-- source-hash: fa9bac299af1bbbf405ea7544d35c3f811be5a5d -->
+<!-- translation-date: 2026-08-18 -->
+<!-- source-hash: 1194b39e5b8226faf0ae26550760526a7208be44 -->

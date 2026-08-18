@@ -610,6 +610,36 @@ Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` s
 
 > **Wichtig:** Entfernen Sie Optionen nicht aus dem JSON, wenn bereits Ereignisse mit diesem Wert existieren. Nutzen Sie stattdessen `"is_active": false`. So bleiben historische Daten konsistent und Exporte vollständig.
 
+#### Zahlenbereichsgrenzen (`Minimalwert`/`Maximalwert`)
+
+Bei Feldvorlagen vom Typ **Zahl** lassen sich an derselben Stelle (**Core → Feldvorlagen**) optionale Grenzen setzen: **Minimalwert** und **Maximalwert**. Sie wirken **ausschließlich auf künftige Schreibvorgänge** — Neuanlage, Bearbeiten und Speichern über Formular oder Dienst-Schicht. Eine Verschärfung schreibt keinen einzigen bereits gespeicherten Wert um: Bestandsdaten außerhalb der neuen Grenze bleiben unverändert in der Datenbank stehen, bis sie fachlich korrigiert werden.
+
+> **Vor jeder Verschärfung: schreibfreies Inventar ausführen.** Mit der Admin-DB-Rolle:
+>
+> ```bash
+> python src/manage.py inventory_number_ranges --facility <UUID-oder-Name>
+> ```
+>
+> Das Kommando verändert nichts und listet je Fund nur Entitätsart (Personen/Fälle/Ereignisse), Dokumentationstyp, Feld-Slug und Anzahl — nie den gespeicherten Wert selbst. „Keine Werte außerhalb konfigurierter Zahlenbereiche gefunden" heißt: Der Bestand des betroffenen Feldes liegt bereits innerhalb der geplanten Grenze, die Verschärfung ist gefahrlos.
+
+**Meldungen des Inventars:**
+
+| Meldung | Bedeutung |
+|---|---|
+| `unter Minimalwert X` / `über Maximalwert X` | Ein gespeicherter Wert liegt außerhalb der geplanten Grenze. |
+| `keine Zahl` | Sammelbefund für drei unterscheidbare, aber bewusst gleich gemeldete Fälle: ein leerer **Pflicht**wert, ein nicht-numerisch gespeicherter Wert, oder ein Entschlüsselungsfehler (beschädigtes/fremdes Chiffrat). Ein Entschlüsselungsfehler wird **immer** gemeldet, auch an einem optionalen Feld. |
+| *(kein Eintrag)* | Ein leerer Wert an einem **optionalen** Feld ist kein Fund — „kein Wert" ist dort ein gültiger Zustand, keine Bereichsverletzung. |
+
+Ein Fund ist kein Reparaturauftrag an das Inventar selbst: Es zählt nur, es schreibt nichts. Bereinigen Sie gemeldete Datensätze fachlich — öffnen Sie den betroffenen Datensatz und tragen Sie einen gültigen Wert ein bzw. leeren Sie ein optionales Feld, bevor Sie die Grenze verschärfen.
+
+#### Speicher-Blockverhalten bei bestehenden Bestandswerten
+
+Ist eine Grenze verschärft, prüft der zentrale Validator **jeden** Schreibvorgang — auch das Bearbeiten eines Datensatzes, dessen Zahlenfeld gar nicht angefasst wurde: Ein Formular übermittelt beim Speichern immer alle aktuellen Feldwerte, nicht nur die tatsächlich geänderten. Liegt der gespeicherte Bestandswert außerhalb der neuen Grenze, weist das Formular ihn wie einen regulären Eingabefehler zurück (**„Dieser Wert muss größer oder gleich X sein."**/**„Dieser Wert muss kleiner oder gleich X sein."**, X = der konfigurierte Minimal-/Maximalwert), und das **gesamte** Speichern wird verweigert — auch wenn die eigentlich beabsichtigte Änderung ein ganz anderes Feld betraf. Das ist die vorgesehene Wirkung des Validators, kein Fehler: Er lässt sich nur auflösen, indem der betroffene Wert korrigiert (oder, sofern das Feld optional ist, geleert) wird. Betroffen ist jeweils nur der einzelne blockierte Datensatz — andere Datensätze desselben Feldes bleiben unabhängig davon bearbeitbar.
+
+#### Grenze sicher zurücknehmen
+
+Erweist sich eine Grenze als zu eng, nehmen Sie sie an derselben Stelle zurück: **Minimalwert**/**Maximalwert** an der Feldvorlage lockern oder leeren. Das wirkt sofort auf künftige Schreibvorgänge; zuvor blockierte Datensätze lassen sich wieder normal speichern, sobald ihr Bestandswert innerhalb der (jetzt weiteren) Grenze liegt — ohne dass dafür ein Wert nachträglich verändert werden müsste. Pflegen Sie die Grenze stattdessen über ein Konfigurationspaket, gilt dort ein eigenes Tri-State-Verhalten (fehlender Schlüssel lässt eine bestehende Grenze unangetastet, erst ein explizites `null` entfernt sie) — siehe [docs/packages.md](packages.md).
+
 ### 2.6b Fuzzy-Suche (pg_trgm)
 
 Die globale Suche nach Personen (Pseudonymen) nutzt zusätzlich zur exakten Teilstring-Suche eine **Trigramm-basierte Fuzzy-Suche** — tolerant gegenüber Tippfehlern und phonetischen Varianten (z. B. „Schmidt" ↔ „Schmitt"). Implementierung: [`src/core/services/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/search.py), Funktion `search_similar_clients`.
