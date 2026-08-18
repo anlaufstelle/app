@@ -3073,6 +3073,15 @@ msgstr ""
 "„%(desired)s“ zurück. Bereits erfasste Werte werden damit für zusätzliche "
 "Rollen sichtbar."
 
+#: src/core/packages/loader.py:785
+#, python-format
+msgid ""
+"Unverändert, weil das Paket den Schlüssel nicht führt — Bestand bleibt: "
+"%(werte)s."
+msgstr ""
+"Unverändert, weil das Paket den Schlüssel nicht führt — Bestand bleibt: "
+"%(werte)s."
+
 #: src/core/reporting/backends/ban_overview.py:173
 msgid ""
 "Die Zahl der aktuell geltenden Hausverbote ist eine Momentaufnahme zum "
