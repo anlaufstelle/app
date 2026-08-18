@@ -137,7 +137,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `slug` | Slug (`a-z`, `0-9`, `-`) | **Pflicht** | Lookup-Key, facility-weit eindeutig, unveränderlich. **Reservierte Slugs** (feste Formularfeld-Namen) sind ein Schema-Fehler — s. Hinweis unter der Tabelle |
 | `name` | nicht-leerer String | **Pflicht** | Muss im Paket eindeutig sein (UI-Unterscheidbarkeit) |
 | `field_type` | `text`, `textarea`, `number`, `date`, `time`, `boolean`, `select`, `multi_select`, `file` | `text` | **Unveränderlich** nach dem Anlegen |
-| `min_value`, `max_value` | ganze Zahl oder `null` | `null` | Nur bei `field_type: number`; `min_value` darf nicht größer als `max_value` sein. Leere Grenzen lassen den Zahlenwert unbeschränkt. |
+| `min_value`, `max_value` | ganze Zahl, `null` oder Schlüssel weglassen | *(nicht anfassen)* | Nur bei `field_type: number`; `min_value` darf nicht größer als `max_value` sein. **Tri-State** (#1934), siehe Hinweis unter der Tabelle |
 | `is_required` | Bool | `false` | Pflichtfeld im Formular |
 | `is_encrypted` | Bool | `false` | **Unveränderlich**; bei `file` und `sensitivity: high` erzwungen |
 | `sensitivity` | `""`, `normal`, `elevated`, `high` | `""` | `""` = erbt vom Dokumentationstyp; `high` erfordert `is_encrypted: true` |
@@ -148,6 +148,12 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 
 `options[]`-Einträge: `slug` (Pflicht, Slug-Format, eindeutig je Vorlage), `label` (Pflicht, nicht leer), `is_active` (Bool, Default `true`).
 
+> **Zahlenbereichsgrenzen `min_value`/`max_value` als Tri-State (#1934):** Fehlt der Schlüssel, bleibt eine bestehende Grenze **unangetastet** — dasselbe Muster wie `tally_enabled`. Ein explizites `null` löscht die Grenze bewusst, ein Zahlenwert setzt sie. Eine Neuanlage ohne Schlüssel nutzt den Modell-Default `null` (keine Grenze).
+>
+> **Vorher/Nachher — ein echter Semantikwechsel, kein Bugfix an undokumentiertem Verhalten:** Bis zu dieser Änderung führte die Rücksync-Tabelle unten `min_value`/`max_value` ausdrücklich als „wird zurückgesetzt": Ein erneuter Lauf zog eine weggelassene Grenze **absichtlich** auf `NULL` zurück, auch eine über die Konfigurationsoberfläche gepflegte. Das war zugesichertes, dokumentiertes Verhalten. Die neue Regel gilt trotzdem **sofort** für jedes bestehende v1-Paket, ohne `schema_version`-Sprung, weil der Effekt nachweislich nur in eine Richtung wirkt: Die neue Semantik löscht in **keinem** Fall mehr, als die alte gelöscht hätte — Weglassen löscht jetzt nie, wo es vorher immer löschte; ein explizites `null` löscht in beiden Fassungen unverändert. Wer die alte „bei jedem Lauf zurücksetzen"-Wirkung an einem Feld ausdrücklich weiter will, trägt `min_value: null`/`max_value: null` ein. `default.yaml` selbst zeigt den Praxis-Impact: `dauer`, `ausgabe` und `rueckgabe` führen mindestens eine der beiden Grenzen nicht mit — jeder Reseed einer Bestandsinstallation hätte dort eine per Konfigurationsoberfläche gesetzte Grenze bisher stillschweigend gelöscht.
+>
+> **Betreiber-Sichtbarkeit ohne Dauerwarnung:** Weglassen ist für die meisten Zahlenfelder der Normalfall (die meisten Vorlagen verwalten gar keine Grenze) — eine Warnung bei jedem fehlenden Schlüssel würde jeden gewöhnlichen Lauf zuspammen. Der Report listet stattdessen einen eigenen, bei jedem Lauf frisch berechneten Abschnitt „**Unangetastete Bestandsgrenzen**", aber **nur**, wenn dadurch tatsächlich ein vorhandener Wert erhalten bleibt. Er unterscheidet damit „unverändert, weil der Schlüssel fehlt (Bestand bleibt: `min_value=5`)" von „unverändert, weil Paket- und Bestandswert gleich sind" (Letzteres bleibt ein normaler `unverändert`-Eintrag ohne eigene Zeile) — ohne dafür eine Warnung zu erzeugen. Der Abschnitt erscheint gleichermaßen im Echtlauf und im `--dry-run`.
+>
 > **Bereichsverschärfung ohne stillen Datenumbau (#1914):** `min_value` und `max_value` gelten für künftige Schreibvorgänge; eine Migration oder ein Paketlauf verändert keine bereits gespeicherten `data_json`-Werte. Vor dem Setzen oder Verschärfen einer Grenze daher mit der Admin-DB-Rolle `python src/manage.py inventory_number_ranges --facility <UUID-oder-Name>` ausführen. Das Inventar nennt nur Entitätsart, Dokumentationstyp, Feld-Slug und Anzahl — nie gespeicherte Werte — und schreibt nichts.
 
 > **Datei-Felder an allen drei Entitäten (seit Milestone 24, #1738, [ADR-039](adr/039-owner-generische-dateianhaenge.md)):** `field_type: file` war bis dahin **nur an `entity_type: event`** zulässig; ein `field_ref` auf ein Datei-Feld unter einem Personen- oder Fall-Typ war ein Schema-Fehler. Diese Restriktion ist **ersatzlos entfallen** — Anhänge hängen jetzt an Ereignis, Person oder Fall. Ein Beispiel steht (auskommentiert) im Paket oben unter `aufnahmebogen`.
@@ -241,6 +247,7 @@ Der Loader ist ein Upsert über den Slug mit Diff: nur bei echter Abweichung wir
 | Wert steht drin | wird geschrieben (auch wenn er per UI geändert wurde — **Rücksync**) |
 | Einzelwert-Schlüssel fehlt (z. B. `icon`, `help_text`, `options`, `default_value`) | Der **Modell-Default** wird geschrieben; das ist **nicht** „unangetastet lassen" |
 | `tally_enabled` fehlt | Ausnahme: Am bestehenden Typ bleibt ein in der Konfigurationsoberfläche gepflegter Wert **unangetastet**; beim Anlegen gilt der Modell-Default `false` |
+| `min_value`/`max_value` fehlen (#1934) | Ausnahme, je Grenze einzeln: An der bestehenden Vorlage bleibt eine gepflegte Grenze **unangetastet**; `null` löscht sie bewusst; beim Anlegen gilt der Modell-Default `null` (keine Grenze) |
 | `conditions`-Schlüssel fehlt | Bestehende Bedingungen bleiben **unangetastet** |
 | `conditions: []` | Alle Bedingungen des Typs werden **gelöscht** |
 | `conditions: [ … ]` | Wholesale-Replace; bei inhaltlicher Gleichheit passiert nichts (`unverändert`) |
@@ -365,8 +372,10 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 | `name` des Typs | wird zurückbenannt — bei einem gleichnamigen betreiber-eigenen Typ bricht der Lauf am Unique-Constraint `(facility, name)` ab, bis das manuell aufgelöst ist |
 | `icon`, `color`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt |
 | `sort_order` der Feldzuordnungen | zurückgesetzt — auch bei Typen **ohne** Gruppen; eine per Drag-and-Drop geänderte Reihenfolge geht verloren |
-| `default_value`, `help_text`, `options_json`, `min_value`, `max_value` der Vorlage | zurückgesetzt |
+| `default_value`, `help_text`, `options_json` der Vorlage | zurückgesetzt |
 | `sensitivity` der Vorlage | zurückgesetzt — eine **Absenkung** wird zusätzlich als Warnung gemeldet |
+
+**Ausnahme `min_value`/`max_value` der Vorlage (#1934):** anders als die übrigen Vorlagenwerte oben sind die beiden Zahlengrenzen **kein** bedingungsloser Rücksync mehr, sondern Tri-State wie `tally_enabled`: Fehlt der Schlüssel, bleibt eine per Konfigurationsoberfläche gepflegte Grenze stehen. Ein Lauf setzt sie nur, wenn das Paket einen Wert **oder** ein bewusstes `null` mitführt.
 
 **Senkt** ein Lauf die **effektive** `sensitivity` (am Typ oder an der Vorlage), meldet der Report zusätzlich eine Warnung „Zugriffsschranke gesenkt“. Die Anwendung bleibt erlaubt — aber bereits erfasste Werte werden damit für zusätzliche Rollen lesbar, und ein `--dry-run` zeigt das vorab. Anhebungen sind still.
 

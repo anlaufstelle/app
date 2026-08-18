@@ -687,3 +687,224 @@ class TestEntfalleneSystemtypen:
         assert report.errors == []
         assert report.document_types.unchanged == ["kontakt"]
         assert report.document_types.updated == []
+
+
+@pytest.mark.django_db
+class TestNumberRangeTriState:
+    """``min_value``/``max_value`` als echtes Tri-State (Refs #1934, Muster
+    ``tally_enabled``): Schlüssel fehlt ⇒ Bestand unangetastet, Schlüssel da
+    mit ``null`` ⇒ Grenze bewusst gelöscht, Schlüssel da mit Zahl ⇒ Grenze
+    gesetzt.
+
+    **Kompatibilitätsentscheid (Task M1-B2, siehe Report):** gilt sofort für
+    jedes Bestands-Paket, ohne ``schema_version``-Bump — obwohl das ein echter
+    Semantikwechsel ist, kein Bugfix an unspezifiziertem Verhalten: Vorher zog
+    jeder Lauf eine weggelassene Grenze **dokumentiert und absichtlich** auf
+    NULL zurück (``docs/packages.md`` führte ``min_value``/``max_value`` bis
+    dahin ausdrücklich in der Rücksync-Tabelle als "wird zurückgesetzt"). Die
+    Sofort-Geltung ist trotzdem sicher, weil der Effekt nachweislich einseitig
+    schützend ist: Die neue Semantik löscht in keinem Fall mehr, als die alte
+    gelöscht hätte — Weglassen löscht jetzt nie, wo es vorher immer löschte;
+    ein explizites ``null`` löscht in beiden Fassungen unverändert.
+    ``dauer`` in :func:`_raw` ist ein Zahlenfeld ohne ``min_value``/
+    ``max_value`` — dieselbe Ausgangslage wie ein reales v1-Bestandspaket
+    (z. B. ``dauer`` in ``default.yaml``).
+    """
+
+    def test_missing_key_uses_model_default_on_create(self, facility):
+        report = _load(facility, _raw())
+
+        assert report.errors == []
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        assert dauer.min_value is None
+        assert dauer.max_value is None
+
+    def test_explicit_value_is_set_on_create(self, facility):
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 0
+        raw["field_templates"][0]["max_value"] = 480
+
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        assert (dauer.min_value, dauer.max_value) == (0, 480)
+
+    def test_missing_key_leaves_admin_configured_bound_untouched(self, facility):
+        """Kernfall der Kompatibilitätsentscheidung: ein Paket, das (wie ein
+        v1-Bestandspaket) ``min_value``/``max_value`` nicht erwähnt, darf eine
+        per Konfigurationsoberfläche gesetzte Grenze nicht mehr auf NULL
+        zurücksetzen."""
+        _load(facility, _raw())
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        dauer.min_value = 5
+        dauer.max_value = 120
+        dauer.full_clean()
+        dauer.save()
+
+        report = _load(facility, _raw())
+
+        assert report.errors == []
+        assert report.field_templates.unchanged == ["dauer", "notiz"]
+        assert report.field_templates.updated == []
+        dauer.refresh_from_db()
+        assert (dauer.min_value, dauer.max_value) == (5, 120)
+
+    def test_explicit_null_clears_existing_bound(self, facility):
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 5
+        raw["field_templates"][0]["max_value"] = 120
+        _load(facility, raw)
+
+        raw_clear = _raw()
+        raw_clear["field_templates"][0]["min_value"] = None
+        raw_clear["field_templates"][0]["max_value"] = None
+        report = _load(facility, raw_clear)
+
+        assert report.errors == []
+        assert report.field_templates.updated == ["dauer"]
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        assert dauer.min_value is None
+        assert dauer.max_value is None
+
+    def test_explicit_value_change_is_synced_back(self, facility):
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 5
+        _load(facility, raw)
+
+        raw["field_templates"][0]["min_value"] = 10
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.field_templates.updated == ["dauer"]
+        assert FieldTemplate.objects.get(slug="dauer").min_value == 10
+
+    def test_second_run_with_only_one_bound_set_leaves_other_untouched(self, facility):
+        """Unabhängigkeit von ``min_value``/``max_value``: Nur ``min_value``
+        wird im Paket geführt, ein Admin-gepflegtes ``max_value`` bleibt
+        stehen."""
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 0
+        _load(facility, raw)
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        dauer.max_value = 999
+        dauer.full_clean()
+        dauer.save()
+
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.field_templates.unchanged == ["dauer", "notiz"]
+        dauer.refresh_from_db()
+        assert (dauer.min_value, dauer.max_value) == (0, 999)
+
+    def test_dry_run_reports_deletion_without_writing(self, facility):
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 5
+        _load(facility, raw)
+
+        raw_clear = _raw()
+        raw_clear["field_templates"][0]["min_value"] = None
+        report = _load(facility, raw_clear, dry_run=True)
+
+        assert report.errors == []
+        assert report.field_templates.updated == ["dauer"]
+        assert FieldTemplate.objects.get(slug="dauer").min_value == 5
+
+    def test_dry_run_reports_setting_a_value_without_writing(self, facility):
+        """Minor aus Review-Runde 1: Löschen und Unverändert waren bereits
+        dry-run-getestet, Setzen (Update auf einen neuen expliziten Wert)
+        fehlte."""
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 5
+        _load(facility, raw)
+
+        raw["field_templates"][0]["min_value"] = 10
+        report = _load(facility, raw, dry_run=True)
+
+        assert report.errors == []
+        assert report.field_templates.updated == ["dauer"]
+        assert FieldTemplate.objects.get(slug="dauer").min_value == 5
+
+    def test_dry_run_reports_unchanged_when_key_is_missing(self, facility):
+        _load(facility, _raw())
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        dauer.min_value = 5
+        dauer.full_clean()
+        dauer.save()
+
+        report = _load(facility, _raw(), dry_run=True)
+
+        assert report.errors == []
+        assert report.field_templates.unchanged == ["dauer", "notiz"]
+        assert FieldTemplate.objects.get(slug="dauer").min_value == 5
+        # Betreiber-Sichtbarkeit (Controller-Ruling Review-Runde 1, Refs #1934):
+        # gilt identisch im Dry-Run — derselbe Code-Pfad, derselbe Report.
+        assert [identifier for identifier, _message in report.preserved] == ["dauer"]
+        assert "min_value=5" in report.preserved[0][1]
+        assert report.warnings == []
+
+
+@pytest.mark.django_db
+class TestNumberRangePreservedVisibility:
+    """Betreiber-Sichtbarkeit ohne Dauerwarnung (Controller-Ruling
+    Review-Runde 1, Refs #1934): der Report muss „unverändert, weil der
+    Schlüssel fehlt (Bestand erhalten)" von „unverändert, weil Paket- und
+    Bestandswert gleich sind" unterscheidbar machen — als eigener, jeden Lauf
+    frisch berechneter ``report.preserved``-Bucket, NICHT als ``warnings``-
+    Eintrag (der würde jeden gewöhnlichen Lauf zuspammen, in dem ein Paket
+    Grenzen einfach nicht verwaltet)."""
+
+    def test_report_distinguishes_preserved_from_value_equal_unchanged(self, facility):
+        raw = _raw()
+        raw["field_templates"].append({"slug": "menge", "name": "Menge", "field_type": "number", "min_value": 0})
+        _load(facility, raw)
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        dauer.min_value = 5
+        dauer.full_clean()
+        dauer.save()
+
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        # Beide bleiben "unverändert" — aus unterschiedlichen Gruenden.
+        assert set(report.field_templates.unchanged) == {"dauer", "notiz", "menge"}
+        # Nur "dauer" (Schluessel fehlt, Bestand erhalten) landet im
+        # preserved-Bucket; "menge" (Paket fuehrt min_value=0, Bestand ist
+        # bereits 0 -> wertgleich) NICHT.
+        assert [identifier for identifier, _message in report.preserved] == ["dauer"]
+        assert "min_value=5" in report.preserved[0][1]
+        # Kein Umweg ueber die Warnungen -- exakt die per Ruling geforderte
+        # Trennung von der abgelehnten Dauerwarnung.
+        assert report.warnings == []
+
+    def test_no_preserved_entry_when_nothing_to_preserve(self, facility):
+        """Der haeufigste Fall (Paket verwaltet keine Grenze, es existiert
+        keine zu erhaltende) darf NICHT im preserved-Report auftauchen --
+        sonst waere es genau die per Ruling abgelehnte Dauerwarnung."""
+        report = _load(facility, _raw())
+        assert report.preserved == []
+
+        report = _load(facility, _raw())
+        assert report.preserved == []
+        assert report.field_templates.unchanged == ["dauer", "notiz"]
+
+    def test_preserved_entry_disappears_once_package_takes_over_the_key(self, facility):
+        """Sobald das Paket den Schluessel selbst fuehrt, ist es kein
+        'unangetastet, weil unerwaehnt' mehr -- der Eintrag verschwindet
+        wieder (kein Erstlauf-Zustand, der haengen bleibt)."""
+        _load(facility, _raw())
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        dauer.min_value = 5
+        dauer.full_clean()
+        dauer.save()
+        preserved_report = _load(facility, _raw())
+        assert [identifier for identifier, _message in preserved_report.preserved] == ["dauer"]
+
+        raw = _raw()
+        raw["field_templates"][0]["min_value"] = 5
+        report = _load(facility, raw)
+
+        assert report.errors == []
+        assert report.preserved == []
+        assert report.field_templates.unchanged == ["dauer", "notiz"]

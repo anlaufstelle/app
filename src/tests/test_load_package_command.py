@@ -86,6 +86,26 @@ class TestRoundtrip:
 
         assert "unverändert" in output
 
+    def test_preserved_number_range_gets_its_own_report_line(self, tmp_path, facility):
+        """Betreiber-Sichtbarkeit ohne Dauerwarnung (Controller-Ruling
+        Review-Runde 1, Refs #1934): eine per Konfigurationsoberfläche
+        gesetzte Grenze, die das Paket nicht erwähnt, bekommt in der
+        CLI-Ausgabe eine eigene, konkrete Zeile — außerhalb von
+        "Warnungen"."""
+        path = _write_yaml(tmp_path, _MINI_PACKAGE)
+        _run(file=path, facility=facility.id)
+        dauer = FieldTemplate.objects.get(facility=facility, slug="dauer")
+        dauer.min_value = 5
+        dauer.full_clean()
+        dauer.save()
+
+        output = _run(file=path, facility=facility.id)
+
+        assert "Unangetastete Bestandsgrenzen (1):" in output
+        assert "dauer: " in output
+        assert "min_value=5" in output
+        assert "Warnungen" not in output
+
 
 @pytest.mark.django_db
 class TestDryRun:

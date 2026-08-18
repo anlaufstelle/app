@@ -161,6 +161,12 @@ class Command(BaseCommand):
             self._write_bucket("aktualisiert", section.updated)
             self._write_bucket("unverändert", section.unchanged)
 
+        # Refs #1934, Controller-Ruling Review-Runde 1: eigener, neutral
+        # eingefaerbter Abschnitt statt einer weiteren Warnung — sonst wuerde
+        # das im Normalfall (Paket verwaltet keine Grenze) jeden Lauf
+        # zuspammen. Kein ``style``-Callable: die Zeile ist Information, kein
+        # Alarm.
+        self._write_messages("Unangetastete Bestandsgrenzen", report.preserved, None)
         self._write_messages("Warnungen", report.warnings, self.style.WARNING)
         self._write_messages("Fehler", report.errors, self.style.ERROR)
 
@@ -175,9 +181,10 @@ class Command(BaseCommand):
         rendered = ", ".join(identifiers) if identifiers else "–"
         self.stdout.write(f"  {label} ({len(identifiers)}): {rendered}")
 
-    def _write_messages(self, label: str, messages: list[tuple[str, str]], style: Any) -> None:
+    def _write_messages(self, label: str, messages: list[tuple[str, str]], style: Any | None) -> None:
         if not messages:
             return
-        self.stdout.write(style(f"\n{label} ({len(messages)}):"))
+        header = f"\n{label} ({len(messages)}):"
+        self.stdout.write(style(header) if style else header)
         for identifier, message in messages:
             self.stdout.write(f"  {identifier}: {message}")

@@ -31,6 +31,22 @@ Semantik-Entscheide (verbindlich, E13–E15):
   unangetastet (UI-gepflegte Regeln überleben), ``[]`` ⇒ leeren, sonst
   Wholesale-Replace. Gruppen und Feldzuordnungen sind dagegen additiv —
   v1 entfernt nie etwas, was das Paket nicht mehr erwähnt.
+* **``min_value``/``max_value``** sind echtes Tri-State (Refs #1934, Muster
+  ``tally_enabled``): Schlüssel fehlt ⇒ unangetastet (UI-gepflegte Grenze
+  überlebt), ``null`` ⇒ bewusst gelöscht, Wert ⇒ gesetzt. **Das ist ein
+  dokumentierter Semantikwechsel, kein Bugfix an undokumentiertem Verhalten**
+  — ``docs/packages.md`` führte ``min_value``/``max_value`` bis dahin
+  ausdrücklich in der Rücksync-Tabelle als "wird zurückgesetzt": vorher zog
+  ein erneuter Lauf eine weggelassene Grenze **absichtlich** auf ``NULL``
+  zurück, jetzt lässt Weglassen den Bestand unangetastet und nur ein
+  explizites ``null`` löscht. Gilt trotzdem **sofort** für jedes bestehende
+  v1-Paket, ohne ``schema_version``-Bump, weil der Effekt nachweislich
+  einseitig schützend ist: die neue Semantik löscht in **keinem** Fall mehr,
+  als die alte gelöscht hätte (Weglassen löscht jetzt nie, wo es vorher immer
+  löschte; ein explizites ``null`` löscht unverändert in beiden Fassungen).
+  ``default.yaml`` selbst zeigt den Praxis-Impact — ``dauer``/``ausgabe``/
+  ``rueckgabe`` führen mindestens eine der beiden Grenzen nicht mit
+  (Kompatibilitätsentscheid, Task M1-B2/#1934, Review-Runde 1).
 * **Dry-Run** nimmt exakt denselben Code-Pfad und rollt am Ende zurück.
 
 Bewusst NICHT enthalten: Audit-Logging (konsistent mit dem Seed — der Loader
@@ -57,7 +73,7 @@ from core.models.field_condition import FieldCondition
 from core.models.field_group import FieldGroup
 from core.models.field_template import FieldTemplate
 from core.models.organization import Facility
-from core.packages.schema import ConditionDef, DocumentTypeDef, FieldTemplateDef, PackageV1
+from core.packages.schema import KEY_MISSING, ConditionDef, DocumentTypeDef, FieldTemplateDef, PackageV1
 from core.services.config import conflicting_report_key_field
 
 if TYPE_CHECKING:
@@ -96,8 +112,21 @@ class PackageReport:
     * ``groups`` / ``field_refs`` → ``"<typ-slug>/<gruppen- bzw. vorlagen-slug>"``
     * ``conditions`` → ``"<typ-slug>/<ziel><-<quelle>"``
 
-    ``errors``/``warnings`` sind global (nicht je Objektart) und tragen denselben
-    Bezeichner als ersten Tupel-Eintrag.
+    ``errors``/``warnings``/``preserved`` sind global (nicht je Objektart) und
+    tragen denselben Bezeichner als ersten Tupel-Eintrag.
+
+    ``preserved`` (Refs #1934, Controller-Ruling Review-Runde 1) ist **keine**
+    Warnung — bewusst ein eigener Bucket statt eines weiteren Eintrags in
+    ``warnings``. Eine Warnung bei jedem fehlenden Tri-State-Schlüssel würde
+    jeden gewöhnlichen Lauf zuspammen, bei dem ein Paket Grenzen einfach nicht
+    verwaltet (der Normalfall für die meisten Zahlenfelder); eine Warnung "nur
+    beim ersten Auftreten" bräuchte eine persistente Erstlauf-Markierung, die
+    hier bewusst NICHT eingeführt wird. ``preserved`` listet daher — jeden Lauf
+    neu und zustandslos berechnet, ohne Alarm-Charakter — genau die Fälle, in
+    denen ein fehlender Schlüssel tatsächlich einen vorhandenen Bestandswert
+    erhält, und macht sie damit von "unverändert, weil paket- und
+    Bestandswert gleich sind" unterscheidbar, ohne Rauschen für den
+    überwiegenden Regelfall (kein Bestandswert vorhanden, nichts zu erhalten).
     """
 
     field_templates: ObjectReport = field(default_factory=ObjectReport)
@@ -107,6 +136,7 @@ class PackageReport:
     conditions: ObjectReport = field(default_factory=ObjectReport)
     errors: list[tuple[str, str]] = field(default_factory=list)
     warnings: list[tuple[str, str]] = field(default_factory=list)
+    preserved: list[tuple[str, str]] = field(default_factory=list)
     dry_run: bool = False
 
     def sections(self) -> list[tuple[str, ObjectReport]]:
@@ -205,6 +235,7 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
 
         _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
         _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
+        _note_preserved_number_range(existing, template_def, report, identifier)
         conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
         conflicts += _report_key_conflicts(existing, template_def.report_key)
         if conflicts:
@@ -467,8 +498,6 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
     desired: dict[str, Any] = {
         "name": template_def.name,
         "field_type": template_def.field_type,
-        "min_value": template_def.min_value,
-        "max_value": template_def.max_value,
         "is_required": template_def.is_required,
         "is_encrypted": is_encrypted,
         "sensitivity": template_def.sensitivity,
@@ -477,6 +506,17 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
         "help_text": template_def.help_text,
         "default_value": template_def.default_value,
     }
+    # Refs #1934, Tri-State analog ``tally_enabled`` (E13): NUR aufnehmen, wenn
+    # das Paket den Schlüssel überhaupt trägt (``KEY_MISSING`` = fehlt, Bestand
+    # bleibt unangetastet). Ein aufgenommenes ``None`` löscht eine bestehende
+    # Grenze bewusst — bei der Neuanlage bleibt das Modellfeld dann einfach auf
+    # seinem Konstruktor-Default (ebenfalls ``None``), das Verhalten ist also
+    # für Neuanlagen deckungsgleich, unabhängig davon, ob der Schlüssel fehlt
+    # oder explizit ``null`` ist.
+    if template_def.min_value is not KEY_MISSING:
+        desired["min_value"] = template_def.min_value
+    if template_def.max_value is not KEY_MISSING:
+        desired["max_value"] = template_def.max_value
     # E3 (Refs #1849): NUR aufnehmen, wenn das Paket etwas sagt — siehe
     # ``_report_key_conflicts``.
     if template_def.report_key is not None:
@@ -713,6 +753,40 @@ def _warn_on_field_sensitivity_downgrade(
         downgraded = ranks.get(new_field, 0) < ranks.get(old_field, 0)
     if downgraded:
         _emit_sensitivity_downgrade_warning(report, identifier, old_field, new_field)
+
+
+def _note_preserved_number_range(
+    existing: FieldTemplate, template_def: FieldTemplateDef, report: PackageReport, identifier: str
+) -> None:
+    """Betreiber-Sichtbarkeit für den Tri-State (Refs #1934, Controller-Ruling
+    Review-Runde 1) — bewusst **keine** Warnung.
+
+    Eine Warnung "Schlüssel fehlt" würde jeden Lauf zuspammen, bei dem ein
+    Paket Grenzen einfach nicht verwaltet — der Normalfall für die meisten
+    Zahlenfelder, kein Missstand. Diese Funktion trägt deshalb in
+    :attr:`PackageReport.preserved` ein, **nur** wenn dadurch tatsächlich ein
+    vorhandener Bestandswert erhalten bleibt (Schlüssel fehlt im Paket UND der
+    Bestand trägt bereits eine Grenze) — kein Eintrag, wenn ohnehin nichts zu
+    erhalten ist (Bestand schon ``None``) oder das Paket den Schlüssel führt
+    (dann ist es ein normaler ``unverändert``/``aktualisiert``-Fall, kein
+    "unangetastet, weil unerwähnt").
+    """
+    preserved_bits = []
+    if template_def.min_value is KEY_MISSING and existing.min_value is not None:
+        preserved_bits.append(f"min_value={existing.min_value!r}")
+    if template_def.max_value is KEY_MISSING and existing.max_value is not None:
+        preserved_bits.append(f"max_value={existing.max_value!r}")
+    if not preserved_bits:
+        return
+    report.preserved.append(
+        (
+            identifier,
+            str(
+                _("Unverändert, weil das Paket den Schlüssel nicht führt — Bestand bleibt: %(werte)s.")
+                % {"werte": ", ".join(preserved_bits)}
+            ),
+        )
+    )
 
 
 def _warn_on_doctype_sensitivity_downgrade(

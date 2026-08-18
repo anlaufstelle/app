@@ -19,6 +19,7 @@ import pytest
 
 from core.models import DocumentType, FieldCondition, FieldTemplate
 from core.packages.schema import (
+    KEY_MISSING,
     ConditionDef,
     DocumentTypeDef,
     FieldRefDef,
@@ -657,3 +658,81 @@ class TestSemanticRules:
         raw["field_templates"].append({"slug": "anhang", "name": "Anhang", "field_type": "file"})
         template = parse_package(raw).field_templates[2]
         assert template.is_encrypted is False
+
+
+class TestNumberRangeTriState:
+    """``min_value``/``max_value`` als echtes Tri-State (Refs #1934, Muster
+    ``tally_enabled``): Schlüssel fehlt ⇒ :data:`KEY_MISSING` (der Loader lässt
+    eine bestehende Grenze unangetastet), Schlüssel da mit ``null`` ⇒ ``None``
+    (bewusstes Löschen), Schlüssel da mit Zahl ⇒ die Zahl (setzen). Vorher
+    normalisierte der Parser fehlenden Schlüssel und explizites ``null`` beide
+    auf ``None`` — der Loader konnte die Fälle nicht unterscheiden und
+    überschrieb beide Grenzen bei jedem Lauf auf NULL.
+
+    ``_valid_raw()["field_templates"][0]`` (``dauer``) ist bereits ein
+    Zahlenfeld ohne ``min_value``/``max_value`` — dieselbe Ausgangslage wie ein
+    reales v1-Bestandspaket.
+    """
+
+    def test_missing_key_yields_key_missing_sentinel(self) -> None:
+        raw = _valid_raw()
+        assert "min_value" not in raw["field_templates"][0]
+        assert "max_value" not in raw["field_templates"][0]
+
+        template = parse_package(raw).field_templates[0]
+
+        assert template.min_value is KEY_MISSING
+        assert template.max_value is KEY_MISSING
+
+    def test_explicit_null_yields_none(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["min_value"] = None
+        raw["field_templates"][0]["max_value"] = None
+
+        template = parse_package(raw).field_templates[0]
+
+        assert template.min_value is None
+        assert template.max_value is None
+
+    def test_explicit_value_yields_value(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["min_value"] = 0
+        raw["field_templates"][0]["max_value"] = 480
+
+        template = parse_package(raw).field_templates[0]
+
+        assert template.min_value == 0
+        assert template.max_value == 480
+
+    def test_min_greater_than_max_is_still_rejected(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["min_value"] = 10
+        raw["field_templates"][0]["max_value"] = 5
+        assert _paths(raw) == ["field_templates[0].min_value", "field_templates[0].max_value"]
+
+    def test_null_min_with_concrete_max_does_not_trigger_cross_check(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["min_value"] = None
+        raw["field_templates"][0]["max_value"] = 5
+        parse_package(raw)  # darf nicht werfen
+
+    def test_missing_min_with_concrete_max_does_not_trigger_cross_check(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["max_value"] = 5
+        parse_package(raw)  # min_value fehlt -> kein Cross-Check, darf nicht werfen
+
+    def test_non_number_field_rejects_concrete_min_value(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][1]["min_value"] = 5  # "notiz" ist textarea
+        assert "field_templates[1].min_value" in _paths(raw)
+
+    def test_non_number_field_accepts_explicit_null(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][1]["min_value"] = None
+        raw["field_templates"][1]["max_value"] = None
+        parse_package(raw)  # darf nicht werfen — null heisst weiterhin "keine Grenze"
+
+    def test_invalid_type_is_rejected_with_path(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["min_value"] = "fuenf"
+        assert "field_templates[0].min_value" in _paths(raw)

@@ -184,6 +184,28 @@ class PackageValidationError(Exception):
 # ---------------------------------------------------------------------------
 
 
+class _KeyMissing:
+    """Sentinel-Typ: der Schlüssel fehlte im Paket (Refs #1934).
+
+    ``min_value``/``max_value`` können legitim ``None`` tragen (bewusstes
+    Löschen der Grenze) — anders als bei ``conditions`` (E14) taugt ``None``
+    hier also selbst nicht als Sentinel für "Schlüssel fehlt". Ein eigener,
+    einelementiger Typ statt eines ``Any``-Sentinels (Muster
+    ``core.services.audit.helpers._UNSET``) hält die Feld-Annotation im
+    streng typisierten ``core.packages``-Modul exakt (``int | None |
+    _KeyMissing`` statt ``Any``) — genau die Typdisziplin, die der
+    Modul-Docstring oben für Fremd-Input einfordert.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - nur Debug-Ausgabe
+        return "KEY_MISSING"
+
+
+KEY_MISSING = _KeyMissing()
+
+
 @dataclass(frozen=True)
 class FieldTemplateDef:
     """Eine Feldvorlage. Lookup-Key beim Laden ist ``(facility, slug)``.
@@ -192,13 +214,22 @@ class FieldTemplateDef:
     (``{"slug": …, "label": …, "is_active": …}``) — der Loader kann sie 1:1
     schreiben. Die inneren Dicts sind normalisiert (``is_active`` immer
     gesetzt) und werden vom Loader kopiert, nie geteilt.
+
+    ``min_value``/``max_value`` sind echtes Tri-State (Refs #1934, Muster
+    ``tally_enabled``/E13): :data:`KEY_MISSING` heißt "Schlüssel fehlte im
+    Paket" — der Loader lässt eine bestehende Grenze dann unangetastet.
+    ``None`` heißt "Schlüssel da, Wert ``null``" — die Grenze wird bewusst
+    gelöscht. Eine ``int`` heißt "Schlüssel da, Wert gesetzt" — die Grenze
+    wird geschrieben. Vorher normalisierte der Parser fehlenden Schlüssel und
+    explizites ``null`` beide auf ``None``; der Loader konnte die Fälle nicht
+    unterscheiden und überschrieb beide Grenzen bei **jedem** Lauf auf NULL.
     """
 
     slug: str
     name: str
     field_type: str = FieldTemplate.FieldType.TEXT.value
-    min_value: int | None = None
-    max_value: int | None = None
+    min_value: int | None | _KeyMissing = KEY_MISSING
+    max_value: int | None | _KeyMissing = KEY_MISSING
     is_required: bool = False
     is_encrypted: bool = False
     sensitivity: str = ""
@@ -384,15 +415,24 @@ def _int_value(
     return value
 
 
-def _optional_int_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> int | None:
+def _tri_state_int_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> int | None | _KeyMissing:
+    """Ganzzahliges Tri-State-Feld (Refs #1934) — löst :func:`_optional_int_value` ab.
+
+    Drei Ausgänge statt zwei: Schlüssel fehlt ⇒ :data:`KEY_MISSING`
+    (unangetastet lassen); Schlüssel da, Wert ``null`` ⇒ ``None`` (bewusst
+    löschen); Schlüssel da, gültige Zahl ⇒ die Zahl (setzen). Ein ungültiger
+    Wert (falscher Typ) fällt auf :data:`KEY_MISSING` zurück wie "fehlt" —
+    der Parser sammelt ohnehin einen Fehler und ``parse_package`` wirft, bevor
+    der Rückgabewert irgendwo ankommt.
+    """
     if key not in data:
-        return None
+        return KEY_MISSING
     value = data[key]
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
         errors.append((_join(path, key), "Erwartet wird eine ganze Zahl oder null."))
-        return None
+        return KEY_MISSING
     return value
 
 
@@ -604,8 +644,8 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
         )
     name = _required_name(data, "name", path, errors)
     field_type = _enum_value(data, "field_type", path, errors, _FIELD_TYPES, default=FieldTemplate.FieldType.TEXT.value)
-    min_value = _optional_int_value(data, "min_value", path, errors)
-    max_value = _optional_int_value(data, "max_value", path, errors)
+    min_value = _tri_state_int_value(data, "min_value", path, errors)
+    max_value = _tri_state_int_value(data, "max_value", path, errors)
     is_required = _bool_value(data, "is_required", path, errors)
     is_encrypted = _bool_value(data, "is_encrypted", path, errors)
     sensitivity = _enum_value(data, "sensitivity", path, errors, _TEMPLATE_SENSITIVITIES, default="")
@@ -615,12 +655,15 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
 
     options = _parse_option_list(data, path, errors, field_type)
 
+    # Nur eine ECHTE Zahl (weder ``KEY_MISSING`` noch das bewusste Loesch-``None``)
+    # ist am Feldtyp ueberhaupt zu beanstanden bzw. fuer den Min/Max-Vergleich
+    # heranzuziehen — beide Nicht-Zahl-Zustaende bedeuten "keine Grenze".
     if field_type != FieldTemplate.FieldType.NUMBER.value:
-        if min_value is not None:
+        if isinstance(min_value, int):
             errors.append((_join(path, "min_value"), "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."))
-        if max_value is not None:
+        if isinstance(max_value, int):
             errors.append((_join(path, "max_value"), "Minimal- und Maximalwert sind nur für Zahlenfelder zulässig."))
-    elif min_value is not None and max_value is not None and min_value > max_value:
+    elif isinstance(min_value, int) and isinstance(max_value, int) and min_value > max_value:
         errors.append((_join(path, "min_value"), "Wert darf nicht größer als max_value sein."))
         errors.append((_join(path, "max_value"), "Wert darf nicht kleiner als min_value sein."))
 
