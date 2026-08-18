@@ -12,7 +12,7 @@ CI_LOCK ?= /work/anlaufstelle-ci.lock
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
 
 .PHONY: i18n-check i18n-update
 
@@ -193,6 +193,25 @@ test-focus:
 test-parallel:
 	$(PYTHON) -m pytest -m "not e2e" -n auto -x
 
+# Vitest-Suite deterministisch/non-watch ausfuehren (Refs #1932). ``npm test``
+# entspricht ``vitest run`` (siehe package.json ``scripts.test``) — kein
+# Watch-Modus, Exit-Code spiegelt den Testausgang 1:1. Klare, gezielte
+# Fehlermeldung statt des kryptischen ``sh: vitest: not found``, wenn
+# node_modules/ (analog dem ``.venv``-Symlink je Worktree) oder das Lockfile
+# fehlen — kein automatisches ``npm ci`` hier, dieselbe Konvention wie bei
+# ``verify-css-fresh``/``sync-vendor-js`` (node_modules-Stand ist Vorbedingung,
+# kein Seiteneffekt des Gates).
+test-js:
+	@if [ ! -f package-lock.json ]; then \
+		echo "test-js: package-lock.json fehlt — kein deterministischer Node-Stand moeglich." >&2; \
+		exit 1; \
+	fi
+	@if [ ! -x node_modules/.bin/vitest ]; then \
+		echo "test-js: node_modules/ fehlt oder ist unvollstaendig — zuerst 'npm ci' ausfuehren." >&2; \
+		exit 1; \
+	fi
+	npm test
+
 # --timeout-method=thread wie bei ``test-e2e`` (Refs #1606): harter Kill des
 # Workers gegen den Greenlet-Endlos-Dreher bei totem Chromium — unter -n 2 auf
 # 2 Kernen der reproduzierte Haenger.
@@ -215,7 +234,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-parallel
+ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js test-parallel
 
 # Serialisierte Varianten der ressourcenschweren Gates (Refs #1840).
 # Wer einen vollen Gate-Lauf startet, nimmt DIESE Targets — sonst kollidieren

@@ -240,10 +240,11 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make lint` | Code mit Ruff prüfen und Formatierung kontrollieren |
 | `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs #741) |
 | `make test` | Unit- und Integrationstests ausführen (ohne E2E) |
+| `make test-js` | Vitest-Suite (JS, `npm test`) deterministisch/non-watch ausführen — Teil von `make ci` (Refs #1932) |
 | `make test-e2e` | End-to-End-Tests mit Playwright ausführen |
 | `make test-e2e-halves` | E2E in zwei seriellen Hälften (RAM-limitierte Hosts, Refs #1787) |
 | `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
-| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-parallel` |
+| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-js` + `test-parallel` |
 | `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast |
 | `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist) |
 | `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar) |
@@ -579,10 +580,12 @@ Während der Entwicklung nie die volle Suite laufen lassen — in Schichten vorg
 
 ```bash
 make ci
-# entspricht: lint + check + Guards (deps/matrix/release-test/vendor-js/agent-docs) + typecheck + test-parallel
+# entspricht: lint + check + Guards (deps/matrix/release-test/vendor-js/agent-docs) + typecheck + test-js + test-parallel
 ```
 
 Diese Pipeline muss vor jedem Pull Request lokal grün sein.
+
+**JS-Gate (`make test-js`, Refs #1932):** führt `npm test` (= `vitest run`, non-watch, deterministisch) gegen die Offline-/Queue-/Watcher-Suite unter [`tests/js/`](tests/js/) aus und ist fail-fast Teil von `make ci`/`make ci-locked`. Fehlt `node_modules/` (kein vorheriges `npm ci`) oder `package-lock.json`, scheitert das Target mit einer klaren Fehlermeldung statt eines kryptischen `vitest: not found`.
 
 ### Mutation-Testing (mutmut)
 

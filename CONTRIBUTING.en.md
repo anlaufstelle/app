@@ -774,4 +774,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
 <!-- translation-date: 2026-08-16 -->
-<!-- source-hash: 137e7a9362c4b405bb6fd71a1f3d3c1d72cfc7d8 -->
+<!-- source-hash: 9960dbf1a7e545b8389f96e1b0b7468277df4c96 -->
