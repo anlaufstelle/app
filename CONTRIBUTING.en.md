@@ -240,10 +240,12 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make lint` | Check code with Ruff and verify formatting |
 | `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs #741) |
 | `make test` | Run unit and integration tests (excluding E2E) |
+| `make test-js` | Run the Vitest suite (JS, `npm test`) deterministically/non-watch — part of `make ci` (Refs #1932) |
 | `make test-e2e` | Run end-to-end tests with Playwright |
 | `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787) |
 | `make check` | Run Django system checks and verify migration consistency |
-| `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-parallel` |
+| `make i18n-check` | Full `.po` reconciliation against the source tree (new/removed/semantically changed msgids) — part of `make ci` (Refs #1933) |
+| `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
 | `make test-focus T=<path>` | Single test file with fail-fast |
 | `make test-parallel` | Unit and integration tests in parallel (pytest-xdist) |
 | `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable) |
@@ -425,7 +427,7 @@ Both catalogs — [`src/locale/de/LC_MESSAGES/django.po`](src/locale/de/LC_MESSA
 
 - **When to regenerate:** `python src/manage.py makemessages -l de -l en --no-obsolete`, run from the **repository root** (that is where the catalog expects its `src/…` reference paths; `LOCALE_PATHS` points at `src/locale/`). At the latest at the end of a milestone or batch run, and before every release cut — not once the backlog has grown to months. Individual new strings may still be added as a catalog entry by hand; that does not replace the run, but it prevents a German fallback in the meantime.
 - **Small changes:** For one new translatable string, the matching block may be added manually in **both** catalogs. Carry over the `msgid`, current `#:` reference(s), `msgstr` (identical in DE, translated in EN), and any `msgctxt`, plural, or format flags. Then run `msgfmt --check-format` and `python src/manage.py compilemessages`. This is the fast maintenance path, not a substitute for the periodic completeness check.
-- **Full sync without reorder churn:** `python scripts/i18n_catalog.py check` extracts DE and EN in a temporary repository copy and reports new or removed `msgid`s without changing files. Semantic drift exits with status 1; reference- and position-only changes are informational and green. First translate new or changed entries in **both** catalogs, or add the DE identity translation, then run `python scripts/i18n_catalog.py update`. `update` performs the same full sync, retains the order of every unchanged PO block, and validates both PO/MO pairs fully before writing; a write failure restores files already replaced. The report separates new (`+`), removed (`-`), and semantically changed (`~`) entries from reference noise; new entries are appended at the end of the catalog.
+- **Full sync without reorder churn:** `python scripts/i18n_catalog.py check` (= `make i18n-check`) extracts DE and EN in a temporary repository copy and reports new or removed `msgid`s without changing files. Semantic drift exits with status 1; reference- and position-only changes are informational and green. First translate new or changed entries in **both** catalogs, or add the DE identity translation, then run `python scripts/i18n_catalog.py update`. `update` performs the same full sync, retains the order of every unchanged PO block, and validates both PO/MO pairs fully before writing; a write failure restores files already replaced. The report separates new (`+`), removed (`-`), and semantically changed (`~`) entries from reference noise; new entries are appended at the end of the catalog. **Mandatory gate since #1933:** `make i18n-check` is a fail-fast part of `make ci`/`make ci-locked` and specifically catches the loss of a `msgid` that is only referenced at runtime (e.g. a form validation message) — a case the other catalog gates (fuzzy/empty, version stamp, `.mo` freshness) don't cover, because the entry no longer exists there at all rather than merely being filled in incorrectly.
 - **DE is the source language ([ADR-027](docs/adr/027-i18n-strategy.md)).** Every entry is an identity translation (`msgstr == msgid`), so resolving a run is mechanical: `msgattrib --clear-fuzzy --empty --clear-previous <po> | msgen`. A German `msgstr` that differs from its `msgid` is a bug (usually a msgmerge fuzzy mismatch) — exactly what the duplicate guard in [`scripts/check_translations.py`](scripts/check_translations.py) targets (Refs #1348).
 - **EN gets translated, not left fuzzy.** `msgfmt` discards fuzzy entries when compiling — the English interface falls back to German there. [`src/tests/test_i18n_catalog.py`](src/tests/test_i18n_catalog.py) forbids both `#, fuzzy` and empty `msgstr`. Take terminology from [`docs/en/glossary.md`](docs/en/glossary.md) and from what the catalog already uses.
 - **Commit the compiled files:** run `python src/manage.py compilemessages` after every run; the `.mo` files live in the repository (deployment does not build them).
@@ -579,10 +581,12 @@ Never run the full suite during development — work in layers, always with fail
 
 ```bash
 make ci
-# equivalent to: lint + check + guards (deps/matrix/release-test/vendor-js/agent-docs) + typecheck + test-parallel
+# equivalent to: lint + check + guards (deps/matrix/release-test/vendor-js/agent-docs) + i18n-check + typecheck + test-js + test-parallel
 ```
 
 This pipeline must pass locally before every pull request.
+
+**JS gate (`make test-js`, Refs #1932):** runs `npm test` (= `vitest run`, non-watch, deterministic) against the offline/queue/watcher suite under [`tests/js/`](tests/js/) and is a fail-fast part of `make ci`/`make ci-locked`. If `node_modules/` (no prior `npm ci`) or `package-lock.json` is missing, the target fails with a clear error message instead of a cryptic `vitest: not found`.
 
 ### Mutation Testing (mutmut)
 
@@ -773,5 +777,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-16 -->
+<!-- translation-date: 2026-08-18 -->
 <!-- source-hash: d271c3a8dfe8edc6da9e7708daebf31adc90a2e9 -->
