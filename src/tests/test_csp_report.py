@@ -7,6 +7,8 @@ import pytest
 from django.test import override_settings
 from django.urls import reverse
 
+from core.logging import JsonFormatter, VerboseScrubbingFormatter
+
 
 @pytest.fixture
 def csp_url():
@@ -170,3 +172,240 @@ class TestCSPHeaderContainsReportURI:
         assert response.status_code == 200
         csp = response.headers.get("Content-Security-Policy", "")
         assert "report-uri /csp-report/" in csp, f"report-uri-Direktive fehlt im CSP-Header: {csp!r}"
+
+
+# --- Refs #1943: Report-Inhalte muessen im tatsaechlich ausgegebenen
+# Log-Record ankommen, der Listenpfad darf das Log nicht aufblaehen und
+# Steuerzeichen duerfen die Log-Zeile nicht faelschen. -------------------
+
+# Muss mit settings/base.py ``LOGGING["formatters"]["verbose"]["format"]``
+# uebereinstimmen — LOG_FORMAT=text ist der Default in Produktion.
+_VERBOSE_FORMAT = "{levelname} {asctime} {module} {message}"
+
+
+def _text_line(record):
+    return VerboseScrubbingFormatter(fmt=_VERBOSE_FORMAT, style="{").format(record)
+
+
+def _json_entry(record):
+    return json.loads(JsonFormatter().format(record))
+
+
+@pytest.mark.django_db
+class TestCSPReportReachesLogSink:
+    """Refs #1943: Die sanitisierten Felder muessen die Formatter ueberleben.
+
+    Die Bestandstests pruefen nur ``record.csp_violation`` — also das
+    logging-``extra``. Beide konfigurierten Formatter verwarfen das
+    ``extra`` aber, sodass produktiv von jedem Report nur die nackte Zeile
+    ``csp_violation`` sichtbar war. Diese Tests pruefen deshalb die
+    **Formatter-Ausgabe**, nicht die Record-Attribute.
+    """
+
+    REPORT = {
+        "csp-report": {
+            "document-uri": "https://anlaufstelle.app/clients/",
+            "violated-directive": "script-src 'self'",
+            "blocked-uri": "https://evil.example.com/payload.js",
+            "line-number": 42,
+        }
+    }
+
+    def _post(self, client, csp_url, caplog, payload, content_type="application/csp-report", **extra):
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(
+                csp_url,
+                data=json.dumps(payload),
+                content_type=content_type,
+                **extra,
+            )
+        return response
+
+    def _violations(self, caplog):
+        return [r for r in caplog.records if r.message == "csp_violation"]
+
+    def test_json_formatter_emits_violation_details(self, client, csp_url, caplog):
+        response = self._post(
+            client,
+            csp_url,
+            caplog,
+            self.REPORT,
+            HTTP_USER_AGENT="Mozilla/5.0 (probe)",
+            REMOTE_ADDR="203.0.113.7",
+        )
+        assert response.status_code == 204
+        entry = _json_entry(self._violations(caplog)[0])
+        assert entry["csp_violation"]["blocked-uri"] == "https://evil.example.com/payload.js"
+        assert entry["csp_violation"]["document-uri"] == "https://anlaufstelle.app/clients/"
+        assert entry["csp_violation"]["violated-directive"] == "script-src 'self'"
+        assert entry["remote_addr"] == "203.0.113.7"
+        assert entry["user_agent"] == "Mozilla/5.0 (probe)"
+
+    def test_text_formatter_emits_violation_details(self, client, csp_url, caplog):
+        """LOG_FORMAT=text ist der Default — der Textpfad darf nicht blind bleiben."""
+        response = self._post(
+            client,
+            csp_url,
+            caplog,
+            self.REPORT,
+            HTTP_USER_AGENT="Mozilla/5.0 (probe)",
+            REMOTE_ADDR="203.0.113.7",
+        )
+        assert response.status_code == 204
+        line = _text_line(self._violations(caplog)[0])
+        assert "https://evil.example.com/payload.js" in line
+        assert "203.0.113.7" in line
+        assert "Mozilla/5.0 (probe)" in line
+        assert "\n" not in line
+
+    def test_formatters_scrub_pii_from_violation_details(self, client, csp_url, caplog):
+        """Die Report-URLs sind fremdbestimmt und koennen Credentials tragen —
+        der PII-Scrub muss auch auf den strukturierten Feldern greifen."""
+        payload = {
+            "csp-report": {
+                "document-uri": "https://anlaufstelle.app/login?password=hunter2",
+                "blocked-uri": "https://evil.example.com/?mail=opfer@example.com",
+            }
+        }
+        assert self._post(client, csp_url, caplog, payload).status_code == 204
+        record = self._violations(caplog)[0]
+        rendered = _text_line(record) + json.dumps(_json_entry(record), ensure_ascii=False)
+        assert "hunter2" not in rendered
+        assert "opfer@example.com" not in rendered
+        assert "password=<redacted>" in rendered
+        assert "<email>" in rendered
+
+
+@pytest.mark.django_db
+class TestCSPReportLogAmplification:
+    """Refs #1943: Ein Request darf nicht beliebig viele Log-Zeilen erzeugen."""
+
+    def test_level_3_list_is_capped_with_aggregate_record(self, client, csp_url, caplog):
+        payload = [
+            {"type": "csp-violation", "body": {"blockedURL": f"https://evil.example.com/{i}.js"}} for i in range(50)
+        ]
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(
+                csp_url,
+                data=json.dumps(payload),
+                content_type="application/reports+json",
+                REMOTE_ADDR="203.0.113.7",
+            )
+        assert response.status_code == 204
+        violations = [r for r in caplog.records if r.message == "csp_violation"]
+        assert len(violations) == 10, "Listenpfad muss auf 10 Violations pro Request gedeckelt sein"
+        truncated = [r for r in caplog.records if r.message == "csp_violation_truncated"]
+        assert len(truncated) == 1, "Der verworfene Rest muss EINMAL aggregiert vermerkt werden"
+        assert truncated[0].csp_violations_total == 50
+        assert truncated[0].csp_violations_dropped == 40
+        entry = json.loads(JsonFormatter().format(truncated[0]))
+        assert entry["csp_violations_total"] == 50
+        assert entry["csp_violations_dropped"] == 40
+        assert entry["remote_addr"] == "203.0.113.7"
+        # Der Aggregat-Record ist die einzige Spur des Verworfenen — er muss
+        # auch im Default-Textpfad die Zahlen tragen, nicht nur im JSON.
+        line = _text_line(truncated[0])
+        assert "csp_violations_total=50" in line
+        assert "csp_violations_dropped=40" in line
+        assert "\n" not in line
+
+    def test_short_list_produces_no_aggregate_record(self, client, csp_url, caplog):
+        payload = [{"type": "csp-violation", "body": {"blockedURL": "https://evil.example.com/a.js"}}]
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(csp_url, data=json.dumps(payload), content_type="application/reports+json")
+        assert response.status_code == 204
+        assert [r for r in caplog.records if r.message == "csp_violation_truncated"] == []
+
+
+@pytest.mark.django_db
+class TestCSPReportControlCharacters:
+    """Refs #1943: Steuerzeichen aus Angreiferfeldern duerfen die Log-Zeile
+    nicht faelschen (Log-Forging) — scharf, seit die Felder ausgegeben werden."""
+
+    FORGED = "https://evil.example/a\nWARNING 2026-08-18 12:00:00,000 csp_report FAKE-ADMIN-LOGIN\r\n\x1b[31mred\x07"
+
+    def test_control_characters_are_stripped(self, client, csp_url, caplog):
+        payload = {"csp-report": {"blocked-uri": self.FORGED}}
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(
+                csp_url,
+                data=json.dumps(payload),
+                content_type="application/csp-report",
+                HTTP_USER_AGENT="curl/8\r\nX-Injected: 1\x1b[2J",
+            )
+        assert response.status_code == 204
+        record = [r for r in caplog.records if r.message == "csp_violation"][0]
+        logged_uri = record.csp_violation["blocked-uri"]
+        for char in ("\n", "\r", "\x1b", "\x07"):
+            assert char not in logged_uri
+            assert char not in record.user_agent
+        line = _text_line(record)
+        assert "\n" not in line, "Eine Violation darf nur EINE Log-Zeile erzeugen"
+        assert "\x1b" not in line and "\x07" not in line
+        assert "https://evil.example/a" in line
+
+    def test_unicode_format_and_bidi_characters_are_stripped(self, client, csp_url, caplog):
+        """Nicht nur ASCII-Steuerzeichen: RTL-Override (U+202E) kann eine URL
+        im Log-Viewer rueckwaerts darstellen, Zero-Width-Space (U+200B) macht
+        zwei verschiedene Hosts optisch gleich, U+2028 ist fuer manche Parser
+        ein Zeilenumbruch. Umlaute und andere echte Schriftzeichen muessen
+        dagegen ueberleben — sonst verstuemmelt der Filter reale URLs.
+        """
+        payload = {
+            "csp-report": {
+                "blocked-uri": "https://evil.example/\u202egpj.exe\u200b?x=1\u2028y=2",
+                "document-uri": "https://anlaufstelle.app/klient-uebersicht/\u00e4\u00f6\u00fc\u00df",
+            }
+        }
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(csp_url, data=json.dumps(payload), content_type="application/csp-report")
+        assert response.status_code == 204
+        record = [r for r in caplog.records if r.message == "csp_violation"][0]
+        blocked = record.csp_violation["blocked-uri"]
+        for char in ("\u202e", "\u200b", "\u2028"):
+            assert char not in blocked
+        assert blocked == "https://evil.example/gpj.exe?x=1y=2"
+        assert (
+            record.csp_violation["document-uri"]
+            == "https://anlaufstelle.app/klient-uebersicht/\u00e4\u00f6\u00fc\u00df"
+        )
+
+    def test_user_agent_is_length_capped(self, client, csp_url, caplog):
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(
+                csp_url,
+                data=json.dumps({"csp-report": {"blocked-uri": "https://evil.example/a.js"}}),
+                content_type="application/csp-report",
+                HTTP_USER_AGENT="U" * 2000,
+            )
+        assert response.status_code == 204
+        record = [r for r in caplog.records if r.message == "csp_violation"][0]
+        assert len(record.user_agent) == 512
+
+
+@pytest.mark.django_db
+class TestCSPReportOversizedBody:
+    """Refs #1943: ``RequestDataTooBig`` darf keinen ERROR-Traceback erzeugen."""
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=256)
+    def test_request_data_too_big_answered_with_plain_400(self, client, csp_url, caplog):
+        payload = {"csp-report": {"blocked-uri": "https://evil.example.com/" + "x" * 500}}
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(
+                csp_url,
+                data=json.dumps(payload),
+                content_type="application/csp-report",
+            )
+        assert response.status_code == 400
+        assert response.content == b"payload too large"
+        csp_records = [r for r in caplog.records if r.name == "security.csp"]
+        assert len(csp_records) == 1
+        assert csp_records[0].exc_info is None
+        assert csp_records[0].levelno == logging.WARNING
+        # Eine Zeile statt ~20 Traceback-Zeilen — und die IP muss drinstehen,
+        # sonst ist der Missbrauch nicht zuzuordnen.
+        line = _text_line(csp_records[0])
+        assert line.count("\n") == 0
+        assert "csp_report_oversized_body" in line
+        assert "Traceback" not in line
+        assert "remote_addr=" in line

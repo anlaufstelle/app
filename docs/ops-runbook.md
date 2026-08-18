@@ -598,12 +598,30 @@ Mit `LOG_FORMAT=json` in `.env` gibt Django strukturierte JSON-Logs aus:
 |------|-------------|
 | `ts` | ISO-8601-Zeitstempel (UTC) |
 | `level` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `logger` | Logger-Name (`django`, `core`, `gunicorn.error`) |
+| `logger` | Logger-Name (`django`, `core`, `gunicorn.error`, `security.csp`) |
 | `module` | Python-Modul |
 | `request_id` | Request-ID (falls vorhanden) |
 | `user_id` | Eingeloggter Benutzer (falls vorhanden) |
 | `facility_id` | Aktive Einrichtung (falls vorhanden) |
 | `exception` | Vollstaendiger Traceback bei Fehlern |
+| `csp_violation` | CSP-Verstoss-Details als Objekt (`blocked-uri`, `document-uri`, `violated-directive` …), nur auf `security.csp` |
+| `csp_violations_total` | Nur auf der Zeile `csp_violation_truncated`: wie viele Verstoesse die Meldung enthielt |
+| `csp_violations_dropped` | Nur auf der Zeile `csp_violation_truncated`: wie viele davon **nicht** geloggt wurden (Deckel: 10 pro Anfrage) |
+| `remote_addr` | Client-IP der Meldung (proxy-bewusst ueber `TRUSTED_PROXY_HOPS`) |
+| `user_agent` | User-Agent der Meldung (Steuerzeichen entfernt, auf 512 Zeichen gekappt) |
+
+Die letzten fuenf Felder stammen aus dem CSP-Report-Endpoint (`/csp-report/`,
+Logger `security.csp`) und stehen seit #1943
+in **beiden** Formaten — auch im Default `LOG_FORMAT=text`, dort als
+`feld="wert"`-Paare hinter der Nachricht. Davor war von jeder Meldung nur
+die nackte Zeile `csp_violation` sichtbar. Zwei Meldungstypen sind dabei
+betriebsrelevant:
+
+- `csp_violation` — ein einzelner Verstoss.
+- `csp_violation_truncated` — eine Anfrage enthielt mehr als 10 Verstoesse;
+  die ersten 10 sind geloggt, der Rest verworfen. Haeuft sich diese Zeile,
+  ist das entweder eine grob gebrochene CSP oder ein Flooding-Versuch: die
+  `remote_addr` gegen das Rate-Limit (10 Anfragen/min/IP) halten.
 
 **JSON-Logs filtern (mit jq):**
 

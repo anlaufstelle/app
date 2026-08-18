@@ -2,9 +2,21 @@
 
 Browser POSTen Verstoesse gegen die Content Security Policy via die
 ``report-uri``-Direktive an diese View. Wir loggen die Violations
-strukturiert als WARNING — wenn Sentry konfiguriert ist (siehe
-``settings/prod.py``), greift die Sentry-Logging-Integration und macht
-die Reports im Dashboard sichtbar.
+strukturiert als WARNING auf dem Logger ``security.csp``.
+
+**Der auswertbare Sink ist das Server-Log, nicht Sentry.** Die
+Sentry-``LoggingIntegration`` erzeugt per Default erst ab ERROR ein
+Event; eine WARNING wird nur zum Breadcrumb an einem spaeteren
+Fehler-Event, und ``settings/prod.py`` konfiguriert nichts Abweichendes.
+Wer Sentry als Detection-Sink will, muss das ``event_level`` fuer diesen
+Logger absenken — siehe Issue #1949.
+
+Die Details stehen im logging-``extra``. Damit sie den Sink auch
+erreichen, kennen BEIDE Formatter (`core/logging.py`,
+``STRUCTURED_LOG_FIELDS``) die Felder ``csp_violation``/``remote_addr``/
+``user_agent`` — davor war produktiv nur die nackte Zeile
+``csp_violation`` sichtbar, also ohne blocked-uri, document-uri, IP oder
+User-Agent, und die Detection-Kontrolle damit wirkungslos (Refs #1943).
 
 Trade-offs:
 
@@ -12,23 +24,33 @@ Trade-offs:
   nicht von User-Formularen — sie tragen keinen CSRF-Token. Das ist
   kein Risiko, weil der Endpoint nur loggt und keinen App-State
   veraendert.
-- Rate-Limit ``10/m`` pro IP: Verhindert Log-Flooding durch boesgemeinte
-  Reports. Bei realer Violation ist 10/min ausreichend; mehr deutet auf
-  Spam hin und wird verworfen (HTTP 429 via ``handler403``,
-  ``core/views/errors.py``, Refs #1354).
+- Rate-Limit ``10/m`` pro IP: begrenzt die Anzahl der *Requests*. Bei
+  realer Violation ist 10/min ausreichend; mehr deutet auf Spam hin und
+  wird verworfen (HTTP 429 via ``handler403``, ``core/views/errors.py``,
+  Refs #1354).
+- Violation-Cap ``_MAX_VIOLATIONS_PER_REPORT`` (Refs #1943): Der
+  CSP-Level-3-Listenpfad erzeugte einen Log-Record PRO Listeneintrag, ein
+  3-KB-Payload also 1000 Zeilen und ein Request am 32-KiB-Cap rund 10.900.
+  Das Rate-Limit deckelt Requests, nicht Zeilen — ohne Cap sind das ~109k
+  Zeilen/min je Quell-IP auf einer unauthentifizierten Flaeche, also ein
+  Disk-Fill-Vektor. Nur die ersten N Eintraege werden geloggt, der Rest
+  einmal aggregiert vermerkt.
 - Body-Limit: 32 KiB harter Cap, damit ein Angreifer nicht beliebig
-  grosse Payloads dem Logging-Pipeline zu fressen gibt.
+  grosse Payloads dem Logging-Pipeline zu fressen gibt. Ein Body oberhalb
+  von ``DATA_UPLOAD_MAX_MEMORY_SIZE`` wird ebenfalls mit 400 beantwortet,
+  statt Django einen ERROR mit vollem Traceback schreiben zu lassen.
 - Feld-Whitelist (Refs #1476): das Report-JSON kommt vom Browser, ist aber
   letztlich vom Betreiber der blockierten Ressource (Angreifer bei einer
   echten Injection) beeinflussbar. Vor dem Logging filtert
   ``_sanitize_violation`` auf bekannte CSP-Report-Felder, koerziert Werte
-  auf str/int und kappt Strings — verhindert Log-Forging/Stored-XSS im
-  Downstream-Sink (Sentry-Dashboard).
+  auf str/int, entfernt Steuerzeichen und kappt Strings — verhindert
+  Log-Forging/Stored-XSS im Downstream-Sink (Sentry-Dashboard).
 """
 
 import json
 import logging
 
+from django.core.exceptions import RequestDataTooBig
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -87,14 +109,34 @@ _ALLOWED_VIOLATION_KEYS = frozenset(
 )
 _MAX_FIELD_LEN = 512
 
+# Refs #1943: Obergrenze fuer geloggte Violations pro Request. Ein realer
+# Reporting-API-Batch traegt eine Handvoll verschiedener Verstoesse (der
+# Browser dedupliziert identische Reports je Dokument); 10 deckt das
+# komfortabel ab und spiegelt zugleich das Rate-Limit (10 Requests/min/IP)
+# — der Worst Case sinkt damit von ~109.000 auf 110 Log-Zeilen pro Minute
+# und Quell-IP. Was darueber liegt, geht nicht still verloren, sondern
+# wird einmal aggregiert mit Gesamtzahl vermerkt.
+_MAX_VIOLATIONS_PER_REPORT = 10
+
+
+def _sanitize_text(value):
+    """Entfernt Steuerzeichen und kappt auf ``_MAX_FIELD_LEN``.
+
+    Newline/CR wuerden eine Log-Zeile faelschen (Log-Forging), ESC/BEL
+    koennen ein Terminal umlenken, das die Logs anzeigt. ``str.isprintable``
+    laesst das normale Leerzeichen stehen und filtert Steuer-, Format- und
+    Separator-Codepoints (inkl. U+2028) heraus.
+    """
+    return "".join(char for char in str(value) if char.isprintable())[:_MAX_FIELD_LEN]
+
 
 def _sanitize_violation(violation):
     """Filtert ein CSP-Violation-Dict auf die Whitelist bekannter Felder.
 
     Unbekannte Keys werden gedroppt, verschachtelte Werte (dict/list)
-    verworfen, Werte auf str/int koerziert und Strings auf
-    ``_MAX_FIELD_LEN`` gekappt. So landet nie rohes, Angreifer-
-    kontrolliertes JSON im Log-``extra``.
+    verworfen, Werte auf str/int koerziert und Strings von Steuerzeichen
+    befreit sowie auf ``_MAX_FIELD_LEN`` gekappt. So landet nie rohes,
+    Angreifer-kontrolliertes JSON im Log-``extra``.
     """
     if not isinstance(violation, dict):
         return {}
@@ -113,7 +155,7 @@ def _sanitize_violation(violation):
         elif value is None:
             continue
         else:
-            sanitized[key] = str(value)[:_MAX_FIELD_LEN]
+            sanitized[key] = _sanitize_text(value)
     return sanitized
 
 
@@ -127,7 +169,15 @@ class CSPReportView(View):
         if content_type not in _VALID_CONTENT_TYPES:
             return HttpResponseBadRequest("unsupported content-type")
 
-        body = request.body
+        client_ip = get_client_ip(request)
+        try:
+            body = request.body
+        except RequestDataTooBig:
+            # Ohne dieses except behandelt Django die SuspiciousOperation
+            # selbst: ERROR mit vollem Traceback (~20 Zeilen) pro
+            # Missbrauchs-Request. Eine Zeile reicht (Refs #1943).
+            logger.warning("csp_report_oversized_body", extra={"remote_addr": client_ip})
+            return HttpResponseBadRequest("payload too large")
         if len(body) > _MAX_BODY_BYTES:
             return HttpResponseBadRequest("payload too large")
 
@@ -147,13 +197,24 @@ class CSPReportView(View):
         else:
             violations = [payload]
 
-        for violation in violations:
+        user_agent = _sanitize_text(request.META.get("HTTP_USER_AGENT", ""))
+        for violation in violations[:_MAX_VIOLATIONS_PER_REPORT]:
             logger.warning(
                 "csp_violation",
                 extra={
                     "csp_violation": _sanitize_violation(violation),
-                    "remote_addr": get_client_ip(request),
-                    "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                    "remote_addr": client_ip,
+                    "user_agent": user_agent,
+                },
+            )
+        if len(violations) > _MAX_VIOLATIONS_PER_REPORT:
+            logger.warning(
+                "csp_violation_truncated",
+                extra={
+                    "csp_violations_total": len(violations),
+                    "csp_violations_dropped": len(violations) - _MAX_VIOLATIONS_PER_REPORT,
+                    "remote_addr": client_ip,
+                    "user_agent": user_agent,
                 },
             )
 

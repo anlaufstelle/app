@@ -196,3 +196,121 @@ def test_verbose_formatter_does_not_mutate_record_message():
     record = _make_record("User tester@example.com failed")
     formatter.format(record)
     assert record.getMessage() == "User tester@example.com failed"
+
+
+# --- Strukturierte Zusatzfelder in BEIDEN Formattern (Refs #1943) -------
+# Bisher rendert nur der JsonFormatter eine feste Whitelist
+# (request_id/user_id/facility_id); alles andere im logging-``extra`` fiel
+# in beiden Pfaden unter den Tisch. Fuer CSP-Violation-Reports hiess das:
+# der Log-Sink sah nur, DASS es einen Verstoss gab, nie welchen.
+
+
+def test_json_formatter_emits_csp_violation_extra():
+    formatter = JsonFormatter()
+    record = _make_record(
+        "csp_violation",
+        level=logging.WARNING,
+        extra={
+            "csp_violation": {"blocked-uri": "https://evil.example.com/x.js"},
+            "remote_addr": "203.0.113.7",
+            "user_agent": "Mozilla/5.0",
+        },
+    )
+    data = json.loads(formatter.format(record))
+    assert data["csp_violation"] == {"blocked-uri": "https://evil.example.com/x.js"}
+    assert data["remote_addr"] == "203.0.113.7"
+    assert data["user_agent"] == "Mozilla/5.0"
+
+
+def test_json_formatter_scrubs_structured_string_values():
+    """Strukturierte Felder koennen fremdbestimmte URLs tragen — der Scrub
+    darf nicht an der Message-Grenze aufhoeren."""
+    formatter = JsonFormatter()
+    record = _make_record(
+        "csp_violation",
+        level=logging.WARNING,
+        extra={
+            "csp_violation": {"document-uri": "https://x.test/?password=hunter2"},
+            "user_agent": "agent tester@example.com",
+        },
+    )
+    data = json.loads(formatter.format(record))
+    assert data["csp_violation"]["document-uri"] == "https://x.test/?password=<redacted>"
+    assert data["user_agent"] == "agent <email>"
+
+
+def test_verbose_formatter_appends_structured_fields():
+    formatter = VerboseScrubbingFormatter(fmt="{levelname} {module} {message}", style="{")
+    record = _make_record(
+        "csp_violation",
+        level=logging.WARNING,
+        extra={
+            "csp_violation": {"blocked-uri": "https://evil.example.com/x.js"},
+            "remote_addr": "203.0.113.7",
+        },
+    )
+    out = formatter.format(record)
+    assert out.startswith("WARNING test csp_violation ")
+    assert "https://evil.example.com/x.js" in out
+    assert "remote_addr=" in out
+    assert "203.0.113.7" in out
+    assert "\n" not in out
+
+
+def test_verbose_formatter_keeps_structured_fields_before_traceback():
+    """Die Felder gehoeren an die Message, nicht hinter den Traceback —
+    sonst zerreisst der Kontext in mehrzeiligen Fehlerausgaben."""
+    formatter = VerboseScrubbingFormatter(fmt="{message}", style="{")
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        import sys
+
+        record = logging.LogRecord(
+            name="core.test",
+            level=logging.ERROR,
+            pathname="test.py",
+            lineno=1,
+            msg="failed",
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+        record.module = "test"
+        record.remote_addr = "203.0.113.7"
+    out = formatter.format(record)
+    first_line = out.splitlines()[0]
+    assert "remote_addr" in first_line
+    assert "Traceback" in out
+
+
+def test_formatters_ignore_unknown_extras():
+    """Nur die Whitelist wird ausgegeben — sonst landet beliebiges
+    ``extra`` (und damit potenziell rohe Payloads) im Log."""
+    json_out = json.loads(JsonFormatter().format(_make_record("x", extra={"secret_blob": "leak-me"})))
+    assert "secret_blob" not in json_out
+    text_out = VerboseScrubbingFormatter(fmt="{message}", style="{").format(
+        _make_record("x", extra={"secret_blob": "leak-me"})
+    )
+    assert text_out == "x"
+
+
+def test_formatters_survive_non_serialisable_structured_value():
+    """Ein nicht JSON-serialisierbarer Wert in einem Whitelist-Feld darf die
+    Zeile nicht kosten.
+
+    ``user_id`` ist laut ``test_formatter_passes_through_structured_ids`` eine
+    UUID. Ohne ``default=str`` wirft ``json.dumps`` in BEIDEN Formattern einen
+    ``TypeError``; ``logging`` faengt den im Handler ab, druckt
+    "--- Logging error ---" und **verwirft den Record**. Der Textpfad ist der
+    Prod-Default und konnte an ``extra`` frueher gar nicht scheitern.
+    """
+    import uuid
+
+    uid = uuid.UUID("12345678-1234-5678-1234-567812345678")
+    record = _make_record("normal log", extra={"user_id": uid})
+
+    data = json.loads(JsonFormatter().format(record))
+    assert data["user_id"] == str(uid)
+
+    text = VerboseScrubbingFormatter(fmt="{message}", style="{").format(record)
+    assert str(uid) in text

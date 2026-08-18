@@ -40,6 +40,68 @@ def scrub(text):
     return text
 
 
+# Strukturierte Zusatzfelder aus dem logging-``extra``, die BEIDE Formatter
+# ausgeben (Refs #1943). Bewusst eine Whitelist statt "alles aus
+# ``record.__dict__``": ein Log-Record traegt Dutzende interner Attribute,
+# und ein versehentlich durchgereichtes ``extra`` waere genau der
+# Payload-Leak, gegen den der Scrubber steht.
+#
+# Vor #1943 kannte nur der ``JsonFormatter`` die ersten drei Felder und der
+# Textpfad gar keins — die CSP-Violation-Reports (``security.csp``) landeten
+# damit vollstaendig im Nirwana: sichtbar war nur "csp_violation", nie
+# blocked-uri/document-uri/IP/User-Agent.
+STRUCTURED_LOG_FIELDS = (
+    "request_id",
+    "user_id",
+    "facility_id",
+    # CSP-Violation-Reports (core/views/csp_report.py)
+    "csp_violation",
+    "csp_violations_total",
+    "csp_violations_dropped",
+    "remote_addr",
+    "user_agent",
+)
+
+
+def _scrub_value(value):
+    """Wendet ``scrub()`` auf alle Strings in *value* an (auch verschachtelt).
+
+    Die strukturierten Felder tragen teils fremdbestimmte Inhalte (CSP-
+    Report-URLs koennen Query-Parameter mit Credentials/Mailadressen
+    enthalten). Der Scrub darf deshalb nicht an der Message-Grenze enden.
+    """
+    if isinstance(value, str):
+        return scrub(value)
+    if isinstance(value, dict):
+        return {key: _scrub_value(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_scrub_value(item) for item in value]
+    return value
+
+
+def _dump(value):
+    """``json.dumps`` fuer Log-Werte — nie werfend.
+
+    ``default=str`` ist kein Komfort, sondern Fail-Safe: ein nicht
+    serialisierbarer Wert (z.B. eine UUID als ``user_id``) wuerde sonst im
+    Formatter einen ``TypeError`` werfen. ``logging`` faengt den im Handler
+    ab, druckt "--- Logging error ---" und **verwirft den Record** — die
+    Log-Zeile waere weg. Ein Formatter darf nie die Ursache dafuer sein,
+    dass ein Ereignis nicht geloggt wird.
+    """
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _structured_fields(record):
+    """Liefert die gesetzten Whitelist-Felder eines Records als dict."""
+    fields = {}
+    for attr in STRUCTURED_LOG_FIELDS:
+        val = getattr(record, attr, None)
+        if val is not None:
+            fields[attr] = _scrub_value(val)
+    return fields
+
+
 class VerboseScrubbingFormatter(logging.Formatter):
     """Plain-Text-Formatter (Default ``LOG_FORMAT=text``) mit PII-Scrub.
 
@@ -55,6 +117,23 @@ class VerboseScrubbingFormatter(logging.Formatter):
     verarbeiteten Felder. ``scrub()`` ist zudem idempotent.
     """
 
+    def formatMessage(self, record):  # noqa: N802 — stdlib-Hook von logging.Formatter
+        """Haengt die strukturierten Felder als ``key=json``-Paare an.
+
+        Ueberschrieben wird ``formatMessage`` (nicht ``format``), damit die
+        Felder direkt hinter der Message stehen und nicht hinter einem
+        angehaengten Traceback — sonst reisst der Kontext in mehrzeiligen
+        Fehlerausgaben auseinander. Die Werte werden JSON-kodiert, damit
+        Leerzeichen (User-Agents!) die Paare nicht mehrdeutig machen;
+        ``default=str`` ist Pflicht, siehe ``_dump``.
+        """
+        line = super().formatMessage(record)
+        fields = _structured_fields(record)
+        if not fields:
+            return line
+        rendered = " ".join(f"{key}={_dump(val)}" for key, val in fields.items())
+        return f"{line} {rendered}"
+
     def format(self, record):
         return scrub(super().format(record))
 
@@ -62,9 +141,11 @@ class VerboseScrubbingFormatter(logging.Formatter):
 class JsonFormatter(logging.Formatter):
     """Emit each log record as a single JSON line with PII scrubbing.
 
-    Scrubbing läuft über ``message`` und ``exception`` — andere strukturierte
-    Felder (``user_id``, ``facility_id``, ``request_id``) sind per Design
-    PII-arm (IDs, keine Klartext-Emails/Tokens) und bleiben unscrubbed.
+    Scrubbing läuft über ``message``, ``exception`` und die strukturierten
+    Zusatzfelder aus ``STRUCTURED_LOG_FIELDS``. Die IDs (``user_id``,
+    ``facility_id``, ``request_id``) sind per Design PII-arm und vom Scrub
+    unberührt; die CSP-Report-Felder sind es nicht — sie tragen
+    fremdbestimmte URLs (Refs #1943).
     """
 
     def format(self, record):
@@ -77,9 +158,7 @@ class JsonFormatter(logging.Formatter):
         }
         if record.exc_info and record.exc_info[0] is not None:
             entry["exception"] = scrub(self.formatException(record.exc_info))
-        # Django request attributes (set by Django's request logging)
-        for attr in ("request_id", "user_id", "facility_id"):
-            val = getattr(record, attr, None)
-            if val is not None:
-                entry[attr] = val
-        return json.dumps(entry, ensure_ascii=False)
+        # Strukturierte Zusatzfelder aus ``extra`` (Django-Request-Attribute
+        # und CSP-Violation-Details) — siehe ``STRUCTURED_LOG_FIELDS``.
+        entry.update(_structured_fields(record))
+        return _dump(entry)
