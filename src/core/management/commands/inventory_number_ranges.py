@@ -35,6 +35,20 @@ def _normalize_number_value(value):
     return int(parsed) if isinstance(parsed, float) and parsed.is_integer() else parsed
 
 
+#: Sentinel für einen fehlgeschlagenen ``safe_decrypt`` (kaputtes/fremdes
+#: Ciphertext) — bewusst kein ``None``, damit ein solcher Wert NICHT wie ein
+#: echter Nichtwert übersprungen wird: er ist belegt, nur nicht auswertbar,
+#: und bleibt fail-loud (Refs #1931).
+_DECRYPT_FAILED = object()
+
+
+def _is_empty_number_value(value):
+    """True, wenn *value* für ein optionales NUMBER-Feld „kein Wert“ bedeutet (Refs #1931)."""
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
 def _range_violations(entity, templates_by_document_type):
     """Yield ``(field_slug, reason)`` without exposing individual field values."""
     if entity.document_type_id is None or not entity.data_json:
@@ -46,7 +60,18 @@ def _range_violations(entity, templates_by_document_type):
             continue
         if template.min_value is None and template.max_value is None:
             continue
-        value = _normalize_number_value(safe_decrypt(stored_value, default=None))
+        decrypted = safe_decrypt(stored_value, default=_DECRYPT_FAILED)
+        if decrypted is _DECRYPT_FAILED:
+            yield slug, "keine Zahl"
+            continue
+        if _is_empty_number_value(decrypted):
+            # Refs #1931: fehlend/None/leer ist bei optionalen Feldern ein
+            # gültiger Nichtwert, kein Bestandsbefund. Ein leerer Pflichtwert
+            # bleibt dagegen ein echter Befund (fail-loud).
+            if template.is_required:
+                yield slug, "keine Zahl"
+            continue
+        value = _normalize_number_value(decrypted)
         if value is None:
             yield slug, "keine Zahl"
         elif template.min_value is not None and value < template.min_value:
