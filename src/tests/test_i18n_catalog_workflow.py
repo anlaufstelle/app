@@ -9,10 +9,24 @@ from pathlib import Path
 
 import pytest
 
+# Meta-Test auf dem Repo-Filesystem (laedt ``scripts/i18n_catalog.py``). Wie die
+# uebrigen scripts/-Tooling-Tests markiert und gegen den ``mutants/``-Tree
+# abgesichert: ``[tool.mutmut] also_copy`` kopiert kein ``scripts/``, der
+# Modul-Load unten schlaegt dort mit ``FileNotFoundError`` fehl und liess die
+# Stats-Sammlung des Mutation-Runs hart abbrechen (Refs #930).
+pytestmark = pytest.mark.architecture
+
+WORKFLOW_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "i18n_catalog.py"
+
+if not WORKFLOW_SCRIPT.exists():  # pragma: no cover - nur im mutants/-Tree
+    pytest.skip(
+        "scripts/i18n_catalog.py nicht erreichbar — Meta-Test ist nur im echten Repo-Tree sinnvoll",
+        allow_module_level=True,
+    )
+
 
 def _workflow_module():
-    path = Path(__file__).parents[2] / "scripts" / "i18n_catalog.py"
-    spec = importlib.util.spec_from_file_location("i18n_catalog", path)
+    spec = importlib.util.spec_from_file_location("i18n_catalog", WORKFLOW_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
