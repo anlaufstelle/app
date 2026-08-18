@@ -218,7 +218,14 @@ The largest collective pre-release to date — the configurability milestones M0
 - **File attachments on persons and cases**: the encrypted file vault, previously event-only, becomes owner-generic (exactly one owner per file — event, person or case) with a direct RLS policy.
 - **Removed (breaking)**: the documentation-type "category" field is gone; report mappings live in their own `report_key` field (the `system_type` enum is down to `ban`/`crisis`, the slug fallback is gone); type names are now unique per facility.
 
+### v0.81.0 (2026-08-18)
+
+- **Tally counting becomes a full capture path**: facility admins opt individual documentation types into the lightweight "+1" tally counter; suitable types with a single required number field open a compact number form instead of the full record, a tally can be undone once within 60 seconds by its own anonymous author, and the whole path — including the number form — now works offline with server and pending counts shown separately.
+- **The timeline updates itself**: visible feed entries, tally counts, the running shift and the focus box converge live within roughly twelve seconds for the viewing role, facility and active filters, and house-ban warning banners now converge the same way, without background polling that would otherwise keep the session open artificially.
+- **Report key becomes its own field**: report assignment moves off the frozen `system_type` enum and its hidden slug fallback onto an explicit "report key" carried by both the documentation type and the field template, so a field decides on its own whether it feeds a given report instead of inheriting an unrelated type-level choice.
+- **Navigation and search overhaul**: pressing Enter now opens a full search results page with true group totals, type filters and pagination instead of a dropdown-only affordance; two new area hubs, "Privacy" and "Administration", group previously scattered pages behind shared tabs, and the statistics area gains an Overview/External report/Record-level reports/Disclosures tab row that makes the external report reachable through navigation for the first time.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.80.0 -->
+<!-- translation-version: v0.81.0 -->
 <!-- translation-date: 2026-08-18 -->
 <!-- source-hash: e9a2358b095fa181798ebccb68169dddb263cf7f -->

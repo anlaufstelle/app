@@ -777,6 +777,6 @@ src/
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
 
 <!-- translation-source: CONTRIBUTING.md -->
-<!-- translation-version: v0.80.0 -->
+<!-- translation-version: v0.81.0 -->
 <!-- translation-date: 2026-08-20 -->
 <!-- source-hash: a7da803b0535523cc8f4a59862026e4b3468174d -->

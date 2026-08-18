@@ -5,12 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
-
-### Fixed
-
-- **Abmelden landet wieder verlässlich auf der Anmeldeseite** (#1951) — Beim Abmelden brachen der Auto-Reload des Service Workers und die Live-Aktualisierung des Zeitstroms die Weiterleitung zur Anmeldeseite ab, sodass der Browser die alte Seite neu lud und auf einer Anmeldeseite mit unbrauchbarem Rücksprungziel landete — nach dem nächsten Login teils auf einem rohen Seitenfragment statt auf der Startseite; die Sitzung war dabei stets korrekt beendet und die verschlüsselten Offline-Daten stets gelöscht.
-
-## [0.81.0] - 2026-08-18
+## [0.81.0] - 2026-08-20
 
 ### Added
 
@@ -64,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Abmelden landet wieder verlässlich auf der Anmeldeseite** (#1951) — Beim Abmelden brachen der Auto-Reload des Service Workers und die Live-Aktualisierung des Zeitstroms die Weiterleitung zur Anmeldeseite ab, sodass der Browser die alte Seite neu lud und auf einer Anmeldeseite mit unbrauchbarem Rücksprungziel landete — nach dem nächsten Login teils auf einem rohen Seitenfragment statt auf der Startseite; die Sitzung war dabei stets korrekt beendet und die verschlüsselten Offline-Daten stets gelöscht.
 - **Konfigurationspakete löschen Zahlenbereichsgrenzen nicht mehr bei jedem Lauf** (#1934) — `min_value`/`max_value` einer Feldvorlage sind jetzt echtes Tri-State wie `tally_enabled`: Fehlt der Schlüssel, bleibt eine per Konfigurationsoberfläche gepflegte Grenze unangetastet; ein explizites `null` löscht sie bewusst, ein Zahlenwert setzt sie. Bisher war dokumentiert, dass ein Paketlauf (auch ein `make seed`-Reseed) beide Grenzen bei fehlendem Schlüssel auf NULL zurücksetzt — das ist der dokumentierte Semantikwechsel dieser Änderung, sie gilt trotzdem rückwirkend für alle bestehenden Pakete ohne Sprung der Schemaversion, weil sie in keinem Fall mehr löscht als vorher. Lade-/Dry-Run-Bericht weisen eine so erhaltene Grenze jetzt außerdem in einer eigenen Zeile „Unangetastete Bestandsgrenzen" aus, statt ununterscheidbar in „unverändert" zu verschwinden.
 - **Bereichsinventar meldet leere optionale Zahlenwerte nicht mehr als Befund** (#1931) — `inventory_number_ranges` überspringt fehlende, `None`- und leere Werte an optionalen Zahlenfeldern jetzt als gültigen Nichtwert; leere Pflichtwerte und tatsächlich nicht-numerisch belegte Werte werden weiterhin gemeldet, verschlüsselte Leerwerte nach Entschlüsselung genauso wie unverschlüsselte.
 - **Auch das Zahlenformular als eigene Seite zählt offline jede Erfassung einzeln** (#1938) — Wer die Werteingabe über den Link in einem eigenen Tab öffnet oder nach einer ungültigen Eingabe auf der Vollseite landet, erzeugt beim Erfassen ohne Netz für jede Übertragung wieder einen eigenen Warteschlangen-Eintrag; zwei gleiche Erfassungen hintereinander gehen nicht mehr als eine durch.

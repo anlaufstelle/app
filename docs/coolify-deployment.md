@@ -125,7 +125,7 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 Coolify zieht das Image automatisch aus `ghcr.io/anlaufstelle/app:${APP_VERSION}`
 ([`docker-compose.prod.yml`](../docker-compose.prod.yml)). Es gibt **kein**
 `:latest`-Tag — ausgeliefert wird immer die per `APP_VERSION` gepinnte
-Release-Version (Default `v0.80.0`, siehe [`docker-compose.prod.yml`](../docker-compose.prod.yml)).
+Release-Version (Default `v0.81.0`, siehe [`docker-compose.prod.yml`](../docker-compose.prod.yml)).
 
 ### 6. Initial-Setup
 
