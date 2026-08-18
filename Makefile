@@ -98,7 +98,12 @@ ssl-cert:
 seed:
 	$(PYTHON) src/manage.py seed
 
-# Reorder-sicherer periodischer i18n-Vollabgleich (Refs #1915).
+# Reorder-sicherer i18n-Vollabgleich (Refs #1915) — Teil von `make ci`/
+# `make ci-locked` (Refs #1933): erkennt neue/entfernte/semantisch geaenderte
+# msgids gegen den echten Quellbaum, ohne PO-Reorder oder Schreibzugriff.
+# Insbesondere faengt es einen msgid-Verlust ab, der nur zur Laufzeit
+# referenziert wird (z.B. eine Formular-Fehlermeldung) und von keinem der
+# uebrigen Kataloggates (fuzzy/leer/Version, .mo-Frische) gesehen wird.
 i18n-check:
 	$(PYTHON) scripts/i18n_catalog.py check
 
@@ -234,7 +239,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js test-parallel
+ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions i18n-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js test-parallel
 
 # Serialisierte Varianten der ressourcenschweren Gates (Refs #1840).
 # Wer einen vollen Gate-Lauf startet, nimmt DIESE Targets — sonst kollidieren
