@@ -111,13 +111,11 @@
             </div>
         </div>
         {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835. #}
+        {# Refs #1901/#1050: bewusst KEIN SOURCE_CODE_VERSION-Span hier -- die anonyme Login-Seite bleibt versionslos (Fingerprinting); Quellcode-/Lizenz-Link bleiben stehen, AGPL §13 verlangt nur den Zugang. #}
         <footer class="text-center text-[12px] text-ink-muted mt-6">
             <span>Anlaufstelle</span>
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
-            {% if SOURCE_CODE_VERSION %}
-            <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
-            {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
             {# Demo: Rechtstexte muessen ohne Login von der Anmeldeseite aus erreichbar sein (Refs #1641). #}

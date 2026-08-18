@@ -32,6 +32,14 @@ class TestVersionFooter:
         response = client.get(reverse("login"))
         assert 'data-testid="app-version"' not in response.content.decode()
 
+    def test_login_page_shows_no_source_code_version(self, client, settings):
+        """Refs #1901: auch bei gesetzter SOURCE_CODE_VERSION bleibt die
+        anonyme Login-Seite versionslos (Fingerprinting) -- die Luecke, durch
+        die der Versions-Span als Nebenwirkung von #1812 sichtbar wurde."""
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        response = client.get(reverse("login"))
+        assert b"abcdef1" not in response.content
+
 
 class TestAppVersionInfo:
     def test_dev_build_suffix_is_exposed(self, monkeypatch):

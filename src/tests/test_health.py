@@ -16,6 +16,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.test import Client
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog
@@ -535,8 +536,23 @@ class TestAGPLFooter:
         assert b"https://git.example.org/fork/anlaufstelle" in response.content
         assert b"github.com/anlaufstelle" not in response.content
 
-    def test_source_code_version_truncated(self, client, db, settings):
+    def test_source_code_version_truncated(self, client, staff_user, settings):
+        """Refs #1901: Versionsanzeige ist auth-gated -- nur eingeloggt sichtbar."""
         settings.SOURCE_CODE_VERSION = "abcdef1234567890"
-        response = client.get("/login/")
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
         # truncatechars:8 -> "abcdef1…" (7 Zeichen + Ellipsis)
         assert b"abcdef1" in response.content
+
+    def test_source_code_version_hidden_on_login_page(self, client, db, settings):
+        """Refs #1901: anonyme Login-Seite zeigt SOURCE_CODE_VERSION nicht (Fingerprinting)."""
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        response = client.get("/login/")
+        assert b"abcdef1" not in response.content
+
+    def test_source_code_version_hidden_on_404(self, client, db, settings):
+        """Refs #1901: 404-Seite erbt von base.html und war ungegatet -- leakte den Stand anonym."""
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        response = client.get("/dieser-pfad-existiert-nicht-1901/")
+        assert response.status_code == 404
+        assert b"abcdef1" not in response.content
