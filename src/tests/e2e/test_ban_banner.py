@@ -19,6 +19,8 @@ from urllib.parse import urljoin
 import pytest
 from playwright.sync_api import expect
 
+from ._selectors import action_in_bar
+
 pytestmark = pytest.mark.e2e
 
 _SEED_BAN_SHELL = r"""
@@ -203,9 +205,16 @@ class TestHausverbotBannerLiveWatch:
             editor.set_default_timeout(30000)
             editor.set_default_navigation_timeout(30000)
             editor.goto(urljoin(base_url, client_href), wait_until="domcontentloaded")
-            editor.locator(f'a[href="/events/{event_pk}/"]').first.click()
-            editor.wait_for_load_state("domcontentloaded")
-            editor.get_by_test_id("event-action-edit").first.click()
+            # Die Personenakte zeigt dasselbe Hausverbot (get_active_bans_for_client)
+            # — mitgeprueft, weil der manuelle Weg hier entlanglief.
+            expect(editor.locator("body")).to_contain_text("Hausverbot")
+            # Refs #922/#924: Direkt-Navigation statt Klick auf die
+            # Kontakt-Chronik — die Liste ist reihenfolgeabhaengig, die
+            # ``event_pk`` steht aus dem Seed fest.
+            editor.goto(f"{base_url}/events/{event_pk}/", wait_until="domcontentloaded")
+            # ``action_in_bar`` scopet auf die Desktop-Aktionsleiste; ohne Scope
+            # traefe das Testid auch die (unsichtbare) Mobil-Zwillingsleiste.
+            action_in_bar(editor, "event", "event-action-edit").click()
             editor.wait_for_load_state("domcontentloaded")
             aktiv_box = editor.locator('input[name="aktiv"]')
             expect(aktiv_box).to_be_checked()
@@ -218,7 +227,7 @@ class TestHausverbotBannerLiveWatch:
             expect(ban_link).to_be_hidden(timeout=30_000)
 
             # Schritt 4: Gegenrichtung — Ban wieder aktiv setzen.
-            editor.get_by_test_id("event-action-edit").first.click()
+            action_in_bar(editor, "event", "event-action-edit").click()
             editor.wait_for_load_state("domcontentloaded")
             aktiv_box = editor.locator('input[name="aktiv"]')
             expect(aktiv_box).not_to_be_checked()
