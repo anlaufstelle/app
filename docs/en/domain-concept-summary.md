@@ -10,7 +10,7 @@ Low-threshold social services -- drop-in centers, emergency shelters, street wor
 
 Established commercial social-sector software targets large providers with hundreds of staff. Licenses are expensive, rollouts require weeks of consulting, and every system assumes that each person is registered with a real name and address. In reality, most contacts at low-threshold facilities are anonymous. Clients have the right not to disclose their identity. A system that asks for a name first has not understood the working reality.
 
-Anlaufstelle fills this gap. It is an open-source specialized application for documentation, operations management, and impact measurement -- built around pseudonymization, contact levels, and the daily rhythms of low-threshold work. It is designed to be self-hosted with `docker compose up`, learnable in two to three hours, and affordable for donation-funded facilities with five to fifteen staff members. Licensed under AGPL v3, it belongs to the community it serves.
+Anlaufstelle fills this gap. It is an open-source specialized application for documentation, operations management, and impact measurement -- built around pseudonymization, contact levels, and the daily rhythms of low-threshold work. It is designed to be self-hosted with `docker compose up`, learnable in two to three hours, and affordable for donation-funded facilities with five to thirty staff members. Licensed under AGPL v3, it belongs to the community it serves.
 
 ## Core Domain Concepts
 
@@ -220,5 +220,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-12 -->
-<!-- source-hash: 89bf1d3c5ad3eabb75fc9ee6747713a3d141315a -->
+<!-- translation-date: 2026-08-18 -->
+<!-- source-hash: e9a2358b095fa181798ebccb68169dddb263cf7f -->

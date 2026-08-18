@@ -46,7 +46,7 @@ Anlaufstelle richtet sich an Einrichtungen, in denen die Mehrzahl der Kontakte a
 - **Tagestreffs, Wärmestuben und Notschlafstellen** — Wohnungslosenhilfe
 - **Konsumräume und weitere niedrigschwellige Angebote**
 
-Typische Teamgröße: 5–20 Mitarbeitende. Typische Situation: Dokumentation mit Kladden, Zählblättern und Excel — weil passende Software entweder zu teuer, zu komplex oder nicht auf anonyme Kontakte ausgelegt ist.
+Typische Teamgröße: 5–30 Mitarbeitende. Typische Situation: Dokumentation mit Kladden, Zählblättern und Excel — weil passende Software entweder zu teuer, zu komplex oder nicht auf anonyme Kontakte ausgelegt ist.
 
 ---
 

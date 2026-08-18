@@ -82,7 +82,7 @@ Anlaufstelle ist das Fachsystem, das die Lücke zwischen teurer Großträger-Sof
 
 Der Markt für Fachsoftware im Sozialbereich bedient drei Segmente: umfassende Enterprise-Suiten für Großträger und Komplexträger, spezialisierte Fallbearbeitungssysteme für Kommunen und Jugendämter sowie mittelständische Branchenlösungen für freie Träger in der Jugendhilfe. Für niedrigschwellige Einrichtungen bleibt eine systematische Lücke:
 
-- **Zu teuer.** Preise sind häufig nicht einmal öffentlich einsehbar. Wo sie es sind, beginnen sie bei Bereichen, die für spendenfinanzierte Einrichtungen mit 5–15 Mitarbeitenden nicht tragbar sind.
+- **Zu teuer.** Preise sind häufig nicht einmal öffentlich einsehbar. Wo sie es sind, beginnen sie bei Bereichen, die für spendenfinanzierte Einrichtungen mit 5–30 Mitarbeitenden nicht tragbar sind.
 - **Zu komplex.** Wochenlange Einführungsprojekte, Consulting-Verträge und umfangreiche Schulungen setzen Ressourcen voraus, die in der Zielgruppe schlicht nicht vorhanden sind.
 - **Falsche Zielgruppe.** Kein gesichtetes System — kommerziell oder Open Source — bietet Pseudonymisierung als Kernkonzept oder dreistufige Kontaktmodelle. Alle setzen eine identifizierte Person als Ausgangspunkt voraus. Das passt nicht zu einer Realität, in der die Mehrzahl der Kontakte anonym bleibt.
 - **Kein Open Source.** Kein einziges der etablierten Fachsysteme im deutschen Sozialsektor ist Open Source. Das erschwert Vertrauen im Umgang mit hochsensiblen Daten vulnerabler Zielgruppen und verhindert gemeinschaftliche Weiterentwicklung.
@@ -106,7 +106,7 @@ Diese Dokumentationsrealität ist kein Versagen der Einrichtungen. Sie ist eine 
 
 Die Ursache liegt nicht in mangelnder Digitalisierungsbereitschaft, sondern in einer strukturellen Nicht-Passung zwischen dem Angebot an Fachsoftware und den Anforderungen niedrigschwelliger Arbeit:
 
-**Kosten:** Kommerzielle Fachsysteme kalkulieren für Organisationen mit mehreren Hundert Mitarbeitenden. Niedrigschwellige Einrichtungen haben typischerweise 5–15 Mitarbeitende, eine Mischfinanzierung aus öffentlichen Mitteln und Spenden, und kein separates IT-Budget.
+**Kosten:** Kommerzielle Fachsysteme kalkulieren für Organisationen mit mehreren Hundert Mitarbeitenden. Niedrigschwellige Einrichtungen haben typischerweise 5–30 Mitarbeitende, eine Mischfinanzierung aus öffentlichen Mitteln und Spenden, und kein separates IT-Budget.
 
 **Komplexität:** Etablierte Großträger- und Fallbearbeitungssysteme erfordern aufwendige Einführungsprojekte mit externer Beratung. In einer Einrichtung, in der die Leitung Nachtdienste übernimmt und der IT-Support im Trägerverband ein Halbtagsadministrator ist, fehlen dafür schlicht die Kapazitäten.
 
@@ -183,7 +183,7 @@ Die primäre Organisationseinheit der Dokumentation ist die Chronik einer Person
 
 Anlaufstelle denkt von der Einrichtung her: ein konkreter Standort mit eigenem Team, eigenen Dokumentationstypen und eigenen Berechtigungen. Das Datenmodell ist so angelegt, dass eine spätere Erweiterung auf Träger mit mehreren Standorten möglich ist, ohne die bestehende Datenstruktur grundlegend umzubauen.
 
-*Das bedeutet konkret:* Das Datenmodell enthält von Anfang an einen Fremdschlüssel auf Einrichtungsebene für alle relevanten Entitäten (Personen, Ereignisse, Dokumentationstypen). Für eine einzelne Einrichtung ist das transparent — es gibt nur eine Einrichtung, und die Organisationsebene ist in der UI ausgeblendet. Wenn ein Träger später weitere Standorte anbindet, ist die Grundlage gelegt, ohne bestehende Tabellen umbauen zu müssen. Personen (Clients) haben zusätzlich einen vorbereiteten Fremdschlüssel auf Organisationsebene, um eine spätere einrichtungsübergreifende Sichtbarkeit zu ermöglichen — dieser FK ist in v1.0 ungenutzt.
+*Das bedeutet konkret:* Das Datenmodell enthält von Anfang an einen Fremdschlüssel auf Einrichtungsebene für alle relevanten Entitäten (Personen, Ereignisse, Dokumentationstypen). Für eine einzelne Einrichtung ist das transparent — es gibt nur eine Einrichtung, und die Organisationsebene ist in der UI ausgeblendet. Wenn ein Träger später weitere Standorte anbindet, ist die Grundlage gelegt, ohne bestehende Tabellen umbauen zu müssen. Personen (Clients) haben zusätzlich einen vorbereiteten Fremdschlüssel auf Organisationsebene, um eine spätere einrichtungsübergreifende Sichtbarkeit zu ermöglichen — dieser FK ist im aktuellen Stand ungenutzt.
 
 ### Prinzip 3: Semantik vor freiem Feldchaos
 
@@ -489,9 +489,11 @@ Die Ökosystem-Ebene öffnet Anlaufstelle nach außen:
 
 ## 8. Aktueller Stand und Roadmap
 
-### Umgesetzt (v1.0)
+> **Zur Begrifflichkeit „v1.0":** „v1.0" bezeichnet projektweit ausschließlich die Produktiv-/Demo-Freigabe-Marke (siehe [README](../README.md), Roadmap #1435) — der Vorbehalt „noch nicht für den Produktiveinsatz freigegeben" fällt erst mit den Kriterien aus #1428. Der bereits umgesetzte Funktionsumfang wird in diesem Dokument unabhängig davon als „aktueller Stand" bezeichnet.
 
-Anlaufstelle v1.0 umfasst:
+### Umgesetzt (aktueller Stand)
+
+Der aktuelle Stand von Anlaufstelle umfasst:
 
 - Einrichtungsstruktur mit Facility-Scoping und Organisationshierarchie
 - 5-stufiges Rollenmodell (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz)
@@ -541,7 +543,7 @@ Beim Setup einer einzelnen Einrichtung wird automatisch eine Organization angele
 
 #### Organization — Der Träger (Hintergrund-Entität)
 
-Die Organisation repräsentiert einen Träger — einen Verband, eine gemeinnützige GmbH, einen Verein. In v1.0 existiert genau eine Organisation, automatisch angelegt, unsichtbar in der UI. Sie dient als vorbereiteter Scope für eine spätere Träger-Erweiterung.
+Die Organisation repräsentiert einen Träger — einen Verband, eine gemeinnützige GmbH, einen Verein. Aktuell existiert genau eine Organisation, automatisch angelegt, unsichtbar in der UI. Sie dient als vorbereiteter Scope für eine spätere Träger-Erweiterung.
 
 #### Facility — Die Einrichtung
 
@@ -569,7 +571,7 @@ Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt 
 
 Der Client repräsentiert eine Person im System. Der primäre Identifikator ist das Pseudonym — ein vom Team vergebener Name. Der Client hat eine Kontaktstufe (anonym, identifiziert, qualifiziert), die seinen Lebenszyklus im System bestimmt.
 
-Ein Client gehört primär zu einer Facility (dort wird dokumentiert, dort gelten die Scope-Regeln). Zusätzlich hat der Client einen vorbereiteten Fremdschlüssel auf Organization-Ebene — in v1.0 redundant (es gibt nur eine Organization), aber bereit für eine spätere einrichtungsübergreifende Sichtbarkeit, falls ein Träger mit dem Use-Case „gleiche Klientel in mehreren Einrichtungen" kommt.
+Ein Client gehört primär zu einer Facility (dort wird dokumentiert, dort gelten die Scope-Regeln). Zusätzlich hat der Client einen vorbereiteten Fremdschlüssel auf Organization-Ebene — im aktuellen Stand redundant (es gibt nur eine Organization), aber bereit für eine spätere einrichtungsübergreifende Sichtbarkeit, falls ein Träger mit dem Use-Case „gleiche Klientel in mehreren Einrichtungen" kommt.
 
 Anonyme Kontakte haben keinen Client-Eintrag — sie werden als Ereignisse ohne Personenbezug gezählt. Ein Client entsteht erst, wenn eine Person identifiziert wird und ein Pseudonym erhält.
 
@@ -665,7 +667,7 @@ erDiagram
 
 Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 
-**Einrichtungsebene (v1.0):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es in v1.0 nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id = :current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
+**Einrichtungsebene (aktueller Stand):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es aktuell nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id = :current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
 
 **Organisationsebene (Branding-Hülse):** Die Organisation existiert als reine Verwaltungs-Hülse für Träger-Branding (Logo, Trägername in Berichten). Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie sieht nur den `/system/`-Bereich, nicht das normale Fach-UI mehrerer Einrichtungen gleichzeitig. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
 
@@ -696,12 +698,12 @@ Jede Architekturentscheidung wird als strukturierter Block dokumentiert. Offene 
 
 ### Entscheidung 2: Klein bauen, Erweiterbarkeit vorbereiten
 
-**Kontext:** Das System muss sowohl für eine einzelne kleine Einrichtung als auch — perspektivisch — für einen Träger mit mehreren Standorten funktionieren. Eine flache Struktur (nur Einrichtung, kein Fremdschlüssel) skaliert nicht für Träger ohne Architekturumbau. Eine volle Hierarchie (Organization → Facility → Unit mit vollständigen Scope-Regeln, Facility-Switcher und Cross-Facility-Statistiken) ist für einen Einzelentwickler in v1.0 überdimensioniert und verzögert den Weg zum ersten nutzbaren Produkt erheblich.
+**Kontext:** Das System muss sowohl für eine einzelne kleine Einrichtung als auch — perspektivisch — für einen Träger mit mehreren Standorten funktionieren. Eine flache Struktur (nur Einrichtung, kein Fremdschlüssel) skaliert nicht für Träger ohne Architekturumbau. Eine volle Hierarchie (Organization → Facility → Unit mit vollständigen Scope-Regeln, Facility-Switcher und Cross-Facility-Statistiken) ist für einen Einzelentwickler überdimensioniert und verzögert den Weg zum ersten nutzbaren Produkt erheblich.
 
 **Entscheidung:** Das System wird für eine einzelne Einrichtung gebaut. Im Datenmodell existieren aber von Anfang an die Fremdschlüssel für eine spätere Erweiterung:
 
 - Jede Entität (Client, Event, DocumentType, WorkItem) hat `facility_id` als Pflicht-FK.
-- Client hat zusätzlich `organization_id` als vorbereiteten FK (in v1.0 redundant, da es nur eine Organization gibt).
+- Client hat zusätzlich `organization_id` als vorbereiteten FK (aktuell redundant, da es nur eine Organization gibt).
 - Beim Setup wird automatisch eine Organization + eine Facility angelegt. Die UI zeigt die Organisationsebene nicht.
 - Jede Datenbankabfrage filtert auf `facility_id = :current_facility`. Da es nur eine Facility gibt, ist das ein transparenter Filter.
 
@@ -711,13 +713,13 @@ Für die Frage, ob Client auf Facility- oder Organization-Ebene angesiedelt wird
 
 **Alternativen:**
 - Nur Facility, kein Organization-Modell. Verworfen: Wenn später ein Träger kommt, muss jede Tabelle um einen FK erweitert werden — das ist eine grundlegende Architekturänderung.
-- Volle Hierarchie von Anfang an. Verworfen: Scope-Logik, Membership-Modell, Admin-Views und Cross-Facility-Statistiken kosten 50–80% mehr Aufwand in v1.0. Als Einzelentwickler mit dem Ziel „zeigbarer Prototyp in 6 Wochen" ist das nicht tragbar.
+- Volle Hierarchie von Anfang an. Verworfen: Scope-Logik, Membership-Modell, Admin-Views und Cross-Facility-Statistiken kosten 50–80% mehr Aufwand. Als Einzelentwickler mit dem Ziel „zeigbarer Prototyp in 6 Wochen" ist das nicht tragbar.
 
 **Offene Punkte:** Keine — die Entscheidung ist final. Der Ausbau auf Träger-Ebene ist ein Feature für die Falllogik (siehe Roadmap), wenn ein konkreter Bedarf vorliegt.
 
 ### Entscheidung 3: Semantische Feldschicht — JSONB (Hybrid)
 
-**Status: Bedingt entschieden.** JSONB für v1.0. Evaluierung der Performance feldbezogener Abfragen vor Auswertung (siehe Roadmap).
+**Status: Bedingt entschieden.** JSONB im aktuellen Stand. Evaluierung der Performance feldbezogener Abfragen vor Auswertung (siehe Roadmap).
 
 **Kontext:** Anlaufstelle braucht konfigurierbare Dokumentationstypen mit eigenen Feldern. Die Frage ist, wie die Feldwerte gespeichert werden. Zwei grundsätzliche Ansätze standen zur Wahl: JSONB (Hybrid) und volles EAV (Entity-Attribute-Value).
 
@@ -770,21 +772,21 @@ Würde man WorkItems als DocumentType abbilden, müsste man Status, Zuweisung, I
 
 ### Entscheidung 5: Case-Fremdschlüssel auf Event von Anfang an
 
-**Kontext:** Fallführung (Case, Episode) kommt erst mit der Falllogik (siehe Roadmap). Die Frage ist, ob der Fremdschlüssel von Event zu Case bereits in v1.0 angelegt wird — nullable, ungenutzt, aber vorhanden.
+**Kontext:** Fallführung (Case, Episode) kommt erst mit der Falllogik (siehe Roadmap). Die Frage ist, ob der Fremdschlüssel von Event zu Case bereits jetzt angelegt wird — nullable, ungenutzt, aber vorhanden.
 
 **Entscheidung:** Ja. Events haben von Anfang an einen optionalen Verweis auf einen Case.
 
-**Begründung:** Wenn der Fremdschlüssel erst mit der Falllogik hinzugefügt wird, müssen alle bestehenden Events migriert werden. Das ist bei einer leeren Entwicklungsdatenbank trivial, aber bei einer Einrichtung, die seit v1.0 produktiv arbeitet, ein Risiko. Durch die frühe Anlage (nullable, kein Pflichtfeld) ist der Fremdschlüssel da, ohne dass er stört — und mit der Falllogik können bestehende Events nachträglich einem Fall zugeordnet werden, ohne Schema-Änderung.
+**Begründung:** Wenn der Fremdschlüssel erst mit der Falllogik hinzugefügt wird, müssen alle bestehenden Events migriert werden. Das ist bei einer leeren Entwicklungsdatenbank trivial, aber bei einer Einrichtung, die bereits produktiv arbeitet, ein Risiko. Durch die frühe Anlage (nullable, kein Pflichtfeld) ist der Fremdschlüssel da, ohne dass er stört — und mit der Falllogik können bestehende Events nachträglich einem Fall zugeordnet werden, ohne Schema-Änderung.
 
 **Alternativen:** Fremdschlüssel erst mit der Falllogik einführen. Verworfen wegen Migrations-Risiko. Verknüpfung über Zwischentabelle statt Fremdschlüssel. Möglich, aber überflüssige Indirektion für eine 1:n-Beziehung.
 
 **Offene Punkte:** Keine — die Entscheidung ist final.
 
-### Entscheidung 6: Datenschutz-Basisarchitektur in v1.0
+### Entscheidung 6: Datenschutz-Basisarchitektur von Anfang an
 
 **Kontext:** Datenschutz könnte als eigene Phase spät im Projekt umgesetzt werden — wenn die Kernfunktionalität steht. Das ist der übliche Ansatz, bei dem Sicherheit und Datenschutz nachgerüstet werden.
 
-**Entscheidung:** Die Datenschutz-Grundlagen (Audit-Trail, Verschlüsselung sensibler Felder, rollenbasierter Zugriff, Kontaktstufen-abhängige Sichtbarkeit) werden in v1.0 implementiert. Die Verfeinerung (automatisierte Löschfristen, Betroffenenrechte, DSGVO-Dokumentation) erfolgt mit der Datenschutz-Reife (siehe Roadmap).
+**Entscheidung:** Die Datenschutz-Grundlagen (Audit-Trail, Verschlüsselung sensibler Felder, rollenbasierter Zugriff, Kontaktstufen-abhängige Sichtbarkeit) werden von Anfang an implementiert. Die Verfeinerung (automatisierte Löschfristen, Betroffenenrechte, DSGVO-Dokumentation) erfolgt mit der Datenschutz-Reife (siehe Roadmap).
 
 **Begründung:** Bei einem System, das hochsensible Sozialdaten verarbeitet, ist Datenschutz kein Feature, sondern eine Grundvoraussetzung. Wenn eine Einrichtung produktiv arbeitet, müssen die Daten von Anfang an geschützt sein. Nachträgliches Einbauen von Audit-Trail und Verschlüsselung erfordert Datenmigration und birgt das Risiko, dass in der Übergangszeit ungeschützte Daten in der Datenbank liegen.
 
@@ -792,7 +794,7 @@ Darüber hinaus: Datenschutz by Design (Art. 25 DSGVO) ist keine Empfehlung, son
 
 **Alternativen:** Datenschutz als eigene, spätere Phase. Verworfen wegen rechtlicher und ethischer Bedenken.
 
-**Offene Punkte:** Die Balance zwischen „genug Datenschutz für v1.0" und „nicht zu viel Aufwand vor der Kernfunktionalität" muss pragmatisch gefunden werden. Der Audit-Trail und die rollenbasierte Zugriffskontrolle sind Pflicht in v1.0. Automatisierte Löschfristen und das vollständige DSGVO-Dokumentationspaket können mit der Datenschutz-Reife (siehe Roadmap) folgen.
+**Offene Punkte:** Die Balance zwischen „genug Datenschutz von Anfang an" und „nicht zu viel Aufwand vor der Kernfunktionalität" muss pragmatisch gefunden werden. Der Audit-Trail und die rollenbasierte Zugriffskontrolle sind Pflicht von Anfang an. Automatisierte Löschfristen und das vollständige DSGVO-Dokumentationspaket können mit der Datenschutz-Reife (siehe Roadmap) folgen.
 
 ---
 
@@ -1020,7 +1022,7 @@ Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den
 
 **Deployment:** Docker Compose als primärer Deployment-Pfad. Das Versprechen `docker compose up` ist eine harte Anforderung an die Containerisierung: Ein einzelnes Compose-File muss Anwendung, Datenbank und Reverse-Proxy starten.
 
-**Suchindex:** PostgreSQL-Volltextsuche für v1.0. Ein dedizierter Suchindex (z.B. Meilisearch) ist ein optionaler Ausbauschritt, wenn sich die eingebaute Suche bei großen Datenmengen als unzureichend erweist.
+**Suchindex:** PostgreSQL-Volltextsuche im aktuellen Stand. Ein dedizierter Suchindex (z.B. Meilisearch) ist ein optionaler Ausbauschritt, wenn sich die eingebaute Suche bei großen Datenmengen als unzureichend erweist.
 
 ### Deployment-Architektur
 
@@ -1186,9 +1188,9 @@ Die Evaluierung findet vor Beginn der Auswertungs-Entwicklung (siehe Roadmap) st
 
 ## 19. Datenschutz: Phasenabgrenzung
 
-Das Hauptdokument beschreibt Datenschutz-Grundlagen in v1.0 und Datenschutz-Reife als Roadmap-Thema. Die Abgrenzung ist implizit klar, aber nicht explizit dokumentiert. Diese Tabelle schafft Klarheit:
+Das Hauptdokument beschreibt Datenschutz-Grundlagen im aktuellen Stand (Fundament) und Datenschutz-Reife als Roadmap-Thema. Die Abgrenzung ist implizit klar, aber nicht explizit dokumentiert. Diese Tabelle schafft Klarheit:
 
-| Maßnahme | v1.0 (Fundament) | Datenschutz-Reife (Stand v0.15) |
+| Maßnahme | Aktueller Stand (Fundament) | Datenschutz-Reife (Stand v0.15) |
 |---|---|---|
 | Rollenbasierte Zugriffskontrolle | ✓ implementiert ||
 | Kontaktstufen-abhängige Sichtbarkeit | ✓ implementiert ||
@@ -1203,7 +1205,7 @@ Das Hauptdokument beschreibt Datenschutz-Grundlagen in v1.0 und Datenschutz-Reif
 | DSGVO-Dokumentation | Nicht mitgeliefert | ✓ Vorlagen mitgeliefert ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/): VVT, DSFA, AV-Vertrag, TOMs, Informationspflichten) |
 | Datenschutz-Folgenabschätzung | Nicht durchgeführt | ✓ Vorlage mitgeliefert (`dsfa.md`), auf Anlaufstelle zugeschnitten |
 
-Die Logik: v1.0 stellt sicher, dass keine ungeschützten Daten im System liegen. Die Datenschutz-Reife stellt sicher, dass die Organisation ihre Compliance-Pflichten erfüllen kann, ohne externen Rechtsberater zu brauchen. **Stand v0.15:** Diese Reife-Maßnahmen sind weitgehend umgesetzt — Retention-Automatisierung ([ADR-021](adr/021-retention-modell.md)), K-Anonymisierung ([ADR-023](adr/023-k-anonymization-statistik.md)), 4-Augen-Löschung und die DSGVO-Vorlagen sind produktiv; offen bleiben v.a. dedizierte Portabilitäts-/Berichtigungs-Workflows (Art. 16/20).
+Die Logik: Das Fundament stellt sicher, dass keine ungeschützten Daten im System liegen. Die Datenschutz-Reife stellt sicher, dass die Organisation ihre Compliance-Pflichten erfüllen kann, ohne externen Rechtsberater zu brauchen. **Stand v0.15:** Diese Reife-Maßnahmen sind weitgehend umgesetzt — Retention-Automatisierung ([ADR-021](adr/021-retention-modell.md)), K-Anonymisierung ([ADR-023](adr/023-k-anonymization-statistik.md)), 4-Augen-Löschung und die DSGVO-Vorlagen sind produktiv; offen bleiben v.a. dedizierte Portabilitäts-/Berichtigungs-Workflows (Art. 16/20).
 
 ---
 
@@ -1227,7 +1229,7 @@ Anlaufstelle richtet sich an Mitarbeitende, nicht an Klientel. Die primäre Barr
 
 ### Zeitplan
 
-Barrierefreiheit wird nicht als eigenes Roadmap-Thema behandelt, sondern als Querschnittsanforderung ab v1.0. Die Kosten für nachträgliche Barrierefreiheit sind erfahrungsgemäß 3–5x höher als bei Integration von Beginn an — dieselbe Logik wie beim Datenschutz.
+Barrierefreiheit wird nicht als eigenes Roadmap-Thema behandelt, sondern als Querschnittsanforderung von Anfang an. Die Kosten für nachträgliche Barrierefreiheit sind erfahrungsgemäß 3–5x höher als bei Integration von Beginn an — dieselbe Logik wie beim Datenschutz.
 
 ---
 
@@ -1259,8 +1261,8 @@ Das Hauptdokument nennt DSGVO und Sozialdatenschutz (SGB X) als rechtlichen Rahm
 
 | Standard / Pflicht | Relevanz für Anlaufstelle | Phase |
 |---|---|---|
-| **DSGVO** (Art. 9, 25, 30, 35) | Kernrelevant. Bereits adressiert. | v1.0 + Datenschutz-Reife (Roadmap) |
-| **SGB X** (§§ 67–85a) | Sozialdatenschutz. Pseudonymisierung und Löschfristen adressieren die Kernanforderungen. | v1.0 |
+| **DSGVO** (Art. 9, 25, 30, 35) | Kernrelevant. Bereits adressiert. | Fundament + Datenschutz-Reife (Roadmap) |
+| **SGB X** (§§ 67–85a) | Sozialdatenschutz. Pseudonymisierung und Löschfristen adressieren die Kernanforderungen. | Fundament |
 | **SGB VIII** (§§ 61–65) | Relevant bei Jugendhilfe-Einrichtungen. Besondere Schweigepflicht. | Datenschutz-Reife (Roadmap) |
 | **§ 203 StGB** | Schweigepflicht. Betrifft die organisatorische Ebene, nicht direkt das System. | Dokumentation |
 | **KDS (Kerndatensatz Suchthilfe)** | Export-Format für die Deutsche Suchthilfestatistik. Relevant für Einrichtungen, die an die DBDD/EBDD berichten. | Schnittstellen (Roadmap) |
@@ -1327,7 +1329,7 @@ Bevor das 30-Sekunden-Ziel zur harten Anforderung wird, sollte es empirisch gepr
 
 ### Authentifizierung
 
-v1.0 setzt auf Django-eigene Authentifizierung (Benutzername + Passwort, bcrypt/Argon2). Für spätere Roadmap-Schritte werden folgende Optionen vorbereitet, aber nicht in v1.0 implementiert:
+Der aktuelle Stand setzt auf Django-eigene Authentifizierung (Benutzername + Passwort, bcrypt/Argon2). Für spätere Roadmap-Schritte werden folgende Optionen vorbereitet, aber aktuell nicht implementiert:
 
 - **SAML 2.0 / OIDC:** Für Träger, die einen Identity Provider betreiben (selten in der Zielgruppe, aber bei größeren Verbänden möglich). Wird relevant, wenn die Organisationshierarchie auf Träger-Ebene ausgebaut wird.
 - **CSV-Import:** Für die initiale Übernahme von Benutzerlisten. Einfacher als LDAP, ausreichend für die Zielgruppe.
@@ -1335,7 +1337,7 @@ v1.0 setzt auf Django-eigene Authentifizierung (Benutzername + Passwort, bcrypt/
 
 ### Scope-Filter als Middleware
 
-Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id = :current_facility`. In v1.0 gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
+Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id = :current_facility`. Aktuell gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
 
 ### Monitoring und Betrieb
 
@@ -1350,17 +1352,17 @@ Für die Einrichtungsleitung, die Anwendungsbetreuung (`facility_admin`) oder di
 
 ## 26. Entscheidungsübersicht
 
-Alle Architektur- und Strategieentscheidungen im Fachkonzept v1.2:
+Alle Architektur- und Strategieentscheidungen im Fachkonzept v1.7:
 
 | # | Entscheidung | Status | Ergebnis |
 |---|---|---|---|
 | 1 | Zeitstrom statt Zeitfenster-Modell | **Final** | Ereignis als Grundeinheit, benannte Zeitfilter als UI-Konfiguration |
 | 2 | Organisationshierarchie | **Final** | Klein bauen + vorbereiten. Facility als Primärscope, FKs auf Organization angelegt, UI zeigt nur Facility |
-| 2a | Client-Scope | **Final** | Client gehört zur Facility. Organization-FK vorbereitet (nullable, ungenutzt in v1.0) |
-| 3 | Semantische Feldschicht | **Bedingt entschieden** | JSONB für v1.0. Performance-Evaluierung feldbezogener Abfragen vor Auswertung (Roadmap) |
+| 2a | Client-Scope | **Final** | Client gehört zur Facility. Organization-FK vorbereitet (nullable, ungenutzt im aktuellen Stand) |
+| 3 | Semantische Feldschicht | **Bedingt entschieden** | JSONB im aktuellen Stand. Performance-Evaluierung feldbezogener Abfragen vor Auswertung (Roadmap) |
 | 4 | WorkItems als eigenes Modul | **Final** | Eigene Entität, getrennt von Events |
 | 5 | Case-FK auf Event von Anfang an | **Final** | Nullable FK, vorbereitet für Falllogik (Roadmap) |
-| 6 | Datenschutz-Basisarchitektur in v1.0 | **Final** | Audit-Trail, Verschlüsselung, rollenbasierter Zugriff ab Tag 1 |
+| 6 | Datenschutz-Basisarchitektur von Anfang an | **Final** | Audit-Trail, Verschlüsselung, rollenbasierter Zugriff ab Tag 1 |
 | 7 | Lizenz | **Final** | AGPL v3 |
 | 8 | Roadmap | **Final** | Phasenplan durch Roadmap ersetzt (siehe Kapitel 8) |
 

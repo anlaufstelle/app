@@ -46,7 +46,7 @@ Anlaufstelle is built for facilities where most contacts are anonymous or pseudo
 - **Day shelters, warming centers and emergency shelters** — homelessness support
 - **Supervised consumption rooms and other low-threshold services**
 
-Typical team size: 5–20 staff. Typical situation: documentation with logbooks, tally sheets, and spreadsheets — because suitable software is either too expensive, too complex, or not designed for anonymous contacts.
+Typical team size: 5–30 staff. Typical situation: documentation with logbooks, tally sheets, and spreadsheets — because suitable software is either too expensive, too complex, or not designed for anonymous contacts.
 
 ---
 
@@ -211,5 +211,5 @@ docker compose exec web python src/manage.py seed
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.80.0 -->
-<!-- translation-date: 2026-08-01 -->
-<!-- source-hash: 4517079fee15268a632d6844dd7ff079936fa498 -->
+<!-- translation-date: 2026-08-18 -->
+<!-- source-hash: 3cd54a320c5cdce881a26e7d964c9bc060faec9b -->
