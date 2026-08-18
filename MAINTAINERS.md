@@ -58,6 +58,21 @@ Zur Vertretung gehören mindestens:
  Schlüsselbund sind. Wie genau (Escrow-Verwahrung, getrennte Schlüssel,
  Vier-Augen-Prinzip) ist noch zu entscheiden und hier absichtlich offen gelassen.
 
+### Eintrag bei Benennung (auszufüllen)
+
+Sobald eine Vertretung feststeht, hier eintragen; die übrige Prosa dieses
+Abschnitts bleibt bis zur Umsetzung der Escrow-Trennung (siehe unten) gültig:
+
+| Feld | Wert |
+|------|------|
+| Name | _TBD_ |
+| Kontakt | _TBD_ |
+
+Nach dem Ausfüllen die Überschrift dieses Abschnitts von „Vertretung: TBD
+vor 2026-09-11 vom Maintainer zu benennen" auf „Vertretung: <Name>" ändern.
+Die Signing-Key-/Secret-Escrow-Trennung ist ein zweiter, unabhängiger Schritt
+— Checkliste dazu: `docs/dev/deputy-escrow-runbook.md` (dev-only).
+
 Solange keine Vertretung eingerichtet ist, bleibt dieser Punkt der wichtigste
 offene Governance-Posten des Projekts.
 
