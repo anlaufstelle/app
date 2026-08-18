@@ -14,8 +14,8 @@
  * KEIN Online-Dispatch hier — der Startup-Drain repliziert beim naechsten
  * Online-Kontakt.
  *
- * Die reinen Feld-Helfer (Event) stammen aus offline-form-fields.js (,
- * window.offlineFormFields); der geteilte Event-Feld-Loop lebt im Partial
+ * Die reinen Feld-Helfer (Event) stammen aus offline-form-fields.js
+ * (window.offlineFormFields); der geteilte Event-Feld-Loop lebt im Partial
  * _offline_event_fields.html, der WorkItem-Feld-Loop im bestehenden
  * _offline_workitem_fields.html (beide auch von offline_detail.html includet).
  */
@@ -261,7 +261,7 @@
             },
         }));
 
-        // ── (#1522): pk-lose WorkItem-Create-Shell ─────────────────────
+        // ── Refs #1522: pk-lose WorkItem-Create-Shell ───────────────────────
         // Spiegel von offlineEventCreate fuer den WorkItem-Track. STAFF+-GATE:
         // das personenlose Facility-Bundle liefert `assignableUsers` NUR fuer
         // Staff+ (Assistenz bekommt []). canCreateWorkItem = assignableUsers>0

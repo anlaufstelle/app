@@ -89,7 +89,7 @@ class TestOfflineBannerCachedClientsLink:
     """Refs #1535 (#1499): der "N Personen lokal verfügbar"-Link
 
     fuehrt auf die kanonische Personenliste (``core:client_list``, /clients/),
-    die im Offline-Zustand in-place die gecachten Personen rendert (/),
+    die im Offline-Zustand in-place die gecachten Personen rendert,
     statt auf die generische ``offline_fallback``-Seite (/offline/).
     """
 

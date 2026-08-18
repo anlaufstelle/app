@@ -203,7 +203,7 @@
             if (hasKey && st) {
                 if (st.purgeExpired) await st.purgeExpired(Date.now());
                 if (st.revalidateCachedClients) await st.revalidateCachedClients();
-                // (#1520/#1499): das personenlose Facility-Meta-Bundle im
+                // Refs #1520/#1499: das personenlose Facility-Meta-Bundle im
                 // SELBEN Lock/Key-Gate revalidieren (billig: 304 bei
                 // unveraendertem Katalog) — damit die Offline-Create-Shell auch
                 // ohne "Person mitnehmen" einen frischen Katalog vorhaelt.

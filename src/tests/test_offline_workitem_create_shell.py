@@ -9,7 +9,8 @@ Alpine-Komponente ``offlineWorkItemCreate`` client-seitig aus IndexedDB
 
 Analog zu :class:`TestOfflineEventCreateShellView`: public, GET-only,
 Template-Smoke. Das Verhalten (Staff+-Gate, Person-Picker, Standalone, Replay)
-deckt die E2E-Journey in ab. Der Staff+-Gate (Assistenz ohne
+deckt die E2E-Journey in tests/e2e/test_offline_create_shell_journeys.py ab.
+Der Staff+-Gate (Assistenz ohne
 assignable_users sieht die Form nicht -> kein 403-"revoked"-Replay, weil
 WorkItemCreateView = StaffRequiredMixin) ist Alpine-seitig verdrahtet und wird
 hier als Scaffold-Hook (offline-workitem-create-gate) belegt.

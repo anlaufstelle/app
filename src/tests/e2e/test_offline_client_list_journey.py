@@ -2,9 +2,9 @@
 
 Refs #1536 (#1499). Deckt die neue Kern-Journey der Welle ab:
 offline rendert der Service Worker die kanonische Personenliste ``/clients/``
-IN-PLACE aus der precachten, pk-losen Shell (OfflineClientListShellView/
-) — kein Bounce mehr auf die ``/offline/``-Home. ``offline-client-list.js``
-(/) liest die offline mitgenommenen Personen aus der verschluesselten
+IN-PLACE aus der precachten, pk-losen Shell (OfflineClientListShellView) — kein
+Bounce mehr auf die ``/offline/``-Home. ``offline-client-list.js`` liest die
+offline mitgenommenen Personen aus der verschluesselten
 IndexedDB (``listOfflineClientsDetailed``) und rendert die gewohnte
 ``role=table``-Liste inkl. client-seitiger Suche + Stufe-/Alter-Filter.
 

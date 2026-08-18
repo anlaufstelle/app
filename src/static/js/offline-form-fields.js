@@ -9,9 +9,9 @@
  * Alpine.data()-Bestandteil, nur ein window-Export (CSP-konform, analog
  * csrf-utils.js/url-patterns.js).
  *
- * Muss (, Refs #1499) in den Service-Worker-APP_SHELL aufgenommen
- * werden -- ist hier noch NICHT enthalten ( haelt den einzigen
- * CACHE_NAME-Bump-Commit der Welle).
+ * Steht (Refs #1499) im Service-Worker-APP_SHELL (s. sw.js). Der
+ * zugehoerige CACHE_NAME-Bump liegt gesammelt in GENAU EINEM Commit
+ * fuer die ganze Reihe -- nicht einer pro Datei.
  */
 (function () {
     "use strict";

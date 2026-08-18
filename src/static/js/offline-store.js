@@ -46,7 +46,7 @@
     "use strict";
 
     const DB_NAME = "anlaufstelle-offline";
-    // (#1520/#1499): `facility` ist Teil von TABLES, damit purgeAll
+    // Refs #1520/#1499: `facility` ist Teil von TABLES, damit purgeAll
     // (Logout/Passwortwechsel) das personenlose Meta-Bundle mitloescht.
     const TABLES = ["queue", "drafts", "meta", "clients", "cases", "events", "facility"];
     const TTL_MS = 48 * 60 * 60 * 1000; // 48h
@@ -55,11 +55,11 @@
     // core/services/system/offline.py synchron gehalten werden (kein
     // Build-Sync, analog TTL_MS/BUNDLE_TTL_SECONDS oben) -- ein Mismatch
     // zwingt den Lesepfad zum Purge, siehe _isSchemaMismatch.
-    // (#1529/#1499): v1->v2 (client.lastContact neu im Bundle) -- Alt-v1-
+    // Refs #1529/#1499: v1->v2 (client.lastContact neu im Bundle) -- Alt-v1-
     // Bundles fallen dadurch im getOfflineClient/listOfflineClientsDetailed-
     // Gate raus und werden gepurged.
     const BUNDLE_SCHEMA_VERSION = 2;
-    // (#1520/#1499): eigene Schema-Version fuers personenlose
+    // Refs #1520/#1499: eigene Schema-Version fuers personenlose
     // Facility-Meta-Bundle -- UNABHAENGIG von BUNDLE_SCHEMA_VERSION (Klient),
     // damit beide Bundles getrennt evolvieren koennen. Muss mit
     // FACILITY_BUNDLE_SCHEMA_VERSION in core/services/system/offline.py
@@ -68,7 +68,7 @@
     // #1912: v1->v2 fuegt den policy-gefilterten Tally-Snapshot hinzu. Der
     // bestehende Lesepfad verwirft Alt-v1 fail-closed.
     const FACILITY_BUNDLE_SCHEMA_VERSION = 2;
-    // (#1520/#1499): das Facility-Bundle ist ein Singleton (genau eine
+    // Refs #1520/#1499: das Facility-Bundle ist ein Singleton (genau eine
     // Facility pro Session) -> fixer Primaerkey, kein pk-Fan-out.
     const FACILITY_ROW_KEY = "self";
 
@@ -103,7 +103,7 @@
         cases: "pk, clientPk, lastSynced",
         events: "pk, clientPk, occurredAt, localStatus",
     });
-    // (#1520/#1499): additiver Upgrade — neue `facility`-Tabelle fuers
+    // Refs #1520/#1499: additiver Upgrade — neue `facility`-Tabelle fuers
     // personenlose Offline-Create-Meta-Bundle (Singleton, Primaerkey "key",
     // fixer Wert "self"). Dexie verlangt die vollstaendige Wiederholung ALLER
     // Tabellen der Vorversion — v3-Tabellen unveraendert uebernommen, niemand
@@ -823,7 +823,7 @@
             out.push({
                 pk: row.pk,
                 pseudonym: client.pseudonym || "",
-                // (#1520/#1499): Kontaktstufe fuer den Person-Picker-
+                // Refs #1520/#1499: Kontaktstufe fuer den Person-Picker-
                 // Vorfilter der Offline-Create-Shell durchreichen (Server
                 // liefert `contact_stage` bereits im Klient-Bundle) — DocTypes
                 // mit `min_contact_stage` sind bei "ohne Person"/anonym nicht
@@ -831,19 +831,19 @@
                 contactStage: client.contact_stage || "",
                 lastSynced: row.lastSynced,
                 expiresAt: envelope.expiresAt || "",
-                // (#1530/#1499): additive Felder fuer die Offline-
+                // Refs #1530/#1499: additive Felder fuer die Offline-
                 // Personenliste (#1499) -- reine Passthroughs aus dem
-                // Server-Bundle (, offline.py `client`-Dict), keine
+                // Server-Bundle (offline.py `client`-Dict), keine
                 // eigene Ableitung/Formatierung hier. Bestehende Konsumenten
                 // (offline-home.js, offline-create.js) lesen weiterhin nur
                 // die Felder oben; diese sind rein additiv.
                 ageCluster: client.age_cluster || "",
                 ageClusterDisplay: client.age_cluster_display || "",
                 contactStageDisplay: client.contact_stage_display || "",
-                //: server-seitig cutoff-frei berechnet, ISO-8601-String
+                // server-seitig cutoff-frei berechnet, ISO-8601-String
                 // oder null (kontaktloser Klient) -- null bewusst NICHT auf
                 // "" gemappt (JSON-clean Unterscheidung "kein Kontakt" vs.
-                // "unbekannt" bleibt fuer erhalten).
+                // "unbekannt" bleibt fuer die Personenliste erhalten).
                 lastContact: client.last_contact != null ? client.last_contact : null,
                 // Default true, falls ein Alt-Bundle das Feld (noch) nicht
                 // gesetzt hat -- das Schema-Gate oben laesst nur v2-Bundles
@@ -1206,14 +1206,14 @@
         return { purged: purged, refreshed: refreshed, total: rows.length, ratelimited: ratelimited };
     }
 
-    /* ─── (#1520/#1499) — personenloses Facility-Meta-Bundle ─────────── */
+    /* ─── Refs #1520/#1499 — personenloses Facility-Meta-Bundle ───────────── */
 
     function _facilityBundleUrl() {
         return "/api/v1/offline/bundle/facility/";
     }
 
     /*
-     * (#1520/#1499): Spiegel von `_isSchemaMismatch` fuer die EIGENE
+     * Refs #1520/#1499: Spiegel von `_isSchemaMismatch` fuer die EIGENE
      * Facility-Schema-Version. Fail-closed: ein fehlender/`undefined` Wert
      * gilt als Mismatch (kein automatisches Gueltig).
      */
@@ -1222,7 +1222,7 @@
     }
 
     /*
-     * (#1520/#1499): Personenloses Facility-Meta-Bundle vom Server
+     * Refs #1520/#1499: Personenloses Facility-Meta-Bundle vom Server
      * speichern (Analog `saveClientBundle`, aber ein Singleton ohne
      * Roster/PII):
      *   {schema_version, generated_at, ttl, expires_at, document_types,
@@ -1277,7 +1277,7 @@
     }
 
     /*
-     * (#1520/#1499): das gespeicherte Facility-Meta-Bundle lesen (Analog
+     * Refs #1520/#1499: das gespeicherte Facility-Meta-Bundle lesen (Analog
      * `getOfflineClient`, ohne cases/events). Gleiche Gates: TRANSIENT-Decrypt
      * -> null ohne Loeschen (#1352); PERMANENT-Decrypt -> Row verwerfen
      * (personenlos, kein force-Sonderfall); Schema-Mismatch (gegen die eigene
@@ -1322,7 +1322,7 @@
     }
 
     /*
-     * (#1520/#1499): das Facility-Meta-Bundle gegen den Server
+     * Refs #1520/#1499: das Facility-Meta-Bundle gegen den Server
      * re-validieren (Analog `revalidateCachedClient`). Gespeicherten ETag als
      * `If-None-Match` mitschicken; 304 -> `not-modified` (Cache bleibt); 200 ->
      * frisch speichern; 429 -> `ratelimited`; INVALIDATION_STATUSES (401/404/
@@ -2240,7 +2240,7 @@
         // F-10 (#1110) — Re-Validierung gegen den Server beim Online-Kontakt
         revalidateCachedClient: revalidateCachedClient,
         revalidateCachedClients: revalidateCachedClients,
-        // (#1520/#1499) — personenloses Facility-Meta-Bundle
+        // Refs #1520/#1499 — personenloses Facility-Meta-Bundle
         saveFacilityBundle: saveFacilityBundle,
         getOfflineFacility: getOfflineFacility,
         revalidateCachedFacility: revalidateCachedFacility,
@@ -2284,7 +2284,7 @@
         MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
         // F-05 (#1425) — Lesepfad-Gate vergleicht dagegen, siehe _isSchemaMismatch
         BUNDLE_SCHEMA_VERSION: BUNDLE_SCHEMA_VERSION,
-        // (#1520/#1499) — Facility-Meta-Bundle-Gate, siehe _isFacilitySchemaMismatch
+        // Refs #1520/#1499 — Facility-Meta-Bundle-Gate, siehe _isFacilitySchemaMismatch
         FACILITY_BUNDLE_SCHEMA_VERSION: FACILITY_BUNDLE_SCHEMA_VERSION,
     };
 

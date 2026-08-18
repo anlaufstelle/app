@@ -622,8 +622,24 @@ class TestPrecachedShellBumpGuard:
     # Refs #1937: Die Offline-Strichlisten-Shell und ihr Renderer sind Teil des
     # Precaches; v36 erzwingt die atomare Aktualisierung von Serverstand,
     # Pending-Delta und Snapshot-Zeitpunkt im Feld.
+    # Refs #1900 (interne Track-Codes aus den Shell-Kommentaren entfernt): nur
+    # der Hash ist nachgezogen, KEIN CACHE_NAME-Bump. Geaendert wurden
+    # ausschliesslich ``{# ... #}``-Django-Kommentare — die entfernt der
+    # Template-Renderer, bevor irgendetwas den Client erreicht. Die precachte
+    # Shell ist auf dem Draht BYTE-IDENTISCH, es gibt also keine zweite
+    # Auslieferungs-Generation und nichts, wogegen ein Bump schuetzen koennte;
+    # er wuerde nur jedes Bestandsgeraet den kompletten App-Shell neu laden
+    # lassen. Bei jeder Aenderung an gerendertem Shell-INHALT gilt unveraendert:
+    # erst CACHE_NAME bumpen, dann diesen Hash nachziehen.
+    #
+    # Die JS-Seite traegt den Verzicht ebenfalls: sw.js selbst und acht precachte
+    # JS-Dateien haben (Kommentar-)Bytes geaendert und gehen so an den Client.
+    # Folgenlos, weil die sw.js-Aenderung ohnehin ein Service-Worker-Update
+    # ausloest und ``cache.addAll(APP_SHELL)`` beim Install die Eintraege im
+    # SELBEN CACHE_NAME ueberschreibt -- die Split-Brain-Lage, gegen die der Bump
+    # schuetzt, entsteht nur bei Shells, die niemand neu holt.
     _PINNED_CACHE_NAME = "anlaufstelle-v36"
-    _PINNED_SHELL_HASH = "966c84beae139ae76477fc359d5469ea7ebe13e0e19f8c1ba4517aa9c047c8c5"
+    _PINNED_SHELL_HASH = "3060739f07864d1ea053e5c12238c3577aa968e98f0f0461ee145219d8f8d855"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

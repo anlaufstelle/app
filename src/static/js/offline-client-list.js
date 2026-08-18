@@ -11,7 +11,7 @@
  * der Anzeigetexte: Stufe/Alter kommen fertig lokalisiert vom Server
  * (contactStageDisplay/ageClusterDisplay).
  *
- * (#1534): client-seitige Suche + Stufe-/Alter-Filter (UND-kombiniert)
+ * Refs #1534: client-seitige Suche + Stufe-/Alter-Filter (UND-kombiniert)
  * ueber die gecachten Zeilen — reaktiv via Alpine ``x-model`` (searchQuery/
  * stageFilter/ageFilter) + ``filteredClients``-Getter. Vorbild
  * offline-home.js applyFilter, Parallele zur Online-Filterleiste
@@ -58,7 +58,7 @@
             pseudonym: c.pseudonym || "",
             contactStage: c.contactStage || "",
             contactStageDisplay: c.contactStageDisplay || "",
-            // ageCluster (Rohwert) fuer den Alter-Filter aus mitfuehren —
+            // ageCluster (Rohwert) fuer den Alter-Filter mitfuehren —
             // die Online-Liste filtert ueber den Cluster-Wert, nicht den
             // lokalisierten Anzeigetext.
             ageCluster: c.ageCluster || "",
@@ -76,7 +76,7 @@
         };
     }
 
-    // (#1534): UND-kombinierter Match einer Zeile gegen die drei Filter
+    // Refs #1534: UND-kombinierter Match einer Zeile gegen die drei Filter
     // — Pseudonym-Teilstring (case-insensitive, wie online ``q``) plus
     // exakter Stufe- (contactStage) und Alter-Vergleich (ageCluster, Rohwert
     // wie online, nicht der lokalisierte Anzeigetext). Leere Filter matchen
@@ -95,7 +95,7 @@
         Alpine.data("offlineClientList", () => ({
             loading: true,
             clients: [],
-            //: reaktive Filterzustaende (an x-model gebunden).
+            // reaktive Filterzustaende (an x-model gebunden).
             searchQuery: "",
             stageFilter: "",
             ageFilter: "",
@@ -131,7 +131,7 @@
                 }
             },
 
-            //: die gefilterte Sicht (Suche UND Stufe UND Alter) — die
+            // die gefilterte Sicht (Suche UND Stufe UND Alter) — die
             // Liste iteriert sie statt der Rohliste. Ohne aktive Filter wird
             // die Rohliste unveraendert durchgereicht (kein unnoetiges Kopieren).
             get filteredClients() {
@@ -142,7 +142,7 @@
                 return this.clients.filter((c) => matchesFilters(c, q, stage, age));
             },
 
-            //: Filterleiste erst zeigen, sobald ueberhaupt Personen
+            // Filterleiste erst zeigen, sobald ueberhaupt Personen
             // gecacht sind (Rohliste, nicht die gefilterte) — sonst blieben
             // die Controls bei 0 Treffern unbedienbar/verschwaenden.
             get hasCachedClients() {

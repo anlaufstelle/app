@@ -42,7 +42,7 @@ BUNDLE_TTL_SECONDS = 48 * 3600
 # changes in a non-backwards-compatible way so the client can purge stale
 # caches after an app upgrade. MUSS mit ``BUNDLE_SCHEMA_VERSION`` in
 # ``src/static/js/offline-store.js`` synchron bleiben (kein Build-Sync).
-# v1->v2 (, #1529/#1499): ``client.last_contact`` neu im Bundle -> ein
+# v1->v2 (#1529/#1499): ``client.last_contact`` neu im Bundle -> ein
 # Alt-v1-Bundle wird beim naechsten Read/Listing per Schema-Mismatch gepurged.
 BUNDLE_SCHEMA_VERSION = 2
 
@@ -330,7 +330,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         .order_by("-created_at")
     )
 
-    # (#1529, #1499): ``last_contact`` fuer die Offline-Personenliste —
+    # Refs #1529, #1499: ``last_contact`` fuer die Offline-Personenliste —
     # BEWUSST cutoff- UND is_deleted-FREI, exakt die Online-Spalten-Annotation
     # aus ``ClientListView`` (views/clients.py: ``Max("events__occurred_at")``),
     # damit der offline gezeigte Wert dem Online-Listenwert 1:1 entspricht.

@@ -10,7 +10,7 @@
 {# mitgenommenen Personen client-seitig aus IndexedDB                        #}
 {# (listOfflineClientsDetailed) und spiegelt partials/table.html 1:1   #}
 {# (Grid-String, hidden sm:/md:-Sichtbarkeit, data-testid client-row/        #}
-{# client-detail-link). Suche/Filter kommt, E2E.                   #}
+{# client-detail-link). Suche/Filter folgen unten im selben Template.       #}
 <div data-testid="offline-client-list"
      x-data="offlineClientList" x-init="load"
      data-confirm-remove-text="{% trans '{count} nicht übertragene Änderungen bleiben lokal erhalten, wenn Sie diese Person jetzt aus dem Offline-Cache entfernen. Trotzdem fortfahren?' %}"
@@ -20,7 +20,7 @@
         <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
     </div>
 
-    {# (#1534): Client-seitige Suche + Stufe-/Alter-Filter (UND-        #}
+    {# Refs #1534: Client-seitige Suche + Stufe-/Alter-Filter (UND-        #}
     {# kombiniert) ueber die gecachten Personen — reines Alpine (x-model +   #}
     {# filteredClients-Getter), kein Netz/HTMX (offline kein JSON-Endpoint). #}
     {# Parallele zur Online-Filterleiste (clients/list.html); Optionswerte   #}
@@ -156,7 +156,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{# Ausgelagert wegen CSP (Refs #672). ergaenzt Suche/Filter/#1499 #}
+{# Ausgelagert wegen CSP (Refs #672). Ergaenzt um Suche/Filter; #1499  #}
 {# nimmt die Datei in den SW-Precache (APP_SHELL) auf.                       #}
 <script src="{% static 'js/offline-client-list.js' %}"></script>
 {% endblock %}

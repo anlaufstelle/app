@@ -42,12 +42,12 @@ class TestOfflineClientListShellView:
 
 @pytest.mark.django_db
 class TestOfflineClientListShellSI4:
-    """ (#1532, #1499): offline_list.html spiegelt
+    """Refs #1532, #1499: offline_list.html spiegelt
     partials/table.html 1:1 als Alpine ``x-for``-Liste ueber die gecachten
     Klienten (``listOfflineClientsDetailed``). Der Shell traegt kein PII —
     die Zeilen entstehen client-seitig; hier wird nur das statische Geruest
-    geprueft (Render + node --check der JS; Interaktion/Filter kommt,
-    E2E).
+    geprueft (Render + node --check der JS; Interaktion/Filter deckt
+    tests/e2e/test_offline_client_list_journey.py ab).
     """
 
     @pytest.fixture
@@ -62,7 +62,7 @@ class TestOfflineClientListShellSI4:
 
     def test_role_table_scaffold_with_x_for(self, body):
         assert 'role="table"' in body
-        #: iteriert die gefilterte Sicht (Suche/Stufe/Alter), nicht die
+        # iteriert die gefilterte Sicht (Suche/Stufe/Alter), nicht die
         # Rohliste — bleibt aber der 1:1-Spiegel von partials/table.html.
         assert 'x-for="c in filteredClients"' in body
         assert 'role="rowgroup"' in body
@@ -114,7 +114,7 @@ class TestOfflineClientListShellSI4:
 
 @pytest.mark.django_db
 class TestOfflineClientListShellSI6:
-    """ (#1534, #1499): client-seitige Suche + Stufe-/Alter-Filter
+    """Refs #1534, #1499: client-seitige Suche + Stufe-/Alter-Filter
     ueber die gecachten Klienten (Vorbild ``offline-home.js applyFilter``,
     Parallele zur Online-Filterleiste ``clients/list.html``). Rein clientseitig
     und reaktiv (Alpine ``x-model`` + ``filteredClients``-Getter) — hier wird

@@ -9,7 +9,7 @@ Alpine-Komponente ``offlineEventCreate`` client-seitig aus IndexedDB
 
 Analog zu :class:`TestOfflineClientShellView` in test_pwa_views.py: public,
 GET-only, Template-Smoke. Das Verhalten (Person-Picker, Kontaktstufen-Vorfilter,
-Replay) deckt die E2E-Journey in ab.
+Replay) deckt die E2E-Journey in tests/e2e/test_offline_create_shell_journeys.py ab.
 """
 
 import pytest
