@@ -2009,6 +2009,26 @@ msgstr "Person ID"
 msgid "Widerrufen am"
 msgstr "Revoked at"
 
+#: src/core/models/ban_revision.py:52
+msgid "Hausverbots-Revision"
+msgstr "House ban revision"
+
+#: src/core/models/ban_revision.py:53
+msgid "Hausverbots-Revisionen"
+msgstr "House ban revisions"
+
+#: src/core/models/ban_revision.py:45
+msgid "Revision (normal)"
+msgstr "Revision (normal)"
+
+#: src/core/models/ban_revision.py:46
+msgid "Revision (erhöht)"
+msgstr "Revision (elevated)"
+
+#: src/core/models/ban_revision.py:47
+msgid "Revision (hoch)"
+msgstr "Revision (high)"
+
 #: src/core/models/offline_revocation.py:76
 msgid "Offline-Widerruf"
 msgstr "Offline revocation"

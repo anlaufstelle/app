@@ -11,7 +11,8 @@
      data-feed-url="{% url 'core:zeitstrom_feed_partial' %}"
      data-tally-counts-url="{% url 'core:zeitstrom_tally_counts_partial' %}"
      data-current-shift-url="{% url 'core:zeitstrom_current_shift_partial' %}"
-     data-focus-box-url="{% url 'core:zeitstrom_focus_box_partial' %}">
+     data-focus-box-url="{% url 'core:zeitstrom_focus_box_partial' %}"
+     data-bans-url="{% url 'core:zeitstrom_bans_partial' %}">
 <form id="zeitstrom-filter-state" class="contents">
     {% for name, value in zeitstrom_filter_state.items %}
     <input type="hidden" name="{{ name }}" value="{{ value }}">

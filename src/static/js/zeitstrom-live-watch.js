@@ -21,6 +21,7 @@
         "tally_topology",
         "current_shift",
         "focus_box",
+        "bans",
     ]);
 
     function defaultNavigate(url) {
@@ -326,6 +327,7 @@
             const config = {
                 current_shift: [root.dataset.currentShiftUrl, "zeitstrom-current-shift-slot"],
                 focus_box: [root.dataset.focusBoxUrl, "zeitstrom-focus-box-slot"],
+                bans: [root.dataset.bansUrl, "zeitstrom-bans-slot"],
             }[component];
             if (!config) return;
             const html = await htmlFollowup(config[0], signal, expectedValidator);

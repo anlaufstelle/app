@@ -2025,6 +2025,26 @@ msgstr "Personen-ID"
 msgid "Widerrufen am"
 msgstr "Widerrufen am"
 
+#: src/core/models/ban_revision.py:52
+msgid "Hausverbots-Revision"
+msgstr "Hausverbots-Revision"
+
+#: src/core/models/ban_revision.py:53
+msgid "Hausverbots-Revisionen"
+msgstr "Hausverbots-Revisionen"
+
+#: src/core/models/ban_revision.py:45
+msgid "Revision (normal)"
+msgstr "Revision (normal)"
+
+#: src/core/models/ban_revision.py:46
+msgid "Revision (erhöht)"
+msgstr "Revision (erhöht)"
+
+#: src/core/models/ban_revision.py:47
+msgid "Revision (hoch)"
+msgstr "Revision (hoch)"
+
 #: src/core/models/offline_revocation.py:76
 msgid "Offline-Widerruf"
 msgstr "Offline-Widerruf"

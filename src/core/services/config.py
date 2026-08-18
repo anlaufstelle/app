@@ -71,7 +71,21 @@ class ConfigDeleteBlocked(Exception):  # noqa: N818 — Plan-Vorgabe (#1056); UI
 def save_document_type(request, form, *, creating: bool) -> DocumentType:
     """Speichert einen DocumentType und schreibt CONFIG_CREATE/CONFIG_UPDATE."""
     changed_fields = list(form.changed_data)
-    obj = form.save()
+    previous_sensitivity = form.initial.get("sensitivity", "")
+    with transaction.atomic():
+        obj = form.save()
+        # Refs #1917: Konfig-Änderungen an einem Ban-Typ (is_active gated die
+        # Banner-Query, sensitivity die Grund-Sichtbarkeit) müssen die
+        # Hausverbots-Revision im selben Commit bumpen. Beim Anlegen gibt es
+        # noch keine Events, also keine Banner-Wirkung.
+        if not creating:
+            from core.services.system.ban_revision import bump_ban_revision_for_document_type_change
+
+            bump_ban_revision_for_document_type_change(
+                obj,
+                changed_fields,
+                previous_sensitivity=previous_sensitivity,
+            )
     action = AuditLog.Action.CONFIG_CREATE if creating else AuditLog.Action.CONFIG_UPDATE
     log_audit_event(
         request,

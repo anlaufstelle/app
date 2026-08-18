@@ -702,6 +702,9 @@ EXPECTATIONS = (
     E("core:zeitstrom_tally_counts_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:zeitstrom_current_shift_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:zeitstrom_focus_box_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    # Refs #1917: Banner-Follow-up des Watchers — dieselbe Rollenfläche wie
+    # die Zeitstrom-Startseite, Grund-Redaktion übernimmt get_active_bans.
+    E("core:zeitstrom_bans_partial", "partials-htmx", get=ASSISTANT_PLUS),
     # JSON-Pollingvertrag: anonyme Requests antworten bewusst mit 401 statt
     # Login-HTML/Redirect; Rollen und Facility-Gate bleiben ASSISTANT_PLUS.
     E("core:zeitstrom_watch", "offline-api", get=ASSISTANT_PLUS, anonymous_ok=True),

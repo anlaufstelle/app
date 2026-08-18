@@ -129,6 +129,7 @@ from core.views.workitems import (
     WorkItemInboxView,
 )
 from core.views.zeitstrom import (
+    ZeitstromBansPartialView,
     ZeitstromCurrentShiftPartialView,
     ZeitstromFeedPartialView,
     ZeitstromFocusBoxPartialView,
@@ -320,6 +321,11 @@ urlpatterns = [
         "partials/zeitstrom/focus-box/",
         ZeitstromFocusBoxPartialView.as_view(),
         name="zeitstrom_focus_box_partial",
+    ),
+    path(
+        "partials/zeitstrom/bans/",
+        ZeitstromBansPartialView.as_view(),
+        name="zeitstrom_bans_partial",
     ),
     path("api/v1/zeitstrom/watch/", ZeitstromWatchView.as_view(), name="zeitstrom_watch"),
     path("partials/cases/fields/", CaseFieldsPartialView.as_view(), name="case_fields_partial"),

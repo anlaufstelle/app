@@ -574,6 +574,16 @@ def anonymize_client(client, user=None):
     Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
     """
+    # Refs #1917 (Fix-Runde): Banner-Wirkung VOR der Kaskade festhalten —
+    # ``_redact_live_events`` leert die Event-``data_json``, danach wäre die
+    # Person nie mehr als Banner-Eintrag erkennbar und der Bump fiele
+    # fälschlich aus. Der Bump selbst folgt als letzter Schritt (s. u.).
+    from core.services.system.ban_revision import (
+        bump_ban_revision_for_client_change,
+        client_has_ban_banner_entries,
+    )
+
+    had_banner_entries = client_has_ban_banner_entries(client)
     _redact_client_identity(client)
     case_ids = _redact_cases_and_episodes(client)
     _redact_case_goals(case_ids)
@@ -610,6 +620,14 @@ def anonymize_client(client, user=None):
     # dieses eine, letzte Fenster.
     _delete_event_attachments_for_client(client, event_ids)
     _delete_owned_attachments_for_client(client, case_ids)
+
+    # Refs #1917: Anonymisierung ersetzt das Pseudonym und leert die
+    # ``data_json`` der Live-Events — Hausverbote dieser Person verschwinden
+    # damit aus dem Banner. Bump bewusst als LETZTER Schritt der (atomaren)
+    # Kaskade, mit der VOR der Redaktion gemessenen Banner-Wirkung: nur wenn
+    # die Person im Banner stand, gibt es für irgendeine Rolle etwas zu
+    # sehen — dormante Bans bleiben unbeobachtbar (Trigger-Seitenkanal).
+    bump_ban_revision_for_client_change(client, had_banner_entries=had_banner_entries)
 
     logger.info(
         "client_anonymized",
@@ -724,6 +742,13 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     changed_fields = changed_fields_vs_db(client, fields)
     for key, value in fields.items():
         setattr(client, key, value)
+    # Refs #1917: das Hausverbots-Banner zeigt das Pseudonym — eine echte
+    # Umbenennung einer Person MIT Ban-Events muss die Revision bumpen
+    # (EXISTS-Guard im Helfer; ohne Ban-Events kein Signal).
+    if "pseudonym" in changed_fields:
+        from core.services.system.ban_revision import bump_ban_revision_for_client_change
+
+        bump_ban_revision_for_client_change(client)
     # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
     # Save wuerde parallel committete, token-unsichtbare Writes (Soft-Delete,
     # Redaktions-Kaskade — beide bumpen ``updated_at`` nicht) mit dem stalen

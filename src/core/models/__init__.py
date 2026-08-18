@@ -1,6 +1,7 @@
 from .activity import Activity
 from .attachment import Attachment
 from .audit import AuditLog
+from .ban_revision import BanRevision
 from .case import Case
 from .client import Client
 from .document_type import DocumentType
@@ -30,6 +31,7 @@ __all__ = [
     "Activity",
     "AuditLog",
     "Attachment",
+    "BanRevision",
     "Case",
     "Client",
     "DeletionRequest",

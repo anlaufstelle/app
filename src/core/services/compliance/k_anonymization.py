@@ -75,6 +75,13 @@ def k_anonymize_client(client, k: int = 5):
             "k_anonymized",
         ]
     )
+    # Refs #1917: der Hash-Bucket ersetzt das im Hausverbots-Banner gezeigte
+    # Pseudonym — Revision bumpen, falls die Person Ban-Events hat
+    # (EXISTS-Guard im Helfer). Bewusst NACH dem Save: so ist der Bump auch
+    # ohne umschließende Transaktion nie vor den Daten sichtbar.
+    from core.services.system.ban_revision import bump_ban_revision_for_client_change
+
+    bump_ban_revision_for_client_change(client)
     return client
 
 

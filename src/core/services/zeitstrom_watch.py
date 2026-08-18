@@ -18,13 +18,16 @@ from core.services.compliance import user_can_see_field
 from core.services.events import build_tally_summary
 from core.services.zeitstrom_filters import ZeitstromState
 
-WATCH_COMPONENTS = ("feed", "tally_counts", "tally_topology", "current_shift", "focus_box")
+WATCH_COMPONENTS = ("feed", "tally_counts", "tally_topology", "current_shift", "focus_box", "bans")
 _COMPONENT_STATE_KEYS = {
     "feed": ("date", "time_filter", "type", "doc_type", "view"),
     "tally_counts": ("date", "time_filter", "view"),
     "tally_topology": ("date", "time_filter", "view"),
     "current_shift": (),
     "focus_box": (),
+    # Das Banner zeigt immer die JETZT aktiven Hausverbote — unabhängig von
+    # Datum/Filter (Refs #1917).
+    "bans": (),
 }
 
 
@@ -506,6 +509,20 @@ def _focus_box_projection(facility):
     return (today, ordered, len(rows), total_open, total_open > len(rows))
 
 
+def _bans_projection(facility, user):
+    """Refs #1917: opake Hausverbots-Revision — eine Single-Row-SELECT.
+
+    Bewusst KEIN Zugriff auf ``core_event`` und KEINE Entschlüsselung im
+    Poll-Pfad; die Projektion enthält nur das rollen-sichtbare
+    Revisions-Präfix (Seitenkanal-Argument in
+    :mod:`core.services.system.ban_revision`). Das autoritative Banner
+    rendert erst das Follow-up-Partial.
+    """
+    from core.services.system.ban_revision import ban_revision_projection
+
+    return ban_revision_projection(facility, user)
+
+
 def build_zeitstrom_component_validator(
     user,
     facility,
@@ -522,6 +539,7 @@ def build_zeitstrom_component_validator(
         "tally_topology": lambda: _tally_topology_projection(facility, user, state, summary=tally_summary),
         "current_shift": lambda: _current_shift_projection(facility, user, state),
         "focus_box": lambda: _focus_box_projection(facility),
+        "bans": lambda: _bans_projection(facility, user),
     }
     if component not in projections:
         raise ValueError(f"Unknown Zeitstrom component: {component}")

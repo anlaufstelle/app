@@ -74,6 +74,36 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
             readonly = (*readonly, "slug", "entity_type")
         return readonly
 
+    def save_model(self, request, obj, form, change):
+        """Refs #1917: Banner-Revision auch am Admin-Fallback bumpen.
+
+        Der Django-Admin ist der per #1637 bewusst erhaltene technische
+        Fallback und laeuft an ``core.services.config.save_document_type``
+        vorbei — ohne diesen Hook blieben ``is_active``-/``sensitivity``-
+        Edits an einem Ban-Typ fuer offene Zeitstroeme unsichtbar (staler
+        Banner bis zum Reload). Zusaetzlich abgedeckt: das Setzen von
+        ``system_type`` leer→ban (der Reparaturpfad — ein GESETZTER Wert ist
+        readonly), das saemtliche Alt-Events des Typs neu ins Banner hebt.
+        Der Admin-Change-View laeuft in ``transaction.atomic`` — Bump und
+        Save teilen sich denselben Commit.
+        """
+        previous_sensitivity = form.initial.get("sensitivity", "") if change else ""
+        super().save_model(request, obj, form, change)
+        if not change:
+            return
+        from core.services.system.ban_revision import (
+            bump_ban_revision,
+            bump_ban_revision_for_document_type_change,
+        )
+
+        bump_ban_revision_for_document_type_change(
+            obj,
+            form.changed_data,
+            previous_sensitivity=previous_sensitivity,
+        )
+        if "system_type" in form.changed_data and obj.system_type == DocumentType.SystemType.BAN:
+            bump_ban_revision(obj.facility, [0])
+
     def get_form(self, request, obj=None, **kwargs):
         """Parent-DocumentType fuer den Inline-Scope auf dem Request merken.
 

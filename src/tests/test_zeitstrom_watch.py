@@ -96,6 +96,9 @@ class TestZeitstromWatchHttpContract:
             "tally_topology",
             "current_shift",
             "focus_box",
+            # Refs #1917: Hausverbotswarnungen werden über eine opake
+            # Revision mitüberwacht.
+            "bans",
         }
         assert set(payload["validators"]) == set(payload["components"])
         assert all(value.startswith('"') and value.endswith('"') for value in payload["validators"].values())
@@ -1144,7 +1147,9 @@ class TestZeitstromWatchRefreshPartials:
 
         assert f'data-watch-url="{reverse("core:zeitstrom_watch")}"' in content
         assert 'id="zeitstrom-bans-slot"' in content
-        assert "data-bans-url=" not in content
+        # Refs #1917: Hausverbote sind nicht mehr an den Seiten-Reload
+        # gebunden — der Watcher kennt jetzt eine eigene Banner-URL.
+        assert f'data-bans-url="{reverse("core:zeitstrom_bans_partial")}"' in content
         assert 'id="zeitstrom-current-shift-slot"' in content
         assert 'id="zeitstrom-focus-box-slot"' in content
         assert content.index("zeitstrom-filter-state.js") < content.index("zeitstrom-live-watch.js")

@@ -181,6 +181,11 @@ def create_event(
         data_after=data_json,
         field_metadata=_snapshot_field_metadata(document_type),
     )
+    # Refs #1917: Hausverbots-Revision in DERSELBEN Transaktion bumpen —
+    # funktionslokaler Import (Zyklus: services.system importiert breit).
+    from core.services.system.ban_revision import bump_ban_revision_for_event_change
+
+    bump_ban_revision_for_event_change(facility, document_type, {}, data_json)
     summary = f"{document_type.name}"
     if client:
         summary += f" für {client.pseudonym}"
@@ -252,6 +257,11 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
         data_after=data_json,
         field_metadata=_snapshot_field_metadata(event.document_type),
     )
+    # Refs #1917: Banner-relevantes Delta (aktiv/bis → Stratum 0, Grund →
+    # Doc-Type-Stratum) in derselben Transaktion signalisieren.
+    from core.services.system.ban_revision import bump_ban_revision_for_event_change
+
+    bump_ban_revision_for_event_change(event.facility, event.document_type, data_before, data_json)
     return event
 
 
@@ -311,6 +321,12 @@ def merge_update_payload(event, merged, restricted_keys, document_type):
 def soft_delete_event(event, user, *, source=None):
     """Soft-Delete + EventHistory(DELETE) + AuditLog."""
     history_payload = build_redacted_delete_history(event)
+    # Refs #1917: VOR dem Wipe bumpen — nur ein aktiver Ban erzeugt ein
+    # Existenz-Delta; das Löschen eines schlafenden Hausverbots bleibt für
+    # alle Rollen unbeobachtbar (Seitenkanal-Auflage).
+    from core.services.system.ban_revision import bump_ban_revision_for_event_change
+
+    bump_ban_revision_for_event_change(event.facility, event.document_type, event.data_json, {})
     event.is_deleted = True
     event.data_json = {}
     delete_attachments_for(event)

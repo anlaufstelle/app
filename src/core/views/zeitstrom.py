@@ -572,3 +572,23 @@ class ZeitstromFocusBoxPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatch
             state = resolve_zeitstrom_state(request.GET, request.current_facility)
             context = {"focus_box": build_focus_box(request.current_facility)}
             return self.render_watch_followup(request, self.template_name, context, state)
+
+
+class ZeitstromBansPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
+    """Autoritatives Hausverbots-Banner als Watch-Follow-up (Refs #1917).
+
+    Nur HIER wird die Hausverbots-Historie geladen und entschlüsselt — exakt
+    wie beim Voll-Seiten-Render (``get_active_bans`` inkl. rollenbasierter
+    Grund-Redaktion, ungekürzt). Der Poll selbst liest ausschließlich die
+    opake ``BanRevision``-Zeile. REPEATABLE READ bindet Body und ETag an
+    denselben DB-Snapshot.
+    """
+
+    template_name = "core/zeitstrom/partials/bans_slot.html"
+    watch_component = "bans"
+
+    def get(self, request):
+        with _consistent_watch_render():
+            state = resolve_zeitstrom_state(request.GET, request.current_facility)
+            context = {"active_bans": get_active_bans(request.current_facility, user=request.user)}
+            return self.render_watch_followup(request, self.template_name, context, state)

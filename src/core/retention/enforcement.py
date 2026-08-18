@@ -81,6 +81,12 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
         history_payload = build_redacted_delete_history(event)
         field_metadata = _snapshot_field_metadata(event.document_type)
         with transaction.atomic():
+            # Refs #1917: dieser Pfad läuft bewusst an ``soft_delete_event``
+            # vorbei — die Hausverbots-Revision muss deshalb hier ebenso VOR
+            # dem Wipe bumpen (nur aktive Bans erzeugen ein Existenz-Delta).
+            from core.services.system.ban_revision import bump_ban_revision_for_event_change
+
+            bump_ban_revision_for_event_change(facility, event.document_type, event.data_json, {})
             event.is_deleted = True
             event.data_json = {}
             # Refs #1092: ``search_text`` MUSS in ``update_fields`` stehen, sonst
