@@ -295,6 +295,33 @@ class TestAnonymizeResidueMatrix:
         # Antrag-Meta bleibt fuer Audit-Trail erhalten.
         assert dr.requested_by is not None
 
+    def test_idempotency_payload_hash_and_key_survive_anonymization(self, client_with_full_history):
+        """Non-PII-Residuum bleibt bewusst erhalten (Refs #1935) — festgeschriebene Retention-Entscheidung.
+
+        ``idempotency_key``/``idempotency_payload_hash`` sind der persistente
+        DB-Backstop gegen Offline-Replay-Duplikate nach Cache-Verlust (Review
+        R5/R6, N14/#1424) — anders als ``data_json``/``search_text`` duerfen
+        sie ``anonymize_client`` NICHT loeschen: ein Leeren wuerde genau den
+        Schutz aushebeln, fuer den der Hash ueber die 72h-Cache-TTL hinaus
+        persistiert wird. Begruendung/Unlinkability-/Kollisions-
+        bewertung: docs/security-notes.md
+        § Event.idempotency_payload_hash ueberlebt die Klienten-Anonymisierung.
+        """
+        cli, _, event = client_with_full_history
+        assert event.data_json, "Positiv-Kontrolle: die Probe muss vorher befuellt sein"
+        event.idempotency_key = "residueprobe-idem-key"
+        event.idempotency_payload_hash = "f" * 64
+        event.save(update_fields=["idempotency_key", "idempotency_payload_hash"])
+
+        cli.anonymize()
+
+        event.refresh_from_db()
+        # Beweist, dass die Redaktion tatsaechlich lief — sonst waere der Test
+        # selbst dann gruen, wenn anonymize_client() ein kompletter No-op waere.
+        assert event.data_json == {}
+        assert event.idempotency_key == "residueprobe-idem-key"
+        assert event.idempotency_payload_hash == "f" * 64
+
     def test_no_pii_residue_anywhere(self, client_with_full_history):
         """Aggregat-Check: keine PII-Werte in irgendeiner abhaengigen Tabelle."""
         cli, case, event = client_with_full_history

@@ -89,6 +89,12 @@ class TestSoftDeleteEventRedacts:
     """Der manuelle Loesch-Pfad redaktiert (war schon so, Regression-Schutz)."""
 
     def test_manual_soft_delete_writes_redacted_history(self, event_with_pii, admin_user):
+        # Refs #1935: Retention-Festschreibung — soft_delete_event() darf den
+        # persistenten Idempotenz-Backstop nicht mit abraeumen.
+        event_with_pii.idempotency_key = "residueprobe-softdelete-key"
+        event_with_pii.idempotency_payload_hash = "a" * 64
+        event_with_pii.save(update_fields=["idempotency_key", "idempotency_payload_hash"])
+
         soft_delete_event(event_with_pii, admin_user)
         history = EventHistory.objects.filter(event=event_with_pii, action=EventHistory.Action.DELETE).first()
         assert history is not None
@@ -101,6 +107,10 @@ class TestSoftDeleteEventRedacts:
         )
         # Klartext darf nirgends in der EventHistory landen.
         assert "psychische Krise" not in str(history.data_before)
+
+        event_with_pii.refresh_from_db()
+        assert event_with_pii.idempotency_key == "residueprobe-softdelete-key"
+        assert event_with_pii.idempotency_payload_hash == "a" * 64
 
 
 @pytest.mark.django_db

@@ -264,6 +264,13 @@ class TestKAnonEnforcement:
             "Bucket-00",
             age_cluster=Client.AgeCluster.AGE_27_PLUS,
         )
+        # Refs #1935: Retention-Festschreibung — der K-Anon-Bridge-Pfad ruft
+        # _redact_live_events NICHT auf (Eintrittsbedingung active_events == 0),
+        # darf idempotency_key/idempotency_payload_hash also nicht anfassen.
+        event = Event.objects.get(client=target)
+        event.idempotency_key = "residueprobe-kanon-key"
+        event.idempotency_payload_hash = "e" * 64
+        event.save(update_fields=["idempotency_key", "idempotency_payload_hash"])
         # 4 Bucket-Genossen OHNE geloeschte Events — zaehlen fuer die
         # Aequivalenzklasse, sind aber keine Anonymisierungs-Kandidaten.
         for i in range(1, 5):
@@ -276,6 +283,9 @@ class TestKAnonEnforcement:
         target.refresh_from_db()
         assert target.k_anonymized is True
         assert target.pseudonym.startswith("anon-")
+        event.refresh_from_db()
+        assert event.idempotency_key == "residueprobe-kanon-key"
+        assert event.idempotency_payload_hash == "e" * 64
 
     def test_mixed_buckets_audit_both_categories(self, facility, staff_user, doc_type_contact):
         self._settings(facility, k=5)

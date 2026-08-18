@@ -252,6 +252,67 @@ Bewusst **nicht** umgestellt ist der `username` bei fehlgeschlagenem Login (einz
 
 ---
 
+## `Event.idempotency_payload_hash` überlebt die Klienten-Anonymisierung (Issue #1935)
+
+**Status:** Akzeptiertes Restrisiko — bewusste Beibehaltung nach Bewertung, keine Löschung. Bekannter Enumerations-/Verschlüsselungs-Bypass-Restfall bei `DocumentType`s ohne Freitextfeld (siehe Unlinkability-Bewertung); Härtung per HMAC-Pepper als Folgearbeit in #1942 vorgemerkt, nicht Teil dieser Festschreibung.
+
+### Beobachtung
+
+`Event.idempotency_payload_hash` (SHA-256-Hexdigest, `CharField(max_length=64)`) ist der seit #1909/N14 persistente DB-Backstop des Offline-Replay-Idempotenz-Schutzes (Review R5/R6, #1424): [`payload_fingerprint()`](../src/core/services/events/idempotency.py) hasht die kanonische Form des Request-Payloads (alle `POST`-Feldpaare außer CSRF-Token und Idempotenz-Schlüsselfeld, sortiert, plus Datei-Tripel), damit ein Replay mit demselben `X-Idempotency-Key`, aber abweichendem Body als Kollision erkannt wird (`has_idempotency_payload_mismatch()`) statt still den falschen gecachten Erfolg zurückzugeben.
+
+Bei der Klienten-Anonymisierung (`anonymize_client()`, [`client/main.py`](../src/core/services/client/main.py)) leert `_redact_live_events()` `Event.data_json`/`search_text` — `idempotency_key`/`idempotency_payload_hash` stehen bewusst **nicht** in deren `update_fields` und bleiben unverändert. Derselbe Befund gilt für den K-Anon-Bridge-Pfad ([`retention/anonymization.py`](../src/core/retention/anonymization.py)): der ruft `_redact_live_events` gar nicht auf (Eintrittsbedingung `active_events == 0`), und der vorgelagerte Soft-Delete (`soft_delete_event`) fasst die Spalte ebenfalls nicht an.
+
+### Zweck (warum der Hash überhaupt existiert)
+
+Der In-Memory-Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`) ist der Fast-Path; die Spalte ist die Ausfallsicherung dafür — sie greift genau dann, wenn der Cache nicht mehr da ist (Worker-Neustart, Eviction, R5) oder zwei parallele Replays das Get-then-Set-Fenster gleichzeitig passieren (R6). Ohne den persistierten Hash würde ein Cache-Verlust nach #1909 wieder in genau die Lücke zurückfallen, die N14/#1424 geschlossen hat: ein Replay mit demselben (client-frei wählbaren) Schlüssel, aber anderem Payload, würde still den falschen gecachten Treffer zurückliefern, statt als Kollision erkannt zu werden.
+
+### Unlinkability-Bewertung
+
+- **Einweg-Digest, kein Klartext.** Der Hash ist SHA-256 über den vollständigen Formular-Payload — er trägt denselben Informationsgehalt wie `data_json` zum Anlagezeitpunkt, aber nur als Digest. Ohne Kenntnis des exakten Original-Payloads ist er wegen Preimage-Resistenz nicht umkehrbar.
+- **Rekonstruktions-Orakel bei kleinem Wertebereich — real, nicht nur theoretisch.** Die Zeile behält nach der Anonymisierung `client_id`, `case_id`, `episode_id`, `occurred_at` und `document_type` im Klartext (siehe nächster Punkt) — einem Angreifer mit DB-Zugriff fehlen nach der Redaktion also ausschließlich die **Feldwerte** aus dem geleerten `data_json`. Trägt der `DocumentType` des Ereignisses ausschließlich strukturierte, nicht-freitextliche Felder (mit den heutigen `FieldTemplate.FieldType`-Optionen zulässig; der Tally-Zählpfad ist bereits durchgehend so aufgebaut), ist der Payload-Rateraum klein genug, um ihn vollständig gegen den gespeicherten Hash zu enumerieren. Ein Treffer **bestätigt dann nicht bloß eine Vermutung, sondern rekonstruiert exakt die redigierten Werte** — der Hash fungiert in diesem Fall als Rekonstruktions-Orakel für Inhalte, die `_redact_live_events()`/die K-Anon-Bridge eigentlich löschen sollten. Für Freitext-Felder (hohe Entropie) bleibt ein Wörterbuch-/Brute-Force-Angriff dagegen praktisch aussichtslos — das Risiko ist an die **Feld-Konfiguration** des jeweiligen `DocumentType` gekoppelt, nicht an eine hypothetische künftige Änderung von `payload_fingerprint()`.
+- **Unterläuft die At-Rest-Verschlüsselung — unabhängig von der Anonymisierung.** `payload_fingerprint()` hasht `request.POST` **vor** jeder Verschlüsselung, auch für Felder mit `FieldTemplate.is_encrypted=True`. Der Hash liegt danach unverschlüsselt in derselben Tabelle wie die Fernet-verschlüsselte `data_json`-Spalte. Bei kleinem Wertebereich (siehe oben) kann ein Angreifer mit reinem DB-Lesezugriff (Dump, Backup, kompromittierte Read-Replica) den Klartext eines verschlüsselten Feldes **ohne den Fernet-Schlüssel** per Wörterbuchangriff auf den Hash ermitteln — die Verschlüsselung schützt in diesem Grenzfall nicht mehr, weil der Hash denselben Klartext ungesalzen daneben trägt. Dieser Befund ist **unabhängig von der Anonymisierung**: er gilt bereits für aktive, nicht-anonymisierte Klient:innen, sobald ein `DocumentType` verschlüsselte Felder mit kleinem Wertebereich hat.
+- **Kein zusätzlicher Gewinn für die reine Existenz-Frage.** Dass am `occurred_at` ein Ereignis dieses `document_type` für `client_id`/`case_id`/`episode_id` existierte, steht ohnehin unredigiert in derselben Zeile — dafür liefert der Hash keinen zusätzlichen Erkenntnisgewinn. Für den **Inhalt** gilt das nur, solange der oben beschriebene kleine Wertebereich nicht vorliegt.
+- **Kein Export-Pfad.** Siehe § Exportausschluss unten — der Hash verlässt die Datenbank nie.
+
+### Kollisionsbewertung
+
+SHA-256s Kollisionswahrscheinlichkeit wird erst im Geburtstagsregime relevant: selbst bei einer für dieses System utopischen Größenordnung von ~2⁶⁴ gehashten Payloads läge die Wahrscheinlichkeit **irgendeiner** Kollision unter allen davon bei nur ~2⁻¹²⁸ (Geburtstagsschranke, ≈ n²/2^(k+1) für n Payloads und einen k-Bit-Hash). Der hier tatsächlich relevante Fall ist aber der **paarweise** Vergleich — `has_idempotency_payload_mismatch()` vergleicht bei jedem Replay genau **einen** neu berechneten Hash gegen **einen** gespeicherten, dessen Kollisionswahrscheinlichkeit bei ~2⁻²⁵⁶ liegt. Beides ist bei den hier realistischen Ereigniszahlen (soziale Einrichtung, nicht Internet-Skala) vernachlässigbar. Selbst eine (praktisch nie eintretende) Kollision hätte ausschließlich eine funktionale Konsequenz innerhalb desselben `(scope, user, idempotency_key)`-Tripels: `has_idempotency_payload_mismatch()` würde einen abweichenden Payload fälschlich als Treffer werten (False Negative der Kollisions-Erkennung selbst) — kein Datenschutz-Vorfall, weil der Vergleich nie gegen fremde, beliebige Angreifer-Payloads läuft, sondern nur innerhalb der eigenen Replay-Kette desselben Nutzers.
+
+### Retention-Begründung
+
+Die Spalte hat **keine eigene Ablauffrist** — ihre Aufbewahrung ist 1:1 an die Lebensdauer der `Event`-Zeile selbst gebunden, genau wie die übrigen dort bewusst erhaltenen technischen Metadaten (`client_id`, `occurred_at`, `document_type`, `created_via`). `Event`-Zeilen werden von der aktuellen Retention-Pipeline nur soft-gelöscht (`is_deleted=True`), nie hart gelöscht — es gibt aktuell keinen Pfad, der die Zeile physisch entfernt.
+
+Ein zeitbasiertes Leeren (z. B. nach der 72-h-Cache-TTL oder einem sonst gewählten Fenster) würde den Zweck der Spalte gerade zunichtemachen: Sie existiert *ausdrücklich*, weil der Cache-Fast-Path zeitlich begrenzt und nicht garantiert überlebensfähig ist (Neustart/Eviction), während der partielle DB-Unique-Constraint `event_idem_key_per_user_uniq` selbst **keine** Zeitgrenze kennt — ein doppelt verwendeter Schlüssel mit abweichendem Payload muss auch nach Monaten noch als Kollision erkennbar sein. Ein TTL auf der Spalte würde also exakt die Lücke wieder öffnen, die #1909/N14 geschlossen hat, ohne einen Datenschutz-Gewinn zu erzielen (siehe Unlinkability-Bewertung).
+
+Eine dritte Option — **nicht Teil dieser Festschreibung**, sondern als Folgearbeit vorgemerkt — wäre der Wechsel von einem reinen SHA-256-Digest auf ein **HMAC-SHA-256 mit serverseitigem Pepper** (analog zu `ENCRYPTION_KEYS`, nicht in der DB gehalten): Der Idempotenz-Zweck bliebe vollständig erhalten (der Vergleich in `has_idempotency_payload_mismatch()` läuft ohnehin nur innerhalb derselben `(scope, user, idempotency_key)`-Kette, nie gegen fremde Payloads), aber die Enumerierbarkeit gegen einen reinen DB-Dump entfiele — ohne den Pepper ist ein Offline-Wörterbuchangriff auf den Hash nicht mehr möglich, auch nicht bei kleinem Feld-Wertebereich (siehe Unlinkability-Bewertung). Kosten: eine Migrationsstrategie für Bestandszeilen (Alt-Hashes ohne Pepper müssten wie der bestehende Legacy-Cache-Fall — `IdempotentHit.payload_hash is None` — als „Treffer ohne Prüfung" behandelt werden, bis sie ausgelaufen sind) und eine Pepper-Rotationsstrategie. Nachverfolgt in #1942 — hier bewusst **nicht implementiert** (Scope dieses Tickets ist die Festschreibung der Ist-Entscheidung, nicht die Härtung des Hash-Verfahrens).
+
+### Exportausschluss (verifiziert)
+
+Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine Blockliste) — `idempotency_key`/`idempotency_payload_hash` sind darin schlicht nicht enthalten:
+
+- Art.-15-/Auskunfts-Export: `_serialize_event()` in [`client/export.py`](../src/core/services/client/export.py), gepinnt in [`test_client_export.py`](../src/tests/test_client_export.py).
+- Facility-/Backup-Export: `_serialize_event()` in [`system/facility_export.py`](../src/core/services/system/facility_export.py), gepinnt in [`test_facility_export.py`](../src/tests/test_facility_export.py).
+- Offline-Bundle: `_serialize_event()` in [`system/offline.py:165`](../src/core/services/system/offline.py) (dieselbe Allowlist-Bauart), gepinnt in [`test_offline_bundle_api.py::test_bundle_contains_only_visible_events`](../src/tests/test_offline_bundle_api.py) (Zeilen 210f. setzen den Hash, 228f. prüfen sein Fehlen im Bundle).
+- CSV-Sachbericht-Export (`export_events_csv()` in [`system/export.py`](../src/core/services/system/export.py)) baut Zeilen ausschließlich aus fest benannten Spalten plus `document_type`-Feld-Slugs — der Hash kann strukturell gar nicht in eine Zeile geraten.
+- Detail-Ansicht (kein Export im engeren Sinn, aber derselbe Vertrag — der Hash läuft dem UI nie zu): gepinnt in [`test_events_crud.py::TestEventDetailView::test_event_detail_renders`](../src/tests/test_events_crud.py) (Zeilen 582-590) — setzt den Hash explizit und prüft, dass er im gerenderten HTML nicht vorkommt.
+
+### Trigger für Re-Evaluation
+
+- Ein Dokumentationstyp ohne Freitextfeld wird für klientenbezogene Ereignisse verwendet — das erlauben die heutigen `FieldTemplate.FieldType`-Optionen bereits, der Tally-Zählpfad ist schon rein numerisch. Das ist kein hypothetischer künftiger Code-Umbau von `payload_fingerprint()`, sondern eine heute per `DocumentType`-Konfiguration erreichbare Einstellung: sobald ein Träger einen solchen Typ tatsächlich klientenbezogen einsetzt, ist der Rekonstruktions-Orakel-Fall aus der Unlinkability-Bewertung kein abstraktes Risiko mehr, sondern eine konkrete, im Betrieb beobachtbare Konfiguration — das macht den HMAC-Pepper-Wechsel (#1942) vordringlich.
+- Ein Hard-Delete-/Purge-Pfad für `Event`-Zeilen wird eingeführt (dann braucht auch der Hash eine explizite Löschregel, statt implizit an der Zeilen-Lebensdauer zu hängen).
+- Ein externer Audit fordert eine kürzere technische Aufbewahrung für Idempotenz-Metadaten.
+
+### Verifikation
+
+- [`test_anonymize_residue.py::TestAnonymizeResidueMatrix::test_idempotency_payload_hash_and_key_survive_anonymization`](../src/tests/test_anonymize_residue.py) — pinnt, dass die Spalte `anonymize_client()` (Hard-Pfad) unverändert übersteht.
+- [`test_retention_k_anonymization.py::TestKAnonEnforcement::test_full_bucket_is_k_anonymized`](../src/tests/test_retention_k_anonymization.py) — pinnt, dass der K-Anon-Bridge-Pfad die Spalte ebenfalls nicht anfasst.
+- [`test_retention_redaction.py::TestSoftDeleteEventRedacts::test_manual_soft_delete_writes_redacted_history`](../src/tests/test_retention_redaction.py) — pinnt, dass der manuelle Soft-Delete-Pfad (`soft_delete_event`) die Spalte nicht anfasst.
+- [`test_client_export.py`](../src/tests/test_client_export.py), [`test_facility_export.py`](../src/tests/test_facility_export.py), [`test_offline_bundle_api.py`](../src/tests/test_offline_bundle_api.py), [`test_events_crud.py`](../src/tests/test_events_crud.py) — pinnen den Exportausschluss/UI-Ausschluss.
+- [`tests/_residue_expectations.py`](../src/tests/_residue_expectations.py) — Klassifikation `non_pii` für `core_event.idempotency_payload_hash`/`idempotency_key`.
+- Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken-verweis-auf-audit-reports)
+
+---
+
 ## Offline-Bundles nach Anonymisierung: Revoke-Liste + 48-h-TTL als letzte Linie (Issue #1760)
 
 **Status:** Aktiver Widerrufskanal seit #1760, Reichweite erweitert in #1774 (gequeute Event-Edit-POSTs + Autosave-Entwurf); das Restrisiko „dauerhaft offline gebliebenes Gerät" bleibt akzeptiert und ist durch die Bundle-TTL begrenzt.
