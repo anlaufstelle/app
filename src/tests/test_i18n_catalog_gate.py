@@ -27,11 +27,25 @@ uebrigen Meta-Tests, die Source-Files scannen (``architecture``).
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from tests.test_i18n_catalog_workflow import _workflow_module
 
-pytestmark = [pytest.mark.architecture, pytest.mark.slow]
+# ``_generated_catalogues()`` startet ein echtes ``manage.py makemessages``,
+# das ohne GNU-gettext (``msguniq``/``xgettext``) mit ``CommandError`` abbricht.
+# Der Skip haelt eine lokale Umgebung ohne die Tools gruen — in CI greift er
+# NICHT: ``.github/workflows/test.yml`` installiert das Paket vor pytest
+# (Refs #1933, #1900).
+pytestmark = [
+    pytest.mark.architecture,
+    pytest.mark.slow,
+    pytest.mark.skipif(
+        shutil.which("msguniq") is None,
+        reason="GNU-gettext-Tools fehlen (msguniq) — 'sudo apt-get install gettext' installiert sie",
+    ),
+]
 
 
 def _find_runtime_only_entry(workflow, text: str) -> tuple[str, str]:

@@ -40,6 +40,13 @@ jobs:
           node-version: "24"
           cache: npm
       - run: pip install -r requirements-dev.txt
+      # Refs #1933 / #1900: Die Katalog-Tests rufen echte GNU-gettext-Werkzeuge
+      # auf — ``makemessages`` braucht ``msguniq``/``xgettext``,
+      # ``scripts/i18n_catalog.py::_compile`` braucht ``msgfmt``. Ohne dieses
+      # Paket ueberspringen sich die Tests still (``shutil.which``-Guard), das
+      # Gate waere hier also stumm statt gruen. Zeile analog lint.yml
+      # (``translations-coverage``).
+      - run: sudo apt-get update && sudo apt-get install -y gettext
       # ``styles.css`` ist ein gitignoriertes Tailwind-Build-Artefakt (v4, #1480):
       # der Prod-Dockerfile baut es, die PWA-/APP_SHELL-Guards und der
       # collectstatic-Test brauchen es ebenfalls. Schritt analog zu e2e.yml.

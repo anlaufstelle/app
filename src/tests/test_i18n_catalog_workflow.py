@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -106,7 +107,7 @@ def _write_catalogue(root: Path, language: str, content: str) -> Path:
     return path
 
 
-def _configure_catalogues(monkeypatch, workflow, tmp_path, *, existing: str, generated: str):
+def _configure_catalogues(monkeypatch, request, workflow, tmp_path, *, existing: str, generated: str):
     root = tmp_path / "root"
     mirror = tmp_path / "mirror"
     for language in workflow.LOCALES:
@@ -114,6 +115,15 @@ def _configure_catalogues(monkeypatch, workflow, tmp_path, *, existing: str, gen
         _write_catalogue(mirror, language, generated)
 
     temporary = tempfile.TemporaryDirectory(dir=tmp_path)
+    # Vertrag von ``_generated_catalogues()``: der Aufrufer raeumt auf. Der
+    # Aufrufer ist hier ``workflow.main()`` — erreicht ein Test dessen
+    # ``finally`` nicht (Abbruch davor, oder er ruft ``main()`` gar nicht),
+    # bliebe das Verzeichnis dem Garbage Collector ueberlassen und dessen
+    # ResourceWarning laesst den Teardown unter ``filterwarnings = error``
+    # scheitern. Der Finalizer bindet die Lebensdauer stattdessen an den Test;
+    # ``cleanup()`` ist idempotent, ein zusaetzlicher Lauf in ``main()`` stoert
+    # nicht.
+    request.addfinalizer(temporary.cleanup)
     monkeypatch.setattr(workflow, "ROOT", root)
     monkeypatch.setattr(workflow, "_generated_catalogues", lambda: (temporary, mirror))
     return root
@@ -137,20 +147,20 @@ def test_ignore_copy_excludes_nested_worktrees_runtime_outputs_secrets_and_env_f
     assert nested_ignored == {".env.production", "__pycache__", "secrets"}
 
 
-def test_check_returns_nonzero_for_semantic_drift(monkeypatch, tmp_path):
+def test_check_returns_nonzero_for_semantic_drift(monkeypatch, request, tmp_path):
     workflow = _workflow_module()
     existing = _catalogue('msgid "Existing"\nmsgstr "Existing"')
     generated = _catalogue('msgid "New"\nmsgstr "New"')
-    _configure_catalogues(monkeypatch, workflow, tmp_path, existing=existing, generated=generated)
+    _configure_catalogues(monkeypatch, request, workflow, tmp_path, existing=existing, generated=generated)
 
     assert workflow.main(["check"]) == 1
 
 
-def test_check_keeps_reference_only_drift_informational(monkeypatch, tmp_path):
+def test_check_keeps_reference_only_drift_informational(monkeypatch, request, tmp_path):
     workflow = _workflow_module()
     existing = _catalogue('#: old.py:1\nmsgid "Existing"\nmsgstr "Existing"')
     generated = _catalogue('#: new.py:1\nmsgid "Existing"\nmsgstr "Existing"')
-    _configure_catalogues(monkeypatch, workflow, tmp_path, existing=existing, generated=generated)
+    _configure_catalogues(monkeypatch, request, workflow, tmp_path, existing=existing, generated=generated)
 
     assert workflow.main(["check"]) == 0
 
@@ -165,11 +175,11 @@ def test_report_lists_changed_msgids_separately_from_reference_noise(capsys):
     assert "  ~ Existing" in capsys.readouterr().out
 
 
-def test_update_rejects_empty_entries_before_writing_any_live_catalogue(monkeypatch, tmp_path):
+def test_update_rejects_empty_entries_before_writing_any_live_catalogue(monkeypatch, request, tmp_path):
     workflow = _workflow_module()
     existing = _catalogue('msgid "Existing"\nmsgstr "Existing"')
     generated = _catalogue('msgid "New"\nmsgstr ""')
-    root = _configure_catalogues(monkeypatch, workflow, tmp_path, existing=existing, generated=generated)
+    root = _configure_catalogues(monkeypatch, request, workflow, tmp_path, existing=existing, generated=generated)
     before = {language: _write_catalogue(root, language, existing).read_bytes() for language in workflow.LOCALES}
 
     with pytest.raises(RuntimeError, match="untranslated"):
@@ -211,11 +221,19 @@ def test_candidate_validation_accepts_both_identity_plural_forms_in_german():
     workflow._validate_catalogue(_catalogue(plural), "de")
 
 
-def test_update_rolls_back_already_replaced_files_when_a_later_replace_fails(monkeypatch, tmp_path):
+# ``workflow._compile()`` ruft echtes ``msgfmt`` auf — als einziger Test dieser
+# Datei. Der Skip haelt eine lokale Umgebung ohne GNU-gettext gruen; in CI
+# greift er NICHT, dort installiert ``.github/workflows/test.yml`` das Paket
+# vor pytest (Refs #1933, #1900).
+@pytest.mark.skipif(
+    shutil.which("msgfmt") is None,
+    reason="GNU-gettext-Tools fehlen (msgfmt) — 'sudo apt-get install gettext' installiert sie",
+)
+def test_update_rolls_back_already_replaced_files_when_a_later_replace_fails(monkeypatch, request, tmp_path):
     workflow = _workflow_module()
     existing = _catalogue('msgid "Existing"\nmsgstr "Existing"')
     generated = _catalogue('msgid "New"\nmsgstr "New"')
-    root = _configure_catalogues(monkeypatch, workflow, tmp_path, existing=existing, generated=generated)
+    root = _configure_catalogues(monkeypatch, request, workflow, tmp_path, existing=existing, generated=generated)
     for language in workflow.LOCALES:
         po, mo = workflow._paths(root, language)
         workflow._compile(po, mo)
