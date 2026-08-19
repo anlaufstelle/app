@@ -28,6 +28,18 @@
         window.location.assign(url);
     }
 
+    // Refs #1951: Vertrag mit sw-register.js — ``window.__logoutInFlight`` ist
+    // der Zeitstempel (ms), zu dem die Logout-Navigation abgeschickt wurde.
+    // Das Fenster ist bewusst identisch zu ``_LOGOUT_NAV_GRACE_MS`` dort: ohne
+    // Deckel bliebe ein Dokument, dessen Logout nie navigiert hat, dauerhaft
+    // blind fuer einen spaeteren Session-Ablauf.
+    const LOGOUT_NAV_GRACE_MS = 10_000;
+
+    function logoutNavInFlight() {
+        const startedAt = window.__logoutInFlight;
+        return typeof startedAt === "number" && Date.now() - startedAt < LOGOUT_NAV_GRACE_MS;
+    }
+
     function createZeitstromLiveWatch(root, options) {
         options = options || {};
         const fetchRequest = options.fetch || window.fetch.bind(window);
@@ -147,6 +159,17 @@
         function leaveSensitivePage(url) {
             stop();
             root.replaceChildren();
+            // Refs #1951: Laeuft schon ein Logout, ist die Navigation nach
+            // ``/login/`` bereits unterwegs (sw-register.js setzt die Marke
+            // unmittelbar bevor es die Logout-Form abschickt). Ein zweites
+            // ``location.assign`` wuerde diese Navigation ABBRECHEN
+            // (``net::ERR_ABORTED``) und die alte, jetzt unauthentifizierte URL
+            // neu laden — der Nutzer landete auf ``/login/?next=<alte URL>``,
+            // als ``next`` sogar mit dieser hier gerade umgeleiteten
+            // Partial-URL. Der schutzrelevante Teil ist oben schon passiert
+            // (Polling aus, sensible Inhalte raus); die Navigation selbst
+            // erledigt der Logout.
+            if (logoutNavInFlight()) return;
             navigate(url);
         }
 

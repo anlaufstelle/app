@@ -35,6 +35,27 @@
     var _dirty = false;
     var _userRequestedReload = false;
 
+    // Refs #1951: Fenster, in dem eine bereits angestossene Logout-Navigation
+    // jede andere clientseitige Navigation verdraengt.
+    //
+    // Bewusst ein ZEITSTEMPEL und kein Boolean: die Marke wird nie
+    // zurueckgesetzt (im Normalfall ersetzt die Navigation die Seite, es gibt
+    // also kein "danach"). Ohne Deckel bliebe ein Dokument, dessen Logout
+    // NICHT navigiert hat — etwa weil die Nav-Form waehrend des Wipe-Fensters
+    // aus dem DOM verschwand und ``form.submit()`` ins Leere lief — fuer den
+    // Rest seiner Lebensdauer beschaedigt: der Toast-Knopf "Neu laden" waere
+    // tot und zeitstrom-live-watch.js wuerde bei einem spaeteren
+    // Session-Ablauf nie mehr von der sensiblen Seite weg navigieren.
+    // Ein Zeitstempel heilt das von selbst und ist gegenueber einem
+    // ``setTimeout``-Reset robust, den Hintergrund-Tab-Throttling beliebig
+    // weit verschleppen kann.
+    var _LOGOUT_NAV_GRACE_MS = 10000;
+
+    function _logoutNavInFlight() {
+        var startedAt = window.__logoutInFlight;
+        return typeof startedAt === "number" && Date.now() - startedAt < _LOGOUT_NAV_GRACE_MS;
+    }
+
     // Ungespeicherte Eingaben erkennen. Capture-Phase, damit auch Felder in
     // HTMX-eingeswappten Fragmenten erfasst werden.
     document.addEventListener("input", _markDirty, true);
@@ -57,9 +78,30 @@
         // Login-POST von auth-bootstrap.js (net::ERR_ABORTED, Login
         // scheitert). Nur eine Seite, die schon vorher einen Controller
         // hatte, erlebt einen echten SW-Wechsel.
+        // Refs #1951 (``controller``-Verlust-Guard): controllerchange feuert
+        // AUCH, wenn die Registrierung verschwindet — dann ist ``controller``
+        // danach ``null``. Genau das passiert bei jedem Logout: die Antwort
+        // auf ``POST /logout/`` traegt ``Clear-Site-Data: "storage"`` (siehe
+        // ``CustomLogoutView.dispatch``), und Chromium raeumt damit auch die
+        // SW-Registrierung ab — waehrend die Weiterleitung nach ``/login/``
+        // noch fliegt. Ein Reload in diesem Moment BRICHT diese Navigation AB
+        // (net::ERR_ABORTED) und laedt stattdessen die alte, jetzt
+        // unauthentifizierte URL neu; der Nutzer landet auf
+        // ``/login/?next=<alte URL>`` statt auf ``/login/`` — als ``next``
+        // sogar mit einer gerade fliegenden HTMX-Partial-URL.
+        //
+        // Ein verlorener Controller ist ohnehin nie ein Update: es gibt keine
+        // frischen Caches, fuer die sich ein Reload lohnen wuerde. Wir setzen
+        // ``wasControlled`` zurueck — die Seite ist jetzt unkontrolliert, und
+        // eine spaetere Uebernahme ist damit wieder der (reload-freie)
+        // Erst-Kontroll-Fall von oben.
         var reloaded = false;
         var wasControlled = !!navigator.serviceWorker.controller;
         navigator.serviceWorker.addEventListener("controllerchange", function () {
+            if (!navigator.serviceWorker.controller) {
+                wasControlled = false;
+                return;
+            }
             if (!wasControlled) {
                 wasControlled = true;
                 return;
@@ -189,10 +231,17 @@
     /**
      * Der neue SW kontrolliert die Seite bereits (Caches sind frisch). Jetzt
      * nur noch entscheiden, ob wir die Seite dafuer wegreissen duerfen.
-     * Ein ausdruecklicher Klick auf "Neu laden" schlaegt jeden Guard.
+     *
+     * Vorrangordnung (Refs #1951): Eine laufende Logout-Navigation schlaegt
+     * ALLES — auch einen ausdruecklichen Klick auf "Neu laden". Sie ist
+     * zeitlich gedeckelt (``_LOGOUT_NAV_GRACE_MS``), danach gilt wieder: ein
+     * ausdruecklicher Klick auf "Neu laden" schlaegt jeden weiteren Guard.
      */
     function _reloadIfSafe() {
         if (reloaded) return;
+        // Refs #1951: Die Weiterleitung nach ``/login/`` darf nicht
+        // abgebrochen werden — die Seite ist ohnehin gleich weg.
+        if (_logoutNavInFlight()) return;
         if (_userRequestedReload) {
             _doReload();
             return;
@@ -330,6 +379,26 @@
             return;
         }
         form._logoutWipeInFlight = true;
+        // Refs #1951: Ab HIER laeuft der Logout — nicht erst ab
+        // ``form.submit()``. Dazwischen liegt der Wipe (bis zu
+        // ``_LOGOUT_WIPE_TIMEOUT_MS``), in dem der native POST bereits
+        // unterbunden ist, aber noch nichts navigiert. Ein ``_doReload()`` in
+        // genau diesem Fenster wuerde den Logout NICHT nur verzoegern, sondern
+        // ganz verwerfen: der POST kaeme nie, der Nutzer bliebe angemeldet —
+        // waehrend der Wipe seine Offline-Daten schon geloescht hat. Deshalb
+        // deckt die Marke die ganze Spanne ab (Klick bis Navigation).
+        //
+        // Vertrag ist ein ZEITSTEMPEL in Millisekunden, kein Boolean, und die
+        // Leser deuten ihn nur ``_LOGOUT_NAV_GRACE_MS`` lang als "laeuft".
+        // Zurueckgenommen wird die Marke nie — im Normalfall ersetzt die
+        // Navigation die Seite. Der Deckel ist die Selbstheilung fuer den
+        // Fall, dass es NICHT dazu kommt (z.B. ``form.submit()`` laeuft ins
+        // Leere, weil die Nav-Form im Wipe-Fenster aus dem DOM verschwand):
+        // ohne ihn blieben der Toast-Knopf "Neu laden" und das Weg-Navigieren
+        // in zeitstrom-live-watch.js fuer die Restlebensdauer des Dokuments
+        // tot. Die Marke liegt auf ``window``, weil sie ausserhalb dieses
+        // Moduls gelesen wird (``leaveSensitivePage``).
+        window.__logoutInFlight = Date.now();
 
         event.preventDefault();
 
@@ -345,6 +414,10 @@
             }),
             timeout,
         ]).then(function () {
+            // Refs #1951: Marke auffrischen — der Deckel soll ab der
+            // NAVIGATION laufen, nicht ab dem Klick. Sonst frisst ein langer
+            // Wipe (bis 3 s) ein Drittel des Fensters auf.
+            window.__logoutInFlight = Date.now();
             form.submit();
         });
     });

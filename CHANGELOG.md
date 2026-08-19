@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Abmelden landet wieder verlässlich auf der Anmeldeseite** (#1951) — Beim Abmelden brachen der Auto-Reload des Service Workers und die Live-Aktualisierung des Zeitstroms die Weiterleitung zur Anmeldeseite ab, sodass der Browser die alte Seite neu lud und auf einer Anmeldeseite mit unbrauchbarem Rücksprungziel landete — nach dem nächsten Login teils auf einem rohen Seitenfragment statt auf der Startseite; die Sitzung war dabei stets korrekt beendet und die verschlüsselten Offline-Daten stets gelöscht.
+
+## [0.81.0] - 2026-08-18
+
 ### Added
 
 - **Strichlisten-Eingabe lässt sich kurz zurücknehmen** (#1913) — Nach dem Zählen kann die eigene anonyme Eingabe innerhalb von 60 Sekunden einmalig und sicher rückgängig gemacht werden; danach verschwindet die Aktion, ohne allgemeine Löschrechte zu erweitern.

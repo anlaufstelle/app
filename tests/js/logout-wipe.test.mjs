@@ -20,6 +20,10 @@ beforeAll(async () => {
 afterEach(() => {
     delete window.crypto_session;
     delete window.offlineStore;
+    // Refs #1951: Der Logout-Handler setzt diese Marke und nimmt sie
+    // absichtlich nie zurueck. Ohne Aufraeumen wuerde eine spaeter hier
+    // ergaenzte Reload-Assertion still unterdrueckt.
+    delete window.__logoutInFlight;
     document.body.innerHTML = "";
     vi.restoreAllMocks();
 });

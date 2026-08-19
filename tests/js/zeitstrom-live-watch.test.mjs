@@ -1235,4 +1235,78 @@ describe("Zeitstrom live watch", () => {
         expect(document.body.textContent).not.toContain("Verbotener Inhalt");
         expect(watcher.isStopped()).toBe(true);
     });
+
+    // Refs #1951: Der Watch-Poll ist der einzige Teil der App, der aus sich
+    // heraus navigiert. Faellt die Session weg, verlaesst er die sensible Seite
+    // — genau richtig bei einem Session-Ablauf, aber fatal WAEHREND eines
+    // Logouts: dort ist die Navigation nach ``/login/`` schon unterwegs, und ein
+    // zweites ``location.assign`` bricht sie ab (``net::ERR_ABORTED``). Der
+    // Nutzer landete dann auf ``/login/?next=<Partial-URL>``.
+    it("verlaesst die sensible Seite, wenn der Poll auf die Login-Seite umgeleitet wird", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi.fn().mockResolvedValue(
+            response({ redirected: true, url: "http://localhost/login/" }),
+        );
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+            navigate,
+        });
+
+        await watcher.checkNow();
+
+        expect(navigate).toHaveBeenCalledWith("http://localhost/login/");
+        expect(watcher.isStopped()).toBe(true);
+    });
+
+    it("ueberholt eine laufende Logout-Navigation nicht (Refs #1951)", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi.fn().mockResolvedValue(
+            response({
+                redirected: true,
+                url: "http://localhost/login/?next=/partials/zeitstrom/current-shift/",
+            }),
+        );
+        window.__logoutInFlight = Date.now();
+        try {
+            const watcher = window.createZeitstromLiveWatch(
+                document.getElementById("zeitstrom-live-watch"),
+                { fetch: fetchMock, navigate },
+            );
+
+            await watcher.checkNow();
+
+            // Der schutzrelevante Teil passiert weiter: Polling aus, sensible
+            // Inhalte raus.
+            expect(watcher.isStopped()).toBe(true);
+            expect(document.getElementById("zeitstrom-live-watch").textContent).toBe("");
+            // Aber KEINE konkurrierende Navigation — der Logout bringt die
+            // Seite selbst nach /login/.
+            expect(navigate).not.toHaveBeenCalled();
+        } finally {
+            delete window.__logoutInFlight;
+        }
+    });
+
+    it("navigiert wieder, wenn die Logout-Marke abgelaufen ist (Refs #1951)", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi.fn().mockResolvedValue(
+            response({ redirected: true, url: "http://localhost/login/" }),
+        );
+        // Logout, der nie navigiert hat: aelter als das 10-s-Fenster. Der Poll
+        // muss die sensible Seite bei spaeterem Session-Ablauf wieder
+        // verlassen duerfen.
+        window.__logoutInFlight = Date.now() - 11_000;
+        try {
+            const watcher = window.createZeitstromLiveWatch(
+                document.getElementById("zeitstrom-live-watch"),
+                { fetch: fetchMock, navigate },
+            );
+
+            await watcher.checkNow();
+
+            expect(navigate).toHaveBeenCalledWith("http://localhost/login/");
+        } finally {
+            delete window.__logoutInFlight;
+        }
+    });
 });
