@@ -200,9 +200,9 @@ def _create_own_client(self, page, base_url):
 | `runserver` statt gunicorn | Single-threaded, blockiert bei Last | conftest startet gunicorn automatisch |
 | `stdout=subprocess.PIPE` für gunicorn | Pipe-Buffer füllt sich nach ~25 Requests | `stdout=subprocess.DEVNULL` |
 
-### Drei Parallel-Last-Anti-Patterns (Refs #849)
+### Vier Last-/Timing-Anti-Patterns (Refs #849, #1855)
 
-Diese Patterns sind im seriellen Lauf meist grün, fallen aber unter `make test-e2e-parallel` (4 Worker, gunicorn 2x2 Slots) reproduzierbar um. Vermeiden — alternative Patterns nutzen.
+Die ersten drei sind im seriellen Lauf meist grün und fallen unter `make test-e2e-parallel` (4 Worker, gunicorn 2x2 Slots) reproduzierbar um; das vierte ist eine Timing-Lotterie, die in jedem Lauf zuschlagen kann. Vermeiden — alternative Patterns nutzen.
 
 **1. `inner_text() / count() / assert` direkt nach `expect_response(...)`**
 
@@ -251,6 +251,29 @@ page.locator(f"a:has-text('{unique_title}')").click()
 ```
 
 `.first.click()` ist nur dann zulässig, wenn der Selektor bereits eindeutig (z.B. `a:has-text('Stern-42')` mit Unique-Pseudonym) ist oder die Test-Assertion für jedes Listenelement gilt (z.B. Berechtigungsprüfung über alle Rollen hinweg).
+
+**4. Interaktion direkt nach einem HTMX-Swap (Settle-Fenster, Refs #1855)**
+
+`htmx:afterSwap` feuert, sobald der neue Knoten im DOM hängt — die Event-Listener bindet htmx aber erst `htmx.config.settleDelay` (20 ms) später in `processNode`. In diesem Fenster ist das Element sichtbar und bedienbar, ein `click`/`select_option` löst aber **keinen** Request aus: das Event verpufft lautlos (kein Konsolen-Fehler, kein 4xx, kein Netzverkehr). Ein nachgelagertes `expect_response` läuft dann in seinen vollen Timeout — Fehlerbild `Timeout 30000ms exceeded while waiting for event "response"`.
+
+Playwrights auto-wartende Assertions schützen **nicht**: `to_be_visible()`/`to_have_count()` sind schon mit `afterSwap` erfüllt, also genau eine Settle-Runde zu früh — sie führen sogar erst in das Fenster hinein. Ein größeres Timeout hilft ebenfalls nicht (die Antwort kommt nie); Host-Last verschiebt das Fenster nur, mal davor, mal dahinter — daher „im Voll-Lauf rot, isoliert grün" ohne Codeänderung.
+
+```python
+# ✗ Rennen gegen das 20-ms-Settle-Fenster
+expect(karte).to_be_visible()
+with page.expect_response(...):
+    karte.locator("select").select_option(value=v)
+
+# ✓ Auf die htmx-Bindung warten (Helfer in src/tests/e2e/_helpers.py)
+from ._helpers import wait_until_htmx_bound
+
+expect(karte).to_be_visible()
+wait_until_htmx_bound(page, karte.locator("select"))
+with page.expect_response(...):
+    karte.locator("select").select_option(value=v)
+```
+
+Mehrstufige Ketten (Swap löst den nächsten Request aus) **nicht** in eine Sammel-Erwartung auf den letzten Request packen, sondern die `expect_response`-Blöcke schachteln — dann nennt die Traceback-Zeile den hängenden Schritt statt nur „response".
 
 ---
 

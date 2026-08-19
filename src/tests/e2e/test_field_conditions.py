@@ -34,7 +34,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell, track_console_errors
+from ._helpers import django_shell, track_console_errors, wait_until_htmx_bound
 
 # M0-Muster wiederverwenden (test_config_ui.py bleibt unangetastet): DocType-CRUD
 # und Feld-Board-Zuordnung sind dort stabil etabliert.
@@ -82,6 +82,17 @@ def _option_value_by_text(select_locator, text):
     value = option.get_attribute("value")
     assert value, f"Option „{text}“ nicht im Dropdown gefunden"
     return value
+
+
+def _htmx_get(fragment):
+    """Response-Praedikat: HTMX-``GET`` auf einen Endpunkt, dessen URL ``fragment`` enthaelt.
+
+    Die Wartekette Quellwechsel → Operator-Slot → Wert-Input besteht aus ZWEI
+    Roundtrips. Sie wird bewusst in zwei geschachtelte ``expect_response``
+    zerlegt statt in eine Sammel-Erwartung auf den letzten: bleibt sie stehen,
+    nennt die Traceback-Zeile dann den haengenden Schritt (Refs #1855).
+    """
+    return lambda response: fragment in response.url and response.request.method == "GET"
 
 
 def _wait_value_input(scope, expected_type):
@@ -180,17 +191,25 @@ class TestFieldConditionsEndToEnd:
             expect(source_select.locator("option", has_text=source_name)).to_have_count(1)
 
             # (a) Regel anlegen: „Wenn <dauer> greater_than 10 → zeige <notiz>".
+            # Die Karte oben stammt aus dem `refresh-conditions`-Swap; htmx bindet
+            # sie erst eine Settle-Runde später (Refs #1855) — vorher verpufft
+            # jedes `change` lautlos.
+            wait_until_htmx_bound(page, source_select)
             target_select.select_option(value=_option_value_by_text(target_select, target_name))
             # Quellwechsel lädt den typabhängigen Operator-Slot (#1715) nach, dessen
             # `load`-Trigger anschließend das typisierte Wert-Input (#E19) nachzieht.
-            with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
-                source_select.select_option(value=_option_value_by_text(source_select, source_name))
+            # Beide Roundtrips einzeln verklammern (s. `_htmx_get`).
+            with page.expect_response(_htmx_get("value-input"), timeout=15000):
+                with page.expect_response(_htmx_get("operator-input"), timeout=15000):
+                    source_select.select_option(value=_option_value_by_text(source_select, source_name))
             # #1715: Der Operator-Slot ist jetzt typgefiltert — number bietet
             # `greater_than`, aber NICHT `contains`.
             operator_select = add_card.locator('[data-testid="condition-operator"]')
             expect(operator_select.locator("option[value='greater_than']")).to_have_count(1, timeout=10000)
             expect(operator_select.locator("option[value='contains']")).to_have_count(0)
-            with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
+            # Der Operator-Slot ist selbst frisch eingeswappt → gleiche Barriere.
+            wait_until_htmx_bound(page, operator_select)
+            with page.expect_response(_htmx_get("value-input"), timeout=15000):
                 operator_select.select_option(value="greater_than")
             _wait_value_input(add_card, "number").fill("10")
             add_card.locator('[data-testid="condition-submit"]').click()
@@ -204,14 +223,20 @@ class TestFieldConditionsEndToEnd:
 
             # (a) Zyklus-Gegenrichtung: „Wenn <notiz> is_not_empty → zeige <dauer>"
             # schließt den Kreis dauer→notiz→dauer → Fehlermeldung, keine Persistenz.
+            # Der Submit oben hat das GANZE Board ersetzt — die Karte ist wieder
+            # frisch eingeswappt, also erneut auf die htmx-Bindung warten.
             add_card = page.locator('[data-testid="condition-add-card"]')
             target_select = add_card.locator('[data-testid="condition-target"]')
             source_select = add_card.locator('[data-testid="condition-source"]')
+            wait_until_htmx_bound(page, source_select)
             target_select.select_option(value=_option_value_by_text(target_select, source_name))
-            with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
-                source_select.select_option(value=_option_value_by_text(source_select, target_name))
-            with page.expect_response(lambda r: "value-input" in r.url and r.request.method == "GET"):
-                add_card.locator('[data-testid="condition-operator"]').select_option(value="is_not_empty")
+            with page.expect_response(_htmx_get("value-input"), timeout=15000):
+                with page.expect_response(_htmx_get("operator-input"), timeout=15000):
+                    source_select.select_option(value=_option_value_by_text(source_select, target_name))
+            operator_select = add_card.locator('[data-testid="condition-operator"]')
+            wait_until_htmx_bound(page, operator_select)
+            with page.expect_response(_htmx_get("value-input"), timeout=15000):
+                operator_select.select_option(value="is_not_empty")
             # is_not_empty ist valueless → kein Wert-Input, sondern der Hinweis.
             expect(add_card.locator('[data-testid="condition-value-none"]')).to_be_visible(timeout=10000)
             add_card.locator('[data-testid="condition-submit"]').click()
@@ -224,8 +249,12 @@ class TestFieldConditionsEndToEnd:
 
             # (b) Event-Formular: Live-Sichtbarkeit ohne Reload -----------------
             page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-            with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
-                page.select_option("select#id_document_type", label=doctype_name)
+            # `domcontentloaded` kann vor htmx' eigenem DOMContentLoaded-Handler
+            # zurückkehren — dieselbe Bindungsfalle wie nach einem Swap (#1855).
+            doctype_select = page.locator("select#id_document_type")
+            wait_until_htmx_bound(page, doctype_select)
+            with page.expect_response(_htmx_get("fields"), timeout=15000):
+                doctype_select.select_option(label=doctype_name)
 
             dynamic = page.locator("#dynamic-fields")
             source_input = dynamic.locator("input[type='number']")
@@ -352,8 +381,10 @@ class TestFieldGroupVisibilityEndToEnd:
         try:
             # --- Event-Formular: Gruppen-Sichtbarkeit ohne Reload -----------
             page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-            with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
-                page.select_option("select#id_document_type", label=doctype_name)
+            doctype_select = page.locator("select#id_document_type")
+            wait_until_htmx_bound(page, doctype_select)
+            with page.expect_response(_htmx_get("fields"), timeout=15000):
+                doctype_select.select_option(label=doctype_name)
 
             dynamic = page.locator("#dynamic-fields")
             source_input = dynamic.locator("input[type='number']")

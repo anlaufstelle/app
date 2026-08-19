@@ -80,6 +80,43 @@ def wait_until(page, predicate, timeout_ms=15000, interval_ms=250):
         waited += interval_ms
 
 
+def wait_until_htmx_bound(page, locator, timeout_ms=10000, interval_ms=50):
+    """Warten, bis htmx ein frisch eingeswapptes Element wirklich verdrahtet hat.
+
+    **Warum es diesen Helfer gibt (Refs #1855):** htmx meldet ``htmx:afterSwap``,
+    sobald der neue Knoten im DOM haengt — seine Event-Listener bindet es aber
+    erst in der Settle-Phase, also ``htmx.config.settleDelay`` (Default 20 ms)
+    spaeter (``processNode`` laeuft als Settle-Task). In diesem Fenster ist das
+    Element sichtbar *und* bedienbar — ein ``select_option``/``click``
+    loest darin aber KEINEN Request aus: das DOM-Event verpufft, htmx bleibt
+    still (kein Konsolen-Fehler, kein 4xx, kein Netzverkehr). Ein nachgelagertes
+    ``expect_response`` laeuft dann in seinen vollen Timeout — genau das
+    Fehlerbild ``Timeout ... while waiting for event "response"``, das #1855
+    fuer mehrere E2E-Tests beschreibt.
+
+    Playwrights auto-wartende Assertions decken das NICHT ab:
+    ``to_be_visible``/``to_have_count`` sind bereits mit ``htmx:afterSwap``
+    erfuellt, also eine Settle-Runde zu frueh — sie sind der Grund, warum der
+    Test genau in dieses Fenster hineinlaeuft. Geprueft wird deshalb die
+    Bindung selbst: htmx legt seinen Elementzustand als Property
+    ``htmx-internal-data`` ab, und zwar erst in ``processNode``.
+
+    Das Fenster ist ~20 ms breit, also eine reine Zeitlotterie: mehr Timeout
+    hilft nicht (der Request kommt nie), mehr Host-Last verschiebt es nur — mal
+    davor, mal dahinter. Das erklaert "im Voll-Lauf rot, isoliert gruen" ohne
+    Codeaenderung.
+
+    Python-seitig pollen (kein ``wait_for_function``, s. :func:`wait_until`).
+    """
+    if not wait_until(
+        page,
+        lambda: locator.evaluate("el => !!el['htmx-internal-data']"),
+        timeout_ms=timeout_ms,
+        interval_ms=interval_ms,
+    ):
+        raise AssertionError("htmx hat das frisch eingeswappte Element nicht verarbeitet (Settle blieb aus)")
+
+
 def track_console_errors(page):
     """Sammelt Browser-Konsolen-Errors und JS-Exceptions einer Page in eine Liste.
 
