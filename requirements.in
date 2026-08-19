@@ -1,4 +1,9 @@
-Django>=6.0.7,<6.1
+# Untergrenze 6.0.8 wegen PYSEC-2026-3717/CVE-2026-15830 (GeoDjango-Rekursion
+# beim WKT/WKB-Parsing, DoS). Das Projekt nutzt contrib.gis nicht und ist damit
+# nicht angreifbar — die Untergrenze verhindert trotzdem, dass ein Neu-Lock
+# wieder auf die verwundbare 6.0.7 zurueckfaellt. Obergrenze <6.1: der
+# Minor-Sprung gehoert zum LTS-Umstieg (#1662), nicht in einen Patch-Release.
+Django>=6.0.8,<6.1
 psycopg[binary]>=3.3.4
 gunicorn>=26.0.0
 whitenoise>=6.5
