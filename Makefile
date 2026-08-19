@@ -1,6 +1,13 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
+# Unit-Testlauf-Baustein von `ci` (Refs #1953): Default test-parallel;
+# `ci-release` setzt test-parallel-cov, damit die Suite im Release-/
+# Checkpoint-Modus EINMAL laeuft und dabei das Coverage-Artefakt fuer
+# `SKIP_UNIT=1 make release-gates` erzeugt — statt zweier Voll-Laeufe
+# (test-parallel + Coverage-Gate) pro Gate-Pass.
+CI_TEST_TARGET ?= test-parallel
+
 # Globales Lock fuer ressourcenschwere Laeufe (Refs #1840). EIN fester,
 # absoluter Pfad — absichtlich AUSSERHALB jedes Worktrees: das Lock schuetzt
 # Host-RAM/CPU, die E2E-Datenbank und Port 8844, also genau die Ressourcen, die
@@ -12,7 +19,7 @@ CI_LOCK ?= /work/anlaufstelle-ci.lock
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta
 
 .PHONY: i18n-check i18n-update
 
@@ -198,6 +205,26 @@ test-focus:
 test-parallel:
 	$(PYTHON) -m pytest -m "not e2e" -n auto -x
 
+# Wie test-parallel, zusaetzlich mit Coverage-Messung + 96-%-Schwelle (Spiegel
+# des release-gates-Coverage-Gates inkl. --ignore, Refs #1953). Erzeugt
+# .coverage im Repo-Root — das Artefakt, das `SKIP_UNIT=1 make release-gates`
+# per scripts/dev/check_coverage_artifact.py prueft, statt die Suite fuer die
+# Messung ein zweites Mal zu fahren.
+# Der Provenienz-Stempel bindet das Artefakt an den INHALT von HEAD
+# (HEAD^{tree}), nicht nur an die Zeit: geschrieben wird er NUR nach gruenem
+# Lauf (Make bricht bei rotem pytest vor der Stempel-Zeile ab; der alte
+# Stempel ist dann bereits geloescht) und NUR bei sauberem src/ — ein rotes
+# oder auf fremdem Stand erzeugtes .coverage kann das SKIP_UNIT-Gate damit
+# nie passieren.
+test-parallel-cov:
+	@rm -f .coverage.stamp
+	$(PYTHON) -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto -x --cov=core --cov-report=term-missing --cov-fail-under=96
+	@if [ -z "$$(git status --porcelain -- src/)" ]; then \
+		git rev-parse 'HEAD^{tree}' > .coverage.stamp; \
+	else \
+		echo "test-parallel-cov: src/ nicht sauber — kein Provenienz-Stempel (SKIP_UNIT-Gate verlangt dann den Voll-Lauf)"; \
+	fi
+
 # Vitest-Suite deterministisch/non-watch ausfuehren (Refs #1932). ``npm test``
 # entspricht ``vitest run`` (siehe package.json ``scripts.test``) — kein
 # Watch-Modus, Exit-Code spiegelt den Testausgang 1:1. Klare, gezielte
@@ -220,7 +247,10 @@ test-js:
 # --timeout-method=thread wie bei ``test-e2e`` (Refs #1606): harter Kill des
 # Workers gegen den Greenlet-Endlos-Dreher bei totem Chromium — unter -n 2 auf
 # 2 Kernen der reproduzierte Haenger.
-test-e2e-parallel:
+# Prerequisite ``tailwind-build`` (Refs #1712/#1953): dieselbe Stale-CSS-Falle
+# wie bei ``test-e2e`` — das parallele Target lief bisher als einziges ohne
+# CSS-Rebuild und konnte gegen veraltete styles.css false-gruen/false-rot laufen.
+test-e2e-parallel: tailwind-build
 	$(PYTHON) -m pytest -m e2e --browser chromium -n $(E2E_WORKERS) --dist loadfile --timeout=120 --timeout-method=thread -v
 
 test-e2e-smoke:
@@ -239,7 +269,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions i18n-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js test-parallel
+ci: lint check changelog-check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions i18n-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js $(CI_TEST_TARGET)
 
 # Serialisierte Varianten der ressourcenschweren Gates (Refs #1840).
 # Wer einen vollen Gate-Lauf startet, nimmt DIESE Targets — sonst kollidieren
@@ -256,6 +286,19 @@ test-e2e-locked:
 
 test-e2e-halves-locked:
 	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) test-e2e-halves
+
+# Release-/Checkpoint-Modus (Refs #1953): identisches `ci`, aber der
+# Unit-Testlauf traegt die Coverage-Messung gleich mit (test-parallel-cov).
+# Danach ersetzt `SKIP_UNIT=1 make release-gates` den zweiten Voll-Lauf durch
+# den Artefakt-Check — EIN Unit-Lauf pro Gate-Pass statt zwei.
+ci-release:
+	$(MAKE) ci CI_TEST_TARGET=test-parallel-cov
+
+ci-release-locked:
+	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) ci-release
+
+test-e2e-parallel-locked:
+	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) test-e2e-parallel
 
 # Schneller Gate: statische Prüfung + Unit-Ebene, ohne E2E/Browser.
 # Enge Feedback-Schleife + Pre-Commit. Beziehung: ci ⊇ verify-fast
@@ -288,6 +331,14 @@ verify-matrix-drift:
 # Refs #1869.
 verify-translation-versions:
 	$(PYTHON) scripts/check_translation_versions.py
+
+# CHANGELOG-Hygiene-Gate (Refs #1953): haelt `[Unreleased]` kontinuierlich
+# sauber (Kategorie-Vokabular, keine Duplikate, Issue-Refs) — statt des
+# Batch-Aufraeumens am Release-Cut (Befund beim v0.81-Cut: Duplikat-Paare,
+# fehlende Sektionen). Leeres/fehlendes `[Unreleased]` ist gruen (frischer
+# Post-Release-Stand).
+changelog-check:
+	$(PYTHON) scripts/check_changelog_unreleased.py
 
 # Guard (Refs #1137): kein ausgelieferter Test (src/tests/) darf hart auf
 # Pfade verweisen, die der Public-/Stage-Release-Snapshot strippt
@@ -348,9 +399,30 @@ sync-vendor-js:
 mutation:
 	$(PYTHON) scripts/dev/run_mutmut.py run
 
+# Delta-Mutation (Refs #1953, Maintainer-Entscheid 2026-08-19): nur die seit
+# BASE geaenderten Dateien der Mutations-Scopes mutieren — laeuft am
+# Meilenstein-Checkpoint im Hintergrund statt im Cut-Pfad. Der Voll-Lauf
+# bleibt 1x vor v1.0 Pflicht (docs/testing/mutation-testing.md § Score-Ziele).
+mutation-delta:
+	@[ -n "$(BASE)" ] || { echo "mutation-delta: BASE=<tag/ref> fehlt (z.B. make mutation-delta BASE=v0.81.0)"; exit 2; }
+	$(PYTHON) scripts/dev/run_mutmut.py run --since "$(BASE)"
+
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
 	$(PYTHON) -m mutmut results
+
+# Versions-Stempel des Doc-Sync §1.2 (Refs #1953): schreibt alle "Immer"-
+# Stellen (SECURITY.md-Tabelle, threat-model-Header, README-Banner,
+# compose-APP_VERSION-Fallbacks, Stand-Zeile, …) idempotent auf VERSION —
+# ersetzt die Handarbeit, `check_translation_versions.py` bleibt die
+# unabhaengige Nachkontrolle.
+release-stamp:
+	@[ -n "$(VERSION)" ] || { echo "release-stamp: VERSION=X.Y.Z fehlt"; exit 2; }
+	$(PYTHON) scripts/dev/release_stamp.py --version "$(VERSION)"
+
+release-stamp-check:
+	@[ -n "$(VERSION)" ] || { echo "release-stamp-check: VERSION=X.Y.Z fehlt"; exit 2; }
+	$(PYTHON) scripts/dev/release_stamp.py --version "$(VERSION)" --check
 
 # Worktree-Workflow (dev-only, Refs #1240): ein Worktree pro Feature als
 # Geschwister-Ordner ../anlaufstelle-<NAME>. scripts/dev/worktree.sh wird —

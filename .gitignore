@@ -8,6 +8,7 @@ venv/
 # Coverage
 htmlcov/
 .coverage
+.coverage.stamp
 coverage.xml
 coverage.json
 
