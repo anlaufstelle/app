@@ -28,6 +28,25 @@ pytestmark = pytest.mark.e2e
 _DUMMY_SALT = "YWJjZGVmZ2hpamtsbW5vcA"
 
 
+def _ensure_service_worker_controls(page):
+    """Sicherstellen, dass ein Service Worker die Seite wirklich kontrolliert.
+
+    Refs #1951: Die Zusicherung auf ein sauberes ``/login/`` hat nur Zaehne,
+    wenn ueberhaupt ein Service Worker aktiv ist — der Abbruch entsteht ja erst
+    dadurch, dass ``Clear-Site-Data: "storage"`` dessen Registrierung abraeumt
+    und die noch lebende Seite darauf mit einer eigenen Navigation reagiert.
+
+    Ohne diese Vorbedingung waeren die Logout-Tests still gruen: Fehlt etwa das
+    ungetrackte Build-Artefakt ``src/static/css/styles.css`` (404), scheitert
+    ``cache.addAll(APP_SHELL)`` im ``install``-Handler, der Worker aktiviert
+    nie, und der Fehler kann gar nicht auftreten. Muster wie in
+    ``test_offline_contract_integration.py``.
+    """
+    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=10000)
+
+
 def _login_via_form(page, base_url, username="miriam", password="anlaufstelle2026"):
     """Real login form submit so `auth-bootstrap.js` derives the session key.
 
@@ -40,6 +59,7 @@ def _login_via_form(page, base_url, username="miriam", password="anlaufstelle202
     page.fill("#id_password", password)
     page.click("button[type=submit]")
     page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
+    _ensure_service_worker_controls(page)
     page.wait_for_function("window.crypto_session && window.offlineStore")
     page.evaluate(
         """async () => {
@@ -85,13 +105,43 @@ def _seed_offline_client(page):
 
 
 def _do_logout(page):
-    """Click the desktop-sidebar logout form and wait for the `/login/` redirect."""
-    page.click("form[action='/logout/'] button[type='submit']")
-    page.wait_for_url(re.compile(r"/login/"), timeout=15000)
+    """Click the desktop-sidebar logout form and wait for the `/login/` redirect.
+
+    Refs #1951: Der Logout-Handler in ``sw-register.js`` haelt den nativen POST
+    an (``preventDefault``), laesst den asynchronen Offline-Wipe durchlaufen und
+    schickt die Form erst DANACH programmatisch ab. Die Navigation startet also
+    erst deutlich nach dem Klick — der Waiter muss VOR dem Klick scharf sein.
+    Ein ``wait_for_url`` erst nach dem Klick beobachtet das Zeitfenster nicht
+    lueckenlos und sieht unter Last einen Abbruch statt der Ankunft
+    (``net::ERR_ABORTED; maybe frame was detached?``).
+    """
+    with page.expect_navigation(url=re.compile(r"/login/"), timeout=15000):
+        page.click("form[action='/logout/'] button[type='submit']")
+    _assert_clean_login_landing(page)
     # crypto.js + offline-store.js are deferred-loaded on /login/ too — wait
     # for them so the subsequent page.evaluate() assertions don't race the
     # script tags.
     page.wait_for_function("window.crypto_session && window.offlineStore")
+
+
+def _assert_clean_login_landing(page):
+    """Der Logout muss auf einem SAUBEREN ``/login/`` landen (Refs #1951).
+
+    ``CustomLogoutView`` weiterleitet auf genau ``/login/`` — ohne
+    ``next``-Parameter. Solange nur gegen ``re.compile(r"/login/")`` geprueft
+    wurde, war ein abgebrochener Logout unsichtbar: Riss ein Service-Worker-
+    Auto-Reload die Logout-Weiterleitung ab, lud der Browser die ALTE, jetzt
+    unauthentifizierte URL neu und landete auf ``/login/?next=<alte URL>`` —
+    teils mit einer gerade fliegenden HTMX-Partial-URL als ``next``-Ziel. Der
+    Test war dabei gruen. Diese Zusicherung schliesst die Luecke.
+
+    Fundkontext: #1855 (Lastempfindlichkeit der E2E-Suite) — dort fiel der
+    Logout-Fall sporadisch auf, war aber Symptom, nicht Ursache.
+    """
+    assert page.url.endswith("/login/"), (
+        f"Logout landete nicht auf sauberem /login/, sondern auf {page.url!r} — "
+        "die Logout-Weiterleitung wurde abgebrochen (Refs #1951)."
+    )
 
 
 def test_logout_wipes_crypto_session_key(browser, base_url):
