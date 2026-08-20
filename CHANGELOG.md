@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Der Release-Cut endet bis v1.0 bei Stage** (#1955) — Bis einschließlich v0.x entfallen der Push in das öffentliche Repository, die Public-Verifikation und das GitHub-Release; der Cut ist mit dem signierten Tag auf Dev und Stage abgeschlossen. Der sanitierte Release-Baum wird unverändert gebaut und auf Leaks geprüft, Stage-CI und Demo-Gate bleiben Pflicht — es ruht die Veröffentlichungsstufe, nicht die Prüfung. Das Tag-Push-Gate leitet den Modus aus der Major-Version des Tags ab, sodass die vollständige Kette zum 1.0-Cut ohne Änderung am Code zurückkehrt.
 
+### Fixed
+
+- **Release-Sanitizer erkennt jetzt, wenn er zu viel entfernt hat** (#1950) — Der Leak-Check läuft **nach** dem Sanitizer auf demselben Baum; ein Muster, das zu viel wegnimmt, war damit strukturell unbeobachtbar — aus einer Zuweisung wurde eine Zuweisung ohne Wert, aus einem YAML-Schlüssel ein Schlüssel ohne Inhalt. Der Sanitizer prüft jetzt je Schnitt-Punkt die von ihm selbst geänderten Dateien: `.py` über `compile()`, `.sh` über `bash -n`, `.js` über `node --check`, `.toml` über `tomllib` — und meldet nur, was vorher gültig war und nachher nicht mehr. YAML bekommt bewusst **kein** Parser-Gate (beide Schadensformen bleiben gültiges YAML), sondern einen strukturellen Vorher/Nachher-Vergleich, der geleerte Skalare und verschwundene Listenelemente meldet. Vier Randformen der Ersetzung innerhalb von Code sind behoben: eine zurückbleibende Klammer mit führendem Komma, ein leerer Schrägstrich zwischen zwei entfernten Kürzeln, ein Kommentar, der nur noch aus Doppelpunkt bestand, und eine eingerückte Zeile, die ihre Einrückung verlor.
+- **Guard-Regex des Release-Checks liegt nur noch an einer Stelle** (#1950) — Die Token-Regex stand siebenfach im Repository: dreimal im Prüfskript selbst und viermal in dessen Tests, mit divergierendem Inhalt. Der Commit-Message-Scan kannte weder `C-NNN` noch `Audit-N` und meldete dort also nicht, was im Baum längst verboten war. Jetzt gibt es eine Definition, aus der alle Prüfungen und Tests ableiten; die Lücke im Message-Scan ist geschlossen (belegt gegen alle Commit-Betreffs seit v0.12.0, kein bestehender Build bricht). Ebenfalls aufgelöst: Quell-Guard und Leak-Check schlossen unterschiedliche `test_episodes`-Dateien aus, wodurch ein Marker in der Nicht-E2E-Datei dev-seitig unsichtbar, im Build aber rot gewesen wäre.
+
+### Removed
+
+- **Toter `conservative`-Modus des Release-Sanitizers entfernt** (#1950) — Der Modus war seit der Safe-Mode-Einführung unerreichbar (YAML und `.txt` laufen über den Safe-Pfad), wurde aber von einem Test abgesichert, der die Zusage „Marker bleiben in YAML stehen" festschrieb — während der reale Pfad sie entfernt. Modus und Test sind ersatzlos entfallen; geprüft wird jetzt der tatsächlich gelaufene Pfad.
+
 ## [0.81.0] - 2026-08-20
 
 ### Added
