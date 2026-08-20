@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+### Docs
+
+- **Der Release-Cut endet bis v1.0 bei Stage** (#1955) — Bis einschließlich v0.x entfallen der Push in das öffentliche Repository, die Public-Verifikation und das GitHub-Release; der Cut ist mit dem signierten Tag auf Dev und Stage abgeschlossen. Der sanitierte Release-Baum wird unverändert gebaut und auf Leaks geprüft, Stage-CI und Demo-Gate bleiben Pflicht — es ruht die Veröffentlichungsstufe, nicht die Prüfung. Das Tag-Push-Gate leitet den Modus aus der Major-Version des Tags ab, sodass die vollständige Kette zum 1.0-Cut ohne Änderung am Code zurückkehrt.
+
 ## [0.81.0] - 2026-08-20
 
 ### Added

@@ -31,6 +31,16 @@ Pipeline (vereinfacht):
 
 > **Release-Tag auf allen drei Repos:** Der signierte Tag `vX.Y.Z` wird vom Release-Build (`dev-ops/release/build-release.sh`, dev-only) auf **allen drei** Repos gesetzt — im **dev**-Repo auf dem Quell-Commit, in **stage**/**app** auf dem daraus gebauten, sanitierten Snapshot (andere SHA, dasselbe Release). So bleibt der Release-Stand auch aus dem dev-Repo allein eindeutig ablesbar; `dev-ops/release/verify-leak.sh` (dev-only) erzwingt den dev-Tag als Teil des Release-Gates (Refs #1237).
 
+## Nachtrag 2026-08-20: Stufe 3 ruht bis v1.0 (Refs #1955)
+
+Die Pipeline bleibt dreistufig; bis einschließlich v0.x endet jeder Release-Cut aber bei **stage**. Der Push nach `anlaufstelle/app`, `release-verify-public.sh` und das GitHub-Release entfallen bis dahin — `anlaufstelle/app` bleibt auf `v0.80.0` stehen.
+
+Unberührt bleibt alles, was die Trennung überhaupt trägt: Der sanitierte Snapshot wird bei jedem Cut gebaut, `verify-leak.sh` läuft, der signierte Tag wird in Dev **und** Stage gesetzt, Stage-CI und Demo-Gate bleiben Pflicht. Es ruht ausschließlich die Veröffentlichungsstufe, nicht die Prüfsubstanz — der Stand bleibt jederzeit publizierbar.
+
+Begründung: Der App-Zweig kostet pro Cut eine eigene Maintainer-Handoff-Kette für ein Publikum, das es vor 1.0 noch nicht gibt (Zeitmodell in #1953). `release-verify-tags.sh` leitet den Modus aus der Major-Version des Tags ab, damit die Kette zum 1.0-Cut ohne Code-Änderung zurückkommt.
+
+Offen zu diesem Nachtrag: AGPL §13 für `demo.anlaufstelle.app` — läuft die öffentliche Demo auf einer Version, deren Corresponding Source nicht öffentlich abrufbar ist, muss die Demo entweder auf dem letzten veröffentlichten Stand bleiben oder die betreffende Version doch publiziert werden.
+
 ## Consequences
 
 - **+** Halbfertige Arbeit bleibt geschützt; veröffentlichter Stand ist immer geprüft.
