@@ -56,7 +56,10 @@ def document_type_label(document_type: DocumentType) -> str:
     """
     if document_type.is_active:
         return document_type.name
-    return f"{document_type.name} ({_('deaktiviert')})"
+    # Refs #1933: Aufruf vor dem f-String — in einem f-String-Ausdruck sieht
+    # xgettext 0.21 (CI-Toolchain) ihn nicht.
+    inactive_label = _("deaktiviert")
+    return f"{document_type.name} ({inactive_label})"
 
 
 class MultipleFileInput(forms.ClearableFileInput):

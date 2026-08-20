@@ -126,12 +126,19 @@ def _render_csv(
         output.truncate(0)
         return chunk
 
+    # Refs #1933: die drei Labels werden bewusst VOR den f-Strings aufgeloest.
+    # In einem f-String-Ausdruck extrahieren nur neuere xgettext-Versionen den
+    # Aufruf (gemessen: 0.23.1 ja, 0.21 nein); die CI-Toolchain
+    # (ubuntu-24.04, gettext 0.21) sieht ihn nicht und
+    # ``make i18n-update`` wuerde die msgid dann still aus dem Katalog werfen.
+    # Guard: ``tests/test_i18n_fstring_extraction_guard.py``.
+    report_label = gettext("Bericht")
+    data_source_label = gettext("Datenquelle")
+    population_label = gettext("Grundgesamtheit")
     # Refs #1766: auch das Zeilenpraefix ist Fliesstext — bliebe es deutsch,
     # waere die Zeile nach dem Uebersetzen der Segmente immer noch gemischt.
     # Der Wert dahinter (``backend.slug``) ist der stabile Code und bleibt.
-    metadata = (
-        f"# {gettext('Bericht')}: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
-    )
+    metadata = f"# {report_label}: {backend.slug} | {facility} | {date_from}–{date_to} | {generated_at.isoformat()}"
     # Quellenausweis (Refs #1743): die Pipeline liest immer live. Steht VOR dem
     # k-Anon-Hinweis, damit dieser das Zeilenende bleibt.
     #
@@ -144,13 +151,11 @@ def _render_csv(
     # derselbe ``msgid`` "Datenquelle" wie im Berichts-Panel/PDF
     # ({% trans "Datenquelle" %}), damit die EN-Katalogpflege nicht
     # dupliziert.
-    metadata += f" | data_source: {LIVE} | {gettext('Datenquelle')}: {DATA_SOURCE_NOTES[LIVE]}"
+    metadata += f" | data_source: {LIVE} | {data_source_label}: {DATA_SOURCE_NOTES[LIVE]}"
     # K3-A3 (Refs #1770): dasselbe Muster fuer die Grundgesamtheit. Panel und
     # Download zeigen denselben Datensatz — benennt nur das Panel seine
     # Basismenge, fehlt die Angabe genau in der Datei, die das Haus verlaesst.
-    metadata += (
-        f" | population: {backend.population} | {gettext('Grundgesamtheit')}: {POPULATION_NOTES[backend.population]}"
-    )
+    metadata += f" | population: {backend.population} | {population_label}: {POPULATION_NOTES[backend.population]}"
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
     # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
