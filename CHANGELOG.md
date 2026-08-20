@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mutation-Gate startet nicht mehr in Resten des letzten Testlaufs** (#1952) — Der bisher nur dokumentierte Pre-Run-Cleanup läuft jetzt im Mutation-Runner selbst und damit in allen Aufrufwegen (`make mutation`, `make mutation-delta`, Watchdog, `RELEASE_MUTATION=1`): Media-Residuen werden geleert und die Test-Datenbanken **des eigenen Laufs** gedroppt — ausschließlich `test_$POSTGRES_DB` und dessen `_gw<N>`-Klone, sodass parallele Sitzungen unangetastet bleiben. Zuvor scheiterte der einleitende Clean-Test (pytest mit `--reuse-db`) an Alt-Zeilen und riss den gesamten Lauf ab, bevor ein einziger Mutant geprüft war. Die Statistik-Datei wird zusätzlich verworfen, wenn sich die Scope-Dateien seit dem letzten Lauf geändert haben — mutmut 3.7 sammelt die Zuordnung Funktion→Test nur noch inkrementell und meldete für verschobene Funktionen sonst zu pessimistische Werte. Aufgeräumt wird unter dem CI-Lock, der Mutationslauf selbst hält ihn nicht; ist die Datenbank nicht erreichbar oder der Lock fremd belegt, gibt es eine sichtbare Warnung statt eines Abbruchs.
+
 ### Docs
 
 - **Der Release-Cut endet bis v1.0 bei Stage** (#1955) — Bis einschließlich v0.x entfallen der Push in das öffentliche Repository, die Public-Verifikation und das GitHub-Release; der Cut ist mit dem signierten Tag auf Dev und Stage abgeschlossen. Der sanitierte Release-Baum wird unverändert gebaut und auf Leaks geprüft, Stage-CI und Demo-Gate bleiben Pflicht — es ruht die Veröffentlichungsstufe, nicht die Prüfung. Das Tag-Push-Gate leitet den Modus aus der Major-Version des Tags ab, sodass die vollständige Kette zum 1.0-Cut ohne Änderung am Code zurückkehrt.
