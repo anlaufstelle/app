@@ -52,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **CRA-Einordnung auf den umgesetzten Stand gezogen** (#1895) — Der Abgleich gegen Anhang I in [docs/compliance/cra-einordnung.md](docs/compliance/cra-einordnung.md) führte Stückliste, Support-Zeitraum und Advisory-Veröffentlichung als Lücken; die ersten beiden sind geschlossen, bei der dritten ist nur noch ein Einstellungs-Schritt am öffentlichen Repository offen. Neu aufgenommen ist außerdem eine Risiko-Notiz, die das bisher nur abstrakt geführte Szenario „Betriebsmodell-Wechsel" an die im Fachkonzept ausdrücklich genannte Option eines kostenpflichtigen Hosting-Angebots bindet: Wird sie gezogen, kippt die Einordnung von „außerhalb des Anwendungsbereichs" in die vollen Herstellerpflichten. Das Betriebshandbuch beschreibt in einem neuen Abschnitt den vollständigen Ablauf einer Schwachstellenmeldung von der Eingangsbestätigung bis zur Veröffentlichung, samt der zusätzlichen behördlichen Fristen bei aktiv ausgenutzten Lücken.
 
+### Docs
+
+- **Force-Push auf Stage ist jetzt ein festgeschriebener Ablauf statt einer Einzelfallentscheidung** (#1954) — Meldet die Stage-CI beim Release-Schnitt einen Fund, gehört der Fix sachlich vor den Versionsfestlegungs-Commit; die Historie dort läuft damit zwangsläufig auseinander, und das Runbook sagte bisher nichts dazu. Es beschreibt nun den entschiedenen Weg: Der Push läuft ausschließlich mit `--force-with-lease` **und explizit angegebenem Alt-Stand**, sodass er fehlschlägt statt zu überschreiben, falls die Gegenseite unerwartet woanders steht. Der Nachweis, dass dabei nichts verlorengeht, ist Pflichtteil und in fester Reihenfolge festgelegt: alter Stand **vor** dem Push protokollieren, alte gegen neue Kette stellen, und der Inhaltsvergleich darf nur die Fixes zeigen. Mit abgedeckt ist der Fall ohne Umordnung, in dem allein eine geänderte Bau-Signatur die wiederverwendeten Commits verwirft. Ausdrücklich ausgenommen bleibt das öffentliche Repository: dorthin ist ein Force-Push nie zulässig, weil eine umgeschriebene Historie jeden Klon bricht.
+
 ## [0.81.0] - 2026-08-20
 
 ### Added
