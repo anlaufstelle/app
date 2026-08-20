@@ -615,3 +615,47 @@ class TestOpsRunbookRetentionCrontabAdminRole:
                 "-e POSTGRES_USER=$POSTGRES_ADMIN_USER-Override tragen wie verify_audit_chain "
                 f"(Refs #1335). Betroffen: {line!r}"
             )
+
+
+class TestProdBackupDirVisibility:
+    """Refs #1872: der Prod-Stack muss die Backup-Ablage im ``web``-Container sehen.
+
+    ``scripts/ops/backup.sh`` legt die verschluesselten Dumps unter
+    ``<repo>/backups/{daily,weekly,monthly}`` auf dem **Host** ab. Im
+    ``web``-Container zeigt ``settings.BACKUP_DIR`` per Default auf
+    ``BASE_DIR.parent/backups`` — einen Pfad, den es im ``read_only``-Image
+    gar nicht gibt. Ohne Mount + passende Variable melden die Backup-Zeile
+    der ``/system/``-Health-Card und ``last_backup_age_hours`` in ``/health/``
+    deshalb dauerhaft „Kein Backup gefunden", egal wie zuverlaessig der
+    Host-Cron laeuft. ``docker-compose.dev.yml``/``.demo.yml`` haben den
+    Mount seit Refs #871, der Prod-Stack fiel durchs Raster.
+    """
+
+    _COMPOSE = Path("docker-compose.prod.yml")
+    _ENV_EXAMPLE = Path(".env.example")
+
+    @staticmethod
+    def _uncommented(path: Path) -> list[str]:
+        return [
+            line.strip() for line in path.read_text(encoding="utf-8").splitlines() if not line.strip().startswith("#")
+        ]
+
+    def test_prod_compose_mounts_backup_dir_read_only(self) -> None:
+        lines = self._uncommented(self._COMPOSE)
+        assert any(line.startswith("- ${BACKUP_HOST_DIR") and line.endswith(":ro") for line in lines), (
+            "docker-compose.prod.yml muss die Host-Backup-Ablage read-only in den "
+            "web-Container mounten (Refs #1872) — sonst zeigt /system/ dauerhaft "
+            "'Kein Backup gefunden'."
+        )
+
+    def test_prod_compose_pins_backup_dir_env(self) -> None:
+        lines = self._uncommented(self._COMPOSE)
+        assert any(line.startswith("BACKUP_DIR: ${BACKUP_DIR") for line in lines), (
+            "docker-compose.prod.yml muss BACKUP_DIR auf denselben Container-Pfad "
+            "setzen wie das Mount-Ziel (Refs #1872)."
+        )
+
+    def test_env_example_documents_both_backup_paths(self) -> None:
+        text = self._ENV_EXAMPLE.read_text(encoding="utf-8")
+        assert "BACKUP_HOST_DIR=" in text, ".env.example muss BACKUP_HOST_DIR dokumentieren (Refs #1872)."
+        assert "BACKUP_DIR=" in text, ".env.example muss BACKUP_DIR dokumentieren (Refs #1872)."

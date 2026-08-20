@@ -20,6 +20,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.services import ops_thresholds
 from core.services.compliance import ComplianceStatus, cron_job_checks
 from core.services.file_vault import ping as clamav_ping
 from core.services.system import rls_bypass_for_read
@@ -27,7 +28,10 @@ from core.services.system import rls_bypass_for_read
 logger = logging.getLogger(__name__)
 
 # Refs #796 (C-28) — Schwellen, die einen ``status=degraded`` ausloesen.
-BACKUP_WARN_HOURS = 48
+# Refs #1872: konsolidiert — der Wert (unveraendert 48 h) kommt jetzt aus
+# ``core.services.ops_thresholds`` und ist dieselbe CRITICAL-Grenze, die auch
+# das Compliance-Dashboard fuer die Backup-Zeile nutzt.
+BACKUP_WARN_HOURS = ops_thresholds.BACKUP_CRITICAL_HOURS
 DISK_WARN_PCT = 10
 SMTP_TIMEOUT_SECONDS = 2
 

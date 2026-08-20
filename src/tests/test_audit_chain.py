@@ -285,6 +285,31 @@ class TestTamperDetection:
         # Kein SystemExit -> exit code 0.
         call_command("verify_audit_chain")
 
+    def test_green_run_writes_last_run_marker(self, facility, staff_user):
+        """Refs #1872: gruener Lauf hinterlaesst AUDIT_CHAIN_VERIFIED (facility=None).
+
+        Ohne den Marker war im UI nirgends erkennbar, ob die HMAC-Kette je
+        geprueft wurde — der Job meldete Erfolg nur ueber den Exit-Code.
+        """
+        AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        call_command("verify_audit_chain")
+        marker = AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).order_by("-timestamp").first()
+        assert marker is not None
+        assert marker.facility_id is None
+        assert marker.target_type == "AuditChainVerification"
+        assert marker.detail["rows_checked"] >= 1
+
+    def test_tampered_run_writes_no_marker(self, facility, staff_user):
+        """Refs #1872: ein Tamper-Fund darf die Betriebs-Ampel nicht gruen faerben."""
+        AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        victim = audit_event(AuditLog.Action.CLIENT_UPDATE, user=staff_user, facility=facility, detail={"k": "v"})
+        _tamper(victim.pk, detail={"k": "tampered"})
+        with pytest.raises(SystemExit):
+            call_command("verify_audit_chain")
+        assert not AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).exists()
+
 
 # ---------------------------------------------------------------------------
 # Backfill

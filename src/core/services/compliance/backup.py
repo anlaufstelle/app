@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from core.models import AuditLog
+from core.services import ops_thresholds
 from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 
@@ -31,25 +32,28 @@ def _backup_checks() -> list[ComplianceCheck]:
         ]
     age_hours = info["age_hours"]
     detail = f"{info['path']} (Alter: {age_hours:.1f}h)"
-    if age_hours <= 24:
+    # Refs #1872: Schwellen aus ``ops_thresholds`` (36 h / 48 h = 1,5 x / 2 x
+    # Tagesintervall des Host-Cron) statt der frueheren, hier lokal gesetzten
+    # 24 h / 72 h — dieselbe Backup-Zeile meldete sonst je nach Ansicht anderes.
+    if age_hours <= ops_thresholds.BACKUP_WARN_HOURS:
         return [
             ComplianceCheck(
                 key="backup_age",
                 label="Letztes Backup",  # pragma: no mutate
                 category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=f"Backup juenger als 24h ({age_hours:.0f}h).",  # pragma: no mutate
+                message=f"Backup ist {age_hours:.0f}h alt (Schwelle: {ops_thresholds.BACKUP_WARN_HOURS}h).",  # pragma: no mutate  # noqa: E501
                 detail=detail,
             )
         ]
-    if age_hours <= 72:
+    if age_hours <= ops_thresholds.BACKUP_CRITICAL_HOURS:
         return [
             ComplianceCheck(
                 key="backup_age",
                 label="Letztes Backup",  # pragma: no mutate
                 category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"Backup ist {age_hours:.0f}h alt (Schwelle: 72h).",  # pragma: no mutate
+                message=f"Backup ist {age_hours:.0f}h alt — ein Tageslauf fehlt.",  # pragma: no mutate
                 detail=detail,
                 action_hint="Backup-Cron pruefen, evtl. manuell ausloesen.",  # pragma: no mutate
             )
@@ -60,7 +64,7 @@ def _backup_checks() -> list[ComplianceCheck]:
             label="Letztes Backup",  # pragma: no mutate
             category="Backup",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"Backup ist {age_hours:.0f}h alt — Cron ausgefallen?",  # pragma: no mutate
+            message=f"Backup ist {age_hours:.0f}h alt — mindestens zwei Laeufe ausgefallen.",  # pragma: no mutate
             detail=detail,
             action_hint="Backup-Cron + Disk-Speicher pruefen, Restore-Test nachholen.",  # pragma: no mutate
         )

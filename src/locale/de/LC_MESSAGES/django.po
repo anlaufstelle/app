@@ -1007,6 +1007,10 @@ msgstr "Breach-Detection-Scan abgeschlossen"
 msgid "Statistik-View-Refresh abgeschlossen"
 msgstr "Statistik-View-Refresh abgeschlossen"
 
+#: src/core/models/audit.py:114
+msgid "Audit-Ketten-Prüfung abgeschlossen"
+msgstr "Audit-Ketten-Prüfung abgeschlossen"
+
 #: src/core/models/audit.py:113
 msgid "Audit-Pruning-Checkpoint"
 msgstr "Audit-Pruning-Checkpoint"

@@ -13,6 +13,7 @@ Jobs unter der Kategorie „Hintergrundjobs".
 from __future__ import annotations
 
 from core.models import AuditLog
+from core.services import ops_thresholds
 from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 
@@ -182,5 +183,72 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
             message=f"Letzter Refresh vor {age:.0f}h — Cron ausgefallen?",  # pragma: no mutate
             detail=detail,
             action_hint="systemd-Timer-Status prüfen + manuell ausführen.",  # pragma: no mutate
+        )
+    ]
+
+
+def _audit_chain_checks() -> list[ComplianceCheck]:
+    """Audit-Ketten-Verifikation — taeglicher Cron 03:30 (Refs #1070, #1872).
+
+    ``verify_audit_chain`` meldete einen gruenen Lauf bisher ausschliesslich
+    ueber den Exit-Code an supercronic. Ob die HMAC-Kette des AuditLog
+    ueberhaupt je geprueft wurde, war damit **nirgends** im System sichtbar —
+    genau die Luecke aus #1872. Der Marker ``AUDIT_CHAIN_VERIFIED`` wird nur
+    nach vollstaendig gruenem Lauf geschrieben; ein Tamper-Fund beendet den
+    Command vorher. Ein alter Marker heisst also entweder „Cron aus" oder
+    „Lauf bricht seit Tagen rot ab" — beides gehoert eskaliert.
+
+    Bewusst nur Anzeige, **kein** Pruef-Button im Request: ein voller
+    Kettendurchlauf skaliert mit der Zahl der AuditLog-Zeilen und liefe mit
+    wachsender Kette in den Gateway-Timeout (siehe ``services/hubs.py``); eine
+    Job-Queue gibt es im Projekt nicht.
+    """
+    key, label = "audit_chain_last_run", "Audit-Ketten-Pruefung"
+    entry = _latest(AuditLog.Action.AUDIT_CHAIN_VERIFIED)
+    if entry is None:
+        return [
+            ComplianceCheck(
+                key=key,
+                label=label,
+                category=_CATEGORY,
+                status=ComplianceStatus.UNKNOWN,
+                message="Noch keine Ketten-Pruefung — Cron lief vielleicht nie.",  # pragma: no mutate
+                action_hint="Cron-Job 'verify_audit_chain' pruefen (Ops-Runbook §3.1).",  # pragma: no mutate
+            )
+        ]
+    age = _age_hours(entry)
+    detail = f"Letzte Pruefung: {entry.timestamp:%Y-%m-%d %H:%M}"
+    if age <= ops_thresholds.AUDIT_CHAIN_WARN_HOURS:
+        return [
+            ComplianceCheck(
+                key=key,
+                label=label,
+                category=_CATEGORY,
+                status=ComplianceStatus.OK,
+                message=f"Letzte Pruefung vor {age:.0f}h.",  # pragma: no mutate
+                detail=detail,
+            )
+        ]
+    if age <= ops_thresholds.AUDIT_CHAIN_CRITICAL_HOURS:
+        return [
+            ComplianceCheck(
+                key=key,
+                label=label,
+                category=_CATEGORY,
+                status=ComplianceStatus.WARNING,
+                message=f"Letzte Pruefung vor {age:.0f}h — ein Tageslauf fehlt.",  # pragma: no mutate
+                detail=detail,
+                action_hint="Cron muss taeglich laufen (deploy/crontab: 30 3 * * *).",  # pragma: no mutate
+            )
+        ]
+    return [
+        ComplianceCheck(
+            key=key,
+            label=label,
+            category=_CATEGORY,
+            status=ComplianceStatus.CRITICAL,
+            message=f"Letzte Pruefung vor {age:.0f}h — Cron aus oder Lauf bricht rot ab.",  # pragma: no mutate
+            detail=detail,
+            action_hint="Cron-Log auf Tamper-Verdacht pruefen + manuell ausfuehren.",  # pragma: no mutate
         )
     ]

@@ -25,13 +25,15 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.loader import MigrationLoader
 
+from core.services import ops_thresholds
+
 logger = logging.getLogger(__name__)
 
-# Heuristik: ein Backup gilt als "stale", wenn es aelter als 36h ist.
-# 24h waere zu strikt fuer Off-by-one-Stunden bei Cron-Schedules,
-# 48h zu lasch fuer einen Daily-Backup-Loop. 36h gibt einen
-# vollen Tag plus Sicherheitsmarge.
-BACKUP_STALE_THRESHOLD_HOURS = 36
+# Refs #1872: ein Backup gilt als "stale", sobald die WARNING-Schwelle aus
+# ``core.services.ops_thresholds`` gerissen ist (36 h = 1,5 x Tagesintervall
+# des Host-Cron). Frueher stand die 36 hier als eigene Zahl und widersprach
+# den 24/72 h des Compliance-Checks auf **derselben** Backup-Zeile.
+BACKUP_STALE_THRESHOLD_HOURS = ops_thresholds.BACKUP_WARN_HOURS
 
 
 def check_database() -> bool:

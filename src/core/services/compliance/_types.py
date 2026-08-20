@@ -51,6 +51,14 @@ class ComplianceCheck:
 # erzeugt dann SECURITY_VIOLATION. SUDO_MODE_FAILED dagegen ist wie
 # MFA_FAILED ein seltener Re-Auth-Fehlversuch einer bereits
 # authentifizierten Session (Refs #1084).
+#
+# NICHT hier hinein gehoeren die Last-Run-Marker der Cron-Jobs
+# (``RETENTION_RUN_COMPLETED``, ``MV_REFRESH_COMPLETED``,
+# ``AUDIT_CHAIN_VERIFIED`` …, Refs #1872): sie melden einen **erfolgreichen**
+# Lauf. Auf dieser Liste wuerde jeder planmaessige Nachtlauf das Dashboard
+# gelb faerben. Ihre Ueberwachung ist der Last-Run-Check in
+# ``compliance/cron.py`` — dort ist das *Ausbleiben* das Signal, nicht das
+# Vorhandensein.
 _CRITICAL_AUDIT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.MFA_FAILED,

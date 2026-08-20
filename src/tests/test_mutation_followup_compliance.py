@@ -24,7 +24,7 @@ import pytest
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from core.models import AuditLog, User
-from core.services import compliance
+from core.services import compliance, ops_thresholds
 from core.services.compliance import (
     ComplianceStatus,
     _audit_event_checks,
@@ -67,31 +67,31 @@ class TestRetentionChecks:
             result = _retention_checks()
         assert result[0].status == ComplianceStatus.OK
 
-    def test_age_seven_days_still_ok(self, facility):
-        """Boundary: ``age_days <= 7`` ist OK. Mutation ``< 7`` würde failen."""
+    def test_age_at_warn_threshold_still_ok(self, facility):
+        """Boundary (Refs #1872): ``age <= RETENTION_WARN_HOURS`` ist OK."""
         entry = _create_retention_audit(facility)
-        with _patch_compliance_now(entry.timestamp + timedelta(days=7, hours=1)):
+        with _patch_compliance_now(entry.timestamp + timedelta(hours=ops_thresholds.RETENTION_WARN_HOURS)):
             result = _retention_checks()
-        assert result[0].status == ComplianceStatus.OK, f"Erwarte OK bei 7 Tagen, bekomme {result[0].status}"
+        assert result[0].status == ComplianceStatus.OK, f"Erwarte OK bei 36h, bekomme {result[0].status}"
 
-    def test_age_eight_days_is_warning(self, facility):
-        """Boundary: ``age_days > 7`` schaltet auf WARNING."""
+    def test_age_one_hour_past_warn_threshold_is_warning(self, facility):
+        """Boundary: ``age > RETENTION_WARN_HOURS`` schaltet auf WARNING."""
         entry = _create_retention_audit(facility)
-        with _patch_compliance_now(entry.timestamp + timedelta(days=8, hours=1)):
-            result = _retention_checks()
-        assert result[0].status == ComplianceStatus.WARNING
-
-    def test_age_fourteen_days_still_warning(self, facility):
-        """Boundary: ``age_days <= 14`` bleibt WARNING. Mutation ``< 14`` würde failen."""
-        entry = _create_retention_audit(facility)
-        with _patch_compliance_now(entry.timestamp + timedelta(days=14, hours=1)):
+        with _patch_compliance_now(entry.timestamp + timedelta(hours=ops_thresholds.RETENTION_WARN_HOURS + 1)):
             result = _retention_checks()
         assert result[0].status == ComplianceStatus.WARNING
 
-    def test_age_fifteen_days_is_critical(self, facility):
-        """Boundary: ``age_days > 14`` schaltet auf CRITICAL."""
+    def test_age_at_critical_threshold_still_warning(self, facility):
+        """Boundary: ``age <= RETENTION_CRITICAL_HOURS`` bleibt WARNING."""
         entry = _create_retention_audit(facility)
-        with _patch_compliance_now(entry.timestamp + timedelta(days=15, hours=1)):
+        with _patch_compliance_now(entry.timestamp + timedelta(hours=ops_thresholds.RETENTION_CRITICAL_HOURS)):
+            result = _retention_checks()
+        assert result[0].status == ComplianceStatus.WARNING
+
+    def test_age_one_hour_past_critical_threshold_is_critical(self, facility):
+        """Boundary: ``age > RETENTION_CRITICAL_HOURS`` schaltet auf CRITICAL."""
+        entry = _create_retention_audit(facility)
+        with _patch_compliance_now(entry.timestamp + timedelta(hours=ops_thresholds.RETENTION_CRITICAL_HOURS + 1)):
             result = _retention_checks()
         assert result[0].status == ComplianceStatus.CRITICAL
 
@@ -439,43 +439,53 @@ class TestClamavSignatureBoundary:
 
 
 class TestBackupBoundary:
-    """Branch-Grenzen für `_backup_checks` Age-Hours (Refs #942).
+    """Branch-Grenzen für `_backup_checks` Age-Hours (Refs #942, #1872).
 
-    Schwellen: ``<= 24`` OK, ``<= 72`` WARNING, ``> 72`` CRITICAL.
+    Schwellen aus ``core.services.ops_thresholds``: ``<= 36`` OK,
+    ``<= 48`` WARNING, ``> 48`` CRITICAL.
     """
 
-    def test_age_24h_is_ok(self):
-        """Exakte Schwelle ``age <= 24`` → OK."""
+    @staticmethod
+    def _info(age_hours: float) -> dict:
+        return {
+            "path": "/var/backups/x.sql",
+            "mtime": None,
+            "age_hours": age_hours,
+            "is_stale": age_hours > ops_thresholds.BACKUP_WARN_HOURS,
+        }
+
+    def test_age_at_warn_threshold_is_ok(self):
+        """Exakte Schwelle ``age <= BACKUP_WARN_HOURS`` → OK."""
         with patch(
             "core.services.system.health.last_backup_info",
-            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 24.0, "is_stale": False},
+            return_value=self._info(float(ops_thresholds.BACKUP_WARN_HOURS)),
         ):
             checks = compliance._backup_checks()
         assert checks[0].status == ComplianceStatus.OK
 
-    def test_age_25h_is_warning(self):
-        """``age > 24`` → WARNING (Boundary +1)."""
+    def test_age_one_hour_past_warn_threshold_is_warning(self):
+        """``age > BACKUP_WARN_HOURS`` → WARNING (Boundary +1)."""
         with patch(
             "core.services.system.health.last_backup_info",
-            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 25.0, "is_stale": True},
+            return_value=self._info(ops_thresholds.BACKUP_WARN_HOURS + 1.0),
         ):
             checks = compliance._backup_checks()
         assert checks[0].status == ComplianceStatus.WARNING
 
-    def test_age_72h_is_still_warning(self):
-        """Exakte Schwelle ``age <= 72`` → WARNING."""
+    def test_age_at_critical_threshold_is_still_warning(self):
+        """Exakte Schwelle ``age <= BACKUP_CRITICAL_HOURS`` → WARNING."""
         with patch(
             "core.services.system.health.last_backup_info",
-            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 72.0, "is_stale": True},
+            return_value=self._info(float(ops_thresholds.BACKUP_CRITICAL_HOURS)),
         ):
             checks = compliance._backup_checks()
         assert checks[0].status == ComplianceStatus.WARNING
 
-    def test_age_73h_is_critical(self):
-        """``age > 72`` → CRITICAL (Boundary +1)."""
+    def test_age_one_hour_past_critical_threshold_is_critical(self):
+        """``age > BACKUP_CRITICAL_HOURS`` → CRITICAL (Boundary +1)."""
         with patch(
             "core.services.system.health.last_backup_info",
-            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 73.0, "is_stale": True},
+            return_value=self._info(ops_thresholds.BACKUP_CRITICAL_HOURS + 1.0),
         ):
             checks = compliance._backup_checks()
         assert checks[0].status == ComplianceStatus.CRITICAL

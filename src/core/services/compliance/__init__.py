@@ -25,6 +25,7 @@ Test schreiben. Fertig.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from core.services.compliance._types import (
     _CRITICAL_AUDIT_ACTIONS,
@@ -49,6 +50,7 @@ from core.services.compliance.breach_detection import (
 )
 from core.services.compliance.clamav import _clamav_checks
 from core.services.compliance.cron import (
+    _audit_chain_checks,
     _breach_scan_checks,
     _mv_refresh_checks,
     _snapshot_checks,
@@ -140,6 +142,7 @@ def aggregate_checks() -> list[ComplianceCheck]:
             _backup_checks,
             _clamav_checks,
             _retention_checks,
+            _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,
             _mv_refresh_checks,
@@ -153,13 +156,19 @@ def aggregate_checks() -> list[ComplianceCheck]:
 
 
 def cron_job_checks() -> list[ComplianceCheck]:
-    """Gebuendelte Last-Run-Checks der Hintergrundjobs (Refs #977).
+    """Gebuendelte Last-Run-Checks der Hintergrundjobs (Refs #977, #1872).
 
-    Teilmenge von :func:`aggregate_checks` — nur die fuenf per
-    systemd-Timer laufenden Jobs (Backup, Retention, Snapshots,
-    Breach-Scan, MV-Refresh). Der Restore-Test bleibt bewusst aussen vor:
-    er ist ein manueller Operator-Workflow, kein Cron-Job, und gehoert
-    aufs Compliance-Dashboard.
+    Teilmenge von :func:`aggregate_checks` — die sechs per Cron laufenden
+    Jobs (Backup, Retention, Audit-Ketten-Pruefung, Snapshots, Breach-Scan,
+    MV-Refresh). Der Restore-Test bleibt bewusst aussen vor: er ist ein
+    manueller Operator-Workflow, kein Cron-Job, und gehoert aufs
+    Compliance-Dashboard.
+
+    Das ist die **Monitoring-Sicht**: sie liefert die Status unveraendert,
+    insbesondere ``unknown`` fuer „lief noch nie". ``/health/`` degradiert
+    darauf bewusst nicht (frische Installation ist kein Ausfall). Die
+    Betriebssicht der ``/system/``-Uebersicht nutzt
+    :func:`operations_job_checks`.
 
     Wiederverwendung der bestehenden Helper haelt /system/-Uebersicht und
     Compliance-Dashboard DRY. Tuple wird zur Aufrufzeit gebildet, damit
@@ -169,11 +178,39 @@ def cron_job_checks() -> list[ComplianceCheck]:
         (
             _backup_checks,
             _retention_checks,
+            _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,
             _mv_refresh_checks,
         )
     )
+
+
+def operations_job_checks() -> list[ComplianceCheck]:
+    """Betriebssicht der ``/system/``-Uebersicht auf dieselben Jobs (Refs #1872).
+
+    Unterschied zu :func:`cron_job_checks` an genau einer Stelle: **„Kein
+    Backup gefunden" ist hier WARNING statt UNKNOWN.** Begruendung fuer die
+    Trennung statt einer globalen Hochstufung:
+
+    - Auf ``/system/`` schaut ein super_admin auf den Betrieb *seiner*
+      Installation. Das Backup ist der einzige Schritt des Deployments, den
+      der Betreiber selbst im Host-Cron einrichten muss; fehlt er, „wird nie
+      gesichert, still und ohne Fehlermeldung" (README-Warnbox). Ein graues
+      „unbekannt" ist dafuer die falsche Farbe — es ist ein Betriebsfehler.
+    - ``/health/`` wird von externem Monitoring gepollt. Dort ist ``unknown``
+      kein Ausfall (``views/health._check_stale_jobs``), sonst waere jede
+      frische Instanz sofort ``degraded``. Diese Semantik bleibt unangetastet.
+
+    Nur der Status wird gehoben; Message, Detail und Action-Hint bleiben
+    identisch, damit beide Ansichten denselben Text zeigen.
+    """
+    return [
+        replace(check, status=ComplianceStatus.WARNING)
+        if check.key == "backup_age" and check.status == ComplianceStatus.UNKNOWN
+        else check
+        for check in cron_job_checks()
+    ]
 
 
 __all__ = [
@@ -184,6 +221,7 @@ __all__ = [
     "SENSITIVITY_RANK",
     "_CRITICAL_AUDIT_ACTIONS",
     "_app_superuser_checks",
+    "_audit_chain_checks",
     "_audit_event_checks",
     "_backup_checks",
     "_breach_scan_checks",
@@ -201,6 +239,7 @@ __all__ = [
     "_version_checks",
     "aggregate_checks",
     "cron_job_checks",
+    "operations_job_checks",
     "allowed_sensitivities_for_user",
     "count_clients_in_bucket",
     "detect_anonymous_login_bursts",

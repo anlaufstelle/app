@@ -62,11 +62,12 @@ class TestCronJobChecks:
         assert isinstance(result, list)
         assert all(isinstance(c, compliance.ComplianceCheck) for c in result)
 
-    def test_contains_the_five_cron_job_keys(self):
+    def test_contains_the_six_cron_job_keys(self):
         keys = {c.key for c in compliance.cron_job_checks()}
         assert {
             "backup_age",
             "retention_last_run",
+            "audit_chain_last_run",
             "snapshot_last_run",
             "breach_scan_last_run",
             "mv_refresh_last_run",
@@ -78,6 +79,93 @@ class TestCronJobChecks:
         assert any(c.key.startswith("_internal_") for c in result)
         internal = [c for c in result if c.key.startswith("_internal_")][0]
         assert internal.status == compliance.ComplianceStatus.UNKNOWN
+
+
+@pytest.mark.django_db
+class TestAuditChainChecks:
+    """Refs #1872: Last-Run-Anzeige der taeglichen Audit-Ketten-Pruefung."""
+
+    def test_unknown_when_never_run(self):
+        AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
+        checks = compliance._audit_chain_checks()
+        assert checks[0].key == "audit_chain_last_run"
+        assert checks[0].category == "Hintergrundjobs"
+        assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
+
+    def test_ok_when_fresh(self):
+        AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
+        AuditLog.objects.create(
+            action=AuditLog.Action.AUDIT_CHAIN_VERIFIED, facility=None, target_type="AuditChainVerification"
+        )
+        checks = compliance._audit_chain_checks()
+        assert checks[0].status == compliance.ComplianceStatus.OK
+
+    def test_warning_between_warn_and_critical_threshold(self):
+        AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
+        old = AuditLog.objects.create(
+            action=AuditLog.Action.AUDIT_CHAIN_VERIFIED, facility=None, target_type="AuditChainVerification"
+        )
+        from core.services.system import bypass_replication_triggers
+
+        with bypass_replication_triggers():
+            AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=40))
+        checks = compliance._audit_chain_checks()
+        assert checks[0].status == compliance.ComplianceStatus.WARNING
+
+    def test_critical_beyond_critical_threshold(self):
+        AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
+        old = AuditLog.objects.create(
+            action=AuditLog.Action.AUDIT_CHAIN_VERIFIED, facility=None, target_type="AuditChainVerification"
+        )
+        from core.services.system import bypass_replication_triggers
+
+        with bypass_replication_triggers():
+            AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=60))
+        checks = compliance._audit_chain_checks()
+        assert checks[0].status == compliance.ComplianceStatus.CRITICAL
+
+    def test_aggregate_includes_audit_chain_check(self):
+        keys = {c.key for c in compliance.aggregate_checks()}
+        assert "audit_chain_last_run" in keys
+
+
+@pytest.mark.django_db
+class TestOperationsJobChecks:
+    """Refs #1872: Betriebsansicht (/system/) vs. Monitoring-Sicht (/health/).
+
+    Ein fehlendes Backup ist im Betrieb ein Fehler (der Host-Cron wurde nie
+    eingerichtet) — auf ``/health/`` bleibt es ``unknown``, weil dort ein
+    externes Monitoring pollt und eine frische Installation kein Ausfall ist.
+    """
+
+    def test_missing_backup_stays_unknown_for_monitoring(self):
+        with patch("core.services.system.health.last_backup_info", return_value=None):
+            checks = compliance.cron_job_checks()
+        backup = next(c for c in checks if c.key == "backup_age")
+        assert backup.status == compliance.ComplianceStatus.UNKNOWN
+
+    def test_missing_backup_is_warning_in_operations_view(self):
+        with patch("core.services.system.health.last_backup_info", return_value=None):
+            checks = compliance.operations_job_checks()
+        backup = next(c for c in checks if c.key == "backup_age")
+        assert backup.status == compliance.ComplianceStatus.WARNING
+        assert backup.message == "Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert."
+
+    def test_existing_backup_status_is_untouched(self):
+        with patch(
+            "core.services.system.health.last_backup_info",
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 6.0, "is_stale": False},
+        ):
+            checks = compliance.operations_job_checks()
+        backup = next(c for c in checks if c.key == "backup_age")
+        assert backup.status == compliance.ComplianceStatus.OK
+
+    def test_other_unknown_jobs_are_not_escalated(self):
+        """Nur das Backup wird hochgestuft — ein nie gelaufener Sidecar-Job bleibt unknown."""
+        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        checks = compliance.operations_job_checks()
+        mv = next(c for c in checks if c.key == "mv_refresh_last_run")
+        assert mv.status == compliance.ComplianceStatus.UNKNOWN
 
 
 @pytest.mark.django_db
@@ -161,7 +249,7 @@ class TestBackupChecks:
             checks = compliance._backup_checks()
         assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
 
-    def test_ok_when_backup_under_24h(self):
+    def test_ok_when_backup_within_warn_threshold(self):
         with patch(
             "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 6.0, "is_stale": False},
@@ -169,21 +257,30 @@ class TestBackupChecks:
             checks = compliance._backup_checks()
         assert checks[0].status == compliance.ComplianceStatus.OK
 
-    def test_warning_when_backup_24_to_72h(self):
+    def test_warning_between_warn_and_critical_threshold(self):
+        """Refs #1872: ein ausgefallener Tageslauf (> 36 h) ist WARNING, noch nicht kritisch."""
         with patch(
             "core.services.system.health.last_backup_info",
-            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 48.0, "is_stale": True},
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 40.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()
         assert checks[0].status == compliance.ComplianceStatus.WARNING
 
-    def test_critical_when_backup_over_72h(self):
+    def test_critical_beyond_critical_threshold(self):
+        """Refs #1872: zwei ausgefallene Tageslaeufe (> 48 h) sind CRITICAL."""
         with patch(
             "core.services.system.health.last_backup_info",
-            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 96.0, "is_stale": True},
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 60.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()
         assert checks[0].status == compliance.ComplianceStatus.CRITICAL
+
+    def test_thresholds_come_from_the_shared_module(self):
+        """Refs #1872: keine fuenfte Schwelle — Backup-Check liest ops_thresholds."""
+        from core.services import ops_thresholds
+
+        assert ops_thresholds.BACKUP_WARN_HOURS == 36
+        assert ops_thresholds.BACKUP_CRITICAL_HOURS == 48
 
 
 @pytest.mark.django_db
@@ -296,7 +393,7 @@ class TestRetentionChecks:
         checks = compliance._retention_checks()
         assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
 
-    def test_ok_when_within_7d(self):
+    def test_ok_when_within_warn_threshold(self):
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
         AuditLog.objects.create(
             action=AuditLog.Action.RETENTION_RUN_COMPLETED,
@@ -306,7 +403,8 @@ class TestRetentionChecks:
         checks = compliance._retention_checks()
         assert checks[0].status == compliance.ComplianceStatus.OK
 
-    def test_warning_when_7_to_14d(self):
+    def test_warning_between_warn_and_critical_threshold(self):
+        """Refs #1872: der Lauf ist taeglich — ein ausgefallener Lauf (> 36 h) ist WARNING."""
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
         old = AuditLog.objects.create(
             action=AuditLog.Action.RETENTION_RUN_COMPLETED, facility=None, target_type="RetentionRun"
@@ -314,11 +412,12 @@ class TestRetentionChecks:
         from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
-            AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(days=10))
+            AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=40))
         checks = compliance._retention_checks()
         assert checks[0].status == compliance.ComplianceStatus.WARNING
 
-    def test_critical_when_over_14d(self):
+    def test_critical_beyond_critical_threshold(self):
+        """Refs #1872: zwei ausgefallene Tageslaeufe (> 48 h) sind CRITICAL."""
         AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).delete()
         old = AuditLog.objects.create(
             action=AuditLog.Action.RETENTION_RUN_COMPLETED, facility=None, target_type="RetentionRun"
@@ -326,7 +425,7 @@ class TestRetentionChecks:
         from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
-            AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(days=30))
+            AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=60))
         checks = compliance._retention_checks()
         assert checks[0].status == compliance.ComplianceStatus.CRITICAL
 

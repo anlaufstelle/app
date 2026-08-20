@@ -217,7 +217,8 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Ablage verschlüsselter Dateianhänge (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
 | `FILE_UPLOAD_TEMP_DIR` | Django-Default (`tempfile.gettempdir()`) | Verzeichnis für den Klartext-Zwischenpuffer von Uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, bevor sie in den File-Vault verschlüsselt werden (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In den mitgelieferten Compose-Dateien fest auf `/tmp` (tmpfs/RAM) gesetzt — [Ops-Runbook § 5.7a](ops-runbook.md). |
-| `BACKUP_DIR` | `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`); der Health-Endpoint liest daraus das Backup-Alter. |
+| `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`) **aus Sicht des Containers**; Health-Endpoint und die Backup-Zeile im Systembereich lesen daraus das Backup-Alter. |
+| `BACKUP_HOST_DIR` | `./backups` | Dasselbe Verzeichnis **auf dem Host** — dorthin schreibt `scripts/ops/backup.sh`. `docker-compose.prod.yml` mountet es read-only nach `BACKUP_DIR`. Passen die beiden Werte nicht zusammen, meldet der Systembereich dauerhaft „Kein Backup gefunden“, obwohl der Backup-Cron läuft. |
 | `APP_VERSION` | `dev` | Versions-String, den `/health/` im `version`-Detailfeld ausweist (nur für Token-/authentifizierte Caller). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
 

@@ -175,11 +175,21 @@ services:
       # .env), faellt prod.py auf den DatabaseCache zurueck; dann kann der
       # redis-Service entfallen (docker compose up --scale redis=0).
       REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
+      # Refs #1872: Ablage der Host-Backups im Container. Der Settings-Default
+      # (BASE_DIR.parent/backups) existiert im read_only-Image nicht, deshalb
+      # meldete der Prod-Stack dauerhaft "Kein Backup gefunden" — unabhaengig
+      # davon, ob der Host-Cron laeuft. Muss identisch zum Mount-Ziel unten sein.
+      BACKUP_DIR: ${BACKUP_DIR:-/backups}
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.
       # Refs #720.
       - media:/data
+      # Refs #1872: Backup-Ablage von scripts/ops/backup.sh (Host, Default
+      # <repo>/backups) read-only hereinreichen, damit die Health-Card unter
+      # /system/ und last_backup_age_hours in /health/ das Backup-Alter sehen.
+      # Read-only: die App darf Backups lesen, nie schreiben oder loeschen.
+      - ${BACKUP_HOST_DIR:-./backups}:${BACKUP_DIR:-/backups}:ro
     depends_on:
       db:
         condition: service_healthy

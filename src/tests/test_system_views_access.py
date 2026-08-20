@@ -272,16 +272,27 @@ class TestSystemDashboardCronCard:
     """Refs #977: /system/-Uebersicht zeigt einen kompakten Hintergrundjobs-Block."""
 
     def test_cron_jobs_dict_in_context(self, client, super_admin_user):
-        """Context enthaelt ``cron_jobs`` mit Summary + Checks (5 Jobs)."""
+        """Context enthaelt ``cron_jobs`` mit Summary + Checks (6 Jobs)."""
         client.force_login(super_admin_user)
         response = client.get(reverse("core:system_dashboard"))
         assert response.status_code == 200
         cron = response.context["cron_jobs"]
         for key in ("checks", "total", "ok", "overdue", "unknown", "worst"):
             assert key in cron, f"cron_jobs-Key {key!r} fehlt"
-        # Fuenf systemd-Timer-Jobs: backup/retention/snapshot/breach/mv-refresh.
-        assert cron["total"] == 5
-        assert cron["ok"] + cron["overdue"] + cron["unknown"] == 5
+        # Sechs Cron-Jobs: backup/retention/audit-chain/snapshot/breach/mv-refresh
+        # (Audit-Ketten-Pruefung seit Refs #1872).
+        assert cron["total"] == 6
+        assert cron["ok"] + cron["overdue"] + cron["unknown"] == 6
+
+    def test_missing_backup_counts_as_overdue_not_unknown(self, client, super_admin_user):
+        """Refs #1872: „Kein Backup gefunden" ist in der Betriebsansicht eine Warnung."""
+        client.force_login(super_admin_user)
+        with patch("core.services.system.health.last_backup_info", return_value=None):
+            response = client.get(reverse("core:system_dashboard"))
+        cron = response.context["cron_jobs"]
+        backup = next(c for c in cron["checks"] if c.key == "backup_age")
+        assert backup.status == "warning"
+        assert cron["overdue"] >= 1
 
     def test_cron_card_rendered_in_template(self, client, super_admin_user):
         """Template enthaelt den Test-Selektor-Marker fuer den Cron-Block."""
@@ -320,7 +331,7 @@ class TestCronJobSummaryWorstStatus:
     def test_all_ok_is_green(self):
         from core.views.system import dashboard
 
-        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("ok", "ok", "ok")):
+        with patch.object(dashboard, "operations_job_checks", return_value=self._checks("ok", "ok", "ok")):
             summary = dashboard._cron_job_summary()
         assert summary["worst"] == "ok"
         assert summary["ok"] == 3
@@ -329,7 +340,7 @@ class TestCronJobSummaryWorstStatus:
     def test_warning_makes_worst_warning_and_counts_overdue(self):
         from core.views.system import dashboard
 
-        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("ok", "warning")):
+        with patch.object(dashboard, "operations_job_checks", return_value=self._checks("ok", "warning")):
             summary = dashboard._cron_job_summary()
         assert summary["worst"] == "warning"
         assert summary["overdue"] == 1
@@ -337,7 +348,7 @@ class TestCronJobSummaryWorstStatus:
     def test_critical_beats_warning(self):
         from core.views.system import dashboard
 
-        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("warning", "critical")):
+        with patch.object(dashboard, "operations_job_checks", return_value=self._checks("warning", "critical")):
             summary = dashboard._cron_job_summary()
         assert summary["worst"] == "critical"
         # overdue = warning + critical
@@ -346,7 +357,7 @@ class TestCronJobSummaryWorstStatus:
     def test_unknown_only_is_unknown(self):
         from core.views.system import dashboard
 
-        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("unknown", "unknown")):
+        with patch.object(dashboard, "operations_job_checks", return_value=self._checks("unknown", "unknown")):
             summary = dashboard._cron_job_summary()
         assert summary["worst"] == "unknown"
         assert summary["unknown"] == 2

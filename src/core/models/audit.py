@@ -106,6 +106,12 @@ class AuditLog(models.Model):
         SNAPSHOT_RUN_COMPLETED = "snapshot_run_completed", _("Statistik-Snapshot-Lauf abgeschlossen")
         BREACH_SCAN_COMPLETED = "breach_scan_completed", _("Breach-Detection-Scan abgeschlossen")
         MV_REFRESH_COMPLETED = "mv_refresh_completed", _("Statistik-View-Refresh abgeschlossen")
+        # Refs #1872: Last-Run-Marker fuer ``verify_audit_chain``. Der Job
+        # meldete einen gruenen Lauf bisher nur als Exit-Code an supercronic —
+        # im UI war nicht erkennbar, ob die HMAC-Kette ueberhaupt je geprueft
+        # wurde. Wird NUR nach vollstaendig gruenem Lauf geschrieben; ein
+        # Tamper-Fund beendet den Command vorher mit Exit != 0.
+        AUDIT_CHAIN_VERIFIED = "audit_chain_verified", _("Audit-Ketten-Prüfung abgeschlossen")
         # Refs #1070: Tombstone-Marker, der beim Pruning den entry_hash der
         # juengsten geloeschten Zeile (``boundary_hash``) festhaelt. Die
         # HMAC-Kette wird nie umgeschrieben — der Checkpoint legitimiert die

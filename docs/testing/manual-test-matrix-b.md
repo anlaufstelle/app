@@ -6184,9 +6184,9 @@
 1. Frisches Backup vorhanden → `/system/compliance/` Kategorie „Backup": Status `ok`, Detail enthält Pfad + Alter (z.B. „6h").
 2. Backup-Verzeichnis leeren (oder älter machen via `touch -t 202401010000 <file>`).
 3. Dashboard neu laden:
- - 24-72h Alter → Status `warning`, Action-Hint „Backup-Cron pruefen".
- - >72h → Status `critical`.
- - Kein Backup → Status `unknown` mit Hinweis auf `settings.BACKUP_DIR`.
+ - 36-48h Alter → Status `warning`, Action-Hint „Backup-Cron pruefen" (Schwellen aus `core/services/ops_thresholds.py`, Refs #1872).
+ - >48h → Status `critical`.
+ - Kein Backup → im Compliance-Dashboard Status `unknown` mit Hinweis auf `settings.BACKUP_DIR`; in der Betriebsansicht `/system/` dagegen `warning` (Refs #1872).
 
 **Status:** ☐ Offen
 

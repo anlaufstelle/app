@@ -7,6 +7,7 @@ Letzter ``RETENTION_RUN_COMPLETED``-Audit-Log-Eintrag, geschrieben vom
 from __future__ import annotations
 
 from core.models import AuditLog
+from core.services import ops_thresholds
 from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 
@@ -30,19 +31,24 @@ def _retention_checks() -> list[ComplianceCheck]:
                 action_hint="enforce_retention-Cron pruefen (Ops-Runbook §6).",  # pragma: no mutate
             )
         ]
-    age_days = (_clock.now() - entry.timestamp).days
+    # Refs #1872: ``enforce_retention`` laeuft laut ``deploy/crontab`` taeglich
+    # um 03:00. Die frueheren Tages-Schwellen (OK <= 7 d, WARNING <= 14 d)
+    # zeigten einen seit knapp einer Woche toten Cron noch gruen — bei einem
+    # Job, an dem die DSFA-Zusage zu Loeschfristen haengt. Jetzt dieselbe
+    # 1,5x/2x-Intervall-Regel wie Backup und Audit-Ketten-Pruefung.
+    age_hours = (_clock.now() - entry.timestamp).total_seconds() / 3600.0
     detail = f"Letzter Lauf: {entry.timestamp:%Y-%m-%d %H:%M}"
-    if age_days <= 7:
+    if age_hours <= ops_thresholds.RETENTION_WARN_HOURS:
         status = ComplianceStatus.OK
-        message = f"Letzter Lauf vor {age_days} Tag(en)."
+        message = f"Letzter Lauf vor {age_hours:.0f}h."
         hint = None
-    elif age_days <= 14:
+    elif age_hours <= ops_thresholds.RETENTION_CRITICAL_HOURS:
         status = ComplianceStatus.WARNING
-        message = f"Letzter Lauf vor {age_days} Tagen — Cron-Schedule pruefen."
-        hint = "Cron muss alle 1-7 Tage laufen (Default: taeglich)."
+        message = f"Letzter Lauf vor {age_hours:.0f}h — ein Tageslauf fehlt."
+        hint = "Cron muss taeglich laufen (deploy/crontab: 0 3 * * *)."
     else:
         status = ComplianceStatus.CRITICAL
-        message = f"Letzter Lauf vor {age_days} Tagen — Cron ausgefallen?"
+        message = f"Letzter Lauf vor {age_hours:.0f}h — mindestens zwei Laeufe ausgefallen."
         hint = "Cron-Status im Container pruefen + manuell ausfuehren."
     return [
         ComplianceCheck(

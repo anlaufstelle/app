@@ -32,7 +32,8 @@ import sys
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from core.models import Facility
+from core.models import AuditLog, Facility
+from core.services.audit import audit_event
 from core.services.audit.chain import verify_chain
 from core.services.audit.hwm import HighWaterMarkStore, HwmIntegrityError
 
@@ -97,5 +98,23 @@ class Command(BaseCommand):
                 facility_id = None if facility is None else facility.pk
                 hwm.record(facility_id, result.rows_checked, result.last_entry_hash)
             hwm.save()
+
+        # Refs #1872: Last-Run-Marker fuer die Betriebsansicht. Bewusst erst
+        # HIER — nach dem ``sys.exit(1)``-Zweig und nach dem HWM-Fortschreiben:
+        # der Marker steht ausschliesslich fuer einen vollstaendig gruenen
+        # Lauf. Ein Tamper-Fund darf die Ampel nicht auf gruen setzen.
+        # ``facility=None`` wie bei allen installationsweiten Cron-Markern; die
+        # Zeile haengt sich selbst an die System-Kette und wird beim naechsten
+        # Lauf mitgeprueft.
+        audit_event(
+            AuditLog.Action.AUDIT_CHAIN_VERIFIED,
+            user=None,
+            facility=None,
+            target_type="AuditChainVerification",
+            detail={
+                "chains": len(results),
+                "rows_checked": sum(result.rows_checked for _, result in results),
+            },
+        )
 
         self.stdout.write(self.style.SUCCESS("Alle Audit-Ketten intakt."))

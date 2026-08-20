@@ -5,7 +5,7 @@ from django.views.generic import TemplateView
 import core.services.system.health as system_health
 from core.models import AuditLog, Facility, Organization
 from core.models.user import User
-from core.services.compliance import ComplianceStatus, cron_job_checks
+from core.services.compliance import ComplianceStatus, operations_job_checks
 from core.services.dashboard import super_admin_dashboard_context
 from core.views.system.mixins import SystemAuditMixin
 
@@ -85,11 +85,15 @@ class SystemDashboardView(SystemAuditMixin, TemplateView):
 def _cron_job_summary() -> dict:
     """Refs #977: kompakte Aggregat-Sicht der Hintergrundjob-Last-Run-Checks.
 
-    Buendelt die fuenf Cron-Checks aus :func:`core.services.compliance.
-    cron_job_checks` und liefert pro Status einen Zaehler plus den
+    Buendelt die Cron-Checks aus :func:`core.services.compliance.
+    operations_job_checks` und liefert pro Status einen Zaehler plus den
     schlechtesten Gesamt-Status fuer die Ampel auf der /system/-Uebersicht.
+
+    Refs #1872: bewusst die **Betriebssicht** und nicht ``cron_job_checks()``
+    — ein fehlendes Backup ist hier eine Warnung (der Host-Cron wurde nie
+    eingerichtet), waehrend es auf ``/health/`` ``unknown`` bleiben muss.
     """
-    checks = cron_job_checks()
+    checks = operations_job_checks()
     counts = {status.value: 0 for status in ComplianceStatus}
     for check in checks:
         counts[check.status.value] += 1
