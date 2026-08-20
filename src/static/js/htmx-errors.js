@@ -16,16 +16,29 @@
 
     var TOAST_ID = "htmx-error-toast";
     var GENERIC = "Die Aktion konnte nicht ausgeführt werden. Bitte erneut versuchen.";
+    // Refs #1873: Rückfall-Text für 429 ohne verwertbaren Body. Der Regelfall
+    // ist der übersetzte Klartext aus handler403 (core/views/errors.py,
+    // RATELIMIT_HINWEIS) — dieses Literal greift nur, wenn ein 429 ohne Body
+    // oder als HTML-Fehlerseite ankommt (z.B. aus einem vorgelagerten
+    // Reverse-Proxy). Es bleibt deutsch wie GENERIC: die Datei wird statisch
+    // ausgeliefert und kennt die Sprache des Nutzers nicht.
+    var RATE_LIMITED = "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen.";
     var AUTO_DISMISS_MS = 6000;
 
     /**
      * Wählt die Toast-Meldung. Kurze Klartext-Bodies (z.B. die 400er aus
-     * retention/workitem_bulk) werden direkt gezeigt; HTML-Fehlerseiten
-     * (500/403/404 → enthalten "<") sowie leere/überlange Bodies fallen auf die
-     * generische Meldung zurück. Die Ausgabe landet via textContent im DOM und
-     * ist damit ohnehin gegen HTML-Injection geschützt.
+     * retention/workitem_bulk, der 429-Hinweis aus handler403) werden direkt
+     * gezeigt; HTML-Fehlerseiten (500/403/404 → enthalten "<") sowie
+     * leere/überlange Bodies fallen auf eine Standardmeldung zurück. Die
+     * Ausgabe landet via textContent im DOM und ist damit ohnehin gegen
+     * HTML-Injection geschützt.
+     *
+     * Refs #1873: Der Rückfall ist statusabhängig. Zuvor las der Handler
+     * ``xhr.status`` nirgends aus — ein Rate-Limit war für den Nutzer von
+     * einem Serverfehler nicht zu unterscheiden.
      */
     function _messageFor(xhr) {
+        var status = xhr && typeof xhr.status === "number" ? xhr.status : 0;
         try {
             var body = xhr && xhr.responseText ? xhr.responseText.trim() : "";
             if (body && body.length <= 200 && body.indexOf("<") === -1) {
@@ -34,7 +47,7 @@
         } catch (_e) {
             // ignore — Fallback unten
         }
-        return GENERIC;
+        return status === 429 ? RATE_LIMITED : GENERIC;
     }
 
     function _showErrorToast(message) {

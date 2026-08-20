@@ -5023,6 +5023,10 @@ msgstr "Ungültige ID im Payload."
 msgid "Kein zu verschiebendes Feld übergeben."
 msgstr "Kein zu verschiebendes Feld übergeben."
 
+#: src/core/views/errors.py:28
+msgid "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen."
+msgstr "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen."
+
 #: src/core/views/event_deletion.py:132
 msgid "Sie können Ihren eigenen Löschantrag nicht genehmigen."
 msgstr "Sie können Ihren eigenen Löschantrag nicht genehmigen."

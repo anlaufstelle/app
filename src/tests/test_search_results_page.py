@@ -411,6 +411,25 @@ class TestRatelimitStaysAtThirtyPerMinute:
 
         assert client.get(reverse(SEARCH), {"q": "Wolke"}).status_code == 429
 
+    def test_die_429_der_suche_traegt_fuer_htmx_einen_hinweis(self, client, staff_user):
+        """Refs #1873: Das Limit bleibt — aber der Treffer ist erkennbar.
+
+        Die Suche laeuft ueber HTMX; ohne Body zeigte der globale Fehler-Toast
+        „Die Aktion konnte nicht ausgefuehrt werden." und war damit von einem
+        Serverfehler nicht zu unterscheiden. Der Hinweis nennt bewusst weder
+        Treffer noch deren Abwesenheit.
+        """
+        client.force_login(staff_user)
+        for _ in range(30):
+            client.get(reverse(SEARCH), {"q": "Wolke"})
+
+        response = client.get(reverse(SEARCH), {"q": "Wolke"}, headers={"hx-request": "true"})
+
+        assert response.status_code == 429
+        assert response.content.decode() == (
+            "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen."
+        )
+
     def test_the_dropdown_endpoint_has_its_own_budget(self, client, staff_user):
         """Getrennte Eimer: die Vollseite verbraucht das Dropdown-Budget nicht."""
         client.force_login(staff_user)

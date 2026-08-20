@@ -28,6 +28,8 @@ Rate-Limiting liegt in der **Anwendung**, nicht am Edge, und folgt zwei Achsen �
 
 Bulk ist am niedrigsten, weil ein Aufruf am meisten Arbeit auslöst; „frequent" am höchsten, weil es legitime kleinteilige UI-Interaktionen sind. Alle mit `block=True` → Überschreitung liefert **HTTP 429**, kein stilles Verwerfen.
 
+**Die 429-Antwort trägt nur für HTMX-Aufrufe einen Text** (Refs #1873). Der [`handler403`](../../src/core/views/errors.py) liefert bei gesetztem `HX-Request`-Header einen kurzen, übersetzten Klartext-Hinweis („Zu viele Anfragen in kurzer Zeit …"), den der globale Fehler-Toast ([`htmx-errors.js`](../../src/static/js/htmx-errors.js)) wörtlich anzeigt; ohne ihn war ein Rate-Limit-Treffer in der Suche von einem Serverfehler — und vom Zustand „keine Treffer" — nicht zu unterscheiden. Für alle anderen Aufrufer bleibt die Antwort nackt (kein Template, kein `Retry-After`): die Offline-JS-Clients werten ausschließlich den Statuscode aus (Refs #1354).
+
 **Shared Cache ist in Produktion Pflicht.** Die Zähler liegen im Django-Cache; Prod nutzt `DatabaseCache` mit `RATELIMIT_USE_CACHE="default"` ([`prod.py`](../../src/anlaufstelle/settings/prod.py)), damit die Zählung **prozessübergreifend** geteilt wird. Ein per-Worker-`LocMemCache` würde jedes Limit ver-N-fachen (ein Limit pro Gunicorn-Worker). Cache-Tabelle via Migration `0092` (Refs #1024/#1016, A5.1). In Test/E2E ist Rate-Limiting deterministisch abgeschaltet (`RATELIMIT_ENABLE=False`).
 
 ## Consequences

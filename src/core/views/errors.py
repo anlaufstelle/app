@@ -10,10 +10,22 @@ import logging
 
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils.translation import gettext, gettext_noop
 from django.views.defaults import permission_denied as django_permission_denied
 from django_ratelimit.exceptions import Ratelimited
 
 logger = logging.getLogger("django.security.csrf")
+
+#: Hinweistext der 429-Antwort fuer HTMX-Aufrufer (Refs #1873).
+#:
+#: Der deutsche Quellstring ist zugleich die ``msgid`` — ``gettext_noop``
+#: meldet ihn dem Katalog an, uebersetzt wird erst im Request (Sprache des
+#: Nutzers). Bewusst allgemein formuliert („Anfragen", nicht
+#: „Suchanfragen"): ``handler403`` bedient JEDE ratelimitierte Flaeche der
+#: App, ein such-spezifischer Text waere bei einer Sammelaktion schlicht
+#: falsch. Er nennt weder Treffer noch deren Abwesenheit — genau diese
+#: Verwechslung war der gemeldete Fehler.
+RATELIMIT_HINWEIS = gettext_noop("Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen.")
 
 
 def permission_denied(request, exception):
@@ -27,10 +39,24 @@ def permission_denied(request, exception):
     vernichten. Alle anderen ``PermissionDenied`` gehen unveraendert an
     Djangos Standard-403 (rendert ``403.html``).
 
-    Die 429-Response ist bewusst schlicht (kein Template, kein
-    ``Retry-After``, KISS): die JS-Clients werten nur den Statuscode aus.
+    Die 429-Response bleibt schlicht (kein Template, kein ``Retry-After``,
+    KISS): die Offline-JS-Clients werten nur den Statuscode aus.
+
+    Refs #1873: **Nur** fuer HTMX-Aufrufer traegt sie zusaetzlich einen
+    kurzen Klartext-Hinweis. ``htmx-errors.js`` zeigt einen solchen Body
+    woertlich im Fehler-Toast an; ohne ihn sah ein Rate-Limit-Treffer in der
+    Suche exakt aus wie ein Serverfehler — oder, wenn das alte Ergebnis
+    stehen blieb, wie „keine Treffer". Ausserhalb von HTMX bleibt die Antwort
+    nackt, damit die #1354-Entscheidung fuer die Offline-Clients unangetastet
+    ist (bewacht von ``test_offline_bundle_api.py``).
     """
     if isinstance(exception, Ratelimited):
+        if request.headers.get("HX-Request") == "true":
+            return HttpResponse(
+                gettext(RATELIMIT_HINWEIS),
+                status=429,
+                content_type="text/plain; charset=utf-8",
+            )
         return HttpResponse(status=429)
     return django_permission_denied(request, exception)
 

@@ -4979,6 +4979,10 @@ msgstr "Invalid ID in payload."
 msgid "Kein zu verschiebendes Feld übergeben."
 msgstr "No field to move provided."
 
+#: src/core/views/errors.py:28
+msgid "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen."
+msgstr "Too many requests in a short time. Please wait a moment and try again."
+
 #: src/core/views/event_deletion.py:132
 msgid "Sie können Ihren eigenen Löschantrag nicht genehmigen."
 msgstr "You cannot approve your own deletion request."
