@@ -1928,6 +1928,54 @@ Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum**
 
 ---
 
+## `lastActivity`-Stempel in `anlaufstelle-crypto.meta` nach dem Abmelden (Issue #1946)
+
+**Status:** Akzeptierter Restbestand — kein Defekt. Der Eintrag ist **kein** Überbleibsel des Logout-Wipes (der räumt ihn nachweislich ab), sondern wird von der **Anmeldeseite** neu angelegt, auf der der Browser nach dem Abmelden landet.
+
+### Beobachtung
+
+Der Security-RC-Lauf 2026-08-18 (Mobile/PWA, Offline-Privacy-Failure-Modes; Laufprotokoll dev-only) hat nach dem Abmelden in der IndexedDB `anlaufstelle-crypto`, Store `meta`, einen einzelnen Eintrag `{key: "lastActivity", ts: <epoch ms>}` vorgefunden — bei ansonsten geleerten Offline-Beständen und entferntem `sessionKey`. Daraus wurde in #1946 geschlossen, der Aktivitäts-Stempel überlebe den Logout-Wipe, und als Maßnahme vorgeschlagen, ihn „in den Logout-Wipe aufzunehmen".
+
+### Am Code widerlegt: der Wipe räumt den Stempel bereits ab
+
+Diese Maßnahme wäre ein No-op. Seit #1065 löscht `clearSessionKey()` in [`crypto.js`](../src/static/js/crypto.js) den Stempel **zusammen** mit dem Schlüssel („Drop the activity stamp with the key"), und `wipeOfflineState()` — der gemeinsame Wipe-Pfad von Logout und Idle-Timeout — beginnt mit genau diesem Aufruf. Der Logout-Hook in [`sw-register.js`](../src/static/js/sw-register.js) ruft nichts anderes auf: er hält den nativen `POST /logout/` an, lässt `crypto_session.wipeOfflineState()` durchlaufen (harter 3-s-Deckel) und schickt erst danach ab (#1476 R2).
+
+### Die tatsächliche Quelle: der Boot-Zweig des Idle-Gates
+
+`crypto.js` wird **nicht nur** von `base.html` geladen, sondern auch von [`auth/login.html`](../src/templates/auth/login.html), [`auth/password_change.html`](../src/templates/auth/password_change.html) und der öffentlichen [`offline.html`](../src/templates/offline.html) — die Idle-Wipe-Mechanik muss auch auf abgemeldeten Seiten greifen können. Beim Laden startet das Modul eine eager `_loadKey()`-Hydrierung, die vor dem Rehydrieren den Idle-Gate `_enforceIdleWipeLocked()` fährt. Findet der **keinen** Stempel vor, legt er einen neuen an („No stamp yet … start the idle window now instead of wiping a possibly active session").
+
+Nach dem Abmelden ist genau das die Lage: der Wipe hat den Store geleert, der `POST /logout/` navigiert auf `/login/`, dort läuft `crypto.js` erneut, findet einen leeren `meta`-Store vor — und stempelt. Der beobachtete Zeitstempel gehört damit **nicht** zur letzten Nutzung der App, sondern zum Aufruf der Anmeldeseite unmittelbar danach. Denselben Eintrag erzeugt der bloße Besuch von `/login/` oder `/offline/` durch jemanden, der sich nie angemeldet hat.
+
+Der zweite denkbare Verursacher — `deriveSessionKey()` stempelt mit `_touchActivity(true)`, **bevor** es den Schlüssel ablegt (#1065-Invariante „Stamp BEFORE storing", damit ein veralteter Vor-Login-Stempel den neuen Schlüssel nicht sofort in einen Idle-Wipe reißt) — läuft zwar ebenfalls auf `login.html`, aber erst beim **Anmelden**. Für den nach dem **Abmelden** beobachteten Eintrag scheidet er aus.
+
+### Bewertung
+
+- **PII-frei.** Der Eintrag besteht aus dem Literal `lastActivity` und einer Epoch-Millisekunde. Kein Nutzer-, Einrichtungs- oder Klientenbezug; er unterscheidet nicht einmal, *wer* das Gerät benutzt hat.
+- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`anlaufstelle-v36`, nur App-Shell-Assets) mehrfach redundant selbst führt.
+- **Selbstheilend im Zweck.** Der Stempel wird bei jedem Wipe und jedem Passwortwechsel gelöscht und beim nächsten Seitenaufruf neu gesetzt; er wächst nicht und akkumuliert keine Historie.
+
+### Was bewusst nicht umgesetzt wird
+
+Ein **Stempel-Gate** — den Boot-Zweig nur dann stempeln lassen, wenn tatsächlich ein `sessionKey` in der IndexedDB liegt — wäre technisch möglich und würde die Spur auf abgemeldeten Seiten vollständig beseitigen. Er wird hier **nicht** gebaut:
+
+- Der Boot-Stempel ist die Schutzhälfte des Idle-Gates gegen das Gegenteil: ohne ihn hätte ein Bestand ohne Stempel (Alt-Installation vor #1065, erster Lauf nach einem Cache-Wechsel) kein definiertes Idle-Fenster. Jede Änderung an dieser Stelle berührt einen sicherheitskritischen, mehrfach nachgehärteten Pfad (#1065, #1324, #1351/#1383, #1393, #1493).
+- Der Gewinn steht dazu in keinem Verhältnis: eine Epoch-Millisekunde ohne Personenbezug, die dieselbe Information trägt wie ein Eintrag in der Browser-History.
+
+Der **Precache** `anlaufstelle-v36` bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
+
+### Trigger für Re-Evaluation
+
+- `crypto.js` beginnt, im Stempel-Record mehr als den Zeitstempel abzulegen (Nutzer-, Einrichtungs- oder Sitzungsbezug) — dann ist die PII-Freiheit nicht mehr gegeben.
+- Eine Betreiberin fordert für Kiosk-/geteilte Geräte einen nachweislich spurenfreien Abmeldezustand; dann ist das oben beschriebene Stempel-Gate die Maßnahme der Wahl.
+- Der Idle-Gate wird ohnehin umgebaut — dann das Gate gleich mitziehen, statt den Pfad zweimal anzufassen.
+
+### Verifikation
+
+- [`tests/js/logout-wipe.test.mjs`](../tests/js/logout-wipe.test.mjs) § „lastActivity nach dem Logout (Refs #1946)" — drei Pins: (1) `wipeOfflineState()` entfernt Schlüssel **und** Stempel (widerlegt die Ticket-Prämisse), (2) der Boot einer schlüssellosen Seite legt den Stempel neu an, (3) die vollständige RC-Sequenz Wipe → Boot der Anmeldeseite ergibt einen Stempel, der **jünger** als der Wipe ist.
+- Handtest: Eintrag zu #1946 in der Release-Hand-Check-Liste (dev-only) — Sichtprüfung des `meta`-Stores vor und nach dem Abmelden.
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)
