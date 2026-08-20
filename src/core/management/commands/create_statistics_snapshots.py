@@ -1,11 +1,15 @@
 """Management command to create statistics snapshots."""
 
+import logging
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from core.models import AuditLog, Event, Facility, Settings
 from core.services.audit import audit_event
 from core.services.dashboard import create_or_update_snapshot
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -52,7 +56,12 @@ class Command(BaseCommand):
             try:
                 facility.settings  # noqa: B018 — check settings exist
             except Settings.DoesNotExist:
-                self.stdout.write(self.style.WARNING(f"No settings for '{facility.name}', skipping."))
+                # Refs #1884: ohne Settings-Zeile entstehen fuer diese Einrichtung
+                # dauerhaft keine Snapshots — zusaetzlich zur stdout-Zeile auf
+                # WARNING-Ebene loggen, damit Log-Auswertung/Alerting greifen.
+                message = f"No settings for '{facility.name}', skipping."
+                self.stdout.write(self.style.WARNING(message))
+                logger.warning("create_statistics_snapshots: %s", message)
                 continue
 
             months_to_snapshot = self._determine_months(facility, today, backfill, year, month)

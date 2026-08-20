@@ -387,6 +387,8 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 | Aufbewahrung qualifiziert (Tage) | 3650 | Löschfrist nach Fallabschluss (Stufe „Mit Zusatzangaben") |
 | 2FA einrichtungsweit verpflichtend | false | Erzwingt TOTP-2FA für **alle** Benutzer dieser Einrichtung (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa)) |
 
+> **Jede Einrichtung hat genau einen Einstellungssatz.** Die Zeile entsteht automatisch, sobald die Einrichtung angelegt wird — beim interaktiven `setup_facility`, beim Anlegen im Admin unter **Core → Einrichtungen** und (nachträglich, für Altbestände) bei jedem `migrate`-Lauf. Das ist keine Formsache: `enforce_retention` und `create_statistics_snapshots` **überspringen** eine Einrichtung ohne Einstellungssatz — für sie würde also keine Aufbewahrungsfrist durchgesetzt und es entstünden keine Statistik-Snapshots. Beide Jobs protokollieren einen solchen Fall auf `WARNING`-Ebene (`No settings for …, skipping.`); taucht die Meldung im Log auf, ist das ein Betriebsfehler und kein Rauschen.
+
 ### 2.4 Weitere Benutzer anlegen
 
 Im Admin unter **Core → Benutzer → Benutzer hinzufügen**:

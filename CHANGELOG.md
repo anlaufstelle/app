@@ -27,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Toter `conservative`-Modus des Release-Sanitizers entfernt** (#1950) — Der Modus war seit der Safe-Mode-Einführung unerreichbar (YAML und `.txt` laufen über den Safe-Pfad), wurde aber von einem Test abgesichert, der die Zusage „Marker bleiben in YAML stehen" festschrieb — während der reale Pfad sie entfernt. Modus und Test sind ersatzlos entfallen; geprüft wird jetzt der tatsächlich gelaufene Pfad.
 
+### Fixed
+
+- **Neu angelegte Einrichtungen bekommen ihre Einstellungen sofort** (#1884) — Wurde eine Einrichtung im Django-Admin unter **Core → Einrichtungen** angelegt, entstand ihr Einstellungssatz bisher erst beim nächsten `migrate`-Lauf, also praktisch erst beim nächsten Update. Bis dahin **übersprangen `enforce_retention` und `create_statistics_snapshots` diese Einrichtung**: Für sie wurde keine Aufbewahrungsfrist durchgesetzt (Art. 5 Abs. 1 lit. e DSGVO) und es entstanden keine Statistik-Snapshots. Die Zeile entsteht jetzt beim Speichern im Admin, mit den bekannten Standardwerten und ohne bestehende Einstellungen anzurühren; Altbestände heilt derselbe Weg beim nächsten Speichern. Übersprungene Einrichtungen melden beide Wartungsjobs zusätzlich auf `WARNING`-Ebene im Log, damit ein solcher Fall auswertbar ist statt in der Ausgabe unterzugehen. Dass eine im Admin angelegte Einrichtung auch keine Dokumentationstypen, Schnellvorlagen und Zeitfenster erhält, bleibt gesondert offen (#1970).
+
 ## [0.81.0] - 2026-08-20
 
 ### Added

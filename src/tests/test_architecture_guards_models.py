@@ -876,3 +876,152 @@ class TestForFacilityConventionGuard:
             "    return Client.objects.get(pk=1, facility=f)\n"
         )
         assert not find_adhoc_facility_filter(source)
+
+
+# --- Refs #1884: Facility <-> Settings ist 1:1 und muss ab Anlage bestehen ---
+
+_FACILITY_CREATING_CALLS = {"create", "get_or_create", "update_or_create", "bulk_create"}
+_SETTINGS_ENSURING_CALLS = {"create", "get_or_create", "update_or_create"}
+_SETTINGS_ENSURING_HELPER = "ensure_settings_for_facility"
+
+
+def find_facility_creations(source: str) -> list[str]:
+    """Findet Aufrufe, die eine ``Facility``-Zeile anlegen.
+
+    Erfasst ``Facility(...)`` (Direktkonstruktion) ebenso wie
+    ``Facility.objects.create/get_or_create/update_or_create/bulk_create(...)``.
+    """
+    hits: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == "Facility":
+            hits.append(f"Zeile {node.lineno}: Facility(...)")
+            continue
+        if isinstance(func, ast.Attribute) and func.attr in _FACILITY_CREATING_CALLS:
+            owner = func.value
+            if isinstance(owner, ast.Attribute) and owner.attr == "objects":
+                owner = owner.value
+            if isinstance(owner, ast.Name) and owner.id == "Facility":
+                hits.append(f"Zeile {node.lineno}: Facility.objects.{func.attr}(...)")
+    return hits
+
+
+def ensures_settings_row(source: str) -> bool:
+    """Prueft, ob dieselbe Quelle auch eine ``Settings``-Zeile garantiert."""
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == _SETTINGS_ENSURING_HELPER:
+            return True
+        if isinstance(func, ast.Attribute):
+            if func.attr == _SETTINGS_ENSURING_HELPER:
+                return True
+            if func.attr in _SETTINGS_ENSURING_CALLS:
+                owner = func.value
+                if isinstance(owner, ast.Attribute) and owner.attr == "objects":
+                    owner = owner.value
+                if isinstance(owner, ast.Name) and owner.id == "Settings":
+                    return True
+    return False
+
+
+def _facility_creation_scan_files() -> list[Path]:
+    """Produktionscode unter ``src/core`` fuer den Facility/Settings-Guard.
+
+    Ausgenommen: ``migrations/`` (historische Modelle, kontrolliert reviewt)
+    und ``seed/`` — die Architektur-Guards behandeln ``core/seed`` als
+    Test-/Fixture-Territorium, nicht als Laufzeit-Anlagepfad.
+    """
+    scan_dir = Path("src/core")
+    return [
+        f for f in sorted(scan_dir.rglob("*.py")) if not {"migrations", "seed"} & set(f.relative_to(scan_dir).parts)
+    ]
+
+
+class TestFacilitySettingsRowGuard:
+    """Refs #1884: Keine Einrichtung ohne ``Settings``-Zeile.
+
+    ``enforce_retention`` und ``create_statistics_snapshots`` ueberspringen
+    Einrichtungen ohne ``Settings`` — fuer sie laeuft dann **keine**
+    Aufbewahrungsfrist (Art. 5 Abs. 1 lit. e DSGVO) und es entstehen keine
+    Statistik-Snapshots. Der ``post_migrate``-Seed
+    (``core/signals/settings_seed.py``) schliesst die Luecke erst beim
+    naechsten Deploy. Diese beiden Guards pinnen, dass kein **zweiter**
+    Laufzeit-Anlagepfad die Luecke still wieder aufreisst.
+    """
+
+    def test_facility_creating_modules_also_ensure_settings(self) -> None:
+        violations = []
+        for py_file in _facility_creation_scan_files():
+            source = py_file.read_text()
+            hits = find_facility_creations(source)
+            if hits and not ensures_settings_row(source):
+                rel = py_file.as_posix()
+                violations.append(f"{rel}: {hits}")
+        assert not violations, (
+            "Facility-Anlage ohne garantierte Settings-Zeile gefunden — betroffene Einrichtungen "
+            "werden von enforce_retention/create_statistics_snapshots uebersprungen (Refs #1884). "
+            f"Betroffen: {violations}"
+        )
+
+    def test_facility_admin_overrides_save_model(self) -> None:
+        """Der Admin ist der einzige Laufzeit-Anlagepfad — sein ``save_model`` haelt den Hook.
+
+        Geprueft wird das **Herkunftsmodul**, nicht bloss die Abweichung von
+        ``django.contrib.admin.ModelAdmin``: django-unfold bringt ein eigenes
+        ``save_model`` mit, gegen das ein reiner Identitaetsvergleich immer
+        gruen waere.
+        """
+        from core.admin_site import anlaufstelle_admin_site
+        from core.models import Facility
+
+        registered = anlaufstelle_admin_site._registry.get(Facility)
+        assert registered is not None, "Facility ist im Anlaufstelle-Admin nicht registriert"
+        origin = type(registered).save_model.__module__
+        assert origin.startswith("core."), (
+            f"FacilityAdmin.save_model kommt aus '{origin}' statt aus core/ — im Admin "
+            "angelegte Einrichtungen bekommen dann keine Settings-Zeile (Refs #1884)"
+        )
+
+    def test_guard_detects_the_pattern(self) -> None:
+        source = (
+            "from core.models import Facility\n\n"
+            "def make(org):\n"
+            "    return Facility.objects.create(organization=org, name='x')\n"
+        )
+        assert find_facility_creations(source)
+        assert not ensures_settings_row(source)
+
+    def test_guard_accepts_a_module_that_seeds_settings(self) -> None:
+        source = (
+            "from core.models import Facility, Settings\n\n"
+            "def make(org):\n"
+            "    facility = Facility.objects.get_or_create(organization=org, name='x')[0]\n"
+            "    Settings.objects.get_or_create(facility=facility)\n"
+            "    return facility\n"
+        )
+        assert find_facility_creations(source)
+        assert ensures_settings_row(source)
+
+    def test_guard_accepts_the_shared_helper(self) -> None:
+        source = (
+            "from core.models import Facility\n"
+            "from core.services.facility import ensure_settings_for_facility\n\n"
+            "def make(org):\n"
+            "    facility = Facility(organization=org, name='x')\n"
+            "    facility.save()\n"
+            "    ensure_settings_for_facility(facility)\n"
+            "    return facility\n"
+        )
+        assert find_facility_creations(source)
+        assert ensures_settings_row(source)
+
+    def test_seed_and_migrations_are_excluded_from_scan(self) -> None:
+        files = _facility_creation_scan_files()
+        assert not any("migrations" in f.parts or "seed" in f.parts for f in files)
+        assert any(f.as_posix().endswith("core/admin/organization.py") for f in files), (
+            "Sanity-Check: der Admin bleibt im Scan"
+        )

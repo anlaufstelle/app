@@ -5,6 +5,7 @@ service module; the command handles only argument parsing, iteration over facili
 and ``stdout``/``stderr`` formatting.
 """
 
+import logging
 from dataclasses import dataclass
 
 from django.core.management.base import BaseCommand, CommandError
@@ -29,6 +30,8 @@ from core.services.retention import (
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
 from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 from core.services.system import prune_offline_client_revocations
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -108,6 +111,19 @@ class Command(BaseCommand):
 
         self._report_enforce_summary(totals, facilities, dry_run)
 
+    def _warn_missing_settings(self, facility):
+        """Meldet eine uebersprungene Einrichtung auf stdout UND im Log-Kanal (Refs #1884).
+
+        Wird eine Einrichtung uebersprungen, laeuft fuer sie **keine**
+        Aufbewahrungsfrist (Art. 5 Abs. 1 lit. e DSGVO). Auf stdout ist das im
+        systemd-Journal eine level-lose Zeile zwischen hunderten
+        Fortschrittsmeldungen; die zusaetzliche ``WARNING``-Logzeile ist der
+        Kanal, auf den Log-Auswertung und Alerting filtern koennen.
+        """
+        message = f"No settings for facility '{facility.name}', skipping."
+        self.stdout.write(self.style.WARNING(message))
+        logger.warning("enforce_retention: %s", message)
+
     def _process_single_facility(self, facility, now, dry_run, totals):
         """Run the full retention pipeline for one facility, accumulating into ``totals``.
 
@@ -120,7 +136,7 @@ class Command(BaseCommand):
         try:
             settings_obj = facility.settings
         except Settings.DoesNotExist:
-            self.stdout.write(self.style.WARNING(f"No settings for facility '{facility.name}', skipping."))
+            self._warn_missing_settings(facility)
             return
 
         # Reactivate deferred proposals whose wait has expired (Issue #515)
@@ -229,7 +245,7 @@ class Command(BaseCommand):
             try:
                 settings_obj = facility.settings
             except Settings.DoesNotExist:
-                self.stdout.write(self.style.WARNING(f"No settings for facility '{facility.name}', skipping."))
+                self._warn_missing_settings(facility)
                 continue
 
             # Reactivate deferred proposals whose wait has expired (Issue #515)

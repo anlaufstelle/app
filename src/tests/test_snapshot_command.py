@@ -1,5 +1,7 @@
 """Tests for the create_statistics_snapshots management command."""
 
+import logging
+from contextlib import contextmanager
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -11,6 +13,39 @@ from django.utils import timezone
 
 from core.models import AuditLog, Client, DocumentType, Event, StatisticsSnapshot
 from core.services.dashboard import create_or_update_snapshot
+
+
+@contextmanager
+def _capture_command_warnings(logger_name: str):
+    """Sammelt WARNING-Records eines Modul-Loggers (``core`` hat ``propagate=False``)."""
+    records: list[logging.LogRecord] = []
+
+    class _ListHandler(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    handler = _ListHandler(level=logging.WARNING)
+    logger = logging.getLogger(logger_name)
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
+
+
+@pytest.mark.django_db
+def test_facility_without_settings_is_logged_on_warning_level(facility):
+    """Refs #1884: uebersprungene Einrichtung erscheint auch im Log-Kanal.
+
+    Ohne ``Settings``-Zeile entstehen fuer die Einrichtung keine Snapshots —
+    die Statistik bleibt fuer sie dauerhaft leer. Bisher stand der Hinweis nur
+    auf ``stdout``.
+    """
+    from io import StringIO
+
+    with _capture_command_warnings("core.management.commands.create_statistics_snapshots") as records:
+        call_command("create_statistics_snapshots", stdout=StringIO())
+    assert any("No settings for" in r.getMessage() for r in records)
 
 
 @pytest.fixture

@@ -10,6 +10,8 @@ Report (Refs #649):
 - DocumentType-basierte Retention (_enforce_document_type_retention)
 """
 
+import logging
+from contextlib import contextmanager
 from datetime import timedelta
 from io import StringIO
 
@@ -22,6 +24,29 @@ from django.utils import timezone
 from core.models import DocumentType, Event, EventHistory, ImportJob
 from core.models.audit import AuditLog
 from core.services import import_engine
+
+
+@contextmanager
+def _capture_command_warnings(logger_name: str):
+    """Sammelt WARNING-Records eines Modul-Loggers.
+
+    Der ``core``-Logger traegt ``propagate=False`` (siehe
+    ``settings/base.py`` LOGGING), deshalb greift das root-basierte
+    ``caplog`` hier nicht — der Handler haengt direkt am Modul-Logger.
+    """
+    records: list[logging.LogRecord] = []
+
+    class _ListHandler(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    handler = _ListHandler(level=logging.WARNING)
+    logger = logging.getLogger(logger_name)
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
 
 
 @pytest.mark.django_db
@@ -43,6 +68,27 @@ class TestCliArgumentValidation:
         stdout = StringIO()
         call_command("enforce_retention", stdout=stdout)
         assert "No settings for facility" in stdout.getvalue()
+
+    def test_skip_is_logged_on_warning_level(self, facility):
+        """Refs #1884: Der Skip muss auch im Log-Kanal auf WARNING-Ebene erscheinen.
+
+        Auf ``stdout`` ist der Hinweis im systemd-Journal eine farblose,
+        level-lose Zeile zwischen hunderten Fortschrittsmeldungen. Eine
+        uebersprungene Einrichtung bedeutet aber, dass fuer sie **keine**
+        Aufbewahrungsfrist laeuft — das gehoert auf einen Kanal, auf den
+        Log-Auswertung/Alerting filtern kann.
+        """
+        records = _capture_command_warnings("core.management.commands.enforce_retention")
+        with records as captured:
+            call_command("enforce_retention", stdout=StringIO())
+        assert any("No settings for facility" in r.getMessage() for r in captured)
+
+    def test_propose_skip_is_logged_on_warning_level(self, facility):
+        """Refs #1884: gleiches Verhalten im ``--propose``-Pfad."""
+        records = _capture_command_warnings("core.management.commands.enforce_retention")
+        with records as captured:
+            call_command("enforce_retention", "--propose", stdout=StringIO())
+        assert any("No settings for facility" in r.getMessage() for r in captured)
 
 
 @pytest.mark.django_db

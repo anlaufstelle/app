@@ -8,6 +8,10 @@ Admin-UI) konsistent ueber bestehende Mandanten anwendbar macht.
 
 Der Receiver laeuft nach jeder ``migrate``-Run der ``core``-App und legt
 fuer jede Facility ohne ``Settings`` eine Default-Row an. Idempotent.
+
+Refs #1884 — dieser Pfad deckt nur den Deploy ab. Die Laufzeit-Anlage im
+Django-Admin haengt ihren Hook in ``FacilityAdmin.save_model``; beide rufen
+denselben Helfer ``core.services.facility.ensure_settings_for_facility``.
 """
 
 from __future__ import annotations
@@ -17,6 +21,8 @@ import logging
 from django.apps import apps as django_apps
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
+
+from core.services.facility import ensure_settings_for_facility
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +42,9 @@ def ensure_facility_settings(sender, app_config, **kwargs):
     missing = Facility.objects.exclude(pk__in=facility_ids_with_settings)
     created = 0
     for facility in missing:
-        Settings.objects.create(facility=facility)
-        created += 1
+        # Refs #1884: gemeinsamer Helfer mit ``FacilityAdmin.save_model`` —
+        # eine Stelle, an der die Default-Zeile entsteht.
+        if ensure_settings_for_facility(facility):
+            created += 1
     if created:
         logger.info("ensure_facility_settings: %d Default-Settings angelegt.", created)

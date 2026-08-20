@@ -110,3 +110,63 @@ class TestFacilityDeleteLegalHoldGuard:
         pk = facility.pk
         facility.delete()
         assert not Facility.objects.filter(pk=pk).exists()
+
+
+class TestFacilityAdminSeedsSettings:
+    """Refs #1884 — jede zur Laufzeit angelegte Einrichtung bekommt sofort eine ``Settings``-Zeile.
+
+    ``ensure_facility_settings`` haengt am ``post_migrate``-Signal und greift
+    damit erst beim naechsten Deploy. Bis dahin haette eine im Admin angelegte
+    Einrichtung keine ``Settings``-Zeile — und ``enforce_retention`` /
+    ``create_statistics_snapshots`` ueberspringen genau solche Einrichtungen.
+    Aufbewahrungsfristen (Art. 5 Abs. 1 lit. e DSGVO) liefen fuer sie gar nicht.
+
+    Der Admin ist der einzige Laufzeit-Anlagepfad (``setup_facility`` legt die
+    Zeile selbst an, ``core/seed/`` ist Fixture-Territorium), deshalb sitzt der
+    Hook in ``save_model`` statt in einem ``post_save``-Receiver.
+    """
+
+    def test_add_creates_settings_row_with_defaults(self, rf, super_admin_user, organization):
+        from core.models import Settings
+        from core.models.settings import (
+            DEFAULT_RETENTION_ANONYMOUS_DAYS,
+            DEFAULT_RETENTION_IDENTIFIED_DAYS,
+            DEFAULT_RETENTION_QUALIFIED_DAYS,
+        )
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        new_facility = Facility(organization=organization, name="Frisch angelegt")
+
+        admin_cls.save_model(request, new_facility, form=None, change=False)
+
+        settings_obj = Settings.objects.get(facility=new_facility)
+        assert settings_obj.retention_anonymous_days == DEFAULT_RETENTION_ANONYMOUS_DAYS
+        assert settings_obj.retention_identified_days == DEFAULT_RETENTION_IDENTIFIED_DAYS
+        assert settings_obj.retention_qualified_days == DEFAULT_RETENTION_QUALIFIED_DAYS
+
+    def test_change_does_not_overwrite_existing_settings(self, rf, super_admin_user, facility, settings_obj):
+        from core.models import Settings
+
+        settings_obj.retention_anonymous_days = 7
+        settings_obj.save(update_fields=["retention_anonymous_days"])
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        facility.name = "Umbenannt"
+        admin_cls.save_model(request, facility, form=None, change=True)
+
+        assert Settings.objects.filter(facility=facility).count() == 1
+        settings_obj.refresh_from_db()
+        assert settings_obj.retention_anonymous_days == 7
+
+    def test_change_heals_legacy_facility_without_settings(self, rf, super_admin_user, facility):
+        from core.models import Settings
+
+        assert not Settings.objects.filter(facility=facility).exists()
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        admin_cls.save_model(request, facility, form=None, change=True)
+
+        assert Settings.objects.filter(facility=facility).exists()
