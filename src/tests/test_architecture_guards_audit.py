@@ -1,5 +1,6 @@
 """Architecture-Guards — Audit-Completeness, Settings-Allowlist, E2E-Selektor-Stabilität (Refs #929)."""
 
+import ast
 import re
 from pathlib import Path
 from typing import ClassVar
@@ -115,26 +116,26 @@ class TestAuditLogCreationAllowlist:
     _ALLOWED_DIRECT_CALLS: dict[str, dict[int, str]] = {
         # Helper-Bodies — by design.
         "core/services/audit/__init__.py": {
-            25: "Docstring-Hinweis — kein echter Call (Refs #959)",
+            27: "Docstring-Hinweis — kein echter Call (Refs #959)",
         },
         "core/services/audit/helpers.py": {
             4: "Docstring-Beispiel — kein echter Call",
-            100: "log_audit_event-Body — zentraler View-Helper",
-            141: "audit_event-Body — generischer Service-/Cron-Helper",
+            107: "log_audit_event-Body — zentraler View-Helper",
+            148: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
-            136: "update_settings-Body — Settings-Diff-Helper",
-            162: "log_settings_change-Body — zweite create-Stelle",
+            137: "update_settings-Body — Settings-Diff-Helper",
+            166: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {
-            114: "on_user_logged_in — auth signal, kein Request",
-            133: "on_user_logged_out — auth signal",
-            166: "on_user_login_failed — no-facility branch",
-            174: "on_user_login_failed — with-facility branch",
-            254: "post_save User — role change detection (actor-Attribution, Refs #1369)",
-            270: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
-            284: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
+            115: "on_user_logged_in — auth signal, kein Request",
+            134: "on_user_logged_out — auth signal",
+            167: "on_user_login_failed — no-facility branch",
+            178: "on_user_login_failed — with-facility branch",
+            261: "post_save User — role change detection (actor-Attribution, Refs #1369)",
+            280: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
+            297: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
         },
     }
 
@@ -188,6 +189,163 @@ class TestAuditLogCreationAllowlist:
             "auf die aktuellen Zeilen aktualisieren.\n"
             f"Verstoesse: {stale}"
         )
+
+
+class TestAuditDetailKeyInventory:
+    """Refs #1944: statisches Gegenstueck zum Laufzeit-Guard
+    ``core.services.audit.detail_policy.validate_audit_detail``.
+
+    Der Laufzeit-Guard traegt die Last (er sieht auch dynamisch gebaute
+    Payloads), faellt aber nur auf, wenn der Schreibpunkt **ausgefuehrt** wird.
+    Dieser Guard liest die literalen ``detail={...}``-Dicts aller Audit-Helper-
+    Aufrufe unter ``src/core`` und meldet einen nicht deklarierten Schluessel
+    schon ohne Testabdeckung.
+
+    Zweiter Teil: jeder Schreibpunkt, dessen ``detail`` **nicht** literal ist
+    (``**kwargs``, Zaehler-Dict, ``**release_detail(...)``), muss in
+    :data:`_DYNAMIC_DETAIL_SITES` mit Anzahl und Begruendung stehen. Dort greift
+    ausschliesslich der Laufzeit-Guard — die Liste haelt sichtbar, wo das der
+    Fall ist, und faellt auf, sobald eine neue solche Stelle dazukommt.
+    """
+
+    _CORE_DIR = Path("src/core")
+
+    # Alle Helper aus ``core.services.audit``. ``audit_admin_view`` /
+    # ``audit_system_view`` / ``audit_client_event`` /
+    # ``audit_retention_decision`` / ``audit_security_violation`` nehmen ihr
+    # ``detail`` als ``**kwargs`` entgegen — der Wert je Helper listet dessen
+    # Meta-Keywords, die nicht als detail-Schluessel zaehlen.
+    _KWARG_HELPERS: ClassVar[dict[str, set[str]]] = {
+        "audit_client_event": {"client", "user", "action"},
+        "audit_retention_decision": {"facility", "target_type", "action", "category", "target_id", "user"},
+        "audit_security_violation": {"facility", "user", "target_type", "target_id", "reason"},
+        "audit_system_view": {"request", "action", "target_type", "target_id"},
+        "audit_admin_view": {"request", "target_obj", "target_type", "target_id"},
+    }
+    _DETAIL_HELPERS: ClassVar[set[str]] = {"log_audit_event", "audit_event"}
+
+    # ``helpers.py`` ist die Heimat des Guards selbst (es reicht ``detail``
+    # weiter, statt es zu bauen) — kein Schreibpunkt im Sinne dieses Tests.
+    _SKIP_FILES: ClassVar[set[str]] = {"core/services/audit/helpers.py"}
+
+    # Datei -> (Anzahl dynamischer Schreibpunkte, Begruendung).
+    _DYNAMIC_DETAIL_SITES: ClassVar[dict[str, tuple[int, str]]] = {
+        "core/admin/mixins.py": (1, "AdminReadAuditMixin reicht **detail durch (admin_view)"),
+        "core/management/commands/export_facility.py": (1, "Zaehler-Dict aus export['entities']"),
+        "core/management/commands/mark_restore_verified.py": (1, "detail-Variable (note) je nach CLI-Argument"),
+        "core/retention/enforcement.py": (1, "**extra_detail des Retention-Laufs (document_type)"),
+        "core/services/config.py": (3, "**_condition_detail(...) der Feldbedingungen"),
+        "core/services/events/crud.py": (1, "audit_detail-Variable mit optionalem source"),
+        # ``log_attachment_violation`` bekommt sein ``**extra`` ueber die
+        # Indirektion ``_reject(...)`` in ``services/file_vault/policy.py``.
+        # Deren neun Aufrufstellen tragen 16 technische Schluessel (Groessen,
+        # MIME-Typen, Virensignatur) — kein einziger davon steht als Literal an
+        # einem Helper-Aufruf, dieser AST-Guard sieht sie also nicht. Genau
+        # dafuer sitzt der eigentliche Guard zur Laufzeit.
+        "core/services/file_vault/audit.py": (1, "**detail von log_attachment_violation (via policy._reject)"),
+        "core/views/attachments.py": (1, "self._audit_detail(...) der Anhang-Domaene"),
+        "core/views/mixins.py": (1, "**extra + **release_detail(...) des Export-Helpers"),
+        "core/views/statistics.py": (1, "**release_detail(...) des externen Berichts"),
+    }
+
+    def _iter_calls(self):
+        """(rel, lineno, helper, node) fuer jeden Audit-Helper-Aufruf."""
+        for py_file in sorted(self._CORE_DIR.rglob("*.py")):
+            rel = str(py_file.relative_to("src"))
+            if rel in self._SKIP_FILES:
+                continue
+            try:
+                tree = ast.parse(py_file.read_text(errors="ignore"))
+            except SyntaxError:  # pragma: no cover — defensiv
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+                if name in self._KWARG_HELPERS or name in self._DETAIL_HELPERS:
+                    yield rel, node.lineno, name, node
+
+    def _literal_keys_and_dynamic_sites(self):
+        keys: dict[str, str] = {}
+        dynamic: dict[str, set[int]] = {}
+
+        def mark_dynamic(rel, lineno):
+            dynamic.setdefault(rel, set()).add(lineno)
+
+        def scan_dict(dict_node, rel, lineno):
+            for key in dict_node.keys:
+                if key is None:  # ``**expr``-Expansion
+                    mark_dynamic(rel, lineno)
+                elif isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    keys.setdefault(key.value, f"{rel}:{lineno}")
+                else:
+                    mark_dynamic(rel, lineno)
+
+        for rel, lineno, name, node in self._iter_calls():
+            if name in self._KWARG_HELPERS:
+                meta = self._KWARG_HELPERS[name]
+                for kw in node.keywords:
+                    if kw.arg is None:
+                        mark_dynamic(rel, lineno)
+                    elif kw.arg not in meta:
+                        keys.setdefault(kw.arg, f"{rel}:{lineno}")
+                continue
+            for kw in node.keywords:
+                if kw.arg != "detail":
+                    continue
+                value = kw.value
+                branches = [value.body, value.orelse] if isinstance(value, ast.IfExp) else [value]
+                for branch in branches:
+                    if isinstance(branch, ast.Dict):
+                        scan_dict(branch, rel, lineno)
+                    elif isinstance(branch, ast.Constant) and branch.value is None:
+                        continue
+                    else:
+                        mark_dynamic(rel, lineno)
+        return keys, dynamic
+
+    def test_literale_detail_schluessel_sind_deklariert(self):
+        if not self._CORE_DIR.exists():
+            pytest.skip(f"{self._CORE_DIR} nicht vorhanden")
+        from core.services.audit.detail_policy import AUDIT_DETAIL_KEYS
+
+        keys, _dynamic = self._literal_keys_and_dynamic_sites()
+        missing = sorted(f"{key} ({where})" for key, where in keys.items() if key not in AUDIT_DETAIL_KEYS)
+        assert not missing, (
+            "Nicht deklarierte AuditLog-detail-Schluessel. Jeder Schluessel muss in "
+            "``core/services/audit/detail_policy.py`` (AUDIT_DETAIL_KEYS) mit Begruendung stehen, "
+            "warum der Wert keine Klienten-PII traegt. Klartext-Freitext gehoert nicht in das "
+            "append-only AuditLog — stattdessen ``hmac_hash_value`` oder die ``target_id`` nutzen.\n"
+            "Refs #1944.\n"
+            "Fehlend:\n  " + "\n  ".join(missing)
+        )
+
+    def test_dynamische_schreibpunkte_sind_dokumentiert(self):
+        if not self._CORE_DIR.exists():
+            pytest.skip(f"{self._CORE_DIR} nicht vorhanden")
+
+        _keys, dynamic = self._literal_keys_and_dynamic_sites()
+        ist = {rel: len(lines) for rel, lines in dynamic.items()}
+        soll = {rel: count for rel, (count, _grund) in self._DYNAMIC_DETAIL_SITES.items()}
+
+        abweichungen = []
+        for rel in sorted(set(ist) | set(soll)):
+            if ist.get(rel, 0) != soll.get(rel, 0):
+                abweichungen.append(f"{rel}: deklariert {soll.get(rel, 0)}, gefunden {ist.get(rel, 0)}")
+        assert not abweichungen, (
+            "Schreibpunkte mit nicht-literalem ``detail`` weichen von der Deklaration ab. "
+            "Dort greift nur der Laufzeit-Guard (validate_audit_detail) — die Liste "
+            "_DYNAMIC_DETAIL_SITES haelt sichtbar, wo das der Fall ist. Neue Stelle: mit "
+            "Begruendung eintragen und pruefen, dass alle dort moeglichen Schluessel in "
+            "AUDIT_DETAIL_KEYS stehen.\n"
+            "Refs #1944.\n"
+            "Abweichungen:\n  " + "\n  ".join(abweichungen)
+        )
+
+    def test_jede_deklarierte_dynamikstelle_existiert_noch(self):
+        fehlend = [rel for rel in self._DYNAMIC_DETAIL_SITES if not (Path("src") / rel).exists()]
+        assert not fehlend, f"_DYNAMIC_DETAIL_SITES verweist auf nicht-existierende Dateien: {fehlend}"
 
 
 class TestDomainAdminReadOnlyGuard:

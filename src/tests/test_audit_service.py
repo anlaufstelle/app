@@ -54,12 +54,12 @@ class TestLogAuditEvent:
         request.current_facility = staff_user.facility
         request.META["REMOTE_ADDR"] = "127.0.0.1"
 
-        entry = log_audit_event(request, AuditLog.Action.LOGIN, detail={"info": "test"})
+        entry = log_audit_event(request, AuditLog.Action.LOGIN, detail={"note": "test"})
 
         assert entry.action == AuditLog.Action.LOGIN
         assert entry.target_type == ""
         assert entry.target_id == ""
-        assert entry.detail == {"info": "test"}
+        assert entry.detail == {"note": "test"}
 
     def test_anonymous_user_no_user_attached(self, rf, facility):
         from django.contrib.auth.models import AnonymousUser

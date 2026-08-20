@@ -3,6 +3,7 @@
 from django.db import transaction
 
 from core.models import AuditLog, Settings
+from core.services.audit.detail_policy import validate_audit_detail
 from core.services.security import check_version_conflict
 
 # Felder, die im Settings-Diff auditiert werden (Refs #893).
@@ -139,13 +140,16 @@ def update_settings(settings_obj, user, *, expected_updated_at=None, **fields):
             action=AuditLog.Action.SETTINGS_CHANGE,
             target_type="Settings",
             target_id=str(settings_obj.pk),
-            detail={
-                "changed_fields": changed,
-                # Security N8 (Refs #1445): Alt-/Neu-Werte value-sicherer Felder
-                # mitschreiben — ein destruktiver Fristen-Aenderungsversuch ist
-                # sonst forensisch nicht rekonstruierbar.
-                "changes": _changed_values(before, after, changed),
-            },
+            detail=validate_audit_detail(
+                {
+                    "changed_fields": changed,
+                    # Security N8 (Refs #1445): Alt-/Neu-Werte value-sicherer Felder
+                    # mitschreiben — ein destruktiver Fristen-Aenderungsversuch ist
+                    # sonst forensisch nicht rekonstruierbar.
+                    "changes": _changed_values(before, after, changed),
+                },
+                source="update_settings",
+            ),
         )
     return settings_obj
 
@@ -165,12 +169,15 @@ def log_settings_change(settings_obj, user, before_snapshot):
             action=AuditLog.Action.SETTINGS_CHANGE,
             target_type="Settings",
             target_id=str(settings_obj.pk),
-            detail={
-                "changed_fields": changed,
-                # Security N8 (Refs #1445): identisches Detail-Schema wie
-                # update_settings (Admin-Pfad) — value-sichere Alt-/Neu-Werte.
-                "changes": _changed_values(before_snapshot, after, changed),
-            },
+            detail=validate_audit_detail(
+                {
+                    "changed_fields": changed,
+                    # Security N8 (Refs #1445): identisches Detail-Schema wie
+                    # update_settings (Admin-Pfad) — value-sichere Alt-/Neu-Werte.
+                    "changes": _changed_values(before_snapshot, after, changed),
+                },
+                source="log_settings_change",
+            ),
         )
     return changed
 

@@ -8,6 +8,11 @@ API. Direkte Calls außerhalb von ``services/audit.py``,
 ``services/settings.py`` und ``signals/audit.py`` werden vom
 Architekturtest (``TestAuditLogCreationAllowlist``) blockiert.
 
+Jeder Schreibvorgang laeuft durch
+:func:`core.services.audit.detail_policy.validate_audit_detail` — das
+``detail`` darf nur Schluessel tragen, die dort mit Begruendung deklariert
+sind (Datenminimierung im append-only Log, Refs #1944).
+
 Übersicht der Helper:
 
 - :func:`log_audit_event` — View-Kontext mit Request-Objekt.
@@ -35,6 +40,8 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import UUID
+
+from core.services.audit.detail_policy import validate_audit_detail
 
 _UNSET: Any = object()
 
@@ -103,7 +110,7 @@ def log_audit_event(
         action=action,
         target_type=target_type or "",
         target_id=target_id or "",
-        detail=detail or {},
+        detail=validate_audit_detail(detail, source=f"log_audit_event({action})") or {},
         ip_address=get_client_ip(request),
     )
 
@@ -144,7 +151,7 @@ def audit_event(
         action=action,
         target_type=target_type or "",
         target_id=str(target_id) if target_id is not None else "",
-        detail=detail or {},
+        detail=validate_audit_detail(detail, source=f"audit_event({action})") or {},
         ip_address=ip_address or "",
     )
 

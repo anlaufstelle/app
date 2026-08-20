@@ -273,8 +273,8 @@ class TestTamperDetection:
 
     def test_verify_command_exit_code_nonzero_on_tamper(self, facility, staff_user):
         audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
-        victim = audit_event(AuditLog.Action.CLIENT_UPDATE, user=staff_user, facility=facility, detail={"k": "v"})
-        _tamper(victim.pk, detail={"k": "tampered"})
+        victim = audit_event(AuditLog.Action.CLIENT_UPDATE, user=staff_user, facility=facility, detail={"note": "v"})
+        _tamper(victim.pk, detail={"note": "tampered"})
         with pytest.raises(SystemExit) as exc:
             call_command("verify_audit_chain")
         assert exc.value.code != 0

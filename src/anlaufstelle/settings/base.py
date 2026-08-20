@@ -44,6 +44,18 @@ AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
 # betriebliche Verankerung (Offsite-Backup, Cron-Frequenz) ist Deployment-Sache.
 AUDIT_HWM_PATH = os.environ.get("DJANGO_AUDIT_HWM_PATH", "")
 
+# AUDIT_DETAIL_STRICT (Refs #1944) — bricht ein nicht deklarierter
+# ``AuditLog.detail``-Schluessel den Schreibvorgang ab? Im Betrieb bewusst
+# ``False``: der Verstoss wird auf ERROR gemeldet, die Zeile aber geschrieben.
+# Ein **fehlender** Audit-Eintrag waere schlimmer als ein zu breiter — das Log
+# ist der Rechenschaftsnachweis (Art. 5 Abs. 2 DSGVO), und die schaerfsten
+# Schreibpunkte (SECURITY_VIOLATION, LOGIN_FAILED) laufen genau dann, wenn
+# ohnehin etwas schiefgeht. dev.py/test.py stellen scharf, damit ein neuer
+# Schreibpunkt vor dem Deploy auffaellt. Betreiber, die den Abbruch wollen,
+# setzen ``DJANGO_AUDIT_DETAIL_STRICT=true``.
+# Allowlist: core/services/audit/detail_policy.py.
+AUDIT_DETAIL_STRICT = env_bool("DJANGO_AUDIT_DETAIL_STRICT", default=False)
+
 # HEALTH_DETAIL_TOKEN (A7.1, Refs #1024) — optionaler Token, mit dem ein
 # interner Monitoring-Caller die Detailfelder von ``/health/`` (version, smtp,
 # Backup-Alter, Disk-frei) abrufen darf. Ohne Token bzw. ohne authentifizierten

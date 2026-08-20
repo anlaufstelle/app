@@ -771,7 +771,7 @@ src/
 ### Key Design Decisions
 
 - **Encryption:** Sensitive fields are encrypted at the application level (`core/services/`). The `ENCRYPTION_KEY` is required in production.
-- **Audit log:** All security-relevant actions are written to `AuditLog`.
+- **Audit log:** All security-relevant actions are written to `AuditLog` — via the typed helpers in `core/services/audit/` (direct `AuditLog.objects.create(...)` calls are blocked by an architecture test). Every `detail` key must be declared with a rationale in `core/services/audit/detail_policy.py`; an undeclared key fails the test run. Plain-text free text does not belong there — use `hmac_hash_value` or the `target_id` instead (Refs #1944).
 - **Retention:** The management command `enforce_retention` enforces retention periods.
 - **HTMX-first:** Interactive UI elements are preferably implemented via HTMX partials to keep JavaScript minimal.
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
@@ -779,4 +779,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.81.0 -->
 <!-- translation-date: 2026-08-20 -->
-<!-- source-hash: a7da803b0535523cc8f4a59862026e4b3468174d -->
+<!-- source-hash: d98c768e74f4573d8bc47461818d891b5ded9b67 -->

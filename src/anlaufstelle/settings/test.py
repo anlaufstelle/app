@@ -8,6 +8,12 @@ from .dev import *  # noqa: F401, F403
 # das Setting per Override explizit auf True.
 SUDO_MODE_ENABLED = False
 
+# Refs #1944: Der Guard fuer die ``AuditLog.detail``-Schluessel ist im Testlauf
+# hart scharf (dev.py setzt ihn schon, hier ohne Env-Ausweg) — ein Schreibpunkt
+# mit nicht deklariertem Schluessel soll in CI scheitern, nicht erst im Betrieb
+# eine ERROR-Zeile erzeugen.
+AUDIT_DETAIL_STRICT = True
+
 # Schneller Passwort-Hasher für Tests (PBKDF2 mit 870k Iterationen → MD5).
 # Django's eigene Test-Suite nutzt die gleiche Strategie.
 # PBKDF2 bleibt als Fallback, damit bestehende Hashes in der Dev-DB verifiziert werden können.

@@ -157,12 +157,12 @@ class TestAuditSecurityViolation:
             target_type="Attachment",
             target_id=sample_event.pk,
             reason="virus_detected",
-            filename="malware.pdf",
+            filename_hash="0a1b2c3d",
         )
         entry.refresh_from_db()
         assert entry.action == AuditLog.Action.SECURITY_VIOLATION
         assert entry.detail["reason"] == "virus_detected"
-        assert entry.detail["filename"] == "malware.pdf"
+        assert entry.detail["filename_hash"] == "0a1b2c3d"
 
     def test_target_id_may_be_none(self, facility, staff_user):
         # Extension-Verstoß vor dem Speichern: noch keine PK.
@@ -172,11 +172,11 @@ class TestAuditSecurityViolation:
             target_type="Upload",
             target_id=None,
             reason="extension_blocked",
-            filename="data.exe",
+            filename_hash="deadbeef",
         )
         entry.refresh_from_db()
         assert entry.target_id == ""
-        assert entry.detail == {"reason": "extension_blocked", "filename": "data.exe"}
+        assert entry.detail == {"reason": "extension_blocked", "filename_hash": "deadbeef"}
 
 
 @pytest.mark.django_db

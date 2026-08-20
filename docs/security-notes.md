@@ -231,6 +231,17 @@ Der File-Vault-Fall war der schärfste: `SECURITY_VIOLATION` ist prune-exempt, d
 
 Bewusst **nicht** umgestellt ist der `username` bei fehlgeschlagenem Login (einziger Nachweis, *was* versucht wurde — bei Angriffen existiert der User nicht, `AuditLog.user` ist `NULL`) und bei Rollenwechsel/Deaktivierung/Löschbestätigung (wegen `on_delete=SET_NULL` die einzige dauerhafte Zuschreibung einer Rechte-Eskalation). Beides sind **Beschäftigten**-, keine Klientendaten.
 
+### Technischer Guard statt Call-Site-Konvention (#1944)
+
+Die Minimierung aus #1751 war eine Aufräumaktion an drei Stellen, kein Gate: der Architekturtest `TestAuditLogCreationAllowlist` prüft nur, **wo** Audit-Zeilen entstehen dürfen, nie **was** in ihnen steht. Ein neuer Service-Aufruf mit `detail={"pseudonym": …}` — oder mit einem Freitextwert unter einem unverdächtigen Schlüssel — lief durch nichts.
+
+Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_policy.py`](../src/core/services/audit/detail_policy.py) führt jeden zulässigen `detail`-Schlüssel mit Begründung, warum sein Wert keine Klienten-PII trägt. Bewusst Schlüssel statt Werte-Blacklist — eine Liste verdächtiger Namen (`pseudonym`, `notes`, `email`) fängt genau den Fall nicht, der wehtut: Freitext unter unauffälligem Schlüssel.
+
+- **Laufzeit-Prüfung** in `audit_event` / `log_audit_event` (und damit in allen typed Helpern, die darauf aufsetzen) sowie an den beiden allowlisteten Direktschreibern in [`signals/audit.py`](../src/core/signals/audit.py) und [`services/system/settings.py`](../src/core/services/system/settings.py). Sie greift auch dort, wo das `detail` dynamisch entsteht (`**kwargs`, Zähler-Dicts) — rund ein Dutzend Stellen, an denen ein rein statischer Guard blind wäre.
+- **Statisches Gegenstück** `TestAuditDetailKeyInventory` in [`test_architecture_guards_audit.py`](../src/tests/test_architecture_guards_audit.py): liest die literalen `detail={…}`-Dicts unter `src/core` und meldet einen undeklarierten Schlüssel schon ohne Testausführung. Die dynamischen Schreibpunkte sind dort namentlich mit Anzahl geführt.
+- **Fail-Verhalten:** `AUDIT_DETAIL_STRICT` bricht den Schreibvorgang ab — Default `True` in dev/test, `False` im Betrieb (dort ERROR-Meldung, Zeile wird trotzdem geschrieben). Ein **fehlender** Audit-Eintrag wäre schlimmer als ein zu breiter: das Log ist der Rechenschaftsnachweis, und die schärfsten Schreibpunkte (`SECURITY_VIOLATION`, `LOGIN_FAILED`) laufen genau dann, wenn ohnehin etwas schiefgeht. Die Meldung nennt nur Schlüsselnamen, nie Werte.
+- **Bewusst zugelassener Freitext** steht in derselben Liste, jeweils mit Begründung: `name` (Konfigurationsbezeichner, keine Klienten-PII), `username`/`actor_username` (Beschäftigten-Kennung, siehe oben), `note` (Betriebsnotiz), `recipient`/`purpose` (Berichts-Freigabe, Betreiber-Obliegenheit), `message` (feste Codekonstante).
+
 ### Restfläche (akzeptiert)
 
 - **Alt-Zeilen bleiben unverändert.** Vor #1751 geschriebene Einträge tragen die Klartextwerte weiter; sie zu redigieren hieße, die HMAC-Kette zu brechen (und damit genau die Integritätszusicherung aufzugeben, wegen der das Log existiert). Sie verschwinden mit dem regulären Pruning.
@@ -1975,6 +1986,66 @@ Der **Precache** `anlaufstelle-v36` bleibt aus demselben Ticket-Entscheid ebenfa
 
 - [`tests/js/logout-wipe.test.mjs`](../tests/js/logout-wipe.test.mjs) § „lastActivity nach dem Logout (Refs #1946)" — drei Pins: (1) `wipeOfflineState()` entfernt Schlüssel **und** Stempel (widerlegt die Ticket-Prämisse), (2) der Boot einer schlüssellosen Seite legt den Stempel neu an, (3) die vollständige RC-Sequenz Wipe → Boot der Anmeldeseite ergibt einen Stempel, der **jünger** als der Wipe ist.
 - Handtest: Eintrag zu #1946 in der Release-Hand-Check-Liste (dev-only) — Sichtprüfung des `meta`-Stores vor und nach dem Abmelden.
+
+---
+
+## `Activity.summary` führt Pseudonym und Titel im Klartext (Issue #1944)
+
+**Status:** Bewusst so. Der Zeitstrahl bleibt Klartext; die Löschpfade räumen ihn ab, für die Restfenster ist die Frist die Grenze. Ein Umbau auf Ziel-Referenz mit Rendering zur Anzeigezeit ist als #1972 eingeplant, nicht Teil dieses Tickets.
+
+### Beobachtung
+
+Während `AuditLog.detail` das Klartext-Pseudonym seit #1093/#1375 bewusst vermeidet, schreibt der Zeitstrahl es aus. Vier Stellen in [`src/core/services/client/main.py`](../src/core/services/client/main.py) formulieren die `summary` mit dem Pseudonym:
+
+| Zeile | `summary` |
+|---|---|
+| 658 | `Person <pseudonym> angelegt` |
+| 768 | `<pseudonym> qualifiziert` |
+| 784 | `Person <pseudonym> aktualisiert` |
+| 1021 | `Person <pseudonym> in den Papierkorb verschoben` |
+
+Dieselbe Bauart trifft klientenbezogenen Freitext an anderen Zielen: `Aufgabe: <titel>` ([`services/case/workitems.py`](../src/core/services/case/workitems.py)), `<Dokumentationstyp> gelöscht` ([`services/events/crud.py`](../src/core/services/events/crud.py)), Fall- und Meilenstein-Titel aus `close_case`/`reopen_case`/`delete_milestone`.
+
+### Am Code korrigiert: eine „eigene Spur“ über die Löschung hinaus gibt es nicht
+
+Das Ticket unterstellte, die `Activity`-Tabelle überlebe die Anonymisierung mit eigener Namensspur. Das ist **widerlegt**: [`_redact_activities`](../src/core/services/client/main.py) setzt `Activity.summary` per `.update(summary="[Anonymisiert]")` für **alle vier** Zieltypen (Client, Event, WorkItem, Case — der Case-Zweig kam mit #1751) und wird in **beiden** Anonymisierungspfaden aufgerufen:
+
+- `anonymize_client()` — [`services/client/main.py:601`](../src/core/services/client/main.py)
+- Retention-Anonymisierung — [`retention/anonymization.py:110`](../src/core/retention/anonymization.py)
+
+Nach Art.-17-Löschung bzw. nach Ablauf der Papierkorb-Frist steht dort also kein Klartext mehr. Was offenbleibt, sind zwei **Fenster davor**, nicht eine Spur danach.
+
+### Was offen bleibt (akzeptiert)
+
+1. **Der Live-Zeitstrahl.** Solange die Person existiert, steht ihr Pseudonym im Feed ([`services/events/feed.py`](../src/core/services/events/feed.py), Zeitstrom). Das ist der Zweck der Ansicht.
+2. **Das Papierkorb-Fenster.** `soft_delete_client` schreibt selbst noch eine Activity („… in den Papierkorb verschoben"); bis `client_trash_days` (Default 30) abgelaufen ist und `enforce_retention` anonymisiert, bleibt sie lesbar.
+3. **Die Aktivitäts-Frist als Obergrenze.** Aktivitäten ohne vorherige Anonymisierung verschwinden erst mit `retention_activities_days` (Default 365, [`retention/enforcement.py`](../src/core/retention/enforcement.py) `_purge_activities`).
+
+### Warum das vertretbar ist
+
+- **Kein zusätzlicher Empfängerkreis.** Der Zeitstrom ist facility-gescoped (RLS + `for_facility`). Wer ihn sieht, sieht dieselben Pseudonyme und Aufgabentitel ohnehin in der Personen- und Aufgabenliste — die `summary` ist eine Kopie sichtbarer Werte, kein neuer Offenlegungskanal. Für Ereignis-Ziele ist der Feed zusätzlich sensitivitäts-gefiltert (`Event.objects.visible_to`, #562).
+- **Der Datensatz ist redigierbar.** Anders als beim append-only, HMAC-verketteten `AuditLog` (siehe § Audit-Log-Restdaten) ist `Activity` eine gewöhnliche Tabelle. Die Löschpfade greifen dort tatsächlich durch — deshalb ist die Write-Time-Minimierung hier nicht der einzige Hebel, und deshalb wiegt der Klartext weniger schwer als im Audit-Log.
+- **Endlicher Horizont.** Beide Restfenster sind konfigurierte Fristen, keine unbegrenzte Aufbewahrung.
+
+### Warum kein Umbau auf Ziel-Referenz
+
+Der saubere Weg wäre, statt der fertigen `summary` nur Verb + Ziel-Referenz zu speichern und den Text zur Anzeigezeit zu rendern. Das ist **ein eigenes Paket**, kein Nebenzweig dieses Tickets:
+
+- Er zöge Fall-, Aufgaben- und Meilenstein-Titel mit — die Formulierungen in `workitems.py`, `cases.py` und `outcome.py` müssten alle auf ein strukturiertes Schema.
+- Er bräuchte eine **Backfill-Migration** über den Bestand: bestehende Zeilen tragen nur den fertigen Satz, aus dem sich Verb und Ziel nicht verlässlich zurückgewinnen lassen.
+- Er berührt die Löschpfade (#1818, #1874) und den Art.-15-Export (`_gather_activities` in [`services/client/export.py`](../src/core/services/client/export.py)), der die `summary` heute wörtlich ausgibt.
+- Der Gewinn wäre begrenzt: er beträfe nur die beiden Restfenster oben, nicht den Live-Feed, der den Klartext gerade braucht.
+
+### Betriebliche Empfehlung
+
+- `client_trash_days` und `retention_activities_days` gehören in Verarbeitungsverzeichnis und Löschkonzept; wer das Papierkorb-Fenster kürzer will, senkt `client_trash_days`.
+- Aufgabentitel sind Freitext. Dass dort kein Klarname stehen soll, ist eine organisatorische Vorgabe (Admin-Handbuch), keine technische Zusicherung — wie bei den Empfänger-/Zweck-Freitexten der Berichts-Freigabe.
+
+### Verifikation
+
+- [`test_client_anonymize_characterization.py`](../src/tests/test_client_anonymize_characterization.py) — `_redact_activities` deckt Client-, Event-, WorkItem- und Case-Ziele ab und lässt fremde Zeilen unberührt.
+- [`test_pii_residue_sweep.py`](../src/tests/test_pii_residue_sweep.py) — Residuen-Sweep über die Redaktionspfade.
+- [`test_retention.py`](../src/tests/test_retention.py) — Aktivitäts-Purge gegen `retention_activities_days`.
 
 ---
 

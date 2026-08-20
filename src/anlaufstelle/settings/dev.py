@@ -24,6 +24,11 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 DEBUG = True
 
+# Refs #1944: In der Entwicklung laut scheitern, wenn ein Audit-Schreibpunkt
+# einen nicht deklarierten ``detail``-Schluessel mitbringt (kaskadiert nach
+# test.py und e2e.py). Im Betrieb bleibt der Guard meldend, siehe base.py.
+AUDIT_DETAIL_STRICT = env_bool("DJANGO_AUDIT_DETAIL_STRICT", default=True)  # noqa: F405
+
 ALLOWED_HOSTS = ["*"]
 
 # DEV bewusst MFA-frei (Refs #1019): das Rollen-Default-Enforcement aus base.py

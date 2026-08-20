@@ -13,6 +13,8 @@ Module:
   ``audit_system_view``).
 - :mod:`core.services.audit.hash` — HMAC-SHA256 PII-Pseudonymisierung
   im AuditLog: ``hmac_hash_email`` / ``hmac_hash_value`` (Refs #1751).
+- :mod:`core.services.audit.detail_policy` — Schluessel-Allowlist fuer den
+  ``detail``-Payload (``validate_audit_detail``, Refs #1944).
 
 Beispiele:
 
@@ -28,6 +30,11 @@ vom Architekturtest (``TestAuditLogCreationAllowlist``) blockiert.
 """
 
 from core.services.audit.chain import compute_entry_hash, verify_chain
+from core.services.audit.detail_policy import (
+    AUDIT_DETAIL_KEYS,
+    UnknownAuditDetailKeyError,
+    validate_audit_detail,
+)
 from core.services.audit.diff import changed_fields_vs_db
 from core.services.audit.hash import hmac_hash_email, hmac_hash_value
 from core.services.audit.helpers import (
@@ -41,6 +48,8 @@ from core.services.audit.helpers import (
 )
 
 __all__ = [
+    "AUDIT_DETAIL_KEYS",
+    "UnknownAuditDetailKeyError",
     "audit_admin_view",
     "audit_client_event",
     "audit_event",
@@ -52,5 +61,6 @@ __all__ = [
     "hmac_hash_email",
     "hmac_hash_value",
     "log_audit_event",
+    "validate_audit_detail",
     "verify_chain",
 ]

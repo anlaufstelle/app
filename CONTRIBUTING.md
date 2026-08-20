@@ -773,7 +773,7 @@ src/
 ### Wichtige Designentscheidungen
 
 - **Verschlüsselung:** Sensible Felder werden auf Anwendungsebene verschlüsselt (`core/services/`). Der `ENCRYPTION_KEY` ist Pflicht in Produktion.
-- **Audit-Log:** Alle sicherheitsrelevanten Aktionen werden in `AuditLog` geschrieben.
+- **Audit-Log:** Alle sicherheitsrelevanten Aktionen werden in `AuditLog` geschrieben — über die typed Helper aus `core/services/audit/` (direkte `AuditLog.objects.create(...)` blockt ein Architekturtest). Jeder `detail`-Schlüssel muss in `core/services/audit/detail_policy.py` mit Begründung deklariert sein; ein neuer Schlüssel scheitert im Testlauf. Klartext-Freitext gehört nicht hinein — stattdessen `hmac_hash_value` oder die `target_id` verwenden (Refs #1944).
 - **Retention:** Das Management-Command `enforce_retention` setzt Löschfristen durch.
 - **HTMX-First:** Interaktive UI-Elemente werden bevorzugt über HTMX-Partials realisiert, um JavaScript minimal zu halten.
 - **Service-Schicht:** Views delegieren Logik an Services — das erleichtert Tests und hält Views schlank.

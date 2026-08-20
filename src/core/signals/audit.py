@@ -9,6 +9,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from core.models import AuditLog
+from core.services.audit.detail_policy import validate_audit_detail
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +167,10 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
         AuditLog.objects.create(
             user=user,
             action=AuditLog.Action.LOGIN_FAILED,
-            detail={"message": "Fehlgeschlagener Login-Versuch", "username": username},
+            detail=validate_audit_detail(
+                {"message": "Fehlgeschlagener Login-Versuch", "username": username},
+                source="signals.on_user_login_failed",
+            ),
             ip_address=ip_address,
         )
         return
@@ -175,7 +179,10 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
         facility=facility,
         user=user,
         action=AuditLog.Action.LOGIN_FAILED,
-        detail={"message": "Fehlgeschlagener Login-Versuch", "username": username},
+        detail=validate_audit_detail(
+            {"message": "Fehlgeschlagener Login-Versuch", "username": username},
+            source="signals.on_user_login_failed",
+        ),
         ip_address=ip_address,
     )
 
@@ -258,12 +265,15 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
             action=AuditLog.Action.USER_ROLE_CHANGED,
             target_type="User",
             target_id=str(instance.pk),
-            detail={
-                "old_role": old_role,
-                "new_role": instance.role,
-                "username": instance.username,
-                **attribution,
-            },
+            detail=validate_audit_detail(
+                {
+                    "old_role": old_role,
+                    "new_role": instance.role,
+                    "username": instance.username,
+                    **attribution,
+                },
+                source="signals.USER_ROLE_CHANGED",
+            ),
         )
 
     if old_is_active is True and instance.is_active is False:
@@ -274,7 +284,10 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
             action=AuditLog.Action.USER_DEACTIVATED,
             target_type="User",
             target_id=str(instance.pk),
-            detail={"username": instance.username, **attribution},
+            detail=validate_audit_detail(
+                {"username": instance.username, **attribution},
+                source="signals.USER_DEACTIVATED",
+            ),
         )
 
     # Refs #1053: Vergabe/Entzug des Rechts „Löschbestätigung" ist
@@ -288,10 +301,13 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
             action=AuditLog.Action.DELETION_CONFIRMER_CHANGED,
             target_type="User",
             target_id=str(instance.pk),
-            detail={
-                "old_value": old_confirmer,
-                "new_value": instance.can_confirm_deletion,
-                "username": instance.username,
-                **attribution,
-            },
+            detail=validate_audit_detail(
+                {
+                    "old_value": old_confirmer,
+                    "new_value": instance.can_confirm_deletion,
+                    "username": instance.username,
+                    **attribution,
+                },
+                source="signals.DELETION_CONFIRMER_CHANGED",
+            ),
         )
