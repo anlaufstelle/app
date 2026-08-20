@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 
 import pytest
-from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django.urls import reverse
@@ -319,37 +318,37 @@ class TestEventDownloadAuditDetail:
 
 class TestSharedRatelimitBucket:
     def test_all_three_routes_share_one_bucket(
-        self, client, staff_user, settings, sample_event, authz_attachment, client_owner, case_owner
+        self, client, staff_user, ratelimit_enabled, sample_event, authz_attachment, client_owner, case_owner
     ):
         """S3 (Refs #1084) owner-generisch: EIN Eimer ``attachment_download``.
 
         Drei Eimer waeren dreifaches Budget fuer denselben teuren Vorgang
         (serverseitige Entschluesselung je Request).
+
+        ``ratelimit_enabled`` (conftest) nagelt das Zaehlfenster fest — sonst
+        koennte die abschliessende ``get_usage``-Probe schon in einem anderen
+        Fenster stehen als die drei Requests davor und ``count == 0`` lesen
+        (Refs #1900).
         """
         person, client_attachment, _cft = client_owner
         case, case_attachment, _kft = case_owner
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        try:
-            client.force_login(staff_user)
-            event_url = reverse(
-                "core:attachment_download",
-                kwargs={"pk": sample_event.pk, "attachment_pk": authz_attachment.pk},
-            )
-            assert client.get(event_url).status_code == 200
-            assert client.get(_client_url(person, client_attachment)).status_code == 200
-            assert client.get(_case_url(case, case_attachment)).status_code == 200
+        client.force_login(staff_user)
+        event_url = reverse(
+            "core:attachment_download",
+            kwargs={"pk": sample_event.pk, "attachment_pk": authz_attachment.pk},
+        )
+        assert client.get(event_url).status_code == 200
+        assert client.get(_client_url(person, client_attachment)).status_code == 200
+        assert client.get(_case_url(case, case_attachment)).status_code == 200
 
-            probe = RequestFactory().get("/")
-            probe.user = staff_user
-            usage = get_usage(
-                probe,
-                group="attachment_download",
-                key="user",
-                rate=RATELIMIT_FREQUENT,
-                method="GET",
-                increment=False,
-            )
-            assert usage["count"] == 3
-        finally:
-            cache.clear()
+        probe = RequestFactory().get("/")
+        probe.user = staff_user
+        usage = get_usage(
+            probe,
+            group="attachment_download",
+            key="user",
+            rate=RATELIMIT_FREQUENT,
+            method="GET",
+            increment=False,
+        )
+        assert usage["count"] == 3

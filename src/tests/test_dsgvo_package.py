@@ -3,7 +3,6 @@
 import re
 
 import pytest
-from django.core.cache import cache
 from django.test import Client as DjangoClient
 
 from core.models import AuditLog, Facility, Organization, Settings, User
@@ -366,18 +365,15 @@ class TestDSGVORateLimit:
     und Dokument-Download — Dokument-Rendering ist teuer, die Views waren die
     letzte Luecke im sonst dichten Drossel-Netz.
 
-    Tests laufen mit ``RATELIMIT_ENABLE = False``; hier wird das Limit explizit
-    aktiviert (Muster: ``test_offline_bundle_api.test_rate_limited_after_120_requests``).
+    Tests laufen mit ``RATELIMIT_ENABLE = False``; ``ratelimit_enabled``
+    (conftest) aktiviert es und nagelt das Zaehlfenster fest (Refs #1900).
     django-ratelimit mit ``block=True`` antwortet via ``handler403`` mit 429
     (Refs #1354).
     """
 
     @pytest.fixture(autouse=True)
-    def _enable_ratelimit(self, settings):
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        yield
-        cache.clear()
+    def _enable_ratelimit(self, ratelimit_enabled):
+        return ratelimit_enabled
 
     def test_package_view_blocked_after_30_requests(self, admin_user):
         client = DjangoClient()

@@ -447,6 +447,75 @@ def _encryption_key(settings):
     settings.ENCRYPTION_KEYS = ""
 
 
+# ---- Rate-Limit-Fixtures (Refs #1900) -----------------------------------
+# Die Testsuite laeuft mit ``RATELIMIT_ENABLE = False``; Tests, die das Limit
+# wirklich ausloesen wollen, schalten es einzeln an. Der Zaehler steckt dabei
+# in einem FESTEN Zeitfenster, nicht in einem gleitenden:
+# ``django_ratelimit.core._get_window`` bildet den Cache-Schluessel aus
+# ``ts - (ts % periode) + (crc32(key) % periode)``. Faellt diese Grenze
+# mitten in die Zaehlschleife, beginnt ein frischer Eimer und der Request,
+# der abgewiesen werden sollte, kommt mit 200 zurueck.
+#
+# Genau so fiel ``test_file_vault.test_download_rate_limited_after_120_requests``
+# in der CI aus (``assert 200 == 429``), waehrend er lokal gruen blieb: die
+# Trefferchance ist Schleifendauer / Periode, also lastabhaengig und bei
+# ``30/m``-Limits sechzigmal hoeher als bei ``…/h``. Mehr Timeout oder ein
+# Nachlauf haetten daran nichts geaendert.
+#
+# ``ratelimit_enabled`` nagelt deshalb die Zeitquelle von django-ratelimit
+# fest — nur dessen Modul-Uhr, nicht ``time`` global und nicht
+# ``timezone.now()``. Damit liegt die gesamte Schleife garantiert in EINEM
+# Fenster und der Test beweist wieder das, was er behauptet.
+
+#: Beliebiger, aber fester Zeitpunkt — nur die Konstanz zaehlt.
+RATELIMIT_FIXED_TS = 1_800_000_000
+
+
+class RatelimitClock:
+    """Steuerbare Zeitquelle fuer ``django_ratelimit.core``.
+
+    Traegt bewusst dieselbe Signatur wie das ``time``-Modul (``time()``), weil
+    sie genau dessen Namen im Modul-Namensraum ersetzt.
+    """
+
+    def __init__(self, now: float) -> None:
+        self.now = now
+
+    def time(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        """Uhr weiterstellen — ``advance(3600)`` wechselt bei jedem
+        Stunden-Limit garantiert in ein neues Zaehlfenster, unabhaengig vom
+        schluesselabhaengigen Versatz."""
+        self.now += seconds
+
+
+@pytest.fixture
+def ratelimit_enabled(settings, monkeypatch):
+    """Rate-Limit fuer einen Test scharf schalten, Zaehlfenster festnageln.
+
+    Leert den Cache vorher und nachher (der LocMem-Cache ueberlebt sonst den
+    Test und schleppt Zaehler weiter) und liefert die ``RatelimitClock``
+    zurueck, damit ein Test den Fensterwechsel bei Bedarf gezielt herbeifuehren
+    kann.
+
+    Die Ablaufzeit des Cache-Eintrags (``Periode + 5 s``) laeuft weiter auf der
+    echten Uhr des Cache-Backends. Das ist unkritisch, solange eine
+    Zaehlschleife deutlich unter einer Minute bleibt.
+    """
+    from django.core.cache import cache
+
+    settings.RATELIMIT_ENABLE = True
+    cache.clear()
+    clock = RatelimitClock(RATELIMIT_FIXED_TS)
+    monkeypatch.setattr("django_ratelimit.core.time", clock)
+    try:
+        yield clock
+    finally:
+        cache.clear()
+
+
 # ---- AuthZ-Matrix-Fixtures (Refs #1055) ---------------------------------
 # Eigene Facility-1-Objekte für Matrix-Zellen + Spiegel-Objekte in
 # second_facility für IDOR-Probes (erwartet 404, kein Existenz-Leak).

@@ -294,7 +294,7 @@ class TestRevocationEndpointRateLimit:
         assert "RATELIMIT_OFFLINE_BUNDLE" not in source
 
     @pytest.mark.django_db
-    def test_das_limit_greift_wirklich(self, client, staff_user, settings):
+    def test_das_limit_greift_wirklich(self, client, staff_user, ratelimit_enabled):
         """Refs #1775: Wirk-Test statt ``hasattr(get, "__wrapped__")``.
 
         Das ``__wrapped__``-Attribut belegte nur, dass ueberhaupt ein Dekorator
@@ -308,22 +308,20 @@ class TestRevocationEndpointRateLimit:
         (``PermissionDenied``-Subklasse), die der eigene ``handler403`` auf 429
         abbildet — nicht auf 403, weil der Offline-Client 403 als Rechteentzug
         deutet und lokale Bundles purgen wuerde (Refs #1354).
-        """
-        from django.core.cache import cache
 
+        ``ratelimit_enabled`` (conftest) nagelt das Zaehlfenster fest — bei 600
+        Requests je Lauf ist das die laengste Schleife der Suite und damit die
+        groesste Angriffsflaeche fuer einen Fensterwechsel mittendrin
+        (Refs #1900).
+        """
         from core.constants import RATELIMIT_OFFLINE_REVOCATIONS
 
         budget = _per_hour(RATELIMIT_OFFLINE_REVOCATIONS)
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        try:
-            client.force_login(staff_user)
-            url = reverse("core:offline_revocations")
-            for i in range(budget):
-                assert client.get(url).status_code == 200, f"Request {i + 1}/{budget} wurde zu frueh abgewiesen"
-            assert client.get(url).status_code == 429, f"Request {budget + 1} haette abgewiesen werden muessen"
-        finally:
-            cache.clear()
+        client.force_login(staff_user)
+        url = reverse("core:offline_revocations")
+        for i in range(budget):
+            assert client.get(url).status_code == 200, f"Request {i + 1}/{budget} wurde zu frueh abgewiesen"
+        assert client.get(url).status_code == 429, f"Request {budget + 1} haette abgewiesen werden muessen"
 
 
 @pytest.mark.django_db

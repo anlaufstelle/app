@@ -758,16 +758,15 @@ class TestStatisticsRangeGuardViews:
 
 @pytest.mark.django_db
 class TestStatisticsRateLimit:
-    """Refs #1589: interaktive Statistik-Endpunkte tragen ein User-Ratelimit."""
+    """Refs #1589: interaktive Statistik-Endpunkte tragen ein User-Ratelimit.
+
+    ``ratelimit_enabled`` (conftest) schaltet das Limit an und nagelt das
+    Zaehlfenster fest — Refs #1900.
+    """
 
     @pytest.fixture(autouse=True)
-    def _enable_ratelimit(self, settings):
-        from django.core.cache import cache
-
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        yield
-        cache.clear()
+    def _enable_ratelimit(self, ratelimit_enabled):
+        return ratelimit_enabled
 
     def test_statistics_view_is_rate_limited(self, client, admin_user):
         from core.constants import RATELIMIT_FREQUENT

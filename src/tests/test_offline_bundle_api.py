@@ -14,8 +14,6 @@ from __future__ import annotations
 import json
 
 import pytest
-from django.core.cache import cache
-from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -887,7 +885,7 @@ class TestOfflineClientBundleView:
         assert RATELIMIT_OFFLINE_BUNDLE == "120/h"
         assert offline_module.RATELIMIT_OFFLINE_BUNDLE == "120/h"
 
-    def test_rate_limited_after_120_requests(self, client, client_identified, staff_user):
+    def test_rate_limited_after_120_requests(self, client, client_identified, staff_user, ratelimit_enabled):
         """With rate-limiting forcibly enabled, the 121st request per hour is
         blocked (Refs #1354: dediziertes ``RATELIMIT_OFFLINE_BUNDLE`` = 120/h,
         statt dem geteilten 30/h-``RATELIMIT_BULK_ACTION``).
@@ -898,17 +896,17 @@ class TestOfflineClientBundleView:
         verschlüsselte Bundles purgt (siehe ``offline-store.js``
         ``INVALIDATION_STATUSES``). Ein Rate-Limit-Treffer ist kein
         Rechteentzug.
+
+        ``ratelimit_enabled`` (conftest) schaltet das Limit an, leert den Cache
+        und haelt das Zaehlfenster fest (Refs #1900).
         """
-        cache.clear()
         client.force_login(staff_user)
         url = self._url(client_identified.pk)
-        with override_settings(RATELIMIT_ENABLE=True):
-            for _ in range(120):
-                response = client.get(url)
-                assert response.status_code == 200
+        for _ in range(120):
             response = client.get(url)
-            assert response.status_code == 429
-        cache.clear()
+            assert response.status_code == 200
+        response = client.get(url)
+        assert response.status_code == 429
 
     def test_real_permission_denied_still_403(self, client, client_identified, super_admin_user):
         """Kontrolltest (Refs #1354): Ein echter Berechtigungs-403 bleibt 403 —

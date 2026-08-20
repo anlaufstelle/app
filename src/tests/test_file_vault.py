@@ -442,27 +442,22 @@ class TestFileUploadView:
         assert log.target_type == "Attachment"
         assert log.target_id == str(attachment.pk)
 
-    def test_download_rate_limited_after_120_requests(self, client, staff_user, event_with_file, settings):
+    def test_download_rate_limited_after_120_requests(self, client, staff_user, event_with_file, ratelimit_enabled):
         """S3 (Refs #1084): AttachmentDownloadView entschluesselt pro Request —
         RATELIMIT_FREQUENT (120/h/User) drosselt Massen-Downloads.
 
-        Tests laufen mit ``RATELIMIT_ENABLE = False``; hier explizit aktiviert.
-        django-ratelimit mit ``block=True`` antwortet via ``handler403`` mit 429
-        (Refs #1354).
+        Tests laufen mit ``RATELIMIT_ENABLE = False``; ``ratelimit_enabled``
+        schaltet es an und haelt das Zaehlfenster fest (Refs #1900 — ohne das
+        konnte die Stundengrenze mitten in die Schleife fallen und der 121.
+        Request kam mit 200 zurueck). django-ratelimit mit ``block=True``
+        antwortet via ``handler403`` mit 429 (Refs #1354).
         """
-        from django.core.cache import cache
-
         event, attachment = event_with_file
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        try:
-            client.force_login(staff_user)
-            url = reverse("core:attachment_download", kwargs={"pk": event.pk, "attachment_pk": attachment.pk})
-            for _ in range(120):
-                assert client.get(url).status_code == 200
-            assert client.get(url).status_code == 429
-        finally:
-            cache.clear()
+        client.force_login(staff_user)
+        url = reverse("core:attachment_download", kwargs={"pk": event.pk, "attachment_pk": attachment.pk})
+        for _ in range(120):
+            assert client.get(url).status_code == 200
+        assert client.get(url).status_code == 429
 
     def test_detail_view_shows_file_info(self, client, staff_user, event_with_file):
         event, attachment = event_with_file

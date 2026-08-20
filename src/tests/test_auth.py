@@ -305,19 +305,15 @@ class TestForcePasswordChangeMiddleware:
 @pytest.mark.django_db
 class TestRateLimiting:
     @pytest.fixture(autouse=True)
-    def _enable_ratelimit(self, settings):
+    def _enable_ratelimit(self, ratelimit_enabled):
         """Rate-Limiting explizit aktivieren (in Test-Settings deaktiviert).
 
-        Cache muss pro Test geleert werden — django-ratelimit nutzt den
-        Django-Cache (LocMem), der zwischen Tests persistiert und sonst
-        Zähler aus vorherigen Tests mitschleppt.
+        ``ratelimit_enabled`` (conftest) leert den Cache vor und nach dem Test
+        — django-ratelimit nutzt den Django-Cache (LocMem), der zwischen Tests
+        persistiert und sonst Zaehler mitschleppt — und haelt zusaetzlich das
+        Zaehlfenster fest (Refs #1900).
         """
-        from django.core.cache import cache
-
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        yield
-        cache.clear()
+        return ratelimit_enabled
 
     def test_rate_limit_blocks_after_threshold(self, client, staff_user):
         """Nach 5 fehlerhaften POST-Requests von derselben IP → 429 (Ratelimited
@@ -357,6 +353,39 @@ class TestRateLimiting:
         response = client.post("/login/", {"username": "teststaff", "password": "wrong"}, REMOTE_ADDR=ip)
 
         assert response.status_code == 429, "Cache-Verdraengung hat den Ratelimit-Zaehler geleert"
+
+    def test_zaehlfenster_ist_ein_festes_intervall(self, client, staff_user, ratelimit_enabled):
+        """Refs #1900: dokumentiert die zweite Flake-Quelle der Ratelimit-Tests.
+
+        ``test_download_rate_limited_after_120_requests`` fiel in der CI mit
+        ``assert 200 == 429`` aus, lokal blieb er gruen. Ursache ist keine Last
+        und kein Cache-Druck, sondern die Fensterlogik von django-ratelimit:
+        ``_get_window`` bildet feste Perioden
+        (``ts - (ts % periode) + (crc32(schluessel) % periode)``), kein
+        gleitendes Fenster. Faellt diese Grenze in die Zaehlschleife, zaehlt ein
+        frischer Eimer ab null — der Request, der abgewiesen werden sollte,
+        kommt mit 200 zurueck.
+
+        Der Test haelt beide Haelften fest: im Fenster greift das Limit, hinter
+        der Grenze zaehlt es neu. Deshalb nagelt ``ratelimit_enabled`` die
+        Zeitquelle fest, statt Timeouts hochzudrehen — an einer Fenstergrenze
+        haette mehr Zeit nichts geholfen, im Gegenteil.
+        """
+        ip = "10.99.99.97"
+        for _ in range(5):
+            client.post("/login/", {"username": "teststaff", "password": "wrong"}, REMOTE_ADDR=ip)
+
+        gesperrt = client.post("/login/", {"username": "teststaff", "password": "wrong"}, REMOTE_ADDR=ip)
+        assert gesperrt.status_code == 429, "Im selben Zaehlfenster muss der 6. Versuch abgewiesen werden"
+
+        # Eine volle Periode weiter: neues Fenster, neuer Zaehler.
+        ratelimit_enabled.advance(3600)
+
+        nach_fensterwechsel = client.post("/login/", {"username": "teststaff", "password": "wrong"}, REMOTE_ADDR=ip)
+        assert nach_fensterwechsel.status_code == 200, (
+            "Hinter der Fenstergrenze zaehlt django-ratelimit neu — genau dieser Effekt "
+            "liess den CI-Lauf 200 statt 429 sehen"
+        )
 
     def test_password_reset_post_rate_limited(self, client):
         """Nach 5 POST-Requests auf password-reset von derselben IP → 429

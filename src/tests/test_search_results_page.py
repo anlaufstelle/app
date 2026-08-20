@@ -391,16 +391,17 @@ class TestSearchResultCountsService:
 
 @pytest.mark.django_db
 class TestRatelimitStaysAtThirtyPerMinute:
-    """Entscheid 6.5 — die Grenze bleibt; der Test hält fest, WAS bei 31 passiert."""
+    """Entscheid 6.5 — die Grenze bleibt; der Test hält fest, WAS bei 31 passiert.
+
+    ``ratelimit_enabled`` (conftest) nagelt das Zaehlfenster fest. Hier ist das
+    besonders wichtig: das Limit laeuft pro **Minute**, die Fenstergrenze faellt
+    also sechzigmal haeufiger in die Schleife als bei den Stundenlimits
+    (Refs #1900).
+    """
 
     @pytest.fixture(autouse=True)
-    def _enable_ratelimit(self, settings):
-        from django.core.cache import cache
-
-        settings.RATELIMIT_ENABLE = True
-        cache.clear()
-        yield
-        cache.clear()
+    def _enable_ratelimit(self, ratelimit_enabled):
+        return ratelimit_enabled
 
     def test_thirty_first_search_in_a_minute_is_refused_with_429(self, client, staff_user):
         client.force_login(staff_user)
