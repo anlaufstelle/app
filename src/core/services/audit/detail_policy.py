@@ -114,6 +114,11 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "k_threshold": "k-Anonymitaets-Schwelle des Berichts",
     "passkeys_removed": "Zahl der beim MFA-Reset entfernten Passkeys",
     "facilities": "Zahl der in einem Cron-Lauf verarbeiteten Einrichtungen",
+    # Refs #1872: Ergebniszahlen des verify_audit_chain-Laufs. Beides sind reine
+    # Mengenangaben ueber die Kette selbst — keine Zeileninhalte, kein Bezug auf
+    # eine Person.
+    "chains": "Zahl der geprueften Ketten eines verify_audit_chain-Laufs",
+    "rows_checked": "Zahl der dabei geprueften AuditLog-Zeilen",
     "soft_deleted_events": "Zaehler des Retention-Laufs",
     "anonymized_clients": "Zaehler des Retention-Laufs",
     "anonymized_trash_clients": "Zaehler des Retention-Laufs",

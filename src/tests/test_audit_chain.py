@@ -304,8 +304,10 @@ class TestTamperDetection:
         """Refs #1872: ein Tamper-Fund darf die Betriebs-Ampel nicht gruen faerben."""
         AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).delete()
         audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
-        victim = audit_event(AuditLog.Action.CLIENT_UPDATE, user=staff_user, facility=facility, detail={"k": "v"})
-        _tamper(victim.pk, detail={"k": "tampered"})
+        # Refs #1944: der Platzhalter-Schluessel muss deklariert sein — die
+        # Laufzeitpruefung greift auch in Tests (AUDIT_DETAIL_STRICT).
+        victim = audit_event(AuditLog.Action.CLIENT_UPDATE, user=staff_user, facility=facility, detail={"count": 1})
+        _tamper(victim.pk, detail={"count": 99})
         with pytest.raises(SystemExit):
             call_command("verify_audit_chain")
         assert not AuditLog.objects.filter(action=AuditLog.Action.AUDIT_CHAIN_VERIFIED).exists()
