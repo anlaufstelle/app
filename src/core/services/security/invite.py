@@ -93,8 +93,10 @@ def send_invite_email(user, request=None) -> bool:
     """
     if not user.email:
         # Keine PII im Log: Nur user-pk, nicht username/email.
-        # extra={"user_pk": ...} landet im JsonFormatter-Record separat und
-        # wird vom PII-Scrubber nicht aus msg/args gezogen. Refs #637.
+        # extra={"user_pk": ...} steht seit Refs #1949 in
+        # ``core.logging.STRUCTURED_LOG_FIELDS`` und wird deshalb von BEIDEN
+        # Formattern ausgegeben (Text und JSON) — davor verwarfen beide das
+        # Feld still, die Zeile blieb ohne jede Zuordnung. Refs #637.
         logger.warning("Invite-Mail nicht versendet: User ohne E-Mail", extra={"user_pk": user.pk})
         return False
 
@@ -129,6 +131,7 @@ def send_invite_email(user, request=None) -> bool:
         fail_silently=False,
     )
     # Keine PII im Log-Message — user_pk in extra, kein username/email.
-    # Refs #637.
+    # Ausgegeben wird das Feld von beiden Formattern, weil es in
+    # ``core.logging.STRUCTURED_LOG_FIELDS`` steht (Refs #1949, Refs #637).
     logger.info("Invite-Mail versendet", extra={"user_pk": user.pk})
     return True

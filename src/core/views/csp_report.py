@@ -7,9 +7,13 @@ strukturiert als WARNING auf dem Logger ``security.csp``.
 **Der auswertbare Sink ist das Server-Log, nicht Sentry.** Die
 Sentry-``LoggingIntegration`` erzeugt per Default erst ab ERROR ein
 Event; eine WARNING wird nur zum Breadcrumb an einem spaeteren
-Fehler-Event, und ``settings/prod.py`` konfiguriert nichts Abweichendes.
-Wer Sentry als Detection-Sink will, muss das ``event_level`` fuer diesen
-Logger absenken — siehe Issue #1949.
+Fehler-Event, und ``settings/prod.py`` konfiguriert bewusst nichts
+Abweichendes (Refs #1949): ein ``event_level`` ist nicht auf
+``security.*`` beschraenkbar — die Integration patcht
+``logging.Logger.callHandlers`` global —, und der SDK-Handler hebt
+saemtliche ``extra``-Felder ins Event, hier also ``remote_addr``
+(Client-IP) und ``user_agent``. Herleitung: ``docs/security-notes.md``
+(§ CSP-Reporting) und ``docs/threat-model.md`` (TB1).
 
 Die Details stehen im logging-``extra``. Damit sie den Sink auch
 erreichen, kennen BEIDE Formatter (`core/logging.py`,

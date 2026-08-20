@@ -314,3 +314,38 @@ def test_formatters_survive_non_serialisable_structured_value():
 
     text = VerboseScrubbingFormatter(fmt="{message}", style="{").format(record)
     assert str(uid) in text
+
+
+def test_user_pk_erscheint_in_beiden_formattern():
+    """``user_pk`` ist die Log-Zuordnung fuer Invite-Ereignisse (Refs #1949).
+
+    ``core/services/security/invite.py`` loggt bewusst *nur* die User-PK statt
+    Username/Mailadresse. Fehlt das Feld in ``STRUCTURED_LOG_FIELDS``,
+    verwerfen beide Formatter es still — der Log-Eintrag bleibt uebrig, aber
+    ohne jede Zuordnung, und der Verzicht auf PII wird zum Totalverlust der
+    Information.
+    """
+    record = _make_record("Invite-Mail versendet", extra={"user_pk": 42})
+
+    data = json.loads(JsonFormatter().format(record))
+    assert data["user_pk"] == 42
+
+    text = VerboseScrubbingFormatter(fmt="{message}", style="{").format(record)
+    assert text == "Invite-Mail versendet user_pk=42"
+
+
+def test_user_pk_bleibt_als_id_unveraendert():
+    """Einordnung ins Scrubbing (Refs #1949): ``user_pk`` ist wie
+    ``user_id``/``facility_id`` eine interne Datensatz-Referenz ohne Freitext.
+
+    Der Scrubber greift nur Freitext-Muster (Mail, Passwort, Token) — eine PK
+    traegt keins davon und muss den Formatter unveraendert verlassen, sonst
+    waere die Zuordnung im Sink kaputt. Auch die UUID-Variante (custom User
+    mit UUID-PK) darf die Zeile nicht kosten.
+    """
+    import uuid
+
+    uid = uuid.UUID("12345678-1234-5678-1234-567812345678")
+    record = _make_record("Invite-Mail versendet", extra={"user_pk": uid})
+    data = json.loads(JsonFormatter().format(record))
+    assert data["user_pk"] == str(uid)

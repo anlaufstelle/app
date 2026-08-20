@@ -111,6 +111,51 @@ class TestSendInviteEmail:
         assert sent is False
         assert len(mail.outbox) == 0
 
+    def test_log_traegt_die_user_pk_bis_in_die_ausgabezeile(self, facility, caplog):
+        """Refs #1949: Der Invite-Log verzichtet bewusst auf Username/Mail und
+        setzt stattdessen ``user_pk`` ins logging-``extra``.
+
+        Der Kommentar an der Log-Stelle behauptete das seit #637, ohne dass das
+        Feld je in ``STRUCTURED_LOG_FIELDS`` stand — beide Formatter verwarfen
+        es also still, und der Eintrag war keinem Konto mehr zuzuordnen. Der
+        Test prueft deshalb nicht nur das Record-Attribut, sondern die
+        formatierte Zeile.
+        """
+        import json
+        import logging
+
+        from core.logging import JsonFormatter, VerboseScrubbingFormatter
+
+        user = User.objects.create_user(
+            username="logged",
+            email="logged@example.org",
+            facility=facility,
+        )
+        with caplog.at_level(logging.INFO, logger="core.services.security.invite"):
+            assert send_invite_email(user) is True
+        record = next(r for r in caplog.records if r.message == "Invite-Mail versendet")
+
+        assert json.loads(JsonFormatter().format(record))["user_pk"] == user.pk
+        text = VerboseScrubbingFormatter(fmt="{message}", style="{").format(record)
+        assert text == f"Invite-Mail versendet user_pk={user.pk}"
+
+    def test_log_ohne_mailadresse_traegt_die_user_pk(self, facility, caplog):
+        """Derselbe Kommentar steht ein zweites Mal am Warnpfad (Refs #1949)."""
+        import json
+        import logging
+
+        from core.logging import JsonFormatter
+
+        user = User.objects.create_user(
+            username="noemail-log",
+            email="",
+            facility=facility,
+        )
+        with caplog.at_level(logging.WARNING, logger="core.services.security.invite"):
+            assert send_invite_email(user) is False
+        record = next(r for r in caplog.records if r.message.startswith("Invite-Mail nicht versendet"))
+        assert json.loads(JsonFormatter().format(record))["user_pk"] == user.pk
+
 
 @pytest.mark.django_db
 class TestInviteConfirmView:

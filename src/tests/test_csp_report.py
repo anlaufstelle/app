@@ -409,3 +409,68 @@ class TestCSPReportOversizedBody:
         assert "csp_report_oversized_body" in line
         assert "Traceback" not in line
         assert "remote_addr=" in line
+
+
+@pytest.mark.django_db
+class TestCSPReportRateLimit:
+    """Refs #1949: Das Rate-Limit ``10/m`` pro IP war nirgends abgesichert.
+
+    Nach dem Violation-Cap aus #1943 ist es die verbleibende
+    *Mengen*-Begrenzung der unauthentifizierten Flaeche: der Cap deckelt die
+    Zeilen pro Request, das Limit die Requests pro Minute und IP. Die
+    Verdrahtung ist mehrteilig (``ratelimit``-Decorator, der IP-Resolver
+    ``client_ip_for_ratelimit`` aus ``RATELIMIT_IP_META_KEY``, und
+    ``handler403``, der ``Ratelimited`` auf 429 mappt) — faellt ein Teil aus,
+    antwortet der Endpoint still weiter mit 204.
+
+    Test- und E2E-Settings setzen ``RATELIMIT_ENABLE = False``; die Fixture
+    ``ratelimit_enabled`` (conftest) schaltet es an, leert den Cache und
+    nagelt das Zaehlfenster fest — ohne das koennte die Minutengrenze mitten
+    in die Schleife fallen (Refs #1900).
+    """
+
+    REPORT = {"csp-report": {"blocked-uri": "https://evil.example.com/x.js"}}
+
+    def _post(self, client, csp_url):
+        return client.post(
+            csp_url,
+            data=json.dumps(self.REPORT),
+            content_type="application/csp-report",
+        )
+
+    def test_elfter_report_pro_minute_wird_mit_429_abgewiesen(self, client, csp_url, ratelimit_enabled, caplog):
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            for _ in range(10):
+                assert self._post(client, csp_url).status_code == 204
+            assert self._post(client, csp_url).status_code == 429
+        # Der abgewiesene Request darf auch keine Log-Zeile mehr erzeugen —
+        # sonst waere das Limit als Flooding-Bremse wirkungslos.
+        assert len([r for r in caplog.records if r.message == "csp_violation"]) == 10
+
+    def test_neues_zaehlfenster_laesst_wieder_durch(self, client, csp_url, ratelimit_enabled):
+        """Gegenprobe: Das Limit sperrt zeitlich begrenzt, nicht dauerhaft."""
+        for _ in range(10):
+            assert self._post(client, csp_url).status_code == 204
+        assert self._post(client, csp_url).status_code == 429
+        ratelimit_enabled.advance(60)
+        assert self._post(client, csp_url).status_code == 204
+
+    @override_settings(TRUSTED_PROXY_HOPS=1)
+    def test_limit_zaehlt_pro_client_ip_nicht_global(self, client, csp_url, ratelimit_enabled):
+        """``RATELIMIT_IP_META_KEY`` → ``client_ip_for_ratelimit``: hinter dem
+        Reverse-Proxy traegt jeder Request dieselbe ``REMOTE_ADDR``. Ohne den
+        Resolver waere das EIN gemeinsamer Eimer fuers ganze Internet — eine
+        einzelne Quelle koennte alle anderen Melder aussperren.
+        """
+        for _ in range(10):
+            assert self._post_forwarded(client, csp_url, "203.0.113.10").status_code == 204
+        assert self._post_forwarded(client, csp_url, "203.0.113.10").status_code == 429
+        assert self._post_forwarded(client, csp_url, "203.0.113.99").status_code == 204
+
+    def _post_forwarded(self, client, csp_url, ip):
+        return client.post(
+            csp_url,
+            data=json.dumps(self.REPORT),
+            content_type="application/csp-report",
+            HTTP_X_FORWARDED_FOR=f"198.51.100.1, {ip}",
+        )

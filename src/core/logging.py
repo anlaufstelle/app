@@ -54,6 +54,13 @@ STRUCTURED_LOG_FIELDS = (
     "request_id",
     "user_id",
     "facility_id",
+    # Invite-Ereignisse (core/services/security/invite.py): Die dortigen
+    # Log-Zeilen verzichten bewusst auf Username/Mailadresse und tragen nur
+    # die User-PK. Ohne diesen Eintrag verwarfen beide Formatter sie still —
+    # der Verzicht auf PII wurde damit zum Totalverlust der Zuordnung
+    # (Refs #1949). Eine PK ist wie ``user_id``/``facility_id`` eine interne
+    # Datensatz-Referenz ohne Freitext und passiert den Scrub unveraendert.
+    "user_pk",
     # CSP-Violation-Reports (core/views/csp_report.py)
     "csp_violation",
     "csp_violations_total",
@@ -143,9 +150,10 @@ class JsonFormatter(logging.Formatter):
 
     Scrubbing läuft über ``message``, ``exception`` und die strukturierten
     Zusatzfelder aus ``STRUCTURED_LOG_FIELDS``. Die IDs (``user_id``,
-    ``facility_id``, ``request_id``) sind per Design PII-arm und vom Scrub
-    unberührt; die CSP-Report-Felder sind es nicht — sie tragen
-    fremdbestimmte URLs (Refs #1943).
+    ``facility_id``, ``request_id``, ``user_pk``) sind per Design PII-arm und
+    vom Scrub unberührt — sie referenzieren einen Datensatz, statt dessen
+    Inhalt zu tragen; die CSP-Report-Felder sind es nicht — sie tragen
+    fremdbestimmte URLs (Refs #1943, Refs #1949).
     """
 
     def format(self, record):
