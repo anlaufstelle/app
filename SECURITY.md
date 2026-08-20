@@ -15,16 +15,29 @@ Sicherheitsupdates werden für die folgende Version bereitgestellt:
 | `0.81.x` | Unterstützt (Pre-Release) |
 | `< 0.81` | Nicht unterstützt |
 
-Das Projekt befindet sich derzeit in einer Pre-Release-Phase. Sobald `1.0` veröffentlicht ist, werden mindestens die jeweils aktuelle und die vorherige Minor-Version mit Sicherheitsupdates versorgt.
+### Support- und End-of-Life-Regel
+
+Vor `1.0` gilt eine **regelbasierte** Zusage **ohne Kalenderfristen**:
+
+1. **Gepflegt wird ausschließlich die jeweils aktuelle Minor-Reihe** (`X.Y.x`). Sicherheitsfixes erscheinen als Patch-Release dieser Reihe.
+2. **Eine Minor-Reihe erreicht ihr End of Life, sobald die nächste erscheint.** Es gibt keine Backports in ältere Reihen — der Sicherheitsfix ist das Update auf die aktuelle Reihe.
+3. **Ältere Reihen** (`< X.Y`) erhalten keine Sicherheitsupdates, auch nicht auf Anfrage.
+4. **Kein zugesicherter Mindest-Support-Zeitraum.** Die Release-Kadenz ist vor `1.0` bewusst hoch und nicht planbar; ein festes End-of-Support-Datum je Minor wäre eine Zusage, die ein Vor-1.0-Projekt mit einem Maintainer nicht verlässlich halten kann. Lieber eine ehrliche Regel als eine Frist, die reißt.
+
+**Umstellung mit `1.0`:** Ab dem `1.0`-Release wird diese Regel durch **Datumsfristen** ersetzt — mindestens die aktuelle und die vorherige Minor-Version werden mit Sicherheitsupdates versorgt, und die Versionstabelle oben nennt je Reihe ein konkretes End-of-Support-Datum.
+
+> **Konsequenz für Betreiber:** Dem aktuellen Minor folgen. Ein Stand, der zwei Reihen zurückliegt, ist ohne weitere Ankündigung ungepatcht. Verbindliche Auskunft ist die Versionstabelle oben, nicht das Release-Datum.
+
+Einordnung dieser Regel gegenüber Art. 13(8) der EU-Cyberresilienz-Verordnung: [`docs/compliance/cra-einordnung.md`](docs/compliance/cra-einordnung.md).
 
 ## Schwachstellen melden
 
 **Sicherheitsmeldungen bitte NICHT als öffentliches GitHub-Issue eröffnen.** Öffentlich gemeldete Schwachstellen gefährden Nutzerdaten anderer Einrichtungen, bevor wir eine Korrektur ausliefern können.
 
-Bevorzugter Weg:
+Meldewege:
 
-1. **GitHub Security Advisory** (privat): [Neue Meldung erstellen](https://github.com/anlaufstelle/app/security/advisories/new)
-2. **E-Mail** an [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). Auf Wunsch stellen wir vor dem Austausch sensibler Details einen verschlüsselten Kanal bereit (PGP-Key auf Anfrage).
+1. **E-Mail** an [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app) — dieser Weg trägt immer. Auf Wunsch stellen wir vor dem Austausch sensibler Details einen verschlüsselten Kanal bereit (PGP-Key auf Anfrage).
+2. **GitHub Security Advisory** (privat): [Neue Meldung erstellen](https://github.com/anlaufstelle/app/security/advisories/new) — setzt voraus, dass „Private Vulnerability Reporting" auf `anlaufstelle/app` aktiviert ist. Führt der Link ins Leere oder zeigt kein Formular, nimm bitte den E-Mail-Weg; es geht dadurch nichts verloren.
 
 Bitte gib in deiner Meldung folgende Informationen an:
 
@@ -49,6 +62,17 @@ Anlaufstelle wird derzeit von einem Solo-Maintainer gepflegt (Verantwortliche, B
 | Veröffentlichung des Advisory | nach Patch + 7 Tage Schonfrist |
 
 Wenn ein Zielwert nicht eingehalten werden kann, kommunizieren wir das transparent — bei kritischen Funden zuerst.
+
+## Veröffentlichung von Advisories
+
+Behobene Schwachstellen werden **koordiniert veröffentlicht**, nicht stillschweigend gepatcht:
+
+1. **Bewertung** durch den Maintainer (bei Ausfall: die benannte Vertretung, [MAINTAINERS.md](MAINTAINERS.md)) mit CVSS-v3.1-Basis-Score und Einstufung kritisch/hoch/mittel/niedrig — Ergebnis geht an die meldende Person.
+2. **Entwurf** eines GitHub Security Advisory (GHSA) im Repository [`anlaufstelle/app`](https://github.com/anlaufstelle/app/security/advisories) mit betroffenen und gepatchten Versionen; bei kritisch/hoch wird über GitHub eine CVE-ID angefordert.
+3. **Fix** als Patch-Release der aktuellen Minor-Reihe (siehe Support-Regel oben).
+4. **Veröffentlichung** des Advisory nach Auslieferung des Patches plus 7 Tagen Schonfrist (siehe SLA-Tabelle oben), zusammen mit einem `Security`-Eintrag in [CHANGELOG.md](CHANGELOG.md), der die GHSA-/CVE-Nummer nennt.
+
+Der operative Ablauf inklusive Zuständigkeiten und der zusätzlichen behördlichen Meldefristen bei **aktiv ausgenutzten** Schwachstellen steht in [`docs/ops-runbook.md` § 6.5c](docs/ops-runbook.md) und [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md).
 
 ## Anerkennung (Hall of Fame)
 
@@ -82,16 +106,29 @@ Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports
 | `0.81.x` | Supported (pre-release) |
 | `< 0.81` | Not supported |
 
-After the `1.0` release we will support at least the current and the previous minor version with security updates.
+### Support and end-of-life rule
+
+Before `1.0` the commitment is **rule-based, without calendar deadlines**:
+
+1. **Only the current minor series** (`X.Y.x`) **is maintained.** Security fixes ship as a patch release of that series.
+2. **A minor series reaches end of life as soon as the next one is released.** There are no backports to older series — the security fix *is* the update to the current series.
+3. **Older series** (`< X.Y`) receive no security updates, not even on request.
+4. **No guaranteed minimum support period.** Before `1.0` the release cadence is deliberately high and not predictable; a fixed end-of-support date per minor would be a promise a pre-1.0 project with a single maintainer cannot reliably keep. An honest rule beats a deadline that breaks.
+
+**Switch at `1.0`:** From the `1.0` release on, this rule is replaced by **date-based deadlines** — at least the current and the previous minor version receive security updates, and the version table above states a concrete end-of-support date per series.
+
+> **Consequence for operators:** follow the current minor. An installation two series behind is unpatched without further notice. The binding statement is the version table above, not the release date.
+
+How this rule relates to Art. 13(8) of the EU Cyber Resilience Act: [`docs/compliance/cra-einordnung.md`](docs/compliance/cra-einordnung.md) (German).
 
 ## Reporting a Vulnerability
 
 **Please do NOT open a public GitHub issue for security reports.** Public disclosure exposes user data in other installations before we can ship a fix.
 
-Preferred channels:
+Reporting channels:
 
-1. **GitHub Security Advisory** (private): [Create a new report](https://github.com/anlaufstelle/app/security/advisories/new)
-2. **E-mail** to [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). On request we will set up an encrypted channel before any sensitive details are exchanged (PGP key available on request).
+1. **E-mail** to [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app) — this channel always works. On request we will set up an encrypted channel before any sensitive details are exchanged (PGP key available on request).
+2. **GitHub Security Advisory** (private): [Create a new report](https://github.com/anlaufstelle/app/security/advisories/new) — requires "Private vulnerability reporting" to be enabled on `anlaufstelle/app`. If the link leads nowhere or shows no form, please use e-mail instead; nothing is lost that way.
 
 Please include:
 
@@ -116,6 +153,17 @@ Anlaufstelle is currently maintained by a single person (maintainers, bus factor
 | Public advisory | patch + 7 days |
 
 If a target cannot be met we will communicate transparently — critical findings first.
+
+## Publishing advisories
+
+Fixed vulnerabilities are **disclosed in a coordinated way**, not patched silently:
+
+1. **Assessment** by the maintainer (or, if unavailable, the designated deputy, [MAINTAINERS.md](MAINTAINERS.md)) with a CVSS v3.1 base score and a critical/high/medium/low rating — the result is sent to the reporter.
+2. **Draft** of a GitHub Security Advisory (GHSA) in the [`anlaufstelle/app`](https://github.com/anlaufstelle/app/security/advisories) repository listing affected and patched versions; for critical/high we request a CVE ID through GitHub.
+3. **Fix** as a patch release of the current minor series (see the support rule above).
+4. **Publication** of the advisory after the patch ships plus a 7-day grace period (see the SLA table above), together with a `Security` entry in [CHANGELOG.md](CHANGELOG.md) naming the GHSA/CVE ID.
+
+The operational procedure including responsibilities and the additional regulatory reporting deadlines for **actively exploited** vulnerabilities lives in [`docs/ops-runbook.md` § 6.5c](docs/ops-runbook.md) and [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md) (both German).
 
 ## Hall of Fame
 

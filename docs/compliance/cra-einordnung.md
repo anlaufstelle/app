@@ -1,6 +1,6 @@
 # CRA-Einordnung — Cyberresilienz-Verordnung (EU) 2024/2847
 
-**Stand:** 2026-06-28 · **Quelle:** [Issue #1077](https://github.com/anlaufstelle/app/issues/1077) · **Ausgangsbefund:** [Repository-Ausblick #1074](https://github.com/anlaufstelle/app/issues/1074) (Horizont 1) · **Pflege:** Maintainer
+**Stand:** 2026-08-20 · **Quelle:** [Issue #1077](https://github.com/anlaufstelle/app/issues/1077), [Issue #1895](https://github.com/anlaufstelle/app/issues/1895) · **Ausgangsbefund:** [Repository-Ausblick #1074](https://github.com/anlaufstelle/app/issues/1074) (Horizont 1) · **Pflege:** Maintainer
 
 > **Kein Rechtsrat.** Dieses Memo dokumentiert die interne Einschätzung des Projekts zur CRA. Es stellt — analog zum [README-Haftungsausschluss](../../README.md#haftungsausschluss) und zur [LICENSE](../../LICENSE) (§15–16) — **keine Rechtsberatung** dar. Maßgeblich sind der Verordnungstext, etwaige Durchführungsrechtsakte und die Leitlinien/FAQ der EU-Kommission und ENISA; bei einer Scope-Bejahung oder einem Betriebsmodell-Wechsel ist fachanwaltliche Prüfung angezeigt.
 
@@ -37,6 +37,8 @@ Der Graubereich ist die Abgrenzung **Dienstleistungen um die Software herum** (B
 | **Heute** | AGPL-FOSS, kostenlos; kostenpflichtige Beratung/Schulung/Anpassung; kostenlose, zeitlich begrenzte Demo | **außerhalb des Scope** (FOSS außerhalb Geschäftstätigkeit), allenfalls **Verwalter-Light-Regime (Art. 24)** mit anteiligen Meldepflichten |
 | **Künftig denkbar** | kostenpflichtiges **Hosting/SaaS-Angebot**, Produktverkauf oder kommerzialisierte Demo | **volle Hersteller-Pflichten** (Anhang I, Konformitätsbewertung, CE, definierter Support-Zeitraum) **ab 11.12.2027** |
 
+> **Risiko-Notiz (Refs #1895):** Die zweite Zeile ist kein Gedankenspiel. [`docs/fachkonzept-anlaufstelle.md` § 12 „Geschäftsmodell-Optionen"](../fachkonzept-anlaufstelle.md) nennt ein gehostetes Angebot zu 20–50 €/Monat je Einrichtung ausdrücklich als Finanzierungsweg. Wird diese Option gezogen, kippt die Einordnung aus § 1.4: aus „außerhalb des Scope" werden volle Hersteller-Pflichten (Konformitätsbewertung, CE, verbindlicher Support-Zeitraum, Datumsfristen in `SECURITY.md`). Die Entscheidung über das Betriebsmodell ist damit zugleich eine Compliance-Entscheidung und gehört **vor** der Umsetzung hierher zurück, nicht danach. Wiedervorlage-Trigger: § 4.
+
 ### 1.4 Wahrscheinliches Ergebnis
 
 **„Außerhalb des Scope bzw. geringe Pflichten."** Begründung:
@@ -58,19 +60,19 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 | Anhang-I-Bezug | Baustein | Stand | Folge-Maßnahme (Issue-Vorschlag) |
 |---|---|---|---|
 | Teil I (sichere Voreinstellungen) | **Secure by Default** — Threat-Model, Settings-Guards, kein Default-Passwort (`create_super_admin` interaktiv) | ✅ vorhanden | — (dokumentiert in [threat-model.md](../threat-model.md), [security-notes.md](../security-notes.md)) |
-| Teil II Nr. 1 (SBOM) | **SBOM** — CycloneDX via `pip-audit` | ⚠️ teilweise — nur CI-Artefakt (90 Tage), **nicht** im Release veröffentlicht | **SBOM als Release-Artefakt**: `sbom.json` (CycloneDX) an das GitHub-Release anhängen ([`release.yml`](../../.github/workflows/release.yml)) |
+| Teil II Nr. 1 (SBOM) | **SBOM** — CycloneDX 1.6, offline aus den Lock-Files des gebauten Trees | ✅ vorhanden — der Release-Build erzeugt `sbom-vX.Y.Z.json` als **dauerhaftes** Artefakt neben den Release-Notes (zusätzlich zum 90-Tage-CI-Artefakt aus [`test.yml`](../../.github/workflows/test.yml)) | offen nur der Anhang ans GitHub-Release — der Cut endet bis `1.0` bei Stage ([ADR-011](../adr/011-three-repo-release-pipeline.md) Nachtrag), bis dahin liegt das Artefakt beim Maintainer ([ops-runbook § 8.4](../ops-runbook.md)) |
 | Teil II Nr. 2 (Schwachstellen unverzüglich beheben) | **Security-Update-Prozess** — Dependabot (pip/npm/Actions), `pip-audit`, CodeQL, zügige Patch-Releases | ✅ vorhanden | — ([`test.yml`](../../.github/workflows/test.yml), [`codeql.yml`](../../.github/workflows/codeql.yml)) |
 | Teil II Nr. 3 (regelmäßige Tests) | **Test-/Review-Pipeline** — CI, CodeQL, `pip-audit`, Mutation-/Perf-Nightly | ✅ vorhanden ||
-| Teil II Nr. 4 (Sicherheitsupdates verbreiten, Info über behobene Lücken) | **Advisory-Veröffentlichung** — CHANGELOG/Hall-of-Fame; GitHub Security Advisories (GHSA) zur Veröffentlichung **ungenutzt** | ⚠️ teilweise | **GHSA aktivieren + interner Advisory-Prozess**: GHSA-Entwurf je Fix, CVE-Anforderung, dokumentierter Ablauf „wer meldet was wohin" |
+| Teil II Nr. 4 (Sicherheitsupdates verbreiten, Info über behobene Lücken) | **Advisory-Veröffentlichung** — CHANGELOG/Hall-of-Fame; GHSA-Prozess (Eingang → Bewertung → Entwurf → Fix → Veröffentlichung) dokumentiert | ⚠️ teilweise — der Prozess steht ([SECURITY.md § Veröffentlichung von Advisories](../../SECURITY.md), [ops-runbook § 6.5c](../ops-runbook.md)), aber **„Private vulnerability reporting" ist auf `anlaufstelle/app` deaktiviert** (Repo-Admin-Schritt, per API verifiziert) | PVR auf `anlaufstelle/app` einschalten; bis dahin trägt allein der E-Mail-Meldeweg |
 | Teil II Nr. 5 (CVD-Policy) | **Coordinated Vulnerability Disclosure** | ✅ vorhanden | — ([SECURITY.md](../../SECURITY.md)) |
 | Teil II Nr. 6 (Meldekontakt) | **Kontaktadresse** für Schwachstellenmeldungen | ✅ vorhanden | — ([SECURITY.md](../../SECURITY.md)) |
-| Art. 13(8) (Support-Zeitraum) | **Definierter Support-Zeitraum pro Version** — SECURITY.md führt eine Versionstabelle, aber **keine** End-of-Support-Fristen | ❌ fehlt | **Support-Zeitraum-Policy**: pro Minor-Version Support-/EOL-Daten in [SECURITY.md](../../SECURITY.md) (post-1.0: aktuelle + vorherige Minor) |
+| Art. 13(8) (Support-Zeitraum) | **Definierter Support-Zeitraum pro Version** — regelbasierte Support-/EOL-Zusage in [SECURITY.md](../../SECURITY.md) (DE + EN): nur die aktuelle Minor-Reihe wird gepflegt, EOL der Vorgängerreihe mit Erscheinen der nächsten, keine Backports | ✅ vorhanden (regelbasiert) | Umstellung auf **Datumsfristen je Minor** beim `1.0`-Cut — vor `1.0` wäre ein festes Datum eine Zusage ohne Deckung (§ 1.4 ordnet das Projekt ohnehin außerhalb des Scope ein) |
 
-**Abgeleitete Folge-Issues (mindestens):**
+**Stand der abgeleiteten Folge-Maßnahmen** (#1895, 2026-08-20):
 
-1. **Support-Zeitraum-Policy** — definierte Support-/EOL-Fristen je Minor-Version in `SECURITY.md`.
-2. **SBOM als Release-Artefakt** — CycloneDX-SBOM an jedes GitHub-Release anhängen.
-3. **GitHub Security Advisories aktivieren** — internen Melde-/Advisory-Prozess dokumentieren (GHSA-Entwurf je Fix, Verantwortlicher, Veröffentlichungs-Schonfrist analog SECURITY.md-SLA).
+1. **Support-/EOL-Regel** — ✅ in `SECURITY.md` (DE + EN), regelbasiert statt datumsbasiert; die Umstellung auf Kalenderfristen hängt am `1.0`-Cut.
+2. **SBOM als Release-Artefakt** — ✅ dauerhaftes CycloneDX-Artefakt je getaggtem Release-Build; der Anhang ans GitHub-Release folgt mit `1.0` (vorher existiert keine Release-Page).
+3. **Advisory-Prozess** — ✅ dokumentiert (`SECURITY.md` + `ops-runbook` § 6.5c); **offen:** „Private vulnerability reporting" auf `anlaufstelle/app` einschalten — ein Repo-Admin-Schritt, der nicht aus dem Dev-Repo heraus ausführbar ist.
 
 ---
 
@@ -100,5 +102,5 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 |---|---|
 | **11.09.2026** — Meldepflichten (Art. 14) anwendbar | Meldeprozess (§3) operativ scharf schalten; Verantwortlichen **und Vertretung** final benennen (in [MAINTAINERS.md](../../MAINTAINERS.md) eintragen, Signing-Key-/Secret-Escrow-Trennung klären); CSIRT-Kontakt/Plattform-Zugang klären |
 | **11.12.2027** — Hauptpflichten (Anhang I) anwendbar | Scope erneut prüfen; bei Scope-Bejahung Konformitätsbewertung, CE, definierter Support-Zeitraum und SBOM-/Advisory-Lücken (§2) schließen |
-| **Betriebsmodell-Änderung** (jederzeit) | Neubewertung bei kostenpflichtigem **Hosting-/SaaS-Angebot**, Produktverkauf oder Kommerzialisierung der Demo-Instanz (#971) — dann volle Hersteller-Pflichten ab 11.12.2027 denkbar |
+| **Betriebsmodell-Änderung** (jederzeit) | Neubewertung bei kostenpflichtigem **Hosting-/SaaS-Angebot**, Produktverkauf oder Kommerzialisierung der Demo-Instanz (#971) — dann volle Hersteller-Pflichten ab 11.12.2027 denkbar. **Konkret benannt**, nicht hypothetisch: [`docs/fachkonzept-anlaufstelle.md` § 12](../fachkonzept-anlaufstelle.md) führt gehostetes Anlaufstelle für 20–50 €/Monat je Einrichtung als Finanzierungsoption — genau der Fall aus § 1.3 Zeile 2 |
 | **Kommissions-/ENISA-Guidance final** | FOSS-Leitlinien/FAQ in §1 einarbeiten; ggf. Einschätzung extern validieren (Fachanwalt bei Bedarf) |
