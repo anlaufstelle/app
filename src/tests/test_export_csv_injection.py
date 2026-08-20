@@ -45,6 +45,31 @@ class TestSanitizeCsvCellUnit:
     def test_sanitize_csv_cell(self, raw, expected):
         assert _sanitize_csv_cell(raw) == expected
 
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            # Fuehrendes Leerzeichen/NBSP/BOM/Zero-Width vor dem Formelzeichen:
+            # Tabellenkalkulationen verwerfen diese Zeichen beim Import und
+            # werten die Zelle danach als Formel (Refs #1945).
+            (" =1+1", "' =1+1"),
+            ("  =1+1", "'  =1+1"),
+            ("\xa0=1+1", "'\xa0=1+1"),
+            ("\ufeff=cmd|'/c calc'!A1", "'\ufeff=cmd|'/c calc'!A1"),
+            ("\u200b@SUM(A1:A10)", "'\u200b@SUM(A1:A10)"),
+            ("\u202f-1234", "'\u202f-1234"),
+            ("\u3000+1+2", "'\u3000+1+2"),
+            (" \t\u200b=1+1", "' \t\u200b=1+1"),
+            # Negativfaelle — fuehrendes Rauschen ohne Formelzeichen bleibt
+            # unangetastet, ebenso reine Leerzeichen-Zellen.
+            (" Maria", " Maria"),
+            ("\xa0Maria", "\xa0Maria"),
+            ("   ", "   "),
+            ("\ufeff", "\ufeff"),
+        ],
+    )
+    def test_sanitize_csv_cell_normalisiert_fuehrendes_rauschen(self, raw, expected):
+        assert _sanitize_csv_cell(raw) == expected
+
 
 @pytest.fixture
 def normal_doc_type(facility):
@@ -274,3 +299,28 @@ class TestCsvHeaderNeutralizesInjection:
                         f"Header-/Zellen-Injection: {cell!r} (Zeile: {row})"
                     )
         assert "'=SUM(A1:A10)" in full_csv
+
+    def test_field_name_mit_fuehrendem_leerzeichen_wird_neutralisiert(self, facility, admin_user, normal_doc_type):
+        """Refs #1945: Ein Leerzeichen vor dem ``=`` darf den Header-Schutz
+        nicht aushebeln — Excel verwirft es und wertet die Formel aus."""
+        import csv
+        import io
+
+        FieldTemplate.objects.create(
+            facility=facility,
+            name=" =SUM(A1:A10)",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        full_csv = "".join(
+            export_events_csv(
+                facility, date.today() - timedelta(days=1), date.today() + timedelta(days=1), user=admin_user
+            )
+        )
+        reader = csv.reader(io.StringIO(full_csv))
+        for row in reader:
+            for cell in row:
+                if cell.lstrip("\ufeff\u200b \t\r\n\xa0"):
+                    assert cell.lstrip("\ufeff\u200b \t\r\n\xa0")[0] not in ("=", "+", "-", "@"), (
+                        f"Header-/Zellen-Injection: {cell!r} (Zeile: {row})"
+                    )
+        assert "' =SUM(A1:A10)" in full_csv

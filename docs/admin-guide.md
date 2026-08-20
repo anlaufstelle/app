@@ -15,6 +15,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
  - 2.8 [Schnell-Vorlagen (Quick-Templates)](#28-schnell-vorlagen-quick-templates)
  - 2.9 [Encrypted File Vault & Virus-Scanning](#29-encrypted-file-vault--virus-scanning)
  - 2.10 [Offline-Modus & Streetwork (M6A)](#210-offline-modus--streetwork-m6a)
+ - 2.11 [CSV-Import und -Export: Formelschutz](#211-csv-import-und--export-formelschutz)
 3. [Backup und Wiederherstellung](#3-backup-und-wiederherstellung)
 4. [Updates](#4-updates)
 5. [Monitoring](#5-monitoring)
@@ -883,6 +884,20 @@ Quelle: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/mai
 
 - **Stufe 2 (Read-Cache):** Ausgewählte Personen-Dossiers werden vor dem Streetwork-Einsatz lokal verschlüsselt gecacht, damit sie offline eingesehen werden können.
 - **Stufe 3 (Offline-Edit):** Ereignisse und Notizen können offline erfasst werden und synchronisieren beim nächsten Online-Gang. Konflikte zwischen Offline-Edit und zwischenzeitlicher Server-Änderung werden per **Side-by-Side-Diff** dem Nutzer zur manuellen Auflösung präsentiert.
+
+### 2.11 CSV-Import und -Export: Formelschutz
+
+Alle CSV-Exporte (Statistik-Export, Datensatz-Berichte, Audit-Log-Export) neutralisieren **Formel-Injection**: Eine Zelle, die mit `=`, `+`, `-`, `@`, Tabulator oder Zeilenumbruch beginnt, würde Excel oder LibreOffice beim Öffnen der Datei als **Formel** ausführen. Solche Zellen bekommen deshalb ein führendes Apostroph (`'`) — die Tabellenkalkulation zeigt den Originalwert an, führt ihn aber nicht aus. Refs #719.
+
+Seit #1945 greift der Schutz auch, wenn vor dem Formelzeichen **unsichtbare Zeichen** stehen — Leerzeichen, geschütztes Leerzeichen (NBSP), Byte-Order-Mark oder Zero-Width-Zeichen. Tabellenkalkulationen verwerfen diese Zeichen beim Import und werten die Zelle danach trotzdem aus; `" =1+1"` wird deshalb ebenfalls apostrophiert. Der Originalwert bleibt vollständig erhalten, es wird nichts abgeschnitten. Das gilt für Werte- **und** Kopfzeilen — der Name einer Feldvorlage ist Freitext der Anwendungsbetreuung und damit derselbe Vektor.
+
+> **Wichtig — eigene Exporte sind nicht round-trip-fest:** Der CSV-Import entfernt das Schutz-Apostroph **nicht** wieder. Importieren Sie eine zuvor exportierte Datei erneut, wird aus dem Wert `=Text` dauerhaft `'=Text`. Das ist kein Fehler und keine Fehlermeldung im Importlauf, sondern eine bewusste Grenze: Die Import-Engine vergleicht die **rohe** Dateizeile mit ihren Fehlermeldungen, um zu verhindern, dass Zellinhalte (potenziell Klientendaten) im Ergebnisprotokoll eines Laufs landen. Würde sie vorher entapostrophieren, träfe dieser Abgleich nicht mehr und ein Zellwert könnte ins Protokoll durchrutschen — Datenschutz geht hier vor Bequemlichkeit.
+>
+> **Praxis:** Nutzen Sie den CSV-Import für die **Übernahme aus Fremdsystemen**, nicht als Sicherung-und-Rückspielweg für eigene Daten. Für Letzteres ist das Datenbank-Backup (siehe [§ 3](#3-backup-und-wiederherstellung)) der richtige Weg. Müssen Sie einen exportierten Wert doch wieder einlesen, entfernen Sie das führende `'` vorher in der Tabellenkalkulation.
+
+Die Berichts-Exporte in **JSON und XML** sanitisieren bewusst nicht — dort gibt es keinen Formel-Kontext, und CSV-Escapes würden die maschinenlesbaren Werte verfälschen.
+
+Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/system/export.py) (`_sanitize_csv_cell`), [`src/core/services/import_engine.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/import_engine.py).
 
 ---
 

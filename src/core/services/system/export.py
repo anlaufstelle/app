@@ -146,17 +146,47 @@ def _resolve_field_value(value, ft):
 # fuehrende ``'`` an, fuehrt ihn aber nicht aus.
 _CSV_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
 
+# Fuehrendes Rauschen, das Tabellenkalkulationen beim CSV-Import verwerfen,
+# bevor sie den Rest der Zelle deuten (Refs #1945): ``" =1+1"`` landet in Excel
+# als ``=1+1`` und wird ausgewertet, obwohl das erste Zeichen kein OWASP-Praefix
+# ist. Die Pruefung laeuft deshalb zusaetzlich auf dem entrauschten Wert.
+_CSV_LEADING_NOISE = (
+    " \t\r\n\v\f"  # ASCII-Whitespace
+    "\xa0\u202f"  # geschuetztes und schmales geschuetztes Leerzeichen
+    "\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u205f\u3000"  # typografische Leerzeichen
+    "\u200b\u200c\u200d\u2060\ufeff"  # Zero-Width-Zeichen und BOM
+)
+
 
 def _sanitize_csv_cell(value):
     """Neutralisiere Formula-Injection in einer einzelnen CSV-Zelle.
 
     ``None`` → ``""``, alles andere wird zu str konvertiert. Beginnt der
-    Wert mit einem der OWASP-Praefixe, wird ein Leading-``'`` vorangestellt.
+    Wert — roh oder nach dem Entfernen von fuehrendem Whitespace/Zero-Width
+    (:data:`_CSV_LEADING_NOISE`) — mit einem der OWASP-Praefixe, wird ein
+    Leading-``'`` vorangestellt. Beide Pruefungen sind noetig: das Entrauschen
+    allein wuerde ``"\\tTab-Smuggling"`` durchlassen, weil Tab selbst ein
+    Praefix ist. Der Originalwert bleibt dabei unveraendert erhalten — die
+    Zelle wird praefixiert, nicht getrimmt.
+
+    **Bewusste Grenze — keine Symmetrie beim Import (Refs #1945):** Der
+    CSV-Import entfernt das Escape-``'`` nicht wieder. Ein exportierter und
+    erneut importierter Wert ``=Text`` bleibt also dauerhaft ``'=Text``. Das ist
+    Absicht: ``core.services.import_engine._pii_safe_message`` vergleicht die
+    **rohe** Dateizeile gegen die Fehlermeldung, um Zellwerte aus
+    ``ImportJob.result_json`` fernzuhalten. Wuerde der Import vorher
+    entapostrophieren, traefe der Fail-Safe-Vergleich nicht mehr und ein
+    Zellwert (potenziell PII) landete in ``result_json`` — die Invariante ist
+    in ``src/tests/_residue_expectations.py`` fuer ``core_importjob.result_json``
+    gepinnt. Der Round-Trip-Drift ist dokumentiert (Admin-Handbuch § 2.11) und
+    kein Sicherheitsproblem: ``'`` ist selbst kein Injection-Praefix, der Wert
+    schaukelt sich ueber mehrere Runden nicht auf.
     """
     if value is None:
         return ""
     text = str(value)
-    if text.startswith(_CSV_INJECTION_PREFIXES):
+    probe = text.lstrip(_CSV_LEADING_NOISE)
+    if text.startswith(_CSV_INJECTION_PREFIXES) or probe.startswith(_CSV_INJECTION_PREFIXES):
         return "'" + text
     return text
 
