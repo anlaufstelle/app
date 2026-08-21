@@ -76,6 +76,6 @@
 | Zeitstrom | Timeline stream | The chronological flow of all events, unfiltered or filtered by time period, person, or document type. The core metaphor of documentation in Anlaufstelle. |
 
 <!-- translation-source: docs/glossar.md -->
-<!-- translation-version: v0.81.0 -->
+<!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-11 -->
 <!-- source-hash: 2ab3b8008eeb6e04acb86bce34c6545319389c89 -->

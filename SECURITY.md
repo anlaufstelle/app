@@ -12,8 +12,8 @@ Sicherheitsupdates werden für die folgende Version bereitgestellt:
 
 | Version | Status |
 |-----------|------------------------------|
-| `0.81.x` | Unterstützt (Pre-Release) |
-| `< 0.81` | Nicht unterstützt |
+| `0.82.x` | Unterstützt (Pre-Release) |
+| `< 0.82` | Nicht unterstützt |
 
 ### Support- und End-of-Life-Regel
 
@@ -103,8 +103,8 @@ Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports
 
 | Version | Status |
 |-----------|------------------------------|
-| `0.81.x` | Supported (pre-release) |
-| `< 0.81` | Not supported |
+| `0.82.x` | Supported (pre-release) |
+| `< 0.82` | Not supported |
 
 ### Support and end-of-life rule
 

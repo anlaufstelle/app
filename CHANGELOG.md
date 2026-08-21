@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.82.0] - 2026-08-21
+
 ### Added
 
 - **Der Systembereich zeigt jetzt auch die Audit-Ketten-Prüfung** (#1872) — Die tägliche Integritätsprüfung der Audit-Kette meldete ihren Erfolg bisher ausschließlich über den Exit-Code an den Cron-Dienst; ob sie jemals lief, war im System nirgends ablesbar. Ein vollständig grüner Lauf hinterlässt jetzt einen Lauf-Marker, den die Karte „Hintergrundjobs" unter `/system/` und das Compliance-Dashboard als eigene Ampelzeile anzeigen. Ein Fund von Manipulationsspuren schreibt bewusst **keinen** Marker — die Zeile läuft dann auf überfällig, statt Erfolg vorzutäuschen. Bewusst nur Anzeige und kein Prüf-Knopf: ein vollständiger Kettendurchlauf im laufenden Aufruf würde mit wachsender Kette in den Zeitüberlauf des Webservers laufen.
@@ -21,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Mehrfach vergebene Kategorien im Änderungsprotokoll fallen beim Einchecken auf** (#1975) — Werden Einträge nacheinander in den offenen Abschnitt gehängt, entstehen leicht mehrere Überschriften derselben Kategorie; wer den Abschnitt später liest, muss die Änderungen einer Kategorie im ganzen Block zusammensuchen. Die Prüfung, die ohnehin bei jedem Testlauf mitläuft, meldet das jetzt mitsamt allen Fundstellen und dem Hinweis, unter welche Überschrift zusammengeführt werden soll. Veröffentlichte Abschnitte bleiben unberührt — sie sind nicht mehr änderbar.
 - **Interne Kürzel im Änderungsprotokoll fallen jetzt beim Einchecken auf** (#1974) — Ein Eintrag, der ein internes Prüfkürzel im Klartext trug, blockierte bisher erst den Release-Bau — also nach einem vollständigen Neubau über alle Änderungsschritte. Die Prüfung des offenen Protokoll-Abschnitts, die ohnehin bei jedem Testlauf mitläuft, meldet solche Kürzel jetzt sofort und nennt die betroffene Zeile. Sie liest dieselbe Musterliste, die auch der Release-Bau verwendet, statt eine zweite zu pflegen.
 - **Der Schutz gegen unsichtbare Schäden an YAML-Dateien greift im Release-Bau jetzt wirklich** (#1973) — Die mit #1950 eingeführte Struktur-Prüfung lief unbemerkt ins Leere, weil dem verwendeten Python die YAML-Bibliothek fehlte; sie meldete das pro verarbeitetem Commit einmal und ging damit im Bau-Protokoll unter. Der Bau prüft die Voraussetzung jetzt einmal vorab und bricht ab, statt scheinbar grün durchzulaufen.
 - **Der Produktions-Stack findet die Backups wieder** (#1872) — Das Backup-Skript legt seine verschlüsselten Sicherungen auf dem Host ab, der Anwendungs-Container sah dieses Verzeichnis aber nie: In `docker-compose.prod.yml` fehlte der Mount und in `.env.example` die zugehörige Variable. Die Backup-Zeile im Systembereich meldete deshalb dauerhaft „Kein Backup gefunden" und `last_backup_age_hours` in `/health/` blieb leer — unabhängig davon, wie zuverlässig die nächtliche Sicherung lief. Die Ablage wird jetzt schreibgeschützt hereingereicht (`BACKUP_HOST_DIR` → `BACKUP_DIR`); die Entwicklungs- und Demo-Stacks hatten diesen Mount bereits.
