@@ -27,6 +27,11 @@ Der Guard ist AST-basiert und betrachtet ausschließlich *Pfad-Ausdrücke*
 (``SCRIPT = REPO_ROOT / "scripts" / "x.py"``) sind harmlos; erst der *Zugriff*
 (``read_text``, ``exec_module``, ``subprocess`` …) auf Import-Ebene ist das
 Problem.
+
+Die Kehrseite des Skip-Musters faengt ``test_skip_guarded_scripts_exist_in_the_repo``
+ab (Refs #1976): im ``mutants/``-Tree ist ein fehlendes Script legitim, im
+echten Repo nicht — dort deckte der Skip ein geloeschtes oder umbenanntes
+Script zu und liesse ``make ci`` gruen.
 """
 
 from __future__ import annotations
@@ -102,13 +107,16 @@ def _rel_component(expr: ast.AST) -> str | None:
     return None
 
 
-def _denotes_outside_path(expr: ast.AST) -> bool:
+def _normalised_rel(expr: ast.AST) -> str | None:
+    """POSIX-normalisierter Relativpfad eines Pfad-Ausdrucks, sonst ``None``."""
     rel = _rel_path(expr)
     if rel is None:
-        return False
-    rel = rel.replace("\\", "/").strip("/")
-    if not rel:
-        return False
+        return None
+    return rel.replace("\\", "/").strip("/") or None
+
+
+def _rel_is_outside(rel: str) -> bool:
+    """Liegt ``rel`` ausserhalb dessen, was mutmut nach ``mutants/`` kopiert?"""
     # Innerhalb eines kopierten Baums …
     under = any(rel == p or rel.startswith(p + "/") for p in _COPIED_PREFIXES)
     # … oder ein Vorfahr-Verzeichnis eines kopierten Baums (z.B. ``src`` selbst,
@@ -118,14 +126,42 @@ def _denotes_outside_path(expr: ast.AST) -> bool:
     return not (under or ancestor)
 
 
+def _denotes_outside_path(expr: ast.AST) -> bool:
+    rel = _normalised_rel(expr)
+    return rel is not None and _rel_is_outside(rel)
+
+
+def _module_level_paths(tree: ast.Module) -> dict[str, str]:
+    """Modul-Level-Namen → Relativpfad, an den sie gebunden sind."""
+    bound: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        rel = _normalised_rel(node.value)
+        if rel is None:
+            continue
+        for tgt in node.targets:
+            if isinstance(tgt, ast.Name):
+                bound[tgt.id] = rel
+    return bound
+
+
 def _outside_names(tree: ast.Module) -> set[str]:
-    """Modul-Level-Namen, die an einen gestrippten Pfad gebunden sind."""
+    """Modul-Level-Namen, die an einen gestrippten Pfad gebunden sind.
+
+    Zaehlt **jede** Zuweisung, nicht nur die letzte: wird derselbe Name erst
+    nach aussen und danach nach innen gebunden, bleibt er gefaehrlich. Deshalb
+    laeuft die Funktion selbst ueber den Baum, statt ``_module_level_paths``
+    zu nutzen — dessen Dict haelt je Name nur die letzte Bindung.
+    """
     names: set[str] = set()
     for node in tree.body:
-        if isinstance(node, ast.Assign) and _denotes_outside_path(node.value):
-            for tgt in node.targets:
-                if isinstance(tgt, ast.Name):
-                    names.add(tgt.id)
+        if not isinstance(node, ast.Assign):
+            continue
+        rel = _normalised_rel(node.value)
+        if rel is None or not _rel_is_outside(rel):
+            continue
+        names.update(tgt.id for tgt in node.targets if isinstance(tgt, ast.Name))
     return names
 
 
@@ -258,6 +294,41 @@ def find_import_time_outside_access(source: str, filename: str = "<test>") -> li
     return findings
 
 
+def _guards_a_module_level_skip(stmt: ast.If) -> bool:
+    """Steht im Rumpf des ``if`` ein ``pytest.skip(..., allow_module_level=True)``?"""
+    for node in ast.walk(stmt):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "skip"):
+            continue
+        for kw in node.keywords:
+            if kw.arg == "allow_module_level" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                return True
+    return False
+
+
+def find_module_level_skip_paths(source: str, filename: str = "<test>") -> set[str]:
+    """Repo-relative Pfade, deren Fehlen das Modul auf Modulebene wegskippt.
+
+    Kehrseite des oben erlaubten Kapselungs-Musters ``if not X.exists():
+    pytest.skip(..., allow_module_level=True)``: der Skip macht ein fehlendes
+    Ziel zu einem gruenen Lauf. Erkannt wird der Pfad sowohl ueber einen zuvor
+    gebundenen Modul-Level-Namen als auch inline im ``if``-Kopf.
+    """
+    tree = ast.parse(source, filename=filename)
+    bound = _module_level_paths(tree)
+    guarded: set[str] = set()
+    for stmt in tree.body:
+        if not isinstance(stmt, ast.If) or not _guards_a_module_level_skip(stmt):
+            continue
+        for node in ast.walk(stmt.test):
+            if isinstance(node, ast.Name) and node.id in bound:
+                guarded.add(bound[node.id])
+            elif isinstance(node, ast.expr):
+                rel = _normalised_rel(node)
+                if rel is not None:
+                    guarded.add(rel)
+    return guarded
+
+
 # ── Guard gegen den echten ``src/tests/``-Baum ──────────────────────────────
 def test_no_shipped_test_accesses_stripped_paths_at_import_time() -> None:
     """Kein ``src/tests/**/test_*.py`` darf auf Import-Ebene ungekapselt auf
@@ -272,6 +343,39 @@ def test_no_shipped_test_accesses_stripped_paths_at_import_time() -> None:
         "Import-Zeit-Zugriff auf mutmut-gestrippte Pfade gefunden — kapsele ihn mit\n"
         "  if not <PFAD>.exists(): pytest.skip(..., allow_module_level=True)\n"
         "oder einem try/except (Muster: test_translation_source_hash_guard.py):\n  " + "\n  ".join(offenders)
+    )
+
+
+# ── Kehrseite des Skips: das Ziel muss es im Dev-Tree wirklich geben ────────
+def test_skip_guarded_scripts_exist_in_the_repo() -> None:
+    """Ein Modul-Level-Skip darf ein *verschwundenes* Script nicht zudecken.
+
+    Das Kapselungs-Muster oben macht aus einem fehlenden Pfad bewusst ein
+    ``skipped`` — im ``mutants/``-Tree ist der Pfad ja legitim nicht da. Im
+    echten Repo ist er das nicht: wird ein Script geloescht oder umbenannt,
+    skippt sein Test still, ``make ci`` bleibt gruen, und der Ausfall faellt
+    erst dort auf, wo das Script wirklich gebraucht wird — bei
+    ``scripts/e2e_slice.py`` erst im naechsten E2E-Lauf der CI, weil der
+    Workflow den Schnitt von dort holt (Refs #1976).
+
+    Geprueft wird nur der **ausgelieferte** ``scripts/``-Baum: ``scripts/dev/``
+    (wie ``dev-ops/`` und ``docs/dev/``) strippt der Release-Build, dort ist
+    das Fehlen im Public-/Stage-Tree der Normalfall und der Skip genau richtig.
+    """
+    # Der dev-only Zweig des scripts/-Baums, dynamisch zusammengesetzt: als
+    # einzelnes String-Literal wuerde der Release-Test-Guard genau diese Datei
+    # als ungegatete Referenz auf einen gestrippten Pfad melden (Refs #1137).
+    dev_only = "scripts/" + "dev/"
+    missing: list[str] = []
+    for path in sorted(TESTS_DIR.rglob("test_*.py")):
+        for rel in sorted(find_module_level_skip_paths(path.read_text(encoding="utf-8"), str(path))):
+            if not rel.startswith("scripts/") or rel.startswith(dev_only):
+                continue
+            if not (REPO_ROOT / rel).exists():
+                missing.append(f"{path.relative_to(REPO_ROOT)} -> {rel}")
+    assert not missing, (
+        "Modul-Level-Skip auf ein Script, das es nicht (mehr) gibt — der Test skippt still,\n"
+        "statt den Ausfall zu melden. Script wiederherstellen oder den Test mitziehen:\n  " + "\n  ".join(missing)
     )
 
 
@@ -322,6 +426,15 @@ _GOOD_COPIED_TREE = (
     'DATA = (REPO_ROOT / "src" / "core" / "models.py").read_text()\n'
 )
 _GOOD_URL_LITERAL = 'import re\nAPI = "/offline/api/sync"\nPAT = re.compile(r"^[A-Za-z0-9_-/]{5}$")\n'
+# Derselbe Name zeigt erst nach aussen, dann nach innen. Wer nur die letzte
+# Bindung liest, haelt ihn faelschlich fuer ungefaehrlich.
+_BAD_REBOUND = (
+    "from pathlib import Path\n"
+    "REPO_ROOT = Path(__file__).resolve().parents[2]\n"
+    'SCRIPT = REPO_ROOT / "scripts" / "x.py"\n'
+    "DATA = SCRIPT.read_text()\n"
+    'SCRIPT = REPO_ROOT / "src" / "core" / "models.py"\n'
+)
 
 
 class TestDetectorContract:
@@ -347,3 +460,24 @@ class TestDetectorContract:
 
     def test_bare_string_literals_are_not_paths(self) -> None:
         assert find_import_time_outside_access(_GOOD_URL_LITERAL) == []
+
+    def test_later_rebinding_does_not_hide_an_outside_access(self) -> None:
+        """Eine spaetere Bindung nach innen entschaerft den Zugriff nicht.
+
+        Der Zugriff ist zur Import-Zeit schon passiert; nur die letzte Bindung
+        zu lesen waere ein Schlupfloch.
+        """
+        assert find_import_time_outside_access(_BAD_REBOUND)
+
+
+class TestSkipGuardCompleteness:
+    """Pinnt den Detektor der Skip-Kehrseite (Refs #1976)."""
+
+    def test_finds_the_path_a_module_level_skip_guards(self) -> None:
+        assert find_module_level_skip_paths(_GOOD_SKIP) == {"scripts/x.py"}
+
+    def test_try_capsule_is_not_a_module_level_skip(self) -> None:
+        assert find_module_level_skip_paths(_GOOD_TRY) == set()
+
+    def test_module_without_any_skip_yields_nothing(self) -> None:
+        assert find_module_level_skip_paths(_GOOD_LAZY_IN_FN) == set()

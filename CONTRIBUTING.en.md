@@ -242,7 +242,8 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make test` | Run unit and integration tests (excluding E2E) |
 | `make test-js` | Run the Vitest suite (JS, `npm test`) deterministically/non-watch — part of `make ci` (Refs #1932) |
 | `make test-e2e` | Run end-to-end tests with Playwright |
-| `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787) |
+| `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787); the split comes from `scripts/e2e_slice.py` — the same key the CI matrix uses (Refs #1976) |
+| `make test-e2e-slice-locked SLICES=4 INDEX=3` | Re-run a single slice of the CI split locally, under the CI lock (a single slice also occupies port 8844 and `anlaufstelle_e2e`; unlocked as `make test-e2e-slice`, only when no other E2E run is active) — the number comes from the job name (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` shows the distribution (Refs #1976) |
 | `make check` | Run Django system checks and verify migration consistency |
 | `make i18n-check` | Full `.po` reconciliation against the source tree (new/removed/semantically changed msgids) — part of `make ci` (Refs #1933) |
 | `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
@@ -778,5 +779,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-20 -->
-<!-- source-hash: d98c768e74f4573d8bc47461818d891b5ded9b67 -->
+<!-- translation-date: 2026-08-21 -->
+<!-- source-hash: 413bb56a4da9f9916f541448f53118277dee407c -->

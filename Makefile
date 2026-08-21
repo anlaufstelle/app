@@ -19,7 +19,7 @@ CI_LOCK ?= /work/anlaufstelle-ci.lock
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta
 
 .PHONY: i18n-check i18n-update
 
@@ -177,27 +177,50 @@ test-e2e: tailwind-build
 # Zwei-Haelften-Fallback fuer RAM-limitierte Hosts (Refs #1787): zwei serielle
 # pytest-Sessions statt einer, jede mit eigenem Server+Seed und eigenem
 # Speicher-Budget. Greift, wenn der Voll-Lauf trotz Browser-Recycling
-# (modul-scoped ``browser``-Fixture) noch ins Host-OOM laeuft. Die Dateiliste
-# wird dynamisch ermittelt — neue Testdateien landen ohne Pflege in einer der
-# Haelften. Das Rezept ist EINE Shell (``; \``), damit ``set -e`` ueber alle
-# Zeilen gilt und die zweite Haelfte nicht den Exit-Code der ersten maskiert.
+# (modul-scoped ``browser``-Fixture) noch ins Host-OOM laeuft.
 #
-# Die drei Leer-Guards sind kein Zierrat: ``pytest`` OHNE Dateiargumente
-# sammelt die **gesamte** Suite ein. Eine leere zweite Haelfte (eine einzige
-# E2E-Datei, verschobenes Verzeichnis, umbenanntes Namensschema) liefe damit
-# still als zweiter Voll-Lauf durch — genau die Situation, gegen die dieses
+# Den Schnitt liefert seit Refs #1976 scripts/e2e_slice.py -- derselbe
+# Splitter, den die CI-Matrix (.github/workflows/e2e.yml) fuer ihre vier
+# Scheiben benutzt. Damit haben lokaler Fallback und CI denselben
+# Aufteilungsschluessel: gleiche Datei-Gruppierung, gleiche Reihenfolge-
+# Abhaengigkeiten, und eine rot gewordene CI-Scheibe laesst sich hier 1:1
+# nachstellen (`make test-e2e-slice-locked SLICES=4 INDEX=3`). Der frueher an
+# dieser Stelle gerechnete Schnitt "erste/zweite Haelfte der sortierten Liste"
+# war zwar deterministisch, aber schief -- 335 gegen 492 Tests (+47 %), weil
+# Dateinamen nichts ueber die Zahl der Tests darin sagen.
+#
+# Das Rezept ist EINE Shell (``; \``), damit ``set -e`` ueber alle Zeilen gilt
+# und die zweite Haelfte nicht den Exit-Code der ersten maskiert.
+#
+# Die Leer-Guards sind kein Zierrat: ``pytest`` OHNE Dateiargumente sammelt die
+# **gesamte** Suite ein. Ein fehlgeschlagener oder leerer Schnitt liefe damit
+# still als doppelter Voll-Lauf durch -- genau die Situation, gegen die dieses
 # Target gebaut ist, nur unbemerkt und mit doppelter Laufzeit.
 test-e2e-halves: tailwind-build
 	set -e; \
-	files=$$(ls src/tests/e2e/test_*.py | sort); \
-	[ -n "$$files" ] || { echo "test-e2e-halves: keine E2E-Testdateien gefunden"; exit 1; }; \
-	n=$$(echo "$$files" | wc -l); half=$$(( (n + 1) / 2 )); \
-	h1=$$(echo "$$files" | head -n $$half); \
-	h2=$$(echo "$$files" | tail -n +$$(( half + 1 ))); \
+	h1=$$($(PYTHON) scripts/e2e_slice.py --slices 2 --index 1); \
+	h2=$$($(PYTHON) scripts/e2e_slice.py --slices 2 --index 2); \
 	[ -n "$$h1" ] || { echo "test-e2e-halves: erste Haelfte leer"; exit 1; }; \
 	[ -n "$$h2" ] || { echo "test-e2e-halves: zweite Haelfte leer"; exit 1; }; \
 	$(PYTHON) -m pytest $$h1 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v; \
 	$(PYTHON) -m pytest $$h2 -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
+
+# Eine einzelne Scheibe des CI-Schnitts lokal nachstellen (Refs #1976):
+#
+#     make test-e2e-slice-locked SLICES=4 INDEX=3
+#
+# SLICES ist per Default die Scheibenzahl der CI-Matrix, damit die Nummer aus
+# dem roten Job-Namen ("E2E-Scheibe 3") ohne Umrechnung passt. Welche Dateien
+# in welcher Scheibe liegen, zeigt `python scripts/e2e_slice.py --slices 4
+# --summary`. Wie bei den Haelften gilt: kein Dateiargument = Voll-Lauf, daher
+# der Leer-Guard.
+SLICES ?= 4
+test-e2e-slice: tailwind-build
+	set -e; \
+	[ -n "$(INDEX)" ] || { echo "test-e2e-slice: INDEX=<1..$(SLICES)> angeben"; exit 1; }; \
+	files=$$($(PYTHON) scripts/e2e_slice.py --slices $(SLICES) --index $(INDEX)); \
+	[ -n "$$files" ] || { echo "test-e2e-slice: leerer Schnitt"; exit 1; }; \
+	$(PYTHON) -m pytest $$files -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
 test-focus:
 	$(PYTHON) -m pytest -m "not e2e" -x $(T)
@@ -286,6 +309,9 @@ test-e2e-locked:
 
 test-e2e-halves-locked:
 	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) test-e2e-halves
+
+test-e2e-slice-locked:
+	flock -w $(CI_LOCK_TIMEOUT) $(CI_LOCK) $(MAKE) test-e2e-slice SLICES=$(SLICES) INDEX=$(INDEX)
 
 # Release-/Checkpoint-Modus (Refs #1953): identisches `ci`, aber der
 # Unit-Testlauf traegt die Coverage-Messung gleich mit (test-parallel-cov).
