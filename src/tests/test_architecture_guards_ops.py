@@ -1,5 +1,6 @@
 """Architecture-Guards — dev-ops-Wartungsskripte (Refs #1047)."""
 
+import os
 import re
 import shutil
 import subprocess
@@ -659,3 +660,312 @@ class TestProdBackupDirVisibility:
         text = self._ENV_EXAMPLE.read_text(encoding="utf-8")
         assert "BACKUP_HOST_DIR=" in text, ".env.example muss BACKUP_HOST_DIR dokumentieren (Refs #1872)."
         assert "BACKUP_DIR=" in text, ".env.example muss BACKUP_DIR dokumentieren (Refs #1872)."
+
+
+class TestDemoDeployTreeSync:
+    """Refs #1971: ``deploy-demo.sh`` bringt den Serverbaum in einen definierten Zustand.
+
+    Bis #1971 lief der Sync per ``tar``-over-ssh. ``tar x`` überschreibt
+    vorhandene Dateien, **löscht aber nie welche**: alles, was eine frühere
+    Version hatte und die neue nicht mehr, blieb auf dem Server liegen. Beim
+    Rückbau der Demo auf ``v0.80.0`` überlebte so das in ``v0.81.0`` neu
+    angelegte Paket ``src/core/urls/`` neben dem wiederhergestellten Modul
+    ``src/core/urls.py`` — Python bevorzugt Pakete gegenüber gleichnamigen
+    Modulen, also lief die v0.81-URL-Konfiguration gegen v0.80-Views und der
+    Deploy brach mit ``ImportError`` ab. Dieselbe Fehlklasse trifft verwaiste
+    Migrationen (anderer Migrationsgraph als lokal und in der CI), Templates,
+    Static-Dateien und Management-Commands — beliebig lange unsichtbar, bis ein
+    gelöschter Dateiname wieder relevant wird.
+
+    Der Skriptkopf begründete den tar-Weg mit „Der Server hat KEIN rsync". Das
+    ist widerlegt (``command -v rsync`` auf dem Demo-Host -> ``/usr/bin/rsync``),
+    damit fällt die Sonderrolle weg: der Sync läuft wie in ``deploy-dev.sh``
+    über ``rsync -a --delete``.
+
+    ``--delete`` macht den Zielpfad sicherheitsrelevant — es räumt auf dem
+    Server alles weg, was nicht im Build-Kontext steht. Ein leerer, relativer,
+    zu flacher oder auf ein Systemverzeichnis zeigender ``REMOTE_DIR`` würde
+    damit fremde Bäume ausräumen. Deshalb der Zielpfad-Guard, und deshalb ist
+    ein abweichender ``REMOTE_DIR`` nur zusammen mit dem reinen Sync-Lauf
+    erlaubt (der Stack-Teil ist über den Compose-Projektnamen und die
+    systemd-Unit fest an ``/opt/anlaufstelle`` gebunden).
+    """
+
+    _SCRIPT = Path("dev-ops/deploy/deploy-demo.sh")
+
+    def _flat(self) -> str:
+        # ``dev-ops/`` ist im Public-/Stage-Snapshot ausgeschlossen
+        # (build-release.sh) — voller Pfad in der Skip-Zeile, weil
+        # verify_release_test_guard den ausgeschlossenen Prefix
+        # (dev-ops/deploy/deploy-demo.sh) auf der Gate-Zeile verlangt (Refs #1137).
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)")
+        return _flat_script(self._SCRIPT)
+
+    def _rsync_call(self) -> str:
+        flat = self._flat()
+        # Zeilenanfang-verankert: die Fehlermeldung des Zielpfad-Guards nennt
+        # "rsync --delete" in Prosa — gemeint ist hier der echte Aufruf.
+        call = re.search(r"^rsync\s[^\n]*", flat, re.MULTILINE)
+        assert call is not None, (
+            "deploy-demo.sh muss den Build-Kontext per rsync syncen (Refs #1971) — "
+            "der tar-Weg loescht auf dem Server nie etwas."
+        )
+        return call.group(0)
+
+    def test_sync_deletes_orphans_on_the_server(self) -> None:
+        assert "--delete" in self._rsync_call(), (
+            "Der Build-Kontext-Sync muss '--delete' setzen (Refs #1971) — sonst "
+            "ueberleben geloeschte Dateien den Deploy und beschatten den neuen "
+            "Stand (Vorfall: src/core/urls/ vs. src/core/urls.py)."
+        )
+
+    def test_no_tar_over_ssh_sync_left(self) -> None:
+        flat = self._flat()
+        assert "tar czf" not in flat and "tar xzf" not in flat, (
+            "Der tar-over-ssh-Sync muss vollstaendig ersetzt sein (Refs #1971) — "
+            "'tar x' ueberschreibt zwar, loescht aber nie."
+        )
+
+    def test_sync_preserves_server_side_env_file(self) -> None:
+        call = self._rsync_call()
+        assert re.search(r"--exclude=/?\.env\.demo(\s|$)", call), (
+            "Der Sync muss .env.demo ausschliessen (Refs #1971) — die Datei liegt "
+            "nur auf dem Server; ohne Exclude wuerde '--delete' sie entfernen."
+        )
+
+    def test_server_side_env_file_is_only_rewritten_on_a_version_change(self) -> None:
+        """Akzeptanzkriterium 2 zu #1971 verlangt eine unveraenderte Pruefsumme der
+        server-seitigen Env-Datei ueber den Deploy hinweg. Der Sync selbst fasst sie
+        nicht an (Exclude), der Stack-Teil patcht aber ``SOURCE_CODE_VERSION``
+        (Refs #1812) und schrieb sie damit bei JEDEM Lauf neu — auch wenn der Wert
+        schon stimmte. Steht der Zielwert bereits drin, darf die Datei nicht
+        angefasst werden; dann ist das AK fuer den Regelfall (denselben Stand erneut
+        deployen) woertlich pruefbar und nur der Versionswechsel bleibt als bewusste,
+        einzeilige Abweichung uebrig.
+        """
+        guard = re.search(r"grep[^\n]*SOURCE_CODE_VERSION=\$\{APP_VERSION\}[^\n]*", self._flat())
+        assert guard is not None, (
+            "Der SOURCE_CODE_VERSION-Patch muss kurzschliessen, wenn der Zielwert "
+            "schon in der Env-Datei steht (Refs #1971 AK2) — sonst aendert jeder "
+            "Deploy die Pruefsumme, obwohl sich inhaltlich nichts aendert."
+        )
+
+    def test_remote_dir_is_overridable(self) -> None:
+        assert 'REMOTE_DIR="${REMOTE_DIR:-' in self._flat(), (
+            "REMOTE_DIR muss ueberschreibbar sein (Refs #1971), damit der Sync "
+            "gegen ein Scratch-Verzeichnis geprueft werden kann, ohne die "
+            "laufende Demo anzufassen (Policy #1955)."
+        )
+
+    # --- Verhaltens-Guards: Skript real starten, ssh/rsync gestubbt ---------
+
+    @staticmethod
+    def _stub_env(tmp_path: Path, remote_dir: str | None, sync_only: str | None) -> tuple[dict[str, str], Path]:
+        stub_dir = tmp_path / "bin"
+        stub_dir.mkdir(exist_ok=True)
+        argv_log = tmp_path / "rsync.argv"
+        (stub_dir / "rsync").write_text(
+            '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$RSYNC_ARGV_LOG"\n', encoding="utf-8"
+        )
+        # ssh protokolliert seine Argumente mit: nur so laesst sich pruefen, ob
+        # ein Lauf beim reinen Sync stehen geblieben ist oder den Stack-Teil
+        # (``bash -se`` mit dem Build/Migrate/Up-Heredoc) angefasst hat.
+        (stub_dir / "ssh").write_text(
+            '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$SSH_ARGV_LOG"\nexit 0\n', encoding="utf-8"
+        )
+        # curl gestubbt, damit der Voll-Deploy-Pfad im Test keinen Netzzugriff
+        # versucht (und ein Fehlschlag dort nicht als Guard-Wirkung durchgeht).
+        (stub_dir / "curl").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        for stub in ("rsync", "ssh", "curl"):
+            (stub_dir / stub).chmod(0o700)
+        env = {
+            "PATH": f"{stub_dir}:{os.environ.get('PATH', '')}",
+            "HOME": str(tmp_path),
+            # Fake-Host + gestubbtes ssh/rsync: der Test darf unter keinen
+            # Umstaenden einen echten Deploy ausloesen.
+            "DEMO_HOST": "stub@invalid.test",
+            "APP_VERSION": "v0.0.0-guardtest",
+            "RSYNC_ARGV_LOG": str(argv_log),
+            "SSH_ARGV_LOG": str(tmp_path / "ssh.argv"),
+        }
+        if remote_dir is not None:
+            env["REMOTE_DIR"] = remote_dir
+        if sync_only is not None:
+            env["DEPLOY_SYNC_ONLY"] = sync_only
+        return env, argv_log
+
+    def _run_script(
+        self,
+        tmp_path: Path,
+        remote_dir: str | None,
+        *,
+        sync_only: str | None = "1",
+        cwd: Path | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], Path]:
+        script = self._SCRIPT.resolve() if self._SCRIPT.exists() else None
+        if script is None:
+            pytest.skip("dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #1971)")
+        bash = shutil.which("bash")
+        if bash is None:
+            pytest.skip("bash nicht verfuegbar — Verhaltens-Guard nicht ausfuehrbar")
+        env, argv_log = self._stub_env(tmp_path, remote_dir, sync_only)
+        result = subprocess.run(  # noqa: S603 — fester bash-Pfad, Repo-eigenes Skript, ssh/rsync gestubbt
+            [bash, str(script)],
+            env=env,
+            cwd=str(cwd) if cwd is not None else None,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        return result, argv_log
+
+    @pytest.mark.parametrize(
+        "unsafe",
+        [
+            "relativ/pfad",
+            "/",
+            "/opt",
+            "/opt/anlaufstelle/",
+            "/opt/../etc/anlaufstelle",
+            "/etc/anlaufstelle",
+            "/var/lib/anlaufstelle",
+            # Kein Systemverzeichnis, trotzdem toedlich: siehe
+            # test_guard_rejects_the_service_users_home_itself.
+            "/home",
+            "/home/anlaufstelle",
+            # Versteckte Verzeichnisse sind nie ein Deploy-Baum, aber oft ein
+            # Zustandsspeicher (SSH-Keys, Credentials, Caches).
+            "/home/anlaufstelle/.ssh",
+            # Ausserhalb der Allowlist: der Guard laesst nur den Deploy-Baum
+            # und Scratch-Verzeichnisse unterhalb eines Home-Verzeichnisses zu.
+            "/srv/anlaufstelle",
+            "/mnt/backups/anlaufstelle",
+        ],
+    )
+    def test_guard_rejects_unsafe_remote_dir(self, tmp_path: Path, unsafe: str) -> None:
+        result, argv_log = self._run_script(tmp_path, unsafe)
+        assert result.returncode != 0, (
+            f"REMOTE_DIR={unsafe!r} muss abgewiesen werden (Refs #1971) — "
+            "'rsync --delete' auf diesen Pfad raeumt fremde Verzeichnisse aus."
+        )
+        assert "REMOTE_DIR" in result.stderr, f"Fehlermeldung muss REMOTE_DIR nennen, war: {result.stderr!r}"
+        assert not argv_log.exists(), f"rsync lief trotz unzulaessigem REMOTE_DIR={unsafe!r}"
+
+    def test_guard_rejects_the_service_users_home_itself(self, tmp_path: Path) -> None:
+        """Das Home des Service-Users ist absolut, zweisegmentig, sonderzeichenfrei
+        und kein Systemverzeichnis — eine Denylist bekannter Tabu-Pfade laesst es
+        also durch. Ein ``rsync --delete`` dorthin loescht aber alles im Home, was
+        nicht im Build-Kontext steht, darunter ``.ssh/authorized_keys``: genau der
+        Schluessel, den das Server-Bootstrap dort ablegt. Ein einziger Lauf mit
+        vergessenem letzten Pfadsegment nimmt damit den Deploy-Zugang zum Server
+        mit. Der Guard muss deshalb als Allowlist arbeiten (fail-closed), nicht
+        als Aufzaehlung der Faelle, an die jemand gedacht hat.
+        """
+        result, argv_log = self._run_script(tmp_path, "/home/anlaufstelle")
+        assert result.returncode != 0, (
+            "REMOTE_DIR='/home/anlaufstelle' muss abgewiesen werden (Refs #1971) — "
+            "der Sync wuerde das Home des Service-Users ausraeumen."
+        )
+        assert not argv_log.exists(), "rsync lief mit dem Home-Verzeichnis als Ziel"
+
+    def test_sync_targets_the_overridden_remote_dir(self, tmp_path: Path) -> None:
+        result, argv_log = self._run_script(tmp_path, "/home/anlaufstelle/deploy-selftest")
+        assert result.returncode == 0, f"Sync-Lauf gescheitert: {result.stderr!r}"
+        argv = argv_log.read_text(encoding="utf-8").splitlines()
+        assert "--delete" in argv, f"rsync ohne --delete aufgerufen: {argv!r}"
+        assert argv[-1] == "stub@invalid.test:/home/anlaufstelle/deploy-selftest/", (
+            f"rsync-Ziel folgt REMOTE_DIR nicht: {argv!r}"
+        )
+        assert any(arg.startswith("--exclude=") and arg.endswith(".env.demo") for arg in argv), (
+            f".env.demo fehlt in den rsync-Excludes: {argv!r}"
+        )
+
+    def test_non_default_remote_dir_does_not_touch_the_stack(self, tmp_path: Path) -> None:
+        """Ein abweichender REMOTE_DIR ohne reinen Sync-Lauf muss abbrechen: der
+        Stack-Teil (Build/Migrate/Up/Reset-Timer) ist ueber den aus dem
+        Verzeichnis-Basename abgeleiteten Compose-Projektnamen und die
+        systemd-Unit fest an ``/opt/anlaufstelle`` gebunden — ein Lauf aus einem
+        anderen Verzeichnis erzeugt einen zweiten Stack mit neuen Volumes."""
+        result, argv_log = self._run_script(tmp_path, "/home/anlaufstelle/deploy-selftest", sync_only=None)
+        assert result.returncode != 0, "abweichender REMOTE_DIR ohne Sync-Only-Lauf muss abbrechen (Refs #1971)"
+        assert "DEPLOY_SYNC_ONLY" in result.stderr, (
+            f"Die Meldung muss den erlaubten Sync-Only-Lauf nennen, war: {result.stderr!r}"
+        )
+        assert not argv_log.exists(), "rsync lief, obwohl der Lauf abgewiesen werden musste"
+
+    @staticmethod
+    def _ssh_calls(tmp_path: Path) -> list[str]:
+        log = tmp_path / "ssh.argv"
+        return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+    @pytest.mark.parametrize("spelling", ["1", "true", "TRUE", "yes", "on"])
+    def test_sync_only_honours_common_boolean_spellings(self, tmp_path: Path, spelling: str) -> None:
+        """Der Schalter darf nicht fail-open sein: verglich er hart gegen ``1``,
+        fiel jede andere uebliche Schreibweise still in den vollen Deploy-Pfad —
+        wer ``DEPLOY_SYNC_ONLY=true`` setzt, um nur den Sync zu pruefen, baute
+        stattdessen das Image, migrierte die Demo-DB und erstellte den Stack neu.
+        Alle anderen Guards hier sind fail-closed; dieser muss es auch sein.
+        """
+        result, argv_log = self._run_script(tmp_path, None, sync_only=spelling)
+        assert result.returncode == 0, f"Sync-Lauf mit DEPLOY_SYNC_ONLY={spelling!r} gescheitert: {result.stderr!r}"
+        assert argv_log.exists(), f"rsync lief nicht (DEPLOY_SYNC_ONLY={spelling!r})"
+        assert not any("bash -se" in call for call in self._ssh_calls(tmp_path)), (
+            f"DEPLOY_SYNC_ONLY={spelling!r} hat den Stack-Teil ausgeloest — der Schalter "
+            "darf nicht nur das Literal '1' kennen (Refs #1971)."
+        )
+
+    def test_sync_only_rejects_an_unrecognised_value(self, tmp_path: Path) -> None:
+        """Ein Wert, den das Skript nicht als Boolean deuten kann, ist ein Tippfehler
+        oder ein Missverstaendnis — beides darf nicht in einen vollen Deploy kippen."""
+        result, argv_log = self._run_script(tmp_path, None, sync_only="vielleicht")
+        assert result.returncode != 0, "unklarer DEPLOY_SYNC_ONLY-Wert muss abbrechen (Refs #1971)"
+        assert "DEPLOY_SYNC_ONLY" in result.stderr, (
+            f"Fehlermeldung muss DEPLOY_SYNC_ONLY nennen, war: {result.stderr!r}"
+        )
+        assert not argv_log.exists(), "rsync lief trotz unklarem DEPLOY_SYNC_ONLY-Wert"
+
+    def test_refuses_to_sync_from_a_foreign_working_directory(self, tmp_path: Path) -> None:
+        """Quelle wie Ziel sind bei ``--delete`` sicherheitsrelevant: aus einem
+        fremden Arbeitsverzeichnis gestartet wuerde der Serverbaum durch dessen
+        Inhalt ERSETZT statt aktualisiert."""
+        foreign = tmp_path / "fremdes-verzeichnis"
+        foreign.mkdir()
+        result, argv_log = self._run_script(tmp_path, "/home/anlaufstelle/deploy-selftest", cwd=foreign)
+        assert result.returncode != 0, "Start ausserhalb des Repo-Roots muss abbrechen (Refs #1971)"
+        # Bewusst ohne den Namen der Compose-Datei in der Assertion: der
+        # Release-Snapshot strippt sie, und verify_release_test_guard verbietet
+        # ungegatete Literale ausgeschlossener Pfade in ausgelieferten Tests.
+        assert "Repo-Root" in result.stderr, f"Die Meldung muss auf den Repo-Root verweisen, war: {result.stderr!r}"
+        assert not argv_log.exists(), "rsync lief aus einem fremden Arbeitsverzeichnis"
+
+
+class TestBootstrapInstallsSyncDependency:
+    """Refs #1971: Der Build-Kontext geht per ``rsync`` an dev und demo — ohne
+    Fallback. Auf einem Debian-Minimal-Image ist ``rsync`` nicht vorinstalliert;
+    fehlt es, bricht der erste Deploy nach einem Server-Neuaufbau mit
+    ``rsync: command not found`` ab (Exit 127 unter ``set -e``), bevor
+    irgendetwas uebertragen ist. Der tar-Weg, der bis #1971 ohne Zusatzpaket
+    auskam, ist bewusst weg — also muss das Server-Bootstrap das Paket
+    mitbringen. Der laufende Demo-Host hat rsync zufaellig schon (haendisch
+    nachinstalliert), der naechste Neuaufbau haette es nicht.
+    """
+
+    _SCRIPT = Path("dev-ops/deploy/bootstrap.sh")
+
+    def test_apt_package_list_contains_rsync(self) -> None:
+        # ``dev-ops/`` ist im Public-/Stage-Snapshot ausgeschlossen — voller Pfad
+        # in der Skip-Zeile, weil verify_release_test_guard den ausgeschlossenen
+        # Prefix (dev-ops/deploy/bootstrap.sh) auf der Gate-Zeile verlangt
+        # (Refs #1137).
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #1971)")
+        flat = _flat_script(self._SCRIPT)
+        installs = re.findall(r"apt-get install[^\n]*", flat)
+        assert installs, "kein 'apt-get install' im Server-Bootstrap gefunden"
+        assert any(re.search(r"(?<![\w-])rsync(?![\w-])", call) for call in installs), (
+            "Das Server-Bootstrap muss 'rsync' mitinstallieren (Refs #1971) — "
+            "die Deploy-Skripte syncen den Build-Kontext ausschliesslich damit, "
+            "und ein frisch aufgesetzter Server hat es nicht."
+        )
