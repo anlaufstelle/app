@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Dateianhänge beim Bearbeiten blockieren nicht mehr die übrige Einrichtung** (#1956) — Wurde beim Bearbeiten einer Person oder eines Falls eine Datei angehängt, liefen Virenprüfung und Verschlüsselung innerhalb derselben Datenbank-Transaktion, die auch den Protokolleintrag der Änderung schreibt. Die zugehörige Sperre je Einrichtung fällt erst mit dem Abschluss der Transaktion — bis dahin musste jede andere protokollpflichtige Aktion derselben Einrichtung warten, im ungünstigsten Fall die volle Zeitgrenze des Virenscanners je Datei. Prüfung und Verschlüsselung laufen jetzt wie beim Anlegen bereits **vor** der Transaktion; in ihr entstehen nur noch die Datenbankzeilen. Ein abgelehnter Upload hinterlässt dabei weiterhin keine verschlüsselten Restdateien, und Anhänge an Feldern, die die eigene Rolle nicht sehen darf, werden nach wie vor gar nicht erst verarbeitet. Der Bearbeiten-Weg für Ereignisse ist mit umgestellt, damit ein künftiger Protokolleintrag dort nicht dieselbe Sperre erzeugt.
 
+### Docs
+
+- **Administrationshandbuch: Der Einladungslink meldet nicht automatisch an** (#1969) — § 2.4 Schritt 3 behauptete in beiden Sprachfassungen, der Nutzer setze über den Setup-Link sein Passwort „und wird eingeloggt". Einen automatischen Login gibt es nicht: `post_reset_login` bleibt auf dem Django-Default `False`, die Bestätigungsseite führt über „Zur Anmeldung" auf die Anmeldemaske.
+
 ## [0.82.0] - 2026-08-21
 
 ### Added

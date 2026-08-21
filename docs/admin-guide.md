@@ -406,7 +406,7 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 
 1. Admin legt Nutzer mit E-Mail im Admin an.
 2. System ruft [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py) auf und generiert einen Setup-Token (eigener `invite_token_generator`, basierend auf `uidb64` + Token-Hash).
-3. Nutzer empfängt Mail, klickt Link, setzt Passwort und wird eingeloggt.
+3. Nutzer empfängt Mail, klickt Link und setzt sein Passwort. Ein automatischer Login findet dabei **nicht** statt — die Bestätigungsseite führt über „Zur Anmeldung“ auf die Anmeldemaske, wo er sich erstmals mit dem neuen Passwort anmeldet.
 
 **Token-Gültigkeit (L4, Refs #1375):** Einladungs- und Passwort-Reset-Tokens haben **getrennte** Gültigkeiten:
 
