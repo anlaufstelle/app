@@ -59,6 +59,12 @@ class ComplianceCheck:
 # gelb faerben. Ihre Ueberwachung ist der Last-Run-Check in
 # ``compliance/cron.py`` — dort ist das *Ausbleiben* das Signal, nicht das
 # Vorhandensein.
+#
+# Ebenfalls bewusst draussen (Refs #1957): die sieben Bearbeitungs-/
+# Zuordnungs-Aktionen rund um Ereignisse, Episoden, Wirkungsziele und Anhaenge.
+# Sie sind der Normalfall eines Arbeitstages — auf dieser Liste faerbte jede
+# bearbeitete Beratungsdokumentation das Dashboard und machte Check #11 als
+# Signal wertlos. Die Aktionen sind Nachweis, nicht Alarm.
 _CRITICAL_AUDIT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.MFA_FAILED,

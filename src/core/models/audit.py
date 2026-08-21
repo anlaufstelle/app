@@ -51,8 +51,34 @@ class AuditLog(models.Model):
         CASE_UPDATE = "case_update", _("Fall aktualisiert")
         CASE_CLOSE = "case_close", _("Fall geschlossen")
         CASE_REOPEN = "case_reopen", _("Fall wiedereröffnet")
+        # Refs #1957 (#1860 B5): Ereignis↔Fall-Zuordnung. Bewusst zwei
+        # gerichtete Aktionen statt einer generischen „Zuordnung geaendert" —
+        # unter /audit/ ist genau die Richtung die Frage („wurde ein Ereignis
+        # aus dem Fall geloest?"), und ein Enum-Wert je Richtung erspart es,
+        # dafuer das ``detail`` lesen zu muessen. ``target_obj`` ist das
+        # **Ereignis**, der Fall steht als ``case_id`` im ``detail``.
+        CASE_EVENT_ASSIGNED = "case_event_assigned", _("Ereignis dem Fall zugeordnet")
+        CASE_EVENT_REMOVED = "case_event_removed", _("Ereignis vom Fall gelöst")
+        # Refs #1957 (#1860 B2/B3): Bearbeitung der beiden Fall-Unterobjekte.
+        # Beide tragen im ``detail`` nur ``case_id`` + ``changed_fields`` —
+        # nie Titel oder Beschreibung, die sind Freitext am Fall.
+        EPISODE_UPDATE = "episode_update", _("Episode aktualisiert")
+        GOAL_UPDATE = "goal_update", _("Wirkungsziel aktualisiert")
         MILESTONE_DELETE = "milestone_delete", _("Meilenstein gelöscht")
         EVENT_CREATE = "event_create", _("Ereignis angelegt")
+        # Refs #1957 (#1860 B1): Ereignis-Bearbeitungen liefen bisher nur in die
+        # ``EventHistory`` — unter /audit/ fehlte jede Bearbeitung. Das
+        # ``detail`` traegt Dokumentationstyp + geaenderte Feld-Slugs, nie
+        # Werte (Beschaeftigtendatenschutz + Art. 5 Abs. 1 lit. c DSGVO, siehe
+        # #1860 „DSGVO-Einordnung").
+        EVENT_UPDATE = "event_update", _("Ereignis aktualisiert")
+        # Refs #1957 (#1860 B4): Anhaenge. Bewusst owner-agnostisch (Ereignis,
+        # Person, Fall) — die Zuordnung laeuft ueber ``owner_type``/``owner_id``
+        # im ``detail`` (ADR-039 §5), die ``target_id`` traegt die Owner-PK.
+        # ``DOWNLOAD`` bleibt unveraendert: der Wert ist Datenvertrag bereits
+        # geschriebener, unveraenderlicher Zeilen.
+        ATTACHMENT_UPLOAD = "attachment_upload", _("Anhang hochgeladen")
+        ATTACHMENT_DELETE = "attachment_delete", _("Anhang gelöscht")
         WORKITEM_CREATE = "workitem_create", _("Aufgabe angelegt")
         WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
         USER_ROLE_CHANGED = "user_role_changed", _("Benutzerrolle geändert")

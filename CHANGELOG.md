@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Das Protokoll kennt jetzt eigene Vorgangsarten für Bearbeitungen, Fall-Zuordnungen und Anhänge** (#1957) — Für die Bearbeitung eines Ereignisses, einer Episode oder eines Wirkungsziels, für das Zuordnen und Lösen eines Ereignisses zu einem Fall sowie für das Hochladen und Löschen eines Anhangs gab es im unveränderlichen Protokoll bisher überhaupt keine Vorgangsart — diese Vorgänge waren unter `/audit/` deshalb strukturell nicht darstellbar. Die sieben Arten sind jetzt angelegt und stehen im Auswahlfeld „Aktion“ der Protokollansicht zur Verfügung, fachlich zwischen den bestehenden Fall- und Ereignis-Einträgen einsortiert und in beiden Oberflächensprachen benannt. Sie unterliegen bewusst der regulären Aufbewahrungsfrist und werten das Compliance-Dashboard nicht als sicherheitskritisch: Es sind Nachweise über Routine-Facharbeit, keine Vorfälle — auf der Kritisch-Liste färbte jede bearbeitete Beratungsdokumentation die Ampel. Die Schreibwege, die solche Einträge tatsächlich erzeugen, folgen schrittweise; bis dahin bleiben die neuen Filterwerte ohne Treffer.
+
 ## [0.82.0] - 2026-08-21
 
 ### Added

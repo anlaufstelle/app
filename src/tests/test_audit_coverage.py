@@ -1,10 +1,14 @@
-"""Audit-coverage regression tests (Refs #532).
+"""Audit-coverage regression tests (Refs #532, #1613, #1957).
 
 Verify that:
 - update_client / update_case / update_workitem services write AuditLog entries
   with action=*_UPDATE and a `changed_fields` detail payload (no PII values)
 - Settings save via the admin layer writes a SETTINGS_CHANGE audit entry
+- jede der sieben ``*_update``-Routen eine passende ``AuditLog.Action`` hat
+  (Registry-Guard ``TestUpdateRouteAuditEnrollment``)
 """
+
+from typing import ClassVar
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -350,21 +354,50 @@ class TestUpdateViewAuditCoverage:
 class TestUpdateRouteAuditEnrollment:
     """Guard gegen Wiederholung — Registry der sieben ``*_update``-Routen (Refs #1613).
 
-    Jede AUDITIERTE Route muss über einen echten HTTP-POST
-    (View→Form→Service→DB) tatsächlich eine ``*_UPDATE``-AuditLog-Zeile
-    schreiben (prüft TB6, nicht Code-Syntax — deshalb kein AST-/Grep-Guard,
-    der ``episode_update`` sofort als False-Positive flaggen würde).
+    Jede Route muss über einen echten HTTP-POST (View→Form→Service→DB)
+    tatsächlich eine ``*_UPDATE``-AuditLog-Zeile schreiben (prüft TB6, nicht
+    Code-Syntax — deshalb kein AST-/Grep-Guard, der ``episode_update`` sofort
+    als False-Positive flaggen würde).
 
-    Die drei nicht-auditierten Routen sind bewusst dokumentiert und
-    out-of-scope (Follow-up): ``episode_update`` ruft ``form.save()`` direkt,
-    ``event_update``/``goal_update`` haben gar keine ``EVENT_UPDATE``/
-    ``GOAL_UPDATE``-Action. Der Guard macht diese Lücke sichtbar, ohne sie
-    hier zu fixen.
+    Seit Refs #1957 trägt ``AuditLog.Action`` für **alle** sieben Routen eine
+    passende Aktion; die frühere Dreier-Lücke (``episode_update``,
+    ``event_update``, ``goal_update``) ist damit im Vokabular geschlossen.
+    ``UNAUDITED_ROUTES`` bleibt als leerer Slot stehen: eine künftige
+    Edit-Route darf dort nur mit ausgeschriebener Begründung landen.
+
+    Die **Schreibpfade** folgen getrennt — ``event_update`` in
+    #1958,
+    ``episode_update``/``goal_update`` in
+    #1959. Solange sie
+    fehlen, tragen genau die drei Routen-Tests ``xfail(strict=True)``. Der
+    Marker ist bewusst strikt: sobald der Schreibpfad steht, wird der Test
+    XPASS und fällt auf — der jeweilige Schreibpfad-Commit entfernt ihn.
     """
 
-    #: name → auditiert? Vollständige Registry der sieben Edit-Routen.
-    AUDITED_ROUTES = {"case_update", "client_update", "workitem_update", "workitem_status_update"}
-    UNAUDITED_ROUTES = {"episode_update", "event_update", "goal_update"}
+    #: Vollständige Registry der sieben Edit-Routen.
+    AUDITED_ROUTES: ClassVar[set[str]] = {
+        "case_update",
+        "client_update",
+        "workitem_update",
+        "workitem_status_update",
+        "episode_update",
+        "event_update",
+        "goal_update",
+    }
+    #: Bewusst leer (Refs #1957) — der Slot bleibt als Begründungszwang stehen.
+    UNAUDITED_ROUTES: ClassVar[set[str]] = set()
+
+    #: Route → erwarteter ``AuditLog.Action``-Wert. ``workitem_status_update``
+    #: teilt sich die Aktion mit ``workitem_update`` (derselbe Service).
+    ACTION_BY_ROUTE: ClassVar[dict[str, str]] = {
+        "case_update": "case_update",
+        "client_update": "client_update",
+        "workitem_update": "workitem_update",
+        "workitem_status_update": "workitem_update",
+        "episode_update": "episode_update",
+        "event_update": "event_update",
+        "goal_update": "goal_update",
+    }
 
     def test_case_update_route_writes_audit(self, client, staff_user, case_open, client_identified):
         client.force_login(staff_user)
@@ -396,14 +429,123 @@ class TestUpdateRouteAuditEnrollment:
         ).count()
         assert after == before + 1
 
-    def test_unaudited_update_routes_have_no_update_action(self):
-        """Macht die Design-Lücke sichtbar (Follow-up), ohne sie zu fixen:
-        für die drei Out-of-Scope-Routen existiert bewusst keine passende
-        ``*_UPDATE``-Action in ``AuditLog.Action``."""
+    @pytest.mark.xfail(
+        strict=True,
+        reason="Schreibpfad in update_event folgt in #1958 — Marker dort entfernen (XPASS = fertig).",
+    )
+    def test_event_update_route_writes_audit(self, client, staff_user, sample_event):
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.EVENT_UPDATE, target_id=str(sample_event.pk)).count()
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "30", "notiz": "Aktualisierte Notiz"},
+        )
+        assert response.status_code == 302
+        sample_event.refresh_from_db()
+        assert str(sample_event.data_json["dauer"]) == "30"
+        after = AuditLog.objects.filter(action=AuditLog.Action.EVENT_UPDATE, target_id=str(sample_event.pk)).count()
+        assert after == before + 1
+
+    def test_event_update_route_no_audit_on_identical_post(self, client, staff_user, sample_event):
+        """Negativfall Ereignis: identischer POST ⇒ keine ``EVENT_UPDATE``-Zeile.
+
+        Läuft **ohne** ``xfail`` — der Test hält schon vor dem Schreibpfad
+        (#1958) fest, dass „einfach immer auditieren" kein zulässiger Fix ist.
+        """
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.EVENT_UPDATE, target_id=str(sample_event.pk)).count()
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": str(sample_event.data_json["dauer"]), "notiz": sample_event.data_json["notiz"]},
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(action=AuditLog.Action.EVENT_UPDATE, target_id=str(sample_event.pk)).count()
+        assert after == before
+
+    @staticmethod
+    def _episode_post_data(episode, **overrides):
+        data = {
+            "title": episode.title,
+            "description": episode.description or "",
+            "started_at": episode.started_at.isoformat(),
+            "ended_at": episode.ended_at.isoformat() if episode.ended_at else "",
+        }
+        data.update(overrides)
+        return data
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="Episoden-Update-Service folgt in #1959 — Marker dort entfernen (XPASS = fertig).",
+    )
+    def test_episode_update_route_writes_audit(self, client, staff_user, case_open, episode):
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count()
+        response = client.post(
+            reverse("core:episode_update", kwargs={"case_pk": case_open.pk, "pk": episode.pk}),
+            self._episode_post_data(episode, title="Geänderte Episode"),
+        )
+        assert response.status_code == 302
+        episode.refresh_from_db()
+        assert episode.title == "Geänderte Episode"
+        after = AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count()
+        assert after == before + 1
+
+    def test_episode_update_route_no_audit_on_identical_post(self, client, staff_user, case_open, episode):
+        """Negativfall Episode: identischer POST ⇒ keine ``EPISODE_UPDATE``-Zeile."""
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count()
+        response = client.post(
+            reverse("core:episode_update", kwargs={"case_pk": case_open.pk, "pk": episode.pk}),
+            self._episode_post_data(episode),
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count()
+        assert after == before
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="Audit-Write in update_goal folgt in #1959 — Marker dort entfernen (XPASS = fertig).",
+    )
+    def test_goal_update_route_writes_audit(self, client, staff_user, case_open, outcome_goal):
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count()
+        response = client.post(
+            reverse("core:goal_update", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}),
+            {"title": "Geändertes Wirkungsziel", "description": outcome_goal.description or ""},
+        )
+        assert response.status_code == 200
+        outcome_goal.refresh_from_db()
+        assert outcome_goal.title == "Geändertes Wirkungsziel"
+        after = AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count()
+        assert after == before + 1
+
+    def test_goal_update_route_no_audit_on_identical_post(self, client, staff_user, case_open, outcome_goal):
+        """Negativfall Wirkungsziel: identischer POST ⇒ keine ``GOAL_UPDATE``-Zeile."""
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count()
+        response = client.post(
+            reverse("core:goal_update", kwargs={"case_pk": case_open.pk, "pk": outcome_goal.pk}),
+            {"title": outcome_goal.title, "description": outcome_goal.description or ""},
+        )
+        assert response.status_code == 200
+        after = AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count()
+        assert after == before
+
+    def test_every_edit_route_has_a_matching_update_action(self):
+        """Umkehrung des früheren Lücken-Tests (Refs #1957): für **jede** der
+        sieben Edit-Routen existiert eine passende ``*_UPDATE``-Action.
+
+        Vorher hielt dieser Slot fest, dass ``episode_update``/``event_update``/
+        ``goal_update`` bewusst *keine* Action haben. Die Anforderung hat sich
+        mit #1957 umgekehrt — das Vokabular ist jetzt vollständig, und der Test
+        schützt es gegen ein stilles Zurückfallen."""
         action_values = {a.value for a in AuditLog.Action}
-        assert "episode_update" not in action_values
-        assert "event_update" not in action_values
-        assert "goal_update" not in action_values
+        missing = sorted({action for action in self.ACTION_BY_ROUTE.values() if action not in action_values})
+        assert not missing, f"Edit-Routen ohne passende AuditLog.Action (Refs #1957): {missing}"
+        assert not self.UNAUDITED_ROUTES, (
+            "Eine Edit-Route ist als nicht-auditiert eingetragen — das braucht eine "
+            f"ausgeschriebene Begründung im Klassen-Docstring: {sorted(self.UNAUDITED_ROUTES)}"
+        )
 
     def test_registry_covers_exactly_the_seven_edit_routes(self):
         """Alle sieben Registry-Routen müssen in ``core.urls`` auflösbar sein —
@@ -427,6 +569,7 @@ class TestUpdateRouteAuditEnrollment:
             },
         }
         assert set(kwargs_by_route) == self.AUDITED_ROUTES | self.UNAUDITED_ROUTES
+        assert set(self.ACTION_BY_ROUTE) == self.AUDITED_ROUTES | self.UNAUDITED_ROUTES
         for name, kwargs in kwargs_by_route.items():
             try:
                 reverse(f"core:{name}", kwargs=kwargs)

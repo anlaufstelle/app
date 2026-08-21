@@ -54,6 +54,16 @@ from core.services.system import bypass_replication_triggers
 # drin. Damit folgt die Aufbewahrung derselben Rechenschaftslogik wie
 # SECURITY_VIOLATION. Festgehalten in ``docs/security-notes.md``
 # § Disclosure-Analyse (K4a).
+#
+# Refs #1957: Die sieben Bearbeitungs-/Zuordnungs-Aktionen (``EVENT_UPDATE``,
+# ``EPISODE_UPDATE``, ``GOAL_UPDATE``, ``CASE_EVENT_ASSIGNED``,
+# ``CASE_EVENT_REMOVED``, ``ATTACHMENT_UPLOAD``, ``ATTACHMENT_DELETE``) stehen
+# bewusst **nicht** hier: sie protokollieren Routine-Facharbeit an lebenden
+# Faellen, nicht die Rechenschaft ueber eine Herausgabe oder einen
+# Sicherheitsvorfall. Fuer sie gilt die regulaere 24-Monats-Frist aus
+# ``auditlog_retention_months`` — eine dauerhafte Aufbewahrung waere gegenueber
+# den Beschaeftigten (§ 26 BDSG) und der Speicherbegrenzung (Art. 5 Abs. 1
+# lit. e DSGVO) nicht zu rechtfertigen.
 PRUNE_EXEMPT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.RETENTION_RUN_COMPLETED,

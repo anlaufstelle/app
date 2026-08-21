@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-16 16:17+0200\n"
+"POT-Creation-Date: 2026-08-21 21:18+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -866,6 +866,22 @@ msgstr "Case closed"
 msgid "Fall wiedereröffnet"
 msgstr "Case reopened"
 
+#: src/core/models/audit.py:60
+msgid "Ereignis dem Fall zugeordnet"
+msgstr "Event linked to case"
+
+#: src/core/models/audit.py:61
+msgid "Ereignis vom Fall gelöst"
+msgstr "Event unlinked from case"
+
+#: src/core/models/audit.py:65
+msgid "Episode aktualisiert"
+msgstr "Episode updated"
+
+#: src/core/models/audit.py:66
+msgid "Wirkungsziel aktualisiert"
+msgstr "Outcome goal updated"
+
 #: src/core/models/audit.py:54
 msgid "Meilenstein gelöscht"
 msgstr "Milestone deleted"
@@ -873,6 +889,18 @@ msgstr "Milestone deleted"
 #: src/core/models/audit.py:55
 msgid "Ereignis angelegt"
 msgstr "Event created"
+
+#: src/core/models/audit.py:74
+msgid "Ereignis aktualisiert"
+msgstr "Event updated"
+
+#: src/core/models/audit.py:80
+msgid "Anhang hochgeladen"
+msgstr "Attachment uploaded"
+
+#: src/core/models/audit.py:81
+msgid "Anhang gelöscht"
+msgstr "Attachment deleted"
 
 #: src/core/models/audit.py:56
 msgid "Aufgabe angelegt"
