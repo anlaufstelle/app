@@ -358,7 +358,7 @@ The script interactively prompts for:
 3. **Application manager username** (`facility_admin`)
 4. **Application manager password** (enter twice)
 
-Afterwards, the organization, facility, default settings, the **default catalog of documentation types**, and the first `facility_admin` user are created. The facility is usable right away: without at least one documentation type, the type selector would be empty and not a single contact could be recorded.
+Afterwards, the organization, facility, default settings, the **default catalog of documentation types**, the three **default shifts** (early, late, night), two **quick templates** on the "Kontakt" type, and the first `facility_admin` user are created. The facility is usable right away: without at least one documentation type, the type selector would be empty and not a single contact could be recorded.
 
 > **All or nothing:** The run is a single database transaction. If it aborts (wrong DB role, dropped connection, catalog conflict), **nothing** half-created is left behind -- not even the admin user. Once the cause is fixed, the command can simply be repeated.
 
@@ -378,6 +378,8 @@ Afterwards, the organization, facility, default settings, the **default catalog 
 > `--dry-run` first shows only what would happen; without the flag the package is applied. The run never deletes anything, **but it does write the catalog properties of existing types and field templates back to the shipped state** (name, sort order, color, icon, visibility) -- unlike the initial setup, which does not touch an existing catalog at all. So look at it with `--dry-run` first; the full write-back table is in [docs/packages.md § 4](../packages.md). The facility UUID appears in the address bar of its detail page under **Core > Facilities** in the Django admin.
 
 > **Note:** If an organization or facility with the given name already exists, it will be reused. An existing username will not be overwritten.
+
+> **Adding a second facility in the Django admin (#1970):** Additional facilities are created at runtime under **Core > Facilities > Add facility** -- that is the only path in the user interface, and it is reserved for `super_admin`. Saving creates the **same baseline** as `setup_facility`: settings record, default catalog of documentation types, default shifts, and quick templates. The new facility is documentable immediately; all that remains is to assign at least one account to it under **Core > Users**. The baseline is created **exactly once, when the facility is added**: saving the same facility again later (when renaming it, or toggling "Active") does not touch its stock -- not even when that stock is empty. That is deliberate, because empty can be a decision: a facility deliberately set up without a catalog via `--no-default-package` would otherwise silently receive the full default catalog on the first rename. Facilities that were created in the admin before this version and stayed empty are therefore provisioned explicitly: the catalog with `manage.py load_package --default --facility <uuid>` (command including the role override above), time filters and quick templates by hand under **Core > Time filters** and **Core > Quick templates**.
 
 > **Organization as a branding shell:** The organization serves only as a carrier branding container (logo, name in reports). There is no org-admin and no cross-facility effect through it -- cross-facility access runs exclusively through `super_admin` and `/system/`. Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
@@ -415,6 +417,16 @@ Under **Core > Settings** in the admin, you can configure the following for each
 | Retention identified (days) | 365 | Deletion period for contacts of clients at the "Pseudonym only" level |
 | Retention qualified (days) | 3650 | Deletion period after case closure ("With additional details" level) |
 | Facility-wide 2FA enforcement | false | Enforces TOTP 2FA for **all** users of this facility (see [Section 2.7](#27-two-factor-authentication-2fa)) |
+
+> **Baseline of a new facility (#1970).** Besides the settings record, creating a facility -- in the Django admin as well as via `setup_facility` -- produces a deliberately small starting stock that you are free to overwrite afterwards:
+>
+> | Stock | Maintained in the admin under | Effect when missing |
+> |---|---|---|
+> | Default catalog of documentation types | Administration > Documentation types | **Blocking:** without an event type the type selector in "New entry" stays empty and nothing can be documented |
+> | Default shifts: early (08-16), late (16-22), night (22-08) | Core > Time filters | Convenience: the timeline then evaluates the full day instead of a shift window; handover view and live tally have no shift reference |
+> | Quick templates "Kurzkontakt" and "Beratungskontakt" on the "Kontakt" type | Core > Quick templates | Convenience: recurring contacts are filled in by hand (see [Section 2.8](#28-quick-templates)) |
+>
+> **Once at creation, not on every save:** if a facility already carries its own documentation types, time filters, or quick templates at the moment it is created, that group is left **untouched** -- the check runs per group, and a single existing object is enough. Every later save of the facility in the admin leaves all three groups alone anyway: labels and orderings maintained in the admin are never silently reset to the shipped state, and deleted default shifts do not come back on their own. Pulling things in is explicit: `manage.py load_package --default` fetches the shipped catalog state (see [Section 2.2](#22-create-a-facility-and-application-manager)); time filters and quick templates you create yourself under **Core > Time filters** and **Core > Quick templates**. One exception: running the initial setup `setup_facility` again with the **same** organization and facility names provisions whatever is empty at that point -- if you deleted every time filter, you get the three default shifts back; the command states for each stock whether it created it or left it alone.
 
 > **Every facility has exactly one settings record.** The row is created automatically as soon as the facility is created -- by the interactive `setup_facility`, when adding it in the admin under **Core > Facilities**, and (retroactively, for existing data) on every `migrate` run. This is not a formality: `enforce_retention` and `create_statistics_snapshots` **skip** a facility without a settings record -- no retention period would be enforced for it and no statistics snapshots would be created. Both jobs log such a case at `WARNING` level (`No settings for ..., skipping.`); if that message shows up in the log it is an operational fault, not noise.
 
@@ -467,7 +479,7 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 
 ### 2.5 Configure Documentation Types
 
-> **Starting point:** A facility created via `setup_facility` ([§ 2.2](#22-create-a-facility-and-application-manager)) already ships with the bundled **default catalog** -- it is ready for documentation without any further step. If the facility was created in the Django admin, or the catalog was declined with `--no-default-package`, the list is empty; in that case run `manage.py load_package --default --facility <uuid>` first (the command including the role override is in [§ 2.2](#22-create-a-facility-and-application-manager)). The sections below describe how to adjust the resulting set.
+> **Starting point:** A facility created via `setup_facility` **or** in the Django admin under **Core > Facilities** ([§ 2.2](#22-create-a-facility-and-application-manager)) already ships with the bundled **default catalog** -- it is ready for documentation without any further step. The list is empty only if the catalog was declined with `--no-default-package` during setup, or if the facility predates #1970. Either state persists until you change it explicitly -- saving the facility in the admin does **not** pull the catalog in (that would silently override the opt-out). In that case run `manage.py load_package --default --facility <uuid>` (the command including the role override is in [§ 2.2](#22-create-a-facility-and-application-manager)). The sections below describe how to adjust the resulting set.
 
 Under **Administration > Documentation types** (`/config/document-types/`), you define which kinds of documentation can be recorded in the facility. The matching **Core > Documentation types** view in the Django admin remains available as a technical fallback, but is not the regular configuration path. Each type consists of:
 
@@ -1712,4 +1724,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-21 -->
-<!-- source-hash: bbfcd96949c542c18838e43f3a8701980ba4e197 -->
+<!-- source-hash: 3f1c30637166150c242df216c2b8a67b41d89ff2 -->

@@ -1025,3 +1025,127 @@ class TestFacilitySettingsRowGuard:
         assert any(f.as_posix().endswith("core/admin/organization.py") for f in files), (
             "Sanity-Check: der Admin bleibt im Scan"
         )
+
+
+# --- Refs #1970: eine angelegte Einrichtung ist ohne Grundausstattung unbenutzbar ---
+
+_BASELINE_ENSURING_HELPER = "ensure_facility_baseline"
+
+
+def ensures_facility_baseline(source: str) -> bool:
+    """Prueft, ob eine Quelle die Grundausstattung einer Einrichtung anstoesst.
+
+    Erkannt wird der Aufruf des einen Einstiegs
+    ``core.services.facility_bootstrap.ensure_facility_baseline`` — als
+    direkter Name (``ensure_facility_baseline(f)``) wie als Attributzugriff
+    (``facility_bootstrap.ensure_facility_baseline(f)``). Bewusst **nicht**
+    erkannt werden ``DocumentType.objects.create``/``TimeFilter.objects.create``
+    & Co.: der Guard soll genau den einen Einstieg erzwingen und nicht eine
+    zweite, handgeschriebene Grundausstattung durchwinken — das war die Falle
+    aus Refs #1884.
+    """
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == _BASELINE_ENSURING_HELPER:
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == _BASELINE_ENSURING_HELPER:
+            return True
+    return False
+
+
+class TestFacilityBaselineGuard:
+    """Refs #1970: Wer eine Einrichtung anlegt, stattet sie auch aus.
+
+    Ohne mindestens einen Dokumentationstyp mit ``entity_type: event`` bleibt
+    die Typ-Auswahl in ``EventCreateView`` leer — es laesst sich **kein
+    einziger Kontakt** dokumentieren, die Einrichtung ist fachlich unbenutzbar.
+    Schichtfenster und Schnellvorlagen sind Komfort und blockieren nichts,
+    gehoeren aber zum selben Startbestand.
+
+    Der Guard laeuft ueber dieselbe Dateiliste wie der Settings-Guard
+    (Refs #1884) — ``migrations/`` und ``seed/`` bleiben aussen vor.
+    """
+
+    def test_facility_creating_modules_also_provision_it(self) -> None:
+        violations = []
+        for py_file in _facility_creation_scan_files():
+            source = py_file.read_text()
+            hits = find_facility_creations(source)
+            if hits and not ensures_facility_baseline(source):
+                violations.append(f"{py_file.as_posix()}: {hits}")
+        assert not violations, (
+            "Facility-Anlage ohne Grundausstattung gefunden — die Einrichtung startet ohne "
+            "Dokumentationstypen und ist damit nicht dokumentierbar (Refs #1970). "
+            f"Betroffen: {violations}"
+        )
+
+    def test_facility_admin_save_model_provisions_it(self) -> None:
+        """Der Admin legt die Zeile nicht selbst an — sein ``save_model`` haelt den Hook.
+
+        Das Herkunftsmodul kommt aus der Admin-Registrierung, damit ein
+        Verschieben von ``FacilityAdmin`` den Guard nicht ins Leere laufen
+        laesst.
+        """
+        import importlib
+        import inspect
+
+        from core.admin_site import anlaufstelle_admin_site
+        from core.models import Facility
+
+        registered = anlaufstelle_admin_site._registry.get(Facility)
+        assert registered is not None, "Facility ist im Anlaufstelle-Admin nicht registriert"
+        module = importlib.import_module(type(registered).save_model.__module__)
+        source = Path(inspect.getfile(module)).read_text()
+        assert ensures_facility_baseline(source), (
+            "FacilityAdmin.save_model stoesst keine Grundausstattung an — im Admin angelegte "
+            "Einrichtungen starten dann ohne Dokumentationstypen (Refs #1970)"
+        )
+
+    def test_guard_detects_the_pattern(self) -> None:
+        source = (
+            "from core.models import Facility\n"
+            "from core.services.facility import ensure_settings_for_facility\n\n"
+            "def make(org):\n"
+            "    facility = Facility.objects.create(organization=org, name='x')\n"
+            "    ensure_settings_for_facility(facility)\n"
+            "    return facility\n"
+        )
+        assert find_facility_creations(source)
+        assert ensures_settings_row(source), "Settings-Guard bleibt gruen — nur die Ausstattung fehlt"
+        assert not ensures_facility_baseline(source)
+
+    def test_guard_accepts_the_shared_helper(self) -> None:
+        source = (
+            "from core.models import Facility\n"
+            "from core.services.facility_bootstrap import ensure_facility_baseline\n\n"
+            "def make(org):\n"
+            "    facility = Facility.objects.create(organization=org, name='x')\n"
+            "    ensure_facility_baseline(facility)\n"
+            "    return facility\n"
+        )
+        assert ensures_facility_baseline(source)
+
+    def test_guard_accepts_the_qualified_call(self) -> None:
+        source = (
+            "from core.models import Facility\n"
+            "from core.services import facility_bootstrap\n\n"
+            "def make(org):\n"
+            "    facility = Facility.objects.create(organization=org, name='x')\n"
+            "    facility_bootstrap.ensure_facility_baseline(facility)\n"
+            "    return facility\n"
+        )
+        assert ensures_facility_baseline(source)
+
+    def test_a_hand_written_second_bootstrap_does_not_satisfy_the_guard(self) -> None:
+        """Kein Freibrief fuer einen zweiten Weg mit abweichendem Ergebnis (Refs #1884)."""
+        source = (
+            "from core.models import DocumentType, Facility\n\n"
+            "def make(org):\n"
+            "    facility = Facility.objects.create(organization=org, name='x')\n"
+            "    DocumentType.objects.create(facility=facility, slug='kontakt', name='Kontakt')\n"
+            "    return facility\n"
+        )
+        assert find_facility_creations(source)
+        assert not ensures_facility_baseline(source)

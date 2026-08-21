@@ -7,6 +7,7 @@ from core.admin.mixins import SuperAdminOnlyAdminMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Facility, Organization
 from core.services.facility import ensure_settings_for_facility
+from core.services.facility_bootstrap import ensure_facility_baseline
 
 
 @admin.register(Organization, site=anlaufstelle_admin_site)
@@ -34,7 +35,7 @@ class FacilityAdmin(SuperAdminOnlyAdminMixin, ModelAdmin):
     search_fields = ("name",)
 
     def save_model(self, request, obj, form, change):
-        """Sichert die ``Settings``-Zeile der Einrichtung (Refs #1884).
+        """Sichert Einstellungen und Grundausstattung der Einrichtung (Refs #1884, #1970).
 
         Der Admin ist der einzige Laufzeit-Anlagepfad fuer eine Facility
         (``setup_facility`` legt die Zeile selbst an, ``core/seed/`` ist
@@ -51,6 +52,46 @@ class FacilityAdmin(SuperAdminOnlyAdminMixin, ModelAdmin):
         mehr formulierbar. Ein Architektur-Guard
         (``test_architecture_guards_models.py``) pinnt stattdessen, dass kein
         zweiter Anlagepfad die Luecke still wieder aufreisst.
+
+        Refs #1970 — die ``Settings``-Zeile allein macht eine Einrichtung noch
+        nicht benutzbar: ohne Dokumentationstyp mit ``entity_type: event``
+        bleibt die Typ-Auswahl in ``/events/new/`` leer und es laesst sich
+        **kein einziger Kontakt** dokumentieren. ``ensure_facility_baseline``
+        ist derselbe Einstieg, den ``setup_facility`` benutzt (Standardkatalog,
+        Schichtfenster, Schnellvorlagen) — ein zweiter Weg mit abweichendem
+        Ergebnis war genau die Falle aus Refs #1884.
+
+        Der Aufruf haengt bewusst an ``change=False`` — Ausstatten beim
+        Anlegen, nie beim Aendern. Die Leer-Pruefungen im Bootstrap arbeiten je
+        Gruppe (Katalog, Zeitfenster, Schnellvorlagen); an einer bestehenden
+        Einrichtung waere „leer" damit unweigerlich als „noch nicht ausgestattet"
+        gelesen worden — obwohl leer hier ein **gepflegter** Zustand sein kann:
+        eine per ``setup_facility --no-default-package`` bewusst katalogfrei
+        angelegte Einrichtung haette beim ersten beliebigen Speichern
+        (Umbenennen, ``is_active`` umschalten) den kompletten Standardkatalog
+        bekommen, geloeschte Standardschichten waeren zurueckgekehrt. Der
+        Auslieferungsstand laesst sich nur ausdruecklich nachziehen:
+        ``manage.py load_package --default --facility <uuid>`` fuer den Katalog,
+        Core -> Zeitfenster / Quick-Templates fuer den Rest.
+
+        Die ``Settings``-Zeile eine Zeile hoeher laeuft dagegen weiter
+        unbedingt (Refs #1884): sie ist ein 1:1-Pflichtsatz ohne bewusst leeren
+        Zustand, ihr Fehlen ein Datenfehler und kein Betreiber-Entscheid.
+
+        Zugriffsrechte: ``FacilityAdmin`` ist super_admin-only (L1, Refs #1375),
+        und die ``FacilityScopeMiddleware`` setzt fuer super_admin
+        ``app.is_super_admin`` — der Bypass-Zweig der ``facility_isolation``-
+        Policies. Die Schreibzugriffe des Bootstraps in die FORCE-RLS-Tabellen
+        (Dokumentationstypen, Feldvorlagen, Feldgruppen, Feldzuordnungen,
+        Bedingungen, Schnellvorlagen, Zeitfenster) sind damit gedeckt, obwohl
+        der Einrichtungs-Kontext des Requests auf eine ANDERE Einrichtung zeigt.
+
+        Fehler werden nicht geschluckt: ein kaputter Auslieferungskatalog
+        schlaegt durch und Djangos ``_changeform_view``-Transaktionsklammer
+        nimmt die halb angelegte Einrichtung wieder mit — besser als eine
+        Einrichtung, die es gibt, in der aber nichts dokumentiert werden kann.
         """
         super().save_model(request, obj, form, change)
         ensure_settings_for_facility(obj)
+        if not change:
+            ensure_facility_baseline(obj)

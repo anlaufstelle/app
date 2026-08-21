@@ -20,6 +20,20 @@ Kaltstart-Minimum (Refs #1883): nach dem Lauf ist die Einrichtung
 deshalb spielt der Command den mitgelieferten Standardkatalog ein
 (``--no-default-package`` fuer Einrichtungen, die leer starten wollen).
 
+Refs #1970: derselbe Aufruf legt Schichtfenster und Schnellvorlagen mit an —
+:func:`core.services.facility_bootstrap.ensure_facility_baseline` ist der EINE
+Einstieg, den auch der Django-Admin benutzt, damit beide Anlagepfade dasselbe
+Ergebnis liefern. ``--no-default-package`` laesst nur den Katalog weg; die
+Schichtfenster haengen an keinem Katalog und entstehen trotzdem, die
+Schnellvorlagen haengen an Katalog-Slugs und bleiben ohne Katalog leer.
+
+Der Opt-out haelt: der Admin zieht den Einstieg nur beim **Anlegen**
+(``change=False``, siehe ``core/admin/organization.py``). Ein spaeteres
+Speichern der so angelegten Einrichtung holt den abgewaehlten Katalog also
+nicht still nach. Ein erneuter Lauf dieses Commands mit denselben Namen ist
+dagegen eine ausdrueckliche Operator-Handlung und stattet aus, was zu diesem
+Zeitpunkt leer ist — er sagt in seiner Ausgabe je Bestand, was er getan hat.
+
 Der Katalog-Schritt ist **Ausstatten, kein Nachziehen**: bringt die
 Einrichtung schon Dokumentationstypen oder Feldvorlagen mit (Wiederholungslauf,
 im Django-Admin angelegte Einrichtung), bleibt sie unangetastet — sonst
@@ -36,7 +50,7 @@ from django.db import transaction
 from core.models import Facility, Organization, Settings, User
 from core.packages.loader import PackageLoadError
 from core.packages.schema import PackageValidationError
-from core.services.facility_bootstrap import ensure_default_package
+from core.services.facility_bootstrap import ensure_facility_baseline
 
 # Refs #1016/#1058/#1883: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -53,7 +67,10 @@ class Command(BaseCommand):
             help=(
                 "Den mitgelieferten Standardkatalog NICHT einspielen. Die Einrichtung "
                 "startet dann ohne Dokumentationstypen und ist erst dokumentierbar, "
-                "wenn ein Paket geladen wurde (manage.py load_package)."
+                "wenn ein Paket geladen wurde (manage.py load_package). Schichtfenster "
+                "entstehen trotzdem, Schnellvorlagen mangels Katalog nicht. Der Entscheid "
+                "haelt: ein spaeteres Speichern der Einrichtung im Django-Admin zieht den "
+                "abgewaehlten Katalog nicht nach."
             ),
         )
 
@@ -128,19 +145,20 @@ class Command(BaseCommand):
                 user.save()
 
             wants_package = not options["no_default_package"]
-            report = self._ensure_catalog(facility) if wants_package else None
+            baseline = self._ensure_baseline(facility, with_package=wants_package)
 
         if created:
             self.stdout.write(self.style.SUCCESS(f"Admin-Benutzer '{admin_username}' erstellt."))
         else:
             self.stdout.write(self.style.WARNING(f"Benutzer '{admin_username}' existiert bereits."))
 
-        self._write_package_summary(facility, report, wants_package=wants_package)
+        self._write_package_summary(facility, baseline.package, wants_package=wants_package)
+        self._write_baseline_summary(baseline)
 
         self.stdout.write(self.style.SUCCESS(f"\nEinrichtung '{facility_name}' ({org_name}) erfolgreich eingerichtet."))
 
-    def _ensure_catalog(self, facility):
-        """Standardkatalog einspielen und Katalog-Fehler in eine lesbare Meldung uebersetzen.
+    def _ensure_baseline(self, facility, *, with_package):
+        """Grundausstattung einspielen und Katalog-Fehler in eine lesbare Meldung uebersetzen.
 
         Muster des Schwester-Commands ``load_package`` (dort ``handle()``):
         erst den (verworfenen) Report ausgeben, dann ``CommandError … from exc``.
@@ -151,7 +169,7 @@ class Command(BaseCommand):
         niemand einen halb angelegten Zustand vermutet.
         """
         try:
-            return ensure_default_package(facility)
+            return ensure_facility_baseline(facility, with_package=with_package)
         except PackageLoadError as exc:
             for identifier, message in exc.report.errors:
                 self.stderr.write(self.style.ERROR(f"  {identifier}: {message}"))
@@ -200,3 +218,41 @@ class Command(BaseCommand):
         )
         for identifier, message in report.warnings:
             self.stdout.write(self.style.WARNING(f"  {identifier}: {message}"))
+
+    def _write_baseline_summary(self, baseline):
+        """Je eine Zeile zu Schichtfenstern und Schnellvorlagen (Refs #1970).
+
+        Beide blockieren nichts — ohne Zeitfenster faellt die Auswertung auf
+        den vollen Tag zurueck, ohne Schnellvorlagen wird eben von Hand
+        ausgefuellt. Der Operator soll trotzdem sehen, was er bekommen hat und
+        was nicht, statt es spaeter in der Oberflaeche zu vermissen.
+        """
+        if baseline.time_filters is None:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Schichtfenster nicht angelegt — die Einrichtung bringt bereits eigene mit; "
+                    "sie bleiben unverändert."
+                )
+            )
+        else:
+            labels = ", ".join(item.label for item in baseline.time_filters)
+            self.stdout.write(self.style.SUCCESS(f"Schichtfenster angelegt: {labels}."))
+
+        if baseline.quick_templates is None:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Schnellvorlagen nicht angelegt — die Einrichtung bringt bereits eigene mit; "
+                    "sie bleiben unverändert."
+                )
+            )
+        elif not baseline.quick_templates:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Schnellvorlagen nicht angelegt — sie hängen an Dokumentationstypen des "
+                    "Standardkatalogs, den diese Einrichtung nicht hat. Nachträglich anlegen: "
+                    "im Admin unter Core → Quick-Templates."
+                )
+            )
+        else:
+            names = ", ".join(item.name for item in baseline.quick_templates)
+            self.stdout.write(self.style.SUCCESS(f"Schnellvorlagen angelegt: {names}."))

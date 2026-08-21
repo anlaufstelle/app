@@ -297,10 +297,13 @@ class TestSetupFacilityAtomicity:
     def test_failure_while_applying_the_catalog_rolls_everything_back(self, monkeypatch):
         from core.management.commands import setup_facility as command_module
 
-        def _boom(_facility):
+        # Refs #1970: der Command ruft die Grundausstattung als Ganzes auf
+        # (Katalog + Schichtfenster + Schnellvorlagen); der Katalog-Schritt
+        # liegt seither eine Ebene tiefer in ``facility_bootstrap``.
+        def _boom(_facility, **_kwargs):
             raise RuntimeError("Katalog kaputt")
 
-        monkeypatch.setattr(command_module, "ensure_default_package", _boom)
+        monkeypatch.setattr(command_module, "ensure_facility_baseline", _boom)
 
         with (
             patch("builtins.input", side_effect=["Org", "Stelle", "admin"]),
@@ -381,10 +384,10 @@ class TestSetupFacilityCatalogFailure:
         report = PackageReport()
         report.errors.append(("kontakt", "Entitaetstyp ist nach dem Anlegen unveraenderlich"))
 
-        def _boom(_facility):
+        def _boom(_facility, **_kwargs):
             raise PackageLoadError(report)
 
-        monkeypatch.setattr(command_module, "ensure_default_package", _boom)
+        monkeypatch.setattr(command_module, "ensure_facility_baseline", _boom)
 
         with pytest.raises(CommandError, match="Standardkatalog"):
             self._run()
@@ -398,12 +401,125 @@ class TestSetupFacilityCatalogFailure:
         from core.management.commands import setup_facility as command_module
         from core.packages.schema import PackageValidationError
 
-        def _boom(_facility):
+        def _boom(_facility, **_kwargs):
             raise PackageValidationError([("document_types[0].slug", "fehlt")])
 
-        monkeypatch.setattr(command_module, "ensure_default_package", _boom)
+        monkeypatch.setattr(command_module, "ensure_facility_baseline", _boom)
 
         with pytest.raises(CommandError, match="Standardkatalog"):
             self._run()
 
         assert Organization.objects.count() == 0
+
+
+@pytest.mark.django_db
+class TestSetupFacilityBaseline:
+    """Refs #1970: Katalog, Schichtfenster und Schnellvorlagen aus EINEM Einstieg.
+
+    Der Admin-Anlagepfad (``core/admin/organization.py``) ruft dieselbe
+    Funktion — ein zweiter Weg mit abweichendem Ergebnis war genau die Falle
+    aus Refs #1884.
+    """
+
+    def _run(self, *, no_default_package=False, username="admin"):
+        out = io.StringIO()
+        with (
+            patch("builtins.input", side_effect=["Org", "Stelle", username]),
+            patch("getpass.getpass", side_effect=["pw1234", "pw1234"]),
+        ):
+            call_command("setup_facility", no_default_package=no_default_package, stdout=out)
+        return out.getvalue()
+
+    def test_run_creates_shifts_and_quick_templates(self):
+        from core.models import QuickTemplate, TimeFilter
+
+        self._run()
+
+        facility = Facility.objects.get(name="Stelle")
+        assert TimeFilter.objects.filter(facility=facility).exists()
+        assert TimeFilter.objects.filter(facility=facility, is_default=True).count() == 1
+        assert QuickTemplate.objects.filter(facility=facility).exists()
+
+    def test_opt_out_skips_the_catalog_but_not_the_shifts(self):
+        from core.models import QuickTemplate, TimeFilter
+
+        self._run(no_default_package=True)
+
+        facility = Facility.objects.get(name="Stelle")
+        assert not DocumentType.objects.filter(facility=facility).exists()
+        assert TimeFilter.objects.filter(facility=facility).exists()
+        # Ohne Katalog gibt es keinen Typ, an dem eine Vorlage haengen koennte.
+        assert not QuickTemplate.objects.filter(facility=facility).exists()
+
+    def test_second_run_leaves_maintained_shifts_alone(self):
+        from core.models import TimeFilter
+
+        self._run()
+        facility = Facility.objects.get(name="Stelle")
+        TimeFilter.objects.filter(facility=facility).exclude(label="Frühdienst").delete()
+        renamed = TimeFilter.objects.get(facility=facility)
+        renamed.label = "Tagdienst"
+        renamed.save()
+
+        self._run()
+
+        assert list(TimeFilter.objects.filter(facility=facility).values_list("label", flat=True)) == ["Tagdienst"]
+
+    def test_admin_save_does_not_undo_the_opt_out(self, rf, super_admin_user):
+        """Der ``--no-default-package``-Entscheid ueberlebt jedes spaetere Speichern im Admin.
+
+        Beide Anlagepfade teilen sich einen Einstieg — der Admin darf ihn
+        deshalb nur beim **Anlegen** ziehen. Sonst holte das erste Umbenennen
+        einer bewusst leer gehaltenen Einrichtung den kompletten
+        Standardkatalog herein, gegen den Hilfetext des Flags.
+        """
+        from django.contrib.messages.storage.fallback import FallbackStorage
+
+        from core.admin.organization import FacilityAdmin
+        from core.admin_site import anlaufstelle_admin_site
+        from core.models import QuickTemplate
+
+        self._run(no_default_package=True)
+        facility = Facility.objects.get(name="Stelle")
+        assert not DocumentType.objects.filter(facility=facility).exists()
+
+        request = rf.get("/")
+        request.user = super_admin_user
+        request.current_facility = getattr(super_admin_user, "facility", None)
+        request.session = {}
+        request._messages = FallbackStorage(request)
+        facility.name = "Stelle (umbenannt)"
+        FacilityAdmin(Facility, anlaufstelle_admin_site).save_model(request, facility, form=None, change=True)
+
+        assert not DocumentType.objects.filter(facility=facility).exists()
+        assert not FieldTemplate.objects.filter(facility=facility).exists()
+        assert not QuickTemplate.objects.filter(facility=facility).exists()
+
+    def test_admin_path_and_command_agree(self, rf, super_admin_user, organization):
+        """Akzeptanzkriterium: beide Anlagepfade liefern dasselbe Ergebnis."""
+        from django.contrib.messages.storage.fallback import FallbackStorage
+
+        from core.admin.organization import FacilityAdmin
+        from core.admin_site import anlaufstelle_admin_site
+        from core.models import QuickTemplate, TimeFilter
+
+        self._run(username="cli-admin")
+        via_command = Facility.objects.get(name="Stelle")
+
+        request = rf.get("/")
+        request.user = super_admin_user
+        request.current_facility = getattr(super_admin_user, "facility", None)
+        request.session = {}
+        request._messages = FallbackStorage(request)
+        via_admin = Facility(organization=organization, name="Adminstelle")
+        FacilityAdmin(Facility, anlaufstelle_admin_site).save_model(request, via_admin, form=None, change=False)
+
+        def _fingerprint(facility):
+            return (
+                sorted(DocumentType.objects.filter(facility=facility).values_list("slug", flat=True)),
+                sorted(FieldTemplate.objects.filter(facility=facility).values_list("slug", flat=True)),
+                sorted(TimeFilter.objects.filter(facility=facility).values_list("label", flat=True)),
+                sorted(QuickTemplate.objects.filter(facility=facility).values_list("name", flat=True)),
+            )
+
+        assert _fingerprint(via_admin) == _fingerprint(via_command)

@@ -1,9 +1,15 @@
 """Settings and time-filter seeding per facility."""
 
-from datetime import time
-
 from core.constants import DEFAULT_SETTINGS_ALLOWED_FILE_TYPES
 from core.models import DocumentType, Facility, Settings, TimeFilter
+
+# Refs #1970: die Schichtfenster sind kein Fixture-Inhalt, sondern
+# Produktions-Startbestand — sie stehen deshalb in
+# ``core/services/facility_bootstrap.py`` und werden hier nur mitbenutzt.
+# Richtung wie beim Dokumentationstyp-Katalog (Refs #1883, ``doc_types.py``):
+# der Seed importiert aus dem Produktionscode, nie umgekehrt. Ohne das lagen
+# dieselben drei Schichten in zwei Listen und drifteten auseinander.
+from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS
 
 
 def seed_settings(facility: Facility) -> None:
@@ -37,20 +43,21 @@ def seed_settings(facility: Facility) -> None:
 
 
 def seed_time_filters(facility: Facility) -> None:
-    """Create the three standard shift time filters if missing."""
-    filters = [
-        ("Frühdienst", time(8, 0), time(16, 0), True, 0),
-        ("Spätdienst", time(16, 0), time(22, 0), False, 1),
-        ("Nachtdienst", time(22, 0), time(8, 0), False, 2),
-    ]
-    for label, start, end, is_default, sort in filters:
+    """Create the three standard shift time filters if missing.
+
+    Anders als der Produktionspfad (``ensure_default_time_filters``: ruehrt
+    eine Einrichtung mit eigenen Schichten gar nicht mehr an) fuellt der Seed
+    je Label einzeln nach — Fixtures sollen einen vollstaendigen, bekannten
+    Stand herstellen.
+    """
+    for sort_order, item in enumerate(DEFAULT_TIME_FILTERS):
         TimeFilter.objects.get_or_create(
             facility=facility,
-            label=label,
+            label=item.label,
             defaults={
-                "start_time": start,
-                "end_time": end,
-                "is_default": is_default,
-                "sort_order": sort,
+                "start_time": item.start_time,
+                "end_time": item.end_time,
+                "is_default": item.is_default,
+                "sort_order": sort_order,
             },
         )

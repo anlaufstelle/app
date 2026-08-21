@@ -108,3 +108,236 @@ class TestEnsureDefaultPackage:
 
         assert report is not None
         assert DocumentType.objects.filter(facility=other, entity_type="event").exists()
+
+
+@pytest.mark.django_db
+class TestEnsureDefaultTimeFilters:
+    """Refs #1970: Schichtfenster gehoeren zur Grundausstattung.
+
+    Ohne Zeitfenster **bricht nichts** — ``build_zeitstrom_state`` liest die
+    aktiven Filter als moeglicherweise leeres Tupel und
+    ``core.services.events.feed.get_time_range`` faellt ohne Filter auf den
+    vollen Tag zurueck. Es fehlt die Schichtsicht: Uebergabe, Zeitstrom-Filter
+    und der Live-Zaehler haben keinen Zeitraum, auf den sie sich beziehen.
+    """
+
+    def test_creates_the_standard_shifts_once(self, facility):
+        from core.models import TimeFilter
+        from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS, ensure_default_time_filters
+
+        created = ensure_default_time_filters(facility)
+
+        assert created is not None
+        labels = list(TimeFilter.objects.for_facility(facility).order_by("sort_order").values_list("label", flat=True))
+        assert labels == [item.label for item in DEFAULT_TIME_FILTERS]
+        assert TimeFilter.objects.for_facility(facility).filter(is_default=True).count() == 1
+
+    def test_sort_order_follows_the_declaration(self, facility):
+        from core.models import TimeFilter
+        from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS, ensure_default_time_filters
+
+        ensure_default_time_filters(facility)
+
+        shifts = TimeFilter.objects.for_facility(facility).order_by("sort_order")
+        orders = list(shifts.values_list("sort_order", flat=True))
+        assert orders == list(range(len(DEFAULT_TIME_FILTERS)))
+
+    def test_facility_with_own_shifts_stays_untouched(self, facility):
+        """Ausstatten, kein Nachziehen — wie beim Katalog (Refs #1883)."""
+        from datetime import time
+
+        from core.models import TimeFilter
+        from core.services.facility_bootstrap import ensure_default_time_filters
+
+        TimeFilter.objects.create(
+            facility=facility,
+            label="Tagdienst 10-18",
+            start_time=time(10, 0),
+            end_time=time(18, 0),
+            is_default=True,
+        )
+
+        assert ensure_default_time_filters(facility) is None
+
+        assert list(TimeFilter.objects.for_facility(facility).values_list("label", flat=True)) == ["Tagdienst 10-18"]
+
+    def test_a_second_facility_gets_its_own_shifts(self, facility, organization):
+        from core.models import Facility, TimeFilter
+        from core.services.facility_bootstrap import ensure_default_time_filters
+
+        ensure_default_time_filters(facility)
+        other = Facility.objects.create(organization=organization, name="Zweitstelle")
+
+        assert ensure_default_time_filters(other) is not None
+        assert TimeFilter.objects.for_facility(other).exists()
+
+
+@pytest.mark.django_db
+class TestEnsureDefaultQuickTemplates:
+    """Refs #1970: knapper Produktions-Startbestand statt der Demo-Vorlagen.
+
+    ``core/seed/quick_templates.py`` liefert Demo-Inhalte und sucht seine
+    Dokumentationstypen ueber den **Namen** — ein im Admin umbenannter Typ
+    faellt dort still durch. Der Produktionspfad matcht ueber den ``slug``.
+    """
+
+    def test_templates_hang_on_the_catalog_by_slug(self, facility):
+        from core.models import QuickTemplate
+        from core.services.facility_bootstrap import (
+            DEFAULT_QUICK_TEMPLATES,
+            ensure_default_package,
+            ensure_default_quick_templates,
+        )
+
+        ensure_default_package(facility)
+        doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
+        doc_type.name = "Erstkontakt"  # Umbenennung im Admin darf den Bootstrap nicht abhaengen
+        doc_type.save()
+
+        created = ensure_default_quick_templates(facility)
+
+        assert created is not None
+        assert len(created) == len(DEFAULT_QUICK_TEMPLATES)
+        assert QuickTemplate.objects.for_facility(facility).count() == len(DEFAULT_QUICK_TEMPLATES)
+        assert all(tpl.document_type_id == doc_type.pk for tpl in created)
+
+    def test_declared_values_survive_the_whitelist_on_the_shipped_catalog(self, facility):
+        """Ein Startbestand, den ``filter_prefilled_data`` leerraeumt, waere wertlos.
+
+        Der Schreibpfad filtert (siehe unten) — deshalb reicht ein
+        Filter-Aufruf auf dem Ergebnis als Zusicherung **nicht** mehr aus, der
+        waere tautologisch gruen. Verglichen wird gegen die **Deklaration**:
+        haette der ausgelieferte Katalog ``dauer`` auf ELEVATED gehoben oder
+        den Options-Slug ``beratung`` deaktiviert, entstuenden hier leere
+        Vorlagen statt der erwarteten Werte.
+        """
+        from core.services.facility_bootstrap import (
+            DEFAULT_QUICK_TEMPLATES,
+            ensure_default_package,
+            ensure_default_quick_templates,
+        )
+
+        ensure_default_package(facility)
+        created = ensure_default_quick_templates(facility)
+
+        assert created
+        assert {tpl.name: tpl.prefilled_data for tpl in created} == {
+            item.name: dict(item.prefilled_data) for item in DEFAULT_QUICK_TEMPLATES
+        }
+
+    def test_prefilled_data_is_written_through_the_whitelist_filter(self, facility):
+        """Der Startbestand trifft auf einen **fremden** Katalog — der Filter entscheidet.
+
+        Der Bootstrap legt Schnellvorlagen auch dann an, wenn der Katalog nicht
+        aus der Auslieferung stammt (Einrichtung mit eigenen Typen, aber ohne
+        eine einzige Vorlage). Traegt deren ``kontakt``-Typ ein ``dauer``-Feld
+        mit erhoehter Sensitivitaet, waere ``{"dauer": 5}`` ein Wert, den
+        ``QuickTemplateAdmin.save_model`` (``core/admin/documents.py``) nie in
+        die Datenbank gelassen haette: gespeichert, aber beim Anwenden still
+        verworfen. Der Schreibpfad des Bootstraps laeuft deshalb durch
+        denselben Filter.
+        """
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate, QuickTemplate
+        from core.services.facility_bootstrap import ensure_default_quick_templates
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            slug="kontakt",
+            name="Kontakt",
+            entity_type=DocumentType.EntityType.EVENT,
+        )
+        dauer = FieldTemplate.objects.create(
+            facility=facility,
+            slug="dauer",
+            name="Dauer",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            sensitivity=DocumentType.Sensitivity.ELEVATED,
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=dauer, sort_order=0)
+
+        created = ensure_default_quick_templates(facility)
+
+        assert created, "Die Vorlagen selbst entstehen — nur ihre Werte muessen den Filter passieren"
+        for template in created:
+            assert template.prefilled_data == {}, "gesperrter Slug darf nicht roh in der DB landen"
+        stored = QuickTemplate.objects.for_facility(facility).values_list("prefilled_data", flat=True)
+        assert list(stored) == [{} for _ in created]
+
+    def test_without_a_matching_catalog_nothing_is_created(self, facility):
+        """Kein Dokumentationstyp mit passendem Slug -> leere Liste, kein Fehler."""
+        from core.models import QuickTemplate
+        from core.services.facility_bootstrap import ensure_default_quick_templates
+
+        assert ensure_default_quick_templates(facility) == []
+        assert not QuickTemplate.objects.for_facility(facility).exists()
+
+    def test_facility_with_own_templates_stays_untouched(self, facility):
+        from core.models import QuickTemplate
+        from core.services.facility_bootstrap import ensure_default_package, ensure_default_quick_templates
+
+        ensure_default_package(facility)
+        doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
+        QuickTemplate.objects.create(facility=facility, document_type=doc_type, name="Eigene Vorlage")
+
+        assert ensure_default_quick_templates(facility) is None
+
+        assert list(QuickTemplate.objects.for_facility(facility).values_list("name", flat=True)) == ["Eigene Vorlage"]
+
+
+@pytest.mark.django_db
+class TestEnsureFacilityBaseline:
+    """Refs #1970: EIN Einstieg fuer alle Anlagepfade — Admin wie ``setup_facility``."""
+
+    def test_provisions_catalog_shifts_and_templates(self, facility):
+        from core.models import QuickTemplate, TimeFilter
+        from core.services.facility_bootstrap import ensure_facility_baseline
+
+        result = ensure_facility_baseline(facility)
+
+        assert result.package is not None
+        assert result.time_filters
+        assert result.quick_templates
+        assert DocumentType.objects.filter(facility=facility, entity_type="event").exists()
+        assert TimeFilter.objects.for_facility(facility).exists()
+        assert QuickTemplate.objects.for_facility(facility).exists()
+
+    def test_without_package_the_shifts_still_come(self, facility):
+        """``--no-default-package`` laesst den Katalog weg, nicht die Schichtfenster."""
+        from core.models import QuickTemplate, TimeFilter
+        from core.services.facility_bootstrap import ensure_facility_baseline
+
+        result = ensure_facility_baseline(facility, with_package=False)
+
+        assert result.package is None
+        assert not DocumentType.objects.filter(facility=facility).exists()
+        assert TimeFilter.objects.for_facility(facility).exists()
+        # Ohne Katalog gibt es keinen Typ, an dem eine Vorlage haengen koennte.
+        assert result.quick_templates == []
+        assert not QuickTemplate.objects.for_facility(facility).exists()
+
+    def test_second_call_reports_an_untouched_facility(self, facility):
+        from core.services.facility_bootstrap import ensure_facility_baseline
+
+        ensure_facility_baseline(facility)
+
+        result = ensure_facility_baseline(facility)
+
+        assert result.package is None
+        assert result.quick_templates is None
+        assert result.time_filters is None
+
+    def test_a_broken_catalog_takes_the_whole_baseline_with_it(self, facility, monkeypatch):
+        """Fail-loud: keine halb ausgestattete Einrichtung (Muster aus Refs #1883)."""
+        from core.models import TimeFilter
+        from core.packages.schema import PackageValidationError
+        from core.services import facility_bootstrap
+
+        def _boom(_facility):
+            raise PackageValidationError([("document_types[0].slug", "kaputt")])
+
+        monkeypatch.setattr(facility_bootstrap, "ensure_default_package", _boom)
+
+        with pytest.raises(PackageValidationError):
+            facility_bootstrap.ensure_facility_baseline(facility)
+
+        assert not TimeFilter.objects.for_facility(facility).exists()

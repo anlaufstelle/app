@@ -170,3 +170,125 @@ class TestFacilityAdminSeedsSettings:
         admin_cls.save_model(request, facility, form=None, change=True)
 
         assert Settings.objects.filter(facility=facility).exists()
+
+
+class TestFacilityAdminBootstrapsBaseline:
+    """Refs #1970 — eine im Admin angelegte Einrichtung ist sofort dokumentierbar.
+
+    ``ensure_settings_for_facility`` (Refs #1884) hat nur die ``Settings``-Zeile
+    geschlossen. Ohne Dokumentationstyp bleibt die Typ-Auswahl in
+    ``/events/new/`` leer und es laesst sich **kein einziger Kontakt**
+    dokumentieren; Schichtfenster und Schnellvorlagen fehlten ebenfalls.
+
+    Der Admin benutzt denselben Einstieg wie ``setup_facility``
+    (``core.services.facility_bootstrap.ensure_facility_baseline``) statt einen
+    zweiten Weg mit abweichendem Ergebnis — genau die Falle aus Refs #1884.
+    """
+
+    def test_add_provisions_catalog_shifts_and_templates(self, rf, super_admin_user, organization):
+        from core.models import DocumentType, QuickTemplate, TimeFilter
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        new_facility = Facility(organization=organization, name="Frisch angelegt")
+
+        admin_cls.save_model(request, new_facility, form=None, change=False)
+
+        assert DocumentType.objects.filter(
+            facility=new_facility, entity_type=DocumentType.EntityType.EVENT, is_active=True
+        ).exists(), "Ohne Ereignistyp bleibt die Typ-Auswahl leer — nichts dokumentierbar"
+        assert TimeFilter.objects.filter(facility=new_facility).exists()
+        assert QuickTemplate.objects.filter(facility=new_facility).exists()
+
+    def test_change_keeps_a_maintained_catalog_untouched(self, rf, super_admin_user, facility):
+        """Ausstatten, kein Nachziehen — im Admin gepflegte Werte bleiben stehen.
+
+        Die Zusicherung an der Oberflaeche: ein Umbenennen der Einrichtung
+        schreibt keinen Katalogwert zurueck. Sie haelt seit dem ``change``-Gate
+        doppelt (der Bootstrap laeuft beim Aendern gar nicht mehr) — und hielte
+        auch ohne, weil ein gepflegter Katalog die Leer-Pruefung nicht passiert.
+        """
+        from core.models import DocumentType
+        from core.services.facility_bootstrap import ensure_facility_baseline
+
+        ensure_facility_baseline(facility)
+        doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
+        doc_type.name = "Beratungskontakt"
+        doc_type.sort_order = 99
+        doc_type.save()
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        facility.name = "Umbenannt"
+        admin_cls.save_model(request, facility, form=None, change=True)
+
+        doc_type.refresh_from_db()
+        assert doc_type.name == "Beratungskontakt"
+        assert doc_type.sort_order == 99
+
+    def test_change_leaves_a_deliberately_empty_facility_empty(self, rf, super_admin_user, facility):
+        """Leer IST ein gepflegter Zustand — ``--no-default-package`` ist eine Entscheidung.
+
+        Der Bootstrap laeuft nur beim Anlegen (``change=False``). Liefe er auch
+        beim Aendern, holte das erste beliebige Speichern (Umbenennen,
+        ``is_active`` umschalten) den kompletten Standardkatalog samt
+        Schnellvorlagen in eine bewusst leer gehaltene Einrichtung — gegen den
+        Hilfetext des Flags und gegen die eigene Zusicherung „ausstatten, kein
+        Nachziehen". Der Nachzieh-Weg ist ``load_package --default``.
+        """
+        from core.models import DocumentType, QuickTemplate
+
+        assert not DocumentType.objects.filter(facility=facility).exists()
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        facility.name = "Umbenannt"
+        admin_cls.save_model(request, facility, form=None, change=True)
+
+        assert not DocumentType.objects.filter(facility=facility).exists()
+        assert not QuickTemplate.objects.for_facility(facility).exists()
+
+    def test_change_does_not_resurrect_deleted_standard_shifts(self, rf, super_admin_user, facility):
+        """Geloeschte Standardschichten kommen nicht von selbst zurueck (Refs #1970).
+
+        Wer alle Zeitfenster loescht, will keine Schichtsicht — ein spaeteres
+        Speichern der Einrichtung darf sie nicht stumm wieder hereinholen.
+        """
+        from core.models import TimeFilter
+        from core.services.facility_bootstrap import ensure_facility_baseline
+
+        ensure_facility_baseline(facility)
+        TimeFilter.objects.for_facility(facility).delete()
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        facility.name = "Umbenannt"
+        admin_cls.save_model(request, facility, form=None, change=True)
+
+        assert not TimeFilter.objects.for_facility(facility).exists()
+
+    def test_type_selector_is_filled_for_a_user_of_the_new_facility(self, rf, client, super_admin_user, organization):
+        """Der Beweis liegt an der Oberflaeche, nicht in der Zeilenzahl."""
+        from django.urls import reverse
+
+        from core.models import User
+
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        new_facility = Facility(organization=organization, name="Zweigstelle Süd")
+        admin_cls.save_model(request, new_facility, form=None, change=False)
+
+        user = User.objects.create_user(
+            username="neue-fachkraft",
+            role=User.Role.STAFF,
+            facility=new_facility,
+            is_staff=True,
+        )
+        user.set_password("testpass123")
+        user.save()
+        client.force_login(user)
+
+        response = client.get(reverse("core:event_create"))
+
+        assert response.status_code == 200
+        assert response.context["meta_form"].fields["document_type"].queryset.exists()
