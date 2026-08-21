@@ -161,6 +161,23 @@ class TestBetriebVerschlucktKeinenEintrag:
         assert any("klarname" in rec.getMessage() for rec in caplog.records)
         assert not any("Erika Mustermann" in rec.getMessage() for rec in caplog.records)
 
+    def test_ohne_setting_wird_nicht_scharf_geschaltet(self, monkeypatch):
+        """Fehlt das Setting ganz, gilt das milde Verhalten -- nicht das harte.
+
+        ``base.py`` setzt ``AUDIT_DETAIL_STRICT`` immer, der ``getattr``-Default
+        greift also nur, wenn jemand ein eigenes Settings-Modul baut. Genau
+        deshalb ist er sonst unpruefbar: der Mutationslauf zum v0.82-Checkpoint
+        meldete drei Ueberlebende in ``_strict``, darunter einen, der den
+        Default auf ``True`` drehte. Der haette im Betrieb Audit-Schreibvorgaenge
+        abgebrochen -- das Gegenteil der Entscheidung dieses Tickets.
+        """
+        from core.services.audit import detail_policy
+
+        # Ein Settings-Objekt ohne das Attribut -- Djangos LazySettings cacht
+        # einmal gelesene Namen, ein delattr am Wrapped greift deshalb nicht.
+        monkeypatch.setattr(detail_policy, "settings", object())
+        assert detail_policy._strict() is False
+
 
 class TestAllowlistInhalt:
     def test_pseudonym_ist_nicht_deklariert(self):
