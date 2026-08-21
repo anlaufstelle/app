@@ -293,3 +293,31 @@ class TestRlsBypassGuard:
 
         assert "Import abgeschlossen" in output
         assert DocumentType.objects.filter(facility=facility, slug="kontakt").exists()
+
+
+@pytest.mark.django_db
+class TestDefaultCatalogOption:
+    """Refs #1883: Standardkatalog ohne Pfadangabe einspielen.
+
+    Deckt die Bestandsluecke, die ``setup_facility`` nicht erreicht: eine
+    bereits existierende Einrichtung bekommt den mitgelieferten Katalog ueber
+    denselben, bereits RLS-geguardeten Operator-Command — statt ueber einen
+    handgetippten Container-Pfad auf ``core/packages/default.yaml``.
+    """
+
+    def test_default_flag_loads_the_bundled_catalog(self, facility):
+        out = io.StringIO()
+        call_command("load_package", default=True, facility=str(facility.id), stdout=out)
+
+        assert DocumentType.objects.filter(facility=facility, entity_type="event").exists()
+        assert "Import abgeschlossen" in out.getvalue()
+
+    def test_file_and_default_are_mutually_exclusive(self, tmp_path, facility):
+        path = _write_yaml(tmp_path, _MINI_PACKAGE)
+
+        with pytest.raises(CommandError, match="--file"):
+            call_command("load_package", file=str(path), default=True, facility=str(facility.id))
+
+    def test_neither_file_nor_default_aborts(self, facility):
+        with pytest.raises(CommandError, match="--file"):
+            call_command("load_package", facility=str(facility.id))

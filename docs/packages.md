@@ -285,14 +285,19 @@ Schema-Fehler (vor dem Laden) tragen stattdessen den **Pfad in der YAML**, z. B.
 ## 4. `manage.py load_package`
 
 ```
-python src/manage.py load_package --file <pfad/zur/paket.yaml> --facility <uuid> [--dry-run]
+python src/manage.py load_package (--file <pfad/zur/paket.yaml> | --default) --facility <uuid> [--dry-run]
 ```
 
 | Argument | Pflicht | Bedeutung |
 |---|---|---|
-| `--file` | ja | Pfad zur Paket-YAML |
+| `--file` | ja¹ | Pfad zur Paket-YAML |
+| `--default` | ja¹ | Statt `--file`: der mitgelieferte Standardkatalog (`core/packages/default.yaml`) |
 | `--facility` | ja | UUID der Ziel-Einrichtung (`Facility.id`) |
 | `--dry-run` | nein | Simuliert den Lauf und rollt am Ende zurück — **identischer Code-Pfad**, der Report zeigt exakt, was ein Echtlauf getan hätte |
+
+¹ Genau eines von `--file` / `--default`. Beides zusammen oder keines von beiden bricht mit einer Meldung ab.
+
+> **`--default` — Standardkatalog nachziehen (#1883).** `manage.py setup_facility` stattet eine **neue** Einrichtung automatisch mit dem Standardkatalog aus — eine Einrichtung, die schon Dokumentationstypen oder Feldvorlagen trägt, lässt es dagegen unangetastet (Ersteinrichtung, kein Katalog-Update). Für eine **bestehende** Einrichtung — im Django-Admin unter **Core → Einrichtungen** entstanden, oder mit `--no-default-package` bewusst leer gestartet — ist `--default` der Weg dorthin: fachlich identisch zu `--file <container-pfad>/default.yaml`, nur ohne dass der Betreiber diesen Pfad kennen muss. Auf Bestandszeilen gilt dabei die übliche Rücksync-Semantik dieses Commands (siehe Tabelle unten) — deshalb erst mit `--dry-run`. Ohne mindestens einen Typ mit `entity_type: event` bleibt die Typ-Auswahl beim Dokumentieren leer.
 
 Im Container **immer mit der Admin-Rolle** (siehe Kasten):
 
@@ -301,11 +306,17 @@ docker compose exec \
   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
   web python manage.py load_package --file /tmp/paket.yaml --facility <uuid> --dry-run
+
+# Standardkatalog statt eigener Datei:
+docker compose exec \
+  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+  web python manage.py load_package --default --facility <uuid> --dry-run
 ```
 
 > ⚠️ **Rollen-Voraussetzung.** Der Loader schreibt in fünf Tabellen mit Row-Level-Security (`core_documenttype`, `core_fieldtemplate`, `core_documenttypefield`, `core_fieldgroup`, `core_fieldcondition`). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ohne den ENV-Override sähe der Lauf 0 Bestandszeilen und scheiterte am ersten Schreibzugriff. Der Command prüft das vorab und bricht mit einer klaren Meldung ab. Hintergrund: [Ops-Runbook § 9.5](ops-runbook.md), [ADR-033](adr/033-runtime-owner-role-separation.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Override überflüssig.
 
-**Exit-Verhalten:** `0` bei Erfolg. Ein Abbruch mit `CommandError` (Exit ≠ 0) bei unlesbarer Datei, YAML-Syntaxfehler (dazu zählen **doppelte Schlüssel** in einem Mapping — siehe unten), fehlender/unbekannter Facility-UUID, Schema-Verstoß oder Loader-Fehler. Bei Loader-Fehlern wird der (verworfene) Report **trotzdem** ausgegeben — er zeigt, was ohne die Fehler passiert wäre.
+**Exit-Verhalten:** `0` bei Erfolg. Ein Abbruch mit `CommandError` (Exit ≠ 0) bei fehlender oder doppelter Paketquelle, unlesbarer Datei, YAML-Syntaxfehler (dazu zählen **doppelte Schlüssel** in einem Mapping — siehe unten), fehlender/unbekannter Facility-UUID, Schema-Verstoß oder Loader-Fehler. Bei Loader-Fehlern wird der (verworfene) Report **trotzdem** ausgegeben — er zeigt, was ohne die Fehler passiert wäre.
 
 > **Doppelte YAML-Schlüssel sind ein Fehler.** Trägt ein Mapping denselben Schlüssel zweimal (z. B. versehentlich zwei `name:` oder zwei `sort_order:` in einem Eintrag), bricht der Import mit Key-Name und Zeile ab — statt still den letzten Wert zu übernehmen (Last-Write-Wins). Das gilt für Pakete **und** den Standardkatalog (`default.yaml`), die beide über denselben strikten Loader gelesen werden.
 

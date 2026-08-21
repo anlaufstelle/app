@@ -16,6 +16,12 @@ ersten INSERT an einer ``ProgrammingError``. :func:`has_rls_bypass_context`
 prüft das vorab und bricht fail-loud ab — Muster der Schwester-Commands
 (``enforce_retention`` Refs #1016, ``detect_breaches`` Refs #1512).
 
+``--default`` (Refs #1883) ersetzt ``--file`` durch den mitgelieferten
+Standardkatalog ``core/packages/default.yaml``. Damit bekommt eine
+**Bestands**-Einrichtung den Auslieferungsstand, ohne dass der Operator den
+Container-Pfad der YAML kennen muss — ``setup_facility`` stattet nur neu
+angelegte Einrichtungen aus.
+
 Report-Ausgabe: Bezeichner sind **nicht** als eindeutige Schlüssel zu
 behandeln. Bei Teiländerungen an Bedingungen (Wholesale-Replace, siehe
 ``core.packages.loader``) können mehrere Einträge desselben Bezeichners im
@@ -34,6 +40,7 @@ import yaml
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from core.models.organization import Facility
+from core.packages.default_catalog import DEFAULT_PACKAGE_PATH, load_default_package_data
 from core.packages.loader import PackageLoadError, PackageReport, load_package
 from core.packages.schema import PackageV1, PackageValidationError, parse_package
 from core.packages.yaml_io import safe_load_unique
@@ -61,7 +68,16 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
-        parser.add_argument("--file", required=True, help="Pfad zur Paket-YAML-Datei.")
+        parser.add_argument("--file", help="Pfad zur Paket-YAML-Datei.")
+        parser.add_argument(
+            "--default",
+            action="store_true",
+            help=(
+                "Statt --file den mitgelieferten Standardkatalog "
+                f"({DEFAULT_PACKAGE_PATH}) einspielen — der Weg, um eine "
+                "Bestands-Einrichtung nachtraeglich auf den Auslieferungsstand zu bringen."
+            ),
+        )
         parser.add_argument("--facility", required=True, help="UUID der Ziel-Einrichtung.")
         parser.add_argument(
             "--dry-run",
@@ -88,7 +104,7 @@ class Command(BaseCommand):
                 "(siehe docs/ops-runbook.md § 9.5)."
             )
         facility = self._resolve_facility(options["facility"])
-        raw = self._read_package_file(options["file"])
+        raw = self._read_source(options)
         package = self._parse_package(raw)
 
         dry_run: bool = bool(options["dry_run"])
@@ -118,6 +134,35 @@ class Command(BaseCommand):
             return Facility.objects.get(id=facility_id)
         except Facility.DoesNotExist as exc:
             raise CommandError(f"Einrichtung mit UUID {raw_uuid!r} nicht gefunden.") from exc
+
+    def _read_source(self, options: dict[str, Any]) -> dict[str, Any]:
+        """Paketquelle bestimmen: genau eines von ``--file`` / ``--default``.
+
+        Refs #1883: ``--default`` schliesst die Bestandsluecke des
+        Kaltstart-Tickets — ``setup_facility`` stattet nur NEUE Einrichtungen
+        aus, eine bereits vorhandene bekommt den Standardkatalog hierueber,
+        ohne dass der Operator den Container-Pfad der ausgelieferten YAML
+        kennen muss. Fachlich identisch zu ``--file <…>/default.yaml``:
+        derselbe strikte Reader, derselbe Loader, derselbe RLS-Guard oben.
+        """
+        path_str: str | None = options.get("file")
+        use_default: bool = bool(options.get("default"))
+        if path_str and use_default:
+            raise CommandError("--file und --default schliessen sich aus — genau eine Paketquelle angeben.")
+        if use_default:
+            self.stdout.write(self.style.MIGRATE_HEADING(f"Standardkatalog: {DEFAULT_PACKAGE_PATH}\n"))
+            return load_default_package_data()
+        # Reihenfolge ist bewusst: erst der ``--default``-Zweig, dann die
+        # Leerpruefung. Ein zusammengefasstes ``if not path_str and not
+        # use_default`` narrowt ``path_str`` fuer mypy NICHT auf ``str``
+        # (``str | None`` bleibt stehen) — der Aufruf unten waere ein
+        # ``arg-type``-Fehler.
+        if not path_str:
+            raise CommandError(
+                f"Keine Paketquelle angegeben — entweder --file <pfad> oder --default "
+                f"(mitgelieferter Standardkatalog {DEFAULT_PACKAGE_PATH})."
+            )
+        return self._read_package_file(path_str)
 
     def _read_package_file(self, path_str: str) -> dict[str, Any]:
         path = Path(path_str)

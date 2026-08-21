@@ -20,6 +20,10 @@ Was sich dadurch **verhält**:
   übereinandergeschrieben (Last-Write-Wins); jetzt stehen sie einmal unter
   ``field_templates`` und werden mehrfach referenziert.
 
+Seit Refs #1883 liegt das reine Lesen/Parsen des Katalogs in
+:mod:`core.packages.default_catalog` (Produktionspfad); hier bleibt der
+Seed-spezifische Teil.
+
 Was der Loader **nicht** kann und deshalb hier bleibt: das Aufräumen
 verwaister Feldgruppen (#1710). Der Loader ist bewusst additiv — er entfernt
 nie etwas, das ein Paket nicht mehr erwähnt. Siehe
@@ -28,48 +32,20 @@ nie etwas, das ein Paket nicht mehr erwähnt. Siehe
 
 from __future__ import annotations
 
-import copy
-import importlib.resources
-from typing import Any
-
 from django.db import transaction
 
 from core.models import DocumentType, Facility, FieldGroup
+
+# Refs #1883: Der Katalog-Reader ist Produktionscode und lebt deshalb neben dem
+# Paket, das er liest (``core/packages/default_catalog.py``) — ``core/seed/``
+# ist Fixture-Territorium, aus dem der Produktionspfad nicht importieren darf.
+# Hier bleibt der Bestands-Name als Re-Export stehen: Seed und Tests behalten
+# ihren Import, und es gibt weiterhin genau EINE Implementierung samt Cache.
+from core.packages.default_catalog import load_default_package_data
 from core.packages.loader import PackageReport, load_package
 from core.packages.schema import PackageV1, parse_package
-from core.packages.yaml_io import safe_load_unique
 
-# Paket-Ressource neben dem Loader (``core/packages/default.yaml``) — über
-# ``importlib.resources`` adressiert, damit der Pfad unabhängig vom
-# Arbeitsverzeichnis und vom Deploy-Layout (Container: ``COPY src/ ./``)
-# auflösbar bleibt.
-_PACKAGE_ANCHOR = "core.packages"
-_PACKAGE_RESOURCE = "default.yaml"
-
-# Modulweiter Cache: die Datei wird einmal je Prozess gelesen und geparst,
-# auch wenn der Seed über mehrere Einrichtungen läuft. Bewusst LAZY (kein
-# Import-Zeit-Dateizugriff — sonst bräche der Import in Umgebungen ohne den
-# Paketbaum, siehe Import-Zeit-Guard in den Architektur-Tests).
-_package_data_cache: dict[str, Any] | None = None
-
-
-def load_default_package_data() -> dict[str, Any]:
-    """Rohdaten des Standardpakets aus ``core/packages/default.yaml``.
-
-    Liefert eine **Kopie** des modulweiten Caches: Aufrufer (insbesondere
-    Tests, die Katalog-Varianten bauen) dürfen das Ergebnis gefahrlos
-    verändern, ohne den Cache zu vergiften.
-    """
-    global _package_data_cache
-    if _package_data_cache is None:
-        text = importlib.resources.files(_PACKAGE_ANCHOR).joinpath(_PACKAGE_RESOURCE).read_text(encoding="utf-8")
-        # Härtung Refs #1727: auch der Standardkatalog läuft über den Duplikat-
-        # Key-strikten Loader — ein Copy-Paste-Fehler im Repo fällt so auf.
-        data = safe_load_unique(text)
-        if not isinstance(data, dict):
-            raise ValueError(f"{_PACKAGE_ANCHOR}/{_PACKAGE_RESOURCE} enthält kein Mapping auf oberster Ebene.")
-        _package_data_cache = data
-    return copy.deepcopy(_package_data_cache)
+__all__ = ["load_default_package_data", "seed_document_types"]
 
 
 def seed_document_types(facility: Facility) -> PackageReport:

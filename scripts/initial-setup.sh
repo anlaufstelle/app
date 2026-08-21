@@ -36,10 +36,14 @@ set -euo pipefail
 #   `getpass` ab. Benutzername und E-Mail lassen sich ueber ADMIN_USERNAME /
 #   ADMIN_EMAIL vorbelegen, das Passwort bewusst nicht.
 #
-# * Kein `setup_facility`. Das Kommando ist voll interaktiv (es nimmt keine
-#   Argumente entgegen) und nur der Single-Tenant-Fallback; empfohlen ist der
-#   auditierbare Weg ueber die `/system/`-UI des Super-Admins (ADR-018).
-#   Das Skript weist am Ende darauf hin.
+# * Kein `setup_facility`. Das Kommando fragt Organisation, Einrichtung,
+#   Benutzername und Passwort interaktiv ab und ist nur der Single-Tenant-
+#   Fallback; empfohlen ist der UI-Weg als Super-Admin im Django-Admin
+#   (`/admin-mgmt/`, ADR-018) — der einzige Laufzeit-Anlagepfad fuer eine
+#   Einrichtung (`core/admin/organization.py`). Zudem braucht das Kommando die
+#   Admin-DB-Rolle (BYPASSRLS), die dieses Skript bewusst nicht in die Umgebung
+#   des Web-Containers hebt. Das Skript weist am Ende mit dem vollstaendigen
+#   Aufruf darauf hin.
 #
 # ---------------------------------------------------------------------------
 # Verwendung
@@ -269,11 +273,21 @@ Erstinbetriebnahme abgeschlossen.
 
 Naechste Schritte:
 
-  1. Als Super-Admin unter /login/ anmelden und im Bereich /system/ die erste
-     Einrichtung sowie die erste Anwendungsbetreuung (facility_admin) anlegen.
-     Der UI-Weg ist auditierbar (SYSTEM_VIEW-Eintraege) und deshalb empfohlen.
-     Reiner Single-Tenant-Fallback (interaktiv):
-       docker compose -f ${COMPOSE_FILE} exec web python manage.py setup_facility
+  1. Als Super-Admin unter /login/ anmelden und die erste Einrichtung sowie die
+     erste Anwendungsbetreuung (facility_admin) im Django-Admin anlegen:
+     /admin-mgmt/ -> Core -> Einrichtungen bzw. Core -> Benutzer (nur
+     super_admin). Der Bereich /system/ zeigt Organisation und Einrichtungen
+     nur an; angelegt wird dort nichts.
+     Reiner Single-Tenant-Fallback (interaktiv, MUSS mit der Admin-DB-Rolle
+     laufen — sonst verweigert die Row-Level-Security den Schreibzugriff):
+       docker compose -f ${COMPOSE_FILE} exec \\
+         -e POSTGRES_USER=\$POSTGRES_ADMIN_USER \\
+         -e POSTGRES_PASSWORD=\$POSTGRES_ADMIN_PASSWORD \\
+         web python manage.py setup_facility
+     Der Befehl legt dabei auch den Standardkatalog der Dokumentationstypen an,
+     damit sofort dokumentiert werden kann (--no-default-package schaltet ihn
+     ab). Eine Einrichtung, die schon Dokumentationstypen hat, laesst er
+     unangetastet — nachziehen mit: load_package --default --facility <uuid>.
 
   2. Zwei-Faktor-Authentifizierung unter /mfa/settings/ einrichten — der
      Bootstrap-Super-Admin ist ab Werk MFA-pflichtig.

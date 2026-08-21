@@ -314,7 +314,7 @@ Das Skript fragt interaktiv nach:
 3. **Passwort** (zweimal eingeben — keinen Default, keinen Demo-Wert)
 4. **Anzeigename**
 
-Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an und legen über den `/system/`-Bereich die erste Einrichtung und den ersten `facility_admin` an.
+Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an und legen die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
 
 > **Wichtig — kein Default-Passwort:** Aus DSGVO- und Sicherheits-Gründen liefert die Anwendung **kein** Default-Passwort und keinen Default-Benutzernamen aus (anders als der frühere `make seed`-Workflow für Entwicklungs-Demos). Wer den Befehl überspringt, erhält **keinen** anmeldungsfähigen Account.
 
@@ -333,12 +333,16 @@ Der Befehl entsperrt den angegebenen User, schreibt einen `LOGIN_UNLOCK`-AuditLo
 
 ### 2.2 Einrichtung und Anwendungsbetreuung anlegen
 
-Nach dem Login als `super_admin` legen Sie über den `/system/`-Bereich die erste Einrichtung und einen `facility_admin` (Anwendungsbetreuung) für sie an. Alternativ steht das interaktive Setup-Skript zur Verfügung — geeignet für reine Single-Tenant-Installationen, in denen Systemadministration und Anwendungsbetreuung dieselbe Person sind:
+Nach dem Login als `super_admin` legen Sie die erste Einrichtung und einen `facility_admin` (Anwendungsbetreuung) für sie im Django-Admin an (`/admin-mgmt/`, **Core → Einrichtungen** bzw. **Core → Benutzer**). Alternativ steht das interaktive Setup-Skript zur Verfügung — geeignet für reine Single-Tenant-Installationen, in denen Systemadministration und Anwendungsbetreuung dieselbe Person sind:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py setup_facility
+docker compose -f docker-compose.prod.yml exec \
+  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+  web python manage.py setup_facility
 ```
+
+> ⚠️ **Rollen-Voraussetzung (#1883).** Der Befehl schreibt in Tabellen mit Row-Level-Security (Einstellungen, Dokumentationstypen, Feldvorlagen). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Web-Requests keinen Einrichtungs-Kontext — **ohne** den gezeigten ENV-Override scheitert schon das Anlegen der Einstellungen an der Datenbank. Der Befehl prüft das vorab und bricht mit einer klaren Meldung ab, **bevor** die erste Eingabeaufforderung erscheint. Hintergrund: [Ops-Runbook § 9 DB-Rollenmodell](ops-runbook.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Override überflüssig.
 
 Das Skript fragt interaktiv nach:
 
@@ -347,7 +351,24 @@ Das Skript fragt interaktiv nach:
 3. **Benutzername der Anwendungsbetreuung** (`facility_admin`)
 4. **Passwort der Anwendungsbetreuung** (zweimal eingeben)
 
-Anschließend sind Organisation, Einrichtung, Standardeinstellungen und der erste `facility_admin`-Benutzer angelegt.
+Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Standardkatalog der Dokumentationstypen** und der erste `facility_admin`-Benutzer angelegt. Die Einrichtung ist damit sofort benutzbar: Ohne mindestens einen Dokumentationstyp bliebe die Typ-Auswahl beim Dokumentieren leer und es ließe sich kein einziger Kontakt erfassen.
+
+> **Alles-oder-nichts:** Der Lauf ist eine einzige Datenbank-Transaktion. Bricht er ab (falsche DB-Rolle, unterbrochene Verbindung, Konflikt beim Katalog), bleibt **nichts** halb Angelegtes zurück — auch der Admin-Benutzer nicht. Der Befehl kann nach Behebung unverändert wiederholt werden.
+
+> **Wiederholungslauf lässt einen vorhandenen Katalog in Ruhe:** Trägt die Einrichtung bereits Dokumentationstypen oder Feldvorlagen (zweiter Lauf, im Django-Admin angelegte Einrichtung), spielt der Befehl den Standardkatalog **nicht** ein. Im Admin gepflegte Namen, Sortierungen, Farben, Symbole und Sichtbarkeiten bleiben damit unverändert; der Befehl sagt das am Ende und nennt `load_package --default` als den Weg, den Auslieferungsstand bewusst nachzuziehen.
+
+> **Opt-out `--no-default-package`:** Wer den Standardkatalog nicht will (eigenes Konfigurationspaket, komplett eigene Typen), hängt `--no-default-package` an. Die Einrichtung startet dann **ohne** Dokumentationstypen und ist erst dokumentierbar, nachdem ein Paket geladen wurde (siehe [docs/packages.md](packages.md)). Der Befehl weist am Ende ausdrücklich darauf hin.
+
+> **Bereits bestehende Einrichtung nachrüsten:** Für eine Einrichtung, die es schon gibt — im Django-Admin unter **Core → Einrichtungen** angelegt oder mit `--no-default-package` bewusst leer gestartet — spielt derselbe Standardkatalog nachträglich ein:
+>
+> ```bash
+> docker compose -f docker-compose.prod.yml exec \
+>   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+>   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+>   web python manage.py load_package --default --facility <uuid> --dry-run
+> ```
+>
+> `--dry-run` zeigt erst nur an, was passieren würde; ohne den Schalter wird angewendet. Der Lauf löscht nie etwas, **schreibt aber die Katalog-Eigenschaften bestehender Typen und Feldvorlagen auf den Auslieferungsstand zurück** (Name, Sortierung, Farbe, Symbol, Sichtbarkeit) — anders als die Ersteinrichtung, die einen vorhandenen Katalog gar nicht anfasst. Deshalb zuerst mit `--dry-run` ansehen; die vollständige Rücksync-Tabelle steht in [docs/packages.md § 4](packages.md). Die UUID der Einrichtung steht im Django-Admin unter **Core → Einrichtungen** in der Adresszeile der Detailseite.
 
 > **Hinweis:** Sollte eine Organisation oder Einrichtung mit dem angegebenen Namen bereits existieren, wird sie wiederverwendet. Ein bestehender Benutzername wird nicht überschrieben.
 
@@ -438,6 +459,8 @@ Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-überg
 > **Trennung System ↔ Anwendung:** `super_admin` betreut Hosting und Bootstrap, `facility_admin` betreut Konfiguration und Nutzer **innerhalb** einer Einrichtung. Diese Trennung ist DSGVO-relevant: Der Super-Admin sieht keine fachlichen Inhalte einer Einrichtung, ohne dass dies im AuditLog (`SYSTEM_VIEW`) auftaucht. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
 ### 2.5 Dokumentationstypen konfigurieren
+
+> **Ausgangslage:** Eine über `setup_facility` ([§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)) angelegte Einrichtung bringt den mitgelieferten **Standardkatalog** bereits mit — sie ist ohne weiteren Schritt dokumentierbar. Wurde die Einrichtung im Django-Admin angelegt oder der Katalog per `--no-default-package` abgewählt, ist die Liste leer; dann zuerst `manage.py load_package --default --facility <uuid>` ausführen (Befehl samt Rollen-Override in [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)). Die folgenden Abschnitte beschreiben, wie Sie den Bestand danach anpassen.
 
 Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen Sie fest, welche Arten von Dokumentation in der Einrichtung erfasst werden können. Die gleichnamige Ansicht unter **Core → Dokumentationstypen** im Django-Admin bleibt als technischer Fallback erhalten, ist aber nicht der reguläre Pflegeweg. Jeder Typ besteht aus:
 

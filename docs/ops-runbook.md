@@ -551,6 +551,34 @@ docker compose -f docker-compose.prod.yml exec \
  -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
  web python manage.py inventory_report_bindings \
  --facility "Beratungsstelle Nord" --format json --output /tmp/report-bindings.json
+
+# Ersteinrichtung einer Einrichtung (Refs #1883): interaktiv Organisation,
+# Einrichtung, Einstellungen, Standardkatalog und ersten facility_admin anlegen.
+# MUSS mit der Admin-DB-Rolle laufen (BYPASSRLS) — der Command schreibt in
+# core_settings und (mit Standardkatalog) in core_documenttype/-fieldtemplate/
+# -documenttypefield/-fieldgroup/-fieldcondition, allesamt FORCE-RLS-Tabellen
+# mit einer USING-only-Policy, die in PostgreSQL auch den INSERT prueft. Der
+# Guard greift VOR der ersten Eingabeaufforderung, damit niemand erst ein
+# Passwort tippt und dann am Schreibzugriff scheitert. Der ganze Lauf ist EINE
+# Transaktion: ein Abbruch laesst keine halb angelegte Einrichtung zurueck.
+# --no-default-package laesst den Katalog weg (Einrichtung startet ohne
+# Dokumentationstypen und ist erst nach load_package dokumentierbar).
+# Traegt die Einrichtung schon Dokumentationstypen oder Feldvorlagen, bleibt
+# der Katalog UNANGETASTET — Ersteinrichtung, kein Katalog-Update (dafuer der
+# naechste Befehl).
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py setup_facility
+
+# Standardkatalog in eine BESTEHENDE Einrichtung nachziehen (Refs #1883):
+# fachlich identisch zu "load_package --file <…>/default.yaml", nur ohne
+# Container-Pfad. Loescht nie etwas, schreibt aber Katalog-Eigenschaften von
+# Bestandszeilen auf den Paket-Stand zurueck (Ruecksync-Tabelle in
+# docs/packages.md) — deshalb erst mit --dry-run ansehen. Wiederholbar,
+# gleiche Rollen-Voraussetzung.
+docker compose -f docker-compose.prod.yml exec \
+ -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+ web python manage.py load_package --default --facility <uuid> --dry-run
 ```
 
 ---
@@ -1345,7 +1373,7 @@ Bootstrap, und das Init-Script legt **zwei** entrechtete Application-Rollen an:
 |---|---|---|---|
 | `postgres` (Bootstrap, `POSTGRES_BOOTSTRAP_PASSWORD`) | `postgres` | SUPERUSER | Nur DB-Init + Notfall-Wartung. **Nicht** fuer Runtime/Operator-Tasks. |
 | `POSTGRES_USER` (App) | `anlaufstelle` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB`, **kein Owner** — nur DML (`SELECT/INSERT/UPDATE/DELETE`) + Sequenz-/Schema-`USAGE` | Django-Runtime. RLS-Policies greifen scharf (`FORCE ROW LEVEL SECURITY`). |
-| `POSTGRES_ADMIN_USER` (Admin/Wartung/**Owner**) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, **DB-/Objekt-Owner** | `migrate`, `seed`, Retention-/Anonymisierungs-Cron. Als Owner umgeht die Wartung die Append-Only-Trigger per DDL (A1.4, § 9.5). |
+| `POSTGRES_ADMIN_USER` (Admin/Wartung/**Owner**) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, **DB-/Objekt-Owner** | `migrate`, `seed`, Retention-/Anonymisierungs-Cron, Ersteinrichtung (`setup_facility`) und Paket-Import (`load_package`). Als Owner umgeht die Wartung die Append-Only-Trigger per DDL (A1.4, § 9.5). |
 
 Eigenschaften, die das Init-Script code-treu garantiert:
 

@@ -167,11 +167,18 @@ docker compose -f docker-compose.prod.yml exec web \
     python manage.py create_super_admin
 ```
 
-Der Super-Admin (`role=super_admin`) legt danach über die `/system/`-UI die erste
-Einrichtung sowie die erste Anwendungsbetreuung (`facility_admin`) an — empfohlen,
-weil über die UI auditierbar (`SYSTEM_VIEW`-Einträge). Für reine
+Der Super-Admin (`role=super_admin`) legt danach im Django-Admin (`/admin-mgmt/`,
+**Core → Einrichtungen** bzw. **Core → Benutzer**) die erste Einrichtung sowie die
+erste Anwendungsbetreuung (`facility_admin`) an — der einzige Laufzeit-Anlagepfad
+für eine Einrichtung; der `/system/`-Bereich zeigt Organisation und Einrichtungen
+nur an. Für reine
 Single-Tenant-Installationen, in denen System- und Anwendungsbetreuung dieselbe
 Person sind, gibt es als interaktiven CLI-Fallback `python manage.py setup_facility`.
+Der Befehl legt Organisation, Einrichtung, Einstellungen, den Standardkatalog der
+Dokumentationstypen und den ersten `facility_admin` in einer Transaktion an und
+**muss mit der Admin-DB-Rolle laufen** (`POSTGRES_USER=$POSTGRES_ADMIN_USER`,
+`POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD`) — sonst bricht er sofort mit einer
+Meldung ab, weil die Row-Level-Security den Schreibzugriff verweigert.
 Details: [ADR-018](adr/018-rollenmodell-superadmin.md),
 [docs/dev/dev-deployment.md § Production-Bootstrap](dev/dev-deployment.md),
 [docs/admin-guide.md § 2.2](admin-guide.md).

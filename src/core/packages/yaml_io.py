@@ -8,10 +8,10 @@ Paste-Fehler ist. :func:`safe_load_unique` verhält sich wie
 ``yaml.safe_load``, wirft aber bei Duplikat-Keys einen
 :class:`DuplicateKeyError` (Key-Name + Zeile).
 
-Bewusst als eigenes Modul (nicht im Command): der Seed liest ``default.yaml``
-über denselben strikten Pfad (:func:`core.seed.doc_types.load_default_package_data`),
-damit ein Katalog-Copy-Paste-Fehler im Repo genauso auffällt wie in einem
-fremden Paket.
+Bewusst als eigenes Modul (nicht im Command): der Standardkatalog wird über
+denselben strikten Pfad gelesen
+(:func:`core.packages.default_catalog.load_default_package_data`), damit ein
+Katalog-Copy-Paste-Fehler im Repo genauso auffällt wie in einem fremden Paket.
 """
 
 from __future__ import annotations

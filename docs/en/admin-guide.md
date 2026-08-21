@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Most recently synchronized on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
+> Most recently synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
 > The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)) and 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906) and 2026-08-18 (§ 5.6 which log fields are exempt from PII scrubbing, #1943) and 2026-08-18 (§ 2.6 numeric range bound guidance for facility admins after tightening `min_value`/`max_value`, #1930) and 2026-08-20 (§ 5.6 technical identifiers -- including the new `user_pk` log field -- pass the PII scrubber unchanged, #1949) and 2026-08-20 (§ 1 `BACKUP_DIR`/`BACKUP_HOST_DIR` ENV reference for the production Compose stack, #1872) and 2026-08-21 (§ 2.4 and § 7.7 the forced password change is cleared once the invitation setup or a password reset completes; § 2.4 step 3 the invitation setup link does not sign the user in, #1969).
 
 # Anlaufstelle -- Admin Guide
@@ -318,7 +318,7 @@ The script interactively prompts for:
 3. **Password** (enter twice -- no default, no demo value)
 4. **Display name**
 
-After successful completion, exactly one user with the role `super_admin` exists. Use this account to log in at `/login/` and then create the first facility and the first `facility_admin` through the `/system/` area.
+After successful completion, exactly one user with the role `super_admin` exists. Use this account to log in at `/login/` and then create the first facility and the first `facility_admin` -- in the Django admin (`/admin-mgmt/`, **Core > Facilities**) or with the setup script from [§ 2.2](#22-create-a-facility-and-application-manager). The `/system/` area only displays the organization and its facilities; nothing is created there.
 
 > **Important -- no default password:** For GDPR and security reasons, the application ships with **no** default password and no default username (unlike the former `make seed` workflow for development demos). Skipping this command leaves you with **no** usable login.
 
@@ -337,12 +337,16 @@ The command unlocks the specified user, writes a `LOGIN_UNLOCK` AuditLog entry, 
 
 ### 2.2 Create a Facility and Application Manager
 
-After logging in as `super_admin`, create the first facility and a `facility_admin` (application manager) for it through the `/system/` area. Alternatively, the interactive setup script is available -- suitable for pure single-tenant installations where system administration and application management are the same person:
+After logging in as `super_admin`, create the first facility and a `facility_admin` (application manager) for it in the Django admin (`/admin-mgmt/`, **Core > Facilities** and **Core > Users**). Alternatively, the interactive setup script is available -- suitable for pure single-tenant installations where system administration and application management are the same person:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec web \
-  python manage.py setup_facility
+docker compose -f docker-compose.prod.yml exec \
+  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+  web python manage.py setup_facility
 ```
+
+> ⚠️ **Role prerequisite (#1883).** The command writes to tables with row-level security (settings, documentation types, field templates). The runtime role of the `web` container is `NOBYPASSRLS` and has no facility context outside a web request -- **without** the ENV override shown above, even creating the settings record fails at the database. The command checks this up front and aborts with a clear message **before** the first prompt appears. Background: [ops runbook § 9 DB role model](../ops-runbook.md). For a local development database whose role is a superuser anyway, the override is unnecessary.
 
 The script interactively prompts for:
 
@@ -351,7 +355,24 @@ The script interactively prompts for:
 3. **Application manager username** (`facility_admin`)
 4. **Application manager password** (enter twice)
 
-Afterwards, the organization, facility, default settings, and the first `facility_admin` user are created.
+Afterwards, the organization, facility, default settings, the **default catalog of documentation types**, and the first `facility_admin` user are created. The facility is usable right away: without at least one documentation type, the type selector would be empty and not a single contact could be recorded.
+
+> **All or nothing:** The run is a single database transaction. If it aborts (wrong DB role, dropped connection, catalog conflict), **nothing** half-created is left behind -- not even the admin user. Once the cause is fixed, the command can simply be repeated.
+
+> **A repeat run leaves an existing catalog alone:** If the facility already carries documentation types or field templates (second run, facility created in the Django admin), the command does **not** apply the default catalog. Names, sort orders, colors, icons, and visibility levels maintained in the admin therefore stay untouched; the command says so at the end and points to `load_package --default` as the way to deliberately pull in the shipped state.
+
+> **Opt-out `--no-default-package`:** If you do not want the default catalog (own configuration package, entirely custom types), append `--no-default-package`. The facility then starts **without** documentation types and only becomes usable for documentation after a package has been loaded (see [docs/packages.md](../packages.md)). The command says so explicitly at the end of the run.
+
+> **Retrofitting an existing facility:** For a facility that already exists -- created in the Django admin under **Core > Facilities**, or deliberately started empty with `--no-default-package` -- the same default catalog can be applied afterwards:
+>
+> ```bash
+> docker compose -f docker-compose.prod.yml exec \
+>   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+>   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+>   web python manage.py load_package --default --facility <uuid> --dry-run
+> ```
+>
+> `--dry-run` first shows only what would happen; without the flag the package is applied. The run never deletes anything, **but it does write the catalog properties of existing types and field templates back to the shipped state** (name, sort order, color, icon, visibility) -- unlike the initial setup, which does not touch an existing catalog at all. So look at it with `--dry-run` first; the full write-back table is in [docs/packages.md § 4](../packages.md). The facility UUID appears in the address bar of its detail page under **Core > Facilities** in the Django admin.
 
 > **Note:** If an organization or facility with the given name already exists, it will be reused. An existing username will not be overwritten.
 
@@ -442,6 +463,8 @@ Anlaufstelle has five roles -- four facility-bound, one facility-spanning:
 > **System ↔ application separation:** `super_admin` manages hosting and bootstrap; `facility_admin` manages configuration and users **within** a facility. This separation is GDPR-relevant: the super-admin cannot view the substantive content of a facility without this being logged in the AuditLog (`SYSTEM_VIEW`). Architecture decision: [ADR-018](../adr/018-rollenmodell-superadmin.md).
 
 ### 2.5 Configure Documentation Types
+
+> **Starting point:** A facility created via `setup_facility` ([§ 2.2](#22-create-a-facility-and-application-manager)) already ships with the bundled **default catalog** -- it is ready for documentation without any further step. If the facility was created in the Django admin, or the catalog was declined with `--no-default-package`, the list is empty; in that case run `manage.py load_package --default --facility <uuid>` first (the command including the role override is in [§ 2.2](#22-create-a-facility-and-application-manager)). The sections below describe how to adjust the resulting set.
 
 Under **Administration > Documentation types** (`/config/document-types/`), you define which kinds of documentation can be recorded in the facility. The matching **Core > Documentation types** view in the Django admin remains available as a technical fallback, but is not the regular configuration path. Each type consists of:
 
@@ -1686,4 +1709,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-21 -->
-<!-- source-hash: 669a1058d634ebd9ce9d9e790d49f9c902086c01 -->
+<!-- source-hash: ba6d2502f255b7e399d9d0042e60e3b728253591 -->
