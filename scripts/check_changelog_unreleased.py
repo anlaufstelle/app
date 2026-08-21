@@ -40,6 +40,12 @@ d) Keine Duplikat-Bullets: Schluessel = (Menge der ``#NNN``-Referenzen im
    Eintrag, casefold-normalisierter Textanfang bis 60 Zeichen).
 e) Fehlende oder leere ``[Unreleased]``-Sektion ist GRUEN (frischer
    Post-Release-Zustand ist legitim).
+f) Jede Kategorie hoechstens eine ``### ``-Ueberschrift pro Block (Refs #1975).
+   Der Block ``[0.82.0]`` sammelte ``### Fixed`` fuenfmal, ``### Docs``
+   fuenfmal, ``### Security`` dreimal: jeder Beitrag haengte seine eigene
+   Ueberschrift hinten an, statt den Eintrag unter die vorhandene zu
+   sortieren. Geprueft wird auch das nur im offenen Block — veroeffentlichte
+   Abschnitte stecken in der Public-History und sind nicht mehr aenderbar.
 """
 
 from __future__ import annotations
@@ -95,7 +101,7 @@ def find_unreleased_block(lines: list[str]) -> tuple[int, int] | None:
 
 
 def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
-    """Regeln a-d auf den Inhalt der ``[Unreleased]``-Sektion anwenden.
+    """Regeln a-d und f auf den Inhalt der ``[Unreleased]``-Sektion anwenden.
 
     ``start``/``end`` wie von :func:`find_unreleased_block` geliefert.
     Gibt ``(errors, warnings)`` zurueck, je eine Liste aus
@@ -111,6 +117,8 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
     section_heading_line = 0
     section_has_bullet = False
     seen_keys: dict[tuple[frozenset[str], str], int] = {}
+    # Regel f: je Kategorie alle Ueberschrift-Zeilen, in Lesereihenfolge.
+    section_lines: dict[str, list[int]] = {}
 
     def close_section() -> None:
         if section_name is not None and not section_has_bullet:
@@ -131,6 +139,7 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
             section_name = heading_match.group(1).strip()
             section_heading_line = lineno
             section_has_bullet = False
+            section_lines.setdefault(section_name, []).append(lineno)
             if section_name not in ALLOWED_SECTIONS:
                 allowed = ", ".join(sorted(ALLOWED_SECTIONS))
                 errors.append(
@@ -173,7 +182,34 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
             continue
 
     close_section()
+    errors.extend(_doppelte_kategorien(section_lines))
+    errors.sort(key=lambda paar: paar[0])
     return errors, warnings
+
+
+def _doppelte_kategorien(section_lines: dict[str, list[int]]) -> list[tuple[int, str]]:
+    """Regel f: Kategorien melden, die mehr als eine Ueberschrift haben.
+
+    Gemeldet wird an der ersten Wiederholung — dort steht die Ueberschrift, die
+    weg soll. Die Meldung nennt alle Fundstellen, damit das Zusammenfuehren in
+    einem Durchgang gelingt. Alle betroffenen Kategorien werden gemeldet, nicht
+    nur die erste; sonst wird das Aufraeumen zur Schleife aus Lauf und Fund.
+    """
+    befunde: list[tuple[int, str]] = []
+    for name, zeilen in section_lines.items():
+        if len(zeilen) < 2:
+            continue
+        fundstellen = ", ".join(str(z) for z in zeilen)
+        befunde.append(
+            (
+                zeilen[1],
+                f"Abschnitt '### {name}' kommt {len(zeilen)} mal im offenen Block vor "
+                f"(Zeilen {fundstellen}). Die Einträge unter die erste Überschrift "
+                f"(Zeile {zeilen[0]}) zusammenführen und die weiteren Überschriften "
+                "entfernen; die Reihenfolge der Kategorien bleibt dabei unverändert.",
+            )
+        )
+    return befunde
 
 
 def _token_regex():
