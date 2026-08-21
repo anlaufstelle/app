@@ -176,7 +176,62 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
     return errors, warnings
 
 
-def check_changelog(path: Path) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+def _token_regex():
+    """Token-Regex aus der Single-Source lesen -- oder None (Refs #1974).
+
+    ``dev-ops/release/leak_tokens.py`` liest die Regex dort, wo der
+    Release-Build sie ausfuehrt (``verify-leak.sh``). Der Import ist bewusst
+    optional: dieses Skript liegt unter ``scripts/`` und ist damit Teil des
+    veroeffentlichten Baums, ``dev-ops/`` wird daraus gestrippt. Fehlt das
+    Modul, ist der Text ohnehin schon durch den Guard gegangen -- dann gibt es
+    hier nichts mehr zu pruefen.
+    """
+    release_dir = Path(__file__).resolve().parent.parent / "dev-ops" / "release"
+    if not (release_dir / "leak_tokens.py").is_file():
+        return None
+    sys.path.insert(0, str(release_dir))
+    try:
+        import leak_tokens  # noqa: PLC0415
+
+        return leak_tokens.token_regex()
+    except Exception:  # noqa: BLE001 -- ein kaputter Guard darf ci nicht blockieren
+        return None
+    finally:
+        if sys.path and sys.path[0] == str(release_dir):
+            sys.path.pop(0)
+
+
+def check_audit_tokens(lines: list[str], start: int, end: int) -> list[tuple[int, str]]:
+    """Audit-Kuerzel im offenen Block melden, bevor der Release-Build daran bricht.
+
+    Der Sanitizer entfernt sie nicht zuverlaessig -- in Markdown-Code-Spans
+    trifft ihn kein Ersetzungsmuster --, ``verify-leak.sh`` [2/7] findet sie
+    aber im Tree. Ohne diese Pruefung faellt das erst im Build-Dry-Run auf,
+    also nach einem Kalt-Rebuild ueber alle Boundaries (Refs #1974).
+
+    Nur der offene Block wird geprueft: veroeffentlichte Abschnitte stecken
+    bereits in der Public-History und sind nicht mehr aenderbar.
+    """
+    regex = _token_regex()
+    if regex is None:
+        return []
+    befunde: list[tuple[int, str]] = []
+    for offset, line in enumerate(lines[start:end], start=start):
+        treffer = sorted({m.group(0) for m in regex.finditer(line)})
+        if treffer:
+            befunde.append(
+                (
+                    offset + 1,
+                    f"Audit-Kuerzel im offenen Block: {', '.join(treffer)}. "
+                    "Der Release-Build bricht daran ab (verify-leak.sh [2/7]), und der "
+                    "Sanitizer entfernt sie hier nicht. Den Eintrag umformulieren, statt "
+                    "die Kuerzel bloss zu loeschen -- sonst verliert er seine Aussage.",
+                )
+            )
+    return befunde
+
+
+def check_changelog(path: Path, *, token_check: bool = True) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
     """Datei laden und Regeln anwenden. Gibt ``(errors, warnings)`` zurueck.
 
     Leere Listen fuer beides, wenn keine ``[Unreleased]``-Sektion existiert
@@ -189,7 +244,11 @@ def check_changelog(path: Path) -> tuple[list[tuple[int, str]], list[tuple[int, 
     start, end = block
     if not any(lines[i].strip() for i in range(start + 1, end)):
         return [], []
-    return analyze_unreleased(lines, start, end)
+    errors, warnings = analyze_unreleased(lines, start, end)
+    if token_check:
+        errors = [*errors, *check_audit_tokens(lines, start, end)]
+        errors.sort(key=lambda paar: paar[0])
+    return errors, warnings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -202,6 +261,14 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("CHANGELOG.md"),
         help="Pfad zur CHANGELOG.md (Default: CHANGELOG.md im aktuellen Verzeichnis).",
     )
+    parser.add_argument(
+        "--kein-token-check",
+        action="store_true",
+        help=(
+            "Die Pruefung auf Audit-Kuerzel ueberspringen (Refs #1974). "
+            "Gedacht fuer Baeume ohne dev-ops/, wo die Regex-Quelle fehlt."
+        ),
+    )
     args = parser.parse_args(argv)
 
     changelog_path: Path = args.changelog
@@ -209,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FEHLER: Changelog-Datei nicht gefunden: {changelog_path}", file=sys.stderr)
         return 1
 
-    errors, warnings = check_changelog(changelog_path)
+    errors, warnings = check_changelog(changelog_path, token_check=not args.kein_token_check)
 
     for lineno, msg in warnings:
         print(f"Hinweis (Zeile {lineno}): {msg}")
