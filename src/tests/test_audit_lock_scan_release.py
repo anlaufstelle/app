@@ -312,10 +312,13 @@ def test_case_update_scan_does_not_hold_audit_chain_lock(client, staff_user, fac
 
 @pytest.mark.django_db(transaction=True)
 def test_event_update_scan_does_not_hold_audit_chain_lock(client, staff_user, facility):
-    """Refs #1956: Der EREIGNIS-Update-Pfad ist heute nur zufaellig unauffaellig
-    (``update_event`` auditiert noch nicht). Die Sonde friert den Zustand ein,
-    damit ein spaeterer Audit-Write dort nicht wieder den Lock ueber den Scan
-    zieht.
+    """Refs #1956: Der EREIGNIS-Update-Pfad haelt den Advisory-Lock der
+    Audit-Hashkette nicht ueber den Datei-Scan.
+
+    Seit Refs #1958 auditiert ``update_event`` selbst — die Sonde ist damit
+    nicht mehr nur Vorsorge, sondern deckt einen tatsaechlichen Audit-Write ab:
+    der Scan laeuft als Staging VOR der Transaktion, der Lock faellt erst mit
+    dem Commit.
     """
     from unittest.mock import patch
 

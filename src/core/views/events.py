@@ -1060,12 +1060,13 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
             # Refs #1956: Scan + Fernet-Verschluesselung liegen als Staging VOR
             # dem atomic — im Block faellt nur noch der schnelle DB-Write an.
-            # ``update_event`` auditiert heute noch nicht, der Ereignis-Pfad war
-            # also nur zufaellig unauffaellig; sobald hier eine AuditLog-Zeile
-            # entsteht, haelt ihr per-Facility-Advisory-Lock sonst bis zum
-            # Commit — und damit ueber den gesamten ClamAV-Scan. ``merged``
-            # traegt die kuenftige Markerlage (``merge_update_payload``), damit
-            # die REPLACE-Aufloesung beider Seiten identisch ist.
+            # Refs #1958: ``update_event`` schreibt in diesem Block jetzt
+            # tatsaechlich eine AuditLog-Zeile — ihr per-Einrichtung-Advisory-
+            # Lock faellt erst mit dem Commit, hier also erst nach dem
+            # ``apply_attachment_changes`` darunter, und laege ohne das Staging
+            # zusaetzlich ueber dem gesamten ClamAV-Scan. ``merged`` traegt die
+            # kuenftige Markerlage (``merge_update_payload``), damit die
+            # REPLACE-Aufloesung beider Seiten identisch ist.
             committed = False
             staged_all: list = []
             try:

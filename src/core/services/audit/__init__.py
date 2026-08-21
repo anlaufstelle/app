@@ -35,7 +35,7 @@ from core.services.audit.detail_policy import (
     UnknownAuditDetailKeyError,
     validate_audit_detail,
 )
-from core.services.audit.diff import changed_fields_vs_db
+from core.services.audit.diff import changed_data_json_slugs, changed_fields_vs_db
 from core.services.audit.hash import hmac_hash_email, hmac_hash_value
 from core.services.audit.helpers import (
     audit_admin_view,
@@ -56,6 +56,7 @@ __all__ = [
     "audit_retention_decision",
     "audit_security_violation",
     "audit_system_view",
+    "changed_data_json_slugs",
     "changed_fields_vs_db",
     "compute_entry_hash",
     "hmac_hash_email",

@@ -194,3 +194,38 @@ class TestClientExportAuditDetailMinimized:
         assert "pseudonym" not in log.detail, "Pseudonym ist eine target_id-Dublette und gehoert nicht ins AuditLog"
         assert log.detail["format"] in ("JSON", "PDF")
         assert log.target_id == str(client_identified.pk)
+
+
+class TestEventUpdateDetailMinimized:
+    """``EVENT_UPDATE`` (Refs #1958) fuehrt den Feld-Diff einer Ereignis-Bearbeitung.
+
+    Neue Schreibstelle, deshalb hier mit gepinnt: das ``detail`` traegt nur
+    Feld-*Namen* (Slugs) plus den Namen des Dokumentationstyps — nie einen
+    Feldwert. Der Wert ist bei einem Ereignis der Beratungsinhalt und faellt
+    unter dieselbe Minimierung wie der Meilenstein-Titel oben; bei einem
+    verschluesselten Feld waere er zusaetzlich genau der Klartext, den der
+    File-Vault aus der Datenbank heraushaelt.
+    """
+
+    def test_detail_traegt_nur_slugs_keine_werte(self, staff_user, facility, doc_type_crisis, client_identified):
+        from django.utils import timezone
+
+        from core.models import Event
+        from core.services.events import update_event
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={"notiz-krise": "Alter Klartext"},
+            created_by=staff_user,
+        )
+
+        update_event(event, staff_user, {"notiz-krise": "Neuer Klartext mit Klientenbezug"})
+
+        log = AuditLog.objects.get(action=AuditLog.Action.EVENT_UPDATE, target_id=str(event.pk))
+        assert log.detail["changed_fields"] == ["notiz-krise"]
+        assert set(log.detail) == {"document_type", "changed_fields"}
+        assert "Klartext" not in str(log.detail), "Feldwerte gehoeren nicht ins append-only AuditLog"
+        assert log.target_type == "Event"

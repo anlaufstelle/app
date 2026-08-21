@@ -22,7 +22,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, EventHistory, FieldTemplate
 from core.services.attachments import crud as attachments_crud
-from core.services.audit import audit_event
+from core.services.audit import audit_event, changed_data_json_slugs
 from core.services.compliance import user_can_see_document_type
 from core.services.dashboard import log_activity
 from core.services.events.fields import (
@@ -242,6 +242,15 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
 
     data_json = _validate_data_json(event.document_type, data_json)
+    # Refs #1958: Der Slug-Diff MUSS vor dem ``save()`` unten stehen — danach
+    # traegt die DB-Zeile bereits den neuen Stand, und ``changed_fields`` bliebe
+    # fuer immer leer (Threat-Model-Befund „Bearbeitung ohne Audit-Spur").
+    # Gelesen wird der DB-Stand unter ``select_for_update`` (Default
+    # ``lock=True``), nicht ``event.data_json``: zwischen Diff und Save passt
+    # damit kein fremder Schreibvorgang, und Nicht-Formular-Aufrufer
+    # (Offline-Replay) koennen die Instanz bereits mit der neuen Payload
+    # anliefern.
+    changed_slugs = changed_data_json_slugs(event, data_json)
     data_before = event.data_json.copy() if event.data_json else {}
     event.data_json = data_json
     event.search_text = compute_event_search_text(data_json, event.document_type)
@@ -264,6 +273,33 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     from core.services.system.ban_revision import bump_ban_revision_for_event_change
 
     bump_ban_revision_for_event_change(event.facility, event.document_type, data_before, data_json)
+    # Refs #1958: Audit nur bei echtem Delta (Muster ``update_client`` /
+    # ``update_case``) — ein Formular-Submit ohne Aenderung ist kein
+    # rechenschaftspflichtiger Vorgang und wuerde das append-only Log mit
+    # Leerzeilen fluten. Die ``EventHistory``-Zeile oben faellt dagegen
+    # UNBEDINGT an: sie ist der fachliche Bearbeitungsverlauf (wer hat wann
+    # gespeichert) und traegt mit ``data_before``/``data_after`` ohnehin den
+    # vollstaendigen Stand; das AuditLog ist der minimierte
+    # Rechenschaftsnachweis und fuehrt bewusst nur Feldnamen.
+    #
+    # Bewusst als LETZTER Schritt von ``update_event``: ``AuditLog.save()`` nimmt
+    # den per-Einrichtung-Advisory-Lock der Hashkette, der erst beim Commit der
+    # umgebenden Transaktion faellt (Refs #1345/#1956) — im View-Pfad also erst
+    # nach ``apply_attachment_changes``, das im selben ``atomic`` folgt. Je
+    # spaeter er genommen wird, desto kuerzer serialisiert er die uebrigen
+    # audit-schreibenden Vorgaenge derselben Einrichtung. Der Virenscan der
+    # Anhaenge liegt seit Refs #1956 als Staging VOR der Transaktion und damit
+    # ausserhalb dieses Fensters.
+    if changed_slugs:
+        audit_event(
+            AuditLog.Action.EVENT_UPDATE,
+            user=user,
+            facility=event.facility,
+            target_obj=event,
+            # Nur Slugs, nie Werte oder Freitexte (Datenminimierung im
+            # append-only Log, Refs #1944).
+            detail={"document_type": event.document_type.name, "changed_fields": changed_slugs},
+        )
     return event
 
 
