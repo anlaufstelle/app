@@ -18,7 +18,17 @@ jobs:
     # 45 statt 30: seriell braucht die Suite lokal 15-16 min auf 8 Kernen, auf einem
     # 2-Kern-Runner plus Setup eher ~25 -- das Limit soll Haenger abraeumen, nicht
     # langsame Laeufe abschneiden.
-    timeout-minutes: 45
+    # 45 min reichten bis v0.81.0, wurden mit v0.82.0 aber gerissen: der Lauf
+    # kam bis 92 % und wurde vom Job-Timeout gekappt -- ohne einen einzigen
+    # Testfehler. Groessenordnung: lokal seriell 22 min fuer 832 Tests, auf dem
+    # Runner > 45 min fuer 92 % von 839. Der Faktor ist Runner-Hardware, nicht
+    # Testcode: die Postgres-Service-Logs desselben Laufs zeigen Checkpoints mit
+    # write=151 s (lokal Millisekunden), also gesaettigte Disk-I/O.
+    # 90 min geben Luft fuer diese Varianz, ohne einen echten Haenger lange
+    # laufen zu lassen -- den faengt weiterhin --timeout=120 pro Test ab.
+    # Nachhaltiger waere eine Matrix ueber mehrere Scheiben (je seriell, wie
+    # test-e2e-halves lokal); als eigenes Ticket vorgemerkt.
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:18-alpine
