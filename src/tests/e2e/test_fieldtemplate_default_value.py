@@ -20,9 +20,18 @@ def _run_shell(script, env):
 
 
 def _set_default_value(slug, value, env):
+    """Setzt ``default_value`` an der Vorlage **der Einrichtung des Testnutzers**.
+
+    Ohne den ``facility``-Filter greift ``.first()`` irgendeine gleichnamige
+    Vorlage: seit Refs #1970 stattet auch der Admin-Anlagepfad jede neue
+    Einrichtung mit dem Standardkatalog aus, und ``test_admin_site.py`` legt im
+    selben Lauf eine zweite Einrichtung an. Der Aufraeumschritt traf dann die
+    fremde Zeile, waehrend die hier gepruefte ihren Wert behielt.
+    """
     script = (
-        "from core.models import FieldTemplate; "
-        f"ft = FieldTemplate.objects.filter(slug='{slug}').first(); "
+        "from core.models import FieldTemplate, User; "
+        "facility = User.objects.get(username='admin').facility; "
+        f"ft = FieldTemplate.objects.filter(slug='{slug}', facility=facility).first(); "
         f"ft.default_value = '{value}'; "
         "ft.save() if ft else None"
     )
