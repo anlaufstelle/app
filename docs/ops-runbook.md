@@ -1754,6 +1754,24 @@ TRUSTED_PROXY_HOPS=1
 
 Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-Spoof-Schutz aus [`signals.audit.get_client_ip`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/audit.py) den falschen Eintrag.
 
+### 12.3 EXTERNAL_ORIGIN (Refs #1967)
+
+Die Produktionspruefung verbietet in `ALLOWED_HOSTS` nur den Match-all-Eintrag `*`; Subdomain-Muster wie `.example.org` bleiben ausdruecklich erlaubt (§ `settings/prod.py`). Zeigt in einem solchen Deployment ein weiterer erlaubter Host auf die Anwendung, ginge ein Token-Link mit **diesem** Host raus — der `Host`-Header des Requests waere damit Teil der Sicherheitsgrenze.
+
+Die drei produktiven Linkquellen — Einladungs-Setup-Link ([`services/security/invite.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py)), Passwort-Reset-Mail ([`views/auth.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/auth.py)) und Entsperr-Mail ([`views/lockout_recovery.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/lockout_recovery.py)) — lesen den Request deshalb nicht mehr. Schema und Host stammen ausschliesslich aus `EXTERNAL_ORIGIN` ([`services/security/origin.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/origin.py)):
+
+```
+EXTERNAL_ORIGIN=https://anlaufstelle.example.de
+```
+
+- **Format:** Schema (`http`/`https`) + Host + optionaler Port. Kein Pfad, kein abschliessender Schraegstrich, keine Query. Ein fehlerhafter Wert bricht den Start ab, statt in einer bereits versendeten Mail aufzufallen.
+- **Ableitung:** Fuehrt `ALLOWED_HOSTS` genau **einen** oeffentlichen Hostnamen, wird `https://<host>` daraus abgeleitet (gleiches Muster wie `OTP_WEBAUTHN_RP_ID`) — der Regelfall „eine Domain hinter Caddy" braucht die Variable nicht.
+- **Loopback zaehlt nicht mit:** `localhost`, `127.0.0.1` und `::1` stehen in `ALLOWED_HOSTS` nur, damit der Container-Healthcheck (`http://localhost:8000/health/`) keinen `DisallowedHost`-400 bekommt — die mitgelieferten Deploy-Vorlagen fuehren sie deshalb neben der Domain. Fuer die Ableitung bleiben sie ausser Betracht; als Basis eines Token-Links kaemen sie ohnehin nie in Frage.
+- **Fail-closed:** Bei mehreren oeffentlichen Hosts, reiner Wildcard-Config oder ausschliesslich Loopback-Eintraegen gibt es keine eindeutige Antwort; Prod startet dann nicht und nennt `EXTERNAL_ORIGIN` im Abbruch. Bewusst kein Raten: eine falsch geratene Origin macht jeden Token-Link unbrauchbar.
+- **Nicht verschaerft wurde die `ALLOWED_HOSTS`-Pruefung selbst** — Subdomain-Muster bleiben erlaubt, sie sind fuer die Linkbildung jetzt schlicht ohne Bedeutung.
+
+Bei einem Domainwechsel ist `EXTERNAL_ORIGIN` mitzuziehen: bereits versendete Links zeigen weiter auf die alte Adresse und laufen ueber deren Gueltigkeitsdauer (`DJANGO_PASSWORD_RESET_TIMEOUT` bzw. `DJANGO_INVITE_TOKEN_TIMEOUT`) aus.
+
 ---
 
 ## 13. PostgreSQL-Major-Upgrade (16 → 18)

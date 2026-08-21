@@ -14,6 +14,12 @@ from .dev import *  # noqa: F401, F403
 _db_name = os.environ.get("E2E_DATABASE_NAME", "anlaufstelle_e2e")
 DATABASES["default"] = {**DATABASES["default"], "NAME": _db_name}  # noqa: F405
 
+# Sicherheitsrelevante Links zeigen auf den E2E-Server (Port 8844), nicht auf
+# den Runserver-Default aus dev.py (Refs #1967). Eine explizit gesetzte
+# EXTERNAL_ORIGIN bleibt unangetastet — dev.py hat sie dann bereits uebernommen.
+if not os.environ.get("EXTERNAL_ORIGIN"):
+    EXTERNAL_ORIGIN = "http://localhost:8844"
+
 # Rate-Limiting deaktivieren (E2E-Tests machen viele Logins auf einer IP)
 RATELIMIT_ENABLE = False
 

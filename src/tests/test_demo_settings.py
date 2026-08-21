@@ -11,13 +11,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
+
+# Wortgleich mit der ausgelieferten Deploy-Vorlage (Datei-Abgleich in
+# TestDemoExternalOrigin, damit hier kein Datei-Zugriff auf Import-Ebene noetig
+# ist). Refs #1967: der Wert stand hier frueher als EIN Host und wich damit von
+# der Vorlage ab, die neben der Domain ``localhost``/``127.0.0.1`` fuer den
+# Container-Healthcheck fuehrt — genau diese Abweichung liess einen Guard
+# durchgehen, an dem der echte Deploy gescheitert waere.
+DEMO_ALLOWED_HOSTS = "demo.anlaufstelle.app,localhost,127.0.0.1"
 
 # Minimaler Satz Pflicht-ENVs, mit dem demo.py (erbt devlive -> prod) importiert.
 _VALID_ENV = {
     "DJANGO_SECRET_KEY": "x" * 50,
-    "ALLOWED_HOSTS": "demo.anlaufstelle.app",
+    "ALLOWED_HOSTS": DEMO_ALLOWED_HOSTS,
     "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
     "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     "POSTGRES_DB": "x",
@@ -51,6 +61,35 @@ def _run_demo_import(expr, env_overrides=None):
         text=True,
         cwd=str(REPO_ROOT),
     )
+
+
+class TestDemoExternalOrigin:
+    """Refs #1967: Die Demo startet mit der ausgelieferten ``ALLOWED_HOSTS``-Zeile
+    und leitet daraus die oeffentliche Demo-Adresse ab.
+
+    ``localhost``/``127.0.0.1`` stehen dort ausschliesslich fuer den
+    Container-Healthcheck (``http://localhost:8000/health/``) und duerfen die
+    Ableitung weder blockieren noch selbst zur Link-Basis werden — sonst
+    zeigten Einladungs- und Reset-Links der Demo ins Container-Innere.
+    """
+
+    @pytest.mark.architecture
+    def test_testwert_deckt_sich_mit_der_ausgelieferten_vorlage(self):
+        vorlage = REPO_ROOT / ".env.demo.example"
+        if not vorlage.exists():  # .env.demo.example fehlt im Public-Snapshot (Refs #1137)
+            pytest.skip("Deploy-Vorlage nicht im Public-Snapshot — Abgleich nur im Dev-Repo moeglich")
+
+        zeilen = [z.strip() for z in vorlage.read_text(encoding="utf-8").splitlines()]
+        aktiv = [z for z in zeilen if z.startswith("ALLOWED_HOSTS=")]
+        assert aktiv == [f"ALLOWED_HOSTS={DEMO_ALLOWED_HOSTS}"], (
+            "Der Testwert muss die ausgelieferte Vorlage spiegeln — inklusive der "
+            f"Healthcheck-Loopback-Eintraege. Vorlage: {aktiv}"
+        )
+
+    def test_origin_wird_aus_der_oeffentlichen_domain_abgeleitet(self):
+        result = _run_demo_import("from anlaufstelle.settings.demo import EXTERNAL_ORIGIN;print(EXTERNAL_ORIGIN)")
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "https://demo.anlaufstelle.app"
 
 
 class TestDemoLogins:

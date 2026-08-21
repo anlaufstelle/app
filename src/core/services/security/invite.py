@@ -27,6 +27,8 @@ from django.utils.crypto import constant_time_compare
 from django.utils.encoding import force_bytes
 from django.utils.http import base36_to_int, urlsafe_base64_encode
 
+from core.services.security.origin import build_external_url, external_link_context
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,21 +73,19 @@ class InviteTokenGenerator(PasswordResetTokenGenerator):
 invite_token_generator = InviteTokenGenerator()
 
 
-def build_invite_url(user, request=None) -> str:
-    """Erzeugt den Setup-Link (uidb64 + token) für den Invite-Flow.
+def build_invite_url(user) -> str:
+    """Erzeugt den absoluten Setup-Link (uidb64 + token) für den Invite-Flow.
 
-    Wenn `request` angegeben ist, wird eine absolute URL (inkl. Host und Scheme)
-    zurückgegeben, andernfalls eine relative URL.
+    Schema und Host kommen aus ``EXTERNAL_ORIGIN`` (Refs #1967), nicht aus dem
+    Request: ein Setup-Link ist ein Token-Link und darf nicht auf einen Host
+    zeigen, den ein eingehender Request bestimmt hat.
     """
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = invite_token_generator.make_token(user)
-    path = reverse("invite_confirm", kwargs={"uidb64": uid, "token": token})
-    if request is not None:
-        return request.build_absolute_uri(path)
-    return path
+    return build_external_url(reverse("invite_confirm", kwargs={"uidb64": uid, "token": token}))
 
 
-def send_invite_email(user, request=None) -> bool:
+def send_invite_email(user) -> bool:
     """Versendet die Einladungs-E-Mail an `user.email`.
 
     Rückgabe: True bei erfolgreichem Versand, False falls `user.email` leer.
@@ -103,19 +103,14 @@ def send_invite_email(user, request=None) -> bool:
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = invite_token_generator.make_token(user)
 
-    if request is not None:
-        protocol = "https" if request.is_secure() else "http"
-        domain = request.get_host()
-    else:
-        protocol = "https"
-        domain = getattr(settings, "INVITE_DEFAULT_DOMAIN", "localhost")
-
+    # Refs #1967: Schema und Host stammen aus EXTERNAL_ORIGIN. Vorher kamen sie
+    # aus ``request.is_secure()``/``request.get_host()`` — mit einem
+    # requestlosen Zweig, der auf das Literal "localhost" zurueckfiel.
     context = {
         "user": user,
         "uid": uid,
         "token": token,
-        "protocol": protocol,
-        "domain": domain,
+        **external_link_context(),
     }
 
     subject = render_to_string("registration/invite_subject.txt", context).strip()

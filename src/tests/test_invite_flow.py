@@ -15,7 +15,14 @@ from core.services.security import build_invite_url, invite_token_generator, sen
 
 @pytest.mark.django_db
 class TestBuildInviteUrl:
-    def test_relative_url_when_no_request(self, facility):
+    def test_absolute_url_aus_der_konfigurierten_origin(self, facility, settings):
+        """Refs #1967: Der Setup-Link ist immer absolut.
+
+        Bis dahin lieferte ``build_invite_url`` ohne Request eine RELATIVE URL —
+        in einer E-Mail unbrauchbar. Schema und Host stehen jetzt fest in
+        ``EXTERNAL_ORIGIN``, der Request wird gar nicht mehr gelesen.
+        """
+        settings.EXTERNAL_ORIGIN = "https://portal.example.org"
         user = User.objects.create_user(
             username="testinvite",
             email="invite@example.org",
@@ -23,7 +30,7 @@ class TestBuildInviteUrl:
         )
         url = build_invite_url(user)
         assert "/invite/" in url
-        assert url.startswith("/")
+        assert url.startswith("https://portal.example.org/")
 
     def test_url_contains_valid_uid_and_token(self, facility):
         user = User.objects.create_user(

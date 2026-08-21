@@ -19,6 +19,7 @@ from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.security import clear_sudo, invite_token_generator, is_locked
 from core.services.security import unlock as unlock_user
+from core.services.security.origin import external_link_context
 from core.signals.audit import get_client_ip
 from core.signals.offline_invalidation import revoke_offline_access
 
@@ -220,6 +221,15 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
             target_id=str(matched_user.pk) if matched_user else "",
             detail={"email_hash": hmac_hash_email(email)} if email else {},
         )
+
+        # Refs #1967: Protokoll und Host des Reset-Links kommen aus
+        # EXTERNAL_ORIGIN, nicht aus ``request.is_secure()``/der aktuellen
+        # Site. ``extra_email_context`` ist dafuer der richtige Hebel — es wird
+        # in ``PasswordResetForm.save()`` zuletzt in den Mail-Kontext gemergt
+        # und schlaegt damit beide abgeleiteten Werte. ``domain_override``
+        # ueberschriebe dagegen nur ``domain`` und liesse ``protocol`` am
+        # Request haengen.
+        self.extra_email_context = {**(self.extra_email_context or {}), **external_link_context()}
         return super().form_valid(form)
 
 

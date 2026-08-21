@@ -31,6 +31,12 @@ AUDIT_DETAIL_STRICT = env_bool("DJANGO_AUDIT_DETAIL_STRICT", default=True)  # no
 
 ALLOWED_HOSTS = ["*"]
 
+# Sicherheitsrelevante Links (Einladung, Passwort-Reset, Entsperrung) zeigen
+# lokal auf den Runserver-Default. Ohne Vorbelegung gaebe es hier keine Origin
+# und damit keinen Link — die Pflicht aus prod.py laesst sich in DEV nicht
+# sinnvoll spiegeln (Refs #1967). Per EXTERNAL_ORIGIN ueberschreibbar.
+EXTERNAL_ORIGIN = EXTERNAL_ORIGIN or "http://localhost:8000"  # noqa: F405
+
 # DEV bewusst MFA-frei (Refs #1019): das Rollen-Default-Enforcement aus base.py
 # wird hier abgeschaltet, damit die Seed-Logins (admin/emma/superadmin) ohne
 # TOTP arbeiten. Kaskadiert ueber Vererbung nach test.py UND e2e.py.

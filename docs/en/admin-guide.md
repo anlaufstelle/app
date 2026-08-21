@@ -127,8 +127,11 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | `DJANGO_AUDIT_HASH_KEY` | -- (required in prod) | HMAC key for pseudonymized audit entries (e.g. password-reset emails), separate from `DJANGO_SECRET_KEY` -- without its own key, the audit hash would otherwise silently fall back to `SHA256(SECRET_KEY)`, which a `SECRET_KEY` leak could then exploit retroactively; hence fail-closed. Generate with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`. |
 | `DJANGO_SETTINGS_MODULE` | -- | In production: `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | -- (required in prod) | Comma-separated host names, e.g. `anlaufstelle.example.de`. |
+| `EXTERNAL_ORIGIN` | derived from `ALLOWED_HOSTS` | Fixed base of every security-relevant link -- the invitation setup link, the password-reset link, and the account-unlock link. Format `https://host[:port]`, without a path and without a trailing slash; a value carrying a path or missing the scheme is rejected at startup. Those links are therefore **no longer** built from the `Host` header of the incoming request. If `ALLOWED_HOSTS` lists exactly **one** public host name, the application derives `https://<host>` itself and the variable can be omitted -- `localhost`, `127.0.0.1` and `::1` do not count, they are only there for the container health check. With several public hosts or with subdomain patterns only (`.example.de`) it is **mandatory** -- otherwise the application refuses to start (#1967). |
 | `TRUSTED_PROXY_HOPS` | `1` | Number of trusted proxies in front of the app (X-Forwarded-For evaluation). `0` = no proxy, `1` = Caddy only, `2` = CDN + Caddy. |
 | `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, backup age, disk free, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
+
+> **Migrating existing installations:** If your `ALLOWED_HOSTS` lists exactly one public host name -- optionally alongside `localhost`/`127.0.0.1` for the health check -- there is nothing to do: `EXTERNAL_ORIGIN` is derived from it. If it lists several public hosts (e.g. with and without `www.`) or a subdomain pattern, add the variable to your `.env` **before** the update; otherwise the application will no longer start after the update and will name exactly this variable in the log. The value is the address under which the facility actually reaches the application -- it will appear in every invitation, password-reset, and unlock email.
 
 **Database (PostgreSQL — three-role model, #902)**
 
@@ -1709,4 +1712,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-21 -->
-<!-- source-hash: ba6d2502f255b7e399d9d0042e60e3b728253591 -->
+<!-- source-hash: bbfcd96949c542c18838e43f3a8701980ba4e197 -->

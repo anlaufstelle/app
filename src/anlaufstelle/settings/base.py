@@ -7,9 +7,10 @@ Gemeinsame Konfiguration für dev und prod.
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-from ._env import env_bool, env_csv, env_int
+from ._env import env_bool, env_csv, env_int, env_origin
 from ._mfa_roles import parse_enforced_role_sets
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -86,6 +87,24 @@ SOURCE_CODE_VERSION = os.environ.get("SOURCE_CODE_VERSION", "")
 DEBUG = False
 
 ALLOWED_HOSTS = []
+
+# --- Feste Basis-Origin fuer sicherheitsrelevante Links (Refs #1967) ---
+# Einladungs-, Passwort-Reset- und Entsperr-Links tragen ein Token und duerfen
+# deshalb nicht aus dem eingehenden Request entstehen: ``ALLOWED_HOSTS`` sperrt
+# in Produktion zwar den Match-all-Eintrag "*", laesst Subdomain-Wildcards
+# (".example.org") aber ausdruecklich zu — jeder davon erfasste Host kaeme sonst
+# ungeprueft in einen Token-Link. EXTERNAL_ORIGIN ist die einzige Quelle fuer
+# Schema und Host solcher Links (core/services/security/origin.py).
+#
+# Format: "https://host[:port]", ohne Pfad und ohne abschliessenden
+# Schraegstrich; ein unbrauchbarer Wert bricht den Start ab (env_origin).
+# Leer heisst hier nur "hier nicht festgelegt": prod.py macht das Setting zur
+# Pflicht (mit Ableitung aus ALLOWED_HOSTS), dev.py/e2e.py belegen es mit dem
+# jeweiligen lokalen Server vor.
+try:
+    EXTERNAL_ORIGIN = env_origin("EXTERNAL_ORIGIN")
+except ValueError as exc:  # pragma: no cover - Startabbruch, in Subprozess-Tests geprueft
+    raise ImproperlyConfigured(str(exc)) from exc
 
 # --- Apps ---
 

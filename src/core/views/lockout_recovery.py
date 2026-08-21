@@ -29,6 +29,7 @@ from core.models import AuditLog, User
 from core.services.audit import log_audit_event
 from core.services.security import build_recovery_token, verify_backup_code, verify_recovery_token
 from core.services.security import unlock as unlock_user
+from core.services.security.origin import build_external_url
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,10 @@ class LockoutRecoveryRequestView(FormView):
         if user is not None:
             token = build_recovery_token(user)
             confirm_path = reverse_lazy("core:lockout_recovery_confirm", kwargs={"token": token})
-            confirm_url = self.request.build_absolute_uri(str(confirm_path))
+            # Refs #1967: Schema und Host aus EXTERNAL_ORIGIN statt aus dem
+            # Request — der Entsperr-Link traegt ein Token und darf nicht auf
+            # einen vom Aufrufer bestimmten Host zeigen.
+            confirm_url = build_external_url(str(confirm_path))
             body = render_to_string(
                 "auth/lockout_recovery_email.txt",
                 {"user": user, "confirm_url": confirm_url},

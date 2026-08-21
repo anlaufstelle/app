@@ -220,7 +220,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
             obj.set_unusable_password()
             super().save_model(request, obj, form, change)
             try:
-                send_invite_email(obj, request=request)
+                send_invite_email(obj)
             except Exception as exc:  # pragma: no cover - Mail-Backend-Fehler
                 messages.error(
                     request,

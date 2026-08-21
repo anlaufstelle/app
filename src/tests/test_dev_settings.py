@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 
@@ -76,3 +78,60 @@ class TestDevPlaintextGuard:
     def test_key_present_with_require_encryption_loads(self):
         result = _run_dev_import({"ENCRYPTION_KEY": _FERNET_KEY, "REQUIRE_ENCRYPTION": "1"})
         assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.architecture
+class TestEnvExampleEntfuehrtDieLokalenLinks:
+    """Refs #1967: ``.env.example`` darf ``EXTERNAL_ORIGIN`` nicht aktiv setzen.
+
+    ``make setup`` kopiert die Datei 1:1 nach ``.env``, ``base.py`` laedt sie per
+    ``load_dotenv`` in ``os.environ``. Ein dort gesetzter Produktionswert kann von
+    dev/e2e nicht mehr korrigiert werden: beide sind bewusst so geschrieben, dass
+    die Umgebung gewinnt (``dev.py``: ``EXTERNAL_ORIGIN or "http://localhost:8000"``;
+    ``e2e.py``: ``if not os.environ.get(...)``). Der Setup-Link aus der
+    Konsolen-Mail zeigte dann auf die oeffentliche Produktionsseite, und der
+    lokale Einladungs-Flow liesse sich nicht abschliessen.
+    """
+
+    _ENV_EXAMPLE = REPO_ROOT / ".env.example"
+
+    def _aktive_zuweisungen(self):
+        werte = {}
+        for zeile in self._ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+            zeile = zeile.strip()
+            if not zeile or zeile.startswith("#") or "=" not in zeile:
+                continue
+            key, _, value = zeile.partition("=")
+            werte[key.strip()] = value.strip()
+        return werte
+
+    def test_external_origin_ist_nicht_aktiv_gesetzt(self):
+        assert "EXTERNAL_ORIGIN" not in self._aktive_zuweisungen(), (
+            ".env.example darf EXTERNAL_ORIGIN nur auskommentiert dokumentieren — `make setup` "
+            "kopiert die Datei nach .env, und der Wert schluege dort die lokalen Vorbelegungen "
+            "von dev.py/e2e.py."
+        )
+
+    def _origin_mit_env_example(self, settings_modul, port_erwartung):
+        werte = self._aktive_zuweisungen()
+        # DJANGO_SETTINGS_MODULE steht in der Vorlage auf prod — hier zaehlt das
+        # lokal genutzte Modul, alles Uebrige kommt unveraendert aus der Datei.
+        werte.pop("DJANGO_SETTINGS_MODULE", None)
+        result = _run_dev_import(
+            {
+                **werte,
+                "DJANGO_SETTINGS_MODULE": settings_modul,
+                # Die Vorlagenwerte stehen bereits in der Subprozess-Env — eine
+                # lokale .env des Entwicklungsrechners darf hier nichts ergaenzen.
+                "DJANGO_LOAD_DOTENV": "false",
+            },
+            expr=f"import {settings_modul} as s;print(s.EXTERNAL_ORIGIN)",
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == port_erwartung
+
+    def test_dev_bleibt_beim_lokalen_runserver(self):
+        self._origin_mit_env_example("anlaufstelle.settings.dev", "http://localhost:8000")
+
+    def test_e2e_bleibt_beim_e2e_server(self):
+        self._origin_mit_env_example("anlaufstelle.settings.e2e", "http://localhost:8844")

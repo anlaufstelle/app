@@ -97,6 +97,41 @@ OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "") or next(iter(_conc
 # OTP_WEBAUTHN_ALLOWED_ORIGINS explizit setzen.
 OTP_WEBAUTHN_ALLOWED_ORIGINS = env_csv("OTP_WEBAUTHN_ALLOWED_ORIGINS") or [f"https://{h}" for h in _concrete_hosts]
 
+# --- Feste Basis-Origin fuer sicherheitsrelevante Links (Refs #1967) ---
+# Einladungs-, Passwort-Reset- und Entsperr-Links duerfen nicht aus dem
+# eingehenden Request entstehen (Begruendung in base.py und in
+# core/services/security/origin.py). In Produktion ist EXTERNAL_ORIGIN deshalb
+# Pflicht — aber nach demselben Muster ableitbar wie OTP_WEBAUTHN_RP_ID oben:
+# fuehrt ALLOWED_HOSTS genau EINEN oeffentlichen Host, ist dessen HTTPS-Origin
+# die einzig moegliche Antwort, und der Regelfall (eine Domain hinter Caddy)
+# braucht keine zusaetzliche Env-Var. Bei mehreren oeffentlichen Hosts oder
+# reiner Wildcard-Config gibt es keine eindeutige Antwort: dann fail-closed
+# statt raten, denn eine falsch geratene Origin macht jeden Token-Link
+# unbrauchbar.
+#
+# Loopback-Namen zaehlen dabei NICHT als oeffentlicher Host: sie stehen in
+# ALLOWED_HOSTS ausschliesslich, weil der Container-Healthcheck (Dockerfile:
+# ``http://localhost:8000/health/``) sonst einen DisallowedHost-400 bekaeme.
+# Die ausgelieferten Deploy-Vorlagen (.env.demo.example,
+# dev-ops/deploy/barbara/.env.barbara.example) fuehren genau diese Kombination
+# aus Domain + localhost + 127.0.0.1 — zaehlten die Loopback-Eintraege mit,
+# haette der Pflicht-Guard sie fuer mehrdeutig gehalten und den Start
+# abgebrochen. Als Basis eines Token-Links kommen sie ohnehin nie in Frage:
+# ein Link auf ``https://localhost`` waere fuer die Empfaengerin wertlos.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+_public_hosts = [h for h in _concrete_hosts if h.lower() not in _LOOPBACK_HOSTS]
+if not EXTERNAL_ORIGIN and len(_public_hosts) == 1:  # noqa: F405
+    EXTERNAL_ORIGIN = f"https://{_public_hosts[0]}"
+if not _IS_COLLECTSTATIC and not EXTERNAL_ORIGIN:  # noqa: F405
+    raise ImproperlyConfigured(
+        "EXTERNAL_ORIGIN muss in Produktion gesetzt sein (z. B. "
+        "'https://anlaufstelle.example.de') — es ist die feste Basis der Einladungs-, "
+        "Passwort-Reset- und Entsperr-Links. Automatisch abgeleitet wird sie nur, wenn "
+        "ALLOWED_HOSTS genau einen oeffentlichen Hostnamen enthaelt (localhost, "
+        "127.0.0.1 und ::1 zaehlen dabei nicht mit — sie stehen dort nur fuer den "
+        "Container-Healthcheck)."
+    )
+
 # --- Security ---
 
 # Trust-Boundary (Refs #841): Caddy als Reverse-Proxy strippt eingehendes

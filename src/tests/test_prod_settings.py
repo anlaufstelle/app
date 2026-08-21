@@ -66,6 +66,9 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         # durchgreifen und den "unset bleibt Django-Default"-Test faelschlich
         # gruen/rot faerben.
         "FILE_UPLOAD_TEMP_DIR": "",
+        # Refs #1967: analog zu REDIS_URL — eine lokale .env duerfte die
+        # Ableitung aus ALLOWED_HOSTS sonst per dotenv-Durchgriff ueberschreiben.
+        "EXTERNAL_ORIGIN": "",
     }
     env.update(env_overrides)
     result = subprocess.run(
@@ -427,6 +430,9 @@ class TestProdWebAuthnRpIdDerivation:
         "DJANGO_SECRET_KEY": "x" * 50,
         "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+        # Refs #1967: reine Wildcard-Config hat keine ableitbare Origin — hier
+        # explizit gesetzt, damit der Fall RP-ID-Ableitung pruefbar bleibt.
+        "EXTERNAL_ORIGIN": "https://app.example.org",
     }
 
     _READBACK = (
@@ -482,6 +488,148 @@ class TestProdAllowedHostsWildcardGuard:
         und duerfen den Guard nicht ausloesen."""
         result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "example.org,.example.org"})
         assert result.returncode == 0, f"prod import failed: {result.stderr}"
+
+
+class TestProdExternalOrigin:
+    """Refs #1967: ``EXTERNAL_ORIGIN`` ist die feste Basis der Einladungs-,
+    Passwort-Reset- und Entsperr-Links. In Produktion Pflicht — aber ableitbar
+    wie ``OTP_WEBAUTHN_RP_ID``, solange ``ALLOWED_HOSTS`` genau einen konkreten
+    Host fuehrt. Ohne eindeutige Antwort faellt der Start aus, statt eine Origin
+    zu raten und damit jeden Token-Link ins Leere zeigen zu lassen."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    _READBACK = "import anlaufstelle.settings.prod as p; print(p.EXTERNAL_ORIGIN)"
+
+    def _resolve(self, env_overrides):
+        result = _run_prod_import({**self._VALID_ENV, **env_overrides}, code=self._READBACK)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        return result.stdout.strip().splitlines()[-1]
+
+    def test_wird_aus_einem_eindeutigen_host_abgeleitet(self):
+        assert self._resolve({"ALLOWED_HOSTS": "app.example.org"}) == "https://app.example.org"
+
+    def test_subdomain_wildcard_neben_einem_konkreten_host_stoert_die_ableitung_nicht(self):
+        resolved = self._resolve({"ALLOWED_HOSTS": "app.example.org,.example.org"})
+        assert resolved == "https://app.example.org"
+
+    def test_explizite_env_var_schlaegt_die_ableitung(self):
+        resolved = self._resolve({"ALLOWED_HOSTS": "app.example.org", "EXTERNAL_ORIGIN": "https://portal.example.org"})
+        assert resolved == "https://portal.example.org"
+
+    def test_mehrere_konkrete_hosts_ohne_env_var_brechen_den_start_ab(self):
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "app.example.org,www.example.org"})
+        assert result.returncode != 0
+        assert "EXTERNAL_ORIGIN" in result.stderr
+
+    def test_reine_wildcard_config_ohne_env_var_bricht_den_start_ab(self):
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": ".example.org"})
+        assert result.returncode != 0
+        assert "EXTERNAL_ORIGIN" in result.stderr
+
+    @pytest.mark.parametrize(
+        "wert",
+        [
+            "portal.example.org",
+            "https://portal.example.org/",
+            "https://portal.example.org/app",
+        ],
+    )
+    def test_fehlerhafter_wert_bricht_den_start_ab(self, wert):
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "app.example.org", "EXTERNAL_ORIGIN": wert})
+        assert result.returncode != 0
+        assert "EXTERNAL_ORIGIN" in result.stderr
+
+    @pytest.mark.parametrize(
+        "hosts",
+        [
+            "app.example.org,localhost,127.0.0.1",
+            "localhost,app.example.org",
+            "app.example.org,localhost,127.0.0.1,::1",
+        ],
+    )
+    def test_loopback_eintraege_zaehlen_bei_der_ableitung_nicht_mit(self, hosts):
+        """Loopback-Namen stehen in ``ALLOWED_HOSTS`` nur fuer den Container-
+        Healthcheck (``Dockerfile``: ``http://localhost:8000/health/``) — ohne
+        sie wirft ``/health/`` einen ``DisallowedHost``-400. Als oeffentliche
+        Basis eines Token-Links kommen sie nie in Frage, also machen sie die
+        Ableitung auch nicht mehrdeutig."""
+        assert self._resolve({"ALLOWED_HOSTS": hosts}) == "https://app.example.org"
+
+    def test_reine_loopback_config_ohne_env_var_bricht_den_start_ab(self):
+        """Kein oeffentlicher Host = keine ableitbare Origin. ``https://localhost``
+        zu raten waere schlimmer als der Startabbruch: der Link ginge raus und
+        waere fuer die Empfaengerin wertlos."""
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "localhost,127.0.0.1"})
+        assert result.returncode != 0
+        assert "EXTERNAL_ORIGIN" in result.stderr
+
+
+def _active_env_assignments(path: Path) -> dict[str, str]:
+    """Aktive (nicht auskommentierte) ``KEY=VALUE``-Zeilen einer .env-Vorlage."""
+    werte: dict[str, str] = {}
+    for zeile in path.read_text(encoding="utf-8").splitlines():
+        zeile = zeile.strip()
+        if not zeile or zeile.startswith("#") or "=" not in zeile:
+            continue
+        key, _, value = zeile.partition("=")
+        werte[key.strip()] = value.strip()
+    return werte
+
+
+@pytest.mark.architecture
+class TestAusgelieferteDeployVorlagenStarten:
+    """Refs #1967: Die eingecheckten Deploy-Vorlagen muessen den Origin-Guard passieren.
+
+    Beide Vorlagen fuehren neben der oeffentlichen Domain ``localhost`` und
+    ``127.0.0.1`` — zwingend fuer den Container-Healthcheck. Zaehlte der Guard
+    diese Eintraege als konkurrierende „konkrete Hosts", scheiterte der
+    Settings-Import und der Web-Container crash-loopte beim naechsten Deploy.
+    Dieser Test liest die Vorlagen und startet prod damit.
+
+    ``architecture``-Marker wie beim ``.env.example``-Guard oben: die Vorlagen
+    liegen ausserhalb von ``src/`` und fehlen in mutmuts ``mutants/``-Arbeitskopie.
+    """
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    _LOOPBACK = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+    _VORLAGEN = [
+        ".env.demo.example",
+        "dev-ops/deploy/barbara/.env.barbara.example",
+    ]
+
+    @pytest.mark.parametrize("vorlage", _VORLAGEN, ids=lambda p: p.rsplit("/", 1)[-1])
+    def test_vorlage_startet_und_leitet_die_oeffentliche_domain_ab(self, vorlage):
+        pfad = REPO_ROOT / vorlage
+        if not pfad.exists():  # .env.demo.example und dev-ops/ fehlen im Public-Snapshot (Refs #1137)
+            pytest.skip(f"{vorlage} nicht im Public-Snapshot — Guard nur im Dev-Repo relevant")
+
+        werte = _active_env_assignments(pfad)
+        hosts = werte.get("ALLOWED_HOSTS", "")
+        assert hosts, f"{vorlage} muss ALLOWED_HOSTS setzen"
+        oeffentlich = [h for h in (h.strip() for h in hosts.split(",")) if h and h not in self._LOOPBACK]
+        assert len(oeffentlich) == 1, f"{vorlage} fuehrt nicht genau eine oeffentliche Domain: {oeffentlich}"
+
+        result = _run_prod_import(
+            {
+                **self._VALID_ENV,
+                "ALLOWED_HOSTS": hosts,
+                "EXTERNAL_ORIGIN": werte.get("EXTERNAL_ORIGIN", ""),
+            },
+            code="import anlaufstelle.settings.prod as p; print(p.EXTERNAL_ORIGIN)",
+        )
+        assert result.returncode == 0, f"{vorlage} startet prod nicht: {result.stderr}"
+        assert result.stdout.strip().splitlines()[-1] == f"https://{oeffentlich[0]}"
 
 
 class TestProdFileUploadTempDir:

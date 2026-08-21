@@ -23,6 +23,9 @@ Module:
   (``check_version_conflict``).
 - :mod:`core.services.security.invite` — Invite-Mail-Versand
   (``build_invite_url``, ``send_invite_email``).
+- :mod:`core.services.security.origin` — feste Basis-Origin fuer
+  sicherheitsrelevante Links (``build_external_url``,
+  ``external_link_context``, ``get_external_origin``).
 """
 
 from core.services.security.invite import build_invite_url, invite_token_generator, send_invite_email
@@ -45,6 +48,11 @@ from core.services.security.mfa import (
     verify_backup_code,
     verify_totp_or_backup,
 )
+from core.services.security.origin import (
+    build_external_url,
+    external_link_context,
+    get_external_origin,
+)
 from core.services.security.sudo_mode import (
     SUDO_SESSION_KEY,
     RequireSudoModeMixin,
@@ -65,6 +73,7 @@ __all__ = [
     "RequireSudoModeMixin",
     "SUDO_SESSION_KEY",
     "_hash_code",
+    "build_external_url",
     "build_invite_url",
     "build_recovery_token",
     "check_version_conflict",
@@ -72,7 +81,9 @@ __all__ = [
     "decrypt_totp_key",
     "encrypt_totp_key",
     "enter_sudo",
+    "external_link_context",
     "generate_backup_codes",
+    "get_external_origin",
     "invite_token_generator",
     "is_encrypted_totp_key",
     "is_in_sudo",
