@@ -1686,4 +1686,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-21 -->
-<!-- source-hash: 9ce9f78754d5b85078c64b249a0dd3a8413e59fa -->
+<!-- source-hash: 669a1058d634ebd9ce9d9e790d49f9c902086c01 -->

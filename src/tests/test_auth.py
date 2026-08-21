@@ -720,3 +720,51 @@ class TestPasswordMinLengthValidator:
             assert not any("12" in str(m) or "lang" in str(m).lower() for m in exc.messages), (
                 f"12+-Zeichen-PW darf nicht an MinimumLengthValidator scheitern: {exc.messages}"
             )
+
+
+@pytest.mark.django_db
+class TestPasswordResetConfirmClearsForcedChange:
+    """Refs #1969: Ein abgeschlossener Self-Service-Reset loest den Zwangswechsel auf.
+
+    Der Reset ist derselbe Vertrauensanker, der schon den Lockout aufhebt
+    (Refs #869): gueltiges Token = bewiesene E-Mail-Kontrolle, und das neue
+    Passwort hat der Nutzer selbst gewaehlt. Ein Zwangswechsel unmittelbar
+    danach verlangt genau dieses Passwort ein zweites Mal zu ersetzen.
+    """
+
+    def _reset_url(self, user):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.urls import reverse
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        return reverse(
+            "password_reset_confirm",
+            kwargs={
+                "uidb64": urlsafe_base64_encode(force_bytes(user.pk)),
+                "token": default_token_generator.make_token(user),
+            },
+        )
+
+    def test_reset_confirm_clears_must_change_password(self, client, staff_user):
+        staff_user.email = "staff@example.org"
+        staff_user.must_change_password = True
+        staff_user.save(update_fields=["email", "must_change_password"])
+
+        response = client.get(self._reset_url(staff_user), follow=True)
+        assert response.status_code == 200
+
+        new_password = "Reset-Chos3n!Pwd"
+        response = client.post(
+            response.redirect_chain[-1][0],
+            {"new_password1": new_password, "new_password2": new_password},
+            follow=True,
+        )
+        assert response.status_code == 200
+
+        staff_user.refresh_from_db()
+        assert staff_user.must_change_password is False
+
+        assert client.login(username=staff_user.username, password=new_password) is True
+        home = client.get("/")
+        assert home.status_code == 200, f"Erster Request nach dem Login wurde umgeleitet: {home.get('Location', '')}"

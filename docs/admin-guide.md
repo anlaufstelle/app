@@ -419,7 +419,7 @@ Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-To
 
 **Fallback ohne E-Mail:** Wird ein Nutzer **ohne** E-Mail-Adresse angelegt, erzeugt der Admin zur Abwärtskompatibilität einmalig ein Klartext-Initialpasswort, das in der Admin-Oberfläche nach dem Speichern angezeigt wird. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
 
-> **Hinweis:** `must_change_password` wird beim Invite-Flow automatisch gesetzt, ist beim Token-Flow aber redundant — das Passwort wird ohnehin im Setup-Schritt vom Nutzer selbst gewählt.
+> **Hinweis:** `must_change_password` wird bei **jeder** Neuanlage im Admin gesetzt. Schließt der Nutzer den Setup-Schritt der Einladung ab — oder später einen Passwort-Reset, wird das Flag dabei automatisch wieder gelöscht (#1969); er hat sein Passwort in diesem Schritt ja selbst gewählt und muss es beim ersten Login nicht sofort erneut ändern. Erzwungen bleibt der Wechsel damit genau dort, wo er gebraucht wird: beim Fallback ohne E-Mail-Adresse, bei dem der Admin das Initialpasswort kennt.
 
 #### Rollenbeschreibung
 
@@ -1499,7 +1499,7 @@ Der PDF-Hinweiskasten benennt beide Punkte gegenüber der betroffenen Person aus
 - Stellen Sie sicher, dass der Hosting-Anbieter einen **Auftragsverarbeitungsvertrag (AVV)** nach Art. 28 DSGVO unterzeichnet.
 - Führen Sie eine **Datenschutz-Folgenabschätzung (DSFA)** nach Art. 35 DSGVO durch, falls Ihre Einrichtung besonders sensible Daten (z. B. Gesundheitsdaten, Daten schutzbedürftiger Personengruppen) verarbeitet.
 - Beschränken Sie den Admin-Zugang auf das notwendige Minimum (**Least Privilege**).
-- Aktivieren Sie regelmäßige Passwortänderungen durch Setzen von `must_change_password = True` bei neu angelegten Benutzern.
+- Erzwingen Sie einen Passwortwechsel dort, wo ein Passwort **außerhalb** der Anwendung bekannt ist: Beim Fallback ohne E-Mail-Adresse setzt die Neuanlage `must_change_password` selbst, für ein nachträglich von Hand vergebenes Passwort aktivieren Sie das Feld **Passwort muss geändert werden** in der Benutzer-Bearbeitung. Bei Konten **mit** E-Mail-Adresse ersetzt der Einladungsweg diese Maßnahme — der Nutzer wählt sein Passwort dort selbst, und der abgeschlossene Setup-Schritt löscht das Kennzeichen wieder (§ 2.4, #1969).
 - Lagern Sie Backups und `ENCRYPTION_KEY` an getrennten, gesicherten Orten.
 
 ### 7.8 Optimistic Locking

@@ -205,3 +205,36 @@ class TestUserOnboardingFlow:
 
         assert not user.has_usable_password()
         assert user.must_change_password is True
+
+    def test_abgeschlossenes_invite_setup_loescht_den_zwangswechsel(self, facility, client):
+        """Refs #1969: Nach dem Setup-Schritt darf ``must_change_password`` nicht stehen bleiben.
+
+        Bis dahin lief der frisch eingeladene Nutzer beim ersten Login sofort
+        wieder auf ``/password-change/`` — obwohl er das Passwort im Setup-Schritt
+        gerade selbst gewaehlt hatte. Der Test faehrt den Pfad einmal komplett:
+        Anlage wie im Admin -> Invite-Link -> Passwort setzen -> Login -> Startseite.
+        """
+        user = User.objects.create_user(username="onboarded", email="onboarded@example.org", facility=facility)
+        user.set_unusable_password()
+        user.must_change_password = True
+        user.save(update_fields=["password", "must_change_password"])
+
+        token = invite_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        response = client.get(f"/invite/{uid}/{token}/", follow=True)
+        assert response.status_code == 200
+
+        new_password = "SetupChos3n!Pwd"
+        response = client.post(
+            response.redirect_chain[-1][0],
+            {"new_password1": new_password, "new_password2": new_password},
+            follow=True,
+        )
+        assert response.status_code == 200
+
+        user.refresh_from_db()
+        assert user.must_change_password is False
+
+        assert client.login(username="onboarded", password=new_password) is True
+        home = client.get("/")
+        assert home.status_code == 200, f"Erster Request nach dem Login wurde umgeleitet: {home.get('Location', '')}"

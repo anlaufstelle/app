@@ -231,6 +231,16 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     und ein neues Passwort gesetzt. Daher schreiben wir einen LOGIN_UNLOCK-
     AuditLog — nachfolgende ``is_locked()``-Pruefungen ignorieren alle
     LOGIN_FAILED-Eintraege bis zu diesem Zeitpunkt.
+
+    Aus demselben Vertrauensanker faellt hier auch ``must_change_password``
+    (Refs #1969). Das Flag setzt die Benutzeranlage im Admin bei *jedem* neuen
+    Konto; aufgeloest wurde es bisher nur im Change-Pfad. Ein frisch
+    eingeladener Nutzer landete deshalb beim ersten Login sofort wieder auf
+    ``/password-change/`` und musste das eben selbst gewaehlte Passwort ein
+    zweites Mal ersetzen. Der E-Mail-lose Fallback (Klartext-Initialpasswort
+    aus der Admin-Anlage) erzwingt den Wechsel weiterhin: er kommt hier gar
+    nicht vorbei, solange keine Adresse nachgetragen und der Setup- bzw.
+    Reset-Weg tatsaechlich durchlaufen wird.
     """
 
     def form_valid(self, form):
@@ -238,6 +248,9 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         user = form.user
         if user is not None and getattr(user, "pk", None):
             unlock_user(user, unlocked_by=None, ip_address=None, trigger="password_reset")
+            if user.must_change_password:
+                user.must_change_password = False
+                user.save(update_fields=["must_change_password"])
         return response
 
 

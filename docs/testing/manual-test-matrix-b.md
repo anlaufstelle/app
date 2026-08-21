@@ -333,7 +333,7 @@
 |---------|-------|---------|--------|-----|
 | Auth | beliebig (z.B. neue Fachkraft) | C/F/S | ⚪ | `test_security_hardening.py` |
 
-**Voraussetzung:** neuer User mit `must_change_password=True` (z.B. via Admin-UI oder Invite-Flow).
+**Voraussetzung:** neuer User mit `must_change_password=True` — Konto **ohne** E-Mail-Adresse im Admin anlegen (die Neuanlage setzt das Flag und zeigt ein Klartext-Initialpasswort an) oder das Flag an einem bestehenden Konto von Hand setzen. **Nicht** über den Invite-Flow: Ein abgeschlossener Einladungs- oder Reset-Vorgang löscht das Flag seit #1969 mit, dieser Weg erzeugt die Voraussetzung also nicht mehr.
 
 **Vorbereitung:**
 - User `neue_fk` mit Initial-Pwd (12 Zeichen aus `generate_initial_password`) und `must_change_password=True` anlegen.
