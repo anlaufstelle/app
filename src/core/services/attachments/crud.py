@@ -9,12 +9,20 @@ sind das Ereignis, Person und Fall.
 ``apply_attachment_changes``) — Bestands-Importe (``core.services.events``) und
 der Event-View-Pfad bleiben dadurch unveraendert gueltig.
 
-**Patch-Vertrag:** ``commit_staged_upload``/``store_encrypted_file``/
+**Patch-Vertrag:** ``prepare_encrypted_upload``/``commit_staged_upload``/
 ``soft_delete_attachment_chain`` werden weiterhin **funktionslokal aus dem
 Paket** ``core.services.file_vault`` geholt (nicht aus dem Submodul). Tests
 patchen genau diesen Paket-Alias (z. B.
 ``patch("core.services.file_vault.commit_staged_upload")``); ein Modul-Level-
 Import oder ein Submodul-Import wuerde den Mock zur Aufrufzeit umgehen.
+
+**Lock-Vertrag (Refs #1956):** Scan + Verschluesselung laufen ausschliesslich in
+:func:`stage_attachment_uploads` — die gehoert VOR den ``transaction.atomic``
+des Aufrufers. Im Transaktionsblock faellt nur noch der schnelle DB-Write
+(``commit_staged_upload``) an. Sonst haelt der per-Facility
+``pg_advisory_xact_lock`` des AuditLog-Inserts (Hashkette) bis zu
+``CLAMAV_TIMEOUT`` je Datei und serialisiert jede audit-schreibende Aktion
+derselben Einrichtung.
 """
 
 from __future__ import annotations
@@ -54,6 +62,131 @@ def finalize_staged_files(owner, user, staged_by_slug, document_type):
     owner.save(update_fields=["data_json"])
 
 
+def replace_upload_key(slug, entry_id):
+    """Der ``request.FILES``-Schluessel des per-Entry-Replace-Inputs.
+
+    Eine Stelle fuer beide Seiten: :func:`stage_attachment_uploads` staged
+    darunter, :func:`_apply_replace` holt darunter wieder ab. Auseinanderlaufen
+    hiesse: verschluesselte ``.enc`` ohne DB-Zeile.
+    """
+    return f"{slug}__replace__{entry_id}"
+
+
+def _iter_file_fields(owner, user, document_type, data_json=None):
+    """Gemeinsame Basis von Staging und Anwendung.
+
+    Liefert je FILE-Feld des Typs, das die Rolle sehen darf, ein Tupel
+    ``(slug, field_template, current_entries, attachments_by_pk)``.
+
+    Warum gemeinsam (Refs #1956): Das Sensitivity-Gate (R11, Refs #1476/#1666)
+    lag frueher NUR in :func:`apply_attachment_changes`. Zieht man Scan +
+    Verschluesselung vor die Transaktion, ohne das Gate mitzuziehen, wuerden
+    Dateien fuer Felder gescannt und verschluesselt, die die Rolle gar nicht
+    aendern darf — als ``.enc``-Waise auf der Disk und als Policy-Umgehung.
+    Ebenso muss die REPLACE-Aufloesung auf beiden Seiten identisch sein: der
+    Staging-Pfad darf **nur** fuer tatsaechlich vorhandene Entries scannen,
+    sonst genuegten frei erfundene ``<slug>__replace__<uuid>``-Schluessel, um
+    beliebig viele Virenscans und ``.enc``-Waisen zu erzwingen.
+
+    ``data_json`` erlaubt dem Aufrufer, die **kuenftige** Markerlage
+    vorzugeben (der Update-Pfad hat sie als ``merged`` schon berechnet, aber
+    noch nicht gespeichert). ``None`` = Markerlage des Owners lesen.
+    """
+    from core.services.compliance import user_can_see_field
+
+    field_templates = build_field_template_lookup(document_type)
+    doc_sensitivity = document_type.sensitivity
+    marker_source = owner.data_json if data_json is None else data_json
+    for slug, ft in field_templates.items():
+        if ft.field_type != FieldTemplate.FieldType.FILE:
+            continue
+
+        # R11 (Refs #1476/#1666): Sensitivity-Gate auch auf Anhang-Mutation.
+        # Der Update-Pfad entfernt Text-Felder oberhalb der Rollen-Sicht
+        # per ``remove_restricted_fields`` aus dem Form; die Anhang-Mutation
+        # liest REMOVE/REPLACE/ADD aber direkt aus ``request.POST``/``FILES``
+        # und umging dieses Gate. Ein User, der den Owner sieht (Doc-Type-Gate),
+        # aber dieses FILE-Feld wegen eines feldbezogenen Sensitivity-Overrides
+        # NICHT sehen darf, darf dessen Anhaenge nicht loeschen/ersetzen/
+        # ergaenzen — der Marker bleibt dann unveraendert. (``user is None`` =
+        # System-/Service-Kontext ohne Rolle → kein Gate.)
+        if user is not None and not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
+            continue
+
+        current_entries = normalize_file_marker((marker_source or {}).get(slug))
+
+        # Refs #782 (C-17): Bulk-Load aller Attachments des aktuellen Slugs
+        # in einer Query — vorher lud der REMOVE/REPLACE-Pfad jeden Entry
+        # einzeln (``filter(pk=entry["id"]).first()``) und produzierte N+1.
+        entry_ids = [entry["id"] for entry in current_entries]
+        attachments_by_pk = (
+            {str(att.pk): att for att in owner.attachments.filter(pk__in=entry_ids)} if entry_ids else {}
+        )
+
+        yield slug, ft, current_entries, attachments_by_pk
+
+
+def stage_attachment_uploads(owner, user, request_files, file_fields, document_type, *, data_json=None):
+    """Scannen + verschluesseln aller REPLACE-/ADD-Uploads — OHNE DB-Write.
+
+    Refs #1956: Gehoert VOR den ``transaction.atomic``-Block des Aufrufers (das
+    Pendant zum Create-Pfad, der seit #1345 so arbeitet). Liefert
+    ``(staged_by_key, staged_all)``:
+
+    * ``staged_by_key`` — ``{schluessel: [StagedUpload, ...]}``. Der Schluessel
+      ist fuer ADD der Feld-Slug (Reihenfolge = Upload-Reihenfolge), fuer
+      REPLACE der Formular-Schluessel aus :func:`replace_upload_key`.
+    * ``staged_all`` — flache Liste aller gestagten Dateien, damit der Aufrufer
+      sie im ``finally`` wieder entfernen kann, wenn seine Transaktion NICHT
+      committet (Cleanup-Garantie aus #662).
+
+    Scheitert eine Datei an der Policy (Virus, Magic-Bytes, Groesse), werden
+    die bereits gestagten ``.enc`` hier entfernt und die ``ValidationError``
+    weitergereicht — der Aufrufer sieht dann eine leere Staging-Menge.
+    """
+    from core.services.file_vault import prepare_encrypted_upload
+
+    # Ohne jede hochgeladene Datei gibt es nichts zu stagen. Der reine
+    # Text-Edit — der haeufigste Fall — spart sich damit die Bestands-Queries
+    # der Marker-Aufloesung komplett.
+    if not request_files and not any(file_fields.values()):
+        return {}, []
+
+    # ADR-039 §2: die Facility kommt aus dem Owner, nie aus dem Request.
+    facility = owner.facility
+    staged_by_key: dict[str, list] = {}
+    staged_all: list = []
+    try:
+        for slug, _ft, current_entries, attachments_by_pk in _iter_file_fields(owner, user, document_type, data_json):
+            for entry in current_entries:
+                att = attachments_by_pk.get(str(entry["id"]))
+                if att is None:
+                    continue
+                key = replace_upload_key(slug, att.entry_id)
+                replace_file = request_files.get(key)
+                if replace_file is None:
+                    continue
+                staged = prepare_encrypted_upload(facility, replace_file, user, owner=owner)
+                staged_all.append(staged)
+                staged_by_key[key] = [staged]
+
+            prepared = []
+            for uploaded_file in file_fields.get(slug) or []:
+                staged = prepare_encrypted_upload(facility, uploaded_file, user, owner=owner)
+                staged_all.append(staged)
+                prepared.append(staged)
+            if prepared:
+                staged_by_key[slug] = prepared
+    except Exception:
+        # Kein halber Staging-Stand auf der Disk (#662): der Aufrufer bekommt
+        # die Exception, aber keine Waisen.
+        for staged in staged_all:
+            staged.output_path.unlink(missing_ok=True)
+        raise
+
+    return staged_by_key, staged_all
+
+
 def _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user):
     """REMOVE-Schritt: hidden CSV ``<slug>__remove`` listet zu loeschende
     ``entry_id``-Werte -> ``soft_delete_attachment_chain``. Liefert die um die
@@ -74,35 +207,39 @@ def _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner,
     return filtered
 
 
-def _apply_replace(slug, current_entries, attachments_by_pk, request_files, facility, ft, owner, user):
-    """REPLACE-Schritt: pro bestehendem Entry ein File-Input
-    ``<slug>__replace__<entry_id>`` -> ``store_encrypted_file(supersedes=...)``.
-    Liefert die (ggf. ersetzte) Entry-Liste."""
-    from core.services.file_vault import store_encrypted_file
+def _apply_replace(slug, current_entries, attachments_by_pk, staged_by_key, ft, owner, user):
+    """REPLACE-Schritt: pro bestehendem Entry eine vorab gestagte Datei unter
+    :func:`replace_upload_key` -> ``commit_staged_upload(supersedes=...)``.
+    Liefert die (ggf. ersetzte) Entry-Liste. Reiner DB-Write (Refs #1956).
+
+    Verbrauchte Schluessel werden aus ``staged_by_key`` entfernt (``pop``) —
+    was am Ende uebrig bleibt, hat keine DB-Zeile bekommen und raeumt
+    :func:`apply_attachment_changes` weg."""
+    from core.services.file_vault import commit_staged_upload
 
     updated_entries = []
     for entry in current_entries:
         att = attachments_by_pk.get(str(entry["id"]))
         if not att:
             continue
-        replace_file = request_files.get(f"{slug}__replace__{att.entry_id}")
-        if replace_file is not None:
-            new_att = store_encrypted_file(facility, replace_file, ft, owner, user, supersedes=att)
+        staged_list = staged_by_key.pop(replace_upload_key(slug, att.entry_id), None)
+        if staged_list:
+            new_att = commit_staged_upload(owner, ft, staged_list[0], user, supersedes=att)
             updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
         else:
             updated_entries.append(entry)
     return updated_entries
 
 
-def _apply_add(slug, updated_entries, file_fields, facility, ft, owner, user):
-    """ADD-Schritt: alle Files aus dem Multi-Upload-Feld werden mit frischen
-    ``entry_id`` angehaengt. Liefert die um die neuen Entries erweiterte Liste."""
-    from core.services.file_vault import store_encrypted_file
+def _apply_add(slug, updated_entries, staged_by_key, ft, owner, user):
+    """ADD-Schritt: alle unter dem Slug gestagten Dateien werden mit frischen
+    ``entry_id`` angehaengt. Liefert die erweiterte Liste. Reiner DB-Write.
+    Verbraucht den Slug-Schluessel aus ``staged_by_key`` (``pop``)."""
+    from core.services.file_vault import commit_staged_upload
 
-    add_files = file_fields.get(slug) or []
     base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
-    for idx, uploaded_file in enumerate(add_files):
-        new_att = store_encrypted_file(facility, uploaded_file, ft, owner, user, sort_order=base_sort + idx)
+    for idx, staged in enumerate(staged_by_key.pop(slug, None) or []):
+        new_att = commit_staged_upload(owner, ft, staged, user, sort_order=base_sort + idx)
         updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
     return updated_entries
 
@@ -115,61 +252,64 @@ def _write_file_marker(owner, slug, updated_entries):
         del owner.data_json[slug]
 
 
-def apply_attachment_changes(owner, user, request_post, request_files, file_fields, document_type):
+def apply_attachment_changes(owner, user, request_post, request_files, file_fields, document_type, staged_by_key=None):
     """Applizieren von REMOVE/REPLACE/ADD auf die FILE-Felder eines Owners.
 
     - **REMOVE**: hidden CSV ``<slug>__remove`` listet zu loeschende
       ``entry_id``-Werte -> ``soft_delete_attachment_chain``.
-    - **REPLACE**: pro bestehendem Entry ein File-Input
-      ``<slug>__replace__<entry_id>`` -> ``store_encrypted_file(supersedes=...)``.
-    - **ADD**: alle Files aus dem Multi-Upload-Feld werden mit frischen
+    - **REPLACE**: die unter :func:`replace_upload_key` gestagte Datei ersetzt
+      den bestehenden Entry (``commit_staged_upload(supersedes=...)``).
+    - **ADD**: alle unter dem Slug gestagten Dateien werden mit frischen
       ``entry_id`` angehaengt.
 
     Aktualisiert anschliessend den Marker im ``owner.data_json``. ``owner`` ist
     ein ``Event``, ``Client`` oder ``Case`` (Refs #1738).
+
+    ``staged_by_key`` (Refs #1956) ist das Ergebnis von
+    :func:`stage_attachment_uploads`; gestagte Dateien, die hier keine DB-Zeile
+    bekommen, werden am Ende von der Disk entfernt. **Jeder Aufrufer mit eigener Transaktion
+    muss es mitgeben** — dann faellt hier nur noch der schnelle DB-Write an und
+    der AuditLog-Advisory-Lock der Einrichtung steht nicht ueber dem ClamAV-
+    Scan. ``None`` ist der Bequemlichkeits-Modus fuer transaktionslose
+    Service-/Test-Aufrufer: dann staged diese Funktion selbst (inklusive
+    Cleanup bei Fehlern) und ``file_fields`` bleibt die ADD-Quelle. Mit
+    ``staged_by_key`` wird ``file_fields`` nicht mehr gelesen.
     """
-    from core.services.compliance import user_can_see_field
+    own_staging = staged_by_key is None
+    staged_all: list = []
+    if own_staging:
+        staged_by_key, staged_all = stage_attachment_uploads(owner, user, request_files, file_fields, document_type)
 
-    field_templates = build_field_template_lookup(document_type)
-    # ADR-039 §2: die Facility kommt aus dem Owner, nie aus dem Request.
-    facility = owner.facility
-    doc_sensitivity = document_type.sensitivity
-    for slug, ft in field_templates.items():
-        if ft.field_type != FieldTemplate.FieldType.FILE:
-            continue
+    # Arbeitskopie: die Schritte unten ``pop``en, was sie verbrauchen. Der
+    # Aufrufer soll seine Staging-Liste unveraendert behalten (sein ``finally``
+    # raeumt bei ausbleibendem Commit alles weg).
+    staged_pending = dict(staged_by_key)
+    try:
+        for slug, ft, current_entries, attachments_by_pk in _iter_file_fields(owner, user, document_type):
+            current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user)
+            updated_entries = _apply_replace(slug, current_entries, attachments_by_pk, staged_pending, ft, owner, user)
+            updated_entries = _apply_add(slug, updated_entries, staged_pending, ft, owner, user)
 
-        # R11 (Refs #1476/#1666): Sensitivity-Gate auch auf Anhang-Mutation.
-        # Der Update-Pfad entfernt Text-Felder oberhalb der Rollen-Sicht
-        # per ``remove_restricted_fields`` aus dem Form; die Anhang-Mutation
-        # liest REMOVE/REPLACE/ADD aber direkt aus ``request.POST``/``FILES``
-        # und umging dieses Gate. Ein User, der den Owner sieht (Doc-Type-Gate),
-        # aber dieses FILE-Feld wegen eines feldbezogenen Sensitivity-Overrides
-        # NICHT sehen darf, darf dessen Anhaenge nicht loeschen/ersetzen/
-        # ergaenzen — der Marker bleibt dann unveraendert. (``user is None`` =
-        # System-/Service-Kontext ohne Rolle → kein Gate.)
-        if user is not None and not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
-            continue
+            _write_file_marker(owner, slug, updated_entries)
 
-        existing_marker = (owner.data_json or {}).get(slug)
-        current_entries = normalize_file_marker(existing_marker)
+        owner.save(update_fields=["data_json"])
 
-        # Refs #782 (C-17): Bulk-Load aller Attachments des aktuellen Slugs
-        # in einer Query — vorher lud der REMOVE/REPLACE-Pfad jeden Entry
-        # einzeln (``filter(pk=entry["id"]).first()``) und produzierte N+1.
-        entry_ids = [entry["id"] for entry in current_entries]
-        attachments_by_pk = (
-            {str(att.pk): att for att in owner.attachments.filter(pk__in=entry_ids)} if entry_ids else {}
-        )
-
-        current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user)
-        updated_entries = _apply_replace(
-            slug, current_entries, attachments_by_pk, request_files, facility, ft, owner, user
-        )
-        updated_entries = _apply_add(slug, updated_entries, file_fields, facility, ft, owner, user)
-
-        _write_file_marker(owner, slug, updated_entries)
-
-    owner.save(update_fields=["data_json"])
+        # Refs #1956: Zwischen Staging und Anwendung kann die Markerlage
+        # abweichen (nebenlaeufige Aenderung, Feldzuordnung entfernt). Eine
+        # gestagte Datei ohne DB-Zeile waere dann eine verschluesselte Waise
+        # auf der Disk, die kein Loeschpfad je erfasst — sofort entfernen
+        # statt auf den naechtlichen Orphan-Cleanup zu warten (#662).
+        for leftover in staged_pending.values():
+            for staged in leftover:
+                staged.output_path.unlink(missing_ok=True)
+    except Exception:
+        # Nur was diese Funktion selbst gestagt hat, raeumt sie auch selbst weg
+        # (#662). Beim Aufrufer-Staging haengt das Aufraeumen an dessen
+        # ``finally`` — nur der weiss, ob seine Transaktion committet hat.
+        if own_staging:
+            for staged in staged_all:
+                staged.output_path.unlink(missing_ok=True)
+        raise
 
 
 def preserve_file_markers(owner, merged_data, previous_data, file_field_slugs):

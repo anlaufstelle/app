@@ -783,17 +783,28 @@ class TestAttachmentAtomicity:
         self, client, staff_user, event_with_file, doc_type_with_file
     ):
         """Scheitert die neue Datei im Update-Pfad, bleibt die alte vollständig
-        erhalten (DB + Filesystem)."""
+        erhalten (DB + Filesystem).
+
+        Refs #1956: Der Update-Pfad staged Scan + Verschlüsselung wie der
+        Anlage-Pfad VOR der ``transaction.atomic()``. Die maßgebliche Naht ist
+        damit ``prepare_encrypted_upload`` — gemockt über den Paket-Alias, den
+        ``stage_attachment_uploads`` funktionslokal auflöst (Patch-Vertrag in
+        ``services/attachments/crud.py``). Das frühere Ziel
+        ``store_encrypted_file`` liegt nicht mehr in diesem Pfad.
+        """
         event, old_attachment = event_with_file
         dt, _, ft_file = doc_type_with_file
         old_path = get_attachment_path(old_attachment)
         assert old_path.exists()
 
         client.force_login(staff_user)
-        new_upload = SimpleUploadedFile("new.pdf", b"new bytes", content_type="application/pdf")
+        # Gueltiger PDF-Header: der Reject muss nachweislich aus dem Mock
+        # kommen und nicht beilaeufig aus der Magic-Bytes-Pruefung — sonst
+        # waere der Patch tot und der Test bewiese nichts (Refs #1956).
+        new_upload = SimpleUploadedFile("new.pdf", PDF_HEADER, content_type="application/pdf")
 
         with patch(
-            "core.services.file_vault.store_encrypted_file",
+            "core.services.file_vault.prepare_encrypted_upload",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(

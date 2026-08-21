@@ -48,14 +48,16 @@ def finalize_staged_files(event, user, staged_by_slug, document_type):
     return attachments_crud.finalize_staged_files(event, user, staged_by_slug, document_type)
 
 
-def apply_attachment_changes(event, user, request_post, request_files, file_fields, document_type):
+def apply_attachment_changes(event, user, request_post, request_files, file_fields, document_type, staged_by_key=None):
     """Alt-Einstiegspunkt fuer den Event-Pfad — delegiert owner-generisch.
 
     M24/AP2 (Refs #1738): Implementierung in
     :func:`core.services.attachments.crud.apply_attachment_changes`.
+    Refs #1956: ``staged_by_key`` (Scan/Verschluesselung vor der Transaktion)
+    wird durchgereicht.
     """
     return attachments_crud.apply_attachment_changes(
-        event, user, request_post, request_files, file_fields, document_type
+        event, user, request_post, request_files, file_fields, document_type, staged_by_key
     )
 
 

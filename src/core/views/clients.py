@@ -24,6 +24,7 @@ from core.services.attachments import (
     discard_type_switch_file_chains,
     finalize_staged_files,
     preserve_file_markers,
+    stage_attachment_uploads,
 )
 from core.services.audit import log_audit_event
 from core.services.case import cases_with_live_client
@@ -610,6 +611,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 return render(request, "core/clients/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 
+        # Refs #1956: Staging-Buchfuehrung fuer den ``finally``-Cleanup unten.
+        committed = False
+        staged_all: list = []
         try:
             if not type_locked:
                 # P4b-Review (fail-closed-Vertrag): ``update_client`` weist
@@ -643,6 +647,27 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     preserve_file_markers(client, merged, old_data, _file_field_slugs(doc_type))
                 fields["data_json"] = merged
 
+            # Refs #1956: Scan + Fernet-Verschluesselung VOR die Transaktion.
+            # ``update_client`` schreibt ueber ``audit_client_event`` eine
+            # AuditLog-Zeile, deren INSERT den per-Facility
+            # ``pg_advisory_xact_lock`` der Hashkette bis zum Commit haelt. Lag
+            # der (bis ``CLAMAV_TIMEOUT`` je Datei dauernde) Scan mit im selben
+            # ``atomic``, serialisierte er jede andere audit-schreibende Aktion
+            # derselben Einrichtung. ``fields.get("data_json")`` gibt die
+            # kuenftige Markerlage vor — beim Typwechsel ist sie leer, dort
+            # wird also (wie in ``apply_attachment_changes``) kein REPLACE
+            # gestagt.
+            staged_by_key: dict = {}
+            if doc_type is not None:
+                staged_by_key, staged_all = stage_attachment_uploads(
+                    client,
+                    request.user,
+                    request.FILES,
+                    file_fields,
+                    doc_type,
+                    data_json=fields.get("data_json"),
+                )
+
             expected_updated_at = request.POST.get("expected_updated_at") or None
             with transaction.atomic():
                 if type_switched:
@@ -662,7 +687,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
                         request.FILES,
                         file_fields,
                         doc_type,
+                        staged_by_key=staged_by_key,
                     )
+            committed = True
         except ValidationError as e:
             # #1938: Fehler an einem fuer diese Rolle unsichtbaren Feld duerfen
             # weder Slug noch Grenze nennen — derselbe Vertrag wie im
@@ -670,6 +697,13 @@ class ClientUpdateView(StaffRequiredMixin, View):
             safe_messages = add_dynamic_service_errors(data_form, e, restricted)
             messages.error(request, "; ".join(safe_messages))
             return redirect("core:client_update", pk=client.pk)
+        finally:
+            # Refs #1345/#1956: Committet die Transaktion nicht (Rollback,
+            # Policy-Reject, unerwartete Exception), sind die vorab
+            # verschluesselten ``.enc`` Waisen — restlos entfernen (#662).
+            if not committed:
+                for staged in staged_all:
+                    staged.output_path.unlink(missing_ok=True)
         messages.success(request, _("Person wurde aktualisiert."))
         return redirect("core:client_detail", pk=client.pk)
 

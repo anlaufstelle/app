@@ -6,12 +6,17 @@ Deckt das neue Paket ``core.services.attachments`` ab:
   Text-Edit still ALLE Bestandsanhaenge aus dem ``data_json`` werfen.
 * ``discard_type_switch_file_chains`` — Soft-Delete der Ketten beim Typwechsel
   (ADR-039 §7), Rueckgabe = Anzahl der KETTEN.
+* ``stage_attachment_uploads``/``apply_attachment_changes`` — die Trennung von
+  Scan/Verschluesselung (vor der Transaktion) und DB-Write (in der Transaktion)
+  samt Cleanup-Garantie fuer nicht verbrauchte Staging-Dateien (Refs #1956).
 * ``attachment_download_url`` — Owner-Dispatch der Download-Route.
 * ``build_attachment_context``/``resolve_file_entries`` — Anzeige-Kontexte, die
   ab AP2 die ``download_url`` selbst tragen (die fuenf hartkodierten
   ``{% url 'core:attachment_download' %}``-Stellen loest AP4 darauf ab).
 * Alias-Vertrag: die Alt-Namen in ``services/events`` bleiben gueltig.
 """
+
+from pathlib import Path
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -29,11 +34,14 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import FieldTemplate  # noqa: E402
 from core.services.attachments import (  # noqa: E402
+    apply_attachment_changes,
     attachment_download_url,
     build_attachment_context,
     discard_type_switch_file_chains,
     preserve_file_markers,
+    replace_upload_key,
     resolve_file_entries,
+    stage_attachment_uploads,
 )
 from core.services.file_vault import commit_staged_upload, prepare_encrypted_upload  # noqa: E402
 
@@ -212,6 +220,92 @@ class TestKontexteTragenDieDownloadUrl:
         assert prior[0]["download_url"] == reverse(
             "core:attachment_download", kwargs={"pk": sample_event.pk, "attachment_pk": old.pk}
         )
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestStagingUndAnwendungGetrennt:
+    """Refs #1956: Scan/Verschluesselung stehen VOR der Transaktion, im
+    Transaktionsblock faellt nur noch der DB-Write an. Beide Seiten teilen
+    Sensitivity-Gate und REPLACE-Aufloesung — laufen sie auseinander, entstehen
+    verschluesselte Waisen auf der Disk (#662).
+    """
+
+    @pytest.fixture
+    def dt_with_file(self, facility, ft_file):
+        from core.models import DocumentType, DocumentTypeField
+
+        dt = DocumentType.objects.create(facility=facility, name="Staging-Typ")
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+        return dt
+
+    def test_staging_scannt_nur_vorhandene_replace_entries(
+        self, staff_user, sample_event, ft_file, dt_with_file, settings, tmp_path
+    ):
+        """Ein frei erfundener ``<slug>__replace__<uuid>``-Schluessel darf weder
+        einen Virenscan noch eine ``.enc`` erzeugen — sonst genuegte ein
+        praeparierter POST, um Scan-Last und Disk-Muell zu erzwingen."""
+        settings.MEDIA_ROOT = str(tmp_path)
+        import uuid as uuid_mod
+
+        upload = SimpleUploadedFile("fremd.pdf", PDF_HEADER, content_type="application/pdf")
+        staged_by_key, staged_all = stage_attachment_uploads(
+            sample_event,
+            staff_user,
+            {replace_upload_key(ft_file.slug, uuid_mod.uuid4()): upload},
+            {},
+            dt_with_file,
+        )
+        assert staged_by_key == {}
+        assert staged_all == []
+        assert list(Path(tmp_path).rglob("*.enc")) == []
+
+    def test_nicht_verbrauchte_staging_datei_wird_entfernt(
+        self, staff_user, sample_event, ft_file, dt_with_file, settings, tmp_path
+    ):
+        """Verliert eine gestagte Datei zwischen Staging und Anwendung ihre
+        Zuordnung, bleibt sie sonst als verschluesselte Waise liegen."""
+        settings.MEDIA_ROOT = str(tmp_path)
+        upload = SimpleUploadedFile("waise.pdf", PDF_HEADER, content_type="application/pdf")
+        staged = prepare_encrypted_upload(sample_event.facility, upload, staff_user, owner=sample_event)
+        assert staged.output_path.exists()
+
+        apply_attachment_changes(
+            sample_event,
+            staff_user,
+            {},
+            {},
+            {},
+            dt_with_file,
+            staged_by_key={"slug-ohne-feld": [staged]},
+        )
+
+        assert not staged.output_path.exists()
+        assert sample_event.attachments.count() == 0
+
+    def test_eigenes_staging_raeumt_bei_db_fehler_auf(
+        self, staff_user, sample_event, ft_file, dt_with_file, settings, tmp_path
+    ):
+        """Ohne ``staged_by_key`` staged der Service selbst — scheitert danach
+        der DB-Write, muss er seine eigenen ``.enc`` wieder entfernen (#662)."""
+        settings.MEDIA_ROOT = str(tmp_path)
+        from unittest.mock import patch
+
+        upload = SimpleUploadedFile("db-fehler.pdf", PDF_HEADER, content_type="application/pdf")
+        with (
+            patch("core.services.file_vault.commit_staged_upload", side_effect=RuntimeError("DB down")),
+            pytest.raises(RuntimeError, match="DB down"),
+        ):
+            apply_attachment_changes(
+                sample_event,
+                staff_user,
+                {},
+                {},
+                {ft_file.slug: [upload]},
+                dt_with_file,
+            )
+
+        assert list(Path(tmp_path).rglob("*.enc")) == []
 
 
 @pytest.mark.django_db

@@ -28,6 +28,8 @@ from core.services.attachments.crud import (
     discard_type_switch_file_chains,
     finalize_staged_files,
     preserve_file_markers,
+    replace_upload_key,
+    stage_attachment_uploads,
 )
 
 __all__ = [
@@ -39,5 +41,7 @@ __all__ = [
     "discard_type_switch_file_chains",
     "finalize_staged_files",
     "preserve_file_markers",
+    "replace_upload_key",
     "resolve_file_entries",
+    "stage_attachment_uploads",
 ]

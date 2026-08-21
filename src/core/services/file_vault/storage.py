@@ -209,10 +209,15 @@ def store_encrypted_file(
     """Encrypt and store an uploaded file. Returns Attachment instance.
 
     Duenner Wrapper um :func:`prepare_encrypted_upload` + :func:`commit_staged_upload`
-    (Refs #1345). Fuer Aufrufer, die Scan/Encrypt und DB-Write NICHT trennen
-    muessen (Seed, Update/Replace-Pfad ``apply_attachment_changes``): der
-    Vertrag (Reihenfolge der Checks, Cleanup-Garantie) bleibt unveraendert;
-    ``event`` heisst ab AP2 ``owner`` (Ereignis, Person oder Fall, Refs #1738).
+    (Refs #1345). Fuer Aufrufer OHNE eigene Transaktion, die Scan/Encrypt und
+    DB-Write nicht trennen muessen (Seed): der Vertrag (Reihenfolge der Checks,
+    Cleanup-Garantie) bleibt unveraendert; ``event`` heisst ab AP2 ``owner``
+    (Ereignis, Person oder Fall, Refs #1738).
+
+    **Nicht** in einem ``transaction.atomic`` verwenden, das eine AuditLog-Zeile
+    schreibt: der Scan liefe dann unter dem per-Facility-Advisory-Lock der
+    Hashkette (Refs #1345/#1956). Die Anlage-/Update-Pfade stagen deshalb ueber
+    :func:`~core.services.attachments.crud.stage_attachment_uploads`.
 
     ADR-039 §2 fail-loud: ``facility`` ist hier nur noch der Policy-/Pfad-Kontext
     der Pre-Encrypt-Pipeline — massgeblich fuer die Zeile ist ``owner.facility``.

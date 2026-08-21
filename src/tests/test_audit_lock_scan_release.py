@@ -184,3 +184,166 @@ def test_security_violation_survives_policy_reject(client, staff_user, facility)
         "SECURITY_VIOLATION muss den Reject ueberleben (durable pre-tx Audit)"
     )
     assert resp.status_code in (200, 422)
+
+
+def _client_doc_type_with_file(facility):
+    """Personen-Typ mit genau einem FILE-Feld (Slug ``anhang``)."""
+    dt = DocumentType.objects.create(
+        facility=facility,
+        name="Personenakte mit Anhang",
+        entity_type=DocumentType.EntityType.CLIENT,
+    )
+    ft_file = FieldTemplate.objects.create(
+        facility=facility,
+        name="Anhang",
+        field_type=FieldTemplate.FieldType.FILE,
+    )
+    DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+    return dt
+
+
+def _case_doc_type_with_file(facility):
+    """Fall-Typ mit genau einem FILE-Feld (Slug ``anhang``)."""
+    dt = DocumentType.objects.create(
+        facility=facility,
+        name="Fallakte mit Anhang",
+        entity_type=DocumentType.EntityType.CASE,
+    )
+    ft_file = FieldTemplate.objects.create(
+        facility=facility,
+        name="Anhang",
+        field_type=FieldTemplate.FieldType.FILE,
+    )
+    DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+    return dt
+
+
+@pytest.mark.django_db(transaction=True)
+def test_client_update_scan_does_not_hold_audit_chain_lock(client, staff_user, facility):
+    """Refs #1956: Auch der PERSONEN-Update-Pfad darf den Lock nicht halten.
+
+    ``ClientUpdateView.post`` umspannte ``update_client`` (schreibt ueber
+    ``audit_client_event`` eine AuditLog-Zeile) und ``apply_attachment_changes``
+    mit EINEM ``atomic`` — der Advisory-Lock der Facility stand damit ueber dem
+    gesamten ClamAV-Scan. Die Sonde im gemockten Scan muss den Lock frei sehen.
+    """
+    from unittest.mock import patch
+
+    from core.models import Client
+
+    doc_type = _client_doc_type_with_file(facility)
+    person = Client.objects.create(
+        facility=facility,
+        pseudonym="Lock-Sonde Person",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        document_type=doc_type,
+        notes="alt",
+        created_by=staff_user,
+    )
+    client.force_login(staff_user)
+
+    captured: dict[str, bool] = {}
+
+    def probing_scan(facility_arg, uploaded_file, owner, user):
+        captured["lock_free"] = _lock_is_free(facility_arg.pk)
+
+    upload = SimpleUploadedFile("test.pdf", PDF_MINIMAL, content_type="application/pdf")
+    with patch("core.services.file_vault.storage.run_virus_scan", probing_scan):
+        resp = client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "Lock-Sonde Person",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "geaendert",
+                "document_type": str(doc_type.pk),
+                "anhang": upload,
+            },
+        )
+
+    assert resp.status_code == 302, resp.content
+    assert captured.get("lock_free") is True, "Audit-Chain-Advisory-Lock wurde ueber den Datei-Scan gehalten"
+    person.refresh_from_db()
+    assert person.attachments.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_case_update_scan_does_not_hold_audit_chain_lock(client, staff_user, facility, client_identified):
+    """Refs #1956: Dasselbe fuer den FALL-Update-Pfad (``update_case`` auditiert)."""
+    from unittest.mock import patch
+
+    from core.models import Case
+
+    doc_type = _case_doc_type_with_file(facility)
+    case = Case.objects.create(
+        facility=facility,
+        client=client_identified,
+        title="Lock-Sonde Fall",
+        description="alt",
+        document_type=doc_type,
+        created_by=staff_user,
+    )
+    client.force_login(staff_user)
+
+    captured: dict[str, bool] = {}
+
+    def probing_scan(facility_arg, uploaded_file, owner, user):
+        captured["lock_free"] = _lock_is_free(facility_arg.pk)
+
+    upload = SimpleUploadedFile("test.pdf", PDF_MINIMAL, content_type="application/pdf")
+    with patch("core.services.file_vault.storage.run_virus_scan", probing_scan):
+        resp = client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {
+                "client": str(client_identified.pk),
+                "title": "Lock-Sonde Fall",
+                "description": "geaendert",
+                "lead_user": "",
+                "document_type": str(doc_type.pk),
+                "anhang": upload,
+            },
+        )
+
+    assert resp.status_code == 302, resp.content
+    assert captured.get("lock_free") is True, "Audit-Chain-Advisory-Lock wurde ueber den Datei-Scan gehalten"
+    case.refresh_from_db()
+    assert case.attachments.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_event_update_scan_does_not_hold_audit_chain_lock(client, staff_user, facility):
+    """Refs #1956: Der EREIGNIS-Update-Pfad ist heute nur zufaellig unauffaellig
+    (``update_event`` auditiert noch nicht). Die Sonde friert den Zustand ein,
+    damit ein spaeterer Audit-Write dort nicht wieder den Lock ueber den Scan
+    zieht.
+    """
+    from unittest.mock import patch
+
+    doc_type = _doc_type_with_file(facility)
+    event = Event.objects.create(
+        facility=facility,
+        document_type=doc_type,
+        occurred_at=timezone.now(),
+        created_by=staff_user,
+    )
+    client.force_login(staff_user)
+
+    captured: dict[str, bool] = {}
+
+    def probing_scan(facility_arg, uploaded_file, owner, user):
+        captured["lock_free"] = _lock_is_free(facility_arg.pk)
+
+    upload = SimpleUploadedFile("test.pdf", PDF_MINIMAL, content_type="application/pdf")
+    with patch("core.services.file_vault.storage.run_virus_scan", probing_scan):
+        resp = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                "anhang": upload,
+            },
+        )
+
+    assert resp.status_code == 302, resp.content
+    assert captured.get("lock_free") is True, "Audit-Chain-Advisory-Lock wurde ueber den Datei-Scan gehalten"
+    assert event.attachments.count() == 1

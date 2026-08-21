@@ -22,6 +22,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
 from core.models import Client, DocumentType, Event
+from core.services.attachments import stage_attachment_uploads
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.compliance import (
@@ -1057,7 +1058,25 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             expected_updated_at = request.POST.get("expected_updated_at")
             wants_json = _wants_json_response(request)
             # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
+            # Refs #1956: Scan + Fernet-Verschluesselung liegen als Staging VOR
+            # dem atomic — im Block faellt nur noch der schnelle DB-Write an.
+            # ``update_event`` auditiert heute noch nicht, der Ereignis-Pfad war
+            # also nur zufaellig unauffaellig; sobald hier eine AuditLog-Zeile
+            # entsteht, haelt ihr per-Facility-Advisory-Lock sonst bis zum
+            # Commit — und damit ueber den gesamten ClamAV-Scan. ``merged``
+            # traegt die kuenftige Markerlage (``merge_update_payload``), damit
+            # die REPLACE-Aufloesung beider Seiten identisch ist.
+            committed = False
+            staged_all: list = []
             try:
+                staged_by_key, staged_all = stage_attachment_uploads(
+                    event,
+                    request.user,
+                    request.FILES,
+                    file_fields,
+                    event.document_type,
+                    data_json=merged,
+                )
                 with transaction.atomic():
                     update_event(
                         event,
@@ -1077,7 +1096,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         request.FILES,
                         file_fields,
                         event.document_type,
+                        staged_by_key=staged_by_key,
                     )
+                committed = True
             except ValidationError as e:
                 # #1936: Nur die drei expliziten Optimistic-Locking-Codes
                 # duerfen in den 409-Konfliktresolver. Fachliche/service-seitige
@@ -1101,6 +1122,13 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                     return _invalid_form_response(data_form)
                 messages.error(request, "; ".join(safe_messages))
                 return redirect("core:event_update", pk=event.pk)
+            finally:
+                # Refs #1345/#1956: Jeder Nicht-Commit-Ausgang laesst die
+                # vorab verschluesselten ``.enc`` verwaisen — restlos entfernen
+                # (Cleanup-Garantie aus #662).
+                if not committed:
+                    for staged in staged_all:
+                        staged.output_path.unlink(missing_ok=True)
 
             messages.success(request, _("Ereignis wurde aktualisiert."))
             return redirect("core:event_detail", pk=event.pk)

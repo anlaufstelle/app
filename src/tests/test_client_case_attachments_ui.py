@@ -4,7 +4,8 @@ Spiegel der Event-Anhang-View-Tests (``test_file_vault.py::TestFileUploadView``,
 ``test_attachment_versioning_stage_b.py``) fuer die beiden neuen Owner:
 
 * Upload beim Anlegen (Staging VOR der Transaktion, Marker danach),
-* Upload beim Bearbeiten (ADD), Ersetzen (REPLACE) und Entfernen (REMOVE),
+* Upload beim Bearbeiten (ADD), Ersetzen (REPLACE) und Entfernen (REMOVE) —
+  seit Refs #1956 ebenfalls mit Staging VOR der Transaktion,
 * Re-Render eines ungueltigen Formulars listet Bestandsanhaenge weiter auf,
 * Typwechsel verwirft die Versionsketten per Soft-Delete (ADR-039 §7).
 """
@@ -74,6 +75,22 @@ def case_doc_type_with_file(facility):
 
 def _entries(owner, slug):
     return (owner.data_json or {}).get(slug, {}).get("entries", [])
+
+
+def _enc_files(media_root) -> list:
+    return sorted(Path(media_root).rglob("*.enc"))
+
+
+def _multi_file_type(facility, entity_type, name, file_name):
+    """Dokumentationstyp mit genau einem FILE-Feld (Mehrfach-Upload)."""
+    dt = DocumentType.objects.create(
+        facility=facility,
+        name=name,
+        entity_type=entity_type,
+    )
+    ft_file = FieldTemplate.objects.create(facility=facility, name=file_name, field_type=FieldTemplate.FieldType.FILE)
+    DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+    return dt, ft_file
 
 
 class TestClientAttachmentForm:
@@ -508,31 +525,12 @@ class TestCreateStagingLeavesNoOrphans:
     passiert) mit Klartext-Inhalt.
     """
 
-    @staticmethod
-    def _enc_files(media_root) -> list:
-        return sorted(Path(media_root).rglob("*.enc"))
-
-    @staticmethod
-    def _multi_file_type(facility, entity_type, name, file_name):
-        dt = DocumentType.objects.create(
-            facility=facility,
-            name=name,
-            entity_type=entity_type,
-        )
-        ft_file = FieldTemplate.objects.create(
-            facility=facility, name=file_name, field_type=FieldTemplate.FieldType.FILE
-        )
-        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
-        return dt, ft_file
-
     def test_client_create_unlinks_staged_files_on_policy_reject(
         self, client, staff_user, facility, settings, tmp_path
     ):
         settings.MEDIA_ROOT = str(tmp_path)
-        dt, ft_file = self._multi_file_type(
-            facility, DocumentType.EntityType.CLIENT, "Personen-Mehrfachdatei", "Unterlagen"
-        )
-        before = self._enc_files(tmp_path)
+        dt, ft_file = _multi_file_type(facility, DocumentType.EntityType.CLIENT, "Personen-Mehrfachdatei", "Unterlagen")
+        before = _enc_files(tmp_path)
 
         client.force_login(staff_user)
         response = client.post(
@@ -552,14 +550,14 @@ class TestCreateStagingLeavesNoOrphans:
         assert not Client.objects.filter(pseudonym="Staging-Person").exists()
         assert not Attachment.objects.exists()
         # Und keine verwaiste .enc: die erste Datei war bereits gestagt.
-        assert self._enc_files(tmp_path) == before
+        assert _enc_files(tmp_path) == before
 
     def test_case_create_unlinks_staged_files_on_policy_reject(
         self, client, staff_user, facility, client_identified, settings, tmp_path
     ):
         settings.MEDIA_ROOT = str(tmp_path)
-        dt, ft_file = self._multi_file_type(facility, DocumentType.EntityType.CASE, "Fall-Mehrfachdatei", "Belege")
-        before = self._enc_files(tmp_path)
+        dt, ft_file = _multi_file_type(facility, DocumentType.EntityType.CASE, "Fall-Mehrfachdatei", "Belege")
+        before = _enc_files(tmp_path)
 
         client.force_login(staff_user)
         response = client.post(
@@ -577,7 +575,141 @@ class TestCreateStagingLeavesNoOrphans:
         assert response.status_code == 200
         assert not Case.objects.filter(title="Staging-Fall").exists()
         assert not Attachment.objects.exists()
-        assert self._enc_files(tmp_path) == before
+        assert _enc_files(tmp_path) == before
+
+
+class TestUpdateStagingLeavesNoOrphans:
+    """Staging-/Unlink-Pfad der BEARBEITEN-Views (Refs #1956).
+
+    Seit dem Umbau laufen Scan + Fernet-Verschluesselung auch im Update-Pfad
+    VOR der Transaktion — der AuditLog-Advisory-Lock der Einrichtung soll nicht
+    ueber dem ClamAV-Scan stehen. Damit liegt die erste ``.enc`` schon auf
+    Disk, wenn eine SPAETERE Datei an der Policy scheitert; ohne Cleanup
+    waechst unter ``MEDIA_ROOT`` ein unreferenzierter, verschluesselter Rest,
+    den kein Loeschpfad je erfasst (Cleanup-Garantie aus #662).
+
+    Ausgeloest ueber den Magic-Bytes-Check: ``.pdf``-Endung (Formular-Whitelist
+    passiert) mit Klartext-Inhalt.
+    """
+
+    def test_client_update_unlinks_staged_files_on_policy_reject(
+        self, client, staff_user, facility, settings, tmp_path
+    ):
+        settings.MEDIA_ROOT = str(tmp_path)
+        dt, ft_file = _multi_file_type(
+            facility, DocumentType.EntityType.CLIENT, "Personen-Update-Mehrfachdatei", "Nachweise"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Staging-Update-Person",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=dt,
+            notes="alt",
+            created_by=staff_user,
+        )
+        before = _enc_files(tmp_path)
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "Staging-Update-Person",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "geaendert",
+                "document_type": str(dt.pk),
+                ft_file.slug: [_pdf("echt3.pdf"), _fake_pdf("unecht3.pdf")],
+            },
+        )
+
+        assert response.status_code == 302  # Redirect mit Fehlermeldung
+        person.refresh_from_db()
+        assert not Attachment.objects.filter(client=person).exists()
+        assert ft_file.slug not in (person.data_json or {})
+        # Und keine verwaiste .enc: die erste Datei war bereits gestagt.
+        assert _enc_files(tmp_path) == before
+        # Der Update rollt mit zurueck — das Staging scheitert VOR der Transaktion.
+        assert person.notes == "alt"
+
+    def test_case_update_unlinks_staged_files_on_policy_reject(
+        self, client, staff_user, facility, client_identified, settings, tmp_path
+    ):
+        settings.MEDIA_ROOT = str(tmp_path)
+        dt, ft_file = _multi_file_type(facility, DocumentType.EntityType.CASE, "Fall-Update-Mehrfachdatei", "Anlagen")
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Staging-Update-Fall",
+            description="alt",
+            document_type=dt,
+            created_by=staff_user,
+        )
+        before = _enc_files(tmp_path)
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {
+                "client": str(client_identified.pk),
+                "title": "Staging-Update-Fall",
+                "description": "geaendert",
+                "lead_user": "",
+                "document_type": str(dt.pk),
+                ft_file.slug: [_pdf("echt4.pdf"), _fake_pdf("unecht4.pdf")],
+            },
+        )
+
+        assert response.status_code == 302
+        case.refresh_from_db()
+        assert not Attachment.objects.filter(case=case).exists()
+        assert ft_file.slug not in (case.data_json or {})
+        assert _enc_files(tmp_path) == before
+        assert case.description == "alt"
+
+    def test_client_update_unlinks_staged_files_when_transaction_rolls_back(
+        self, client, staff_user, facility, settings, tmp_path
+    ):
+        """Staging erfolgreich, Transaktion NICHT committet (Versionskonflikt).
+
+        Die Datei ist an dieser Stelle schon verschluesselt auf Disk, die
+        ``Attachment``-Zeile rollt aber zurueck. Ohne das ``finally`` der View
+        bliebe genau hier eine ``.enc``-Waise liegen — der Fall, den der
+        Anlage-Pfad seit #1345 abdeckt und der Update-Pfad seit #1956.
+        """
+        settings.MEDIA_ROOT = str(tmp_path)
+        dt, ft_file = _multi_file_type(
+            facility, DocumentType.EntityType.CLIENT, "Personen-Konfliktdatei", "Konfliktbeleg"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Konflikt-Person",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=dt,
+            notes="alt",
+            created_by=staff_user,
+        )
+        before = _enc_files(tmp_path)
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "Konflikt-Person",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "geaendert",
+                "document_type": str(dt.pk),
+                # Veralteter Versions-Token -> ``version_conflict`` im Service.
+                "expected_updated_at": "2020-01-01T00:00:00+00:00",
+                ft_file.slug: _pdf("konflikt.pdf"),
+            },
+        )
+
+        assert response.status_code == 302
+        person.refresh_from_db()
+        assert person.notes == "alt", "Versionskonflikt haette den Update verhindern muessen"
+        assert not Attachment.objects.filter(client=person).exists()
+        assert _enc_files(tmp_path) == before
 
 
 class TestInvalidMetaFormKeepsFileMarkers:
