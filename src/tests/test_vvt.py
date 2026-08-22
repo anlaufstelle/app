@@ -356,7 +356,14 @@ class TestQualifiedAccessClaimStaysScoped:
 
     def test_stage_docs_do_not_promise_blanket_access_logging(self):
         for relative in _STAGE_DOC_PATHS:
-            text = Path(relative).read_text(encoding="utf-8")
+            doc = Path(relative)
+            if not doc.exists():
+                # Muster ``test_architecture_guards_views.TestUserGuidePathsResolve``:
+                # der Mutations-Baum (und der Release-Snapshot-Kontext) fuehrt
+                # ``docs/`` nicht mit — der Guard prueft Doku-Konsistenz und
+                # laeuft nur dort, wo die Doku liegt.
+                pytest.skip(f"{relative} nicht vorhanden")
+            text = doc.read_text(encoding="utf-8")
             match = _BLANKET_CLIENT_ACCESS_CLAIM_RE.search(text)
             assert match is None, (
                 f'{relative} sagt "{match.group(0)}" zu — protokolliert wird nur '
