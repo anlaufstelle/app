@@ -380,7 +380,7 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > **Organization als Branding-Hülse:** Die Organisation dient nur dem Träger-Branding (Logo, Name in Berichten). Es gibt keinen Org-Admin und keinen Cross-Facility-Effekt durch sie — facility-übergreifender Zugriff läuft ausschließlich über `super_admin` und `/system/`. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
-### 2.2 Django-Adminoberfläche
+### 2.2b Django-Adminoberfläche
 
 Die Adminoberfläche ist erreichbar unter:
 
@@ -476,7 +476,7 @@ Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-überg
 
 ### 2.5 Dokumentationstypen konfigurieren
 
-> **Ausgangslage:** Eine über `setup_facility` **oder** im Django-Admin unter **Core → Einrichtungen** ([§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)) angelegte Einrichtung bringt den mitgelieferten **Standardkatalog** bereits mit — sie ist ohne weiteren Schritt dokumentierbar. Leer ist die Liste nur, wenn der Katalog bei der Ersteinrichtung per `--no-default-package` abgewählt wurde oder die Einrichtung aus einer Version vor #1970 stammt. Beides bleibt so, bis Sie es ausdrücklich ändern — ein Speichern der Einrichtung im Admin holt den Katalog **nicht** nach (das würde die Abwahl still übergehen). Führen Sie dann `manage.py load_package --default --facility <uuid>` aus (Befehl samt Rollen-Override in [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)). Die folgenden Abschnitte beschreiben, wie Sie den Bestand danach anpassen.
+> **Ausgangslage:** Eine über `setup_facility` **oder** im Django-Admin unter **Core → Einrichtungen** ([§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)) angelegte Einrichtung bringt den mitgelieferten **Standardkatalog** bereits mit — sie ist ohne weiteren Schritt dokumentierbar. Leer ist die Liste nur, wenn der Katalog bei der Ersteinrichtung per `--no-default-package` abgewählt wurde oder die Einrichtung aus einer Version vor #1970 stammt. Beides bleibt so, bis Sie es ausdrücklich ändern — ein Speichern der Einrichtung im Admin holt den Katalog **nicht** nach (das würde die Abwahl still übergehen). Führen Sie dann `manage.py load_package --default --facility <uuid>` aus (Befehl samt Rollen-Override in [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen)). Aufbau, Feld-Referenz und Pflege-Regeln eines Konfigurationspakets — auch eines eigenen statt des mitgelieferten — beschreibt [docs/packages.md](packages.md). Die folgenden Abschnitte beschreiben, wie Sie den Bestand danach anpassen.
 
 Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen Sie fest, welche Arten von Dokumentation in der Einrichtung erfasst werden können. Die gleichnamige Ansicht unter **Core → Dokumentationstypen** im Django-Admin bleibt als technischer Fallback erhalten, ist aber nicht der reguläre Pflegeweg. Jeder Typ besteht aus:
 

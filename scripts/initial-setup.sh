@@ -278,6 +278,10 @@ Naechste Schritte:
      /admin-mgmt/ -> Core -> Einrichtungen bzw. Core -> Benutzer (nur
      super_admin). Der Bereich /system/ zeigt Organisation und Einrichtungen
      nur an; angelegt wird dort nichts.
+     Das Speichern stattet die neue Einrichtung gleich aus: Standardkatalog der
+     Dokumentationstypen, die drei Standardschichten und zwei Schnellvorlagen.
+     Sie ist damit sofort dokumentierbar — zu tun bleibt nur, ihr unter
+     Core -> Benutzer mindestens ein Konto zuzuordnen.
      Reiner Single-Tenant-Fallback (interaktiv, MUSS mit der Admin-DB-Rolle
      laufen — sonst verweigert die Row-Level-Security den Schreibzugriff):
        docker compose -f ${COMPOSE_FILE} exec \\

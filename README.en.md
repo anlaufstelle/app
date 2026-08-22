@@ -178,21 +178,35 @@ Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app
 
 ### Quick Start
 
-**Prerequisites:** Docker and Docker Compose
+**Prerequisites:** Python 3.14, Node.js 24+, Docker (for the database)
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up
+python3.14 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+npm install
+make tailwind-build   # builds src/static/css/styles.css (not in the repo)
+make db               # PostgreSQL 18 in a container
 ```
 
-Open the application at: [http://localhost:8000](http://localhost:8000)
-
-On first launch, database migrations run automatically. Seed data for a demo facility can be loaded with:
+The credentials from `make db` are already the defaults of the dev settings; all that remains is a key for field encryption — without it the seed run aborts:
 
 ```bash
-docker compose exec web python src/manage.py seed
+export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 ```
+
+Database migrations do **not** run on their own in any startup path — the application container starts the server and nothing else (in production the schema is a one-shot job of its own with an advisory lock, see [docs/en/admin-guide.md § 1, Step 4](docs/en/admin-guide.md#step-4-start-the-stack)). So create the schema once, optionally load seed data for a demo facility, and start the development server:
+
+```bash
+make migrate
+make seed        # optional
+make run-http    # http://localhost:8000
+```
+
+For Tailwind in watch mode (`make tailwind`), the HTTPS server, and the rest of the toolchain see [CONTRIBUTING.en.md § Development Environment Setup](CONTRIBUTING.en.md#development-environment-setup).
+
+> **Note:** the development Compose file (`docker-compose.yml`) is currently only good for infrastructure (`docker compose up -d db`) — its `web` service does not come up, because it mounts `./src` over the image path `/app` and thereby hides the image's startup script (#1977). The production stack (`docker-compose.prod.yml`) is unaffected; its installation is described in [docs/en/admin-guide.md § 1](docs/en/admin-guide.md).
 
 ### Tech Stack
 
@@ -211,5 +225,5 @@ docker compose exec web python src/manage.py seed
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-18 -->
-<!-- source-hash: f7c9edca1569865798e6c767c70b7b831cc40efd -->
+<!-- translation-date: 2026-08-22 -->
+<!-- source-hash: bc03f2ab3692131a1f5001015b2cfb3362bbca26 -->

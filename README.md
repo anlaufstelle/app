@@ -178,21 +178,35 @@ Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufste
 
 ### Quick-Start
 
-**Voraussetzungen:** Docker und Docker Compose
+**Voraussetzungen:** Python 3.14, Node.js 24+, Docker (für die Datenbank)
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up
+python3.14 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+npm install
+make tailwind-build   # baut src/static/css/styles.css (nicht im Repo)
+make db               # PostgreSQL 18 im Container
 ```
 
-Anwendung aufrufen: [http://localhost:8000](http://localhost:8000)
-
-Beim ersten Start werden Datenbank-Migrationen automatisch ausgeführt. Seed-Daten für eine Demo-Einrichtung können mit folgendem Befehl geladen werden:
+Die Zugangsdaten aus `make db` sind bereits die Vorbelegung der Dev-Settings; zu setzen bleibt nur ein Schlüssel für die Feldverschlüsselung — ohne ihn bricht der Seed-Lauf ab:
 
 ```bash
-docker compose exec web python src/manage.py seed
+export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 ```
+
+Datenbank-Migrationen laufen in **keinem** Startpfad von selbst mit — auch der Anwendungs-Container startet ausschließlich den Server (in Produktion ist das Schema ein eigener One-Shot-Job mit Advisory-Lock, siehe [docs/admin-guide.md § 1, Schritt 4](docs/admin-guide.md#schritt-4-stack-starten)). Also einmal das Schema anlegen, optional Seed-Daten für eine Demo-Einrichtung laden und den Entwicklungsserver starten:
+
+```bash
+make migrate
+make seed        # optional
+make run-http    # http://localhost:8000
+```
+
+Für Tailwind im Watch-Modus (`make tailwind`), den HTTPS-Server und den Rest der Werkzeugkette: [CONTRIBUTING.md § Entwicklungsumgebung einrichten](CONTRIBUTING.md#entwicklungsumgebung-einrichten).
+
+> **Hinweis:** Die Entwicklungs-Compose (`docker-compose.yml`) taugt derzeit nur für die Infrastruktur (`docker compose up -d db`) — ihr `web`-Dienst kommt nicht hoch, weil sie `./src` über den Image-Pfad `/app` mountet und damit dessen Startskript verdeckt (#1977). Der produktive Stack (`docker-compose.prod.yml`) ist davon nicht betroffen; seine Installation beschreibt [docs/admin-guide.md § 1](docs/admin-guide.md).
 
 ### Tech-Stack
 

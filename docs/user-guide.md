@@ -692,7 +692,7 @@ Anlaufstelle unterscheidet fünf Rollen. Ihre Rolle wird von der Anwendungsbetre
 | `facility_admin` | Anwendungsbetreuung | Vollzugriff auf alle Bereiche und Einstellungen **Ihrer Einrichtung** (Audit-Log, DSGVO-Paket, Benutzerverwaltung) |
 | `super_admin` | Systemadministration | Träger-/Hosting-Konzept: facility-übergreifend, Bootstrap-Tools, getrennter `/system/`-Bereich. **In der normalen Fach-UI nicht sichtbar** — Endnutzer interagieren nicht mit ihm. |
 
-> **Hinweis:** Die Systemadministration (`super_admin`) ist eine Hosting-/Träger-Rolle. Sie hostet die Installation und legt die erste Einrichtung sowie die erste Anwendungsbetreuung an. Im fachlichen Tagesgeschäft begegnen Sie ihr in der Regel nicht — sie arbeitet ausschließlich im `/system/`-Bereich, der Ihnen als facility-gebundener User nicht zugänglich ist.
+> **Hinweis:** Die Systemadministration (`super_admin`) ist eine Hosting-/Träger-Rolle. Sie hostet die Installation und legt die erste Einrichtung sowie die erste Anwendungsbetreuung an — beides in der Django-Adminoberfläche (`/admin-mgmt/`); der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an. Im fachlichen Tagesgeschäft begegnen Sie ihr in der Regel nicht — beide Bereiche sind Ihnen als facility-gebundener User nicht zugänglich.
 
 ### Was darf wer?
 

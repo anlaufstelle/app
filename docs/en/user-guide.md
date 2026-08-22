@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> Most recently synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
+> Most recently synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
@@ -695,7 +695,7 @@ Anlaufstelle distinguishes five roles. Your role is assigned by the facility adm
 | `facility_admin` | Facility Admin | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
 | `super_admin` | System Admin | Hosting/carrier role: cross-facility, bootstrap tools, separate `/system/` area. **Not visible in the regular staff UI** -- end users do not interact with it. |
 
-> **Note:** The System Admin (`super_admin`) is a hosting/carrier role. It sets up the installation and creates the first facility and the first Facility Admin. You will not encounter it in day-to-day operations -- it works exclusively in the `/system/` area, which is not accessible to facility-bound users.
+> **Note:** The System Admin (`super_admin`) is a hosting/carrier role. It sets up the installation and creates the first facility and the first Facility Admin -- both in the Django admin interface (`/admin-mgmt/`); the `/system/` area only displays the organization and its facilities. You will not encounter it in day-to-day operations -- neither area is accessible to facility-bound users.
 
 ### Who Can Do What?
 
@@ -888,5 +888,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-15 -->
-<!-- source-hash: d66eb9386e80a392cec2a86edc50000b18d61886 -->
+<!-- translation-date: 2026-08-22 -->
+<!-- source-hash: 26dfd52205b54feefe44902ceca3b7270294b3b1 -->

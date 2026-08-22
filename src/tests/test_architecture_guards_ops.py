@@ -298,6 +298,168 @@ class TestInitialSetupScript:
                     "das Passwort wird interaktiv per getpass abgefragt (ADR-018)."
                 )
 
+    def test_closing_note_says_the_admin_path_equips_the_facility(self) -> None:
+        """Refs #1894/#1970: Die Abschlussmeldung schickt in Schritt 1 in den
+        Django-Admin — den einzigen Laufzeit-Anlagepfad fuer eine Einrichtung
+        (``core/admin/organization.py``). Seit Refs #1970 stattet dieser Weg die
+        neue Einrichtung selbst aus (``ensure_facility_baseline``: Standard-
+        katalog, Schichtfenster, Schnellvorlagen).
+
+        Die Meldung nannte den Standardkatalog aber ausschliesslich am
+        ``setup_facility``-Fallback weiter unten. Wer Schritt 1 folgte, konnte
+        daraus nur schliessen, der Admin-Weg lasse die Einrichtung leer — genau
+        die Rateaufgabe, die #1894 abstellt.
+        """
+        parts = self._body().split("Erstinbetriebnahme abgeschlossen.", 1)
+        assert len(parts) == 2, "initial-setup.sh muss eine Abschlussmeldung ausgeben (Refs #793)."
+        # Alles vor der ersten Nennung des CLI-Fallbacks = die Beschreibung des
+        # Admin-Wegs. Der Fallback darf seinen eigenen Katalog-Satz behalten.
+        admin_step = parts[1].split("setup_facility", 1)[0]
+        assert "/admin-mgmt/" in admin_step, (
+            "Die Abschlussmeldung muss den Django-Admin als Anlagepfad nennen — "
+            "der /system/-Bereich ist fuer Organisation und Einrichtungen eine "
+            "reine Leseansicht (core/views/system/organization.py, Refs #1883)."
+        )
+        assert "Standardkatalog" in admin_step, (
+            "Die Abschlussmeldung muss schon beim Admin-Weg sagen, dass die neue "
+            "Einrichtung den Standardkatalog mitbekommt (Refs #1970) — sonst liest "
+            "sich der Katalog als Sonderleistung des setup_facility-Fallbacks."
+        )
+
+
+class TestReadmeQuickStart:
+    """Refs #1894: Der Quick-Start in ``README.md``/``README.en.md`` ist der
+    erste Befehlsblock, den eine neue Entwicklerin abtippt — er muss laufen.
+
+    Er behauptete, beim ersten Start liefen Datenbank-Migrationen automatisch.
+    Das tut kein Startpfad: ``docker-entrypoint.sh`` migriert seit Refs #802
+    bewusst NICHT (Migrationen sind ein eigener One-Shot-Job mit Advisory-Lock,
+    ``docker-migrate.sh``) — das Skript endet auf ``exec gunicorn`` und reicht
+    ``"$@"`` nirgends weiter, das ``command:`` der Dev-Compose ist also totes
+    Gewicht. Zum Schema kam der dokumentierte Weg ohnehin nicht: Der
+    ``web``-Dienst der Dev-Compose startet gar nicht erst (siehe
+    ``test_quickstart_does_not_start_the_web_service_of_the_dev_compose``).
+    """
+
+    _READMES = (Path("README.md"), Path("README.en.md"))
+    _MIGRATE_CALL = re.compile(r"manage\.py\s+migrate\b")
+    _MIGRATE_STEP = re.compile(r"(?:manage\.py|make)\s+migrate\b")
+    _QUICKSTART_HEADING = re.compile(r"^### Quick[- ]Start$", re.MULTILINE)
+    _COMPOSE_CALL = re.compile(r"docker compose\s+(?P<args>[^\n`]*)")
+    # ``src/manage.py`` ist auf dem Host richtig und im Container falsch —
+    # verboten ist deshalb nur die Kombination mit einem Container-Aufruf.
+    _CONTAINERISED_SRC_MANAGE_PY = re.compile(r"docker (?:compose\s+)?(?:exec|run)[^\n]*\bsrc/manage\.py")
+
+    @classmethod
+    def _quickstart(cls, readme: Path) -> str:
+        """Nur der Quick-Start-Abschnitt — der Rest der Projektuebersicht
+        beschreibt den Prod-Stack und darf ``docker compose up`` nennen."""
+        text = readme.read_text(encoding="utf-8")
+        heading = cls._QUICKSTART_HEADING.search(text)
+        assert heading is not None, f"{readme}: Abschnitt '### Quick-Start' nicht gefunden."
+        rest = text[heading.end() :]
+        following = re.search(r"^### ", rest, re.MULTILINE)
+        return rest[: following.start()] if following else rest
+
+    @staticmethod
+    def _targets_the_web_service(args: str) -> bool:
+        tokens = args.split()
+        if "web" in tokens:
+            return True
+        if "up" in tokens:
+            # ``up`` ohne Dienstliste zieht jeden Dienst hoch, auch ``web``.
+            return not [token for token in tokens[tokens.index("up") + 1 :] if not token.startswith("-")]
+        return False
+
+    def test_no_startup_path_migrates_implicitly(self) -> None:
+        """Praemisse der folgenden Guards — kippt sie (etwa mit dem
+        One-Command-Startup, Refs #1062), gehoert der README-Text mit umgestellt."""
+        entrypoint = Path("docker-entrypoint.sh").read_text(encoding="utf-8")
+        code = "\n".join(line for line in entrypoint.splitlines() if not line.lstrip().startswith("#"))
+        assert not self._MIGRATE_CALL.search(code), (
+            "docker-entrypoint.sh migriert wieder — dann darf der README-Quick-Start "
+            "den expliziten Migrate-Schritt verlieren (Refs #802/#1062)."
+        )
+        # Das Skript uebergibt sein Argument-Array nicht weiter: der letzte
+        # Befehl ist ein ``exec gunicorn`` ohne ``"$@"``. Ein ``command:`` in
+        # einer Compose-Datei ist damit wirkungslos — es landet als ungenutztes
+        # Argument beim Entrypoint. Wer daraus schliesst, die Dev-Compose starte
+        # ``runserver``, liest den falschen Startpfad (Refs #802).
+        assert '"$@"' not in code, (
+            "docker-entrypoint.sh reicht jetzt Argumente weiter — damit wird das "
+            "'command:' der Compose-Dateien wirksam, README-Quick-Start pruefen."
+        )
+        assert re.search(r"^exec gunicorn\b", code, re.MULTILINE), (
+            "docker-entrypoint.sh startet nicht mehr gunicorn — Startpfad und README-Quick-Start pruefen (Refs #802)."
+        )
+        compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+        assert not self._MIGRATE_CALL.search(compose), (
+            "docker-compose.yml migriert wieder — README-Quick-Start pruefen (Refs #1062)."
+        )
+
+    def test_quickstart_names_an_explicit_migrate_step(self) -> None:
+        for readme in self._READMES:
+            assert self._MIGRATE_STEP.search(self._quickstart(readme)), (
+                f"{readme}: Der Quick-Start muss den Migrate-Schritt ausdruecklich "
+                "nennen — kein Startpfad fuehrt ihn aus, und ohne Schema laeuft die "
+                "Anwendung in einen Datenbankfehler statt hochzukommen (Refs #1894)."
+            )
+
+    def test_quickstart_never_calls_src_manage_py_inside_a_container(self) -> None:
+        """Im Image liegt ``manage.py`` auf ``/app/manage.py``: das Dockerfile
+        kopiert ``src/`` unmittelbar ins ``WORKDIR /app``. Ein in einen Container
+        hineingereichtes ``python src/manage.py`` scheitert dort mit
+        ``No such file or directory`` — auf dem Host ist derselbe Pfad richtig."""
+        dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+        assert re.search(r"^WORKDIR /app$", dockerfile, re.MULTILINE), (
+            "Dockerfile-WORKDIR geaendert — README-Quick-Start-Pfade pruefen."
+        )
+        assert re.search(r"^COPY src/ \./$", dockerfile, re.MULTILINE), (
+            "Dockerfile kopiert src/ nicht mehr direkt ins WORKDIR — README-Quick-Start-Pfade pruefen."
+        )
+        for readme in self._READMES:
+            text = readme.read_text(encoding="utf-8")
+            assert not self._CONTAINERISED_SRC_MANAGE_PY.search(text), (
+                f"{readme}: 'src/manage.py' gibt es im Container nicht — "
+                "manage.py liegt dort auf /app/manage.py (Refs #1894)."
+            )
+
+    def test_quickstart_does_not_start_the_web_service_of_the_dev_compose(self) -> None:
+        """Refs #1894: Der ``web``-Dienst der Dev-Compose startet nicht.
+
+        ``docker-compose.yml`` mountet ``./src`` auf ``/app`` und ueberdeckt
+        damit das ENTRYPOINT-Skript des Images (``/app/docker-entrypoint.sh``
+        kommt aus einem eigenen ``COPY`` und liegt in ``src/`` nicht vor).
+        ``docker compose up`` bricht deshalb mit
+        ``exec: "/app/docker-entrypoint.sh": stat ...: no such file or
+        directory`` ab; jedes folgende ``docker compose exec web …`` laeuft in
+        ``service "web" is not running``. Der Quick-Start darf diesen Weg
+        nicht versprechen, solange er nicht funktioniert.
+
+        Kippt eine der Praemissen — also sobald die Dev-Compose repariert ist —
+        faellt dieser Guard und der Quick-Start darf zurueck auf Compose.
+        """
+        dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+        assert 'ENTRYPOINT ["/app/docker-entrypoint.sh"]' in dockerfile, (
+            "Image-ENTRYPOINT geaendert — README-Quick-Start pruefen (Refs #1894)."
+        )
+        assert not Path("src/docker-entrypoint.sh").exists(), (
+            "src/docker-entrypoint.sh existiert jetzt — der ./src:/app-Mount verdeckt "
+            "das ENTRYPOINT nicht mehr, der Quick-Start darf zurueck auf Compose."
+        )
+        compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+        assert re.search(r"^\s*-\s*\./src:/app\s*$", compose, re.MULTILINE), (
+            "docker-compose.yml mountet ./src nicht mehr auf /app — der web-Dienst "
+            "startet damit wieder, der Quick-Start darf zurueck auf Compose (Refs #1894)."
+        )
+        for readme in self._READMES:
+            for call in self._COMPOSE_CALL.finditer(self._quickstart(readme)):
+                assert not self._targets_the_web_service(call.group("args")), (
+                    f"{readme}: Der Quick-Start startet den web-Dienst der Dev-Compose "
+                    f"('docker compose {call.group('args').strip()}') — der Dienst kommt nicht hoch, "
+                    "weil der ./src:/app-Mount das ENTRYPOINT-Skript des Images verdeckt (Refs #1894)."
+                )
+
 
 class TestShippedShellScriptsSyntax:
     """Refs #793: Bis C-25 gab es keinen Guard, der die ausgelieferten
