@@ -105,14 +105,17 @@ def load_client_owner(request, pk):
 def load_case_owner(request, pk):
     """Stufe 1 fuer **fall**-eigene Anhaenge (M24/AP4, Refs #1738).
 
-    Refs #1777: Die Loeschgrenze der Fall-Domaene verlaeuft ueber die Person,
-    nicht ueber ``case.is_deleted`` (das nie gesetzt wird).
-    ``cases_with_live_client()`` schliesst Faelle papierkorb-geloeschter UND
-    anonymisierter Personen aus — derselbe Schnitt, den Fall-Detail/-Bearbeiten
-    ziehen. Ohne ihn blieb die Fall-Datei der letzte offene Deep-Link auf den
-    Bestand einer widerrufenen Person. ``is_deleted=False`` bleibt zusaetzlich
-    als defensiver Pin gegen ein kuenftiges Fall-Soft-Delete (die Invariante
-    haelt heute, aber der Egress-Pfad soll nicht allein davon abhaengen).
+    Refs #1777: Die Loeschgrenze der Fall-Domaene verlief zunaechst nur ueber
+    die Person. ``cases_with_live_client()`` schliesst Faelle
+    papierkorb-geloeschter UND anonymisierter Personen aus — derselbe Schnitt,
+    den Fall-Detail/-Bearbeiten ziehen. Ohne ihn blieb die Fall-Datei der letzte
+    offene Deep-Link auf den Bestand einer widerrufenen Person.
+
+    Refs #1818 (ADR-044): ``case.is_deleted`` wird jetzt gesetzt — der Filter
+    ist damit kein defensiver Pin mehr, sondern die Papierkorb-Grenze selbst.
+    Er steht hier trotzdem doppelt (im Helfer UND als Kwarg): der Egress-Pfad
+    einer entschluesselten Datei soll nicht allein von der Innenlogik eines
+    Helfers abhaengen.
     """
     return get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk, is_deleted=False)
 

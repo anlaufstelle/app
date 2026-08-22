@@ -347,7 +347,7 @@ def prepare_audit_objects(conn, fac_id):
     Lauf dokumentiert (geteilte Bestandsobjekte, die unter fremden Tests
     wegbrechen).
 
-    1. 1 Trash-Client (client_trashed).
+    1. 1 Trash-Client (client_trashed) und 1 Trash-Case (case_trashed).
     2. Vertragskonformes sample_event: Der Seed vergibt Owner und
        DocumentType-Sensitivität zufällig; die Erwartungen für
        core:event_update (STAFF_PLUS) / core:event_delete (LEAD_PLUS) gelten
@@ -398,6 +398,24 @@ def prepare_audit_objects(conn, fac_id):
         )
         AND NOT EXISTS (
             SELECT 1 FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true
+        )
+        """,
+        params,
+    )
+    # 1b. Trash-Case (Refs #1818): Gegenstueck zu Schritt 1 auf der Fall-Achse.
+    #     Zielt bewusst auf den LETZTEN Fall (ORDER BY id DESC), damit der
+    #     deterministisch geerntete ``case_open`` (ORDER BY id, mit Episode +
+    #     Milestone bevorzugt) nicht unter den Papierkorb-Filtern wegbricht.
+    cur.execute(
+        """
+        UPDATE core_case SET is_deleted = true, deleted_at = now()
+        WHERE id = (
+            SELECT id FROM core_case
+            WHERE facility_id = %(fac)s AND is_deleted = false
+            ORDER BY id DESC LIMIT 1
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM core_case WHERE facility_id = %(fac)s AND is_deleted = true
         )
         """,
         params,
@@ -548,6 +566,12 @@ HARVEST_SQL = {
         "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true ORDER BY id LIMIT 1"
     ),
     "case_open": _CASE_OPEN,
+    # Refs #1818: Ziel von case_restore/case_anonymize. ORDER BY id DESC wie in
+    # ``prepare_audit_objects`` Schritt 1b — dieselbe Zeile, die dort in den
+    # Papierkorb geschoben wird.
+    "case_trashed": (
+        "SELECT id FROM core_case WHERE facility_id = %(fac)s AND is_deleted = true ORDER BY id DESC LIMIT 1"
+    ),
     "case_closed": (
         "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false "
         "ORDER BY id LIMIT 1"
@@ -717,6 +741,7 @@ FOREIGN_ALIASES = {
     "foreign_client": "client_identified",
     "foreign_client_trashed": "client_trashed",
     "foreign_case": "case_open",
+    "foreign_case_trashed": "case_trashed",
     "foreign_case_closed": "case_closed",
     "foreign_case_event": "case_event",
     "foreign_event": "sample_event",

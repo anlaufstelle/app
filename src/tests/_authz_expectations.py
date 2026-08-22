@@ -279,6 +279,33 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "case_open.pk"),),
         idor=(("pk", "foreign_case.pk"),),
     ),
+    # Fall-Loeschweg (Refs #1818, ADR-044). Rollen-Gefaelle wie bei den
+    # Personen: die Fachkraft loescht/beantragt (STAFF_PLUS, wie die Fallakte
+    # selbst), die Anwendungsbetreuung raeumt den Papierkorb auf (ADMIN_ONLY).
+    E(
+        "core:case_delete_request",
+        "facility-write",
+        get=STAFF_PLUS,
+        post=STAFF_PLUS,
+        url_kwargs=(("pk", "case_open.pk"),),
+        idor=(("pk", "foreign_case.pk"),),
+    ),
+    E(
+        "core:case_restore",
+        "facility-write",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "case_trashed.pk"),),
+        idor=(("pk", "foreign_case_trashed.pk"),),
+    ),
+    # Sofort-Tilgung im Papierkorb — gleiches Gate und gleicher Scope wie
+    # case_restore (Anwendungsbetreuung, is_deleted=True).
+    E(
+        "core:case_anonymize",
+        "facility-write",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "case_trashed.pk"),),
+        idor=(("pk", "foreign_case_trashed.pk"),),
+    ),
     E(
         "core:case_close",
         "facility-write",
@@ -457,6 +484,8 @@ EXPECTATIONS = (
     # keine neue Berechtigung, nur eine andere Anordnung derselben Seiten.
     E("core:verwaltung_uebersicht", "facility-admin", get=ADMIN_ONLY),
     E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
+    # Refs #1818: zweiter Papierkorb, gleiches Gate wie der erste.
+    E("core:case_trash", "facility-admin", get=ADMIN_ONLY),
     E("core:audit_log", "facility-admin", get=ADMIN_ONLY),
     E(
         "core:audit_detail",

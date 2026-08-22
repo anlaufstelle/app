@@ -1,0 +1,29 @@
+{% load i18n %}
+{% comment %}
+    Aktion „Löschen" an der Fallakte (Refs #1818, ADR-044).
+
+    Gegenstück zu core/clients/partials/delete_request_action.html. Der Titel
+    der Aktion nennt bewusst NICHT den Ausgang: welcher der beiden Wege gilt
+    (direkter Papierkorb oder Vier-Augen-Antrag), hängt an der Kontaktstufe der
+    Person (P1c) und steht auf der Bestätigungsseite — hier wäre es eine
+    Behauptung, die das Template selbst aus dem Modell ableiten müsste.
+
+    Läuft bereits ein Antrag, ist ein zweiter wirkungslos (der Service ist
+    idempotent); die Aktion wird dann als deaktivierter Zustand ausgewiesen
+    statt als Link. Parameter: ``case``, ``pending_deletion_request``,
+    ``action_class`` (Layout-Klassen der jeweiligen Leiste).
+{% endcomment %}
+{% if pending_deletion_request %}
+<span class="{{ action_class }} opacity-60 cursor-not-allowed"
+      aria-disabled="true"
+      title="{% trans 'Ein Löschantrag wartet bereits auf Bestätigung.' %}"
+      data-testid="case-delete-request-pending">
+    {% trans "Löschantrag läuft" %}
+</span>
+{% else %}
+<a href="{% url 'core:case_delete_request' case.pk %}"
+   class="{{ action_class }}"
+   data-testid="case-delete-request-btn">
+    {% trans "Löschen" %}
+</a>
+{% endif %}

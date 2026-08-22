@@ -101,7 +101,9 @@ def save_document_type(request, form, *, creating: bool) -> DocumentType:
 # ---------------------------------------------------------------------------
 
 
-def _append_trash_share(reason: str, trashed_count: int, *, of_attachments: bool = False) -> str:
+def _append_trash_share(
+    reason: str, trashed_count: int, *, of_attachments: bool = False, of_cases: bool = False
+) -> str:
     """Ergänzt eine Blocker-Begründung um den Papierkorb-Anteil.
 
     Refs #1737: Die Blocker zählen über den Default-Manager, der ``is_deleted``
@@ -112,6 +114,13 @@ def _append_trash_share(reason: str, trashed_count: int, *, of_attachments: bool
     Zusatz benennt den Anteil; den Ausweg (Papierkorb öffnen, wiederherstellen
     oder endgültig anonymisieren) zeigen die Lösch-Dialoge als Link.
 
+    ``of_cases`` (Refs #1818, ADR-044): Seit dem Fall-Löschpfad gibt es einen
+    **zweiten** Papierkorb, und er erzeugt dieselbe Sackgasse — ein Fall im
+    Papierkorb hält seinen ``document_type`` per ``PROTECT`` und seine
+    ``data_json``-Slugs fest, ist über die Fallliste aber nicht mehr
+    erreichbar. Der Satz nennt dann Fälle statt Personen; der Ausweg ist der
+    Fall-Papierkorb (Link im Hinweis-Partial).
+
     ``of_attachments`` (M24/AP4, Refs #1738): Der zweite Blocker-Grund zählt
     **Dateianhänge**, nicht Personen — „Davon liegt 1 Person im Papierkorb"
     bezöge sich dort auf die falsche Größe. Der Satz nennt deshalb die Anhänge;
@@ -121,7 +130,13 @@ def _append_trash_share(reason: str, trashed_count: int, *, of_attachments: bool
     """
     if not trashed_count:
         return reason
-    if of_attachments:
+    if of_cases:
+        share = ngettext(
+            "Davon liegt %(t)d Fall im Papierkorb.",
+            "Davon liegen %(t)d Fälle im Papierkorb.",
+            trashed_count,
+        ) % {"t": trashed_count}
+    elif of_attachments:
         share = ngettext(
             "Davon gehört %(t)d Anhang zu einer Person im Papierkorb.",
             "Davon gehören %(t)d Anhänge zu Personen im Papierkorb.",
@@ -162,6 +177,46 @@ def _trashed_client_ids_with_attachment(field_template: FieldTemplate) -> set:
     ids |= set(base.filter(event__client__is_deleted=True).values_list("event__client_id", flat=True))
     ids |= set(base.filter(case__client__is_deleted=True).values_list("case__client_id", flat=True))
     return ids
+
+
+def _trashed_case_ids_with_slug(field_template: FieldTemplate) -> set:
+    """PKs von Fällen im Papierkorb mit einem Wert unter diesem Slug (Refs #1818)."""
+    if not field_template.slug:
+        return set()
+    return set(
+        Case.objects.filter(
+            facility_id=field_template.facility_id,
+            is_deleted=True,
+            data_json__has_key=field_template.slug,
+        ).values_list("pk", flat=True)
+    )
+
+
+def _trashed_case_ids_with_attachment(field_template: FieldTemplate) -> set:
+    """PKs von Fällen im Papierkorb, deren **Anhänge** diese Vorlage blockieren.
+
+    Gegenstück zu :func:`_trashed_client_ids_with_attachment` auf der Fall-Achse:
+    ``Attachment.field_template`` ist ``PROTECT``, und seit ADR-039 kann ein
+    Anhang direkt am Fall hängen. Liegt dieser Fall im Papierkorb, ist er über
+    die Fallliste nicht mehr erreichbar — genau die Sackgasse, für die #1737
+    den Personen-Ausweg gebaut hat.
+    """
+    return set(
+        Attachment.objects.filter(field_template=field_template, case__is_deleted=True).values_list(
+            "case_id", flat=True
+        )
+    )
+
+
+def field_template_trashed_case_count(field_template: FieldTemplate) -> int:
+    """Fälle im Papierkorb, die das Löschen dieser Vorlage blockieren (Refs #1818).
+
+    Speist den zweiten Ausweg-Hinweis („Fall-Papierkorb öffnen") der
+    Lösch-Dialoge. Zwei Quellen wie beim Personen-Gegenstück: ein Wert unter dem
+    Slug im ``data_json`` ODER ein Anhang, der die Vorlage per ``PROTECT``
+    festhält. Distinct über beide — derselbe Fall zählt nicht doppelt.
+    """
+    return len(_trashed_case_ids_with_slug(field_template) | _trashed_case_ids_with_attachment(field_template))
 
 
 def field_template_trashed_client_count(field_template: FieldTemplate) -> int:
@@ -205,6 +260,12 @@ def delete_document_type(request, doc_type: DocumentType) -> None:
     :func:`field_template_delete_blockers`: alle zutreffenden Gründe, nicht nur
     der erste — ein Typ kann z.B. sowohl Events als auch Personen referenziert
     haben, wenn ``entity_type`` erst nachträglich sinnvoll genutzt wurde).
+
+    Refs #1818: Personen- **und** Fall-Blocker tragen ihren Papierkorb-Anteil im
+    Satz. Beide Zähler laufen über den Default-Manager, der ``is_deleted`` nicht
+    filtert — ein Datensatz im Papierkorb blockiert also mit, ist im Fach-UI
+    aber nicht mehr erreichbar. Ohne den Zusatz verlangt die Meldung einen
+    Schritt, den niemand gehen kann.
     """
     reasons: list[str] = []
 
@@ -232,12 +293,16 @@ def delete_document_type(request, doc_type: DocumentType) -> None:
     case_count = Case.objects.filter(document_type=doc_type).count()
     if case_count:
         reasons.append(
-            ngettext(
-                "%(n)d Fall ist diesem Dokumentationstyp zugeordnet und müsste zuerst geändert werden.",
-                "%(n)d Fälle sind diesem Dokumentationstyp zugeordnet und müssten zuerst geändert werden.",
-                case_count,
+            _append_trash_share(
+                ngettext(
+                    "%(n)d Fall ist diesem Dokumentationstyp zugeordnet und müsste zuerst geändert werden.",
+                    "%(n)d Fälle sind diesem Dokumentationstyp zugeordnet und müssten zuerst geändert werden.",
+                    case_count,
+                )
+                % {"n": case_count},
+                Case.objects.filter(document_type=doc_type, is_deleted=True).count(),
+                of_cases=True,
             )
-            % {"n": case_count}
         )
 
     if reasons:
@@ -381,12 +446,20 @@ def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
         ).count()
         if data_case_count:
             reasons.append(
-                ngettext(
-                    "%(n)d Fall enthält Daten unter dem Slug „%(slug)s“.",
-                    "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“.",
-                    data_case_count,
+                _append_trash_share(
+                    ngettext(
+                        "%(n)d Fall enthält Daten unter dem Slug „%(slug)s“.",
+                        "%(n)d Fälle enthalten Daten unter dem Slug „%(slug)s“.",
+                        data_case_count,
+                    )
+                    % {"n": data_case_count, "slug": field_template.slug},
+                    # Nur der Slug-Anteil, wie im Personen-Zweig darüber: dieser
+                    # Satz zählt Fälle MIT Slug-Daten. Der breitere
+                    # ``field_template_trashed_case_count`` speist den
+                    # Ausweg-Hinweis der Dialoge (Refs #1818).
+                    len(_trashed_case_ids_with_slug(field_template)),
+                    of_cases=True,
                 )
-                % {"n": data_case_count, "slug": field_template.slug}
             )
 
     return reasons

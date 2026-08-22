@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 04:32+0200\n"
+"POT-Creation-Date: 2026-08-22 11:17+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3873,24 +3873,6 @@ msgstr ""
 #: src/core/services/compliance/vvt.py:119
 msgid "Optimistic Locking gegen versehentliches Ueberschreiben"
 msgstr "Optimistic Locking gegen versehentliches Ueberschreiben"
-
-#: src/core/services/compliance/vvt.py:120
-msgid ""
-"AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf "
-"Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von Faellen (ein Fall "
-"kann nicht geloescht werden); Bearbeitungen von Episoden und "
-"Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur "
-"Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende "
-"Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert "
-"(ADR-043)"
-msgstr ""
-"AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf "
-"Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von Faellen (ein Fall "
-"kann nicht geloescht werden); Bearbeitungen von Episoden und "
-"Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur "
-"Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende "
-"Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert "
-"(ADR-043)"
 
 #: src/core/services/compliance/vvt.py:121
 msgid "Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"
@@ -7811,20 +7793,6 @@ msgstr[1] ""
 "%(n)s der blockierenden Personen liegen im Papierkorb und sind über die "
 "Personenliste nicht mehr erreichbar."
 
-#: src/templates/core/config/partials/trash_blocker_hint.html:16
-msgid ""
-"Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die "
-"blockierenden Werte unwiderruflich, ohne die Person wieder sichtbar zu "
-"machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. "
-"Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst "
-"weg."
-msgstr ""
-"Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die "
-"blockierenden Werte unwiderruflich, ohne die Person wieder sichtbar zu "
-"machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. "
-"Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst "
-"weg."
-
 #: src/templates/core/config/partials/trash_blocker_hint.html:19
 msgid "Papierkorb öffnen"
 msgstr "Papierkorb öffnen"
@@ -11140,6 +11108,122 @@ msgstr ""
 "Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — "
 "Anonymisierung nicht möglich."
 
-#: src/core/services/deletion.py:92
-msgid "Fall (nicht mehr auffindbar)"
-msgstr "Fall (nicht mehr auffindbar)"
+#: src/core/models/case.py:114
+msgid "Anonymisiert am"
+msgstr "Anonymisiert am"
+
+#: src/core/services/case/deletion.py:278
+msgid "Der Fall wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."
+msgstr "Der Fall wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."
+
+#: src/core/services/case/deletion.py:444
+msgid "Der Fall wurde bereits endgültig anonymisiert."
+msgstr "Der Fall wurde bereits endgültig anonymisiert."
+
+#: src/core/services/compliance/vvt.py:168
+msgid "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen von Episoden und Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+msgstr "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen von Episoden und Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+
+#: src/core/services/config.py:135
+#, python-format
+msgid "Davon liegt %(t)d Fall im Papierkorb."
+msgid_plural "Davon liegen %(t)d Fälle im Papierkorb."
+msgstr[0] "Davon liegt %(t)d Fall im Papierkorb."
+msgstr[1] "Davon liegen %(t)d Fälle im Papierkorb."
+
+#: src/core/views/case_deletion.py:109
+msgid "Fall in den Papierkorb verschoben. Die Anwendungsbetreuung kann ihn dort wiederherstellen; nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert."
+msgstr "Fall in den Papierkorb verschoben. Die Anwendungsbetreuung kann ihn dort wiederherstellen; nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert."
+
+#: src/core/views/case_deletion.py:124
+msgid "Für diesen Fall läuft bereits ein Löschantrag — er wartet auf Bestätigung. Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
+msgstr "Für diesen Fall läuft bereits ein Löschantrag — er wartet auf Bestätigung. Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
+
+#: src/core/views/case_deletion.py:164
+msgid "Fall wiederhergestellt."
+msgstr "Fall wiederhergestellt."
+
+#: src/core/views/case_deletion.py:189
+msgid "Fall wurde endgültig anonymisiert."
+msgstr "Fall wurde endgültig anonymisiert."
+
+#: src/templates/core/cases/delete_request_confirm.html:4
+#: src/templates/core/cases/delete_request_confirm.html:10
+msgid "Fall löschen"
+msgstr "Fall löschen"
+
+#: src/templates/core/cases/delete_request_confirm.html:17
+#, python-format
+msgid "Vier-Augen-Prinzip — <strong>%(pseudonym)s</strong> ist eine Person mit Zusatzangaben. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wandert der Fall in den Papierkorb."
+msgstr "Vier-Augen-Prinzip — <strong>%(pseudonym)s</strong> ist eine Person mit Zusatzangaben. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wandert der Fall in den Papierkorb."
+
+#: src/templates/core/cases/delete_request_confirm.html:20
+msgid "Solange der Antrag läuft, bleibt der Fall unverändert nutzbar. Nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert; zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung."
+msgstr "Solange der Antrag läuft, bleibt der Fall unverändert nutzbar. Nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert; zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung."
+
+#: src/templates/core/cases/delete_request_confirm.html:24
+msgid "Der Fall wandert sofort in den Papierkorb. Die Anwendungsbetreuung kann ihn dort wiederherstellen; nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert. Episoden, Wirkungsziele und Dateianhänge gehen mit, zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung."
+msgstr "Der Fall wandert sofort in den Papierkorb. Die Anwendungsbetreuung kann ihn dort wiederherstellen; nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert. Episoden, Wirkungsziele und Dateianhänge gehen mit, zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung."
+
+#: src/templates/core/cases/delete_request_confirm.html:65
+#, python-format
+msgid "Für diesen Fall läuft bereits ein Löschantrag vom %(datum)s (gestellt von %(person)s). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich."
+msgstr "Für diesen Fall läuft bereits ein Löschantrag vom %(datum)s (gestellt von %(person)s). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich."
+
+#: src/templates/core/cases/delete_request_confirm.html:83
+msgid "z.B. Fall versehentlich angelegt, Verarbeitung nicht mehr erforderlich"
+msgstr "z.B. Fall versehentlich angelegt, Verarbeitung nicht mehr erforderlich"
+
+#: src/templates/core/cases/delete_request_confirm.html:89
+msgid "In den Papierkorb verschieben"
+msgstr "In den Papierkorb verschieben"
+
+#: src/templates/core/cases/deletion_review.html:4
+#: src/templates/core/cases/deletion_review.html:10
+msgid "Fall-Löschantrag prüfen"
+msgstr "Fall-Löschantrag prüfen"
+
+#: src/templates/core/cases/deletion_review.html:32
+msgid "Betroffener Fall"
+msgstr "Betroffener Fall"
+
+#: src/templates/core/cases/deletion_review.html:52
+msgid "Bei Genehmigung wandert der Fall in den Papierkorb. Nach Ablauf der Aufbewahrungsfrist wird er automatisch anonymisiert; Episoden, Wirkungsziele und Dateianhänge gehen mit. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung. Statistik-Aggregate bleiben erhalten."
+msgstr "Bei Genehmigung wandert der Fall in den Papierkorb. Nach Ablauf der Aufbewahrungsfrist wird er automatisch anonymisiert; Episoden, Wirkungsziele und Dateianhänge gehen mit. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung. Statistik-Aggregate bleiben erhalten."
+
+#: src/templates/core/cases/trash.html:4 src/templates/core/cases/trash.html:8
+msgid "Papierkorb — Fälle"
+msgstr "Papierkorb — Fälle"
+
+#: src/templates/core/cases/trash.html:12
+msgid "Hier erscheinen Fälle, sobald sie gelöscht wurden — bei Personen mit Zusatzangaben erst nach bestätigter Löschung (Vier-Augen-Prinzip), sonst sofort. Nach Ablauf der Papierkorb-Frist werden sie automatisch anonymisiert; bis dahin lassen sie sich wiederherstellen. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung."
+msgstr "Hier erscheinen Fälle, sobald sie gelöscht wurden — bei Personen mit Zusatzangaben erst nach bestätigter Löschung (Vier-Augen-Prinzip), sonst sofort. Nach Ablauf der Papierkorb-Frist werden sie automatisch anonymisiert; bis dahin lassen sie sich wiederherstellen. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung."
+
+#: src/templates/core/cases/trash.html:41
+msgid "Inhalt unwiderruflich entfernt"
+msgstr "Inhalt unwiderruflich entfernt"
+
+#: src/templates/core/cases/trash.html:42
+#, python-format
+msgid "Endgültig anonymisiert am %(datum)s"
+msgstr "Endgültig anonymisiert am %(datum)s"
+
+#: src/templates/core/cases/trash.html:56
+#, python-format
+msgid "„%(titel)s“ jetzt endgültig anonymisieren? Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele und Dateianhänge dieses Falls werden unwiderruflich entfernt, zugeordnete Kontakte verlieren ihre Fallzuordnung und bleiben in der Personenakte. Eine Wiederherstellung ist danach nicht mehr möglich."
+msgstr "„%(titel)s“ jetzt endgültig anonymisieren? Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele und Dateianhänge dieses Falls werden unwiderruflich entfernt, zugeordnete Kontakte verlieren ihre Fallzuordnung und bleiben in der Personenakte. Eine Wiederherstellung ist danach nicht mehr möglich."
+
+#: src/templates/core/config/partials/trash_blocker_hint.html:25
+#, python-format
+msgid "%(n)s der blockierenden Fälle liegt im Papierkorb und ist über die Fallliste nicht mehr erreichbar."
+msgid_plural "%(n)s der blockierenden Fälle liegen im Papierkorb und sind über die Fallliste nicht mehr erreichbar."
+msgstr[0] "%(n)s der blockierenden Fälle liegt im Papierkorb und ist über die Fallliste nicht mehr erreichbar."
+msgstr[1] "%(n)s der blockierenden Fälle liegen im Papierkorb und sind über die Fallliste nicht mehr erreichbar."
+
+#: src/templates/core/config/partials/trash_blocker_hint.html:29
+msgid "Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die blockierenden Werte unwiderruflich, ohne den Datensatz wieder sichtbar zu machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst weg."
+msgstr "Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die blockierenden Werte unwiderruflich, ohne den Datensatz wieder sichtbar zu machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst weg."
+
+#: src/templates/core/config/partials/trash_blocker_hint.html:39
+msgid "Fall-Papierkorb öffnen"
+msgstr "Fall-Papierkorb öffnen"

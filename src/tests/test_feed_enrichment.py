@@ -588,6 +588,72 @@ class TestActivityTargetUrl:
 
 
 @pytest.mark.django_db
+class TestTrashedCaseLeavesTheFeed:
+    """Papierkorb-Grenze im Zeitstrom (Refs #1818, ADR-044 §7).
+
+    ``close_case``/``reopen_case`` schreiben den Falltitel als Freitext ins
+    ``Activity.summary``. Der Papierkorb nimmt den Fall aus Liste, Detail,
+    Episoden, Zielen und Ereignis-Select — der Zeitstrom waere sonst der eine
+    Ort, an dem sein Titel weiterlaeuft, und zwar um ein Vielfaches der
+    Papierkorb-Frist (``retention_activities_days`` 365 gegen 30 Tage).
+    """
+
+    def _feed_summaries(self, facility, user):
+        return [
+            item["object"].summary
+            for item in build_feed_items(facility, timezone.localdate(), "activities", user=user)
+            if item["type"] == "activity"
+        ]
+
+    def test_case_activity_disappears_with_the_case(self, facility, staff_user, case_open):
+        from core.services.case import close_case, soft_delete_case
+
+        close_case(case_open, staff_user)
+        assert any(case_open.title in s for s in self._feed_summaries(facility, staff_user))
+
+        soft_delete_case(case_open, staff_user)
+        assert self._feed_summaries(facility, staff_user) == []
+
+    def test_activity_returns_after_a_restore(self, facility, staff_user, admin_user, case_open):
+        """Die Zeile ist nicht umsonst geschrieben — sie kommt mit dem Fall zurueck."""
+        from core.services.case import close_case, restore_case, soft_delete_case
+
+        close_case(case_open, staff_user)
+        soft_delete_case(case_open, staff_user)
+        restore_case(case_open, admin_user)
+        assert any(case_open.title in s for s in self._feed_summaries(facility, staff_user))
+
+    def test_other_targets_are_untouched(self, facility, staff_user, case_open, client_identified):
+        from core.services.case import soft_delete_case
+
+        log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.UPDATED,
+            target=client_identified,
+            summary="Person aktualisiert",
+        )
+        soft_delete_case(case_open, staff_user)
+        assert "Person aktualisiert" in self._feed_summaries(facility, staff_user)
+
+    def test_target_url_is_dropped_for_a_trashed_case(self, facility, staff_user, case_open):
+        """Zweite Verteidigungslinie: der ``deleted``-Verb-Zweig deckt nur die
+        Loesch-Zeile selbst, nicht aeltere ``created``/``updated``-Zeilen."""
+        from core.services.case import soft_delete_case
+
+        activity = log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.UPDATED,
+            target=case_open,
+            summary="Fall aktualisiert",
+        )
+        assert activity_target_url(activity) != ""
+        soft_delete_case(case_open, staff_user)
+        assert activity_target_url(activity) == ""
+
+
+@pytest.mark.django_db
 class TestPreviewOrderMatchesBlockSequence:
     """#1713: die Vorschau-Feldreihenfolge folgt der globalen Block-Sequenz.
 

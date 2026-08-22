@@ -98,6 +98,21 @@ class Case(DynamicDataEncryptionMixin, SoftDeletableModel):
         blank=True,
         verbose_name=_("Geschlossen am"),
     )
+    # Refs #1818 (ADR-044 §3): Zustandsmerkmal der endgueltigen Tilgung. Der
+    # Papierkorb-Fall traegt ``is_deleted=True``; nach der Redaktion traegt er
+    # zusaetzlich diesen Zeitstempel. Ohne ihn waere „im Papierkorb" von
+    # „endgueltig getilgt" nur am Titel-Praefix zu ahnen — die Person hat dafuer
+    # ihr ``is_active=False``, der Fall hatte nichts. Drei Stellen lesen ihn:
+    # der naechtliche Fristablauf (sonst redigiert er denselben Fall in JEDEM
+    # Lauf erneut und schreibt jedes Mal eine neue ``CASE_ANONYMIZED``-Zeile in
+    # das append-only AuditLog), ``restore_case`` (eine inhaltsleere Huelle darf
+    # nicht in Liste, Detail und Statistik zurueckkehren) und die
+    # Papierkorb-Liste, die beide Zustaende unterscheiden muss.
+    anonymized_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Anonymisiert am"),
+    )
 
     class Meta:
         verbose_name = _("Fall")

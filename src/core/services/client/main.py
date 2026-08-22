@@ -317,6 +317,33 @@ def _redact_client_deletion_request(client) -> None:
     ).update(reason="[Anonymisiert]")
 
 
+def _redact_case_deletion_requests(case_ids: list) -> None:
+    """Redigiere ``reason`` der FALL-Loeschantraege dieser Person (Refs #1818).
+
+    Der Redaktions-Faecher kannte bis ADR-044 nur zwei Zieltypen:
+    :func:`_redact_deletion_requests` (``target_type="Event"``) und
+    :func:`_redact_client_deletion_request` (``target_type="Client"``). Mit dem
+    Fall-Loeschpfad ist ``target_type="Case"`` ein drittes zulaessiges Ziel —
+    ohne diesen Helfer ueberlebte die Begruendung eines Fall-Loeschantrags
+    („Fall doppelt angelegt, Betreuung laeuft bei Frau Meier") die
+    **vollstaendige** Anonymisierung der Person, also genau die Luecke, die
+    #1091 fuer den Client- und #1751 fuer die uebrigen Freitexte geschlossen
+    haben.
+
+    Der Fall-Pfad selbst redigiert seinen Antrag schon
+    (``services/case/deletion._redact_case_deletion_request``); hier geht es um
+    den Weg ueber die Person, der die Faelle mitnimmt, ohne den Fall-Pfad zu
+    betreten. Antrags-Meta (status/requested_by/reviewed_by/timestamps) bleibt
+    wie ueberall als Vier-Augen-Nachweis stehen.
+    """
+    if not case_ids:
+        return
+    DeletionRequest.objects.filter(
+        target_type=DeletionRequest.TargetType.CASE,
+        target_id__in=case_ids,
+    ).update(reason="[Anonymisiert]")
+
+
 def _redact_rectification_requests(client) -> None:
     """Redigiere die Wertpaare/Freitexte der Art.-16-Antraege dieser Person (Refs #1792).
 
@@ -378,8 +405,8 @@ def _redact_retention_proposals(event_ids: list) -> None:
         proposal.save(update_fields=["details"])
 
 
-def _redact_legal_holds(client, event_ids: list) -> None:
-    """Redigiere ``LegalHold.reason`` fuer Client- und Event-Ziele (Refs #1751, Punkt 4).
+def _redact_legal_holds(client, event_ids: list, case_ids: list | None = None) -> None:
+    """Redigiere ``LegalHold.reason`` fuer Client-, Event- und Fall-Ziele (Refs #1751, #1818).
 
     ``reason`` ist bestimmungsgemaess Freitext mit Fall-/Klientenkontext und
     kannte bisher **keinen** Redaktions- oder Pruning-Pfad: abgelaufene und
@@ -388,6 +415,13 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     Redigiert wird nur der Freitext — Ziel, Fristen, Ersteller und
     Aufhebungs-Metadaten bleiben fuer den Nachweis-Trail erhalten (die Zeile
     belegt weiterhin, DASS eine Aufbewahrungspflicht bestand).
+
+    Der **Fall**-Zweig (``target_type="Case"``, Refs #1818) kam mit ADR-044
+    dazu: seit ``create_hold_for_target`` einen Fall-Hold erzeugen kann, faellt
+    dessen ``reason`` sonst durch beide bisherigen Zweige und bliebe nach der
+    Personen-Anonymisierung dauerhaft im Klartext stehen — ``LegalHold.reason``
+    ist laut eigenem Docstring bestimmungsgemaess Freitext mit
+    Fall-/Klientenkontext und kennt keinen zweiten Pruning-Pfad.
 
     Hinweis zur Reichweite: ein **aktiver** Hold blockiert die Anonymisierung
     an beiden Retention-Einstiegen — ``anonymize_eligible_soft_deleted_clients``
@@ -404,6 +438,8 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     targets = Q(target_type="Client", target_id=client.pk)
     if event_ids:
         targets |= Q(target_type="Event", target_id__in=event_ids)
+    if case_ids:
+        targets |= Q(target_type="Case", target_id__in=case_ids)
     LegalHold.objects.for_facility(client.facility).filter(targets).update(reason="[Anonymisiert]")
 
 
@@ -531,15 +567,17 @@ def anonymize_client(client, user=None):
       :func:`_delete_event_attachments_for_client`, personen- und falleigene
       ueber :func:`_delete_owned_attachments_for_client`. Beide laufen seit
       Refs #1782 gebuendelt als LETZTER Schritt (Begruendung am Aufruf).
-    - ``DeletionRequest.reason`` für Event-Targets sowie für den
-      Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
+    - ``DeletionRequest.reason`` für Event-Targets, für den
+      Client-Target-Löschantrag dieses Klienten (Refs #1091) und für die
+      Fall-Löschanträge ihrer Fälle (Refs #1818) — Antrags-Meta
       (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
     - ``RectificationRequest.old_value``/``new_value``/``reason``/
       ``review_note`` der Art.-16-Berichtigungsanträge dieser Person
       (Refs #1792) — dieselbe Trennung: Werte raus, Antrags-Meta bleibt.
     - ``RetentionProposal.details["pseudonym"]`` der Löschvorschläge dieser
-      Events und ``LegalHold.reason`` für Client-/Event-Ziele (Refs #1751) —
-      auch hier bleibt die Nachweis-Metadatenspur unangetastet.
+      Events und ``LegalHold.reason`` für Client-, Event- und Fall-Ziele
+      (Refs #1751, #1818) — auch hier bleibt die Nachweis-Metadatenspur
+      unangetastet.
     - ``Activity.summary`` für Client-, Event-, WorkItem- und Case-Targets —
       der Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067),
       die WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090) und
@@ -575,9 +613,10 @@ def anonymize_client(client, user=None):
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
     _redact_client_deletion_request(client)
+    _redact_case_deletion_requests(case_ids)
     _redact_rectification_requests(client)
     _redact_retention_proposals(event_ids)
-    _redact_legal_holds(client, event_ids)
+    _redact_legal_holds(client, event_ids, case_ids)
     _redact_activities(client, event_ids)
     _delete_recent_visits(client)
     _revoke_offline_bundles(client)

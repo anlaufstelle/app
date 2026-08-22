@@ -143,10 +143,13 @@ _POINT_IN_TIME_ISSUE = CompletenessIssue(
 def _visible_cases(facility):
     """Sichtbare Faelle der Einrichtung.
 
-    ``is_deleted=False`` ist defensiv: die Invariante „Faelle kennen kein
-    Soft-Delete" ist in ``src/tests/test_cases_trash_invariant.py`` gepinnt.
-    Faellt sie, zaehlt dieser Bericht trotzdem richtig weiter — ein Bericht ist
-    der schlechteste Ort, um eine solche Modellaenderung zu bemerken.
+    ``is_deleted=False`` war defensiv gedacht — die Invariante „Faelle kennen
+    kein Soft-Delete" ist mit dem Fall-Loeschpfad gefallen (Refs #1818,
+    ADR-044). Der Filter ist seither tragend: ein Fall im Papierkorb zaehlt
+    nicht mehr mit, ein nach Fristablauf redigierter Fall dagegen weiter (die
+    Tilgung ist eine Redaktion, keine Loeschung — P3a). Die Fallzahl sinkt also
+    beim Loeschen und bleibt beim Fristablauf konstant; die Zeitreihen bleiben
+    stetig.
     """
     return Case.objects.for_facility(facility).filter(is_deleted=False)
 

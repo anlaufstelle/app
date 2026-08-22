@@ -157,20 +157,17 @@ PROCESSING_ACTIVITIES = [
             #    ``OFFLINE_*_READ`` und ``SYSTEM_VIEW``; Detail-, Listen- und
             #    Suchaufrufe erzeugen keinen Eintrag (ADR-043).
             #
-            # ACHTUNG (Refs #1818, ADR-044): Punkt 1 ist seit dem Fall-Loeschpfad
-            # nur noch fuer die **Oberflaeche** wahr. Modell, Migration 0158 und
-            # der Loesch-Service existieren (``services/case/deletion.py``,
-            # ``DeletionRequest.TargetType.CASE``,
-            # ``CASE_SOFT_DELETED``/``CASE_RESTORED``/``CASE_ANONYMIZED``) — es
-            # gibt nur noch keine Route dorthin. Der Satz bleibt deshalb
-            # unveraendert stehen, bis die Views liegen: eine Art.-30-Angabe, die
-            # einen fuer niemanden erreichbaren Loeschweg zusagt, waere genauso
-            # falsch wie die alte Ueberreichweite. Mit den Views MUSS er in
-            # DERSELBEN Aenderung fallen (DE + EN + .mo).
+            # Refs #1818 (ADR-044): Der frueher hier stehende Klammerzusatz „ein
+            # Fall kann nicht geloescht werden" ist mit den Fall-Loesch-Routen
+            # (``views/case_deletion.py``, Antrag/Papierkorb/Wiederherstellung/
+            # Tilgung) hinfaellig geworden und faellt in derselben Aenderung
+            # (DE + EN + .mo). Er wird nicht durch eine Gegenaussage ersetzt,
+            # sondern durch die drei Aktionen, die es jetzt gibt — eine
+            # Art.-30-Angabe zaehlt auf, was protokolliert wird.
             _(
                 "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; "
-                "auf Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von "
-                "Faellen (ein Fall kann nicht geloescht werden); Bearbeitungen "
+                "auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, "
+                "Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen "
                 "von Episoden und Wirkungszielen werden gar nicht protokolliert; "
                 "von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme "
                 "und facility-uebergreifende Zugriffe — Detail-, Listen- und "

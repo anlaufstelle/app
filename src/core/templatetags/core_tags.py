@@ -230,13 +230,30 @@ _MODEL_URL_MAP = {
 
 @register.simple_tag
 def activity_target_url(activity):
-    """Resolve a detail URL for an Activity's GenericFK target."""
+    """Resolve a detail URL for an Activity's GenericFK target.
+
+    Zwei Sperren, nicht eine: ``verb == "deleted"`` faengt die Zeile ab, die
+    die Loeschung SELBST protokolliert — aber nicht die aelteren
+    ``created``/``updated``-Zeilen desselben Objekts. Fuer Faelle ist das seit
+    dem Loeschpfad (Refs #1818, ADR-044) ein echter Verweis ins Leere: der Fall
+    im Papierkorb faellt aus ``cases_with_live_client()``, ``case_detail``
+    antwortet 404, und ein Kartenlink dorthin sieht nach kaputter Anwendung
+    aus. Der Zeitstrom filtert diese Karten bereits weg
+    (:func:`core.services.events.feed.build_feed_items`); diese Sperre ist die
+    zweite Verteidigungslinie fuer jede kuenftige Flaeche, die
+    ``_activity_card.html`` einbindet, ohne durch den Feed zu laufen.
+    """
     if activity.verb == "deleted":
         return ""
     model_name = activity.target_type.model if activity.target_type else None
     url_name = _MODEL_URL_MAP.get(model_name)
     if not url_name:
         return ""
+    if model_name == "case":
+        from core.models import Case
+
+        if not Case.objects.filter(pk=activity.target_id, is_deleted=False).exists():
+            return ""
     try:
         return reverse(url_name, args=[activity.target_id])
     except Exception:

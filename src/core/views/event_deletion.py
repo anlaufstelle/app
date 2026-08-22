@@ -3,6 +3,10 @@
 Aus ``views/events.py`` ausgekoppelt (Refs #598 #603). Der direkte Staff-
 Löschpfad (``EventDeleteView``) bleibt in ``events.py``, weil er dort zum
 Event-Lifecycle gehört; hier liegt nur der Review-Workflow (Lead/Admin).
+
+``DeletionRequestReviewView`` bedient seit Refs #1818 **drei** Zieltypen
+(Ereignis, Person, Fall). Ein eigener Review-Einstieg je Typ waere ein zweiter
+Ort fuer dieselbe Entscheidung; die Loeschantragsliste ist eine Flaeche.
 """
 
 import logging
@@ -17,7 +21,8 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.models import Client, DeletionRequest, Event
+from core.models import Case, Client, DeletionRequest, Event
+from core.services.case import approve_case_deletion, reject_case_deletion
 from core.services.client import approve_client_deletion, reject_client_deletion
 from core.services.deletion import annotate_deletion_targets, eligible_deletion_confirmers
 from core.services.events import approve_deletion, reject_deletion
@@ -106,6 +111,22 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                 {"deletion_request": dr, "client": client, "next_url": next_url},
             )
 
+        # Fall-Ziele (Refs #1818, ADR-044). Bewusst OHNE
+        # ``cases_with_live_client()``: ein noch nicht genehmigter Antrag zeigt
+        # auf einen lebenden Fall, ein bereits genehmigter (Status PENDING ist
+        # hier zwar erzwungen, der Scope soll die Annahme aber nicht tragen) auf
+        # einen im Papierkorb — die Pruefseite muss beide anzeigen koennen.
+        if dr.target_type == DeletionRequest.TargetType.CASE:
+            try:
+                case = Case.objects.select_related("client").get(pk=dr.target_id, facility=request.current_facility)
+            except Case.DoesNotExist as exc:
+                raise Http404 from exc
+            return render(
+                request,
+                "core/cases/deletion_review.html",
+                {"deletion_request": dr, "case": case, "next_url": next_url},
+            )
+
         try:
             event = Event.objects.select_related("document_type", "client").get(
                 pk=dr.target_id, facility=request.current_facility
@@ -133,19 +154,20 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
             return redirect("core:deletion_review", pk=pk)
 
         action = request.POST.get("action")
-        is_client = dr.target_type == DeletionRequest.TargetType.CLIENT
+        # Drei Zieltypen, ein Einstieg (Refs #1818): der Fall-Zweig kam mit
+        # ADR-044 dazu. Die Zuordnung liegt bewusst hier und nicht in den
+        # Services — jeder von ihnen kennt nur seinen eigenen Zieltyp.
+        approvers = {
+            DeletionRequest.TargetType.CLIENT: (approve_client_deletion, reject_client_deletion),
+            DeletionRequest.TargetType.CASE: (approve_case_deletion, reject_case_deletion),
+        }
+        approve, reject = approvers.get(dr.target_type, (approve_deletion, reject_deletion))
 
         if action == "approve":
-            if is_client:
-                approve_client_deletion(dr, request.user)
-            else:
-                approve_deletion(dr, request.user)
+            approve(dr, request.user)
             messages.success(request, _("Löschantrag wurde genehmigt."))
         elif action == "reject":
-            if is_client:
-                reject_client_deletion(dr, request.user)
-            else:
-                reject_deletion(dr, request.user)
+            reject(dr, request.user)
             messages.info(request, _("Löschantrag wurde abgelehnt."))
 
         return redirect(self._post_review_redirect(request))

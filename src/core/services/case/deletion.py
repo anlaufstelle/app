@@ -223,9 +223,25 @@ def reject_case_deletion(deletion_request, reviewer):
 
     Der Fall bleibt unveraendert erreichbar; ein erneuter Antrag ist moeglich
     (die Unique-Constraint greift nur fuer PENDING-Zeilen).
+
+    Derselbe PENDING-Re-Check wie in :func:`approve_case_deletion` — anders als
+    im Personen-Pfad (``reject_client_deletion``), und aus einem Grund, den es
+    dort nicht gibt: dieser Weg schreibt zusaetzlich eine
+    ``DELETION_REJECTED``-Zeile in das append-only AuditLog. Ohne den Guard
+    liesse sich ein bereits genehmigter Antrag auf REJECTED zurueckdrehen,
+    waehrend der Fall im Papierkorb liegen bleibt — der widerspruechliche
+    Zustand waere damit nicht bloss transient, sondern dauerhaft protokolliert.
+    Heute deckt ``DeletionRequestReviewView`` das per ``status=PENDING``-Scope
+    ab; der Service ist die Single Source of Truth (dasselbe Argument wie an
+    jeder anderen Stelle dieses Moduls).
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
+    deletion_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
+    if deletion_request.status != DeletionRequest.Status.PENDING:
+        raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
     deletion_request.status = DeletionRequest.Status.REJECTED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()
@@ -249,9 +265,17 @@ def restore_case(case, user):
     Verlustfrei, weil der Papierkorb nur ``is_deleted`` setzt: Episoden,
     Wirkungsziele, Anhaenge und die Ereignis-Zuordnung bleiben unangetastet,
     bis die Frist ablaeuft.
+
+    Nach der Tilgung ist genau das nicht mehr wahr: ``anonymized_at`` markiert
+    einen Fall, dessen Inhalt unwiderruflich weg ist. Ein Restore holte dann
+    eine inhaltsleere Huelle zurueck in ``cases_with_live_client()`` — also in
+    Fallliste, Detail und Statistik. Die Person hat gegen denselben Fehlgriff
+    ihr ``is_active=False`` als Backstop; der Fall braucht den Guard hier.
     """
     if not case.is_deleted:
         raise ValidationError(_("Der Fall liegt nicht im Papierkorb."))
+    if case.anonymized_at is not None:
+        raise ValidationError(_("Der Fall wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."))
     case.restore()
     audit_event(
         AuditLog.Action.CASE_RESTORED,
@@ -277,6 +301,14 @@ def redact_case_content(case) -> None:
 
     Das Leeren von ``data_json`` erledigt zugleich die Marker-Bereinigung der
     Invariante I-M1 (ADR-039 §7) fuer den physischen Anhang-Loeschpfad.
+
+    ``anonymized_at`` wird hier gesetzt und nicht erst in :func:`anonymize_case`:
+    diese Funktion ist die geteilte Redaktion, die auch der Personen-Pfad
+    aufruft (``_redact_cases_and_episodes``). Der Stempel gehoert an den Ort,
+    der den Inhalt tatsaechlich entfernt — sonst traegt ihn nur der Fall-Weg
+    und die Faelle einer anonymisierten Person blieben als „nur im Papierkorb"
+    markiert. Ein bereits gesetzter Stempel bleibt stehen: er datiert die
+    **erste** Tilgung, spaetere Laeufe finden ohnehin nichts mehr vor.
     """
     from core.models.episode import Episode
 
@@ -284,7 +316,8 @@ def redact_case_content(case) -> None:
     case.description = ""
     case.data_json = {}
     case.document_type = None
-    case.save(update_fields=["title", "description", "data_json", "document_type"])
+    case.anonymized_at = case.anonymized_at or timezone.now()
+    case.save(update_fields=["title", "description", "data_json", "document_type", "anonymized_at"])
     Episode.objects.filter(case_id=case.pk).update(
         title="Episode (anonymisiert)",
         description="",
@@ -407,6 +440,8 @@ def anonymize_case_now(case, user):
     """
     if not case.is_deleted:
         raise ValidationError(_("Nur Fälle im Papierkorb können anonymisiert werden."))
+    if case.anonymized_at is not None:
+        raise ValidationError(_("Der Fall wurde bereits endgültig anonymisiert."))
     if case_has_active_hold(case):
         raise ValidationError(
             _("Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
@@ -426,11 +461,20 @@ def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=Fal
     P4: Faelle mit aktivem Legal Hold sind ausgeschlossen — die Tilgung wird
     dadurch nur **aufgeschoben**, ein spaeterer Lauf holt sie nach.
 
+    ``anonymized_at__isnull=True`` ist die Abbruchbedingung: der Fall bleibt
+    nach der Tilgung soft-geloescht und erfuellt ``deleted_at__lt=cutoff``
+    weiter. Ohne den Filter faende ihn JEDER naechtliche Lauf erneut, redigierte
+    den bereits leeren Rest noch einmal und schriebe jedes Mal eine neue
+    ``CASE_ANONYMIZED``-Zeile in das append-only, HMAC-verkettete AuditLog —
+    unbegrenztes Wachstum, und der Zaehler „Anonymized N trash-expired case(s)"
+    bliebe dauerhaft von Null verschieden und damit als Betriebssignal
+    wertlos.
+
     Returns: Anzahl der getilgten Faelle.
     """
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
     qs = exclude_cases_with_active_holds(
-        Case.objects.for_facility(facility).filter(is_deleted=True, deleted_at__lt=cutoff),
+        Case.objects.for_facility(facility).filter(is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True),
         facility,
     )
     if dry_run:

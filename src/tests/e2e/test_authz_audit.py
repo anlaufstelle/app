@@ -174,6 +174,41 @@ def _reset_event(conn, ctx):
     cur.execute("UPDATE core_event SET is_deleted = false WHERE id = %s", (ctx["ids_fac1"]["sample_event"],))
 
 
+def _reset_case(conn, ctx):
+    """Soft-Delete von case_open rueckgaengig machen (Refs #1818).
+
+    ``core:case_delete_request`` ist eine Route mit ZWEI Ausgaengen (ADR-044
+    §1): steht die Person auf ``QUALIFIED``, entsteht nur ein Loeschantrag —
+    sonst wandert der Fall direkt in den Papierkorb. Welcher Ausgang im Seed
+    gilt, haengt an der geernteten Person; der Hook macht deshalb beide Faelle
+    idempotent (ohne Soft-Delete aendert das UPDATE nichts).
+
+    Ohne Reset bekaeme jeder nachfolgende ERLAUBTE Akteur 404 — ``case_detail``
+    und der Antragsweg laden ueber ``cases_with_live_client()``, das seit #1818
+    ``is_deleted=False`` am Fall filtert.
+    """
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        "UPDATE core_case SET is_deleted = false, deleted_at = NULL, deleted_by_id = NULL WHERE id = %s",
+        (ctx["ids_fac1"]["case_open"],),
+    )
+
+
+def _reset_trashed_case(conn, ctx):
+    """case_trashed nach einem erlaubten Restore zurueck in den Papierkorb (Refs #1818).
+
+    ``case_restore`` steht in der Erwartungs-Tabelle VOR ``case_anonymize``, und
+    beide zielen auf dieselbe Zeile. Ohne diesen Hook faende die Sofort-Tilgung
+    danach einen lebenden Fall und antwortete auf einer Allow-Zelle mit 404 —
+    eine falsche Abweichungszeile fuer einen Loesch-Endpoint.
+    """
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        "UPDATE core_case SET is_deleted = true, deleted_at = COALESCE(deleted_at, now()) WHERE id = %s",
+        (ctx["ids_fac1"]["case_trashed"],),
+    )
+
+
 def _reset_milestone(conn, ctx):
     """Hard-Delete von milestone rückgängig machen.
 
@@ -358,6 +393,12 @@ def _reset_attachment(conn, ctx):
 # ABWEICHUNG). Hook läuft nach jeder POST-Zelle dieser Endpoints.
 DESTRUCTIVE_RESET = {
     "core:event_delete": _reset_event,  # Soft-Delete (events/crud.py: soft_delete_event)
+    # Refs #1818: Soft-Delete (services/case/deletion.soft_delete_case) auf dem
+    # direkten Weg der gestaffelten Loeschroute.
+    "core:case_delete_request": _reset_case,
+    # Refs #1818: Restore hebt den Papierkorb-Zustand auf, den die naechste
+    # Zelle (case_anonymize) auf derselben Zeile voraussetzt.
+    "core:case_restore": _reset_trashed_case,
     "core:milestone_delete": _reset_milestone,  # Hard-Delete
     # Refs #1874: Hard-Delete inkl. Disk — der erste physische Löschpfad in der
     # Matrix. Ohne Reset bekäme die zweite erlaubte Rolle (lead nach

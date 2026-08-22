@@ -41,6 +41,8 @@ Begründung gegen den Hard-Delete: Er risse per CASCADE Episoden, Ziele und Meil
 
 **Eine** Implementierung für beide Wege: `redact_case_content` / `redact_case_goals` liegen in [`services/case/deletion.py`](../../src/core/services/case/deletion.py) und werden vom Personen-Pfad (`_redact_cases_and_episodes`) mitbenutzt. Zwei Kopien wären die Drift, die #1756 gekostet hat: der Rest darf nicht davon abhängen, ob eine ganze Person oder ein einzelner Fall gelöscht wurde.
 
+Die Redaktion setzt `Case.anonymized_at`. Ohne dieses Zustandsmerkmal wären „im Papierkorb" und „endgültig getilgt" am Fall nicht unterscheidbar — die Person hat dafür ihr `is_active=False`, der Fall hatte nichts. Drei Stellen lesen es: der nächtliche Fristablauf (sonst fände er denselben Fall in **jedem** Lauf erneut, redigierte den bereits leeren Rest und schriebe jedes Mal eine neue `CASE_ANONYMIZED`-Zeile in das append-only, HMAC-verkettete AuditLog), `restore_case` (eine inhaltsleere Hülle darf nicht in Liste, Detail und Statistik zurückkehren) und die Papierkorb-Liste, die beide Zustände trennen muss. Der Stempel sitzt in `redact_case_content` und damit im **geteilten** Helfer: auch die Fälle einer vollständig anonymisierten Person tragen ihn.
+
 Mitredigiert werden zwei Stellen, die den Falltitel als Freitext weitertragen und die Papierkorb-Frist deutlich überleben würden: die `Activity.summary`-Zeilen des Falls (`retention_activities_days`, Default 365 gegen 30 Tage — der Befund aus #1751) und der `reason` des Löschantrags. Die Antrags-Metadaten (wer, wann, welcher Status) bleiben als Vier-Augen-Nachweis erhalten.
 
 ### 4. Legal Hold: `Case` wird Hold-Ziel, und ein Ereignis-Hold sperrt den Fall (P4)
@@ -56,6 +58,8 @@ Die Sperre (`exclude_cases_with_active_holds`, Einzelprüfung `case_has_active_h
 | dem Fall selbst | direkter Aufbewahrungsauftrag |
 | einem **Ereignis des Falls** | die Tilgung löst die Zuordnung (§5); welcher Fall ein gehaltenes Ereignis einrahmte, ist selbst Beweismittel (Spoliations-Schutz analog #1066) |
 | der **Person** des Falls | sonst wäre der Fall-Löschweg die Hintertür um genau die Sperre, die die Personen-Anonymisierung blockiert — sie redigiert dieselben Fall-Inhalte |
+
+**Und die Gegenrichtung.** Ein Hold mit `target_type="Case"` sperrt seit dieser ADR auch die Anonymisierung der **Person**, an allen drei Einstiegen, die über `exclude_clients_with_active_holds` laufen (Papierkorb-Frist, Admin-Sofort-Tilgung, K-Anon-Bridge). Ohne diesen Zweig wäre der Personen-Weg die Hintertür um den frisch eingeführten Fall-Hold: er redigiert über `_redact_cases_and_episodes`/`_redact_case_goals` genau die Inhalte, die der Hold sichern soll, und löscht über `_delete_owned_attachments_for_client` die fall-eigenen Anhänge physisch — der `.enc`-Unlink ist nicht rollback-bar. Aus demselben Grund kennt der Redaktions-Fächer des Personen-Pfads jetzt den Zieltyp `Case`: die Begründung eines Fall-Löschantrags (`_redact_case_deletion_requests`) und der Grund eines Fall-Holds (`_redact_legal_holds`) überleben die Anonymisierung ihrer Person nicht mehr.
 
 Bewusst **nicht** über `client_has_active_hold` gebaut: der Helfer schließt zusätzlich Personen aus, von denen *irgendein* Ereignis unter Hold steht — auch eines, das mit diesem Fall nichts zu tun hat. Für die Personen-Anonymisierung ist das richtig (sie fasst alle Ereignisse an), für die Fall-Redaktion wäre es Überdeckung: sie lässt Ereignisse unberührt.
 
@@ -85,13 +89,28 @@ Drei eigene Aktionen `CASE_SOFT_DELETED` / `CASE_RESTORED` / `CASE_ANONYMIZED` �
 
 Der Falltitel steht **nie** im `detail` (#1751, Allowlist #1944) — das Log ist append-only und überlebt jede spätere Anonymisierung; die Zuordnung läuft über `target_id` bzw. `target_case`.
 
+### 9. Oberfläche: eine Route mit zwei Ausgängen, ein Papierkorb, ein Review-Einstieg
+
+Vier Routen unter `cases/` ([`views/case_deletion.py`](../../src/core/views/case_deletion.py)): `case_delete_request` (STAFF_PLUS, GET+POST), `case_trash`, `case_restore`, `case_anonymize` (alle Anwendungsbetreuung). Dasselbe Rollengefälle wie bei den Personen — die Fachkraft löscht bzw. beantragt, die Anwendungsbetreuung räumt den Papierkorb auf.
+
+`case_delete_request` ist **eine** Route mit zwei Ausgängen (§1, Muster `EventDeleteView.post`), nicht zwei Routen. Die Seite nennt den geltenden Ausgang vor dem Klick; welcher es ist, beantwortet der Service (`case_requires_four_eyes`), nicht das Template.
+
+Genehmigen und Ablehnen liegen **nicht** hier, sondern im Case-Zweig von `DeletionRequestReviewView` ([`views/event_deletion.py`](../../src/core/views/event_deletion.py)): die Löschanträge-Liste ist eine Fläche für alle drei Zieltypen, ein vierter Review-Einstieg wäre ein zweiter Ort für dieselbe Entscheidung. Das Ziel-Label eines Fall-Antrags ist rollengegatet (`annotate_deletion_targets`) — `can_confirm_deletion` ist rollenunabhängig (#1053), die Fall-Domäne ist für die Assistenz aber geschlossen.
+
+Der Papierkorb steht in **keiner** Navigation; sein einziger Einstieg ist die Kopfleiste der Fallliste, wie beim Personen-Papierkorb (#1040 D3). Er lädt bewusst nicht über `cases_with_live_client()` (§7).
+
+Zwei Sichtflächen mussten mitgezogen werden, die kein View-Gate haben: der **Zeitstrom** blendet Aktivitäten eines Papierkorb-Falls aus (`close_case`/`reopen_case` tragen den Falltitel im `summary`, und `retention_activities_days` überlebt die Papierkorb-Frist um ein Vielfaches), und `activity_target_url` gibt für einen Papierkorb-Fall keine URL mehr aus — der `deleted`-Verb-Zweig deckte nur die Lösch-Zeile selbst.
+
+Schließlich erzeugt der zweite Papierkorb dieselbe **Sackgasse** wie der erste (#1737): ein Fall im Papierkorb hält `document_type` (PROTECT) und seine `data_json`-Slugs fest, ist über die Fallliste aber nicht mehr erreichbar. Die Lösch-Dialoge der Konfiguration weisen den Fall-Anteil aus und verlinken den Fall-Papierkorb.
+
 ## Consequences
 
 - [ADR-039](039-owner-generische-dateianhaenge.md) §6 fällt (Update-Block dort). Fall-eigene Anhänge haben einen eigenen Löschpfad und warten nicht mehr auf die Anonymisierung der ganzen Person; die Prüftabelle in §7 bekommt ihre achte Zeile (Marker-Invariante I-M1: `delete_attachments_for(case)` und das Leeren von `case.data_json` liegen im selben `atomic`, die Datei-Löschung steht wie in #1782 ganz am Ende).
 - Es gibt einen zweiten `soft_delete()`-Aufrufer im Produktionscode. Die Aussage „nur Personen kennen einen Papierkorb" ist in Doku und Tests überall nachzuziehen.
 - Die Statistik zählt Papierkorb-Fälle nicht mehr mit, redigierte Fälle dagegen weiter — die Fallzahl sinkt beim Löschen und bleibt beim Fristablauf konstant.
 - Betreiberseitig kommt **keine** neue Einstellung dazu (§2); der Retention-Lauf meldet eine zusätzliche Zeile (`Anonymized N trash-expired case(s)`).
-- Ein Legal Hold auf einen Fall ist ab jetzt speicher- **und** erzeugbar. Der vorschlagsfreie Einstieg steht dem Service-Layer offen; die Oberfläche dazu ist noch nicht gebaut.
+- Ein Legal Hold auf einen Fall ist ab jetzt speicher- **und** erzeugbar. Der vorschlagsfreie Einstieg steht dem Service-Layer offen; die Oberfläche dazu ist noch nicht gebaut. Beide Löschrichtungen prüfen ihn (§4).
+- `Case` bekommt mit `anonymized_at` (Migration 0159) ein zweites Zustandsfeld. Jede neue Fläche, die Papierkorb-Fälle zeigt, muss die beiden Zustände trennen — „gelöscht" allein ist seither keine vollständige Auskunft mehr.
 - Bekannte Grenze: der **direkte** Löschweg (nicht-qualifizierte Person, §1) schreibt keine `DELETION_APPROVED`-Zeile und läuft deshalb nicht in den Massen-Destruktions-Zähler der Breach-Erkennung.
 
 ## Alternatives considered

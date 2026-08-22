@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Fall löschen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    {# Objekt-Eltern (Konzept #1802 §3.4): der Löschweg wird AUS der Fallakte betreten. #}
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Fall löschen" %}</h1>
+
+    {# P1c (ADR-044 §1): welcher der beiden Wege gilt, entscheidet die #}
+    {# Kontaktstufe der Person. Die Seite sagt es VOR dem Klick — der Ausgang #}
+    {# ist ein anderer, nicht nur ein anderer Zwischenschritt. #}
+    {% if requires_four_eyes %}
+    <p class="text-sm text-ink-muted mb-3" data-testid="case-delete-four-eyes-hint">
+        {% blocktrans with pseudonym=case.client.pseudonym %}Vier-Augen-Prinzip — <strong>{{ pseudonym }}</strong> ist eine Person mit Zusatzangaben. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wandert der Fall in den Papierkorb.{% endblocktrans %}
+    </p>
+    <p class="text-[13px] text-ink-muted mb-5" data-testid="case-delete-trash-hint">
+        {% trans "Solange der Antrag läuft, bleibt der Fall unverändert nutzbar. Nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert; zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung." %}
+    </p>
+    {% else %}
+    <p class="text-sm text-ink-muted mb-5" data-testid="case-delete-direct-hint">
+        {% trans "Der Fall wandert sofort in den Papierkorb. Die Anwendungsbetreuung kann ihn dort wiederherstellen; nach Ablauf der Papierkorb-Frist wird er automatisch anonymisiert. Episoden, Wirkungsziele und Dateianhänge gehen mit, zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung." %}
+    </p>
+    {% endif %}
+
+    {# Fall-Zusammenfassung #}
+    <div class="card p-4 mb-5">
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Titel" %}</dt>
+                <dd class="font-medium">{{ case.title }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Person" %}</dt>
+                <dd class="font-medium">{{ case.client.pseudonym }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Status" %}</dt>
+                <dd>{% include "core/cases/partials/status_badge.html" with case=case %}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {% if requires_four_eyes and no_eligible_confirmer %}
+    <div class="bg-red-50 border border-red-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="case-delete-no-confirmer">
+        <p class="text-[13px] text-red-700 font-medium">
+            {% trans "Kein möglicher Genehmiger: Außer Ihnen trägt derzeit niemand das Recht „Löschbestätigung“. Ein Antrag bliebe liegen — die Anwendungsbetreuung kann das Recht in der Benutzerverwaltung vergeben." %}
+        </p>
+    </div>
+    {% elif requires_four_eyes %}
+    <div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-5" data-testid="case-delete-confirmers">
+        <p class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bestätigen können" %}</p>
+        <p class="text-[13px] text-ink-soft">
+            {% for confirmer in confirmers %}{{ confirmer.display_name|default:confirmer.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+    </div>
+    {% endif %}
+
+    {# Refs #1736 (A): laufender Antrag → kein zweites, wirkungsloses Formular. #}
+    {% if pending_deletion_request %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="status" data-testid="case-delete-already-pending">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}Für diesen Fall läuft bereits ein Löschantrag vom {{ datum }} (gestellt von {{ person }}). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    {# R1 (Refs #1802): kein zweiter Weg zurück — der Rücklink oben zeigt auf dasselbe Ziel. #}
+    {% else %}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% if requires_four_eyes %}
+        <div>
+            <label for="reason" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                {% trans "Begründung" %}
+            </label>
+            <textarea
+                id="reason"
+                name="reason"
+                rows="4"
+                required
+                class="w-full px-3 py-2 border border-subtle rounded-md text-sm focus:ring-2 focus:ring-accent focus:border-accent"
+                placeholder="{% trans 'z.B. Fall versehentlich angelegt, Verarbeitung nicht mehr erforderlich' %}"></textarea>
+        </div>
+        {% endif %}
+
+        <div class="flex items-center space-x-3 pt-2">
+            <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700" data-testid="case-delete-submit">
+                {% if requires_four_eyes %}{% trans "Löschantrag stellen" %}{% else %}{% trans "In den Papierkorb verschieben" %}{% endif %}
+            </button>
+            <a href="{% url 'core:case_detail' pk=case.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+                {% trans "Abbrechen" %}
+            </a>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

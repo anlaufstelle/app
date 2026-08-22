@@ -1,22 +1,44 @@
 {% load i18n %}
 {% comment %}
-    Ausweg aus einer Lösch-Blockade durch Personen im Papierkorb
-    (Refs #1737, Option A). Erwartet ``client_trashed_count``.
+    Ausweg aus einer Lösch-Blockade durch Datensätze im Papierkorb
+    (Refs #1737 Option A für Personen, Refs #1818/ADR-044 für Fälle).
+    Erwartet ``client_trashed_count`` und/oder ``case_trashed_count``.
 
     Ohne diesen Hinweis endet der Dialog in einer scheinbaren Sackgasse: die
     blockierenden Datensätze sind im Fach-UI nicht mehr erreichbar (Detail
     antwortet 404), und die Anonymisierung passierte bisher nur nächtlich.
+
+    Seit dem Fall-Löschpfad gibt es ZWEI Papierkörbe. Sie bekommen je einen
+    Absatz und je einen Link — ein gemeinsamer Satz müsste offenlassen, welcher
+    der beiden Bestände gemeint ist, und genau das ist die Frage, die den
+    Ausweg findet.
 {% endcomment %}
-{% if client_trashed_count %}
+{% if client_trashed_count or case_trashed_count %}
 <div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-5" data-testid="config-delete-trash-hint">
+    {% if client_trashed_count %}
     <p class="text-[13px] text-ink-soft mb-2">
         {% blocktrans count n=client_trashed_count %}{{ n }} der blockierenden Personen liegt im Papierkorb und ist über die Personenliste nicht mehr erreichbar.{% plural %}{{ n }} der blockierenden Personen liegen im Papierkorb und sind über die Personenliste nicht mehr erreichbar.{% endblocktrans %}
     </p>
-    <p class="text-[13px] text-ink-soft mb-2">
-        {% trans "Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die blockierenden Werte unwiderruflich, ohne die Person wieder sichtbar zu machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst weg." %}
+    {% endif %}
+    {% if case_trashed_count %}
+    <p class="text-[13px] text-ink-soft mb-2" data-testid="config-delete-case-trash-count">
+        {% blocktrans count n=case_trashed_count %}{{ n }} der blockierenden Fälle liegt im Papierkorb und ist über die Fallliste nicht mehr erreichbar.{% plural %}{{ n }} der blockierenden Fälle liegen im Papierkorb und sind über die Fallliste nicht mehr erreichbar.{% endblocktrans %}
     </p>
-    <a href="{% url 'core:client_trash' %}" class="text-[13px] text-accent font-semibold hover:underline" data-testid="config-delete-trash-link">
-        {% trans "Papierkorb öffnen" %}
-    </a>
+    {% endif %}
+    <p class="text-[13px] text-ink-soft mb-2">
+        {% trans "Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (entfernt die blockierenden Werte unwiderruflich, ohne den Datensatz wieder sichtbar zu machen) oder „Wiederherstellen“ und den Datensatz anschließend bearbeiten. Ohne Eingriff fällt die Blockade nach Ablauf der Papierkorb-Frist von selbst weg." %}
+    </p>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {% if client_trashed_count %}
+        <a href="{% url 'core:client_trash' %}" class="text-[13px] text-accent font-semibold hover:underline" data-testid="config-delete-trash-link">
+            {% trans "Papierkorb öffnen" %}
+        </a>
+        {% endif %}
+        {% if case_trashed_count %}
+        <a href="{% url 'core:case_trash' %}" class="text-[13px] text-accent font-semibold hover:underline" data-testid="config-delete-case-trash-link">
+            {% trans "Fall-Papierkorb öffnen" %}
+        </a>
+        {% endif %}
+    </div>
 </div>
 {% endif %}

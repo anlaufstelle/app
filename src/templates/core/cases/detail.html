@@ -19,6 +19,11 @@
                 {% url 'core:client_detail' case.client.pk as client_url %}
                 {% include "components/_context_link.html" with url=client_url label=case.client.pseudonym %}
                 {% endif %}
+                {# Refs #1818: laufender Vier-Augen-Löschantrag am Datensatz. #}
+                {% if pending_deletion_request %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                      data-testid="case-deletion-pending-badge">{% trans "Löschung beantragt" %}</span>
+                {% endif %}
             </div>
         </div>
         {# Refs #1859 (B3): ``ml-auto`` haelt die Leiste auch dann rechtsbuendig, #}
@@ -36,6 +41,27 @@
         </div>
     </div>
 </div>
+
+{# Löschantrag-Banner (Refs #1818, Muster Personenakte #1736 A): der #}
+{# Wartezustand gehört an den betroffenen Datensatz, nicht nur in die #}
+{# entscheidende Rolle. #}
+{% if pending_deletion_request %}
+<div class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-[10px] text-[13px] text-amber-800"
+     role="status"
+     data-testid="case-deletion-pending-banner">
+    <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <span class="font-semibold">{% trans "Löschung beantragt" %}</span>
+    <span>
+        {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}am {{ datum }} durch {{ person }} — wartet auf Bestätigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip).{% endblocktrans %}
+    </span>
+    {# Rückkanal wie in der Personenakte: wer die Liste sehen darf, kommt von hier hin. #}
+    {% if user.can_access_deletion_requests %}
+    <a href="{% url 'core:deletion_request_list' %}" class="font-semibold underline hover:no-underline" data-testid="case-deletion-pending-link">
+        {% trans "Zu den Löschanträgen" %}
+    </a>
+    {% endif %}
+</div>
+{% endif %}
 
 {# Meta-Informationen #}
 <div class="card p-4 mb-5">

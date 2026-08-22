@@ -300,6 +300,10 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
         # Zahl verlangt der Dialog einen Schritt, den man im Fach-UI gar nicht
         # gehen kann — der Datensatz ist dort nicht mehr erreichbar.
         client_trashed_count = Client.objects.filter(document_type=doc_type, is_deleted=True).count()
+        # Refs #1818: seit dem Fall-Loeschpfad blockiert auch ein Fall im
+        # Papierkorb — mit demselben Sackgassen-Effekt (die Fallliste zeigt ihn
+        # nicht mehr, das Detail antwortet 404).
+        case_trashed_count = Case.objects.filter(document_type=doc_type, is_deleted=True).count()
         # QuickTemplate.document_type ist FK CASCADE: zugehörige Schnellvorlagen
         # werden beim Löschen still mitentfernt — die Kaskade im Dialog ausweisen.
         quick_template_count = QuickTemplate.objects.filter(document_type=doc_type).count()
@@ -312,6 +316,7 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
                 "client_count": client_count,
                 "case_count": case_count,
                 "client_trashed_count": client_trashed_count,
+                "case_trashed_count": case_trashed_count,
                 "quick_template_count": quick_template_count,
             },
         )

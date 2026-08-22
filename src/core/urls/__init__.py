@@ -20,6 +20,12 @@ from core.views.attachments import (
     ClientAttachmentDownloadView,
 )
 from core.views.audit import AuditLogDetailView, AuditLogListView
+from core.views.case_deletion import (
+    CaseAnonymizeView,
+    CaseDeleteRequestView,
+    CaseRestoreView,
+    CaseTrashView,
+)
 from core.views.case_episodes import (
     EpisodeCloseView,
     EpisodeCreateView,
@@ -186,6 +192,13 @@ urlpatterns = [
         CaseAttachmentDownloadView.as_view(),
         name="case_attachment_download",
     ),
+    # Fall-Loesch-Workflow (Refs #1818, ADR-044) — gestaffelter Antrag,
+    # Papierkorb, Wiederherstellung, Sofort-Tilgung. Aufbau und Reihenfolge wie
+    # beim Personen-Gegenstueck vier Bloecke weiter oben.
+    path("cases/trash/", CaseTrashView.as_view(), name="case_trash"),
+    path("cases/<uuid:pk>/delete/", CaseDeleteRequestView.as_view(), name="case_delete_request"),
+    path("cases/<uuid:pk>/restore/", CaseRestoreView.as_view(), name="case_restore"),
+    path("cases/<uuid:pk>/anonymize/", CaseAnonymizeView.as_view(), name="case_anonymize"),
     path("cases/<uuid:pk>/close/", CaseCloseView.as_view(), name="case_close"),
     path("cases/<uuid:pk>/reopen/", CaseReopenView.as_view(), name="case_reopen"),
     path("cases/<uuid:pk>/assign-event/", CaseAssignEventView.as_view(), name="case_assign_event"),

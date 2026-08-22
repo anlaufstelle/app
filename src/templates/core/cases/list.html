@@ -5,13 +5,28 @@
 
 {% block content %}
 {# PageHeader #}
-<div class="flex items-center justify-between mb-6">
-    <h1 class="text-[22px] font-bold text-ink">{% trans "Fälle" %}</h1>
-    <div class="hidden md:block">
-        <a href="{% url 'core:case_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2" data-testid="cases-list-create-case">
-            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-            {% trans "Fall anlegen" %}
+<div class="flex items-center justify-between gap-2 mb-6">
+    <h1 class="text-[22px] font-bold text-ink min-w-0 truncate">{% trans "Fälle" %}</h1>
+    <div class="flex items-center gap-2 md:gap-3 flex-shrink-0">
+        {# Refs #1818: Der Fall-Papierkorb steht in keiner Navigation — diese #}
+        {# Kopfleiste ist sein EINZIGER Einstieg, genau wie bei den Personen   #}
+        {# (Refs #1040 D3, #1863). Mobil als Icon, ab md mit Text; das         #}
+        {# ``aria-label`` ist wortgleich mit dem sichtbaren Text (WCAG 2.5.3). #}
+        {% if user.is_facility_admin %}
+        <a href="{% url 'core:case_trash' %}"
+           class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-[13px] text-ink-muted hover:text-ink md:hover:underline"
+           aria-label="{% trans 'Papierkorb' %}"
+           data-testid="case-trash-link">
+            <svg aria-hidden="true" class="w-5 h-5 md:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            <span class="hidden md:inline">{% trans "Papierkorb" %}</span>
         </a>
+        {% endif %}
+        <div class="hidden md:block">
+            <a href="{% url 'core:case_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2" data-testid="cases-list-create-case">
+                <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                {% trans "Fall anlegen" %}
+            </a>
+        </div>
     </div>
 </div>
 

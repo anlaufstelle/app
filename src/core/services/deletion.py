@@ -46,11 +46,16 @@ def annotate_deletion_targets(requests, facility, user) -> None:
       die Policy verbirgt).
     * Ein soft-gelöschtes oder nicht mehr auffindbares Ziel bekommt ebenfalls
       keinen Link — die Detailansicht antwortet dort mit 404.
-    * Fall-Ziele (Refs #1818) tragen ihren Titel als Label. Er ist Freitext und
-      kann PII enthalten — er steht damit auf derselben Stufe wie das
-      Pseudonym eines Personen-Ziels und bleibt dieser Liste vorbehalten, die
-      ohnehin nur Löschbestätiger:innen sehen. Ins ``AuditLog`` gehört er
-      weiterhin nicht (#1751).
+    * Fall-Ziele (Refs #1818) tragen ihren Titel als Label — aber nur für
+      Rollen, die Fälle überhaupt sehen dürfen. ``can_confirm_deletion`` ist
+      rollenunabhängig (#1053): eine Assistenz kann es tragen, und für sie ist
+      die Fall-Domäne sonst durchgängig geschlossen (``case_detail`` und der
+      Fall-Anhang-Download sind STAFF_PLUS, ADR-039 §12). Ohne Gate bekäme sie
+      hier den Freitext-Titel im Klartext und dazu einen
+      ``core:case_detail``-Link, den ihre Rolle nicht öffnen darf. Für sie
+      bleibt das Label deshalb generisch — dieselbe fail-closed-Regel wie beim
+      unsichtbaren Ereignis. Ins ``AuditLog`` gehört der Titel weiterhin nicht
+      (#1751).
 
     ``requests`` wird in-place annotiert (Listen aus der View).
     """
@@ -63,7 +68,14 @@ def annotate_deletion_targets(requests, facility, user) -> None:
     case_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CASE]
 
     clients = {c.pk: c for c in Client.objects.for_facility(facility).filter(pk__in=client_ids)} if client_ids else {}
-    cases = {c.pk: c for c in Case.objects.for_facility(facility).filter(pk__in=case_ids)} if case_ids else {}
+    # Fail-closed: ohne Fall-Sichtbarkeit bleibt die Menge leer, der Zweig
+    # unten faellt dann in denselben generischen Ast wie ein nicht mehr
+    # auffindbarer Fall (Label ohne Link).
+    cases = (
+        {c.pk: c for c in Case.objects.for_facility(facility).filter(pk__in=case_ids)}
+        if case_ids and user is not None and user.is_staff_or_above
+        else {}
+    )
     events = (
         {
             e.pk: e
@@ -89,7 +101,10 @@ def annotate_deletion_targets(requests, facility, user) -> None:
         if dr.target_type == DeletionRequest.TargetType.CASE:
             target = cases.get(dr.target_id)
             if target is None:
-                dr.target_label = _("Fall (nicht mehr auffindbar)")
+                # Unsichtbar (Rollen-Gate) oder nicht mehr vorhanden — beides
+                # bleibt bewusst ununterscheidbar generisch, Muster
+                # Ereignis-Zweig.
+                dr.target_label = _("Fall")
                 dr.target_url = ""
                 continue
             dr.target_label = target.title

@@ -170,6 +170,33 @@ class TestApproveCaseDeletion:
             == 1
         )
 
+    def test_status_recheck_fires_before_the_trash_guard(self, case_open, staff_user, lead_user, admin_user):
+        """Der PENDING-Re-Check pinnt sich SELBST, nicht den ``is_deleted``-Guard.
+
+        Der Test darueber blieb gruen, wenn man ``select_for_update()`` UND den
+        Status-Re-Check ersatzlos strich: die erwartete ``ValidationError`` fiel
+        dann aus ``_move_case_to_trash`` („Der Fall liegt bereits im
+        Papierkorb."), und auch die Zaehl-Assertion hielt, weil das Audit erst
+        nach jenem Guard geschrieben wird. Hier wird der Antragsstatus von
+        aussen fortgeschrieben, WAEHREND der Fall noch lebt — dann gibt es
+        keinen zweiten Guard, der einspringen koennte, und die Meldung sagt
+        auch, welcher gegriffen hat.
+        """
+        dr = request_case_deletion(case_open, staff_user, "Grund")
+        DeletionRequest.objects.filter(pk=dr.pk).update(status=DeletionRequest.Status.APPROVED)
+        case_open.refresh_from_db()
+        assert case_open.is_deleted is False
+
+        with pytest.raises(ValidationError) as exc:
+            approve_case_deletion(dr, admin_user)
+        assert "bereits bearbeitet" in " ".join(exc.value.messages)
+
+        case_open.refresh_from_db()
+        assert case_open.is_deleted is False
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.CASE_SOFT_DELETED, target_id=str(case_open.pk)
+        ).exists()
+
 
 class TestRejectCaseDeletion:
     def test_reject_sets_status_only(self, case_open, staff_user, lead_user):
@@ -193,6 +220,25 @@ class TestRejectCaseDeletion:
         dr = request_case_deletion(case_open, staff_user, "Grund")
         with pytest.raises(ValidationError):
             reject_case_deletion(dr, staff_user)
+
+    def test_reject_of_an_already_approved_request_is_refused(self, case_open, staff_user, lead_user, admin_user):
+        """Kein Zurueckdrehen auf REJECTED, waehrend der Fall im Papierkorb liegt.
+
+        Der Fall-Pfad schreibt anders als ``reject_client_deletion``
+        zusaetzlich eine ``DELETION_REJECTED``-Zeile ins append-only AuditLog —
+        der widerspruechliche Zustand waere damit dauerhaft protokolliert statt
+        transient.
+        """
+        dr = request_case_deletion(case_open, staff_user, "Grund")
+        approve_case_deletion(dr, lead_user)
+
+        with pytest.raises(ValidationError) as exc:
+            reject_case_deletion(dr, admin_user)
+        assert "bereits bearbeitet" in " ".join(exc.value.messages)
+
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.APPROVED
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_REJECTED, target_id=str(dr.pk)).exists()
 
     def test_rerequest_after_reject_is_possible(self, case_open, staff_user, lead_user):
         first = request_case_deletion(case_open, staff_user, "Grund")
@@ -414,6 +460,62 @@ class TestAnonymizeCaseNow:
             anonymize_case_now(trashed_case, admin_user)
         trashed_case.refresh_from_db()
         assert "Anonymisiert" not in trashed_case.title
+
+
+class TestAnonymizationIsFinal:
+    """``anonymized_at`` trennt „im Papierkorb" von „endgueltig getilgt"."""
+
+    def test_stamp_is_set_by_the_redaction(self, trashed_case, admin_user):
+        assert trashed_case.anonymized_at is None
+        anonymize_case_now(trashed_case, admin_user)
+        trashed_case.refresh_from_db()
+        assert trashed_case.anonymized_at is not None
+
+    def test_expiry_run_touches_each_case_exactly_once(self, facility, settings_obj, trashed_case):
+        """Ohne Abbruchbedingung faende JEDER naechtliche Lauf denselben Fall erneut.
+
+        Der Fall bleibt nach der Tilgung soft-geloescht und erfuellt
+        ``deleted_at__lt=cutoff`` weiter — die Folge waere eine neue
+        ``CASE_ANONYMIZED``-Zeile im append-only AuditLog pro Lauf und ein
+        Betriebszaehler, der nie auf Null zurueckfaellt.
+        """
+        _expire(trashed_case, settings_obj)
+        laeufe = [anonymize_eligible_soft_deleted_cases(facility, settings_obj) for _ in range(3)]
+        assert laeufe == [1, 0, 0]
+        assert (
+            AuditLog.objects.filter(action=AuditLog.Action.CASE_ANONYMIZED, target_id=str(trashed_case.pk)).count() == 1
+        )
+
+    def test_dry_run_also_skips_already_anonymized_cases(self, facility, settings_obj, trashed_case, admin_user):
+        _expire(trashed_case, settings_obj)
+        anonymize_case_now(trashed_case, admin_user)
+        assert anonymize_eligible_soft_deleted_cases(facility, settings_obj, dry_run=True) == 0
+
+    def test_restore_of_an_anonymized_case_is_refused(self, trashed_case, admin_user):
+        """Sonst kaeme eine inhaltsleere Huelle in Liste, Detail und Statistik zurueck."""
+        anonymize_case_now(trashed_case, admin_user)
+        with pytest.raises(ValidationError) as exc:
+            restore_case(trashed_case, admin_user)
+        assert "endgültig anonymisiert" in " ".join(exc.value.messages)
+        trashed_case.refresh_from_db()
+        assert trashed_case.is_deleted is True
+
+    def test_second_manual_anonymization_is_refused(self, trashed_case, admin_user):
+        anonymize_case_now(trashed_case, admin_user)
+        with pytest.raises(ValidationError):
+            anonymize_case_now(trashed_case, admin_user)
+        assert (
+            AuditLog.objects.filter(action=AuditLog.Action.CASE_ANONYMIZED, target_id=str(trashed_case.pk)).count() == 1
+        )
+
+    def test_person_anonymization_stamps_the_case_too(self, case_open, client_identified, admin_user):
+        """Der Stempel sitzt in der GETEILTEN Redaktion, nicht nur im Fall-Weg."""
+        from core.services.client import anonymize_client_now
+
+        client_identified.soft_delete(user=admin_user)
+        anonymize_client_now(client_identified, admin_user)
+        case_open.refresh_from_db()
+        assert case_open.anonymized_at is not None
 
 
 class TestRetentionCommandRunsTheCasePath:

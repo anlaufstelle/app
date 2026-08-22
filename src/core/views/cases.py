@@ -32,6 +32,8 @@ from core.services.case import (
     cases_with_live_client,
     close_case,
     create_case,
+    get_pending_case_deletion_request,
+    pending_deletion_case_ids,
     remove_event_from_case,
     reopen_case,
     update_case,
@@ -276,6 +278,9 @@ class CaseListView(StaffRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMi
             "selected_status": request.GET.get("status"),
             "status_choices": Case.Status.choices,
             "pagination_params": self.pagination_params(request),
+            # Refs #1818: Badge „Löschung beantragt" in der Zeile — eine Query
+            # je Seite, nicht eine je Zeile (Muster ``pending_deletion_client_ids``).
+            "pending_deletion_case_ids": pending_deletion_case_ids(facility, cases),
         }
 
         return self.render_htmx_or_full(context)
@@ -416,6 +421,9 @@ class CaseDetailView(StaffRequiredMixin, View):
             "case": case,
             "episodes": episodes,
             "goals": goals,
+            # Refs #1818: laufender Vier-Augen-Löschantrag am Datensatz selbst —
+            # sonst wäre der Wartezustand nur in der entscheidenden Rolle sichtbar.
+            "pending_deletion_request": get_pending_case_deletion_request(case),
             **_get_case_event_context(case, facility, request.user),
         }
         # M2 P8 (Refs #1058, E18): Sektion „Zusatzfelder" — gemeinsames

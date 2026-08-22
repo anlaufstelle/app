@@ -547,6 +547,25 @@ def _make_attachment(fac, owner, user, *, ft_name="Anhang (AuthZ)"):
 
 
 @pytest.fixture
+def case_trashed(facility, client_identified, staff_user):
+    """Fall im Papierkorb (Refs #1818) — Gegenstueck zu ``client_trashed``.
+
+    Traegt ``anonymized_at=None``: die Zeile ist wiederherstellbar und damit
+    das Ziel von ``case_restore``/``case_anonymize``. Ein bereits getilgter
+    Fall waere fuer beide Routen der Fehlerfall, nicht der Normalfall.
+    """
+    return Case.objects.create(
+        facility=facility,
+        client=client_identified,
+        title="Fall im Papierkorb",
+        status=Case.Status.OPEN,
+        created_by=staff_user,
+        is_deleted=True,
+        deleted_at=timezone.now(),
+    )
+
+
+@pytest.fixture
 def client_trashed(facility, staff_user):
     return Client.objects.create(
         facility=facility,
@@ -700,6 +719,19 @@ def foreign_case_closed(second_facility, foreign_client, foreign_staff):
         status=Case.Status.CLOSED,
         closed_at=timezone.now(),
         created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_case_trashed(second_facility, foreign_client, foreign_staff):
+    return Case.objects.create(
+        facility=second_facility,
+        client=foreign_client,
+        title="Fremder Fall im Papierkorb",
+        status=Case.Status.OPEN,
+        created_by=foreign_staff,
+        is_deleted=True,
+        deleted_at=timezone.now(),
     )
 
 

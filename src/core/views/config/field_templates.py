@@ -141,6 +141,8 @@ class ConfigFieldTemplateDeleteView(FacilityAdminRequiredMixin, View):
                 "blockers": blockers,
                 # Refs #1737 (A): Papierkorb-Anteil der Blockade → Ausweg-Hinweis.
                 "client_trashed_count": config_service.field_template_trashed_client_count(field_template),
+                # Refs #1818: zweiter Papierkorb, zweiter Ausweg-Link.
+                "case_trashed_count": config_service.field_template_trashed_case_count(field_template),
             },
         )
 

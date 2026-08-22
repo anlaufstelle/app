@@ -36,13 +36,18 @@ _BLANKET_READ_LOG_RE = re.compile(
     re.IGNORECASE,
 )
 
-#: Refs #1862: Behauptung, ein **Fall** koenne geloescht werden. Es gibt keinen
-#: Fall-Loeschworkflow (``services/case/cases.py``, ``DeletionRequest``
-#: kennt nur ``EVENT``/``CLIENT``, ADR-039 §6) und folgerichtig keine
-#: ``AuditLog.Action.CASE_DELETE``. Der Ausdruck endet bewusst am Satz-/
-#: Aufzaehlungstrenner — "Loeschen von Ereignissen; ... von Faellen" ist
-#: keine Loeschzusage fuer Faelle.
-_CASE_DELETION_CLAIM_RE = re.compile(r"Loesch\w*[^;.]{0,60}Faelle", re.IGNORECASE)
+#: Refs #1862, seit #1818 umgedreht: Bis zum Fall-Loeschpfad war die Behauptung
+#: „ein Fall kann geloescht werden" die unzutreffende Angabe — es gab keinen
+#: Loeschworkflow (``DeletionRequest.TargetType`` kannte nur
+#: ``EVENT``/``CLIENT``, ADR-039 §6) und folgerichtig keine Loeschaktion.
+#: Mit ADR-044 gibt es beides; unzutreffend ist jetzt die **Gegenaussage**.
+#: Der Ausdruck faengt die konkrete Formulierung, die dort stand, und ihre
+#: naheliegenden Varianten.
+_CASE_UNDELETABLE_CLAIM_RE = re.compile(
+    r"Fall\w*\s+(?:kann|koennen|können)\s+nicht\s+(?:mehr\s+)?gel[oö]e?scht|"
+    r"(?:Faelle|Fälle)\s+sind\s+nicht\s+l[oö]schbar",
+    re.IGNORECASE,
+)
 
 #: Refs #1862: Wortstamm der beiden Fall-Unterobjekte, deren Bearbeitung
 #: **nirgends** landet — weder AuditLog noch EventHistory noch
@@ -142,21 +147,36 @@ class TestProcessingActivitiesSchema:
                     "protokolliert werden nur benannte Lesezugriffe."
                 )
 
-    def test_toms_do_not_claim_that_a_case_can_be_deleted(self):
-        """Refs #1862: Ein **Fall** kann in dieser Anwendung nicht geloescht werden.
+    def test_toms_do_not_deny_the_case_deletion_path(self):
+        """Refs #1818 (ADR-044): Ein **Fall** kann geloescht werden — umgedrehter Guard.
 
-        ``Case`` erbt zwar ``SoftDeletableModel``, aber kein Produktionspfad
-        setzt ``is_deleted`` je auf einem Fall; ``DeletionRequest.TargetType``
-        kennt nur ``EVENT``/``CLIENT`` (``services/case/cases.py``, ADR-039 §6),
-        und ``AuditLog.Action`` fuehrt CASE_CREATE/UPDATE/CLOSE/REOPEN — keine
-        Loeschaktion. Eine TOM, die eine Fall-Loeschung protokolliert nennt,
-        sagt eine Verarbeitung zu, die es nicht gibt.
+        Dieser Test pinnte bis #1818 das Gegenteil: ``Case`` erbte zwar
+        ``SoftDeletableModel``, aber kein Produktionspfad setzte ``is_deleted``,
+        ``DeletionRequest.TargetType`` kannte nur ``EVENT``/``CLIENT``
+        (ADR-039 §6), und ``AuditLog.Action`` fuehrte CASE_CREATE/UPDATE/
+        CLOSE/REOPEN ohne Loeschaktion. Eine TOM, die damals eine
+        Fall-Loeschung nannte, sagte eine Verarbeitung zu, die es nicht gab.
+
+        Genau dafuer war er geschrieben — er sollte reissen, sobald der
+        Loeschweg kommt. Er ist deshalb **umgedreht** statt geloescht: dieselbe
+        Ableitung aus dem Produktionscode, nur mit der neuen Soll-Menge.
+
+        Zwei Haelften. Erstens: die drei Fall-Loeschaktionen SIND in
+        ``AuditLog.Action`` — ohne sie waere die Zusage im Verzeichnis wieder
+        unzutreffend. Zweitens: keine TOM behauptet noch das Gegenteil (der
+        Klammerzusatz „ein Fall kann nicht geloescht werden" stand bis
+        #1818 in der Aktivitaet ``falldaten``).
         """
+        for action in ("CASE_SOFT_DELETED", "CASE_RESTORED", "CASE_ANONYMIZED"):
+            assert hasattr(AuditLog.Action, action), (
+                f"AuditLog.Action.{action} fehlt — ohne die Aktion darf das Verzeichnis "
+                "keine Protokollierung der Fall-Loeschung zusagen."
+            )
         for entry in PROCESSING_ACTIVITIES:
             for tom in entry["toms"]:
-                assert not _CASE_DELETION_CLAIM_RE.search(str(tom)), (
-                    f"Aktivitaet {entry['id']}: TOM behauptet eine Fall-Loeschung "
-                    f"({tom!s}) — es gibt keinen Fall-Loeschworkflow."
+                assert not _CASE_UNDELETABLE_CLAIM_RE.search(str(tom)), (
+                    f"Aktivitaet {entry['id']}: TOM behauptet, ein Fall koenne nicht "
+                    f"geloescht werden ({tom!s}) — seit ADR-044 gibt es den Loeschweg."
                 )
 
     def test_toms_naming_episodes_or_goals_say_they_are_unlogged(self):

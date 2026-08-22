@@ -8,7 +8,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, Event, WorkItem
+from core.models import Activity, Case, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import option_label_map
@@ -86,6 +86,27 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
             activities_qs = activities_qs.exclude(
                 Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
             )
+
+        # Faelle im Papierkorb aus dem Zeitstrom nehmen (Refs #1818, ADR-044 §7).
+        # ``close_case``/``reopen_case`` schreiben den Falltitel als Freitext ins
+        # ``summary`` (`Fall "…" geschlossen`). Der Papierkorb nimmt den Fall aus
+        # Liste, Detail, Episoden, Zielen und Ereignis-Select — der Zeitstrom
+        # bliebe sonst der eine Ort, an dem sein Titel weiterlaeuft, und zwar
+        # bis zur Frist (``retention_activities_days``, Default 365 gegen 30 Tage;
+        # der Befund aus #1751). Rollenunabhaengig, weil „geloescht" keine
+        # Sichtbarkeitsfrage ist.
+        #
+        # Auch die ``deleted``-Zeile („Fall in den Papierkorb verschoben",
+        # titelfrei) faellt mit raus — die Rechenschaft ueber die Loeschung
+        # traegt die ``CASE_SOFT_DELETED``-Zeile im append-only AuditLog, nicht
+        # der Zeitstrom. Sie ist trotzdem nicht umsonst geschrieben: nach
+        # ``restore_case`` erscheint der Fall wieder, und mit ihm die Spur, dass
+        # er zwischenzeitlich im Papierkorb lag.
+        from django.contrib.contenttypes.models import ContentType
+
+        case_ct = ContentType.objects.get_for_model(Case)
+        trashed_case_ids = Case.objects.for_facility(facility).filter(is_deleted=True).values_list("pk", flat=True)
+        activities_qs = activities_qs.exclude(Q(target_type=case_ct) & Q(target_id__in=trashed_case_ids))
 
         activities = activities_qs.select_related("actor", "target_type").order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
         activities_list = [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]

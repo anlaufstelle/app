@@ -20,6 +20,14 @@
                     <a href="{% url 'core:case_detail' case.pk %}" class="text-[14px] font-semibold text-accent hover:underline">
                         {{ case.title }}
                     </a>
+                    {# Refs #1818: laufender Vier-Augen-Löschantrag. #}
+                    {% if case.pk in pending_deletion_case_ids %}
+                    <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-semibold bg-amber-100 text-amber-800 align-middle"
+                          data-testid="case-row-deletion-pending-badge"
+                          title="{% trans 'Löschantrag wartet auf Bestätigung' %}">
+                        {% trans "Löschung beantragt" %}
+                    </span>
+                    {% endif %}
                 </td>
                 <td class="px-4 py-2.5 text-[13px] text-ink-soft">
                     {% if case.client %}{{ case.client.pseudonym }}{% else %}–{% endif %}
@@ -45,7 +53,16 @@
     <a href="{% url 'core:case_detail' case.pk %}" class="block bg-surface border border-subtle rounded-[10px] p-3 hover:shadow-xs transition">
         <div class="flex items-center justify-between gap-2">
             <span class="text-[13px] font-semibold text-accent truncate">{{ case.title }}</span>
-            {% include "core/cases/partials/status_badge.html" with case=case %}
+            <div class="flex items-center gap-1 flex-shrink-0">
+                {% if case.pk in pending_deletion_case_ids %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-semibold bg-amber-100 text-amber-800"
+                      data-testid="case-card-deletion-pending-badge"
+                      title="{% trans 'Löschantrag wartet auf Bestätigung' %}">
+                    {% trans "Löschung beantragt" %}
+                </span>
+                {% endif %}
+                {% include "core/cases/partials/status_badge.html" with case=case %}
+            </div>
         </div>
         <div class="mt-1 text-[12px] text-ink-muted">
             {% if case.client %}{{ case.client.pseudonym }} · {% endif %}

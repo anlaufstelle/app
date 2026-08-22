@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Papierkorb — Fälle" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Papierkorb — Fälle" %}</h1>
+    {# Muster Personen-Papierkorb (Refs #1736 F): die Semantik steht auf der Seite, #}
+    {# sonst wirkt sie „kaputt", solange ein Antrag noch auf Bestätigung wartet. #}
+    <p class="text-sm text-ink-muted mb-6" data-testid="case-trash-semantics-hint">
+        {% trans "Hier erscheinen Fälle, sobald sie gelöscht wurden — bei Personen mit Zusatzangaben erst nach bestätigter Löschung (Vier-Augen-Prinzip), sonst sofort. Nach Ablauf der Papierkorb-Frist werden sie automatisch anonymisiert; bis dahin lassen sie sich wiederherstellen. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung." %}
+    </p>
+
+    {% if cases %}
+        <table class="w-full text-sm border border-subtle rounded-[10px] overflow-hidden">
+            <thead class="bg-canvas">
+                <tr class="text-left">
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Titel" %}</th>
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</th>
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht am" %}</th>
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht von" %}</th>
+                    <th class="px-3 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for case in cases %}
+                <tr class="border-t border-subtle">
+                    <td class="px-3 py-2 font-medium">{{ case.title }}</td>
+                    <td class="px-3 py-2">{{ case.client.pseudonym|default:"–" }}</td>
+                    <td class="px-3 py-2">{{ case.deleted_at|date:"DATETIME_FORMAT" }}</td>
+                    <td class="px-3 py-2">{{ case.deleted_by.display_name|default:case.deleted_by.username|default:"–" }}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap">
+                        {# Refs #1818: „wiederherstellbar" und „endgültig getilgt" sind #}
+                        {# zwei Zustände. Ohne ``anonymized_at`` böte die Zeile einen  #}
+                        {# Wiederherstellen-Knopf an, der eine inhaltsleere Hülle       #}
+                        {# zurückholt — der Service weist das seither ab.               #}
+                        {% if case.anonymized_at %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-muted"
+                              data-testid="case-trash-anonymized-badge"
+                              title="{% trans 'Inhalt unwiderruflich entfernt' %}">
+                            {% blocktrans with datum=case.anonymized_at|date:"DATE_FORMAT" %}Endgültig anonymisiert am {{ datum }}{% endblocktrans %}
+                        </span>
+                        {% else %}
+                        <form method="post" action="{% url 'core:case_restore' pk=case.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="text-accent text-sm font-medium hover:underline" data-testid="case-restore-btn">
+                                {% trans "Wiederherstellen" %}
+                            </button>
+                        </form>
+                        {# Ausweg aus einer Lösch-Blockade ohne Datenresurrektion und #}
+                        {# ohne Warten auf die Frist (Muster Personen-Papierkorb,     #}
+                        {# Refs #1737 B). Bestätigung via data-confirm, CSP-konform.  #}
+                        <span class="text-subtle mx-1">·</span>
+                        <form method="post" action="{% url 'core:case_anonymize' pk=case.pk %}" class="inline"
+                              data-confirm="{% blocktrans with titel=case.title %}„{{ titel }}“ jetzt endgültig anonymisieren? Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele und Dateianhänge dieses Falls werden unwiderruflich entfernt, zugeordnete Kontakte verlieren ihre Fallzuordnung und bleiben in der Personenakte. Eine Wiederherstellung ist danach nicht mehr möglich.{% endblocktrans %}">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-700 text-sm font-medium hover:underline" data-testid="case-anonymize-now-btn">
+                                {% trans "Jetzt endgültig anonymisieren" %}
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-sm text-ink-muted italic">{% trans "Papierkorb ist leer." %}</p>
+    {% endif %}
+</div>
+{% endblock %}

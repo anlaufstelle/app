@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Fall-Löschantrag prüfen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    {# Refs #1802: die Genehmigungsseite braucht einen Ausweg neben den Formular-Schaltflächen. #}
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Fall-Löschantrag prüfen" %}</h1>
+
+    {# Antrag-Info #}
+    <div class="card p-4 mb-4">
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Beantragt von" %}</dt>
+                <dd class="font-medium">{% if deletion_request.requested_by %}{{ deletion_request.requested_by.display_name|default:deletion_request.requested_by.username }}{% else %}–{% endif %}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Beantragt am" %}</dt>
+                <dd class="font-medium">{{ deletion_request.created_at|date:"DATETIME_FORMAT" }}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted mb-1">{% trans "Begründung" %}</dt>
+                <dd class="font-medium">{{ deletion_request.reason }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Fall-Zusammenfassung #}
+    <div class="card p-4 mb-5">
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffener Fall" %}</h2>
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Titel" %}</dt>
+                <dd class="font-medium">{{ case.title }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Person" %}</dt>
+                <dd class="font-medium">{{ case.client.pseudonym }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Status" %}</dt>
+                <dd>{% include "core/cases/partials/status_badge.html" with case=case %}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Angelegt am" %}</dt>
+                <dd class="font-medium">{{ case.created_at|date:"DATE_FORMAT" }}</dd>
+            </div>
+        </dl>
+        <p class="text-xs text-ink-muted mt-3">
+            {% trans "Bei Genehmigung wandert der Fall in den Papierkorb. Nach Ablauf der Aufbewahrungsfrist wird er automatisch anonymisiert; Episoden, Wirkungsziele und Dateianhänge gehen mit. Zugeordnete Kontakte bleiben in der Personenakte und verlieren erst dann ihre Fallzuordnung. Statistik-Aggregate bleiben erhalten." %}
+        </p>
+    </div>
+
+    {% if deletion_request.requested_by == request.user %}
+    <p class="text-sm text-ink-muted italic" data-testid="deletion-own-request-hint">
+        {% trans "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)." %}
+    </p>
+    {% else %}
+    <form method="post" class="flex items-center space-x-3">
+        {% csrf_token %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        <button type="submit" name="action" value="approve" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
+            {% trans "Genehmigen" %}
+        </button>
+        <button type="submit" name="action" value="reject" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+            {% trans "Ablehnen" %}
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

@@ -11,14 +11,20 @@ POST-Forms, lead+) — eine folgenschwere Aktion ist nie primär (§6.2).
 ``CaseDetailView`` ist bereits ``StaffRequiredMixin``, deshalb kein
 zusätzliches Rollen-Gate auf den primären Aktionen (wie im Bestandscode).
 
-⋮-Regel (Refs #1864): Das ⋮ erscheint sonst nur ab ZWEI Einträgen — diese
-Seite ist die begründete AUSNAHME und bleibt unverändert. Hinter dem ⋮ liegt
-hier immer genau ein Eintrag („Schließen“ bzw. „Wiedereröffnen“, je nach
-Fallstatus), aber beide sind folgenschwer: Ein versehentlicher Klick soll
-weiterhin einen bewussten Zwischenschritt kosten (§6.2). Auch
-„Wiedereröffnen“ bleibt im Menü — stünde es in der Leiste und „Schließen“
-im Menü, spränge die Aktion je nach Fallstatus zwischen beiden Orten. Die
-vollständige Regel steht in ``components/_action_overflow.html``.
+⋮-Regel (Refs #1864): Das ⋮ erscheint sonst nur ab ZWEI Einträgen. Ab
+Leitung sind es hier zwei („Schließen“ bzw. „Wiedereröffnen“ + „Löschen“);
+für die Fachkraft bleibt genau einer übrig, und diese Seite ist die
+begründete AUSNAHME: „Löschen“ ist folgenschwer, ein versehentlicher Klick
+soll einen bewussten Zwischenschritt kosten (§6.2). Auch „Wiedereröffnen“
+bleibt im Menü — stünde es in der Leiste und „Schließen“ im Menü, spränge
+die Aktion je nach Fallstatus zwischen beiden Orten. Die vollständige Regel
+steht in ``components/_action_overflow.html``.
+
+Löschen (Refs #1818, ADR-044): STAFF_PLUS wie die Seite selbst — welcher der
+beiden Wege gilt (direkter Papierkorb oder Vier-Augen-Antrag), entscheidet
+die Kontaktstufe der Person und steht auf der Bestätigungsseite. Der Eintrag
+steht als letzter und hinter einem Trenner: er ist der einzige, der nicht
+umkehrbar in denselben Zustand zurückführt.
 
 Mobile Kurzlabels und Icons (Refs #1859): wie in der Personenakte tragen die
 beiden Anlege-Aktionen eigene Icons (Sprechblase/Klemmbrett) und mobil ein
@@ -39,12 +45,12 @@ components/_action_button.html).
 {% include "components/_action_button.html" with variant=variant position="primary" base_url=workitem_create_url query_param_name="client" query_param_value=case.client.pk label=label_task label_short=short_task testid="case-action-task" icon_path="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" %}
 {% include "components/_action_button.html" with variant=variant position="primary" base_url=case_update_url label=label_edit testid="case-action-edit" icon_path="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" %}
 
-{% if user.is_lead_or_admin %}
 <div x-data="mobileOverflowMenu" class="relative">
     {% include "components/_action_overflow.html" with variant=variant %}
     {# Refs #1859 (B3): max-w klemmt das 224-px-Panel auf die Viewportbreite. #}
     <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
          class="absolute right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
+        {% if user.is_lead_or_admin %}
         {% if case.status == 'open' %}
         <form method="post" action="{% url 'core:case_close' case.pk %}">
             {% csrf_token %}
@@ -60,6 +66,8 @@ components/_action_button.html).
             </button>
         </form>
         {% endif %}
+        <div class="border-t border-subtle my-1"></div>
+        {% endif %}
+        {% include "core/cases/partials/delete_request_action.html" with action_class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" %}
     </div>
 </div>
-{% endif %}

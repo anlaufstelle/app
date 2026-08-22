@@ -59,8 +59,9 @@ NAV_ROUTE_PREFIXES = (
 # reine Verschiebung, kein Pattern darf dabei verloren gehen oder sich
 # verdoppeln. Bei einer bewussten Aenderung der Routenzahl hier mitziehen.
 # +1 Tally-Undo (#1913), +4 Zeitstrom-Watch (#1916), +1 Bans-Watch-Partial (#1917),
-# +1 Anhang-Loeschung (#1874).
-_EXPECTED_TOTAL_PATTERNS = 154
+# +1 Anhang-Loeschung (#1874), +4 Fall-Loeschweg (#1818: Papierkorb, Antrag,
+# Wiederherstellen, Sofort-Tilgung).
+_EXPECTED_TOTAL_PATTERNS = 158
 
 
 def _prefixed_route_names() -> dict[str, str]:

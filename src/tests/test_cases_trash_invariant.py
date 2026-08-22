@@ -46,7 +46,7 @@ REPO_SRC = Path(__file__).resolve().parents[1]
 
 
 # ---------------------------------------------------------------------------
-# (a) Invariante: Faelle kennen kein Soft-Delete
+# (a) Der Papierkorb-Fall existiert — und entsteht an genau einer Stelle
 # ---------------------------------------------------------------------------
 
 

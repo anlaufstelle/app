@@ -136,14 +136,27 @@ def get_active_hold_target_ids(facility, target_type="Event"):
 
 
 def exclude_clients_with_active_holds(queryset, facility):
-    """Nimmt Klienten mit aktivem Legal Hold aus *queryset* (Refs #1066, #1756).
+    """Nimmt Klienten mit aktivem Legal Hold aus *queryset* (Refs #1066, #1756, #1818).
 
     Ausgeschlossen wird, wer selbst unter einem Hold steht
-    (``target_type="Client"``) **oder** mindestens ein Event unter Hold hat
-    (``target_type="Event"``) — sonst risse die Loeschung des Eltern-Klienten
-    den gehaltenen Event mit (Spoliation). Nicht aufgehobene, nicht
+    (``target_type="Client"``), mindestens ein Event unter Hold hat
+    (``target_type="Event"``) **oder** mindestens einen **Fall** unter Hold hat
+    (``target_type="Case"``) — sonst risse die Loeschung des Eltern-Klienten
+    das gehaltene Kind mit (Spoliation). Nicht aufgehobene, nicht
     abgelaufene Holds zaehlen; die Aktiv-Grenze zieht
     :func:`get_active_hold_target_ids` (``timezone.localdate``).
+
+    Der **Fall**-Zweig kam mit ADR-044 (Refs #1818, P4) dazu und ist die
+    Gegenrichtung zu :func:`exclude_cases_with_active_holds`: seit dort ein
+    Personen-Hold den Fall sperrt, muss hier ein Fall-Hold die Person sperren.
+    Die Personen-Anonymisierung redigiert ueber
+    ``_redact_cases_and_episodes``/``_redact_case_goals`` genau die
+    Fall-Inhalte, die der Hold sichern soll, und loescht ueber
+    ``_delete_owned_attachments_for_client`` die fall-eigenen Anhaenge
+    physisch (nicht rollback-bar). Ohne diesen Zweig waere der Personen-Weg
+    die Hintertuer um den Fall-Hold — an allen drei Einstiegen
+    (Papierkorb-Frist, Admin-Sofort-Tilgung, K-Anon-Bridge), weil alle drei
+    ueber diesen Helfer laufen.
 
     Die Anonymisierung wird damit nur **aufgeschoben**: ein spaeterer
     Retention-Lauf holt sie nach, sobald der Hold aufgehoben oder abgelaufen
@@ -157,8 +170,10 @@ def exclude_clients_with_active_holds(queryset, facility):
     muessen exakt dieselbe Menge ausnehmen — #1756 war genau die Drift
     zwischen beiden.
     """
-    return queryset.exclude(pk__in=get_active_hold_target_ids(facility, "Client")).exclude(
-        events__pk__in=get_active_hold_target_ids(facility, "Event")
+    return (
+        queryset.exclude(pk__in=get_active_hold_target_ids(facility, "Client"))
+        .exclude(events__pk__in=get_active_hold_target_ids(facility, "Event"))
+        .exclude(cases__pk__in=get_active_hold_target_ids(facility, "Case"))
     )
 
 
