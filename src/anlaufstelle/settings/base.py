@@ -10,7 +10,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-from ._env import env_bool, env_csv, env_int, env_origin
+from ._env import env_bool, env_csv, env_int, env_origin, env_tokens
 from ._mfa_roles import parse_enforced_role_sets
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -401,6 +401,23 @@ OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = env_int("OFFLINE_REVOCATION_SESSION_SCAN
 # gezählte Hop muss ein bekannter Proxy sein. Ein Django-System-Check
 # (``core.checks.check_trusted_proxy_hops``) warnt bei ungewöhnlich hohen Werten.
 TRUSTED_PROXY_HOPS = env_int("TRUSTED_PROXY_HOPS", 1)
+
+# --- Vertrauenswürdige Proxy-Bereiche (Refs #1963) ---
+# Dieselbe Variable füllt die Caddy-Direktive ``trusted_proxies static`` (siehe
+# den globalen ``servers``-Block der Caddyfiles) und dieses Setting. Caddy
+# übernimmt ein eingehendes ``X-Forwarded-For`` NUR von einem Peer aus dieser
+# Liste; von jedem anderen Peer ersetzt es den Header durch dessen IP. Ohne
+# Einträge kommt bei der App also immer genau EIN Eintrag an — jedes
+# ``TRUSTED_PROXY_HOPS > 1`` griffe dann daneben und fiele auf REMOTE_ADDR
+# (die Proxy-IP) zurück. Leer = Caddy ist der einzige Proxy (Regelfall).
+# Format: CIDR-Bereiche, nackte Adressen oder Caddys Schlüsselwort
+# ``private_ranges``, getrennt durch LEERZEICHEN — die Caddy-Schreibweise, und
+# zwar die einzige: Der Caddyfile-Parser zerlegt Direktiven-Argumente nicht am
+# Komma (deshalb ``env_tokens`` statt ``env_csv``). Ein kommagetrennter Wert
+# käme dort als ein einziger, unbrauchbarer Bereich an und ließe Caddy den
+# Start verweigern; ``core.checks.check_trusted_proxy_cidrs`` (core.E003) meldet
+# ihn deshalb schon hier — mit demselben Regelwerk, das Caddy anwendet.
+TRUSTED_PROXY_CIDRS = env_tokens("TRUSTED_PROXY_CIDRS")
 
 # django-ratelimit: die per-IP-Eimer (key="ip") sollen auf der ECHTEN Client-IP
 # schlüsseln, nicht auf REMOTE_ADDR. Hinter dem Caddy-Reverse-Proxy ist

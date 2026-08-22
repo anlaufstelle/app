@@ -102,9 +102,10 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 - `DOMAIN=anlaufstelle.app`
 - `BACKUP_ENCRYPTION_KEY` — separater Fernet-Key für Backups
 - `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` — SMTP
-- `TRUSTED_PROXY_HOPS=1` (Caddy/Traefik → App)
+- `TRUSTED_PROXY_HOPS=1` (Caddy/Traefik → App). **Höher nur zusammen mit `TRUSTED_PROXY_CIDRS`** — ohne die Bereiche des vorgelagerten Proxys sieht die Anwendung nie mehr als einen `X-Forwarded-For`-Eintrag und fällt auf die Proxy-IP zurück (ein gemeinsamer Ratelimit-Eimer für alle). Der System-Check `core.W003` meldet die Kombination beim Start (#1963).
 
 **Optional:**
+- `TRUSTED_PROXY_CIDRS` — Bereiche der Proxys, denen Caddy ein eingehendes `X-Forwarded-For` glauben darf (**nur** Leerzeichen-getrennt — Kommas und Netzmasken kennt Caddy nicht; CIDR oder nackte Adresse, alternativ Caddys Schlüsselwort `private_ranges`). Leer lassen, solange Caddy der einzige Proxy ist. Pflicht, sobald `TRUSTED_PROXY_HOPS > 1`; ein für Caddy unbrauchbarer Wert bricht den Start mit `core.E003` ab (#1963).
 - `SENTRY_DSN` — für Error-Tracking
 - `LOG_FORMAT=json` — strukturiertes Logging
 - `CLAMAV_ENABLED=true` — Default. Zum aktiven Scannen muss zusätzlich ein
@@ -230,6 +231,9 @@ Die mitgelieferte [`Caddyfile`](../Caddyfile) (Refs #801) enthält:
 - **www-Redirect** — `www.{$DOMAIN}` wird permanent (`301`) auf den Apex umgeleitet, damit Backlinks und Cookies eindeutig auf eine Origin gehen.
 - **HTTPS + HSTS** — Caddy beantragt automatisch Let's-Encrypt-Zertifikate, HSTS mit `max-age=31536000` ist gesetzt.
 - **Access-Log** — JSON-Log nach `/var/log/caddy/access.log` mit Rotation (10 MiB, 10 Files, 30 Tage). Persistiert über das `caddy_logs`-Volume in [`docker-compose.prod.yml`](../docker-compose.prod.yml). Auswertung z. B. via `docker compose exec caddy cat /var/log/caddy/access.log | jq`.
+- **Fehler-Log** — `/var/log/caddy/error.log`, gleiche Rotation und Aufbewahrung wie der Access-Log. Caddys Fehler-Logger (`http.log.error.*`, ausgelöst bei jedem Handler-Fehler: Upstream weg im Deploy-Fenster, Worker-OOM, `413` aus `request_body`) schrieb bis #1963 ungefiltert auf `stderr` — also in den Docker-Log des Hosts, außerhalb des `caddy_logs`-Volumes und außerhalb jeder Aufbewahrungsgrenze, samt vollständigem Query-String. Ein benannter Logger im globalen Block (`log errors { include http.log.error … }`) holt ihn in dasselbe Volume und durch dieselbe Redaktion. Caddy-eigene Meldungen (TLS/ACME, Start) bleiben unverändert in `docker compose logs caddy`.
+- **Query-Redaktion im Access-Log** (Refs #1963) — der Encoder ist `format filter`, nicht `format json`: aus `request.uri`, `request.headers.Referer` und `resp_headers.Location` wird der komplette Query-Teil durch `?redigiert` ersetzt. Dort standen sonst Volltext-Suchbegriffe (`?q=…`) und Objekt-IDs (`client`/`case`/`event`/`user`/`assigned_to`) — also Klarnamen und Pseudonym-Referenzen, 30 Tage lang außerhalb von Audit- und Löschlogik. Der Pfad bleibt erhalten, 4xx/5xx sind weiter einer Route zuzuordnen. Bewusst keine Denylist einzelner Parameter: die müsste bei jedem neuen Filter nachgezogen werden.
+- **Proxy-Vertrauen** (Refs #1963) — der globale `servers`-Block setzt `trusted_proxies static {$TRUSTED_PROXY_CIDRS}` und `trusted_proxies_strict`. Leer gelassen (Regelfall: Caddy ist der Edge) verwirft Caddy jedes vom Client mitgeschickte `X-Forwarded-For` und setzt den Header selbst. Vor einem CDN/Loadbalancer **müssen** dessen Bereiche dort stehen, bevor `TRUSTED_PROXY_HOPS` auf `2` gesetzt wird — siehe [`docs/ops-runbook.md` § 12.2](ops-runbook.md).
 - **CSP** — Content-Security-Policy wird **ausschließlich in Django** über `django-csp` gesetzt (`anlaufstelle.settings.base.CONTENT_SECURITY_POLICY`); im Caddyfile bewusst nicht doppelt, damit App- und Proxy-Policy nicht auseinanderlaufen.
 
 ### Optionaler Rate-Limit

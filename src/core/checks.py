@@ -1,20 +1,34 @@
 """Django-System-Checks für sicherheitsrelevante Settings.
 
-Refs #1375 (L8): ``TRUSTED_PROXY_HOPS`` bestimmt, welcher Eintrag aus
+Refs #1375 (L8), #1963: ``TRUSTED_PROXY_HOPS`` bestimmt, welcher Eintrag aus
 ``X-Forwarded-For`` als echte Client-IP interpretiert wird
-(:func:`core.signals.audit.get_client_ip`). Ist der Wert **höher** als die
-tatsächlich vorgeschalteten, vertrauenswürdigen Proxy-Hops, kann ein Client
-den XFF-Header spoofen — er hängt selbst zusätzliche Fake-Hops an, die dann als
-„vertrauenswürdig" gezählt werden. Das unterläuft alle IP-gebundenen
-Sicherheitsmechanismen (Ratelimits key="ip", die Lockout-Achse N9, die
-Audit-Client-IP). Django kann die reale Hop-Zahl nicht kennen; der Check warnt
-daher heuristisch bei ungewöhnlich hohen Werten und lehnt offensichtlich
-ungültige (negative) Werte ab.
+(:func:`core.signals.audit.get_client_ip`). Ob mehr als ein Hop überhaupt
+sinnvoll ist, entscheidet der Edge-Proxy: Caddy übernimmt ein eingehendes
+``X-Forwarded-For`` nur von einem Peer aus ``trusted_proxies`` und ersetzt es
+sonst durch dessen IP. Ohne deklariertes Proxy-Vertrauen kommt bei der App also
+immer genau ein Eintrag an — ``TRUSTED_PROXY_HOPS > 1`` greift dann daneben und
+fällt auf ``REMOTE_ADDR`` (die Proxy-IP) zurück, womit Ratelimit-Eimer
+(key="ip"), Lockout-Achse N9, Audit-Client-IP und Maintenance-Allowlist auf
+einen einzigen Wert kollabieren. Umgekehrt ist ein Hop zu viel bei tatsächlich
+vertrauendem Edge genau der Spoofing-Fall aus #1375.
+
+Django kann die reale Topologie nicht messen. Die Checks koppeln die Hop-Zahl
+deshalb an ``TRUSTED_PROXY_CIDRS`` — dieselbe Variable, die die Caddy-Direktive
+füllt —, warnen zusätzlich heuristisch bei ungewöhnlich hohen Werten und lehnen
+Werte ab, an denen Caddy scheitern würde.
+
+**Zu den IDs:** ``core.W001`` behält die mit #1375 veröffentlichte Bedeutung
+(Hop-Zahl ungewöhnlich hoch) — Betreiber haben sie in ihren Runbook-Tabellen
+stehen, eine Umwidmung würde dort still etwas anderes anzeigen. Die mit #1963
+hinzugekommene Kopplung ``hops > 1`` ohne Proxy-Vertrauen bekommt darum die
+neue ID ``core.W003``, der unbrauchbare Bereich die neue ID ``core.E003``.
 """
 
 from __future__ import annotations
 
+import re
 import sys
+from ipaddress import ip_network
 from pathlib import Path
 
 from django.conf import settings
@@ -25,10 +39,54 @@ from django.core.checks import Error, Warning, register
 # wahrscheinlicher als ein echtes 3-Proxy-Setup — dann lieber einmal warnen.
 _TRUSTED_PROXY_HOPS_WARN_THRESHOLD = 3
 
+# Caddys ``trusted_proxies static`` kennt neben CIDR-Bereichen und nackten
+# Adressen Schlüsselwörter, die die Direktive selbst expandiert. Sie sind keine
+# IP-Notation und dürfen die Syntaxprüfung nicht auslösen.
+_TRUSTED_PROXY_CIDR_KEYWORDS = frozenset({"private_ranges"})
+
+# Caddy parst jeden Eintrag über Gos ``netip.ParsePrefix``/``ParseAddr``. Das
+# ist an zwei Stellen strenger als Pythons ``ipaddress``: eine Netzmaske
+# (``192.168.0.0/255.255.255.0``) und eine führende Null in der Präfixlänge
+# (``2001:db8::/032``) lässt Python durchgehen, Go nicht. Beides am gepinnten
+# Image nachgestellt (caddy 2.11.4, ``caddy validate``: "bad bits after slash").
+# Ein Check, der mehr durchlässt als Caddy, gibt genau dann Entwarnung, wenn
+# der Reverse-Proxy gleich sterben wird — also prüft er die Präfixlänge selbst.
+_DEZIMALE_PRAEFIXLAENGE = re.compile(r"^(0|[1-9][0-9]*)$")
+
+_CIDR_HINWEIS = (
+    "Erlaubt ist genau das, was Caddys 'trusted_proxies static' parst: CIDR-Bereiche "
+    "(203.0.113.0/24, 2001:db8::/32) mit dezimaler Präfixlänge ohne führende Null, nackte "
+    "Adressen (dann /32 bzw. /128) und das Schlüsselwort 'private_ranges'. Eine Netzmaske "
+    "(192.168.0.0/255.255.255.0) ist KEINE gültige Schreibweise. Mehrere Bereiche durch "
+    "Leerzeichen trennen. Ein unbrauchbarer Wert bringt sonst den Reverse-Proxy nicht mehr hoch."
+)
+
+_CIDR_HINWEIS_KOMMA = (
+    "Das Komma ist hier kein Trennzeichen: Der Wert füllt per {$TRUSTED_PROXY_CIDRS} die "
+    "Caddy-Direktive 'trusted_proxies static', und Caddy zerlegt Direktiven-Argumente "
+    "ausschließlich an Leerzeichen — der komplette Eintrag käme dort als EIN Bereich an, und "
+    "der Reverse-Proxy verweigerte den Start. Mehrere Bereiche also durch Leerzeichen trennen: "
+    "TRUSTED_PROXY_CIDRS='203.0.113.0/24 198.51.100.0/24'."
+)
+
+
+def _ist_caddy_bereich(eintrag: str) -> bool:
+    """Akzeptiert genau das, was Caddys ``trusted_proxies static`` akzeptiert."""
+    if eintrag in _TRUSTED_PROXY_CIDR_KEYWORDS:
+        return True
+    _, trenner, praefix = eintrag.rpartition("/")
+    if trenner and not _DEZIMALE_PRAEFIXLAENGE.match(praefix):
+        return False
+    try:
+        ip_network(eintrag, strict=False)
+    except ValueError:
+        return False
+    return True
+
 
 @register()
 def check_trusted_proxy_hops(app_configs, **kwargs):
-    """Validiert ``settings.TRUSTED_PROXY_HOPS`` (L8, Refs #1375)."""
+    """Validiert ``settings.TRUSTED_PROXY_HOPS`` (L8, Refs #1375, #1963)."""
     messages = []
     hops = getattr(settings, "TRUSTED_PROXY_HOPS", 1)
 
@@ -45,6 +103,25 @@ def check_trusted_proxy_hops(app_configs, **kwargs):
         )
         return messages
 
+    if hops > 1 and not getattr(settings, "TRUSTED_PROXY_CIDRS", []):
+        messages.append(
+            Warning(
+                f"TRUSTED_PROXY_HOPS={hops} ohne konfiguriertes Proxy-Vertrauen.",
+                hint=(
+                    "Mehr als ein Hop ist nur belastbar, wenn der Edge-Proxy weiß, welchen "
+                    "vorgelagerten Proxys er glauben darf. Caddy übernimmt ein eingehendes "
+                    "X-Forwarded-For ausschließlich von einem Peer aus 'trusted_proxies' und "
+                    "ersetzt es sonst durch dessen IP — bei leerem TRUSTED_PROXY_CIDRS kommt "
+                    "also immer genau ein Eintrag an, und get_client_ip fällt auf REMOTE_ADDR "
+                    "(die Proxy-IP) zurück: ein gemeinsamer Ratelimit-Eimer, eine Lockout-Achse "
+                    "und eine Audit-IP für alle. Trage die Bereiche des vorgelagerten Proxys in "
+                    "TRUSTED_PROXY_CIDRS ein (sie füllen zugleich die Caddy-Direktive) oder "
+                    "setze TRUSTED_PROXY_HOPS auf 1."
+                ),
+                id="core.W003",
+            )
+        )
+
     if hops >= _TRUSTED_PROXY_HOPS_WARN_THRESHOLD:
         messages.append(
             Warning(
@@ -60,6 +137,30 @@ def check_trusted_proxy_hops(app_configs, **kwargs):
             )
         )
 
+    return messages
+
+
+@register()
+def check_trusted_proxy_cidrs(app_configs, **kwargs):
+    """Validiert ``settings.TRUSTED_PROXY_CIDRS`` (Refs #1963).
+
+    Der Wert wird per Env-Substitution in die Caddy-Direktive
+    ``trusted_proxies static`` eingesetzt. Ein unbrauchbarer Bereich lässt Caddy
+    den Start verweigern — und zwar erst, nachdem der ``web``-Container sich als
+    healthy gemeldet hat (``depends_on``). Dieser Check zieht den Fehler in den
+    Start der Anwendung vor, wo er im Deploy-Log an der erwarteten Stelle steht.
+    """
+    messages = []
+    for eintrag in getattr(settings, "TRUSTED_PROXY_CIDRS", []):
+        if _ist_caddy_bereich(eintrag):
+            continue
+        messages.append(
+            Error(
+                f"TRUSTED_PROXY_CIDRS enthält keinen gültigen IP-Bereich: {eintrag!r}.",
+                hint=_CIDR_HINWEIS_KOMMA if "," in eintrag else _CIDR_HINWEIS,
+                id="core.E003",
+            )
+        )
     return messages
 
 

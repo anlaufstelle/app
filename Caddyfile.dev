@@ -8,6 +8,53 @@
 
 {
 	email {$ACME_EMAIL}
+
+	# Proxy-Vertrauen (Refs #1963). Caddy uebernimmt ein eingehendes
+	# X-Forwarded-For NUR von einem Peer aus dieser Liste; von jedem anderen
+	# Peer ERSETZT es den Header durch dessen IP. Leer = kein vorgelagerter
+	# Proxy (Regelfall: Caddy ist der Edge) — dann kommt bei der App genau
+	# EIN Eintrag an und TRUSTED_PROXY_HOPS=1 trifft ihn.
+	# Steht ein CDN/Loadbalancer davor, MUESSEN dessen Bereiche hier stehen,
+	# BEVOR TRUSTED_PROXY_HOPS auf 2 gesetzt wird: sonst sieht die App nie
+	# zwei Eintraege und faellt auf REMOTE_ADDR (die Proxy-IP) zurueck —
+	# ein gemeinsamer Ratelimit-Eimer, eine Lockout-Achse und eine Audit-IP
+	# fuer alle. Dieselbe Variable liest settings.TRUSTED_PROXY_CIDRS; ein
+	# unbrauchbarer Wert bricht dort bereits den Start ab (core.E003).
+	# trusted_proxies_strict laesst Caddy die Client-IP-Header von RECHTS
+	# lesen (ab Caddy 2.8) und damit den vom Proxy gesetzten statt des vom
+	# Client kontrollierten Eintrags nehmen.
+	servers {
+		trusted_proxies static {$TRUSTED_PROXY_CIDRS}
+		trusted_proxies_strict
+	}
+
+	# Fehler-Protokoll (Refs #1963). Der 'format filter'-Encoder oben haengt am
+	# Site-Logger und deckt nur http.log.access.* ab. Caddys FEHLER-Logger
+	# http.log.error.* laeuft davon unberuehrt auf stderr — im Container also in
+	# den Docker-json-file-Log des Hosts: ausserhalb dieses Volumes, ausserhalb
+	# roll_keep_for und ausserhalb jeder Loeschlogik. Er traegt dieselbe
+	# request>uri samt Query wie der Access-Log und entsteht bei JEDEM
+	# Handler-Fehler: Upstream weg (502/504 im Deploy-Fenster, Worker-OOM,
+	# gunicorn-Restart) oder 413 aus request_body max_size.
+	# Dieser benannte Logger holt ihn in dasselbe Volume, unter dieselbe
+	# Aufbewahrung und durch dieselbe Redaktion. Doppelt steht dadurch nichts
+	# im Log: Der Caddyfile-Adapter traegt http.log.error selbst in
+	# logging.logs.default.exclude ein, stderr bleibt fuer alles uebrige
+	# zustaendig (Caddy-eigene Fehler wie tls.* also weiterhin in 'docker logs').
+	log errors {
+		include http.log.error
+		output file /var/log/caddy/error.log {
+			roll_size 10MiB
+			roll_keep 5
+			roll_keep_for 720h
+		}
+		format filter {
+			request>uri regexp "[?].*" "?redigiert"
+			request>headers>Referer regexp "[?].*" "?redigiert"
+			resp_headers>Location regexp "[?].*" "?redigiert"
+			wrap json
+		}
+	}
 }
 
 {$DOMAIN} {
@@ -34,8 +81,25 @@
 		output file /var/log/caddy/access.log {
 			roll_size 10MiB
 			roll_keep 5
+			# Ohne diesen Wert haelt Caddy rotierte Logs nach eigenem Default
+			# (90 Tage) vor — mit vollstaendigen Client-IPs. Refs #1963.
+			roll_keep_for 720h
 		}
-		format json
+		# Query-Redaktion (Refs #1963): request>uri trug den kompletten
+		# Query-String ins Log — Volltext-Suchbegriffe (q) und Objekt-IDs
+		# (client/case/event/user/assigned_to), also Klarnamen und
+		# Pseudonym-Referenzen ausserhalb von Audit- und Loeschlogik.
+		# Bewusst der ganze Query-Teil statt einer Denylist einzelner
+		# Parameter: die driftet mit jedem neuen Filter. Der Pfad bleibt
+		# stehen, damit 4xx/5xx weiter einer Route zuzuordnen sind.
+		# Referer (bei gleichem Origin schickt der Browser die volle URL)
+		# und Location (Redirects mit ?next=) tragen dieselbe Query erneut.
+		format filter {
+			request>uri regexp "[?].*" "?redigiert"
+			request>headers>Referer regexp "[?].*" "?redigiert"
+			resp_headers>Location regexp "[?].*" "?redigiert"
+			wrap json
+		}
 	}
 }
 

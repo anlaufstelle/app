@@ -12,12 +12,19 @@ frei und laesst sich isoliert (ohne Settings-Reimport) testen.
 """
 
 import os
+import re
 from urllib.parse import urlsplit
 
 # Dieselbe Werteliste wie ueberall im Projekt bereits verwendet — case-
 # insensitiv, damit ".env"-Werte wie "True"/"TRUE"/"1"/"yes" gleichermassen
 # als wahr gelten.
 _TRUE_VALUES = ("true", "1", "yes")
+
+# Trennzeichen der Caddyfile-Direktiven-Argumente (siehe :func:`env_tokens`).
+# Zeilenumbrueche gehoeren bewusst NICHT dazu: sie beenden in einer Caddyfile
+# die Direktive und lassen ``caddy adapt`` scheitern — ein Wert mit
+# Zeilenumbruch bleibt darum ein (unbrauchbares) Token und faellt auf.
+_CADDY_ARGUMENT_TRENNER = re.compile(r"[ \t]+")
 
 
 def env_int(name: str, default: int) -> int:
@@ -37,6 +44,27 @@ def env_csv(name: str, default: str = "") -> list[str]:
     """Kommaliste -> getrimmte, nicht-leere Eintraege (Reihenfolge erhalten,
     Duplikate NICHT entfernt — wie das bisherige Hand-Parsing)."""
     return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
+
+
+def env_tokens(name: str, default: str = "") -> list[str]:
+    """Leerzeichen-/Tab-getrennte Liste -> getrimmte, nicht-leere Eintraege.
+
+    Gebraucht fuer ``TRUSTED_PROXY_CIDRS`` (Refs #1963): derselbe ``.env``-Wert
+    fuellt per ``{$TRUSTED_PROXY_CIDRS}`` die Caddy-Direktive
+    ``trusted_proxies static`` UND dieses Setting. Zerlegt wird deshalb exakt
+    so, wie **Caddy** zerlegt — der Caddyfile-Parser trennt Direktiven-Argumente
+    an Leerzeichen und Tabs, an nichts sonst.
+
+    Ausdruecklich NICHT am Komma (dafuer gibt es :func:`env_csv`): sonst saehe
+    die Anwendung eine Liste, die es im Reverse-Proxy nie gab. ``a/24,b/24``
+    waere hier zwei gueltige Bereiche, fuer Caddy dagegen ein einziger,
+    unbrauchbarer — die System-Checks gaeben Entwarnung, waehrend Caddy den
+    Start verweigert (am gepinnten Image nachgestellt, caddy 2.11.4: "parsing
+    CIDR expression"). So bleibt das Komma im Token stehen und faellt
+    ``core.checks.check_trusted_proxy_cidrs`` als ``core.E003`` auf, bevor
+    irgendetwas startet.
+    """
+    return [token for token in _CADDY_ARGUMENT_TRENNER.split(os.environ.get(name, default).strip()) if token]
 
 
 def env_origin(name: str, default: str = "") -> str:

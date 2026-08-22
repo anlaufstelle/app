@@ -415,6 +415,311 @@ class TestCaddyUploadBodyLimit:
         )
 
 
+# Redaktions-Sonden (Refs #1963): reale Abfragen der Anwendung, an denen sich
+# jede Redaktionsregel messen lassen muss — Volltextsuche, Objekt-IDs, ?next=.
+_QUERY_SONDEN = (
+    "/clients/?q=Suchbegriff&client=PSEUDOID&next=/cases/",
+    "/statistics/?date_from=2026-01-01&assigned_to=PSEUDOID",
+)
+_QUERY_VERBOTEN = ("Suchbegriff", "PSEUDOID", "q=", "client=", "assigned_to=", "next=", "date_from=")
+# Die drei Felder, die dieselbe Adresse jeweils erneut transportieren.
+_REDIGIERTE_FELDER = ("request>uri", "request>headers>Referer", "resp_headers>Location")
+
+
+def _redaktionsregel(code: str, feld: str, quelle: str) -> tuple[str, str]:
+    """(Muster, Ersatz) der ``regexp``-Filterregel fuer ``feld`` im Log-Block."""
+    treffer = re.search(rf'{re.escape(feld)}\s+regexp\s+"([^"]*)"\s+"([^"]*)"', code)
+    assert treffer is not None, (
+        f"{quelle}: kein 'regexp'-Log-Filter fuer '{feld}' — der Query-String "
+        "landet sonst ungefiltert im Protokoll (Refs #1963)."
+    )
+    return treffer.group(1), treffer.group(2)
+
+
+def _pruefe_redaktion(code: str, quelle: str) -> None:
+    """Jede der drei Regeln gegen alle Sonden fahren — nichts darf uebrig bleiben."""
+    for feld in _REDIGIERTE_FELDER:
+        muster, ersatz = _redaktionsregel(code, feld, quelle)
+        for sonde in _QUERY_SONDEN:
+            redigiert = re.sub(muster, ersatz, sonde)
+            for verboten in _QUERY_VERBOTEN:
+                assert verboten not in redigiert, (
+                    f"{quelle}: die Redaktionsregel fuer '{feld}' laesst '{verboten}' "
+                    f"stehen ({sonde!r} -> {redigiert!r}) — Refs #1963."
+                )
+
+
+class TestCaddyAccessLogQueryRedaction:
+    """Refs #1963 (Sicherheitsreview #1821, Access-Log): Der JSON-Access-Log
+    protokollierte ``request>uri`` samt komplettem Query-String. Dort stehen
+    Volltext-Suchbegriffe (``q``) und Objekt-IDs (``client``/``case``/``event``/
+    ``user``/``assigned_to``) — also Klarnamen und Pseudonym-Referenzen, die
+    ueber Wochen ausserhalb von Audit- und Loeschlogik im Log-Volume liegen.
+
+    Bewusst KEINE Denylist einzelner Parameter: die driftet mit jedem neuen
+    Filter. Der Query-Teil faellt komplett weg, der Pfad bleibt stehen — damit
+    bleiben 4xx/5xx weiterhin einer Route zuzuordnen.
+
+    Mitbehandelt sind die beiden anderen Felder, die dieselbe URL erneut
+    transportieren: ``request>headers>Referer`` (bei gleichem Origin schickt
+    der Browser trotz ``strict-origin-when-cross-origin`` die volle URL) und
+    ``resp_headers>Location`` (Redirects mit ``?next=``).
+    """
+
+    _CADDYFILES = (
+        Path("Caddyfile"),
+        Path("Caddyfile.dev"),
+        Path("Caddyfile.demo"),
+        Path("Caddyfile.staging"),
+        # Fuenfter, live laufender Site-Block: wird per ``import sites.d/*.caddy``
+        # aus Caddyfile.dev geladen (ADR-017) und loggt in dasselbe Volume.
+        Path("dev-ops/deploy/barbara/barbara.caddy"),
+    )
+
+    @staticmethod
+    def _code(path: Path) -> str:
+        # Der Release-Build (dev-ops/release/build-release.sh) nimmt Stage-,
+        # Demo- und dev-ops-Pfade aus dem Public-Snapshot. Ihre Namen stehen
+        # literal auf der Gate-Zeile, weil verify_release_test_guard.py den
+        # ausgeschlossenen Prefix genau dort erwartet (Refs #1137).
+        if not path.exists():  # Caddyfile.staging / Caddyfile.demo / dev-ops/
+            pytest.skip(f"{path} nicht im Public-Snapshot (Refs #1047, #1963)")
+        return "\n".join(
+            line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_access_log_uses_a_filtering_encoder(self, path: Path) -> None:
+        code = self._code(path)
+        assert "format json" not in code, (
+            f"{path}: 'format json' schreibt request>uri roh ins Access-Log. "
+            "Erwartet wird 'format filter { ... wrap json }' (Refs #1963)."
+        )
+        assert re.search(r"format\s+filter\s*\{", code), (
+            f"{path}: Access-Log ohne 'format filter'-Encoder (Refs #1963)."
+        )
+        assert re.search(r"wrap\s+json\b", code), (
+            f"{path}: der Filter-Encoder muss weiterhin JSON ausgeben ('wrap json', Refs #1963)."
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_query_bearing_fields_are_redacted(self, path: Path) -> None:
+        _pruefe_redaktion(self._code(path), str(path))
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_path_without_query_survives_untouched(self, path: Path) -> None:
+        # Der Pfad ist die Debugging-Information, die erhalten bleiben soll —
+        # eine zu gierige Regel wuerde 4xx/5xx unzuordenbar machen.
+        code = self._code(path)
+        muster, ersatz = _redaktionsregel(code, "request>uri", str(path))
+        assert re.sub(muster, ersatz, "/clients/42/documents/") == "/clients/42/documents/", (
+            f"{path}: die Redaktionsregel darf den Pfad nicht antasten (Refs #1963)."
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_retention_is_pinned_everywhere(self, path: Path) -> None:
+        # Ohne ``roll_keep_for`` haelt Caddy rotierte Logs nach eigenem Default
+        # (90 Tage) — laenger als die 720 h, die die Prod-Konfiguration seit
+        # jeher vorgibt. Der Wert wird darum in jeder Variante ausgeschrieben.
+        code = self._code(path)
+        assert re.search(r"roll_keep_for\s+720h\b", code), (
+            f"{path}: kein 'roll_keep_for 720h' — rotierte Access-Logs mit "
+            "vollstaendigen Client-IPs blieben sonst nach Caddy-Default liegen (Refs #1963)."
+        )
+
+
+class TestCaddyErrorLogRedaction:
+    """Refs #1963 (Nachbesserung): Der ``format filter``-Encoder haengt am
+    Site-Logger und deckt nur ``http.log.access.*`` ab. Caddys FEHLER-Logger
+    ``http.log.error.*`` bleibt davon unberuehrt und laeuft ungefiltert auf
+    stderr — im Container also in den Docker-json-file-Log des Hosts: ausserhalb
+    des ``caddy_logs``-Volumes, ausserhalb ``roll_keep_for 720h`` und ausserhalb
+    jeder Loeschlogik.
+
+    Er traegt dieselbe ``request>uri`` samt Query wie der Access-Log und
+    entsteht bei JEDEM Handler-Fehler: Upstream weg (502/504 im Deploy-Fenster,
+    Worker-OOM, gunicorn-Restart) oder 413 aus ``request_body max_size``.
+    Nachgestellt am gepinnten Image (caddy 2.11.4, Upstream gestoppt, Aufruf
+    ``/clients/?q=Suchbegriff&client=PSEUDOID``): im Datei-Log stand
+    ``"uri":"/clients/?redigiert"``, auf stderr gleichzeitig
+    ``{"logger":"http.log.error.log0",...,"uri":"/clients/?q=Suchbegriff&client=PSEUDOID"}``.
+
+    Ein benannter globaler Logger holt ihn in dasselbe Volume, unter dieselbe
+    Aufbewahrung und durch dieselbe Redaktion. Doppelt protokolliert wird
+    dadurch nichts: Der Caddyfile-Adapter traegt ``http.log.error`` selbst in
+    ``logging.logs.default.exclude`` ein (mit ``caddy adapt`` am selben Image
+    geprueft), stderr bleibt fuer alles uebrige zustaendig.
+
+    ``dev-ops/deploy/barbara/barbara.caddy`` steht hier nicht: Es ist ein per
+    ``import`` eingebundener Site-Block, der benannte Logger ist eine globale
+    Option und deckt aus Caddyfile.dev alle Sites des Servers ab.
+    """
+
+    _CADDYFILES = (
+        Path("Caddyfile"),
+        Path("Caddyfile.dev"),
+        Path("Caddyfile.demo"),
+        Path("Caddyfile.staging"),
+    )
+
+    @staticmethod
+    def _code(path: Path) -> str:
+        # Gate-Zeile mit vollem Pfad (Caddyfile.staging / Caddyfile.demo),
+        # verify_release_test_guard.py erwartet den Prefix genau dort (#1137).
+        if not path.exists():
+            pytest.skip(f"{path} nicht im Public-Snapshot (Refs #1047, #1963)")
+        return "\n".join(
+            line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+        )
+
+    @classmethod
+    def _fehler_block(cls, path: Path) -> str:
+        """Rumpf des benannten Logger-Blocks (``log <name> { ... }``).
+
+        Der Site-Log heisst ``log {`` (ohne Namen) — nur der benannte Block ist
+        eine globale Option und kann ``include`` fuehren.
+        """
+        code = cls._code(path)
+        start = re.search(r"log\s+[A-Za-z_][\w-]*\s*\{", code)
+        assert start is not None, (
+            f"{path}: kein benannter Logger-Block ('log <name> {{ … }}') — Caddys "
+            "Fehler-Logger laeuft dann ungefiltert auf stderr, also in den "
+            "Docker-Log des Hosts, ausserhalb jeder Aufbewahrungsgrenze (Refs #1963)."
+        )
+        tiefe = 0
+        for pos in range(start.end() - 1, len(code)):
+            if code[pos] == "{":
+                tiefe += 1
+            elif code[pos] == "}":
+                tiefe -= 1
+                if tiefe == 0:
+                    return code[start.end() : pos]
+        raise AssertionError(f"{path}: benannter Logger-Block nicht geschlossen")
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_error_logger_is_captured(self, path: Path) -> None:
+        block = self._fehler_block(path)
+        assert re.search(r"include\s+http\.log\.error\b", block), (
+            f"{path}: der benannte Logger muss 'include http.log.error' fuehren — "
+            "sonst bleibt Caddys Fehler-Logger beim stderr-Default (Refs #1963)."
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_error_log_lands_in_the_retained_volume(self, path: Path) -> None:
+        block = self._fehler_block(path)
+        assert re.search(r"output\s+file\s+/var/log/caddy/\S+", block), (
+            f"{path}: der Fehler-Logger muss nach /var/log/caddy schreiben — nur "
+            "dieses Verzeichnis ist als Volume gemountet und damit von Rotation "
+            "und Aufbewahrung erfasst (Refs #1963)."
+        )
+        assert re.search(r"roll_keep_for\s+720h\b", block), (
+            f"{path}: dem Fehler-Log fehlt 'roll_keep_for 720h' — es laege sonst "
+            "laenger vor als das Zugriffsprotokoll daneben (Refs #1963)."
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_error_log_redacts_the_same_fields(self, path: Path) -> None:
+        block = self._fehler_block(path)
+        assert re.search(r"wrap\s+json\b", block), (
+            f"{path}: der Fehler-Logger muss weiterhin JSON ausgeben ('wrap json', Refs #1963)."
+        )
+        _pruefe_redaktion(block, f"{path} (Fehler-Logger)")
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_error_log_keeps_the_path_readable(self, path: Path) -> None:
+        # Ohne Pfad ist ein 502 keiner Route mehr zuzuordnen — die Redaktion
+        # darf nur den Query-Teil treffen.
+        muster, ersatz = _redaktionsregel(self._fehler_block(path), "request>uri", f"{path} (Fehler-Logger)")
+        assert re.sub(muster, ersatz, "/clients/42/documents/") == "/clients/42/documents/", (
+            f"{path}: die Redaktionsregel des Fehler-Logs darf den Pfad nicht antasten (Refs #1963)."
+        )
+
+
+class TestCaddyTrustedProxies:
+    """Refs #1963 (Sicherheitsreview #1821, Proxy-Vertrauen): Keine der
+    Caddy-Konfigurationen erklaerte, welchen vorgelagerten Proxys sie glauben
+    darf. Caddy ersetzt ein eingehendes ``X-Forwarded-For`` genau dann durch
+    die Peer-IP, wenn der Peer NICHT in ``trusted_proxies`` steht — die
+    dokumentierte CDN-Topologie mit ``TRUSTED_PROXY_HOPS=2`` bekam damit nie
+    zwei Eintraege zu sehen und fiel auf ``REMOTE_ADDR`` (die Proxy-IP)
+    zurueck: ein gemeinsamer Ratelimit-Eimer, eine Lockout-Achse und eine
+    Audit-IP fuer alle.
+
+    Die Bereiche kommen aus derselben Variable, die auch die Settings lesen —
+    sonst driften Edge und Anwendung auseinander.
+    """
+
+    _ENV_VAR = "TRUSTED_PROXY_CIDRS"
+
+    # barbara.caddy ist ein per ``import`` eingebundener Site-Block; globale
+    # Server-Optionen gelten serverweit und werden von Caddyfile.dev gestellt.
+    _CADDYFILES = (
+        Path("Caddyfile"),
+        Path("Caddyfile.dev"),
+        Path("Caddyfile.demo"),
+        Path("Caddyfile.staging"),
+    )
+
+    _COMPOSE = (
+        Path("docker-compose.prod.yml"),
+        Path("docker-compose.staging.yml"),
+        Path("docker-compose.demo.yml"),
+        Path("docker-compose.dev.yml"),
+    )
+
+    @staticmethod
+    def _code(path: Path) -> str:
+        if not path.exists():  # Caddyfile.staging / Caddyfile.demo (Refs #1137)
+            pytest.skip(f"{path} nicht im Public-Snapshot (Refs #1047, #1963)")
+        return "\n".join(
+            line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_global_servers_block_declares_proxy_trust(self, path: Path) -> None:
+        code = self._code(path)
+        assert re.search(r"servers\s*\{", code), (
+            f"{path}: kein globaler 'servers'-Options-Block — ohne ihn gibt es kein Proxy-Vertrauen (Refs #1963)."
+        )
+        assert re.search(r"trusted_proxies\s+static\s+\S", code), (
+            f"{path}: 'trusted_proxies static <bereiche>' fehlt (Refs #1963)."
+        )
+        assert re.search(r"^\s*trusted_proxies_strict\s*$", code, re.MULTILINE), (
+            f"{path}: 'trusted_proxies_strict' fehlt — ohne die Direktive liest "
+            "Caddy die Client-IP-Header von links und nimmt damit den vom "
+            "Client kontrollierten Eintrag (Refs #1963)."
+        )
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_ranges_come_from_the_shared_env_var(self, path: Path) -> None:
+        code = self._code(path)
+        assert f"{{${self._ENV_VAR}" in code, (
+            f"{path}: die vertrauten Bereiche muessen aus '{{${self._ENV_VAR}:...}}' "
+            "stammen — dieselbe Variable liest settings.TRUSTED_PROXY_CIDRS, "
+            "sonst driften Edge und Anwendung auseinander (Refs #1963)."
+        )
+
+    def test_setting_and_caddy_share_the_variable_name(self) -> None:
+        import anlaufstelle.settings.base as base_settings
+
+        assert hasattr(base_settings, self._ENV_VAR), (
+            f"settings.base muss '{self._ENV_VAR}' fuehren — der System-Check "
+            "koppelt TRUSTED_PROXY_HOPS > 1 daran (Refs #1963)."
+        )
+
+    @pytest.mark.parametrize("path", _COMPOSE, ids=str)
+    def test_compose_passes_the_variable_to_caddy(self, path: Path) -> None:
+        if not path.exists():  # docker-compose.staging.yml / docker-compose.demo.yml (Refs #1137)
+            pytest.skip(f"{path} nicht im Public-Snapshot (Refs #1047, #1963)")
+        inhalt = path.read_text(encoding="utf-8")
+        caddy_block = inhalt.split("\n  caddy:\n", 1)
+        assert len(caddy_block) == 2, f"{path}: kein 'caddy'-Service gefunden"
+        assert f"- {self._ENV_VAR}" in caddy_block[1], (
+            f"{path}: der caddy-Service reicht '{self._ENV_VAR}' nicht durch — "
+            "die Caddyfile-Substitution bliebe auf ihrem Default stehen (Refs #1963)."
+        )
+
+
 def _flat_script(path: Path) -> str:
     """Skript ohne Kommentarzeilen, Zeilenfortsetzungen aufgeloest.
 

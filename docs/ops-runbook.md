@@ -1742,9 +1742,13 @@ In `Caddyfile` (und den Varianten `Caddyfile.dev`, `Caddyfile.demo`, `Caddyfile.
 reverse_proxy web:8000
 ```
 
-Caddys `reverse_proxy` setzt `X-Forwarded-Proto` (sowie `X-Forwarded-For`/`X-Forwarded-Host`) per Default selbst auf den tatsaechlichen Verbindungsstatus und ueberschreibt dabei einen vom Client mitgeschickten Wert. `SECURE_PROXY_SSL_HEADER` verlaesst sich also auf dieses Caddy-Default-Verhalten, **nicht** auf eine explizite `header_up`-Direktive. (Ein zusaetzliches `header_up X-Forwarded-Proto {scheme}` waere redundant.)
+Caddys `reverse_proxy` setzt `X-Forwarded-Proto` (sowie `X-Forwarded-For`/`X-Forwarded-Host`) per Default selbst. `SECURE_PROXY_SSL_HEADER` verlaesst sich also auf dieses Caddy-Default-Verhalten, **nicht** auf eine explizite `header_up`-Direktive. (Ein zusaetzliches `header_up X-Forwarded-Proto {scheme}` waere redundant.)
 
-### 12.2 TRUSTED_PROXY_HOPS
+**Wovon „per Default" abhaengt (Refs #1963):** Ob Caddy einen eingehenden `X-Forwarded-*`-Wert uebernimmt oder verwirft, entscheidet allein die Liste `trusted_proxies` (§ 12.2). Kommt der Request von einem Peer, der **nicht** darin steht — der Normalfall, Caddy ist der Edge —, verwirft Caddy den mitgeschickten Wert und setzt alle drei Header selbst; `X-Forwarded-For` enthaelt dann genau **einen** Eintrag, naemlich die tatsaechliche Peer-IP. Steht der Peer dagegen in `trusted_proxies`, behaelt Caddy den vorhandenen Wert: bei `X-Forwarded-For` **haengt** es die Peer-IP rechts **an**, bei `X-Forwarded-Proto`/`-Host` uebernimmt es den vorgelagerten Wert unveraendert.
+
+Fuer `SECURE_PROXY_SSL_HEADER` heisst das: Die Annahme traegt, solange kein vorgelagerter Proxy in `trusted_proxies` steht — und ansonsten nur, wenn dieser Proxy seinerseits `X-Forwarded-Proto` korrekt setzt. Wer die Liste befuellt, verlaengert damit die Vertrauenskette bis zum vorgelagerten Proxy.
+
+### 12.2 TRUSTED_PROXY_HOPS und TRUSTED_PROXY_CIDRS
 
 Ergaenzend setzt `.env` (Default `1`):
 
@@ -1752,7 +1756,34 @@ Ergaenzend setzt `.env` (Default `1`):
 TRUSTED_PROXY_HOPS=1
 ```
 
-Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-Spoof-Schutz aus [`signals.audit.get_client_ip`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/audit.py) den falschen Eintrag.
+Erklaerung in `.env.example`. Der Wert zaehlt von rechts: [`signals.audit.get_client_ip`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/audit.py) nimmt den `TRUSTED_PROXY_HOPS`-ten `X-Forwarded-For`-Eintrag von rechts und faellt auf `REMOTE_ADDR` zurueck, wenn der Header weniger Eintraege hat.
+
+**`hops > 1` ist ohne konfiguriertes Proxy-Vertrauen wirkungslos** (Refs #1963). Aus § 12.1 folgt: Ohne Eintrag in `trusted_proxies` kommt bei der App **immer genau ein** `X-Forwarded-For`-Eintrag an. `TRUSTED_PROXY_HOPS=2` findet dann keinen zweiten Eintrag und faellt auf `REMOTE_ADDR` zurueck — das ist Caddys Container-IP, also **ein einziger Wert fuer alle Clients**: ein gemeinsamer Ratelimit-Eimer, eine gemeinsame Lockout-Achse (N9), eine Audit-IP und eine Maintenance-Allowlist-Entscheidung fuer das ganze Internet (dieselbe Klasse Fehler wie Security N1). Umgekehrt gilt: Ist die Hop-Zahl hoeher als die Zahl der Proxys, denen Caddy tatsaechlich vertraut, waehlt der Resolver einen client-kontrollierten Eintrag — der Spoofing-Fall aus #1375.
+
+Beide Werte gehoeren deshalb zusammen. Vor einem CDN/Loadbalancer:
+
+```
+# Bereiche des vorgelagerten Proxys — Leerzeichen-getrennt, CIDR oder nackte Adresse
+TRUSTED_PROXY_CIDRS=203.0.113.0/24 2001:db8::/32
+TRUSTED_PROXY_HOPS=2
+```
+
+Dieselbe Variable fuellt die Caddy-Direktive `trusted_proxies static` im globalen `servers`-Block der Caddyfiles (Passthrough im `caddy`-Service der Compose-Dateien) **und** `settings.TRUSTED_PROXY_CIDRS`. Damit gibt es genau eine Quelle; Edge und Anwendung koennen nicht auseinanderlaufen.
+
+Abgesichert ist die Kombination durch zwei System-Checks in [`core/checks.py`](https://github.com/anlaufstelle/app/blob/main/src/core/checks.py):
+
+| ID | Ausloeser | Bedeutung |
+|----|-----------|-----------|
+| `core.E001` | `TRUSTED_PROXY_HOPS` negativ/kein Integer | Start bricht ab |
+| `core.W001` | `hops >= 3` | Heuristik: mehr als CDN + Caddy ist selten echt (unveraendert seit #1375) |
+| `core.W003` | `hops > 1`, aber `TRUSTED_PROXY_CIDRS` leer | **neu** — Hop-Zahl greift ins Leere (siehe oben) |
+| `core.E003` | Eintrag in `TRUSTED_PROXY_CIDRS` ist fuer Caddy kein IP-Bereich | **neu** — Start bricht ab; sonst verweigert **Caddy** den Start, und zwar erst nach dem als healthy gemeldeten `web`-Container |
+
+`core.W001` behaelt seine mit #1375 veroeffentlichte Bedeutung; die beiden mit #1963 hinzugekommenen Pruefungen bekommen eigene IDs, damit eine bestehende Runbook-Tabelle nicht still etwas anderes anzeigt.
+
+**Schreibweise (`core.E003`):** Der Wert wird von **Caddy** zerlegt, nicht von der Anwendung — der Caddyfile-Parser trennt Direktiven-Argumente ausschliesslich an Leerzeichen/Tabs. Ein Komma ist damit kein Trennzeichen (`203.0.113.0/24,198.51.100.0/24` ist fuer Caddy EIN, unbrauchbarer Bereich), und Netzmasken (`192.168.0.0/255.255.255.0`) kennt Caddy nicht. Der Check bildet genau Caddys Parser nach (Gos `netip.ParsePrefix`, inklusive fuehrender Nullen wie `/032`) — was hier durchgeht, startet den Reverse-Proxy; was hier abbricht, haette ihn sterben lassen.
+
+`trusted_proxies_strict` steht zusaetzlich in jedem globalen `servers`-Block: ab Caddy 2.8 liest Caddy die Client-IP-Header damit von **rechts** statt von links und nimmt so den vom Proxy gesetzten statt des vom Client kontrollierten Eintrags — dieselbe Leserichtung, die auch `get_client_ip` verwendet. Das gepinnte Image ist `caddy:2-alpine` in Version 2.11.4 (Digest in `docker-compose.prod.yml`), die Direktive ist dort vorhanden.
 
 ### 12.3 EXTERNAL_ORIGIN (Refs #1967)
 

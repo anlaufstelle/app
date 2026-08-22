@@ -333,7 +333,8 @@ services:
     # cap_drop ALL bis auf NET_BIND_SERVICE (Bind auf 80/443; das Caddy-Binary
     # traegt cap_net_bind_service als File-Cap, die no-new-privileges sonst
     # beim exec blockt). read_only-Root-FS; beschreibbar via Volumes bleiben
-    # /data, /config (Zertifikate/State) und /var/log/caddy (Access-Log).
+    # /data, /config (Zertifikate/State) und /var/log/caddy (Zugriffs- und
+    # Fehler-Log, Refs #1963).
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
@@ -354,7 +355,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-      # Access-Log persistent — Refs #801.
+      # Zugriffs- und Fehler-Log persistent — Refs #801, #1963.
       - caddy_logs:/var/log/caddy
     # KEIN env_file: .env hier — Caddy braucht keine App-/DB-/Krypto-Secrets
     # (Blast-Radius). Nur die vom Caddyfile tatsaechlich referenzierten
@@ -364,6 +365,10 @@ services:
     environment:
       - DOMAIN
       - X_ROBOTS_TAG
+      # Vertraute Proxy-Bereiche fuer 'trusted_proxies static' im Caddyfile.
+      # Dieselbe Variable liest settings.TRUSTED_PROXY_CIDRS — leer/undefiniert
+      # heisst 'kein vorgelagerter Proxy' und ist der Regelfall. Refs #1963.
+      - TRUSTED_PROXY_CIDRS
     depends_on:
       web:
         condition: service_healthy
