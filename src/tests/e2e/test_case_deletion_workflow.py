@@ -42,6 +42,34 @@ def _shell(e2e_env, script):
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 
 
+_CLEANUP = """
+from core.models import Case, Client, Event, LegalHold
+from core.models.workitem import DeletionRequest
+clients = Client.objects.filter(pseudonym__startswith="E2E-CaseDel-")
+client_pks = [str(pk) for pk in clients.values_list("pk", flat=True)]
+cases = Case.objects.filter(client__in=clients)
+case_pks = [str(pk) for pk in cases.values_list("pk", flat=True)]
+LegalHold.objects.filter(target_id__in=case_pks + client_pks).delete()
+DeletionRequest.objects.filter(target_id__in=case_pks + client_pks).delete()
+Event.objects.filter(client__in=clients).delete()
+cases.delete()
+clients.delete()
+print("ok")
+"""
+
+
+@pytest.fixture(autouse=True)
+def _casedel_cleanup(e2e_env):
+    """Raeumt die Wegwerf-Personen dieser Datei ab — auch bei Testfehlern.
+
+    Muster ``purge_data`` (test_attachment_purge.py). Reihenfolge: Holds und
+    Antraege zuerst (freie target_ids), dann Ereignisse, dann Faelle (loest
+    das PROTECT auf ``Case.client``), zuletzt die Personen.
+    """
+    yield
+    _shell(e2e_env, _CLEANUP)
+
+
 def _seed_case(e2e_env, *, stage, prefix):
     """Person der Stufe ``stage`` mit einem Fall anlegen.
 
@@ -51,8 +79,15 @@ def _seed_case(e2e_env, *, stage, prefix):
     Größe, um die es hier geht — ließe sich darüber gar nicht setzen.
     """
     marke = uuid.uuid4().hex[:8]
-    pseudonym = f"E2E-{prefix}-Person-{marke}"
-    titel = f"E2E-{prefix}-Fall-{marke}"
+    # Gemeinsames Praefix fuer ALLE Objekte dieser Datei — die Aufraeum-Fixture
+    # unten haengt daran. Ohne sie blieben je Lauf bis zu neun Personen zurueck;
+    # die Personenliste sortiert nach Pseudonym bei Seitengroesse 25, und
+    # "E2E-…" steht vor jedem Seed-Pseudonym: die Seed-Personen rutschten auf
+    # Seite 2, und alphabetisch spaetere Testdateien (test_client_export,
+    # test_mobile_workflows, test_offline_deadletter_ui) fanden ihre Zeile
+    # nicht mehr.
+    pseudonym = f"E2E-CaseDel-{prefix}-Person-{marke}"
+    titel = f"E2E-CaseDel-{prefix}-Fall-{marke}"
     script = (
         "from core.models import Case, Client, Facility;"
         " from core.models.user import User;"

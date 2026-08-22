@@ -57,7 +57,13 @@ def _open_first_qualified_case(page, base_url) -> str:
     # Auf Mobile rendert die Liste Cards in einem ``.sm:hidden``-Container; auf
     # Desktop die Tabelle in ``.hidden.sm:block``. ``visible``-Filter selektiert
     # automatisch die im aktuellen Viewport sichtbare Variante.
-    case_link = page.locator("main a[href^='/cases/']:not([href$='/new/'])").filter(visible=True).first
+    # ``/trash/`` ausschliessen: seit dem Fall-Papierkorb (Refs #1818) steht in
+    # der Kopfleiste der Fallliste ein Admin-Link auf ``/cases/trash/`` — im
+    # DOM VOR der Tabelle. ``.first`` traf dann den Papierkorb statt eines
+    # Fall-Details, und ``wait_for_url(…/<uuid>/)`` lief in den Timeout.
+    case_link = (
+        page.locator("main a[href^='/cases/']:not([href$='/new/']):not([href$='/trash/'])").filter(visible=True).first
+    )
     case_link.wait_for(state="visible", timeout=10000)
     case_link.click()
     page.wait_for_url(re.compile(r"/cases/[0-9a-f-]{36}/$"), timeout=10000)
