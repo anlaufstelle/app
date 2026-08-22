@@ -353,17 +353,34 @@ class TestVaultHeaderBounds:
         with pytest.raises(EncryptionError, match="token length"):
             list(decrypt_file_stream(out))
 
-    def test_four_gib_token_length_never_reaches_read(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize(
+        "token_len",
+        [
+            pytest.param(2**32 - 1, id="4gib-minus-1"),
+            pytest.param(2**31, id="signed-boundary"),
+        ],
+    )
+    def test_four_gib_token_length_never_reaches_read(self, tmp_path, monkeypatch, token_len):
         """Die zugesagte Peak-RAM-Invariante O(CHUNK): kein einzelner
         ``read``-Aufruf darf mehr als die Token-Obergrenze anfordern, auch
-        wenn der Header 4 GiB behauptet."""
+        wenn der Header 4 GiB behauptet.
+
+        Beide Werte tragen das High-Bit: als **signed** 32-Bit-Zahl gelesen
+        wuerden sie negativ, unterliefen damit sowohl den Deckel
+        (``-1 > MAX_CHUNK_TOKEN_BYTES`` ist False) als auch die
+        Truncation-Pruefung — und ``inp.read(-1)`` laese den GESAMTEN
+        Dateirest in den RAM. Deshalb muss (1) die Ablehnung explizit als
+        Laengen-Fehler kommen (nicht erst als ``InvalidToken``-Wrap hinter
+        einem vollzogenen Read) und (2) jede an ``read`` gestellte Groesse
+        nicht-negativ sein.
+        """
         from core.services.file_vault import encryption as enc
 
         out = tmp_path / "4gib.enc"
         with open(out, "wb") as f:
             f.write(struct.pack(">B", FILE_FORMAT_VERSION))
             f.write(struct.pack(">I", 1))
-            f.write(struct.pack(">I", 2**32 - 1))
+            f.write(struct.pack(">I", token_len))
             f.write(b"\x00" * 64)
 
         requested: list[int] = []
@@ -381,9 +398,9 @@ class TestVaultHeaderBounds:
             return handle
 
         monkeypatch.setattr(enc, "open", _spy_open, raising=False)
-        with pytest.raises(EncryptionError):
+        with pytest.raises(EncryptionError, match="token length"):
             list(decrypt_file_stream(out))
-        assert max(requested) <= enc.MAX_CHUNK_TOKEN_BYTES
+        assert all(0 <= size <= enc.MAX_CHUNK_TOKEN_BYTES for size in requested)
 
     def test_chunk_count_beyond_file_size_is_rejected_before_first_yield(self, tmp_path):
         """Ein aufgeblasener ``chunk_count`` wird sofort abgewiesen — nicht

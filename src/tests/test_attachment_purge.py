@@ -178,6 +178,48 @@ class TestPurgeRemovesFilesRowsAndMarker:
 
         assert purge_attachment_chain(event, uuid.uuid4()) == 0
 
+    def test_marker_cleanup_reaches_the_chain_behind_text_and_foreign_markers(
+        self, facility, staff_user, client_identified
+    ):
+        """Die Marker-Bereinigung darf nicht am ersten fremden Slug enden.
+
+        Reale Owner tragen Text-Slugs und weitere FILE-Felder VOR dem Marker
+        der vernichteten Kette (``data_json`` in Feld-Reihenfolge; jsonb
+        sortiert Schluessel nach Laenge). Endet die Schleife von
+        ``_drop_purged_marker_entries`` an einem Nicht-Marker-Slug oder an
+        einem vom Purge unberuehrten Marker, bleibt der Marker der physisch
+        geloeschten Zeilen stehen — Invariante I-M1 (ADR-039 §7) verletzt,
+        der Stale-Eintrag leckt in Facility-Export und Konflikt-Diff.
+        """
+        ft_other = _file_template(facility, "Beiblatt")
+        ft_target = _file_template(facility, "Zielbeleg neu")
+        dt = _doc_type(facility, "Typ mit zwei Dateifeldern", DocumentType.EntityType.EVENT, file_field=ft_other)
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_target, sort_order=1)
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={"notiz": "bleibt stehen"},
+            created_by=staff_user,
+        )
+        other = _attach(facility, event, ft_other, staff_user, "unbeteiligt.pdf")
+        target = _attach(facility, event, ft_target, staff_user, "ziel.pdf")
+
+        # Reihenfolge-Vorbedingung des Szenarios: Text-Slug und unbeteiligter
+        # Marker stehen VOR dem Ziel-Marker — in Insertion-Order UND nach dem
+        # jsonb-Reload (Schluessel-Laenge 5 < 8 < 13).
+        event = Event.objects.get(pk=event.pk)
+        assert list(event.data_json) == ["notiz", ft_other.slug, ft_target.slug]
+
+        purge_attachment_chain(event, target.entry_id)
+
+        event.refresh_from_db()
+        assert ft_target.slug not in event.data_json
+        assert event.data_json["notiz"] == "bleibt stehen"
+        assert event.data_json[ft_other.slug]["entries"] == [{"id": str(other.pk), "sort": 0}]
+        assert get_attachment_path(other).exists()
+
 
 # ---------------------------------------------------------------------------
 # Legal Hold — Blocker fuer den physischen Pfad

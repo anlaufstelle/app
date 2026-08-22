@@ -307,6 +307,51 @@ class TestStagingUndAnwendungGetrennt:
 
         assert list(Path(tmp_path).rglob("*.enc")) == []
 
+    def test_add_nach_remove_persistiert_das_stufe_b_schema(
+        self, staff_user, sample_event, ft_file, dt_with_file, settings, tmp_path
+    ):
+        """Der nach einem ADD geschriebene Marker traegt exakt das Stufe-B-Schema
+        ``{"id", "sort"}`` (``dynamic_data.py``) mit ``sort = base_sort + idx``.
+
+        ``data_json`` geht verbatim in Facility-/DSGVO-Exporte; ein fremder
+        Entry-Schluessel liesse ``normalize_file_marker`` den Sort beim
+        naechsten Lesen positional re-derivieren — nach Remove+Add drifteten
+        Marker-Sort und DB-``sort_order`` auseinander und Folge-ADDs vergaeben
+        doppelte Sortwerte.
+        """
+        settings.MEDIA_ROOT = str(tmp_path)
+        first = _attach(sample_event, ft_file, staff_user, name="erste.pdf", sort_order=0)
+        second = _attach(sample_event, ft_file, staff_user, name="zweite.pdf", sort_order=1)
+        sample_event.data_json[ft_file.slug] = _multi_marker(first, second)
+        sample_event.save(update_fields=["data_json"])
+
+        uploads = [
+            SimpleUploadedFile("dritte.pdf", PDF_HEADER, content_type="application/pdf"),
+            SimpleUploadedFile("vierte.pdf", PDF_HEADER, content_type="application/pdf"),
+        ]
+        apply_attachment_changes(
+            sample_event,
+            staff_user,
+            {f"{ft_file.slug}__remove": str(first.entry_id)},
+            {},
+            {ft_file.slug: uploads},
+            dt_with_file,
+        )
+
+        sample_event.refresh_from_db()
+        entries = sample_event.data_json[ft_file.slug]["entries"]
+        assert [set(entry) for entry in entries] == [{"id", "sort"}] * 3
+        added = list(
+            sample_event.attachments.filter(deleted_at__isnull=True)
+            .exclude(entry_id__in=[first.entry_id, second.entry_id])
+            .order_by("sort_order")
+        )
+        assert entries == [
+            {"id": str(second.pk), "sort": 1},
+            {"id": str(added[0].pk), "sort": 2},
+            {"id": str(added[1].pk), "sort": 3},
+        ]
+
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
