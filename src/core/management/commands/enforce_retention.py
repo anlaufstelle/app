@@ -46,6 +46,10 @@ class _RetentionTotals:
     deleted: int = 0
     anonymized: int = 0
     trash_anonymized: int = 0
+    # Refs #1818 (ADR-044): Faelle im Papierkorb, deren ``client_trash_days``
+    # abgelaufen sind (P2b — dieselbe Frist wie bei Personen, kein zweiter
+    # Fristbegriff).
+    trash_anonymized_cases: int = 0
     activities: int = 0
     auditlog_pruned: int = 0
     # Refs #1760: abgelaufene Offline-Widerrufe (klartext-frei, aber pseudonymer
@@ -162,6 +166,14 @@ class Command(BaseCommand):
         from core.services.client import anonymize_eligible_soft_deleted_clients
 
         totals.trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
+        # Refs #1818: Faelle aus dem Papierkorb tilgen, sobald dieselbe
+        # client_trash_days-Frist abgelaufen ist. Bewusst NACH dem Personen-Lauf:
+        # anonymisiert der eine Schritt die ganze Person, sind ihre Faelle
+        # bereits redigiert und dieser Lauf findet nur noch die einzeln
+        # geloeschten.
+        from core.services.case.deletion import anonymize_eligible_soft_deleted_cases
+
+        totals.trash_anonymized_cases += anonymize_eligible_soft_deleted_cases(facility, settings_obj, dry_run=dry_run)
         totals.auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
         # Refs #1760: Widerrufe aelter als OFFLINE_REVOCATION_RETENTION_SECONDS
         # (2x Bundle-TTL) haben ihren Zweck erfuellt — kein Geraet im TTL-Fenster
@@ -205,6 +217,11 @@ class Command(BaseCommand):
                 )
             )
             self.stdout.write(
+                self.style.WARNING(
+                    f"[dry-run] Would anonymize {totals.trash_anonymized_cases} trash-expired case(s) in total."
+                )
+            )
+            self.stdout.write(
                 self.style.WARNING(f"[dry-run] Would prune {totals.auditlog_pruned} audit-log entry/entries in total.")
             )
             return
@@ -213,6 +230,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Hard-deleted {totals.activities} activity/activities in total."))
         self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.anonymized} client(s) in total."))
         self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.trash_anonymized} trash-expired client(s) in total."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Anonymized {totals.trash_anonymized_cases} trash-expired case(s) in total.")
+        )
         self.stdout.write(self.style.SUCCESS(f"Pruned {totals.auditlog_pruned} audit-log entry/entries in total."))
         self.stdout.write(
             self.style.SUCCESS(f"Pruned {totals.offline_revocations_pruned} expired offline revocation(s) in total.")
@@ -232,6 +252,7 @@ class Command(BaseCommand):
                 "hard_deleted_activities": totals.activities,
                 "anonymized_clients": totals.anonymized,
                 "anonymized_trash_clients": totals.trash_anonymized,
+                "anonymized_trash_cases": totals.trash_anonymized_cases,
                 "pruned_auditlog": totals.auditlog_pruned,
                 "pruned_offline_revocations": totals.offline_revocations_pruned,
             },

@@ -11086,3 +11086,60 @@ msgstr "Diese Datei endgültig löschen"
 #: src/templates/core/attachments/partials/_purge_link.html:26
 msgid "endgültig löschen"
 msgstr "endgültig löschen"
+
+#: src/core/models/audit.py:63
+msgid "Fall in Papierkorb"
+msgstr "Fall in Papierkorb"
+
+#: src/core/models/audit.py:64
+msgid "Fall wiederhergestellt"
+msgstr "Fall wiederhergestellt"
+
+#: src/core/models/audit.py:65
+msgid "Fall anonymisiert"
+msgstr "Fall anonymisiert"
+
+#: src/core/services/case/deletion.py:138
+msgid "Der Fall liegt bereits im Papierkorb."
+msgstr "Der Fall liegt bereits im Papierkorb."
+
+#: src/core/services/case/deletion.py:169
+msgid ""
+"Für Fälle einer Person mit Zusatzangaben ist ein Löschantrag mit "
+"Bestätigung nötig."
+msgstr ""
+"Für Fälle einer Person mit Zusatzangaben ist ein Löschantrag mit "
+"Bestätigung nötig."
+
+#: src/core/services/case/deletion.py:187
+#: src/core/services/case/deletion.py:228
+msgid "Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."
+msgstr "Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."
+
+#: src/core/services/case/deletion.py:189
+msgid "Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."
+msgstr "Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."
+
+#: src/core/services/case/deletion.py:195
+msgid "Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."
+msgstr "Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."
+
+#: src/core/services/case/deletion.py:254
+msgid "Der Fall liegt nicht im Papierkorb."
+msgstr "Der Fall liegt nicht im Papierkorb."
+
+#: src/core/services/case/deletion.py:409
+msgid "Nur Fälle im Papierkorb können anonymisiert werden."
+msgstr "Nur Fälle im Papierkorb können anonymisiert werden."
+
+#: src/core/services/case/deletion.py:412
+msgid ""
+"Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — "
+"Anonymisierung nicht möglich."
+msgstr ""
+"Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — "
+"Anonymisierung nicht möglich."
+
+#: src/core/services/deletion.py:92
+msgid "Fall (nicht mehr auffindbar)"
+msgstr "Fall (nicht mehr auffindbar)"

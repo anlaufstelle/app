@@ -156,6 +156,17 @@ PROCESSING_ACTIVITIES = [
             # 3. **Von Lesezugriffen** bleiben nur ``EXPORT``, ``DOWNLOAD``,
             #    ``OFFLINE_*_READ`` und ``SYSTEM_VIEW``; Detail-, Listen- und
             #    Suchaufrufe erzeugen keinen Eintrag (ADR-043).
+            #
+            # ACHTUNG (Refs #1818, ADR-044): Punkt 1 ist seit dem Fall-Loeschpfad
+            # nur noch fuer die **Oberflaeche** wahr. Modell, Migration 0158 und
+            # der Loesch-Service existieren (``services/case/deletion.py``,
+            # ``DeletionRequest.TargetType.CASE``,
+            # ``CASE_SOFT_DELETED``/``CASE_RESTORED``/``CASE_ANONYMIZED``) — es
+            # gibt nur noch keine Route dorthin. Der Satz bleibt deshalb
+            # unveraendert stehen, bis die Views liegen: eine Art.-30-Angabe, die
+            # einen fuer niemanden erreichbaren Loeschweg zusagt, waere genauso
+            # falsch wie die alte Ueberreichweite. Mit den Views MUSS er in
+            # DERSELBEN Aenderung fallen (DE + EN + .mo).
             _(
                 "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; "
                 "auf Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von "

@@ -60,6 +60,19 @@ class ComplianceCheck:
 # ``compliance/cron.py`` — dort ist das *Ausbleiben* das Signal, nicht das
 # Vorhandensein.
 #
+# Ebenfalls bewusst draussen (Refs #1818): die drei Fall-Loeschaktionen
+# (``CASE_SOFT_DELETED``/``CASE_RESTORED``/``CASE_ANONYMIZED``) — exakt aus dem
+# Grund, aus dem auch ihre Personen-Pendants (``CLIENT_SOFT_DELETED`` …) nicht
+# hier stehen: eine einzelne Loeschung ist der vorgesehene Ablauf, kein Vorfall;
+# auf dieser Liste faerbte jeder korrekt bearbeitete Loeschantrag das Dashboard.
+# Die *Menge* ist die Auffaelligkeit, und die zaehlt eine Ebene hoeher:
+# ``detect_mass_client_destruction`` (``compliance/breach_detection.py``) sieht
+# ueber ``DELETION_APPROVED`` auch genehmigte Fall-Loeschungen und erzeugt bei
+# Ueberschreitung eine ``SECURITY_VIOLATION`` — die steht auf dieser Liste.
+# Bekannte Grenze: der direkte Loeschweg nicht-qualifizierter Faelle (P1c)
+# schreibt keine ``DELETION_APPROVED``-Zeile und laeuft deshalb nicht in diesen
+# Zaehler.
+#
 # Ebenfalls bewusst draussen (Refs #1957): die sieben Bearbeitungs-/
 # Zuordnungs-Aktionen rund um Ereignisse, Episoden, Wirkungsziele und Anhaenge.
 # Sie sind der Normalfall eines Arbeitstages — auf dieser Liste faerbte jede

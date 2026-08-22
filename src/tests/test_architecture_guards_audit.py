@@ -234,6 +234,12 @@ class TestAuditDetailKeyInventory:
         "core/management/commands/export_facility.py": (1, "Zaehler-Dict aus export['entities']"),
         "core/management/commands/mark_restore_verified.py": (1, "detail-Variable (note) je nach CLI-Argument"),
         "core/retention/enforcement.py": (1, "**extra_detail des Retention-Laufs (document_type)"),
+        "core/services/case/deletion.py": (
+            1,
+            "**detail von _move_case_to_trash — der gemeinsame Kern beider "
+            "Fall-Loeschwege; die Aufrufer geben entweder ``trigger`` (direkt) "
+            "oder ``deletion_request`` (genehmigt) mit (Refs #1818)",
+        ),
         "core/services/config.py": (3, "**_condition_detail(...) der Feldbedingungen"),
         "core/services/events/crud.py": (1, "audit_detail-Variable mit optionalem source"),
         # ``log_attachment_violation`` bekommt sein ``**extra`` ueber die

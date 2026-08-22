@@ -18,16 +18,18 @@ logger = logging.getLogger(__name__)
 
 
 def cases_with_live_client():
-    """Faelle, deren Person weder im Papierkorb noch anonymisiert ist (Refs #1777).
+    """Lebende Faelle lebender Personen (Refs #1777, seit #1818 auch am Fall).
 
-    **Die Loeschgrenze der Fall-Domaene verlaeuft ueber die Person, nicht ueber
-    den Fall.** ``Case`` erbt zwar ``SoftDeletableModel``, aber kein
-    Produktionspfad setzt ``is_deleted`` je auf einem Fall — es gibt keinen
-    Fall-Loeschworkflow (``DeletionRequest.TargetType`` kennt nur
-    ``EVENT``/``CLIENT``, ADR-039 §6). Ein ``is_deleted=False``-Filter an den
-    Fall-Views waere darum wirkungslos; die wirksame Grenze ist der
-    Pflicht-FK ``Case.client``:
+    **Die Loeschgrenze der Fall-Domaene verlief zunaechst nur ueber die
+    Person.** ``Case`` erbte zwar ``SoftDeletableModel``, aber kein
+    Produktionspfad setzte ``is_deleted`` je auf einem Fall — es gab keinen
+    Fall-Loeschworkflow (ADR-039 §6). Seit dem Fall-Loeschpfad (#1818,
+    [ADR-044]) gibt es ihn, und der Filter am Fall selbst ist nicht mehr
+    wirkungslos, sondern die Papierkorb-Grenze:
 
+    * ``is_deleted=True`` — Fall im Papierkorb (#1818); Detail, Bearbeiten,
+      Episoden, Ziele und die Fallliste antworten damit wie bei einer
+      widerrufenen Person,
     * ``client__is_deleted=True`` — Person im Papierkorb (#1737),
     * ``client__is_active=False`` — Person anonymisiert (#1771; muss NICHT im
       Papierkorb liegen, die K-Anon-Bridge laesst ``is_deleted=False``).
@@ -40,11 +42,12 @@ def cases_with_live_client():
     Liefert ein ``FacilityScopedQuerySet``; ``.for_facility(...)`` und
     ``select_related(...)`` bleiben also anwendbar, und
     :func:`~core.services.scoping.get_scoped_object` nimmt es direkt entgegen.
-    Die Invariante „Faelle kennen kein Soft-Delete" ist in
-    ``tests/test_cases_trash_invariant.py`` gepinnt — faellt sie, braucht diese
-    Funktion zusaetzlich ein ``is_deleted=False`` am Fall selbst.
+    Beide Haelften der Grenze sind in ``tests/test_cases_trash_invariant.py``
+    gepinnt. Der Papierkorb-Zugang selbst (Liste, Wiederherstellen) fragt
+    bewusst **nicht** ueber diesen Helfer ab — er ist der eine Ort, an dem ein
+    geloeschter Fall sichtbar sein muss.
     """
-    return Case.objects.filter(client__is_deleted=False, client__is_active=True)
+    return Case.objects.filter(is_deleted=False, client__is_deleted=False, client__is_active=True)
 
 
 def get_case_or_none(facility, case_id):

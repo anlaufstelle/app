@@ -191,6 +191,13 @@ class DeletionRequest(models.Model):
     class TargetType(models.TextChoices):
         EVENT = "Event", _("Event")
         CLIENT = "Client", _("Person")
+        # Refs #1818 (ADR-044): Art. 17 kannte bis hierher nur die beiden
+        # Extreme — einzelnes Ereignis oder ganze Person. Ein Betroffener, der
+        # genau einen Fall geloescht haben will, zwang die Einrichtung damit zur
+        # Alles-oder-nichts-Entscheidung. Der Wert ist bewusst der Modellname
+        # (wie ``Event``/``Client``), damit ``target_id`` ohne Zusatzwissen
+        # aufloesbar bleibt.
+        CASE = "Case", _("Fall")
 
     objects = FacilityScopedManager()
 

@@ -136,55 +136,35 @@ def _redact_client_identity(client) -> None:
 def _redact_cases_and_episodes(client) -> list:
     """Anonymisiere alle Cases + ihre Episoden. Returns case_ids für Folgeschritte.
 
-    M2 P5 (Refs #1058, Entscheid E7): ``data_json`` traegt seit P5 freie
-    Feldwerte (auch verschluesselte) und wird mit geleert; ``document_type``
-    faellt auf ``NULL`` zurueck, damit der ``PROTECT``-Verweis anonymisierte
-    Bestaende nicht dauerhaft an einen Konfigurationstyp kettet (der Typ waere
-    sonst nie loeschbar, obwohl die Daten weg sind) — Muster
-    ``_redact_client_identity``.
+    Refs #1818: die eigentliche Redaktion liegt seit dem Fall-Loeschpfad in
+    :func:`core.services.case.deletion.redact_case_content` — sie ist dort der
+    Kern der Fristablauf-Tilgung (ADR-044, P3a) und hier der Kaskadenschritt
+    der Personen-Anonymisierung. **Eine** Implementierung, weil beide Pfade
+    denselben Rest hinterlassen muessen: sonst haengt das Ergebnis davon ab, ob
+    eine ganze Person oder ein einzelner Fall geloescht wurde.
     """
     from core.models.case import Case
-    from core.models.episode import Episode
+    from core.services.case.deletion import redact_case_content
 
     cases = Case.objects.filter(client=client)
     case_ids = list(cases.values_list("pk", flat=True))
     for case in cases:
-        case.title = f"[Anonymisiert {case.created_at:%Y-%m-%d}]"
-        case.description = ""
-        case.data_json = {}
-        case.document_type = None
-        case.save(update_fields=["title", "description", "data_json", "document_type"])
-
-    Episode.objects.filter(case_id__in=case_ids).update(
-        title="Episode (anonymisiert)",
-        description="",
-    )
+        redact_case_content(case)
     return case_ids
 
 
 def _redact_case_goals(case_ids: list) -> None:
     """Anonymisiere Wirkungsziele + Meilensteine der Faelle (Refs #1751, Punkt 1).
 
-    ``OutcomeGoal.title``/``description`` und ``Milestone.title`` sind
-    Freitexte am Fall („Wohnung finden fuer …"), die die Anonymisierung
-    bisher ueberlebten: ``_redact_cases_and_episodes`` kaskadiert nur auf
-    ``Episode``, und kein anderer Pfad fasste die Ziel-Hierarchie an. Sie
-    haengen am selben Aggregat wie die Episoden und werden daher nach
-    demselben Muster geleert; die Fortschritts-Marker (``is_achieved``,
-    ``is_completed``, Datumsfelder) bleiben als anonyme Kennzahl erhalten.
+    Delegiert seit #1818 an :func:`core.services.case.deletion.redact_case_goals`
+    (dieselbe Begruendung wie bei :func:`_redact_cases_and_episodes`). Der
+    private Name bleibt hier stehen, weil der Paritaets-Guard
+    ``test_bridge_calls_every_hard_path_redactor`` die Kaskadenschritte des
+    Hard-Pfads an ihm abliest.
     """
-    from core.models.outcome import Milestone, OutcomeGoal
+    from core.services.case.deletion import redact_case_goals
 
-    if not case_ids:
-        return
-    goal_ids = list(OutcomeGoal.objects.filter(case_id__in=case_ids).values_list("pk", flat=True))
-    if not goal_ids:
-        return
-    OutcomeGoal.objects.filter(pk__in=goal_ids).update(
-        title="Wirkungsziel (anonymisiert)",
-        description="",
-    )
-    Milestone.objects.filter(goal_id__in=goal_ids).update(title="Meilenstein (anonymisiert)")
+    redact_case_goals(case_ids)
 
 
 def _redact_workitems(client) -> None:

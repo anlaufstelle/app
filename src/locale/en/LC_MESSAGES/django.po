@@ -10983,3 +10983,61 @@ msgstr "Delete this file permanently"
 #: src/templates/core/attachments/partials/_purge_link.html:26
 msgid "endgültig löschen"
 msgstr "delete permanently"
+
+#: src/core/models/audit.py:63
+msgid "Fall in Papierkorb"
+msgstr "Case in trash"
+
+#: src/core/models/audit.py:64
+msgid "Fall wiederhergestellt"
+msgstr "Case restored"
+
+#: src/core/models/audit.py:65
+msgid "Fall anonymisiert"
+msgstr "Case anonymized"
+
+#: src/core/services/case/deletion.py:138
+msgid "Der Fall liegt bereits im Papierkorb."
+msgstr "The case is already in the trash."
+
+#: src/core/services/case/deletion.py:169
+msgid ""
+"Für Fälle einer Person mit Zusatzangaben ist ein Löschantrag mit "
+"Bestätigung nötig."
+msgstr ""
+"Cases of a person with additional details require a deletion request with "
+"confirmation."
+
+#: src/core/services/case/deletion.py:187
+#: src/core/services/case/deletion.py:228
+msgid "Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."
+msgstr "The reviewer must not be the requester (four-eyes principle)."
+
+#: src/core/services/case/deletion.py:189
+msgid "Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."
+msgstr ""
+"The reviewer needs the 'deletion confirmation' right (four-eyes "
+"principle)."
+
+#: src/core/services/case/deletion.py:195
+msgid "Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."
+msgstr "The deletion request has already been processed (no longer pending)."
+
+#: src/core/services/case/deletion.py:254
+msgid "Der Fall liegt nicht im Papierkorb."
+msgstr "The case is not in the trash."
+
+#: src/core/services/case/deletion.py:409
+msgid "Nur Fälle im Papierkorb können anonymisiert werden."
+msgstr "Only cases in the trash can be anonymized."
+
+#: src/core/services/case/deletion.py:412
+msgid ""
+"Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — "
+"Anonymisierung nicht möglich."
+msgstr ""
+"This case is subject to a legal hold — anonymization is not possible."
+
+#: src/core/services/deletion.py:92
+msgid "Fall (nicht mehr auffindbar)"
+msgstr "Case (no longer available)"

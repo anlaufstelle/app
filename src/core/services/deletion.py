@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Client, DeletionRequest, Event, User
+from core.models import Case, Client, DeletionRequest, Event, User
 
 
 def eligible_deletion_confirmers(facility, *, exclude_user=None):
@@ -46,6 +46,11 @@ def annotate_deletion_targets(requests, facility, user) -> None:
       die Policy verbirgt).
     * Ein soft-gelöschtes oder nicht mehr auffindbares Ziel bekommt ebenfalls
       keinen Link — die Detailansicht antwortet dort mit 404.
+    * Fall-Ziele (Refs #1818) tragen ihren Titel als Label. Er ist Freitext und
+      kann PII enthalten — er steht damit auf derselben Stufe wie das
+      Pseudonym eines Personen-Ziels und bleibt dieser Liste vorbehalten, die
+      ohnehin nur Löschbestätiger:innen sehen. Ins ``AuditLog`` gehört er
+      weiterhin nicht (#1751).
 
     ``requests`` wird in-place annotiert (Listen aus der View).
     """
@@ -55,8 +60,10 @@ def annotate_deletion_targets(requests, facility, user) -> None:
 
     client_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CLIENT]
     event_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.EVENT]
+    case_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CASE]
 
     clients = {c.pk: c for c in Client.objects.for_facility(facility).filter(pk__in=client_ids)} if client_ids else {}
+    cases = {c.pk: c for c in Case.objects.for_facility(facility).filter(pk__in=case_ids)} if case_ids else {}
     events = (
         {
             e.pk: e
@@ -77,6 +84,16 @@ def annotate_deletion_targets(requests, facility, user) -> None:
                 continue
             dr.target_label = target.pseudonym
             dr.target_url = "" if target.is_deleted else reverse("core:client_detail", args=[target.pk])
+            continue
+
+        if dr.target_type == DeletionRequest.TargetType.CASE:
+            target = cases.get(dr.target_id)
+            if target is None:
+                dr.target_label = _("Fall (nicht mehr auffindbar)")
+                dr.target_url = ""
+                continue
+            dr.target_label = target.title
+            dr.target_url = "" if target.is_deleted else reverse("core:case_detail", args=[target.pk])
             continue
 
         target = events.get(dr.target_id)

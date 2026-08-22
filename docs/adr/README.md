@@ -75,6 +75,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-041](041-berichtigungsworkflow-intern.md) | Interner Art.-16-Berichtigungsworkflow (ergänzt ADR-013, kein Self-Service) | Accepted |
 | [ADR-042](042-report-key-berichtszuordnung.md) | `report_key` als eigene Achse der Berichtszuordnung (supersedes ADR-038 § 4) | Accepted |
 | [ADR-043](043-suchraum-volltextsuche.md) | Suchraum der Volltextsuche — keine Such-Protokollierung, offener Fall-Rahmen | Accepted |
+| [ADR-044](044-fall-loeschpfad.md) | Fall-Löschpfad — Papierkorb, gestaffelter Antrag, Frist und Redaktion (supersedes ADR-039 § 6) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 

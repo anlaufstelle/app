@@ -51,6 +51,18 @@ class AuditLog(models.Model):
         CASE_UPDATE = "case_update", _("Fall aktualisiert")
         CASE_CLOSE = "case_close", _("Fall geschlossen")
         CASE_REOPEN = "case_reopen", _("Fall wiedereröffnet")
+        # Refs #1818 (ADR-044): Fall-Loeschpfad. Bewusst drei eigene Aktionen
+        # statt der generischen ``DELETE``-Zeile — sie spiegeln die drei
+        # Zustaende des Papierkorbs (hinein, zurueck, endgueltig redigiert)
+        # genauso wie die Personen-Trias ``CLIENT_SOFT_DELETED``/
+        # ``CLIENT_RESTORED``/``CLIENT_ANONYMIZED``, und unter /audit/ ist genau
+        # diese Unterscheidung die Frage. Die generischen ``DELETION_*``-Zeilen
+        # des Vier-Augen-Antrags (target_type ``DeletionRequest``) bleiben
+        # unveraendert nutzbar. ``target_obj`` ist der **Fall**; der Falltitel
+        # steht nie im ``detail`` (Freitext, #1751).
+        CASE_SOFT_DELETED = "case_soft_deleted", _("Fall in Papierkorb")
+        CASE_RESTORED = "case_restored", _("Fall wiederhergestellt")
+        CASE_ANONYMIZED = "case_anonymized", _("Fall anonymisiert")
         # Refs #1957 (#1860 B5): Ereignis↔Fall-Zuordnung. Bewusst zwei
         # gerichtete Aktionen statt einer generischen „Zuordnung geaendert" —
         # unter /audit/ ist genau die Richtung die Frage („wurde ein Ereignis

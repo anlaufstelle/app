@@ -6,6 +6,8 @@ vorher als vier flache Module unter ``services/`` lagen.
 Module:
 
 - :mod:`.cases`     — Case-CRUD, Event-Zuordnung (vorher services/cases.py).
+- :mod:`.deletion`  — Papierkorb, Vier-Augen-Antrag, Fristablauf-Tilgung
+  (Refs #1818, ADR-044).
 - :mod:`.goals`     — Goal/Milestone-CRUD (vorher services/goals.py).
 - :mod:`.workitems` — WorkItem-CRUD, Status-Workflow, Wiederkehrlogik,
   Bulk-Operationen (vorher services/workitems.py).
@@ -22,6 +24,21 @@ from core.services.case.cases import (
     remove_event_from_case,
     reopen_case,
     update_case,
+)
+from core.services.case.deletion import (
+    anonymize_case,
+    anonymize_case_now,
+    anonymize_eligible_soft_deleted_cases,
+    approve_case_deletion,
+    case_requires_four_eyes,
+    get_pending_case_deletion_request,
+    pending_deletion_case_ids,
+    redact_case_content,
+    redact_case_goals,
+    reject_case_deletion,
+    request_case_deletion,
+    restore_case,
+    soft_delete_case,
 )
 from core.services.case.goals import (
     achieve_goal,
@@ -61,11 +78,16 @@ __all__ = [
     "_maybe_duplicate_recurring",
     "_next_due_date",
     "achieve_goal",
+    "anonymize_case",
+    "anonymize_case_now",
+    "anonymize_eligible_soft_deleted_cases",
+    "approve_case_deletion",
     "assign_event_to_case",
     "build_handover_summary",
     "bulk_assign_workitems",
     "bulk_update_workitem_priority",
     "bulk_update_workitem_status",
+    "case_requires_four_eyes",
     "cases_with_live_client",
     "close_case",
     "create_case",
@@ -75,8 +97,16 @@ __all__ = [
     "delete_milestone",
     "duplicate_recurring_workitem",
     "get_case_or_none",
+    "get_pending_case_deletion_request",
+    "pending_deletion_case_ids",
+    "redact_case_content",
+    "redact_case_goals",
+    "reject_case_deletion",
     "remove_event_from_case",
     "reopen_case",
+    "request_case_deletion",
+    "restore_case",
+    "soft_delete_case",
     "toggle_milestone",
     "unachieve_goal",
     "update_case",

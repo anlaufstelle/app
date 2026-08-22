@@ -48,6 +48,8 @@ Alt-Zeilen mit `target_type="EventAttachment"` werden NIE migriert (HMAC-Kette +
 
 Es gibt heute keinen Fall-Löschpfad; fall-eigene Dateien fallen mit der Klienten-Anonymisierung, der Client-Legal-Hold schützt transitiv.
 
+**Update 2026-08-22:** Abgelöst durch [ADR-044](044-fall-loeschpfad.md) ab Migration 0158 — Fälle haben seither einen eigenen Löschweg (Papierkorb, gestaffelter Vier-Augen-Antrag, `client_trash_days`-Frist, Redaktion statt Hard-Delete), fall-eigene Anhänge fallen mit der Tilgung des Falls statt erst mit der Anonymisierung der ganzen Person (#1818). `LegalHold.target_type="Case"` ist zulässig und über einen vorschlagsfreien Einstieg erzeugbar; zusätzlich sperrt ein Hold auf einem **Ereignis des Falls** dessen Löschung (Spoliations-Schutz). Der Client-Legal-Hold schützt weiterhin transitiv — er ist einer der drei Sperr-Zweige. Die Prüftabelle in §7 führt den neuen Pfad als achte Zeile.
+
 ### 7. Typwechsel an Person/Fall mit Dateien + Marker-Invariante I-M1
 
 Betroffene Versionsketten werden beim Typwechsel **soft-deletet** (`discard_type_switch_file_chains`), nicht physisch gelöscht; der Confirm-Dialog (#1733) nennt die Datei-Anzahl. **Invariante I-M1:** jeder Pfad, der Attachment-Zeilen physisch löscht, bereinigt im selben `transaction.atomic` die `__files__`-Marker des Owners (oder leert dessen `data_json`). Prüftabelle je Löschpfad (die Tabelle ist **normativ**: ein neuer physischer Löschpfad ist erst vollständig, wenn er hier eine Zeile hat):
@@ -62,6 +64,7 @@ Betroffene Versionsketten werden beim Typwechsel **soft-deletet** (`discard_type
 | `purge_orphan_field_data` | nein | skippt FILE-Waisen explizit (Docstring + Skip-Pin-Test) |
 | `purge_attachment_chain` (Refs #1874) | **ja** (ganze Versionskette: Zeilen + `.enc`) | `_drop_purged_marker_entries` im selben `atomic` **vor** dem `delete()` — über **alle** Marker-Slugs des `data_json`, nicht nur über die FILE-Felder des heutigen Typs (nach einem Typwechsel gehört ein Marker zu einem Slug, den das aktuelle Feldset nicht mehr kennt); Test `test_data_json_marker_loses_the_entry` |
 | `cleanup_orphan_storage_files` | nur Disk | kennt keine Marker; verschont alle `storage_filename` bekannter Zeilen |
+| `anonymize_case` → `delete_attachments_for(case)` (Refs #1818, [ADR-044](044-fall-loeschpfad.md)) | **ja** (fall-eigene Anhänge) | `redact_case_content` leert `case.data_json` im selben `atomic`, **vor** dem Unlink; die Datei-Löschung steht wie im Personen-Pfad ganz am Ende der Kaskade (Refs #1782) |
 
 ### 8. Offline
 

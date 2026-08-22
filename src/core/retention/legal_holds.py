@@ -7,26 +7,43 @@ gegen Loeschung; orthogonal zu Vorschlaegen und Enforcement).
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import AuditLog, Client, LegalHold, RetentionProposal
+from core.models import AuditLog, Case, Client, LegalHold, RetentionProposal
 from core.services.audit import audit_retention_decision
 
 
-def create_legal_hold(proposal, user, reason, expires_at=None):
-    """Create a legal hold and set the proposal to held status."""
+def create_hold_for_target(facility, *, target_type, target_id, user, reason, expires_at=None):
+    """Legt einen Legal Hold OHNE Retention-Vorschlag an (Refs #1818, ADR-044 §5).
+
+    ``LegalHold.target_type`` ist ein freies ``CharField`` ohne ``choices`` —
+    ``"Case"`` war also immer speicherbar. Was fehlte, war der **Erzeugungsweg**:
+    :func:`create_legal_hold` setzt einen ``RetentionProposal`` voraus, und
+    ``RetentionProposal.TargetType`` kennt nur ``EVENT``. Ein Fall-Hold war damit
+    ausschliesslich per ORM-Konsole anlegbar.
+
+    Bewusst NICHT geloest, indem ``RetentionProposal`` einen ``CASE``-Zweig
+    bekommt: ein Vorschlag traegt ``deletion_due_at`` und
+    ``retention_category`` und entsteht aus den Fristen des
+    Ereignis-Enforcements (:mod:`core.retention.enforcement`). Fuer Faelle gibt
+    es keine solche Frist — ihr Loeschweg ist der Vier-Augen-Antrag plus die
+    Papierkorb-Frist. Ein Pseudo-Vorschlag nur als Traeger des Holds haette ein
+    zweites, leerlaufendes Vorschlagsobjekt in die Retention-Ansicht gespuelt.
+
+    Der Vorschlags-gebundene Weg bleibt :func:`create_legal_hold` und setzt
+    zusaetzlich den Vorschlag auf ``HELD``; beide schreiben dieselbe
+    ``LEGAL_HOLD``-Audit-Zeile.
+    """
     hold = LegalHold.objects.create(
-        facility=proposal.facility,
-        target_type=proposal.target_type,
-        target_id=proposal.target_id,
+        facility=facility,
+        target_type=target_type,
+        target_id=target_id,
         reason=reason,
         expires_at=expires_at,
         created_by=user,
     )
-    proposal.status = RetentionProposal.Status.HELD
-    proposal.save(update_fields=["status"])
     audit_retention_decision(
-        proposal.facility,
-        target_type=proposal.target_type,
-        target_id=proposal.target_id,
+        facility,
+        target_type=target_type,
+        target_id=target_id,
         action=AuditLog.Action.LEGAL_HOLD,
         category="legal_hold_created",
         user=user,
@@ -34,6 +51,21 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         expires_at=str(expires_at) if expires_at else None,
         hold_id=str(hold.pk),
     )
+    return hold
+
+
+def create_legal_hold(proposal, user, reason, expires_at=None):
+    """Create a legal hold and set the proposal to held status."""
+    hold = create_hold_for_target(
+        proposal.facility,
+        target_type=proposal.target_type,
+        target_id=proposal.target_id,
+        user=user,
+        reason=reason,
+        expires_at=expires_at,
+    )
+    proposal.status = RetentionProposal.Status.HELD
+    proposal.save(update_fields=["status"])
     return hold
 
 
@@ -130,6 +162,58 @@ def exclude_clients_with_active_holds(queryset, facility):
     )
 
 
+def exclude_cases_with_active_holds(queryset, facility):
+    """Nimmt Faelle mit aktivem Legal Hold aus *queryset* (Refs #1818, P4).
+
+    Gegenstueck zu :func:`exclude_clients_with_active_holds`, mit **drei**
+    Ausschluss-Zweigen statt zwei:
+
+    * der Fall selbst steht unter Hold (``target_type="Case"`` — seit ADR-044
+      zulaessig),
+    * mindestens ein **Ereignis des Falls** steht unter Hold. Die Tilgung
+      loest die Zuordnung (P5); welcher Fall ein gehaltenes Ereignis
+      einrahmte, ist selbst Beweismittel — der Hold darf sich nicht dadurch
+      aushebeln lassen, dass man den Rahmen entfernt (Spoliation, Muster
+      #1066),
+    * die **Person** des Falls steht unter Hold. Ohne diesen Zweig waere der
+      Fall-Loeschweg die Hintertuer um genau die Sperre, die
+      ``exclude_clients_with_active_holds`` zieht: die Personen-Anonymisierung
+      redigiert dieselben Fall-Inhalte (``_redact_cases_and_episodes``) und ist
+      bei einem Personen-Hold blockiert. ADR-039 §6 sagt dasselbe von der
+      Datei-Seite her („der Client-Legal-Hold schuetzt transitiv").
+
+    Bewusst NICHT ueber :func:`client_has_active_hold` gebaut: der Helfer
+    schliesst zusaetzlich Personen aus, von denen **irgendein** Ereignis unter
+    Hold steht — auch eines, das mit diesem Fall nichts zu tun hat. Fuer die
+    Personen-Anonymisierung ist das richtig (sie fasst alle Ereignisse an), fuer
+    die Fall-Redaktion waere es Ueberdeckung: sie laesst Ereignisse unberuehrt.
+
+    Wie beim Personen-Pfad wird nur **aufgeschoben** — ein spaeterer
+    Retention-Lauf holt die Tilgung nach, sobald der Hold aufgehoben oder
+    abgelaufen ist.
+    """
+    return (
+        queryset.exclude(pk__in=get_active_hold_target_ids(facility, "Case"))
+        .exclude(events__pk__in=get_active_hold_target_ids(facility, "Event"))
+        .exclude(client_id__in=get_active_hold_target_ids(facility, "Client"))
+    )
+
+
+def case_has_active_hold(case):
+    """Einzel-Pruefung derselben Regel wie :func:`exclude_cases_with_active_holds`.
+
+    Fuer die manuelle Sofort-Tilgung
+    (:func:`core.services.case.deletion.anonymize_case_now`), die den Ausschluss
+    als Meldung statt als Mengen-Filter braucht. Bewusst **auf** dem
+    Mengen-Filter aufgesetzt statt daneben nachgebaut — dieselbe Lehre wie
+    #1756 beim Personen-Pfad.
+    """
+    return not exclude_cases_with_active_holds(
+        Case.objects.filter(pk=case.pk),
+        case.facility,
+    ).exists()
+
+
 def owner_has_active_hold(owner):
     """Aktiver Legal Hold, der die Anhaenge eines Owners schuetzt (Refs #1874).
 
@@ -149,8 +233,13 @@ def owner_has_active_hold(owner):
     * **Ereignis** — eigener Event-Hold ODER (ueber die Person) der
       Personen-Zweig unten,
     * **Person** — der Personen-Zweig,
-    * **Fall** — der Personen-Zweig ueber ``case.client``; ``Case`` ist kein
-      Hold-Ziel, die schuetzenswerte Entitaet ist die Person.
+    * **Fall** — eigener Case-Hold ODER der Personen-Zweig ueber ``case.client``.
+      Bis #1818 gab es nur die zweite Haelfte, weil ``Case`` kein Hold-Ziel sein
+      konnte; seit ADR-044 kann er es (P4), und ein Hold auf genau diesem Fall
+      muss dann auch seine Anhaenge schuetzen — sonst waere der Purge-Weg die
+      Luecke im frisch eingefuehrten Hold. Der Personen-Zweig bleibt bewusst
+      **zusaetzlich** stehen (rein additive Erweiterung): er sperrt schon heute
+      breiter, naemlich auch bei einem gehaltenen Ereignis derselben Person.
 
     Der Personen-Zweig ist bewusst :func:`client_has_active_hold` und kein
     Eigenbau: dieselbe Menge, die schon Anonymisierung und Trash-Ablauf
@@ -170,6 +259,8 @@ def owner_has_active_hold(owner):
     elif model_name == "client":
         client = owner
     elif model_name == "case":
+        if has_active_hold(owner.facility, "Case", owner.pk):
+            return True
         client = owner.client
     else:
         raise ValueError(f"Kein zulaessiger Attachment-Owner: {owner._meta.label}")
