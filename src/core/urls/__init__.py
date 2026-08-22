@@ -15,6 +15,7 @@ from core.views.account import AccountProfileView
 from core.views.attachments import (
     AttachmentDownloadView,
     AttachmentListView,
+    AttachmentPurgeView,
     CaseAttachmentDownloadView,
     ClientAttachmentDownloadView,
 )
@@ -206,6 +207,10 @@ urlpatterns = [
     path("cases/<uuid:case_pk>/milestones/<uuid:pk>/delete/", MilestoneDeleteView.as_view(), name="milestone_delete"),
     # Attachments (central file overview)
     path("attachments/", AttachmentListView.as_view(), name="attachment_list"),
+    # Refs #1874: ersatzloses Loeschen einer Versionskette (Bestaetigung + POST).
+    # Owner-frei adressiert (nur die Anhang-PK), weil die Uebersicht owner-generisch
+    # ist; den Owner leitet der View aus der Zeile ab und gatet ihn wie beim Download.
+    path("attachments/<uuid:pk>/delete/", AttachmentPurgeView.as_view(), name="attachment_delete"),
     # Events
     path("events/new/", EventCreateView.as_view(), name="event_create"),
     path("events/<uuid:pk>/", EventDetailView.as_view(), name="event_detail"),

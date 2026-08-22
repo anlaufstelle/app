@@ -150,6 +150,11 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "email_hash": "HMAC der E-Mail statt Klartext (Refs #1751)",
     "filename_hash": "HMAC des Dateinamens statt Klartext (Refs #1751)",
     "filename_ext": "gekappter Typmarker der Datei (Refs #1755) — kein Namensrest",
+    # Refs #1874: ``ATTACHMENT_DELETE`` (ersatzloses Loeschen einer Anhang-Kette).
+    # Reine Mengenangabe, wie viele Versionen der Kette physisch entfernt wurden —
+    # kein Bezug auf Inhalt oder Person. Der Dateiname steht wie bei den
+    # File-Vault-Rejects nur als ``filename_hash``/``filename_ext`` drin.
+    "versions": "Zahl der physisch entfernten Versionen einer Anhang-Kette (Refs #1874)",
     "source_ip": "IP-Adresse eines Breach-Detection-Treffers — Sicherheits-Forensik",
     # -- File-Vault-Rejects (``_reject`` in services/file_vault/policy.py) ---
     # Der Klartext-Dateiname wird von ``log_attachment_violation`` zentral in

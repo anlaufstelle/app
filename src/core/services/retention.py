@@ -36,6 +36,7 @@ from core.retention.legal_holds import (
     exclude_clients_with_active_holds,
     get_active_hold_target_ids,
     has_active_hold,
+    owner_has_active_hold,
 )
 from core.retention.proposals import (
     DASHBOARD_CATEGORY_LABELS,
@@ -83,6 +84,7 @@ __all__ = [
     "get_active_hold_target_ids",
     "get_dashboard_proposals",
     "has_active_hold",
+    "owner_has_active_hold",
     "process_facility_retention",
     "prune_auditlog",
     "reactivate_deferred_proposals",

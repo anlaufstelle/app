@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-21 21:18+0200\n"
+"POT-Creation-Date: 2026-08-22 04:32+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11007,3 +11007,82 @@ msgstr "Stand: __timestamp__"
 #: src/templates/core/zeitstrom/offline_zeitstrom.html:154
 msgid "ausstehend: __count__"
 msgstr "ausstehend: __count__"
+
+#: src/core/services/attachments/crud.py:407
+msgid "Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden."
+msgstr "Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden."
+
+#: src/core/views/attachments.py:764
+msgid "Datei wurde endgültig gelöscht."
+msgstr "Datei wurde endgültig gelöscht."
+
+#: src/templates/core/attachments/confirm_delete.html:4
+#: src/templates/core/attachments/confirm_delete.html:10
+msgid "Datei endgültig löschen"
+msgstr "Datei endgültig löschen"
+
+#: src/templates/core/attachments/confirm_delete.html:12
+#, python-format
+msgid "Sie sind dabei, <strong>%(name)s</strong> unwiderruflich zu vernichten."
+msgstr "Sie sind dabei, <strong>%(name)s</strong> unwiderruflich zu vernichten."
+
+#: src/templates/core/attachments/confirm_delete.html:20
+#, python-format
+msgid "Die verschlüsselte Datei wird vom Datenträger entfernt. In der Anwendung gibt es danach keinen Papierkorb und keine Wiederherstellung."
+msgid_plural "Alle %(n)s Versionen dieser Datei werden vom Datenträger entfernt. In der Anwendung gibt es danach keinen Papierkorb und keine Wiederherstellung."
+msgstr[0] "Die verschlüsselte Datei wird vom Datenträger entfernt. In der Anwendung gibt es danach keinen Papierkorb und keine Wiederherstellung."
+msgstr[1] "Alle %(n)s Versionen dieser Datei werden vom Datenträger entfernt. In der Anwendung gibt es danach keinen Papierkorb und keine Wiederherstellung."
+
+#: src/templates/core/attachments/confirm_delete.html:27
+msgid "Für diesen Datensatz besteht ein aktiver Legal Hold. Die Datei ist beweissicherungspflichtig und kann nicht vernichtet werden."
+msgstr "Für diesen Datensatz besteht ein aktiver Legal Hold. Die Datei ist beweissicherungspflichtig und kann nicht vernichtet werden."
+
+#: src/templates/core/attachments/confirm_delete.html:53
+msgid "Hinweis: Wer die Datei nur aus der Dokumentation nehmen will, entfernt sie im Bearbeiten-Formular des Datensatzes. Sie verschwindet dann aus der Oberfläche, bleibt aber für die Auskunft nach Art. 15 DSGVO nachweisbar — und lässt sich später weiterhin hier endgültig löschen."
+msgstr "Hinweis: Wer die Datei nur aus der Dokumentation nehmen will, entfernt sie im Bearbeiten-Formular des Datensatzes. Sie verschwindet dann aus der Oberfläche, bleibt aber für die Auskunft nach Art. 15 DSGVO nachweisbar — und lässt sich später weiterhin hier endgültig löschen."
+
+#: src/core/views/attachments.py:875
+msgid "Diese Datei wurde bereits endgültig gelöscht."
+msgstr "Diese Datei wurde bereits endgültig gelöscht."
+
+#: src/templates/core/attachments/confirm_delete.html:31
+msgid "Sicherungskopien sind davon nicht erfasst: Führt Ihre Einrichtung ein Medien-Backup, bleibt die verschlüsselte Datei dort bis zum Ablauf der Backup-Aufbewahrung erhalten. Wenn eine betroffene Person auf vollständiger Löschung besteht, wenden Sie sich zusätzlich an Ihre Administration."
+msgstr "Sicherungskopien sind davon nicht erfasst: Führt Ihre Einrichtung ein Medien-Backup, bleibt die verschlüsselte Datei dort bis zum Ablauf der Backup-Aufbewahrung erhalten. Wenn eine betroffene Person auf vollständiger Löschung besteht, wenden Sie sich zusätzlich an Ihre Administration."
+
+#: src/templates/core/attachments/confirm_delete.html:72
+msgid "Entfernt am"
+msgstr "Entfernt am"
+
+#: src/templates/core/attachments/confirm_delete.html:84
+msgid "Diese Datei ist bereits aus der Dokumentation entfernt und in der Oberfläche nicht mehr sichtbar. Verschlüsselt liegt sie weiterhin auf dem Datenträger — erst dieser Schritt beseitigt sie."
+msgstr "Diese Datei ist bereits aus der Dokumentation entfernt und in der Oberfläche nicht mehr sichtbar. Verschlüsselt liegt sie weiterhin auf dem Datenträger — erst dieser Schritt beseitigt sie."
+
+#: src/templates/core/attachments/list.html:55
+msgid "Entfernte Dateien"
+msgstr "Entfernte Dateien"
+
+#: src/templates/core/attachments/list.html:56
+msgid "Zurück zu den aktiven Dateien"
+msgstr "Zurück zu den aktiven Dateien"
+
+#: src/templates/core/attachments/list.html:58
+msgid "Entfernte Dateien anzeigen"
+msgstr "Entfernte Dateien anzeigen"
+
+#: src/templates/core/attachments/partials/attachment_table.html:68
+#: src/templates/core/attachments/partials/attachment_table.html:114
+#, python-format
+msgid "entfernt %(removed)s"
+msgstr "entfernt %(removed)s"
+
+#: src/templates/core/attachments/partials/attachment_table.html:148
+msgid "Keine entfernten Dateien"
+msgstr "Keine entfernten Dateien"
+
+#: src/templates/core/attachments/partials/_purge_link.html:26
+msgid "Diese Datei endgültig löschen"
+msgstr "Diese Datei endgültig löschen"
+
+#: src/templates/core/attachments/partials/_purge_link.html:26
+msgid "endgültig löschen"
+msgstr "endgültig löschen"

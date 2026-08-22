@@ -50,7 +50,7 @@ Es gibt heute keinen Fall-Löschpfad; fall-eigene Dateien fallen mit der Kliente
 
 ### 7. Typwechsel an Person/Fall mit Dateien + Marker-Invariante I-M1
 
-Betroffene Versionsketten werden beim Typwechsel **soft-deletet** (`discard_type_switch_file_chains`), nicht physisch gelöscht; der Confirm-Dialog (#1733) nennt die Datei-Anzahl. **Invariante I-M1:** jeder Pfad, der Attachment-Zeilen physisch löscht, bereinigt im selben `transaction.atomic` die `__files__`-Marker des Owners (oder leert dessen `data_json`). Prüftabelle je Löschpfad:
+Betroffene Versionsketten werden beim Typwechsel **soft-deletet** (`discard_type_switch_file_chains`), nicht physisch gelöscht; der Confirm-Dialog (#1733) nennt die Datei-Anzahl. **Invariante I-M1:** jeder Pfad, der Attachment-Zeilen physisch löscht, bereinigt im selben `transaction.atomic` die `__files__`-Marker des Owners (oder leert dessen `data_json`). Prüftabelle je Löschpfad (die Tabelle ist **normativ**: ein neuer physischer Löschpfad ist erst vollständig, wenn er hier eine Zeile hat):
 
 | Löschpfad | physisch? | Marker-Bereinigung |
 |---|---|---|
@@ -60,6 +60,7 @@ Betroffene Versionsketten werden beim Typwechsel **soft-deletet** (`discard_type
 | `enforce_retention`/`enforce_document_type_retention` → `_soft_delete_events` | ja | wie `soft_delete_event` |
 | `discard_type_switch_file_chains` (neu) | **nein** (soft-delete) | Typwechsel verwirft `data_json` ohnehin (E11-Rebuild) — kein physischer Löschpfad, I-M1 nicht berührt |
 | `purge_orphan_field_data` | nein | skippt FILE-Waisen explizit (Docstring + Skip-Pin-Test) |
+| `purge_attachment_chain` (Refs #1874) | **ja** (ganze Versionskette: Zeilen + `.enc`) | `_drop_purged_marker_entries` im selben `atomic` **vor** dem `delete()` — über **alle** Marker-Slugs des `data_json`, nicht nur über die FILE-Felder des heutigen Typs (nach einem Typwechsel gehört ein Marker zu einem Slug, den das aktuelle Feldset nicht mehr kennt); Test `test_data_json_marker_loses_the_entry` |
 | `cleanup_orphan_storage_files` | nur Disk | kennt keine Marker; verschont alle `storage_filename` bekannter Zeilen |
 
 ### 8. Offline
@@ -85,6 +86,12 @@ Lückenlosigkeit: das Rename lässt die Join-Policy aktiv; nach 0130 sind alle Z
 ### 12. Sichtbarkeits-Gate für Downloads (5 Stufen) + Rollen-Gefälle
 
 (1) Owner-Lookup facility-gescopt + `is_deleted=False` → 404; (2) Doc-Type-Sensitivity `user_can_see_document_type` → **404** (einzige nicht-leckende Antwort — die Zusatzfelder-Sektion ist für Unterberechtigte komplett abwesend; `document_type is None` ⇒ fail-closed); (3) Anhang am Owner + `deleted_at IS NULL` → 404; (4) Feld-Sensitivity `user_can_see_field` → **403**; (5) Datei auf Disk → 404 + `logger.error`. Rollen-Gefälle: Fall-Download `StaffRequiredMixin` (Fälle sind für Assistenz unsichtbar — ein ASSISTANT-Download wäre Gate-Umgehung), Client-Download `AssistantOrAboveRequiredMixin`.
+
+**Update 2026-08-22 (#1874) — das Gate ist nicht mehr download-only.** Die Route `core:attachment_delete` (ersatzloses, physisches Löschen einer Versionskette) fährt dasselbe fünfstufige Gate, mit drei Unterschieden:
+
+- **Einstieg über die Anhang-Zeile statt über den Owner.** Die URL trägt nur die Anhang-PK; der Owner wird daraus abgeleitet. Stufe 0 ist deshalb ein direkter `Attachment.objects.for_facility(...)`-Lookup (**nicht** über einen Owner-Join — eine personen-/falleigene Zeile hängt an keinem Ereignis) plus `is_current=True`: Löschgegenstand ist immer die Ketten**spitze**, eine Vorversion fällt mit der Kette und ist kein eigener Einstieg. Stufe 1 dispatcht danach über `OWNER_LOADERS` (Modulebene, geteilt mit den drei Download-Views — zwei Kopien des Scope-Schnitts wären die Drift, die #1777 gekostet hat).
+- **Stufe 3 läuft mit `include_removed=True`.** Der Anlassfall (irrtümlicher Upload) nimmt in der Praxis zuerst den kurzen Weg über die Checkbox „Entfernen" — bliebe L5 (Refs #1375) hier stehen, wäre genau diese Datei danach unlöschbar und ihre `.enc` läge bis zur Anonymisierung der Person im Vault. Die Lockerung gilt **ausschließlich** in Richtung Vernichtung; jeder lesende Pfad lässt den Schalter auf `False`.
+- **Rolle LEAD_PLUS statt des Owner-Gefälles.** Das reversible Entfernen bleibt bei jeder bearbeitenden Rolle; die Vernichtung ist eine Eskalation. LEAD_PLUS deckt zugleich das Rollen-Gefälle der Owner-Typen ab (Fall-Anhänge sind STAFF_PLUS) — es braucht keine zweite Fallunterscheidung.
 
 ## Consequences
 

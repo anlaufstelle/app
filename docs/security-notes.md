@@ -263,6 +263,40 @@ Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_pol
 
 ---
 
+## Medien-Backups überleben das ersatzlose Löschen einer Datei (Issue #1874)
+
+**Status:** Akzeptiertes Restrisiko. Die Anwendung kann es technisch nicht schließen; die Gegenmaßnahme ist betrieblich und die Zusage an die betroffene Person ist entsprechend eingeschränkt formuliert.
+
+### Beobachtung
+
+Das ersatzlose Löschen eines Dateianhangs (`purge_attachment_chain`, Route `core:attachment_delete`) entfernt die Zeilen, die `__files__`-Marker **und** die verschlüsselten `.enc`-Dateien der ganzen Versionskette vom Datenträger. Innerhalb der laufenden Instanz ist der Vorgang damit vollständig und unwiderruflich — es gibt keinen Papierkorb und keinen Wiederherstellungspfad.
+
+**Nicht erfasst sind die Sicherungskopien daneben.** Der Prod-Backup-Pfad (Welt B, [`scripts/ops/backup.sh`](../scripts/ops/backup.sh)) schreibt neben dem DB-Dump einen Medien-Tarball `*_media.tar.gz.enc` (+ `.hmac`), der über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) zurückspielbar ist (siehe [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-die-zwei-backup-welten)). Eine Datei, die heute gelöscht wird, liegt in jedem Backup weiter, das vor der Löschung entstanden ist — bis zum Ablauf der Backup-Aufbewahrung bzw. bis zur Rotation des Off-Site-Ziels. Ein Restore holt sie zurück; die DB-Zeile käme dabei mit, weil der DB-Dump aus demselben Zeitpunkt stammt.
+
+Für ein Feature, das ausdrücklich als **Datenminimierung** angeboten wird (Anlassfall: falsche Datei, falsche Person, Klarname im Dokument), ist eine unbedingte Zusage „keine Wiederherstellung — auch nicht durch die Administration" gegenüber der betroffenen Person deshalb falsch.
+
+### Warum die Anwendung das nicht schließen kann
+
+Ein Backup ist per Konstruktion ein Stand **von vorher**. Nachträglich einzelne Objekte aus einem verschlüsselten, HMAC-signierten Tarball zu entfernen hieße, das Artefakt neu zu schreiben und seine Signatur neu zu setzen — damit wäre die Integritätszusicherung des Backups aufgegeben, also genau die Eigenschaft, wegen der es existiert. Dieselbe Abwägung wie beim append-only Audit-Log (§ Audit-Log-Restdaten): Integrität der Sicherung schlägt selektive Nachredaktion.
+
+### Was umgesetzt ist
+
+- **Die Bestätigungsseite sagt es.** Der Warnkasten spricht die Unwiderruflichkeit **„in der Anwendung"** aus; ein zweiter, eigener Kasten (`data-testid="attachment-purge-backup-hint"`) nennt das Medien-Backup und verweist auf die Administration. Beides ist mit Test gepinnt.
+- **Beide Handbücher** (`user-guide.md` / `en/user-guide.md`, Abschnitt 3a „Endgültig löschen") tragen dieselbe Einschränkung, statt der vorherigen unbedingten Zusage.
+
+### Betriebliche Empfehlung
+
+- Die Aufbewahrungsdauer der Backups gehört in Verarbeitungsverzeichnis und Löschkonzept — sie ist die tatsächliche Obergrenze für die Beseitigung einer Datei.
+- Bei einem Löschersuchen nach Art. 17: die Anwendungslöschung sofort ausführen und den Backup-Rest über die reguläre Rotation auslaufen lassen; Art. 17 Abs. 1 verlangt Löschung „unverzüglich", nicht die Zerstörung integritätsgesicherter Sicherungsstände.
+- Wer eine kürzere Frist zusichern will, verkürzt die Backup-Aufbewahrung — nicht die Löschroutine.
+
+### Verifikation
+
+- [`test_attachment_purge.py`](../src/tests/test_attachment_purge.py) — `TestConfirmationNamesTheRecord::test_warning_qualifies_the_promise_against_media_backups` pinnt den Hinweiskasten.
+- [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-die-zwei-backup-welten) — Nachweis, dass der Medien-Tarball existiert und zurückspielbar ist.
+
+---
+
 ## `Event.idempotency_payload_hash` überlebt die Klienten-Anonymisierung (Issue #1935)
 
 **Status:** Akzeptiertes Restrisiko — bewusste Beibehaltung nach Bewertung, keine Löschung. Bekannter Enumerations-/Verschlüsselungs-Bypass-Restfall bei `DocumentType`s ohne Freitextfeld (siehe Unlinkability-Bewertung); Härtung per HMAC-Pepper als Folgearbeit in #1942 vorgemerkt, nicht Teil dieser Festschreibung.

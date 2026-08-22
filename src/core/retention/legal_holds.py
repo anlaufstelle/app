@@ -130,6 +130,52 @@ def exclude_clients_with_active_holds(queryset, facility):
     )
 
 
+def owner_has_active_hold(owner):
+    """Aktiver Legal Hold, der die Anhaenge eines Owners schuetzt (Refs #1874).
+
+    Gebraucht vom **physischen** Anhang-Loeschpfad
+    (:func:`core.services.attachments.crud.purge_attachment_chain`). Der
+    bisherige UI-Entfernen-Pfad fragte gar nicht nach Holds — er brauchte es
+    auch nicht: ``soft_delete_attachment_chain`` setzt nur ``deleted_at``, die
+    verschluesselte Datei und die Zeile bleiben bitgleich erhalten. Ein Legal
+    Hold sichert Beweismittel; genau das leistet ein Soft-Delete noch. Ein
+    Purge dagegen macht die Datei unwiederbringlich — er ist der erste
+    Anhang-Pfad, an dem ein Hold ueberhaupt etwas zu verhindern hat.
+
+    ``LegalHold.target_type`` kennt nur ``Event``/``Client``/``Activity``; ein
+    Anhang ist nie selbst Hold-Ziel. Die Sperre wird deshalb ueber den Owner
+    aufgeloest:
+
+    * **Ereignis** — eigener Event-Hold ODER (ueber die Person) der
+      Personen-Zweig unten,
+    * **Person** — der Personen-Zweig,
+    * **Fall** — der Personen-Zweig ueber ``case.client``; ``Case`` ist kein
+      Hold-Ziel, die schuetzenswerte Entitaet ist die Person.
+
+    Der Personen-Zweig ist bewusst :func:`client_has_active_hold` und kein
+    Eigenbau: dieselbe Menge, die schon Anonymisierung und Trash-Ablauf
+    zurueckhaelt (Refs #1756) — inklusive „mindestens ein Ereignis der Person
+    steht unter Hold". Ein personen-eigener Anhang mit gehaltenem Ereignis
+    waere sonst loeschbar, waehrend die Anonymisierung derselben Person
+    blockiert ist.
+
+    Ein personenloses Ereignis (``client`` ist ``NULL``) hat keinen
+    Personen-Zweig — dort zaehlt nur der eigene Event-Hold.
+    """
+    model_name = owner._meta.model_name
+    if model_name == "event":
+        if has_active_hold(owner.facility, "Event", owner.pk):
+            return True
+        client = owner.client
+    elif model_name == "client":
+        client = owner
+    elif model_name == "case":
+        client = owner.client
+    else:
+        raise ValueError(f"Kein zulaessiger Attachment-Owner: {owner._meta.label}")
+    return client is not None and client_has_active_hold(client)
+
+
 def client_has_active_hold(client):
     """Einzel-Pruefung derselben Regel wie :func:`exclude_clients_with_active_holds`.
 

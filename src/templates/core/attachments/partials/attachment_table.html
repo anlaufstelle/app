@@ -54,12 +54,30 @@
                 </td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell">{{ item.client_pseudonym }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell"><span class="font-mono">{{ item.attachment.created_at|date:"DATETIME_FORMAT" }}</span></td>
-                <td class="px-4 py-3 text-right">
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                    {% comment %} Refs #1874: In der Entfernt-Ansicht traegt die Zeile keinen
+                    Download-Einstieg — der Download-View antwortet auf ``deleted_at`` mit 404
+                    (Stufe 3, Refs #1375), ein Anker waere ein garantiert toter Link. {% endcomment %}
+                    {% if item.download_url %}
                     <a href="{{ item.download_url }}"
                        class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-accent hover:text-accent"
                        title="{% trans 'Herunterladen' %}">
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     </a>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-1.5 text-xs text-ink-muted" data-testid="attachment-removed-at">{% blocktrans with removed=item.removed_at|date:"SHORT_DATE_FORMAT" %}entfernt {{ removed }}{% endblocktrans %}</span>
+                    {% endif %}
+                    {% comment %} Refs #1874: Ersatzloses Löschen — nur Leitung/Anwendungsbetreuung
+                    bekommt ``delete_url`` gesetzt. Der Link führt auf eine Bestätigungsseite,
+                    nicht direkt auf den POST: der Vorgang ist unwiderruflich. {% endcomment %}
+                    {% if item.delete_url %}
+                    <a href="{{ item.delete_url }}"
+                       data-testid="attachment-delete-link"
+                       class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-red-600 hover:text-red-700"
+                       title="{% trans 'Endgültig löschen' %}">
+                        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -84,11 +102,27 @@
                 <span class="truncate">{{ item.original_filename }}</span>
             </span>
             {% endif %}
-            <a href="{{ item.download_url }}"
-               class="ml-2 flex-shrink-0 text-accent hover:text-accent"
-               title="{% trans 'Herunterladen' %}">
-                <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            </a>
+            <div class="ml-2 flex-shrink-0 flex items-center gap-2">
+                {# Siehe Desktop-Zeile (Refs #1874): entfernte Zeilen ohne Download-Anker. #}
+                {% if item.download_url %}
+                <a href="{{ item.download_url }}"
+                   class="text-accent hover:text-accent"
+                   title="{% trans 'Herunterladen' %}">
+                    <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </a>
+                {% else %}
+                <span class="text-xs text-ink-muted" data-testid="mobile-attachment-removed-at">{% blocktrans with removed=item.removed_at|date:"SHORT_DATE_FORMAT" %}entfernt {{ removed }}{% endblocktrans %}</span>
+                {% endif %}
+                {# Siehe Desktop-Zeile (Refs #1874); eigener testid, damit der Selektor eindeutig bleibt. #}
+                {% if item.delete_url %}
+                <a href="{{ item.delete_url }}"
+                   data-testid="mobile-attachment-delete-link"
+                   class="text-red-600 hover:text-red-700"
+                   title="{% trans 'Endgültig löschen' %}">
+                    <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </a>
+                {% endif %}
+            </div>
         </div>
         <div class="mt-1 text-xs text-ink-muted">
             {{ item.file_size_display }} · {{ item.doc_type_name }} · {{ item.client_pseudonym }}
@@ -108,5 +142,11 @@
 </div>
 
 {% else %}
+{# Refs #1874: eigene Leermeldung fuer die Entfernt-Ansicht — „Keine Dateien gefunden" #}
+{# laese sich dort als Filterfehler statt als aufgeraeumter Zustand. #}
+{% if show_removed %}
+{% include "components/_empty_state.html" with icon="paperclip" message=_("Keine entfernten Dateien") %}
+{% else %}
 {% include "components/_empty_state.html" with icon="paperclip" message=_("Keine Dateien gefunden") %}
+{% endif %}
 {% endif %}

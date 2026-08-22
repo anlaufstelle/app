@@ -27,8 +27,22 @@ derselben Einrichtung.
 
 from __future__ import annotations
 
+from django.core.exceptions import PermissionDenied
+from django.utils.translation import gettext_lazy as _
+
 from core.models import FieldTemplate
 from core.services.dynamic_data import build_field_template_lookup, is_file_marker, normalize_file_marker
+
+
+class AttachmentPurgeBlockedError(PermissionDenied):
+    """Ein physisches Loeschen ist gesperrt (Refs #1874).
+
+    Erbt von :class:`~django.core.exceptions.PermissionDenied`, damit ein
+    kuenftiger Aufrufer, der die Ausnahme NICHT behandelt, mit 403 endet statt
+    mit einem 500er — die sichere Richtung fuer einen Loeschpfad, der nicht
+    stattfinden darf. Der View faengt sie ab und macht daraus eine lesbare
+    Meldung.
+    """
 
 
 def finalize_staged_files(owner, user, staged_by_slug, document_type):
@@ -310,6 +324,94 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
             for staged in staged_all:
                 staged.output_path.unlink(missing_ok=True)
         raise
+
+
+def _drop_purged_marker_entries(owner, purged_pks):
+    """Entfernt die Marker-Eintraege der geloeschten Zeilen aus ``owner.data_json``.
+
+    Invariante I-M1 (ADR-039 §7): ein **physischer** Loeschpfad MUSS im selben
+    ``transaction.atomic`` die ``__files__``-Marker bereinigen — sonst zeigt der
+    Marker auf eine Zeile, die es nicht mehr gibt, und der Owner rendert ein
+    Anhang-Feld mit unaufloesbarem Eintrag.
+
+    Bewusst ueber **alle** Marker-Slugs des ``data_json`` statt ueber die
+    FILE-Felder des aktuellen Dokumentationstyps: nach einem Typwechsel kann ein
+    Marker zu einem Slug gehoeren, den der heutige Typ nicht mehr kennt
+    (:func:`discard_type_switch_file_chains` laesst genau solche Ketten
+    zurueck). Der Aufloesungsweg des Feldsets wuerde den Marker dann nicht
+    finden und stehen lassen.
+    """
+    data_json = owner.data_json or {}
+    changed = False
+    for slug in list(data_json):
+        marker = data_json.get(slug)
+        if not is_file_marker(marker):
+            continue
+        current = normalize_file_marker(marker)
+        entries = [entry for entry in current if entry["id"] not in purged_pks]
+        if len(entries) == len(current):
+            continue
+        changed = True
+        if entries:
+            data_json[slug] = {"__files__": True, "entries": entries}
+        else:
+            del data_json[slug]
+    if changed:
+        owner.data_json = data_json
+        owner.save(update_fields=["data_json"])
+    return changed
+
+
+def purge_attachment_chain(owner, entry_id):
+    """Loesche eine Versionskette **ersatzlos**: Zeilen, Dateien und Marker (Refs #1874).
+
+    Abgrenzung zum Bestand: Das UI-Entfernen an den Owner-Formularen
+    (``<slug>__remove`` -> :func:`_apply_remove` ->
+    ``soft_delete_attachment_chain``) ist seit #622 ein **Soft**-Delete — es
+    setzt ``deleted_at`` und laesst die verschluesselte ``.enc`` liegen; der
+    naechtliche Orphan-Sweep verschont sie ausdruecklich, weil die Zeile noch
+    existiert. Eine irrtuemlich hochgeladene Datei (falsche Person, Klarname im
+    Inhalt) blieb damit bis zur Anonymisierung der ganzen Person im Vault.
+    Diese Funktion ist der Gegenpart: sie erfasst die **ganze** Kette, auch
+    bereits soft-geloeschte und ersetzte Glieder.
+
+    **Legal Hold ist ein harter Blocker** (:func:`owner_has_active_hold`). Der
+    Soft-Delete-Pfad kommt ohne diese Pruefung aus, weil er nichts vernichtet;
+    hier waere sie das Loeschen von Beweismitteln.
+
+    **Reihenfolge — erst DB, dann Disk.** Ein Prozessabbruch zwischen beiden
+    Schritten hinterlaesst so eine referenzlose ``.enc``, die
+    :func:`~core.services.file_vault.cleanup.cleanup_orphan_storage_files`
+    einsammelt. Umgekehrt (wie in :func:`delete_attachments_for`, dessen
+    Aufrufer den Owner ohnehin komplett abraeumt) bliebe eine DB-Zeile ohne
+    Datei zurueck — die raeumt kein Sweep je weg, und der Download antwortet
+    dauerhaft mit 404. Beide Schritte gehoeren in **eine** Transaktion des
+    Aufrufers; ein Rollback nach dem Unlink waere in beiden Reihenfolgen
+    derselbe Verlust.
+
+    :param owner: Ereignis, Person oder Fall — der Zugriff laeuft ueber den
+        geteilten Reverse-Accessor ``owner.attachments`` und ist damit
+        owner-gescopt.
+    :param entry_id: Kennung der Versionskette (nicht die Attachment-PK).
+    :raises AttachmentPurgeBlockedError: bei aktivem Legal Hold.
+    :return: Zahl der physisch entfernten Versionen (0 = Kette existiert nicht).
+    """
+    from core.retention.legal_holds import owner_has_active_hold
+    from core.services.file_vault import delete_attachment_file
+
+    chain = list(owner.attachments.filter(entry_id=entry_id))
+    if not chain:
+        return 0
+    if owner_has_active_hold(owner):
+        raise AttachmentPurgeBlockedError(
+            _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")
+        )
+
+    _drop_purged_marker_entries(owner, {str(attachment.pk) for attachment in chain})
+    owner.attachments.filter(entry_id=entry_id).delete()
+    for attachment in chain:
+        delete_attachment_file(attachment)
+    return len(chain)
 
 
 def preserve_file_markers(owner, merged_data, previous_data, file_field_slugs):

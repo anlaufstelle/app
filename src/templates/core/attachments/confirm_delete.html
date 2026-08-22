@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Datei endgültig löschen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    {# Ruecklink aus core.nav (Refs #1802). #}
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Datei endgültig löschen" %}</h1>
+    <p class="text-sm text-ink-muted mb-5">
+        {% blocktrans with name=original_filename %}Sie sind dabei, <strong>{{ name }}</strong> unwiderruflich zu vernichten.{% endblocktrans %}
+    </p>
+
+    {% comment %} Refs #1874: Erster nutzer-getriggerter Hard-Delete der Anwendung —
+    die Warnung nennt ausdrücklich, dass es keinen Papierkorb gibt. {% endcomment %}
+    <div class="bg-red-50 border border-red-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="attachment-purge-warning">
+        <p class="text-[13px] text-red-800">
+            {% blocktrans count n=version_count %}Die verschlüsselte Datei wird vom Datenträger entfernt. In der Anwendung gibt es danach keinen Papierkorb und keine Wiederherstellung.{% plural %}Alle {{ n }} Versionen dieser Datei werden vom Datenträger entfernt. In der Anwendung gibt es danach keinen Papierkorb und keine Wiederherstellung.{% endblocktrans %}
+        </p>
+    </div>
+
+    {% comment %} Refs #1874: Die Zusage der Unwiderruflichkeit gilt für die laufende
+    Anwendung, nicht für die Sicherungskopien daneben. Wo ein Medien-Backup läuft
+    (``*_media.tar.gz.enc``, docs/disaster-recovery.md §2/§3), lebt die verschlüsselte
+    Datei bis zum Ablauf der Backup-Aufbewahrung weiter — für ein als Datenminimierung
+    angebotenes Feature wäre eine unbedingte Zusage gegenüber der betroffenen Person
+    falsch. Restrisiko-Notiz: docs/security-notes.md § Medien-Backups. {% endcomment %}
+    <div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-5" data-testid="attachment-purge-backup-hint">
+        <p class="text-[13px] text-ink-soft">
+            {% trans "Sicherungskopien sind davon nicht erfasst: Führt Ihre Einrichtung ein Medien-Backup, bleibt die verschlüsselte Datei dort bis zum Ablauf der Backup-Aufbewahrung erhalten. Wenn eine betroffene Person auf vollständiger Löschung besteht, wenden Sie sich zusätzlich an Ihre Administration." %}
+        </p>
+    </div>
+
+    {% if hold_blocked %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="attachment-purge-blocker-hold">
+        <p class="text-[13px] text-amber-800">
+            {% trans "Für diesen Datensatz besteht ein aktiver Legal Hold. Die Datei ist beweissicherungspflichtig und kann nicht vernichtet werden." %}
+        </p>
+    </div>
+    {% endif %}
+
+    <dl class="card p-5 mb-5 text-[13px] space-y-2">
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Dateiname" %}</dt>
+            <dd class="text-ink font-medium truncate" data-testid="attachment-purge-filename">{{ original_filename }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Größe" %}</dt>
+            <dd class="text-ink">{{ file_size_display }}</dd>
+        </div>
+        {% comment %} Refs #1874: Das Owner-Label allein benennt keinen Datensatz — zwei
+        gleichnamige Dateien an zwei Personen ergäben zwei Seiten, die sich nur in der
+        UUID der Adresszeile unterscheiden. Pseudonym, Dokumentationstyp und
+        Hochladezeitpunkt sind dieselben Merkmale, die die Übersichtszeile daneben
+        führt. {% endcomment %}
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Zugeordnet zu" %}</dt>
+            <dd><a href="{{ owner_url }}" class="text-accent hover:underline" data-testid="attachment-purge-owner">{{ owner_label }} · {{ client_pseudonym }}</a></dd>
+        </div>
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
+            <dd class="text-ink" data-testid="attachment-purge-doc-type">{{ doc_type_name }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Hochgeladen am" %}</dt>
+            <dd class="text-ink" data-testid="attachment-purge-uploaded-at">{{ uploaded_at|date:"DATETIME_FORMAT" }}</dd>
+        </div>
+        {% if removed_at %}
+        {# Refs #1874: Kette bereits über „Entfernen" aus der Dokumentation genommen. #}
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Entfernt am" %}</dt>
+            <dd class="text-ink" data-testid="attachment-purge-removed-at">{{ removed_at|date:"DATETIME_FORMAT" }}</dd>
+        </div>
+        {% endif %}
+        <div class="flex justify-between gap-4">
+            <dt class="text-ink-muted">{% trans "Versionen" %}</dt>
+            <dd class="text-ink" data-testid="attachment-purge-versions">{{ version_count }}</dd>
+        </div>
+    </dl>
+
+    <div class="card p-5 mb-5">
+        <p class="text-[13px] text-ink-soft">
+            {% if removed_at %}{% trans "Diese Datei ist bereits aus der Dokumentation entfernt und in der Oberfläche nicht mehr sichtbar. Verschlüsselt liegt sie weiterhin auf dem Datenträger — erst dieser Schritt beseitigt sie." %}{% else %}{% trans "Hinweis: Wer die Datei nur aus der Dokumentation nehmen will, entfernt sie im Bearbeiten-Formular des Datensatzes. Sie verschwindet dann aus der Oberfläche, bleibt aber für die Auskunft nach Art. 15 DSGVO nachweisbar — und lässt sich später weiterhin hier endgültig löschen." %}{% endif %}
+        </p>
+    </div>
+
+    <form method="post" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if hold_blocked %}disabled aria-disabled="true"{% endif %} data-testid="attachment-purge-confirm">
+            {% trans "Endgültig löschen" %}
+        </button>
+        <a href="{% url 'core:attachment_list' %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+    </form>
+</div>
+{% endblock %}

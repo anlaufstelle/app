@@ -219,7 +219,8 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 - **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
 - **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses (bzw. der Person oder des Falls) und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
 - **Ersetzen (mit Versionshistorie):** Beim Bearbeiten können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird **nicht** gelöscht — sie bleibt als **Vorversion** erhalten und ist in der Detailansicht über ein aufklappbares Akkordeon weiterhin herunterladbar. Vorversionen werden erst beim vollständigen Löschen des Datensatzes entfernt. Das gilt an Ereignis, Person und Fall gleichermaßen.
-- **Entfernen:** Im Formular lässt sich eine hinterlegte Datei abwählen. Sie verschwindet aus der Detailansicht und ist nicht mehr herunterladbar; die Versionskette bleibt für die Nachvollziehbarkeit bestehen, bis der Datensatz selbst gelöscht wird.
+- **Entfernen:** Im Formular lässt sich eine hinterlegte Datei abwählen. Sie verschwindet aus der Detailansicht und ist nicht mehr herunterladbar; die Versionskette bleibt für die Nachvollziehbarkeit bestehen, bis der Datensatz selbst gelöscht wird. Die Datei liegt weiterhin verschlüsselt auf dem Server und wird in einer Auskunft nach Art. 15 DSGVO als „entfernt am …" ausgewiesen. Das ist **keine Sackgasse**: Eine entfernte Datei lässt sich später weiterhin endgültig löschen (siehe unten und [Abschnitt 3a](#endgültig-löschen)).
+- **Endgültig löschen:** Für den Irrtumsfall — falsche Datei, falsche Person — gibt es zusätzlich das ersatzlose Löschen. Es vernichtet die verschlüsselte Datei samt aller Vorversionen physisch. Das ist **unwiderruflich** und deshalb Leitungen und der Administration vorbehalten. Der Einstieg steht an **zwei** Stellen: direkt an der Datei in der Detailansicht des Ereignisses, der Person oder des Falls (Link „endgültig löschen" neben dem Dateinamen) und in der [Dateien-Übersicht](#3a-dateien-übersicht).
 
 > **Typwechsel verwirft Werte *und* Dateien:** Wechseln Sie an einer Person oder einem Fall den Dokumentationstyp — oder entfernen ihn („— Kein Typ —"), gelten die Zusatzfelder des alten Typs nicht mehr. Eine Rückfrage vor dem Speichern nennt beides: wie viele **Feldwerte** verworfen werden **und** wie viele hinterlegte **Dateien** entfernt werden. „Abbrechen" lässt alles unverändert stehen; erst „OK" führt es aus.
 
@@ -290,6 +291,20 @@ Alle Dateien liegen auf dem Server verschlüsselt (Fernet, AES-128-CBC mit HMAC-
 ### Vorversionen
 
 Ersetzte Dateien bleiben als Vorversionen erhalten (siehe [Abschnitt 3 – Dateianhänge](#dateianhänge)). Die Dateien-Übersicht zeigt aktuell nur die jeweils aktuelle Version eines Eintrags; Vorversionen sind über den Eintrag in der Detailseite des Ereignisses, der Person oder des Falls einsehbar.
+
+### Endgültig löschen
+
+Neben dem Download trägt jede Zeile für **Leitungen und Administration** ein Papierkorb-Symbol: **endgültig löschen**. Denselben Einstieg gibt es direkt an der Datei in der Detailansicht des Ereignisses, der Person oder des Falls. Gedacht ist er für den Irrtum — eine Datei, die nie hätte hochgeladen werden dürfen (falsche Person, falsche Datei, Klarname im Dokument).
+
+- Der Klick führt zunächst auf eine **Bestätigungsseite**. Sie benennt den Datensatz, um den es geht: Dateiname, Größe, zugeordneter Datensatz **mit Person-ID**, Dokumentationstyp, Hochladezeitpunkt und die Zahl der betroffenen Versionen. Prüfen Sie diese Angaben — zwei gleichnamige Dateien an zwei Personen unterscheiden sich sonst durch nichts.
+- Bestätigt wird die verschlüsselte Datei **samt allen Vorversionen vom Datenträger entfernt**. **In der Anwendung** gibt es danach keinen Papierkorb und keine Wiederherstellung — auch nicht durch die Administration.
+- **Sicherungskopien sind davon nicht erfasst.** Führt Ihre Einrichtung ein Medien-Backup, bleibt die verschlüsselte Datei dort bis zum Ablauf der Backup-Aufbewahrung erhalten und ließe sich über eine Wiederherstellung des Gesamtstands zurückholen. Wenn eine betroffene Person auf vollständiger Löschung besteht, sagen Sie ihr das nicht anders zu und wenden Sie sich zusätzlich an Ihre Administration.
+- **Aufbewahrungssperre (Legal Hold):** Steht der Datensatz oder die zugehörige Person unter einem aktiven Legal Hold, ist die Schaltfläche gesperrt und die Bestätigungsseite nennt den Grund. Beweissicherungspflichtige Dateien lassen sich nicht vernichten. Der abgewiesene Versuch wird protokolliert.
+- Der Vorgang wird im Audit-Log protokolliert — **ohne** den Dateinamen im Klartext, aber mit Datensatzbezug und Zeitpunkt. In einer Auskunft nach Art. 15 DSGVO erscheint er dort als „Anhang gelöscht"; die Datei selbst wird danach nicht mehr als gespeichert ausgewiesen, weil sie es nicht mehr ist.
+
+**Bereits entfernte Dateien.** Wer eine Datei zuerst nur über die Checkbox „Entfernen" aus der Dokumentation genommen hat, findet sie in der normalen Übersicht nicht mehr — sie liegt aber weiterhin verschlüsselt auf dem Server. Leitungen und Administration blenden diese Dateien über **„Entfernte Dateien anzeigen"** oberhalb der Tabelle ein und können sie von dort aus endgültig löschen.
+
+> **Wann besser nur entfernen?** Wenn die Datei fachlich einmal richtig war und nur nicht mehr in der laufenden Dokumentation stehen soll, gehört sie über das Bearbeiten-Formular **entfernt** (siehe [Abschnitt 3 – Dateianhänge](#dateianhänge)). Sie verschwindet dann aus der Oberfläche, bleibt aber nachweisbar — und der Weg zum endgültigen Löschen bleibt über „Entfernte Dateien anzeigen" offen.
 
 ---
 

@@ -16,7 +16,7 @@
             hx-get="{% url 'core:attachment_list' %}"
             hx-trigger="change"
             hx-target="#attachment-table"
-            hx-include="[name='client'],[name='case'],[name='event']">
+            hx-include="[name='client'],[name='case'],[name='event'],[name='removed']">
         <option value="">{% trans "Alle Dokumentationstypen" %}</option>
         {% for dt in doc_types %}
         <option value="{{ dt.pk }}" {% if selected_doc_type == dt.pk|slugify %}selected{% endif %}>{{ dt.name }}</option>
@@ -30,14 +30,40 @@
            hx-get="{% url 'core:attachment_list' %}"
            hx-trigger="keyup changed delay:300ms"
            hx-target="#attachment-table"
-           hx-include="[name='document_type'],[name='case'],[name='event']">
+           hx-include="[name='document_type'],[name='case'],[name='event'],[name='removed']">
     {# §6.5 Kontextregel (Refs #1813 T4): ?case=/?event= kommen ausschließlich #}
     {# per Deep-Link von den Detailseiten (Person/Fall/Ereignis) — kein eigenes #}
     {# Eingabefeld, aber als hidden Inputs am HTMX-Nachladen der anderen Filter #}
     {# beteiligt, sonst geht der Filter beim ersten Dropdown-/Tipp-Wechsel verloren. #}
     <input type="hidden" name="case" value="{{ selected_case }}">
     <input type="hidden" name="event" value="{{ selected_event }}">
+    {# Refs #1874: ohne dieses Feld kippt die Entfernt-Ansicht beim ersten #}
+    {# Filtergriff auf die aktiven Dateien zurueck, waehrend Badge und #}
+    {# Ruecklink stehen bleiben — die Tabelle zeigte dann etwas anderes an, #}
+    {# als die Ueberschrift verspricht. #}
+    {% if show_removed %}<input type="hidden" name="removed" value="1">{% endif %}
 </div>
+
+{% comment %} Refs #1874: Zweite Ansicht derselben Liste — die über die Checkbox
+„Entfernen" aus der Dokumentation genommenen Ketten. Ohne sie war der Anlassfall des
+Tickets eine Sackgasse: die irrtümlich hochgeladene Datei, die zuerst nur entfernt
+wurde, tauchte hier nie wieder auf und blieb bis zur Anonymisierung der Person im
+Vault. An dieselbe Rolle gebunden wie die Löschaktion selbst — für jede andere Rolle
+wäre es nur ein zweiter Blick auf bewusst ausgeblendete Zeilen ohne Handlungsoption.
+
+Der Umschalter setzt die Filter oben absichtlich zurück (einfacher Link statt
+Query-Mitnahme): die Entfernt-Ansicht ist ein Aufräumblick auf eine kurze Liste,
+kein zweiter Rechercheeinstieg. {% endcomment %}
+{% if may_purge %}
+<div class="mb-4 flex items-center gap-3 no-print">
+    {% if show_removed %}
+    <span class="inline-flex items-center rounded-full bg-canvas border border-subtle px-2.5 py-0.5 text-[12px] font-medium text-ink-muted" data-testid="attachment-removed-badge">{% trans "Entfernte Dateien" %}</span>
+    <a href="{% url 'core:attachment_list' %}" class="text-[13px] text-accent hover:underline" data-testid="attachment-removed-toggle-off">{% trans "Zurück zu den aktiven Dateien" %}</a>
+    {% else %}
+    <a href="{% url 'core:attachment_list' %}?removed=1" class="text-[13px] text-accent hover:underline" data-testid="attachment-removed-toggle">{% trans "Entfernte Dateien anzeigen" %}</a>
+    {% endif %}
+</div>
+{% endif %}
 
 <div id="attachment-table">
     {% include "core/attachments/partials/attachment_table.html" %}

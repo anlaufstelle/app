@@ -363,7 +363,11 @@ DATEIEN = NavItem(
     key="attachments",
     label=_("Dateien"),
     url_name="core:attachment_list",
-    family=frozenset({"attachment_list"}),
+    # Refs #1874: Die Bestaetigungsseite des ersatzlosen Loeschens gehoert in
+    # die Familie — sie ist eine Vollseite unter der Dateien-Uebersicht und
+    # bekommt von hier ihren Rücklink „← Dateien". Der Nav-Eintrag selbst bleibt
+    # dadurch auch waehrend der Bestaetigung aktiv markiert.
+    family=frozenset({"attachment_list", "attachment_delete"}),
     gates=("is_assistant_or_above",),
     testid="nav-attachments",
     icon="attachments",

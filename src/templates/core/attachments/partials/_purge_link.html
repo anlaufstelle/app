@@ -1,0 +1,27 @@
+{% load i18n %}
+{% comment %}
+Refs #1874: Einstieg in das **ersatzlose** Löschen einer Datei — direkt am
+Owner-Objekt (Ereignis-/Personen-/Fall-Detail), nicht nur in der zentralen
+Dateien-Übersicht. Wer den Irrtum beim Lesen des Datensatzes bemerkt, soll
+nicht erst die Übersicht suchen und die Zeile dort wiederfinden müssen.
+
+Erwartet ``entry.attachment_id`` aus dem umgebenden Kontext (identische
+Schlüssel in ``core/events/detail.html`` und
+``core/partials/dynamic_data_display.html``, gebaut von
+``core.services.attachments.context.resolve_file_entries``).
+
+Nur an der **Kettenspitze** eingebunden, nie an einer Vorversion: der Purge
+erfasst immer die ganze Kette, die Route bindet ihn an ``is_current``
+(``AttachmentPurgeView._resolve``) — ein Link an der Vorversion wäre ein 404.
+
+Rollen-Gate wie in der Übersicht: ``LeadOrAdminRequiredMixin`` quittiert jede
+andere Rolle mit 403, ein sichtbarer Link wäre eine Einladung ins Leere. Das
+reversible „Entfernen" im Bearbeiten-Formular bleibt davon unberührt und steht
+weiterhin jeder bearbeitenden Rolle offen.
+{% endcomment %}
+{% if user.is_lead_or_admin %}
+<a href="{% url 'core:attachment_delete' entry.attachment_id %}"
+   data-testid="owner-attachment-purge-link"
+   class="text-[12px] text-red-600 hover:text-red-700 hover:underline"
+   title="{% trans 'Diese Datei endgültig löschen' %}">{% trans "endgültig löschen" %}</a>
+{% endif %}

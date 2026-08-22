@@ -92,7 +92,7 @@ def get_visible_event_or_404(user, facility, pk, *, select_related=None):
     return event
 
 
-def get_visible_attachment_for_owner_or_404(user, owner, attachment_pk):
+def get_visible_attachment_for_owner_or_404(user, owner, attachment_pk, *, include_removed=False):
     """Anhang eines **bereits autorisiert geladenen** Owners aufloesen und gaten.
 
     Owner-generische Stufen 3+4 des fuenfstufigen Download-Gates (ADR-039 §12,
@@ -116,11 +116,20 @@ def get_visible_attachment_for_owner_or_404(user, owner, attachment_pk):
     Bezugs-Sensitivity fuer den Feldvergleich — dann wird 404 gehoben statt
     implizit auf NORMAL zurueckzufallen.
 
+    ``include_removed`` oeffnet Stufe 3 fuer entfernte (soft-geloeschte) Zeilen.
+    Ausschliesslich fuer das ersatzlose Loeschen (Refs #1874): eine irrtuemlich
+    hochgeladene Datei wird in der Praxis zuerst ueber die Checkbox „Entfernen"
+    aus der Dokumentation genommen, und ohne diesen Schalter waere sie danach
+    nie mehr physisch loeschbar — die ``.enc`` bliebe bis zur Anonymisierung der
+    Person liegen, also genau der Zustand, den der Loeschweg beseitigen soll.
+    Der Schalter lockert **nur** Stufe 3 und **nur** in Richtung Vernichtung;
+    jeder lesende Pfad (Download) laesst ihn auf ``False`` und bleibt bei L5
+    (Refs #1375). Die Stufen 1, 2 und 4 laufen unveraendert.
+
     Returns: die ``Attachment``-Instanz.
     """
-    attachment = (
-        owner.attachments.filter(pk=attachment_pk, deleted_at__isnull=True).select_related("field_template").first()
-    )
+    rows = owner.attachments.all() if include_removed else owner.attachments.filter(deleted_at__isnull=True)
+    attachment = rows.filter(pk=attachment_pk).select_related("field_template").first()
     if attachment is None:
         raise Http404("Attachment not found")
     document_type = getattr(owner, "document_type", None)

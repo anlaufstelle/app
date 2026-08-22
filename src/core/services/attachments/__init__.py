@@ -9,7 +9,7 @@ geteilten Reverse-Accessor ``attachments``.
 Submodule:
 
 - :mod:`.crud`    — Schreibpfade (Staging-Finalisierung, REMOVE/REPLACE/ADD,
-  Marker-Erhalt, Typwechsel-Verwurf).
+  Marker-Erhalt, Typwechsel-Verwurf, ersatzloses Loeschen einer Kette).
 - :mod:`.context` — Read-only Anzeige-Kontexte + Download-URL-Aufloesung.
 
 ``services/events`` re-exportiert die Alt-Namen weiter; dieses Paket ist die
@@ -24,16 +24,19 @@ from core.services.attachments.context import (
     resolve_file_entries,
 )
 from core.services.attachments.crud import (
+    AttachmentPurgeBlockedError,
     apply_attachment_changes,
     discard_type_switch_file_chains,
     finalize_staged_files,
     preserve_file_markers,
+    purge_attachment_chain,
     replace_upload_key,
     stage_attachment_uploads,
 )
 
 __all__ = [
     "OWNER_DOWNLOAD_ROUTES",
+    "AttachmentPurgeBlockedError",
     "apply_attachment_changes",
     "attachment_download_url",
     "build_attachment_context",
@@ -41,6 +44,7 @@ __all__ = [
     "discard_type_switch_file_chains",
     "finalize_staged_files",
     "preserve_file_markers",
+    "purge_attachment_chain",
     "replace_upload_key",
     "resolve_file_entries",
     "stage_attachment_uploads",

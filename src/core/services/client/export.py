@@ -140,6 +140,18 @@ def _gather_attachments(owner, attachment_index=None):
     unmarkiert zu listen ebenso irrefuehrend. Muster wie ``_soft_delete_meta``
     bei den uebrigen Kategorien.
 
+    **Nach einem ersatzlosen Loeschen (Refs #1874) steht hier nichts mehr** —
+    und das ist richtig: ``purge_attachment_chain`` entfernt Datei UND Zeile,
+    es gibt keine gespeicherten Daten mehr, ueber die Auskunft zu erteilen
+    waere. Eine Grabstein-Zeile waere obendrein kontraproduktiv, weil ihr
+    Dateiname (das einzige, was sie noch tragen koennte) haeufig genau die PII
+    ist, deren Vernichtung der Vorgang bezweckt. Der Vorgang selbst faellt
+    trotzdem nicht aus der Auskunft: ``ATTACHMENT_DELETE`` schreibt auf
+    ``target_type="Attachment"`` mit der **Owner**-PK als ``target_id``
+    (ADR-039 §5) und wird damit von :func:`_gather_audit_trail` ueber die
+    bestehenden Personen-/Fall-/Ereignis-Zweige mitgeliefert — als „Anhang
+    geloescht" mit Zeitpunkt, ohne Dateinamen.
+
     ``mime_type`` liefert den **verifizierten** Typ (libmagic, Refs #1274) und
     faellt nur fuer Bestandszeilen ohne Erkennung auf den browser-gemeldeten
     zurueck — dieselbe Rangfolge wie beim Download.

@@ -223,7 +223,8 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event (or of the client or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
 - **Replacing (with version history):** When editing, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the detail view via an expandable accordion. Previous versions are only removed when the record itself is fully deleted. This applies to events, clients, and cases alike.
-- **Removing:** A stored file can be deselected in the form. It disappears from the detail view and can no longer be downloaded; the version chain is kept for traceability until the record itself is deleted.
+- **Removing:** A stored file can be deselected in the form. It disappears from the detail view and can no longer be downloaded; the version chain is kept for traceability until the record itself is deleted. The file remains encrypted on the server and is reported as "removed on..." in an Art. 15 GDPR access request. This is **not a dead end**: a removed file can still be deleted permanently later (see below and [Section 3a](#deleting-permanently)).
+- **Deleting permanently:** For genuine mistakes -- wrong file, wrong person -- there is additionally permanent deletion. It physically destroys the encrypted file including all previous versions. This is **irreversible** and therefore restricted to managers and administration. There are **two** entry points: directly at the file in the detail view of the event, the client, or the case (link "delete permanently" next to the filename) and in the [Files overview](#3a-files-overview).
 
 > **Changing the type discards values *and* files:** If you change the documentation type on a client or a case -- or remove it ("— No type —") --, the additional fields of the old type no longer apply. A confirmation prompt before saving names both: how many **field values** will be discarded **and** how many stored **files** will be removed. "Cancel" leaves everything unchanged; only "OK" carries it out.
 
@@ -294,6 +295,20 @@ All files are stored encrypted on the server (Fernet, AES-128-CBC with HMAC-SHA2
 ### Previous versions
 
 Replaced files are preserved as previous versions (see [Section 3 -- File Attachments](#file-attachments)). The Files overview currently only shows the latest version per entry; previous versions are accessible via the entry on the detail page of the event, the client, or the case.
+
+### Deleting permanently
+
+Next to the download, every row carries a trash icon for **managers and administration**: delete permanently. The same entry point sits directly at the file in the detail view of the event, the client, or the case. It is meant for genuine mistakes -- a file that should never have been uploaded (wrong person, wrong file, a real name inside the document).
+
+- The click first opens a **confirmation page**. It names the record in question: filename, size, the assigned record **including the client ID**, the documentation type, the upload timestamp, and the number of affected versions. Check these details -- two identically named files belonging to two different people are otherwise indistinguishable.
+- Once confirmed, the encrypted file **including all previous versions is removed from disk**. **Within the application** there is no trash bin and no way to restore it afterwards -- not even by the administration.
+- **Backups are not covered by this.** If your facility runs a media backup, the encrypted file stays there until the backup retention expires and could be brought back by restoring the overall state. If a data subject insists on complete erasure, do not promise otherwise and additionally involve your administration.
+- **Legal hold:** if the record or its client is under an active legal hold, the button is disabled and the confirmation page states the reason. Files that must be preserved as evidence cannot be destroyed. The rejected attempt is recorded.
+- The operation is recorded in the audit log -- **without** the plaintext filename, but with the record reference and the timestamp. In an Art. 15 GDPR access request it appears there as "attachment deleted"; the file itself is no longer reported as stored, because it no longer is.
+
+**Files already removed.** Anyone who first took a file out of the documentation via the "Remove" checkbox will no longer find it in the regular overview -- yet it remains encrypted on the server. Managers and administration can show these files via **"Show removed files"** above the table and delete them permanently from there.
+
+> **When is removing the better choice?** If the file was professionally correct once and merely should not appear in the running documentation any more, **remove** it via the edit form (see [Section 3 -- File Attachments](#file-attachments)). It then disappears from the interface but stays verifiable -- and the route to permanent deletion stays open via "Show removed files".
 
 ---
 
@@ -889,4 +904,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-22 -->
-<!-- source-hash: 58a4c1fcb63addc86f6e36febb73459b1de197a8 -->
+<!-- source-hash: 2cf6fb3ff7341ea5d2ae70b9b4834440dcf3de74 -->

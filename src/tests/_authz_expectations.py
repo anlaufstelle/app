@@ -206,6 +206,19 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "case_open.pk"), ("attachment_pk", "authz_case_attachment.pk")),
         idor=(("pk", "foreign_case.pk"), ("attachment_pk", "foreign_case_attachment.pk")),
     ),
+    # Refs #1874: ersatzloses (physisches) Loeschen einer Anhang-Kette. LEAD_PLUS —
+    # der reversible Soft-Delete bleibt an den Owner-Formularen bei jeder
+    # bearbeitenden Rolle; die unwiderrufliche Vernichtung ist eine Eskalation.
+    # LEAD_PLUS deckt zugleich das Rollen-Gefaelle der Owner-Typen ab (Fall-Anhaenge
+    # sind STAFF_PLUS, ADR-039 §12) — es braucht keine zweite Fallunterscheidung.
+    E(
+        "core:attachment_delete",
+        "deletion",
+        get=LEAD_PLUS,
+        post=LEAD_PLUS,
+        url_kwargs=(("pk", "authz_attachment.pk"),),
+        idor=(("pk", "foreign_attachment.pk"),),
+    ),
     E(
         "core:workitem_detail",
         "facility-read",

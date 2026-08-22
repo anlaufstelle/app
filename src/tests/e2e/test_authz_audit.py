@@ -14,13 +14,17 @@ strukturellem Versagen (zu wenige Zellen, zu viele Setup-Fehler).
 
 import datetime
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 import requests
+from django.conf import settings as django_settings
 from django.urls import reverse
+from psycopg.types.json import Jsonb
 
 from tests._authz_expectations import EXPECTATIONS, ROLES
 from tests.e2e import _authz_audit_helpers as helpers
@@ -128,16 +132,20 @@ def audit_context(base_url, medium_seed):
         ids_fac1 = helpers.harvest_ids(conn, fac1)
         ids_fac2 = helpers.harvest_ids(conn, fac2)
         milestone_snapshot = _snapshot_milestone(conn, ids_fac1["milestone"])
+        attachment_snapshot = _snapshot_attachment_chain(conn, ids_fac1["authz_attachment"])
 
     yield {
         "sessions": sessions,
         "ids_fac1": ids_fac1,
         "ids_fac2": ids_fac2,
         "milestone_snapshot": milestone_snapshot,
+        "attachment_snapshot": attachment_snapshot,
     }
 
     for session in sessions.values():
         session.close()
+    if attachment_snapshot is not None:
+        shutil.rmtree(attachment_snapshot["backup_dir"], ignore_errors=True)
 
 
 # Spaltenliste am Model verifiziert (core/models/outcome.py: Milestone).
@@ -184,12 +192,178 @@ def _reset_milestone(conn, ctx):
     )
 
 
+# Spaltenliste am Model verifiziert (core/models/attachment.py: Attachment).
+_ATTACHMENT_COLUMN_LIST = (
+    "id",
+    "facility_id",
+    "event_id",
+    "client_id",
+    "case_id",
+    "entry_id",
+    "sort_order",
+    "deleted_at",
+    "field_template_id",
+    "storage_filename",
+    "original_filename_encrypted",
+    "file_size",
+    "mime_type",
+    "detected_mime",
+    "created_by_id",
+    "created_at",
+    "is_current",
+    "superseded_by_id",
+    "superseded_at",
+)
+_ATTACHMENT_COLUMNS = ", ".join(_ATTACHMENT_COLUMN_LIST)
+_ATTACHMENT_COL = {name: index for index, name in enumerate(_ATTACHMENT_COLUMN_LIST)}
+#: Owner-Tabelle je Owner-Spalte (ADR-039 §1: genau eine der drei ist gesetzt).
+_ATTACHMENT_OWNER_TABLES = (("event_id", "core_event"), ("client_id", "core_client"), ("case_id", "core_case"))
+
+
+def _as_sql_value(value):
+    """``jsonb``-Werte fuer den Re-INSERT wieder einpacken.
+
+    psycopg liefert ``jsonb`` als Python-``dict``/``list`` zurueck, adaptiert die
+    Rueckrichtung aber nicht von selbst — ohne den Wrapper scheiterte der Restore
+    an ``original_filename_encrypted`` (verschluesselter Dateiname) und an der
+    ``data_json`` des Owners.
+    """
+    return Jsonb(value) if isinstance(value, (dict, list)) else value
+
+
+def _attachment_file_path(row):
+    """Pfad der ``.enc`` einer Snapshot-Zeile.
+
+    ``MEDIA_ROOT`` kommt aus den Django-Settings dieses Prozesses statt aus einem
+    zweiten Pfad-Literal: Test- und E2E-Settings leiten beide aus demselben
+    ``BASE_DIR`` ab (``settings/base.py``), der laufende gunicorn schreibt also in
+    genau dieses Verzeichnis. Ein eigenes Literal hier wäre die Drift, die beim
+    ersten ``MEDIA_ROOT``-Override still einen leeren Restore erzeugt.
+    """
+    return (
+        Path(django_settings.MEDIA_ROOT)
+        / str(row[_ATTACHMENT_COL["facility_id"]])
+        / row[_ATTACHMENT_COL["storage_filename"]]
+    )
+
+
+def _snapshot_attachment_chain(conn, attachment_id):
+    """Zeilen, ``.enc``-Dateien und Owner-Marker der Matrix-Anhangskette sichern.
+
+    Refs #1874: ``core:attachment_delete`` ist der erste **physische** Löschpfad
+    in der Matrix. Er nimmt mehr mit als ``_reset_milestone``:
+
+    1. **alle** Zeilen der Versionskette (``entry_id``), nicht nur die Spitze,
+    2. die verschlüsselten Dateien auf Disk (``delete_attachment_file``),
+    3. den ``__files__``-Marker in der ``data_json`` des Owners
+       (``_drop_purged_marker_entries``, Invariante I-M1).
+
+    Ohne alle drei Teile stünde die nächste erlaubte Zelle vor einer halb
+    wiederhergestellten Kette — und der Report bekäme statt einer falschen
+    ABWEICHUNG eine andere.
+    """
+    if attachment_id is None:
+        return None
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        f"SELECT {_ATTACHMENT_COLUMNS} FROM core_attachment "  # noqa: S608 — Literal aus diesem Modul.
+        "WHERE entry_id = (SELECT entry_id FROM core_attachment WHERE id = %s)",
+        (attachment_id,),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return None
+
+    owner_table, owner_id = None, None
+    for column, table in _ATTACHMENT_OWNER_TABLES:
+        value = rows[0][_ATTACHMENT_COL[column]]
+        if value is not None:
+            owner_table, owner_id = table, value
+            break
+    owner_data_json = None
+    if owner_table is not None:
+        cur.execute(f"SELECT data_json FROM {owner_table} WHERE id = %s", (owner_id,))  # noqa: S608
+        fetched = cur.fetchone()
+        owner_data_json = fetched[0] if fetched else None
+
+    backup_dir = Path(tempfile.mkdtemp(prefix="authz-audit-attachment-"))
+    for row in rows:
+        source = _attachment_file_path(row)
+        if source.exists():
+            shutil.copy2(source, backup_dir / row[_ATTACHMENT_COL["storage_filename"]])
+    return {
+        "rows": rows,
+        "backup_dir": backup_dir,
+        "owner_table": owner_table,
+        "owner_id": owner_id,
+        "owner_data_json": owner_data_json,
+    }
+
+
+def _reset_attachment(conn, ctx):
+    """Physisch gelöschte Anhangskette wiederherstellen — DB, Disk und Marker.
+
+    Reihenfolge gespiegelt zum Löschpfad (``purge_attachment_chain``: Marker →
+    Zeilen → Dateien): erst die Dateien zurück, dann die Zeilen, dann der Marker.
+    Bricht der Hook dazwischen ab, bleibt kein Zustand stehen, der schlimmer wäre
+    als der gelöschte — eine Datei ohne Zeile sammelt der Orphan-Sweep ein, eine
+    Zeile ohne Datei repariert nichts.
+
+    ``superseded_by_id`` wird bewusst in einem zweiten Schritt gesetzt: die
+    Verbindung läuft im Autocommit, jede Zeile wäre also ihre eigene Transaktion,
+    und eine Vorversion, die auf ihre noch nicht eingefügte Nachfolgerin zeigt,
+    liefe in einen FK-Fehler. Das erspart eine Annahme über die Einfügereihenfolge
+    der Kette.
+
+    ``ON CONFLICT DO NOTHING`` macht den Hook idempotent — abgelehnte Akteure
+    haben nichts gelöscht.
+    """
+    snapshot = ctx["attachment_snapshot"]
+    if snapshot is None:
+        return
+    cur = helpers._superuser_cursor(conn)
+    for row in snapshot["rows"]:
+        target = _attachment_file_path(row)
+        backup = snapshot["backup_dir"] / row[_ATTACHMENT_COL["storage_filename"]]
+        if backup.exists() and not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, target)
+
+    placeholders = ", ".join(["%s"] * len(_ATTACHMENT_COLUMN_LIST))
+    successor_index = _ATTACHMENT_COL["superseded_by_id"]
+    for row in snapshot["rows"]:
+        values = [_as_sql_value(value) for value in row]
+        values[successor_index] = None
+        cur.execute(
+            f"INSERT INTO core_attachment ({_ATTACHMENT_COLUMNS}) "  # noqa: S608
+            f"VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING",
+            values,
+        )
+    for row in snapshot["rows"]:
+        if row[successor_index] is not None:
+            cur.execute(
+                "UPDATE core_attachment SET superseded_by_id = %s WHERE id = %s",
+                (row[successor_index], row[_ATTACHMENT_COL["id"]]),
+            )
+
+    if snapshot["owner_table"] is not None:
+        cur.execute(
+            f"UPDATE {snapshot['owner_table']} SET data_json = %s WHERE id = %s",  # noqa: S608
+            (_as_sql_value(snapshot["owner_data_json"]), snapshot["owner_id"]),
+        )
+
+
 # C2: Endpoints, deren erlaubter POST das Matrix-Objekt konsumiert — ohne
 # Wiederherstellung bekämen nachfolgende ERLAUBTE Akteure 404 (falsche
 # ABWEICHUNG). Hook läuft nach jeder POST-Zelle dieser Endpoints.
 DESTRUCTIVE_RESET = {
     "core:event_delete": _reset_event,  # Soft-Delete (events/crud.py: soft_delete_event)
     "core:milestone_delete": _reset_milestone,  # Hard-Delete
+    # Refs #1874: Hard-Delete inkl. Disk — der erste physische Löschpfad in der
+    # Matrix. Ohne Reset bekäme die zweite erlaubte Rolle (lead nach
+    # facility_admin) auf einer Allow-Zelle 404 und der Sicherheitsbericht eine
+    # falsche Abweichungszeile für einen Lösch-Endpoint.
+    "core:attachment_delete": _reset_attachment,
 }
 
 

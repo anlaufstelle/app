@@ -38,6 +38,20 @@ def _extension(filename: str) -> str:
     return ""
 
 
+def filename_audit_fields(filename: str) -> dict[str, str]:
+    """Die datenminimierte Namensspur einer Datei fuers ``detail`` (Refs #1751/#1874).
+
+    ``{"filename_hash": <HMAC>, "filename_ext": <Typmarker>}`` — genau das Paar,
+    das :func:`log_attachment_violation` seit #1751 schreibt, jetzt als eigener
+    Einstieg. Der physische Loeschpfad (``ATTACHMENT_DELETE``, Refs #1874)
+    protokolliert denselben Vorgangstyp aus einem View heraus und darf den
+    Klartextnamen genauso wenig ins append-only Log schreiben. Ohne gemeinsamen
+    Helfer haette der zweite Schreibpunkt die Minimierung nachgebaut — und der
+    Nachbau ist genau die Stelle, an der sie beim naechsten Mal fehlt.
+    """
+    return {"filename_hash": hmac_hash_value(filename), "filename_ext": _extension(filename)}
+
+
 def _owner_reference(owner):
     """``(owner_type, owner_id)`` fuer das Detail-Schema der Anhang-Domaene.
 
@@ -95,8 +109,7 @@ def log_attachment_violation(facility, user, owner, *, reason, filename, **extra
         target_type="Attachment",
         target_id=target_id,
         reason=reason,
-        filename_hash=hmac_hash_value(filename),
-        filename_ext=_extension(filename),
+        **filename_audit_fields(filename),
         owner_type=owner_type,
         owner_id=owner_id,
         **extra,

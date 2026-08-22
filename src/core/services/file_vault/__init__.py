@@ -17,6 +17,10 @@ Submodule sind Implementierungsdetail.
 
 from __future__ import annotations
 
+from core.services.file_vault.audit import (
+    filename_audit_fields,
+    log_attachment_violation,
+)
 from core.services.file_vault.cleanup import (
     cleanup_orphan_storage_files,
     delete_attachments_for,
@@ -79,6 +83,7 @@ __all__ = [
     "encrypt_dynamic_data",
     "encrypt_field",
     "encrypt_file",
+    "filename_audit_fields",
     "generate_key",
     "get_attachment_path",
     "get_current_entries_for_field",
@@ -86,6 +91,7 @@ __all__ = [
     "get_fernet",
     "get_original_filename",
     "is_encrypted_value",
+    "log_attachment_violation",
     "ping",
     "prepare_encrypted_upload",
     "rotate_all",

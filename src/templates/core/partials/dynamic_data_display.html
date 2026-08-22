@@ -57,6 +57,7 @@ Service.
                             </ul>
                         </details>
                         {% endif %}
+                        {% include "core/attachments/partials/_purge_link.html" %}
                     </li>
                     {% endfor %}
                 </ul>
@@ -87,6 +88,7 @@ Service.
                         <li class="flex flex-wrap items-center gap-2" data-attachment-id="{{ entry.attachment_id }}">
                             <a href="{{ entry.download_url }}" class="text-accent hover:text-accent hover:underline">{{ entry.original_filename }}</a>
                             <span class="text-[12px] text-ink-muted">({{ entry.file_size_display }})</span>
+                            {% include "core/attachments/partials/_purge_link.html" %}
                         </li>
                         {% endfor %}
                     </ul>
