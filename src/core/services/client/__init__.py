@@ -11,6 +11,8 @@ Module:
 
 - :mod:`.main`           — Client-CRUD, Anonymisierung, Stage-Wechsel,
   Deletion-Request-Workflow, Restore.
+- :mod:`.merge`          — Duplikat-Merge (Refs #1876, ADR-045):
+  Vier-Augen-Antrag, Ausfuehrung, Tombstone, Undo.
 - :mod:`.export`         — Auskunfts-Export nach DSGVO Art. 15
   (JSON + PDF).
 - :mod:`.dsgvo_package`  — DSGVO-Templates fuer Betroffenenrechts-
@@ -88,6 +90,15 @@ from core.services.client.main import (
     track_client_visit,
     update_client,
 )
+from core.services.client.merge import (
+    approve_client_merge,
+    get_pending_merge_request,
+    merge_clients,
+    merge_requires_four_eyes,
+    reject_client_merge,
+    request_client_merge,
+    unmerge_client,
+)
 from core.services.client.rectification import (
     approve_rectification,
     decode_rectification_text,
@@ -149,6 +160,7 @@ __all__ = [
     "anonymize_client_now",
     "anonymize_eligible_soft_deleted_clients",
     "approve_client_deletion",
+    "approve_client_merge",
     "approve_rectification",
     "create_client",
     "decode_rectification_text",
@@ -158,15 +170,21 @@ __all__ = [
     "get_client_or_none",
     "get_document_list",
     "get_pending_deletion_request",
+    "get_pending_merge_request",
+    "merge_clients",
+    "merge_requires_four_eyes",
     "pending_deletion_client_ids",
     "rectifiable_fields",
     "reject_client_deletion",
+    "reject_client_merge",
     "reject_rectification",
     "render_document",
     "request_client_deletion",
+    "request_client_merge",
     "request_rectification",
     "resolve_writable_client",
     "restore_client",
     "track_client_visit",
+    "unmerge_client",
     "update_client",
 ]

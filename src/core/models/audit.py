@@ -47,6 +47,15 @@ class AuditLog(models.Model):
         CLIENT_SOFT_DELETED = "client_soft_deleted", _("Person in Papierkorb")
         CLIENT_RESTORED = "client_restored", _("Person wiederhergestellt")
         CLIENT_ANONYMIZED = "client_anonymized", _("Person anonymisiert")
+        # Refs #1876 (ADR-045): Duplikat-Merge. Zwingend GETRENNT von
+        # ``CLIENT_SOFT_DELETED``: ``detect_mass_client_destruction``
+        # (``compliance/breach_detection.py``) zaehlt jene Aktion ab 20 im
+        # Kurzfenster — eine Aufraeum-Kampagne ueber Alt-Duplikate ist
+        # gezieltes Konsolidieren, kein Vernichten, und darf keinen
+        # Breach-Alarm ausloesen. ``target_obj`` ist die QUELLE (die Person,
+        # die zum Tombstone wird); das ``detail`` traegt Ziel-UUID,
+        # Undo-Inventar (UUID-Listen) und uebernommene Feld-Slugs — nie Werte.
+        CLIENT_MERGED = "client_merged", _("Person zusammengeführt")
         CASE_CREATE = "case_create", _("Fall angelegt")
         CASE_UPDATE = "case_update", _("Fall aktualisiert")
         CASE_CLOSE = "case_close", _("Fall geschlossen")

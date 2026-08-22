@@ -920,6 +920,11 @@ def get_pending_deletion_request(client):
     Refs #1736 (A): eine Quelle für alle Anzeigeflächen (Detail-Banner/-Badge,
     Antragsseite, Idempotenz-Zweig der Antrags-View). ``requested_by`` wird
     mitgeladen, weil jede dieser Flächen die antragstellende Person nennt.
+
+    Refs #1876: Auch ein PENDING-Merge-Antrag (gesetztes ``merge_into``) wird
+    gefunden — gewollt: pro Person läuft immer nur EIN destruktiver Antrag
+    (Löschung ODER Zusammenführung), und jede Fläche, die hier fragt, soll
+    beide blocken. Nur Merge-Anträge liefert ``get_pending_merge_request``.
     """
     return (
         DeletionRequest.objects.filter(
@@ -1011,6 +1016,14 @@ def approve_client_deletion(deletion_request, reviewer):
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )
+    # Refs #1876: Ein Merge-Antrag (gesetztes ``merge_into``) darf nicht als
+    # blosser Loeschantrag genehmigt werden — die Quelle landete im
+    # Papierkorb, ohne dass irgendetwas zum Ziel wandert. Genehmigung nur
+    # ueber ``approve_client_merge`` (services/client/merge.py).
+    if deletion_request.merge_into_id is not None:
+        raise ValidationError(
+            _("Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden.")
+        )
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
@@ -1047,6 +1060,13 @@ def reject_client_deletion(deletion_request, reviewer):
     """Lehnt einen Client-Löschantrag ab — Status→REJECTED, kein Soft-Delete."""
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
+    # Refs #1876: Merge-Antraege werden ueber ``reject_client_merge``
+    # abgelehnt — jener Weg schreibt die ``DELETION_REJECTED``-Zeile mit
+    # Merge-Kontext; hier fiele sie still unter den Tisch.
+    if deletion_request.merge_into_id is not None:
+        raise ValidationError(
+            _("Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden.")
+        )
     deletion_request.status = DeletionRequest.Status.REJECTED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()
@@ -1055,7 +1075,20 @@ def reject_client_deletion(deletion_request, reviewer):
 
 @transaction.atomic
 def restore_client(client, user):
-    """Holt eine soft-deletete Person aus dem Papierkorb zurück."""
+    """Holt eine soft-deletete Person aus dem Papierkorb zurück.
+
+    Refs #1876: Merge-Tombstones (gesetztes ``merged_into``) sind hier
+    ausgeschlossen — ein blosses Restore liesse die Quelle ohne ihre
+    gewanderten Fälle/Ereignisse auferstehen (Duplikat UND Datenverlust in
+    einem). Der konsistente Rückweg ist ``unmerge_client``.
+    """
+    if client.merged_into_id is not None:
+        raise ValidationError(
+            _(
+                "Diese Person wurde mit einer anderen zusammengeführt — "
+                "Wiederherstellen nur über das Aufheben der Zusammenführung."
+            )
+        )
     if not client.is_deleted:
         raise ValidationError("Person ist nicht im Papierkorb.")
     client.restore()

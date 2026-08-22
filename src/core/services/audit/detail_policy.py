@@ -146,6 +146,23 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "target_case": "Fall-UUID des Ziels einer Loeschentscheidung (Refs #1818) — nie der Falltitel",
     "target_type": "Modellname des Import-/Audit-Ziels — Schema, kein Inhalt",
     "deletion_request": "UUID des Loeschantrags",
+    # -- Duplikat-Merge (Refs #1876, ADR-045) ----------------------------
+    # Die ``moved_*``-Listen sind zugleich das Undo-Inventar von
+    # ``unmerge_client``: nur mit ihnen ist bestimmbar, welche Zeilen des
+    # Ziels urspruenglich der Quelle gehoerten. UUIDs sind opake Bezeichner
+    # ohne Personenbezug (dieselbe Einordnung wie ``target_client``).
+    "merged_into": "Client-UUID des Merge-Ziels einer Zusammenfuehrung — UUID, kein Pseudonym",
+    "merge_into": "Client-UUID des beantragten Merge-Ziels eines Vier-Augen-Antrags",
+    "unmerged_from": "Client-UUID des bisherigen Merge-Ziels beim Aufheben einer Zusammenfuehrung",
+    "moved_events": "Ereignis-UUIDs, die zum Merge-Ziel wanderten — UUIDs, keine Inhalte; Undo-Inventar",
+    "moved_cases": "Fall-UUIDs, die zum Merge-Ziel wanderten — Undo-Inventar",
+    "moved_workitems": "Aufgaben-UUIDs, die zum Merge-Ziel wanderten — Undo-Inventar",
+    "moved_attachments": "Anhang-UUIDs uebernommener Datei-Felder — Undo-Inventar, keine Dateinamen",
+    "adopted_slugs": (
+        "Feld-Slugs, deren Werte aus der Merge-Quelle uebernommen wurden — Namen, keine Werte (Muster changed_fields)"
+    ),
+    "document_type_adopted": "ob das Merge-Ziel den Dokumentationstyp der Quelle uebernahm — Boolean",
+    "target_stage_before": "Kontaktstufe des Merge-Ziels vor der Zusammenfuehrung — Enum-Wert (Undo-Inventar)",
     "actor_id": "UUID des handelnden Admins (Refs #1369)",
     "boundary_hash": "Ketten-Grenzhash des Audit-Prunings",
     "boundary_hashes": "Ketten-Grenzhashes des Audit-Prunings",

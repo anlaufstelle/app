@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 13:06+0200\n"
+"POT-Creation-Date: 2026-08-22 16:03+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11243,3 +11243,83 @@ msgstr "Keine Fälle im Papierkorb."
 #: src/templates/core/cases/deletion_review.html:38
 msgid "Die Angaben zum Fall sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab."
 msgstr "Die Angaben zum Fall sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab."
+
+#: src/core/models/audit.py:58
+msgid "Person zusammengeführt"
+msgstr "Person zusammengeführt"
+
+#: src/core/models/client.py:114
+msgid "Zusammengeführt in"
+msgstr "Zusammengeführt in"
+
+#: src/core/models/workitem.py:228
+msgid "Zusammenführungs-Ziel"
+msgstr "Zusammenführungs-Ziel"
+
+#: src/core/services/client/main.py:1019 src/core/services/client/main.py:1060
+msgid "Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden."
+msgstr "Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden."
+
+#: src/core/services/client/main.py:1078
+msgid "Diese Person wurde mit einer anderen zusammengeführt — Wiederherstellen nur über das Aufheben der Zusammenführung."
+msgstr "Diese Person wurde mit einer anderen zusammengeführt — Wiederherstellen nur über das Aufheben der Zusammenführung."
+
+#: src/core/services/client/merge.py:211 src/core/services/client/merge.py:243
+msgid "Dies ist kein Zusammenführungs-Antrag."
+msgstr "Dies ist kein Zusammenführungs-Antrag."
+
+#: src/core/services/client/merge.py:273
+msgid "Nur die Leitung darf Personen direkt zusammenführen."
+msgstr "Nur die Leitung darf Personen direkt zusammenführen."
+
+#: src/core/services/client/merge.py:276
+msgid "Für Personen mit Zusatzangaben ist ein Zusammenführungs-Antrag mit Bestätigung nötig."
+msgstr "Für Personen mit Zusatzangaben ist ein Zusammenführungs-Antrag mit Bestätigung nötig."
+
+#: src/core/services/client/merge.py:313
+msgid "Eine Person kann nicht mit sich selbst zusammengeführt werden."
+msgstr "Eine Person kann nicht mit sich selbst zusammengeführt werden."
+
+#: src/core/services/client/merge.py:315
+msgid "Beide Personen müssen zur selben Einrichtung gehören."
+msgstr "Beide Personen müssen zur selben Einrichtung gehören."
+
+#: src/core/services/client/merge.py:318
+msgid "Personen im Papierkorb können nicht zusammengeführt werden."
+msgstr "Personen im Papierkorb können nicht zusammengeführt werden."
+
+#: src/core/services/client/merge.py:320
+msgid "Anonymisierte Personen können nicht zusammengeführt werden."
+msgstr "Anonymisierte Personen können nicht zusammengeführt werden."
+
+#: src/core/services/client/merge.py:322
+msgid "Diese Person ist bereits zusammengeführt."
+msgstr "Diese Person ist bereits zusammengeführt."
+
+#: src/core/services/client/merge.py:325
+msgid "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+msgstr "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+
+#: src/core/services/client/merge.py:329
+msgid "Für eine der beiden Personen läuft bereits ein Lösch- oder Zusammenführungs-Antrag."
+msgstr "Für eine der beiden Personen läuft bereits ein Lösch- oder Zusammenführungs-Antrag."
+
+#: src/core/services/client/merge.py:341
+msgid "Interner Fehler: Ereignis- und Fall-Zuordnung sind inkonsistent — Zusammenführung abgebrochen."
+msgstr "Interner Fehler: Ereignis- und Fall-Zuordnung sind inkonsistent — Zusammenführung abgebrochen."
+
+#: src/core/services/client/merge.py:540
+msgid "Zu dieser Zusammenführung fehlt der Audit-Nachweis — Aufheben nicht möglich."
+msgstr "Zu dieser Zusammenführung fehlt der Audit-Nachweis — Aufheben nicht möglich."
+
+#: src/core/services/client/merge.py:572
+msgid "Nur die Leitung darf eine Zusammenführung aufheben."
+msgstr "Nur die Leitung darf eine Zusammenführung aufheben."
+
+#: src/core/services/client/merge.py:574 src/core/services/client/merge.py:578
+msgid "Diese Person ist nicht zusammengeführt."
+msgstr "Diese Person ist nicht zusammengeführt."
+
+#: src/core/services/client/merge.py:581
+msgid "Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar."
+msgstr "Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar."

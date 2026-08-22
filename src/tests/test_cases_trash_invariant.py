@@ -10,11 +10,13 @@ haette den Anlass mitgenommen, aus dem sie entstanden sind.
 Drei Haelften:
 
 **(a) Der Papierkorb-Fall MUSS existieren — und an genau einer Stelle entstehen.**
-``DeletionRequest.TargetType`` kennt jetzt ``CASE``, und es gibt genau zwei
-``soft_delete()``-Aufrufer im Produktionscode: den Personen-Workflow und
-``services/case/deletion.py``. Ein ``case.soft_delete()`` irgendwo sonst — in
-einer View, im Retention-Pfad, im Admin — umginge Vier-Augen-Staffelung (P1c),
-Audit-Eintrag und Aktivitaets-Spur.
+``DeletionRequest.TargetType`` kennt jetzt ``CASE``, und es gibt genau drei
+``soft_delete()``-Aufrufer im Produktionscode: den Personen-Workflow,
+``services/case/deletion.py`` und — seit #1876 (ADR-045) — den Merge-Service
+``services/client/merge.py``, dessen Quelle als Tombstone in den Papierkorb
+geht. Ein ``case.soft_delete()`` irgendwo sonst — in einer View, im
+Retention-Pfad, im Admin — umginge Vier-Augen-Staffelung (P1c), Audit-Eintrag
+und Aktivitaets-Spur.
 
 **(b) Die Grenze verlaeuft AUCH ueber die PERSON.**
 Ein Fall haengt per Pflicht-FK an genau einer Person. Ist die im Papierkorb
@@ -73,10 +75,13 @@ class TestCaseSoftDeleteEntryPoints:
     #: Aggregat es geht.
     _SOFT_DELETE_CALL = re.compile(r"(?<![\w.])([\w.]+)\.soft_delete\(")
 
-    #: Gepinnter Ist-Zustand: genau ZWEI Aufrufer — Personen- und Fall-Workflow.
+    #: Gepinnter Ist-Zustand: genau DREI Aufrufer — Personen-Workflow,
+    #: Fall-Workflow und (seit #1876, ADR-045) der Merge-Service, der die
+    #: QUELLE einer Zusammenfuehrung als Tombstone in den Papierkorb legt.
     _EXPECTED_SOFT_DELETE_CALLS = {
         ("core/services/client/main.py", "client"),
         ("core/services/case/deletion.py", "case"),
+        ("core/services/client/merge.py", "source"),
     }
 
     #: Der einzige Modulpfad, der einen Fall in den Papierkorb legen darf.
@@ -111,7 +116,7 @@ class TestCaseSoftDeleteEntryPoints:
         """Der Vier-Augen-Loeschworkflow kennt Ereignis, Person UND Fall (#1818)."""
         assert {choice.value for choice in DeletionRequest.TargetType} == {"Event", "Client", "Case"}
 
-    def test_extraction_finds_both_known_soft_deletes(self):
+    def test_extraction_finds_the_known_soft_deletes(self):
         """Anker gegen einen still gruenen Guard: findet die Ableitung ueberhaupt etwas?
 
         Ohne diese Kontrolle waere ``test_only_the_deletion_service_soft_deletes_a_case``

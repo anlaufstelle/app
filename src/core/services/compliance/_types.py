@@ -73,6 +73,14 @@ class ComplianceCheck:
 # schreibt keine ``DELETION_APPROVED``-Zeile und laeuft deshalb nicht in diesen
 # Zaehler.
 #
+# Ebenfalls bewusst draussen (Refs #1876): ``CLIENT_MERGED``. Eine
+# Zusammenfuehrung ist der vorgesehene Weg, Alt-Duplikate zu konsolidieren —
+# auf dieser Liste faerbte jede Aufraeum-Kampagne das Dashboard. Anders als
+# die Loeschgenehmigung schreibt der Merge zudem bewusst weder
+# ``CLIENT_SOFT_DELETED`` noch ``DELETION_APPROVED``: er soll auch in
+# ``detect_mass_client_destruction`` nicht als Vernichtung zaehlen — die
+# Daten wandern zum Ziel, sie verschwinden nicht (ADR-045).
+#
 # Ebenfalls bewusst draussen (Refs #1957): die sieben Bearbeitungs-/
 # Zuordnungs-Aktionen rund um Ereignisse, Episoden, Wirkungsziele und Anhaenge.
 # Sie sind der Normalfall eines Arbeitstages — auf dieser Liste faerbte jede

@@ -257,7 +257,14 @@ def detect_mass_client_destruction(facility) -> list[dict]:
     ``DELETION_APPROVED`` gemeinsam — diese schreiben KEIN ``Action.DELETE`` und
     blieben daher fuer ``detect_mass_delete`` unsichtbar. Eigene, niedrigere
     Schwelle, weil gezieltes Vernichten von Personendaten schwerer wiegt als
-    generische Loeschungen (kurz + Langzeit-Fenster)."""
+    generische Loeschungen (kurz + Langzeit-Fenster).
+
+    ``CLIENT_MERGED`` (Refs #1876, ADR-045) zaehlt bewusst NICHT mit: der
+    Merge-Soft-Delete der Quelle schreibt weder ``CLIENT_SOFT_DELETED`` noch
+    ``DELETION_APPROVED`` — die Daten wandern zum Ziel, statt vernichtet zu
+    werden, und eine Aufraeum-Kampagne ueber Alt-Duplikate ist kein
+    Breach-Signal. Die spaetere Tilgung des Tombstones laeuft regulaer als
+    ``CLIENT_ANONYMIZED`` in diesen Zaehler."""
     return _detect_facility_action_burst(
         facility,
         actions=(

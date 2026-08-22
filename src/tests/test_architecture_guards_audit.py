@@ -240,6 +240,13 @@ class TestAuditDetailKeyInventory:
             "Fall-Loeschwege; die Aufrufer geben entweder ``trigger`` (direkt) "
             "oder ``deletion_request`` (genehmigt) mit (Refs #1818)",
         ),
+        "core/services/client/merge.py": (
+            1,
+            "**extra der CLIENT_MERGED-Zeile — der direkte Merge-Weg schreibt "
+            "ohne, der genehmigte mit ``deletion_request`` (Muster "
+            "_move_case_to_trash, Refs #1876); alle uebrigen Schluessel stehen "
+            "literal am Aufruf und sind in AUDIT_DETAIL_KEYS deklariert",
+        ),
         "core/services/config.py": (3, "**_condition_detail(...) der Feldbedingungen"),
         "core/services/events/crud.py": (1, "audit_detail-Variable mit optionalem source"),
         # ``log_attachment_violation`` bekommt sein ``**extra`` ueber die

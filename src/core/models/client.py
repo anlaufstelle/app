@@ -97,6 +97,22 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         verbose_name=_("Dokumentationstyp"),
     )
     data_json = models.JSONField(default=dict, blank=True, verbose_name=_("Daten (JSON)"))
+    # Refs #1876 (ADR-045): Tombstone-Verweis des Duplikat-Merge. Gesetzt nur
+    # auf der QUELLE einer Zusammenfuehrung, in derselben Transaktion wie ihr
+    # Soft-Delete. PROTECT statt SET_NULL, begruendet am Retention-Verhalten:
+    # der Retention-Lauf REDIGIERT Personen (``anonymize_client``), er loescht
+    # keine Zeilen — PROTECT kostet dort also nie etwas, verhindert aber, dass
+    # ein kuenftiger Hard-Delete-Pfad den einzigen Nachweis "wohin sind die
+    # Daten dieser Person gewandert" (Art. 15) still kappt. Der Verweis
+    # ueberlebt die Redaktion des Tombstones bewusst.
+    merged_into = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="merged_sources",
+        verbose_name=_("Zusammengeführt in"),
+    )
     is_active = models.BooleanField(default=True, verbose_name=_("Aktiv"))
     k_anonymized = models.BooleanField(
         default=False,

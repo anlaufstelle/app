@@ -210,6 +210,23 @@ class DeletionRequest(models.Model):
     )
     target_type = models.CharField(max_length=100, choices=TargetType.choices, verbose_name=_("Zieltyp"))
     target_id = models.UUIDField(verbose_name=_("Ziel-ID"))
+    # Refs #1876 (ADR-045): Merge-Ziel eines Zusammenfuehrungs-Antrags. KEIN
+    # eigenes Request-Modell: der Vier-Augen-Weg (PENDING-Unique, Requester-!=-
+    # Reviewer-Constraint, Antragsliste, Idempotenz) ist mit dem Loeschantrag
+    # identisch — die Quelle IST ``target_id``, es fehlte nur das Ziel. Ein
+    # gesetztes ``merge_into`` macht aus dem Loeschantrag einen Merge-Antrag;
+    # entschieden wird er ausschliesslich ueber ``approve_client_merge``/
+    # ``reject_client_merge`` (Guards in ``services/client/main.py``).
+    # PROTECT wie ``Client.merged_into``: Personen werden redigiert, nie hart
+    # geloescht — der Antrags-Nachweis darf nicht still zerfallen.
+    merge_into = models.ForeignKey(
+        "core.Client",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="incoming_merge_requests",
+        verbose_name=_("Zusammenführungs-Ziel"),
+    )
     reason = models.TextField(verbose_name=_("Begründung"))
     status = models.CharField(
         max_length=20,
@@ -251,6 +268,13 @@ class DeletionRequest(models.Model):
             models.CheckConstraint(
                 condition=~models.Q(requested_by=models.F("reviewed_by")),
                 name="deletion_request_different_reviewer",
+            ),
+            # Refs #1876: ein Merge-Antrag darf nicht auf seine eigene Quelle
+            # zeigen (analog ``deletion_request_different_reviewer`` — der
+            # Service prueft zuerst, die DB haelt die Invariante fest).
+            models.CheckConstraint(
+                condition=models.Q(merge_into__isnull=True) | ~models.Q(merge_into=models.F("target_id")),
+                name="deletion_request_merge_target_differs",
             ),
             # #530: prevent duplicate PENDING requests for the same target.
             # Partial unique index — closed (APPROVED/REJECTED) records
