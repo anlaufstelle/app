@@ -246,13 +246,14 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make test-e2e-slice-locked SLICES=4 INDEX=3` | Re-run a single slice of the CI split locally, under the CI lock (a single slice also occupies port 8844 and `anlaufstelle_e2e`; unlocked as `make test-e2e-slice`, only when no other E2E run is active) — the number comes from the job name (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` shows the distribution (Refs #1976) |
 | `make check` | Run Django system checks and verify migration consistency |
 | `make i18n-check` | Full `.po` reconciliation against the source tree (new/removed/semantically changed msgids) — part of `make ci` (Refs #1933) |
-| `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
+| `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
 | `make test-focus T=<path>` | Single test file with fail-fast |
 | `make test-parallel` | Unit and integration tests in parallel (pytest-xdist) |
 | `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable) |
 | `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min) |
 | `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools) |
 | `make deps-check` | Verify lock files match `.in` (drift detection) |
+| `make audit-js` | `npm audit` against `package-lock.json` — blocking JS advisory gate from severity `AUDIT_LEVEL` (default `moderate`) upwards, part of `make ci`; needs access to the npm registry (Refs #1968) |
 | `make dev` | Start database, run migrations, and start server (combined) |
 | `make clean` | Remove generated artefacts (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` is left untouched (data loss risk) |
 
@@ -583,12 +584,20 @@ Never run the full suite during development — work in layers, always with fail
 
 ```bash
 make ci
-# equivalent to: lint + check + guards (deps/matrix/release-test/vendor-js/agent-docs) + i18n-check + typecheck + test-js + test-parallel
+# equivalent to: lint + check + guards (deps/matrix/release-test/vendor-js/agent-docs) + audit-js + i18n-check + typecheck + test-js + test-parallel
 ```
 
 This pipeline must pass locally before every pull request.
 
 **JS gate (`make test-js`, Refs #1932):** runs `npm test` (= `vitest run`, non-watch, deterministic) against the offline/queue/watcher suite under [`tests/js/`](tests/js/) and is a fail-fast part of `make ci`/`make ci-locked`. If `node_modules/` (no prior `npm ci`) or `package-lock.json` is missing, the target fails with a clear error message instead of a cryptic `vitest: not found`.
+
+**JS advisory gate (`make audit-js`, Refs #1968):** runs `npm audit --audit-level=$(AUDIT_LEVEL)` against `package-lock.json` — the counterpart to `pip-audit` on the Python side, which JavaScript previously lacked entirely. It deliberately hangs in `make ci` and not only in the GitHub workflow: the workflow is dormant without Actions credit, `make ci` is the real gate.
+
+**This means the gate chain now needs network access.** `npm audit` does read the lockfile only (no `npm ci`, no `node_modules/` required), but it queries the advisory data from the npm registry. On a host without registry access `make ci` aborts in `audit-js` — right after `deps-check`, i.e. before a single test runs. Individual gates can still be run selectively in that case (`make lint`, `make typecheck`, `make test-parallel`).
+
+Threshold `moderate` rather than `high`, because the advisory that prompted this gate was itself only `moderate`. The value lives in the Makefile as `AUDIT_LEVEL ?= moderate` and can be overridden: `make ci AUDIT_LEVEL=high` or `make audit-js AUDIT_LEVEL=high`. That is the emergency brake for the one case the gate cannot resolve on its own — a freshly published `moderate` advisory **with no fix available** blocks every commit from the moment it appears. The default stays blocking at `moderate`; raising it belongs in the pull-request description, not in the Makefile.
+
+All Node packages in this project are `devDependencies` (Tailwind CLI + Vitest toolchain) — hence no `--omit=dev`, which would leave the gate empty. They are, however, also installed during the container build: the Node stage of the [`Dockerfile`](Dockerfile) calls `npm ci` without `--omit=dev`; only the Tailwind CLI is executed there, and only the generated `styles.css` ends up in the final image.
 
 ### Mutation Testing (mutmut)
 
@@ -779,5 +788,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-21 -->
-<!-- source-hash: 413bb56a4da9f9916f541448f53118277dee407c -->
+<!-- translation-date: 2026-08-22 -->
+<!-- source-hash: 31419fa6dba5b6a00e3d384ddfaa878288fa7542 -->

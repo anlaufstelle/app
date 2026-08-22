@@ -3,8 +3,10 @@
 import base64
 
 import pytest
+from django.db import DatabaseError
+from django.db.models import QuerySet
 
-from core.models import AuditLog
+from core.models import AuditLog, User
 
 
 @pytest.mark.django_db
@@ -21,6 +23,48 @@ class TestEnsureOfflineKeySalt:
         first = staff_user.ensure_offline_key_salt()
         second = staff_user.ensure_offline_key_salt()
         assert first == second
+
+    def test_concurrent_first_derivations_agree_on_one_salt(self, staff_user):
+        """Refs #1968: zwei parallele Erstabrufe duerfen NICHT zwei Salts erzeugen.
+
+        ``OfflineKeySaltView`` ist POST-only und wird direkt nach dem Login
+        gerufen — zwei Tabs genuegen. Das fruehere Check-generate-save-Muster
+        liess beide Anfragen je einen eigenen Salt wuerfeln; der zweite ``save``
+        gewann, und der Client mit dem ersten Salt leitete einen Schluessel ab,
+        der zu nichts mehr passte (seine IndexedDB-Saetze wurden unlesbar).
+
+        Zwei getrennt geladene Model-Instanzen derselben Zeile bilden genau
+        diesen Wettlauf ab: beide sehen ``offline_key_salt == ""``.
+        """
+        first_request = User.objects.get(pk=staff_user.pk)
+        second_request = User.objects.get(pk=staff_user.pk)
+
+        first_salt = first_request.ensure_offline_key_salt()
+        second_salt = second_request.ensure_offline_key_salt()
+
+        assert first_salt == second_salt
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == first_salt
+
+    def test_first_assignment_fails_loud_when_the_write_is_swallowed(self, staff_user, monkeypatch):
+        """Refs #1968: ein wirkungsloses Compare-and-set darf keinen LEEREN Salt liefern.
+
+        Trifft ``filter(pk=..., offline_key_salt="").update(...)`` keine Zeile
+        und steht in der DB weiterhin der Leerwert, liest ``refresh_from_db``
+        genau diesen nach — ``OfflineKeySaltView`` antwortete mit
+        ``{"salt": ""}`` und der Client leitete seinen Offline-Schluessel aus
+        einem leeren Salt ab. Das ersetzte ``save(update_fields=[...])`` war in
+        derselben Lage fail-loud (``DatabaseError``); diese Zusage bleibt.
+
+        Der Fall ist heute nicht erreichbar (auf ``core_user`` liegt keine
+        RLS-Policy), waere aber bei einer kuenftigen Policy- oder
+        Grant-Aenderung genau der stille Bruch. Der Stub auf ``QuerySet.update``
+        stellt ihn nach: Schreibvorgang ohne Wirkung, Leerwert bleibt stehen.
+        """
+        monkeypatch.setattr(QuerySet, "update", lambda self, **kwargs: 0)
+
+        with pytest.raises(DatabaseError):
+            staff_user.ensure_offline_key_salt()
 
     def test_salt_is_base64url(self, staff_user):
         salt = staff_user.ensure_offline_key_salt()

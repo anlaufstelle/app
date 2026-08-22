@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import struct
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
@@ -200,6 +201,29 @@ CHUNK_SIZE = 64 * 1024  # 64 KB per chunk
 _FID_LEN = 16  # 16B Datei-Bindung (SHA256(file_id)[:16])
 _CTX_LEN = 24  # 16B Datei-Bindung + 4B chunk_index + 4B total
 
+# --- Grenzen fuer die unauthentifizierten Header-Laengenfelder (Refs #1968) ---
+# Der Datei-Header ([1B Version][4B chunk_count]) und die Chunk-Laengenfelder
+# ([4B token_len]) liegen ausserhalb jedes Fernet-Tokens; wer Schreibzugriff auf
+# das Storage hat (manipulierter Restore, kompromittiertes Volume), setzt sie
+# frei. Ungeprueft bricht das die im Modul zugesagte Peak-RAM-Invariante
+# O(CHUNK) (siehe ``encrypt_file`` und ``system.facility_export``): ein
+# ``token_len`` von 2**32-1 laesst ``inp.read()`` 4 GiB anfordern.
+_HEADER_LEN = 5  # 1B Version + 4B chunk_count
+_CHUNK_RECORD_MIN_BYTES = 4  # jedes Chunk-Record traegt mindestens sein Laengenfeld
+# Fernet-Token-Layout: [1B Version][8B Timestamp][16B IV][AES-CBC-Ciphertext]
+# [32B HMAC-SHA256], base64url-kodiert. Der Ciphertext ist PKCS7-gepolstert,
+# also hoechstens Klartextlaenge + 16.
+_FERNET_RAW_OVERHEAD = 1 + 8 + 16 + 32 + 16
+
+#: Obergrenze fuer ein ``token_len``-Feld. Groesster legitim geschriebener
+#: Klartext pro Chunk ist ``CHUNK_SIZE`` (v1) bzw. ``CHUNK_SIZE + _CTX_LEN``
+#: (v2, inklusive Bindungskontext). Bewusst aus ``CHUNK_SIZE`` abgeleitet und
+#: NICHT aus ``FILE_VAULT_MAX_UPLOAD_BYTES``: das Upload-Limit ist
+#: betreiberkonfigurierbar und kann historisch groesser gewesen sein — ein daran
+#: gekoppelter Deckel sperrte Bestandsanhaenge aus. ``CHUNK_SIZE`` ist seit dem
+#: Einfuehrungscommit des File-Vaults unveraendert.
+MAX_CHUNK_TOKEN_BYTES = 4 * ((CHUNK_SIZE + _CTX_LEN + _FERNET_RAW_OVERHEAD + 2) // 3)
+
 
 def _file_binding(file_id: str) -> bytes:
     """Stabile 16-Byte-Bindung aus der Storage-ID der Datei."""
@@ -295,6 +319,15 @@ def decrypt_file_stream(input_path, file_id=None):
     v2-Dateien (A4.5) ist ``file_id`` erforderlich; jeder Chunk wird gegen
     seine erwartete Position + Datei-Bindung geprueft (Reorder/Truncation/
     Splicing werfen ``EncryptionError``).
+
+    Alle Header-Laengenfelder werden plausibilisiert (Refs #1968), bevor sie
+    eine Leseanforderung oder eine Schleifengrenze werden — sie sind nicht
+    Teil eines Fernet-Tokens und damit angreifer-kontrolliert. Referenz ist
+    die tatsaechliche Dateigroesse (``os.fstat`` auf dem offenen Deskriptor,
+    also TOCTOU-frei) plus ``MAX_CHUNK_TOKEN_BYTES``. Jeder Parserfehler
+    verlaesst die Funktion als ``EncryptionError`` — insbesondere ein hinter
+    dem Versionsbyte abgeschnittener Chunk-Zaehler, der frueher ``struct.error``
+    an den Aufrufern vorbeischleuste.
     """
     f = get_fernet()
 
@@ -306,7 +339,25 @@ def decrypt_file_stream(input_path, file_id=None):
         if version not in (_FILE_FORMAT_V1, _FILE_FORMAT_V2):
             raise EncryptionError(f"Unsupported file format version: {version}")
 
-        (chunk_count,) = struct.unpack(">I", inp.read(4))
+        count_bytes = inp.read(4)
+        if len(count_bytes) < 4:
+            raise EncryptionError("Truncated encrypted file — incomplete chunk count field")
+        (chunk_count,) = struct.unpack(">I", count_bytes)
+
+        # ``chunk_count`` gegen die ECHTE Dateigroesse plausibilisieren, nicht
+        # gegen ``FILE_VAULT_MAX_UPLOAD_BYTES``: das Upload-Limit ist
+        # betreiberkonfigurierbar und kann historisch groesser gewesen sein —
+        # ein daran gekoppelter Deckel machte Bestandsanhaenge (Art.-9-Daten)
+        # unlesbar. Jedes Chunk-Record belegt mindestens sein 4B-Laengenfeld,
+        # also ist ``(Dateigroesse - Header) // 4`` eine Schranke, die eine
+        # echte Datei niemals reissen kann.
+        file_size = os.fstat(inp.fileno()).st_size
+        max_chunks = max(0, (file_size - _HEADER_LEN) // _CHUNK_RECORD_MIN_BYTES)
+        if chunk_count > max_chunks:
+            raise EncryptionError(
+                f"Implausible chunk count in header: {chunk_count} exceeds "
+                f"{max_chunks} possible chunks in {file_size} bytes"
+            )
 
         # ``file_id`` (sofern uebergeben) erlaubt die v2-Bindungspruefung UND die
         # Erkennung eines auf v1 herabgestuften, eigentlich gebundenen Headers.
@@ -328,6 +379,13 @@ def decrypt_file_stream(input_path, file_id=None):
             if len(len_bytes) < 4:
                 raise EncryptionError("Truncated encrypted file")
             (token_len,) = struct.unpack(">I", len_bytes)
+            if token_len > MAX_CHUNK_TOKEN_BYTES:
+                # Vor dem ``read``: sonst haengt die im Modul zugesagte
+                # Peak-RAM-Invariante O(CHUNK) an einem angreifer-gesetzten
+                # 32-Bit-Feld.
+                raise EncryptionError(
+                    f"Implausible chunk token length in header: {token_len} exceeds {MAX_CHUNK_TOKEN_BYTES}"
+                )
             token = inp.read(token_len)
             if len(token) < token_len:
                 raise EncryptionError("Truncated encrypted file")

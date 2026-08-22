@@ -5,7 +5,7 @@ import secrets
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import DatabaseError, models
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
@@ -308,11 +308,46 @@ class User(AbstractUser):
         nach Reload denselben Key re-derivieren kann.
 
         Refs #958 — ersetzt den frueheren ``services/offline_keys``-Service.
+
+        Refs #1968: die Erstvergabe ist ein atomares Compare-and-set. Der
+        Endpunkt ``OfflineKeySaltView`` ist POST-only und wird direkt nach dem
+        Login gerufen — zwei Tabs genuegen fuer zwei gleichzeitige Erstabrufe.
+        Ein Check-generate-save-Muster wuerfelte dabei zwei Salts, der zweite
+        ``save`` gewann, und der Client mit dem ersten Salt leitete einen
+        Schluessel ab, der zu nichts mehr passte. Das ``filter(...).update()``
+        (Muster analog ``signals.offline_invalidation._rotate_offline_salt``)
+        laesst nur den ersten Schreiber gewinnen; der zweite liest per
+        ``refresh_from_db`` den bereits vergebenen Wert nach und liefert ihn
+        zurueck — beide Tabs leiten denselben Schluessel ab.
+
+        Zugesichert bleibt dabei: der Rueckgabewert ist NIE leer. Bleibt der
+        Schreibvorgang wirkungslos und steht in der Datenbank weiterhin kein
+        Salt, wirft die Methode ``DatabaseError`` — so wie es das ersetzte
+        ``save(update_fields=[...])`` tat. Sonst antwortete
+        ``OfflineKeySaltView`` mit ``{"salt": ""}`` und der Client leitete
+        seinen Offline-Schluessel aus einem leeren Salt ab.
         """
+        if self.offline_key_salt:
+            return self.offline_key_salt
+        candidate = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode().rstrip("=")
+        # Die WHERE-Bedingung auf den leeren Salt macht den Schreibvorgang zum
+        # Compare-and-set: unter READ COMMITTED blockiert der zweite UPDATE bis
+        # zum Commit des ersten und trifft danach keine Zeile mehr.
+        type(self).objects.filter(pk=self.pk, offline_key_salt="").update(offline_key_salt=candidate)
+        self.refresh_from_db(fields=["offline_key_salt"])
         if not self.offline_key_salt:
-            salt_bytes = secrets.token_bytes(16)
-            self.offline_key_salt = base64.urlsafe_b64encode(salt_bytes).decode().rstrip("=")
-            self.save(update_fields=["offline_key_salt"])
+            # Compare-and-set wirkungslos UND weiterhin Leerwert in der DB: der
+            # Aufrufer bekaeme ``{"salt": ""}`` zurueck und leitete seinen
+            # Offline-Schluessel aus einem leeren Salt ab. Heute unerreichbar
+            # (auf ``core_user`` liegt keine RLS-Policy), aber das ersetzte
+            # ``save(update_fields=[...])`` war in genau dieser Lage fail-loud
+            # (``DatabaseError``) — die Zusage "liefert immer einen nicht-leeren
+            # Salt" darf nicht still an einer kuenftigen Policy-/Grant-Aenderung
+            # brechen.
+            raise DatabaseError(
+                "Offline-Salt konnte nicht vergeben werden: der Schreibvorgang traf keine Zeile "
+                f"und in der Datenbank steht weiterhin kein Salt (Nutzer pk={self.pk})."
+            )
         return self.offline_key_salt
 
 

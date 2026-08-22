@@ -300,3 +300,128 @@ class TestFileEncryptionV2Binding:
         out = tmp_path / "v1fid.enc"
         encrypt_file(io.BytesIO(content), out)  # v1
         assert b"".join(decrypt_file_stream(out, file_id="file-A")) == content
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestVaultHeaderBounds:
+    """Refs #1968: Laengenfelder des Vault-Headers plausibilisieren.
+
+    Der Header ([1B Version][4B chunk_count] plus je Chunk [4B token_len])
+    liegt ausserhalb jedes Fernet-Tokens und ist damit NICHT authentifiziert
+    — jeder mit Schreibzugriff auf das Storage (manipulierter Restore,
+    kompromittiertes Volume) setzt die Werte frei. Der Decoder sagt in
+    ``encrypt_file``/``_attachment_sha256`` eine Peak-RAM-Invariante von
+    O(CHUNK) zu; ein ungeprueftes ``token_len`` bricht genau diese Zusage,
+    weil ``inp.read(token_len)`` beliebig grosse Anforderungen stellt.
+
+    Bewusst NICHT gegen ``FILE_VAULT_MAX_UPLOAD_BYTES`` plausibilisiert: der
+    Wert ist betreiberkonfigurierbar und kann historisch groesser gewesen
+    sein — ein daran gekoppelter Deckel machte Bestandsanhaenge (Art.-9-Daten)
+    unlesbar. Referenz ist die tatsaechliche Dateigroesse auf der Platte.
+    """
+
+    def test_declared_token_length_is_capped_at_a_real_chunk(self, tmp_path):
+        """Die Konstante muss den groessten ECHT vorkommenden Token abdecken.
+
+        Gegenprobe gegen einen zu engen Deckel: ein voller v2-Chunk
+        (``CHUNK_SIZE`` Nutzdaten + 24B Bindungskontext) ist der groesste
+        Token, den ``encrypt_file`` je schreibt.
+        """
+        from core.services.file_vault.encryption import MAX_CHUNK_TOKEN_BYTES
+
+        out = tmp_path / "fullchunk.enc"
+        encrypt_file(io.BytesIO(b"Z" * (CHUNK_SIZE * 2)), out, file_id="file-A")
+        _version, _count, tokens = _split_v2(out)
+        assert max(len(t) for t in tokens) <= MAX_CHUNK_TOKEN_BYTES
+
+    def test_oversized_token_length_is_rejected_before_reading(self, tmp_path):
+        """``token_len`` oberhalb der Obergrenze wird abgewiesen — und zwar,
+        BEVOR die Bytes gelesen werden. Der Body ist absichtlich vollstaendig
+        vorhanden, damit die Ablehnung nicht als Truncation erklaerbar ist.
+        """
+        from core.services.file_vault.encryption import MAX_CHUNK_TOKEN_BYTES
+
+        oversized = MAX_CHUNK_TOKEN_BYTES + 1
+        out = tmp_path / "bigtoken.enc"
+        with open(out, "wb") as f:
+            f.write(struct.pack(">B", FILE_FORMAT_VERSION))
+            f.write(struct.pack(">I", 1))
+            f.write(struct.pack(">I", oversized))
+            f.write(b"\x00" * oversized)
+
+        with pytest.raises(EncryptionError, match="token length"):
+            list(decrypt_file_stream(out))
+
+    def test_four_gib_token_length_never_reaches_read(self, tmp_path, monkeypatch):
+        """Die zugesagte Peak-RAM-Invariante O(CHUNK): kein einzelner
+        ``read``-Aufruf darf mehr als die Token-Obergrenze anfordern, auch
+        wenn der Header 4 GiB behauptet."""
+        from core.services.file_vault import encryption as enc
+
+        out = tmp_path / "4gib.enc"
+        with open(out, "wb") as f:
+            f.write(struct.pack(">B", FILE_FORMAT_VERSION))
+            f.write(struct.pack(">I", 1))
+            f.write(struct.pack(">I", 2**32 - 1))
+            f.write(b"\x00" * 64)
+
+        requested: list[int] = []
+        real_open = open
+
+        def _spy_open(*args, **kwargs):
+            handle = real_open(*args, **kwargs)
+            real_read = handle.read
+
+            def _read(size=-1):
+                requested.append(size)
+                return real_read(size)
+
+            handle.read = _read  # type: ignore[method-assign]
+            return handle
+
+        monkeypatch.setattr(enc, "open", _spy_open, raising=False)
+        with pytest.raises(EncryptionError):
+            list(decrypt_file_stream(out))
+        assert max(requested) <= enc.MAX_CHUNK_TOKEN_BYTES
+
+    def test_chunk_count_beyond_file_size_is_rejected_before_first_yield(self, tmp_path):
+        """Ein aufgeblasener ``chunk_count`` wird sofort abgewiesen — nicht
+        erst, nachdem der erste (echte) Chunk schon ausgeliefert wurde.
+
+        Ohne Plausibilisierung liefert der Generator den ersten Chunk brav
+        aus und meldet den Bruch erst in Runde 2 als ``Truncated``; der
+        Aufrufer haette dann bereits Klartext verarbeitet.
+        """
+        out = tmp_path / "hugecount.enc"
+        encrypt_file(io.BytesIO(b"echte Nutzdaten"), out)
+        _version, _count, tokens = _split_v2(out)
+        _write_v2(out, FILE_FORMAT_VERSION, 2**32 - 1, tokens)
+
+        stream = decrypt_file_stream(out)
+        with pytest.raises(EncryptionError, match="chunk count"):
+            next(stream)
+
+    def test_chunk_count_bound_ignores_the_configurable_upload_cap(self, tmp_path, settings):
+        """Fail-closed-Gegenprobe: die Grenze haengt an der Dateigroesse, NICHT
+        an ``FILE_VAULT_MAX_UPLOAD_BYTES``. Ein Bestandsanhang, der groesser ist
+        als das (spaeter verschaerfte) Upload-Limit, muss lesbar bleiben."""
+        settings.FILE_VAULT_MAX_UPLOAD_BYTES = 1024  # 1 KiB
+        data = b"P" * (CHUNK_SIZE * 3 + 11)
+        out = tmp_path / "legacybig.enc"
+        encrypt_file(io.BytesIO(data), out, file_id="file-A")
+
+        assert b"".join(decrypt_file_stream(out, file_id="file-A")) == data
+
+    def test_truncated_chunk_count_raises_encryption_error(self, tmp_path):
+        """Auf 1-4 Bytes hinter dem Versionsbyte abgeschnittene Datei (halber
+        Restore, volle Platte): ``struct.unpack`` warf bisher ``struct.error``
+        an ``EncryptionError`` vorbei — Aufrufer mussten den Fremdtyp
+        mitfangen (``facility_export._attachment_sha256``)."""
+        out = tmp_path / "cutcount.enc"
+        with open(out, "wb") as f:
+            f.write(struct.pack(">B", FILE_FORMAT_VERSION))
+            f.write(b"\x00\x00")  # nur 2 der 4 Zaehler-Bytes
+
+        with pytest.raises(EncryptionError, match="Truncated"):
+            list(decrypt_file_stream(out))

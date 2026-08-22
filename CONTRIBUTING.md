@@ -246,13 +246,14 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make test-e2e-slice-locked SLICES=4 INDEX=3` | Eine einzelne Scheibe des CI-Schnitts lokal nachfahren, unter dem CI-Lock (auch eine Scheibe belegt Port 8844 und `anlaufstelle_e2e`; ungelockt als `make test-e2e-slice`, nur wenn sicher kein anderer E2E-Lauf läuft) — die Nummer stammt aus dem Job-Namen (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` zeigt die Verteilung (Refs #1976) |
 | `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
 | `make i18n-check` | `.po`-Vollabgleich gegen den Quellbaum (neue/entfernte/semantisch geänderte msgids) — Teil von `make ci` (Refs #1933) |
-| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
+| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
 | `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast |
 | `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist) |
 | `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar) |
 | `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min) |
 | `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools) |
 | `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion) |
+| `make audit-js` | `npm audit` gegen `package-lock.json` — blockierendes JS-Advisory-Gate ab Schweregrad `AUDIT_LEVEL` (Default `moderate`), Teil von `make ci`; braucht Zugang zur npm-Registry (Refs #1968) |
 | `make dev` | Datenbank starten, migrieren und Server starten (kombiniert) |
 | `make clean` | Generierte Artefakte löschen (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` bleibt unangetastet (Datenverlustrisiko) |
 
@@ -583,12 +584,20 @@ Während der Entwicklung nie die volle Suite laufen lassen — in Schichten vorg
 
 ```bash
 make ci
-# entspricht: lint + check + Guards (deps/matrix/release-test/vendor-js/agent-docs) + i18n-check + typecheck + test-js + test-parallel
+# entspricht: lint + check + Guards (deps/matrix/release-test/vendor-js/agent-docs) + audit-js + i18n-check + typecheck + test-js + test-parallel
 ```
 
 Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 
 **JS-Gate (`make test-js`, Refs #1932):** führt `npm test` (= `vitest run`, non-watch, deterministisch) gegen die Offline-/Queue-/Watcher-Suite unter [`tests/js/`](tests/js/) aus und ist fail-fast Teil von `make ci`/`make ci-locked`. Fehlt `node_modules/` (kein vorheriges `npm ci`) oder `package-lock.json`, scheitert das Target mit einer klaren Fehlermeldung statt eines kryptischen `vitest: not found`.
+
+**JS-Advisory-Gate (`make audit-js`, Refs #1968):** führt `npm audit --audit-level=$(AUDIT_LEVEL)` gegen `package-lock.json` aus — das Gegenstück zu `pip-audit` auf der Python-Seite, das es für JavaScript vorher nicht gab. Es hängt bewusst in `make ci` und nicht nur im GitHub-Workflow: der Workflow ruht ohne Actions-Guthaben, `make ci` ist das reale Tor.
+
+**Damit braucht die Gate-Kette Netzzugang.** `npm audit` liest zwar nur das Lockfile (kein `npm ci`, kein `node_modules/` nötig), fragt die Advisory-Daten aber bei der npm-Registry ab. Auf einem Host ohne Registry-Zugang bricht `make ci` in `audit-js` ab — und zwar direkt nach `deps-check`, also bevor ein einziger Test läuft. Einzelne Gates lassen sich in dem Fall weiter gezielt fahren (`make lint`, `make typecheck`, `make test-parallel`).
+
+Schwelle `moderate` statt `high`, weil die Meldung, die das Gate ausgelöst hat, selbst nur `moderate` war. Der Wert steht als `AUDIT_LEVEL ?= moderate` im Makefile und ist überschreibbar: `make ci AUDIT_LEVEL=high` bzw. `make audit-js AUDIT_LEVEL=high`. Das ist die Notbremse für den einen Fall, den das Gate sonst nicht auflösen kann — eine frisch veröffentlichte `moderate`-Advisory **ohne verfügbaren Fix** blockiert ab ihrer Veröffentlichung jeden Commit. Der Default bleibt blockierend bei `moderate`; ein Hochsetzen gehört in die PR-Beschreibung, nicht ins Makefile.
+
+Sämtliche Node-Pakete des Projekts sind `devDependencies` (Tailwind-CLI + Vitest-Toolchain) — deshalb kein `--omit=dev`, das Gate wäre sonst leer. Sie werden allerdings auch im Container-Bau installiert: die Node-Stufe des [`Dockerfile`](Dockerfile) ruft `npm ci` ohne `--omit=dev`; ausgeführt wird dort nur die Tailwind-CLI, und ins Endimage wandert allein die erzeugte `styles.css`.
 
 ### Mutation-Testing (mutmut)
 

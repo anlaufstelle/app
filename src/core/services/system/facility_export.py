@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import struct
 from typing import Any
 
 from django.db.models import Prefetch, Q
@@ -108,11 +107,13 @@ def _attachment_sha256(attachment: Attachment) -> str | None:
     ``None`` bei fehlender/korrupter Datei auf Disk (Betriebs-Realitaet statt
     Gesamtexport-Absturz, Befund 4 Refs #1060) — Peak-RAM bleibt O(CHUNK), der
     Klartext wird nie komplett gepuffert. Deckt ``OSError`` (Datei fehlt,
-    ``get_attachment_path``), ``EncryptionError`` (kaputter
-    Format-Header/Truncation/Chunk-Bindungsfehler, ``decrypt_file_stream``)
-    und ``struct.error`` ab (auf 1-4 Bytes hinter dem Versionsbyte
-    abgeschnittene Datei: ``decrypt_file_stream`` liest den Chunk-Zaehler
-    ungeprueft per ``struct.unpack`` — S5-Restluecke Refs #1060).
+    ``get_attachment_path``) und ``EncryptionError`` (kaputter
+    Format-Header/Truncation/Chunk-Bindungsfehler/unplausible Laengenfelder,
+    ``decrypt_file_stream``) ab. Der frueher zusaetzlich noetige
+    ``struct.error`` (auf 1-4 Bytes hinter dem Versionsbyte abgeschnittene
+    Datei — der Chunk-Zaehler lief ungeprueft in ``struct.unpack``) entfaellt:
+    ``decrypt_file_stream`` meldet jeden Parserfehler seit Refs #1968 selbst
+    als ``EncryptionError``.
 
     ``EncryptionKeyMissing`` (Fehlkonfiguration: ``ENCRYPTION_KEY``/``_KEYS``
     fehlt) wird bewusst NICHT gefangen und propagiert — analog
@@ -127,7 +128,7 @@ def _attachment_sha256(attachment: Attachment) -> str | None:
             hasher.update(chunk)
     except EncryptionKeyMissing:
         raise
-    except (OSError, EncryptionError, struct.error):
+    except (OSError, EncryptionError):
         logger.warning("Facility-Export: Anhang-Datei unlesbar/korrupt (attachment_id=%s)", attachment.pk)
         return None
     return hasher.hexdigest()

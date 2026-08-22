@@ -281,11 +281,12 @@ class TestAttachments:
         assert att_entry["sha256"] is None
 
     def test_truncated_attachment_after_version_byte_yields_null_sha256(self, facility, sample_event, staff_user):
-        """S5-Restluecke (Refs #1060): eine hinter dem gueltigen Versionsbyte
-        auf 1-4 Bytes abgeschnittene Datei (halber Restore, volle Platte) laesst
-        ``decrypt_file_stream`` beim ungeprueften ``struct.unpack`` des
-        Chunk-Zaehlers ``struct.error`` werfen — weder ``OSError`` noch
-        ``EncryptionError``; muss ebenfalls als ``sha256: null`` enden."""
+        """Refs #1060/#1968: eine hinter dem gueltigen Versionsbyte auf 1-4 Bytes
+        abgeschnittene Datei (halber Restore, volle Platte) lief frueher in ein
+        ungeprueftes ``struct.unpack`` des Chunk-Zaehlers und warf ``struct.error``
+        — weder ``OSError`` noch ``EncryptionError``, der Export brauchte den
+        Fremdtyp im ``except``. ``decrypt_file_stream`` meldet den Parserfehler
+        jetzt selbst als ``EncryptionError``; das Ergebnis bleibt ``sha256: null``."""
         from core.services.file_vault.storage import get_attachment_path
 
         attachment = _make_attachment(facility, sample_event, staff_user)

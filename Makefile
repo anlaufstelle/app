@@ -19,7 +19,15 @@ CI_LOCK ?= /work/anlaufstelle-ci.lock
 # Fehlschlag mitten im Lauf, zu lang hiesse haengende Sessions.
 CI_LOCK_TIMEOUT ?= 14400
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta
+# Schwelle des JS-Advisory-Gates ``audit-js`` (Refs #1968). Der Default bleibt
+# blockierend bei ``moderate``; die Variable ist die Notbremse fuer den einen
+# Fall, in dem das Gate sonst unaufloesbar waere: eine frisch veroeffentlichte
+# ``moderate``-Advisory OHNE verfuegbaren Fix blockiert ab ihrer
+# Veroeffentlichung jeden Commit. ``make ci AUDIT_LEVEL=high`` haelt den Gate-
+# Lauf dann am Laufen, ohne dass jemand das Rezept patchen muss.
+AUDIT_LEVEL ?= moderate
+
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check audit-js maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta
 
 .PHONY: i18n-check i18n-update
 
@@ -267,6 +275,30 @@ test-js:
 	fi
 	npm test
 
+# JavaScript-Advisory-Gate (Refs #1968). Gegenstueck zu ``pip-audit`` auf der
+# Python-Seite — fuer JS gab es bis dahin gar keins, weshalb Advisories in
+# ``nanoid``/``postcss``/``undici`` mehrere Releases lang unbemerkt im Lockfile
+# standen.
+#
+# Bewusst HIER und nicht nur in ``.github/workflows/test.yml``: der Workflow
+# haengt am Actions-Guthaben des Dev-Repos und ruht faktisch; ``make ci`` ist
+# das reale Tor. ``npm audit`` liest ausschliesslich package-lock.json —
+# node_modules/ ist nicht noetig, eine Netzverbindung zur Registry schon.
+#
+# Schwelle ``moderate``, nicht ``high``: die Advisory, die dieses Gate
+# ausgeloest hat (PostCSS, sourceMappingURL), war selbst nur ``moderate`` —
+# ein High-Only-Gate liesse genau die Klasse durch, die den Befund erzeugt hat.
+# Die Schwelle haengt an ``AUDIT_LEVEL`` (Default oben), damit eine fix-lose
+# Advisory nicht jeden Commit blockiert, bis ein Patch erscheint.
+# Kein ``--omit=dev``: saemtliche Node-Pakete des Projekts sind
+# devDependencies (Tailwind-CLI + Vitest-Toolchain), das Gate waere sonst leer.
+audit-js:
+	@if [ ! -f package-lock.json ]; then \
+		echo "audit-js: package-lock.json fehlt — ohne Lockfile ist kein Advisory-Abgleich moeglich." >&2; \
+		exit 1; \
+	fi
+	npm audit --audit-level=$(AUDIT_LEVEL)
+
 # --timeout-method=thread wie bei ``test-e2e`` (Refs #1606): harter Kill des
 # Workers gegen den Greenlet-Endlos-Dreher bei totem Chromium — unter -n 2 auf
 # 2 Kernen der reproduzierte Haenger.
@@ -292,7 +324,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check changelog-check deps-check verify-matrix-drift test-matrix-index-check verify-translation-versions i18n-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js $(CI_TEST_TARGET)
+ci: lint check changelog-check deps-check audit-js verify-matrix-drift test-matrix-index-check verify-translation-versions i18n-check verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck verify-css-fresh test-js $(CI_TEST_TARGET)
 
 # Serialisierte Varianten der ressourcenschweren Gates (Refs #1840).
 # Wer einen vollen Gate-Lauf startet, nimmt DIESE Targets — sonst kollidieren
