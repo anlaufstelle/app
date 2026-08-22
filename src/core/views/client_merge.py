@@ -1,4 +1,4 @@
-"""Views des Duplikat-Merges fuer Personen (Refs #1876, ADR-045, Stufe 2).
+"""Views des Duplikat-Merges fuer Personen (Refs #1876, ADR-045).
 
 Aufbau als Mischung der beiden Blaupausen, wie beim Fall-Loeschweg
 (``views/case_deletion.py``):

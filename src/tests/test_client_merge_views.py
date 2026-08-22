@@ -1,4 +1,4 @@
-"""Duplikat-Merge fuer Personen — View-Schicht (Refs #1876, ADR-045, Stufe 2).
+"""Duplikat-Merge fuer Personen — View-Schicht (Refs #1876, ADR-045).
 
 Geprueft werden die Oberflaechen ueber dem Merge-Service
 (:mod:`core.services.client.merge`):

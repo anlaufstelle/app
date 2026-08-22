@@ -7,7 +7,8 @@ Papierkorb (``merged_into``), das Zusammenspiel mit dem Retention-Lauf und
 das Undo bis zum Fristablauf.
 
 Die Sicht-Grenzen (Views, Papierkorb-Liste, Art.-15-Export) sind bewusst
-NICHT hier — sie folgen mit den Views (Stufen 2/3 von #1876).
+NICHT hier — sie liegen bei den View- und Export-Tests
+(``test_client_merge_views.py``, ``test_client_export*.py``).
 """
 
 from datetime import timedelta
@@ -16,8 +17,9 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, Event, LegalHold, RecentClientVisit
+from core.models import Activity, AuditLog, Case, Client, Event, LegalHold, RecentClientVisit
 from core.models.offline_revocation import OfflineClientRevocation
+from core.models.retention import RetentionProposal
 from core.models.workitem import DeletionRequest, WorkItem
 from core.services.client import (
     anonymize_eligible_soft_deleted_clients,
@@ -33,6 +35,7 @@ from core.services.client.merge import (
     request_client_merge,
     unmerge_client,
 )
+from core.services.dashboard import log_activity
 
 pytestmark = pytest.mark.django_db
 
@@ -337,6 +340,121 @@ class TestTombstoneRetention:
         # Der Verweis ueberlebt die Redaktion — der Audit-Trail der Quelle
         # bleibt ueber den Tombstone erreichbar (ADR-045, Entscheid 2).
         assert source.merged_into_id == target.pk
+
+    def test_retention_run_redacts_moved_event_traces_of_the_source(
+        self, facility, source, target, doc_type_contact, settings_obj, staff_user, lead_user
+    ):
+        """Die Tombstone-Redaktion muss die GEWANDERTEN Ereignisse mitnehmen.
+
+        ``_event_ids_for_client(source)`` ist nach dem Merge leer — alle
+        Ereignisse liegen beim Ziel. Ohne das ``moved_events``-Inventar aus dem
+        ``CLIENT_MERGED``-``detail`` ueberlebten das Klartext-Pseudonym der
+        Quelle im Zeitstrom (``Activity.summary``, Frist 365 Tage bzw. bis zur
+        Redaktion des ZIELS), ``RetentionProposal.details['pseudonym']``,
+        ``DeletionRequest.reason`` und abgelaufene ``LegalHold.reason`` mit
+        Event-Ziel — exakt die Zeilen, die die Kaskade ohne Merge redigiert
+        (#1751-Linie).
+        """
+        event = _event(facility, source, doc_type_contact, staff_user)
+        activity = log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.CREATED,
+            target=event,
+            summary=f"Beratungskontakt für {source.pseudonym}",
+        )
+        proposal = RetentionProposal.objects.create(
+            facility=facility,
+            target_type=RetentionProposal.TargetType.EVENT,
+            target_id=event.pk,
+            deletion_due_at=timezone.localdate(),
+            details={"pseudonym": source.pseudonym, "occurred_at": str(event.occurred_at)},
+            retention_category="identified",
+        )
+        deletion_request = DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.EVENT,
+            target_id=event.pk,
+            reason=f"Doppelt dokumentiert bei {source.pseudonym}",
+            requested_by=staff_user,
+        )
+        hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event.pk,
+            reason=f"Anfrage zum Kontakt mit {source.pseudonym}",
+            created_by=lead_user,
+            expires_at=timezone.localdate() - timedelta(days=1),
+        )
+
+        merge_clients(source, target, lead_user)
+        Client.objects.filter(pk=source.pk).update(
+            deleted_at=timezone.now() - timedelta(days=settings_obj.client_trash_days + 1)
+        )
+
+        assert anonymize_eligible_soft_deleted_clients(facility, settings_obj) == 1
+
+        activity.refresh_from_db()
+        proposal.refresh_from_db()
+        deletion_request.refresh_from_db()
+        hold.refresh_from_db()
+        assert activity.summary == "[Anonymisiert]"
+        assert proposal.details["pseudonym"] == "[Anonymisiert]"
+        # Der Nachweis-Trail des Vorschlags bleibt — nur der Freitext geht raus.
+        assert proposal.details["occurred_at"] == str(event.occurred_at)
+        assert deletion_request.reason == "[Anonymisiert]"
+        assert hold.reason == "[Anonymisiert]"
+
+    def test_tombstone_redaction_spares_post_merge_rows_and_target_rows(
+        self, facility, source, target, doc_type_contact, settings_obj, staff_user, lead_user
+    ):
+        """Grenze der Mit-Redaktion: nur die Quell-Spuren, nichts vom Ziel.
+
+        Metadaten, die NACH dem Merge zu einem gewanderten Ereignis entstehen,
+        tragen den Kontext des ZIELS (der Retention-Scan schreibt jetzt dessen
+        Pseudonym) — sie fallen erst mit der Redaktion des Ziels. Die eigenen
+        Zeilen des Ziels bleiben ohnehin unberuehrt.
+        """
+        moved_event = _event(facility, source, doc_type_contact, staff_user)
+        target_event = _event(facility, target, doc_type_contact, staff_user)
+        target_activity = log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.CREATED,
+            target=target_event,
+            summary=f"Beratungskontakt für {target.pseudonym}",
+        )
+
+        merge_clients(source, target, lead_user)
+
+        post_merge_activity = log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.UPDATED,
+            target=moved_event,
+            summary=f"Beratungskontakt für {target.pseudonym}",
+        )
+        post_merge_proposal = RetentionProposal.objects.create(
+            facility=facility,
+            target_type=RetentionProposal.TargetType.EVENT,
+            target_id=moved_event.pk,
+            deletion_due_at=timezone.localdate(),
+            details={"pseudonym": target.pseudonym},
+            retention_category="identified",
+        )
+
+        Client.objects.filter(pk=source.pk).update(
+            deleted_at=timezone.now() - timedelta(days=settings_obj.client_trash_days + 1)
+        )
+
+        assert anonymize_eligible_soft_deleted_clients(facility, settings_obj) == 1
+
+        target_activity.refresh_from_db()
+        post_merge_activity.refresh_from_db()
+        post_merge_proposal.refresh_from_db()
+        assert target_activity.summary == f"Beratungskontakt für {target.pseudonym}"
+        assert post_merge_activity.summary == f"Beratungskontakt für {target.pseudonym}"
+        assert post_merge_proposal.details["pseudonym"] == target.pseudonym
 
     def test_restore_refuses_merge_tombstone(self, source, target, lead_user):
         """Wiederherstellen aus dem Papierkorb wuerde die Quelle ohne ihre

@@ -13,7 +13,11 @@ drei Produktentscheide der ADR bestimmen die Form:
   Verweis in derselben Transaktion. Die normale Papierkorb-Frist
   (``client_trash_days``) gilt mit; danach redigiert der bestehende
   Retention-Lauf (``anonymize_eligible_soft_deleted_clients``) den Tombstone —
-  der ``merged_into``-Verweis ueberlebt die Redaktion (PROTECT, Art.-15-Spur).
+  inklusive der quell-bezogenen Metadaten der GEWANDERTEN Ereignisse, die die
+  Kaskade ueber das ``moved_events``-Inventar der ``CLIENT_MERGED``-Zeile
+  nachholt (``_redact_merged_source_references``, die eigenen Queries der
+  Kaskade sammeln ueber die Quelle und faenden 0 Zeilen). Der
+  ``merged_into``-Verweis ueberlebt die Redaktion (PROTECT, Art.-15-Spur).
   Bis zum Fristablauf ist der Merge per :func:`unmerge_client` umkehrbar.
 * **Kontaktstufe: hoechste gewinnt**: Das Ziel landet auf ``QUALIFIED``,
   sobald eine der beiden dort war. Alles andere waere eine verdeckte

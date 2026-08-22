@@ -48,6 +48,7 @@ from core.services.client import (
     _redact_deletion_requests,
     _redact_event_history,
     _redact_legal_holds,
+    _redact_merged_source_references,
     _redact_rectification_requests,
     _redact_retention_proposals,
     _redact_workitems,
@@ -110,6 +111,13 @@ def _k_anonymize_with_cascade(client, k):
         _redact_retention_proposals(event_ids)
         _redact_legal_holds(client, event_ids, case_ids)
         _redact_activities(client, event_ids)
+        # Merge-Tombstones (ADR-045, Refs #1876) erreichen die Bridge nicht —
+        # ihre Ereignisse sind zum Ziel gewandert, die Eintrittsbedingung
+        # ``total_events > 0`` schliesst sie aus; der Aufruf ist dann ein
+        # No-op (``merged_into`` unbesetzt). Er steht trotzdem hier, damit
+        # beide Kaskaden identisch bleiben (Paritaets-Guard) und eine spaeter
+        # geaenderte Eintrittsbedingung nicht still zur Luecke wird.
+        _redact_merged_source_references(client)
         _delete_recent_visits(client)
         _revoke_offline_bundles(client)
         # Refs #1344/#1738: Datei-Block spaet in der Transaktion — der

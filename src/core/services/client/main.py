@@ -539,6 +539,102 @@ def _redact_activities(client, event_ids: list) -> None:
     Activity.objects.for_facility(client.facility).filter(targets).update(summary="[Anonymisiert]")
 
 
+def _redact_merged_source_references(client) -> None:
+    """Redigiere die Quell-Spuren der GEWANDERTEN Ereignisse eines Merge-Tombstones (Refs #1876).
+
+    Nach einem Merge (ADR-045) sammelt ``_event_ids_for_client(source)`` 0
+    Zeilen — alle Ereignisse haengen laengst am Ziel. Die Kaskade oben traefe
+    damit genau die Metadaten nicht mehr, die sie ohne Merge redigiert
+    (#1751-Linie): ``Activity.summary`` der Ereignis-Zeilen (Zeitstrom,
+    ``retention_activities_days`` = Default 365 Tage bzw. bis zur Redaktion
+    des ZIELS), ``RetentionProposal.details["pseudonym"]``,
+    ``DeletionRequest.reason`` und abgelaufene ``LegalHold.reason`` mit
+    Event-Ziel — alle mit dem Klartext-Pseudonym der Quelle.
+
+    Die Ereignis-IDs kommen aus dem ``moved_events``-Inventar der
+    ``CLIENT_MERGED``-Audit-Zeile — bewusst DERSELBE Ort wie das
+    Undo-Inventar (ADR-045 §2): Rechenschafts-Spur und Umkehr-Inventar sind
+    dieselbe Information. Fehlt die Zeile (Alt-/Reparaturzustand), faellt die
+    Mit-Redaktion aus statt den Retention-Lauf zu reissen — geloggt, damit der
+    Zustand sichtbar wird; die Zeilen fallen spaetestens mit der Redaktion des
+    Ziels.
+
+    Redigiert wird NICHT beim Merge selbst: im Undo-Fenster muessen die
+    Zeilen intakt bleiben (``unmerge_client`` stellt den Zustand wieder her).
+    Und es wird NUR quell-bezogen redigiert, begrenzt auf zwei Achsen:
+
+    * **Nur Metadaten, keine Ereignis-Inhalte des Ziels** — ``EventHistory``,
+      ``data_json`` und Anhaenge der gewanderten Ereignisse gehoeren jetzt zur
+      lebenden Akte des Ziels und fallen erst mit dessen eigener Redaktion.
+    * **Nur Zeilen bis zum Merge-Zeitpunkt** (``timestamp`` der Audit-Zeile):
+      was danach zu einem gewanderten Ereignis entsteht, traegt den Kontext
+      des ZIELS (der Retention-Scan schreibt jetzt dessen Pseudonym, ein
+      neuer Antrag begruendet sich gegen dessen Akte — ein PENDING-Antrag
+      darf seine Vier-Augen-Begruendung nicht verlieren).
+
+    Die Marker sind dieselben wie in den ``_redact_*``-Helfern oben; die
+    Meta-Spuren (Antrags-Status, Hold-Fristen, Vorschlags-Nachweis, Verb +
+    Zeitpunkt im Zeitstrom) bleiben wie dort erhalten.
+    """
+    if client.merged_into_id is None:
+        return
+    row = (
+        AuditLog.objects.filter(
+            facility=client.facility,
+            action=AuditLog.Action.CLIENT_MERGED,
+            target_type="Client",
+            target_id=str(client.pk),
+        )
+        .order_by("-timestamp")
+        .first()
+    )
+    # Dieselbe Konsistenz-Bedingung wie ``_merge_inventory`` (merge.py) — aber
+    # degradierend statt abbrechend: eine fehlende/fremde Inventar-Zeile darf
+    # den Retention-Lauf nicht reissen, die Redaktion der Person selbst laeuft.
+    if row is None or row.detail.get("merged_into") != str(client.merged_into_id):
+        logger.warning(
+            "client_merge_inventory_missing",
+            extra={"client_id": str(client.pk)},
+        )
+        return
+    moved_event_ids = row.detail.get("moved_events") or []
+    if not moved_event_ids:
+        return
+    merged_at = row.timestamp
+
+    from django.contrib.contenttypes.models import ContentType
+
+    from core.models.event import Event
+    from core.models.retention import LegalHold, RetentionProposal
+
+    Activity.objects.for_facility(client.facility).filter(
+        target_type=ContentType.objects.get_for_model(Event),
+        target_id__in=moved_event_ids,
+        created_at__lte=merged_at,
+    ).update(summary="[Anonymisiert]")
+    DeletionRequest.objects.filter(
+        target_type=DeletionRequest.TargetType.EVENT,
+        target_id__in=moved_event_ids,
+        created_at__lte=merged_at,
+    ).update(reason="[Anonymisiert]")
+    LegalHold.objects.for_facility(client.facility).filter(
+        target_type="Event",
+        target_id__in=moved_event_ids,
+        created_at__lte=merged_at,
+    ).update(reason="[Anonymisiert]")
+    proposals = RetentionProposal.objects.filter(
+        target_type=RetentionProposal.TargetType.EVENT,
+        target_id__in=moved_event_ids,
+        proposed_at__lte=merged_at,
+    )
+    for proposal in proposals.iterator():
+        details = proposal.details or {}
+        if "pseudonym" not in details:
+            continue
+        proposal.details = {**details, "pseudonym": "[Anonymisiert]"}
+        proposal.save(update_fields=["details"])
+
+
 @transaction.atomic
 def anonymize_client(client, user=None):
     """DSGVO-konforme Aggregat-Anonymisierung eines Klienten (Refs #715, #743).
@@ -582,6 +678,13 @@ def anonymize_client(client, user=None):
       der Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067),
       die WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090) und
       die Case-Target-Activity den Fall-/Meilenstein-Titel (Refs #1751).
+    - Bei einem **Merge-Tombstone** (``merged_into`` gesetzt, ADR-045)
+      zusätzlich die quell-bezogenen Metadaten der zum Ziel GEWANDERTEN
+      Ereignisse (``Activity.summary``, ``RetentionProposal``-Pseudonym,
+      ``DeletionRequest.reason``, ``LegalHold.reason``) — über das
+      ``moved_events``-Inventar der ``CLIENT_MERGED``-Audit-Zeile und begrenzt
+      auf Zeilen bis zum Merge-Zeitpunkt
+      (:func:`_redact_merged_source_references`, Refs #1876).
     - ``RecentClientVisit``-Zeilen der Person werden **gelöscht** (Refs #1761)
       — sonst listete das „zuletzt besucht"-Widget die anonymisierte Person
       weiter.
@@ -618,6 +721,10 @@ def anonymize_client(client, user=None):
     _redact_retention_proposals(event_ids)
     _redact_legal_holds(client, event_ids, case_ids)
     _redact_activities(client, event_ids)
+    # Merge-Tombstones (ADR-045): die vier Schritte davor sammeln ueber die
+    # QUELLE — nach der Wanderung 0 Zeilen. Die quell-bezogenen Metadaten der
+    # gewanderten Ereignisse holt dieser Schritt ueber das Audit-Inventar nach.
+    _redact_merged_source_references(client)
     _delete_recent_visits(client)
     _revoke_offline_bundles(client)
     # Refs #1344/#1738/#1782: EIN Datei-Zeitpunkt, ganz am Ende der Kaskade.
