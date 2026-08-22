@@ -107,7 +107,9 @@ class TestExportClientDataAggregate:
     ``attachments`` (M24: Anhang-Metadaten aller drei Owner gehoeren in die
     Auskunft; die personen-eigenen als eigene Top-Level-Kategorie) sowie mit
     #1796 um
-    ``rectification_requests`` (Art.-16-Antraege, ADR-041).
+    ``rectification_requests`` (Art.-16-Antraege, ADR-041). Refs #1818 traegt
+    ``deleted_cases`` nach — Faelle im Papierkorb sind wie geloeschte
+    Ereignisse ein eigener Abschnitt (ADR-044).
     """
 
     def test_top_level_dict_contains_all_aggregate_keys(self, client_identified, facility, staff_user):
@@ -118,6 +120,7 @@ class TestExportClientDataAggregate:
             "deleted_events",
             "attachments",
             "cases",
+            "deleted_cases",
             "episodes",
             "outcome_goals",
             "event_history",

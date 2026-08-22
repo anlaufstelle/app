@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 11:17+0200\n"
+"POT-Creation-Date: 2026-08-22 13:06+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -8367,16 +8367,16 @@ msgid "Keine Fälle vorhanden."
 msgstr "Keine Fälle vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:177
-msgid "4. Episoden"
-msgstr "4. Episoden"
+msgid "5. Episoden"
+msgstr "5. Episoden"
 
 #: src/templates/core/export/client_data_pdf.html:204
 msgid "Keine Episoden vorhanden."
 msgstr "Keine Episoden vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:207
-msgid "5. Wirkungsziele und Meilensteine"
-msgstr "5. Wirkungsziele und Meilensteine"
+msgid "6. Wirkungsziele und Meilensteine"
+msgstr "6. Wirkungsziele und Meilensteine"
 
 #: src/templates/core/export/client_data_pdf.html:213
 msgid "Ziel"
@@ -8387,8 +8387,8 @@ msgid "Keine Wirkungsziele vorhanden."
 msgstr "Keine Wirkungsziele vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:239
-msgid "6. Kontakte"
-msgstr "6. Kontakte"
+msgid "7. Kontakte"
+msgstr "7. Kontakte"
 
 #: src/templates/core/export/client_data_pdf.html:249
 msgid "Daten"
@@ -8399,8 +8399,8 @@ msgid "Keine Kontakte vorhanden."
 msgstr "Keine Kontakte vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:286
-msgid "7. Gelöschte Ereignisse (Papierkorb)"
-msgstr "7. Gelöschte Ereignisse (Papierkorb)"
+msgid "8. Gelöschte Ereignisse (Papierkorb)"
+msgstr "8. Gelöschte Ereignisse (Papierkorb)"
 
 #: src/templates/core/export/client_data_pdf.html:288
 msgid ""
@@ -8417,8 +8417,8 @@ msgid "Keine gelöschten Ereignisse vorhanden."
 msgstr "Keine gelöschten Ereignisse vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:315
-msgid "8. Änderungshistorie"
-msgstr "8. Änderungshistorie"
+msgid "9. Änderungshistorie"
+msgstr "9. Änderungshistorie"
 
 #: src/templates/core/export/client_data_pdf.html:340
 #: src/templates/core/export/client_data_pdf.html:345
@@ -8430,16 +8430,16 @@ msgid "Keine Änderungshistorie vorhanden."
 msgstr "Keine Änderungshistorie vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:356
-msgid "9. Löschanträge"
-msgstr "9. Löschanträge"
+msgid "10. Löschanträge"
+msgstr "10. Löschanträge"
 
 #: src/templates/core/export/client_data_pdf.html:385
 msgid "Keine Löschanträge vorhanden."
 msgstr "Keine Löschanträge vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:394
-msgid "10. Berichtigungsanträge"
-msgstr "10. Berichtigungsanträge"
+msgid "11. Berichtigungsanträge"
+msgstr "11. Berichtigungsanträge"
 
 #: src/templates/core/export/client_data_pdf.html:401
 #: src/templates/core/rectification/review.html:24
@@ -8461,8 +8461,8 @@ msgid "Keine Berichtigungsanträge vorhanden."
 msgstr "Keine Berichtigungsanträge vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:441
-msgid "11. Aufbewahrung: Sperrvermerke und Löschvorschläge"
-msgstr "11. Aufbewahrung: Sperrvermerke und Löschvorschläge"
+msgid "12. Aufbewahrung: Sperrvermerke und Löschvorschläge"
+msgstr "12. Aufbewahrung: Sperrvermerke und Löschvorschläge"
 
 #: src/templates/core/export/client_data_pdf.html:442
 msgid "Sperrvermerke (Legal Holds)"
@@ -8481,8 +8481,8 @@ msgid "Keine Löschvorschläge vorhanden."
 msgstr "Keine Löschvorschläge vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:502
-msgid "12. Aufgaben"
-msgstr "12. Aufgaben"
+msgid "13. Aufgaben"
+msgstr "13. Aufgaben"
 
 #: src/templates/core/export/client_data_pdf.html:515
 msgid "Fällig am"
@@ -8493,8 +8493,8 @@ msgid "Keine Aufgaben vorhanden."
 msgstr "Keine Aufgaben vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:538
-msgid "13. Aktivitäten"
-msgstr "13. Aktivitäten"
+msgid "14. Aktivitäten"
+msgstr "14. Aktivitäten"
 
 #: src/templates/core/export/client_data_pdf.html:544
 #: src/templates/core/export/client_data_pdf.html:602
@@ -8514,8 +8514,8 @@ msgid "Keine Aktivitäten vorhanden."
 msgstr "Keine Aktivitäten vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:570
-msgid "14. Merkliste und zuletzt aufgerufen"
-msgstr "14. Merkliste und zuletzt aufgerufen"
+msgid "15. Merkliste und zuletzt aufgerufen"
+msgstr "15. Merkliste und zuletzt aufgerufen"
 
 #: src/templates/core/export/client_data_pdf.html:575
 msgid "Zuletzt aufgerufen am"
@@ -8530,8 +8530,8 @@ msgid "Keine Einträge vorhanden."
 msgstr "Keine Einträge vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:595
-msgid "15. Zugriffsprotokoll"
-msgstr "15. Zugriffsprotokoll"
+msgid "16. Zugriffsprotokoll"
+msgstr "16. Zugriffsprotokoll"
 
 #: src/templates/core/export/client_data_pdf.html:596
 msgid ""
@@ -11227,3 +11227,19 @@ msgstr "Ausweg: im Papierkorb entweder „Jetzt endgültig anonymisieren“ (ent
 #: src/templates/core/config/partials/trash_blocker_hint.html:39
 msgid "Fall-Papierkorb öffnen"
 msgstr "Fall-Papierkorb öffnen"
+
+#: src/templates/core/export/client_data_pdf.html:174
+msgid "4. Fälle im Papierkorb"
+msgstr "4. Fälle im Papierkorb"
+
+#: src/templates/core/export/client_data_pdf.html:186
+msgid "Endgültig anonymisiert am"
+msgstr "Endgültig anonymisiert am"
+
+#: src/templates/core/export/client_data_pdf.html:210
+msgid "Keine Fälle im Papierkorb."
+msgstr "Keine Fälle im Papierkorb."
+
+#: src/templates/core/cases/deletion_review.html:38
+msgid "Die Angaben zum Fall sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab."
+msgstr "Die Angaben zum Fall sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Falldetails braucht, gibt die Bestätigung an eine Fachkraft ab."

@@ -209,6 +209,28 @@ def _reset_trashed_case(conn, ctx):
     )
 
 
+def _reset_anonymized_case(conn, ctx):
+    """``case_trashed`` nach einer erlaubten Sofort-Tilgung wieder tilgbar machen (Refs #1818).
+
+    ``case_anonymize`` ist der einzige unwiderrufliche der vier Fall-Endpoints:
+    er setzt ``anonymized_at`` und redigiert Titel, Beschreibung, Episoden und
+    Ziele. Der Service weist einen zweiten Aufruf danach mit ``ValidationError``
+    ab — ohne diesen Hook pruefte die Matrix ab dem zweiten erlaubten Akteur
+    nur noch den Fehlerpfad (heute mit derselben 302 folgenlos, nach einer
+    Ausweitung von ADMIN_ONLY aber eine still falsche Aussage).
+
+    Zurueckgesetzt wird nur der Zustands-Stempel, nicht der Inhalt: die
+    ``.enc``-Dateien sind physisch weg (nicht rollback-bar), und fuer die
+    Zugriffsmatrix zaehlt allein, dass die Zeile wieder ein gueltiges Ziel ist.
+    """
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        "UPDATE core_case SET anonymized_at = NULL, is_deleted = true, "
+        "deleted_at = COALESCE(deleted_at, now()) WHERE id = %s",
+        (ctx["ids_fac1"]["case_trashed"],),
+    )
+
+
 def _reset_milestone(conn, ctx):
     """Hard-Delete von milestone rückgängig machen.
 
@@ -399,6 +421,9 @@ DESTRUCTIVE_RESET = {
     # Refs #1818: Restore hebt den Papierkorb-Zustand auf, den die naechste
     # Zelle (case_anonymize) auf derselben Zeile voraussetzt.
     "core:case_restore": _reset_trashed_case,
+    # Refs #1818: die Sofort-Tilgung ist unwiderruflich — ohne Reset trifft der
+    # zweite erlaubte Akteur den ValidationError-Zweig statt des Loeschpfads.
+    "core:case_anonymize": _reset_anonymized_case,
     "core:milestone_delete": _reset_milestone,  # Hard-Delete
     # Refs #1874: Hard-Delete inkl. Disk — der erste physische Löschpfad in der
     # Matrix. Ohne Reset bekäme die zweite erlaubte Rolle (lead nach

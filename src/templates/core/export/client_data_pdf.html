@@ -164,9 +164,69 @@
     <p>{% trans "Keine Fälle vorhanden." %}</p>
     {% endif %}
 
+    {% comment %}Refs #1818 (ADR-044): Faelle im Papierkorb als eigener Abschnitt —
+    dieselbe Trennung wie bei den geloeschten Ereignissen (Abschnitt 8). Bis zur
+    Tilgung sind sie gespeicherter Datenbestand; ``Endgültig anonymisiert am``
+    weist aus, wann die Inhalte entfernt wurden (leer = noch wiederherstellbar).
+    {% endcomment %}
+    <h2>{% trans "4. Fälle im Papierkorb" %}</h2>
+    {% if deleted_cases %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Titel" %}</th>
+                <th>{% trans "Beschreibung" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Erstellt am" %}</th>
+                <th>{% trans "Gelöscht am" %}</th>
+                <th>{% trans "Gelöscht von" %}</th>
+                <th>{% trans "Endgültig anonymisiert am" %}</th>
+                <th>{% trans "Fallverantwortlich" %}</th>
+                <th>{% trans "Zusatzfelder" %}</th>
+                <th>{% trans "Dateianhänge" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for case in deleted_cases %}
+            <tr>
+                <td>{{ case.title }}</td>
+                <td>{{ case.description|default:"-" }}</td>
+                <td>{{ case.status }}</td>
+                <td>{{ case.created_at }}</td>
+                <td>{{ case.deleted_at|default:"-" }}</td>
+                <td>{{ case.deleted_by|default:"-" }}</td>
+                <td>{{ case.anonymized_at|default:"-" }}</td>
+                <td>{{ case.lead_user|default:"-" }}</td>
+                {% comment %}Bis zur Tilgung traegt ein Fall im Papierkorb seine
+                Zusatzfelder weiter — die Auskunft darf sie nicht auslassen, nur weil
+                der Fall geloescht ist (dieselben Quellen wie in Abschnitt 3).{% endcomment %}
+                <td>
+                    {% if case.document_type %}
+                    <strong>{{ case.document_type }}</strong>
+                    {% for entry in case.dynamic_data %}
+                        <br>{{ entry.label }}: {{ entry.value }}
+                    {% endfor %}
+                    {% for entry in case.dynamic_data_orphaned %}
+                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value }}
+                    {% endfor %}
+                    {% else %}-{% endif %}
+                </td>
+                <td>
+                    {% for attachment in case.attachments %}
+                        {{ attachment.field }}: {{ attachment.filename }} ({{ attachment.file_size }} {% trans "Bytes" %}, {{ attachment.mime_type }}){% if attachment.removed_at %} — {% trans "entfernt" %}{% elif not attachment.is_current %} — {% trans "ersetzt" %}{% endif %}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}-{% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Fälle im Papierkorb." %}</p>
+    {% endif %}
+
     {% comment %}Refs #1752: Episoden und Wirkungsziele fehlten bislang komplett,
     obwohl sie Freitext zur Person tragen.{% endcomment %}
-    <h2>{% trans "4. Episoden" %}</h2>
+    <h2>{% trans "5. Episoden" %}</h2>
     {% if episodes %}
     <table>
         <thead>
@@ -196,7 +256,7 @@
     <p>{% trans "Keine Episoden vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "5. Wirkungsziele und Meilensteine" %}</h2>
+    <h2>{% trans "6. Wirkungsziele und Meilensteine" %}</h2>
     {% if outcome_goals %}
     <table>
         <thead>
@@ -228,7 +288,7 @@
     <p>{% trans "Keine Wirkungsziele vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "6. Kontakte" %}</h2>
+    <h2>{% trans "7. Kontakte" %}</h2>
     {% if events %}
     <table>
         <thead>
@@ -273,7 +333,7 @@
     {% comment %}Refs #1752: Soft-deletete Ereignisse sind bis zum Hard-Purge weiterhin
     gespeicherte Daten. Ihr ``data_json`` ist beim Loeschen geleert — ausgewiesen
     werden Existenz und Zeitpunkt, die Inhalte stehen in der Aenderungshistorie.{% endcomment %}
-    <h2>{% trans "7. Gelöschte Ereignisse (Papierkorb)" %}</h2>
+    <h2>{% trans "8. Gelöschte Ereignisse (Papierkorb)" %}</h2>
     {% if deleted_events %}
     <p>{% trans "Diese Ereignisse sind gelöscht, aber noch nicht endgültig entfernt. Ihre Inhalte wurden beim Löschen entfernt; was noch vorhanden ist, steht in der Änderungshistorie." %}</p>
     <table>
@@ -302,7 +362,7 @@
     <p>{% trans "Keine gelöschten Ereignisse vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "8. Änderungshistorie" %}</h2>
+    <h2>{% trans "9. Änderungshistorie" %}</h2>
     {% if event_history %}
     <table>
         <thead>
@@ -342,7 +402,7 @@
     <p>{% trans "Keine Änderungshistorie vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "9. Löschanträge" %}</h2>
+    <h2>{% trans "10. Löschanträge" %}</h2>
     {% if deletion_requests %}
     <table>
         <thead>
@@ -379,7 +439,7 @@
     Vier-Augen-Nachweis. Ausgewiesen werden ALLE Status; ein abgelehnter Antrag ist
     fuer die betroffene Person die aussagekraeftigste Zeile. Redigierte Werte
     (Anonymisierung, Refs #1792) erscheinen als „—", nie als ``None``.{% endcomment %}
-    <h2>{% trans "10. Berichtigungsanträge" %}</h2>
+    <h2>{% trans "11. Berichtigungsanträge" %}</h2>
     {% if rectification_requests %}
     <table>
         <thead>
@@ -424,7 +484,7 @@
     {% comment %}Refs #1752 (Art. 18): Legal Hold erklaert, warum Daten trotz
     abgelaufener Frist noch existieren; der Loeschvorschlag benennt die anstehende
     Loeschung samt Frist.{% endcomment %}
-    <h2>{% trans "11. Aufbewahrung: Sperrvermerke und Löschvorschläge" %}</h2>
+    <h2>{% trans "12. Aufbewahrung: Sperrvermerke und Löschvorschläge" %}</h2>
     <h3>{% trans "Sperrvermerke (Legal Holds)" %}</h3>
     {% if legal_holds %}
     <table>
@@ -485,7 +545,7 @@
     <p>{% trans "Keine Löschvorschläge vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "12. Aufgaben" %}</h2>
+    <h2>{% trans "13. Aufgaben" %}</h2>
     {% if work_items %}
     <table>
         <thead>
@@ -521,7 +581,7 @@
     <p>{% trans "Keine Aufgaben vorhanden." %}</p>
     {% endif %}
 
-    <h2>{% trans "13. Aktivitäten" %}</h2>
+    <h2>{% trans "14. Aktivitäten" %}</h2>
     {% if activities %}
     <table>
         <thead>
@@ -552,7 +612,7 @@
     {% comment %}Refs #1752: Merklisten-/Zuletzt-besucht-Eintraege sind gespeicherte
     Information ueber die Person. Bewusst OHNE die zugreifende Person — sonst waere
     das ein Zugriffsprotokoll ueber Beschaeftigte (Art. 15 Abs. 4).{% endcomment %}
-    <h2>{% trans "14. Merkliste und zuletzt aufgerufen" %}</h2>
+    <h2>{% trans "15. Merkliste und zuletzt aufgerufen" %}</h2>
     {% if recent_visits %}
     <table>
         <thead>
@@ -576,7 +636,7 @@
 
     {% comment %}Refs #1752: Zugriffsprotokoll bewusst ohne Beschaeftigten-Identitaet
     (Produktentscheid 2026-08-03) — Aktion, Zeitpunkt und Kategorie ja, Namen nein.{% endcomment %}
-    <h2>{% trans "15. Zugriffsprotokoll" %}</h2>
+    <h2>{% trans "16. Zugriffsprotokoll" %}</h2>
     <p>{% trans "Protokollierte Zugriffe auf Ihre Daten. Die Namen der zugreifenden Beschäftigten sind nicht aufgeführt, da es sich dabei zugleich um Daten Dritter handelt." %}</p>
     {% if audit_trail %}
     <table>

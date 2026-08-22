@@ -812,6 +812,28 @@ Ein geschlossener Fall kann jederzeit wieder geöffnet werden:
 
 > **Wichtig:** Fälle schließen und wiedereröffnen können nur **Leitungen** und **Administratoren**.
 
+### Fall löschen
+
+Ein versehentlich angelegter Fall lässt sich löschen. „Schließen" ist dafür **nicht** das richtige Mittel: Es ist eine fachliche Aussage über den Hilfeverlauf, und ein Fall, den es nie gab, hat keinen Verlauf.
+
+1. Öffnen Sie die Fall-Detailseite.
+2. Klicken Sie im Menü **Weitere Aktionen** (⋮) auf **Löschen**.
+3. Die folgende Seite sagt Ihnen, welcher der beiden Wege gilt:
+ - **Direkt in den Papierkorb** — bei Personen der Kontaktstufe „Anonym" oder „Nur Pseudonym".
+ - **Löschantrag mit Bestätigung** — bei einer Person der Stufe „Mit Zusatzangaben". Geben Sie eine Begründung ein; die Seite nennt gleich, wer den Antrag bestätigen kann. Bestätigt wird er über **Datenschutz → Löschanträge**, wie bei Personen und Kontakten. Solange der Antrag läuft, bleibt der Fall unverändert nutzbar und ist als „Löschung beantragt" gekennzeichnet.
+4. Bestätigen Sie.
+
+Was dabei passiert:
+
+- Der Fall verschwindet aus Fallliste, Statistik und Zeitstrom und liegt im **Papierkorb**. Episoden, Wirkungsziele und Dateianhänge gehen mit — sie kommen beim Wiederherstellen vollständig zurück.
+- **Zugeordnete Kontakte bleiben bei der Person.** Sie werden nicht mitgelöscht und blockieren die Löschung auch nicht; sie verlieren ihre Fallzuordnung erst, wenn der Fall endgültig getilgt wird.
+- Nach Ablauf der Papierkorb-Frist (Standard 30 Tage, dieselbe wie für gelöschte Personen) wird der Fall automatisch **anonymisiert**: Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele und Dateien sind dann unwiderruflich weg. Danach ist keine Wiederherstellung mehr möglich.
+- In einer Datenauskunft nach Art. 15 DSGVO erscheint ein Fall im Papierkorb bis zu diesem Zeitpunkt in einem **eigenen Abschnitt** „Fälle im Papierkorb" — mit dem Hinweis, seit wann er gelöscht und ob er bereits endgültig anonymisiert ist.
+
+> **Wiederherstellen** kann nur die **Anwendungsbetreuung** — über **Papierkorb** in der Kopfzeile der Fallliste. Dort steht auch **Jetzt endgültig anonymisieren**, wenn nicht auf die Frist gewartet werden soll.
+
+> **Offline:** Ein gelöschter Fall verschwindet beim nächsten Abgleich auch aus den offline gespeicherten Daten auf Ihrem Gerät. Fälle lassen sich offline ohnehin nicht anlegen, bearbeiten oder löschen.
+
 ### Kontakte zuordnen und entfernen
 
 Auf der Fall-Detailseite sehen Sie unterhalb der zugeordneten Kontakte eine Liste der **nicht zugeordneten Kontakte** der Person. So ordnen Sie einen Kontakt zu:
@@ -886,6 +908,8 @@ Jede Episode zeigt ihren Status:
 | Fallliste einsehen | Nein | Ja | Ja | Ja |
 | Fall anlegen und bearbeiten | Nein | Ja | Ja | Ja |
 | Fall schließen / wiedereröffnen | Nein | Nein | Ja | Ja |
+| Fall löschen bzw. Löschung beantragen | Nein | Ja | Ja | Ja |
+| Fall-Papierkorb: wiederherstellen, endgültig anonymisieren | Nein | Nein | Nein | Ja |
 | Kontakte zuordnen / entfernen | Nein | Ja | Ja | Ja |
 | Episoden verwalten | Nein | Ja | Ja | Ja |
 | Wirkungsziele und Meilensteine | Nein | Ja | Ja | Ja |

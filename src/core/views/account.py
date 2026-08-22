@@ -9,6 +9,7 @@ from django.views.generic import TemplateView
 
 from core.models import Case as CaseModel
 from core.models import Event, RecentClientVisit, WorkItem
+from core.services.case import cases_with_live_client
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,11 @@ class AccountProfileView(LoginRequiredMixin, TemplateView):
                 occurred_at__lte=end_dt,
             )
             .count(),
-            "open_cases": CaseModel.objects.for_facility(facility).filter(status=CaseModel.Status.OPEN).count(),
+            # Refs #1818: derselbe Choke-Point wie Fallliste und Personenakte
+            # (``cases_with_live_client``). Ohne ihn zaehlte die Kennzahl Faelle
+            # im Papierkorb und die einer widerrufenen Person mit — Zahl und
+            # Liste widersprechen sich dann ab dem ersten geloeschten Fall.
+            "open_cases": cases_with_live_client().filter(facility=facility, status=CaseModel.Status.OPEN).count(),
             "my_open_tasks": WorkItem.objects.for_facility(facility)
             .filter(assigned_to=user, status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
             .count(),

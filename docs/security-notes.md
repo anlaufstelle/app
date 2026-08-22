@@ -390,6 +390,16 @@ Drei Design-Entscheidungen mit Sicherheitsbezug:
 
 **Aufbewahrung der Widerrufe:** `OFFLINE_REVOCATION_RETENTION_SECONDS` = 2 × Bundle-TTL (96 h), danach Prune im nächtlichen `enforce_retention`-Lauf. Begründung: ein Bundle ist höchstens 48 h gültig, ein Gerät kann aber exakt am Fristende wieder online gehen und muss den Eintrag dann noch sehen — der doppelte Abstand deckt diese Überlappung plus Uhren-Drift ab, ohne die Liste unbegrenzt wachsen zu lassen. Der Eintrag ist zwar klartextfrei, bleibt aber ein pseudonymer Bezug auf eine bereits gelöschte Person und darf nicht länger liegen, als er einen Zweck hat (Art. 5 Abs. 1 lit. e).
 
+### Abgrenzung: gelöschter **Fall**, nicht gelöschte Person (Refs #1818)
+
+Mit dem Fall-Löschweg ([ADR-044](adr/044-fall-loeschpfad.md)) gibt es einen zweiten Weg, auf dem Inhalte aus dem Bundle verschwinden müssen. Der Bundle-Bau filtert seither über `cases_with_live_client()`, ein Fall im Papierkorb geht also **nicht mehr** mit hinaus. Ein **Widerruf** bereits ausgelieferter Bundles wird dabei bewusst **nicht** ausgelöst:
+
+- Die Revoke-Liste ist **personen**-genau (`OfflineClientRevocation.client_pk`) und wirkt mit `force: true` — sie verwürfe die ungesyncte Arbeit zur **ganzen** Person, weil ein einzelner Fall gelöscht wurde. Für den häufigsten Anlass (versehentlich angelegter Fall) steht dieser Preis in keinem Verhältnis.
+- Der reguläre Abgleich überschreibt den lokalen Bestand ohnehin mit einem Bundle **ohne** den gelöschten Fall; es bleibt dasselbe Zeitfenster wie beim Löschen eines **Ereignisses**, das ebenfalls keinen Widerruf auslöst.
+- Letzte Linie bleibt auch hier die 48-h-Bundle-TTL.
+
+Wer diese Grenze verschieben will, braucht einen fall-genauen Widerrufskanal — nicht einen zweiten Aufrufer des personen-genauen.
+
 ### Restrisiko (akzeptiert)
 
 **Ein Gerät, das nach der Anonymisierung nie wieder online geht, erhält das Signal nicht.** Für diesen Fall bleibt die **48-h-Bundle-TTL die letzte Verteidigungslinie**: `purgeExpired`/`purgeExpiredBundles` verwerfen den Server-Spiegel rein lokal, sobald `expiresAt` überschritten ist, und der Idle-Wipe entzieht davor bereits den Schlüssel (Session-Dauer, Default 30 Min). Ein Widerruf kann diese Grenze prinzipiell nicht unterschreiten — jede Server→Gerät-Zustellung setzt Konnektivität voraus.

@@ -386,6 +386,34 @@ class TestCasesFilter:
         pks = {x["pk"] for x in bundle["cases"]}
         assert str(c.pk) in pks
 
+    def test_trashed_case_is_excluded(self, facility, client_identified, staff_user):
+        """Ein Fall im Papierkorb darf das Offline-Paket nicht mehr verlassen (Refs #1818).
+
+        Das Bundle ist ein Derivat der Online-Sicht: was ``cases_with_live_client()``
+        aus Fallliste und Fallakte nimmt, darf nicht ueber den Umweg
+        ``core/clients/offline_detail.html`` weiter auf dem Geraet lesbar sein —
+        mit Titel und Beschreibung, also genau dem Freitext, den die Tilgung
+        spaeter redigiert. Gegenstueck zu ``test_soft_deleted_events_are_excluded``
+        auf der Ereignis-Achse.
+        """
+        live = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="lebt",
+            created_by=staff_user,
+        )
+        trashed = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="GEHEIMER FALLTITEL",
+            description="Papierkorb-Beschreibung",
+            created_by=staff_user,
+        )
+        trashed.soft_delete(user=staff_user)
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert {x["pk"] for x in bundle["cases"]} == {str(live.pk)}
+        assert "GEHEIMER FALLTITEL" not in str(bundle)
+
     def test_cases_for_other_client_excluded(self, facility, client_identified, staff_user):
         from core.models import Client
 

@@ -31,7 +31,10 @@
                 {# Refs #1813 T4 / #1802 (Entscheid 2): Fall-Detail ist STAFF_PLUS. Fuer die #}
                 {# Assistenz erscheint weder Badge noch Titel — Fall-Titel sind Freitext,    #}
                 {# ein unverlinkter Text waere ein Existenz- und Inhalts-Leak (Regel R8).    #}
-                {% if event.case and user.is_staff_or_above %}
+                {# Refs #1818: ``show_to_case`` (services/events/context.py) traegt dieselbe #}
+                {# Bedingung wie die ⋮-Aktion „Zum Fall" und schliesst zusaetzlich den Fall  #}
+                {# im Papierkorb aus — zwei Flaechen, eine Quelle.                           #}
+                {% if show_to_case %}
                 {% url 'core:case_detail' event.case.pk as case_url %}
                 {% trans "Fall" as fall_label %}
                 {% include "components/_context_link.html" with url=case_url label=event.case.title prefix=fall_label testid="context-badge-case" %}

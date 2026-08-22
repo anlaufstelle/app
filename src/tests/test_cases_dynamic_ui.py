@@ -1546,7 +1546,8 @@ class TestCaseExportDynamicData:
         """Ohne ``document_type`` erscheinen keine Dynamik-Keys im Fall-Dict.
 
         Refs #1752: Der Basis-Schluesselsatz ist per Produktentscheid vom
-        2026-08-03 um ``updated_at`` und die Papierkorb-Metadaten gewachsen.
+        2026-08-03 um ``updated_at`` und die Papierkorb-Metadaten gewachsen,
+        mit dem Fall-Loeschweg (Refs #1818, ADR-044 P3a) um ``anonymized_at``.
         Die urspruengliche Aussage — ``dynamic_data``/``dynamic_data_orphaned``
         bleiben ohne Typ fern — bleibt unveraendert gepinnt.
         """
@@ -1563,6 +1564,7 @@ class TestCaseExportDynamicData:
             "is_deleted",
             "deleted_at",
             "deleted_by",
+            "anonymized_at",
         }
 
     def test_export_formats_select_and_boolean_values(

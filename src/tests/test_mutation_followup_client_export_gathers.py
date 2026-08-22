@@ -584,10 +584,12 @@ class TestGatherCases:
     def test_empty_when_no_cases(self, client_identified):
         assert _gather_cases(client_identified) == []
 
-    def test_contains_all_eleven_fields(self, facility, client_identified, staff_user):
+    def test_contains_all_twelve_fields(self, facility, client_identified, staff_user):
         """Anforderung geändert per Produktentscheid 2026-08-03 (Refs #1752):
         vorher sieben Felder — ``updated_at`` und die Papierkorb-Metadaten
-        fehlten."""
+        fehlten. Refs #1818 (ADR-044 P3a): dazu ``anonymized_at`` — die Zeile
+        eines getilgten Falls bleibt stehen, ``is_deleted`` allein sagt also
+        nicht, ob die Inhalte noch existieren."""
         CaseModel.objects.create(
             facility=facility,
             client=client_identified,
@@ -611,6 +613,7 @@ class TestGatherCases:
             "is_deleted",
             "deleted_at",
             "deleted_by",
+            "anonymized_at",
         }
 
     def test_title_preserved(self, facility, client_identified, staff_user):
@@ -755,14 +758,19 @@ class TestGatherCases:
         assert result["deleted_by"] is None
 
     def test_soft_deleted_case_is_exported_with_trash_metadata(self, facility, client_identified, staff_user):
-        """``Case.objects`` filtert Soft-Deletes nicht heraus — der Fall bleibt
-        bis zum Hard-Purge in der Auskunft und muss als Papierkorb-Eintrag
-        erkennbar sein."""
+        """Der Fall bleibt bis zur Tilgung in der Auskunft — im Papierkorb-Zweig.
+
+        Anforderung geändert mit dem Fall-Löschweg (Refs #1818, ADR-044):
+        vorher lieferte ``_gather_cases`` **eine** Liste über beide Zustände,
+        der Papierkorb-Fall stand also im Live-Abschnitt. Die Assertion wird
+        dabei nicht schwächer, sondern schärfer — sie pinnt jetzt beide Zweige.
+        """
         case = CaseModel.objects.create(
             facility=facility, client=client_identified, title="Papierkorb-Fall", created_by=staff_user
         )
         case.soft_delete(user=staff_user)
-        result = _gather_cases(client_identified)
+        assert _gather_cases(client_identified) == []
+        result = _gather_cases(client_identified, is_deleted=True)
         assert [r["title"] for r in result] == ["Papierkorb-Fall"]
         assert result[0]["is_deleted"] is True
         assert result[0]["deleted_at"] == case.deleted_at.isoformat()

@@ -56,6 +56,23 @@ class TestEventContextBadges:
         assert case_event.case.title not in html
         assert reverse("core:case_detail", kwargs={"pk": case_event.case.pk}) not in html
 
+    def test_trashed_case_loses_badge_title_and_link(self, client, staff_user, case_event):
+        """Refs #1818: ein Fall im Papierkorb ist auch als Elternteil weg.
+
+        ``case_detail`` antwortet fuer ihn 404 (``cases_with_live_client()``) —
+        der Badge waere ein toter Link, und sein Freitext-Titel bliebe bis zum
+        Fristablauf (Default 30 Tage) in der Personenakte sichtbar, obwohl der
+        Fall geloescht ist. P5 loest ``Event.case`` erst bei der Tilgung; die
+        Sichtgrenze muss deshalb hier gezogen werden, nicht am Fremdschluessel.
+        """
+        case_event.case.soft_delete(user=staff_user)
+
+        html = _get(client, staff_user, "core:event_detail", case_event)
+
+        assert 'data-testid="context-badge-case"' not in html
+        assert case_event.case.title not in html
+        assert reverse("core:case_detail", kwargs={"pk": case_event.case.pk}) not in html
+
     def test_event_without_parents_shows_no_badges(self, client, staff_user, sample_event):
         sample_event.client = None
         sample_event.is_anonymous = True

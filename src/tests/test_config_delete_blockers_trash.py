@@ -11,6 +11,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import Client, DocumentType, FieldTemplate
+from core.services import config as config_service
 from core.services.config import (
     ConfigDeleteBlocked,
     delete_document_type,
@@ -83,6 +84,58 @@ class TestDocumentTypeBlockerMentionsTrash:
         with pytest.raises(ConfigDeleteBlocked) as exc:
             delete_document_type(request, client_doc_type)
         assert not any("Papierkorb" in r for r in exc.value.reasons)
+
+
+class TestCaseTrashShareOfTheBlocker:
+    """Fall-Papierkorb als zweite Sackgasse (Refs #1818, ADR-044 §9).
+
+    Gegenstueck zu ``TestFieldTemplateBlockerMentionsTrash`` auf der Fall-Achse:
+    ein Fall im Papierkorb haelt ``document_type`` (PROTECT) und die Slugs
+    seines ``data_json`` fest, ist ueber die Fallliste aber nicht mehr
+    erreichbar. Der Zaehler speist den zweiten Ausweg-Link.
+    """
+
+    def _fall(self, facility, *, slug=None, deleted=False, titel="Blocker-Fall"):
+        from core.models import Case
+
+        case = Case.objects.create(
+            facility=facility,
+            client=Client.objects.create(facility=facility, pseudonym=f"P-{titel}"),
+            title=titel,
+            data_json={slug: "Wert"} if slug else {},
+        )
+        if deleted:
+            case.soft_delete()
+        return case
+
+    def test_trashed_case_with_slug_value_is_counted(self, facility, slug_template):
+        self._fall(facility, slug=slug_template.slug, deleted=True)
+        assert config_service.field_template_trashed_case_count(slug_template) == 1
+
+    def test_live_case_with_slug_value_is_not_counted(self, facility, slug_template):
+        self._fall(facility, slug=slug_template.slug)
+        assert config_service.field_template_trashed_case_count(slug_template) == 0
+
+    def test_template_without_slug_counts_nothing(self, facility):
+        vorlage = FieldTemplate.objects.create(
+            facility=facility, name="Ohne Slug", field_type=FieldTemplate.FieldType.TEXT
+        )
+        self._fall(facility, deleted=True)
+        assert config_service.field_template_trashed_case_count(vorlage) == 0
+
+    def test_dialog_links_to_the_case_trash(self, client, admin_user, facility, slug_template):
+        self._fall(facility, slug=slug_template.slug, deleted=True)
+        client.force_login(admin_user)
+        body = client.get(reverse("core:config_fieldtemplate_delete", args=[slug_template.pk])).content.decode()
+        assert 'data-testid="config-delete-case-trash-count"' in body
+        assert 'data-testid="config-delete-case-trash-link"' in body
+        assert reverse("core:case_trash") in body
+
+    def test_dialog_without_trashed_cases_has_no_case_hint(self, client, admin_user, facility, slug_template):
+        self._fall(facility, slug=slug_template.slug)
+        client.force_login(admin_user)
+        body = client.get(reverse("core:config_fieldtemplate_delete", args=[slug_template.pk])).content.decode()
+        assert 'data-testid="config-delete-case-trash-count"' not in body
 
 
 class TestConfirmDeletePagesOfferTheWayOut:
@@ -203,6 +256,31 @@ class TestAttachmentBlockerMentionsTrash:
         reasons = field_template_delete_blockers(file_template)
         assert reasons
         assert not any("Papierkorb" in r for r in reasons)
+
+    def test_case_attachment_dialog_offers_the_case_trash(
+        self, client, admin_user, staff_user, facility, client_doc_type, file_template
+    ):
+        """Fall-Achse des Anhang-Zweigs (Refs #1818) — bisher unbelegt.
+
+        Ein Anhang am FALL haelt die Datei-Feldvorlage per ``PROTECT`` fest.
+        Liegt der Fall im Papierkorb (und seine Person NICHT), greift der
+        Personen-Zaehler nicht: der Ausweg-Link muss aus
+        ``field_template_trashed_case_count`` kommen.
+        """
+        from core.models import Case
+
+        person = _make_client(facility, client_doc_type, pseudonym="P-Fallanhang")
+        case = Case.objects.create(facility=facility, client=person, title="Anhang-Fall", created_by=staff_user)
+        _attach_to(facility, case, file_template, staff_user)
+        case.soft_delete(user=staff_user)
+
+        assert config_service.field_template_trashed_case_count(file_template) == 1
+        assert config_service.field_template_trashed_client_count(file_template) == 0
+
+        client.force_login(admin_user)
+        body = client.get(reverse("core:config_fieldtemplate_delete", args=[file_template.pk])).content.decode()
+        assert 'data-testid="config-delete-case-trash-count"' in body
+        assert reverse("core:case_trash") in body
 
     def test_confirm_dialog_offers_the_way_out(
         self, client, admin_user, staff_user, facility, client_doc_type, file_template

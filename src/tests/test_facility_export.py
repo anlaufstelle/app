@@ -437,6 +437,90 @@ class TestOnlyActiveEntities:
 
 
 @pytest.mark.django_db
+class TestCaseTrashBoundary:
+    """Refs #1818 (ADR-044): der Papierkorb hat eine zweite Achse — den FALL.
+
+    Bis #1818 galt fuer diesen Export „die Grenze verlaeuft ueber die Person";
+    ``Case.is_deleted`` hatte keinen Produktionssetzer, der Eigen-Filter am Fall
+    war Defense-in-Depth. Mit dem Fall-Loeschweg ist er load-bearing — und die
+    Kinder des Falls (Episoden, Wirkungsziele samt Meilensteinen) muessen
+    denselben Schnitt mitmachen, sonst stehen ihre Freitexte weiter im Export,
+    mit ``case_id`` auf einen Fall, der in ``entities.cases`` fehlt.
+    """
+
+    def test_trashed_case_takes_its_episodes_and_goals_along(
+        self, facility, client_identified, case_open, episode, outcome_goal, milestone, staff_user
+    ):
+        case_open.soft_delete(user=staff_user)
+        entities = build_facility_export(facility, with_file_hashes=False)["entities"]
+        assert str(case_open.pk) not in {c["id"] for c in entities["cases"]}
+        assert str(episode.pk) not in {e["id"] for e in entities["episodes"]}
+        assert str(outcome_goal.pk) not in {g["id"] for g in entities["goals"]}
+
+    def test_event_of_a_trashed_case_stays_without_its_case_reference(
+        self, facility, client_identified, case_open, episode, sample_event, staff_user
+    ):
+        """P5: das Ereignis bleibt in der Personenakte — nur der Rahmen faellt.
+
+        Im Export heisst das: die Zeile bleibt, ``case_id``/``episode_id``
+        werden leer. Ein Verweis auf einen nicht exportierten Fall waere genau
+        der dangling FK, den der Modul-Docstring ausschliesst; das Ereignis
+        wegzulassen waere die andere Richtung — es gehoert zur Person, nicht
+        zum Fall.
+        """
+        sample_event.case = case_open
+        sample_event.episode = episode
+        sample_event.save(update_fields=["case", "episode"])
+        case_open.soft_delete(user=staff_user)
+        entities = build_facility_export(facility, with_file_hashes=False)["entities"]
+        entry = next(e for e in entities["events"] if e["id"] == str(sample_event.pk))
+        assert entry["client_id"] == str(client_identified.pk)
+        assert entry["case_id"] is None
+        assert entry["episode_id"] is None
+
+    def test_no_dangling_foreign_keys_after_case_trash(
+        self,
+        facility,
+        client_identified,
+        case_open,
+        case_closed,
+        episode,
+        outcome_goal,
+        milestone,
+        sample_event,
+        staff_user,
+    ):
+        """Derselbe Guard wie nach dem Personen-Papierkorb, auf der Fall-Achse.
+
+        ``case_closed`` bleibt lebend, damit die Listen nicht leer sind und der
+        Guard nicht vakuum-gruen laeuft.
+        """
+        sample_event.case = case_open
+        sample_event.episode = episode
+        sample_event.save(update_fields=["case", "episode"])
+        case_open.soft_delete(user=staff_user)
+
+        entities = build_facility_export(facility, with_file_hashes=False)["entities"]
+        client_ids = {c["id"] for c in entities["clients"]}
+        case_ids = {c["id"] for c in entities["cases"]}
+        episode_ids = {e["id"] for e in entities["episodes"]}
+
+        assert str(case_closed.pk) in case_ids
+        assert str(sample_event.pk) in {e["id"] for e in entities["events"]}
+
+        for event in entities["events"]:
+            assert event["client_id"] is None or event["client_id"] in client_ids
+            assert event["case_id"] is None or event["case_id"] in case_ids
+            assert event["episode_id"] is None or event["episode_id"] in episode_ids
+        for case in entities["cases"]:
+            assert case["client_id"] in client_ids
+        for ep in entities["episodes"]:
+            assert ep["case_id"] in case_ids
+        for goal in entities["goals"]:
+            assert goal["case_id"] in case_ids
+
+
+@pytest.mark.django_db
 class TestTrashBoundaryIsThePerson:
     """Befund 1+2 (Refs #1060, high): die Papierkorb-Grenze verlaeuft ueber die
     Person (``client.soft_delete()`` — der einzige Produktionsloeschpfad,

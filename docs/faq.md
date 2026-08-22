@@ -548,18 +548,23 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 | EventHistory | Neuer Eintrag mit `_redacted: True` |
 | AuditLog | Neuer immutabler Eintrag |
 
+**Dieselbe Staffelung gilt für Fälle** (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md)): Fachkräfte löschen einen Fall aus der Fallakte heraus; steht die Person auf „Mit Zusatzangaben", entsteht ein Löschantrag über dieselbe Löschanträge-Liste, sonst wandert der Fall direkt in den **Fall-Papierkorb** (`/cases/trash/`, Anwendungsbetreuung). Von dort holt ihn „Wiederherstellen" vollständig zurück — mit Episoden, Wirkungszielen und Dateianhängen, bis die Papierkorb-Frist `client_trash_days` abläuft und er automatisch anonymisiert wird (Titel, Beschreibung, Zusatzfelder, Episoden, Ziele und Dateien fallen, die Fall-Zeile bleibt als anonymes Aggregat stehen). Zugeordnete **Kontakte bleiben bei der Person** und blockieren die Löschung nicht; sie verlieren ihre Fallzuordnung erst bei der endgültigen Tilgung.
+
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — `DeletionRequest`
 - [`src/core/services/event.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
 - [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
+- [`src/core/services/case/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/deletion.py) — `soft_delete_case`, `request_case_deletion`, `approve_case_deletion`, `restore_case`, `anonymize_case`
+- [`src/core/views/case_deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/case_deletion.py) — `CaseDeleteRequestView`, `CaseTrashView`, `CaseRestoreView`, `CaseAnonymizeView`
 
 ### 16. Was hat KEINEN Löschmechanismus?
 
-- **Clients** — kein manueller Löschantrag, aber automatische Anonymisierung durch `enforce_retention`
-- **Cases / Episodes** — kein Löschmechanismus
+- **Episoden, Wirkungsziele, Meilensteine** — kein eigener Löschweg; sie hängen am Fall und werden mit dessen Anonymisierung (bzw. der ihrer Person) redigiert
 - **User-Accounts** — kein Löschmechanismus
 - **AuditLog-Einträge** — immutabel, bewusst nicht löschbar
 - **EventHistory** — kaskadiert nur bei Hard-Delete
+
+> **Nachtrag:** **Personen** und **Fälle** stehen seit #1736 bzw. #1818 **nicht mehr** auf dieser Liste: beide haben einen manuellen Löschweg mit Papierkorb (siehe Frage 15), zusätzlich zur automatischen Anonymisierung durch `enforce_retention`.
 
 ---
 
@@ -576,7 +581,7 @@ Konfigurierbar pro Facility in **Administration → Einstellungen**:
 | Mit Zusatzangaben | 3.650 Tage (10 Jahre) | `retention_qualified_days` |
 | Activity-Logs | 365 Tage | `retention_activities_days` |
 
-Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
+Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`. Die **Papierkorb-Frist** `client_trash_days` (Default 30 Tage) gilt für gelöschte **Personen und Fälle** gleichermaßen — bewusst kein zweiter Fristbegriff ([ADR-044](adr/044-fall-loeschpfad.md) § 2).
 
 **Automatische Durchsetzung:** Das Management Command `enforce_retention` läuft täglich per Cron und löscht/anonymisiert abgelaufene Daten.
 

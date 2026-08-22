@@ -139,7 +139,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         # Refs #1775: zellgenau statt ``"200 Tage" in content`` — sonst
         # bestuende der Test auch, wenn der Wert in der falschen Zeile landet.
         assert rows[5] == ("Aktivitäten / Zeitstrom-Einträge", "200 Tage")
-        assert rows[6] == ("Papierkorb-Frist für gelöschte Personen", "45 Tage")
+        assert rows[6] == ("Papierkorb-Frist für gelöschte Personen und Fälle", "45 Tage")
         assert rows[7] == ("Audit-Log", "36 Monate")
         assert "{{ retention_activities_days }}" not in content
         assert "{{ client_trash_days }}" not in content
@@ -156,7 +156,7 @@ class TestDsfaExtendedRetentionPlaceholders:
         # Text. Ein kaputter ``retention_activities_days``-Platzhalter blieb
         # damit unbemerkt.
         assert rows[5] == ("Aktivitäten / Zeitstrom-Einträge", "365 Tage")
-        assert rows[6] == ("Papierkorb-Frist für gelöschte Personen", "30 Tage")
+        assert rows[6] == ("Papierkorb-Frist für gelöschte Personen und Fälle", "30 Tage")
         assert rows[7] == ("Audit-Log", "24 Monate")
 
     def test_check_prosa_is_removed(self, facility):

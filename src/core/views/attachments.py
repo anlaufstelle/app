@@ -252,10 +252,9 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             # gesetzt (CheckConstraint), die beiden anderen Klauseln sind dann
             # per ``isnull`` erfuellt.
             #
-            # Refs #1777: Fuer Person und Fall verlaeuft die Loeschgrenze ueber
-            # die PERSON, nicht ueber ``is_deleted`` der Owner-Zeile. ``Case``
-            # kennt keinen Loeschworkflow (``case.is_deleted`` wird nie gesetzt),
-            # und eine anonymisierte Person (``is_active=False``) liegt nicht
+            # Refs #1777: Fuer Person und Fall verlaeuft die Loeschgrenze auch
+            # ueber die PERSON, nicht nur ueber ``is_deleted`` der Owner-Zeile —
+            # eine anonymisierte Person (``is_active=False``) liegt nicht
             # zwingend im Papierkorb (K-Anon-Bridge). Der Fall-Zweig muss deshalb
             # ueber ``case__client`` filtern, der Personen-Zweig zusaetzlich
             # ``is_active`` pruefen — analog zum Ereignis-Zweig ueber

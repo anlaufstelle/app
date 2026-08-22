@@ -223,7 +223,13 @@ def _build_secondary_action_flags(event, user):
     """
     show_to_client = event.client_id is not None
     # ``case_detail`` ist STAFF_PLUS — die Assistenz sähe sonst einen 403-Link.
-    show_to_case = event.case_id is not None and user.is_staff_or_above
+    # Refs #1818: und ein Fall im Papierkorb antwortet für JEDE Rolle 404
+    # (``cases_with_live_client()``). Der Fremdschlüssel bleibt bis zur Tilgung
+    # bestehen (P5, ADR-044) — die Sichtgrenze muss deshalb hier gezogen werden,
+    # sonst zeigt die Personenakte weiter den Freitext-Titel eines gelöschten
+    # Falls und verlinkt ins Leere. Der Wert trägt beide Flächen: die ⋮-Aktion
+    # „Zum Fall" UND das Kontext-Badge im Objektkopf (detail.html).
+    show_to_case = event.case_id is not None and user.is_staff_or_above and not event.case.is_deleted
     can_delete_event = user.is_lead_or_admin or (user.is_staff_or_above and event.created_by_id == user.pk)
     bleibt_im_menue = can_delete_event or (show_to_client and show_to_case)
     return {

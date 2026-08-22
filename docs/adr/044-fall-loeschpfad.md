@@ -37,7 +37,9 @@ Begründung: Ein zweiter Fristbegriff müsste in Datenschutzerklärung und DSFA 
 
 Die Fall-Zeile bleibt und wird inhaltlich geleert — Titel auf `[Anonymisiert <Datum>]`, Beschreibung und `data_json` leer, `document_type` auf `NULL`; Episoden, Wirkungsziele und Meilensteine ebenso. Exakt das Ergebnis, das die Personen-Anonymisierung erzeugt.
 
-Begründung gegen den Hard-Delete: Er risse per CASCADE Episoden, Ziele und Meilensteine mit und machte die Statistik-Zeitreihen unstetig — eine Auswertung über zwölf Monate änderte sich rückwirkend, sobald jemand einen alten Fall löscht. Die Redaktion nimmt den Personenbezug und lässt die Zählbarkeit stehen.
+Begründung gegen den Hard-Delete: Er risse per CASCADE Episoden, Ziele und Meilensteine mit — samt deren eigener Zählbarkeit — und nähme die Fall-Zeile aus jeder späteren Nachprüfung. Die Redaktion nimmt den Personenbezug und lässt beides stehen.
+
+Was sie **nicht** leistet: die Fallzahl gegen die Löschung selbst stabil zu halten. `_visible_cases` ([`reporting/backends/case_metrics.py`](../../src/core/reporting/backends/case_metrics.py)) filtert `is_deleted=False`, und `anonymize_case` lässt den Fall soft-gelöscht — die Zeitreihe `neue_faelle` sinkt also schon beim Verschieben in den Papierkorb, rückwirkend auch für abgeschlossene Zeiträume, und ändert sich beim Fristablauf nicht mehr. Ein Hard-Delete wäre an dieser Stelle nicht schlechter; die Redaktion gewinnt über die Kinder des Falls, nicht über die Fallzahl. Beide Aussagen sind in `test_reporting_case_metrics.py` gepinnt.
 
 **Eine** Implementierung für beide Wege: `redact_case_content` / `redact_case_goals` liegen in [`services/case/deletion.py`](../../src/core/services/case/deletion.py) und werden vom Personen-Pfad (`_redact_cases_and_episodes`) mitbenutzt. Zwei Kopien wären die Drift, die #1756 gekostet hat: der Rest darf nicht davon abhängen, ob eine ganze Person oder ein einzelner Fall gelöscht wurde.
 
@@ -103,11 +105,24 @@ Zwei Sichtflächen mussten mitgezogen werden, die kein View-Gate haben: der **Ze
 
 Schließlich erzeugt der zweite Papierkorb dieselbe **Sackgasse** wie der erste (#1737): ein Fall im Papierkorb hält `document_type` (PROTECT) und seine `data_json`-Slugs fest, ist über die Fallliste aber nicht mehr erreichbar. Die Lösch-Dialoge der Konfiguration weisen den Fall-Anteil aus und verlinken den Fall-Papierkorb.
 
+### 10. Reichweite der Löschung außerhalb der Fall-Domäne
+
+Der Papierkorb-Zustand endet nicht an den Fall-Views. Vier Flächen tragen Fall-Inhalte, ohne über `cases_with_live_client()` zu laufen; sie ziehen mit:
+
+| Fläche | Verhalten | Warum so |
+|---|---|---|
+| **Auskunft (Art. 15)**, [`services/client/export.py`](../../src/core/services/client/export.py) | Eigener Abschnitt `deleted_cases`; `cases` führt nur noch lebende Fälle. Je Eintrag zusätzlich `anonymized_at`. | Ein Fall im Papierkorb ist bis zur Tilgung gespeicherter Datenbestand und gehört in die Auskunft — aber getrennt, sonst kann die betroffene Person Live-Akte und Papierkorb nicht unterscheiden (dieselbe Trennung wie `deleted_events`, #1752). `is_deleted` allein beantwortet nicht, ob die Inhalte noch existieren (§3). |
+| **Offline-Bundle**, [`services/system/offline.py`](../../src/core/services/system/offline.py) | Fällt weg, sobald der Fall im Papierkorb liegt. | Das Bundle ist ein Derivat der Online-Sicht. Ohne den Filter verließen Titel und Beschreibung eines gelöschten Falls das System auf ein Endgerät und blieben dort bis zum nächsten Abgleich lesbar — das Gegenteil des Löschversprechens. Ein Widerruf bereits ausgelieferter Bundles (`revoke_offline_client_bundles`) wird **nicht** ausgelöst: er ist personen-, nicht fallgenau und verwürfe die ungesyncte Arbeit zur ganzen Person. Dieselbe Grenze gilt beim Ereignis-Löschpfad. |
+| **Datenmitnahme (Art. 20)**, [`services/system/facility_export.py`](../../src/core/services/system/facility_export.py) | Episoden und Wirkungsziele des Falls fallen mit; seine Ereignisse bleiben, tragen aber `case_id: null` und `episode_id: null`. | Sonst stünden Freitexte unter einem `case_id`, den `entities.cases` nicht mehr kennt — der Dangling-FK-Zustand, den #1060 ausgeschlossen hat. Das Ereignis wegzulassen wäre die andere Richtung: es gehört der Person (§5). |
+| **Personenakte / Ereignis-Detail** | Kontext-Merkmal „Fall" und die Aktion „Zum Fall" verschwinden. | `case_detail` antwortet für einen Papierkorb-Fall 404; der Fremdschlüssel bleibt bis zur Tilgung bestehen (§5), die Sichtgrenze muss deshalb an der Anzeige gezogen werden — sonst bliebe der Freitext-Titel über die volle Papierkorb-Frist in der Personenakte stehen. |
+
+Ebenso rollengegatet wie die Antragsliste (§9) ist die **Prüfseite** eines Fall-Löschantrags: `can_confirm_deletion` ist rollenunabhängig, `case_detail` ist STAFF_PLUS — wer Fälle nicht sehen darf, entscheidet den Antrag anhand von Antragsteller:in und Begründung, ohne Titel und Pseudonym.
+
 ## Consequences
 
 - [ADR-039](039-owner-generische-dateianhaenge.md) §6 fällt (Update-Block dort). Fall-eigene Anhänge haben einen eigenen Löschpfad und warten nicht mehr auf die Anonymisierung der ganzen Person; die Prüftabelle in §7 bekommt ihre achte Zeile (Marker-Invariante I-M1: `delete_attachments_for(case)` und das Leeren von `case.data_json` liegen im selben `atomic`, die Datei-Löschung steht wie in #1782 ganz am Ende).
 - Es gibt einen zweiten `soft_delete()`-Aufrufer im Produktionscode. Die Aussage „nur Personen kennen einen Papierkorb" ist in Doku und Tests überall nachzuziehen.
-- Die Statistik zählt Papierkorb-Fälle nicht mehr mit, redigierte Fälle dagegen weiter — die Fallzahl sinkt beim Löschen und bleibt beim Fristablauf konstant.
+- Die Statistik zählt Papierkorb-Fälle nicht mehr mit — auch nach der Tilgung nicht, denn sie bleiben soft-gelöscht (§3). Die Fallzahl sinkt einmalig beim Löschen, rückwirkend auch für abgeschlossene Zeiträume, und bleibt beim Fristablauf unverändert. Die über den **Personen**-Weg redigierten Fälle zählen dagegen weiter (`is_deleted` bleibt dort `False`).
 - Betreiberseitig kommt **keine** neue Einstellung dazu (§2); der Retention-Lauf meldet eine zusätzliche Zeile (`Anonymized N trash-expired case(s)`).
 - Ein Legal Hold auf einen Fall ist ab jetzt speicher- **und** erzeugbar. Der vorschlagsfreie Einstieg steht dem Service-Layer offen; die Oberfläche dazu ist noch nicht gebaut. Beide Löschrichtungen prüfen ihn (§4).
 - `Case` bekommt mit `anonymized_at` (Migration 0159) ein zweites Zustandsfeld. Jede neue Fläche, die Papierkorb-Fälle zeigt, muss die beiden Zustände trennen — „gelöscht" allein ist seither keine vollständige Auskunft mehr.

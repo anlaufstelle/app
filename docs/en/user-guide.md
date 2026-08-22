@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> Most recently synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
+> Most recently synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
@@ -815,6 +815,28 @@ A closed case can be reopened at any time:
 
 > **Important:** Only **leads** and **administrators** can close and reopen cases.
 
+### Deleting a Case
+
+A case created by mistake can be deleted. "Closing" is **not** the right tool for that: it is a statement about the course of support, and a case that never existed has no course.
+
+1. Open the case detail page.
+2. In the **More actions** menu (⋮), click **Delete**.
+3. The next page tells you which of the two paths applies:
+ - **Straight to the trash** — for clients at contact stage "Anonymous" or "Pseudonym only".
+ - **Deletion request with confirmation** — for a client at stage "With additional details". Enter a reason; the page also names who can confirm the request. Confirmation happens under **Privacy → Deletion requests**, just like for clients and contacts. While the request is pending, the case stays fully usable and is flagged as "deletion requested".
+4. Confirm.
+
+What happens:
+
+- The case disappears from the case list, statistics and the activity feed, and moves to the **trash**. Episodes, outcome goals and file attachments go with it — and all come back if the case is restored.
+- **Assigned contacts stay with the client.** They are not deleted along with the case and do not block its deletion; they only lose their case assignment once the case is purged for good.
+- Once the trash period expires (30 days by default, the same one that applies to deleted clients), the case is **anonymized** automatically: title, description, custom fields, episodes, outcome goals and files are then irreversibly gone. Restoring is no longer possible after that.
+- Until then, a case in the trash appears in an Art. 15 GDPR access record in its **own section** "Cases in the trash" — stating since when it has been deleted and whether it has already been anonymized for good.
+
+> Only the **facility admin** can **restore** a case — via **Trash** in the header of the case list. That page also offers **Anonymize permanently now** if waiting for the deadline is not an option.
+
+> **Offline:** a deleted case also disappears from the data cached on your device at the next sync. Cases cannot be created, edited or deleted offline anyway.
+
 ### Assigning and Removing Contacts
 
 On the case detail page, below the assigned contacts, you see a list of the client's **unassigned contacts**. To assign a contact:
@@ -889,6 +911,8 @@ Each episode shows its status:
 | View case list | No | Yes | Yes | Yes |
 | Create and edit cases | No | Yes | Yes | Yes |
 | Close / reopen cases | No | No | Yes | Yes |
+| Delete a case / request its deletion | No | Yes | Yes | Yes |
+| Case trash: restore, anonymize permanently | No | No | No | Yes |
 | Assign / remove contacts | No | Yes | Yes | Yes |
 | Manage episodes | No | Yes | Yes | Yes |
 | Outcome goals and milestones | No | Yes | Yes | Yes |
@@ -904,4 +928,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-22 -->
-<!-- source-hash: 2cf6fb3ff7341ea5d2ae70b9b4834440dcf3de74 -->
+<!-- source-hash: a3f0cf8ae37e21253855d3c36081dda3617c7590 -->

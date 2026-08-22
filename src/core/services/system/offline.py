@@ -314,8 +314,23 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     # (ADR-022, Refs #1355).
     is_staff_or_above = user.is_staff_or_above if hasattr(user, "is_staff_or_above") else False
 
+    # Lokaler Import: ``core.services.case`` zieht ueber den Loesch-Service
+    # ``core.services.dashboard`` nach und schliesst auf Modulebene einen
+    # Import-Zyklus ueber ``core.services.events``.
+    from core.services.case import cases_with_live_client
+
+    # Refs #1818: ueber ``cases_with_live_client()`` statt ueber
+    # ``CaseModel.objects`` — das Bundle ist ein Derivat der Online-Sicht, und
+    # der Helfer ist deren Choke-Point. Ein Fall im Papierkorb ist online in
+    # Liste, Akte, Episoden und Zielen weg; ohne denselben Filter verliesse
+    # sein Freitext (Titel, Beschreibung) das System auf ein Endgeraet und
+    # bliebe dort bis zum naechsten Sync bzw. bis zum TTL-Ablauf lesbar —
+    # genau das Gegenteil des Loeschversprechens. Die Personen-Haelfte des
+    # Helfers ist hier Defense-in-Depth (der Bundle-Endpoint laesst eine
+    # widerrufene Person schon nicht durch), die Fall-Haelfte ist wirksam.
     cases = (
-        CaseModel.objects.for_facility(facility)
+        cases_with_live_client()
+        .for_facility(facility)
         .filter(client=client)
         .select_related("lead_user")
         .order_by("-created_at")

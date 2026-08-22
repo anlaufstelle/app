@@ -20,11 +20,13 @@ auf den aktuellen Datenbestand, nicht auf geloeschte Zwischenstaende.
 ``is_deleted`` von Case/Event/Episode/Goal/WorkItem** (Befund 1+2,
 Adversarial-Review Refs #1060): der Personen-Loeschpfad ist
 der Client-Soft-Delete (``approve_client_deletion``,
-``core/services/client/main.py:938``) — Case/Episode/WorkItem setzen ihr
-eigenes ``is_deleted`` in Produktion nie direkt (gepinnt in
-``test_cases_trash_invariant``); NUR **Event** hat eigene Loeschpfade
-(``soft_delete_event``, Retention-Purge), dessen Eigen-Filter ist also
-load-bearing. Ein Filter, der nur das jeweils
+``core/services/client/main.py``). **Seit #1818 (ADR-044) verlaeuft eine
+zweite Grenze ueber den FALL**: ``services/case/deletion.py`` setzt
+``Case.is_deleted`` direkt (gepinnt in ``test_cases_trash_invariant``), und
+seine Episoden und Wirkungsziele muessen mit — Episode/WorkItem setzen ihr
+eigenes ``is_deleted`` in Produktion weiterhin nie direkt. **Event** hat
+eigene Loeschpfade (``soft_delete_event``, Retention-Purge), sein Eigen-Filter
+ist also ebenfalls load-bearing. Ein Filter, der nur das jeweils
 eigene Feld prueft, ist fuer die uebrigen ein No-Op: eine Person im Papierkorb wuerde
 sonst aus ``entities.clients`` verschwinden, waehrend ihre Cases/Events/
 Episoden/Ziele/WorkItems (entschluesselte ``data_json``, Anhang-Metadaten)
@@ -295,12 +297,28 @@ def _serialize_client(client: Client, facility, *, with_file_hashes: bool) -> di
     }
 
 
-def _serialize_event(event: Event, facility, *, with_file_hashes: bool) -> dict:
+def _serialize_event(event: Event, facility, *, with_file_hashes: bool, exported_case_ids: set | None = None) -> dict:
+    """Ein Ereignis als Export-Zeile.
+
+    ``exported_case_ids`` traegt die Faelle, die tatsaechlich in
+    ``entities.cases`` stehen. Refs #1818 (ADR-044 P5): ein Ereignis eines
+    Falls im Papierkorb bleibt in der Personenakte — es haengt an der Person,
+    nicht am Fall — verliert im Export aber Fall- und Episodenzuordnung. Beide
+    Ziele fehlen dort, der Verweis waere sonst genau der dangling FK, den der
+    Modul-Docstring ausschliesst. Die Tilgung loest dieselbe Zuordnung spaeter
+    dauerhaft (``_detach_events``); der Export nimmt das nur vorweg, ohne die
+    Zeile anzufassen.
+    """
+    case_id = _uuid_str(event.case_id)
+    episode_id = _uuid_str(event.episode_id)
+    if exported_case_ids is not None and case_id is not None and case_id not in exported_case_ids:
+        case_id = None
+        episode_id = None
     return {
         "id": str(event.pk),
         "client_id": _uuid_str(event.client_id),
-        "case_id": _uuid_str(event.case_id),
-        "episode_id": _uuid_str(event.episode_id),
+        "case_id": case_id,
+        "episode_id": episode_id,
         "document_type_id": str(event.document_type_id),
         "occurred_at": event.occurred_at.isoformat(),
         "data_json": _decrypt_data_json(event.data_json),
@@ -391,14 +409,19 @@ def _serialize_workitem(work_item: WorkItem) -> dict:
 def _build_entities(facility, *, with_file_hashes: bool) -> dict:
     """Nur aktive Entities — der Papierkorb bleibt aussen vor (E14).
 
-    Zwei unabhaengige Filter-Ebenen, nicht eine:
+    Drei Filter-Ebenen, nicht eine:
 
-    1. Das jeweils EIGENE ``is_deleted``: fuer **Event** load-bearing
+    1. Das jeweils EIGENE ``is_deleted``: load-bearing fuer **Event**
        (``soft_delete_event`` in ``core/services/events/crud.py`` und der
-       Retention-Purge in ``core/retention/enforcement.py`` setzen es); fuer
-       Case/Episode/WorkItem in Produktion aktuell ein No-Op (kein Aufrufer
-       setzt es direkt), bleibt als Defense-in-Depth stehen.
-    2. Die tatsaechlich wirksame Grenze: der Loeschzustand der PERSON
+       Retention-Purge in ``core/retention/enforcement.py`` setzen es) und seit
+       #1818 auch fuer **Case** (``services/case/deletion.py``); fuer
+       Episode/WorkItem in Produktion weiterhin ein No-Op (kein Aufrufer setzt
+       es direkt), bleibt dort als Defense-in-Depth stehen.
+    2. Refs #1818: der Papierkorb-Zustand des FALLS wirkt auf seine Kinder —
+       Episoden und Wirkungsziele filtern zusaetzlich ueber
+       ``case__is_deleted=False``, Ereignisse behalten ihre Zeile und verlieren
+       nur die Zuordnung (P5, siehe :func:`_serialize_event`).
+    3. Die dritte wirksame Grenze: der Loeschzustand der PERSON
        (Befund 1+2, Refs #1060). ``live_client`` schliesst Zeilen aus, deren
        Client im Papierkorb liegt; ``client__isnull=True`` bleibt explizit
        erlaubt, weil Event/WorkItem ``client`` als SET_NULL fuehren — anonyme
@@ -426,13 +449,23 @@ def _build_entities(facility, *, with_file_hashes: bool) -> dict:
         .filter(is_deleted=False, client__is_deleted=False)
         .order_by("-created_at", "pk")
     )
+    # Refs #1818: ``case__is_deleted=False`` an beiden Kind-Listen. Der Fall
+    # traegt seit dem Loeschweg einen eigenen Papierkorb-Zustand; ohne den
+    # Filter blieben Episoden- und Wirkungsziel-Freitexte (samt Meilensteinen)
+    # eines geloeschten Falls im Export stehen — mit ``case_id`` auf eine Zeile,
+    # die in ``entities.cases`` fehlt.
     episodes = (
-        Episode.objects.filter(case__facility=facility, is_deleted=False, case__client__is_deleted=False)
+        Episode.objects.filter(
+            case__facility=facility,
+            is_deleted=False,
+            case__is_deleted=False,
+            case__client__is_deleted=False,
+        )
         .select_related("case")
         .order_by("-started_at", "pk")
     )
     goals = (
-        OutcomeGoal.objects.filter(case__facility=facility, case__client__is_deleted=False)
+        OutcomeGoal.objects.filter(case__facility=facility, case__is_deleted=False, case__client__is_deleted=False)
         .select_related("case")
         .prefetch_related(Prefetch("milestones", queryset=Milestone.objects.order_by("sort_order", "pk")))
         .order_by("-created_at", "pk")
@@ -444,10 +477,15 @@ def _build_entities(facility, *, with_file_hashes: bool) -> dict:
         .order_by("-created_at", "pk")
     )
 
+    case_rows = [_serialize_case(c, facility, with_file_hashes=with_file_hashes) for c in cases]
+    exported_case_ids = {row["id"] for row in case_rows}
     return {
         "clients": [_serialize_client(c, facility, with_file_hashes=with_file_hashes) for c in clients],
-        "events": [_serialize_event(e, facility, with_file_hashes=with_file_hashes) for e in events],
-        "cases": [_serialize_case(c, facility, with_file_hashes=with_file_hashes) for c in cases],
+        "events": [
+            _serialize_event(e, facility, with_file_hashes=with_file_hashes, exported_case_ids=exported_case_ids)
+            for e in events
+        ],
+        "cases": case_rows,
         "episodes": [_serialize_episode(ep) for ep in episodes],
         "goals": [_serialize_goal(g) for g in goals],
         "work_items": [_serialize_workitem(wi) for wi in work_items],

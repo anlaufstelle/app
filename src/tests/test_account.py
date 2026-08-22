@@ -114,6 +114,22 @@ class TestAccountProfileView:
         assert own_event in events
         assert other_event not in events
 
+    def test_open_cases_counter_ignores_the_trash(self, client, staff_user, case_open, profile_url):
+        """Refs #1818: „Offene Fälle" darf nicht zählen, was die Fallliste nicht führt.
+
+        Der Zähler lief über ``CaseModel.objects`` ohne Papierkorb-Grenze. Mit
+        dem Fall-Löschweg ist dieser Zustand erreichbar — Kennzahl und Liste
+        widersprächen sich sonst genau ab dem ersten gelöschten Fall.
+        """
+        from core.services.case import soft_delete_case
+
+        client.force_login(staff_user)
+        assert client.get(profile_url).context["stats"]["open_cases"] == 1
+
+        soft_delete_case(case_open, staff_user)
+
+        assert client.get(profile_url).context["stats"]["open_cases"] == 0
+
     def test_profile_hides_own_high_events_for_staff(
         self, client, staff_user, facility, client_identified, profile_url
     ):

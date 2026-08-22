@@ -946,7 +946,9 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
             request.user,
             request.current_facility,
             pk,
-            select_related=("document_type", "client", "created_by"),
+            # ``case`` mitgeladen (Refs #1818): ``_build_secondary_action_flags``
+            # prueft dessen Papierkorb-Zustand, sonst eine Extra-Query je Aufruf.
+            select_related=("document_type", "client", "created_by", "case"),
         )
         context = build_event_detail_context(event, request.user)
         return render(request, "core/events/detail.html", context)

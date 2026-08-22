@@ -416,10 +416,19 @@ def _gather_events(client, user, attachment_index=None, *, is_deleted=False):
     return events_data, event_ids
 
 
-def _gather_cases(client, attachment_index=None):
-    """Serialize all cases linked to the client."""
+def _gather_cases(client, attachment_index=None, *, is_deleted=False):
+    """Serialize the client's cases — Live-Bestand oder Papierkorb (Refs #1818).
+
+    ``is_deleted`` waehlt zwischen beiden Mengen, genau wie in
+    :func:`_gather_events`: ein Fall im Papierkorb ist bis zur Tilgung
+    weiterhin gespeicherter Datenbestand und gehoert in die Auskunft — aber als
+    eigener Abschnitt, damit die betroffene Person Live-Akte und Papierkorb
+    unterscheiden kann. Vorher lieferte diese Funktion **eine** Liste ueber
+    beide Zustaende; die Papierkorb-Metadaten standen zwar je Zeile drin
+    (``_soft_delete_meta``), die Auskunft mischte die Mengen aber.
+    """
     cases = (
-        CaseModel.objects.filter(client=client)
+        CaseModel.objects.filter(client=client, is_deleted=is_deleted)
         .select_related("created_by", "lead_user", "document_type", "deleted_by")
         .order_by("-created_at", "pk")
     )
@@ -435,6 +444,12 @@ def _gather_cases(client, attachment_index=None):
             "closed_at": _isoformat(case.closed_at),
             "lead_user": _username(case.lead_user),
             "created_by": _username(case.created_by),
+            # Refs #1818 (ADR-044 P3a): ``is_deleted`` allein beantwortet nicht,
+            # ob die Inhalte noch existieren — nach Fristablauf bleibt die Zeile
+            # stehen und wird redigiert. Ohne den Tilgungsstempel laese sich ein
+            # getilgter Fall wie ein wiederherstellbarer, dessen Felder nur
+            # zufaellig leer sind.
+            "anonymized_at": _isoformat(case.anonymized_at),
             **_soft_delete_meta(case),
         }
         # M2 P8 (Refs #1058): dynamische Fall-Felder gehoeren in die Auskunft,
@@ -1045,6 +1060,11 @@ def export_client_data(client, facility, user):
     ``_gather_events``. Lead/Admin sehen alles, Staff sieht
     NORMAL+ELEVATED, Assistant nur NORMAL.
 
+    Refs #1818: dasselbe gilt fuer Faelle im Papierkorb (``deleted_cases``);
+    Episoden und Wirkungsziele bleiben dagegen in **einer** Liste — sie haengen
+    am Fall, ihr eigener Loeschzustand ist davon unabhaengig, und der
+    zugehoerige Fall ist ueber beide Fall-Abschnitte auffindbar.
+
     Refs #1752: Ereignisse im Papierkorb kommen als eigener Abschnitt dazu;
     alle ereignisbezogenen Kategorien (Historie, Loeschantraege, Legal Holds,
     Loeschvorschlaege, Zeitstrom) arbeiten anschliessend auf **beiden** Mengen
@@ -1071,6 +1091,9 @@ def export_client_data(client, facility, user):
         # eigene PDF-Nadeln.
         "attachments": _gather_attachments(client, attachment_index),
         "cases": _gather_cases(client, attachment_index),
+        # Refs #1818 (ADR-044): Faelle im Papierkorb wie die Ereignisse als
+        # eigener Abschnitt — sie sind bis zur Tilgung gespeicherte Daten.
+        "deleted_cases": _gather_cases(client, attachment_index, is_deleted=True),
         "episodes": _gather_episodes(client),
         "outcome_goals": _gather_outcome_goals(client),
         "event_history": _gather_event_history(all_event_ids),

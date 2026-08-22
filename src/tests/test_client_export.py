@@ -793,6 +793,72 @@ class TestClientExportDeletedEvents:
 
 
 @pytest.mark.django_db
+class TestClientExportDeletedCases:
+    """Refs #1818 — Faelle im Papierkorb als eigener Auskunfts-Abschnitt.
+
+    Dieselbe Begruendung wie bei den geloeschten Ereignissen (#1752): ein Fall
+    im Papierkorb ist bis zur Tilgung weiterhin gespeicherter personenbezogener
+    Datenbestand und gehoert in die Auskunft — aber getrennt vom Live-Bestand,
+    damit die betroffene Person beides unterscheiden kann. Bis #1818 lieferte
+    ``_gather_cases`` **eine** Liste ueber alle Faelle; die Papierkorb-Metadaten
+    standen zwar je Fall drin, die Auskunft mischte die beiden Mengen aber in
+    denselben Abschnitt.
+    """
+
+    @pytest.fixture
+    def trashed_case(self, facility, sample_client, admin_user):
+        case = CaseModel.objects.create(
+            facility=facility,
+            client=sample_client,
+            title="Papierkorb-Fall",
+            description="Papierkorb-Beschreibung",
+            created_by=admin_user,
+        )
+        case.soft_delete(user=admin_user)
+        return case
+
+    def test_trashed_case_is_exported_in_its_own_section(self, sample_client, facility, trashed_case, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert len(data["deleted_cases"]) == 1
+        entry = data["deleted_cases"][0]
+        assert entry["title"] == "Papierkorb-Fall"
+        assert entry["is_deleted"] is True
+        assert entry["deleted_at"] is not None
+        assert entry["deleted_by"] == "ce_admin"
+
+    def test_trashed_case_stays_out_of_the_live_section(
+        self, sample_client, facility, trashed_case, sample_case, admin_user
+    ):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [c["is_deleted"] for c in data["cases"]] == [False]
+
+    def test_live_case_reports_an_empty_deleted_section(self, sample_client, facility, sample_case, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["deleted_cases"] == []
+
+    def test_case_entry_reports_the_anonymization_stamp(self, sample_client, facility, trashed_case, admin_user):
+        """``anonymized_at`` trennt „im Papierkorb" von „endgueltig getilgt".
+
+        Ohne den Stempel liest sich ein getilgter Fall in der Auskunft wie ein
+        wiederherstellbarer — beides ``is_deleted=True``, und der Inhalt ist
+        nur deshalb leer, weil ihn niemand gefuellt hat. Die Auskunft muss
+        beantworten, ob die Daten noch existieren.
+        """
+        from core.services.case import anonymize_case
+
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["deleted_cases"][0]["anonymized_at"] is None
+
+        anonymize_case(trashed_case, user=admin_user, trigger="manual")
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["deleted_cases"][0]["anonymized_at"] is not None
+
+    def test_live_case_carries_the_stamp_key_as_none(self, sample_client, facility, sample_case, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["cases"][0]["anonymized_at"] is None
+
+
+@pytest.mark.django_db
 class TestClientExportAuditTrail:
     """Refs #1752 — Audit-Auszug ueber die Person, ohne Beschaeftigten-Identitaet.
 
@@ -1628,6 +1694,16 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         description="Fall-Beschreibung",
         created_by=admin_user,
     )
+    # Refs #1818: ein Fall im Papierkorb — der abgeleitete PDF-Guard prueft
+    # jede Kategorie durch Leeren, ein leeres ``deleted_cases`` waere blind.
+    trashed_case = CaseModel.objects.create(
+        facility=facility,
+        client=sample_client,
+        title="PDF-Papierkorb-Fall",
+        description="Papierkorb-Beschreibung",
+        created_by=admin_user,
+    )
+    trashed_case.soft_delete(user=admin_user)
     episode = Episode.objects.create(
         case=case,
         title="PDF-Episode",
@@ -1780,6 +1856,7 @@ class TestClientExportPdfCoverage:
             "Notiz-Freitext-PDF",  # Client.notes
             "K-anonymisiert",  # Anonymisierungs-Metadaten
             "PDF-Fall",  # Fall
+            "PDF-Papierkorb-Fall",  # Fall im Papierkorb (Refs #1818)
             "PDF-Episode",  # Episode
             "PDF-Ziel",  # Wirkungsziel
             "PDF-Meilenstein",  # Meilenstein
@@ -1900,6 +1977,8 @@ class TestClientExportCompleteness:
         "events",
         "deleted_events",
         "cases",
+        # Refs #1818: Faelle im Papierkorb als eigener Abschnitt (ADR-044).
+        "deleted_cases",
         # Refs #1738 (M24): Anhang-Metadaten der Person als eigene Kategorie.
         "attachments",
         "episodes",

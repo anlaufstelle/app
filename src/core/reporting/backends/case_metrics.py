@@ -145,11 +145,21 @@ def _visible_cases(facility):
 
     ``is_deleted=False`` war defensiv gedacht — die Invariante „Faelle kennen
     kein Soft-Delete" ist mit dem Fall-Loeschpfad gefallen (Refs #1818,
-    ADR-044). Der Filter ist seither tragend: ein Fall im Papierkorb zaehlt
-    nicht mehr mit, ein nach Fristablauf redigierter Fall dagegen weiter (die
-    Tilgung ist eine Redaktion, keine Loeschung — P3a). Die Fallzahl sinkt also
-    beim Loeschen und bleibt beim Fristablauf konstant; die Zeitreihen bleiben
-    stetig.
+    ADR-044). Der Filter ist seither tragend, und er trennt zwei Redaktionen,
+    die man leicht verwechselt:
+
+    * **Fall-Loeschweg:** der Fall wandert in den Papierkorb und zaehlt ab
+      diesem Moment nicht mehr mit — auch nicht nach der Tilgung, denn
+      ``anonymize_case`` redigiert nur den Inhalt und laesst ``is_deleted=True``
+      stehen. Die Fallzahl sinkt also EINMAL, beim Loeschen (rueckwirkend auch
+      fuer bereits abgeschlossene Zeitraeume), und aendert sich beim
+      Fristablauf nicht mehr.
+    * **Personen-Anonymisierung:** ``_redact_cases_and_episodes`` leert die
+      Faelle einer Person, ohne sie zu loeschen — ``is_deleted`` bleibt
+      ``False``, sie zaehlen weiter. Das ist die Redaktion, die die Zeitreihe
+      stetig haelt.
+
+    Beide Zusagen sind in ``test_reporting_case_metrics.py`` gepinnt.
     """
     return Case.objects.for_facility(facility).filter(is_deleted=False)
 

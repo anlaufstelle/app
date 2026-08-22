@@ -179,6 +179,40 @@ class TestReviewDispatchesTheCaseTarget:
         assert qualified_case.title not in body
         assert reverse("core:case_detail", args=[qualified_case.pk]) not in body
 
+    def test_assistant_confirmer_sees_no_case_title_on_the_review_page(
+        self, client, assistant_user, staff_user, qualified_case
+    ):
+        """Dasselbe Gate wie in der Liste — einen Klick weiter (Refs #1818).
+
+        ``annotate_deletion_targets`` haelt der Assistenz den Falltitel fern,
+        die Pruefseite lag hinter demselben ``DeletionConfirmerRequiredMixin``
+        aber ungegated dahinter: der „Pruefen"-Link steht fuer jede
+        ``can_confirm_deletion``-Traegerin in der Liste. Ohne Gate bekaeme sie
+        dort genau den Freitext-Titel und das Pseudonym, die ihr die
+        Fall-Domaene (``case_detail`` ist STAFF_PLUS) verwehrt.
+        """
+        assistant_user.can_confirm_deletion = True
+        assistant_user.save(update_fields=["can_confirm_deletion"])
+        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        client.force_login(assistant_user)
+
+        response = client.get(reverse("core:deletion_review", args=[dr.pk]))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert qualified_case.title not in body
+        assert qualified_case.client.pseudonym not in body
+        assert 'data-testid="case-review-not-visible"' in body
+        # Die Entscheidung bleibt moeglich — nur der Inhalt ist zu.
+        assert 'value="approve"' in body
+
+    def test_staff_confirmer_still_sees_the_case_summary(self, client, staff_user, lead_user, qualified_case):
+        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        client.force_login(lead_user)
+        body = client.get(reverse("core:deletion_review", args=[dr.pk])).content.decode()
+        assert qualified_case.title in body
+        assert 'data-testid="case-review-not-visible"' not in body
+
 
 class TestTrashView:
     def test_lists_trashed_cases_with_both_actions(self, client, admin_user, staff_user, case_open):

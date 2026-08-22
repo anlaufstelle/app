@@ -201,6 +201,44 @@ class TestBuildDataset:
         assert summary["offene_faelle_aktuell"] == 0
         assert summary["betroffene_personen"] == 0
 
+    def test_getilgter_fall_bleibt_draussen(self, backend, facility, zeitraum):
+        """Refs #1818: die Tilgung holt einen Fall NICHT in die Statistik zurueck.
+
+        ``anonymize_case`` redigiert den Inhalt und laesst ``is_deleted=True``
+        stehen — der Fall bleibt also draussen. Der Docstring von
+        ``_visible_cases`` behauptete zwischenzeitlich das Gegenteil („zaehlt
+        dagegen weiter"); dieser Pin haelt Prosa und Verhalten zusammen.
+        """
+        from core.services.case import anonymize_case
+
+        person = _person(facility)
+        case = _fall(facility, person)
+        case.soft_delete(user=None)
+
+        anonymize_case(case, user=None, trigger="trash_days_expired")
+
+        summary = backend.build_dataset(facility, *zeitraum).summary
+        assert summary["neue_faelle"] == 0
+        assert summary["offene_faelle_aktuell"] == 0
+
+    def test_fall_einer_anonymisierten_person_zaehlt_weiter(self, backend, facility, zeitraum):
+        """Der Personen-Weg redigiert Faelle, ohne sie zu loeschen — sie zaehlen weiter.
+
+        Das ist die Redaktion, die die Zeitreihe stetig haelt: ``is_deleted``
+        bleibt am Fall ``False``, nur der Inhalt faellt. Genau hier verlaeuft
+        die Grenze zum Fall-Loeschweg (Refs #1818).
+        """
+        from core.services.case import redact_case_content
+
+        person = _person(facility)
+        case = _fall(facility, person)
+
+        redact_case_content(case)
+
+        summary = backend.build_dataset(facility, *zeitraum).summary
+        assert summary["neue_faelle"] == 1
+        assert summary["offene_faelle_aktuell"] == 1
+
     def test_fremde_facility_ist_unsichtbar(self, backend, facility, zeitraum):
         fremd = Facility.objects.create(organization=Organization.objects.create(name="Fremd"), name="Fremdstelle")
         _fall(fremd, _person(fremd, "F1"), "Fremdfall")

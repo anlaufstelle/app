@@ -124,7 +124,20 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
             return render(
                 request,
                 "core/cases/deletion_review.html",
-                {"deletion_request": dr, "case": case, "next_url": next_url},
+                {
+                    "deletion_request": dr,
+                    "case": case,
+                    "next_url": next_url,
+                    # Fail-closed wie in ``annotate_deletion_targets``
+                    # (services/deletion.py): ``can_confirm_deletion`` ist
+                    # rollenunabhaengig (#1053), die Fall-Domaene ist fuer die
+                    # Assistenz aber geschlossen (``case_detail`` ist
+                    # STAFF_PLUS). Ohne dieses Flag haette die Liste ihr den
+                    # Falltitel vorenthalten und die Pruefseite ihn einen Klick
+                    # spaeter wieder ausgegeben. Die ENTSCHEIDUNG bleibt ihr
+                    # moeglich — nur der Freitext nicht.
+                    "may_see_case": request.user.is_staff_or_above,
+                },
             )
 
         try:

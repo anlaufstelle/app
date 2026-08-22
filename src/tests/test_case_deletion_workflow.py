@@ -59,6 +59,40 @@ class TestFourEyesStaging:
         assert case_requires_four_eyes(case_open) is False
 
 
+class TestPendingRequestSurvivesADowngrade:
+    """Refs #1818: Ein laufender Antrag darf nicht durch die Hintertuer umgangen werden.
+
+    Die Kontaktstufe der Person ist waehrend eines laufenden Loeschantrags
+    aenderbar. Wird sie von „Mit Zusatzangaben" auf „Nur Pseudonym"
+    herabgestuft, entfaellt die Vier-Augen-Pflicht — die Route darf deshalb
+    aber nicht auf den direkten Ausgang umschalten, solange der Antrag offen
+    ist. Sonst landet der Fall im Papierkorb, waehrend der Antrag PENDING
+    bleibt, und die spaetere Genehmigung laeuft in eine ValidationError.
+    """
+
+    def test_direct_route_defers_to_the_open_request(self, client, facility, client_qualified, staff_user, lead_user):
+        from django.urls import reverse
+
+        case = Case.objects.create(
+            facility=facility, client=client_qualified, title="Fall mit Antrag", created_by=staff_user
+        )
+        dr = request_case_deletion(case, staff_user, reason="Antrag vor der Herabstufung")
+        assert dr.status == DeletionRequest.Status.PENDING
+
+        # Herabstufung waehrend des laufenden Antrags — ein erlaubter Vorgang.
+        client_qualified.contact_stage = Client.ContactStage.IDENTIFIED
+        client_qualified.save(update_fields=["contact_stage"])
+        assert case_requires_four_eyes(case) is False
+
+        client.force_login(lead_user)
+        client.post(reverse("core:case_delete_request", kwargs={"pk": case.pk}), {"reason": "erneut"})
+
+        case.refresh_from_db()
+        dr.refresh_from_db()
+        assert case.is_deleted is False, "Der offene Antrag wurde durch den direkten Weg umgangen"
+        assert dr.status == DeletionRequest.Status.PENDING
+
+
 class TestRequestCaseDeletion:
     def test_creates_pending_request(self, case_open, staff_user):
         dr = request_case_deletion(case_open, staff_user, "Fall irrtuemlich angelegt")

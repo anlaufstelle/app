@@ -99,7 +99,17 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
 
     def post(self, request, pk):
         case = self._load(request, pk)
-        if not case_requires_four_eyes(case):
+        # Refs #1818: Der PENDING-Check steht VOR der Weiche, nicht nur im
+        # Vier-Augen-Zweig. Die Kontaktstufe der Person ist waehrend eines
+        # laufenden Antrags aenderbar (``update_client``); eine Herabstufung
+        # von „Mit Zusatzangaben" auf „Nur Pseudonym" schaltete die Route sonst
+        # auf den direkten Ausgang um. Ein noch offenes Formular oder ein
+        # wiederholter POST legte den Fall dann sofort in den Papierkorb,
+        # waehrend der Antrag PENDING blieb — die spaetere Genehmigung lief in
+        # eine ValidationError, und der Antrag liess sich nicht mehr abraeumen.
+        pending = get_pending_case_deletion_request(case)
+
+        if not case_requires_four_eyes(case) and pending is None:
             soft_delete_case(case, request.user)
             messages.success(
                 request,
@@ -114,7 +124,6 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
         # Antrag legt nichts an und verwirft die neu eingegebene Begruendung.
         # Ohne diese Meldung meldete die View trotzdem Erfolg (stiller
         # Fake-Erfolg).
-        pending = get_pending_case_deletion_request(case)
         if pending is not None:
             messages.info(
                 request,
