@@ -81,7 +81,7 @@ class TestTallyEncryptedQueueAndSchemaContract:
         store = _js("offline-store.js")
         sw = _js("sw.js")
         assert "const FACILITY_BUNDLE_SCHEMA_VERSION = 2;" in store
-        assert 'const CACHE_NAME = "anlaufstelle-v36";' in sw
+        assert 'const CACHE_NAME = "anlaufstelle-v37";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):

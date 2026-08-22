@@ -109,7 +109,7 @@ importScripts("/static/js/url-patterns.js");
 // zeigen den bestaetigten Serverstand wieder getrennt von Pending-Deltas und
 // einen absoluten Snapshot-Zeitpunkt. Beide liegen cache-first im APP_SHELL;
 // ohne Bump bliebe Bestandsnutzern der alte, irrefuehrende Tally-Status.
-const CACHE_NAME = "anlaufstelle-v36";
+const CACHE_NAME = "anlaufstelle-v37";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

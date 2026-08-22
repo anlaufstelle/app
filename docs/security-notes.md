@@ -1998,7 +1998,7 @@ Der zweite denkbare Verursacher — `deriveSessionKey()` stempelt mit `_touchAct
 ### Bewertung
 
 - **PII-frei.** Der Eintrag besteht aus dem Literal `lastActivity` und einer Epoch-Millisekunde. Kein Nutzer-, Einrichtungs- oder Klientenbezug; er unterscheidet nicht einmal, *wer* das Gerät benutzt hat.
-- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`anlaufstelle-v36`, nur App-Shell-Assets) mehrfach redundant selbst führt.
+- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`anlaufstelle-v37`, nur App-Shell-Assets) mehrfach redundant selbst führt.
 - **Selbstheilend im Zweck.** Der Stempel wird bei jedem Wipe und jedem Passwortwechsel gelöscht und beim nächsten Seitenaufruf neu gesetzt; er wächst nicht und akkumuliert keine Historie.
 
 ### Was bewusst nicht umgesetzt wird
@@ -2008,7 +2008,7 @@ Ein **Stempel-Gate** — den Boot-Zweig nur dann stempeln lassen, wenn tatsächl
 - Der Boot-Stempel ist die Schutzhälfte des Idle-Gates gegen das Gegenteil: ohne ihn hätte ein Bestand ohne Stempel (Alt-Installation vor #1065, erster Lauf nach einem Cache-Wechsel) kein definiertes Idle-Fenster. Jede Änderung an dieser Stelle berührt einen sicherheitskritischen, mehrfach nachgehärteten Pfad (#1065, #1324, #1351/#1383, #1393, #1493).
 - Der Gewinn steht dazu in keinem Verhältnis: eine Epoch-Millisekunde ohne Personenbezug, die dieselbe Information trägt wie ein Eintrag in der Browser-History.
 
-Der **Precache** `anlaufstelle-v36` bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
+Der **Precache** `anlaufstelle-v37` bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
 
 ### Trigger für Re-Evaluation
 
