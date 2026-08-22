@@ -111,6 +111,11 @@ jobs:
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
           DJANGO_AUDIT_HASH_KEY: ci-check-only-not-a-real-audit-hash-key
           ALLOWED_HOSTS: localhost
+          # Refs #1967: localhost zaehlt bei der EXTERNAL_ORIGIN-Ableitung
+          # nicht mit (Loopback dient nur dem Container-Healthcheck) — ohne
+          # expliziten Dummy bricht der fail-closed-Guard in prod.py den
+          # Check ab. Spiegel: release-gates.sh.
+          EXTERNAL_ORIGIN: https://ci-check.invalid
           # core.E002 (#1453) verlangt MEDIA_ROOT ausserhalb BASE_DIR,
           # core.W002 (#1661) ein gesetztes FILE_UPLOAD_TEMP_DIR — Dummies
           # analog docker-compose.prod.yml. Spiegel: release-gates.sh.
