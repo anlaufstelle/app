@@ -15,9 +15,10 @@ from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Client, Event, LegalHold, RecentClientVisit
+from core.models import Activity, AuditLog, Case, Client, DocumentTypeField, Event, LegalHold, RecentClientVisit
 from core.models.offline_revocation import OfflineClientRevocation
 from core.models.retention import RetentionProposal
 from core.models.workitem import DeletionRequest, WorkItem
@@ -27,6 +28,7 @@ from core.services.client import (
     restore_client,
 )
 from core.services.client.merge import (
+    _is_empty_value,
     approve_client_merge,
     get_pending_merge_request,
     merge_clients,
@@ -36,6 +38,8 @@ from core.services.client.merge import (
     unmerge_client,
 )
 from core.services.dashboard import log_activity
+from core.services.system import bypass_replication_triggers
+from tests.conftest import _make_attachment
 
 pytestmark = pytest.mark.django_db
 
@@ -70,6 +74,21 @@ def _event(facility, client, doc_type, user, case=None):
         data_json={},
         created_by=user,
     )
+
+
+def _file_slug_with_attachment(facility, owner, doc_type, user):
+    """FILE-Feld am ``doc_type`` plus Anhang und Stufe-B-Marker am ``owner``.
+
+    Liefert ``(slug, attachment)``. Der Marker referenziert die Attachment-PK
+    (Entry-Schema ``{"id", "sort"}``, ``services/dynamic_data.py``).
+    """
+    attachment = _make_attachment(facility, owner, user, ft_name="Nachweis")
+    field_template = attachment.field_template
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=field_template, sort_order=2)
+    owner.document_type = doc_type
+    owner.data_json = {field_template.slug: {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}}
+    owner.save()
+    return field_template.slug, attachment
 
 
 class TestMergeStaging:
@@ -132,6 +151,33 @@ class TestMergeValidation:
         request_client_deletion(source, staff_user, reason="Antrag laeuft")
         with pytest.raises(ValidationError):
             merge_clients(source, target, lead_user)
+
+
+class TestEmptyValueDefinition:
+    """Leere-Definition der Uebernahme-Regel (ADR-045, Entscheid 3).
+
+    „Leer" muss auch die real vorkommenden Formular-Leerwerte treffen:
+    Django-Forms liefern fuer geleerte Text-/Mehrfachfelder ""/[] in
+    ``cleaned_data``, und ``validate_data_json`` filtert Leerwerte nicht —
+    der Slot existiert dann MIT Leerwert statt gar nicht. FILE-Marker gelten
+    als leer, solange sie keine ``entries`` tragen.
+    """
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, "", [], {}, {"__files__": True}, {"__files__": True, "entries": []}],
+        ids=["none", "leerstring", "leere-liste", "leeres-dict", "marker-ohne-entries-key", "marker-leere-entries"],
+    )
+    def test_empty(self, value):
+        assert _is_empty_value(value) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        ["Notunterkunft", ["a"], {"k": "v"}, 0, False, {"__files__": True, "entries": [{"id": "a", "sort": 0}]}],
+        ids=["string", "liste", "dict", "zahl-null", "bool-false", "marker-mit-entries"],
+    )
+    def test_filled(self, value):
+        assert _is_empty_value(value) is False
 
 
 class TestMergeExecution:
@@ -232,21 +278,75 @@ class TestMergeExecution:
         assert target.document_type_id == doc_type_client_profile.pk
         assert target.data_json["wohnsituation"] == "Notunterkunft"
 
+    def test_adopts_source_value_into_blank_target_field(
+        self, facility, source, target, doc_type_client_profile, lead_user
+    ):
+        """Ein Ziel-Feld MIT Leerwert ("" statt fehlendem Slot) zaehlt als leer —
+        die Quelle fuellt es (ADR-045, Entscheid 3). Sonst ginge der Quell-Wert
+        mit der Tombstone-Redaktion verloren."""
+        source.document_type = doc_type_client_profile
+        source.data_json = {"wohnsituation": "Notunterkunft"}
+        source.save()
+        target.document_type = doc_type_client_profile
+        target.data_json = {"wohnsituation": ""}
+        target.save()
+
+        merge_clients(source, target, lead_user)
+
+        target.refresh_from_db()
+        assert target.data_json["wohnsituation"] == "Notunterkunft"
+        merged_row = AuditLog.objects.get(action=AuditLog.Action.CLIENT_MERGED)
+        assert merged_row.detail["adopted_slugs"] == ["wohnsituation"]
+
+    def test_adopts_file_slug_and_moves_attachments(
+        self, facility, source, target, doc_type_client_profile, staff_user, lead_user
+    ):
+        """Ein GEFUELLTER ``__files__``-Marker der Quelle fuellt ein leeres
+        Ziel-Feld — samt Wanderung der referenzierten Attachment-Zeilen
+        (Marker-Invariante I-M1, ADR-039 §7).
+
+        Blieben die Dateien bei der Quelle, wuerden sie nach Fristablauf mit
+        deren Tombstone redigiert (Modul-Docstring) — unwiederbringlicher
+        Verlust von Dateien, die zum Ziel gehoeren.
+        """
+        slug, attachment = _file_slug_with_attachment(facility, source, doc_type_client_profile, staff_user)
+        target.document_type = doc_type_client_profile
+        target.save()
+
+        merge_clients(source, target, lead_user)
+
+        target.refresh_from_db()
+        attachment.refresh_from_db()
+        assert target.data_json[slug] == {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}
+        assert attachment.client_id == target.pk
+        merged_row = AuditLog.objects.get(action=AuditLog.Action.CLIENT_MERGED)
+        assert slug in merged_row.detail["adopted_slugs"]
+        # Das Undo-Inventar traegt die gewanderten Datei-Zeilen — unmerge_client
+        # liest den Rueckweg von genau hier.
+        assert merged_row.detail["moved_attachments"] == [str(attachment.pk)]
+
 
 class TestMergeFourEyes:
     """Antrag + Genehmigung, wenn eine der beiden Personen QUALIFIED ist."""
 
-    def test_request_creates_pending_merge_request(self, client_qualified, target, staff_user):
+    def test_request_creates_pending_merge_request(self, facility, client_qualified, target, staff_user):
         dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt angelegt")
         assert dr.status == DeletionRequest.Status.PENDING
         assert dr.target_type == DeletionRequest.TargetType.CLIENT
         assert dr.target_id == client_qualified.pk
         assert dr.merge_into_id == target.pk
-        assert AuditLog.objects.filter(
+        row = AuditLog.objects.get(
             action=AuditLog.Action.DELETION_REQUESTED,
             target_type="DeletionRequest",
             target_id=str(dr.pk),
-        ).exists()
+        )
+        # facility haelt die append-only Zeile in den facility-gescopten
+        # Audit-Flaechen und in der per-Facility-HMAC-Kette — mit
+        # facility=None fiele sie dauerhaft (unheilbar) heraus.
+        assert row.facility_id == facility.pk
+        # detail pinnt, WEN der Antrag betrifft und WOHIN gemerged wird;
+        # reason lebt bewusst NICHT im detail (Refs #1093).
+        assert row.detail == {"target_client": str(client_qualified.pk), "merge_into": str(target.pk)}
         assert get_pending_merge_request(client_qualified) == dr
 
     def test_request_is_idempotent(self, client_qualified, target, staff_user):
@@ -310,6 +410,27 @@ class TestMergeFourEyes:
             action=AuditLog.Action.DELETION_REJECTED,
             target_id=str(dr.pk),
         ).exists()
+
+    def test_rejected_request_blocks_neither_lookup_nor_new_request(
+        self, client_qualified, target, staff_user, admin_user
+    ):
+        """Nach einer Ablehnung muss ein NEUER Antrag moeglich sein.
+
+        ``get_pending_merge_request`` darf nur PENDING liefern: gaebe sie den
+        abgelehnten Antrag zurueck, reichte ihn ``request_client_merge`` als
+        Idempotenz-Treffer weiter — es entstuende nie wieder ein
+        PENDING-Antrag, und ``approve_client_merge`` wiese ihn als „bereits
+        bearbeitet" ab: der Merge waere dauerhaft still blockiert.
+        """
+        first = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        reject_client_merge(first, admin_user)
+
+        assert get_pending_merge_request(client_qualified) is None
+
+        second = request_client_merge(client_qualified, target, staff_user, reason="Erneut: Doppelt")
+        assert second.pk != first.pk
+        assert second.status == DeletionRequest.Status.PENDING
+        assert AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).count() == 2
 
     def test_generic_deletion_approval_refuses_merge_requests(self, client_qualified, target, staff_user, admin_user):
         """Ein Merge-Antrag darf nicht als blosser Loeschantrag genehmigt werden —
@@ -537,6 +658,72 @@ class TestUnmerge:
         source.refresh_from_db()
         with pytest.raises(ValidationError):
             unmerge_client(source, lead_user)
+
+    def test_unmerge_returns_adopted_file_attachments(
+        self, facility, source, target, doc_type_client_profile, staff_user, lead_user
+    ):
+        """Rueckweg des ``moved_attachments``-Inventars: uebernommene
+        Datei-Zeilen wandern zur Quelle zurueck, der uebernommene Marker
+        faellt am Ziel weg (I-M1: kein Marker ohne passende Zeile)."""
+        slug, attachment = _file_slug_with_attachment(facility, source, doc_type_client_profile, staff_user)
+        target.document_type = doc_type_client_profile
+        target.save()
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+
+        unmerge_client(source, lead_user)
+
+        target.refresh_from_db()
+        attachment.refresh_from_db()
+        assert attachment.client_id == source.pk
+        assert slug not in target.data_json
+        source.refresh_from_db()
+        assert source.data_json[slug]["entries"][0]["id"] == str(attachment.pk)
+
+    def test_unmerge_refuses_missing_merge_audit_row(self, source, target, lead_user):
+        """Fehlt die ``CLIENT_MERGED``-Zeile (Alt-/Reparaturzustand,
+        Teil-Restore), muss das Undo mit der spezifizierten ValidationError
+        abbrechen — „fehlt der Audit-Nachweis: Aufheben nicht moeglich" —
+        statt zu crashen oder ohne Inventar weiterzulaufen."""
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        # DB-/Reparatur-Vektor: Zeile lautlos entfernen — Append-Only-Trigger
+        # per Owner-DDL umgangen (Muster ``test_audit_chain``).
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(
+                action=AuditLog.Action.CLIENT_MERGED,
+                target_id=str(source.pk),
+            ).delete()
+
+        with pytest.raises(ValidationError):
+            unmerge_client(source, lead_user)
+
+        source.refresh_from_db()
+        assert source.is_deleted is True
+        assert source.merged_into_id == target.pk
+
+    def test_unmerge_refuses_mismatched_merge_inventory(self, facility, source, target, staff_user, lead_user):
+        """Passt die juengste ``CLIENT_MERGED``-Zeile nicht zum aktuellen
+        ``merged_into``, darf das Undo NICHT mit dem falschen Inventar
+        weiterlaufen (es verschoebe die falschen Zeilen), sondern muss sauber
+        abbrechen und die Quelle als Tombstone stehen lassen."""
+        stranger = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Merge-Fremdziel",
+            created_by=staff_user,
+        )
+        merge_clients(source, target, lead_user)
+        # Reparatur-/Altzustand: der Verweis zeigt auf ein Ziel, zu dem das
+        # protokollierte Inventar nicht gehoert.
+        Client.objects.filter(pk=source.pk).update(merged_into=stranger)
+        source.refresh_from_db()
+
+        with pytest.raises(ValidationError):
+            unmerge_client(source, lead_user)
+
+        source.refresh_from_db()
+        assert source.is_deleted is True
 
     def test_unmerge_requires_merge_tombstone(self, source, lead_user):
         with pytest.raises(ValidationError):
