@@ -73,7 +73,21 @@ PROCESSING_ACTIVITIES = [
             _("Pseudonymisierung by Design"),
             _("Row Level Security (RLS) pro Facility"),
             _("Verschluesselung at-rest (AES-GCM) sensibler Felder"),
-            _("AuditLog auf Lese- und Schreibzugriffe"),
+            # Refs #1862: Hier stand "AuditLog auf Lese- und Schreibzugriffe"
+            # — eine unzutreffende Angabe nach Art. 30 Abs. 1 lit. g DSGVO.
+            # Protokolliert wird jede Aenderung, von Lesezugriffen aber nur
+            # ``VIEW_QUALIFIED`` (``views/clients.py``), ``EXPORT``,
+            # ``DOWNLOAD``, ``OFFLINE_*_READ`` und ``SYSTEM_VIEW``. Listen-,
+            # Detail- und Suchaufrufe erzeugen keinen Eintrag; dass die
+            # Volltextsuche bewusst unprotokolliert bleibt, entscheidet
+            # ADR-043.
+            _(
+                "AuditLog auf jede Aenderung; von Lesezugriffen nur die "
+                "Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft "
+                "und Export, Datei-Download, Offline-Mitnahme sowie "
+                "facility-uebergreifende Zugriffe — sonstige Listen-, Detail- "
+                "und Suchaufrufe werden nicht protokolliert (ADR-043)"
+            ),
             _("Rollenbasierte Zugriffskontrolle (5 Rollen)"),
             _("MFA / TOTP fuer sensible Rollen"),
         ],
@@ -117,7 +131,40 @@ PROCESSING_ACTIVITIES = [
             _("Sensitivitaets-basierte Sichtbarkeit (je Dokumentationstyp, einzelne Feldvorlagen koennen sie anheben)"),
             _("Verschluesselung sensibler Felder (AES-GCM, Schluessel ausserhalb der DB)"),
             _("Optimistic Locking gegen versehentliches Ueberschreiben"),
-            _("AuditLog jeder Lese- und Schreibaktion"),
+            # Refs #1862: Hier stand "AuditLog jeder Lese- und Schreibaktion".
+            # Der Ersatz muss drei Dinge genau treffen, sonst ersetzt er eine
+            # unzutreffende Art.-30-Angabe nur durch die naechste:
+            #
+            # 1. **Schreibzugriffe sind nicht deckungsgleich.** Ereignisse
+            #    kennen Anlegen (``EVENT_CREATE``), Bearbeiten
+            #    (``EVENT_UPDATE``) und Loeschen (``DELETE``,
+            #    ``services/events/crud.py``). Ein **Fall** kennt
+            #    CASE_CREATE/UPDATE/CLOSE/REOPEN — und **keine** Loeschung:
+            #    kein Produktionspfad setzt ``is_deleted`` je auf einem Fall,
+            #    ``DeletionRequest.TargetType`` kennt nur ``EVENT``/``CLIENT``
+            #    (``services/case/cases.py``, ADR-039 §6). Eine
+            #    ``AuditLog.Action.CASE_DELETE`` gibt es folgerichtig nicht.
+            # 2. **Episoden und Wirkungsziele landen nirgends.**
+            #    ``models/case.py`` (``create_episode``) und
+            #    ``services/case/goals.py`` speichern nur; sie rufen weder
+            #    ``audit_event`` noch ``log_activity``. Eine ``EventHistory``
+            #    gibt es ausschliesslich fuer Event-Objekte. Die Aktionen
+            #    ``EPISODE_UPDATE``/``GOAL_UPDATE`` existieren im Vokabular,
+            #    ihr Schreibpfad ist offen (#1959, in test_audit_coverage.py
+            #    als ``xfail(strict=True)`` gepinnt). Bis dahin ist "gar nicht
+            #    protokolliert" die einzige zutreffende Aussage.
+            # 3. **Von Lesezugriffen** bleiben nur ``EXPORT``, ``DOWNLOAD``,
+            #    ``OFFLINE_*_READ`` und ``SYSTEM_VIEW``; Detail-, Listen- und
+            #    Suchaufrufe erzeugen keinen Eintrag (ADR-043).
+            _(
+                "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; "
+                "auf Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von "
+                "Faellen (ein Fall kann nicht geloescht werden); Bearbeitungen "
+                "von Episoden und Wirkungszielen werden gar nicht protokolliert; "
+                "von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme "
+                "und facility-uebergreifende Zugriffe — Detail-, Listen- und "
+                "Suchaufrufe werden nicht protokolliert (ADR-043)"
+            ),
             _("Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"),
             _("Encrypted File Vault mit ClamAV-Scan fail-closed fuer Anhaenge"),
         ],

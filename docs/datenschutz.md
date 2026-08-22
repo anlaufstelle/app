@@ -10,10 +10,11 @@
 
 | Grundsatz | Verweis | Für |
 |---|---|---|
+| Art. 5(1)(b) Zweckbindung — Suchraum | [ADR-043](adr/043-suchraum-volltextsuche.md) — Suchanfragen werden bewusst **nicht** protokolliert (Begründung + Restrisiko), der Fall-Rahmen bleibt bewusst für alle Fachkräfte offen; fünf Regeln für jede Erweiterung des Suchraums | [Auditor] [Dev] |
 | Art. 5(1)(c) Datenminimierung | [ADR-023](adr/023-k-anonymization-statistik.md) · [`external_report.py`](../src/core/services/dashboard/external_report.py) | [Auditor] [Dev] |
 | Art. 5(1)(e) Speicherbegrenzung | [ADR-021](adr/021-retention-modell.md) · **Dateianhänge:** `DocumentType.retention_days` ist **event-only** — personen- und falleigene Dateien haben keine eigene Frist, sie folgen dem Owner-Lebenszyklus ([ADR-039](adr/039-owner-generische-dateianhaenge.md)) | [Auditor] [Dev] [Träger] |
 | Art. 5(1)(f) Integrität & Vertraulichkeit | [ADR-006](adr/006-fernet-field-encryption.md) · [ADR-007](adr/007-auditlog-append-only.md) · [ADR-014](adr/014-encrypted-file-vault.md) · [security-notes.md](security-notes.md) | [Auditor] [Dev] |
-| Art. 5(2) Rechenschaftspflicht | [ADR-007](adr/007-auditlog-append-only.md) · [VVT](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | [Auditor] |
+| Art. 5(2) Rechenschaftspflicht | [ADR-007](adr/007-auditlog-append-only.md) · [VVT](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) · **was das Audit-Log nicht protokolliert** (gewöhnliche Listen-, Detail- und Suchaufrufe): [ADR-043](adr/043-suchraum-volltextsuche.md), [Admin-Guide § 7.4](admin-guide.md#74-audit-log) | [Auditor] |
 
 ## B. Betroffenenrechte (Art. 12–22 DSGVO)
 

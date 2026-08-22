@@ -17,12 +17,32 @@ gegenstandslos geworden — das Primaerlabel traegt die Aussage selbst.
 
 from __future__ import annotations
 
+import re
+
 import pytest
+from django.template.loader import render_to_string
 from django.urls import reverse
 
 from core.models import Client, DeletionRequest
 
 LEGEND_TESTID = 'data-testid="contact-stage-legend"'
+
+#: Refs #1862: Die pauschale Zusage "jeder Zugriff wird protokolliert" ist am
+#: Code falsch. ``AuditLog.Action.VIEW_QUALIFIED`` entsteht projektweit nur im
+#: GET der Personen-Detailseite (``core/views/clients.py``); das
+#: Bearbeiten-Formular derselben Person zeigt ihre Zusatzangaben
+#: entschluesselt im Klartext und schreibt **keinen** Eintrag (Kommentar
+#: "Update-GET zeigt Klartext"), Liste, Ereignis, Fall und Suchtreffer
+#: ebenfalls nicht. Diese beiden Bausteine sind ausgeliefertes UI — sie geben
+#: der Nutzerin die Zusage direkt, deshalb haengt der Guard hier.
+BLANKET_ACCESS_CLAIM_RE = re.compile(
+    r"jede[rn]?\s+Zugriff\w*(\s+darauf)?\s+wird\s+(automatisch\s+)?protokolliert",
+    re.IGNORECASE,
+)
+
+#: Die Flaeche, auf die die Zusage tatsaechlich zutrifft — die Detailseite der
+#: Person (``/clients/<id>/``), und nur sie.
+SCOPED_ACCESS_CLAIM_RE = re.compile(r"Detailseite[^.;]{0,30}wird protokolliert")
 
 
 @pytest.mark.django_db
@@ -35,6 +55,16 @@ class TestContactStageHelpTexts:
         assert "Mit Zusatzangaben" in help_text
         # Die Konsequenz der Auswahl, nicht nur die Definition (user-guide.md:315).
         assert "protokolliert" in help_text
+
+    def test_contact_stage_help_text_scopes_the_audit_claim(self):
+        """Refs #1862: nicht "jeder Zugriff", sondern der Aufruf des Profils."""
+        help_text = str(Client._meta.get_field("contact_stage").help_text)
+        assert not BLANKET_ACCESS_CLAIM_RE.search(help_text), (
+            f"``contact_stage.help_text`` sagt eine flaechendeckende Zugriffs-"
+            f"Protokollierung zu ({help_text!r}) — geschrieben wird nur beim "
+            "Aufruf der Personen-Detailseite (VIEW_QUALIFIED)."
+        )
+        assert SCOPED_ACCESS_CLAIM_RE.search(help_text), help_text
 
     def test_contact_stage_help_text_carries_no_markdown(self):
         """T3: ``_form_field.html`` rendert ``help_text`` ohne ``|safe`` —
@@ -70,6 +100,17 @@ class TestContactStageLegend:
         content = client.get(reverse("core:retention_dashboard")).content.decode()
         assert LEGEND_TESTID in content
 
+    def test_legend_scopes_the_audit_claim_to_the_person_profile(self):
+        """Refs #1862: die Legende steht auf drei Listen — und die Liste selbst
+        schreibt keinen Eintrag."""
+        html = render_to_string("components/_contact_stage_legend.html")
+        assert not BLANKET_ACCESS_CLAIM_RE.search(html), (
+            "Die Legendenzeile sagt eine flaechendeckende Zugriffs-"
+            "Protokollierung zu — geschrieben wird nur beim Aufruf der "
+            "Personen-Detailseite (VIEW_QUALIFIED)."
+        )
+        assert SCOPED_ACCESS_CLAIM_RE.search(html), html
+
 
 @pytest.mark.django_db
 class TestClientBadgeTitle:
@@ -90,6 +131,17 @@ class TestClientBadgeTitle:
         html = self._render_badge(client_qualified)
         assert "title=" in html
         assert "protokolliert" in html
+
+    def test_qualified_badge_title_scopes_the_audit_claim(self, client_qualified):
+        """Refs #1862: der Badge haengt auch an Liste, Suchtreffer und
+        Loeschantrag-Review — alles Flaechen ohne ``VIEW_QUALIFIED``."""
+        html = self._render_badge(client_qualified)
+        assert not BLANKET_ACCESS_CLAIM_RE.search(html), (
+            "Der Badge-``title`` sagt eine flaechendeckende Zugriffs-"
+            "Protokollierung zu — geschrieben wird nur beim Aufruf der "
+            "Personen-Detailseite (VIEW_QUALIFIED)."
+        )
+        assert SCOPED_ACCESS_CLAIM_RE.search(html), html
 
     def test_badge_keeps_its_visible_label(self, client_qualified):
         """``title`` ersetzt keine a11y-Arbeit — der sichtbare Text bleibt."""

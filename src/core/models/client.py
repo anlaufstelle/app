@@ -48,11 +48,16 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         choices=ContactStage.choices,
         default=ContactStage.IDENTIFIED,
         verbose_name=_("Kontaktstufe"),
+        # Refs #1862: Hier stand "jeder Zugriff darauf wird protokolliert" —
+        # unzutreffend. ``VIEW_QUALIFIED`` entsteht projektweit nur im GET der
+        # Personen-Detailseite (``views/clients.py``); das Bearbeiten-Formular
+        # derselben Person zeigt dieselben Zusatzangaben entschluesselt und
+        # schreibt nichts, Liste, Ereignis, Fall und Suchtreffer ebenfalls nicht.
         help_text=_(
             "Wie viel über die Person bekannt ist. Nur Pseudonym: es ist nur "
             "das Pseudonym hinterlegt. Mit Zusatzangaben: zusätzliche "
-            "persönliche Angaben sind hinterlegt; jeder Zugriff darauf wird "
-            "protokolliert."
+            "persönliche Angaben sind hinterlegt; das Öffnen der Detailseite "
+            "wird protokolliert."
         ),
     )
     age_cluster = models.CharField(

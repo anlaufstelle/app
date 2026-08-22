@@ -9,7 +9,10 @@
 {# erreichbar ist. Bewusst OHNE ``{% trans … as var %}``: ohne ``with``-Push #}
 {# schreibt ``as`` in den Kontext der aufrufenden Schleife und der Titel der #}
 {# vorigen Zeile bliebe stehen, wenn ein Badge in keinen Zweig faellt. #}
+{# Refs #1862: Der Badge haengt auch an Personenliste, Suchtreffer und #}
+{# Loeschantrag-Review — Flaechen, die KEINEN ``VIEW_QUALIFIED`` schreiben. #}
+{# Die Zusage nennt deshalb genau die eine Flaeche, die ihn ausloest. #}
 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold {% if client.contact_stage == 'qualified' %}bg-purple-100 text-purple-800{% elif client.contact_stage == 'identified' %}bg-green-100 text-green-800{% else %}bg-canvas text-ink-soft{% endif %}"
-      data-testid="client-stage-badge"{% if client.contact_stage == 'qualified' %} title="{% trans 'Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; jeder Zugriff wird protokolliert.' %}"{% elif client.contact_stage == 'identified' %} title="{% trans 'Nur Pseudonym: es ist nur das Pseudonym bekannt, keine weiteren persönlichen Angaben.' %}"{% endif %}>
+      data-testid="client-stage-badge"{% if client.contact_stage == 'qualified' %} title="{% trans 'Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; das Öffnen der Detailseite dieser Person wird protokolliert.' %}"{% elif client.contact_stage == 'identified' %} title="{% trans 'Nur Pseudonym: es ist nur das Pseudonym bekannt, keine weiteren persönlichen Angaben.' %}"{% endif %}>
     {{ client.get_contact_stage_display }}
 </span>

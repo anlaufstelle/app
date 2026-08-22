@@ -1355,11 +1355,11 @@ msgstr "Contact stage"
 msgid ""
 "Wie viel über die Person bekannt ist. Nur Pseudonym: es ist nur das "
 "Pseudonym hinterlegt. Mit Zusatzangaben: zusätzliche persönliche Angaben "
-"sind hinterlegt; jeder Zugriff darauf wird protokolliert."
+"sind hinterlegt; das Öffnen der Detailseite wird protokolliert."
 msgstr ""
 "How much is known about the person. Pseudonym only: only the pseudonym is on "
-"file. With additional details: further personal details are on file; every "
-"access to them is logged."
+"file. With additional details: further personal details are on file; opening "
+"the detail page is logged."
 
 #: src/core/models/client.py:62
 #: src/core/reporting/backends/client_metrics.py:208
@@ -3726,8 +3726,17 @@ msgid "Verschluesselung at-rest (AES-GCM) sensibler Felder"
 msgstr "Encryption at rest (AES-GCM) of sensitive fields"
 
 #: src/core/services/compliance/vvt.py:76
-msgid "AuditLog auf Lese- und Schreibzugriffe"
-msgstr "Audit log on read and write access"
+msgid ""
+"AuditLog auf jede Aenderung; von Lesezugriffen nur die "
+"Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft und Export, "
+"Datei-Download, Offline-Mitnahme sowie facility-uebergreifende Zugriffe "
+"— sonstige Listen-, Detail- und Suchaufrufe werden nicht protokolliert "
+"(ADR-043)"
+msgstr ""
+"Audit log on every change; of read access only the person detail page at "
+"the \"With additional details\" level, data subject access and export, "
+"file download, offline take-out and cross-facility access — all other "
+"list, detail and search requests are not logged (ADR-043)"
 
 #: src/core/services/compliance/vvt.py:77
 msgid "Rollenbasierte Zugriffskontrolle (5 Rollen)"
@@ -3825,8 +3834,20 @@ msgid "Optimistic Locking gegen versehentliches Ueberschreiben"
 msgstr "Optimistic locking against accidental overwrite"
 
 #: src/core/services/compliance/vvt.py:120
-msgid "AuditLog jeder Lese- und Schreibaktion"
-msgstr "Audit log on every read and write action"
+msgid ""
+"AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf "
+"Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von Faellen (ein Fall "
+"kann nicht geloescht werden); Bearbeitungen von Episoden und "
+"Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur "
+"Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende "
+"Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert "
+"(ADR-043)"
+msgstr ""
+"Audit log on creating, editing and deleting events; on creating, editing, "
+"closing and reopening cases (a case cannot be deleted); edits to episodes "
+"and outcome goals are not logged at all; of read access only export, file "
+"download, offline take-out and cross-facility access — detail, list and "
+"search requests are not logged (ADR-043)"
 
 #: src/core/services/compliance/vvt.py:121
 msgid "Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"
@@ -6138,11 +6159,11 @@ msgstr "Go to object"
 
 #: src/templates/components/_client_badge.html:13
 msgid ""
-"Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; jeder "
-"Zugriff wird protokolliert."
+"Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; das "
+"Öffnen der Detailseite dieser Person wird protokolliert."
 msgstr ""
-"With additional details: further personal details are on file; every access "
-"is logged."
+"With additional details: further personal details are on file; opening this "
+"person's detail page is logged."
 
 #: src/templates/components/_client_badge.html:13
 msgid ""
@@ -6154,11 +6175,12 @@ msgstr ""
 #: src/templates/components/_contact_stage_legend.html:19
 msgid ""
 "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit "
-"Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, jeder "
-"Zugriff wird protokolliert."
+"Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, das Öffnen "
+"der Detailseite wird protokolliert."
 msgstr ""
 "Contact stage: Pseudonym only = only the pseudonym is known. With additional "
-"details = further personal details are on file, every access is logged."
+"details = further personal details are on file, opening the detail page is "
+"logged."
 
 #: src/templates/components/_event_card.html:59
 msgid "Keine weiteren Angaben."

@@ -308,7 +308,7 @@ Each client has a **contact level**:
 | Level | Description |
 |---|---|
 | **Pseudonym only** | Only the pseudonym is stored, plus the age group |
-| **With additional details** | Additional personal details are stored (restricted access, every access is logged) |
+| **With additional details** | Additional personal details are stored (restricted access, opening the detail page is logged) |
 
 > **Note:** Access to client profiles at the "With additional details" level is automatically recorded in the audit log.
 
@@ -889,4 +889,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-22 -->
-<!-- source-hash: 26dfd52205b54feefe44902ceca3b7270294b3b1 -->
+<!-- source-hash: 58a4c1fcb63addc86f6e36febb73459b1de197a8 -->

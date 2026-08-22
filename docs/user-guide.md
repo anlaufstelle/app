@@ -304,9 +304,9 @@ Jede Person hat eine **Kontaktstufe**:
 | Stufe | Beschreibung |
 |---|---|
 | **Nur Pseudonym** | Es ist nur das Pseudonym hinterlegt, dazu die Altersgruppe |
-| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, jeder Zugriff wird protokolliert) |
+| **Mit Zusatzangaben** | Zusätzliche persönliche Angaben sind hinterlegt (eingeschränkter Zugriff, das Öffnen der Detailseite wird protokolliert) |
 
-> **Hinweis:** Der Zugriff auf Personenprofile der Kontaktstufe „Mit Zusatzangaben" wird automatisch im Audit-Log protokolliert.
+> **Hinweis:** Protokolliert wird das Öffnen der **Detailseite** (`/clients/<id>/`) einer Person der Kontaktstufe „Mit Zusatzangaben" — und nur das. Die Personenliste, das Bearbeiten-Formular derselben Person, ein Ereignis, ein Fall und ein Suchtreffer erzeugen **keinen** Eintrag, auch wenn dort Zusatzangaben zu sehen sind.
 
 ### Person anlegen
 

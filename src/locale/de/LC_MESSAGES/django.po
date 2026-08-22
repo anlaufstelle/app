@@ -1366,11 +1366,11 @@ msgstr "Kontaktstufe"
 msgid ""
 "Wie viel über die Person bekannt ist. Nur Pseudonym: es ist nur das "
 "Pseudonym hinterlegt. Mit Zusatzangaben: zusätzliche persönliche Angaben "
-"sind hinterlegt; jeder Zugriff darauf wird protokolliert."
+"sind hinterlegt; das Öffnen der Detailseite wird protokolliert."
 msgstr ""
 "Wie viel über die Person bekannt ist. Nur Pseudonym: es ist nur das "
 "Pseudonym hinterlegt. Mit Zusatzangaben: zusätzliche persönliche Angaben "
-"sind hinterlegt; jeder Zugriff darauf wird protokolliert."
+"sind hinterlegt; das Öffnen der Detailseite wird protokolliert."
 
 #: src/core/models/client.py:62
 #: src/core/reporting/backends/client_metrics.py:208
@@ -3763,8 +3763,18 @@ msgid "Verschluesselung at-rest (AES-GCM) sensibler Felder"
 msgstr "Verschluesselung at-rest (AES-GCM) sensibler Felder"
 
 #: src/core/services/compliance/vvt.py:76
-msgid "AuditLog auf Lese- und Schreibzugriffe"
-msgstr "AuditLog auf Lese- und Schreibzugriffe"
+msgid ""
+"AuditLog auf jede Aenderung; von Lesezugriffen nur die "
+"Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft und Export, "
+"Datei-Download, Offline-Mitnahme sowie facility-uebergreifende Zugriffe "
+"— sonstige Listen-, Detail- und Suchaufrufe werden nicht protokolliert "
+"(ADR-043)"
+msgstr ""
+"AuditLog auf jede Aenderung; von Lesezugriffen nur die "
+"Personen-Detailseite der Stufe „Mit Zusatzangaben“, Auskunft und Export, "
+"Datei-Download, Offline-Mitnahme sowie facility-uebergreifende Zugriffe "
+"— sonstige Listen-, Detail- und Suchaufrufe werden nicht protokolliert "
+"(ADR-043)"
 
 #: src/core/services/compliance/vvt.py:77
 msgid "Rollenbasierte Zugriffskontrolle (5 Rollen)"
@@ -3865,8 +3875,22 @@ msgid "Optimistic Locking gegen versehentliches Ueberschreiben"
 msgstr "Optimistic Locking gegen versehentliches Ueberschreiben"
 
 #: src/core/services/compliance/vvt.py:120
-msgid "AuditLog jeder Lese- und Schreibaktion"
-msgstr "AuditLog jeder Lese- und Schreibaktion"
+msgid ""
+"AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf "
+"Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von Faellen (ein Fall "
+"kann nicht geloescht werden); Bearbeitungen von Episoden und "
+"Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur "
+"Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende "
+"Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert "
+"(ADR-043)"
+msgstr ""
+"AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf "
+"Anlegen, Bearbeiten, Schliessen und Wiedereroeffnen von Faellen (ein Fall "
+"kann nicht geloescht werden); Bearbeitungen von Episoden und "
+"Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur "
+"Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende "
+"Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert "
+"(ADR-043)"
 
 #: src/core/services/compliance/vvt.py:121
 msgid "Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"
@@ -6195,11 +6219,11 @@ msgstr "Zum Objekt"
 
 #: src/templates/components/_client_badge.html:13
 msgid ""
-"Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; jeder "
-"Zugriff wird protokolliert."
+"Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; das "
+"Öffnen der Detailseite dieser Person wird protokolliert."
 msgstr ""
-"Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; jeder "
-"Zugriff wird protokolliert."
+"Mit Zusatzangaben: zusätzliche persönliche Angaben sind hinterlegt; das "
+"Öffnen der Detailseite dieser Person wird protokolliert."
 
 #: src/templates/components/_client_badge.html:13
 msgid ""
@@ -6212,12 +6236,12 @@ msgstr ""
 #: src/templates/components/_contact_stage_legend.html:19
 msgid ""
 "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit "
-"Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, jeder "
-"Zugriff wird protokolliert."
+"Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, das Öffnen "
+"der Detailseite wird protokolliert."
 msgstr ""
 "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit "
-"Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, jeder "
-"Zugriff wird protokolliert."
+"Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, das Öffnen "
+"der Detailseite wird protokolliert."
 
 #: src/templates/components/_event_card.html:59
 msgid "Keine weiteren Angaben."

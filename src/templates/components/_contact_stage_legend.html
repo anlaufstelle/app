@@ -13,8 +13,11 @@ Eingebunden auf: Personenliste, Offline-Personenliste, Loeschfristen-
 Dashboard. NICHT auf der Statistik (traegt eigene Labels) und nicht im
 Suchergebnis-Dropdown (kein Platz — dort greift C2).
 {% endcomment %}
+{# Refs #1862: Die Legende steht auf Listen — und die Liste selbst schreibt #}
+{# keinen Audit-Eintrag. Protokolliert wird nur der Aufruf der Detailseite #}
+{# (``VIEW_QUALIFIED``, ``views/clients.py``). #}
 {# ``legend_class`` erlaubt den Farbwechsel in farbigen Kaesten (Loeschfristen); #}
 {# Default ist die gedaempfte Listenfarbe. #}
 <p class="text-[12px] {{ legend_class|default:'text-ink-muted' }}" data-testid="contact-stage-legend">
-    {% trans "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, jeder Zugriff wird protokolliert." %}
+    {% trans "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, das Öffnen der Detailseite wird protokolliert." %}
 </p>

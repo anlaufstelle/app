@@ -10,10 +10,11 @@
 
 | Principle | Reference | For |
 |---|---|---|
+| Art. 5(1)(b) Purpose limitation — search scope | [ADR-043](../adr/043-suchraum-volltextsuche.md) — search queries are deliberately **not** logged (rationale + residual risk), the case frame stays deliberately open to every staff member; five rules for any extension of the search scope | [Auditor] [Dev] |
 | Art. 5(1)(c) Data minimization | [ADR-023](../adr/023-k-anonymization-statistik.md) · [`external_report.py`](../../src/core/services/dashboard/external_report.py) | [Auditor] [Dev] |
 | Art. 5(1)(e) Storage limitation | [ADR-021](../adr/021-retention-modell.md) · **Attachments:** `DocumentType.retention_days` is **event-only** — client- and case-owned files have no retention period of their own, they follow the owner's lifecycle ([ADR-039](../adr/039-owner-generische-dateianhaenge.md)) | [Auditor] [Dev] [Operator] |
 | Art. 5(1)(f) Integrity & confidentiality | [ADR-006](../adr/006-fernet-field-encryption.md) · [ADR-007](../adr/007-auditlog-append-only.md) · [ADR-014](../adr/014-encrypted-file-vault.md) · [security-notes.md](../security-notes.md) | [Auditor] [Dev] |
-| Art. 5(2) Accountability | [ADR-007](../adr/007-auditlog-append-only.md) · [Processing register](../../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | [Auditor] |
+| Art. 5(2) Accountability | [ADR-007](../adr/007-auditlog-append-only.md) · [Processing register](../../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) · **what the audit log does not record** (ordinary list, detail and search requests): [ADR-043](../adr/043-suchraum-volltextsuche.md), [Admin Guide § 7.4](admin-guide.md#74-audit-log) | [Auditor] |
 
 ## B. Data subject rights (Art. 12–22 GDPR)
 
@@ -65,4 +66,4 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-11 -->
-<!-- source-hash: 4bfd9ecc6218a28031a52f95bae48c58194f47e5 -->
+<!-- source-hash: a16a40b4cde5791148496de853a2b5659b0da596 -->

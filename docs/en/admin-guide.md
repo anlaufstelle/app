@@ -1415,11 +1415,14 @@ The audit log is **append-only** and immutable. It automatically records:
 |---|---|
 | Login / Logout | Every login/logout |
 | Failed login | Incorrect password |
-| Data at the "With additional details" level viewed | Access to identifiable personal data |
+| Data at the "With additional details" level viewed | Opening the **person detail page** (`/clients/<id>/`) of a person at that level — not the person list, an event, a case or a search result |
 | Export | Data export by a user — including data subject access requests for individual people and on-screen views of the external report. **Released report files** (CSV/PDF/JSON/XML with a reporting period) are a subset: only those are exempt from the retention deadline and appear in the [release overview](#8-statistics-snapshots--materialized-view) |
 | Deletion | Manual or via `enforce_retention` |
 | Level change | Change in a person's contact status |
 | Settings changed | Changes to facility settings |
+| File download | Downloading an attachment from the file vault |
+
+> **What the audit log deliberately does _not_ record:** ordinary list and detail requests (person list, event, case, work item) and **every search query** — neither the search term nor a counter or timestamp. This is a deliberate trade-off: the search term is personal data itself and would survive any anonymization in the append-only log. The rationale, the rejected alternatives (hashing, counters) and the residual risk that comes with it are documented in [ADR-043](../adr/043-suchraum-volltextsuche.md) (German); the processing register at `/system/vvt/` states the same in its technical measures.
 
 **View in the admin:**
 
@@ -1725,4 +1728,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-22 -->
-<!-- source-hash: db72f65bb79cfc0fc26bad94a799f9dacc932c33 -->
+<!-- source-hash: 4ddef5c1a205a760de25c4ee8ece9288d8de273a -->
