@@ -154,17 +154,22 @@ def _remove(page, base_url, client_pk):
     page.wait_for_url(lambda url: "/edit/" not in url, timeout=30000)
 
 
-def _open_overview(page, base_url, pseudonym, *, removed=False):
-    """Datei-Übersicht, auf die Person gefiltert (Anker-First)."""
+def _open_overview(page, base_url, client_id, *, removed=False):
+    """Datei-Übersicht, auf die Person gefiltert (Anker-First).
+
+    ``client_id`` ist die **UUID**, nicht das Pseudonym: der Filter der
+    Übersicht läuft über ``_filter_by_uuid`` und ist fail-closed — ein
+    nicht-UUID-Wert liefert eine leere Liste statt der Gesamtmenge.
+    """
     suffix = "&removed=1" if removed else ""
-    page.goto(f"{base_url}/attachments/?client={pseudonym}{suffix}")
+    page.goto(f"{base_url}/attachments/?client={client_id}{suffix}")
     page.wait_for_load_state("domcontentloaded")
     page.wait_for_selector("#attachment-table", timeout=30000)
 
 
-def _delete_url(page, base_url, pseudonym):
+def _delete_url(page, base_url, client_id):
     """Adresse der Bestätigungsseite aus der gefilterten Übersicht ziehen."""
-    _open_overview(page, base_url, pseudonym)
+    _open_overview(page, base_url, client_id)
     link = page.locator("[data-testid='attachment-delete-link']").first
     link.wait_for(timeout=30000)
     return base_url + link.get_attribute("href")
@@ -182,7 +187,7 @@ class TestLeadPurgeJourney:
         assert _chain_state(e2e_env, "E2E-PURGE-Person-A") == (2, 2), "Kette mit zwei Versionen erwartet"
 
         page = lead_page
-        page.goto(_delete_url(page, base_url, "E2E-PURGE-Person-A"))
+        page.goto(_delete_url(page, base_url, purge_data["client_a"]))
         page.wait_for_selector("[data-testid='attachment-purge-confirm']", timeout=30000)
 
         # Die Seite muss den DATENSATZ benennen, nicht nur die Datei.
@@ -212,9 +217,9 @@ class TestStaffIsRejected:
         self, staff_page, lead_page, base_url, e2e_env, purge_data, _test_pdf
     ):
         _upload(staff_page, base_url, purge_data["client_a"], _test_pdf)
-        url = _delete_url(lead_page, base_url, "E2E-PURGE-Person-A")
+        url = _delete_url(lead_page, base_url, purge_data["client_a"])
 
-        _open_overview(staff_page, base_url, "E2E-PURGE-Person-A")
+        _open_overview(staff_page, base_url, purge_data["client_a"])
         assert staff_page.locator("[data-testid='attachment-delete-link']").count() == 0
         assert staff_page.locator("[data-testid='attachment-removed-toggle']").count() == 0
 
@@ -237,8 +242,11 @@ class TestConfirmationNamesTheRecord:
 
         page = lead_page
         texts = {}
-        for pseudonym in ("E2E-PURGE-Person-A", "E2E-PURGE-Person-B"):
-            page.goto(_delete_url(page, base_url, pseudonym))
+        for pseudonym, client_id in (
+            ("E2E-PURGE-Person-A", purge_data["client_a"]),
+            ("E2E-PURGE-Person-B", purge_data["client_b"]),
+        ):
+            page.goto(_delete_url(page, base_url, client_id))
             page.wait_for_selector("[data-testid='attachment-purge-owner']", timeout=30000)
             texts[pseudonym] = page.locator("[data-testid='attachment-purge-owner']").inner_text()
 
@@ -264,7 +272,7 @@ class TestLegalHoldBlocks:
         )
 
         page = lead_page
-        url = _delete_url(page, base_url, "E2E-PURGE-Person-A")
+        url = _delete_url(page, base_url, purge_data["client_a"])
         page.goto(url)
         page.wait_for_selector("[data-testid='attachment-purge-blocker-hold']", timeout=30000)
         assert page.locator("[data-testid='attachment-purge-confirm']").is_disabled()
@@ -302,13 +310,13 @@ class TestRemovedChainStaysPurgeable:
 
         page = lead_page
         # Aktive Ansicht zeigt die Zeile nicht mehr …
-        _open_overview(page, base_url, "E2E-PURGE-Person-A")
+        _open_overview(page, base_url, purge_data["client_a"])
         assert page.locator("[data-testid='attachment-delete-link']").count() == 0
         # … die Entfernt-Ansicht schon, ohne Download-Einstieg.
         page.click("[data-testid='attachment-removed-toggle']")
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_selector("[data-testid='attachment-removed-badge']", timeout=30000)
-        _open_overview(page, base_url, "E2E-PURGE-Person-A", removed=True)
+        _open_overview(page, base_url, purge_data["client_a"], removed=True)
         link = page.locator("[data-testid='attachment-delete-link']").first
         link.wait_for(timeout=30000)
         assert page.locator("[data-testid='attachment-removed-at']").count() >= 1
