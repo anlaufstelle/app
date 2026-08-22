@@ -112,6 +112,22 @@ class TestRequestCaseDeletion:
         audit = AuditLog.objects.get(action=AuditLog.Action.DELETION_REQUESTED, target_id=str(dr.pk))
         assert audit.detail == {"target_case": str(case_open.pk)}
 
+    def test_audit_row_attributes_requester_facility_and_target_type(self, case_open, staff_user):
+        """Provenienz der append-only ``DELETION_REQUESTED``-Zeile (Art. 5 Abs. 2).
+
+        ``AuditLog.user``/``facility`` sind nullable und ``audit_event``
+        akzeptiert ``None`` ausdruecklich (Cron-/System-Pfade) — fiele eines
+        der Felder weg, liefe der Antrag als System-Zeile aus jedem User- und
+        Facility-Filter der Audit-Ansicht heraus. ``target_type`` ist der
+        dokumentierte Rueckweg zum Antrag samt ``reason`` (Muster #932, wie im
+        Ereignis-Pfad per ``test_deletion_approval_audit`` gepinnt).
+        """
+        dr = request_case_deletion(case_open, staff_user, "Grund")
+        audit = AuditLog.objects.get(action=AuditLog.Action.DELETION_REQUESTED, target_id=str(dr.pk))
+        assert audit.user == staff_user
+        assert audit.facility == case_open.facility
+        assert audit.target_type == "DeletionRequest"
+
     def test_pending_lookup_and_id_set(self, case_open, staff_user, facility):
         assert get_pending_case_deletion_request(case_open) is None
         assert pending_deletion_case_ids(facility, [case_open]) == set()
@@ -133,11 +149,18 @@ class TestSoftDeleteCase:
         audit = AuditLog.objects.get(action=AuditLog.Action.CASE_SOFT_DELETED, target_id=str(case_open.pk))
         assert audit.target_type == "Case"
         assert audit.detail == {"trigger": "direct"}
-        assert Activity.objects.filter(
+        # Provenienz der append-only Zeile: ohne Actor/Facility griffe weder
+        # der User- noch der Facility-Filter der Audit-Ansicht.
+        assert audit.user == staff_user
+        assert audit.facility == case_open.facility
+        activity = Activity.objects.get(
             verb=Activity.Verb.DELETED,
             target_type=ContentType.objects.get_for_model(Case),
             target_id=case_open.pk,
-        ).exists()
+        )
+        # Pinnt zugleich die titel-FREIE Formulierung: die Zeile ueberlebt die
+        # Tilgung des Falls um ~335 Tage — kein Falltitel im Feed (#1751).
+        assert activity.summary == "Fall in den Papierkorb verschoben"
 
     def test_second_soft_delete_is_rejected(self, case_open, staff_user):
         soft_delete_case(case_open, staff_user)
@@ -166,6 +189,9 @@ class TestApproveCaseDeletion:
 
         audit = AuditLog.objects.get(action=AuditLog.Action.CASE_SOFT_DELETED, target_id=str(case_open.pk))
         assert audit.detail == {"deletion_request": str(dr.pk)}
+        # Actor der Genehmigung ist der Reviewer — nicht der Antragsteller.
+        assert audit.user == lead_user
+        assert audit.facility == case_open.facility
 
     def test_approve_writes_the_generic_workflow_entry(self, case_open, staff_user, lead_user):
         """``DELETION_APPROVED`` macht die Antrags-Entscheidung als eigenen
@@ -487,6 +513,11 @@ class TestAnonymizeCaseNow:
         assert trashed_case.is_deleted is True
         audit = AuditLog.objects.get(action=AuditLog.Action.CASE_ANONYMIZED, target_id=str(trashed_case.pk))
         assert audit.detail["trigger"] == "manual"
+        # ``Case`` hat kein ``anonymized_by``-Feld — diese Zeile ist der
+        # EINZIGE Nachweis, wer die unwiderrufliche Tilgung ausgeloest hat.
+        # Ohne Actor saehe die manuelle Tilgung wie ein Cron-Lauf aus.
+        assert audit.user == admin_user
+        assert audit.facility == trashed_case.facility
 
     def test_active_hold_blocks_the_manual_path(self, facility, trashed_case, lead_user, admin_user):
         _hold(facility, lead_user, "Case", trashed_case.pk)
