@@ -77,5 +77,5 @@
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-11 -->
+<!-- translation-date: 2026-08-22 -->
 <!-- source-hash: b7d56a9dc4b822efa817f566433a5c0c4be6fc47 -->
