@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 17:18+0200\n"
+"POT-Creation-Date: 2026-08-22 18:30+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -8466,6 +8466,44 @@ msgstr ""
 #: src/templates/core/export/client_data_pdf.html:617
 msgid "Keine protokollierten Zugriffe vorhanden."
 msgstr "No logged accesses available."
+
+#: src/templates/core/export/client_data_pdf.html:679
+msgid "17. Zusammenführungen"
+msgstr "17. Merges"
+
+#: src/templates/core/export/client_data_pdf.html:681
+msgid ""
+"In diese Akte wurden die folgenden doppelt angelegten Akten überführt; deren "
+"Einträge sind seither Teil dieser Auskunft. Die aufgelöste Akte liegt bis "
+"zum Ablauf der Papierkorb-Frist als Verweis vor und wird danach endgültig "
+"anonymisiert. Ihre eigene Protokollspur verbleibt an ihrem Datensatz und "
+"kann gesondert beauskunftet werden."
+msgstr ""
+"The following duplicate records were merged into this record; their entries "
+"have been part of this access record since then. The dissolved record "
+"remains as a reference until the trash period expires and is anonymized for "
+"good afterwards. Its own audit trail stays with its dataset and can be "
+"disclosed separately."
+
+#: src/templates/core/export/client_data_pdf.html:685
+msgid "Pseudonym der aufgelösten Akte"
+msgstr "Pseudonym of the dissolved record"
+
+#: src/templates/core/export/client_data_pdf.html:686
+msgid "Zusammengeführt am"
+msgstr "Merged on"
+
+#: src/templates/core/export/client_data_pdf.html:695
+msgid "endgültig anonymisiert"
+msgstr "anonymized for good"
+
+#: src/templates/core/export/client_data_pdf.html:695
+msgid "im Papierkorb (Zusammenführung noch aufhebbar)"
+msgstr "in the trash (merge can still be reverted)"
+
+#: src/templates/core/export/client_data_pdf.html:701
+msgid "Keine Zusammenführungen vorhanden."
+msgstr "No merges on record."
 
 #: src/templates/core/export/client_data_pdf.html:621
 #: src/templates/core/export/report_pdf.html:155

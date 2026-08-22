@@ -109,7 +109,8 @@ class TestExportClientDataAggregate:
     #1796 um
     ``rectification_requests`` (Art.-16-Antraege, ADR-041). Refs #1818 traegt
     ``deleted_cases`` nach — Faelle im Papierkorb sind wie geloeschte
-    Ereignisse ein eigener Abschnitt (ADR-044).
+    Ereignisse ein eigener Abschnitt (ADR-044). Refs #1876 traegt
+    ``merged_from`` nach — die Herkunft nach Duplikat-Merges (ADR-045 §7).
     """
 
     def test_top_level_dict_contains_all_aggregate_keys(self, client_identified, facility, staff_user):
@@ -131,6 +132,7 @@ class TestExportClientDataAggregate:
             "work_items",
             "activities",
             "recent_visits",
+            "merged_from",
             "audit_trail",
             "export_meta",
         }

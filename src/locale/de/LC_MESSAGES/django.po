@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 17:18+0200\n"
+"POT-Creation-Date: 2026-08-22 18:30+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -8546,6 +8546,44 @@ msgstr ""
 #: src/templates/core/export/client_data_pdf.html:617
 msgid "Keine protokollierten Zugriffe vorhanden."
 msgstr "Keine protokollierten Zugriffe vorhanden."
+
+#: src/templates/core/export/client_data_pdf.html:679
+msgid "17. Zusammenführungen"
+msgstr "17. Zusammenführungen"
+
+#: src/templates/core/export/client_data_pdf.html:681
+msgid ""
+"In diese Akte wurden die folgenden doppelt angelegten Akten überführt; deren "
+"Einträge sind seither Teil dieser Auskunft. Die aufgelöste Akte liegt bis "
+"zum Ablauf der Papierkorb-Frist als Verweis vor und wird danach endgültig "
+"anonymisiert. Ihre eigene Protokollspur verbleibt an ihrem Datensatz und "
+"kann gesondert beauskunftet werden."
+msgstr ""
+"In diese Akte wurden die folgenden doppelt angelegten Akten überführt; deren "
+"Einträge sind seither Teil dieser Auskunft. Die aufgelöste Akte liegt bis "
+"zum Ablauf der Papierkorb-Frist als Verweis vor und wird danach endgültig "
+"anonymisiert. Ihre eigene Protokollspur verbleibt an ihrem Datensatz und "
+"kann gesondert beauskunftet werden."
+
+#: src/templates/core/export/client_data_pdf.html:685
+msgid "Pseudonym der aufgelösten Akte"
+msgstr "Pseudonym der aufgelösten Akte"
+
+#: src/templates/core/export/client_data_pdf.html:686
+msgid "Zusammengeführt am"
+msgstr "Zusammengeführt am"
+
+#: src/templates/core/export/client_data_pdf.html:695
+msgid "endgültig anonymisiert"
+msgstr "endgültig anonymisiert"
+
+#: src/templates/core/export/client_data_pdf.html:695
+msgid "im Papierkorb (Zusammenführung noch aufhebbar)"
+msgstr "im Papierkorb (Zusammenführung noch aufhebbar)"
+
+#: src/templates/core/export/client_data_pdf.html:701
+msgid "Keine Zusammenführungen vorhanden."
+msgstr "Keine Zusammenführungen vorhanden."
 
 #: src/templates/core/export/client_data_pdf.html:621
 #: src/templates/core/export/report_pdf.html:155

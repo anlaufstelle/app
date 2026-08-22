@@ -328,6 +328,16 @@ def _gather_client_fields(client):
     orphaned = _gather_entity_orphan_data(client)
     if orphaned:
         fields["dynamic_data_orphaned"] = orphaned
+    # Refs #1876 (ADR-045 §7): ein Merge-Tombstone weist aus, WOHIN seine Daten
+    # gewandert sind — die Art.-15-Antwort der Quelle. Nur am Tombstone, damit
+    # das Bestandsformat fuer alle anderen Personen bitgleich bleibt (Muster
+    # ``dynamic_data_orphaned``). Der Zeitpunkt der Zusammenfuehrung ist das
+    # vorhandene ``deleted_at`` (Soft-Delete + Merge in EINER Transaktion).
+    # Live-Zeilen-Lektuere: wird das Ziel spaeter selbst redigiert, steht hier
+    # dessen redigierter Marker — nie laenger ein Klartext-Pseudonym als die
+    # Zeile selbst.
+    if client.merged_into_id:
+        fields["merged_into"] = client.merged_into.pseudonym
     return fields
 
 
@@ -576,8 +586,9 @@ def _gather_deletion_requests(facility, client, event_ids):
         .select_related("requested_by", "reviewed_by")
         .order_by("-created_at", "pk")
     )
-    return [
-        {
+    rows = []
+    for dr in deletion_requests:
+        entry = {
             "target_type": dr.get_target_type_display(),
             "status": dr.get_status_display(),
             "reason": dr.reason,
@@ -586,8 +597,17 @@ def _gather_deletion_requests(facility, client, event_ids):
             "created_at": dr.created_at.isoformat(),
             "reviewed_at": _isoformat(dr.reviewed_at),
         }
-        for dr in deletion_requests
-    ]
+        # Refs #1876: ein Antrag mit gesetztem ``merge_into`` ist ein
+        # Zusammenfuehrungs-Antrag (ADR-045 §1) — ohne Marker laese er sich in
+        # der Auskunft als Loeschantrag, obwohl nichts geloescht wird. Nur wenn
+        # gesetzt (Muster ``dynamic_data_orphaned``), damit das Bestandsformat
+        # gewoehnlicher Loeschantraege bitgleich bleibt. Bewusst OHNE das
+        # Ziel-Pseudonym: der Antrag kann die Redaktion des Ziels ueberleben,
+        # die Antragszeile selbst traegt nur Meta (wie ``target_type``).
+        if dr.merge_into_id:
+            entry["merge_request"] = True
+        rows.append(entry)
+    return rows
 
 
 def _rectification_field_label(field_path, field_templates):
@@ -947,6 +967,43 @@ AUDIT_CATEGORIES = (
 )
 
 
+def _gather_merged_sources(client):
+    """Zusammenfuehrungs-Herkunft des Ziels (Refs #1876, ADR-045 §7).
+
+    Nach einem Duplikat-Merge sind die Ereignisse, Faelle und Anhaenge der
+    Quelle Teil DIESER Akte — die Auskunft muss ausweisen, dass (und seit
+    wann) ein Teil ihres Bestands aus einer zusammengefuehrten Akte stammt,
+    sonst wirkt der Bestand aelter bzw. anders entstanden als er ist.
+
+    **Minimierungslinie — Live-Zeilen-Lektuere** (Muster
+    :func:`_gather_attachments`): das Pseudonym kommt aus der lebenden
+    Tombstone-Zeile. Solange die Quelle unredigiert im Papierkorb liegt, ist
+    ihr Pseudonym Teil der Akte des Ziels (die Zeitleiste des Ziels fuehrt
+    ihre Eintraege laengst); nach der Redaktion durch den Retention-Lauf steht
+    hier nur noch der redigierte Marker — das Klartext-Pseudonym lebt in der
+    Auskunft exakt so lange wie im Papierkorb selbst, keinen Tag laenger.
+
+    ``anonymized`` unterscheidet die beiden Zustaende (Redaktions-Marker ist
+    ``is_active=False``, wie in ``unmerge_client``): bis dahin ist die
+    Zusammenfuehrung aufhebbar, danach endgueltig. ``merged_at`` ist das
+    ``deleted_at`` des Tombstones — Soft-Delete und ``merged_into``-Verweis
+    entstehen in derselben Transaktion (ADR-045 §2).
+
+    Das Zugriffsprotokoll der Quelle bleibt an deren Datensatz (append-only,
+    ``target_id`` = Quelle) und laeuft bewusst NICHT in diesen Export — die
+    volle Historie beider Vorgaenger beantwortet die Einrichtung mit BEIDEN
+    Exporten (ADR-045 §7).
+    """
+    return [
+        {
+            "pseudonym": source.pseudonym,
+            "merged_at": _isoformat(source.deleted_at),
+            "anonymized": not source.is_active,
+        }
+        for source in client.merged_sources.order_by("deleted_at", "pk")
+    ]
+
+
 def _audit_category(target_type):
     """Kategorie-Label zu einem Audit-``target_type`` (laengstes Praefix gewinnt)."""
     for prefix, label in AUDIT_CATEGORIES:
@@ -1106,6 +1163,10 @@ def export_client_data(client, facility, user):
         "work_items": _gather_workitems(client),
         "activities": _gather_activities(facility, client, all_event_ids),
         "recent_visits": _gather_recent_visits(client),
+        # Refs #1876 (ADR-045 §7): Herkunft nach Duplikat-Merges — eigene
+        # Top-Level-Kategorie, damit der abgeleitete PDF-Guard
+        # (``test_every_category_has_its_own_pdf_section``) sie erfasst.
+        "merged_from": _gather_merged_sources(client),
         "audit_trail": _gather_audit_trail(facility, client, all_event_ids),
         "export_meta": _build_export_meta(facility),
     }

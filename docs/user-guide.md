@@ -363,6 +363,26 @@ Von der Detailseite aus können Sie über **Kontakt dokumentieren** direkt einen
 
 > **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
 
+### Personen zusammenführen (Duplikate)
+
+Wurde dieselbe Person versehentlich zweimal angelegt — etwa unter zwei Schreibweisen des Pseudonyms, lassen sich die beiden Akten nachträglich zusammenführen. Schon beim **Anlegen** hilft ein Hinweis, das zu vermeiden: Sobald Sie ein Pseudonym eintippen, das einer bestehenden Person ähnelt, erscheint unter dem Feld „Ähnliche Person existiert bereits" mit einem Link auf die Akte. Der Hinweis blockiert nichts — Sie können trotzdem speichern.
+
+Ist das Duplikat bereits entstanden:
+
+1. Öffnen Sie die Akte der Person, die **aufgelöst** werden soll, und wählen Sie im Menü **Weitere Aktionen** (⋮) den Eintrag **Mit Duplikat zusammenführen**.
+2. Suchen Sie die Ziel-Person — die Akte, die bestehen bleibt. Die Suche findet auch ähnliche Schreibweisen.
+3. Die Bestätigungsseite zeigt **beide Akten im Vergleich** (Kontaktstufe, Altersgruppe, Anlagedatum, letzter Kontakt, Zahl der Ereignisse/Fälle/Anhänge) sowie eine Statistik-Warnung und den Frist-Hinweis. Welcher der beiden Wege gilt, sagt die Seite selbst:
+ - **Direkt zusammenführen** — wenn beide Personen auf „Nur Pseudonym" stehen; das darf nur die **Leitung**.
+ - **Antrag mit Bestätigung** — sobald eine der beiden Personen „Mit Zusatzangaben" trägt (oder eine Fachkraft den Weg geht). Geben Sie eine Begründung ein; bestätigt wird über **Datenschutz → Löschanträge**, wo der Antrag als eigene Art **Zusammenführung** mit Ziel erscheint. Bis dahin ist die Akte als „Zusammenführung beantragt" gekennzeichnet und bleibt nutzbar.
+
+Was dabei passiert:
+
+- **Ereignisse, Fälle, Aufgaben und die Merkliste wandern vollständig** zur Ziel-Akte. Bei den Zusatzangaben behält das Ziel seine Werte; Angaben der Quelle füllen nur leere Felder. Die Kontaktstufe steigt auf die höhere der beiden — nie umgekehrt.
+- Die aufgelöste Akte verschwindet aus Liste, Suche und Auswahlfeldern und liegt mit dem Vermerk „zusammengeführt in …" im **Papierkorb**. Bis zum Ablauf der Papierkorb-Frist kann die Anwendungsbetreuung dort **Zusammenführung aufheben** — die gewanderten Einträge kehren zurück; seit der Zusammenführung neu erfasste bleiben beim Ziel. Danach wird die leere Hülle wie jede gelöschte Person endgültig anonymisiert; der Verweis auf das Ziel bleibt.
+- In einer **Datenauskunft nach Art. 15 DSGVO** weist die Ziel-Akte im Abschnitt „Zusammenführungen" aus, welche Akte wann in sie überführt wurde; die Auskunft über die aufgelöste Akte nennt umgekehrt „Zusammengeführt in". Das Zugriffsprotokoll der aufgelösten Akte bleibt an deren Datensatz — eine Auskunft über die volle Historie beider Vorgänger beantworten Sie mit **beiden** Auskünften.
+
+> **Offline:** Auf Geräten zwischengespeicherte Daten der aufgelösten Akte werden beim nächsten Abgleich verworfen. Wurde zu ihr **offline bereits ein Ereignis erfasst**, aber noch nicht übertragen, wird es nicht automatisch auf die Ziel-Akte umgebucht — es landet wie bei einer Löschung in der **Konfliktliste** (Dead-Letter) zur Nachbearbeitung, damit nichts still im Namen der erfassenden Person umgeschrieben wird.
+
 ---
 
 ## 5. Hinweise und Aufgaben (WorkItems)

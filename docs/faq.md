@@ -550,12 +550,16 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 
 **Dieselbe Staffelung gilt für Fälle** (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md)): Fachkräfte löschen einen Fall aus der Fallakte heraus; steht die Person auf „Mit Zusatzangaben", entsteht ein Löschantrag über dieselbe Löschanträge-Liste, sonst wandert der Fall direkt in den **Fall-Papierkorb** (`/cases/trash/`, Anwendungsbetreuung). Von dort holt ihn „Wiederherstellen" vollständig zurück — mit Episoden, Wirkungszielen und Dateianhängen, bis die Papierkorb-Frist `client_trash_days` abläuft und er automatisch anonymisiert wird (Titel, Beschreibung, Zusatzfelder, Episoden, Ziele und Dateien fallen, die Fall-Zeile bleibt als anonymes Aggregat stehen). Zugeordnete **Kontakte bleiben bei der Person** und blockieren die Löschung nicht; sie verlieren ihre Fallzuordnung erst bei der endgültigen Tilgung.
 
+**Und für Zusammenführungen** (Refs #1876, [ADR-045](adr/045-personen-merge.md)): Doppelt angelegte Personen führt die Akte über **⋮ → Mit Duplikat zusammenführen** zusammen — dieselbe Staffelung: Trägt eine der beiden Personen „Mit Zusatzangaben", entsteht ein Antrag über dieselbe Löschanträge-Liste (dort als eigene Art **Zusammenführung → Ziel** ausgewiesen), sonst führt die Leitung direkt zusammen. Ereignisse, Fälle, Aufgaben und Merkliste wandern zur Ziel-Akte, die Kontaktstufe steigt auf die höhere der beiden; die aufgelöste Akte liegt mit dem Vermerk „zusammengeführt in …" im Personen-Papierkorb und bietet dort **Zusammenführung aufheben** statt „Wiederherstellen" an, bis `client_trash_days` abläuft und der Aufbewahrungslauf sie wie jede gelöschte Person redigiert (der Verweis auf das Ziel bleibt). Die Art.-15-Auskunft weist den Vorgang auf beiden Seiten aus (Abschnitt „Zusammenführungen" bzw. Stammdaten-Zeile „Zusammengeführt in").
+
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — `DeletionRequest`
 - [`src/core/services/event.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
 - [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
 - [`src/core/services/case/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/deletion.py) — `soft_delete_case`, `request_case_deletion`, `approve_case_deletion`, `restore_case`, `anonymize_case`
 - [`src/core/views/case_deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/case_deletion.py) — `CaseDeleteRequestView`, `CaseTrashView`, `CaseRestoreView`, `CaseAnonymizeView`
+- [`src/core/services/client/merge.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/merge.py) — `merge_clients`, `request_client_merge`, `approve_client_merge`, `unmerge_client`
+- [`src/core/views/client_merge.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/client_merge.py) — `ClientMergeView`, `ClientUnmergeView`, `ClientSimilarHintView`
 
 ### 16. Was hat KEINEN Löschmechanismus?
 

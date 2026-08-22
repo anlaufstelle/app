@@ -1683,6 +1683,20 @@ class TestClientExportRectificationRequests:
 @pytest.fixture
 def fully_populated_client(facility, doc_type, sample_client, admin_user, confirmer_user, lead_user):
     """Eine Person mit je einem Datensatz aus jeder Auskunfts-Kategorie (Refs #1752)."""
+    # Refs #1876 (ADR-045 §7): ein Merge-Tombstone — der abgeleitete PDF-Guard
+    # prueft jede Kategorie durch Leeren, ein leeres ``merged_from`` waere
+    # blind. Der Merge laeuft VOR den Mutationen unten: ``k_anonymized`` und
+    # der PENDING-Loeschantrag wuerden ``_validate_merge`` sonst abweisen.
+    from core.services.client import merge_clients
+
+    merge_source = Client.objects.create(
+        facility=facility,
+        pseudonym="PDF-Duplikat",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        created_by=admin_user,
+    )
+    merge_clients(merge_source, sample_client, lead_user)
+
     sample_client.notes = "Notiz-Freitext-PDF"
     sample_client.k_anonymized = True
     sample_client.save(update_fields=["notes", "k_anonymized"])
@@ -1869,6 +1883,7 @@ class TestClientExportPdfCoverage:
             "PDF-Aufgabe",  # Aufgabe
             "PDF-Aktivitaet",  # Zeitstrom
             "Daten der Stufe „Mit Zusatzangaben“ eingesehen",  # Audit-Auszug
+            "PDF-Duplikat",  # Zusammenfuehrungs-Herkunft (Refs #1876)
         ],
     )
     def test_pdf_contains_every_category(self, fully_populated_client, facility, admin_user, needle):
@@ -1992,6 +2007,8 @@ class TestClientExportCompleteness:
         "work_items",
         "activities",
         "recent_visits",
+        # Refs #1876 (ADR-045 §7): Zusammenfuehrungs-Herkunft des Ziels.
+        "merged_from",
         "audit_trail",
     ]
     REQUIRED_CLIENT_FIELDS = [
@@ -2028,3 +2045,110 @@ class TestClientExportCompleteness:
         payload = json.loads(response.content.decode("utf-8"))
         empty = [key for key in self.REQUIRED_LIST_CATEGORIES if not payload.get(key)]
         assert empty == [], f"Kategorien ohne Daten im JSON-Download: {empty}"
+
+
+@pytest.mark.django_db
+class TestClientExportMergeProvenance:
+    """Refs #1876 (ADR-045 §7) — die Auskunft weist Zusammenfuehrungen aus.
+
+    Ziel-Export: ``merged_from`` als eigene Top-Level-Kategorie — je Tombstone
+    Pseudonym, Zeitpunkt und Tilgungsstatus, gelesen aus der **lebenden**
+    Tombstone-Zeile (Muster ``_gather_attachments``): nach der Redaktion steht
+    dort der redigierte Marker, das Klartext-Pseudonym der Quelle lebt in der
+    Auskunft also exakt so lange wie im Papierkorb selbst.
+
+    Quell-Export: solange der Tombstone existiert, benennt ``client.merged_into``
+    die Ziel-Akte — die Art.-15-Antwort „wohin sind die Daten gewandert".
+    Der Zeitpunkt ist das vorhandene ``deleted_at`` (Soft-Delete und Merge
+    laufen in derselben Transaktion, ADR-045 §2).
+    """
+
+    @pytest.fixture
+    def merged_pair(self, facility, sample_client, admin_user, lead_user):
+        from core.services.client import merge_clients
+
+        source = Client.objects.create(
+            facility=facility,
+            pseudonym="Merge-Quelle",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=admin_user,
+        )
+        merge_clients(source, sample_client, lead_user)
+        source.refresh_from_db()
+        return source, sample_client
+
+    def test_target_export_lists_the_merged_source(self, merged_pair, facility, admin_user):
+        source, target = merged_pair
+        data = export_client_data(target, facility, admin_user)
+        assert data["merged_from"] == [
+            {
+                "pseudonym": "Merge-Quelle",
+                "merged_at": source.deleted_at.isoformat(),
+                "anonymized": False,
+            }
+        ]
+
+    def test_merged_from_is_always_present(self, sample_client, facility, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["merged_from"] == []
+
+    def test_redacted_tombstone_keeps_only_the_redacted_marker(self, merged_pair, facility, admin_user):
+        """Live-Zeilen-Lektuere: die Redaktion des Tombstones erfasst die Auskunft mit."""
+        from core.services.client import anonymize_client
+
+        source, target = merged_pair
+        anonymize_client(source)
+        data = export_client_data(target, facility, admin_user)
+        (entry,) = data["merged_from"]
+        assert entry["anonymized"] is True
+        assert "Merge-Quelle" not in entry["pseudonym"]
+
+    def test_source_tombstone_export_names_the_target(self, merged_pair, facility, admin_user):
+        source, target = merged_pair
+        data = export_client_data(source, facility, admin_user)
+        assert data["client"]["merged_into"] == target.pseudonym
+        assert data["client"]["is_deleted"] is True
+
+    def test_unmerged_client_has_no_merged_into_key(self, sample_client, facility, admin_user):
+        """Bestandsformat bitgleich — der Schluessel existiert nur am Tombstone."""
+        data = export_client_data(sample_client, facility, admin_user)
+        assert "merged_into" not in data["client"]
+
+    def test_pdf_names_the_target_on_the_tombstone_export(self, merged_pair, facility, admin_user):
+        """Der ``merged_into``-Wert haengt im ``client``-Block und laeuft damit am
+        Top-Level-Paritaets-Guard vorbei — eigene Nadel (Muster Anhang-Spalten)."""
+        source, target = merged_pair
+        html = _render_export_html(source, facility, admin_user)
+        assert "Zusammengeführt in" in html
+        assert target.pseudonym in html
+
+    def test_merge_request_row_is_marked(self, facility, sample_client, admin_user, staff_user):
+        """Ein Merge-Antrag darf in der Auskunft nicht als Loeschantrag durchgehen
+        (dasselbe Prinzip wie in der Antragsliste: die Antragsart beim Namen nennen)."""
+        from core.services.client import request_client_merge
+
+        source = Client.objects.create(
+            facility=facility,
+            pseudonym="Merge-Antrag-Quelle",
+            contact_stage=Client.ContactStage.QUALIFIED,
+            created_by=admin_user,
+        )
+        request_client_merge(source, sample_client, staff_user, "Doppelt angelegt")
+        data = export_client_data(source, facility, admin_user)
+        (row,) = data["deletion_requests"]
+        assert row["merge_request"] is True
+        html = _render_export_html(source, facility, admin_user)
+        assert "Zusammenführung" in html.rsplit("Löschanträge", 1)[1]
+
+    def test_plain_deletion_request_row_keeps_its_format(self, facility, sample_client, admin_user):
+        """Kein ``merge_request``-Schluessel an gewoehnlichen Loeschantraegen."""
+        DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=sample_client.pk,
+            reason="Nur Loeschung",
+            requested_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        (row,) = data["deletion_requests"]
+        assert "merge_request" not in row

@@ -62,6 +62,15 @@ Kein Pseudonym im `detail` und keins der Quelle im Zeitstrom: die Aktivitäts-Ze
 
 Der Merge-Service ist der **dritte** `soft_delete()`-Aufrufer im Produktionscode; der abgeleitete Guard in `test_cases_trash_invariant.py` pinnt ihn (die Soll-Menge wächst — exakt der Mechanismus, für den der Guard gebaut wurde). Unter den Redaktions-Paritäts-Guard (`TestKAnonBridgeRedactionParity`) fällt er dagegen **nicht**, obwohl er dieselbe Tabellenmenge berührt: der Merge redigiert nichts, er verschiebt Zuordnungen — die Tilgung des Tombstones läuft durch `anonymize_client` selbst, und genau dessen Helfer-Menge pinnt der Guard bereits.
 
+### 7. Art.-15-Auskunft: beide Akten bleiben beauskunftbar, die volle Historie beantworten beide Exporte
+
+Die Auskunft ([`services/client/export.py`](../../src/core/services/client/export.py)) weist den Merge auf **beiden** Seiten aus:
+
+- **Ziel:** eigene Top-Level-Kategorie `merged_from` (PDF-Abschnitt „Zusammenführungen") — je Tombstone das Pseudonym, der Zeitpunkt (`deleted_at`: Soft-Delete und Verweis entstehen in einer Transaktion, §2) und der Tilgungsstatus. **Minimierungslinie = Live-Zeilen-Lektüre** (dasselbe Muster wie die Anhang-Metadaten aus #1738): das Pseudonym kommt aus der lebenden Tombstone-Zeile, nach der Redaktion steht dort nur noch der redigierte Marker — das Klartext-Pseudonym der Quelle lebt in der Auskunft exakt so lange wie im Papierkorb selbst. Ein Zusammenführungs-**Antrag** ist in der Kategorie `deletion_requests` als solcher markiert (`merge_request`), damit er nicht als Löschantrag durchgeht.
+- **Quelle (solange der Tombstone existiert):** das Stammdaten-Feld `merged_into` benennt die Ziel-Akte — die Antwort auf „wohin sind die Daten dieses Pseudonyms gewandert". Der Export einer Papierkorb-Person war schon vor dem Merge möglich (Refs #1752); er funktioniert auch nach der Redaktion weiter, dann mit redigierten Stammdaten und stehendem Verweis (PROTECT, §2).
+
+**Bewusst kein zusammengeführtes Gesamtprotokoll:** `_gather_audit_trail` sammelt über `target_id` = eigene PK; die Alt-Zeilen der Quelle (Zugriffe, Stufenwechsel, `CLIENT_MERGED` selbst) bleiben append-only an der Quelle und tauchen im Ziel-Export nicht auf. Sie umzuhängen ist unmöglich (HMAC-verkettet), sie zu duplizieren wäre eine zweite Wahrheit. Eine Auskunft über die **volle Historie beider Vorgänger** beantwortet die Einrichtung deshalb **organisatorisch mit beiden Exporten**: dem des Ziels (Bestand + Herkunft) und dem des Quell-Tombstones (dessen Zugriffsprotokoll + Verbleib-Verweis) — der Papierkorb bzw. die direkte Akten-URL macht den Tombstone dafür erreichbar. Das Benutzerhandbuch (§ Personen zusammenführen) und das Admin-Handbuch (§ 7.6) halten diesen Zwei-Export-Weg fest.
+
 ## Bewusst in Kauf genommene Risiken
 
 - **Statistik-Diskontinuität.** `Count('client', distinct=True)` sinkt nach einem Merge **rückwirkend** für Live-Abfragen; eingefrorene `StatisticsSnapshot`-Zeilen behalten die Vor-Merge-Zahl. Ein bereits abgegebener Sachbericht wird damit unreproduzierbar. Entscheid: Warnung im Merge-Dialog (folgt mit den Views), **keine** Rückrechnung — eine „korrigierte" Historie wäre eine zweite Wahrheit neben den Snapshots.
@@ -84,4 +93,4 @@ Der Merge-Service ist der **dritte** `soft_delete()`-Aufrufer im Produktionscode
 - Umsetzungs-Issue: #1876
 - Service: [`services/client/merge.py`](../../src/core/services/client/merge.py); Modell/Migration: [`models/client.py`](../../src/core/models/client.py), [`models/workitem.py`](../../src/core/models/workitem.py), Migration 0160
 - Blaupausen: [ADR-044](044-fall-loeschpfad.md) (Staffelung P1c), [`services/client/main.py`](../../src/core/services/client/main.py) (`request_client_deletion` … `approve_client_deletion`)
-- Tests: `src/tests/test_client_merge_workflow.py`; Guard-Pins in `src/tests/test_cases_trash_invariant.py`
+- Tests: `src/tests/test_client_merge_workflow.py`, `src/tests/test_client_merge_views.py`, Auskunft in `src/tests/test_client_export.py` (`TestClientExportMergeProvenance`), E2E in `src/tests/e2e/test_client_merge.py`; Guard-Pins in `src/tests/test_cases_trash_invariant.py`

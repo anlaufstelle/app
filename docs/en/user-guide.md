@@ -367,6 +367,26 @@ From the detail page, you can use **Document contact** to record a contact for t
 
 > **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
 
+### Merging Clients (Duplicates)
+
+If the same person was accidentally created twice -- for example under two spellings of the pseudonym -- the two records can be merged afterwards. A hint already helps to avoid this at **creation time**: as soon as you type a pseudonym that resembles an existing client, "A similar client already exists" appears below the field with a link to that record. The hint blocks nothing -- you can still save.
+
+If the duplicate already exists:
+
+1. Open the record of the client that is to be **dissolved** and choose **Merge with duplicate** in the **More actions** menu (⋮).
+2. Search for the target client -- the record that remains. The search also finds similar spellings.
+3. The confirmation page shows **both records side by side** (contact level, age group, creation date, last contact, number of events/cases/attachments) plus a statistics warning and the deadline note. The page itself tells you which of the two paths applies:
+ - **Merge directly** -- if both clients are at "Pseudonym only"; only the **lead** may do this.
+ - **Request with confirmation** -- as soon as one of the two clients carries "With additional details" (or a staff member takes this path). Enter a reason; confirmation happens under **Privacy → Deletion requests**, where the request appears as its own kind, **Merge**, with its target. Until then the record is flagged as "merge requested" and stays usable.
+
+What happens:
+
+- **Events, cases, tasks and the recent-visits list move completely** to the target record. For the additional details, the target keeps its values; values from the source only fill empty fields. The contact level rises to the higher of the two -- never the other way around.
+- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into...". Until the trash period expires, the facility admin can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted client; the reference to the target remains.
+- In an **Art. 15 GDPR access record**, the target record states in its "Merges" section which record was merged into it and when; the access record of the dissolved record conversely states "Merged into". The access log of the dissolved record stays with its own dataset -- a request covering the full history of both predecessors is answered with **both** access records.
+
+> **Offline:** Data of the dissolved record cached on devices is discarded at the next sync. If an event for it was **already documented offline** but not yet transmitted, it is not silently rebooked to the target record -- as with a deletion, it goes to the **conflict list** (dead letter) for follow-up, so that nothing is rewritten in the documenting person's name without their knowledge.
+
 ---
 
 ## 5. Hints and Tasks (Work Items)
@@ -928,4 +948,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-22 -->
-<!-- source-hash: a3f0cf8ae37e21253855d3c36081dda3617c7590 -->
+<!-- source-hash: fbb76c7cec82f14ce7578892bb4acac217e678db -->
