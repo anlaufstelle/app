@@ -28,7 +28,7 @@
                 {# Refs #1736 (A): laufender Vier-Augen-Löschantrag am Datensatz. #}
                 {% if pending_deletion_request %}
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
-                      data-testid="client-deletion-pending-badge">{% trans "Löschung beantragt" %}</span>
+                      data-testid="{% if pending_deletion_request.merge_into_id %}client-merge-pending-badge{% else %}client-deletion-pending-badge{% endif %}">{% if pending_deletion_request.merge_into_id %}{% trans "Zusammenführung beantragt" %}{% else %}{% trans "Löschung beantragt" %}{% endif %}</span>
                 {% endif %}
                 <span x-show="isOffline" x-cloak
                       class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-800"
@@ -86,11 +86,18 @@
 {# Löschantrag-Banner (Refs #1736, A): der Wartezustand war bisher nur in der #}
 {# entscheidenden Rolle sichtbar, nie am betroffenen Datensatz. #}
 {% if pending_deletion_request %}
+{% comment %}Refs #1876: derselbe Wartezustand traegt zwei Bedeutungen — ein
+gesetztes ``merge_into`` ist ein Zusammenführungs-, kein Löschantrag. Banner
+und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcomment %}
 <div class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-[10px] text-[13px] text-amber-800"
      role="status"
-     data-testid="client-deletion-pending-banner">
+     data-testid="{% if pending_deletion_request.merge_into_id %}client-merge-pending-banner{% else %}client-deletion-pending-banner{% endif %}">
     <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    {% if pending_deletion_request.merge_into_id %}
+    <span class="font-semibold">{% blocktrans with target=pending_deletion_request.merge_into.pseudonym %}Zusammenführung in „{{ target }}“ beantragt{% endblocktrans %}</span>
+    {% else %}
     <span class="font-semibold">{% trans "Löschung beantragt" %}</span>
+    {% endif %}
     <span>
         {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}am {{ datum }} durch {{ person }} — wartet auf Bestätigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip).{% endblocktrans %}
     </span>

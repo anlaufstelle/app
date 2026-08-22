@@ -39,6 +39,21 @@
         <div class="card p-5 space-y-4">
             {% for field in form %}
             {% include "components/_form_field.html" %}
+            {% comment %}Refs #1876 (präventiver Teil): nicht-blockierender
+            Duplikat-Hinweis unter dem Pseudonym-Feld — nur beim Anlegen (beim
+            Bearbeiten existiert die Person bereits, der „Ähnliche Person"-Fall
+            ist dort der Merge-Weg). HTMX lädt das Fragment beim Tippen nach;
+            ``hx-include`` schickt das Feld unter seinem Namen ``pseudonym``
+            mit, die View akzeptiert ihn als Suchbegriff. Ohne JS erscheint
+            schlicht kein Hinweis — bewusst kein Pflicht-Zwischenschritt.{% endcomment %}
+            {% if field.name == "pseudonym" and not is_edit %}
+            <div class="-mt-1 empty:hidden"
+                 hx-get="{% url 'core:client_similar_hint' %}"
+                 hx-trigger="keyup changed delay:400ms from:#id_pseudonym"
+                 hx-include="#id_pseudonym"
+                 hx-target="this"
+                 data-testid="client-similar-hint-region"></div>
+            {% endif %}
             {% comment %}M2/P7 (Refs #1058, E11): Ein Typwechsel — und ebenso das
             Entfernen des Typs — baut die Zusatzfelder neu auf; die Werte des alten
             Typs haben im neuen Feldset keine Bedeutung und werden von

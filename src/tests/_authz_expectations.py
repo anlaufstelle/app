@@ -270,6 +270,30 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_trashed.pk"),),
         idor=(("pk", "foreign_client_trashed.pk"),),
     ),
+    # Duplikat-Merge (Refs #1876, ADR-045): Einstieg + Antrag STAFF_PLUS wie
+    # der Loeschantrag (die Fachkraft beantragt, der Direktweg ist zusaetzlich
+    # per Service-Guard Leitung+). Der Matrix-POST traegt kein ``target`` und
+    # konsumiert nichts (Redirect mit Fehlermeldung) — deshalb bewusst KEIN
+    # DESTRUCTIVE_RESET-Hook.
+    E(
+        "core:client_merge",
+        "facility-write",
+        get=STAFF_PLUS,
+        post=STAFF_PLUS,
+        url_kwargs=(("pk", "client_identified.pk"),),
+        idor=(("pk", "foreign_client.pk"),),
+    ),
+    # Aufheben = Papierkorb-Pflege, gleiches Gate wie client_restore. Das
+    # Matrix-Objekt ist ein gewoehnlicher Papierkorb-Client (kein Tombstone):
+    # der Service antwortet mit ValidationError → Meldung + Redirect, nichts
+    # wird konsumiert.
+    E(
+        "core:client_unmerge",
+        "facility-write",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "client_trashed.pk"),),
+        idor=(("pk", "foreign_client_trashed.pk"),),
+    ),
     E("core:case_create", "facility-write", get=STAFF_PLUS, post=STAFF_PLUS),
     E(
         "core:case_update",
@@ -729,6 +753,9 @@ EXPECTATIONS = (
         idor=(("pk", "foreign_workitem.pk"),),
     ),
     E("core:client_autocomplete", "partials-htmx", get=ASSISTANT_PLUS),
+    # Refs #1876: Duplikat-Hinweis im Anlage-Formular — dasselbe Gate wie
+    # ``client_create`` (STAFF_PLUS), denn genau dort wird er nachgeladen.
+    E("core:client_similar_hint", "partials-htmx", get=STAFF_PLUS),
     # M2 P7 (Refs #1058): STAFF_PLUS — bewusst enger als das Event-Partial.
     # Personen anlegen/bearbeiten ist STAFF_PLUS (``client_create``), also darf
     # auch die Feldflaeche dieses Formulars nicht tiefer aufgehen.

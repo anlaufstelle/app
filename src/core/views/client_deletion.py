@@ -108,7 +108,15 @@ class ClientRestoreView(FacilityAdminRequiredMixin, View):
 
     def post(self, request, pk):
         client = get_scoped_object(Client, request, pk=pk, is_deleted=True)
-        restore_client(client, request.user)
+        # Refs #1876: ``restore_client`` weist Merge-Tombstones ab (der
+        # konsistente Rueckweg ist das Aufheben der Zusammenfuehrung) — die
+        # Meldung gehoert auf die Seite, nicht in ein 500 (Muster
+        # ``CaseRestoreView``).
+        try:
+            restore_client(client, request.user)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            return redirect("core:client_trash")
         messages.success(request, _("Person wiederhergestellt."))
         return redirect("core:client_detail", pk=pk)
 
@@ -145,7 +153,10 @@ class ClientTrashView(FacilityAdminRequiredMixin, View):
         clients = (
             Client.objects.for_facility(facility)
             .filter(is_deleted=True)
-            .select_related("deleted_by")
+            # ``merged_into`` (Refs #1876): der Papierkorb weist Merge-
+            # Tombstones als „zusammengeführt in …" aus — die Betreuung muss
+            # sehen, WOHIN die Akte ging.
+            .select_related("deleted_by", "merged_into")
             .order_by("-deleted_at")
         )
         return render(

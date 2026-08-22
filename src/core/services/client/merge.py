@@ -334,6 +334,23 @@ def _validate_merge(source, target, *, ignore_request=None):
             raise ValidationError(
                 _("Für eine der beiden Personen läuft bereits ein Lösch- oder Zusammenführungs-Antrag.")
             )
+    # Ketten-Guard (Review-Befund zu ADR-045, Entscheid 2): Traegt die QUELLE
+    # einen noch unredigierten Tombstone (A→B liegt im Undo-Fenster), wuerde
+    # B→C das Undo-Versprechen still brechen — ``unmerge_client(A)`` traefe
+    # mit seinen Inventar-Updates (Filter ``client=target``) 0 Zeilen, weil
+    # die Daten laengst bei C liegen, und A kaeme als leeres, aktives Duplikat
+    # zurueck. Erst aufheben oder die Redaktion des Tombstones abwarten
+    # (``is_active=False`` — dessen Undo ist dann ohnehin abgewiesen, die
+    # Kette darf weiterwachsen). Das ZIEL darf Tombstones tragen: deren
+    # Inventar bleibt beim Ziel, LIFO-Undo traegt (Testbeleg
+    # ``TestChainMerge``).
+    if source.merged_sources.filter(is_active=True).exists():
+        raise ValidationError(
+            _(
+                "Diese Person trägt eine noch rückgängig machbare Zusammenführung — "
+                "erst aufheben oder den Ablauf der Papierkorb-Frist abwarten."
+            )
+        )
 
 
 def _assert_event_case_consistency(*clients):
@@ -586,6 +603,19 @@ def unmerge_client(source, user):
     if not source.is_active:
         raise ValidationError(
             _("Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar.")
+        )
+    # Abwehr in der Tiefe zum Ketten-Guard in ``_validate_merge`` (fuer Alt-/
+    # Reparaturzustaende, die nicht ueber die Service-Wege entstanden sind):
+    # ist das Ziel seinerseits Merge-Tombstone, liegen die gewanderten Daten
+    # nicht mehr dort — die Inventar-Updates traefen 0 Zeilen und stellten die
+    # Quelle als leeres Duplikat wieder her. LIFO gilt: erst die juengere
+    # Zusammenfuehrung aufheben.
+    if target.merged_into_id is not None:
+        raise ValidationError(
+            _(
+                "Die Ziel-Person wurde ihrerseits zusammengeführt — "
+                "zuerst deren Zusammenführung aufheben (jüngste zuerst)."
+            )
         )
     inventory = _merge_inventory(source)
     moved_cases = inventory.get("moved_cases", [])

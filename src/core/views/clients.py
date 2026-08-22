@@ -34,6 +34,7 @@ from core.services.client import (
     export_client_data_pdf,
     get_pending_deletion_request,
     pending_deletion_client_ids,
+    pending_merge_client_ids,
     track_client_visit,
     update_client,
 )
@@ -272,6 +273,9 @@ class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, 
             # Refs #1736 (A): Badge „Löschung beantragt" in der Liste — eine
             # Query fuer die gerade sichtbare Seite, nicht je Zeile.
             "pending_deletion_client_ids": pending_deletion_client_ids(facility, clients),
+            # Refs #1876: Merge-Antraege sind eine Teilmenge davon — die
+            # Liste nennt sie beim Namen („Zusammenführung beantragt").
+            "pending_merge_client_ids": pending_merge_client_ids(facility, clients),
             "q": self.get_search_term(request),
             "selected_stage": request.GET.get("stage"),
             "selected_age": request.GET.get("age"),

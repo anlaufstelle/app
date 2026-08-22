@@ -423,3 +423,87 @@ class TestUnmerge:
     def test_unmerge_requires_merge_tombstone(self, source, lead_user):
         with pytest.raises(ValidationError):
             unmerge_client(source, lead_user)
+
+
+class TestChainMerge:
+    """Ketten-Merges duerfen das Undo-Versprechen nicht still brechen (ADR-045).
+
+    A→B und danach B→C liesse ``unmerge_client(A)`` fehlerfrei durchlaufen,
+    obwohl die Inventar-Updates (Filter ``client=target``) 0 Zeilen treffen —
+    A kaeme als leeres Duplikat zurueck, waehrend die Daten bei C liegen.
+    Deshalb: solange eine Person einen unredigierten Tombstone traegt, ist sie
+    selbst keine zulaessige QUELLE; und ``unmerge_client`` weist ein Ziel ab,
+    das seinerseits zusammengefuehrt wurde (Legacy-/Reparaturzustaende).
+    """
+
+    @pytest.fixture
+    def third(self, facility, staff_user):
+        return Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Merge-Drittakte",
+            created_by=staff_user,
+        )
+
+    def test_direct_chain_merge_is_blocked(self, source, target, third, lead_user):
+        merge_clients(source, target, lead_user)
+        with pytest.raises(ValidationError):
+            merge_clients(target, third, lead_user)
+
+    def test_requested_chain_merge_is_blocked(self, source, target, third, staff_user, lead_user):
+        merge_clients(source, target, lead_user)
+        with pytest.raises(ValidationError):
+            request_client_merge(target, third, staff_user, reason="Kette")
+
+    def test_merge_into_tombstone_carrier_stays_allowed_and_undoable(
+        self, facility, source, target, third, doc_type_contact, staff_user, lead_user
+    ):
+        """C→B bleibt erlaubt, wenn B Tombstones TRAEGT — das Inventar von A
+        liegt weiterhin bei B, LIFO-Undo funktioniert nachweislich."""
+        ev = _event(facility, source, doc_type_contact, staff_user)
+        merge_clients(source, target, lead_user)
+        merge_clients(third, target, lead_user)
+
+        source.refresh_from_db()
+        unmerge_client(source, lead_user)
+
+        ev.refresh_from_db()
+        source.refresh_from_db()
+        assert ev.client_id == source.pk
+        assert source.is_deleted is False
+
+    def test_chain_merge_allowed_after_tombstone_redaction(
+        self, facility, source, target, third, settings_obj, lead_user
+    ):
+        merge_clients(source, target, lead_user)
+        Client.objects.filter(pk=source.pk).update(
+            deleted_at=timezone.now() - timedelta(days=settings_obj.client_trash_days + 1)
+        )
+        anonymize_eligible_soft_deleted_clients(facility, settings_obj)
+
+        result = merge_clients(target, third, lead_user)
+
+        assert result.pk == third.pk
+
+    def test_unmerge_refuses_when_target_is_itself_merged(
+        self, facility, source, target, third, doc_type_contact, staff_user, lead_user
+    ):
+        """Abwehr in der Tiefe fuer Alt-/Reparaturzustaende: liegt das Ziel
+        selbst als Merge-Tombstone vor, wanderte nichts zurueck — der Aufruf
+        muss scheitern statt ein leeres Duplikat wiederzubeleben."""
+        ev = _event(facility, source, doc_type_contact, staff_user)
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        # Kettenzustand direkt herstellen (der Validierungs-Guard verhindert
+        # ihn ueber die Service-Wege) — Simulation eines Alt-Datenbestands.
+        target.merged_into = third
+        target.save(update_fields=["merged_into"])
+        target.soft_delete(user=lead_user)
+        Event.objects.filter(pk=ev.pk).update(client=third)
+
+        with pytest.raises(ValidationError):
+            unmerge_client(source, lead_user)
+
+        source.refresh_from_db()
+        assert source.is_deleted is True
+        assert source.merged_into_id == target.pk

@@ -954,6 +954,29 @@ def pending_deletion_client_ids(facility, clients) -> set:
     )
 
 
+def pending_merge_client_ids(facility, clients) -> set:
+    """PKs derjenigen ``clients``, für die ein PENDING-**Merge**-Antrag läuft.
+
+    Refs #1876: Teilmenge von :func:`pending_deletion_client_ids` (derselbe
+    Antragstyp, gesetztes ``merge_into``) — die Personenliste soll die
+    Antragsart beim Namen nennen statt jede Zusammenführung als „Löschung
+    beantragt" auszuweisen.
+    """
+    ids = [c.pk for c in clients]
+    if not ids:
+        return set()
+    return set(
+        DeletionRequest.objects.for_facility(facility)
+        .filter(
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id__in=ids,
+            status=DeletionRequest.Status.PENDING,
+            merge_into__isnull=False,
+        )
+        .values_list("target_id", flat=True)
+    )
+
+
 def request_client_deletion(client, user, reason):
     """Stellt einen Vier-Augen-Löschantrag für eine Person.
 

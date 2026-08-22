@@ -25,16 +25,45 @@
             <tbody>
                 {% for client in clients %}
                 <tr class="border-t border-subtle">
-                    <td class="px-3 py-2 font-medium">{{ client.pseudonym }}</td>
+                    <td class="px-3 py-2 font-medium">
+                        {{ client.pseudonym }}
+                        {% comment %}Refs #1876: ein Merge-Tombstone ist keine
+                        gewoehnliche Loeschung — die Betreuung muss sehen,
+                        WOHIN die Akte ging (ADR-045, Entscheid 2).{% endcomment %}
+                        {% if client.merged_into_id %}
+                        <span class="block text-[12px] font-normal text-ink-muted" data-testid="client-trash-merged-into">
+                            {% trans "zusammengeführt in" %}
+                            {% if client.merged_into.is_deleted %}
+                            {{ client.merged_into.pseudonym }}
+                            {% else %}
+                            <a href="{% url 'core:client_detail' pk=client.merged_into.pk %}" class="text-accent hover:underline">{{ client.merged_into.pseudonym }}</a>
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    </td>
                     <td class="px-3 py-2">{{ client.deleted_at|date:"DATETIME_FORMAT" }}</td>
                     <td class="px-3 py-2">{{ client.deleted_by.display_name|default:client.deleted_by.username|default:"–" }}</td>
                     <td class="px-3 py-2 text-right whitespace-nowrap">
+                        {% if client.merged_into_id %}
+                        {% comment %}Kein „Wiederherstellen" fuer Tombstones —
+                        der Service weist es ab (Restore ohne Rueckwanderung
+                        waere Duplikat + Datenverlust); der konsistente
+                        Rueckweg ist das Aufheben der Zusammenfuehrung.{% endcomment %}
+                        <form method="post" action="{% url 'core:client_unmerge' pk=client.pk %}" class="inline"
+                              data-confirm="{% blocktrans with pseudonym=client.pseudonym target=client.merged_into.pseudonym %}Zusammenführung von „{{ pseudonym }}“ in „{{ target }}“ aufheben? Die gewanderten Ereignisse, Fälle, Aufgaben und übernommenen Anhänge kehren zurück; seit der Zusammenführung neu erfasste Einträge bleiben bei „{{ target }}“.{% endblocktrans %}">
+                            {% csrf_token %}
+                            <button type="submit" class="text-accent text-sm font-medium hover:underline" data-testid="client-unmerge-btn">
+                                {% trans "Zusammenführung aufheben" %}
+                            </button>
+                        </form>
+                        {% else %}
                         <form method="post" action="{% url 'core:client_restore' pk=client.pk %}" class="inline">
                             {% csrf_token %}
                             <button type="submit" class="text-accent text-sm font-medium hover:underline">
                                 {% trans "Wiederherstellen" %}
                             </button>
                         </form>
+                        {% endif %}
                         {# Refs #1737 (B): Ausweg aus einer Lösch-Blockade ohne Datenresurrektion #}
                         {# und ohne Warten auf die Papierkorb-Frist. Bestätigung via #}
                         {# data-confirm (confirm-action.js, CSP-konform). #}

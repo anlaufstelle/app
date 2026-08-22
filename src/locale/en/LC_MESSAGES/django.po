@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 16:03+0200\n"
+"POT-Creation-Date: 2026-08-22 17:18+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11224,3 +11224,216 @@ msgstr "This person is not merged."
 #: src/core/services/client/merge.py:581
 msgid "Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar."
 msgstr "The source has already been permanently anonymized — the merge can no longer be undone."
+
+#: src/core/services/client/merge.py:350
+msgid "Diese Person trägt eine noch rückgängig machbare Zusammenführung — erst aufheben oder den Ablauf der Papierkorb-Frist abwarten."
+msgstr "This person carries a merge that can still be undone — undo it first or wait for the trash retention period to expire."
+
+#: src/core/services/client/merge.py:616
+msgid "Die Ziel-Person wurde ihrerseits zusammengeführt — zuerst deren Zusammenführung aufheben (jüngste zuerst)."
+msgstr "The target person has been merged in turn — undo that merge first (most recent first)."
+
+#: src/core/views/client_merge.py:172
+msgid "Für diese Person läuft bereits ein Lösch- oder Zusammenführungs-Antrag — er wartet auf Bestätigung. Es wurde nichts Neues angelegt."
+msgstr "A deletion or merge request is already pending for this person — it is awaiting confirmation. Nothing new was created."
+
+#: src/core/views/client_merge.py:180
+msgid "Bitte zuerst eine Ziel-Person auswählen."
+msgstr "Please select a target person first."
+
+#: src/core/views/client_merge.py:190
+msgid "Personen zusammengeführt. Die aufgelöste Akte liegt bis zum Ablauf der Papierkorb-Frist im Papierkorb — bis dahin lässt sich die Zusammenführung aufheben."
+msgstr "Persons merged. The dissolved record stays in the trash until the trash retention period expires — until then the merge can be undone."
+
+#: src/core/views/client_merge.py:208
+msgid "Zusammenführungs-Antrag gestellt. Er erscheint in der Löschanträge-Liste und muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden."
+msgstr "Merge request submitted. It appears in the deletion requests list and must be confirmed by a second person holding the \"Deletion confirmation\" right."
+
+#: src/core/views/client_merge.py:236
+msgid "Zusammenführung aufgehoben — die Person ist wiederhergestellt."
+msgstr "Merge undone — the person is restored."
+
+#: src/core/views/event_deletion.py:231
+msgid "Zusammenführungs-Antrag wurde genehmigt — die Akten sind zusammengeführt."
+msgstr "Merge request was approved — the records are merged."
+
+#: src/core/views/event_deletion.py:239
+msgid "Zusammenführungs-Antrag wurde abgelehnt."
+msgstr "Merge request was rejected."
+
+#: src/templates/core/clients/detail.html:31
+msgid "Zusammenführung beantragt"
+msgstr "Merge requested"
+
+#: src/templates/core/clients/detail.html:98
+#, python-format
+msgid "Zusammenführung in „%(target)s“ beantragt"
+msgstr "Merge into \"%(target)s\" requested"
+
+#: src/templates/core/clients/merge_confirm.html:4
+#: src/templates/core/clients/merge_confirm.html:10
+msgid "Personen zusammenführen"
+msgstr "Merge persons"
+
+#: src/templates/core/clients/merge_confirm.html:17
+#, python-format
+msgid "Für diese Person läuft bereits ein Zusammenführungs-Antrag vom %(datum)s (gestellt von %(person)s). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich."
+msgstr "A merge request from %(datum)s (submitted by %(person)s) is already pending for this person. It is awaiting confirmation by a second authorized person; another request is not possible."
+
+#: src/templates/core/clients/merge_confirm.html:19
+#, python-format
+msgid "Für diese Person läuft bereits ein Löschantrag vom %(datum)s (gestellt von %(person)s). Solange er offen ist, kann sie nicht zusammengeführt werden."
+msgstr "A deletion request from %(datum)s (submitted by %(person)s) is already pending for this person. While it is open, the person cannot be merged."
+
+#: src/templates/core/clients/merge_confirm.html:31
+#, python-format
+msgid "Die Akte <strong>%(source)s</strong> wird in <strong>%(target_p)s</strong> aufgelöst: Ereignisse, Fälle, Aufgaben und übernommene Anhänge wandern zur verbleibenden Akte; Zusatzangaben der aufgelösten Akte füllen nur leere Felder."
+msgstr "The record <strong>%(source)s</strong> is dissolved into <strong>%(target_p)s</strong>: events, cases, tasks and adopted attachments move to the remaining record; additional details of the dissolved record only fill empty fields."
+
+#: src/templates/core/clients/merge_confirm.html:39
+msgid "wird aufgelöst"
+msgstr "is dissolved"
+
+#: src/templates/core/clients/merge_confirm.html:40
+msgid "bleibt bestehen"
+msgstr "remains"
+
+#: src/templates/core/clients/merge_confirm.html:75
+#: src/templates/core/clients/merge_review.html:95
+msgid "Anhänge"
+msgstr "Attachments"
+
+#: src/templates/core/clients/merge_confirm.html:85
+#, python-format
+msgid "Kontaktstufe: die höchste gewinnt — <strong>%(target_p)s</strong> wird dabei auf „Mit Zusatzangaben“ hochgestuft (eine stille Herabstufung wäre eine Schutzlücke)."
+msgstr "Contact stage: the highest wins — <strong>%(target_p)s</strong> is upgraded to \"With additional details\" (a silent downgrade would be a protection gap)."
+
+#: src/templates/core/clients/merge_confirm.html:91
+msgid "Statistik: Live-Auswertungen zählen danach eine Person weniger — auch rückwirkend. Bereits eingefrorene Monats-Berichte behalten ihre alte Zahl; ein damit abgegebener Sachbericht lässt sich aus den Live-Daten nicht mehr reproduzieren."
+msgstr "Statistics: live evaluations will count one person less afterwards — retroactively, too. Monthly reports that are already frozen keep their old number; an activity report submitted with them can no longer be reproduced from the live data."
+
+#: src/templates/core/clients/merge_confirm.html:96
+#, python-format
+msgid "Die aufgelöste Akte „%(source)s“ liegt danach mit einem Verweis auf ihr Ziel im Papierkorb. Bis zum Ablauf der Papierkorb-Frist lässt sich die Zusammenführung vollständig aufheben — danach wird sie automatisch anonymisiert und die Zusammenführung ist unumkehrbar."
+msgstr "Afterwards, the dissolved record \"%(source)s\" stays in the trash with a reference to its target. Until the trash retention period expires, the merge can be fully undone — after that the record is automatically anonymized and the merge is irreversible."
+
+#: src/templates/core/clients/merge_confirm.html:102
+msgid "Vier-Augen-Prinzip — mindestens eine der beiden Personen ist „Mit Zusatzangaben“ geführt. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt."
+msgstr "Four-eyes principle — at least one of the two persons is kept \"With additional details\". Your request must be confirmed by a second person holding the \"Deletion confirmation\" right; only then are the records merged."
+
+#: src/templates/core/clients/merge_confirm.html:104
+msgid "Direkt zusammenführen darf nur die Leitung. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt."
+msgstr "Only the lead may merge directly. Your request must be confirmed by a second person holding the \"Deletion confirmation\" right; only then are the records merged."
+
+#: src/templates/core/clients/merge_confirm.html:129
+msgid "Jetzt zusammenführen"
+msgstr "Merge now"
+
+#: src/templates/core/clients/merge_confirm.html:146
+msgid "z.B. dieselbe Person wurde unter zwei Schreibweisen angelegt"
+msgstr "e.g. the same person was created under two spellings"
+
+#: src/templates/core/clients/merge_confirm.html:150
+msgid "Zusammenführungs-Antrag stellen"
+msgstr "Submit merge request"
+
+#: src/templates/core/clients/merge_confirm.html:165
+#, python-format
+msgid "Wählen Sie die Person, in die <strong>%(source)s</strong> aufgelöst werden soll — also die Akte, die bestehen bleibt. Im nächsten Schritt zeigt eine Übersicht beide Akten im Vergleich."
+msgstr "Select the person into which <strong>%(source)s</strong> is to be dissolved — that is, the record that remains. The next step shows both records side by side."
+
+#: src/templates/core/clients/merge_confirm.html:174
+msgid "Pseudonym der Ziel-Person suchen..."
+msgstr "Search for the target person's pseudonym..."
+
+#: src/templates/core/clients/merge_confirm.html:175
+msgid "Pseudonym der Ziel-Person suchen"
+msgstr "Search for the target person's pseudonym"
+
+#: src/templates/core/clients/merge_confirm.html:182
+msgid "Suchen"
+msgstr "Search"
+
+#: src/templates/core/clients/merge_review.html:4
+#: src/templates/core/clients/merge_review.html:9
+msgid "Zusammenführungs-Antrag prüfen"
+msgstr "Review merge request"
+
+#: src/templates/core/clients/merge_review.html:30
+msgid "Beantragte Zusammenführung"
+msgstr "Requested merge"
+
+#: src/templates/core/clients/merge_review.html:33
+msgid "Wird aufgelöst"
+msgstr "Is dissolved"
+
+#: src/templates/core/clients/merge_review.html:37
+msgid "Bleibt bestehen"
+msgstr "Remains"
+
+#: src/templates/core/clients/merge_review.html:43
+msgid "Kontaktstufe: die höchste gewinnt — die verbleibende Akte wird bei Genehmigung auf „Mit Zusatzangaben“ hochgestuft."
+msgstr "Contact stage: the highest wins — upon approval, the remaining record is upgraded to \"With additional details\"."
+
+#: src/templates/core/clients/merge_review.html:47
+msgid "Bei Genehmigung wandern Ereignisse, Fälle, Aufgaben und übernommene Anhänge zur verbleibenden Akte; die aufgelöste Akte liegt mit Verweis auf ihr Ziel im Papierkorb und lässt sich bis zum Fristablauf per Aufheben zurückholen. Eingefrorene Statistik-Berichte behalten ihre alte Personenzahl."
+msgstr "Upon approval, events, cases, tasks and adopted attachments move to the remaining record; the dissolved record stays in the trash with a reference to its target and can be brought back by undoing the merge until the retention period expires. Frozen statistics reports keep their old person count."
+
+#: src/templates/core/clients/merge_review.html:57
+#: src/templates/core/clients/merge_review.html:64
+msgid "Bestand der beiden Akten"
+msgstr "Contents of the two records"
+
+#: src/templates/core/clients/merge_review.html:59
+msgid "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab."
+msgstr "The record counts (cases, events, attachments) are not visible to your role. You can decide the request based on the requester and the reason given; anyone who needs the numbers hands the confirmation over to a social worker."
+
+#: src/templates/core/clients/merge_review.html:106
+msgid "Sie haben diesen Antrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
+msgstr "You submitted this request yourself. Approval must be given by a second authorized person (four-eyes principle)."
+
+#: src/templates/core/clients/partials/_actions.html:74
+msgid "Mit Duplikat zusammenführen"
+msgstr "Merge with duplicate"
+
+#: src/templates/core/clients/partials/_similar_hint.html:11
+msgid "Ähnliche Person existiert bereits — bitte kurz prüfen, bevor ein Duplikat entsteht:"
+msgstr "A similar person already exists — please check briefly before creating a duplicate:"
+
+#: src/templates/core/clients/partials/delete_request_action.html:17
+msgid "Ein Zusammenführungs-Antrag wartet bereits auf Bestätigung."
+msgstr "A merge request is already awaiting confirmation."
+
+#: src/templates/core/clients/partials/delete_request_action.html:19
+msgid "Zusammenführungs-Antrag läuft"
+msgstr "Merge request pending"
+
+#: src/templates/core/clients/partials/merge_search_results.html:15
+#, python-format
+msgid "angelegt am %(datum)s"
+msgstr "created on %(datum)s"
+
+#: src/templates/core/clients/partials/merge_search_results.html:27
+msgid "Keine passende Person gefunden — auch nicht mit ähnlicher Schreibweise."
+msgstr "No matching person found — not even with a similar spelling."
+
+#: src/templates/core/clients/trash.html:36
+msgid "zusammengeführt in"
+msgstr "merged into"
+
+#: src/templates/core/clients/trash.html:55
+#, python-format
+msgid "Zusammenführung von „%(pseudonym)s“ in „%(target)s“ aufheben? Die gewanderten Ereignisse, Fälle, Aufgaben und übernommenen Anhänge kehren zurück; seit der Zusammenführung neu erfasste Einträge bleiben bei „%(target)s“."
+msgstr "Undo the merge of \"%(pseudonym)s\" into \"%(target)s\"? The moved events, cases, tasks and adopted attachments return; entries recorded since the merge remain with \"%(target)s\"."
+
+#: src/templates/core/clients/trash.html:58
+msgid "Zusammenführung aufheben"
+msgstr "Undo merge"
+
+#: src/templates/core/deletion_requests/partials/target.html:23
+msgid "Zusammenführung"
+msgstr "Merge"
+
+#: src/templates/core/clients/partials/table.html:54
+msgid "Zusammenführungs-Antrag wartet auf Bestätigung"
+msgstr "Merge request awaiting confirmation"

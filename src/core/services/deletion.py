@@ -64,6 +64,9 @@ def annotate_deletion_targets(requests, facility, user) -> None:
         return
 
     client_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CLIENT]
+    # Merge-Antraege (Refs #1876): das Ziel der Zusammenfuehrung haengt an
+    # derselben Bulk-Query — die Liste soll zeigen, WOHIN aufgeloest wuerde.
+    client_ids += [r.merge_into_id for r in requests if r.merge_into_id is not None]
     event_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.EVENT]
     case_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CASE]
 
@@ -88,6 +91,19 @@ def annotate_deletion_targets(requests, facility, user) -> None:
     )
 
     for dr in requests:
+        # Merge-Ziel (Refs #1876): Label + Link fuer „→ <Ziel>" in der Liste;
+        # gleiche fail-closed-Regeln wie das Antragsziel selbst.
+        dr.merge_target_label = ""
+        dr.merge_target_url = ""
+        if dr.merge_into_id is not None:
+            merge_target = clients.get(dr.merge_into_id)
+            if merge_target is None:
+                dr.merge_target_label = _("Person (nicht mehr auffindbar)")
+            else:
+                dr.merge_target_label = merge_target.pseudonym
+                dr.merge_target_url = (
+                    "" if merge_target.is_deleted else reverse("core:client_detail", args=[merge_target.pk])
+                )
         if dr.target_type == DeletionRequest.TargetType.CLIENT:
             target = clients.get(dr.target_id)
             if target is None:

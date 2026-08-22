@@ -46,7 +46,15 @@
                                 {% trans "Offline" %}
                             </span>
                             {# Refs #1736 (A): laufender Vier-Augen-Löschantrag. #}
-                            {% if client.pk in pending_deletion_client_ids %}
+                            {# Refs #1876: Merge-Antraege laufen als derselbe   #}
+                            {# Antragstyp — die Liste nennt die Art beim Namen. #}
+                            {% if client.pk in pending_merge_client_ids %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-semibold bg-amber-100 text-amber-800 flex-shrink-0"
+                                  data-testid="client-row-merge-pending-badge"
+                                  title="{% trans 'Zusammenführungs-Antrag wartet auf Bestätigung' %}">
+                                {% trans "Zusammenführung beantragt" %}
+                            </span>
+                            {% elif client.pk in pending_deletion_client_ids %}
                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-semibold bg-amber-100 text-amber-800 flex-shrink-0"
                                   data-testid="client-row-deletion-pending-badge"
                                   title="{% trans 'Löschantrag wartet auf Bestätigung' %}">

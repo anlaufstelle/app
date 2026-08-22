@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Zusammenführungs-Antrag prüfen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg" data-testid="merge-review-page">
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Zusammenführungs-Antrag prüfen" %}</h1>
+
+    {# Antrag-Info — Aufbau wie die Loesch-Pruefseiten. #}
+    <div class="card p-4 mb-4">
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Beantragt von" %}</dt>
+                <dd class="font-medium">{% if deletion_request.requested_by %}{{ deletion_request.requested_by.display_name|default:deletion_request.requested_by.username }}{% else %}–{% endif %}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-ink-muted">{% trans "Beantragt am" %}</dt>
+                <dd class="font-medium">{{ deletion_request.created_at|date:"DATETIME_FORMAT" }}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted mb-1">{% trans "Begründung" %}</dt>
+                <dd class="font-medium">{{ deletion_request.reason }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <div class="card p-4 mb-4">
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Beantragte Zusammenführung" %}</h2>
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between items-center gap-2">
+                <dt class="text-ink-muted">{% trans "Wird aufgelöst" %}</dt>
+                <dd class="font-medium flex items-center gap-2">{{ client.pseudonym }} {% include "components/_client_badge.html" with client=client %}</dd>
+            </div>
+            <div class="flex justify-between items-center gap-2">
+                <dt class="text-ink-muted">{% trans "Bleibt bestehen" %}</dt>
+                <dd class="font-medium flex items-center gap-2">{{ merge_target.pseudonym }} {% include "components/_client_badge.html" with client=merge_target %}</dd>
+            </div>
+        </dl>
+        {% if stage_upgraded %}
+        <p class="text-[13px] text-ink-soft mt-3" data-testid="merge-stage-upgrade-hint">
+            {% trans "Kontaktstufe: die höchste gewinnt — die verbleibende Akte wird bei Genehmigung auf „Mit Zusatzangaben“ hochgestuft." %}
+        </p>
+        {% endif %}
+        <p class="text-xs text-ink-muted mt-3">
+            {% trans "Bei Genehmigung wandern Ereignisse, Fälle, Aufgaben und übernommene Anhänge zur verbleibenden Akte; die aufgelöste Akte liegt mit Verweis auf ihr Ziel im Papierkorb und lässt sich bis zum Fristablauf per Aufheben zurückholen. Eingefrorene Statistik-Berichte behalten ihre alte Personenzahl." %}
+        </p>
+    </div>
+
+    {# Bestandszahlen — nur fuer Rollen mit Fall-Domaene (fail-closed wie      #}
+    {# ``may_see_case`` in der Fall-Pruefseite, Refs #1818): die Zahlen        #}
+    {# zaehlen Faelle, die die Assistenz nirgendwo sonst sieht. Entscheidung   #}
+    {# bleibt ihr moeglich — anhand Antragsteller:in und Begruendung.          #}
+    {% if not may_see_inventory %}
+    <div class="card p-4 mb-5" data-testid="merge-review-not-visible">
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Bestand der beiden Akten" %}</h2>
+        <p class="text-[13px] text-ink-muted">
+            {% trans "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab." %}
+        </p>
+    </div>
+    {% else %}
+    <div class="card p-4 mb-5 overflow-x-auto">
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Bestand der beiden Akten" %}</h2>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left">
+                    <th class="pb-2"></th>
+                    <th class="pb-2 font-bold text-ink">{{ client.pseudonym }}</th>
+                    <th class="pb-2 font-bold text-ink">{{ merge_target.pseudonym }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Angelegt am" %}</td>
+                    <td class="py-1.5 pr-2">{{ client.created_at|date:"DATE_FORMAT" }}</td>
+                    <td class="py-1.5">{{ merge_target.created_at|date:"DATE_FORMAT" }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Letzter Kontakt" %}</td>
+                    <td class="py-1.5 pr-2">{{ source_facts.last_contact|date:"DATE_FORMAT"|default:"–" }}</td>
+                    <td class="py-1.5">{{ target_facts.last_contact|date:"DATE_FORMAT"|default:"–" }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Ereignisse" %}</td>
+                    <td class="py-1.5 pr-2" data-testid="merge-source-events">{{ source_facts.events }}</td>
+                    <td class="py-1.5" data-testid="merge-target-events">{{ target_facts.events }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Fälle" %}</td>
+                    <td class="py-1.5 pr-2" data-testid="merge-source-cases">{{ source_facts.cases }}</td>
+                    <td class="py-1.5" data-testid="merge-target-cases">{{ target_facts.cases }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Anhänge" %}</td>
+                    <td class="py-1.5 pr-2" data-testid="merge-source-attachments">{{ source_facts.attachments }}</td>
+                    <td class="py-1.5" data-testid="merge-target-attachments">{{ target_facts.attachments }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if deletion_request.requested_by == request.user %}
+    <p class="text-sm text-ink-muted italic" data-testid="deletion-own-request-hint">
+        {% trans "Sie haben diesen Antrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)." %}
+    </p>
+    {% else %}
+    <form method="post" class="flex items-center space-x-3">
+        {% csrf_token %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        <button type="submit" name="action" value="approve" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
+            {% trans "Genehmigen" %}
+        </button>
+        <button type="submit" name="action" value="reject" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+            {% trans "Ablehnen" %}
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

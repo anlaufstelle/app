@@ -1,0 +1,22 @@
+{% load i18n %}
+{% comment %}
+    Nicht-blockierender Duplikat-Hinweis im Personen-Anlagepfad (Refs #1876).
+    HTMX-Swap-Ziel unter dem Pseudonym-Feld in ``core/clients/form.html`` —
+    reine Information, kein Zwischenschritt: der Streetwork-Alltag braucht
+    schnelle Anlage. Parameter: ``similar`` (Liste, ggf. leer).
+{% endcomment %}
+{% if similar %}
+<div class="bg-amber-50 border border-amber-200 rounded-[10px] p-3" role="status" data-testid="client-similar-hint">
+    <p class="text-[13px] text-amber-800 mb-1">
+        {% trans "Ähnliche Person existiert bereits — bitte kurz prüfen, bevor ein Duplikat entsteht:" %}
+    </p>
+    <ul class="space-y-0.5">
+        {% for candidate in similar %}
+        <li class="flex items-center gap-2 flex-wrap">
+            <a href="{% url 'core:client_detail' pk=candidate.pk %}" class="text-[13px] font-medium text-accent hover:underline" data-testid="client-similar-link">{{ candidate.pseudonym }}</a>
+            {% include "components/_client_badge.html" with client=candidate %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

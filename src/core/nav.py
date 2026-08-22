@@ -859,6 +859,7 @@ VIEW_PROVIDED_BACKLINK: dict[str, str] = {
     "episode_update": "wie episode_create.",
     "rectification_create": "Antrag wird AUS der Personenakte gestellt (clients/<pk>/rectification/new/).",
     "client_delete_request": "Löschantrag wird aus der Personenakte gestellt (clients/<pk>/delete-request/).",
+    "client_merge": "Zusammenführung wird aus der Personenakte betreten (clients/<pk>/merge/).",
     "case_delete_request": "Löschweg wird aus der Fallakte betreten (cases/<pk>/delete/) — Rücklink ist der Fallname.",
     "event_update": "Bearbeiten kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
     "event_delete": "Lösch-Bestätigung kehrt zum Ereignis zurück, nicht in den Zeitstrom.",

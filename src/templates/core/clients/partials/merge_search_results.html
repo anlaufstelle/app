@@ -1,0 +1,29 @@
+{% load i18n %}
+{% comment %}
+    Trefferliste der Ziel-Suche (Refs #1876) — HTMX-Swap-Ziel von
+    ``merge_confirm.html`` (Suchschritt). Teilstring-Treffer zuerst, dahinter
+    Trigramm-Ähnliche (``search_similar_clients``, Facility-Schwelle).
+    Parameter: ``client`` (Quelle), ``results``, ``q``.
+{% endcomment %}
+{% if results %}
+<ul class="border border-subtle rounded-[10px] divide-y divide-subtle bg-surface" data-testid="merge-search-results-list">
+    {% for candidate in results %}
+    <li class="flex items-center justify-between gap-3 px-3 py-2.5">
+        <span class="flex items-center gap-2 flex-wrap min-w-0">
+            <span class="text-sm font-medium text-ink truncate">{{ candidate.pseudonym }}</span>
+            {% include "components/_client_badge.html" with client=candidate %}
+            <span class="text-[12px] text-ink-muted">{% blocktrans with datum=candidate.created_at|date:"DATE_FORMAT" %}angelegt am {{ datum }}{% endblocktrans %}</span>
+        </span>
+        <a href="{% url 'core:client_merge' pk=client.pk %}?target={{ candidate.pk }}"
+           class="text-sm text-accent font-medium hover:underline whitespace-nowrap"
+           data-testid="merge-target-choose">
+            {% trans "Auswählen" %}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+{% elif q %}
+<p class="text-sm text-ink-muted italic" data-testid="merge-search-empty">
+    {% trans "Keine passende Person gefunden — auch nicht mit ähnlicher Schreibweise." %}
+</p>
+{% endif %}

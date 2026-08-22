@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 16:03+0200\n"
+"POT-Creation-Date: 2026-08-22 17:18+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11323,3 +11323,216 @@ msgstr "Diese Person ist nicht zusammengeführt."
 #: src/core/services/client/merge.py:581
 msgid "Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar."
 msgstr "Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar."
+
+#: src/core/services/client/merge.py:350
+msgid "Diese Person trägt eine noch rückgängig machbare Zusammenführung — erst aufheben oder den Ablauf der Papierkorb-Frist abwarten."
+msgstr "Diese Person trägt eine noch rückgängig machbare Zusammenführung — erst aufheben oder den Ablauf der Papierkorb-Frist abwarten."
+
+#: src/core/services/client/merge.py:616
+msgid "Die Ziel-Person wurde ihrerseits zusammengeführt — zuerst deren Zusammenführung aufheben (jüngste zuerst)."
+msgstr "Die Ziel-Person wurde ihrerseits zusammengeführt — zuerst deren Zusammenführung aufheben (jüngste zuerst)."
+
+#: src/core/views/client_merge.py:172
+msgid "Für diese Person läuft bereits ein Lösch- oder Zusammenführungs-Antrag — er wartet auf Bestätigung. Es wurde nichts Neues angelegt."
+msgstr "Für diese Person läuft bereits ein Lösch- oder Zusammenführungs-Antrag — er wartet auf Bestätigung. Es wurde nichts Neues angelegt."
+
+#: src/core/views/client_merge.py:180
+msgid "Bitte zuerst eine Ziel-Person auswählen."
+msgstr "Bitte zuerst eine Ziel-Person auswählen."
+
+#: src/core/views/client_merge.py:190
+msgid "Personen zusammengeführt. Die aufgelöste Akte liegt bis zum Ablauf der Papierkorb-Frist im Papierkorb — bis dahin lässt sich die Zusammenführung aufheben."
+msgstr "Personen zusammengeführt. Die aufgelöste Akte liegt bis zum Ablauf der Papierkorb-Frist im Papierkorb — bis dahin lässt sich die Zusammenführung aufheben."
+
+#: src/core/views/client_merge.py:208
+msgid "Zusammenführungs-Antrag gestellt. Er erscheint in der Löschanträge-Liste und muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden."
+msgstr "Zusammenführungs-Antrag gestellt. Er erscheint in der Löschanträge-Liste und muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden."
+
+#: src/core/views/client_merge.py:236
+msgid "Zusammenführung aufgehoben — die Person ist wiederhergestellt."
+msgstr "Zusammenführung aufgehoben — die Person ist wiederhergestellt."
+
+#: src/core/views/event_deletion.py:231
+msgid "Zusammenführungs-Antrag wurde genehmigt — die Akten sind zusammengeführt."
+msgstr "Zusammenführungs-Antrag wurde genehmigt — die Akten sind zusammengeführt."
+
+#: src/core/views/event_deletion.py:239
+msgid "Zusammenführungs-Antrag wurde abgelehnt."
+msgstr "Zusammenführungs-Antrag wurde abgelehnt."
+
+#: src/templates/core/clients/detail.html:31
+msgid "Zusammenführung beantragt"
+msgstr "Zusammenführung beantragt"
+
+#: src/templates/core/clients/detail.html:98
+#, python-format
+msgid "Zusammenführung in „%(target)s“ beantragt"
+msgstr "Zusammenführung in „%(target)s“ beantragt"
+
+#: src/templates/core/clients/merge_confirm.html:4
+#: src/templates/core/clients/merge_confirm.html:10
+msgid "Personen zusammenführen"
+msgstr "Personen zusammenführen"
+
+#: src/templates/core/clients/merge_confirm.html:17
+#, python-format
+msgid "Für diese Person läuft bereits ein Zusammenführungs-Antrag vom %(datum)s (gestellt von %(person)s). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich."
+msgstr "Für diese Person läuft bereits ein Zusammenführungs-Antrag vom %(datum)s (gestellt von %(person)s). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich."
+
+#: src/templates/core/clients/merge_confirm.html:19
+#, python-format
+msgid "Für diese Person läuft bereits ein Löschantrag vom %(datum)s (gestellt von %(person)s). Solange er offen ist, kann sie nicht zusammengeführt werden."
+msgstr "Für diese Person läuft bereits ein Löschantrag vom %(datum)s (gestellt von %(person)s). Solange er offen ist, kann sie nicht zusammengeführt werden."
+
+#: src/templates/core/clients/merge_confirm.html:31
+#, python-format
+msgid "Die Akte <strong>%(source)s</strong> wird in <strong>%(target_p)s</strong> aufgelöst: Ereignisse, Fälle, Aufgaben und übernommene Anhänge wandern zur verbleibenden Akte; Zusatzangaben der aufgelösten Akte füllen nur leere Felder."
+msgstr "Die Akte <strong>%(source)s</strong> wird in <strong>%(target_p)s</strong> aufgelöst: Ereignisse, Fälle, Aufgaben und übernommene Anhänge wandern zur verbleibenden Akte; Zusatzangaben der aufgelösten Akte füllen nur leere Felder."
+
+#: src/templates/core/clients/merge_confirm.html:39
+msgid "wird aufgelöst"
+msgstr "wird aufgelöst"
+
+#: src/templates/core/clients/merge_confirm.html:40
+msgid "bleibt bestehen"
+msgstr "bleibt bestehen"
+
+#: src/templates/core/clients/merge_confirm.html:75
+#: src/templates/core/clients/merge_review.html:95
+msgid "Anhänge"
+msgstr "Anhänge"
+
+#: src/templates/core/clients/merge_confirm.html:85
+#, python-format
+msgid "Kontaktstufe: die höchste gewinnt — <strong>%(target_p)s</strong> wird dabei auf „Mit Zusatzangaben“ hochgestuft (eine stille Herabstufung wäre eine Schutzlücke)."
+msgstr "Kontaktstufe: die höchste gewinnt — <strong>%(target_p)s</strong> wird dabei auf „Mit Zusatzangaben“ hochgestuft (eine stille Herabstufung wäre eine Schutzlücke)."
+
+#: src/templates/core/clients/merge_confirm.html:91
+msgid "Statistik: Live-Auswertungen zählen danach eine Person weniger — auch rückwirkend. Bereits eingefrorene Monats-Berichte behalten ihre alte Zahl; ein damit abgegebener Sachbericht lässt sich aus den Live-Daten nicht mehr reproduzieren."
+msgstr "Statistik: Live-Auswertungen zählen danach eine Person weniger — auch rückwirkend. Bereits eingefrorene Monats-Berichte behalten ihre alte Zahl; ein damit abgegebener Sachbericht lässt sich aus den Live-Daten nicht mehr reproduzieren."
+
+#: src/templates/core/clients/merge_confirm.html:96
+#, python-format
+msgid "Die aufgelöste Akte „%(source)s“ liegt danach mit einem Verweis auf ihr Ziel im Papierkorb. Bis zum Ablauf der Papierkorb-Frist lässt sich die Zusammenführung vollständig aufheben — danach wird sie automatisch anonymisiert und die Zusammenführung ist unumkehrbar."
+msgstr "Die aufgelöste Akte „%(source)s“ liegt danach mit einem Verweis auf ihr Ziel im Papierkorb. Bis zum Ablauf der Papierkorb-Frist lässt sich die Zusammenführung vollständig aufheben — danach wird sie automatisch anonymisiert und die Zusammenführung ist unumkehrbar."
+
+#: src/templates/core/clients/merge_confirm.html:102
+msgid "Vier-Augen-Prinzip — mindestens eine der beiden Personen ist „Mit Zusatzangaben“ geführt. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt."
+msgstr "Vier-Augen-Prinzip — mindestens eine der beiden Personen ist „Mit Zusatzangaben“ geführt. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt."
+
+#: src/templates/core/clients/merge_confirm.html:104
+msgid "Direkt zusammenführen darf nur die Leitung. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt."
+msgstr "Direkt zusammenführen darf nur die Leitung. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt."
+
+#: src/templates/core/clients/merge_confirm.html:129
+msgid "Jetzt zusammenführen"
+msgstr "Jetzt zusammenführen"
+
+#: src/templates/core/clients/merge_confirm.html:146
+msgid "z.B. dieselbe Person wurde unter zwei Schreibweisen angelegt"
+msgstr "z.B. dieselbe Person wurde unter zwei Schreibweisen angelegt"
+
+#: src/templates/core/clients/merge_confirm.html:150
+msgid "Zusammenführungs-Antrag stellen"
+msgstr "Zusammenführungs-Antrag stellen"
+
+#: src/templates/core/clients/merge_confirm.html:165
+#, python-format
+msgid "Wählen Sie die Person, in die <strong>%(source)s</strong> aufgelöst werden soll — also die Akte, die bestehen bleibt. Im nächsten Schritt zeigt eine Übersicht beide Akten im Vergleich."
+msgstr "Wählen Sie die Person, in die <strong>%(source)s</strong> aufgelöst werden soll — also die Akte, die bestehen bleibt. Im nächsten Schritt zeigt eine Übersicht beide Akten im Vergleich."
+
+#: src/templates/core/clients/merge_confirm.html:174
+msgid "Pseudonym der Ziel-Person suchen..."
+msgstr "Pseudonym der Ziel-Person suchen..."
+
+#: src/templates/core/clients/merge_confirm.html:175
+msgid "Pseudonym der Ziel-Person suchen"
+msgstr "Pseudonym der Ziel-Person suchen"
+
+#: src/templates/core/clients/merge_confirm.html:182
+msgid "Suchen"
+msgstr "Suchen"
+
+#: src/templates/core/clients/merge_review.html:4
+#: src/templates/core/clients/merge_review.html:9
+msgid "Zusammenführungs-Antrag prüfen"
+msgstr "Zusammenführungs-Antrag prüfen"
+
+#: src/templates/core/clients/merge_review.html:30
+msgid "Beantragte Zusammenführung"
+msgstr "Beantragte Zusammenführung"
+
+#: src/templates/core/clients/merge_review.html:33
+msgid "Wird aufgelöst"
+msgstr "Wird aufgelöst"
+
+#: src/templates/core/clients/merge_review.html:37
+msgid "Bleibt bestehen"
+msgstr "Bleibt bestehen"
+
+#: src/templates/core/clients/merge_review.html:43
+msgid "Kontaktstufe: die höchste gewinnt — die verbleibende Akte wird bei Genehmigung auf „Mit Zusatzangaben“ hochgestuft."
+msgstr "Kontaktstufe: die höchste gewinnt — die verbleibende Akte wird bei Genehmigung auf „Mit Zusatzangaben“ hochgestuft."
+
+#: src/templates/core/clients/merge_review.html:47
+msgid "Bei Genehmigung wandern Ereignisse, Fälle, Aufgaben und übernommene Anhänge zur verbleibenden Akte; die aufgelöste Akte liegt mit Verweis auf ihr Ziel im Papierkorb und lässt sich bis zum Fristablauf per Aufheben zurückholen. Eingefrorene Statistik-Berichte behalten ihre alte Personenzahl."
+msgstr "Bei Genehmigung wandern Ereignisse, Fälle, Aufgaben und übernommene Anhänge zur verbleibenden Akte; die aufgelöste Akte liegt mit Verweis auf ihr Ziel im Papierkorb und lässt sich bis zum Fristablauf per Aufheben zurückholen. Eingefrorene Statistik-Berichte behalten ihre alte Personenzahl."
+
+#: src/templates/core/clients/merge_review.html:57
+#: src/templates/core/clients/merge_review.html:64
+msgid "Bestand der beiden Akten"
+msgstr "Bestand der beiden Akten"
+
+#: src/templates/core/clients/merge_review.html:59
+msgid "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab."
+msgstr "Die Bestandszahlen (Fälle, Ereignisse, Anhänge) sind für Ihre Rolle nicht einsehbar. Sie können den Antrag anhand von Antragsteller:in und Begründung entscheiden; wer die Zahlen braucht, gibt die Bestätigung an eine Fachkraft ab."
+
+#: src/templates/core/clients/merge_review.html:106
+msgid "Sie haben diesen Antrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
+msgstr "Sie haben diesen Antrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
+
+#: src/templates/core/clients/partials/_actions.html:74
+msgid "Mit Duplikat zusammenführen"
+msgstr "Mit Duplikat zusammenführen"
+
+#: src/templates/core/clients/partials/_similar_hint.html:11
+msgid "Ähnliche Person existiert bereits — bitte kurz prüfen, bevor ein Duplikat entsteht:"
+msgstr "Ähnliche Person existiert bereits — bitte kurz prüfen, bevor ein Duplikat entsteht:"
+
+#: src/templates/core/clients/partials/delete_request_action.html:17
+msgid "Ein Zusammenführungs-Antrag wartet bereits auf Bestätigung."
+msgstr "Ein Zusammenführungs-Antrag wartet bereits auf Bestätigung."
+
+#: src/templates/core/clients/partials/delete_request_action.html:19
+msgid "Zusammenführungs-Antrag läuft"
+msgstr "Zusammenführungs-Antrag läuft"
+
+#: src/templates/core/clients/partials/merge_search_results.html:15
+#, python-format
+msgid "angelegt am %(datum)s"
+msgstr "angelegt am %(datum)s"
+
+#: src/templates/core/clients/partials/merge_search_results.html:27
+msgid "Keine passende Person gefunden — auch nicht mit ähnlicher Schreibweise."
+msgstr "Keine passende Person gefunden — auch nicht mit ähnlicher Schreibweise."
+
+#: src/templates/core/clients/trash.html:36
+msgid "zusammengeführt in"
+msgstr "zusammengeführt in"
+
+#: src/templates/core/clients/trash.html:55
+#, python-format
+msgid "Zusammenführung von „%(pseudonym)s“ in „%(target)s“ aufheben? Die gewanderten Ereignisse, Fälle, Aufgaben und übernommenen Anhänge kehren zurück; seit der Zusammenführung neu erfasste Einträge bleiben bei „%(target)s“."
+msgstr "Zusammenführung von „%(pseudonym)s“ in „%(target)s“ aufheben? Die gewanderten Ereignisse, Fälle, Aufgaben und übernommenen Anhänge kehren zurück; seit der Zusammenführung neu erfasste Einträge bleiben bei „%(target)s“."
+
+#: src/templates/core/clients/trash.html:58
+msgid "Zusammenführung aufheben"
+msgstr "Zusammenführung aufheben"
+
+#: src/templates/core/deletion_requests/partials/target.html:23
+msgid "Zusammenführung"
+msgstr "Zusammenführung"
+
+#: src/templates/core/clients/partials/table.html:54
+msgid "Zusammenführungs-Antrag wartet auf Bestätigung"
+msgstr "Zusammenführungs-Antrag wartet auf Bestätigung"

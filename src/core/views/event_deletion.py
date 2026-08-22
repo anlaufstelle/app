@@ -12,6 +12,7 @@ Ort fuer dieselbe Entscheidung; die Loeschantragsliste ist eine Flaeche.
 import logging
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -23,7 +24,12 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Case, Client, DeletionRequest, Event
 from core.services.case import approve_case_deletion, reject_case_deletion
-from core.services.client import approve_client_deletion, reject_client_deletion
+from core.services.client import (
+    approve_client_deletion,
+    approve_client_merge,
+    reject_client_deletion,
+    reject_client_merge,
+)
 from core.services.deletion import annotate_deletion_targets, eligible_deletion_confirmers
 from core.services.events import approve_deletion, reject_deletion
 from core.services.scoping import get_scoped_object
@@ -105,6 +111,38 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                 client = Client.objects.get(pk=dr.target_id, facility=request.current_facility)
             except Client.DoesNotExist as exc:
                 raise Http404 from exc
+            # Merge-Antrag (Refs #1876, ADR-045): dieselbe Flaeche, eigene
+            # Pruefseite — entschieden wird ueber eine ZUSAMMENFUEHRUNG, nicht
+            # eine Loeschung, und die Seite muss beide Akten unterscheidbar
+            # zeigen (Lehre #1874).
+            if dr.merge_into_id is not None:
+                try:
+                    merge_target = Client.objects.get(pk=dr.merge_into_id, facility=request.current_facility)
+                except Client.DoesNotExist as exc:
+                    raise Http404 from exc
+                from core.views.client_merge import merge_facts
+
+                # Fail-closed wie ``may_see_case`` (Refs #1818): die
+                # Bestandszahlen zaehlen Faelle — eine Domaene, die fuer die
+                # Assistenz geschlossen ist (``case_detail`` ist STAFF_PLUS).
+                # Pseudonym und Kontaktstufe bleiben sichtbar (die Personen-
+                # Flaechen sind assistant+), die ENTSCHEIDUNG bleibt moeglich.
+                may_see = request.user.is_staff_or_above
+                return render(
+                    request,
+                    "core/clients/merge_review.html",
+                    {
+                        "deletion_request": dr,
+                        "client": client,
+                        "merge_target": merge_target,
+                        "source_facts": merge_facts(client) if may_see else None,
+                        "target_facts": merge_facts(merge_target) if may_see else None,
+                        "may_see_inventory": may_see,
+                        "stage_upgraded": merge_target.contact_stage != Client.ContactStage.QUALIFIED
+                        and client.contact_stage == Client.ContactStage.QUALIFIED,
+                        "next_url": next_url,
+                    },
+                )
             return render(
                 request,
                 "core/clients/deletion_review.html",
@@ -170,18 +208,42 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
         # Drei Zieltypen, ein Einstieg (Refs #1818): der Fall-Zweig kam mit
         # ADR-044 dazu. Die Zuordnung liegt bewusst hier und nicht in den
         # Services — jeder von ihnen kennt nur seinen eigenen Zieltyp.
+        # Merge-Antraege (Refs #1876) laufen ueber dieselbe Flaeche, aber in
+        # die Merge-Services: ``approve_client_deletion`` weist sie hart ab.
+        is_merge = dr.target_type == DeletionRequest.TargetType.CLIENT and dr.merge_into_id is not None
         approvers = {
             DeletionRequest.TargetType.CLIENT: (approve_client_deletion, reject_client_deletion),
             DeletionRequest.TargetType.CASE: (approve_case_deletion, reject_case_deletion),
         }
         approve, reject = approvers.get(dr.target_type, (approve_deletion, reject_deletion))
+        if is_merge:
+            approve, reject = approve_client_merge, reject_client_merge
 
-        if action == "approve":
-            approve(dr, request.user)
-            messages.success(request, _("Löschantrag wurde genehmigt."))
-        elif action == "reject":
-            reject(dr, request.user)
-            messages.info(request, _("Löschantrag wurde abgelehnt."))
+        # ValidationError → Meldung statt 500: beim Merge kann die Ausfuehrung
+        # an spaeter entstandenen Zustaenden scheitern (Legal Hold, Ziel im
+        # Papierkorb, Ketten-Guard) — der Antrag bleibt dann PENDING und die
+        # Meldung nennt den Grund. Gleiches Netz fuer die Loesch-Zweige.
+        try:
+            if action == "approve":
+                approve(dr, request.user)
+                messages.success(
+                    request,
+                    _("Zusammenführungs-Antrag wurde genehmigt — die Akten sind zusammengeführt.")
+                    if is_merge
+                    else _("Löschantrag wurde genehmigt."),
+                )
+            elif action == "reject":
+                reject(dr, request.user)
+                messages.info(
+                    request,
+                    _("Zusammenführungs-Antrag wurde abgelehnt.") if is_merge else _("Löschantrag wurde abgelehnt."),
+                )
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            # Zur Liste, nicht zurueck zur Pruefseite: deren Scope erzwingt
+            # PENDING — wurde der Antrag parallel entschieden, waere der
+            # Rueckweg ein 404 und die Meldung verloren.
+            return redirect("core:deletion_request_list")
 
         return redirect(self._post_review_redirect(request))
 

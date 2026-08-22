@@ -65,6 +65,13 @@ vollen Labels bleiben (WCAG 2.5.3, siehe components/_action_button.html).
         {% include "core/clients/partials/_offline_toggle_action.html" with variant=variant position="overflow" %}
         <div class="border-t border-subtle my-1"></div>
         {% include "core/clients/partials/delete_request_action.html" with action_class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" %}
+        {% comment %}Refs #1876: Zusammenfuehren ist folgenschwer (loest eine
+        Akte auf) — nach der ⋮-Regel von #1801 §6.2 NIE primaer, deshalb hier
+        im Overflow neben der Loeschung. STAFF_PLUS wie die Route: die
+        Fachkraft stellt den Antrag, die Leitung entscheidet direkt.{% endcomment %}
+        <a href="{% url 'core:client_merge' client.pk %}" class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="client-merge-btn">
+            {% trans "Mit Duplikat zusammenführen" %}
+        </a>
         {% if user.is_lead_or_admin %}
         <div class="border-t border-subtle my-1"></div>
         <a href="{% url 'core:client_export_json' client.pk %}" class="flex items-center min-h-[44px] px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="client-export-json-link">

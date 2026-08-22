@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Personen zusammenführen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    {# Objekt-Eltern (Konzept #1802 §3.4): der Merge wird AUS der Personenakte betreten. #}
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Personen zusammenführen" %}</h1>
+
+    {# Laufender Antrag → kein zweites, wirkungsloses Formular (Muster #1736 A). #}
+    {% if pending_deletion_request %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="status" data-testid="merge-already-pending">
+        <p class="text-[13px] text-amber-800">
+            {% if pending_deletion_request.merge_into_id %}
+            {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}Für diese Person läuft bereits ein Zusammenführungs-Antrag vom {{ datum }} (gestellt von {{ person }}). Er wartet auf Bestätigung durch eine zweite berechtigte Person; ein weiterer Antrag ist nicht möglich.{% endblocktrans %}
+            {% else %}
+            {% blocktrans with datum=pending_deletion_request.created_at|date:"DATETIME_FORMAT" person=pending_deletion_request.requested_by.display_name|default:pending_deletion_request.requested_by.username|default:"–" %}Für diese Person läuft bereits ein Löschantrag vom {{ datum }} (gestellt von {{ person }}). Solange er offen ist, kann sie nicht zusammengeführt werden.{% endblocktrans %}
+            {% endif %}
+        </p>
+    </div>
+
+    {% elif target %}
+    {# ------------------------------------------------------------------ #}
+    {# Bestaetigungsschritt. Lehre aus #1874: die Seite traegt die          #}
+    {# Beweislast — zwei aehnliche Personen muessen HIER unterscheidbar     #}
+    {# sein (Stufe, Anlagedatum, letzter Kontakt, Bestandszahlen).          #}
+    {# ------------------------------------------------------------------ #}
+    <p class="text-sm text-ink-muted mb-5">
+        {% blocktrans with source=client.pseudonym target_p=target.pseudonym %}Die Akte <strong>{{ source }}</strong> wird in <strong>{{ target_p }}</strong> aufgelöst: Ereignisse, Fälle, Aufgaben und übernommene Anhänge wandern zur verbleibenden Akte; Zusatzangaben der aufgelösten Akte füllen nur leere Felder.{% endblocktrans %}
+    </p>
+
+    <div class="card p-4 mb-5 overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left">
+                    <th class="pb-2"></th>
+                    <th class="pb-2 font-bold text-ink" data-testid="merge-source-column">{{ client.pseudonym }} <span class="block text-[11px] font-normal text-ink-muted">{% trans "wird aufgelöst" %}</span></th>
+                    <th class="pb-2 font-bold text-ink" data-testid="merge-target-column">{{ target.pseudonym }} <span class="block text-[11px] font-normal text-ink-muted">{% trans "bleibt bestehen" %}</span></th>
+                </tr>
+            </thead>
+            <tbody class="align-top">
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Kontaktstufe" %}</td>
+                    <td class="py-1.5 pr-2">{% include "components/_client_badge.html" with client=client %}</td>
+                    <td class="py-1.5">{% include "components/_client_badge.html" with client=target %}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Altersgruppe" %}</td>
+                    <td class="py-1.5 pr-2">{{ client.get_age_cluster_display|default:"–" }}</td>
+                    <td class="py-1.5">{{ target.get_age_cluster_display|default:"–" }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Angelegt am" %}</td>
+                    <td class="py-1.5 pr-2">{{ client.created_at|date:"DATE_FORMAT" }}</td>
+                    <td class="py-1.5">{{ target.created_at|date:"DATE_FORMAT" }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Letzter Kontakt" %}</td>
+                    <td class="py-1.5 pr-2">{{ source_facts.last_contact|date:"DATE_FORMAT"|default:"–" }}</td>
+                    <td class="py-1.5">{{ target_facts.last_contact|date:"DATE_FORMAT"|default:"–" }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Ereignisse" %}</td>
+                    <td class="py-1.5 pr-2" data-testid="merge-source-events">{{ source_facts.events }}</td>
+                    <td class="py-1.5" data-testid="merge-target-events">{{ target_facts.events }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Fälle" %}</td>
+                    <td class="py-1.5 pr-2" data-testid="merge-source-cases">{{ source_facts.cases }}</td>
+                    <td class="py-1.5" data-testid="merge-target-cases">{{ target_facts.cases }}</td>
+                </tr>
+                <tr class="border-t border-subtle">
+                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Anhänge" %}</td>
+                    <td class="py-1.5 pr-2" data-testid="merge-source-attachments">{{ source_facts.attachments }}</td>
+                    <td class="py-1.5" data-testid="merge-target-attachments">{{ target_facts.attachments }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if stage_upgraded %}
+    <p class="text-[13px] text-ink-soft mb-3" data-testid="merge-stage-upgrade-hint">
+        {% blocktrans with target_p=target.pseudonym %}Kontaktstufe: die höchste gewinnt — <strong>{{ target_p }}</strong> wird dabei auf „Mit Zusatzangaben“ hochgestuft (eine stille Herabstufung wäre eine Schutzlücke).{% endblocktrans %}
+    </p>
+    {% endif %}
+
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-3 mb-3" role="alert" data-testid="merge-statistics-warning">
+        <p class="text-[13px] text-amber-800">
+            {% trans "Statistik: Live-Auswertungen zählen danach eine Person weniger — auch rückwirkend. Bereits eingefrorene Monats-Berichte behalten ihre alte Zahl; ein damit abgegebener Sachbericht lässt sich aus den Live-Daten nicht mehr reproduzieren." %}
+        </p>
+    </div>
+
+    <p class="text-[13px] text-ink-muted mb-5" data-testid="merge-deadline-hint">
+        {% blocktrans with source=client.pseudonym %}Die aufgelöste Akte „{{ source }}“ liegt danach mit einem Verweis auf ihr Ziel im Papierkorb. Bis zum Ablauf der Papierkorb-Frist lässt sich die Zusammenführung vollständig aufheben — danach wird sie automatisch anonymisiert und die Zusammenführung ist unumkehrbar.{% endblocktrans %}
+    </p>
+
+    {% if not direct_allowed %}
+    <p class="text-sm text-ink-muted mb-3" data-testid="merge-four-eyes-hint">
+        {% if requires_four_eyes %}
+        {% trans "Vier-Augen-Prinzip — mindestens eine der beiden Personen ist „Mit Zusatzangaben“ geführt. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt." %}
+        {% else %}
+        {% trans "Direkt zusammenführen darf nur die Leitung. Ihr Antrag muss von einer zweiten Person mit dem Recht „Löschbestätigung“ bestätigt werden; erst danach wird zusammengeführt." %}
+        {% endif %}
+    </p>
+    {% if no_eligible_confirmer %}
+    <div class="bg-red-50 border border-red-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="merge-no-confirmer">
+        <p class="text-[13px] text-red-700 font-medium">
+            {% trans "Kein möglicher Genehmiger: Außer Ihnen trägt derzeit niemand das Recht „Löschbestätigung“. Ein Antrag bliebe liegen — die Anwendungsbetreuung kann das Recht in der Benutzerverwaltung vergeben." %}
+        </p>
+    </div>
+    {% else %}
+    <div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-5" data-testid="merge-confirmers">
+        <p class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bestätigen können" %}</p>
+        <p class="text-[13px] text-ink-soft">
+            {% for confirmer in confirmers %}{{ confirmer.display_name|default:confirmer.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <form method="post" action="{% url 'core:client_merge' pk=client.pk %}" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="target" value="{{ target.pk }}">
+        {% if direct_allowed %}
+        <div class="flex items-center space-x-3 pt-1">
+            <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700" data-testid="merge-direct-submit">
+                {% trans "Jetzt zusammenführen" %}
+            </button>
+            <a href="{% url 'core:client_detail' pk=client.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+                {% trans "Abbrechen" %}
+            </a>
+        </div>
+        {% else %}
+        <div>
+            <label for="reason" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                {% trans "Begründung" %}
+            </label>
+            <textarea
+                id="reason"
+                name="reason"
+                rows="4"
+                required
+                class="w-full px-3 py-2 border border-subtle rounded-md text-sm focus:ring-2 focus:ring-accent focus:border-accent"
+                placeholder="{% trans 'z.B. dieselbe Person wurde unter zwei Schreibweisen angelegt' %}"></textarea>
+        </div>
+        <div class="flex items-center space-x-3 pt-1">
+            <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700" data-testid="merge-request-submit">
+                {% trans "Zusammenführungs-Antrag stellen" %}
+            </button>
+            <a href="{% url 'core:client_detail' pk=client.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+                {% trans "Abbrechen" %}
+            </a>
+        </div>
+        {% endif %}
+    </form>
+
+    {% else %}
+    {# ------------------------------------------------------------------ #}
+    {# Suchschritt: Ziel-Person waehlen. HTMX-Nachladen wie die Personen-  #}
+    {# liste (keyup + delay), mit Formular-Fallback ohne JS.               #}
+    {# ------------------------------------------------------------------ #}
+    <p class="text-sm text-ink-muted mb-5">
+        {% blocktrans with source=client.pseudonym %}Wählen Sie die Person, in die <strong>{{ source }}</strong> aufgelöst werden soll — also die Akte, die bestehen bleibt. Im nächsten Schritt zeigt eine Übersicht beide Akten im Vergleich.{% endblocktrans %}
+    </p>
+
+    <form method="get" action="{% url 'core:client_merge' pk=client.pk %}" class="mb-4">
+        <div class="relative">
+            <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text"
+                   name="q"
+                   value="{{ q }}"
+                   placeholder="{% trans 'Pseudonym der Ziel-Person suchen...' %}"
+                   aria-label="{% trans 'Pseudonym der Ziel-Person suchen' %}"
+                   class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
+                   data-testid="merge-target-search"
+                   hx-get="{% url 'core:client_merge' pk=client.pk %}"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-target="#merge-search-results">
+        </div>
+        <noscript><button type="submit" class="mt-2 px-4 py-2 btn-secondary">{% trans "Suchen" %}</button></noscript>
+    </form>
+
+    <div id="merge-search-results">
+        {% include "core/clients/partials/merge_search_results.html" %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

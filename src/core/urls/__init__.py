@@ -57,6 +57,7 @@ from core.views.client_deletion import (
     ClientRestoreView,
     ClientTrashView,
 )
+from core.views.client_merge import ClientMergeView, ClientSimilarHintView, ClientUnmergeView
 from core.views.clients import (
     ClientAutocompleteView,
     ClientCreateView,
@@ -181,6 +182,10 @@ urlpatterns = [
     path("clients/<uuid:pk>/delete/", ClientDeleteRequestView.as_view(), name="client_delete_request"),
     path("clients/<uuid:pk>/restore/", ClientRestoreView.as_view(), name="client_restore"),
     path("clients/<uuid:pk>/anonymize/", ClientAnonymizeView.as_view(), name="client_anonymize"),
+    # Duplikat-Merge (Refs #1876, ADR-045) — gestaffelter Einstieg wie der
+    # Loeschantrag, Aufheben als Papierkorb-Pflege (Rollen-Gefaelle s. Views).
+    path("clients/<uuid:pk>/merge/", ClientMergeView.as_view(), name="client_merge"),
+    path("clients/<uuid:pk>/unmerge/", ClientUnmergeView.as_view(), name="client_unmerge"),
     # Cases
     path("cases/", CaseListView.as_view(), name="case_list"),
     path("cases/new/", CaseCreateView.as_view(), name="case_create"),
@@ -320,6 +325,8 @@ urlpatterns = [
     # HTMX-Fragmente unter /partials/<feature>/, JSON-APIs unter /api/v1/<feature>/ (Refs #848)
     path("partials/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
     path("partials/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),
+    # Refs #1876: nicht-blockierender Duplikat-Hinweis im Personen-Anlagepfad.
+    path("partials/clients/similar/", ClientSimilarHintView.as_view(), name="client_similar_hint"),
     path("partials/clients/fields/", ClientFieldsPartialView.as_view(), name="client_fields_partial"),
     path("partials/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
     path("partials/tally/increment/", TallyIncrementView.as_view(), name="tally_increment"),

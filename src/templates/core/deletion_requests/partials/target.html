@@ -14,3 +14,16 @@
 {% else %}
 <span class="text-sm font-medium" data-testid="deletion-target-label">{{ dr.target_label }}</span>
 {% endif %}
+{% comment %}Refs #1876: Merge-Antraege entscheiden ueber eine ZUSAMMENFUEHRUNG,
+nicht eine Loeschung — die Liste sagt es und nennt das Ziel („→ wohin").
+Label/URL liefert ``annotate_deletion_targets`` (fail-closed wie das
+Antragsziel selbst).{% endcomment %}
+{% if dr.merge_into_id %}
+<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800" data-testid="deletion-merge-chip">{% trans "Zusammenführung" %}</span>
+<span class="text-[12px] text-ink-muted">→</span>
+{% if dr.merge_target_url %}
+<a href="{{ dr.merge_target_url }}" class="text-sm font-medium text-accent hover:underline" data-testid="deletion-merge-target-link">{{ dr.merge_target_label }}</a>
+{% else %}
+<span class="text-sm font-medium" data-testid="deletion-merge-target-label">{{ dr.merge_target_label }}</span>
+{% endif %}
+{% endif %}
