@@ -346,6 +346,32 @@ class TestAttachments:
         assert {a["id"] for a in client_entry["attachments"]} == {str(client_att.pk)}
         assert {a["id"] for a in case_entry["attachments"]} == {str(case_att.pk)}
 
+    def test_case_and_client_attachments_carry_known_sha256(
+        self, facility, client_identified, doc_type_client_profile, case_open, doc_type_case_form, staff_user
+    ):
+        """Refs #1818/#1060: der Integritaetsnachweis gilt auch fuer Fall- und
+        Personen-Anhaenge. Die Known-Content-Probe lief bisher nur ueber
+        Ereignis-Anhaenge; fuer ``cases``/``clients`` war nur die
+        ``with_file_hashes=False``-Richtung (``sha256: null``) gepinnt — ein
+        still verlorenes ``with_file_hashes`` an genau diesen Serializer-Zeilen
+        blieb gruen."""
+        client_identified.document_type = doc_type_client_profile
+        client_identified.save(update_fields=["document_type"])
+        case_open.document_type = doc_type_case_form
+        case_open.save(update_fields=["document_type"])
+
+        client_att = _make_attachment(facility, client_identified, staff_user, ft_name="Anhang Person (Hash)")
+        case_att = _make_attachment(facility, case_open, staff_user, ft_name="Anhang Fall (Hash)")
+        expected = hashlib.sha256(PDF_MINIMAL).hexdigest()
+
+        entities = build_facility_export(facility)["entities"]
+        client_entry = next(c for c in entities["clients"] if c["id"] == str(client_identified.pk))
+        case_entry = next(c for c in entities["cases"] if c["id"] == str(case_open.pk))
+        client_att_entry = next(a for a in client_entry["attachments"] if a["id"] == str(client_att.pk))
+        case_att_entry = next(a for a in case_entry["attachments"] if a["id"] == str(case_att.pk))
+        assert client_att_entry["sha256"] == expected
+        assert case_att_entry["sha256"] == expected
+
     def test_superseded_attachment_not_included(self, facility, sample_event, staff_user):
         first = _make_attachment(facility, sample_event, staff_user)
         ft = first.field_template
@@ -477,6 +503,25 @@ class TestCaseTrashBoundary:
         assert entry["client_id"] == str(client_identified.pk)
         assert entry["case_id"] is None
         assert entry["episode_id"] is None
+
+    def test_event_of_a_live_case_keeps_case_and_episode_reference(
+        self, facility, client_identified, case_open, episode, sample_event, staff_user
+    ):
+        """Positive Gegenprobe zu P5 (Refs #1818): ohne Papierkorb bleibt die
+        Zuordnung erhalten.
+
+        Die Detach-Tests pruefen nur ``is None`` und die Dangling-FK-Guards nur
+        ``is None or in case_ids`` — eine Regression, die ``case_id``/
+        ``episode_id`` fuer JEDES exportierte Ereignis nullt, bliebe damit
+        unsichtbar. Hier wird die Zuordnung am lebenden Fall exakt gepinnt.
+        """
+        sample_event.case = case_open
+        sample_event.episode = episode
+        sample_event.save(update_fields=["case", "episode"])
+        entities = build_facility_export(facility, with_file_hashes=False)["entities"]
+        entry = next(e for e in entities["events"] if e["id"] == str(sample_event.pk))
+        assert entry["case_id"] == str(case_open.pk)
+        assert entry["episode_id"] == str(episode.pk)
 
     def test_no_dangling_foreign_keys_after_case_trash(
         self,

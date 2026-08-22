@@ -168,6 +168,85 @@ class TestConfirmDeletePagesOfferTheWayOut:
         assert "config-delete-trash-hint" not in body
 
 
+class TestDocumentTypeCaseTrashShareWording:
+    """Der Fall-Papierkorb-Anteil im Blocker-Satz, exakt gepinnt (Refs #1818).
+
+    Die bestehenden Tests pruefen nur den Substring "Papierkorb" mit genau
+    EINEM Fall. Unentdeckt blieben damit: eine Zaehlung ohne
+    ``document_type``-Filter (facility-uebergreifend falsche Zahl im Dialog),
+    eine Zaehlung ohne ``is_deleted``-Filter (alle Faelle des Typs als
+    Papierkorb deklariert), die falsche Objektart ("Person" statt "Fall" —
+    der Ausweg-Hinweis fuehrte in den falschen Papierkorb) und der nie
+    ausgefuehrte Pluralpfad des ``of_cases``-Zweigs von
+    :func:`core.services.config._append_trash_share`.
+    """
+
+    @pytest.fixture
+    def case_doc_type(self, facility):
+        return DocumentType.objects.create(
+            facility=facility,
+            name="Fallbogen",
+            slug="fallbogen",
+            entity_type=DocumentType.EntityType.CASE,
+        )
+
+    def _fall(self, facility, doc_type=None, *, deleted=False, titel="Fall"):
+        from core.models import Case
+
+        case = Case.objects.create(
+            facility=facility,
+            client=Client.objects.create(facility=facility, pseudonym=f"P-{titel}"),
+            title=titel,
+            document_type=doc_type,
+        )
+        if deleted:
+            case.soft_delete()
+        return case
+
+    def _delete_blocked(self, rf, admin_user, facility, doc_type):
+        request = rf.post("/")
+        request.user = admin_user
+        request.current_facility = facility
+        with pytest.raises(ConfigDeleteBlocked) as exc:
+            delete_document_type(request, doc_type)
+        return exc.value.reasons
+
+    def test_singular_share_counts_only_trashed_cases_of_this_type(
+        self, rf, facility, other_facility, case_doc_type, admin_user
+    ):
+        self._fall(facility, case_doc_type, titel="Lebend")
+        self._fall(facility, case_doc_type, deleted=True, titel="Korb")
+        # Negativprobe: ein Papierkorb-Fall einer fremden Einrichtung (ohne
+        # diesen Typ) darf weder die Zahl erhoehen noch im Satz auftauchen.
+        self._fall(other_facility, deleted=True, titel="Fremd")
+
+        reasons = self._delete_blocked(rf, admin_user, facility, case_doc_type)
+        assert any(r.endswith("Davon liegt 1 Fall im Papierkorb.") for r in reasons)
+
+    def test_plural_share_names_two_trashed_cases(self, rf, facility, case_doc_type, admin_user):
+        self._fall(facility, case_doc_type, deleted=True, titel="Korb-1")
+        self._fall(facility, case_doc_type, deleted=True, titel="Korb-2")
+
+        reasons = self._delete_blocked(rf, admin_user, facility, case_doc_type)
+        assert any(r.endswith("Davon liegen 2 Fälle im Papierkorb.") for r in reasons)
+
+    def test_plural_fallback_carries_the_passed_msgid(self):
+        """Ohne aktiven Katalog traegt das uebergebene Plural-msgid den Satz.
+
+        Mit aktivem ``de``-Katalog schlaegt ``ngettext`` ueber das
+        Singular-msgid nach und liefert den Katalog-Plural — ein kaputtes
+        Plural-Argument im Code bliebe unsichtbar, bis eine Sprache ohne
+        (vollstaendigen) Katalog aktiv ist: dann ist das Argument der einzige
+        Fallback, und ``None`` hiesse 500 statt Blocker-Meldung, sobald >= 2
+        Faelle im Papierkorb blockieren.
+        """
+        from django.utils import translation
+
+        with translation.override(None):
+            reason = config_service._append_trash_share("X.", 2, of_cases=True)
+        assert reason == "X. Davon liegen 2 Fälle im Papierkorb."
+
+
 # ---------------------------------------------------------------------------
 # Zweite Blocker-Quelle: Attachment.field_template (PROTECT) — M24/AP4,
 # Refs #1738 (#1737 hat sie als kuenftige Quelle bereits benannt)

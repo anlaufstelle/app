@@ -2152,3 +2152,50 @@ class TestClientExportMergeProvenance:
         data = export_client_data(sample_client, facility, admin_user)
         (row,) = data["deletion_requests"]
         assert "merge_request" not in row
+
+
+@pytest.mark.django_db
+class TestAnonymizationRedactsOnlyOwnCaseRequests:
+    """Die Fall-Antrags-Redaktion der Personen-Anonymisierung ist fall-gebunden.
+
+    Refs #1818: ``_redact_case_deletion_requests`` (``core/services/client/main.py``)
+    grenzt ueber ``target_id__in`` auf die Faelle der anonymisierten Person ein.
+    Ohne diese Grenze ueberschriebe jede Personen-Anonymisierung die
+    Begruendungen SAEMTLICHER Fall-Loeschantraege datenbankweit und
+    facility-uebergreifend — einschliesslich PENDING-Vier-Augen-Antraege
+    lebender Faelle fremder Personen; der Reviewer saehe "[Anonymisiert]"
+    statt der Begruendung, die auch die Art.-15-Auskunft des fremden Falls
+    traegt.
+    """
+
+    def test_foreign_case_request_survives_person_anonymization(self, sample_client, sample_case, facility, admin_user):
+        from core.services.case import request_case_deletion
+        from core.services.client import anonymize_client_now
+
+        own_dr = request_case_deletion(sample_case, admin_user, "Eigener Antrag")
+
+        fremd_org = Organization.objects.create(name="Fremd-Org")
+        fremd_facility = Facility.objects.create(organization=fremd_org, name="Fremd-Einrichtung")
+        fremd_user = User.objects.create_user(
+            username="ce_fremd",
+            password="test1234",
+            role=User.Role.FACILITY_ADMIN,
+            facility=fremd_facility,
+            is_staff=True,
+        )
+        fremd_client = Client.objects.create(facility=fremd_facility, pseudonym="Fremd-Person", created_by=fremd_user)
+        fremd_case = CaseModel.objects.create(
+            facility=fremd_facility, client=fremd_client, title="Fremder Fall", created_by=fremd_user
+        )
+        fremd_dr = request_case_deletion(fremd_case, fremd_user, "Fremder Antrag")
+
+        sample_client.soft_delete(user=admin_user)
+        anonymize_client_now(sample_client, admin_user)
+
+        own_dr.refresh_from_db()
+        fremd_dr.refresh_from_db()
+        # Positivkontrolle: der Antrag zum eigenen Fall ist redigiert ...
+        assert own_dr.reason == "[Anonymisiert]"
+        # ... der fremde PENDING-Antrag bleibt wortgleich stehen.
+        assert fremd_dr.reason == "Fremder Antrag"
+        assert fremd_dr.status == DeletionRequest.Status.PENDING
