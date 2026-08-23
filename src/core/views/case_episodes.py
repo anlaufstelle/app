@@ -14,7 +14,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.episodes import EpisodeForm
 from core.models import Case
 from core.models.episode import Episode
-from core.services.case import cases_with_live_client
+from core.services.case import cases_with_live_client, update_episode
 from core.services.scoping import get_scoped_object
 from core.views.mixins import StaffRequiredMixin
 from core.views.utils import object_back_link
@@ -91,7 +91,15 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
         episode = get_object_or_404(Episode, pk=pk, case=case)
         form = EpisodeForm(request.POST, instance=episode)
         if form.is_valid():
-            form.save()
+            # Refs #1959: NICHT ``form.save()`` — ``_post_clean()`` hat die
+            # Instanz laengst mutiert, ein Diff danach faende nie eine
+            # Aenderung und schriebe nie ``EPISODE_UPDATE``. Der Service diffed
+            # gegen den DB-Stand und schreibt die Audit-Zeile.
+            update_episode(
+                episode,
+                request.user,
+                **{field: form.cleaned_data[field] for field in EpisodeForm.Meta.fields},
+            )
             messages.success(request, _("Episode wurde aktualisiert."))
             return redirect("core:case_detail", pk=case.pk)
         context = _episode_context(case, form, is_edit=True, episode=episode)

@@ -11059,9 +11059,9 @@ msgstr "The case has been permanently anonymized and cannot be restored."
 msgid "Der Fall wurde bereits endgültig anonymisiert."
 msgstr "The case has already been permanently anonymized."
 
-#: src/core/services/compliance/vvt.py:168
-msgid "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen von Episoden und Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
-msgstr "Audit log on creating, editing and deleting events; on creating, editing, closing, reopening, deleting, restoring and anonymizing cases; edits to episodes and outcome goals are not logged at all; of read access only export, file download, offline take-out and cross-facility access — detail, list and search requests are not logged (ADR-043)"
+#: src/core/services/compliance/vvt.py:174
+msgid "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; auf das Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen und Loesen von Ereignissen zu Faellen; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+msgstr "Audit log on creating, editing and deleting events; on creating, editing, closing, reopening, deleting, restoring and anonymizing cases; on editing episodes and outcome goals as well as linking events to and unlinking them from cases; of read access only export, file download, offline take-out and cross-facility access — detail, list and search requests are not logged (ADR-043)"
 
 #: src/core/services/config.py:135
 #, python-format

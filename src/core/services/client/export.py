@@ -958,12 +958,19 @@ AUDIT_CATEGORY_OTHER = "Sonstiges"
 # Refs #1796: ``RectificationRequest`` (ADR-041) kollidiert mit keinem der
 # uebrigen Praefixe — die Reihenfolge bleibt damit unerheblich, der Eintrag
 # steht am Ende.
+#
+# Refs #1959: ``Episode`` und ``OutcomeGoal`` ebenfalls kollisionsfrei —
+# "Episode".startswith("Event") ist False (drittes Zeichen), und kein
+# bestehender ``target_type`` beginnt mit einem der beiden neuen Praefixe. Die
+# Reihenfolge bleibt daher auch hier unerheblich; sie stehen am Ende.
 AUDIT_CATEGORIES = (
     ("EventAttachment", "Anhang"),
     ("Attachment", "Anhang"),
     ("Event", "Ereignis"),
     ("Client", "Person"),
     ("RectificationRequest", "Berichtigung"),
+    ("Episode", "Episode"),
+    ("OutcomeGoal", "Wirkungsziel"),
 )
 
 
@@ -1046,6 +1053,14 @@ def _gather_audit_trail(facility, client, event_ids):
     **Berichtigungsantraege** dazu: ``RECTIFICATION_REQUESTED/APPROVED/REJECTED``
     zeigen auf die Antrags-PK (ADR-041), die vorher keinen Zweig traf.
 
+    Refs #1959 setzt die Reihe fort: ``EPISODE_UPDATE`` und ``GOAL_UPDATE``
+    zeigen auf die **Episoden**- bzw. **Ziel**-PK. Beide haengen ueber ``case``
+    an der Person, tragen aber weder deren noch die Fall-PK — ohne eigenen
+    Zweig fiele jede Bearbeitung dieser Unterobjekte still aus dem
+    Zugriffsprotokoll der betroffenen Person. Die ``CASE_EVENT_*``-Zeilen
+    brauchen dagegen nichts: ihr ``target_id`` ist die Ereignis-PK und liegt
+    damit bereits im Ereignis-Zweig.
+
     Download-Zeilen zeigen auf den Anhang, nicht auf seinen Owner; sie werden
     ueber ``detail`` zugeordnet. Das kommt ohne Lesen der Attachment-Tabelle aus
     und traegt auch dann noch, wenn die Anhaenge beim Loeschen des Owners
@@ -1084,6 +1099,19 @@ def _gather_audit_trail(facility, client, event_ids):
         # Zweig verwendet. Ueber-Matching ist ausgeschlossen, weil die IDs aus
         # ``client.cases`` stammen (plus ``for_facility`` + RLS).
         targets |= Q(target_id__in=case_id_strings)
+        # Refs #1959: Episoden und Wirkungsziele haengen ueber ``case`` an der
+        # Person; ihre Audit-Zeilen tragen die eigene PK. Ueber-Matching ist
+        # ausgeschlossen, weil die IDs aus ``client.cases`` abgeleitet werden
+        # (plus ``for_facility`` + RLS).
+        subobject_id_strings = [
+            str(pk)
+            for pk in [
+                *Episode.objects.filter(case_id__in=case_id_strings).values_list("pk", flat=True),
+                *OutcomeGoal.objects.filter(case_id__in=case_id_strings).values_list("pk", flat=True),
+            ]
+        ]
+        if subobject_id_strings:
+            targets |= Q(target_id__in=subobject_id_strings)
     if event_id_strings:
         targets |= Q(target_id__in=event_id_strings)
         # Alt-Schema (vor ADR-039 §5) — unmigrierbare Bestandszeilen.

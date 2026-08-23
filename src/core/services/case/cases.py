@@ -276,14 +276,24 @@ def reopen_case(case, user):
 
 
 @transaction.atomic
-def assign_event_to_case(case, event, user):  # user reserved for future audit trail
-    """Assign an event to a case. Both must belong to the same facility.
+def assign_event_to_case(case, event, user):
+    """Assign an event to a case + AuditLog. Both must belong to the same facility.
 
     Additional invariants:
     - Anonymous events may only be attached to cases without a client.
     - Clientel of the event must match the case's clientel when both are set.
     - The user must be permitted to see the event (service-layer fallback for
       callers that bypass the view-level :func:`get_visible_event_or_404`).
+
+    Refs #1959: ``user`` trug bis hierher den Vermerk „reserved for future
+    audit trail" — die Luecke ist geschlossen. Die Zuordnung entscheidet, in
+    welchem Fallzusammenhang ein Kontakt steht; ohne Eintrag war sie
+    nachtraeglich niemandem zuzuordnen (Threat-Model TB6, Repudiation).
+
+    ``target_obj`` ist das **Ereignis**: die Zeile beschreibt, was mit dem
+    Ereignis geschah, und bleibt so auch nach einem spaeteren Loesen
+    zuordenbar. Ein erneutes Zuordnen desselben Falls ist ein No-Op und
+    schreibt keine zweite Zeile.
     """
     if event.facility_id != case.facility_id:
         raise ValueError(_("Ereignis gehört nicht zur selben Einrichtung wie der Fall."))
@@ -296,14 +306,50 @@ def assign_event_to_case(case, event, user):  # user reserved for future audit t
             )
         if event.client_id != case.client_id:
             raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
+    previous_case_id = event.case_id
+    if previous_case_id == case.pk:
+        return event
     event.case = case
     event.save()
+    audit_event(
+        AuditLog.Action.CASE_EVENT_ASSIGNED,
+        user=user,
+        facility=case.facility,
+        target_obj=event,
+        # Nur UUIDs ins detail (Refs #1751): der Falltitel ist Freitext, den die
+        # Anonymisierung ueberschreibt — im append-only Log ueberlebte er sie.
+        # ``previous_case_id`` steht nur beim Umhaengen: das loest das Ereignis
+        # aus dem alten Fall, ohne dass eine CASE_EVENT_REMOVED-Zeile
+        # entstuende — ohne den Schluessel bliebe der Abgang unbelegt. Beide
+        # Zweige sind literale Dicts, damit der statische Schluessel-Guard
+        # (``TestAuditDetailKeyInventory``, Refs #1944) sie sieht.
+        detail={"case_id": str(case.pk), "previous_case_id": str(previous_case_id)}
+        if previous_case_id is not None
+        else {"case_id": str(case.pk)},
+    )
     return event
 
 
 @transaction.atomic
-def remove_event_from_case(event):
-    """Remove an event from its case."""
+def remove_event_from_case(event, user):
+    """Remove an event from its case + AuditLog.
+
+    Refs #1959: ``user`` ist neu — der Service hatte ihn gar nicht, eine
+    Audit-Zeile ohne Akteur waere als Nachweis wertlos. Ein Ereignis ohne Fall
+    zu loesen ist ein No-Op und schreibt nichts. ``case_id`` benennt den Fall,
+    aus dem das Ereignis geloest wurde; ohne ihn waere nach dem Schreiben nicht
+    mehr feststellbar, welche Akte betroffen war.
+    """
+    previous_case = event.case
+    if previous_case is None:
+        return event
     event.case = None
     event.save()
+    audit_event(
+        AuditLog.Action.CASE_EVENT_REMOVED,
+        user=user,
+        facility=previous_case.facility,
+        target_obj=event,
+        detail={"case_id": str(previous_case.pk)},
+    )
     return event

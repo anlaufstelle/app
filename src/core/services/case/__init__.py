@@ -8,6 +8,7 @@ Module:
 - :mod:`.cases`     — Case-CRUD, Event-Zuordnung (vorher services/cases.py).
 - :mod:`.deletion`  — Papierkorb, Vier-Augen-Antrag, Fristablauf-Tilgung
   (Refs #1818, ADR-044).
+- :mod:`.episodes`  — Episoden-Update mit Audit-Schreibpfad (Refs #1959).
 - :mod:`.goals`     — Goal/Milestone-CRUD (vorher services/goals.py).
 - :mod:`.workitems` — WorkItem-CRUD, Status-Workflow, Wiederkehrlogik,
   Bulk-Operationen (vorher services/workitems.py).
@@ -40,6 +41,7 @@ from core.services.case.deletion import (
     restore_case,
     soft_delete_case,
 )
+from core.services.case.episodes import update_episode
 from core.services.case.goals import (
     achieve_goal,
     create_goal,
@@ -110,6 +112,7 @@ __all__ = [
     "toggle_milestone",
     "unachieve_goal",
     "update_case",
+    "update_episode",
     "update_goal",
     "update_workitem",
     "update_workitem_status",

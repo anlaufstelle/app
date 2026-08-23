@@ -49,13 +49,13 @@ _CASE_UNDELETABLE_CLAIM_RE = re.compile(
     re.IGNORECASE,
 )
 
-#: Refs #1862: Wortstamm der beiden Fall-Unterobjekte, deren Bearbeitung
-#: **nirgends** landet — weder AuditLog noch EventHistory noch
-#: Aktivitaets-Feed (Schreibpfad offen in #1959).
-_UNLOGGED_SUBOBJECT_RE = re.compile(r"Episode|Wirkungsziel", re.IGNORECASE)
+#: Refs #1862: Wortstamm der beiden Fall-Unterobjekte. Bis #1959 landete ihre
+#: Bearbeitung **nirgends** — weder AuditLog noch EventHistory noch
+#: Aktivitaets-Feed; seit #1959 schreibt sie eine AuditLog-Zeile.
+_LOGGED_SUBOBJECT_RE = re.compile(r"Episode|Wirkungsziel", re.IGNORECASE)
 
-#: Die Aussage, die eine TOM ueber diese Unterobjekte treffen MUSS, sobald sie
-#: sie ueberhaupt erwaehnt.
+#: Die Aussage, die eine TOM ueber diese Unterobjekte seit #1959 NICHT mehr
+#: treffen darf — sie war bis dahin die einzige zutreffende.
 _UNLOGGED_SUBOBJECT_PHRASE = "gar nicht protokolliert"
 
 #: Refs #1862: ``VIEW_QUALIFIED`` entsteht ausschliesslich beim Aufruf der
@@ -179,24 +179,42 @@ class TestProcessingActivitiesSchema:
                     f"geloescht werden ({tom!s}) — seit ADR-044 gibt es den Loeschweg."
                 )
 
-    def test_toms_naming_episodes_or_goals_say_they_are_unlogged(self):
-        """Refs #1862: Episoden- und Wirkungsziel-Bearbeitungen landen nirgends.
+    def test_toms_do_not_deny_the_episode_and_goal_write_path(self):
+        """Refs #1959, umgedrehter Guard: Episoden- und Wirkungsziel-Bearbeitungen
+        werden protokolliert.
 
-        Wer sie in einer TOM ueberhaupt erwaehnt, muss das ausdruecklich sagen —
-        ein Verweis auf einen "Bearbeitungsverlauf" waere eine zweite
-        unzutreffende Angabe: ``EventHistory`` gibt es nur fuer Ereignisse,
-        ``log_activity`` ruft von den beiden Services nur ``delete_milestone``.
+        Bis #1959 pinnte dieser Slot das Gegenteil — wer die beiden
+        Unterobjekte in einer TOM ueberhaupt erwaehnte, musste ausdruecklich
+        "gar nicht protokolliert" sagen, weil ``models/case.py`` und
+        ``services/case/goals.py`` nur speicherten. Genau dafuer war er
+        geschrieben: er sollte reissen, sobald der Schreibpfad kommt. Er ist
+        deshalb **umgedreht** statt geloescht — dieselbe Ableitung aus dem
+        Produktionscode, nur mit der neuen Soll-Menge.
+
+        Zwei Haelften. Erstens: die vier Aktionen SIND in ``AuditLog.Action`` —
+        ohne sie waere die Zusage im Verzeichnis unzutreffend. Zweitens: keine
+        TOM behauptet noch das Gegenteil.
+
+        Was **nicht** dazugekommen ist, bleibt ungesagt: ``EventHistory`` gibt
+        es weiterhin nur fuer Ereignisse, und ``log_activity`` ruft von den
+        beiden Services nach wie vor nur ``delete_milestone`` — ein Verweis auf
+        einen "Bearbeitungsverlauf" waere deshalb weiterhin unzutreffend.
         """
+        for action in ("EPISODE_UPDATE", "GOAL_UPDATE", "CASE_EVENT_ASSIGNED", "CASE_EVENT_REMOVED"):
+            assert hasattr(AuditLog.Action, action), (
+                f"AuditLog.Action.{action} fehlt — ohne die Aktion darf das Verzeichnis "
+                "keine Protokollierung der Episoden-/Wirkungsziel-Bearbeitung zusagen."
+            )
         for entry in PROCESSING_ACTIVITIES:
             for tom in entry["toms"]:
                 text = str(tom)
-                if not _UNLOGGED_SUBOBJECT_RE.search(text):
+                if not _LOGGED_SUBOBJECT_RE.search(text):
                     continue
-                assert _UNLOGGED_SUBOBJECT_PHRASE in text, (
-                    f"Aktivitaet {entry['id']}: TOM nennt Episoden/Wirkungsziele, "
-                    f'sagt aber nicht "{_UNLOGGED_SUBOBJECT_PHRASE}" ({text}) — '
-                    "ihre Bearbeitung erzeugt weder AuditLog- noch "
-                    "EventHistory- noch Activity-Zeile."
+                assert _UNLOGGED_SUBOBJECT_PHRASE not in text, (
+                    f"Aktivitaet {entry['id']}: TOM sagt weiter "
+                    f'"{_UNLOGGED_SUBOBJECT_PHRASE}" ueber Episoden/Wirkungsziele '
+                    f"({text}) — seit #1959 schreiben beide Bearbeitungswege eine "
+                    "AuditLog-Zeile."
                 )
 
     def test_id_is_unique(self):
@@ -270,16 +288,18 @@ class TestSearchStaysUnaudited:
 
 
 @pytest.mark.django_db
-class TestEpisodeAndGoalEditsLeaveNoTrace:
-    """Refs #1862 (Schreibpfad offen in #1959): die TOM-Aussage am Code gepinnt.
+class TestEpisodeAndGoalEditsAreAudited:
+    """Refs #1959, umgedreht: die TOM-Aussage weiter am Code gepinnt.
 
-    Der VVT sagt seit der Korrektur, dass Bearbeitungen von Episoden und
-    Wirkungszielen **gar nicht** protokolliert werden. Das ist die
-    unangenehmste Aussage des Verzeichnisses und deshalb genau die, die
-    nachweisbar bleiben muss: Ueber die echten Bearbeiten-Routen entsteht
-    weder eine ``AuditLog``- noch eine ``EventHistory``- noch eine
-    ``Activity``-Zeile. Sobald #1959 den Schreibpfad nachruestet, fallen
-    diese Tests auf — und die TOM ist im selben Schritt nachzuziehen.
+    Bis #1959 hiess diese Klasse ``TestEpisodeAndGoalEditsLeaveNoTrace`` und
+    pinnte das (0, 0, 0)-Delta — die TOM sagte damals "gar nicht
+    protokolliert", und das war die unangenehmste und deshalb am schaerfsten
+    nachzuweisende Aussage des Verzeichnisses. Mit dem Schreibpfad kehrt sich
+    die Soll-Menge um: ueber die echten Bearbeiten-Routen entsteht **genau
+    eine** ``AuditLog``-Zeile — und weiterhin **keine** ``EventHistory``- und
+    keine ``Activity``-Zeile. Das dritte und vierte Delta bleiben also bei
+    null; wer sie mitzieht, macht die TOM erneut unzutreffend, nur in die
+    andere Richtung.
     """
 
     def _deltas(self, before):
@@ -292,7 +312,7 @@ class TestEpisodeAndGoalEditsLeaveNoTrace:
     def _counts(self):
         return (AuditLog.objects.count(), EventHistory.objects.count(), Activity.objects.count())
 
-    def test_episode_edit_writes_no_audit_no_history_no_activity(self, client, staff_user, case_open, episode):
+    def test_episode_edit_writes_exactly_one_audit_row(self, client, staff_user, case_open, episode):
         client.force_login(staff_user)
         before = self._counts()
         response = client.post(
@@ -307,12 +327,14 @@ class TestEpisodeAndGoalEditsLeaveNoTrace:
         assert response.status_code == 302
         episode.refresh_from_db()
         assert episode.title == "Geaenderte Episode"
-        assert self._deltas(before) == (0, 0, 0), (
-            "Episoden-Bearbeitung hinterlaesst jetzt eine Spur — die TOM in "
-            'vvt.py ("gar nicht protokolliert") ist damit unzutreffend.'
+        assert self._deltas(before) == (1, 0, 0), (
+            "Episoden-Bearbeitung muss genau eine AuditLog-Zeile schreiben und "
+            "weder EventHistory noch Aktivitaets-Feed beruehren — sonst ist die "
+            "TOM in vvt.py unzutreffend."
         )
+        assert AuditLog.objects.latest("timestamp").action == AuditLog.Action.EPISODE_UPDATE
 
-    def test_goal_edit_writes_no_audit_no_history_no_activity(self, client, staff_user, case_open, outcome_goal):
+    def test_goal_edit_writes_exactly_one_audit_row(self, client, staff_user, case_open, outcome_goal):
         client.force_login(staff_user)
         before = self._counts()
         response = client.post(
@@ -322,10 +344,12 @@ class TestEpisodeAndGoalEditsLeaveNoTrace:
         assert response.status_code == 200
         outcome_goal.refresh_from_db()
         assert outcome_goal.title == "Geaendertes Wirkungsziel"
-        assert self._deltas(before) == (0, 0, 0), (
-            "Wirkungsziel-Bearbeitung hinterlaesst jetzt eine Spur — die TOM in "
-            'vvt.py ("gar nicht protokolliert") ist damit unzutreffend.'
+        assert self._deltas(before) == (1, 0, 0), (
+            "Wirkungsziel-Bearbeitung muss genau eine AuditLog-Zeile schreiben "
+            "und weder EventHistory noch Aktivitaets-Feed beruehren — sonst ist "
+            "die TOM in vvt.py unzutreffend."
         )
+        assert AuditLog.objects.latest("timestamp").action == AuditLog.Action.GOAL_UPDATE
 
 
 class TestQualifiedAccessClaimStaysScoped:

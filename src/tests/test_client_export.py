@@ -1069,6 +1069,94 @@ class TestClientExportAuditTrail:
         assert [e["category"] for e in data["audit_trail"]] == ["Anhang"]
         assert data["audit_trail"][0]["action"] == "Sicherheitsverletzung"
 
+    def test_episode_rows_are_listed_as_episode_category(self, sample_client, facility, sample_case, admin_user):
+        """Refs #1959: ``EPISODE_UPDATE`` zeigt auf die **Episoden**-PK.
+
+        Ohne den Episoden-Zweig fiele jede Bearbeitung einer Episode still aus
+        dem Zugriffsprotokoll der betroffenen Person — die Zeile traegt weder
+        die Personen- noch die Fall-PK, sie matchte keinen einzigen Zweig.
+        """
+        episode = Episode.objects.create(
+            case=sample_case,
+            title="Export-Episode",
+            started_at=timezone.now().date(),
+            created_by=admin_user,
+        )
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.EPISODE_UPDATE,
+            target_type="Episode",
+            target_id=str(episode.pk),
+            detail={"case_id": str(sample_case.pk), "changed_fields": ["title"]},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Episode"]
+        assert data["audit_trail"][0]["action"] == "Episode aktualisiert"
+
+    def test_goal_rows_are_listed_as_goal_category(self, sample_client, facility, sample_case, admin_user):
+        """Refs #1959: dasselbe fuer ``GOAL_UPDATE`` — ``target_id`` ist die Ziel-PK."""
+        goal = OutcomeGoal.objects.create(case=sample_case, title="Export-Ziel", created_by=admin_user)
+        AuditLog.objects.create(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.GOAL_UPDATE,
+            target_type="OutcomeGoal",
+            target_id=str(goal.pk),
+            detail={"case_id": str(sample_case.pk), "changed_fields": ["description"]},
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert [e["category"] for e in data["audit_trail"]] == ["Wirkungsziel"]
+        assert data["audit_trail"][0]["action"] == "Wirkungsziel aktualisiert"
+
+    def test_episode_and_goal_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
+        """Gegenprobe: Episoden/Ziele fremder Faelle duerfen nicht mitmatchen."""
+        other = Client.objects.create(facility=facility, pseudonym="Fremd-Episode", created_by=admin_user)
+        other_case = CaseModel.objects.create(
+            facility=facility,
+            client=other,
+            title="Fremdfall",
+            created_by=admin_user,
+        )
+        other_episode = Episode.objects.create(
+            case=other_case,
+            title="Fremd-Episode",
+            started_at=timezone.now().date(),
+            created_by=admin_user,
+        )
+        other_goal = OutcomeGoal.objects.create(case=other_case, title="Fremd-Ziel", created_by=admin_user)
+        for action, target_type, target_id in (
+            (AuditLog.Action.EPISODE_UPDATE, "Episode", other_episode.pk),
+            (AuditLog.Action.GOAL_UPDATE, "OutcomeGoal", other_goal.pk),
+        ):
+            AuditLog.objects.create(
+                facility=facility,
+                user=admin_user,
+                action=action,
+                target_type=target_type,
+                target_id=str(target_id),
+            )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert data["audit_trail"] == []
+
+    def test_case_event_rows_are_listed_as_event_category(
+        self, sample_client, facility, sample_case, sample_event, admin_user
+    ):
+        """``CASE_EVENT_ASSIGNED``/``-REMOVED`` zeigen auf die Ereignis-PK und
+        brauchen deshalb keinen eigenen Zweig (Ticket-Aussage am Code belegt)."""
+        for action in (AuditLog.Action.CASE_EVENT_ASSIGNED, AuditLog.Action.CASE_EVENT_REMOVED):
+            AuditLog.objects.create(
+                facility=facility,
+                user=admin_user,
+                action=action,
+                target_type="Event",
+                target_id=str(sample_event.pk),
+                detail={"case_id": str(sample_case.pk)},
+            )
+        data = export_client_data(sample_client, facility, admin_user)
+        assert {e["category"] for e in data["audit_trail"]} == {"Ereignis"}
+        assert len(data["audit_trail"]) == 2
+
     def test_case_targeted_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
         """Gegenprobe zum Fall-Zweig: fremde Fall-IDs duerfen nicht mitmatchen."""
         other = Client.objects.create(facility=facility, pseudonym="Fremd-Fall", created_by=admin_user)

@@ -205,3 +205,81 @@ class TestEpisodeCloseView:
             )
         )
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestUpdateEpisodeService:
+    """``update_episode`` — der Schreibpfad der Episoden-Bearbeitung (Refs #1959).
+
+    Bis #1959 rief ``EpisodeUpdateView`` ``form.save()`` direkt; es gab gar
+    keinen Service. Ein Service ist hier zwingend und nicht nur Konvention:
+    ``EpisodeForm`` ist ein ``ModelForm(instance=…)``, dessen ``_post_clean()``
+    die Instanz bereits mutiert hat — ein Diff **nach** ``form.save()`` fände
+    nie eine Änderung und schriebe nie eine Audit-Zeile (Threat-Model TB6,
+    Repudiation). Der Diff läuft deshalb gegen den DB-Stand
+    (``changed_fields_vs_db``), wie bei ``update_case``/``update_client``.
+
+    ``Episode`` hat kein ``updated_at`` — es gibt hier folgerichtig **keinen**
+    Versionskonflikt-Check (anders als ``update_case``).
+    """
+
+    def test_writes_audit_with_changed_fields(self, episode, staff_user, case_open):
+        from core.models import AuditLog
+        from core.services.case import update_episode
+
+        update_episode(episode, staff_user, title="Neue Episode")
+
+        episode.refresh_from_db()
+        assert episode.title == "Neue Episode"
+        log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
+        assert log.user == staff_user
+        assert log.target_type == "Episode"
+        assert log.facility == case_open.facility
+        assert log.detail["changed_fields"] == ["title"]
+        assert log.detail["case_id"] == str(case_open.pk)
+
+    def test_detail_carries_no_freetext(self, episode, staff_user):
+        """Titel und Beschreibung sind klientenbezogener Freitext (Refs #1751)."""
+        from core.models import AuditLog
+        from core.services.case import update_episode
+
+        update_episode(episode, staff_user, title="Klartext-Titel", description="Klartext-Verlauf")
+
+        log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
+        assert set(log.detail) == {"case_id", "changed_fields"}
+        assert "Klartext" not in str(log.detail)
+
+    def test_identical_values_write_nothing(self, episode, staff_user):
+        from core.models import AuditLog
+        from core.services.case import update_episode
+
+        update_episode(episode, staff_user, title=episode.title, description=episode.description)
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE).exists()
+
+    def test_without_fields_writes_nothing(self, episode, staff_user):
+        from core.models import AuditLog
+        from core.services.case import update_episode
+
+        update_episode(episode, staff_user)
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE).exists()
+
+    def test_unknown_field_is_rejected(self, episode, staff_user):
+        """Allowlist gegen Mass-Assignment (Muster ``update_case``, Refs #734)."""
+        from core.services.case import update_episode
+
+        with pytest.raises(ValueError, match="case"):
+            update_episode(episode, staff_user, case=episode.case)
+
+    def test_only_changed_columns_are_written(self, episode, staff_user):
+        """``save(update_fields=…)`` — ein Vollsave überschriebe die parallel
+        laufende Redaktions-Kaskade mit dem stalen Klartext (Refs #1789)."""
+        from core.services.case import update_episode
+
+        Episode.objects.filter(pk=episode.pk).update(description="Aus der Redaktion")
+        update_episode(episode, staff_user, title="Nur der Titel")
+
+        episode.refresh_from_db()
+        assert episode.title == "Nur der Titel"
+        assert episode.description == "Aus der Redaktion"

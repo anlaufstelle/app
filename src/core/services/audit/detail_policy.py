@@ -139,6 +139,10 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "credential_pk": "Passkey-Datensatz-UUID",
     "hold_id": "Legal-Hold-UUID",
     "case_id": "Fall-UUID — traegt den Falltitel bewusst nicht mit",
+    # Refs #1959: Wird ein Ereignis von einem Fall auf einen anderen umgehaengt,
+    # entsteht nur eine ``CASE_EVENT_ASSIGNED``-Zeile — der Abgang aus dem alten
+    # Fall haette sonst keinen Beleg. UUID wie ``case_id``, kein Falltitel.
+    "previous_case_id": "Fall-UUID des vorherigen Falls einer Ereignis-Zuordnung",
     "owner_type": "Modellname des Anhang-Eigentuemers (ADR-039 §5) — Schema, kein Inhalt",
     "owner_id": "UUID des Anhang-Eigentuemers (ADR-039 §5)",
     "target_client": "Client-UUID des Ziels einer Loesch-/Berichtigungs-Entscheidung",

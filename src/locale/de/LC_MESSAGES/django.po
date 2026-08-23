@@ -11158,9 +11158,9 @@ msgstr "Der Fall wurde endgültig anonymisiert und kann nicht wiederhergestellt 
 msgid "Der Fall wurde bereits endgültig anonymisiert."
 msgstr "Der Fall wurde bereits endgültig anonymisiert."
 
-#: src/core/services/compliance/vvt.py:168
-msgid "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen von Episoden und Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
-msgstr "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen von Episoden und Wirkungszielen werden gar nicht protokolliert; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+#: src/core/services/compliance/vvt.py:174
+msgid "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; auf das Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen und Loesen von Ereignissen zu Faellen; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
+msgstr "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, Wiederherstellen und Anonymisieren von Faellen; auf das Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen und Loesen von Ereignissen zu Faellen; von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme und facility-uebergreifende Zugriffe — Detail-, Listen- und Suchaufrufe werden nicht protokolliert (ADR-043)"
 
 #: src/core/services/config.py:135
 #, python-format

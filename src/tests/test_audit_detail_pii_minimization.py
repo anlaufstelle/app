@@ -229,3 +229,55 @@ class TestEventUpdateDetailMinimized:
         assert set(log.detail) == {"document_type", "changed_fields"}
         assert "Klartext" not in str(log.detail), "Feldwerte gehoeren nicht ins append-only AuditLog"
         assert log.target_type == "Event"
+
+
+class TestEpisodeAndGoalUpdateDetailMinimized:
+    """``EPISODE_UPDATE``/``GOAL_UPDATE`` (Refs #1959) fuehren nur Feldnamen.
+
+    Beide Schreibstellen sind mit #1959 neu und laufen deshalb hier mit: Titel
+    und Beschreibung einer Episode bzw. eines Wirkungsziels sind derselbe
+    klientenbezogene Freitext, den die Anonymisierung an ``Episode.description``
+    tilgt (Refs #1751) — im append-only Log ueberlebte er sie. Die Zuordnung
+    bleibt ueber ``target_id`` (Episoden-/Ziel-PK) und ``case_id`` vollstaendig.
+    """
+
+    def test_episode_detail_traegt_nur_feldnamen(self, staff_user, case_open, episode):
+        from core.services.case import update_episode
+
+        update_episode(episode, staff_user, title="Klartext-Titel", description="Klartext-Verlauf")
+
+        log = AuditLog.objects.get(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk))
+        assert set(log.detail) == {"case_id", "changed_fields"}
+        assert log.detail["changed_fields"] == ["title", "description"]
+        assert "Klartext" not in str(log.detail), "Feldwerte gehoeren nicht ins append-only AuditLog"
+        assert log.target_type == "Episode"
+
+    def test_goal_detail_traegt_nur_feldnamen(self, staff_user, case_open, outcome_goal):
+        from core.services.case import update_goal
+
+        update_goal(outcome_goal, staff_user, title="Klartext-Ziel", description="Klartext-Weg")
+
+        log = AuditLog.objects.get(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk))
+        assert set(log.detail) == {"case_id", "changed_fields"}
+        assert "Klartext" not in str(log.detail)
+        assert log.target_type == "OutcomeGoal"
+
+
+class TestCaseEventAssignmentDetailMinimized:
+    """``CASE_EVENT_ASSIGNED``/``CASE_EVENT_REMOVED`` (Refs #1959) fuehren nur UUIDs.
+
+    Der Falltitel ist Freitext (die Anonymisierung ueberschreibt ihn), das
+    ``detail`` traegt deshalb ausschliesslich Fall-UUIDs — dieselbe Einordnung
+    wie ``case_id`` beim Meilenstein-Loeschen.
+    """
+
+    def test_assignment_detail_traegt_nur_uuids(self, staff_user, case_open, sample_event):
+        from core.services.case import assign_event_to_case, remove_event_from_case
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+        remove_event_from_case(sample_event, staff_user)
+
+        for action in (AuditLog.Action.CASE_EVENT_ASSIGNED, AuditLog.Action.CASE_EVENT_REMOVED):
+            log = AuditLog.objects.get(action=action)
+            assert set(log.detail) == {"case_id"}
+            assert case_open.title not in str(log.detail)

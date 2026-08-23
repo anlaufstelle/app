@@ -368,14 +368,14 @@ class TestUpdateRouteAuditEnrollment:
     ``UNAUDITED_ROUTES`` bleibt als leerer Slot stehen: eine künftige
     Edit-Route darf dort nur mit ausgeschriebener Begründung landen.
 
-    Die **Schreibpfade** folgen getrennt: ``event_update`` steht seit
-    #1958 und trägt
-    deshalb keinen Marker mehr. Offen bleiben ``episode_update`` und
-    ``goal_update`` in
-    #1959; solange sie
-    fehlen, tragen genau diese **zwei** Routen-Tests ``xfail(strict=True)``. Der
-    Marker ist bewusst strikt: sobald der Schreibpfad steht, wird der Test
-    XPASS und fällt auf — der jeweilige Schreibpfad-Commit entfernt ihn.
+    Die **Schreibpfade** sind seit
+    #1959 vollständig:
+    ``event_update`` kam mit
+    #1958,
+    ``episode_update`` und ``goal_update`` mit #1959. Die beiden
+    ``xfail(strict=True)``-Marker, die bis dahin auf genau diesen zwei
+    Routen-Tests saßen, sind damit gefallen — kein Test dieser Klasse trägt
+    noch einen Marker, jeder der sieben Pfade wird echt durchgeschrieben.
     """
 
     #: Vollständige Registry der sieben Edit-Routen.
@@ -473,10 +473,6 @@ class TestUpdateRouteAuditEnrollment:
         data.update(overrides)
         return data
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Episoden-Update-Service folgt in #1959 — Marker dort entfernen (XPASS = fertig).",
-    )
     def test_episode_update_route_writes_audit(self, client, staff_user, case_open, episode):
         client.force_login(staff_user)
         before = AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count()
@@ -502,10 +498,6 @@ class TestUpdateRouteAuditEnrollment:
         after = AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count()
         assert after == before
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Audit-Write in update_goal folgt in #1959 — Marker dort entfernen (XPASS = fertig).",
-    )
     def test_goal_update_route_writes_audit(self, client, staff_user, case_open, outcome_goal):
         client.force_login(staff_user)
         before = AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count()

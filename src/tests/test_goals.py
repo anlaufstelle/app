@@ -54,18 +54,18 @@ class TestGoalService:
         assert goal.description == ""
 
     def test_update_goal_title(self, outcome_goal, staff_user):
-        updated = update_goal(outcome_goal, title="Neuer Titel")
+        updated = update_goal(outcome_goal, staff_user, title="Neuer Titel")
         assert updated.title == "Neuer Titel"
 
     def test_update_goal_description(self, outcome_goal, staff_user):
-        updated = update_goal(outcome_goal, description="Neue Beschreibung")
+        updated = update_goal(outcome_goal, staff_user, description="Neue Beschreibung")
         assert updated.description == "Neue Beschreibung"
         # Title should remain unchanged
         assert updated.title == "Stabile Wohnsituation"
 
     def test_update_goal_none_values_unchanged(self, outcome_goal, staff_user):
         original_title = outcome_goal.title
-        updated = update_goal(outcome_goal, title=None, description=None)
+        updated = update_goal(outcome_goal, staff_user, title=None, description=None)
         assert updated.title == original_title
 
     def test_achieve_goal(self, outcome_goal, staff_user):
@@ -126,6 +126,74 @@ class TestGoalService:
         # traegt target_id (Meilenstein-PK) + case_id.
         assert "title" not in log.detail
         assert log.detail["case_id"] == str(case_id)
+
+
+@pytest.mark.django_db
+class TestUpdateGoalAudit:
+    """``update_goal`` schreibt ``GOAL_UPDATE`` (Refs #1959).
+
+    Bis #1959 hatte der Service gar keinen ``user``-Parameter — ohne Akteur
+    kann ``audit_event`` keine Zeile schreiben, die Signatur musste sich also
+    aendern. Die Bearbeitung eines Wirkungsziels aendert Falldaten und ist
+    damit dieselbe Klasse Schreibvorgang wie ``CASE_UPDATE``/``EVENT_UPDATE``:
+    ohne Eintrag ist sie nachtraeglich nicht zuzuordnen (Threat-Model TB6,
+    Repudiation).
+
+    ``OutcomeGoal`` hat kein ``updated_at`` — es gibt hier folgerichtig
+    **keinen** Versionskonflikt-Check (anders als ``update_case``).
+    """
+
+    def test_writes_audit_with_changed_fields(self, outcome_goal, staff_user, case_open):
+        from core.models import AuditLog
+
+        update_goal(outcome_goal, staff_user, title="Neues Ziel")
+
+        outcome_goal.refresh_from_db()
+        assert outcome_goal.title == "Neues Ziel"
+        log = AuditLog.objects.get(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk))
+        assert log.user == staff_user
+        assert log.target_type == "OutcomeGoal"
+        assert log.facility == case_open.facility
+        assert log.detail["changed_fields"] == ["title"]
+        assert log.detail["case_id"] == str(case_open.pk)
+
+    def test_detail_carries_no_freetext(self, outcome_goal, staff_user):
+        """Titel und Beschreibung sind klientenbezogener Freitext (Refs #1751)."""
+        from core.models import AuditLog
+
+        update_goal(outcome_goal, staff_user, title="Klartext-Ziel", description="Klartext-Weg")
+
+        log = AuditLog.objects.get(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk))
+        assert set(log.detail) == {"case_id", "changed_fields"}
+        assert "Klartext" not in str(log.detail)
+
+    def test_identical_values_write_nothing(self, outcome_goal, staff_user):
+        from core.models import AuditLog
+
+        update_goal(outcome_goal, staff_user, title=outcome_goal.title, description=outcome_goal.description)
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE).exists()
+
+    def test_without_field_arguments_writes_nothing(self, outcome_goal, staff_user):
+        """Bestandsverhalten aus ``test_update_goal_none_values_unchanged``,
+        um die Audit-Zusage erweitert: ein Aufruf ohne Feldargumente ist ein
+        No-Op und darf keine Zeile erzeugen."""
+        from core.models import AuditLog
+
+        update_goal(outcome_goal, staff_user)
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE).exists()
+
+    def test_only_changed_columns_are_written(self, outcome_goal, staff_user):
+        """``save(update_fields=…)`` — ein Vollsave ueberschriebe die parallel
+        laufende Redaktions-Kaskade mit dem stalen Klartext (Refs #1789)."""
+        OutcomeGoal.objects.filter(pk=outcome_goal.pk).update(description="Aus der Redaktion")
+
+        update_goal(outcome_goal, staff_user, title="Nur der Titel")
+
+        outcome_goal.refresh_from_db()
+        assert outcome_goal.title == "Nur der Titel"
+        assert outcome_goal.description == "Aus der Redaktion"
 
 
 @pytest.mark.django_db

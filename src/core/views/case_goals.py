@@ -52,7 +52,7 @@ class GoalUpdateView(StaffRequiredMixin, View):
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         title = request.POST.get("title", "").strip() or None
         description = request.POST.get("description")
-        update_goal(goal, title=title, description=description)
+        update_goal(goal, request.user, title=title, description=description)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 

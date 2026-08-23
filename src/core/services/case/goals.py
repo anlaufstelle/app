@@ -8,6 +8,7 @@ from django.utils import timezone
 from core.models import Activity, AuditLog
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.audit import audit_event
+from core.services.audit.diff import changed_fields_vs_db
 from core.services.dashboard import log_activity
 
 logger = logging.getLogger(__name__)
@@ -27,13 +28,50 @@ def create_goal(case, user, title, description=""):
 
 
 @transaction.atomic
-def update_goal(goal, title=None, description=None):
-    """Update mutable fields on a goal (title, description)."""
+def update_goal(goal, user, title=None, description=None):
+    """Update mutable fields on a goal (title, description) + AuditLog.
+
+    Refs #1959: ``user`` ist neu und Pflicht — ohne Akteur kann
+    ``audit_event`` keine verwertbare Zeile schreiben, und eine Bearbeitung
+    des Wirkungsziels aendert Falldaten wie jede andere. Positionell wie in
+    ``update_case``/``update_event``, damit der Service-Layer ein Muster
+    behaelt.
+
+    ``fields`` entsteht aus den nicht-``None``-Argumenten; ein Aufruf ohne
+    Feldargumente ist ein No-Op. Der Diff laeuft ueber
+    :func:`changed_fields_vs_db` gegen den DB-Stand — die View reicht
+    Formularwerte durch, die Instanz kann bereits mutiert sein (Threat-Model
+    TB6, dieselbe Falle wie bei der Episode). Audit nur bei echtem Diff.
+
+    ``OutcomeGoal`` fuehrt kein ``updated_at``; es gibt hier folgerichtig
+    keinen Versionskonflikt-Check.
+    """
+    fields = {}
     if title is not None:
-        goal.title = title
+        fields["title"] = title
     if description is not None:
-        goal.description = description
-    goal.save()
+        fields["description"] = description
+    if not fields:
+        return goal
+
+    changed_fields = changed_fields_vs_db(goal, fields)
+    for key, value in fields.items():
+        setattr(goal, key, value)
+    # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge) — sonst
+    # ueberschreibt ein Vollsave die parallel laufende Redaktions-Kaskade.
+    goal.save(update_fields=list(fields.keys()))
+
+    if changed_fields:
+        audit_event(
+            AuditLog.Action.GOAL_UPDATE,
+            user=user,
+            facility=goal.case.facility,
+            target_obj=goal,
+            # Refs #1751 (Punkt 5): kein Titel, keine Beschreibung — beides ist
+            # klientenbezogener Freitext (dieselbe Einordnung wie beim
+            # Meilenstein-Titel in ``delete_milestone``).
+            detail={"case_id": str(goal.case_id), "changed_fields": changed_fields},
+        )
     return goal
 
 

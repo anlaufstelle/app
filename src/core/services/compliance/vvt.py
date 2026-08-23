@@ -144,15 +144,21 @@ PROCESSING_ACTIVITIES = [
             #    ``DeletionRequest.TargetType`` kennt nur ``EVENT``/``CLIENT``
             #    (``services/case/cases.py``, ADR-039 §6). Eine
             #    ``AuditLog.Action.CASE_DELETE`` gibt es folgerichtig nicht.
-            # 2. **Episoden und Wirkungsziele landen nirgends.**
-            #    ``models/case.py`` (``create_episode``) und
-            #    ``services/case/goals.py`` speichern nur; sie rufen weder
-            #    ``audit_event`` noch ``log_activity``. Eine ``EventHistory``
-            #    gibt es ausschliesslich fuer Event-Objekte. Die Aktionen
-            #    ``EPISODE_UPDATE``/``GOAL_UPDATE`` existieren im Vokabular,
-            #    ihr Schreibpfad ist offen (#1959, in test_audit_coverage.py
-            #    als ``xfail(strict=True)`` gepinnt). Bis dahin ist "gar nicht
-            #    protokolliert" die einzige zutreffende Aussage.
+            # 2. **Episoden und Wirkungsziele sind seit #1959 protokolliert.**
+            #    Bis dahin sagte diese TOM "gar nicht protokolliert" — die
+            #    damals einzige zutreffende Aussage: ``models/case.py``
+            #    (``create_episode``) und ``services/case/goals.py``
+            #    speicherten nur, ohne ``audit_event`` und ohne
+            #    ``log_activity``. Mit #1959 schreiben ``update_episode``
+            #    (``services/case/episodes.py``) und ``update_goal``
+            #    ``EPISODE_UPDATE``/``GOAL_UPDATE``, die Ereignis-Zuordnung
+            #    ``CASE_EVENT_ASSIGNED``/``CASE_EVENT_REMOVED``. Die Angabe
+            #    zaehlt deshalb jetzt auf, statt zu verneinen. **Nicht**
+            #    dazugekommen sind Anlegen, Abschliessen und Erreichen —
+            #    ebenso wenig eine ``EventHistory`` (die gibt es weiterhin
+            #    ausschliesslich fuer Event-Objekte) oder ein Eintrag im
+            #    Aktivitaets-Feed; die TOM nennt darum ausdruecklich nur die
+            #    Bearbeitung.
             # 3. **Von Lesezugriffen** bleiben nur ``EXPORT``, ``DOWNLOAD``,
             #    ``OFFLINE_*_READ`` und ``SYSTEM_VIEW``; Detail-, Listen- und
             #    Suchaufrufe erzeugen keinen Eintrag (ADR-043).
@@ -167,10 +173,11 @@ PROCESSING_ACTIVITIES = [
             _(
                 "AuditLog auf Anlegen, Bearbeiten und Loeschen von Ereignissen; "
                 "auf Anlegen, Bearbeiten, Schliessen, Wiedereroeffnen, Loeschen, "
-                "Wiederherstellen und Anonymisieren von Faellen; Bearbeitungen "
-                "von Episoden und Wirkungszielen werden gar nicht protokolliert; "
-                "von Lesezugriffen nur Export, Datei-Download, Offline-Mitnahme "
-                "und facility-uebergreifende Zugriffe — Detail-, Listen- und "
+                "Wiederherstellen und Anonymisieren von Faellen; auf das "
+                "Bearbeiten von Episoden und Wirkungszielen sowie das Zuordnen "
+                "und Loesen von Ereignissen zu Faellen; von Lesezugriffen nur "
+                "Export, Datei-Download, Offline-Mitnahme und "
+                "facility-uebergreifende Zugriffe — Detail-, Listen- und "
                 "Suchaufrufe werden nicht protokolliert (ADR-043)"
             ),
             _("Soft-Delete + Vier-Augen-Prinzip vor finaler Loeschung"),

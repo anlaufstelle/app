@@ -128,9 +128,96 @@ class TestCaseService:
 
     def test_remove_event_from_case(self, facility, staff_user, case_open, sample_event):
         assign_event_to_case(case_open, sample_event, staff_user)
-        remove_event_from_case(sample_event)
+        remove_event_from_case(sample_event, staff_user)
         sample_event.refresh_from_db()
         assert sample_event.case is None
+
+
+@pytest.mark.django_db
+class TestCaseEventAssignmentAudit:
+    """Zuordnen und Loesen von Ereignissen sind auditiert (Refs #1959).
+
+    Die Zuordnung entscheidet, in welchem Fallzusammenhang ein Kontakt steht —
+    fachlich eine Aussage ueber die Person, technisch ein Schreibvorgang auf
+    ``Event.case``. Bis #1959 hinterliess sie keine Spur; ``assign_event_to_case``
+    trug den ``user`` sogar schon als Parameter, ausdruecklich „reserved for
+    future audit trail", und ``remove_event_from_case`` hatte ihn gar nicht.
+
+    ``target_obj`` ist das **Ereignis**, nicht der Fall: die Zeile beschreibt,
+    was mit dem Ereignis geschah, und bleibt so auch nach dem Loesen
+    zuordenbar. Der Fall steht als ``case_id`` im ``detail``.
+    """
+
+    def test_assign_writes_audit_on_the_event(self, facility, staff_user, case_open, sample_event):
+        from core.models import AuditLog
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+
+        log = AuditLog.objects.get(action=AuditLog.Action.CASE_EVENT_ASSIGNED)
+        assert log.user == staff_user
+        assert log.facility == facility
+        assert log.target_type == "Event"
+        assert log.target_id == str(sample_event.pk)
+        assert log.detail == {"case_id": str(case_open.pk)}
+
+    def test_assign_to_the_same_case_is_idempotent(self, facility, staff_user, case_open, sample_event):
+        """Erneutes Zuordnen desselben Falls schreibt keine zweite Zeile."""
+        from core.models import AuditLog
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+        assign_event_to_case(case_open, sample_event, staff_user)
+
+        assert AuditLog.objects.filter(action=AuditLog.Action.CASE_EVENT_ASSIGNED).count() == 1
+
+    def test_reassignment_names_the_previous_case(
+        self, facility, staff_user, case_open, sample_event, client_identified
+    ):
+        """Ein Umhaengen loest das Ereignis aus dem alten Fall, ohne dass eine
+        ``CASE_EVENT_REMOVED``-Zeile entstuende — ohne ``previous_case_id``
+        waere der Abgang aus dem alten Fall unbelegt."""
+        from core.models import AuditLog
+
+        second = create_case(
+            facility=facility,
+            user=staff_user,
+            client=client_identified,
+            title="Zweiter Fall",
+        )
+        assign_event_to_case(case_open, sample_event, staff_user)
+        assign_event_to_case(second, sample_event, staff_user)
+
+        log = AuditLog.objects.filter(action=AuditLog.Action.CASE_EVENT_ASSIGNED).latest("timestamp")
+        assert log.detail == {"case_id": str(second.pk), "previous_case_id": str(case_open.pk)}
+
+    def test_remove_writes_audit_naming_the_previous_case(self, facility, staff_user, case_open, sample_event):
+        from core.models import AuditLog
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+        remove_event_from_case(sample_event, staff_user)
+
+        log = AuditLog.objects.get(action=AuditLog.Action.CASE_EVENT_REMOVED)
+        assert log.user == staff_user
+        assert log.facility == facility
+        assert log.target_type == "Event"
+        assert log.target_id == str(sample_event.pk)
+        assert log.detail == {"case_id": str(case_open.pk)}
+
+    def test_remove_without_case_writes_nothing(self, facility, staff_user, sample_event):
+        """Ein Ereignis ohne Fall zu loesen ist ein No-Op — keine Zeile."""
+        from core.models import AuditLog
+
+        remove_event_from_case(sample_event, staff_user)
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.CASE_EVENT_REMOVED).exists()
+
+    def test_detail_carries_no_freetext(self, facility, staff_user, case_open, sample_event):
+        """Weder Fall- noch Ereignistitel gehoeren ins append-only Log (Refs #1751)."""
+        from core.models import AuditLog
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+
+        log = AuditLog.objects.get(action=AuditLog.Action.CASE_EVENT_ASSIGNED)
+        assert case_open.title not in str(log.detail)
 
 
 @pytest.mark.django_db
@@ -324,6 +411,8 @@ class TestCaseReopenView:
 @pytest.mark.django_db
 class TestCaseAssignEventView:
     def test_assign_event_to_case(self, client, staff_user, case_open, sample_event):
+        from core.models import AuditLog
+
         client.force_login(staff_user)
         response = client.post(
             reverse("core:case_assign_event", kwargs={"pk": case_open.pk}),
@@ -332,6 +421,11 @@ class TestCaseAssignEventView:
         assert response.status_code == 200
         sample_event.refresh_from_db()
         assert sample_event.case == case_open
+        # Refs #1959: der Akteur muss bis zur Schreibstelle durchgereicht sein —
+        # eine Zeile ohne ``user`` waere als Nachweis wertlos.
+        log = AuditLog.objects.get(action=AuditLog.Action.CASE_EVENT_ASSIGNED)
+        assert log.user == staff_user
+        assert log.target_id == str(sample_event.pk)
 
     def test_assign_event_validates_facility(self, client, staff_user, case_open, other_facility):
         from core.models import DocumentType
@@ -355,6 +449,8 @@ class TestCaseAssignEventView:
 @pytest.mark.django_db
 class TestCaseRemoveEventView:
     def test_remove_event_from_case(self, client, staff_user, case_open, sample_event):
+        from core.models import AuditLog
+
         sample_event.case = case_open
         sample_event.save()
         client.force_login(staff_user)
@@ -367,6 +463,11 @@ class TestCaseRemoveEventView:
         assert response.status_code == 200
         sample_event.refresh_from_db()
         assert sample_event.case is None
+        # Refs #1959: dieselbe Durchreichung wie beim Zuordnen — der Service
+        # hatte bis dahin gar keinen ``user``-Parameter.
+        log = AuditLog.objects.get(action=AuditLog.Action.CASE_EVENT_REMOVED)
+        assert log.user == staff_user
+        assert log.detail["case_id"] == str(case_open.pk)
 
 
 @pytest.mark.django_db
