@@ -223,6 +223,10 @@
         // base.html exposes request.session.get_expiry_age via
         // data-session-age on <body>; login.html / password_change.html
         // load crypto.js without it (and before <body> exists) → fallback.
+        // Refs #1966: offline_base.html laesst das Attribut ebenfalls weg —
+        // eine precachte Shell darf die Restlaufzeit EINER Sitzung nicht
+        // einfrieren. Die precachten Shells laufen damit auf demselben
+        // dokumentierten Default wie die Login-Seite.
         const body = document.body;
         const raw = body && body.dataset ? body.dataset.sessionAge : null;
         const parsed = parseInt(raw || "", 10);

@@ -145,6 +145,31 @@ def _open_inplace_shell(page, base_url, client_pk):
     page.locator("[data-testid='offline-event']").first.wait_for(state="visible", timeout=15000)
 
 
+def _force_stale_csrf_meta(page):
+    """Einen veralteten CSRF-Token im Dokument erzwingen.
+
+    Refs #1966: Die precachte Shell traegt seit dem Neutralitaets-Fix GAR KEIN
+    ``<meta name="csrf-token">`` mehr — der maskierte Token unterschied sich
+    schon zwischen zwei anonymen Abrufen und machte die Shell zwischen anonym
+    und angemeldet verschieden. Der 403-Refresh-Pfad, den die Tests hier
+    absichern, bleibt trotzdem erreichbar (jede lange offene Online-Seite kann
+    einen rotierten Token tragen), deshalb wird das Meta hier angelegt, wenn es
+    fehlt, statt nur ueberschrieben. Ohne das lief der fruehere Aufruf in einen
+    ``TypeError`` auf ``null``.
+    """
+    page.evaluate(
+        """() => {
+            let meta = document.querySelector('meta[name="csrf-token"]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.setAttribute('name', 'csrf-token');
+                document.head.appendChild(meta);
+            }
+            meta.setAttribute('content', 'stale-precached-token-DEADBEEF');
+        }"""
+    )
+
+
 def _wait_for_active_service_worker(page, base_url):
     """SW registriert + aktiviert + kontrolliert die Page (sonst kann er
     ``/clients/<pk>/`` offline nicht in-place ausliefern). Analog
@@ -505,10 +530,14 @@ class TestOfflineEditReplay:
     def test_inplace_shell_offline_edit_syncs_despite_stale_csrf(self, browser, base_url, e2e_env):
         """Refs #1330: Offline-Edit auf der SW-servierten In-Place-Shell unter der
         kanonischen URL ``/clients/<pk>/`` (Refs #1322) muss beim Reconnect
-        synchronisieren — auch wenn die aus dem Cache gelieferte Shell ein zur
-        Precache-Zeit eingefrorenes, veraltetes ``<meta name="csrf-token">``
-        traegt. Der Replay darf am 403 nicht als „revoked" scheitern, sondern
-        muss den Token auffrischen und erneut senden.
+        synchronisieren — auch wenn das Dokument einen veralteten
+        ``<meta name="csrf-token">`` traegt. Der Replay darf am 403 nicht als
+        „revoked" scheitern, sondern muss den Token auffrischen und erneut
+        senden.
+
+        Refs #1966: Die Shell selbst liefert kein CSRF-Meta mehr aus (das wird
+        hier mitgeprueft); der veraltete Token wird deshalb explizit gesetzt,
+        um den 403-Zweig deterministisch zu treffen.
         """
         client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
         context = browser.new_context(locale="de-DE")
@@ -524,15 +553,19 @@ class TestOfflineEditReplay:
             _open_inplace_shell(page, base_url, client_pk)
             assert page.url.rstrip("/").endswith(f"/clients/{client_pk}"), f"kein In-Place-Render, URL={page.url}"
 
+            # Refs #1966: Die aus dem Precache gelieferte Shell traegt kein
+            # Nutzer-Chrome — hier stellvertretend das CSRF-Meta, das der
+            # Byte-Gleichheit als erstes im Weg stand.
+            assert page.evaluate("() => document.querySelector('meta[name=\"csrf-token\"]') === null"), (
+                "Die precachte Shell liefert wieder ein CSRF-Meta aus (Refs #1966)"
+            )
+
             _edit_notiz_offline(page, event_pk, "Shell-Edit offline")
 
             # Die gecachte Shell traegt ein veraltetes CSRF-Meta — deterministisch
             # reproduzieren (in Produktion: Snapshot der Precache-Zeit vor der
             # Login-Token-Rotation), damit der Replay-POST erst einen 403 kassiert.
-            page.evaluate(
-                "() => document.querySelector('meta[name=\"csrf-token\"]')"
-                ".setAttribute('content', 'stale-precached-token-DEADBEEF')"
-            )
+            _force_stale_csrf_meta(page)
 
             # Reconnect (auf der Shell-Seite bleibend) → Auto-Replay.
             _go_online(page)
@@ -570,10 +603,7 @@ class TestOfflineEditReplay:
 
             # Stale-CSRF deterministisch reproduzieren → der Replay-POST kassiert
             # erst einen 403 und muss den Token auffrischen.
-            page.evaluate(
-                "() => document.querySelector('meta[name=\"csrf-token\"]')"
-                ".setAttribute('content', 'stale-precached-token-DEADBEEF')"
-            )
+            _force_stale_csrf_meta(page)
 
             # Ab hier die Requests mitschneiden — NACH dem Login, damit dessen
             # eigene /login/-Navigation nicht mitzaehlt.

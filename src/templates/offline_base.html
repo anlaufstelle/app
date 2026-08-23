@@ -1,0 +1,184 @@
+{% load i18n static %}
+<!DOCTYPE html>
+{% comment %}
+Basistemplate der precachten Offline-Shells (Refs #1966).
+
+WARUM EIGENSTAENDIG: Der Service Worker holt die acht pk-losen Shells beim
+Install mit einem same-origin-Fetch — also MIT Cookies. Lief das waehrend
+einer angemeldeten Sitzung, landete mit base.html die personalisierte Variante
+im Precache: Klarname, Rollenbezeichnung, Organisation/Einrichtung,
+data-user-id, data-session-age und der CSRF-Token. Dieser Cache-Eintrag
+ueberlebt Sitzungsablauf, Browser-Abbruch, Sperrung und Geraetewechsel und
+wird danach JEDER Sitzung auf dem Geraet ausgeliefert; der Logout-Wipe
+entschaerft nur den Normalfall (Befund 3 aus #1821).
+
+HARTE REGEL FUER DIESE DATEI: keine auth-, sitzungs- oder personenabhaengige
+Verzweigung. Kein request.user, keine csrf_token, keine Flash-Messages, keine
+Zeitstempel. Eine Shell-Antwort ist byte-gleich, egal wer sie abruft —
+festgenagelt von src/tests/test_offline_shell_neutrality.py.
+
+GEGENSTUECK ZUR DRIFT (#1826): Diese Datei ist bewusst KEIN zweites
+Vollayout. Sie traegt exakt zwei Dinge, die base.html auch traegt und die
+offline gebraucht werden: die Asset-/Skriptkette und den Offline-Statusbalken.
+Alles Uebrige (Suche, Anlegen-Menue, Profil, Sprache, Abmelden, Demo-Banner,
+2FA-Reminder, Versionsanzeige) fehlt hier absichtlich — es ist entweder
+personenabhaengig oder ohne Netz wirkungslos.
+
+WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
+* <meta name="csrf-token">: Der maskierte Token unterscheidet sich schon
+  zwischen zwei anonymen Abrufen; Byte-Gleichheit und eingebackener Token
+  schliessen einander aus. Die Replay-Konsumenten holen sich den Token zur
+  Laufzeit vom dedizierten Endpoint (csrf-utils.js refresh(), Refs #1408) —
+  offline-queue.js, offline-edit.js und offline-tally.js tun das jeweils
+  schon, wenn fromMeta() leer ist.
+* data-session-age: crypto.js faellt dokumentiert auf DEFAULT_SESSION_AGE_S
+  zurueck (_sessionAgeMs), genau wie auf login.html.
+* data-user-id: Der Draft-Namensraum in autosave.js haengt daran, aber kein
+  Shell-Template traegt ein data-autosave-Formular (das ist die ONLINE-Maske
+  core/events/create.html). Der Boot-Purge in sw-register.js hing ebenfalls
+  daran und gated seit #1966 auf den Session-Key statt auf das Attribut.
+* hx-headers mit CSRF: Keine Shell nutzt htmx (die Inhalte entstehen aus
+  IndexedDB via Alpine); ein eingebackener Token brachte nur das Leck.
+* Demo-Banner: Es nennt den naechsten Reset-Zeitpunkt (H:i) und ist damit
+  uhrzeitabhaengig — schon zwei Precache-Fetches eine Minute auseinander
+  lieferten verschiedene Bytes, und im Cache stuende dauerhaft eine falsche
+  Uhrzeit.
+{% endcomment %}
+{# Refs #808: lang dynamisch aus dem aktiven Sprach-Code (i18n-Context-Processor). #}
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Anlaufstelle{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2d6a4f">
+    <link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+    {# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    {# Refs #1660: identische htmx-Konfiguration wie base.html — Begruendung dort. #}
+    <meta name="htmx-config" content='{"includeIndicatorStyles": false, "attributesToSettle": ["class", "width", "height"]}'>
+    <script src="{% static 'js/htmx.min.js' %}" defer></script>
+    {# Alpine-Komponenten VOR alpine-csp.min.js (alpine:init-Registrierung), Reihenfolge 1:1 wie base.html. Refs #669, #911. #}
+    <script src="{% static 'js/alpine/base-layout.js' %}" defer></script>
+    <script src="{% static 'js/alpine/widgets.js' %}" defer></script>
+    <script src="{% static 'js/alpine/auth.js' %}" defer></script>
+    <script src="{% static 'js/alpine/forms.js' %}" defer></script>
+    <script src="{% static 'js/alpine/dashboards.js' %}" defer></script>
+    <script src="{% static 'js/alpine/config.js' %}" defer></script>
+    <script src="{% static 'js/alpine/conditions.js' %}" defer></script>
+    <script src="{% static 'js/date-input-i18n.js' %}" defer></script>
+    <script src="{% static 'js/alpine-csp.min.js' %}" defer></script>
+    {# Umami-Web-Analytics (Refs #1602/#1604) — haengt an der Deploy-Konfiguration, nicht an der Sitzung. #}
+    {% include "partials/_umami.html" %}
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full overflow-x-hidden"
+      data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}">
+
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+
+    {# Offline-Banner und Sync-Indikator — 1:1 aus base.html (Refs #1495), aber #}
+    {# ohne den Rollen-Gate um den Personenlisten-Link: die Shell kennt die #}
+    {# Rolle nicht und darf sie nicht kennen. Der Link bleibt trotzdem #}
+    {# unsichtbar, solange nichts gecacht ist (x-show="hasCachedClients"), und #}
+    {# die Systemrolle hat mangels Einrichtung nie gecachte Personen. #}
+    <div x-data="offlineStatus"
+         @online.window="onOnline"
+         @offline.window="onOffline"
+         @offline-queue-count.window="onQueueEvent"
+         @offline-clients-count.window="onClientsEvent"
+         @offline-unsynced-count.window="onUnsyncedEvent"
+         @offline-conflict-count.window="onConflictEvent"
+         id="offline-status" class="sticky top-0 z-50">
+        <div x-show="offline" x-cloak
+             class="bg-yellow-500 text-white text-center text-sm py-2"
+             data-testid="offline-banner">
+            {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
+            <a href="{% url 'core:client_list' %}" aria-label="{% trans 'Zur Personenliste' %}" x-show="hasCachedClients" x-cloak class="ml-2 text-xs underline" data-testid="offline-cached-count">
+                (<span x-text="cachedClients"></span><span x-show="isSingleCachedClient" x-cloak> {% trans "Person lokal verfügbar" %}</span><span x-show="hasMultipleCachedClients" x-cloak> {% trans "Personen lokal verfügbar" %}</span>)
+            </a>
+            <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
+                · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
+            </span>
+        </div>
+        <div x-show="showSyncBanner" x-cloak
+             class="bg-blue-500 text-white text-center text-sm py-2"
+             data-testid="sync-banner">
+            <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
+        </div>
+        <div x-show="showConflictBanner" x-cloak
+             class="bg-red-500 text-white text-center text-sm py-2"
+             data-testid="conflict-banner">
+            <a href="{% url 'core:offline_conflict_list' %}" class="underline">
+                <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
+            </a>
+        </div>
+    </div>
+
+    {% include "partials/_offline_navigation.html" %}
+
+    <main id="main-content" class="min-h-screen overflow-x-hidden">
+        <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
+            {# Refs #811 (C-44): stabile Live-Region fuer clientseitige Meldungen. #}
+            {# Bleibt LEER: serverseitige Flash-Messages sind Sitzungszustand und #}
+            {# haetten in einem Cache-Eintrag nichts verloren. #}
+            <div id="flash-messages" role="status" aria-live="polite" aria-atomic="true"></div>
+            {% block content %}{% endblock %}
+        </div>
+        {# AGPL §13: Source-Link fuer Network-Use-Disclosure. Refs #835. Die #}
+        {# auth-gated Versions-/Build-Anzeigen aus base.html (Refs #1050/#1901) #}
+        {# fehlen hier bewusst — sie sind genau die Auth-Verzweigung, die eine #}
+        {# precachte Shell nicht tragen darf. #}
+        <footer class="text-center text-[12px] text-ink-muted py-4 mt-8 border-t border-subtle">
+            <span>Anlaufstelle</span>
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+            {# Demo: Rechtstexte der Webseite verlinken (Refs #1604) — Deploy-Konfiguration, nicht Sitzung. #}
+            {% if demo_mode and DEMO_LEGAL_IMPRINT_URL %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ DEMO_LEGAL_IMPRINT_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Impressum" %}</a>
+            {% endif %}
+            {% if demo_mode and DEMO_LEGAL_PRIVACY_URL %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ DEMO_LEGAL_PRIVACY_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Datenschutz" %}</a>
+            {% endif %}
+        </footer>
+    </main>
+
+    {# Umami-Consent-Banner (Opt-in) — nur Demo mit UMAMI_REQUIRE_CONSENT. Refs #1604. #}
+    {% include "partials/_umami_consent.html" %}
+
+    {% block extra_js %}{% endblock %}
+
+    {# Offline-Modul-Reihenfolge 1:1 wie base.html: csrf → csrf-utils → dexie → #}
+    {# url-patterns → crypto → offline-store → offline-queue → offline-client → #}
+    {# offline-edit → sw-register. Die Kette wandert VOLLSTAENDIG mit — faellt #}
+    {# ein Glied weg, bricht der Kalt-Offline-Pfad erst im Browser ohne Netz. #}
+    <script src="{% static 'js/csrf.js' %}"></script>
+    <script src="{% static 'js/csrf-utils.js' %}"></script>
+    <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/url-patterns.js' %}"></script>
+    <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-store.js' %}"></script>
+    <script src="{% static 'js/filter-persistence.js' %}" defer></script>
+    <script src="{% static 'js/offline-queue.js' %}"></script>
+    <script src="{% static 'js/offline-client.js' %}"></script>
+    <script src="{% static 'js/offline-edit.js' %}"></script>
+    {# M6 (Refs #1351, Refs #1383): Sync-Orchestrator — einziger koordinierter Replay-Trigger (ADR-030). #}
+    <script src="{% static 'js/sync-orchestrator.js' %}"></script>
+    <script src="{% static 'js/attachment-remove.js' %}" defer></script>
+    <script src="{% static 'js/confirm-action.js' %}" defer></script>
+    <script src="{% static 'js/double-submit.js' %}" defer></script>
+    <script src="{% static 'js/htmx-errors.js' %}" defer></script>
+    <script src="{% static 'js/focus-management.js' %}" defer></script>
+    <script src="{% static 'js/sw-register.js' %}" defer></script>
+</body>
+</html>

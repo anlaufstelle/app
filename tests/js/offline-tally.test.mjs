@@ -44,6 +44,7 @@ beforeEach(async () => {
 afterEach(() => {
     vi.restoreAllMocks();
     delete global.fetch;
+    delete window.csrfUtils;
 });
 
 function queueRow(documentType, localStatus, value = "7") {
@@ -613,6 +614,26 @@ describe("kalte Offline-Tally-Shell", () => {
         expect(new URLSearchParams(options.body).get("time_filter")).toBe("all");
         expect(new URLSearchParams(options.body).get("tally_window_start")).toBe("2026-08-16T00:00:00Z");
         expect(new URLSearchParams(options.body).get("tally_window_end")).toBe("2026-08-16T23:59:59Z");
+    });
+
+    it("holt den CSRF-Token nach, wenn die precachte Shell kein Meta traegt (Refs #1966)", async () => {
+        // Die Zeitstrom-Shell erbt seit #1966 offline_base.html und traegt
+        // KEIN <meta name="csrf-token"> mehr (der maskierte Token unterscheidet
+        // sich schon zwischen zwei anonymen Abrufen und machte Byte-Gleichheit
+        // unmoeglich). offline-queue.js/offline-edit.js kannten den Nachfass
+        // laengst; hier fehlte er und jeder Submit lief garantiert erst in ein
+        // 403.
+        document.body.innerHTML = `<form data-document-type="${TYPE_A}" data-tally-date="2026-08-16" data-tally-time-filter="all"><input name="anzahl" value="3"></form>`;
+        const form = document.querySelector("form");
+        const refresh = vi.fn(async () => "frischer-token");
+        window.csrfUtils = { fromMeta: () => null, refresh };
+        global.fetch = vi.fn(async () => new Response("ok", { status: 200 }));
+
+        await tallyUi.submitForm(form);
+
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls[0][1].headers["X-CSRFToken"]).toBe("frischer-token");
     });
 
     it("fordert neben dem zentralen Orchestrator keinen eigenen Online-Sync an", async () => {

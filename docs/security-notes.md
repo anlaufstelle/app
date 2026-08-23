@@ -2008,7 +2008,7 @@ Der zweite denkbare Verursacher — `deriveSessionKey()` stempelt mit `_touchAct
 ### Bewertung
 
 - **PII-frei.** Der Eintrag besteht aus dem Literal `lastActivity` und einer Epoch-Millisekunde. Kein Nutzer-, Einrichtungs- oder Klientenbezug; er unterscheidet nicht einmal, *wer* das Gerät benutzt hat.
-- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`anlaufstelle-v37`, nur App-Shell-Assets) mehrfach redundant selbst führt.
+- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`anlaufstelle-v38`, nur App-Shell-Assets) mehrfach redundant selbst führt.
 - **Selbstheilend im Zweck.** Der Stempel wird bei jedem Wipe und jedem Passwortwechsel gelöscht und beim nächsten Seitenaufruf neu gesetzt; er wächst nicht und akkumuliert keine Historie.
 
 ### Was bewusst nicht umgesetzt wird
@@ -2018,7 +2018,7 @@ Ein **Stempel-Gate** — den Boot-Zweig nur dann stempeln lassen, wenn tatsächl
 - Der Boot-Stempel ist die Schutzhälfte des Idle-Gates gegen das Gegenteil: ohne ihn hätte ein Bestand ohne Stempel (Alt-Installation vor #1065, erster Lauf nach einem Cache-Wechsel) kein definiertes Idle-Fenster. Jede Änderung an dieser Stelle berührt einen sicherheitskritischen, mehrfach nachgehärteten Pfad (#1065, #1324, #1351/#1383, #1393, #1493).
 - Der Gewinn steht dazu in keinem Verhältnis: eine Epoch-Millisekunde ohne Personenbezug, die dieselbe Information trägt wie ein Eintrag in der Browser-History.
 
-Der **Precache** `anlaufstelle-v37` bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
+Der **Precache** `anlaufstelle-v38` bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
 
 ### Trigger für Re-Evaluation
 
@@ -2090,6 +2090,36 @@ Der saubere Weg wäre, statt der fertigen `summary` nur Verb + Ziel-Referenz zu 
 - [`test_client_anonymize_characterization.py`](../src/tests/test_client_anonymize_characterization.py) — `_redact_activities` deckt Client-, Event-, WorkItem- und Case-Ziele ab und lässt fremde Zeilen unberührt.
 - [`test_pii_residue_sweep.py`](../src/tests/test_pii_residue_sweep.py) — Residuen-Sweep über die Redaktionspfade.
 - [`test_retention.py`](../src/tests/test_retention.py) — Aktivitäts-Purge gegen `retention_activities_days`.
+
+---
+
+## Precache-Shells sind auth-neutral (Issue #1966)
+
+Der Service Worker precacht acht pk-lose Offline-Hüllen und serviert sie ohne Netz **in-place** an ihren kanonischen URLs (`/`, `/clients/`, `/clients/<uuid>/`, `/workitems/`, `/events/new/`, `/workitems/new/`, `/offline/conflicts/`, `/offline/conflicts/<uuid>/`). Sie sind bewusst **public**: ein Auth-Gate würde den install-time `cache.addAll` auf `/login/` umlenken und das Precaching atomar scheitern lassen — die ganze Shell-Liste hängt an einem einzigen Aufruf.
+
+### Der geschlossene Befund
+
+Der Precache-Fetch läuft same-origin und damit **mit** Cookies. Installierte oder aktualisierte sich der Service Worker während einer angemeldeten Sitzung, landete die personalisierte `base.html`-Variante im Cache: Klarname und Rollenbezeichnung aus der Sidebar, Organisations- und Einrichtungsname, `data-user-id`, `data-session-age` und der CSRF-Token. Der Precache wird **cache-first ohne Revalidierung** ausgeliefert; der Eintrag überlebt damit Sitzungsablauf, Browser-Abbruch, Sperrung und Gerätewechsel und wird danach jeder weiteren Sitzung auf demselben Gerät gezeigt. Der Logout-Wipe entschärft nur den Normalfall, nicht die Abbruchfälle.
+
+### Die zugesicherte Eigenschaft
+
+Die Shells erben seit #1966 das strikt statische [`offline_base.html`](../src/templates/offline_base.html) statt `base.html`. Zugesichert ist nicht „weniger Chrome", sondern **Byte-Gleichheit**: dieselbe Shell-URL liefert anonym und angemeldet denselben Body. Das ist die einzige Formulierung, die sich testen lässt und die nicht bei der nächsten Template-Änderung stillschweigend erodiert.
+
+Daraus folgt zwangsläufig, dass die Shells **kein** `<meta name="csrf-token">` mehr tragen: der maskierte Token unterscheidet sich schon zwischen zwei anonymen Abrufen. Die Replay-Konsumenten holen ihn zur Laufzeit vom dedizierten Endpoint (`csrfUtils.refresh()`, #1408) — der zuvor dokumentierte „eingefrorene CSRF-Token" ist damit keine Eigenschaft der Shells mehr. `crypto.js` fällt ohne `data-session-age` auf seinen dokumentierten Default zurück, und der Boot-Purge in `sw-register.js` gated seither auf den Session-Key statt auf `data-user-id`.
+
+Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigation.html`](../src/templates/partials/_offline_navigation.html)) mit genau den Zielen, die der Service Worker selbst precacht. Die reguläre Navigation kann dort nicht stehen: sie ist rollen- und personenabhängig, und ein Cache-Eintrag friert die Sicht des Erst-Installierenden ein. Die Rollenschranke greift beim Online-Aufruf am Server und beim Replay der Queue.
+
+### Grenzen
+
+- Die **Sprache** bleibt die des Precache-Fetches: die Shell trägt den zur Precache-Zeit aktiven Sprachcode. Das ist eine Anzeige-Eigenschaft ohne Personenbezug; wer die Sprache wechselt, sieht die Hülle bis zur nächsten Service-Worker-Generation in der alten Sprache.
+- Der Bump-Guard für precachte Shells folgt `{% extends %}` noch nicht selbst (#1852); `offline_base.html` steht deshalb ausdrücklich in seiner Template-Liste.
+- Jede Änderung am ausgelieferten Shell-Markup verlangt weiterhin einen `CACHE_NAME`-Bump — sonst bekämen genau die betroffenen Bestandsgeräte die neue Hülle nie.
+
+### Verifikation
+
+- [`test_offline_shell_neutrality.py`](../src/tests/test_offline_shell_neutrality.py) — Byte-Gleichheit anonym vs. angemeldet für alle acht Shells, Abwesenheit von Name/Rolle/Einrichtung/`data-user-id`/CSRF-Meta, Vollständigkeit der Skriptkette und ein ableitungsbasierter Vollständigkeits-Check gegen die View-Klassen.
+- [`test_pwa_views.py`](../src/tests/test_pwa_views.py) — Shell-Hash-Guard samt gepinntem `CACHE_NAME` (`anlaufstelle-v38`).
+- [`tests/js/sw-boot-purge-gate.test.mjs`](../tests/js/sw-boot-purge-gate.test.mjs) — der Boot-Purge läuft ohne `data-user-id` weiter und bleibt ohne Session-Key aus.
 
 ---
 

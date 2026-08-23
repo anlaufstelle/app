@@ -328,7 +328,7 @@ class OfflineClientDetailView(AssistantOrAboveRequiredMixin, View):
 class OfflineShellView(TemplateView):
     """Basis fuer die generischen, pk-losen In-Place-Offline-Scaffolds (Muster #1322).
 
-    Sieben Konkretisierungen teilten bis Refs #1827 denselben Aufbau
+    Acht Konkretisierungen teilten bis Refs #1827 denselben Aufbau
     (``http_method_names = ["get"]`` + ``def get`` mit einem einzeiligen
     ``render(...)``) und denselben Sicherheits-Absatz wortgleich — hier einmal:
 
@@ -337,6 +337,13 @@ class OfflineShellView(TemplateView):
     Online-/Offline-URL faellt zusammen. Ein zugehoeriges JS-Modul liest die
     eigentlichen Daten client-seitig aus IndexedDB (entschluesselt) und
     rendert sie; die Shell selbst traegt **kein PII**.
+
+    Seit Refs #1966 erben alle Konkretisierungen ``offline_base.html`` statt
+    ``base.html``: der Precache-Fetch laeuft same-origin und damit MIT Cookies,
+    sodass eine Installation waehrend einer angemeldeten Sitzung sonst das
+    personalisierte Chrome (Klarname, Rolle, Einrichtung, ``data-user-id``,
+    CSRF-Token) dauerhaft im Cache einfror. Die Shell-Antwort ist jetzt
+    byte-gleich, egal wer sie abruft (``test_offline_shell_neutrality.py``).
 
     **Public on purpose**, exakt wie :class:`~core.views.pwa.OfflineFallbackView`:
     ein Auth-Gate wuerde den install-time ``cache.addAll``-Fetch auf

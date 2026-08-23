@@ -76,6 +76,15 @@
         params.set("tally_window_end", form.dataset.tallyWindowEnd || "");
         const body = params.toString();
         let csrf = csrfToken();
+        // Refs #1966: Die precachte Zeitstrom-Shell traegt kein
+        // <meta name="csrf-token"> mehr (es machte die Shell zwischen anonym
+        // und angemeldet verschieden). Ohne diesen Nachfass liefe JEDER Submit
+        // von der Shell garantiert erst in ein 403 und erst der Retry unten
+        // durch — dieselbe Vorstufe haben offline-queue.js und offline-edit.js
+        // laengst.
+        if (!csrf && window.csrfUtils && window.csrfUtils.refresh) {
+            csrf = await window.csrfUtils.refresh();
+        }
         let response = await fetch(TALLY_URL, requestOptions(body, idempotencyKey, csrf));
         if (response.status === 403 && window.csrfUtils && window.csrfUtils.refresh) {
             const fresh = await window.csrfUtils.refresh();

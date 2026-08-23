@@ -113,6 +113,47 @@ EXEMPTIONS: dict[tuple[str, str, str], str] = {
     ): "SW-vorgecachter Shell an der kanonischen /events/new/-URL (Refs #1322)",
 }
 
+# Refs #1966: Die acht pk-losen In-Place-Shells erben seit dem
+# Neutralitaets-Fix ein gemeinsames, STATISCHES Basistemplate
+# (``templates/offline_base.html``) samt fester Offline-Navigation. Die
+# regulaere Navigation kann dort nicht stehen: sie ist rollen- UND
+# personenabhaengig, und der Service Worker holt jede Shell genau einmal und
+# liefert sie danach jeder Sitzung auf dem Geraet aus demselben Cache-Eintrag
+# aus — die Rollen-Sicht des Erst-Installierenden waere eingefroren (und mit
+# ihr dessen Name, Rolle und Einrichtung, genau der geschlossene Befund).
+#
+# Dieselbe Begruendung wie bei ``offline_fallback`` oben, nur fuer acht statt
+# eine Seite; die vier Ziele sind exakt die, die der SW selbst precacht und
+# offline in-place bedient. Beim ONLINE-Aufruf greift die Rollenschranke am
+# Server unveraendert.
+_PRECACHED_SHELL_PAGES = (
+    "core:offline_client_shell",
+    "core:offline_event_shell",
+    "core:offline_workitem_shell",
+    "core:offline_client_list_shell",
+    "core:offline_workitem_list_shell",
+    "core:offline_zeitstrom_shell",
+    "core:offline_conflict_shell",
+    "core:offline_conflict_list",
+)
+_OFFLINE_NAV_TARGETS = (
+    "core:zeitstrom",
+    "core:client_list",
+    "core:workitem_inbox",
+    "core:event_create",
+)
+_OFFLINE_NAV_REASON = (
+    "statische Offline-Navigation in offline_base.html — SW-Precache ist rollenagnostisch (Refs #1966)"
+)
+EXEMPTIONS.update(
+    {
+        (page, target, "*"): _OFFLINE_NAV_REASON
+        for page in _PRECACHED_SHELL_PAGES
+        for target in _OFFLINE_NAV_TARGETS
+        if (page, target, "*") not in EXEMPTIONS
+    }
+)
+
 
 @pytest.fixture
 def guard_users(db, facility):

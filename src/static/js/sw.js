@@ -109,7 +109,18 @@ importScripts("/static/js/url-patterns.js");
 // zeigen den bestaetigten Serverstand wieder getrennt von Pending-Deltas und
 // einen absoluten Snapshot-Zeitpunkt. Beide liegen cache-first im APP_SHELL;
 // ohne Bump bliebe Bestandsnutzern der alte, irrefuehrende Tally-Status.
-const CACHE_NAME = "anlaufstelle-v37";
+// Refs #1966: v37 -> v38 -- alle acht precachten Shells erben jetzt das
+// statische offline_base.html statt base.html. Der Precache-Fetch laeuft
+// same-origin und damit MIT Cookies: ein Install/Update waehrend einer
+// angemeldeten Sitzung schrieb bisher die personalisierte Chrome-Variante
+// (Klarname, Rolle, Organisation/Einrichtung, data-user-id, data-session-age,
+// CSRF-Token) in den Cache, wo sie cache-first ohne Revalidierung ausgeliefert
+// wird und Sitzungsende, Sperrung und Geraetewechsel ueberlebt. Ohne Bump
+// behielten genau die betroffenen Bestandsgeraete ihre personalisierte Kopie —
+// der Bump ist hier also nicht Hygiene, sondern der Loeschvorgang: er erzwingt
+// Re-Install + Re-Precache und raeumt im activate die v37-Generation samt
+// Runtime-Cache weg.
+const CACHE_NAME = "anlaufstelle-v38";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -258,15 +269,18 @@ const APP_SHELL = [
     "/static/js/offline-client.js",
     "/static/js/offline-edit.js",
     // Refs #1482: Die In-Place-Shells (offline_detail.html/conflict_review.html)
-    // erweitern base.html — ihr gesamtes Rendering haengt an Alpine
-    // (alpine:init in offline-client-view.js/conflict-resolver.js;
-    // loading/unavailable/Inhalt stehen in <template x-if>), die mobile
-    // Bottom-Nav an den Layout-Komponenten (createMenu/mobileMore). Der
+    // erweitern seit Refs #1966 offline_base.html — ihr gesamtes Rendering
+    // haengt an Alpine (alpine:init in offline-client-view.js/
+    // conflict-resolver.js; loading/unavailable/Inhalt stehen in
+    // <template x-if>), der Offline-Statusbalken an der Layout-Komponente
+    // offlineStatus. Die Navigation der Shells ist dagegen statisch und
+    // braucht kein JS mehr (die rollenabhaengige Bottom-Nav mit
+    // createMenu/mobileMore steht nur noch auf base.html-Seiten). Der
     // Sync-Orchestrator ist der einzige koordinierte Replay-Trigger
     // (ADR-030); ohne ihn fallen queue/edit/store auf ihre unkoordinierten
     // online-Listener zurueck (Pre-M6-Race). Nach einem CACHE_NAME-Bump ist
     // der SWR-Runtime-Cache leer — ohne Pre-Cache bleibt ein
-    // Offline-Kaltstart ohne Renderer/Nav/Koordinator.
+    // Offline-Kaltstart ohne Renderer/Statusbalken/Koordinator.
     "/static/js/alpine-csp.min.js",
     "/static/js/alpine/base-layout.js",
     "/static/js/sync-orchestrator.js",

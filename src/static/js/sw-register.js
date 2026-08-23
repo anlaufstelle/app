@@ -422,11 +422,20 @@
         });
     });
 
-    // Bootstrap: on every page load with an authenticated user, drop expired
-    // records (TTL handling). Salt + key derivation happens in login.html /
-    // password_change.html — those templates trigger crypto_session.deriveSessionKey
-    // before redirecting away from the login page.
-    if (window.offlineStore && document.body.dataset.userId) {
+    // Bootstrap: on every page load, drop expired records (TTL handling).
+    // Salt + key derivation happens in login.html / password_change.html —
+    // those templates trigger crypto_session.deriveSessionKey before
+    // redirecting away from the login page.
+    //
+    // Refs #1966: Das Gate hing frueher zusaetzlich an
+    // ``document.body.dataset.userId``. Die precachten Offline-Shells tragen
+    // dieses Attribut nicht mehr (es fror die Nutzer-pk im
+    // Service-Worker-Cache ein) — ein PWA-Kaltstart direkt in eine Shell
+    // haette den Purge damit still uebersprungen und abgelaufene, aber
+    // verschluesselte Bestaende ueber ihre Aufbewahrungsfrist hinaus liegen
+    // lassen. Das eigentliche Auth-Signal ist ohnehin der Session-Key unten
+    // (``hasKey``, Refs #1352); die Markup-Ableitung war nur ein Vorfilter.
+    if (window.offlineStore) {
         (async function () {
             try {
                 var cs = window.crypto_session;

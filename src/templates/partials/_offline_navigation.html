@@ -1,0 +1,31 @@
+{% load i18n %}
+{% comment %}
+Refs #1966: STATISCHE Navigation der precachten Offline-Shells.
+
+Die regulaere Navigation (partials/_navigation_desktop.html /
+_navigation_mobile.html) ist personen- und rollenabhaengig: Organisations- und
+Einrichtungsname, Klarname, Rollenbezeichnung, die nav_sidebar-Gates und zwei
+CSRF-tragende Formulare (Sprache, Abmelden). In einer Shell, die der Service
+Worker EINMAL holt und danach jeder Sitzung auf dem Geraet aus demselben
+Cache-Eintrag ausliefert, waere das eingefrorenes fremdes Nutzer-Chrome —
+genau der Befund, den dieses Ticket schliesst.
+
+Deshalb hier eine feste Leiste ohne jede Verzweigung. Die vier Ziele sind
+genau die, die der Service Worker selbst precacht und offline IN-PLACE bedient
+(Refs #1499); sie sind offline also tatsaechlich erreichbar und nicht nur
+verlinkt. Bewusst OHNE Aktiv-Markierung: die Shell wird unter einer anderen
+URL ausgeliefert als der, unter der sie geholt wurde — eine eingefrorene
+Markierung waere immer falsch.
+
+Die Rollenschranke liegt wie bei allen precachten Shells im Client und beim
+Replay am Server (siehe EXEMPTIONS in src/tests/test_authz_template_links.py).
+{% endcomment %}
+<nav class="bg-surface border-b border-subtle" aria-label="{% trans 'Offline-Navigation' %}" data-testid="offline-nav">
+    <div class="max-w-[1140px] mx-auto px-4 md:px-8 py-2 flex flex-wrap items-center gap-1">
+        <span class="text-sm font-bold text-ink mr-2">Anlaufstelle</span>
+        <a href="{% url 'core:zeitstrom' %}" class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-accent hover:bg-canvas" data-testid="offline-nav-zeitstrom">{% trans "Zeitstrom" %}</a>
+        <a href="{% url 'core:client_list' %}" class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-accent hover:bg-canvas" data-testid="offline-nav-clients">{% trans "Personen" %}</a>
+        <a href="{% url 'core:workitem_inbox' %}" class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-accent hover:bg-canvas" data-testid="offline-nav-workitems">{% trans "Aufgaben" %}</a>
+        <a href="{% url 'core:event_create' %}" class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-accent hover:bg-canvas" data-testid="offline-nav-event-create">{% trans "Kontakt dokumentieren" %}</a>
+    </div>
+</nav>

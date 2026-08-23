@@ -10524,6 +10524,10 @@ msgstr "Set up now"
 msgid "Hauptnavigation"
 msgstr "Main navigation"
 
+#: src/templates/partials/_offline_navigation.html:23
+msgid "Offline-Navigation"
+msgstr "Offline navigation"
+
 #: src/templates/partials/_navigation_desktop.html:23
 #: src/templates/partials/_navigation_desktop.html:25
 #: src/templates/partials/_navigation_mobile.html:21

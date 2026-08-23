@@ -33,6 +33,13 @@
     var PERSON_KEY = "__personPk";
 
     function getStorageKey() {
+        // Refs #1966: Die precachten Offline-Shells tragen kein
+        // ``data-user-id`` mehr. Der Leerstring-Zweig hier ist deshalb kein
+        // toter Pfad — er greift aber nur theoretisch: ``data-autosave`` steht
+        // ausschliesslich an der ONLINE-Erfassungsmaske
+        // (core/events/create.html, erbt base.html), kein Shell-Template
+        // bringt ein Autosave-Formular mit. Ein Shell-weiter Draft-Namensraum
+        // entsteht also nicht.
         var userId = document.body.dataset.userId || "";
         return KEY_PREFIX + userId + "_" + window.location.pathname;
     }

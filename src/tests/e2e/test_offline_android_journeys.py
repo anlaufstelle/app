@@ -289,10 +289,16 @@ class TestColdStartShellAssets:
         finally:
             context.close()
 
-    def test_cold_offline_mobile_create_menu_opens(self, browser, base_url):
-        """Die mobile Bottom-Nav der Shell haengt an alpine/base-layout.js
-        (createMenu): Offline-Kaltstart muss das "+"-Menue oeffnen koennen —
-        sonst wirkt "Neue Aufgabe/Neuer Kontakt" auf Android schlicht tot."""
+    def test_cold_offline_shell_navigation_reaches_the_create_form(self, browser, base_url):
+        """Refs #1966: Die Shell traegt eine STATISCHE Offline-Navigation.
+
+        Vorher hing der Weg zur Erfassung am mobilen "+"-Menue der Bottom-Nav
+        und damit an ``alpine/base-layout.js`` (``createMenu``). Die Bottom-Nav
+        ist personen- und rollenabhaengig und darf deshalb nicht mehr in einer
+        precachten Shell stehen — an ihre Stelle tritt eine feste Leiste. Die
+        gepruefte Eigenschaft ist damit sogar staerker: der Weg zur
+        Offline-Erfassung braucht im Kaltstart ueberhaupt kein JavaScript mehr.
+        """
         context = _android_context(browser)
         page = context.new_page()
         page.set_default_timeout(30000)
@@ -300,8 +306,15 @@ class TestColdStartShellAssets:
             _fresh_sw_only(page, base_url)
             page.context.set_offline(True)
             page.goto(f"{base_url}/clients/{uuid.uuid4()}/", wait_until="domcontentloaded")
-            page.locator("[data-testid='mobile-nav-create']").click()
-            page.locator("[data-testid='mobile-create-event']").wait_for(state="visible", timeout=5000)
+
+            page.locator("[data-testid='offline-nav']").wait_for(state="visible", timeout=5000)
+            # Kein Nutzer-Chrome: weder die rollenabhaengige Bottom-Nav noch
+            # die Desktop-Sidebar duerfen in der precachten Shell stehen.
+            assert page.locator("[data-testid='mobile-nav-create']").count() == 0
+            assert page.locator("[data-testid='nav-items']").count() == 0
+
+            page.locator("[data-testid='offline-nav-event-create']").click()
+            page.locator("[data-testid='offline-event-create']").wait_for(state="attached", timeout=15000)
         finally:
             context.close()
 

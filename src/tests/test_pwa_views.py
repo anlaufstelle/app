@@ -150,14 +150,15 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v37"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v38"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1774: offline-store.js ist precached und traegt die erweiterte "
-            "Reichweite des Offline-Widerrufs — die Ereignis->Person-Aufloesung "
-            "fuer gequeute /events/<uuid>/edit/-POSTs. Ohne Bump haelt ein "
-            "laufender SW seine alte Kopie aus dem Precache (cache-first, keine "
-            "Revalidierung); der Widerruf liesse den gequeuten POST weiter "
-            "stehen und der Replay schriebe nach der Loeschung PII zurueck)."
+            "(#1966: alle acht precachten Shells erben jetzt das statische "
+            "offline_base.html. Der Precache-Fetch laeuft same-origin und damit "
+            "MIT Cookies — ein Install waehrend einer angemeldeten Sitzung "
+            "schrieb bisher Klarname, Rolle, Einrichtung, data-user-id und den "
+            "CSRF-Token in den Cache, wo sie cache-first ohne Revalidierung "
+            "Sitzungsende, Sperrung und Geraetewechsel ueberlebten. Der Bump ist "
+            "hier der Loeschvorgang, nicht Hygiene)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -589,6 +590,14 @@ class TestPrecachedShellBumpGuard:
     # Template waere ein blinder Fleck fuer genau die 26078b7-Bugklasse.
     _SHELL_TEMPLATES = (
         "offline.html",
+        # Refs #1966: Basistemplate der acht In-Place-Shells. Es steht in
+        # KEINER OFFLINE_*_SHELL_URL-View direkt, geht aber ueber
+        # ``{% extends %}`` in jede einzelne precachte Antwort ein — inklusive
+        # der kompletten Asset-/Skriptkette und des Offline-Statusbalkens. Der
+        # Guard folgt ``{% extends %}`` (noch) nicht selbst (#1852); ohne
+        # diesen Eintrag waere ausgerechnet die Datei ungeschuetzt, in der das
+        # gemeinsame Shell-Markup jetzt liegt.
+        "offline_base.html",
         "core/clients/offline_detail.html",
         "core/events/offline_create.html",
         "core/workitems/offline_create.html",
@@ -638,8 +647,14 @@ class TestPrecachedShellBumpGuard:
     # ausloest und ``cache.addAll(APP_SHELL)`` beim Install die Eintraege im
     # SELBEN CACHE_NAME ueberschreibt -- die Split-Brain-Lage, gegen die der Bump
     # schuetzt, entsteht nur bei Shells, die niemand neu holt.
-    _PINNED_CACHE_NAME = "anlaufstelle-v37"
-    _PINNED_SHELL_HASH = "10fc925bbb8cf466b5ea89747e1c29c16000f3df65aa484f201d5c63c6aa55a5"
+    # Refs #1966: Die acht Shells erben statt base.html das neue statische
+    # offline_base.html (das damit selbst in _SHELL_TEMPLATES gehoert, siehe
+    # oben). Hier aendert sich ausgeliefertes Markup — anders als bei #1845/
+    # #1900 also MIT CACHE_NAME-Bump (v37 -> v38): Bestandsgeraete tragen genau
+    # die personalisierte Shell im Precache, die der Fix entfernt, und
+    # bekaemen sie ohne Bump nie ersetzt.
+    _PINNED_CACHE_NAME = "anlaufstelle-v38"
+    _PINNED_SHELL_HASH = "9e1af60f0f74d895eabdf00fb3b27a162814f0c1017ff34858b9672b024b3407"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
