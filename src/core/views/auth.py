@@ -17,11 +17,9 @@ from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import AuditLog, User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.audit import hmac_hash_email, log_audit_event
-from core.services.security import clear_sudo, invite_token_generator, is_locked
-from core.services.security import unlock as unlock_user
+from core.services.security import RevocationReason, invite_token_generator, is_locked, revoke_credentials
 from core.services.security.origin import external_link_context
 from core.signals.audit import get_client_ip
-from core.signals.offline_invalidation import revoke_offline_access
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +92,12 @@ class CustomLoginView(auth_views.LoginView):
             # Sessions flushen wie bei Rollenwechsel/Deaktivierung. Der Zweig
             # feuert NUR bei korrektem Passwort gegen einen gesperrten Account
             # (AuthenticationForm hat validiert) → nicht angreifer-getrieben:
-            # wer das Passwort nicht kennt, erreicht ihn nie.
-            revoke_offline_access(user)
+            # wer das Passwort nicht kennt, erreicht ihn nie. Refs #1965: der
+            # Widerruf laeuft ueber dieselbe Funktion wie die drei
+            # Passwort-Pfade; die Wirkungs-Matrix des Lockout-Grundes waehlt
+            # Rotation + Flush, aber keine Passwort-Nebenwirkungen und keine
+            # eigene Audit-Zeile (der folgende LOGIN_FAILED-Write ist die Spur).
+            revoke_credentials(user, reason=RevocationReason.ACCOUNT_LOCKOUT, request=self.request)
             log_audit_event(
                 self.request,
                 AuditLog.Action.LOGIN_FAILED,
@@ -253,14 +255,16 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     Reset-Weg tatsaechlich durchlaufen wird.
     """
 
+    #: Refs #1965: Ausloeser-Slug fuer den zentralen Credential-Widerruf.
+    #: ``InviteConfirmView`` ueberschreibt ihn — dieselbe Mechanik, aber im
+    #: Protokoll unterscheidbar (Ersteinrichtung vs. Zuruecksetzen).
+    revocation_reason = RevocationReason.PASSWORD_RESET
+
     def form_valid(self, form):
         response = super().form_valid(form)
         user = form.user
         if user is not None and getattr(user, "pk", None):
-            unlock_user(user, unlocked_by=None, ip_address=None, trigger="password_reset")
-            if user.must_change_password:
-                user.must_change_password = False
-                user.save(update_fields=["must_change_password"])
+            revoke_credentials(user, reason=self.revocation_reason, request=self.request)
         return response
 
 
@@ -273,6 +277,7 @@ class InviteConfirmView(CustomPasswordResetConfirmView):
     sind NICHT auf der Passwort-Reset-Route verwendbar (eigenes ``key_salt``)."""
 
     token_generator = invite_token_generator
+    revocation_reason = RevocationReason.INVITE_SETUP
 
 
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
@@ -283,17 +288,13 @@ class CustomPasswordChangeView(auth_views.PasswordChangeView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Rotate offline_key_salt: client-side keys derived with the old password
-        # would not match anyway, so all old IndexedDB-encrypted records become
-        # garbage that the next login will purge.
-        self.request.user.must_change_password = False
-        self.request.user.offline_key_salt = ""
-        self.request.user.save(update_fields=["must_change_password", "offline_key_salt"])
-        # I8 (Refs #1376): SudoMode-Fenster leeren — ein neues Passwort
-        # entwertet die alte Re-Auth; ohne clear_sudo bliebe eine bereits
-        # erreichte Sudo-Session (z.B. per gestohlenem Session-Cookie vor
-        # dem Passwortwechsel) trotz neuem Passwort weiter gueltig.
-        clear_sudo(self.request)
+        # Refs #1965: Salt-Rotation, Sudo-Clear, Zwangswechsel-Flag und die
+        # Rechenschaftszeile liegen in der zentralen Funktion — der Wechsel ist
+        # nur noch ein Ausloeser unter mehreren. Die Rotation ist hier bewusst
+        # scharf (und bei Reset/Invite bewusst nicht): dieser Pfad haelt die
+        # eigene Session per ``update_session_auth_hash`` am Leben, der
+        # abgeleitete Offline-Schluessel muss also aktiv entwertet werden.
+        revoke_credentials(self.request.user, reason=RevocationReason.PASSWORD_CHANGE, request=self.request)
         return response
 
 

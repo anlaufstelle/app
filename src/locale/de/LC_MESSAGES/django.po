@@ -11574,3 +11574,7 @@ msgstr "Zusammenführung"
 #: src/templates/core/clients/partials/table.html:54
 msgid "Zusammenführungs-Antrag wartet auf Bestätigung"
 msgstr "Zusammenführungs-Antrag wartet auf Bestätigung"
+
+#: src/core/models/audit.py:120
+msgid "Zugangsdaten widerrufen"
+msgstr "Zugangsdaten widerrufen"

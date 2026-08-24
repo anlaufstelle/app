@@ -249,7 +249,11 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "filters": "gesetzte Filter eines AuditLog-Exports (Aktion, User-/Facility-ID, Datumsgrenzen) — kein Freitextfeld",
     "artifact_released": "Kennzeichen, dass ein Artefakt das Haus verlassen hat (Refs #1770)",
     "system": "Kennzeichen eines nicht request-getriebenen Vorgangs (Refs #1369)",
-    "reason": "Grund eines Sicherheitsverstosses/Legal Holds — feste Slugs",
+    "reason": (
+        "Grund eines Sicherheitsverstosses/Legal Holds und Ausloeser eines "
+        "Credential-Widerrufs (Refs #1965: password_change/password_reset/invite_setup) "
+        "— feste Slugs"
+    ),
     # -- Bewusst zugelassener Freitext ------------------------------------
     # Diese Schluessel tragen echten Freitext. Sie zu verbieten waere falsch —
     # sie unkommentiert zu erlauben auch. Deshalb je eine Begruendung, warum

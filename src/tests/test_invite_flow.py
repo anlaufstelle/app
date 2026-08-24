@@ -245,3 +245,44 @@ class TestUserOnboardingFlow:
         assert client.login(username="onboarded", password=new_password) is True
         home = client.get("/")
         assert home.status_code == 200, f"Erster Request nach dem Login wurde umgeleitet: {home.get('Location', '')}"
+
+    def test_invite_setup_widerruft_die_alten_zugangsdaten(self, facility, client):
+        """Refs #1965: Auch das Invite-Setup laeuft ueber den zentralen Widerruf.
+
+        Der Setup-Schritt ist derselbe Vertrauensanker wie der Reset (gueltiges
+        Token + selbst gewaehltes Passwort) und muss dieselben Nebenwirkungen
+        ausloesen — mit einem eigenen Ausloeser-Slug, damit im Protokoll
+        unterscheidbar bleibt, ob ein Konto neu eingerichtet oder ein Passwort
+        zurueckgesetzt wurde.
+        """
+        import time
+
+        from core.models import AuditLog
+        from core.services.security import SUDO_SESSION_KEY
+
+        user = User.objects.create_user(username="widerruf", email="widerruf@example.org", facility=facility)
+        user.set_unusable_password()
+        user.save(update_fields=["password"])
+        session = client.session
+        session[SUDO_SESSION_KEY] = int(time.time()) + 900
+        session.save()
+
+        token = invite_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        response = client.get(f"/invite/{uid}/{token}/", follow=True)
+        new_password = "SetupChos3n!Pwd"
+        response = client.post(
+            response.redirect_chain[-1][0],
+            {"new_password1": new_password, "new_password2": new_password},
+            follow=True,
+        )
+        assert response.status_code == 200
+
+        assert SUDO_SESSION_KEY not in client.session
+        eintrag = AuditLog.objects.filter(
+            action=AuditLog.Action.CREDENTIALS_REVOKED,
+            target_id=str(user.pk),
+        ).get()
+        assert eintrag.detail["reason"] == "invite_setup"
+        entsperrung = AuditLog.objects.filter(action=AuditLog.Action.LOGIN_UNLOCK, user=user).get()
+        assert entsperrung.detail["trigger"] == "invite_setup"

@@ -181,7 +181,7 @@ class TestCombinedInvalidationContract:
         assert not Session.objects.filter(session_key=key).exists()
 
     def test_local_instance_reflects_rotation_in_same_transaction(self, staff_user):
-        """Das ``QuerySet.update()`` in ``_rotate_offline_salt`` darf KEINE
+        """Das ``QuerySet.update()`` in ``rotate_offline_salt`` darf KEINE
         Signal-Rekursion auslösen und muss die laufende Instanz konsistent
         halten (``offline_key_salt`` lokal leer)."""
         staff_user.ensure_offline_key_salt()
@@ -275,3 +275,33 @@ class TestLockoutTriggersRevocation:
         staff_user.refresh_from_db()
         assert staff_user.offline_key_salt == ""
         assert not Session.objects.filter(session_key=key).exists()
+
+
+@pytest.mark.django_db
+class TestRevocationGrenzeZumCredentialLifecycle:
+    """Refs #1965: Der Revocations-Pfad teilt die Mechanik mit dem
+    Credential-Lifecycle, nicht dessen Audit-Zeile.
+
+    Salt-Rotation und Session-Flush leben seit #1965 in
+    ``core.services.security.credentials``; ``revoke_offline_access`` ist der
+    Einstieg des Signal-Pfads dorthin. Was NICHT mitwandern darf, ist die
+    Rechenschaftszeile ``CREDENTIALS_REVOKED``: Rollenwechsel und
+    Deaktivierung tragen mit ``USER_ROLE_CHANGED``/``USER_DEACTIVATED``
+    bereits eine eigene Spur, eine zweite Zeile beschriebe denselben Vorgang
+    doppelt.
+    """
+
+    def test_rollenwechsel_schreibt_keine_credentials_revoked_zeile(self, staff_user):
+        from core.models import AuditLog
+
+        staff_user.ensure_offline_key_salt()
+
+        staff_user.role = User.Role.ASSISTANT
+        staff_user.save()
+
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == ""
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.CREDENTIALS_REVOKED,
+            target_id=str(staff_user.pk),
+        ).exists()

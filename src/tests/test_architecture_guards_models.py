@@ -487,6 +487,14 @@ class TestTenantModelScopeGuard:
             "Reload einer serverseitig ermittelten ``user_id`` aus dem Scan-Finding — "
             "kein Request-Input; die Facility steckt bereits im Finding."
         ),
+        "security/credentials.py:rotate_offline_salt:User": (
+            "Signalfreies ``update()`` auf die EIGENE, bereits aufgeloeste PK des Users "
+            "(Salt-Rotation im Credential-Widerruf, Refs #1965) — kein Request-Input. "
+            "``QuerySet.update()`` ist hier Pflicht, nicht Stil: die Rotation laeuft auch "
+            "aus dem ``post_save``-Receiver des Rechteentzugs, ein ``save()`` wuerde sich "
+            "selbst erneut ausloesen. Die Stelle lag bis #1965 in "
+            "``signals/offline_invalidation.py`` und damit ausserhalb dieses Scans."
+        ),
         "security/lockout_recovery.py:verify_recovery_token:User": (
             "Aufloesung der PK aus einem signierten Recovery-Token — pre-auth."
         ),

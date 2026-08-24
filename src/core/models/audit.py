@@ -106,6 +106,18 @@ class AuditLog(models.Model):
         USER_DEACTIVATED = "user_deactivated", _("Benutzer deaktiviert")
         DELETION_CONFIRMER_CHANGED = "deletion_confirmer_changed", _("Recht Löschbestätigung geändert")
         PASSWORD_RESET_REQUESTED = "password_reset_requested", _("Passwort-Reset angefordert")
+        # Refs #1965: Abschluss eines Credential-Wechsels (Passwortwechsel,
+        # Passwort-Reset, Invite-Setup) samt der daran haengenden Widerrufe —
+        # Offline-Salt, Sudo-Fenster, Zwangswechsel-Flag, Lockout. Bewusst EINE
+        # Aktion mit ``detail["reason"]`` statt drei Aktionen: die Frage unter
+        # /audit/ ist "wann wechselten hier zuletzt Zugangsdaten", nicht "ueber
+        # welche der drei Routen". Bewusst NICHT auf dem Rechteentzugs-Pfad
+        # (Rollenwechsel/Deaktivierung/Lockout) geschrieben — der traegt mit
+        # ``USER_ROLE_CHANGED``/``USER_DEACTIVATED``/``LOGIN_FAILED`` bereits
+        # seine eigene Spur. Der Name folgt der Funktion ``revoke_credentials``:
+        # protokolliert wird der WIDERRUF der am alten Passwort haengenden
+        # Artefakte, nicht das neue Passwort.
+        CREDENTIALS_REVOKED = "credentials_revoked", _("Zugangsdaten widerrufen")
         SECURITY_VIOLATION = "security_violation", _("Sicherheitsverletzung")
         MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")
         MFA_DISABLED = "mfa_disabled", _("2FA deaktiviert")

@@ -86,6 +86,14 @@ class ComplianceCheck:
 # Sie sind der Normalfall eines Arbeitstages — auf dieser Liste faerbte jede
 # bearbeitete Beratungsdokumentation das Dashboard und machte Check #11 als
 # Signal wertlos. Die Aktionen sind Nachweis, nicht Alarm.
+# Ebenfalls bewusst draussen (Refs #1965): ``CREDENTIALS_REVOKED``. Ein
+# Passwortwechsel, ein Self-Service-Reset und ein Invite-Setup sind der
+# vorgesehene Ablauf, kein Vorfall — auf dieser Liste faerbte jede turnusmaessige
+# Passworthygiene das Dashboard und machte Check #11 als Signal wertlos. Der
+# angriffsnahe Nachbarfall bleibt sichtbar: gehaeufte Fehlversuche laufen
+# weiterhin ueber ``LOGIN_FAILED`` in den Lockout, dessen Missbrauchs-Muster
+# ``detect_*`` in ``compliance/breach_detection.py`` als ``SECURITY_VIOLATION``
+# meldet — und die steht auf dieser Liste.
 _CRITICAL_AUDIT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.MFA_FAILED,

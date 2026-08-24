@@ -31,36 +31,20 @@ sowie ``is_active`` True -> False.
 Die Diff-Erkennung läuft über eigene, instanz-lokale ``_offline_inval_old_*``-
 Attribute (unabhängig von den ``_audit_old_*``-Attributen in
 ``core/signals/audit.py``), damit beide Receiver entkoppelt bleiben.
+
+Refs #1965: Beide Mechanismen selbst liegen seit dem Zusammenziehen des
+Credential-Lifecycles in :mod:`core.services.security.credentials` — dieses
+Modul haelt nur noch die Signal-Verdrahtung und den benannten Einstieg
+:func:`revoke_offline_access`.
 """
 
 from __future__ import annotations
 
-import logging
-
-from django.conf import settings
-from django.contrib.sessions.models import Session
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from django.utils import timezone
 
 from core.models import User
-
-logger = logging.getLogger(__name__)
-
-# R18 (Refs #1476/#1666): Obergrenze fuer den Session-Scan in
-# ``_flush_user_sessions``. Djangos DB-Session-Backend traegt keinen
-# queryable User-Index — der User haengt nur im signierten ``session_data``.
-# Der Flush muss daher jede nicht-abgelaufene Session dekodieren. Ohne Deckel
-# ist das O(alle aktiven Sessions) je Revocation (DoS-Flaeche, wenn ein
-# Angreifer viele anonyme Sessions erzeugt). Der Default liegt weit ueber dem
-# realistischen Bestand (Pilot < 30 User); wird er ueberschritten, wird das
-# laut geloggt (Salt-Rotation entwertet den Offline-Schluessel ohnehin global;
-# der ungeflushte Rest laeuft bei Inaktivitaet ab — aktiv genutzte Sessions
-# erneuern sich seit #1858, enden aber spaetestens am absoluten
-# Sitzungs-Maximum aus #1868 [Default 12 h ab Login]. Das Zeitfenster des
-# Rests ist damit wieder nach oben begrenzt; siehe docs/security-notes.md).
-_SESSION_SCAN_CAP_DEFAULT = 10000
-_SESSION_SCAN_CHUNK = 2000
+from core.services.security.credentials import RevocationReason, revoke_credentials
 
 
 @receiver(pre_save, sender=User, dispatch_uid="offline_invalidation_capture_old")
@@ -103,72 +87,18 @@ def _invalidate_offline_cache_on_revoke(sender, instance, created, **kwargs):
 def revoke_offline_access(user) -> None:
     """Entwerte den Offline-Zugang eines Users: Salt rotieren + Sessions flushen.
 
-    Gemeinsamer Einstieg fuer alle Revocation-Ausloeser (Rollenwechsel,
-    Deaktivierung — via ``post_save`` — sowie Account-Lockout, Refs #1476/#1666).
-    Beide Schritte gehoeren zusammen: die Salt-Rotation allein liefe ins Leere,
-    solange eine noch gueltige Session ueber ``OfflineKeySaltView`` den frisch
-    rotierten Salt sofort nachladen koennte.
+    Einstieg des Signal-Pfads in den zentralen Credential-Lifecycle
+    (:func:`core.services.security.credentials.revoke_credentials`, Refs #1965).
+    Die Mechanik selbst — Salt-Rotation, Session-Flush samt DoS-Deckel — liegt
+    seit #1965 dort, weil drei ihrer vier Ausloeser Views sind und eine zweite
+    Wahrheit im Signal-Modul genau die Teilmengen-Drift erzeugte, die #1965
+    aufgeloest hat. Beide Schritte gehoeren weiterhin zusammen: die
+    Salt-Rotation allein liefe ins Leere, solange eine noch gueltige Session
+    ueber ``OfflineKeySaltView`` den frisch rotierten Salt sofort nachladen
+    koennte.
+
+    Bewusst OHNE eigene Audit-Zeile: Rollenwechsel und Deaktivierung schreiben
+    ueber ``core/signals/audit.py`` bereits ``USER_ROLE_CHANGED`` bzw.
+    ``USER_DEACTIVATED``.
     """
-    _rotate_offline_salt(user)
-    _flush_user_sessions(user)
-
-
-def _rotate_offline_salt(user) -> None:
-    """Leere ``offline_key_salt`` per Queryset-Update (feuert KEINE Signale,
-    also keine Rekursion). Spiegelt das Verhalten der Passwortwechsel-Rotation:
-    der alte client-seitige Schlüssel wird damit wertlos."""
-    if not user.offline_key_salt:
-        return
-    User.objects.filter(pk=user.pk).update(offline_key_salt="")
-    # Lokale Instanz konsistent halten, damit ein nachfolgender Zugriff in
-    # derselben Transaktion nicht den alten Wert sieht.
-    user.offline_key_salt = ""
-
-
-def _flush_user_sessions(user) -> None:
-    """Lösche alle (noch gültigen) DB-Sessions, die auf diesen User zeigen.
-
-    Django-Default-Session-Backend ist DB-backed; eine Session bindet den User
-    über ``_auth_user_id`` im dekodierten Payload. Wir scannen nur die noch
-    nicht abgelaufenen Sessions (abgelaufene tragen ohnehin keinen lebenden
-    Schlüssel mehr und werden vom Clearsessions-Housekeeping getilgt).
-
-    R18 (Refs #1476/#1666): Der Scan ist begrenzt — nur die zwei benötigten
-    Spalten (``.only``), gestreamt (``.iterator``) statt materialisiert, und
-    hart gedeckelt (``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``). Wird der Deckel
-    erreicht, wird laut geloggt und abgebrochen; die bereits gerotierte Salt
-    entwertet den Offline-Schlüssel global. Ein etwaiger ungeflushter
-    Session-Rest läuft seit #1858 bei Inaktivität ab — aktiv genutzte
-    Sessions erneuern sich, enden aber spätestens am absoluten
-    Sitzungs-Maximum (#1868, Default 12 h ab Login).
-    """
-    user_id = str(user.pk)
-    cap = getattr(settings, "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", _SESSION_SCAN_CAP_DEFAULT)
-    stale_keys = []
-    capped = False
-    qs = (
-        Session.objects.filter(expire_date__gte=timezone.now())
-        .only("session_key", "session_data")
-        .iterator(chunk_size=_SESSION_SCAN_CHUNK)
-    )
-    for scanned, session in enumerate(qs):
-        if scanned >= cap:
-            capped = True
-            break
-        if session.get_decoded().get("_auth_user_id") == user_id:
-            stale_keys.append(session.session_key)
-    if stale_keys:
-        Session.objects.filter(session_key__in=stale_keys).delete()
-        logger.info(
-            "Offline-Invalidierung: %d Session(s) für User %s geflusht.",
-            len(stale_keys),
-            user.pk,
-        )
-    if capped:
-        logger.error(
-            "Offline-Invalidierung: Session-Scan-Obergrenze (%d) für User %s erreicht — "
-            "Rest nicht geflusht (Salt ist rotiert; Rest läuft bei Inaktivität ab, spätestens am "
-            "absoluten Sitzungs-Maximum, Refs #1858/#1868).",
-            cap,
-            user.pk,
-        )
+    revoke_credentials(user, reason=RevocationReason.PRIVILEGE_REVOKED)

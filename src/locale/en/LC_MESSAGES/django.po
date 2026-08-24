@@ -11475,3 +11475,7 @@ msgstr "Merge"
 #: src/templates/core/clients/partials/table.html:54
 msgid "Zusammenführungs-Antrag wartet auf Bestätigung"
 msgstr "Merge request awaiting confirmation"
+
+#: src/core/models/audit.py:120
+msgid "Zugangsdaten widerrufen"
+msgstr "Credentials revoked"

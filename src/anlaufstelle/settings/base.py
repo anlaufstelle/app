@@ -374,7 +374,7 @@ SESSION_COOKIE_AGE = 1800  # 30 Minuten
 SESSION_SAVE_EVERY_REQUEST = False
 
 # R18 (Refs #1476/#1666): Obergrenze fuer den Session-Scan der Offline-Revocation
-# (``core.signals.offline_invalidation._flush_user_sessions``). Djangos
+# (``core.services.security.credentials.flush_user_sessions``, Refs #1965). Djangos
 # DB-Session-Backend hat keinen queryable User-Index, daher muss jede aktive
 # Session dekodiert werden — der Deckel bounded den Worst-Case je Revocation.
 # Default weit ueber realistischem Bestand; bei Ueberschreitung wird laut geloggt.

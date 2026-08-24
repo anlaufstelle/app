@@ -1949,7 +1949,7 @@ Zwei Sicherheitsflächen kommen dazu:
 - **Pre-MFA-Sessions** (Passwort passiert, `mfa_verified=False`) werden mitverlängert — ein Gate auf das Flag ist nicht möglich, weil es für Nutzer ohne MFA-Gerät dauerhaft `False` bleibt. Delta gering (Passwort-Besitzer könnten sich jederzeit neu anmelden).
 - **Parallele Session-Writes:** bisher rein lesende Requests schreiben jetzt gelegentlich die Session (Last-Write-Wins-Semantik von `django_session`, winziges Race-Fenster bei parallelem Logout). Django-inhärent, durch die 10-%-Drosselung selten.
 
-Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum** — ist mit #1868 aufgelöst (nächster Abschnitt). Damit ist auch der **Revocation-Scan-Rest** jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` wieder nach oben begrenzt: eine aktiv weitergenutzte Session überdauert den Rechteentzug höchstens bis zu ihrem absoluten Ende (Kommentare in [`offline_invalidation.py`](../src/core/signals/offline_invalidation.py) nachgezogen; praktisch relevant erst bei >10 000 aktiven Sessions).
+Das dritte Restrisiko der ersten Fassung — **kein absolutes Sitzungs-Maximum** — ist mit #1868 aufgelöst (nächster Abschnitt). Damit ist auch der **Revocation-Scan-Rest** jenseits `OFFLINE_REVOCATION_SESSION_SCAN_LIMIT` wieder nach oben begrenzt: eine aktiv weitergenutzte Session überdauert den Rechteentzug höchstens bis zu ihrem absoluten Ende (Kommentare in [`credentials.py`](../src/core/services/security/credentials.py) nachgezogen — bis #1965 standen sie in `signals/offline_invalidation.py`; praktisch relevant erst bei >10 000 aktiven Sessions).
 
 ### Verifikation
 

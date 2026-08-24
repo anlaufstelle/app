@@ -242,6 +242,34 @@ class TestLoginLogout:
         assert response.status_code == 302
         assert SUDO_SESSION_KEY not in client.session
 
+    def test_password_change_writes_credentials_revoked_audit(self, client, staff_user):
+        """Refs #1965: Der Passwortwechsel hinterlaesst eine Rechenschaftszeile.
+
+        Die Nebenwirkungen des Wechsels (Salt-Rotation, Sudo-Fenster,
+        Zwangswechsel-Flag) liefen bis dahin voellig unprotokolliert — im
+        ``/audit/`` war ein Passwortwechsel nur als *Ausbleiben* weiterer
+        Ereignisse erkennbar. Die zentrale Funktion schreibt genau eine Zeile
+        mit dem ausloesenden Grund.
+        """
+        client.login(username="teststaff", password="testpass123")
+
+        response = client.post(
+            "/password-change/",
+            {
+                "old_password": "testpass123",
+                "new_password1": "newSecurePass42",
+                "new_password2": "newSecurePass42",
+            },
+        )
+        assert response.status_code == 302
+
+        eintrag = AuditLog.objects.filter(
+            action=AuditLog.Action.CREDENTIALS_REVOKED,
+            target_id=str(staff_user.pk),
+        ).get()
+        assert eintrag.detail["reason"] == "password_change"
+        assert eintrag.target_type == "User"
+
 
 # --- B.5: ForcePasswordChange Middleware ---
 
@@ -768,3 +796,35 @@ class TestPasswordResetConfirmClearsForcedChange:
         assert client.login(username=staff_user.username, password=new_password) is True
         home = client.get("/")
         assert home.status_code == 200, f"Erster Request nach dem Login wurde umgeleitet: {home.get('Location', '')}"
+
+    def test_reset_confirm_clears_sudo_and_writes_audit(self, client, staff_user):
+        """Refs #1965: Reset und Wechsel teilen jetzt dieselben Nebenwirkungen.
+
+        Das Sudo-Fenster fehlte im Reset-Pfad — praktisch folgenlos, weil das
+        Fenster in der Session liegt und die Session am Auth-Hash stirbt, aber
+        genau diese Vollstaendigkeit haing damit an einem Zufall statt an einer
+        Regel. Die Rechenschaftszeile fehlte in beiden Pfaden.
+        """
+        from core.services.security import SUDO_SESSION_KEY
+
+        staff_user.email = "staff@example.org"
+        staff_user.save(update_fields=["email"])
+        session = client.session
+        session[SUDO_SESSION_KEY] = int(time.time()) + 900
+        session.save()
+
+        response = client.get(self._reset_url(staff_user), follow=True)
+        new_password = "Reset-Chos3n!Pwd"
+        response = client.post(
+            response.redirect_chain[-1][0],
+            {"new_password1": new_password, "new_password2": new_password},
+            follow=True,
+        )
+        assert response.status_code == 200
+
+        assert SUDO_SESSION_KEY not in client.session
+        eintrag = AuditLog.objects.filter(
+            action=AuditLog.Action.CREDENTIALS_REVOKED,
+            target_id=str(staff_user.pk),
+        ).get()
+        assert eintrag.detail["reason"] == "password_reset"

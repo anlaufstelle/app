@@ -315,7 +315,7 @@ class User(AbstractUser):
         Ein Check-generate-save-Muster wuerfelte dabei zwei Salts, der zweite
         ``save`` gewann, und der Client mit dem ersten Salt leitete einen
         Schluessel ab, der zu nichts mehr passte. Das ``filter(...).update()``
-        (Muster analog ``signals.offline_invalidation._rotate_offline_salt``)
+        (Muster analog ``services.security.credentials.rotate_offline_salt``)
         laesst nur den ersten Schreiber gewinnen; der zweite liest per
         ``refresh_from_db`` den bereits vergebenen Wert nach und liefert ihn
         zurueck — beide Tabs leiten denselben Schluessel ab.

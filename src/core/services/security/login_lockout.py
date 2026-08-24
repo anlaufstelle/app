@@ -114,8 +114,11 @@ def unlock(user, unlocked_by, ip_address=None, trigger: str = "admin") -> AuditL
 
     ``trigger`` documents the recovery path (Refs #869): ``"admin"`` (Admin-
     Action), ``"cli"`` (manage.py unlock), ``"password_reset"``,
+    ``"invite_setup"`` (Ersteinrichtung ueber den Einladungslink, Refs #1965 —
+    derselbe Vertrauensanker wie der Reset, im Protokoll aber unterscheidbar),
     ``"recovery_token"`` (dedizierter Token-Flow), ``"backup_code"``
-    (MFA-Recovery).
+    (MFA-Recovery). Die Slugs der drei Passwort-Wege stammen aus
+    :class:`core.services.security.credentials.RevocationReason`.
 
     L14 (Refs #1375): Fuer super_admin ein No-Op (``None``) — die Rolle ist per
     :func:`is_locked` ohnehin nie gesperrt, ein Unlock-Audit waere sinnlos. Die
