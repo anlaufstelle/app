@@ -497,6 +497,65 @@ class TestFieldTemplateCrud:
                 except Exception:
                     pass
 
+    def test_select_options_editor_roundtrip_and_expert_validation(self, authenticated_page, base_url):
+        """Zeileneditor → Persistenz → Expertinnen-Fallback (#1875).
+
+        Der Ablauf wurde vor diesem E2E-Test manuell auf Port 8844 geprüft.
+        """
+        page = authenticated_page
+        errors = track_console_errors(page)
+        name = _cfg_name("FT-OPTIONS")
+        created = False
+
+        try:
+            page.goto(f"{base_url}{FIELDTEMPLATE_LIST}new/", wait_until="domcontentloaded")
+            expect(page.locator("textarea#id_options_json")).to_be_visible()
+            expect(page.locator('[data-testid="options-editor"]')).to_be_hidden()
+            assert "Progressive Enhancement fuer FieldTemplate.options_json" not in page.locator("body").inner_text()
+
+            page.fill("input#id_name", name)
+            page.select_option("select#id_field_type", value="select")
+            expect(page.locator('[data-testid="options-editor"]')).to_be_visible()
+            expect(page.locator("textarea#id_options_json")).to_be_hidden()
+
+            page.locator("[data-options-add]").click()
+            row = page.locator("[data-option-row]").first
+            row.locator("[data-option-label]").fill("Akutberatung")
+            row.locator("[data-option-slug]").fill("akutberatung")
+            raw_options = page.locator("textarea#id_options_json").input_value()
+            assert '"slug": "akutberatung"' in raw_options
+
+            page.locator(FORM_SUBMIT).click()
+            page.wait_for_url(re.compile(r"/config/field-templates/$"))
+            created = True
+
+            page.goto(f"{base_url}{FIELDTEMPLATE_LIST}?q={name}", wait_until="domcontentloaded")
+            self._row(page, name).locator('[data-testid="fieldtemplate-edit-link"]').click()
+            page.wait_for_url(re.compile(r"/config/field-templates/[0-9a-f-]+/edit/$"))
+            expect(page.locator("[data-option-row]")).to_have_count(1)
+            expect(page.locator("[data-option-label]")).to_have_value("Akutberatung")
+            expect(page.locator("[data-option-slug]")).to_have_value("akutberatung")
+
+            page.locator('[data-testid="options-expert-toggle"]').click()
+            expect(page.locator("textarea#id_options_json")).to_be_visible()
+            page.locator("textarea#id_options_json").fill("{kaputt")
+            page.locator('[data-testid="options-expert-toggle"]').click()
+            expect(page.locator("[data-options-json-error]")).to_be_visible()
+            expect(page.locator("textarea#id_options_json")).to_be_visible()
+
+            assert errors == [], f"Konsolen-Errors im Auswahloptionen-Editor: {errors}"
+        finally:
+            if created:
+                try:
+                    page.goto(f"{base_url}{FIELDTEMPLATE_LIST}?q={name}", wait_until="domcontentloaded")
+                    link = self._row(page, name).locator('[data-testid="fieldtemplate-delete-link"]')
+                    if link.count():
+                        link.click()
+                        page.wait_for_url(re.compile(r"/config/field-templates/[0-9a-f-]+/delete/$"))
+                        page.locator('[data-testid="fieldtemplate-delete-confirm"]').click()
+                except Exception:
+                    pass
+
     def test_seed_template_delete_is_blocked(self, authenticated_page, base_url):
         """Seed-Vorlage „Dauer" ist in mehreren Typen zugeordnet → Löschen blockiert.
 

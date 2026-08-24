@@ -18,11 +18,15 @@ from django.utils import timezone
 from core.models import (
     Attachment,
     AuditLog,
+    Case,
+    Client,
     DocumentType,
     DocumentTypeField,
     Event,
+    FieldCondition,
     FieldTemplate,
 )
+from core.services.option_usage import option_slugs_in_use
 
 
 def _valid_post(**overrides):
@@ -195,6 +199,163 @@ class TestValidation:
         assert response.status_code == 200
         assert "options_json" in response.context["form"].errors
         assert not FieldTemplate.objects.filter(name="Kaputt").exists()
+
+    @pytest.mark.parametrize(
+        "options_json",
+        [
+            "{}",
+            '[{"slug":"nur-slug"}]',
+            '[{"slug":"Nicht Gültig","label":"A"}]',
+            '[{"slug":"doppelt","label":"A"},{"slug":"doppelt","label":"B"}]',
+            '[{"slug":"a","label":"A","is_active":"ja"}]',
+            '[{"slug":"a","label":"A","unbekannt":true}]',
+        ],
+    )
+    def test_options_json_structure_is_validated(self, client, admin_user, options_json):
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_fieldtemplate_create"),
+            _valid_post(
+                name="Struktur kaputt",
+                field_type=FieldTemplate.FieldType.SELECT,
+                options_json=options_json,
+            ),
+        )
+
+        assert response.status_code == 200
+        assert "options_json" in response.context["form"].errors
+        assert not FieldTemplate.objects.filter(name="Struktur kaputt").exists()
+
+    def test_options_are_only_allowed_for_select_types(self, client, admin_user):
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_fieldtemplate_create"),
+            _valid_post(
+                name="Text mit Optionen",
+                field_type=FieldTemplate.FieldType.TEXT,
+                options_json='[{"slug":"a","label":"A"}]',
+            ),
+        )
+
+        assert response.status_code == 200
+        assert "options_json" in response.context["form"].errors
+
+    def test_valid_options_are_normalized(self, client, admin_user):
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_fieldtemplate_create"),
+            _valid_post(
+                name="Saubere Auswahl",
+                field_type=FieldTemplate.FieldType.SELECT,
+                options_json='[{"slug":"offen","label":" Offen "}]',
+            ),
+        )
+
+        assert response.status_code == 302
+        assert FieldTemplate.objects.get(name="Saubere Auswahl").options_json == [
+            {"slug": "offen", "label": "Offen", "is_active": True}
+        ]
+
+
+@pytest.mark.django_db
+class TestOptionsEditor:
+    def test_form_keeps_real_textarea_and_renders_progressive_editor(self, client, admin_user):
+        client.force_login(admin_user)
+
+        body = client.get(reverse("core:config_fieldtemplate_create")).content.decode()
+
+        assert 'x-data="fieldTemplateOptionsEditor"' in body
+        assert 'name="options_json"' in body
+        assert 'data-testid="options-editor"' in body
+        assert 'data-testid="options-expert-toggle"' in body
+        assert "Progressive Enhancement fuer FieldTemplate.options_json" not in body
+
+    def test_server_validation_error_stays_visible_outside_hidden_json_wrapper(self, client, admin_user):
+        client.force_login(admin_user)
+
+        body = client.post(
+            reverse("core:config_fieldtemplate_create"),
+            _valid_post(
+                name="Leere Option",
+                field_type=FieldTemplate.FieldType.SELECT,
+                options_json='[{"slug":"","label":""}]',
+            ),
+        ).content.decode()
+
+        assert "data-options-field-errors" in body
+        assert "data-options-json-wrapper" in body
+        assert body.index("data-options-field-errors") < body.index("data-options-json-wrapper")
+
+    def test_edit_form_exposes_used_slugs_without_values_or_counts(
+        self, client, admin_user, facility, client_identified, doc_type_contact, staff_user
+    ):
+        template = FieldTemplate.objects.create(
+            facility=facility,
+            name="Auswahl genutzt",
+            field_type=FieldTemplate.FieldType.SELECT,
+            options_json=[
+                {"slug": "genutzt", "label": "Genutzt", "is_active": True},
+                {"slug": "frei", "label": "Frei", "is_active": True},
+            ],
+        )
+        event = _make_event(facility, client_identified, doc_type_contact, staff_user)
+        event.data_json = {template.slug: "genutzt"}
+        event.save(update_fields=["data_json"])
+        client.force_login(admin_user)
+
+        body = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": template.pk})).content.decode()
+
+        assert 'data-used-option-slugs="genutzt"' in body
+        assert 'data-used-option-slugs="genutzt frei"' not in body
+
+
+@pytest.mark.django_db
+class TestOptionUsage:
+    def test_collects_slugs_from_all_dynamic_owners_and_conditions(
+        self, facility, client_identified, doc_type_contact, staff_user
+    ):
+        source = FieldTemplate.objects.create(
+            facility=facility,
+            name="Quellauswahl",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[
+                {"slug": "ereignis", "label": "Ereignis"},
+                {"slug": "person", "label": "Person"},
+                {"slug": "fall", "label": "Fall"},
+                {"slug": "bedingung", "label": "Bedingung"},
+            ],
+        )
+        target = FieldTemplate.objects.create(facility=facility, name="Ziel", field_type=FieldTemplate.FieldType.TEXT)
+        source_ref = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=source)
+        target_ref = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=target)
+        FieldCondition.objects.create(
+            target_field=target_ref,
+            depends_on_field=source_ref,
+            operator=FieldCondition.Operator.CONTAINS,
+            value="bedingung",
+        )
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={source.slug: ["ereignis"]},
+            created_by=staff_user,
+        )
+        Client.objects.filter(pk=client_identified.pk).update(data_json={source.slug: ["person"]})
+        Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Optionsnutzung",
+            document_type=doc_type_contact,
+            data_json={source.slug: ["fall"]},
+            created_by=staff_user,
+        )
+
+        assert option_slugs_in_use(source) == {"ereignis", "person", "fall", "bedingung"}
 
 
 # ---------------------------------------------------------------------------
