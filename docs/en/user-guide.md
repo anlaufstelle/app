@@ -539,6 +539,8 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
  > The three "Last N days" windows are **rolling** and end today; both ends count, so "Last 30 days" spans exactly 30 days. Calendar words are reserved for calendar units -- which is why the calendar period is called "Calendar year" and the rolling windows are named after their length.
 3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and client groups.
 
+> **Note:** The "Overview" tab -- this dashboard -- counts events in the period **regardless of their report assignment**, including events whose documentation type is not assigned to a report or is explicitly excluded from reports. The report assignment (called "report key" in the configuration) affects the figures only on the "Dataset reports" tab. The two tabs may therefore show different figures for the same period; the "Dataset reports" section explains further reasons. The population evaluated by an individual table is stated below its heading: "Contacts by age group", for example, counts only events linked to a person.
+
 ### Year Navigation
 
 To view data for a specific year:
@@ -947,5 +949,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-22 -->
-<!-- source-hash: fbb76c7cec82f14ce7578892bb4acac217e678db -->
+<!-- translation-date: 2026-08-24 -->
+<!-- source-hash: 02ce82376c2f5c08b726e04f30edf37e7454f97b -->

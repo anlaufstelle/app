@@ -548,6 +548,12 @@ The choices come from the reports themselves: what a report evaluates is declare
 | **Explicitly belongs in no report** | *(excluded -- and **not** a defect)* |
 | *(empty)* | *(appears in no report -- and is reported as a gap)* |
 
+> **The report key does not affect the overview.** The key figures, charts and tables on the "Overview" tab (contacts over time, documentation types, age groups) count the events in the period **regardless of their report key** -- including events that no report evaluates. A type set to "Explicitly belongs in no report" is therefore omitted from reports that assign data through the report key (such as the example activity report), but it remains visible and continues to count in the overview. The "External report" tab does not use the report key either.
+>
+> **Two details belong with that rule.** First, reports about **application behaviour** continue to bind through the system type rather than the report key: the example entry-ban overview therefore shows entry-ban events even if their type is set to "Explicitly belongs in no report" -- and that is exactly how the bundled default catalogue is configured ([ADR-042](../adr/042-report-key-berichtszuordnung.md), *Implementation E4*, German). Second, the overview normally reads completed months from stored monthly aggregates, while dataset reports may calculate live; that can also make their figures diverge ([User Guide § 7](user-guide.md#7-statistics-and-export)).
+>
+> The overview and a report may therefore show different figures for the same period without anything being misconfigured: the overview answers "What happened?", while the reports answer "What goes into which report?". To narrow the overview to one type, use the "All documentation types" dropdown above the charts.
+
 The example activity report is a customizable example or template -- not a binding or current official proof.
 
 > **Empty and "explicitly excluded" are two different things.** Under "Reports" the report states how many events it does *not* show. Counted there are **only** types that make no statement at all (key empty) -- a type set to "Explicitly belongs in no report" is a complete statement and does **not** appear in the notice (#1819). Until the update, bans and notes were counted; a facility that documents entry bans saw the notice permanently without anything being misconfigured.
@@ -558,13 +564,34 @@ The example activity report is a customizable example or template -- not a bindi
 >
 > When **creating** a type the form suggests matching values: system type "Crisis" suggests the key "Crisis", "Ban" suggests "Explicitly belongs in no report". Both are suggestions, not constraints -- system type and report key are allowed to diverge on purpose.
 
+> **Set incorrectly? The repair path uses a new type.** A report key that has been set cannot be corrected -- not in the form, the Django admin or a configuration package. If the wrong value was selected accidentally, create a **new** documentation type with the correct key and set the old type to inactive through its **"Active"** field. Remember that names must be unique (see "Name uniqueness" above), including against **inactive** types: the new type therefore needs another name, or you must rename the old one first. The old type will no longer be offered for new events; existing events remain unchanged on it -- and therefore in the report row where they were counted before. Also remember the old type's **quick templates** (§ 2.8): deactivating the type does **not** remove them from the event-creation page, so deactivate them separately. **Deletion is not a substitute:** a type with existing events cannot be deleted. A reporting period spanning the changeover date will contain both types, so plan the change for a period boundary whenever possible.
+>
+> **Interim:** These steps currently have to be performed manually. A guided process is recorded as a proposal (#1888); it does not change the one-time nature of the key.
+
 **Report keys on field templates.** Reports that evaluate **field values** (minute totals, needle-exchange balance, distribution of selection fields) additionally need to know **which field** to read. Until the update that only worked through the field slug: naming your numeric field "Session duration" instead of "Duration" produced a report that permanently showed zero minutes -- without any feedback. Since the update the field template carries its own report key (e.g. "Minutes") and the name is free. The former free-text field **"Statistics category"** on the field template was removed in the same step: no evaluation ever read it.
 
 > **At most one field template per report key and documentation type.** Two fields with the key "Minutes" on the same type would mean double-counted minutes. The assignment is therefore rejected -- as is setting a key later that is already taken on a shared type; if the duplication arises anyway (e.g. through a configuration package), the report counts **neither** field and says so. The same field template on **different** types is fine, as are two similarly named fields with **different** keys.
 >
 > **A deliberate gap:** If a **field template** carries a key that no report knows, the report does *not* say so separately -- unlike for a documentation type. The reason is that no meaningful figure could be given there: a field with an unknown key simply yields no values, and nobody knows how many there should have been. The state stays visible through "Appears in …" on the field template itself, which then reads "Does not appear in any report."
 
-**All bindings at a glance.** If you would rather not check "Appears in …" type by type, use the maintenance command **`inventory_report_bindings`** (#1848). For one facility (`--facility`, mandatory) it lists which report key sits in which reporting backend and which documentation types and field templates carry it -- and which carry none and therefore appear in no report; `--format json` and `--output` write the result to a file in machine-readable form. It is pure information and changes no data, but like the other maintenance commands (e.g. `purge_orphan_field_data`, below) it must run with the **admin DB role** and otherwise aborts with a clear message (Row Level Security). Execution: see `docs/ops-runbook.md` § 3.5.
+#### Check the Binding Inventory
+
+The "Appears in …" information answers the question for **one** documentation type or **one** field template. For a facility-wide view -- which type and field template appear in which report, and which appear in none -- use the **`inventory_report_bindings`** maintenance command:
+
+```bash
+docker compose -f docker-compose.prod.yml exec \
+  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+  web python manage.py inventory_report_bindings --facility <uuid-or-name>
+```
+
+Add `--format json --output <file>` to write the same inventory in machine-readable form. The command **does not change your configuration** -- it only reads it.
+
+For **documentation types**, it distinguishes the same four states as the reports' completeness notice (assigned · explicitly excluded · unknown key · no statement). Only types whose entity type is **event** are listed, because report keys do not affect person and case types (see "Minimum contact stage"). For **field templates** -- where there is no entity-type restriction -- it reports only *bound* or *unbound*: the deliberate gap described above also applies here, so an unknown field key simply appears as unbound. A field template is considered bound as soon as its key matches a report available to your facility, even if it has not yet been assigned to a documentation type.
+
+This is particularly useful after creating many types manually or loading a third-party configuration package, and as a cross-check before releasing a report for the first time.
+
+> ⚠️ **Role requirement.** Like the other maintenance commands (`load_package`, `purge_orphan_field_data`, `reencrypt_fields`), this command must run with the **admin DB role** -- following the same pattern as [Ops Runbook § 3.5](../ops-runbook.md#35-manuelle-ausfuehrung); the roles themselves are explained by the database role model in [Ops Runbook § 9](../ops-runbook.md#9-row-level-security-rls). Without that role it aborts with a clear message instead of producing an empty report: under the runtime role, a facility with no visible rows would look perfectly configured because of Row Level Security.
 
 #### Minimum Contact Stage
 
@@ -1285,6 +1312,22 @@ docker system prune -f
 docker system df -v | grep pgdata
 ```
 
+### Problem: Reports Show "Suppressed" or Dashes Instead of Figures
+
+**Symptom:** A report shows dashes ("—" in the dataset-report preview) or the notice "suppressed" (external report, activity-report PDF) instead of figures -- possibly in almost every row.
+
+**This is normally not a defect.** Aggregates below the facility's k-anonymity threshold are hidden so that a report cannot be used to identify individual people. In a facility with little data -- during testing, shortly after initial setup, or over a very short period -- practically every value may be below the threshold. Hiding an additional visible cell, a total row or an entire breakdown is part of the method: otherwise the suppressed value could be calculated by subtraction.
+
+**User documentation:** [User Guide § 7 -- Statistics and Export](user-guide.md#7-statistics-and-export) explains the representation in each file format and the on-screen response (expand the period, rule out an empty period). Administrators should also know these three points:
+
+1. **The threshold is a setting of its own, not a side effect of retention.** It is configured per facility in the admin under **Core → Settings** (`k_anonymity_threshold`, default 5) and applies to **every report artifact that leaves the organization** -- regardless of whether k-anonymization is enabled for the retention run. [§ 7.3](#73-retention-periods-and-enforce_retention) documents both fields together in the retention context, but they are independent.
+
+2. **Two views are deliberately not suppressed** and can therefore be used to check whether any data exists at all: the on-screen **statistics overview** and the PDF export in internal mode (`?internal=1`, with an "INTERNAL" banner; both restricted to lead/administration roles). It is expected that the overview may show different figures from a report. Forwarding content from these internal views falls outside the guarantee.
+
+3. **A boundary remains even when no suppression is visible:** the guarantee applies per artifact and period, not across multiple releases -- see [§ 8, "Releasing Reports: What You Need to Know"](#8-statistics-snapshots-materialized-view).
+
+> **Important:** Lowering the threshold is a privacy decision, not a troubleshooting step. It affects every report that leaves the organization; document the change accordingly -- the audit log records it as "Settings changed" with the old and new values ([§ 7.4](#74-audit-log)).
+
 ### Diagnostic Commands at a Glance
 
 ```bash
@@ -1671,6 +1714,8 @@ Anlaufstelle computes statistics (dashboard, half-year reports, example activity
 
 **Statistics snapshots** persist monthly aggregates before events are deleted. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
 
+> **Important: snapshot protection does not cover every report.** It preserves the **monthly aggregates** that feed the statistics overview (key figures, tables and timeline), its PDF export and the activity-report PDFs. Of the reports on the **"Dataset reports"** tab, only the **example activity report** is snapshot-enabled, and even there only its **PDF**: its CSV/JSON/XML files -- like every other report on that tab -- recalculate from the current data on **every** request. Once `enforce_retention` has cleaned up a past period, their figures for that period will be lower than on the first download -- potentially zero, without an error message, because that is not a defect. The extent depends on the report: it evaluates events, cases or people and changes only when records in **its** population are deleted or anonymized; the population is stated above each preview. **If you give such a file to a funding body or other recipient, retain the generated file yourself** -- it cannot be reproduced identically later. Each report states where it reads from ("Data source: …"); the other considerations for external release are explained below under ["Releasing Reports"](#releasing-reports-what-you-need-to-know).
+
 ### Automatic Capture
 
 Snapshots are created automatically whenever `enforce_retention` deletes events -- the affected months are captured right before the deletion.
@@ -1757,5 +1802,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-22 -->
-<!-- source-hash: 7dfe5b5b1b00678e2541e88e9dd708a0c1e99a90 -->
+<!-- translation-date: 2026-08-24 -->
+<!-- source-hash: 971ee3f942496ee3d90850246fbf6e027a964f3d -->

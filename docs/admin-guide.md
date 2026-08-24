@@ -544,6 +544,12 @@ Die Auswahl kommt aus den Berichten selbst: Was ein Bericht auswertet, deklarier
 | **Gehört ausdrücklich in keinen Bericht** | *(ausgeschlossen — und **kein** Mangel)* |
 | *(leer)* | *(erscheint in keinem Bericht — und wird als Lücke gemeldet)* |
 
+> **Der Berichtsschlüssel wirkt nicht auf die Übersicht.** Kennzahlen, Diagramme und Tabellen des Reiters „Übersicht" (Kontakte im Zeitverlauf, Dokumentationstypen, Altersgruppen) zählen die Ereignisse des Zeitraums **unabhängig vom Berichtsschlüssel** — auch solche, die kein Bericht auswertet. Ein Typ mit „Gehört ausdrücklich in keinen Bericht" fällt deshalb aus den Berichten heraus, die über den Berichtsschlüssel zuordnen (etwa dem Beispiel-Sachbericht), bleibt in der Übersicht aber sichtbar und zählt dort weiter mit. Auch der Reiter „Externer Bericht" kennt den Berichtsschlüssel nicht.
+>
+> **Zwei Dinge gehören dazu.** Erstens binden Berichte über **Anwendungsverhalten** weiterhin über den Systemtyp statt über den Berichtsschlüssel: Die Beispiel-Hausverbots-Übersicht zeigt Hausverbots-Ereignisse also auch dann, wenn der Typ „Gehört ausdrücklich in keinen Bericht" trägt — im mitgelieferten Standardkatalog ist genau das der Fall ([ADR-042](adr/042-report-key-berichtszuordnung.md), *Vollzug E4*). Zweitens liest die Übersicht für abgeschlossene Monate in der Regel aus den gespeicherten Monats-Auswertungen, während die Datensatz-Berichte je nach Bericht live rechnen; auch das kann Zahlen auseinanderlaufen lassen ([User-Guide § 7](user-guide.md#7-statistik-und-export)).
+>
+> Übersicht und Bericht dürfen im selben Zeitraum deshalb verschiedene Zahlen zeigen, ohne dass etwas falsch konfiguriert ist: Die Übersicht beantwortet „Was ist passiert?", die Berichte beantworten „Was geht in welchen Bericht?". Wollen Sie die Übersicht auf einen einzelnen Typ einschränken, nutzen Sie das Dropdown „Alle Dokumentationstypen" über den Diagrammen.
+
 Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein verbindlicher oder aktueller Behördennachweis.
 
 > **Leer und „ausdrücklich ausgeschlossen" sind zwei verschiedene Dinge.** Der Bericht weist unter „Berichte" aus, wie viele Ereignisse er *nicht* zeigt. Gezählt werden dort **nur** Typen, die gar keine Aussage treffen (Schlüssel leer) — ein Typ mit „Gehört ausdrücklich in keinen Bericht" ist eine vollständige Aussage und erscheint **nicht** im Hinweis (#1819). Bis zum Update zählten Hausverbote und Notizen mit; eine Einrichtung, die Hausverbote dokumentiert, sah den Hinweis dauerhaft, ohne dass etwas falsch konfiguriert war.
@@ -554,13 +560,34 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 >
 > Beim **Anlegen** schlägt das Formular passende Werte vor: „Krisengespräch" als Systemtyp schlägt den Schlüssel „Krisengespräch" vor, „Hausverbot" schlägt „Gehört ausdrücklich in keinen Bericht" vor. Beides ist ein Vorschlag, kein Zwang — Systemtyp und Berichtsschlüssel dürfen bewusst auseinanderlaufen.
 
+> **Falsch gesetzt? Der Weg führt über einen neuen Typ.** Ein gesetzter Berichtsschlüssel lässt sich nicht korrigieren — weder im Formular noch im Django-Admin noch über ein Konfigurationspaket. Wurde versehentlich der falsche Wert gewählt, legen Sie einen **neuen** Dokumentationstyp mit dem richtigen Schlüssel an und setzen den alten über das Feld **„Aktiv"** auf inaktiv. Beachten Sie dabei die Eindeutigkeit des Namens (siehe „Eindeutigkeit des Namens" weiter oben): Sie gilt auch gegenüber **inaktiven** Typen, der neue Typ braucht also einen anderen Namen — oder Sie benennen den alten zuvor um. Der alte Typ steht dann für neue Ereignisse nicht mehr zur Wahl; bereits erfasste Ereignisse bleiben unverändert bei ihm — und damit in der Berichtszeile, in der sie bisher gezählt wurden. Denken Sie zusätzlich an die **Schnell-Vorlagen** des alten Typs (§ 2.8): Sie verschwinden mit der Deaktivierung des Typs **nicht** von der Erfassungsseite und sind eigens zu deaktivieren. **Löschen ist kein Ersatz:** Ein Typ, zu dem Ereignisse existieren, lässt sich nicht löschen. Rechnen Sie damit, dass ein Berichtszeitraum, der über den Umstellungstag hinweggeht, beide Typen enthält — planen Sie den Wechsel deshalb möglichst auf eine Zeitraumgrenze.
+>
+> **Interim:** Diese Schritte sind heute von Hand auszuführen. Ein geführter Ablauf dafür ist als Vorschlag erfasst (#1888); an der Einmaligkeit des Schlüssels ändert er nichts.
+
 **Berichtsschlüssel an Feldvorlagen.** Berichte, die **Feldwerte** auswerten (Minutensummen, Spritzensaldo, Verteilung der Auswahlfelder), brauchen zusätzlich zu wissen, **welches Feld** sie lesen sollen. Bis zum Update ging das nur über den Feld-Slug: Wer sein Zahlenfeld „Gesprächsdauer" statt „Dauer" nannte, bekam einen Bericht, der dauerhaft null Minuten auswies — ohne jede Rückmeldung. Seit dem Update trägt die Feldvorlage ihren eigenen Berichtsschlüssel (z. B. „Minuten"), und der Name ist frei wählbar. Das frühere Freitextfeld **„Statistik-Kategorie"** an der Feldvorlage ist im selben Zug entfallen: Es wurde von keiner Auswertung gelesen.
 
 > **Je Dokumentationstyp höchstens eine Feldvorlage je Berichtsschlüssel.** Zwei Felder mit dem Schlüssel „Minuten" am selben Typ hießen doppelt gezählte Minuten. Die Zuordnung wird deshalb abgewiesen — ebenso das nachträgliche Setzen eines Schlüssels, der an einem gemeinsamen Typ schon vergeben ist; entsteht die Doppelung trotzdem (z. B. über ein Konfigurationspaket), zählt der Bericht **keines** der beiden Felder und weist das aus. Dieselbe Feldvorlage an **verschiedenen** Typen ist unproblematisch, ebenso zwei gleich benannte Felder mit **verschiedenen** Schlüsseln.
 >
 > **Bewusste Lücke:** Trägt eine **Feldvorlage** einen Schlüssel, den kein Bericht kennt, sagt der Bericht das *nicht* eigens — anders als beim Dokumentationstyp. Der Grund ist, dass sich dort keine sinnvolle Zahl nennen ließe: Ein Feld mit unbekanntem Schlüssel liefert schlicht keine Werte, und wie viele es hätten sein sollen, weiß niemand. Sichtbar bleibt der Zustand über „Erscheint in …" an der Feldvorlage selbst — dort steht dann „Erscheint in keinem Bericht."
 
-**Alle Zuordnungen auf einen Blick.** Wer den Stand nicht Typ für Typ über „Erscheint in …" abfragen will, nutzt den Wartungsbefehl **`inventory_report_bindings`** (#1848). Er listet für eine Einrichtung (`--facility`, Pflichtangabe) auf, welcher Berichtsschlüssel in welchem Berichts-Backend steckt und welche Dokumentationstypen und Feldvorlagen ihn tragen — bzw. welche keinen tragen und damit in keinem Bericht erscheinen; `--format json` und `--output` schreiben das Ergebnis maschinenlesbar in eine Datei. Er ist reine Auskunft und verändert keine Daten, muss aber wie die übrigen Wartungskommandos (z. B. `purge_orphan_field_data`, unten) mit der **Admin-DB-Rolle** laufen und bricht sonst mit einer klaren Meldung ab (Row-Level-Security). Ausführung: siehe `docs/ops-runbook.md` § 3.5.
+#### Bindungs-Inventar prüfen
+
+Die Auskunft „Erscheint in …" beantwortet die Frage für **einen** Dokumentationstyp bzw. **eine** Feldvorlage. Für den Blick über die ganze Einrichtung — welcher Typ und welche Feldvorlage erscheinen in welchem Bericht, und welche in keinem — gibt es den Wartungsbefehl **`inventory_report_bindings`**:
+
+```bash
+docker compose -f docker-compose.prod.yml exec \
+  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
+  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
+  web python manage.py inventory_report_bindings --facility <uuid-oder-name>
+```
+
+Mit `--format json --output <datei>` schreibt er dieselbe Auswertung maschinenlesbar. Er **ändert nichts an Ihrer Konfiguration** — er liest nur.
+
+Bei **Dokumentationstypen** unterscheidet er dieselben vier Zustände wie der Vollständigkeitshinweis der Berichte (zugeordnet · ausdrücklich ausgeschlossen · unbekannter Schlüssel · keine Angabe); aufgeführt werden dabei nur Typen mit Entitätstyp **Ereignis** — an Personen- und Fall-Typen wirkt der Berichtsschlüssel ohnehin nicht (siehe „Mindest-Kontaktstufe"). Bei **Feldvorlagen** — dort ohne Einschränkung auf einen Entitätstyp — nennt er nur *gebunden* oder *ungebunden*: Die oben beschriebene bewusste Lücke gilt auch hier, ein unbekannter Feld-Schlüssel erscheint schlicht als ungebunden. Als gebunden gilt eine Feldvorlage außerdem schon dann, wenn ihr Schlüssel zu einem in Ihrer Einrichtung verfügbaren Bericht passt — auch wenn sie noch keinem Dokumentationstyp zugeordnet ist.
+
+Sinnvoll vor allem, nachdem Sie viele Typen von Hand angelegt oder ein fremdes Konfigurationspaket eingespielt haben, und als Gegenprobe, bevor Sie einen Bericht erstmals nach außen geben.
+
+> ⚠️ **Rollen-Voraussetzung.** Wie die übrigen Wartungskommandos (`load_package`, `purge_orphan_field_data`, `reencrypt_fields`) muss der Lauf mit der **Admin-DB-Rolle** erfolgen — nach demselben Muster wie die Läufe in [Ops-Runbook § 3.5](ops-runbook.md#35-manuelle-ausfuehrung); die Rollen selbst erklärt das DB-Rollenmodell in [Ops-Runbook § 9](ops-runbook.md#9-row-level-security-rls). Ohne sie bricht er mit einer klaren Meldung ab, statt einen leeren Report auszugeben — unter der Laufzeit-Rolle sähe eine Einrichtung ohne sichtbare Zeilen aus wie eine tadellos konfigurierte (Row-Level-Security).
 
 #### Mindest-Kontaktstufe
 
@@ -1279,6 +1306,22 @@ docker system prune -f
 docker system df -v | grep pgdata
 ```
 
+### Problem: Berichte zeigen „unterdrückt" oder Gedankenstriche statt Zahlen
+
+**Symptom:** Statt Zahlen stehen im Bericht Gedankenstriche („—" in der Vorschau der Datensatz-Berichte) bzw. der Hinweis „unterdrückt" (externer Bericht, Sachbericht-PDF) — teilweise in nahezu allen Zeilen.
+
+**Das ist in aller Regel kein Defekt.** Aggregate unterhalb der K-Anonymitäts-Schwelle der Einrichtung werden ausgeblendet, damit sich aus einem Bericht keine einzelnen Personen ableiten lassen. In einer Einrichtung mit wenig Bestand — im Testbetrieb, kurz nach der Ersteinrichtung oder bei einem sehr kurzen Zeitraum — liegen praktisch alle Werte unter der Schwelle. Dass dabei zusätzlich eine sichtbare Zelle, eine Summenzeile oder eine ganze Aufschlüsselung wegfällt, gehört zum Verfahren: sonst ließe sich der unterdrückte Wert zurückrechnen.
+
+**Benutzerseitige Doku:** [User-Guide § 7 — Statistik und Export](user-guide.md#7-statistik-und-export) — Darstellung je Dateiformat und das Vorgehen am Bildschirm (Zeitraum vergrößern, leeren Zeitraum ausschließen). Für die Administration kommen drei Punkte hinzu:
+
+1. **Die Schwelle ist ein eigenes Setting, kein Nebeneffekt der Aufbewahrung.** Sie steht je Einrichtung im Admin unter **Core → Einstellungen** (Feld `k_anonymity_threshold`, Standard 5) und wirkt auf **jedes Berichts-Artefakt, das das Haus verlässt** — unabhängig davon, ob die K-Anonymisierung im Aufbewahrungslauf aktiviert ist. [§ 7.3](#73-löschfristen-und-enforce_retention) dokumentiert beide Felder gemeinsam im Retention-Kontext; sie hängen aber nicht voneinander ab.
+
+2. **Zwei Ansichten sind bewusst nicht unterdrückt** und taugen deshalb zur Gegenprobe, ob überhaupt Daten vorhanden sind: die **Statistik-Übersicht am Bildschirm** und der PDF-Export im internen Modus (`?internal=1`, mit „INTERN"-Banner; beides nur Leitung/Administration). Dass die Übersicht andere Zahlen zeigt als der Bericht, ist erwartet. Was aus diesen internen Ansichten weitergegeben wird, verlässt die Zusicherung.
+
+3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die Zusicherung gilt je Artefakt und je Zeitraum, nicht über mehrere Herausgaben hinweg — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots-materialized-view).
+
+> **Wichtig:** Das Herabsetzen der Schwelle ist eine Datenschutz-Entscheidung, kein Bedienschritt. Sie gilt für alle Berichte, die das Haus verlassen; dokumentieren Sie die Änderung entsprechend — im Audit-Log erscheint sie als „Einstellungen geändert" mit Alt- und Neu-Wert ([§ 7.4](#74-audit-log)).
+
 ### Diagnose-Befehle auf einen Blick
 
 ```bash
@@ -1664,6 +1707,8 @@ Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](htt
 Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sachbericht-PDFs) standardmäßig aus der Event-Tabelle (über die Materialized View aggregiert). Wenn die automatische Datenlöschung (`enforce_retention`) alte Events entfernt, würden diese aus den Statistiken verschwinden.
 
 **Statistik-Snapshots** sichern monatliche Aggregate, bevor Events gelöscht werden. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten (aus der Materialized View) für den aktuellen Monat.
+
+> **Wichtig: Der Snapshot-Schutz gilt nicht für jeden Bericht.** Gesichert werden die **Monats-Aggregate** — aus ihnen speisen sich die Statistik-Übersicht (Kennzahlen, Tabellen, Zeitverlauf), ihr PDF-Export und die Sachbericht-PDFs. Von den Berichten des Reiters **„Datensatz-Berichte"** ist dagegen allein der **Beispiel-Sachbericht** snapshot-fähig, und auch bei ihm nur das **PDF**: seine CSV-/JSON-/XML-Dateien rechnen — wie die aller übrigen Berichte dieses Reiters — bei **jedem** Aufruf neu aus dem aktuellen Datenbestand. Sobald `enforce_retention` einen vergangenen Zeitraum bereinigt hat, fallen deren Zahlen für diesen Zeitraum niedriger aus als beim ersten Abruf — bis auf null, und ohne Fehlermeldung, weil das kein Fehler ist. Wie stark, hängt am einzelnen Bericht: Er wertet Ereignisse, Fälle oder Personen aus und ändert sich erst, wenn die Datensätze **seiner** Grundgesamtheit gelöscht bzw. anonymisiert werden; welche das ist, benennt er über der Vorschau selbst. **Wer solche Dateien an Träger oder Kostenträger weitergibt, bewahrt die erzeugte Datei selbst auf** — identisch reproduzieren lässt sie sich später nicht. Woher ein Bericht liest, steht jeweils am Bericht selbst („Datenquelle: …"); was bei der Weitergabe sonst zu beachten ist, steht unten unter [„Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 ### Automatische Sicherung
 

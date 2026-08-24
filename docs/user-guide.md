@@ -535,6 +535,8 @@ Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (
  > Die drei „Letzte N Tage"-Fenster sind **rollierend** und enden heute; beide Enden zählen mit, „Letzte 30 Tage" umfasst also genau 30 Tage. Kalenderwörter stehen ausschließlich für Kalendereinheiten — deshalb heißt der kalendarische Zeitraum „Kalenderjahr" und die rollierenden Fenster nach ihrer Länge.
 3. Das Dashboard aktualisiert sich automatisch und zeigt aggregierte Kennzahlen zu Kontaktzahlen, Dokumentationstypen und Personengruppen.
 
+> **Hinweis:** Der Reiter „Übersicht" — dieses Dashboard — zählt die Ereignisse des Zeitraums **unabhängig von ihrer Berichtszuordnung**: auch solche, deren Dokumentationstyp keinem Bericht zugeordnet oder ausdrücklich von den Berichten ausgenommen ist. Die Berichtszuordnung (in der Konfiguration „Berichtsschlüssel") wirkt sich erst im Reiter „Datensatz-Berichte" auf die Zahlen aus — die beiden Reiter können im selben Zeitraum deshalb unterschiedliche Zahlen zeigen; weitere Gründe dafür nennt der Abschnitt „Datensatz-Berichte". Welche Grundgesamtheit eine einzelne Tabelle auswertet, steht jeweils unter ihrer Überschrift: „Kontakte nach Altersgruppe" zählt zum Beispiel nur Ereignisse mit Personenbezug.
+
 ### Jahresnavigation
 
 Um die Daten eines bestimmten Jahres zu sehen:
