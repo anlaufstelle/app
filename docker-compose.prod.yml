@@ -37,6 +37,7 @@ services:
       APP_DB_PASSWORD: ${POSTGRES_PASSWORD}
       ADMIN_DB_USER: ${POSTGRES_ADMIN_USER}
       ADMIN_DB_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      REQUIRE_ADMIN_DB_ROLE: "true"
     volumes:
       # PG18-Image: PGDATA=/var/lib/postgresql/18/docker, VOLUME-Deklaration
       # /var/lib/postgresql — Mount aufs Elternverzeichnis, nicht .../data
@@ -155,9 +156,41 @@ services:
       - /home/appuser/.cache:mode=1777
     pids_limit: 512
     mem_limit: 2g
-    env_file: .env
     environment:
+      # Refs #1962: explizite HTTP-Runtime-Allowlist. Die .env enthaelt auch
+      # POSTGRES_ADMIN_PASSWORD und POSTGRES_BOOTSTRAP_PASSWORD und darf daher
+      # nie komplett in den Web-Container gelangen.
+      ANLAUFSTELLE_PROCESS_ROLE: runtime
+      DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_AUDIT_HASH_KEY: ${DJANGO_AUDIT_HASH_KEY}
+      SOURCE_CODE_URL: ${SOURCE_CODE_URL:-https://github.com/anlaufstelle/app}
+      SOURCE_CODE_VERSION: ${SOURCE_CODE_VERSION-}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY-}
+      ENCRYPTION_KEYS: ${ENCRYPTION_KEYS-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      EXTERNAL_ORIGIN: ${EXTERNAL_ORIGIN-}
+      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@anlaufstelle.app}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/data/media}
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT: ${CLAMAV_TIMEOUT:-15}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS-}
+      SENTRY_DSN: ${SENTRY_DSN-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav
       # Refs #1017: Stabiler App-Rollenname für check_db_roles — der Migrate-Job
@@ -207,6 +240,49 @@ services:
       - internal
       - frontend
 
+  maintenance:
+    # Privilegierter, opt-in One-Shot-Pfad fuer Migrationen und Operator-
+    # Kommandos (Refs #1962). Anders als ``web`` darf nur dieser Service die
+    # vollstaendige .env und damit Admin-/Bootstrap-Zugangsdaten sehen.
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.82.0}
+    profiles: ["maintenance"]
+    entrypoint: ["python", "manage.py"]
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/appuser/.cache:mode=1777
+    pids_limit: 256
+    mem_limit: 1g
+    env_file: .env
+    environment:
+      ANLAUFSTELLE_PROCESS_ROLE: maintenance
+      DJANGO_LOAD_DOTENV: "false"
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
+      POSTGRES_HOST: db
+      POSTGRES_APP_USER: ${POSTGRES_USER}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_ADMIN_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_BOOTSTRAP_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}
+      CLAMAV_HOST: clamav
+      FILE_UPLOAD_TEMP_DIR: /tmp
+      REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
+    volumes:
+      - media:/data
+      - ${BACKUP_HOST_DIR:-./backups}:${BACKUP_DIR:-/backups}:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
   cron:
     # Hintergrundjob-Scheduler (Refs #794, C-26). Vor diesem Sidecar musste
     # jede Installation die Jobs per Host-Crontab selbst einrichten — tat sie
@@ -244,6 +320,8 @@ services:
     mem_limit: 1g
     env_file: .env
     environment:
+      ANLAUFSTELLE_PROCESS_ROLE: maintenance
+      DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav

@@ -55,6 +55,7 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         # lokale .env (z.B. POSTGRES_ADMIN_PASSWORD=change-me-admin) per
         # load_dotenv(override=False) durchgreifen und "should boot"-Tests
         # faelschlich rot faerben — daher hier ebenfalls auf leer vorbelegen.
+        "POSTGRES_ADMIN_USER": "",
         "POSTGRES_ADMIN_PASSWORD": "",
         "POSTGRES_BOOTSTRAP_PASSWORD": "",
         # Refs #795/#1657: den optionalen Redis-Umschalter leer vorbelegen, damit
@@ -389,6 +390,43 @@ class TestProdPlaceholderSecretsGuard:
         result = _run_prod_import({**self._VALID_ENV, "POSTGRES_BOOTSTRAP_PASSWORD": "change-me-bootstrap"})
         assert result.returncode != 0
         assert "POSTGRES_BOOTSTRAP_PASSWORD" in result.stderr
+
+    def test_runtime_rejects_privileged_db_secret_leak(self):
+        """HTTP-Runtime failt auch bei einem starken Admin-Passwort geschlossen.
+
+        Ein gueltiger Wert ist hier gerade das Problem: ``web`` darf ihn nie
+        sehen. Nur der explizite Maintenance-Prozess darf privilegierte
+        Zugangsdaten erhalten (Refs #1962).
+        """
+        result = _run_prod_import({**self._VALID_ENV, "POSTGRES_ADMIN_PASSWORD": "a" * 40})
+        assert result.returncode != 0
+        assert "POSTGRES_ADMIN_PASSWORD" in result.stderr
+        assert "maintenance" in result.stderr.lower()
+
+    def test_maintenance_requires_admin_and_bootstrap_passwords(self):
+        result = _run_prod_import(
+            {
+                **self._VALID_ENV,
+                "ANLAUFSTELLE_PROCESS_ROLE": "maintenance",
+                "POSTGRES_ADMIN_USER": "anlaufstelle_admin",
+                "POSTGRES_ADMIN_PASSWORD": "",
+                "POSTGRES_BOOTSTRAP_PASSWORD": "b" * 40,
+            }
+        )
+        assert result.returncode != 0
+        assert "POSTGRES_ADMIN_PASSWORD" in result.stderr
+
+    def test_maintenance_accepts_complete_strong_db_secrets(self):
+        result = _run_prod_import(
+            {
+                **self._VALID_ENV,
+                "ANLAUFSTELLE_PROCESS_ROLE": "maintenance",
+                "POSTGRES_ADMIN_USER": "anlaufstelle_admin",
+                "POSTGRES_ADMIN_PASSWORD": "a" * 40,
+                "POSTGRES_BOOTSTRAP_PASSWORD": "b" * 40,
+            }
+        )
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
 
     def test_short_postgres_password_rejected(self):
         """Zu wenig Entropie (< 32 Zeichen) wird wie bei den anderen Secrets abgelehnt."""

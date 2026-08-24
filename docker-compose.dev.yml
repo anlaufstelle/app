@@ -44,6 +44,7 @@ services:
       APP_DB_PASSWORD: ${POSTGRES_PASSWORD}
       ADMIN_DB_USER: ${POSTGRES_ADMIN_USER}
       ADMIN_DB_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      REQUIRE_ADMIN_DB_ROLE: "true"
     volumes:
       # PG18-Image: PGDATA=/var/lib/postgresql/18/docker, VOLUME-Deklaration
       # /var/lib/postgresql — Mount aufs Elternverzeichnis, nicht .../data
@@ -121,9 +122,37 @@ services:
       - /home/appuser/.cache:mode=1777
     pids_limit: 512
     mem_limit: 2g
-    env_file: .env.dev
     environment:
+      # Refs #1962: explizite Runtime-Allowlist. Admin-/Bootstrap-Secrets aus
+      # .env.dev werden ausschliesslich dem Maintenance-One-Shot gegeben.
+      ANLAUFSTELLE_PROCESS_ROLE: runtime
+      DJANGO_LOAD_DOTENV: "false"
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.devlive
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_AUDIT_HASH_KEY: ${DJANGO_AUDIT_HASH_KEY}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      EXTERNAL_ORIGIN: ${EXTERNAL_ORIGIN-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY-}
+      ENCRYPTION_KEYS: ${ENCRYPTION_KEYS-}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT: ${CLAMAV_TIMEOUT:-15}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID-}
+      UMAMI_SCRIPT_SRC: ${UMAMI_SCRIPT_SRC-}
+      UMAMI_RECORDER_SRC: ${UMAMI_RECORDER_SRC-}
+      SENTRY_DSN: ${SENTRY_DSN-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      SOURCE_CODE_URL: ${SOURCE_CODE_URL:-https://github.com/anlaufstelle/app}
+      SOURCE_CODE_VERSION: ${SOURCE_CODE_VERSION-}
+      BACKUP_DIR: ${BACKUP_DIR:-/var/backups/anl}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS-}
       # MEDIA_ROOT unter read_only aufs beschreibbare media-Volume (/data)
       # pinnen — sonst greift der Default BASE_DIR/media (=/app/media, jetzt
       # read-only) und Datei-Uploads scheitern mit HTTP 500. Refs #1374.
@@ -168,6 +197,46 @@ services:
     networks:
       - internal
       - frontend
+
+  maintenance:
+    # Opt-in One-Shot fuer migrate/seed/Wartung. Nur hier wird die komplette
+    # .env.dev mit den privilegierten DB-Secrets geladen (Refs #1962).
+    image: ghcr.io/anlaufstelle/app:main
+    pull_policy: always
+    profiles: ["maintenance"]
+    entrypoint: ["python", "manage.py"]
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/appuser/.cache:mode=1777
+    pids_limit: 256
+    mem_limit: 1g
+    env_file: .env.dev
+    environment:
+      ANLAUFSTELLE_PROCESS_ROLE: maintenance
+      DJANGO_LOAD_DOTENV: "false"
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.devlive
+      POSTGRES_HOST: db
+      POSTGRES_APP_USER: ${POSTGRES_USER}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_ADMIN_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_BOOTSTRAP_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}
+      CLAMAV_HOST: clamav
+      FILE_UPLOAD_TEMP_DIR: /tmp
+      MEDIA_ROOT: /data/media
+    volumes:
+      - media_dev:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
 
   caddy:
     image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648

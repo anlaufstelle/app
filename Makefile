@@ -610,10 +610,7 @@ dev-seed:
 	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && \
 	  set -a && . ./.env.dev && set +a && \
 	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm -T \
-	    --entrypoint python \
-	    -e POSTGRES_USER="$$POSTGRES_ADMIN_USER" \
-	    -e POSTGRES_PASSWORD="$$POSTGRES_ADMIN_PASSWORD" \
-	    web manage.py seed $(SEED_ARGS) </dev/null'
+	    maintenance seed $(SEED_ARGS) </dev/null'
 
 # Manueller Backup-Snapshot (Cron macht das eigenstaendig).
 dev-backup:
@@ -639,10 +636,7 @@ demo-seed:
 	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && \
 	  set -a && . ./.env.demo && set +a && \
 	  docker compose -f docker-compose.demo.yml --env-file .env.demo run --rm -T \
-	    --entrypoint python \
-	    -e POSTGRES_USER="$$POSTGRES_ADMIN_USER" \
-	    -e POSTGRES_PASSWORD="$$POSTGRES_ADMIN_PASSWORD" \
-	    web manage.py seed $(SEED_ARGS) </dev/null'
+	    maintenance seed $(SEED_ARGS) </dev/null'
 
 # Compose-Status + Healthcheck.
 demo-status:

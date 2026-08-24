@@ -72,7 +72,7 @@ docker compose -f docker-compose.prod.yml pull web
 # 2. Migrationen als One-Shot-Job ausfuehren (advisory lock haelt
 #    parallele Jobs zurueck, lange RunPython blockiert keine Worker).
 docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh web
+    --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Stack neu starten (web + caddy, DB bleibt).
 #    Entrypoint laeuft jetzt nur noch collectstatic + gunicorn.
@@ -394,15 +394,15 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 # MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
 # fail-loud ab (§9 DB-Rollenmodell), statt faelschlich 0 verarbeitete Zeilen
 # als RETENTION_RUN_COMPLETED zu melden.
-0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
+0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
 
 # Audit-Ketten-Verifikation (taeglich 03:30, nach Retention; Refs #1070)
 # MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
 # fail-loud ab (§9 DB-Rollenmodell) statt faelschlich "intakt" zu melden.
-30 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py verify_audit_chain >> /var/log/anlaufstelle-audit-verify.log 2>&1
+30 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain >> /var/log/anlaufstelle-audit-verify.log 2>&1
 
 # Statistik-Snapshots (monatlich am 1. um 04:00)
-0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
+0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 
 # Orphan-Storage-Cleanup (taeglich 04:30, nach den Snapshots; verwaiste
 # .enc-Dateien ohne Attachment-Record entfernen — owner-unabhaengig, also
@@ -410,13 +410,13 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 # MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
 # fail-loud ab (§9 DB-Rollenmodell): als RLS-gefilterte App-Rolle saehe der Lauf
 # 0 registrierte Attachments und wuerde JEDE .enc-Datei als Orphan loeschen.
-30 4 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py cleanup_orphan_storage_files >> /var/log/anlaufstelle-orphan-cleanup.log 2>&1
+30 4 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance cleanup_orphan_storage_files >> /var/log/anlaufstelle-orphan-cleanup.log 2>&1
 
 # Breach-Detection-Scan (stuendlich zur 30. Minute, Refs #685)
-30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
+30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
 # Materialized-View-Refresh (stuendlich zur 15. Minute, Details siehe Abschnitt 11)
-15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
+15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
 
 # Invite-Token-Audit (woechentlich So 05:00, Details siehe Abschnitt 10)
 0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
@@ -512,12 +512,10 @@ docker compose -f docker-compose.prod.yml exec web \
 # cleanup_orphan_storage_files (nach dem Loeschen der Attachment-Zeile), nicht
 # ueber diesen Command — die uebersprungene Zaehlung gilt also nicht als
 # erledigte Datei-Minimierung.
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py purge_orphan_field_data --dry-run # Vorschau
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py purge_orphan_field_data # ausfuehren
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+ purge_orphan_field_data --dry-run # Vorschau
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+ purge_orphan_field_data # ausfuehren
 
 # Facility-Export (Refs #1060, M4 / DSGVO Art. 20): kompletter fachlicher
 # Datenbestand EINER Einrichtung als versioniertes JSON (Schema v1, Referenz
@@ -530,10 +528,10 @@ docker compose -f docker-compose.prod.yml exec \
 # sicher loeschen. Laufzeit skaliert mit der Anhangsmenge (SHA-256 wird
 # ueber die entschluesselten Inhalte gestreamt); --no-file-hashes
 # ueberspringt das Hashing (sha256: null).
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py export_facility \
- --facility "Beratungsstelle Nord" --output /tmp/facility-export.json --indent 2
+mkdir -p./exports && chmod 700./exports
+docker compose -f docker-compose.prod.yml run --rm \
+ -v "$PWD/exports:/exports" maintenance export_facility \
+ --facility "Beratungsstelle Nord" --output /exports/facility-export.json --indent 2
 
 # Inventar der Berichtszuordnung (Refs #1848): listet fuer EINE Einrichtung
 # auf, welcher Berichtsschluessel in welchem Berichts-Backend steckt (Typ- und
@@ -543,14 +541,12 @@ docker compose -f docker-compose.prod.yml exec \
 # (BYPASSRLS) — sonst fail-loud (§ 9 DB-Rollenmodell): unter der App-Rolle
 # ohne Facility-Kontext saehe ein leeres/gefiltertes Inventar wie eine
 # tadellos konfigurierte Einrichtung aus.
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py inventory_report_bindings \
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+ inventory_report_bindings \
  --facility "Beratungsstelle Nord" # Textreport auf stdout
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py inventory_report_bindings \
- --facility "Beratungsstelle Nord" --format json --output /tmp/report-bindings.json
+docker compose -f docker-compose.prod.yml run --rm \
+ -v "$PWD/exports:/exports" maintenance inventory_report_bindings \
+ --facility "Beratungsstelle Nord" --format json --output /exports/report-bindings.json
 
 # Ersteinrichtung einer Einrichtung (Refs #1883): interaktiv Organisation,
 # Einrichtung, Einstellungen, Standardkatalog und ersten facility_admin anlegen.
@@ -566,9 +562,7 @@ docker compose -f docker-compose.prod.yml exec \
 # Traegt die Einrichtung schon Dokumentationstypen oder Feldvorlagen, bleibt
 # der Katalog UNANGETASTET — Ersteinrichtung, kein Katalog-Update (dafuer der
 # naechste Befehl).
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py setup_facility
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 
 # Standardkatalog in eine BESTEHENDE Einrichtung nachziehen (Refs #1883):
 # fachlich identisch zu "load_package --file <…>/default.yaml", nur ohne
@@ -576,9 +570,8 @@ docker compose -f docker-compose.prod.yml exec \
 # Bestandszeilen auf den Paket-Stand zurueck (Ruecksync-Tabelle in
 # docs/packages.md) — deshalb erst mit --dry-run ansehen. Wiederholbar,
 # gleiche Rollen-Voraussetzung.
-docker compose -f docker-compose.prod.yml exec \
- -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
- web python manage.py load_package --default --facility <uuid> --dry-run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+ load_package --default --facility <uuid> --dry-run
 ```
 
 ---
@@ -1391,9 +1384,12 @@ Eigenschaften, die das Init-Script code-treu garantiert:
   admin … TO app` grantet jeder migrierten Tabelle/Sequenz automatisch die
   App-DML-Rechte.
 
-Operator-/Wartungs-Tasks connecten als Admin-Rolle ueber einen ENV-Override
-(`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die Admin-Werte); der Migrate-Job
-[`docker-migrate.sh`](../docker-migrate.sh) macht das automatisch. Das
+Operator-/Wartungs-Tasks laufen ausschliesslich im opt-in Service
+`maintenance`; nur er laedt die vollstaendige `.env` und ueberschreibt dort
+`POSTGRES_USER`/`POSTGRES_PASSWORD` mit der Admin-Rolle. `web` erhaelt dagegen
+eine explizite Runtime-Allowlist und sieht weder Admin- noch Bootstrap-Secret
+(Refs #1962). Der
+Migrate-Job [`docker-migrate.sh`](../docker-migrate.sh) laeuft in diesem Service. Das
 Rollen-Gate `check_db_roles` prueft die stabile App-Rolle ueber
 `POSTGRES_APP_USER` (Refs #1017), damit der ENV-Override es nicht verwirrt.
 
@@ -1481,9 +1477,8 @@ Management-Commands `enforce_retention`, `backfill_audit_chain`,
 `reencrypt_fields` und `load_package` (M2, Refs
 #1058 — RLS-Bypass-Guard
 bricht sonst fail-loud ab) müssen daher als **Owner-/Admin-Rolle**
-(`POSTGRES_ADMIN_USER`) laufen — das ist über den ENV-Override
-(`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die Admin-Werte) bereits so
-eingerichtet (Retention-Cron § 6). Läuft ein solcher
+(`POSTGRES_ADMIN_USER`) laufen — das ist ueber den dedizierten
+`maintenance`-Service bereits so eingerichtet (Retention-Cron § 6). Läuft ein solcher
 Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
 table core_auditlog` ab — Fail-loud, kein stiller Audit-Verlust.
 
@@ -1495,7 +1490,7 @@ Der `facility_id`-Backfill der Attachment-Migration `0130`
 (#1738) nutzt diesen
 Guard — laeuft `migrate` versehentlich als App-Rolle, bricht er fail-loud ab,
 statt still **0 Zeilen** zu backfillen und die Migration als erfolgreich zu
-melden. `docker-migrate.sh` setzt den Admin-Override bereits automatisch.
+melden. `docker-migrate.sh` laeuft deshalb ausschliesslich im Maintenance-Service.
 
 Das frühere `GRANT SET ON PARAMETER session_replication_role` wird **nicht mehr
 benötigt** und ist aus dem Init-Script entfernt. Auf Bestands-DBs kann es als
@@ -1848,13 +1843,12 @@ docker compose -f docker-compose.prod.yml exec -T db \
  sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
 
 # 7. Verifizieren: Rollen-Gate, RLS aktiv, Stichproben
-docker compose -f docker-compose.prod.yml run --rm -T \
- --entrypoint python web manage.py check_db_roles # Exit 0
+docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles # Exit 0
 docker compose -f docker-compose.prod.yml exec -T db sh -c \
  'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"' # > 0
 
 # 8. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
-docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh web
+docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 docker compose -f docker-compose.prod.yml up -d web caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 

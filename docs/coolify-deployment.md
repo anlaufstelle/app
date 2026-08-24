@@ -92,6 +92,16 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 
 In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.env.example):
 
+> **Secret-Grenze (Refs #1962):**
+> Coolify darf alle Werte zentral fuer die Compose-Interpolation verwalten;
+> `docker-compose.prod.yml` reicht an `web` trotzdem nur eine explizite
+> Runtime-Allowlist weiter. `POSTGRES_ADMIN_PASSWORD` und
+> `POSTGRES_BOOTSTRAP_PASSWORD` landen ausschliesslich in `db`, `cron` und dem
+> opt-in Service `maintenance`. Dieser startet wegen seines Compose-Profils
+> nicht dauerhaft; ein gezieltes `docker compose run --rm maintenance …`
+> aktiviert ihn nur fuer den jeweiligen Operator-Job. Keine Admin-Secrets als
+> manuelle Service-Variable am Coolify-Web-Service nachtragen.
+
 **Pflicht:**
 - `DJANGO_SECRET_KEY` — frisch generiert (`python -c "import secrets; print(secrets.token_urlsafe(50))"`)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
@@ -158,7 +168,7 @@ Die Einzelschritte, die das Skript kapselt:
 # Migrationen laufen NICHT im Entrypoint, sondern als separater One-Shot-Job
 # vor dem Rolling-Restart (docker-migrate.sh, Refs #802/C-34) — prueft vorab
 # via check_db_roles das DB-Rollenprofil (Refs #1002).
-docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh web
+docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 
 # Deployment-Settings und DB-Rollen-Posture verifizieren (Refs #793)
 docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
@@ -178,9 +188,10 @@ Single-Tenant-Installationen, in denen System- und Anwendungsbetreuung dieselbe
 Person sind, gibt es als interaktiven CLI-Fallback `python manage.py setup_facility`.
 Der Befehl legt Organisation, Einrichtung, Einstellungen, den Standardkatalog der
 Dokumentationstypen und den ersten `facility_admin` in einer Transaktion an und
-**muss mit der Admin-DB-Rolle laufen** (`POSTGRES_USER=$POSTGRES_ADMIN_USER`,
-`POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD`) — sonst bricht er sofort mit einer
-Meldung ab, weil die Row-Level-Security den Schreibzugriff verweigert.
+**muss ueber den opt-in Service `maintenance` laufen** (`docker compose run
+--rm maintenance setup_facility`). Nur dieser Service erhaelt die Admin-DB-
+Zugangsdaten; `web` sieht sie nicht. Andernfalls bricht der Command sofort mit
+einer Meldung ab, weil die Row-Level-Security den Schreibzugriff verweigert.
 Details: [ADR-018](adr/018-rollenmodell-superadmin.md),
 [docs/dev/dev-deployment.md § Production-Bootstrap](dev/dev-deployment.md),
 [docs/admin-guide.md § 2.2](admin-guide.md).

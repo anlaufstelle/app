@@ -261,7 +261,7 @@ docker compose -f docker-compose.prod.yml up -d db clamav
 
 # 2. Schema einmalig per One-Shot-Job anlegen
 docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh web
+    --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Vollen Stack starten (web + caddy)
 docker compose -f docker-compose.prod.yml up -d
@@ -340,13 +340,10 @@ Der Befehl entsperrt den angegebenen User, schreibt einen `LOGIN_UNLOCK`-AuditLo
 Nach dem Login als `super_admin` legen Sie die erste Einrichtung und einen `facility_admin` (Anwendungsbetreuung) für sie im Django-Admin an (`/admin-mgmt/`, **Core → Einrichtungen** bzw. **Core → Benutzer**). Alternativ steht das interaktive Setup-Skript zur Verfügung — geeignet für reine Single-Tenant-Installationen, in denen Systemadministration und Anwendungsbetreuung dieselbe Person sind:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec \
-  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
-  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
-  web python manage.py setup_facility
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 ```
 
-> ⚠️ **Rollen-Voraussetzung (#1883).** Der Befehl schreibt in Tabellen mit Row-Level-Security (Einstellungen, Dokumentationstypen, Feldvorlagen). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Web-Requests keinen Einrichtungs-Kontext — **ohne** den gezeigten ENV-Override scheitert schon das Anlegen der Einstellungen an der Datenbank. Der Befehl prüft das vorab und bricht mit einer klaren Meldung ab, **bevor** die erste Eingabeaufforderung erscheint. Hintergrund: [Ops-Runbook § 9 DB-Rollenmodell](ops-runbook.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Override überflüssig.
+> ⚠️ **Rollen-Voraussetzung (#1883).** Der Befehl schreibt in Tabellen mit Row-Level-Security (Einstellungen, Dokumentationstypen, Feldvorlagen). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Web-Requests keinen Einrichtungs-Kontext; sie erhaelt bewusst keine Admin-Secrets. Der opt-in Service `maintenance` verbindet als BYPASSRLS-Rolle. Der Befehl prüft das vorab und bricht mit einer klaren Meldung ab, **bevor** die erste Eingabeaufforderung erscheint. Hintergrund: [Ops-Runbook § 9 DB-Rollenmodell](ops-runbook.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Maintenance-Pfad überflüssig.
 
 Das Skript fragt interaktiv nach:
 
@@ -366,10 +363,8 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 > **Bereits bestehende Einrichtung nachrüsten:** Für eine Einrichtung, die es schon gibt — im Django-Admin unter **Core → Einrichtungen** angelegt oder mit `--no-default-package` bewusst leer gestartet — spielt derselbe Standardkatalog nachträglich ein:
 >
 > ```bash
-> docker compose -f docker-compose.prod.yml exec \
->   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
->   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
->   web python manage.py load_package --default --facility <uuid> --dry-run
+> docker compose -f docker-compose.prod.yml run --rm maintenance \
+>   load_package --default --facility <uuid> --dry-run
 > ```
 >
 > `--dry-run` zeigt erst nur an, was passieren würde; ohne den Schalter wird angewendet. Der Lauf löscht nie etwas, **schreibt aber die Katalog-Eigenschaften bestehender Typen und Feldvorlagen auf den Auslieferungsstand zurück** (Name, Sortierung, Farbe, Symbol, Sichtbarkeit) — anders als die Ersteinrichtung, die einen vorhandenen Katalog gar nicht anfasst. Deshalb zuerst mit `--dry-run` ansehen; die vollständige Rücksync-Tabelle steht in [docs/packages.md § 4](packages.md). Die UUID der Einrichtung steht im Django-Admin unter **Core → Einrichtungen** in der Adresszeile der Detailseite.
@@ -857,13 +852,10 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 > **Wichtig:** Niemals den alten Key **ersetzen** statt **ergänzen** — sonst werden alle noch nicht umgeschlüsselten Bestandsdateien unlesbar.
 
-> ⚠️ **Rollen-Voraussetzung (Refs #1058).** `reencrypt_fields` liest und schreibt Tabellen mit Row-Level-Security. Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ein Aufruf ohne Rollen-Override sähe **0 Zeilen**. Deshalb immer mit der Admin-Rolle aufrufen ([Ops-Runbook § 9.5](ops-runbook.md)):
+> ⚠️ **Rollen-Voraussetzung (Refs #1058).** `reencrypt_fields` liest und schreibt Tabellen mit Row-Level-Security. Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ein Aufruf dort sähe **0 Zeilen**. Deshalb immer ueber den Maintenance-Service aufrufen ([Ops-Runbook § 9.5](ops-runbook.md)):
 >
 > ```bash
-> docker compose exec \
->   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
->   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
->   web python manage.py reencrypt_fields --dry-run
+> docker compose run --rm maintenance reencrypt_fields --dry-run
 > ```
 >
 > Der Command bricht seit #1058 mit einer klaren Fehlermeldung ab, wenn der Bypass-Kontext fehlt (fail-loud statt „0 rotiert, Erfolg gemeldet"). Bei älteren Ständen ohne diesen Guard gilt: **Schritt 3 niemals nach einem Lauf ausführen, der überall `0` meldet** — sonst steht der Alt-Schlüssel nicht mehr in der Liste, obwohl nichts rotiert wurde.
@@ -1036,7 +1028,7 @@ docker compose -f docker-compose.prod.yml pull web
 
 # 2. Migrationen als One-Shot-Job ausführen
 docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh web
+    --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Stack neu starten (web + caddy, DB bleibt; kurze Downtime)
 docker compose -f docker-compose.prod.yml up -d web caddy

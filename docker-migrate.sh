@@ -4,7 +4,7 @@
 # Aufruf vor dem Rolling-Restart der Web-Replicas:
 #
 #   docker compose -f docker-compose.prod.yml run --rm \
-#       --entrypoint=/app/docker-migrate.sh web
+#       --entrypoint=/app/docker-migrate.sh maintenance
 #
 # Der Advisory-Lock verhindert, dass parallele Migrate-Jobs (z. B. zwei
 # Operatoren gleichzeitig) sich gegenseitig ueberholen. Der Web-
@@ -16,8 +16,9 @@
 # Admin-Rolle BYPASSRLS) als Fail-Fast-Deploy-Gate gegen die
 # RLS-Bypass-Luecke aus #902. Da dieser One-Shot-Job genau einmal pro
 # Deploy vor dem Rolling-Restart laeuft, ist er der natuerliche Ort fuer
-# diese Deploy-weite Invariante — der Web-Entrypoint bleibt schlank
-# (Refs #802). Exit 1 (falsches Rollenprofil) bricht den Deploy ab;
+# diese Deploy-weite Invariante — der Web-Entrypoint bleibt schlank und sieht
+# die privilegierten DB-Secrets nie (Refs #802/#1962). Exit 1 (falsches
+# Rollenprofil) bricht den Deploy ab;
 # Exit 2 (Konfig unvollstaendig) warnt nur und laesst die Migration zu.
 set -e
 

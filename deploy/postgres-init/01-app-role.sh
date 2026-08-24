@@ -57,6 +57,42 @@ if [ -z "$APP_DB_USER" ] || [ -z "$APP_DB_PASSWORD" ]; then
 	exit 1
 fi
 
+# Refs #1962: Die ausgelieferten Deployment-Stacks setzen dieses Flag. Dort
+# ist das Drei-Rollen-Modell kein optionaler Legacy-Fallback, und die einzige
+# Stelle, die das Bootstrap-Secret sieht, muss Platzhalter/zu kurze Werte
+# fail-closed abweisen. Ein manueller Legacy-Aufruf ohne Flag bleibt kompatibel.
+case "${REQUIRE_ADMIN_DB_ROLE:-false}" in
+	true | 1 | yes)
+		if [ -z "${ADMIN_DB_USER:-}" ] || [ -z "${ADMIN_DB_PASSWORD:-}" ]; then
+			echo "01-app-role.sh: ADMIN_DB_USER / ADMIN_DB_PASSWORD missing — abort" >&2
+			exit 1
+		fi
+
+		validate_secret() {
+			_secret_name="$1"
+			_secret_value="$2"
+			if [ -z "$_secret_value" ]; then
+				echo "01-app-role.sh: ${_secret_name} missing — abort" >&2
+				exit 1
+			fi
+			case "$_secret_value" in
+				change-me*)
+					echo "01-app-role.sh: ${_secret_name} is a change-me placeholder — abort" >&2
+					exit 1
+					;;
+			esac
+			if [ "${#_secret_value}" -lt 32 ]; then
+				echo "01-app-role.sh: ${_secret_name} is shorter than 32 characters — abort" >&2
+				exit 1
+			fi
+		}
+
+		validate_secret POSTGRES_PASSWORD "${POSTGRES_PASSWORD:-}"
+		validate_secret APP_DB_PASSWORD "$APP_DB_PASSWORD"
+		validate_secret ADMIN_DB_PASSWORD "$ADMIN_DB_PASSWORD"
+		;;
+esac
+
 # --- App-Rolle anlegen (Django-Runtime, RLS-geschuetzt) --------------------
 psql -v ON_ERROR_STOP=1 \
 	--username "$POSTGRES_USER" \

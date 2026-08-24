@@ -1258,7 +1258,7 @@
 
 **Schritte:**
 1. Ohne Admin-Rollen-Override ausführen: `docker compose exec web python manage.py export_facility --facility "<Name>" --output /tmp/facility-export.json`.
-2. Mit Admin-Rollen-Override (Ops-Runbook § 3.5): `docker compose exec -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py export_facility --facility "<Name>" --output /tmp/facility-export.json --indent 2`.
+2. Ueber den Admin-Maintenance-Pfad (Ops-Runbook § 3.5): `docker compose run --rm -v "$PWD/exports:/exports" maintenance export_facility --facility "<Name>" --output /exports/facility-export.json --indent 2`.
 3. Ausgabedatei sichten: `schema_version`, `facility`, `configuration`, `entities`.
 4. `--no-file-hashes` einmal gegenprüfen: Laufzeit spürbar kürzer, `sha256`-Felder der Attachments sind `null`.
 5. Facility per UUID **und** per Name aufrufen; mehrdeutigen Namen (zwei Facilities mit demselben Namen, falls vorhanden) und unbekannte UUID/Namen gegenprüfen.
@@ -1295,7 +1295,7 @@
 
 **Schritte:**
 1. Import-Lauf anlegen, **nicht** abschließen — Quelldatei-Pfad notieren (`MEDIA_ROOT/<facility>/imports/<uuid>.enc`).
-2. Mit Admin-DB-Rolle ausführen: `docker compose exec -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py cleanup_orphan_storage_files`.
+2. Mit Admin-DB-Rolle ausführen: `docker compose run --rm maintenance cleanup_orphan_storage_files`.
 3. Quelldatei-Pfad erneut prüfen — noch vorhanden?
 4. Denselben Lauf abschließen (Übernahme oder Abbruch) — `storage_filename` wird geleert.
 5. Cleanup erneut ausführen.

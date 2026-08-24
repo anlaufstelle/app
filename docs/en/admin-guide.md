@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Most recently synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
+> Most recently synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
 > The German version is the authoritative source. Most recently synced on 2026-08-22 (§ 2 the retention run does act on cases once they are deleted, § 7.5 case trash and the two deletion paths, § 7.6 the `deleted_cases` section of the Art. 15 access record, #1818). Previous content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)) and 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906) and 2026-08-18 (§ 5.6 which log fields are exempt from PII scrubbing, #1943) and 2026-08-18 (§ 2.6 numeric range bound guidance for facility admins after tightening `min_value`/`max_value`, #1930) and 2026-08-20 (§ 5.6 technical identifiers -- including the new `user_pk` log field -- pass the PII scrubber unchanged, #1949) and 2026-08-20 (§ 1 `BACKUP_DIR`/`BACKUP_HOST_DIR` ENV reference for the production Compose stack, #1872) and 2026-08-21 (§ 2.4 and § 7.7 the forced password change is cleared once the invitation setup or a password reset completes; § 2.4 step 3 the invitation setup link does not sign the user in, #1969).
 
 # Anlaufstelle -- Admin Guide
@@ -265,7 +265,7 @@ docker compose -f docker-compose.prod.yml up -d db clamav
 
 # 2. Create the schema once via the one-shot job
 docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh web
+    --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Start the full stack (web + caddy)
 docker compose -f docker-compose.prod.yml up -d
@@ -344,13 +344,10 @@ The command unlocks the specified user, writes a `LOGIN_UNLOCK` AuditLog entry, 
 After logging in as `super_admin`, create the first facility and a `facility_admin` (application manager) for it in the Django admin (`/admin-mgmt/`, **Core > Facilities** and **Core > Users**). Alternatively, the interactive setup script is available -- suitable for pure single-tenant installations where system administration and application management are the same person:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec \
-  -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
-  -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
-  web python manage.py setup_facility
+docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 ```
 
-> ⚠️ **Role prerequisite (#1883).** The command writes to tables with row-level security (settings, documentation types, field templates). The runtime role of the `web` container is `NOBYPASSRLS` and has no facility context outside a web request -- **without** the ENV override shown above, even creating the settings record fails at the database. The command checks this up front and aborts with a clear message **before** the first prompt appears. Background: [ops runbook § 9 DB role model](../ops-runbook.md). For a local development database whose role is a superuser anyway, the override is unnecessary.
+> ⚠️ **Role prerequisite (#1883).** The command writes to tables with row-level security (settings, documentation types, field templates). The `NOBYPASSRLS` runtime role of `web` deliberately receives no admin secrets. The opt-in `maintenance` service connects with the BYPASSRLS role. The command checks this up front and aborts with a clear message **before** the first prompt appears. Background: [ops runbook § 9 DB role model](../ops-runbook.md). For a local development database whose role is a superuser anyway, the maintenance path is unnecessary.
 
 The script interactively prompts for:
 
@@ -370,10 +367,8 @@ Afterwards, the organization, facility, default settings, the **default catalog 
 > **Retrofitting an existing facility:** For a facility that already exists -- created in the Django admin under **Core > Facilities**, or deliberately started empty with `--no-default-package` -- the same default catalog can be applied afterwards:
 >
 > ```bash
-> docker compose -f docker-compose.prod.yml exec \
->   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
->   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
->   web python manage.py load_package --default --facility <uuid> --dry-run
+> docker compose -f docker-compose.prod.yml run --rm maintenance \
+>   load_package --default --facility <uuid> --dry-run
 > ```
 >
 > `--dry-run` first shows only what would happen; without the flag the package is applied. The run never deletes anything, **but it does write the catalog properties of existing types and field templates back to the shipped state** (name, sort order, color, icon, visibility) -- unlike the initial setup, which does not touch an existing catalog at all. So look at it with `--dry-run` first; the full write-back table is in [docs/packages.md § 4](../packages.md). The facility UUID appears in the address bar of its detail page under **Core > Facilities** in the Django admin.
@@ -861,13 +856,10 @@ MultiFernet accepts a list of keys. To rotate:
 
 > **Important:** Never **replace** the old key instead of **appending** the new one -- any still-unrotated data would become unreadable.
 
-> ⚠️ **Role prerequisite (Refs #1058).** `reencrypt_fields` reads and writes tables protected by row-level security. The runtime role of the `web` container is `NOBYPASSRLS` and has no facility context outside a request -- a call without a role override would see **0 rows**. Always invoke it with the admin role ([ops runbook § 9.5](../ops-runbook.md)):
+> ⚠️ **Role prerequisite (Refs #1058).** `reencrypt_fields` reads and writes tables protected by row-level security. The `NOBYPASSRLS` runtime role of `web` has no facility context outside a request and would see **0 rows**. Always invoke it via the maintenance service ([ops runbook § 9.5](../ops-runbook.md)):
 >
 > ```bash
-> docker compose exec \
->   -e POSTGRES_USER=$POSTGRES_ADMIN_USER \
->   -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD \
->   web python manage.py reencrypt_fields --dry-run
+> docker compose run --rm maintenance reencrypt_fields --dry-run
 > ```
 >
 > Since #1058 the command aborts with a clear error message when the bypass context is missing (fail-loud instead of "0 rotated, success reported"). On older builds without that guard: **never run step 3 after a run that reports `0` everywhere** -- the old key would leave the list although nothing was rotated.
@@ -1042,7 +1034,7 @@ docker compose -f docker-compose.prod.yml pull web
 
 # 2. Run migrations as a one-shot job
 docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh web
+    --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Restart the stack (web + caddy, DB stays up; brief downtime)
 docker compose -f docker-compose.prod.yml up -d web caddy
@@ -1766,4 +1758,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-22 -->
-<!-- source-hash: 795522caa865b2ace9f3c295fe855968df4406f4 -->
+<!-- source-hash: 7dfe5b5b1b00678e2541e88e9dd708a0c1e99a90 -->

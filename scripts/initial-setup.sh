@@ -174,7 +174,7 @@ info "Datenbank ist bereit."
 step "2/6  Schema anlegen/aktualisieren (One-Shot-Job)"
 info "docker-migrate.sh laeuft als BYPASSRLS-Admin-Rolle, verifiziert vorab die"
 info "Rollen-Topologie (check_db_roles) und normalisiert die Ownership."
-compose run --rm --entrypoint=/app/docker-migrate.sh web
+compose run --rm --entrypoint=/app/docker-migrate.sh maintenance
 
 # ---------------------------------------------------------------------------
 # 3. Stack
@@ -284,10 +284,7 @@ Naechste Schritte:
      Core -> Benutzer mindestens ein Konto zuzuordnen.
      Reiner Single-Tenant-Fallback (interaktiv, MUSS mit der Admin-DB-Rolle
      laufen — sonst verweigert die Row-Level-Security den Schreibzugriff):
-       docker compose -f ${COMPOSE_FILE} exec \\
-         -e POSTGRES_USER=\$POSTGRES_ADMIN_USER \\
-         -e POSTGRES_PASSWORD=\$POSTGRES_ADMIN_PASSWORD \\
-         web python manage.py setup_facility
+       docker compose -f ${COMPOSE_FILE} run --rm maintenance setup_facility
      Der Befehl legt dabei auch den Standardkatalog der Dokumentationstypen an,
      damit sofort dokumentiert werden kann (--no-default-package schaltet ihn
      ab). Eine Einrichtung, die schon Dokumentationstypen hat, laesst er

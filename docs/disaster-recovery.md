@@ -88,6 +88,13 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 | `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge. Ein neuer Wert macht **alte** Audit-Hashes nicht mehr nachvollziehbar — für DSGVO-Beweiskraft den alten wiederbeschaffen. | [`.env.example`](../.env.example) L14 |
 
 > **`POSTGRES_USER`/`POSTGRES_ADMIN_USER` sind keine Geheimnisse, aber load-bearing.** Der Rollenname muss identisch zum verlorenen Setup sein, weil der Dump `OWNER`/`GRANT`-Klauseln auf genau diese Rollennamen enthält (seit A1.4 ist die **Admin-Rolle** DB-/Objekt-Owner, die App-Rolle hat nur DML — [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)). Andere Passwörter sind ok; andere **Rollennamen** brechen den Restore.
+>
+> **Container-Grenze (Refs #1962):**
+> Nach dem Wiederherstellen bleiben Admin-/Bootstrap-Passwort zwar in der
+> Betreiber-`.env`, werden aber nie an `web` durchgereicht. DB-Init bekommt sie
+> explizit; Migrationen und Verifikation laufen als kurzlebiger
+> `maintenance`-Service. Ein Restore darf diese Trennung nicht durch einen
+> manuellen `-e … web`-Override rueckgaengig machen.
 
 ### 4.3 Optional
 
@@ -189,7 +196,7 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
 ```bash
 # Migrate als One-Shot. docker-migrate.sh verifiziert vorab via check_db_roles,
 # dass App-Rolle = NOSUPERUSER/NOBYPASSRLS und Admin = BYPASSRLS (Refs #1002).
-docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh web
+docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 
 # Vollständigen Stack hochfahren (web, caddy, ggf. clamav).
 docker compose -f docker-compose.prod.yml up -d
@@ -209,7 +216,7 @@ Reihenfolge: erst Infrastruktur-Checks (DB-Rollen, RLS), dann Health-Endpoint, d
 
 ```bash
 # 1) DB-Rollen-Gate — App-Rolle ohne Superuser/BYPASSRLS, Admin mit BYPASSRLS.
-docker compose -f docker-compose.prod.yml run --rm --entrypoint python web manage.py check_db_roles   # Exit 0
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles   # Exit 0
 
 # 2) RLS aktiv? (Sicherheits-Safety-Net muss nach Restore noch greifen.)
 docker compose -f docker-compose.prod.yml exec -T db sh -c \

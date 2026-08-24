@@ -315,21 +315,49 @@ if not _IS_COLLECTSTATIC and not AUDIT_HASH_KEY:  # noqa: F405
 # Nur-leer-Guards oben liessen die durch. Ein oeffentlich bekannter
 # SECRET_KEY macht Reset-/Invite-Token faelschbar, ein bekannter
 # AUDIT_HASH_KEY die Audit-Pseudonyme brute-forcebar. Fail-closed.
-# Refs #1591: Auch die DB-Passwoerter (``POSTGRES_PASSWORD``,
-# ``POSTGRES_ADMIN_PASSWORD``, ``POSTGRES_BOOTSTRAP_PASSWORD``) werden geprueft —
-# .env.example liefert sie als ``change-me`` / ``change-me-admin`` /
-# ``change-me-bootstrap`` aus. ADMIN/BOOTSTRAP sind keine Django-Settings
-# (nur von ``deploy/postgres-init`` + compose gelesen), daher direkt aus
-# ``os.environ``; identische change-me-/Mindestlaengen-Logik.
+# Refs #1591/#1962: Die Runtime prueft ihr App-Passwort und weist jedes
+# privilegierte DB-Secret als Boundary-Verletzung ab. Nur ein explizit als
+# ``maintenance`` markierter One-Shot/Sidecar darf Admin-/Bootstrap-Secrets
+# sehen; dort sind sie Pflicht und unterliegen demselben Entropie-Guard.
 _SECRET_MIN_LENGTH = 32
 if not _IS_COLLECTSTATIC:
-    for _name, _value in (
+    _process_role = os.environ.get("ANLAUFSTELLE_PROCESS_ROLE", "runtime").strip().lower()
+    if _process_role not in {"runtime", "maintenance"}:
+        raise ImproperlyConfigured("ANLAUFSTELLE_PROCESS_ROLE muss 'runtime' oder 'maintenance' sein.")
+
+    _privileged_db_values = {
+        "POSTGRES_ADMIN_USER": os.environ.get("POSTGRES_ADMIN_USER", ""),
+        "POSTGRES_ADMIN_PASSWORD": os.environ.get("POSTGRES_ADMIN_PASSWORD", ""),
+        "POSTGRES_BOOTSTRAP_PASSWORD": os.environ.get("POSTGRES_BOOTSTRAP_PASSWORD", ""),
+    }
+    if _process_role == "runtime":
+        _leaked = sorted(_name for _name, _value in _privileged_db_values.items() if _value)
+        if _leaked:
+            raise ImproperlyConfigured(
+                "Privilegierte DB-Konfiguration im Runtime-Prozess gefunden: "
+                f"{', '.join(_leaked)}. Diese Variablen duerfen nur der "
+                "maintenance-Rolle bereitgestellt werden (Refs #1962)."
+            )
+    else:
+        _missing = sorted(_name for _name, _value in _privileged_db_values.items() if not _value)
+        if _missing:
+            raise ImproperlyConfigured(
+                f"Maintenance-Prozess ohne erforderliche DB-Konfiguration: {', '.join(_missing)} (Refs #1962)."
+            )
+
+    _checked_secrets = [
         ("DJANGO_SECRET_KEY", SECRET_KEY),  # noqa: F405
         ("DJANGO_AUDIT_HASH_KEY", AUDIT_HASH_KEY),  # noqa: F405
         ("POSTGRES_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "")),
-        ("POSTGRES_ADMIN_PASSWORD", os.environ.get("POSTGRES_ADMIN_PASSWORD", "")),
-        ("POSTGRES_BOOTSTRAP_PASSWORD", os.environ.get("POSTGRES_BOOTSTRAP_PASSWORD", "")),
-    ):
+    ]
+    if _process_role == "maintenance":
+        _checked_secrets.extend(
+            (
+                ("POSTGRES_ADMIN_PASSWORD", _privileged_db_values["POSTGRES_ADMIN_PASSWORD"]),
+                ("POSTGRES_BOOTSTRAP_PASSWORD", _privileged_db_values["POSTGRES_BOOTSTRAP_PASSWORD"]),
+            )
+        )
+    for _name, _value in _checked_secrets:
         if _value.startswith("change-me"):
             raise ImproperlyConfigured(
                 f"{_name} ist noch der Platzhalter aus .env.example — bitte echten "

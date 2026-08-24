@@ -328,6 +328,153 @@ class TestInitialSetupScript:
         )
 
 
+class TestDeploymentDbSecretBoundary:
+    """Refs #1962: privilegierte DB-Secrets gehoeren nicht in ``web``.
+
+    ``env_file`` ist fuer HTTP-Runtime-Container zu breit: die ausgelieferten
+    Dateien enthalten neben dem App-Passwort auch Admin-/Bootstrap-Zugaenge.
+    Jeder Deployment-Stack muss deshalb eine explizite Runtime-Allowlist und
+    fuer Migrationen/Operator-Kommandos einen separaten Maintenance-Service
+    bereitstellen.
+    """
+
+    _COMPOSES = (
+        Path("docker-compose.prod.yml"),
+        Path("docker-compose.demo.yml"),
+        Path("docker-compose.dev.yml"),
+    )
+    _ENV_TEMPLATES = {
+        Path("docker-compose.prod.yml"): Path(".env.example"),
+        Path("docker-compose.demo.yml"): Path(".env.demo.example"),
+        Path("docker-compose.dev.yml"): Path(".env.dev.example"),
+    }
+    _OPERATOR_DOCS = (
+        Path("docs/ops-runbook.md"),
+        Path("docs/packages.md"),
+        Path("docs/coolify-deployment.md"),
+        Path("docs/disaster-recovery.md"),
+        Path("docs/admin-guide.md"),
+        Path("docs/en/admin-guide.md"),
+    )
+    _FORBIDDEN = {
+        "POSTGRES_ADMIN_USER",
+        "POSTGRES_ADMIN_PASSWORD",
+        "POSTGRES_BOOTSTRAP_PASSWORD",
+    }
+
+    @staticmethod
+    def _services(path: Path) -> dict:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))["services"]
+
+    @pytest.mark.parametrize("compose_path", _COMPOSES)
+    def test_web_uses_explicit_runtime_allowlist(self, compose_path: Path) -> None:
+        web = self._services(compose_path)["web"]
+        assert "env_file" not in web, (
+            f"{compose_path}: web darf keine vollstaendige Env-Datei laden — "
+            "sie enthaelt Admin-/Bootstrap-DB-Secrets (Refs #1962)."
+        )
+        environment = web.get("environment", {})
+        leaked = self._FORBIDDEN.intersection(environment)
+        assert not leaked, f"{compose_path}: privilegierte DB-Variablen in web: {sorted(leaked)}"
+
+    @pytest.mark.parametrize("compose_path", _COMPOSES)
+    def test_documented_runtime_variables_stay_in_allowlist(self, compose_path: Path) -> None:
+        """Drift-Guard fuer die explizite Allowlist aus Option (b), Refs #1962."""
+        template = self._ENV_TEMPLATES[compose_path]
+        if template == Path(".env.demo.example") and not template.exists():
+            pytest.skip(".env.demo.example nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #1962)")
+        documented = set(re.findall(r"^([A-Z][A-Z0-9_]*)=", template.read_text(encoding="utf-8"), re.MULTILINE))
+        infrastructure_only = {
+            "DOMAIN",
+            "ACME_EMAIL",
+            "BACKUP_ENCRYPTION_KEY",
+            "BACKUP_HOST_DIR",
+            "BACKUP_RETENTION_DAYS",
+        }
+        expected = documented - self._FORBIDDEN - infrastructure_only
+        actual = set(self._services(compose_path)["web"].get("environment", {}))
+        missing = expected - actual
+        assert not missing, (
+            f"{compose_path}: dokumentierte Runtime-Variablen fehlen in der web-Allowlist: {sorted(missing)}"
+        )
+
+    @pytest.mark.parametrize("compose_path", _COMPOSES)
+    def test_privileged_commands_have_dedicated_maintenance_service(self, compose_path: Path) -> None:
+        maintenance = self._services(compose_path).get("maintenance")
+        assert maintenance is not None, f"{compose_path}: separater maintenance-Service fehlt (Refs #1962)."
+        assert "maintenance" in maintenance.get("profiles", []), (
+            f"{compose_path}: maintenance muss opt-in per Compose-Profil bleiben."
+        )
+        environment = maintenance.get("environment", {})
+        assert environment.get("ANLAUFSTELLE_PROCESS_ROLE") == "maintenance"
+        assert environment.get("POSTGRES_USER") == "${POSTGRES_ADMIN_USER}"
+        assert environment.get("POSTGRES_PASSWORD") == "${POSTGRES_ADMIN_PASSWORD}"
+        assert environment.get("POSTGRES_ADMIN_PASSWORD") == "${POSTGRES_ADMIN_PASSWORD}"
+        assert environment.get("POSTGRES_BOOTSTRAP_PASSWORD") == "${POSTGRES_BOOTSTRAP_PASSWORD}"
+
+    def test_initial_setup_migrates_via_maintenance_service(self) -> None:
+        body = Path("scripts/initial-setup.sh").read_text(encoding="utf-8")
+        call = re.search(r"compose run[^\n]*--entrypoint=/app/docker-migrate\.sh[^\n]*", body)
+        assert call is not None, "initial-setup.sh muss den Migrate-One-Shot starten."
+        assert "maintenance" in call.group(0) and " web" not in call.group(0), (
+            "initial-setup.sh darf Admin-Secrets nur in den maintenance-One-Shot laden (Refs #1962)."
+        )
+
+    def test_postgres_init_fails_loud_without_required_admin_role(self) -> None:
+        result = subprocess.run(
+            ["/bin/sh", "deploy/postgres-init/01-app-role.sh"],
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "REQUIRE_ADMIN_DB_ROLE": "true",
+                "POSTGRES_USER": "postgres",
+                "POSTGRES_PASSWORD": "b" * 40,
+                "POSTGRES_DB": "anlaufstelle",
+                "APP_DB_USER": "anlaufstelle",
+                "APP_DB_PASSWORD": "a" * 40,
+                "ADMIN_DB_USER": "",
+                "ADMIN_DB_PASSWORD": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "ADMIN_DB_USER / ADMIN_DB_PASSWORD missing" in result.stderr
+
+    def test_postgres_init_rejects_placeholder_bootstrap_password(self) -> None:
+        result = subprocess.run(
+            ["/bin/sh", "deploy/postgres-init/01-app-role.sh"],
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "REQUIRE_ADMIN_DB_ROLE": "true",
+                "POSTGRES_USER": "postgres",
+                "POSTGRES_PASSWORD": "change-me-bootstrap",
+                "POSTGRES_DB": "anlaufstelle",
+                "APP_DB_USER": "anlaufstelle",
+                "APP_DB_PASSWORD": "a" * 40,
+                "ADMIN_DB_USER": "anlaufstelle_admin",
+                "ADMIN_DB_PASSWORD": "c" * 40,
+            },
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "POSTGRES_PASSWORD" in result.stderr and "placeholder" in result.stderr
+
+    @pytest.mark.parametrize("doc_path", _OPERATOR_DOCS)
+    def test_operator_docs_never_inject_admin_secrets_into_web(self, doc_path: Path) -> None:
+        text = doc_path.read_text(encoding="utf-8")
+        code_blocks = re.findall(r"```[^\n]*\n(.*?)\n```", text, re.DOTALL)
+        for block in code_blocks:
+            injects_privileged = "POSTGRES_ADMIN_PASSWORD" in block or "POSTGRES_BOOTSTRAP_PASSWORD" in block
+            targets_web = bool(re.search(r"(?:exec|run)[^\n]*\bweb\b", block))
+            assert not (injects_privileged and targets_web), (
+                f"{doc_path}: Codebeispiel injiziert privilegierte DB-Secrets in web (Refs #1962)."
+            )
+            assert not re.search(r"docker-migrate\.sh\s+web\b", block), (
+                f"{doc_path}: Migrate-One-Shot muss maintenance statt web nutzen (Refs #1962)."
+            )
+
+
 class TestReadmeQuickStart:
     """Refs #1894/#1977: Der Compose-Quick-Start muss wirklich funktionieren.
 
@@ -1081,12 +1228,12 @@ class TestRestoreDrillProdFormat:
 
 
 class TestOpsRunbookRetentionCrontabAdminRole:
-    """Refs #1335 (Review-Nachschlag): ``enforce_retention`` bricht ohne
+    """Refs #1335/#1962: ``enforce_retention`` bricht ohne
     BYPASSRLS-Admin-Kontext genauso fail-loud ab wie ``verify_audit_chain``
     (``enforce_retention.py:73`` — identischer ``_has_rls_bypass_context()``-Guard).
     Jede Host-Crontab-Zeile im Runbook, die ``enforce_retention`` via
     ``docker compose exec`` startet, muss deshalb den
-    ``-e POSTGRES_USER=$POSTGRES_ADMIN_USER``-Override tragen — sonst faehrt ein
+    den dedizierten ``maintenance``-Service laufen — sonst faehrt ein
     Self-Hoster, der den Block woertlich uebernimmt, die
     Aufbewahrungsfrist-Durchsetzung als RLS-gefilterte App-Rolle und sie bricht
     jede Nacht fail-loud ab: die exakte DSGVO-Retention-Luecke, die #1335
@@ -1107,19 +1254,19 @@ class TestOpsRunbookRetentionCrontabAdminRole:
         assert blocks, "kein ```cron-Block in ops-runbook.md § 3 gefunden"
         return blocks
 
-    def test_enforce_retention_line_uses_admin_role_override(self) -> None:
+    def test_enforce_retention_line_uses_maintenance_service(self) -> None:
         retention_lines = [
             line
             for block in self._crontab_blocks()
             for line in block.splitlines()
-            if "manage.py enforce_retention" in line
+            if "enforce_retention" in line and not line.lstrip().startswith("#")
         ]
         assert retention_lines, "keine enforce_retention-Crontab-Zeile in ops-runbook.md § 3 gefunden"
         for line in retention_lines:
-            assert "POSTGRES_ADMIN_USER" in line, (
+            assert "maintenance enforce_retention" in line, (
                 "enforce_retention bricht ohne BYPASSRLS-Admin-Kontext fail-loud ab "
-                "(enforce_retention.py:73) — die Beispiel-Crontab-Zeile muss denselben "
-                "-e POSTGRES_USER=$POSTGRES_ADMIN_USER-Override tragen wie verify_audit_chain "
+                "(enforce_retention.py:73) — die Beispiel-Crontab-Zeile muss den "
+                "dedizierten Maintenance-Service nutzen, der allein die Admin-Secrets sieht "
                 f"(Refs #1335). Betroffen: {line!r}"
             )
 
