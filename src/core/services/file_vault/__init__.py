@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from core.services.file_vault.audit import (
     filename_audit_fields,
+    filename_fingerprint,
     log_attachment_violation,
 )
 from core.services.file_vault.cleanup import (
@@ -84,6 +85,7 @@ __all__ = [
     "encrypt_field",
     "encrypt_file",
     "filename_audit_fields",
+    "filename_fingerprint",
     "generate_key",
     "get_attachment_path",
     "get_current_entries_for_field",

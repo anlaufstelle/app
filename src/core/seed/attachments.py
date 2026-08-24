@@ -145,7 +145,17 @@ def attach_files_to_counseling_events(facility: Facility, users: list[User], cfg
     created = 0
     for event in selected:
         uploaded = generate_dummy_file()
-        attachment = store_encrypted_file(facility, uploaded, field_template, event, random.choice(staff_users))
+        # M4-Entscheid zu #1960: Der dev/e2e-Seed erzeugt synthetische Dateien,
+        # aber keine hunderte bis tausende ATTACHMENT_UPLOAD-Zeilen unter dem
+        # per-Facility-Audit-Lock. Der Bypass steht absichtlich am Aufruf.
+        attachment = store_encrypted_file(
+            facility,
+            uploaded,
+            field_template,
+            event,
+            random.choice(staff_users),
+            audit=False,
+        )
         event.data_json["scan-bescheid"] = {"__file__": True, "attachment_id": str(attachment.pk)}
         event.save(update_fields=["data_json"])
         created += 1
@@ -206,7 +216,10 @@ def _owner_doc_type(facility: Facility, name: str, entity_type: str, field_templ
 def _attach_to_owner(facility: Facility, owner, field_template: FieldTemplate, user: User, filename: str) -> None:
     """Einen Anhang am Owner ablegen und den Stufe-B-Marker setzen."""
     uploaded = SimpleUploadedFile(filename, _STATIC_PDF, content_type="application/pdf")
-    attachment = store_encrypted_file(facility, uploaded, field_template, owner, user)
+    # Wie beim skalierten Ereignis-Seed: synthetische Beispieldatei, keine
+    # fachliche Nutzer-Mutation. ``audit=False`` dokumentiert den Entscheid
+    # sichtbar am einzigen Vault-Aufruf dieses Helpers (Refs #1960).
+    attachment = store_encrypted_file(facility, uploaded, field_template, owner, user, audit=False)
     owner.data_json = dict(owner.data_json or {})
     owner.data_json[field_template.slug] = {
         "__files__": True,

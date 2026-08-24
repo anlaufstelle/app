@@ -38,6 +38,12 @@ def delete_attachments_for(owner):
     im selben ``transaction.atomic`` die ``__files__``-Marker des Owners
     bereinigen bzw. dessen ``data_json`` leeren — sonst zeigen Marker auf
     nicht mehr existierende Zeilen.
+
+    Bewusst OHNE einzelne ``ATTACHMENT_DELETE``-Zeilen (Refs #1960): Dieser
+    physische Cleanup ist nur ein untergeordneter Schritt der bereits
+    auditierten Owner-Loeschung oder -Anonymisierung. Ein Eintrag je Kette
+    wuerde denselben fachlichen Vorgang N-mal als vermeintliche manuelle
+    Anhang-Loeschung protokollieren.
     """
     for attachment in owner.attachments.all():
         delete_attachment_file(attachment)

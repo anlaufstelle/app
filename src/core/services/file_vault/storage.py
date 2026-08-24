@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings as django_settings
+from django.db import transaction
 from django.utils import timezone
 
 from core.models.attachment import Attachment, owner_field_name
@@ -49,9 +50,10 @@ class StagedUpload:
     """Ergebnis von :func:`prepare_encrypted_upload` — eine bereits verschluesselt
     auf Disk liegende, aber noch NICHT als ``Attachment`` persistierte Datei.
 
-    Traegt alle Werte, die :func:`commit_staged_upload` fuer den reinen DB-Write
-    braucht, sodass zwischen Scan/Encrypt (teuer, synchron) und dem DB-Insert
-    keine erneute Datei-Beruehrung noetig ist (Refs #1345).
+    Traegt alle Werte, die :func:`commit_staged_upload` fuer den atomaren
+    DB-/Audit-Write braucht, sodass zwischen Scan/Encrypt (teuer, synchron)
+    und dem schnellen Persistieren keine erneute Datei-Beruehrung noetig ist
+    (Refs #1345/#1960).
     """
 
     storage_name: str
@@ -130,12 +132,31 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     )
 
 
-def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None):
+def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
+    """Persistiere Upload und Audit-Zeile atomar; Fehler raeumen die Datei auf."""
+    try:
+        with transaction.atomic():
+            return _commit_staged_upload(
+                owner,
+                field_template,
+                staged,
+                user,
+                supersedes=supersedes,
+                sort_order=sort_order,
+                audit=audit,
+            )
+    except Exception:
+        staged.output_path.unlink(missing_ok=True)
+        raise
+
+
+def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
     """Persistiere eine per :func:`prepare_encrypted_upload` gestagte Datei als
-    ``Attachment`` — reiner DB-Write (Refs #1345).
+    ``Attachment`` samt Audit-Zeile — schneller DB-Write (Refs #1345/#1960).
 
     Sicher innerhalb der Aufrufer-``transaction.atomic()`` aufzurufen: hier faellt
-    kein ClamAV-Scan und keine Verschluesselung mehr an, nur der schnelle Insert.
+    kein ClamAV-Scan und keine Verschluesselung mehr an, nur Attachment-,
+    Versions- und AuditLog-Schreibvorgaenge.
 
     ``owner`` ist ein ``Event``, ``Client`` oder ``Case`` (AP2, Refs #1738); der
     passende Owner-FK wird ueber :func:`~core.models.attachment.owner_field_name`
@@ -161,10 +182,12 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
             # Replace-Modus: entry_id + sort_order vom Vorgänger übernehmen.
             entry_id = supersedes.entry_id
             effective_sort = supersedes.sort_order if sort_order is None else sort_order
+            mode = "replace"
         else:
             # Add-Modus: frische entry_id, sort_order wie übergeben (oder 0).
             entry_id = uuid.uuid4()
             effective_sort = sort_order if sort_order is not None else 0
+            mode = "add"
 
         new_attachment = Attachment.objects.create(
             # ADR-039 §2: facility IMMER aus dem Owner abgeleitet, nie als
@@ -188,6 +211,11 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
             supersedes.superseded_by = new_attachment
             supersedes.superseded_at = timezone.now()
             supersedes.save(update_fields=["is_current", "superseded_by", "superseded_at"])
+
+        if audit:
+            from core.services.file_vault.audit import audit_attachment_upload
+
+            audit_attachment_upload(owner, field_template, new_attachment, staged, user, mode=mode)
     except Exception:
         # Synchroner Fehler in DB-Operationen — geschriebene Datei sofort
         # entfernen, damit der Disk nicht waechst (#662).
@@ -205,6 +233,8 @@ def store_encrypted_file(
     user,
     supersedes=None,
     sort_order=None,
+    *,
+    audit=True,
 ):
     """Encrypt and store an uploaded file. Returns Attachment instance.
 
@@ -212,7 +242,9 @@ def store_encrypted_file(
     (Refs #1345). Fuer Aufrufer OHNE eigene Transaktion, die Scan/Encrypt und
     DB-Write nicht trennen muessen (Seed): der Vertrag (Reihenfolge der Checks,
     Cleanup-Garantie) bleibt unveraendert; ``event`` heisst ab AP2 ``owner``
-    (Ereignis, Person oder Fall, Refs #1738).
+    (Ereignis, Person oder Fall, Refs #1738). ``audit=False`` ist ausschliesslich
+    fuer den expliziten dev/e2e-Seed-Pfad vorgesehen (M4-Entscheid zu #1960);
+    produktive Aufrufer behalten den fail-closed Default.
 
     **Nicht** in einem ``transaction.atomic`` verwenden, das eine AuditLog-Zeile
     schreibt: der Scan liefe dann unter dem per-Facility-Advisory-Lock der
@@ -232,10 +264,18 @@ def store_encrypted_file(
             f"(owner.facility_id={getattr(owner, 'facility_id', None)!r}, facility={facility.pk!r})"
         )
     staged = prepare_encrypted_upload(facility, uploaded_file, user, owner=owner)
-    return commit_staged_upload(owner, field_template, staged, user, supersedes=supersedes, sort_order=sort_order)
+    return commit_staged_upload(
+        owner,
+        field_template,
+        staged,
+        user,
+        supersedes=supersedes,
+        sort_order=sort_order,
+        audit=audit,
+    )
 
 
-def soft_delete_attachment_chain(owner, entry_id, user):
+def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=None):
     """Markiere alle Attachments einer Versionskette (entry_id) als soft-deleted.
 
     Für UI-Lösch-Aktionen (Stufe B, Refs #622). Physischer Disk-Cleanup
@@ -248,10 +288,16 @@ def soft_delete_attachment_chain(owner, entry_id, user):
 
     Returns: Anzahl der neu soft-deleted Attachments in der Kette.
     """
-    qs = owner.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
-    now = timezone.now()
-    updated = qs.update(deleted_at=now)
-    return updated
+    with transaction.atomic():
+        qs = owner.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
+        if audit and field is None:
+            field = qs.values_list("field_template__slug", flat=True).first()
+        updated = qs.update(deleted_at=timezone.now())
+        if updated and audit:
+            from core.services.file_vault.audit import audit_attachment_delete
+
+            audit_attachment_delete(owner, user, entry_id=entry_id, field=field or "", versions=updated)
+        return updated
 
 
 def get_current_entries_for_field(owner, field_template):

@@ -145,6 +145,8 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "previous_case_id": "Fall-UUID des vorherigen Falls einer Ereignis-Zuordnung",
     "owner_type": "Modellname des Anhang-Eigentuemers (ADR-039 §5) — Schema, kein Inhalt",
     "owner_id": "UUID des Anhang-Eigentuemers (ADR-039 §5)",
+    "attachment_id": "UUID der neu erzeugten Anhang-Version (Refs #1960)",
+    "entry_id": "UUID der logischen Anhang-Versionskette (Refs #1960)",
     "target_client": "Client-UUID des Ziels einer Loesch-/Berichtigungs-Entscheidung",
     "target_event": "Ereignis-UUID des Ziels einer Loeschentscheidung",
     "target_case": "Fall-UUID des Ziels einer Loeschentscheidung (Refs #1818) — nie der Falltitel",
@@ -178,6 +180,8 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     # kein Bezug auf Inhalt oder Person. Der Dateiname steht wie bei den
     # File-Vault-Rejects nur als ``filename_hash``/``filename_ext`` drin.
     "versions": "Zahl der physisch entfernten Versionen einer Anhang-Kette (Refs #1874)",
+    "file_size": "Groesse eines erfolgreich gespeicherten Anhangs in Bytes (Refs #1960)",
+    "mime": "verifizierter MIME-Typ eines Anhangs — technischer Typmarker (Refs #1960)",
     "source_ip": "IP-Adresse eines Breach-Detection-Treffers — Sicherheits-Forensik",
     # -- File-Vault-Rejects (``_reject`` in services/file_vault/policy.py) ---
     # Der Klartext-Dateiname wird von ``log_attachment_violation`` zentral in
@@ -233,7 +237,7 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "category": "semantische Differenzierung einer Retention-Entscheidung (Refs #901) — Enum-Wert",
     # -- Ablauf- und Herkunftskennzeichen ---------------------------------
     "event": "Unterart eines Auth-/MFA-Vorgangs — feste Slugs",
-    "mode": "MFA-Verfahren (TOTP/Passkey) — feste Slugs",
+    "mode": "MFA-Verfahren oder Anhang-Modus (add/replace) — feste Slugs",
     "flow": "Zweig der Lockout-Wiederherstellung — feste Slugs",
     "factor": "Zweiter Faktor der Sudo-Bestaetigung — feste Slugs",
     "next": "Kennzeichen des Folgeschritts im Sudo-Flow",

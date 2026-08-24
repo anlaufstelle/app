@@ -255,7 +255,13 @@ class TestAuditDetailKeyInventory:
         # MIME-Typen, Virensignatur) — kein einziger davon steht als Literal an
         # einem Helper-Aufruf, dieser AST-Guard sieht sie also nicht. Genau
         # dafuer sitzt der eigentliche Guard zur Laufzeit.
-        "core/services/file_vault/audit.py": (1, "**detail von log_attachment_violation (via policy._reject)"),
+        "core/services/file_vault/audit.py": (
+            2,
+            "**detail von log_attachment_violation (via policy._reject) sowie "
+            "**filename_fingerprint beim ATTACHMENT_UPLOAD; die moeglichen "
+            "Fingerprint-Schluessel filename_hash/filename_ext sind beide in "
+            "AUDIT_DETAIL_KEYS deklariert (Refs #1960)",
+        ),
         "core/views/attachments.py": (1, "self._audit_detail(...) der Anhang-Domaene"),
         "core/views/mixins.py": (1, "**extra + **release_detail(...) des Export-Helpers"),
         "core/views/statistics.py": (1, "**release_detail(...) des externen Berichts"),

@@ -28,6 +28,7 @@ derselben Einrichtung.
 from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models import FieldTemplate
@@ -215,7 +216,7 @@ def _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner,
     for entry in current_entries:
         att = attachments_by_pk.get(str(entry["id"]))
         if att and str(att.entry_id) in remove_ids:
-            soft_delete_attachment_chain(owner, att.entry_id, user)
+            soft_delete_attachment_chain(owner, att.entry_id, user, field=slug)
             continue
         filtered.append(entry)
     return filtered
@@ -474,16 +475,25 @@ def discard_type_switch_file_chains(owner, user):
     genau die Zahl, die der Bestaetigungsdialog nennt (Refs #1733).
     """
     from core.services.file_vault import soft_delete_attachment_chain
+    from core.services.file_vault.audit import audit_attachment_bulk_delete
 
-    entry_ids = list(
-        owner.attachments.filter(deleted_at__isnull=True)
-        # ``Attachment.Meta.ordering`` sortiert nach ``-created_at``; ohne
-        # ``order_by()`` zoege PostgreSQL diese Spalte ins DISTINCT und die
-        # Ketten kaemen mehrfach zurueck (falsche Zaehlung).
-        .order_by()
-        .values_list("entry_id", flat=True)
-        .distinct()
-    )
-    for entry_id in entry_ids:
-        soft_delete_attachment_chain(owner, entry_id, user)
-    return len(entry_ids)
+    with transaction.atomic():
+        entry_ids = list(
+            owner.attachments.filter(deleted_at__isnull=True)
+            # ``Attachment.Meta.ordering`` sortiert nach ``-created_at``; ohne
+            # ``order_by()`` zoege PostgreSQL diese Spalte ins DISTINCT und die
+            # Ketten kaemen mehrfach zurueck (falsche Zaehlung).
+            .order_by()
+            .values_list("entry_id", flat=True)
+            .distinct()
+        )
+        for entry_id in entry_ids:
+            soft_delete_attachment_chain(owner, entry_id, user, audit=False)
+        if entry_ids:
+            audit_attachment_bulk_delete(
+                owner,
+                user,
+                chains=len(entry_ids),
+                reason="document_type_switch",
+            )
+        return len(entry_ids)

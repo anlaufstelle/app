@@ -1,17 +1,15 @@
-"""AuditLog-Sink fuer File-Vault-Sicherheitsverletzungen.
+"""AuditLog-Sinks fuer File-Vault-Mutationen und Sicherheitsverletzungen.
 
 Schmaler Wrapper um :func:`core.services.audit.audit_security_violation`,
 der den ``target_type="Attachment"`` und die ``target_id`` aus dem
 Owner vereinheitlicht (``None`` bei Pre-Save-Rejects ohne Owner-PK).
-Detail-Payload bleibt schema-stabil: ``reason``, ``filename_hash``,
-``filename_ext``, ``owner_type``/``owner_id`` plus optionale Extras
-(signature/extension/declared/detected/error).
-Refs #610 / #901 / #1751 / #1738.
+Die Fingerprint-API haelt den Dateinamen in allen Pfaden aus dem append-only
+Log heraus. Refs #610 / #901 / #1751 / #1738 / #1960.
 """
 
 from __future__ import annotations
 
-from core.services.audit import audit_security_violation, hmac_hash_value
+from core.services.audit import audit_event, audit_security_violation, hmac_hash_value
 
 
 def _extension(filename: str) -> str:
@@ -38,8 +36,8 @@ def _extension(filename: str) -> str:
     return ""
 
 
-def filename_audit_fields(filename: str) -> dict[str, str]:
-    """Die datenminimierte Namensspur einer Datei fuers ``detail`` (Refs #1751/#1874).
+def filename_fingerprint(filename: str) -> dict[str, str]:
+    """Die datenminimierte Namensspur einer Datei fuers ``detail`` (Refs #1751/#1960).
 
     ``{"filename_hash": <HMAC>, "filename_ext": <Typmarker>}`` — genau das Paar,
     das :func:`log_attachment_violation` seit #1751 schreibt, jetzt als eigener
@@ -50,6 +48,16 @@ def filename_audit_fields(filename: str) -> dict[str, str]:
     Nachbau ist genau die Stelle, an der sie beim naechsten Mal fehlt.
     """
     return {"filename_hash": hmac_hash_value(filename), "filename_ext": _extension(filename)}
+
+
+def filename_audit_fields(filename: str) -> dict[str, str]:
+    """Rueckwaertskompatibler Name fuer :func:`filename_fingerprint`.
+
+    Der Purge-Pfad aus #1874 importiert diesen Namen bereits. Upload,
+    Soft-Delete und Security-Reject teilen ab #1960 die explizit benannte
+    Fingerprint-API; beide Einstiege bleiben byte-identisch.
+    """
+    return filename_fingerprint(filename)
 
 
 def _owner_reference(owner):
@@ -70,6 +78,66 @@ def _owner_reference(owner):
     owner_type = getattr(meta, "model_name", None) if meta is not None else None
     pk = getattr(owner, "pk", None)
     return owner_type, (str(pk) if pk else None)
+
+
+def audit_attachment_upload(owner, field_template, attachment, staged, user, *, mode: str):
+    """Auditiere einen erfolgreichen Add-/Replace-Write am Vault-Choke-Point."""
+    from core.models import AuditLog
+
+    owner_type, owner_id = _owner_reference(owner)
+    return audit_event(
+        AuditLog.Action.ATTACHMENT_UPLOAD,
+        user=user,
+        facility=owner.facility,
+        target_type="Attachment",
+        target_id=str(owner.pk),
+        detail={
+            "owner_type": owner_type,
+            "owner_id": owner_id,
+            "field": field_template.slug,
+            "attachment_id": str(attachment.pk),
+            "entry_id": str(attachment.entry_id),
+            "mode": mode,
+            **filename_fingerprint(staged.original_name),
+            "file_size": staged.file_size,
+            "mime": staged.detected_mime or staged.content_type or "application/octet-stream",
+        },
+    )
+
+
+def audit_attachment_delete(owner, user, *, entry_id, field: str, versions: int):
+    """Auditiere den erfolgreichen Soft-Delete genau einer Versionskette."""
+    from core.models import AuditLog
+
+    owner_type, owner_id = _owner_reference(owner)
+    return audit_event(
+        AuditLog.Action.ATTACHMENT_DELETE,
+        user=user,
+        facility=owner.facility,
+        target_type="Attachment",
+        target_id=str(owner.pk),
+        detail={
+            "owner_type": owner_type,
+            "owner_id": owner_id,
+            "entry_id": str(entry_id),
+            "field": field,
+            "versions": versions,
+        },
+    )
+
+
+def audit_attachment_bulk_delete(owner, user, *, chains: int, reason: str):
+    """Auditiere einen fachlichen Massenpfad als genau eine Sammelzeile."""
+    from core.models import AuditLog
+
+    return audit_event(
+        AuditLog.Action.ATTACHMENT_DELETE,
+        user=user,
+        facility=owner.facility,
+        target_type="Attachment",
+        target_id=str(owner.pk),
+        detail={"chains": chains, "bulk": True, "reason": reason},
+    )
 
 
 def log_attachment_violation(facility, user, owner, *, reason, filename, **extra):
@@ -109,7 +177,7 @@ def log_attachment_violation(facility, user, owner, *, reason, filename, **extra
         target_type="Attachment",
         target_id=target_id,
         reason=reason,
-        **filename_audit_fields(filename),
+        **filename_fingerprint(filename),
         owner_type=owner_type,
         owner_id=owner_id,
         **extra,
