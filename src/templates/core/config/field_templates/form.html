@@ -23,6 +23,7 @@
             <p class="text-[13px] text-ink">
                 {% if field_bindings %}{{ field_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
             </p>
+            <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
         </div>
         {% endif %}
 

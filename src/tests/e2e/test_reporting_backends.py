@@ -201,7 +201,7 @@ class TestReportPanelPreview:
         _open_statistics(page, base_url)
         panel = _select_backend(page, "sample-report-1")
 
-        expect(panel).to_contain_text("Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt")
+        expect(panel).to_contain_text("Aggregate mit weniger als 5 Datensätzen werden unterdrückt")
 
     def test_panel_weist_die_live_datenquelle_aus(self, authenticated_page, base_url):
         """Refs #1743: Die Vorschau liest live und sagt das — sonst stehen ihre

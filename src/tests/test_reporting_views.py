@@ -65,7 +65,7 @@ class TestDatasetReportPanelView:
         assert "Beispiel-Sachbericht" in content
         assert "Kontakte" in content
         # prepare_export lief: die Fussnote zur K-Anon-Schwelle erscheint.
-        assert "Kleinstfallzahl-Schwelle" in content
+        assert "Aggregate mit weniger als 5 Datensätzen werden unterdrückt" in content
         assert "k-Anonymität" in content
 
     def test_completeness_warnung_bei_luecken(self, client, lead_user, doc_type_contact, sample_event):

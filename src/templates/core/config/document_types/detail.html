@@ -64,6 +64,7 @@
                 <dd class="text-ink font-medium" data-testid="doctype-report-bindings">
                     {% if report_bindings %}{{ report_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
                 </dd>
+                <dd class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</dd>
             </div>
             {% endif %}
             <div>

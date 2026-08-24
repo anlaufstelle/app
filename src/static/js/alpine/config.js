@@ -60,10 +60,17 @@ document.addEventListener("alpine:init", () => {
         select: null,
         scopeValue: "",
         wrappers: [],
+        extraWrappers: [],
         systemTypeSelect: null,
         reportKeySelect: null,
         reportKeyDefaults: {},
         reportKeyTouched: false,
+        reportKeyBindings: {},
+        reportKeyBindingsOutput: null,
+        reportKeyExcludedValue: "",
+        reportKeyEmptyLabel: "",
+        reportKeyExcludedLabel: "",
+        reportKeyUnboundLabel: "",
         init() {
             const root = this.$el;
             this.select = root.querySelector("select[name='entity_type']");
@@ -74,6 +81,7 @@ document.addEventListener("alpine:init", () => {
                 .filter((el) => el !== null)
                 .map((el) => el.closest("div"))
                 .filter((el) => el !== null && el !== root);
+            this.extraWrappers = Array.from(root.querySelectorAll("[data-entity-scoped-extra]"));
             this.initReportKeyDefaults(root);
             if (!this.select) {
                 // Bearbeiten-Formular ohne Select (theoretisch) oder fremdes
@@ -106,7 +114,28 @@ document.addEventListener("alpine:init", () => {
         initReportKeyDefaults(root) {
             this.systemTypeSelect = root.querySelector("select[name='system_type']");
             this.reportKeySelect = root.querySelector("select[name='report_key']");
-            if (!this.systemTypeSelect || !this.reportKeySelect || this.reportKeySelect.disabled) {
+            this.reportKeyBindingsOutput = root.querySelector("[data-report-key-bindings-output]");
+            this.reportKeyExcludedValue = root.dataset.reportKeyExcludedValue || "";
+            this.reportKeyEmptyLabel = root.dataset.reportKeyEmptyLabel || "";
+            this.reportKeyExcludedLabel = root.dataset.reportKeyExcludedLabel || "";
+            this.reportKeyUnboundLabel = root.dataset.reportKeyUnboundLabel || "";
+            try {
+                const parsed = JSON.parse(root.dataset.reportKeyBindings || "{}");
+                this.reportKeyBindings = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+            } catch (_error) {
+                // Defektes oder altes Markup darf weder das Formular noch die
+                // übrige Entity-Scope-Komponente lahmlegen.
+                this.reportKeyBindings = {};
+            }
+            if (!this.reportKeySelect) {
+                return;
+            }
+            this.reportKeySelect.addEventListener("change", () => {
+                this.reportKeyTouched = true;
+                this.renderReportKeyBindings();
+            });
+            this.renderReportKeyBindings();
+            if (!this.systemTypeSelect || this.reportKeySelect.disabled) {
                 return;
             }
             (root.dataset.reportKeyDefaults || "")
@@ -118,9 +147,6 @@ document.addEventListener("alpine:init", () => {
                         this.reportKeyDefaults[systemType] = reportKey;
                     }
                 });
-            this.reportKeySelect.addEventListener("change", () => {
-                this.reportKeyTouched = true;
-            });
             this.systemTypeSelect.addEventListener("change", () => this.applyReportKeyDefault());
         },
         applyReportKeyDefault() {
@@ -130,7 +156,25 @@ document.addEventListener("alpine:init", () => {
             const vorschlag = this.reportKeyDefaults[this.systemTypeSelect.value];
             if (vorschlag) {
                 this.reportKeySelect.value = vorschlag;
+                this.renderReportKeyBindings();
             }
+        },
+        renderReportKeyBindings() {
+            if (!this.reportKeyBindingsOutput || !this.reportKeySelect) {
+                return;
+            }
+            const key = this.reportKeySelect.value;
+            if (!key) {
+                this.reportKeyBindingsOutput.textContent = this.reportKeyEmptyLabel;
+                return;
+            }
+            if (key === this.reportKeyExcludedValue) {
+                this.reportKeyBindingsOutput.textContent = this.reportKeyExcludedLabel;
+                return;
+            }
+            const names = this.reportKeyBindings[key];
+            this.reportKeyBindingsOutput.textContent =
+                Array.isArray(names) && names.length > 0 ? names.join(" · ") : this.reportKeyUnboundLabel;
         },
         applyScope() {
             const inScope = this.select.value === this.scopeValue;
@@ -162,6 +206,9 @@ document.addEventListener("alpine:init", () => {
                     });
                 }
                 wrapper.hidden = hide;
+            });
+            this.extraWrappers.forEach((wrapper) => {
+                wrapper.hidden = !inScope;
             });
         },
     }));

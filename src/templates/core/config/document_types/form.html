@@ -22,6 +22,7 @@
             <p class="text-[13px] text-ink">
                 {% if report_bindings %}{{ report_bindings|join:" · " }}{% else %}{% trans "Erscheint in keinem Bericht." %}{% endif %}
             </p>
+            <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
         </div>
         {% endif %}
 
@@ -44,12 +45,24 @@
              x-data="documentTypeEntityFields"
              data-entity-scope-value="{{ form.event_entity_type_value }}"
              data-entity-scoped-fields="{{ form.event_only_fields_attr }}"
-             data-report-key-defaults="{{ form.report_key_defaults_attr }}">
+             data-report-key-defaults="{{ form.report_key_defaults_attr }}"
+             data-report-key-bindings="{{ form.report_key_bindings_json }}"
+             data-report-key-excluded-value="{{ form.report_key_excluded_value }}"
+             data-report-key-empty-label="{% trans 'Noch kein Berichtsschlüssel gewählt.' %}"
+             data-report-key-excluded-label="{% trans 'Gehört ausdrücklich in keinen Bericht.' %}"
+             data-report-key-unbound-label="{% trans 'Dieser Schlüssel speist keinen registrierten Bericht.' %}">
             {% include "components/_form_field.html" with field=form.name %}
             {% include "components/_form_field.html" with field=form.entity_type %}
             {% include "components/_form_field.html" with field=form.sensitivity %}
             {% include "components/_form_field.html" with field=form.system_type %}
             {% include "components/_form_field.html" with field=form.report_key %}
+            {% if not is_edit %}
+            <div class="rounded-md border border-subtle bg-canvas p-3" data-entity-scoped-extra data-testid="doctype-report-key-preview">
+                <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Erscheint in" %}</p>
+                <p class="text-[13px] text-ink" data-report-key-bindings-output aria-live="polite"></p>
+                <p class="mt-1 text-[12px] text-ink-muted">{% trans "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen." %}</p>
+            </div>
+            {% endif %}
             {% include "components/_form_field.html" with field=form.min_contact_stage %}
             {% include "components/_form_field.html" with field=form.retention_days %}
             {% include "components/_form_field.html" with field=form.description %}

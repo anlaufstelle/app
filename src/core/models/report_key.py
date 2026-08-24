@@ -77,7 +77,8 @@ class ReportKeyMixin(models.Model):
         db_index=True,
         verbose_name=_("Berichtsschlüssel"),
         help_text=_(
-            "Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in keinem Bericht. "
+            "Ordnet diesen Eintrag einer Berichtszeile zu; derselbe Schlüssel kann in mehreren Berichten erscheinen. "
+            "Leer = erscheint in keinem Bericht. "
             "Ein leerer Schlüssel kann nachgetragen werden; ein gesetzter ist danach unveränderbar."
         ),
     )

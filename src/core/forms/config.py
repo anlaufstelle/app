@@ -10,6 +10,7 @@ UI-Validierung (Widget-CSS, freundliche Unique-Fehler, Immutabilitäten).
 from __future__ import annotations
 
 import datetime
+import json
 from typing import TYPE_CHECKING, Any
 
 from django import forms
@@ -22,7 +23,7 @@ from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
 from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, slug_base
-from core.reporting.registry import get_field_key_vocabulary, get_report_key_vocabulary
+from core.reporting.registry import backends_for_report_key, get_field_key_vocabulary, get_report_key_vocabulary
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
@@ -121,7 +122,15 @@ class ReportKeyFormMixin:
         if bearbeitung and gesetzt:
             auswahl.disabled = True
         self.fields["report_key"] = auswahl
-        if bearbeitung and not gesetzt:
+        if bearbeitung and gesetzt:
+            self._append_help_text(
+                "report_key",
+                _(
+                    "Falsch gesetzt? Diesen Eintrag deaktivieren und einen neuen mit dem richtigen Schlüssel "
+                    "anlegen — bereits erfasste Einträge bleiben bei ihrer bisherigen Berichtszeile."
+                ),
+            )
+        elif bearbeitung:
             # Nur im Nachtrag-Fall: beim Anlegen gibt es noch keine Berichte,
             # und bei gesperrtem Feld waere der Hinweis gegenstandslos.
             self._append_help_text(
@@ -272,6 +281,14 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # wird nur ein bereits gesetzter Wert (Entscheid E-K, Konzept #1847
         # §2.1). Das Vokabular ist das der **Typ**-Ebene.
         self._setup_report_key(get_report_key_vocabulary())
+        self._append_help_text(
+            "report_key",
+            _(
+                "Leer heißt: noch keine Aussage — Berichte, die alle Ereignisse gegenrechnen, weisen den Typ "
+                "als Lücke aus. Soll er bewusst in keinem Bericht erscheinen, wählen Sie "
+                "„Gehört ausdrücklich in keinen Bericht“."
+            ),
+        )
         # Final-Review H (Refs #1058): beide Felder werden ausschliesslich im
         # Ereignis-Pfad ausgewertet (``enforce_document_type_retention`` zaehlt
         # ``Event``; ``min_contact_stage`` greift nur in der Ereignis-Anlage).
@@ -334,6 +351,19 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         Berichtszuordnung statt einer ungefragt gesetzten).
         """
         return " ".join(f"{system_type}:{report_key}" for system_type, report_key in self.REPORT_KEY_DEFAULTS.items())
+
+    @property
+    def report_key_bindings_json(self) -> str:
+        """Registry-Zuordnung für die Live-Auskunft beim Anlegen (Refs #1903)."""
+        bindings = {
+            key: [str(backend.name) for backend in backends_for_report_key(key)] for key in get_report_key_vocabulary()
+        }
+        return json.dumps(bindings, ensure_ascii=False, separators=(",", ":"))
+
+    @property
+    def report_key_excluded_value(self) -> str:
+        """Sentinel-Wert für die Live-Auskunft, ohne Duplikat im JavaScript."""
+        return EXCLUDED
 
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]

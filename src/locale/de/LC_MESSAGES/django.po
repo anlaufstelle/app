@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 18:30+0200\n"
+"POT-Creation-Date: 2026-08-24 18:09+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2245,13 +2245,15 @@ msgstr "Berichtsschlüssel"
 
 #: src/core/models/report_key.py:80
 msgid ""
-"Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in keinem "
-"Bericht. Ein leerer Schlüssel kann nachgetragen werden; ein gesetzter ist "
-"danach unveränderbar."
+"Ordnet diesen Eintrag einer Berichtszeile zu; derselbe Schlüssel kann in "
+"mehreren Berichten erscheinen. Leer = erscheint in keinem Bericht. Ein "
+"leerer Schlüssel kann nachgetragen werden; ein gesetzter ist danach "
+"unveränderbar."
 msgstr ""
-"Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in keinem "
-"Bericht. Ein leerer Schlüssel kann nachgetragen werden; ein gesetzter ist "
-"danach unveränderbar."
+"Ordnet diesen Eintrag einer Berichtszeile zu; derselbe Schlüssel kann in "
+"mehreren Berichten erscheinen. Leer = erscheint in keinem Bericht. Ein "
+"leerer Schlüssel kann nachgetragen werden; ein gesetzter ist danach "
+"unveränderbar."
 
 #: src/core/models/report_key.py:93
 msgid "Der Berichtsschlüssel kann nach dem Setzen nicht mehr geändert werden."
@@ -9587,11 +9589,13 @@ msgstr "PDF-Export"
 
 #: src/templates/core/statistics/partials/full_content.html:52
 msgid ""
-"Fertige Auswertungen für die Weitergabe nach außen. Kleinstfallzahlen sind "
-"unterdrückt — die Zahlen können deshalb von der Übersicht abweichen."
+"Fertige Auswertungen für die Weitergabe nach außen. Sie zählen nur Ereignisse "
+"mit Berichtszuordnung und unterdrücken Kleinstfallzahlen — die Zahlen können "
+"deshalb von der Übersicht abweichen."
 msgstr ""
-"Fertige Auswertungen für die Weitergabe nach außen. Kleinstfallzahlen sind "
-"unterdrückt — die Zahlen können deshalb von der Übersicht abweichen."
+"Fertige Auswertungen für die Weitergabe nach außen. Sie zählen nur Ereignisse "
+"mit Berichtszuordnung und unterdrücken Kleinstfallzahlen — die Zahlen können "
+"deshalb von der Übersicht abweichen."
 
 #: src/templates/core/statistics/partials/full_content.html:79
 msgid "Fließt in die Monats-Aggregate ein"
@@ -9624,10 +9628,9 @@ msgid "Zeigt %(shown)s von %(total)s Zeilen"
 msgstr "Zeigt %(shown)s von %(total)s Zeilen"
 
 #: src/templates/core/statistics/partials/report_panel.html:68
-msgid ""
-"Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)."
-msgstr ""
-"Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)."
+#, python-format
+msgid "Aggregate mit weniger als %(threshold)s Datensätzen werden unterdrückt (k-Anonymität)."
+msgstr "Aggregate mit weniger als %(threshold)s Datensätzen werden unterdrückt (k-Anonymität)."
 
 #: src/templates/core/statistics/partials/report_panel.html:102
 #: src/templates/core/system/auditlog_list.html:21
@@ -11582,3 +11585,34 @@ msgstr "Zusammenführungs-Antrag wartet auf Bestätigung"
 #: src/core/models/audit.py:120
 msgid "Zugangsdaten widerrufen"
 msgstr "Zugangsdaten widerrufen"
+
+#: src/core/forms/config.py:129
+msgid "Falsch gesetzt? Diesen Eintrag deaktivieren und einen neuen mit dem richtigen Schlüssel anlegen — bereits erfasste Einträge bleiben bei ihrer bisherigen Berichtszeile."
+msgstr "Falsch gesetzt? Diesen Eintrag deaktivieren und einen neuen mit dem richtigen Schlüssel anlegen — bereits erfasste Einträge bleiben bei ihrer bisherigen Berichtszeile."
+
+#: src/core/forms/config.py:287
+msgid "Leer heißt: noch keine Aussage — Berichte, die alle Ereignisse gegenrechnen, weisen den Typ als Lücke aus. Soll er bewusst in keinem Bericht erscheinen, wählen Sie „Gehört ausdrücklich in keinen Bericht“."
+msgstr "Leer heißt: noch keine Aussage — Berichte, die alle Ereignisse gegenrechnen, weisen den Typ als Lücke aus. Soll er bewusst in keinem Bericht erscheinen, wählen Sie „Gehört ausdrücklich in keinen Bericht“."
+
+#: src/templates/core/config/document_types/detail.html:67
+#: src/templates/core/config/document_types/form.html:25
+#: src/templates/core/config/document_types/form.html:63
+#: src/templates/core/config/field_templates/form.html:26
+msgid "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen."
+msgstr "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen."
+
+#: src/templates/core/config/document_types/form.html:51
+msgid "Noch kein Berichtsschlüssel gewählt."
+msgstr "Noch kein Berichtsschlüssel gewählt."
+
+#: src/templates/core/config/document_types/form.html:52
+msgid "Gehört ausdrücklich in keinen Bericht."
+msgstr "Gehört ausdrücklich in keinen Bericht."
+
+#: src/templates/core/config/document_types/form.html:53
+msgid "Dieser Schlüssel speist keinen registrierten Bericht."
+msgstr "Dieser Schlüssel speist keinen registrierten Bericht."
+
+#: src/templates/core/hubs/verwaltung.html:85
+msgid "— wird am Dokumentationstyp oder an der Feldvorlage gesetzt; derselbe Schlüssel kann in mehreren Berichten erscheinen."
+msgstr "— wird am Dokumentationstyp oder an der Feldvorlage gesetzt; derselbe Schlüssel kann in mehreren Berichten erscheinen."

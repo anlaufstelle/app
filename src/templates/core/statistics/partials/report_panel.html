@@ -65,7 +65,7 @@ Vorschau eines Reporting-Backends. Rendert das Ergebnis von
 
 {% if k_anonymity_threshold is not None %}
 <p class="text-[12px] text-ink-muted italic mb-4">
-    {% trans "Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)." %}
+    {% blocktrans with threshold=k_anonymity_threshold %}Aggregate mit weniger als {{ threshold }} Datensätzen werden unterdrückt (k-Anonymität).{% endblocktrans %}
 </p>
 {% endif %}
 

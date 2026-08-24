@@ -63,6 +63,30 @@ function buildForm({ scopedFields = SCOPED, withSelect = true, errorOn = null } 
     return document.getElementById("root");
 }
 
+function buildReportKeyForm() {
+    document.body.innerHTML = `
+        <div id="root"
+             data-entity-scope-value="event"
+             data-entity-scoped-fields="system_type report_key"
+             data-report-key-defaults="crisis:crisis"
+             data-report-key-bindings='{"contact":["Bericht A","Bericht B"],"crisis":["Krisenbericht"]}'
+             data-report-key-excluded-value="excluded"
+             data-report-key-empty-label="Noch kein Schlüssel gewählt."
+             data-report-key-excluded-label="Erscheint bewusst in keinem Bericht."
+             data-report-key-unbound-label="Kein Bericht kennt diesen Schlüssel.">
+            <div>
+                <select id="id_entity_type" name="entity_type">
+                    <option value="event" selected>Ereignis</option>
+                    <option value="client">Person</option>
+                </select>
+            </div>
+            <div><select id="id_system_type" name="system_type"><option value=""></option><option value="crisis">Krise</option></select></div>
+            <div><select id="id_report_key" name="report_key"><option value=""></option><option value="excluded">Ausgeschlossen</option><option value="contact">Kontakt</option><option value="crisis">Krise</option></select></div>
+            <div data-entity-scoped-extra data-testid="report-preview"><p data-report-key-bindings-output></p></div>
+        </div>`;
+    return document.getElementById("root");
+}
+
 function mount(root) {
     const component = factory();
     component.$el = root;
@@ -155,5 +179,47 @@ describe("documentTypeEntityFields", () => {
     it("blendet ohne Entitaetstyp-Select nichts aus", () => {
         expect(() => mount(buildForm({ withSelect: false }))).not.toThrow();
         expect(wrapper("system_type").hidden).toBe(false);
+    });
+
+    it("zeigt beim Anlegen alle Berichte des gewaehlten Schluessels", () => {
+        mount(buildReportKeyForm());
+        const select = document.getElementById("id_report_key");
+        select.value = "contact";
+        select.dispatchEvent(new Event("change"));
+
+        expect(document.querySelector("[data-report-key-bindings-output]").textContent).toBe("Bericht A · Bericht B");
+    });
+
+    it("zieht die Live-Auskunft nach einer Systemtyp-Vorbelegung mit", () => {
+        mount(buildReportKeyForm());
+        const systemType = document.getElementById("id_system_type");
+        systemType.value = "crisis";
+        systemType.dispatchEvent(new Event("change"));
+
+        expect(document.getElementById("id_report_key").value).toBe("crisis");
+        expect(document.querySelector("[data-report-key-bindings-output]").textContent).toBe("Krisenbericht");
+    });
+
+    it("unterscheidet leer, ausdruecklich ausgeschlossen und unbekannt", () => {
+        mount(buildReportKeyForm());
+        const select = document.getElementById("id_report_key");
+        const output = document.querySelector("[data-report-key-bindings-output]");
+        expect(output.textContent).toBe("Noch kein Schlüssel gewählt.");
+
+        select.value = "excluded";
+        select.dispatchEvent(new Event("change"));
+        expect(output.textContent).toBe("Erscheint bewusst in keinem Bericht.");
+
+        select.append(new Option("Fremd", "fremd"));
+        select.value = "fremd";
+        select.dispatchEvent(new Event("change"));
+        expect(output.textContent).toBe("Kein Bericht kennt diesen Schlüssel.");
+    });
+
+    it("blendet die Live-Auskunft zusammen mit Ereignis-Feldern aus", () => {
+        mount(buildReportKeyForm());
+        selectEntityType("client");
+
+        expect(document.querySelector('[data-testid="report-preview"]').hidden).toBe(true);
     });
 });

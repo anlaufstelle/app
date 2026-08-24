@@ -94,6 +94,7 @@ class TestBerichtsPanelEnglisch:
         assert "Count" in content
         assert "Data source" in content
         assert "Example Activity Report" in content
+        assert "Aggregates with fewer than 5 records are suppressed" in content
 
     def test_panel_bleibt_auf_deutsch_ohne_praeferenz(self, client, lead_user, doc_type_contact, sample_event):
         """Gegenprobe: ohne EN-Praeferenz steht dort weiterhin Deutsch.

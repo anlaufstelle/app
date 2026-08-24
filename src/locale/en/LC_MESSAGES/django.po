@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-22 18:30+0200\n"
+"POT-Creation-Date: 2026-08-24 18:09+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2229,12 +2229,14 @@ msgstr "Report key"
 
 #: src/core/models/report_key.py:80
 msgid ""
-"Ordnet diesen Eintrag einer Berichtszeile zu. Leer = erscheint in keinem "
-"Bericht. Ein leerer Schlüssel kann nachgetragen werden; ein gesetzter ist "
-"danach unveränderbar."
+"Ordnet diesen Eintrag einer Berichtszeile zu; derselbe Schlüssel kann in "
+"mehreren Berichten erscheinen. Leer = erscheint in keinem Bericht. Ein "
+"leerer Schlüssel kann nachgetragen werden; ein gesetzter ist danach "
+"unveränderbar."
 msgstr ""
-"Assigns this entry to a report row. Empty = appears in no report. An empty "
-"key can be added later; once set it can no longer be changed."
+"Assigns this entry to a report row; the same key can appear in multiple "
+"reports. Empty = appears in no report. An empty key can be added later; once "
+"set it can no longer be changed."
 
 #: src/core/models/report_key.py:93
 msgid "Der Berichtsschlüssel kann nach dem Setzen nicht mehr geändert werden."
@@ -9496,11 +9498,13 @@ msgstr "PDF export"
 
 #: src/templates/core/statistics/partials/full_content.html:52
 msgid ""
-"Fertige Auswertungen für die Weitergabe nach außen. Kleinstfallzahlen sind "
-"unterdrückt — die Zahlen können deshalb von der Übersicht abweichen."
+"Fertige Auswertungen für die Weitergabe nach außen. Sie zählen nur Ereignisse "
+"mit Berichtszuordnung und unterdrücken Kleinstfallzahlen — die Zahlen können "
+"deshalb von der Übersicht abweichen."
 msgstr ""
-"Ready-made analyses for external release. Small case numbers are suppressed, "
-"so the figures may differ from the overview."
+"Ready-made analyses for external release. They count only events assigned to "
+"reports and suppress small case numbers, so the figures may differ from the "
+"overview."
 
 #: src/templates/core/statistics/partials/full_content.html:79
 msgid "Fließt in die Monats-Aggregate ein"
@@ -9533,10 +9537,9 @@ msgid "Zeigt %(shown)s von %(total)s Zeilen"
 msgstr "Showing %(shown)s of %(total)s rows"
 
 #: src/templates/core/statistics/partials/report_panel.html:68
-msgid ""
-"Werte unter der Kleinstfallzahl-Schwelle werden unterdrückt (k-Anonymität)."
-msgstr ""
-"Values below the minimum case-count threshold are suppressed (k-anonymity)."
+#, python-format
+msgid "Aggregate mit weniger als %(threshold)s Datensätzen werden unterdrückt (k-Anonymität)."
+msgstr "Aggregates with fewer than %(threshold)s records are suppressed (k-anonymity)."
 
 #: src/templates/core/statistics/partials/report_panel.html:102
 #: src/templates/core/system/auditlog_list.html:21
@@ -11483,3 +11486,34 @@ msgstr "Merge request awaiting confirmation"
 #: src/core/models/audit.py:120
 msgid "Zugangsdaten widerrufen"
 msgstr "Credentials revoked"
+
+#: src/core/forms/config.py:129
+msgid "Falsch gesetzt? Diesen Eintrag deaktivieren und einen neuen mit dem richtigen Schlüssel anlegen — bereits erfasste Einträge bleiben bei ihrer bisherigen Berichtszeile."
+msgstr "Set incorrectly? Deactivate this entry and create a new one with the correct key — entries already recorded remain in their previous report row."
+
+#: src/core/forms/config.py:287
+msgid "Leer heißt: noch keine Aussage — Berichte, die alle Ereignisse gegenrechnen, weisen den Typ als Lücke aus. Soll er bewusst in keinem Bericht erscheinen, wählen Sie „Gehört ausdrücklich in keinen Bericht“."
+msgstr "Empty means: no decision yet — reports that reconcile all events show the type as a gap. If it is intentionally not to appear in any report, select “Explicitly belongs in no report”."
+
+#: src/templates/core/config/document_types/detail.html:67
+#: src/templates/core/config/document_types/form.html:25
+#: src/templates/core/config/document_types/form.html:63
+#: src/templates/core/config/field_templates/form.html:26
+msgid "Ergibt sich aus dem Berichtsschlüssel — ein Schlüssel kann mehrere Berichte speisen."
+msgstr "Derived from the report key — one key can feed multiple reports."
+
+#: src/templates/core/config/document_types/form.html:51
+msgid "Noch kein Berichtsschlüssel gewählt."
+msgstr "No report key selected yet."
+
+#: src/templates/core/config/document_types/form.html:52
+msgid "Gehört ausdrücklich in keinen Bericht."
+msgstr "Explicitly belongs in no report."
+
+#: src/templates/core/config/document_types/form.html:53
+msgid "Dieser Schlüssel speist keinen registrierten Bericht."
+msgstr "This key does not feed any registered report."
+
+#: src/templates/core/hubs/verwaltung.html:85
+msgid "— wird am Dokumentationstyp oder an der Feldvorlage gesetzt; derselbe Schlüssel kann in mehreren Berichten erscheinen."
+msgstr "— is set on the document type or field template; the same key can appear in multiple reports."
