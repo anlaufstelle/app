@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 22:36+0200\n"
+"POT-Creation-Date: 2026-08-24 23:29+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11809,3 +11809,12 @@ msgstr "Optionen sind nur für Auswahl- und Mehrfachauswahl-Felder zulässig."
 
 msgid "Zeileneditor übernehmen"
 msgstr "Zeileneditor übernehmen"
+
+msgid "Farbname für Kennzeichnungen, zum Beispiel green, rose oder blue. Bitte auf ausreichenden Kontrast zur Schrift achten."
+msgstr "Farbname für Kennzeichnungen, zum Beispiel green, rose oder blue. Bitte auf ausreichenden Kontrast zur Schrift achten."
+
+msgid "Kleinere Zahlen erscheinen in Auswahllisten und Übersichten weiter oben."
+msgstr "Kleinere Zahlen erscheinen in Auswahllisten und Übersichten weiter oben."
+
+msgid "Technischer Icon-Name, zum Beispiel users, heart oder file-text. Leer verwendet den Standard."
+msgstr "Technischer Icon-Name, zum Beispiel users, heart oder file-text. Leer verwendet den Standard."
