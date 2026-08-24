@@ -22,7 +22,7 @@ from django.utils.translation import gettext_lazy as _
 from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
 from core.models.report_key import EXCLUDED
-from core.models.slug import _RESERVED_SLUGS, slug_base
+from core.models.slug import _RESERVED_SLUGS, _SLUG_RE, slug_base
 from core.reporting.registry import backends_for_report_key, get_field_key_vocabulary, get_report_key_vocabulary
 from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
@@ -474,9 +474,12 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
             "default_value": forms.TextInput(),
         }
 
-    def __init__(self, *args, facility=None, **kwargs):
+    def __init__(self, *args, facility=None, used_option_slugs=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.facility = facility
+        # Nur Slugs, keine Werte/Zaehler: der Browser braucht sie, um beim
+        # Entfernen/Umbenennen einer verwendeten Option zu warnen (#1875).
+        self.used_option_slugs_attr = " ".join(sorted(used_option_slugs or ()))
         self._setup_report_key(get_field_key_vocabulary())
 
     def clean(self):
@@ -532,13 +535,53 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
     # Personen-/Fall-Typ ist keine Sackgasse mehr, sondern der Regelfall.
 
     def clean_options_json(self):
-        # JSONField liefert bei leerem Textarea ``None``; das Model-Feld ist
-        # NOT NULL mit ``default=list`` — leeres Feld also als leere Liste
-        # normalisieren, damit kein IntegrityError am Save entsteht.
+        """Optionsstruktur wie im Paket-Schema validieren und normalisieren.
+
+        Das ``JSONField`` prueft allein die JSON-Syntax. Alle Konsumenten
+        erwarten aber eine eindeutige Liste aus ``slug``/``label`` und dem
+        optionalen Boolean ``is_active``. Der visuelle Editor ist nur Komfort;
+        diese serverseitige Pruefung bleibt auch fuer Ohne-JS-/Experten-Posts
+        die Wahrheit.
+        """
         value = self.cleaned_data.get("options_json")
         if value in (None, ""):
             return []
-        return value
+        if not isinstance(value, list):
+            raise ValidationError(_("Optionen müssen eine JSON-Liste sein."))
+        if value and self.cleaned_data.get("field_type") not in {
+            FieldTemplate.FieldType.SELECT,
+            FieldTemplate.FieldType.MULTI_SELECT,
+        }:
+            raise ValidationError(_("Optionen sind nur für Auswahl- und Mehrfachauswahl-Felder zulässig."))
+
+        normalized: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        allowed_keys = {"slug", "label", "is_active"}
+        for index, option in enumerate(value, start=1):
+            if not isinstance(option, dict):
+                raise ValidationError(_("Option %(index)s muss ein JSON-Objekt sein.") % {"index": index})
+            if set(option) - allowed_keys:
+                raise ValidationError(_("Option %(index)s enthält unbekannte Schlüssel.") % {"index": index})
+
+            slug = option.get("slug")
+            label = option.get("label")
+            active = option.get("is_active", True)
+            if not isinstance(slug, str) or not _SLUG_RE.fullmatch(slug):
+                raise ValidationError(
+                    _("Option %(index)s braucht einen gültigen Slug aus a–z, 0–9 und Bindestrichen.") % {"index": index}
+                )
+            if slug in seen:
+                raise ValidationError(_("Jeder Options-Slug darf nur einmal vorkommen."))
+            if not isinstance(label, str) or not label.strip():
+                raise ValidationError(_("Option %(index)s braucht eine Bezeichnung.") % {"index": index})
+            if not isinstance(active, bool):
+                raise ValidationError(
+                    _("Der Aktiv-Status von Option %(index)s muss true oder false sein.") % {"index": index}
+                )
+
+            seen.add(slug)
+            normalized.append({"slug": slug, "label": label.strip(), "is_active": active})
+        return normalized
 
 
 class FieldGroupForm(TailwindFormMixin, forms.ModelForm):

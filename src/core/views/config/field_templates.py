@@ -22,6 +22,7 @@ from core.models import FieldTemplate
 from core.reporting.registry import describe_field_bindings
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
+from core.services.option_usage import option_slugs_in_use
 from core.views.mixins import (
     FacilityAdminRequiredMixin,
     HTMXPartialMixin,
@@ -97,7 +98,11 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
 
     def get(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
-        form = FieldTemplateForm(instance=field_template, facility=request.current_facility)
+        form = FieldTemplateForm(
+            instance=field_template,
+            facility=request.current_facility,
+            used_option_slugs=option_slugs_in_use(field_template),
+        )
         context = {
             "form": form,
             "field_template": field_template,
@@ -113,7 +118,12 @@ class ConfigFieldTemplateUpdateView(FacilityAdminRequiredMixin, View):
 
     def post(self, request, pk):
         field_template = get_object_or_404(FieldTemplate, pk=pk, facility=request.current_facility)
-        form = FieldTemplateForm(request.POST, instance=field_template, facility=request.current_facility)
+        form = FieldTemplateForm(
+            request.POST,
+            instance=field_template,
+            facility=request.current_facility,
+            used_option_slugs=option_slugs_in_use(field_template),
+        )
         if form.is_valid():
             config_service.save_field_template(request, form, creating=False, facility=request.current_facility)
             messages.success(request, _("Feldvorlage „%(name)s“ wurde aktualisiert.") % {"name": field_template.name})

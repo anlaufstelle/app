@@ -212,4 +212,173 @@ document.addEventListener("alpine:init", () => {
             });
         },
     }));
+
+    /**
+     * Komfort-Editor fuer FieldTemplate.options_json (Refs #1875).
+     *
+     * Das Textarea bleibt das echte, servervalidierte Formularfeld. Diese
+     * Komponente liest es ein, rendert fuer Auswahltypen zugaengliche Zeilen
+     * und serialisiert jede Aenderung wieder dorthin. Bei fehlendem JS,
+     * unlesbarem Bestands-JSON oder einem anderen Feldtyp bleibt das Textarea
+     * sichtbar — der Experten-/Fallback-Pfad ist damit kein zweiter Vertrag.
+     */
+    Alpine.data("fieldTemplateOptionsEditor", () => ({
+        textarea: null,
+        editor: null,
+        list: null,
+        jsonWrapper: null,
+        expertButton: null,
+        warning: null,
+        jsonError: null,
+        rowTemplate: null,
+        fieldTypeSelect: null,
+        options: [],
+        usedSlugs: new Set(),
+        canEnhance: false,
+        expertOpen: false,
+        init() {
+            const root = this.$el;
+            this.textarea = root.querySelector("textarea[name='options_json']");
+            this.editor = root.querySelector("[data-options-editor]");
+            this.list = root.querySelector("[data-options-list]");
+            this.jsonWrapper = root.querySelector("[data-options-json-wrapper]");
+            this.expertButton = root.querySelector("[data-options-expert-toggle]");
+            this.warning = root.querySelector("[data-options-usage-warning]");
+            this.jsonError = root.querySelector("[data-options-json-error]");
+            this.rowTemplate = root.querySelector("template[data-options-row-template]");
+            this.fieldTypeSelect = root.closest("form")?.querySelector("select[name='field_type']") || null;
+            this.usedSlugs = new Set((root.dataset.usedOptionSlugs || "").split(/\s+/).filter(Boolean));
+            if (
+                !this.textarea ||
+                !this.editor ||
+                !this.list ||
+                !this.jsonWrapper ||
+                !this.expertButton ||
+                !this.rowTemplate
+            ) {
+                return;
+            }
+
+            const parsed = this.parseTextarea();
+            if (parsed !== null) {
+                this.options = parsed;
+                this.canEnhance = true;
+                this.renderRows();
+            }
+            root.querySelector("[data-options-add]")?.addEventListener("click", () => this.addOption());
+            this.expertButton.addEventListener("click", () => this.toggleExpert());
+            this.fieldTypeSelect?.addEventListener("change", () => this.updateVisibility());
+            this.updateVisibility();
+        },
+        isOptionField() {
+            return ["select", "multi_select"].includes(this.fieldTypeSelect?.value || "");
+        },
+        parseTextarea() {
+            try {
+                const value = JSON.parse(this.textarea.value || "[]");
+                if (!Array.isArray(value) || value.some((option) => option === null || typeof option !== "object")) {
+                    return null;
+                }
+                return value.map((option) => ({
+                    slug: typeof option.slug === "string" ? option.slug : "",
+                    label: typeof option.label === "string" ? option.label : "",
+                    is_active: option.is_active !== false,
+                }));
+            } catch (_error) {
+                return null;
+            }
+        },
+        updateVisibility() {
+            const active = this.canEnhance && this.isOptionField();
+            this.editor.hidden = !active;
+            this.expertButton.hidden = !active;
+            this.jsonWrapper.hidden = active && !this.expertOpen;
+            if (!active) {
+                this.jsonWrapper.hidden = false;
+            }
+            this.expertButton.setAttribute("aria-expanded", this.expertOpen ? "true" : "false");
+            this.expertButton.textContent = this.expertOpen
+                ? this.$el.dataset.expertHideLabel || "Zeileneditor übernehmen"
+                : this.$el.dataset.expertShowLabel || "JSON bearbeiten";
+        },
+        renderRows() {
+            this.list.replaceChildren();
+            this.options.forEach((option, index) => {
+                const row = this.rowTemplate.content.firstElementChild.cloneNode(true);
+                row.setAttribute("aria-label", `Option ${index + 1}`);
+                const label = row.querySelector("[data-option-label]");
+                const slug = row.querySelector("[data-option-slug]");
+                const active = row.querySelector("[data-option-active]");
+                label.value = option.label;
+                slug.value = option.slug;
+                active.checked = option.is_active;
+                [label, slug].forEach((input) => input.addEventListener("input", () => this.syncFromRows()));
+                active.addEventListener("change", () => this.syncFromRows());
+                row.querySelector("[data-option-remove]").addEventListener("click", () => {
+                    row.remove();
+                    this.syncFromRows();
+                });
+                this.list.append(row);
+            });
+            this.updateUsageWarning();
+        },
+        syncFromRows() {
+            this.options = Array.from(this.list.querySelectorAll("[data-option-row]")).map((row) => ({
+                slug: row.querySelector("[data-option-slug]").value.trim(),
+                label: row.querySelector("[data-option-label]").value.trim(),
+                is_active: row.querySelector("[data-option-active]").checked,
+            }));
+            this.textarea.value = JSON.stringify(this.options, null, 2);
+            this.updateUsageWarning();
+        },
+        addOption() {
+            this.options.push({ slug: "", label: "", is_active: true });
+            this.renderRows();
+            this.syncFromRows();
+            this.list.querySelector("[data-option-row]:last-child [data-option-label]")?.focus();
+        },
+        updateUsageWarning() {
+            if (!this.warning) return;
+            const current = new Set(
+                Array.from(this.list.querySelectorAll("[data-option-slug]"))
+                    .map((input) => input.value.trim())
+                    .filter(Boolean),
+            );
+            const removed = Array.from(this.usedSlugs).filter((slug) => !current.has(slug)).sort();
+            this.warning.hidden = removed.length === 0;
+            this.warning.textContent = removed.length
+                ? `${this.$el.dataset.usedWarningPrefix || "Verwendete Slugs:"} ${removed.join(", ")}`
+                : "";
+        },
+        toggleExpert() {
+            if (!this.expertOpen) {
+                this.expertOpen = true;
+                this.hideJsonError();
+                this.updateVisibility();
+                this.textarea.focus();
+                return;
+            }
+            const parsed = this.parseTextarea();
+            if (parsed === null) {
+                this.showJsonError();
+                return;
+            }
+            this.options = parsed;
+            this.expertOpen = false;
+            this.hideJsonError();
+            this.renderRows();
+            this.updateVisibility();
+        },
+        showJsonError() {
+            if (!this.jsonError) return;
+            this.jsonError.textContent =
+                this.$el.dataset.invalidJsonMessage || "Das JSON ist ungültig und kann nicht übernommen werden.";
+            this.jsonError.hidden = false;
+        },
+        hideJsonError() {
+            if (!this.jsonError) return;
+            this.jsonError.hidden = true;
+            this.jsonError.textContent = "";
+        },
+    }));
 });

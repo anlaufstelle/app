@@ -37,7 +37,11 @@
             </div>
             {% endif %}
             {% for field in form %}
+            {% if field.name == "options_json" %}
+            {% include "core/config/field_templates/partials/options_editor.html" %}
+            {% else %}
             {% include "components/_form_field.html" %}
+            {% endif %}
             {% endfor %}
         </div>
 

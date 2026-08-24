@@ -1,0 +1,65 @@
+{% load core_tags i18n %}
+{% comment %}
+Progressive Enhancement fuer FieldTemplate.options_json (#1875): Das echte
+Textarea bleibt immer im DOM, traegt den einzigen POST-Namen und ist ohne JS
+sichtbar. Die Alpine-Komponente blendet den Zeileneditor nur fuer select /
+multi_select ein und synchronisiert jede Aenderung zurueck ins Textarea.
+{% endcomment %}
+<div x-data="fieldTemplateOptionsEditor"
+     data-used-option-slugs="{{ form.used_option_slugs_attr }}"
+     data-used-warning-prefix="{% trans 'Achtung: Diese verwendeten Slugs würden entfernt oder umbenannt:' %}"
+     data-invalid-json-message="{% trans 'Das JSON ist noch ungültig und kann nicht in Zeilen übernommen werden.' %}"
+     data-expert-show-label="{% trans 'JSON bearbeiten' %}"
+     data-expert-hide-label="{% trans 'Zeileneditor übernehmen' %}">
+    <div data-options-editor hidden data-testid="options-editor" class="rounded-[10px] border border-subtle bg-canvas p-4 space-y-3">
+        <div>
+            <p class="text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft">{% trans "Auswahloptionen" %}</p>
+            <p class="mt-1 text-[12px] text-ink-muted">{% trans "Bezeichnung ist der sichtbare Text. Der stabile Slug wird in Bestandsdaten und Bedingungen gespeichert." %}</p>
+        </div>
+        <div data-options-list class="space-y-3"></div>
+        <button type="button" data-options-add class="inline-flex min-h-[44px] items-center px-3 py-2 btn-secondary">
+            {% trans "Option hinzufügen" %}
+        </button>
+        <p data-options-usage-warning hidden role="alert" class="rounded-md border border-orange-300 bg-orange-50 p-3 text-[13px] text-orange-900"></p>
+    </div>
+
+    <button type="button" data-options-expert-toggle data-testid="options-expert-toggle" hidden
+            aria-expanded="false" class="mt-2 inline-flex min-h-[44px] items-center text-[13px] font-medium text-accent hover:underline">
+        {% trans "JSON bearbeiten" %}
+    </button>
+
+    {% if field.errors %}
+    {# Muss ausserhalb des per JavaScript versteckten Textarea-Wrappers bleiben. #}
+    <ul data-options-field-errors id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
+        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <div data-options-json-wrapper>
+        <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
+            {{ field.label }}{% if field.field.required %} *{% endif %}
+        </label>
+        {% aria_field field %}
+        {% if field.help_text %}<p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>{% endif %}
+    </div>
+    <p data-options-json-error hidden role="alert" class="mt-1 text-sm text-red-600"></p>
+
+    <template data-options-row-template>
+        <div data-option-row role="group" class="grid grid-cols-1 gap-3 rounded-md border border-subtle bg-surface p-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
+            <label class="text-[12px] font-medium text-ink-soft">
+                {% trans "Bezeichnung" %}
+                <input type="text" data-option-label class="mt-1 w-full rounded-md border-subtle text-sm">
+            </label>
+            <label class="text-[12px] font-medium text-ink-soft">
+                {% trans "Slug" %}
+                <input type="text" data-option-slug pattern="[a-z0-9]+(?:-[a-z0-9]+)*" class="mt-1 w-full rounded-md border-subtle font-mono text-sm">
+            </label>
+            <label class="inline-flex min-h-[44px] items-center gap-2 text-[13px] text-ink">
+                <input type="checkbox" data-option-active class="rounded border-subtle">
+                {% trans "Aktiv" %}
+            </label>
+            <button type="button" data-option-remove class="inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-[13px] font-medium text-red-700 hover:underline">
+                {% trans "Entfernen" %}
+            </button>
+        </div>
+    </template>
+</div>
