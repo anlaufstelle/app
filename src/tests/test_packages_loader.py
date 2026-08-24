@@ -94,6 +94,17 @@ class TestCreate:
         assert doc_type.fields.get(field_template=dauer).field_group.slug == "basisdaten"
         assert doc_type.fields.get(field_template__slug="notiz").field_group is None
 
+    def test_missing_presentation_keys_use_model_defaults_for_new_type(self, facility):
+        raw = _raw()
+        for key in ("icon", "color", "sort_order"):
+            del raw["document_types"][0][key]
+
+        report = _load(facility, raw)
+
+        doc_type = DocumentType.objects.get(slug="kontakt")
+        assert report.document_types.created == ["kontakt"]
+        assert (doc_type.icon, doc_type.color, doc_type.sort_order) == ("", "", 0)
+
     def test_second_run_is_completely_unchanged(self, facility):
         raw = _raw()
         raw["document_types"][0]["conditions"] = [
@@ -140,6 +151,34 @@ class TestCreate:
 
 @pytest.mark.django_db
 class TestUpdate:
+    def test_missing_presentation_keys_leave_local_values_untouched(self, facility):
+        raw = _raw()
+        _load(facility, raw)
+        doc_type = DocumentType.objects.get(slug="kontakt")
+        doc_type.icon = "heart"
+        doc_type.color = "rose"
+        doc_type.sort_order = 41
+        doc_type.save(update_fields=["icon", "color", "sort_order"])
+        for key in ("icon", "color", "sort_order"):
+            del raw["document_types"][0][key]
+
+        report = _load(facility, raw)
+
+        doc_type.refresh_from_db()
+        assert report.document_types.unchanged == ["kontakt"]
+        assert (doc_type.icon, doc_type.color, doc_type.sort_order) == ("heart", "rose", 41)
+
+    def test_explicit_presentation_values_overwrite_local_values(self, facility):
+        raw = _raw()
+        _load(facility, raw)
+        raw["document_types"][0].update(icon="heart", color="rose", sort_order=9)
+
+        report = _load(facility, raw)
+
+        doc_type = DocumentType.objects.get(slug="kontakt")
+        assert report.document_types.updated == ["kontakt"]
+        assert (doc_type.icon, doc_type.color, doc_type.sort_order) == ("heart", "rose", 9)
+
     def test_mutable_attributes_are_updated(self, facility):
         _load(facility, _raw())
         raw = _raw()

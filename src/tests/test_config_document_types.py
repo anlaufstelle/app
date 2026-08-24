@@ -173,6 +173,18 @@ class TestCreate:
         assert response.status_code == 302
         assert DocumentType.objects.get(name="Strichlisten-Kontakt").tally_enabled is True
 
+    def test_create_persists_icon_color_and_sort_order(self, client, admin_user):
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(name="Sichtbarer Typ", icon="heart", color="rose", sort_order="7"),
+        )
+
+        assert response.status_code == 302
+        doc_type = DocumentType.objects.get(name="Sichtbarer Typ")
+        assert (doc_type.icon, doc_type.color, doc_type.sort_order) == ("heart", "rose", 7)
+
     def test_empty_post_re_renders_without_500(self, client, admin_user):
         client.force_login(admin_user)
         response = client.post(reverse("core:config_doctype_create"), {})
@@ -225,6 +237,25 @@ class TestUpdate:
         dt.refresh_from_db()
         assert dt.name == "Gewandelt"
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(dt.pk)).exists()
+
+    def test_icon_color_and_sort_order_are_editable(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Darstellung",
+            icon="users",
+            color="indigo",
+            sort_order=1,
+        )
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
+            _valid_post(name="Darstellung", icon="heart", color="rose", sort_order="9"),
+        )
+
+        assert response.status_code == 302
+        dt.refresh_from_db()
+        assert (dt.icon, dt.color, dt.sort_order) == ("heart", "rose", 9)
 
     def test_update_persists_tally_opt_in(self, client, admin_user, facility):
         dt = DocumentType.objects.create(facility=facility, name="Strichlisten-Kontakt")
@@ -494,6 +525,13 @@ class TestFormFieldOrderAndHints:
         entity_pos = order.index("entity_type")
         for governed in ("system_type", "min_contact_stage", "retention_days"):
             assert entity_pos < order.index(governed), f"{governed} steht vor entity_type: {order}"
+
+    def test_presentation_fields_are_available_with_a_contrast_hint(self, facility):
+        form = DocumentTypeForm(facility=facility)
+
+        assert {"icon", "color", "sort_order"} <= form.fields.keys()
+        assert "Kontrast" in str(form.fields["color"].help_text)
+        assert form.fields["sort_order"].widget.input_type == "number"
 
     def test_system_type_help_text_names_the_entity_restriction(self, facility):
         help_text = str(DocumentTypeForm(facility=facility).fields["system_type"].help_text)

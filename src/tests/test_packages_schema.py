@@ -660,6 +660,35 @@ class TestSemanticRules:
         assert template.is_encrypted is False
 
 
+class TestDocumentTypePresentationTriState:
+    """Lokale Fach-UI-Werte duerfen beim Laden alter Pakete nicht verschwinden (#1886)."""
+
+    def test_missing_keys_yield_key_missing_sentinel(self) -> None:
+        raw = _valid_raw()
+        for key in ("icon", "color", "sort_order"):
+            del raw["document_types"][0][key]
+
+        doc_type = parse_package(raw).document_types[0]
+
+        assert doc_type.icon is KEY_MISSING
+        assert doc_type.color is KEY_MISSING
+        assert doc_type.sort_order is KEY_MISSING
+
+    def test_explicit_values_are_preserved(self) -> None:
+        doc_type = parse_package(_valid_raw()).document_types[0]
+
+        assert doc_type.icon == "users"
+        assert doc_type.color == "indigo"
+        assert doc_type.sort_order == 0
+
+    @pytest.mark.parametrize("key", ["icon", "color", "sort_order"])
+    def test_explicit_null_is_rejected(self, key: str) -> None:
+        raw = _valid_raw()
+        raw["document_types"][0][key] = None
+
+        assert f"document_types[0].{key}" in _paths(raw)
+
+
 class TestNumberRangeTriState:
     """``min_value``/``max_value`` als echtes Tri-State (Refs #1934, Muster
     ``tally_enabled``): Schlüssel fehlt ⇒ :data:`KEY_MISSING` (der Loader lässt

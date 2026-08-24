@@ -293,6 +293,50 @@ class TestDocumentTypeCrud:
         finally:
             _delete_doctype(page, base_url, pk)
 
+    def test_icon_color_and_sort_order_roundtrip(self, authenticated_page, base_url):
+        """Manuell zuerst auf Port 8844 gepruefter Darstellungs-Workflow (#1886)."""
+        page = authenticated_page
+        errors = track_console_errors(page)
+        name = _cfg_name("DT-PRESENTATION")
+        pk = None
+
+        try:
+            page.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
+            expect(page.locator("input#id_icon")).to_have_attribute("type", "text")
+            expect(page.locator("input#id_color")).to_have_attribute("type", "text")
+            expect(page.locator("input#id_sort_order")).to_have_attribute("type", "number")
+            expect(page.locator("form:has(#id_name)")).to_contain_text("Kontrast")
+
+            page.fill("input#id_name", name)
+            page.fill("input#id_icon", "heart")
+            page.fill("input#id_color", "rose")
+            page.fill("input#id_sort_order", "17")
+            page.locator(FORM_SUBMIT).click()
+            page.wait_for_url(_DETAIL_RE)
+            match = _DETAIL_RE.search(page.url)
+            assert match, f"Detail-URL nicht erkannt: {page.url}"
+            pk = match.group(1)
+
+            page.locator('[data-testid="doctype-edit-link"]').click()
+            page.wait_for_url(re.compile(rf"/config/document-types/{pk}/edit/$"))
+            expect(page.locator("input#id_icon")).to_have_value("heart")
+            expect(page.locator("input#id_color")).to_have_value("rose")
+            expect(page.locator("input#id_sort_order")).to_have_value("17")
+
+            page.fill("input#id_icon", "map-pin")
+            page.fill("input#id_color", "blue")
+            page.fill("input#id_sort_order", "2")
+            page.locator(FORM_SUBMIT).click()
+            page.wait_for_url(re.compile(rf"/config/document-types/{pk}/$"))
+            page.locator('[data-testid="doctype-edit-link"]').click()
+            expect(page.locator("input#id_icon")).to_have_value("map-pin")
+            expect(page.locator("input#id_color")).to_have_value("blue")
+            expect(page.locator("input#id_sort_order")).to_have_value("2")
+            assert errors == [], f"Konsolen-Errors im Darstellungsformular: {errors}"
+        finally:
+            if pk:
+                _delete_doctype(page, base_url, pk)
+
     def test_tally_opt_in_controls_zeitstrom_visibility(self, authenticated_page, staff_page, base_url):
         """Die fachliche Config-UI schaltet einen geeigneten Typ in der Strichliste ein und aus."""
         admin = authenticated_page
