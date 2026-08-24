@@ -448,6 +448,32 @@ class TestReadmeQuickStart:
             "durchreichen — kein ausgelieferter Festschluessel (Refs #1977)."
         )
 
+    def test_dev_compose_healthcheck_treats_http_200_as_liveness(self) -> None:
+        """Refs #1982: Die Dev-DB wird mit der Bootstrap-Rolle initialisiert.
+
+        Sie ist erwartungsgemaess Superuser und laesst ``/health/`` deshalb
+        ``degraded`` melden. Das allgemeine Image muss diesen Betriebsbefund
+        weiter streng behandeln; nur die Dev-Compose prueft reine Liveness.
+        """
+        healthcheck = self._compose()["services"]["web"]["healthcheck"]
+        test = healthcheck.get("test", [])
+        assert test[:2] == ["CMD", "python"], (
+            "Dev-web muss den Image-Healthcheck mit einem echten Python-HTTP-Check ueberschreiben (Refs #1982)."
+        )
+        command = " ".join(test[2:])
+        assert "urllib.request.urlopen('http://localhost:8000/health/'" in command, (
+            "Der Dev-Liveness-Check muss /health/ wirklich per HTTP erreichen (Refs #1982)."
+        )
+        assert "json.loads" not in command and "status') == 'ok'" not in command, (
+            "Nur Dev darf HTTP 200 trotz status=degraded als live behandeln; "
+            "die strenge Statusauswertung bleibt im Image (Refs #1982)."
+        )
+
+        dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+        assert "json.loads(body).get('status') == 'ok'" in dockerfile, (
+            "Der allgemeine Image-/Produktions-Healthcheck darf fuer #1982 nicht aufgeweicht werden."
+        )
+
     def test_built_css_survives_the_source_bind_mount(self) -> None:
         artifact = "/opt/anlaufstelle/static/css/styles.css"
         dockerfile = Path("Dockerfile").read_text(encoding="utf-8")

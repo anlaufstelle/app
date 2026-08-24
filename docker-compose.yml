@@ -57,6 +57,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Das Dev-Postgres initialisiert POSTGRES_USER als Bootstrap-Superuser.
+    # /health/ meldet den erwarteten RLS-Bypass deshalb als "degraded"; fuer
+    # den lokalen Stack pruefen wir reine Liveness. Das Image und die
+    # Produktions-Compose behalten ihren strengen status=ok-Check (Refs #1982).
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read()"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   tailwind:
     image: node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
