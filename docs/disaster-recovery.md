@@ -95,6 +95,16 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 > explizit; Migrationen und Verifikation laufen als kurzlebiger
 > `maintenance`-Service. Ein Restore darf diese Trennung nicht durch einen
 > manuellen `-e … web`-Override rueckgaengig machen.
+>
+> **Nach jeder DB-Passwortrotation (Refs #1964):**
+> [`scripts/ops/rotate-db-passwords.sh`](../scripts/ops/rotate-db-passwords.sh)
+> ersetzt `POSTGRES_PASSWORD`, `POSTGRES_ADMIN_PASSWORD` und
+> `POSTGRES_BOOTSTRAP_PASSWORD` gemeinsam. Noch im selben Wartungsfenster alle
+> drei Werte im host-getrennten Eskrow/Passwortmanager ersetzen und den alten
+> Satz als widerrufen markieren. Sonst scheitert die Notfall-Strecke am
+> vorhandenen Cluster mit einem veralteten Login, obwohl das Backup selbst
+> intakt ist. Das Ausführungs- und Negativtest-Protokoll darf nur Rollenname,
+> Zeitpunkt und Exit-Code enthalten — niemals einen alten oder neuen Wert.
 
 ### 4.3 Optional
 
@@ -102,7 +112,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 
 ### 4.4 Wo die Schlüssel liegen sollten — Eskrow
 
-> **Stand: noch nicht verdrahtet — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **muss** mindestens `BACKUP_ENCRYPTION_KEY` + die vollständige `ENCRYPTION_KEYS`-Historie an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust.
+> **Stand: noch nicht verdrahtet — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **müssen** mindestens `BACKUP_ENCRYPTION_KEY`, die vollständige `ENCRYPTION_KEYS`-Historie und der **aktuelle** Satz `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD`/`POSTGRES_BOOTSTRAP_PASSWORD` an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust. Die DB-Passwörter sind auf einem fabrikfrischen Cluster zwar technisch neu wählbar; für Diagnose, Rotation und Recovery am vorhandenen Cluster muss der Eskrow aber dem aktuellen Login-Stand entsprechen.
 
 ---
 

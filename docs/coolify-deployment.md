@@ -101,6 +101,16 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 > nicht dauerhaft; ein gezieltes `docker compose run --rm maintenance …`
 > aktiviert ihn nur fuer den jeweiligen Operator-Job. Keine Admin-Secrets als
 > manuelle Service-Variable am Coolify-Web-Service nachtragen.
+>
+> **DB-Passwortrotation (Refs #1964):**
+> Eine Aenderung nur in der Coolify-Oberflaeche aktualisiert bestehende
+> PostgreSQL-Rollen nicht. Ist die mode-600-Datei `/opt/anlaufstelle/.env` die
+> verbindliche Secret-Quelle des Compose-Projekts, den getesteten Ablauf aus
+> [Ops-Runbook „DB-Passwortrotation"](ops-runbook.md#db-passwortrotation-alle-drei-rollen)
+> verwenden. Verwaltet Coolify die Werte ausserhalb dieser Datei, dieselbe
+> Transaktion/Reihenfolge aus dem Runbook nutzen und die drei neuen Werte vor
+> dem Consumer-Neustart auch dort setzen; niemals Admin-Secrets am `web`-
+> Service hinterlegen. Nach Erfolg den externen Passwort-Eskrow aktualisieren.
 
 **Pflicht:**
 - `DJANGO_SECRET_KEY` — frisch generiert (`python -c "import secrets; print(secrets.token_urlsafe(50))"`)

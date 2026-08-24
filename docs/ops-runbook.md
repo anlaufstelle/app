@@ -1406,6 +1406,90 @@ docker compose -f docker-compose.prod.yml exec web python manage.py check_db_rol
 # Admin-Rolle rolsuper=False, rolbypassrls=True (Exit-Code 0)
 ```
 
+### DB-Passwortrotation (alle drei Rollen)
+
+Refs #1964. Eine Aenderung
+der `.env` allein rotiert **kein** Passwort in einem bestehenden PostgreSQL-
+Cluster: [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
+laeuft nur beim ersten Initialisieren eines leeren Volumes und legt fehlende
+Rollen an. Es bleibt bewusst init-only; ein `ALTER ROLE`-Zweig dort waere ein
+halb wirksames Versprechen, weil er bei jedem Bestandsvolume uebersprungen wird.
+
+Der kanonische, getestete Weg ist:
+
+```bash
+cd /opt/anlaufstelle./scripts/ops/rotate-db-passwords.sh
+
+# dev/demo verwenden ihre eigene Compose-/Env-Datei:
+COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \./scripts/ops/rotate-db-passwords.sh
+```
+
+**Voraussetzungen:** Wartungsfenster ankündigen; sicherstellen, dass gerade kein
+Backup-/Restore-Job laeuft; einen aktuellen, verifizierten Sicherungsstand haben;
+`.env` muss mode `600` (oder strenger) besitzen. Das Skript braucht Docker-
+Zugriff und `openssl`, gibt aber **kein** Passwort auf stdout/stderr oder in
+Prozessargumenten aus. Es erzeugt drei voneinander unabhaengige Zufallswerte und
+setzt intern als Bootstrap-Superuser eine Transaktion nach diesem Muster ab:
+
+```sql
+BEGIN;
+ALTER ROLE "anlaufstelle" PASSWORD '<neues App-Passwort>';
+ALTER ROLE "anlaufstelle_admin" PASSWORD '<neues Admin-Passwort>';
+ALTER ROLE "postgres" PASSWORD '<neues Bootstrap-Passwort>';
+COMMIT;
+```
+
+Die Platzhalter sind **kein** Kopierbefehl. Passwoerter nie in Shell-History,
+Ticket oder Runbook-Protokoll schreiben; das Skript uebergibt SQL und Login-
+Geheimnisse nur ueber stdin. Ein manueller Notfalllauf muss dieselbe Reihenfolge
+und eine einzige Transaktion verwenden.
+
+#### Reihenfolge und vollstaendige Consumer-Liste
+
+| Schritt/Consumer | Rolle | Was die Rotation tut |
+|---|---|---|
+| `web` | App (`POSTGRES_PASSWORD`) | Vor der DB-Aenderung stoppen; nach Env-Tausch mit neuem Passwort starten und Health abwarten. |
+| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Zusammen mit `web` stoppen/starten, damit kein Retention-/Audit-Job mit altem Login neu verbindet. In Dev/Demo ohne `cron` entfaellt nur dieser Schritt. |
+| `maintenance` / [`docker-migrate.sh`](../docker-migrate.sh) | Admin | Nach DB-Recreate als kurzlebiger One-Shot mit der neuen Env ausfuehren. Das prueft `check_db_roles`, Migrationen und die Ownership-Normalisierung aus #1085. |
+| `db` | Bootstrap (`POSTGRES_BOOTSTRAP_PASSWORD`) | Alle drei Rollen in einer Transaktion aendern; danach den Container mit unveraendertem Datenvolume **recreaten**, damit auch seine Container-Env nicht das alte Bootstrap-Secret behaelt. |
+| [`scripts/ops/backup.sh`](../scripts/ops/backup.sh) | Admin | Kein Daemon-Neustart: das Host-Skript liest `.env` bei jedem neuen Lauf. Deshalb waehrend der Rotation nicht parallel starten. |
+| Restore-Strecke (`restore.sh`, `restore-drill.sh`, [Disaster-Recovery](disaster-recovery.md)) | Bootstrap/Admin | Kein dauerhafter Consumer; jeder spaetere Lauf liest die neue `.env`. Eskrow/Notfallunterlagen muessen unmittelbar nachgezogen werden. |
+
+Das Skript schreibt zuerst eine mode-identische Env-Datei im selben Verzeichnis,
+stoppt dann die dauerhaften Consumer, rotiert die DB, testet alle **neuen**
+Logins, tauscht `.env` atomar, recreated `db`, faehrt den echten Migrate-Pfad
+und startet `web`/`cron`. Erst danach folgen drei Negativtests ueber TCP/
+Passwortauthentifizierung. Erwartete Schlusszeilen (Rollennamen duerfen
+abweichen, Geheimnisse erscheinen nie):
+
+```text
+[db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle wird mit Auth-Fehler abgewiesen.
+[db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle_admin wird mit Auth-Fehler abgewiesen.
+[db-password-rotation] Negativtest gruen: alter Login fuer Rolle postgres wird mit Auth-Fehler abgewiesen.
+[db-password-rotation] Rotation abgeschlossen. Backup-/Restore-Jobs lesen beim naechsten Lauf die neue Env-Datei.
+```
+
+Ein blosses „Verbindung fehlgeschlagen" zaehlt nicht: Der Negativtest akzeptiert
+nur PostgreSQLs `password authentication failed`; zuvor wurden dieselben drei
+Rollen mit den neuen Passwoertern erfolgreich getestet. Schlaegt irgendein
+Schritt fehl, setzt der Exit-Trap DB-Passwoerter und `.env` auf die alten Werte
+zurueck, recreated `db` bei Bedarf und startet die vorher gestoppten Consumer.
+Eine Warnung **„Rollback war unvollstaendig"** ist ein harter Betriebsalarm:
+keinen weiteren Neustart ausloesen, bis DB und `.env` manuell abgeglichen sind.
+
+**Bootstrap-Entscheidung:** `postgres` bleibt `LOGIN`, wird aber mitrotiert und
+bleibt ausserhalb von `web`, `cron` und normalen Operator-Jobs. `NOLOGIN` wird
+bewusst **nicht** gesetzt: dieselbe Rolle ist der einzige kontrollierte Pfad fuer
+eine spaetere Rotation und die fabrikfrische Restore-Strecke. Ohne einen zweiten
+Superuser liesse sie sich nach `NOLOGIN` nicht aus der Anwendung heraus sicher
+reaktivieren; das verschöbe statt verringerte das Notfallrisiko.
+
+**Unmittelbarer Abschluss:** Die drei neuen DB-Passwoerter im getrennten
+Passwort-Eskrow und in der DR-Kontaktkarte ersetzen, alten Stand als widerrufen
+markieren und erst dann das Wartungsfenster schliessen. Ein alter Eskrow-Stand
+laesst Backup-/Restore- und Notfallbefehle am vorhandenen Cluster genau dann
+scheitern, wenn die lokale `.env` nicht mehr erreichbar ist.
+
 ### 9.1 Symptome eines RLS-Problems
 
 - UI zeigt leere Listen, obwohl in der DB Zeilen vorhanden sind.

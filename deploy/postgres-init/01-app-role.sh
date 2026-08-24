@@ -42,6 +42,12 @@
 #
 # Refs #671, #863, #1026, #1039, ADR-005, ADR-017, ADR-020.
 #
+# Bewusst INIT-ONLY (Refs #1964): Bestehende Rollen werden hier nicht per
+# ``ALTER ROLE ... PASSWORD`` an die aktuelle Env angeglichen, weil der
+# Postgres-Init-Hook bei vorhandenem Volume gar nicht erneut laeuft. Ein solcher
+# Zweig waere nur scheinbar idempotent. Fuer Bestandscluster gilt stattdessen
+# ``scripts/ops/rotate-db-passwords.sh`` + Ops-Runbook § DB-Passwortrotation.
+#
 # Variablen aus dem Container-Env:
 #   POSTGRES_USER       — Bootstrap (=postgres), Superuser
 #   POSTGRES_DB         — Datenbank-Name
