@@ -9,6 +9,7 @@ Templates weiterhin ``{% compute_diff entry user %}`` aufrufen koennen.
 from django import template
 
 from core.services.events.history_diff import (
+    ATTACHMENT_PLACEHOLDER,
     ENCRYPTED_PLACEHOLDER,
     RESTRICTED_PLACEHOLDER,
     compute_event_diff,
@@ -18,7 +19,12 @@ register = template.Library()
 
 # Re-Export fuer Rueckwaertskompatibilitaet (Tests/Aufrufer importieren die
 # Platzhalter teils aus diesem Modul).
-__all__ = ["ENCRYPTED_PLACEHOLDER", "RESTRICTED_PLACEHOLDER", "compute_diff"]
+__all__ = [
+    "ATTACHMENT_PLACEHOLDER",
+    "ENCRYPTED_PLACEHOLDER",
+    "RESTRICTED_PLACEHOLDER",
+    "compute_diff",
+]
 
 
 @register.simple_tag

@@ -1567,6 +1567,12 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
 
+#### Historien-Diff: Entschlüsselung für berechtigte Rollen
+
+Die Ereignis-Detailseite zeigt unter **Änderungshistorie** die gespeicherten Vorher-/Nachher-Stände. Verschlüsselte Felder werden dort zur Anzeigezeit entschlüsselt, sofern die aktuelle Rolle das Feld nach Dokumentations- und Feld-Sensibilität sehen darf: Assistenz bis **Normal**, Fachkraft bis **Erhöht**, Leitung und Anwendungsbetreuung bis **Hoch**. Oberhalb der Rollengrenze steht weiterhin `[Eingeschränkt]`; ohne angemeldeten Nutzer bleibt ein verschlüsselter Wert fail-closed als `●●●●●` maskiert. Datei-Marker erscheinen immer als `[Anhang]`, nie als technische ID.
+
+Die Darstellung gilt **rückwirkend für den gesamten Bestand**. Damit können berechtigte Rollen auch frühere Werte lesen, die später berichtigt oder entfernt wurden. Dieser Zugriff wurde vor der Umsetzung ausdrücklich für dieselben Rollen freigegeben, die die Werte bereits in Detail-/Bearbeitungsansicht und Art.-15-Auskunft sehen dürfen (#1961); berücksichtigen Sie ihn in Rollenvergabe, Datenschutz-Folgenabschätzung und Auskunftsprozess. Ein redigierter Lösch-Historieneintrag enthält keinen alten Wert und zeigt deshalb nur `– (gelöscht)`.
+
 #### Umfang der Auskunft (Art. 15)
 
 Die Auskunft wird in der Personenansicht als **JSON** (maschinenlesbar, Art. 20) oder als **PDF** (lesbares Dokument) erzeugt. Beide Formate decken denselben Umfang ab; das PDF fasst zusammen, lässt aber keine Kategorie aus. Auslösen dürfen die Rollen mit Export-Recht (Leitung, Anwendungsbetreuung); der Aufruf verlangt eine Re-Authentifizierung (Sudo-Mode), ist ratelimitiert und wird selbst im Audit-Log protokolliert.

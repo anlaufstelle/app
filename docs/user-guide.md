@@ -234,7 +234,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 2. Klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder und klicken Sie auf **Speichern**.
 
-> **Hinweis:** Bearbeitungen werden in der Änderungshistorie des Ereignisses protokolliert. Frühere Versionen bleiben im Verlauf sichtbar.
+> **Hinweis:** Bearbeitungen werden in der Änderungshistorie des Ereignisses protokolliert. Frühere Versionen bleiben im Verlauf sichtbar. Auch verschlüsselte Vorher-Werte werden dort im Klartext angezeigt, wenn Ihre Rolle das Feld sehen darf; höher eingestufte Felder bleiben als „[Eingeschränkt]“ geschützt.
 
 > **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
 

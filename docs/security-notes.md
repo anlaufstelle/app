@@ -2033,6 +2033,33 @@ Der **Precache** `anlaufstelle-v38` bleibt aus demselben Ticket-Entscheid ebenfa
 
 ---
 
+## Historien-Diff: Entschlüsselung für Berechtigte (Issue #1961)
+
+### Ausgangslage
+
+`EventHistory.data_before` und `data_after` enthalten für verschlüsselte dynamische Felder Fernet-Hüllen. [`history_diff.py`](../src/core/services/events/history_diff.py) maskierte solche Werte bislang rollenunabhängig als `●●●●●`, obwohl die vorgeschaltete Sensibilitätsprüfung schon zwischen erlaubten und gesperrten Feldern unterscheidet. Das machte den fachlichen Vorher-/Nachher-Vergleich gerade für HIGH-Felder wertlos. Außerdem erzeugt Fernet bei jedem Speichern einen neuen Token: Ein unveränderter Klarwert erschien deshalb als Änderung, weil nur die Ciphertexte verglichen wurden.
+
+### Entscheidung und Freigabe
+
+Seit #1961 gilt bei der Anzeige die feste Vorrangregel `restricted > Datei-Marker > berechtigt ? Klartext : ●●●●● > Rohwert`. `may_decrypt` ist nur wahr, wenn ein Nutzerkontext vorliegt und [`user_can_see_field`](../src/core/services/compliance/sensitivity.py) das Feld für dessen Rolle freigibt. `user=None` bleibt damit fail-closed; eine fehlende Schlüsselkonfiguration wird weiterhin laut als `EncryptionKeyMissing` propagiert. Datei-Marker werden vor jedem Krypto-Aufruf erkannt und ausschließlich als `[Anhang]` angezeigt. Bei erlaubten Update-Feldern vergleicht der Service die entschlüsselten Werte, sodass reines Fernet-Rauschen keine Diff-Zeile mehr erzeugt.
+
+Die Maintainer-Freigabe vom 23.08.2026 umfasst ausdrücklich zwei Folgen: Art.-9-Klartext erscheint damit in einem Oberflächenkontext, der ihn zuvor maskierte, und die Änderung wirkt ohne Stichtag auf **alle** vorhandenen Historieneinträge. Die Begründung ist die bereits bestehende Rollenparität: Dieselben berechtigten Rollen lesen denselben Wert in Ereignis-Detail und -Formular; der Art.-15-Export entschlüsselte historische Werte schon vorher ausdrücklich, weil ein Fernet-Token keine Auskunft ist ([`client/export.py`](../src/core/services/client/export.py)). Die alte Historien-Maskierung widersprach dieser Grenze, ohne eine eigene Autorisierungsregel zu bilden.
+
+### Grenzen
+
+- Ein berechtigter Nutzer sieht auch **frühere** Angaben, die später berichtigt wurden. Das ist Zweck der Änderungshistorie und muss in Rollenvergabe und Datenschutz-Folgenabschätzung berücksichtigt werden.
+- Ein redigierter Soft-Delete speichert keine alten Werte; berechtigte Rollen sehen dort `– (gelöscht)`, nicht rekonstruierte Inhalte.
+- Restricted- und No-User-Pfade entschlüsseln auch zum Vergleich nicht. Weil ihre Ciphertexte roh verglichen werden, kann dort weiter eine maskierte Diff-Zeile für einen unveränderten Wert erscheinen; Vertraulichkeit hat in diesen Pfaden Vorrang vor kosmetischer Rauschunterdrückung.
+- Die Detailseite lädt weiterhin die vollständige Historie. Die zusätzliche Entschlüsselung ist linear in Einträge × verschlüsselte Felder; bei auffälligen realen Verläufen muss die Historie begrenzt oder lazy geladen werden.
+
+### Verifikation
+
+- [`test_history_diffs.py`](../src/tests/test_history_diffs.py) — vollständige Rollen-/Sensibilitätsmatrix, fail-closed ohne Nutzer, Datei-Marker, korrupter Token, fehlender Schlüssel, redigierter Delete und Fernet-Rauschunterdrückung.
+- Release-Handtest zu #1961 in [`dev/hand-checks.md`](dev/hand-checks.md) — sichtbare Rollen-Gegenprobe auf der Ereignis-Detailseite.
+- Serielle Browser-Abdeckung ist als Folge #1983 für `release-0.85` eingeplant; sie wird bewusst nicht parallel zu diesem Security-Commit gestartet.
+
+---
+
 ## `Activity.summary` führt Pseudonym und Titel im Klartext (Issue #1944)
 
 **Status seit #1972: behoben.** Das Modell besitzt keine `summary`-Spalte mehr. Der Zeitstrahl zeigt Pseudonyme und Titel weiterhin, liest sie aber erst zur Anzeigezeit aus dem referenzierten Ziel.

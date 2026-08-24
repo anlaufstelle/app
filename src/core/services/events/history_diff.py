@@ -1,24 +1,29 @@
 """Diff- und Maskierungs-Logik fuer EventHistory-Eintraege (Refs #1162).
 
 Sicherheitskritischer Service-Layer: berechnet aus einem ``EventHistory``-
-Eintrag die anzuzeigenden Diff-Felder und maskiert dabei verschluesselte
-(``encrypted``) und fuer die Rolle nicht sichtbare (``restricted``) Werte.
+Eintrag die anzuzeigenden Diff-Felder, entschluesselt sie fuer berechtigte
+Rollen und maskiert fuer die Rolle nicht sichtbare (``restricted``) Werte.
 
-Vorrang der Maskierung (byte-identisch zur frueheren Templatetag-Logik):
+Vorrang der Darstellung (Refs #1961):
 
-    restricted  >  encrypted  >  Roh-/Formatierungswert
+    restricted  >  Datei-Marker  >  berechtigt ? Klartext : encrypted
+                >  Roh-/Formatierungswert
 
 ``restricted`` greift ausschliesslich, wenn ein ``user`` uebergeben wird und
 :func:`core.services.compliance.user_can_see_field` False liefert (die
 effektive Feld-Sensitivity uebersteigt das Rollen-Maximum). Ohne ``user`` ist
-nie etwas restricted.
+nie etwas restricted, verschluesselte Werte bleiben dann aber fail-closed
+maskiert.
 
 Der Templatetag ``core.templatetags.history_tags.compute_diff`` ist nur noch
 ein duenner Wrapper um :func:`compute_event_diff`.
 """
 
 from core.services.compliance import user_can_see_field
+from core.services.dynamic_data import is_file_marker
+from core.services.file_vault.encryption import safe_decrypt
 
+ATTACHMENT_PLACEHOLDER = "[Anhang]"
 ENCRYPTED_PLACEHOLDER = "●●●●●"
 RESTRICTED_PLACEHOLDER = "[Eingeschränkt]"
 
@@ -48,12 +53,16 @@ def _build_slug_info(event):
     return slug_info
 
 
-def _display_value(value, is_encrypted, *, restricted=False):
-    """Return display string for a value, masking encrypted or restricted fields."""
+def _display_value(value, is_encrypted, *, restricted=False, may_decrypt=False):
+    """Return a display value using the security precedence from #1961."""
     if restricted:
         return RESTRICTED_PLACEHOLDER
+    if is_file_marker(value):
+        return ATTACHMENT_PLACEHOLDER
     if is_encrypted:
-        return ENCRYPTED_PLACEHOLDER
+        if not may_decrypt:
+            return ENCRYPTED_PLACEHOLDER
+        value = safe_decrypt(value, default=ENCRYPTED_PLACEHOLDER)
     if value is None:
         return "–"
     if isinstance(value, bool):
@@ -101,24 +110,42 @@ def _resolve_slug_info(entry):
 
 
 def _field_masking(slug, slug_info, user, doc_type_sensitivity):
-    """Return the (encrypted, restricted) masking flags for a single slug."""
+    """Return ``(encrypted, restricted, may_decrypt)`` for a single slug."""
     encrypted = _is_encrypted(slug, slug_info)
     restricted = _is_restricted(slug, slug_info, user, doc_type_sensitivity)
-    return encrypted, restricted
+    may_decrypt = user is not None and not restricted
+    return encrypted, restricted, may_decrypt
 
 
 def _diff_create(data_after, slug_info, user, doc_type_sensitivity):
     """Build diff entries for a CREATE action: [{label, value}]."""
     fields = []
     for slug, value in data_after.items():
-        encrypted, restricted = _field_masking(slug, slug_info, user, doc_type_sensitivity)
+        encrypted, restricted, may_decrypt = _field_masking(slug, slug_info, user, doc_type_sensitivity)
         fields.append(
             {
                 "label": _resolve_label(slug, slug_info),
-                "value": _display_value(value, encrypted, restricted=restricted),
+                "value": _display_value(
+                    value,
+                    encrypted,
+                    restricted=restricted,
+                    may_decrypt=may_decrypt,
+                ),
             }
         )
     return fields
+
+
+def _comparison_value(value, encrypted, may_decrypt):
+    """Normalize permitted encrypted values before update comparison.
+
+    Fernet emits a fresh token on every save. Comparing ciphertext would make
+    an unchanged field look modified. Restricted and no-user paths deliberately
+    retain the raw comparison and therefore never decrypt as a side effect.
+    """
+    if encrypted and may_decrypt and not is_file_marker(value):
+        return safe_decrypt(value, default=ENCRYPTED_PLACEHOLDER)
+    return value
 
 
 def _diff_update(data_before, data_after, slug_info, user, doc_type_sensitivity):
@@ -128,25 +155,39 @@ def _diff_update(data_before, data_after, slug_info, user, doc_type_sensitivity)
     for slug in all_keys:
         old_val = data_before.get(slug)
         new_val = data_after.get(slug)
-        if old_val == new_val:
+        encrypted, restricted, may_decrypt = _field_masking(slug, slug_info, user, doc_type_sensitivity)
+        old_comparison = _comparison_value(old_val, encrypted, may_decrypt)
+        new_comparison = _comparison_value(new_val, encrypted, may_decrypt)
+        if old_comparison == new_comparison:
             continue
-        encrypted, restricted = _field_masking(slug, slug_info, user, doc_type_sensitivity)
+        old_was_decrypted = encrypted and may_decrypt and not is_file_marker(old_val)
+        new_was_decrypted = encrypted and may_decrypt and not is_file_marker(new_val)
         fields.append(
             {
                 "label": _resolve_label(slug, slug_info),
-                "old_value": _display_value(old_val, encrypted, restricted=restricted),
-                "new_value": _display_value(new_val, encrypted, restricted=restricted),
+                "old_value": _display_value(
+                    old_comparison if old_was_decrypted else old_val,
+                    encrypted and not old_was_decrypted,
+                    restricted=restricted,
+                    may_decrypt=may_decrypt,
+                ),
+                "new_value": _display_value(
+                    new_comparison if new_was_decrypted else new_val,
+                    encrypted and not new_was_decrypted,
+                    restricted=restricted,
+                    may_decrypt=may_decrypt,
+                ),
                 "changed": True,
             }
         )
     return fields
 
 
-def _redacted_delete_value(encrypted, restricted):
+def _redacted_delete_value(encrypted, restricted, may_decrypt):
     """Display value for a single field of a redacted soft-delete (no original values stored)."""
     if restricted:
         return RESTRICTED_PLACEHOLDER
-    if encrypted:
+    if encrypted and not may_decrypt:
         return ENCRYPTED_PLACEHOLDER
     return "– (gelöscht)"
 
@@ -160,20 +201,25 @@ def _diff_delete(data_before, slug_info, user, doc_type_sensitivity):
     fields = []
     if data_before.get("_redacted"):
         for slug in data_before.get("fields", []):
-            encrypted, restricted = _field_masking(slug, slug_info, user, doc_type_sensitivity)
+            encrypted, restricted, may_decrypt = _field_masking(slug, slug_info, user, doc_type_sensitivity)
             fields.append(
                 {
                     "label": _resolve_label(slug, slug_info),
-                    "value": _redacted_delete_value(encrypted, restricted),
+                    "value": _redacted_delete_value(encrypted, restricted, may_decrypt),
                 }
             )
     else:
         for slug, value in data_before.items():
-            encrypted, restricted = _field_masking(slug, slug_info, user, doc_type_sensitivity)
+            encrypted, restricted, may_decrypt = _field_masking(slug, slug_info, user, doc_type_sensitivity)
             fields.append(
                 {
                     "label": _resolve_label(slug, slug_info),
-                    "value": _display_value(value, encrypted, restricted=restricted),
+                    "value": _display_value(
+                        value,
+                        encrypted,
+                        restricted=restricted,
+                        may_decrypt=may_decrypt,
+                    ),
                 }
             )
     return fields

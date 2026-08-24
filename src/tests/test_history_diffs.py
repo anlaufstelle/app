@@ -1,10 +1,12 @@
 """Tests for EventHistory diff template tag (compute_diff)."""
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 
 from core.models import EventHistory
 from core.services.events import create_event, soft_delete_event, update_event
+from core.services.file_vault import EncryptionKeyMissing
 from core.templatetags.history_tags import ENCRYPTED_PLACEHOLDER, RESTRICTED_PLACEHOLDER, compute_diff
 
 
@@ -139,7 +141,7 @@ class TestComputeDiffDelete:
 
 @pytest.mark.django_db
 class TestComputeDiffEncrypted:
-    """Test that encrypted fields are masked in diffs."""
+    """Fail-closed path: without a user, encrypted fields stay masked."""
 
     def test_encrypted_field_masked_on_create(self, facility, staff_user, doc_type_crisis):
         event = create_event(
@@ -253,7 +255,7 @@ class TestComputeDiffSensitivity:
         assert result["fields"][0]["value"] == RESTRICTED_PLACEHOLDER
 
     def test_compute_diff_shows_sensitive_fields_for_lead(self, facility, doc_type_crisis):
-        """Lead user can see all sensitivity levels — values should not be masked by sensitivity."""
+        """Lead users see the decrypted value of permitted HIGH fields."""
         from core.models.user import User
 
         lead_user = User.objects.create_user(
@@ -271,9 +273,8 @@ class TestComputeDiffSensitivity:
 
         entry = EventHistory.objects.filter(event=event, action=EventHistory.Action.CREATE).first()
 
-        # Lead can see HIGH fields, but field is still encrypted → encrypted placeholder
         result = compute_diff(entry, user=lead_user)
-        assert result["fields"][0]["value"] == ENCRYPTED_PLACEHOLDER
+        assert result["fields"][0]["value"] == "Vertraulich"
 
     def test_compute_diff_masks_sensitive_update_for_staff(self, facility, staff_user, doc_type_crisis):
         """Update diffs must also mask sensitive fields for staff."""
@@ -309,6 +310,58 @@ class TestComputeDiffSensitivity:
         result = compute_diff(entry, user=staff_user)
         assert len(result["fields"]) == 1
         assert result["fields"][0]["value"] == RESTRICTED_PLACEHOLDER
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("role", "sensitivity", "expected"),
+    [
+        ("assistant", "normal", "Klartext"),
+        ("assistant", "elevated", RESTRICTED_PLACEHOLDER),
+        ("assistant", "high", RESTRICTED_PLACEHOLDER),
+        ("staff", "normal", "Klartext"),
+        ("staff", "elevated", "Klartext"),
+        ("staff", "high", RESTRICTED_PLACEHOLDER),
+        ("lead", "normal", "Klartext"),
+        ("lead", "elevated", "Klartext"),
+        ("lead", "high", "Klartext"),
+    ],
+)
+def test_encrypted_history_role_sensitivity_matrix(facility, role, sensitivity, expected):
+    """Assistenz/Fachkraft/Leitung × NORMAL/ELEVATED/HIGH (Refs #1961)."""
+    from core.models import DocumentType, DocumentTypeField, FieldTemplate
+    from core.models.user import User
+
+    user = User.objects.create_user(
+        username=f"history-{role}-{sensitivity}",
+        role=role,
+        facility=facility,
+    )
+    document_type = DocumentType.objects.create(
+        facility=facility,
+        name=f"Historie {role} {sensitivity}",
+        sensitivity=DocumentType.Sensitivity.NORMAL,
+    )
+    field = FieldTemplate.objects.create(
+        facility=facility,
+        name=f"Historienwert {role} {sensitivity}",
+        field_type=FieldTemplate.FieldType.TEXT,
+        sensitivity=sensitivity,
+        is_encrypted=True,
+    )
+    DocumentTypeField.objects.create(document_type=document_type, field_template=field)
+    event = create_event(
+        facility=facility,
+        user=user,
+        document_type=document_type,
+        occurred_at=timezone.now(),
+        data_json={field.slug: "Klartext"},
+    )
+    entry = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
+
+    result = compute_diff(entry, user=user)
+
+    assert result["fields"][0]["value"] == expected
 
 
 @pytest.mark.django_db
@@ -469,13 +522,13 @@ _RAW_VALUES = {
 
 
 def _expected_value(slug, raw, *, with_user):
-    """Erwarteter maskierter Anzeigewert nach der Vorrang-Regel restricted>encrypted>raw."""
+    """Erwarteter Wert nach restricted > file > permitted/plaintext > raw."""
     is_encrypted = slug in (_SLUG_ENC_RESTR, _SLUG_ENC_OPEN)
     is_high = slug in (_SLUG_ENC_RESTR, _SLUG_PLAIN_RESTR)
     if with_user and is_high:
         return RESTRICTED_PLACEHOLDER
     if is_encrypted:
-        return ENCRYPTED_PLACEHOLDER
+        return str(raw) if with_user else ENCRYPTED_PLACEHOLDER
     return str(raw)
 
 
@@ -553,7 +606,7 @@ class TestComputeDiffMaskingMatrix:
             if with_user and is_high:
                 expected = RESTRICTED_PLACEHOLDER
             elif is_encrypted:
-                expected = ENCRYPTED_PLACEHOLDER
+                expected = "– (gelöscht)" if with_user else ENCRYPTED_PLACEHOLDER
             else:
                 expected = "– (gelöscht)"
             assert by_label[label] == expected
@@ -586,3 +639,116 @@ class TestComputeDiffMaskingMatrix:
         for slug, raw in _RAW_VALUES.items():
             label = slug.replace("-", " ").title()
             assert by_label[label] == _expected_value(slug, raw, with_user=with_user)
+
+    def test_file_marker_uses_attachment_placeholder_before_decryption(
+        self, facility, staff_user, doc_type_masking_matrix
+    ):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_masking_matrix,
+            occurred_at=timezone.now(),
+            data_json={_SLUG_ENC_OPEN: "vorher"},
+        )
+        create_entry = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
+        marker = {"__file__": True, "attachment_id": "00000000-0000-0000-0000-000000000001"}
+        entry = EventHistory.objects.create(
+            event=event,
+            changed_by=staff_user,
+            action=EventHistory.Action.CREATE,
+            data_after={_SLUG_ENC_OPEN: marker},
+            field_metadata=create_entry.field_metadata,
+        )
+
+        result = compute_diff(entry, user=staff_user)
+
+        assert result["fields"] == [{"label": "Enc Open", "value": "[Anhang]"}]
+
+    def test_corrupt_encrypted_token_stays_masked(self, facility, staff_user, doc_type_masking_matrix):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_masking_matrix,
+            occurred_at=timezone.now(),
+            data_json={_SLUG_ENC_OPEN: "vorher"},
+        )
+        create_entry = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
+        entry = EventHistory.objects.create(
+            event=event,
+            changed_by=staff_user,
+            action=EventHistory.Action.CREATE,
+            data_after={_SLUG_ENC_OPEN: {"__encrypted__": True, "value": "kaputt"}},
+            field_metadata=create_entry.field_metadata,
+        )
+
+        result = compute_diff(entry, user=staff_user)
+
+        assert result["fields"][0]["value"] == ENCRYPTED_PLACEHOLDER
+
+    def test_missing_encryption_key_propagates(self, facility, staff_user, doc_type_masking_matrix):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_masking_matrix,
+            occurred_at=timezone.now(),
+            data_json={_SLUG_ENC_OPEN: "vorher"},
+        )
+        entry = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
+
+        with (
+            override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=""),
+            pytest.raises(EncryptionKeyMissing),
+        ):
+            compute_diff(entry, user=staff_user)
+
+    def test_unchanged_permitted_encrypted_value_is_not_a_diff(self, facility, doc_type_masking_matrix):
+        from core.models.user import User
+
+        lead_user = User.objects.create_user(
+            username="testlead_hist_unchanged",
+            role=User.Role.LEAD,
+            facility=facility,
+        )
+        event = create_event(
+            facility=facility,
+            user=lead_user,
+            document_type=doc_type_masking_matrix,
+            occurred_at=timezone.now(),
+            data_json=dict(_RAW_VALUES),
+        )
+        update_event(event, lead_user, dict(_RAW_VALUES))
+        entry = EventHistory.objects.filter(event=event, action=EventHistory.Action.UPDATE).first()
+
+        result = compute_diff(entry, user=lead_user)
+
+        assert result["fields"] == []
+
+    def test_changed_permitted_encrypted_value_decrypts_each_side_once(
+        self, facility, staff_user, doc_type_masking_matrix, monkeypatch
+    ):
+        from core.services.events import history_diff
+
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_masking_matrix,
+            occurred_at=timezone.now(),
+            data_json={_SLUG_ENC_OPEN: "Alt"},
+        )
+        update_event(event, staff_user, {_SLUG_ENC_OPEN: "Neu"})
+        entry = EventHistory.objects.filter(event=event, action=EventHistory.Action.UPDATE).first()
+        original_safe_decrypt = history_diff.safe_decrypt
+        calls = 0
+
+        def counting_safe_decrypt(value, default):
+            nonlocal calls
+            calls += 1
+            return original_safe_decrypt(value, default)
+
+        monkeypatch.setattr(history_diff, "safe_decrypt", counting_safe_decrypt)
+
+        result = compute_diff(entry, user=staff_user)
+
+        assert result["fields"][0]["old_value"] == "Alt"
+        assert result["fields"][0]["new_value"] == "Neu"
+        assert calls == 2
