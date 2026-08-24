@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 21:02+0200\n"
+"POT-Creation-Date: 2026-08-24 22:36+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11759,3 +11759,53 @@ msgstr "Kein Standard-Dokumentationstyp"
 
 msgid "Sicherheit"
 msgstr "Sicherheit"
+
+msgid "Achtung: Diese verwendeten Slugs würden entfernt oder umbenannt:"
+msgstr "Achtung: Diese verwendeten Slugs würden entfernt oder umbenannt:"
+
+msgid "Auswahloptionen"
+msgstr "Auswahloptionen"
+
+msgid "Bezeichnung ist der sichtbare Text. Der stabile Slug wird in Bestandsdaten und Bedingungen gespeichert."
+msgstr "Bezeichnung ist der sichtbare Text. Der stabile Slug wird in Bestandsdaten und Bedingungen gespeichert."
+
+msgid "Das JSON ist noch ungültig und kann nicht in Zeilen übernommen werden."
+msgstr "Das JSON ist noch ungültig und kann nicht in Zeilen übernommen werden."
+
+#, python-format
+msgid "Der Aktiv-Status von Option %(index)s muss true oder false sein."
+msgstr "Der Aktiv-Status von Option %(index)s muss true oder false sein."
+
+msgid "JSON bearbeiten"
+msgstr "JSON bearbeiten"
+
+msgid "Jeder Options-Slug darf nur einmal vorkommen."
+msgstr "Jeder Options-Slug darf nur einmal vorkommen."
+
+#, python-format
+msgid "Option %(index)s braucht eine Bezeichnung."
+msgstr "Option %(index)s braucht eine Bezeichnung."
+
+#, python-format
+msgid "Option %(index)s braucht einen gültigen Slug aus a–z, 0–9 und Bindestrichen."
+msgstr "Option %(index)s braucht einen gültigen Slug aus a–z, 0–9 und Bindestrichen."
+
+#, python-format
+msgid "Option %(index)s enthält unbekannte Schlüssel."
+msgstr "Option %(index)s enthält unbekannte Schlüssel."
+
+#, python-format
+msgid "Option %(index)s muss ein JSON-Objekt sein."
+msgstr "Option %(index)s muss ein JSON-Objekt sein."
+
+msgid "Option hinzufügen"
+msgstr "Option hinzufügen"
+
+msgid "Optionen müssen eine JSON-Liste sein."
+msgstr "Optionen müssen eine JSON-Liste sein."
+
+msgid "Optionen sind nur für Auswahl- und Mehrfachauswahl-Felder zulässig."
+msgstr "Optionen sind nur für Auswahl- und Mehrfachauswahl-Felder zulässig."
+
+msgid "Zeileneditor übernehmen"
+msgstr "Zeileneditor übernehmen"
