@@ -84,7 +84,7 @@ case "$*" in
     printf 'healthy\n'; exit 0 ;;
 esac
 
-if [[ "$*" == *"exec -T db"* && "$*" == *"psql -h 127.0.0.1"* ]]; then
+if [[ "$*" == *"exec -T db"* && "$*" == *"psql -h db"* ]]; then
   IFS= read -r supplied_password
   user="${*: -2:1}"
   case "$supplied_password" in
@@ -171,6 +171,12 @@ def test_rotation_is_atomic_and_exercises_every_consumer(tmp_path: Path) -> None
         assert secret not in result.stdout
         assert secret not in result.stderr
         assert secret not in log
+
+
+def test_login_proofs_use_scram_network_path_not_trusted_loopback() -> None:
+    body = SCRIPT.read_text(encoding="utf-8")
+    assert "psql -h db" in body
+    assert "psql -h 127.0.0.1" not in body
 
 
 def test_failed_negative_login_test_rolls_db_and_env_back(tmp_path: Path) -> None:

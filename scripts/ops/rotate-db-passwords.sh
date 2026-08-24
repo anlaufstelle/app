@@ -193,7 +193,7 @@ login_succeeds() {
     printf '%s\n' "$password" | "${COMPOSE[@]}" exec -T db sh -ceu '
         IFS= read -r PGPASSWORD
         export PGPASSWORD
-        exec psql -h 127.0.0.1 -U "$1" -d "$2" -tAc "SELECT 1"
+        exec psql -h db -U "$1" -d "$2" -tAc "SELECT 1"
     ' sh "$user" "$POSTGRES_DB" >/dev/null 2>&1
 }
 
@@ -203,7 +203,7 @@ old_login_is_rejected() {
         printf '%s\n' "$password" | "${COMPOSE[@]}" exec -T db sh -ceu '
             IFS= read -r PGPASSWORD
             export PGPASSWORD
-            exec psql -h 127.0.0.1 -U "$1" -d "$2" -tAc "SELECT 1"
+            exec psql -h db -U "$1" -d "$2" -tAc "SELECT 1"
         ' sh "$user" "$POSTGRES_DB" 2>&1
     )" || status=$?
     [[ "$status" -ne 0 ]] || return 1

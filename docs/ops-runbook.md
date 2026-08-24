@@ -1464,9 +1464,11 @@ und eine einzige Transaktion verwenden.
 Das Skript schreibt zuerst eine mode-identische Env-Datei im selben Verzeichnis,
 stoppt dann die dauerhaften Consumer, rotiert die DB, testet alle **neuen**
 Logins, tauscht `.env` atomar, recreated `db`, faehrt den echten Migrate-Pfad
-und startet `web`/`cron`. Erst danach folgen drei Negativtests ueber TCP/
-Passwortauthentifizierung. Erwartete Schlusszeilen (Rollennamen duerfen
-abweichen, Geheimnisse erscheinen nie):
+und startet `web`/`cron`. Erst danach folgen drei Negativtests ueber den
+Compose-Netzwerkhost `db` und damit PostgreSQLs SCRAM-Passwortauthentifizierung.
+Der Loopback-Pfad im DB-Container ist dafuer unzulaessig, weil offizielle
+PostgreSQL-Volumes dort eine `trust`-Regel besitzen koennen. Erwartete
+Schlusszeilen (Rollennamen duerfen abweichen, Geheimnisse erscheinen nie):
 
 ```text
 [db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle wird mit Auth-Fehler abgewiesen.
