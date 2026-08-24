@@ -77,6 +77,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-043](043-suchraum-volltextsuche.md) | Suchraum der Volltextsuche — keine Such-Protokollierung, offener Fall-Rahmen | Accepted |
 | [ADR-044](044-fall-loeschpfad.md) | Fall-Löschpfad — Papierkorb, gestaffelter Antrag, Frist und Redaktion (supersedes ADR-039 § 6) | Accepted |
 | [ADR-045](045-personen-merge.md) | Duplikat-Merge für Personen — gestaffelter Antrag, Tombstone, Undo bis Fristablauf | Accepted |
+| [ADR-046](046-in-app-badges-statt-notification-modell.md) | In-App-Badges statt Notification-Modell | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
