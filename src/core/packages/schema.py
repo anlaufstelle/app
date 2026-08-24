@@ -311,9 +311,12 @@ class DocumentTypeDef:
     sensitivity: str = DocumentType.Sensitivity.NORMAL.value
     min_contact_stage: str | None = None
     report_key: str | None = None
-    icon: str = ""
-    color: str = ""
-    sort_order: int = 0
+    # Refs #1886: fehlende Darstellungs-Schluessel in aelteren Paketen lassen
+    # lokale Fach-UI-Anpassungen unangetastet. Leere Strings bzw. 0 bleiben
+    # ausdrueckliche Werte und koennen den Bestand bewusst zuruecksetzen.
+    icon: str | _KeyMissing = KEY_MISSING
+    color: str | _KeyMissing = KEY_MISSING
+    sort_order: int | _KeyMissing = KEY_MISSING
     groups: tuple[GroupDef, ...] = ()
     field_refs: tuple[FieldRefDef, ...] = ()
     conditions: tuple[ConditionDef, ...] | None = None
@@ -378,6 +381,13 @@ def _str_value(data: dict[str, Any], key: str, path: str, errors: Errors, *, def
     return value
 
 
+def _key_missing_str_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> str | _KeyMissing:
+    """Zeichenkette mit ``KEY_MISSING`` fuer E13-konformen Ruecksync (#1886)."""
+    if key not in data:
+        return KEY_MISSING
+    return _str_value(data, key, path, errors)
+
+
 def _required_name(data: dict[str, Any], key: str, path: str, errors: Errors) -> str:
     """Pflicht-Freitext (Name/Label): Zeichenkette mit sichtbarem Inhalt."""
     if key not in data:
@@ -413,6 +423,13 @@ def _int_value(
         errors.append((_join(path, key), f"Wert muss >= {minimum} sein."))
         return default
     return value
+
+
+def _key_missing_int_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> int | _KeyMissing:
+    """Ganzzahl mit ``KEY_MISSING`` fuer E13-konformen Ruecksync (#1886)."""
+    if key not in data:
+        return KEY_MISSING
+    return _int_value(data, key, path, errors)
 
 
 def _tri_state_int_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> int | None | _KeyMissing:
@@ -774,9 +791,9 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
     tally_enabled = _bool_value(data, "tally_enabled", path, errors) if "tally_enabled" in data else None
     min_contact_stage = _optional_enum_value(data, "min_contact_stage", path, errors, _CONTACT_STAGES)
     report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
-    icon = _str_value(data, "icon", path, errors)
-    color = _str_value(data, "color", path, errors)
-    sort_order = _int_value(data, "sort_order", path, errors)
+    icon = _key_missing_str_value(data, "icon", path, errors)
+    color = _key_missing_str_value(data, "color", path, errors)
+    sort_order = _key_missing_int_value(data, "sort_order", path, errors)
 
     # ``system_type`` steuert Bann-Logik und Krisen-Highlight (E4, Refs #1850:
     # die Berichts-Zuordnung ist raus) — beides Ereignis-Semantik. An

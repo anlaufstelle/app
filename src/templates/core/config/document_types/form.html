@@ -66,6 +66,9 @@
             {% include "components/_form_field.html" with field=form.min_contact_stage %}
             {% include "components/_form_field.html" with field=form.retention_days %}
             {% include "components/_form_field.html" with field=form.description %}
+            {% include "components/_form_field.html" with field=form.icon %}
+            {% include "components/_form_field.html" with field=form.color %}
+            {% include "components/_form_field.html" with field=form.sort_order %}
             {% include "components/_form_field.html" with field=form.is_active %}
             {% include "components/_form_field.html" with field=form.tally_enabled %}
             {% if is_edit %}

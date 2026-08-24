@@ -249,12 +249,16 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
             "min_contact_stage",
             "retention_days",
             "description",
+            "icon",
+            "color",
+            "sort_order",
             "is_active",
             "tally_enabled",
         ]
         widgets = {
             "retention_days": forms.NumberInput(attrs={"min": 1}),
             "description": forms.Textarea(attrs={"rows": 3}),
+            "sort_order": forms.NumberInput(),
         }
 
     def __init__(self, *args, facility=None, **kwargs):
@@ -265,6 +269,10 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # den Schlüssel (Bestand) nicht am „Pflichtfeld"-Fehler scheitert;
         # ``clean_entity_type`` liefert den Bestandsdefault EVENT nach.
         self.fields["entity_type"].required = False
+        # Kompatibel mit bestehenden Ohne-JS-/API-Posts, die das neue Feld aus
+        # #1886 noch nicht senden: Anlage nutzt den Modell-Default, Bearbeitung
+        # behaelt die vorhandene Position statt sie still auf 0 zu setzen.
+        self.fields["sort_order"].required = False
         # Neuobjekt: facility aus dem Scope an die Instanz binden, damit
         # form.save() (Service) den richtigen Mandanten schreibt.
         if facility is not None and self.instance.facility_id is None:
@@ -289,6 +297,22 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
                 "„Gehört ausdrücklich in keinen Bericht“."
             ),
         )
+        self._append_help_text(
+            "icon",
+            _("Technischer Icon-Name, zum Beispiel users, heart oder file-text. Leer verwendet den Standard."),
+        )
+        self._append_help_text(
+            "color",
+            _(
+                "Farbname für Kennzeichnungen, zum Beispiel green, rose oder blue. "
+                "Bitte auf ausreichenden Kontrast zur Schrift achten."
+            ),
+        )
+        self._append_help_text(
+            "sort_order",
+            _("Kleinere Zahlen erscheinen in Auswahllisten und Übersichten weiter oben."),
+        )
+
         # Final-Review H (Refs #1058): beide Felder werden ausschliesslich im
         # Ereignis-Pfad ausgewertet (``enforce_document_type_retention`` zaehlt
         # ``Event``; ``min_contact_stage`` greift nur in der Ereignis-Anlage).
@@ -320,6 +344,10 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
                 "Der Typ und alle Pflichtfelder müssen für die jeweilige Rolle sichtbar sein."
             ),
         )
+
+    def clean_sort_order(self) -> int:
+        value = self.cleaned_data.get("sort_order")
+        return self.instance.sort_order if value is None else value
 
     # -- Template-Brücke für die Alpine-Komponente (Refs #1757) --------------
     #

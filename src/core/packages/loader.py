@@ -263,10 +263,16 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
         "system_type": doc_def.system_type,
         "sensitivity": doc_def.sensitivity,
         "min_contact_stage": doc_def.min_contact_stage,
-        "icon": doc_def.icon,
-        "color": doc_def.color,
-        "sort_order": doc_def.sort_order,
     }
+    # Refs #1886, E13: Aeltere Pakete ohne Darstellungs-Schluessel duerfen
+    # lokale Werte aus der Fach-UI nicht bei jedem Ruecksync auf Modell-
+    # Defaults zuruecksetzen. Explizites "" bzw. 0 bleibt dagegen ein Wert.
+    if doc_def.icon is not KEY_MISSING:
+        desired["icon"] = doc_def.icon
+    if doc_def.color is not KEY_MISSING:
+        desired["color"] = doc_def.color
+    if doc_def.sort_order is not KEY_MISSING:
+        desired["sort_order"] = doc_def.sort_order
     # Refs #1637, E13: Fehlt der Schlüssel, bleibt ein im Admin gepflegtes Opt-in erhalten.
     if doc_def.tally_enabled is not None:
         desired["tally_enabled"] = doc_def.tally_enabled
