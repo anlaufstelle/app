@@ -30,7 +30,17 @@ services:
 
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    # ./src:/app verdeckt den Image-Entrypoint. Dev startet deshalb bewusst
+    # ohne ihn und kopiert zuerst das im Image gebaute CSS aus dem nicht
+    # gemounteten Pfad in den Quellbaum (Refs #1977).
+    entrypoint: []
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        cp /opt/anlaufstelle/static/css/styles.css /app/static/css/styles.css
+        exec python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./src:/app
     ports:
@@ -41,6 +51,9 @@ services:
       POSTGRES_DB: anlaufstelle
       POSTGRES_USER: anlaufstelle
       POSTGRES_PASSWORD: anlaufstelle
+      # Kein Dev-Festschluessel: Compose bricht vor dem Start mit einer klaren
+      # Meldung ab, wenn der Aufrufer keinen Key bereitstellt (Refs #1977).
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?Set ENCRYPTION_KEY before running Docker Compose}"
     depends_on:
       db:
         condition: service_healthy

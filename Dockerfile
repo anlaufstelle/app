@@ -73,8 +73,11 @@ COPY src/ ./
 # APP_VERSION-ENV-Wert (samt ERROR-Log-Rauschen vor Refs #1504).
 COPY pyproject.toml /pyproject.toml
 
-# Copy compiled Tailwind CSS
-COPY --from=node /build/src/static/css/styles.css static/css/styles.css
+# Copy compiled Tailwind CSS. Die zweite Ablage ausserhalb /app bleibt auch
+# dann sichtbar, wenn die Dev-Compose den Quellbaum auf /app bind-mountet. Der
+# Dev-Start kopiert dieses Artefakt in den gemounteten Baum (Refs #1977).
+COPY --from=node /build/src/static/css/styles.css /opt/anlaufstelle/static/css/styles.css
+RUN mkdir -p static/css && cp /opt/anlaufstelle/static/css/styles.css static/css/styles.css
 
 # App version (set at build time, exposed via /health/)
 ARG APP_VERSION=dev

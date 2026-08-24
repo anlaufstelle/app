@@ -178,35 +178,25 @@ Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app
 
 ### Quick Start
 
-**Prerequisites:** Python 3.14, Node.js 24+, Docker (for the database)
+**Prerequisites:** Docker with Docker Compose and Python 3 to generate a local encryption key
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-python3.14 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-npm install
-make tailwind-build   # builds src/static/css/styles.css (not in the repo)
-make db               # PostgreSQL 18 in a container
+export ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+docker compose up --build -d
 ```
 
-The credentials from `make db` are already the defaults of the dev settings; all that remains is a key for field encryption — without it the seed run aborts:
+Database migrations and seed data deliberately do not run as part of server startup. Create the schema explicitly, then load the demo facility:
 
 ```bash
-export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed
 ```
 
-Database migrations do **not** run on their own in any startup path — the application container starts the server and nothing else (in production the schema is a one-shot job of its own with an advisory lock, see [docs/en/admin-guide.md § 1, Step 4](docs/en/admin-guide.md#step-4-start-the-stack)). So create the schema once, optionally load seed data for a demo facility, and start the development server:
+The styled login screen is then available at [http://localhost:8000](http://localhost:8000). Keep `ENCRYPTION_KEY` safe for later starts; a different key cannot read development data that has already been encrypted. Server output: `docker compose logs -f web`.
 
-```bash
-make migrate
-make seed        # optional
-make run-http    # http://localhost:8000
-```
-
-For Tailwind in watch mode (`make tailwind`), the HTTPS server, and the rest of the toolchain see [CONTRIBUTING.en.md § Development Environment Setup](CONTRIBUTING.en.md#development-environment-setup).
-
-> **Note:** the development Compose file (`docker-compose.yml`) is currently only good for infrastructure (`docker compose up -d db`) — its `web` service does not come up, because it mounts `./src` over the image path `/app` and thereby hides the image's startup script (#1977). The production stack (`docker-compose.prod.yml`) is unaffected; its installation is described in [docs/en/admin-guide.md § 1](docs/en/admin-guide.md).
+For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local Python test runs, and the rest of the toolchain see [CONTRIBUTING.en.md § Development Environment Setup](CONTRIBUTING.en.md#development-environment-setup). The production stack (`docker-compose.prod.yml`) follows the separate migration path in [docs/en/admin-guide.md § 1](docs/en/admin-guide.md).
 
 ### Tech Stack
 
@@ -225,5 +215,5 @@ For Tailwind in watch mode (`make tailwind`), the HTTPS server, and the rest of 
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-22 -->
-<!-- source-hash: bc03f2ab3692131a1f5001015b2cfb3362bbca26 -->
+<!-- translation-date: 2026-08-24 -->
+<!-- source-hash: afbced2f312200562ea47f1c0cfa80f5f31131e3 -->

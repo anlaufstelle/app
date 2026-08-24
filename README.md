@@ -178,35 +178,25 @@ Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufste
 
 ### Quick-Start
 
-**Voraussetzungen:** Python 3.14, Node.js 24+, Docker (für die Datenbank)
+**Voraussetzungen:** Docker mit Docker Compose und Python 3 zum Erzeugen eines lokalen Verschlüsselungsschlüssels
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-python3.14 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-npm install
-make tailwind-build   # baut src/static/css/styles.css (nicht im Repo)
-make db               # PostgreSQL 18 im Container
+export ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+docker compose up --build -d
 ```
 
-Die Zugangsdaten aus `make db` sind bereits die Vorbelegung der Dev-Settings; zu setzen bleibt nur ein Schlüssel für die Feldverschlüsselung — ohne ihn bricht der Seed-Lauf ab:
+Datenbank-Migrationen und Seed-Daten laufen bewusst nicht beim Serverstart mit. Lege das Schema deshalb ausdrücklich an und lade anschließend die Demo-Einrichtung:
 
 ```bash
-export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed
 ```
 
-Datenbank-Migrationen laufen in **keinem** Startpfad von selbst mit — auch der Anwendungs-Container startet ausschließlich den Server (in Produktion ist das Schema ein eigener One-Shot-Job mit Advisory-Lock, siehe [docs/admin-guide.md § 1, Schritt 4](docs/admin-guide.md#schritt-4-stack-starten)). Also einmal das Schema anlegen, optional Seed-Daten für eine Demo-Einrichtung laden und den Entwicklungsserver starten:
+Die gestylte Anmeldemaske ist danach unter [http://localhost:8000](http://localhost:8000) erreichbar. Bewahre `ENCRYPTION_KEY` für weitere Starts sicher auf; ein anderer Schlüssel kann bereits verschlüsselte Entwicklungsdaten nicht lesen. Serverausgabe: `docker compose logs -f web`.
 
-```bash
-make migrate
-make seed        # optional
-make run-http    # http://localhost:8000
-```
-
-Für Tailwind im Watch-Modus (`make tailwind`), den HTTPS-Server und den Rest der Werkzeugkette: [CONTRIBUTING.md § Entwicklungsumgebung einrichten](CONTRIBUTING.md#entwicklungsumgebung-einrichten).
-
-> **Hinweis:** Die Entwicklungs-Compose (`docker-compose.yml`) taugt derzeit nur für die Infrastruktur (`docker compose up -d db`) — ihr `web`-Dienst kommt nicht hoch, weil sie `./src` über den Image-Pfad `/app` mountet und damit dessen Startskript verdeckt (#1977). Der produktive Stack (`docker-compose.prod.yml`) ist davon nicht betroffen; seine Installation beschreibt [docs/admin-guide.md § 1](docs/admin-guide.md).
+Für Tailwind im Watch-Modus (`docker compose --profile tailwind up tailwind`), den lokalen Python-Testlauf und den Rest der Werkzeugkette: [CONTRIBUTING.md § Entwicklungsumgebung einrichten](CONTRIBUTING.md#entwicklungsumgebung-einrichten). Der produktive Stack (`docker-compose.prod.yml`) folgt dem getrennten Migrationspfad aus [docs/admin-guide.md § 1](docs/admin-guide.md).
 
 ### Tech-Stack
 

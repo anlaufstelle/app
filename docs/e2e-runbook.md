@@ -12,7 +12,7 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 
 | # | Schritt | Befehl | Prüfung |
 |---|---------|--------|---------|
-| 1 | PostgreSQL läuft | `sudo docker compose up -d` | `pg_isready -h localhost` → Exit 0 |
+| 1 | PostgreSQL läuft | `sudo docker compose up -d db` | `pg_isready -h localhost` → Exit 0 |
 | 2 | Port 8844 frei | `lsof -i :8844` | Keine Ausgabe |
 | 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i :8844` danach leer |
 | 4 | Venv aktiv | `source .venv/bin/activate` | `which python` zeigt `.venv/` |
@@ -35,7 +35,7 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 | Symptom | Ursache | Fix |
 |---------|---------|-----|
 | `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i :8844` → `kill <PID>` oder `pkill -f 'gunicorn.*8844'` |
-| `RuntimeError: gunicorn...` + DB-Connection-Error | PostgreSQL nicht gestartet | `sudo docker compose up -d` → `pg_isready -h localhost` |
+| `RuntimeError: gunicorn...` + DB-Connection-Error | PostgreSQL nicht gestartet | `sudo docker compose up -d db` → `pg_isready -h localhost` |
 | `psycopg.OperationalError: database "anlaufstelle_e2e" does not exist` | conftest-Erstellung fehlgeschlagen | `PGPASSWORD=anlaufstelle psql -h localhost -U anlaufstelle -c "CREATE DATABASE anlaufstelle_e2e;"` |
 | Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py seed --flush` |
 | Login-Redirect + Rate-Limit-Meldung | Falsches Settings-Modul (Rate-Limit aktiv) | `DJANGO_SETTINGS_MODULE` muss `anlaufstelle.settings.e2e` sein |
