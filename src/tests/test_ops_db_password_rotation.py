@@ -210,3 +210,11 @@ def test_disaster_recovery_requires_escrow_update_after_rotation() -> None:
     assert "POSTGRES_ADMIN_PASSWORD" in dr
     assert "POSTGRES_BOOTSTRAP_PASSWORD" in dr
     assert "Eskrow" in dr and "Rotation" in dr
+
+
+def test_dev_deploy_syncs_rotation_script_to_the_host() -> None:
+    deploy_path = REPO_ROOT / "dev-ops/deploy/deploy-dev.sh"
+    if not deploy_path.exists():
+        pytest.skip("dev-ops/ deploy/deploy-dev.sh nicht im Public-Snapshot")
+    deploy = deploy_path.read_text(encoding="utf-8")
+    assert "scripts/ops/rotate-db-passwords.sh" in deploy
