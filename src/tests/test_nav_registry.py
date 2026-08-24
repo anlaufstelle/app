@@ -62,7 +62,9 @@ NAV_ROUTE_PREFIXES = (
 # +1 Anhang-Loeschung (#1874), +4 Fall-Loeschweg (#1818: Papierkorb, Antrag,
 # Wiederherstellen, Sofort-Tilgung), +3 Duplikat-Merge (#1876: Einstieg/
 # Bestaetigung, Aufheben, Aehnlich-Hinweis im Anlagepfad).
-_EXPECTED_TOTAL_PATTERNS = 161
+# #1885 fuegt genau den Einstellungen-Reiter hinzu; die Baseline bleibt ein
+# Verlust-/Duplikat-Guard fuer alle nachfolgenden URLconf-Aenderungen.
+_EXPECTED_TOTAL_PATTERNS = 162
 
 
 def _prefixed_route_names() -> dict[str, str]:
@@ -108,7 +110,7 @@ def _count_all_patterns(patterns) -> int:
 
 
 def test_total_pattern_count_is_stable():
-    """Smoke-Test (Refs #1835): der ``urls.py``-Package-Split ist reine Verschiebung.
+    """Smoke-Test (Refs #1835/#1885): URL-Leaf-Baseline nach dem neuen Reiter.
 
     Zaehlt rekursiv ueber flache Patterns UND ``include()``-Gruppen — faellt,
     sobald beim Split ein Pattern verloren geht oder sich verdoppelt.

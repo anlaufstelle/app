@@ -20,7 +20,7 @@ import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors
+from ._helpers import enter_sudo_mode, track_console_errors
 
 pytestmark = pytest.mark.e2e
 
@@ -38,6 +38,57 @@ _DETAIL_RE = re.compile(r"/config/document-types/([0-9a-f-]+)/$")
 def _cfg_name(kind: str) -> str:
     """Eindeutiger Wegwerf-Name mit ``E2E-CFG``-Präfix."""
     return f"E2E-CFG-{kind}-{uuid.uuid4().hex[:6]}"
+
+
+class TestFacilitySettingsHub:
+    """Der neue Hub-Reiter nutzt Sudo, Gruppen und den Audit-Service (#1885)."""
+
+    def test_admin_updates_settings_and_sees_minimized_audit(self, authenticated_page, base_url):
+        page = authenticated_page
+        console_errors = track_console_errors(page)
+        enter_sudo_mode(page, base_url)
+
+        page.goto(f"{base_url}/verwaltung/", wait_until="domcontentloaded")
+        expect(page.locator('[data-testid^="subnav-tab-"]')).to_have_count(5)
+        warning_links = page.locator('[data-testid="settings-warnings-list"] a[href="/verwaltung/einstellungen/"]')
+        expect(warning_links).to_have_count(2)
+
+        page.goto(f"{base_url}/verwaltung/einstellungen/", wait_until="domcontentloaded")
+        expect(page.locator("fieldset")).to_have_count(4)
+        expect(page.locator('input[name="facility_full_name"]')).to_be_visible()
+        expect(page.locator('input[name="max_file_size_mb"]')).to_be_visible()
+
+        name_input = page.locator('input[name="facility_full_name"]')
+        size_input = page.locator('input[name="max_file_size_mb"]')
+        original_name = name_input.input_value()
+        original_size = size_input.input_value()
+        changed_name = _cfg_name("SETTINGS")
+        submit = page.locator('form:has(input[name="expected_updated_at"]) button[type="submit"]')
+
+        try:
+            name_input.fill(changed_name)
+            size_input.fill("11" if original_size != "11" else "12")
+            submit.click()
+            page.wait_for_url(re.compile(r"/verwaltung/einstellungen/$"), timeout=10000)
+            expect(page.get_by_text("Einstellungen wurden gespeichert.")).to_be_visible()
+            expect(page.locator('input[name="facility_full_name"]')).to_have_value(changed_name)
+
+            page.goto(f"{base_url}/audit/", wait_until="domcontentloaded")
+            audit_row = page.locator("table tbody tr").filter(has_text="Einstellungen geändert").first
+            expect(audit_row).to_be_visible()
+            expect(audit_row).to_contain_text("facility_full_name")
+            expect(audit_row).to_contain_text("max_file_size_mb")
+            expect(audit_row).not_to_contain_text(changed_name)
+            assert console_errors == []
+        finally:
+            # Die E2E-DB ist suite-weit geteilt: den Seed-Settings-Stand fuer
+            # nachfolgende Tests wiederherstellen. Die Audit-Spur bleibt als
+            # korrekter Nachweis beider echten UI-Mutationen bestehen.
+            page.goto(f"{base_url}/verwaltung/einstellungen/", wait_until="domcontentloaded")
+            page.locator('input[name="facility_full_name"]').fill(original_name)
+            page.locator('input[name="max_file_size_mb"]').fill(original_size)
+            page.locator('form:has(input[name="expected_updated_at"]) button[type="submit"]').click()
+            page.wait_for_url(re.compile(r"/verwaltung/einstellungen/$"), timeout=10000)
 
 
 # ---------------------------------------------------------------------------

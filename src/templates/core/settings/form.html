@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Einstellungen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Einstellungen" %}</h1>
+    <p class="mt-1 mb-4 text-[13px] text-ink-muted">{% trans "Einrichtungsweite Regeln für Sitzungen, Datenschutz, Dateien und Komfort." %}</p>
+
+    {% subnav "verwaltung" %}
+
+    <form method="post" class="space-y-5" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="expected_updated_at" value="{{ form.instance.updated_at.isoformat }}">
+        {% include "core/_form_errors.html" %}
+
+        {% for title, fields in form.grouped_fields %}
+        <fieldset class="card p-5 space-y-4">
+            <legend class="px-1 text-[15px] font-semibold text-ink">{{ title }}</legend>
+            {% for field in fields %}
+            {% include "components/_form_field.html" %}
+            {% endfor %}
+        </fieldset>
+        {% endfor %}
+
+        <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">{% trans "Speichern" %}</button>
+            <a href="{% url 'core:verwaltung_uebersicht' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

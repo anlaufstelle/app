@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 19:04+0200\n"
+"POT-Creation-Date: 2026-08-24 21:02+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11636,3 +11636,27 @@ msgstr "Case opened"
 #, python-format
 msgid "Fall eröffnet: %(title)s"
 msgstr "Case opened: %(title)s"
+
+msgid "Allgemein und Komfort"
+msgstr "General and convenience"
+
+msgid "Anwendungsbetreuung: Einstellungen, Formulare, Felder, Datenübernahme und Zugänge."
+msgstr "Application administration: Settings, forms, fields, data import and access."
+
+msgid "Datenschutz und Fristen"
+msgstr "Data protection and retention periods"
+
+msgid "Einrichtungsweite Regeln für Sitzungen, Datenschutz, Dateien und Komfort."
+msgstr "Facility-wide rules for sessions, data protection, files and convenience."
+
+msgid "Einstellungen wurden gespeichert."
+msgstr "Settings were saved."
+
+msgid "Einstellungen öffnen"
+msgstr "Open settings"
+
+msgid "Kein Standard-Dokumentationstyp"
+msgstr "No default documentation type"
+
+msgid "Sicherheit"
+msgstr "Security"

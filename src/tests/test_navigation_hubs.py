@@ -204,12 +204,12 @@ class TestHubTabRoleFilter:
 
         assert len(_pills(content)) == 6
 
-    def test_verwaltung_subnav_has_four_tabs_for_admin(self, client, admin_user):
-        """F1 (Pakete/Export) ist Folgeticket — der Hub startet mit vier Reitern."""
+    def test_verwaltung_subnav_has_five_tabs_for_admin(self, client, admin_user):
+        """Der Einstellungen-Reiter erweitert den Hub auf fünf Reiter (Refs #1885)."""
         client.force_login(admin_user)
         content = client.get(reverse("core:verwaltung_uebersicht")).content.decode()
 
-        assert len(_pills(content)) == 4
+        assert len(_pills(content)) == 5
 
     def test_lead_overview_body_links_no_admin_only_route(self, client, lead_user):
         """Ergänzt ``test_authz_template_links`` punktuell — der Kennzahlen-Service

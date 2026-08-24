@@ -80,6 +80,7 @@ from core.views.events import (
     TallyIncrementView,
     TallyUndoView,
 )
+from core.views.facility_settings import FacilitySettingsView
 from core.views.hubs import DatenschutzUebersichtView, VerwaltungUebersichtView
 from core.views.import_wizard import (
     ImportAbortView,
@@ -158,6 +159,7 @@ urlpatterns = [
     # Bookmark-Bruch, null Aenderung an Service-Worker-Routen).
     path("datenschutz/", DatenschutzUebersichtView.as_view(), name="datenschutz_uebersicht"),
     path("verwaltung/", VerwaltungUebersichtView.as_view(), name="verwaltung_uebersicht"),
+    path("verwaltung/einstellungen/", FacilitySettingsView.as_view(), name="facility_settings"),
     # Übergabe → in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
     path("uebergabe/", RedirectView.as_view(url="/?view=uebergabe", permanent=True), name="handover"),
     # Redirects (alte URLs)

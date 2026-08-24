@@ -527,6 +527,15 @@ VERWALTUNG_UEBERSICHT = NavItem(
     family=frozenset({"verwaltung_uebersicht"}),
     gates=("is_facility_admin",),
 )
+EINSTELLUNGEN = NavItem(
+    key="facility-settings",
+    label=_("Einstellungen"),
+    url_name="core:facility_settings",
+    family=frozenset({"facility_settings"}),
+    gates=("is_facility_admin",),
+    testid="nav-facility-settings",
+    icon="settings",
+)
 
 DATENSCHUTZ = NavSection(
     key="datenschutz",
@@ -543,16 +552,17 @@ DATENSCHUTZ = NavSection(
         DSGVO_PAKET,
     ),
 )
-# F1 (Konfigurationspakete + Einrichtungs-Export) ist Folgeticket — der Hub
-# startet bewusst mit vier Reitern statt mit zwei leeren Versprechen.
+# F1 (Konfigurationspakete + Einrichtungs-Export) ist Folgeticket. #1885
+# ergaenzt den Einstellungen-Reiter ueber den bestehenden Audit-Service.
 VERWALTUNG = NavSection(
     key="verwaltung",
     label=_("Verwaltung"),
-    subtitle=_("Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge."),
+    subtitle=_("Anwendungsbetreuung: Einstellungen, Formulare, Felder, Datenübernahme und Zugänge."),
     aria_label=_("Verwaltungs-Navigation"),
     testid="subnav-verwaltung",
     tabs=(
         VERWALTUNG_UEBERSICHT,
+        EINSTELLUNGEN,
         KONFIGURATION,
         FELDVORLAGEN,
         DATENIMPORT,

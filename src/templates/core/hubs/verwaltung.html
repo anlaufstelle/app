@@ -6,7 +6,7 @@
 {% block content %}
 <div class="mb-4">
     <h1 class="text-[22px] font-bold text-ink">{% trans "Verwaltung" %}</h1>
-    <p class="text-[13px] text-ink-muted mt-1">{% trans "Anwendungsbetreuung: Formulare, Felder, Datenübernahme und Zugänge." %}</p>
+    <p class="text-[13px] text-ink-muted mt-1">{% trans "Anwendungsbetreuung: Einstellungen, Formulare, Felder, Datenübernahme und Zugänge." %}</p>
 </div>
 
 {% subnav "verwaltung" %}
@@ -34,6 +34,7 @@
         <li class="px-4 py-3 text-[13px] text-ink flex items-start gap-2">
             <span aria-hidden="true" class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></span>
             <span>{{ warning }}</span>
+            <a href="{% url 'core:facility_settings' %}" class="ml-auto inline-flex min-h-[44px] items-center font-medium text-accent hover:underline">{% trans "Einstellungen öffnen" %}</a>
         </li>
         {% endfor %}
     </ul>

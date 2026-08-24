@@ -59,10 +59,10 @@ class DatenschutzUebersichtView(LoginRequiredMixin, UserPassesTestMixin, Templat
 
 
 class VerwaltungUebersichtView(FacilityAdminRequiredMixin, TemplateView):
-    """`/verwaltung/` — Anwendungsbetreuung: Formulare, Felder, Datenübernahme, Zugänge.
+    """`/verwaltung/` — Anwendungsbetreuung: Settings, Formulare, Datenuebernahme, Zugaenge.
 
     Keine Einzelreiter-Weiterleitung nötig: ``is_facility_admin`` sieht alle
-    vier Reiter. Die Seite ersetzt die bisherige, fast leere
+    Reiter. Die Seite ersetzt die bisherige, fast leere
     ``role_facility_admin.html`` — die Rolle bekommt erstmals eine Heimat
     statt zweier halbleerer Seiten (Konzept §4.2).
     """

@@ -504,9 +504,14 @@ EXPECTATIONS = (
     ),
     # ---- facility-admin -----------------------------------------------------
     # Bereichs-Hub „Verwaltung" (Refs #1813, Konzept #1801 §4.1): dasselbe Gate
-    # wie alle vier Reiter (Dokumentationstypen, Feldvorlagen, Datenimport) —
+    # wie alle Reiter (Einstellungen, Dokumentationstypen, Feldvorlagen,
+    # Datenimport) —
     # keine neue Berechtigung, nur eine andere Anordnung derselben Seiten.
     E("core:verwaltung_uebersicht", "facility-admin", get=ADMIN_ONLY),
+    # Refs #1885 / M4-Entscheid E4: einrichtungsweite Sicherheits-, Fristen-
+    # und Datei-Policies sind nur fuer die eigene Anwendungsbetreuung und
+    # durchgehend hinter dem Sudo-Step-up schreibbar.
+    E("core:facility_settings", "facility-admin", get=ADMIN_ONLY, post=ADMIN_ONLY, sudo=True),
     E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
     # Refs #1818: zweiter Papierkorb, gleiches Gate wie der erste.
     E("core:case_trash", "facility-admin", get=ADMIN_ONLY),
