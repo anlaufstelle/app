@@ -729,8 +729,8 @@ Architektur-Guard (`TestKAnonBridgeRedactionParity` in
 liest die Redaktions-Helfer per AST aus `anonymize_client` und verlangt, dass die Bridge jeden
 davon aufruft; ein neuer Helfer im Hard-Pfad reißt den Test, bis er in der Bridge landet oder
 begründet ausgenommen wird. Genau diese Drift hatte den Befund erzeugt: die Bridge rief 2 von
-9 Helfern, ein k-anonymisierter Klient behielt Klartext in `EventHistory`, `DeletionRequest.reason`
-und `Activity.summary`. Zwei Ausnahmen sind bewusst hinterlegt (`_redact_live_events` — die
+9 Helfern; damals behielt ein k-anonymisierter Klient Klartext in `EventHistory`,
+`DeletionRequest.reason` und `Activity.summary` (die Spalte wurde mit #1972 entfernt). Zwei Ausnahmen sind bewusst hinterlegt (`_redact_live_events` — die
 Eintrittsbedingung garantiert `active_events == 0`; `_redact_client_identity` — würde
 `age_cluster` löschen und damit den Quasi-Identifikator zerstören, auf dem die k-Anonymität
 beruht). Sperrvermerke blockieren seit #1756
@@ -2035,61 +2035,26 @@ Der **Precache** `anlaufstelle-v38` bleibt aus demselben Ticket-Entscheid ebenfa
 
 ## `Activity.summary` führt Pseudonym und Titel im Klartext (Issue #1944)
 
-**Status:** Bewusst so. Der Zeitstrahl bleibt Klartext; die Löschpfade räumen ihn ab, für die Restfenster ist die Frist die Grenze. Ein Umbau auf Ziel-Referenz mit Rendering zur Anzeigezeit ist als #1972 eingeplant, nicht Teil dieses Tickets.
+**Status seit #1972: behoben.** Das Modell besitzt keine `summary`-Spalte mehr. Der Zeitstrahl zeigt Pseudonyme und Titel weiterhin, liest sie aber erst zur Anzeigezeit aus dem referenzierten Ziel.
 
-### Beobachtung
+### Speicher- und Rendering-Vertrag
 
-Während `AuditLog.detail` das Klartext-Pseudonym seit #1093/#1375 bewusst vermeidet, schreibt der Zeitstrahl es aus. Vier Stellen in [`src/core/services/client/main.py`](../src/core/services/client/main.py) formulieren die `summary` mit dem Pseudonym:
+Eine `Activity` speichert nur Einrichtung, handelnde Person, Verb, Zeitpunkt, die vorhandene Generic-FK aus `target_type`/`target_id` und `context`. Der Kontext hat das Schema `{"schema": 1, "action": "…"}`; `action` kommt aus dem geschlossenen Vokabular `Activity.Action`. Pseudonyme, Aufgaben-, Fall- und Meilenstein-Titel sowie Namen von Dokumentationstypen sind darin unzulässig. [`log_activity`](../src/core/services/dashboard/activity.py) nimmt deshalb keinen fertigen Anzeigetext mehr an.
 
-| Zeile | `summary` |
-|---|---|
-| 658 | `Person <pseudonym> angelegt` |
-| 768 | `<pseudonym> qualifiziert` |
-| 784 | `Person <pseudonym> aktualisiert` |
-| 1021 | `Person <pseudonym> in den Papierkorb verschoben` |
+[`render_activity_summary`](../src/core/services/dashboard/activity.py) übersetzt den Aktionscode und liest den aktuellen Zielwert. Dadurch ändern sich sichtbare Sätze nach einer Umbenennung mit dem Ziel, ohne dass eine historische Klartextkopie zurückbleibt. Fehlt das Ziel — etwa nach dem Löschen eines Meilensteins — entsteht ein generischer Satz wie „Meilenstein gelöscht" oder „Aufgabe erledigt". Aktivitätskarte, Zeitstrom-Revision und Art.-15-Export benutzen denselben Renderer; die Sätze sind damit erstmals vollständig übersetzbar.
 
-Dieselbe Bauart trifft klientenbezogenen Freitext an anderen Zielen: `Aufgabe: <titel>` ([`services/case/workitems.py`](../src/core/services/case/workitems.py)), `<Dokumentationstyp> gelöscht` ([`services/events/crud.py`](../src/core/services/events/crud.py)), Fall- und Meilenstein-Titel aus `close_case`/`reopen_case`/`delete_milestone`.
+### Bestandsmigration und Löschpfade
 
-### Am Code korrigiert: eine „eigene Spur“ über die Löschung hinaus gibt es nicht
+Migration [`0163_activity_display_context`](../src/core/migrations/0163_activity_display_context.py) redigiert **alle** alten Freitexte, markiert sie als `legacy_redacted` und entfernt anschließend die Spalte. Aus dem fertigen Altsatz ließen sich Aktionsvariante und Zielwert nicht verlässlich zurückgewinnen; eine scheinbar exakte Heuristik hätte falsch zugeordnete Historie erzeugt. Altzeilen bleiben mit Verb, Ziel und Zeitpunkt als generische Aktivität lesbar, ihr früherer Wortlaut ist bewusst nicht wiederherstellbar.
 
-Das Ticket unterstellte, die `Activity`-Tabelle überlebe die Anonymisierung mit eigener Namensspur. Das ist **widerlegt**: [`_redact_activities`](../src/core/services/client/main.py) setzt `Activity.summary` per `.update(summary="[Anonymisiert]")` für **alle vier** Zieltypen (Client, Event, WorkItem, Case — der Case-Zweig kam mit #1751) und wird in **beiden** Anonymisierungspfaden aufgerufen:
-
-- `anonymize_client()` — [`services/client/main.py:601`](../src/core/services/client/main.py)
-- Retention-Anonymisierung — [`retention/anonymization.py:110`](../src/core/retention/anonymization.py)
-
-Nach Art.-17-Löschung bzw. nach Ablauf der Papierkorb-Frist steht dort also kein Klartext mehr. Was offenbleibt, sind zwei **Fenster davor**, nicht eine Spur danach.
-
-### Was offen bleibt (akzeptiert)
-
-1. **Der Live-Zeitstrahl.** Solange die Person existiert, steht ihr Pseudonym im Feed ([`services/events/feed.py`](../src/core/services/events/feed.py), Zeitstrom). Das ist der Zweck der Ansicht.
-2. **Das Papierkorb-Fenster.** `soft_delete_client` schreibt selbst noch eine Activity („… in den Papierkorb verschoben"); bis `client_trash_days` (Default 30) abgelaufen ist und `enforce_retention` anonymisiert, bleibt sie lesbar.
-3. **Die Aktivitäts-Frist als Obergrenze.** Aktivitäten ohne vorherige Anonymisierung verschwinden erst mit `retention_activities_days` (Default 365, [`retention/enforcement.py`](../src/core/retention/enforcement.py) `_purge_activities`).
-
-### Warum das vertretbar ist
-
-- **Kein zusätzlicher Empfängerkreis.** Der Zeitstrom ist facility-gescoped (RLS + `for_facility`). Wer ihn sieht, sieht dieselben Pseudonyme und Aufgabentitel ohnehin in der Personen- und Aufgabenliste — die `summary` ist eine Kopie sichtbarer Werte, kein neuer Offenlegungskanal. Für Ereignis-Ziele ist der Feed zusätzlich sensitivitäts-gefiltert (`Event.objects.visible_to`, #562).
-- **Der Datensatz ist redigierbar.** Anders als beim append-only, HMAC-verketteten `AuditLog` (siehe § Audit-Log-Restdaten) ist `Activity` eine gewöhnliche Tabelle. Die Löschpfade greifen dort tatsächlich durch — deshalb ist die Write-Time-Minimierung hier nicht der einzige Hebel, und deshalb wiegt der Klartext weniger schwer als im Audit-Log.
-- **Endlicher Horizont.** Beide Restfenster sind konfigurierte Fristen, keine unbegrenzte Aufbewahrung.
-
-### Warum kein Umbau auf Ziel-Referenz
-
-Der saubere Weg wäre, statt der fertigen `summary` nur Verb + Ziel-Referenz zu speichern und den Text zur Anzeigezeit zu rendern. Das ist **ein eigenes Paket**, kein Nebenzweig dieses Tickets:
-
-- Er zöge Fall-, Aufgaben- und Meilenstein-Titel mit — die Formulierungen in `workitems.py`, `cases.py` und `outcome.py` müssten alle auf ein strukturiertes Schema.
-- Er bräuchte eine **Backfill-Migration** über den Bestand: bestehende Zeilen tragen nur den fertigen Satz, aus dem sich Verb und Ziel nicht verlässlich zurückgewinnen lassen.
-- Er berührt die Löschpfade (#1818, #1874) und den Art.-15-Export (`_gather_activities` in [`services/client/export.py`](../src/core/services/client/export.py)), der die `summary` heute wörtlich ausgibt.
-- Der Gewinn wäre begrenzt: er beträfe nur die beiden Restfenster oben, nicht den Live-Feed, der den Klartext gerade braucht.
-
-### Betriebliche Empfehlung
-
-- `client_trash_days` und `retention_activities_days` gehören in Verarbeitungsverzeichnis und Löschkonzept; wer das Papierkorb-Fenster kürzer will, senkt `client_trash_days`.
-- Aufgabentitel sind Freitext. Dass dort kein Klarname stehen soll, ist eine organisatorische Vorgabe (Admin-Handbuch), keine technische Zusicherung — wie bei den Empfänger-/Zweck-Freitexten der Berichts-Freigabe.
+`_redact_activities` bleibt in beiden Anonymisierungspfaden als Defense-in-Depth verdrahtet. Für das aktuelle Schema wäre das nicht nötig: der Kontext enthält bereits keine PII, und Pseudonym/Titel werden am Ziel selbst redigiert. Der Helfer setzt betroffene Kontexte trotzdem auf `redacted`; so kann ein künftiger Schema-Zusatz nicht unbemerkt die Löschgrenze erweitern. Dasselbe gilt für Fall- und Merge-Tombstone-Pfade.
 
 ### Verifikation
 
-- [`test_client_anonymize_characterization.py`](../src/tests/test_client_anonymize_characterization.py) — `_redact_activities` deckt Client-, Event-, WorkItem- und Case-Ziele ab und lässt fremde Zeilen unberührt.
-- [`test_pii_residue_sweep.py`](../src/tests/test_pii_residue_sweep.py) — Residuen-Sweep über die Redaktionspfade.
-- [`test_retention.py`](../src/tests/test_retention.py) — Aktivitäts-Purge gegen `retention_activities_days`.
+- [`test_activity_rendering.py`](../src/tests/test_activity_rendering.py) — Speicherung ohne Zielwert, aktueller Zielwert, fehlendes Ziel, Übersetzung, Aktivitätskarte und Art.-15-Export.
+- [`test_0163_activity_display_context.py`](../src/tests/migrations/test_0163_activity_display_context.py) — Alttext wird redigiert und die Spalte physisch entfernt.
+- `TestActivityWriteSchema` in [`test_architecture_guards_services.py`](../src/tests/test_architecture_guards_services.py) — jede Produktions-Schreibstelle muss `action` setzen; `summary` ist verboten.
+- [`test_pii_residue_sweep.py`](../src/tests/test_pii_residue_sweep.py) — `core_activity.context` ist als PII-freier, geschlossener Schemawert klassifiziert und enthält keinen Klienten-Sentinel.
 
 ---
 

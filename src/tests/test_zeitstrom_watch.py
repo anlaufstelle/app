@@ -399,28 +399,28 @@ class TestZeitstromWatchVisibility:
             verb=Activity.Verb.UPDATED,
             target_type=ContentType.objects.get_for_model(Event),
             target_id=hidden_event.pk,
-            summary="Unsichtbare Änderung",
+            context={"schema": 1, "action": Activity.Action.EVENT_CREATED},
         )
 
         response = _watch(client, params={"type": "activities"}, etag=first["ETag"])
         assert response.status_code == 304
 
-    def test_visible_activity_summary_change_changes_feed_revision(
+    def test_visible_activity_target_change_changes_feed_revision(
         self, client, staff_user, facility, client_identified
     ):
-        activity = Activity.objects.create(
+        Activity.objects.create(
             facility=facility,
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target_type=ContentType.objects.get_for_model(client_identified),
             target_id=client_identified.pk,
-            summary="Alter sichtbarer Text",
+            context={"schema": 1, "action": Activity.Action.CLIENT_UPDATED},
         )
         client.force_login(staff_user)
         params = {"type": "activities"}
         first = _watch(client, params=params)
 
-        Activity.objects.filter(pk=activity.pk).update(summary="Neuer sichtbarer Text")
+        type(client_identified).objects.filter(pk=client_identified.pk).update(pseudonym="Neuer sichtbarer Text")
 
         response = _watch(client, params=params, etag=first["ETag"])
         assert response.status_code == 200
@@ -439,7 +439,7 @@ class TestZeitstromWatchVisibility:
             verb=Activity.Verb.UPDATED,
             target_type=ContentType.objects.get_for_model(client_identified),
             target_id=client_identified.pk,
-            summary="Sichtbare Aktivität",
+            context={"schema": 1, "action": Activity.Action.CLIENT_UPDATED},
         )
         client.force_login(staff_user)
         params = {"type": "activities"}

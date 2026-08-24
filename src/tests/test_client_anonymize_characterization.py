@@ -129,16 +129,11 @@ class TestClientAnonymizeCharacterization:
         assert rr.field_path == "notes"
         assert rr.requested_by_id == staff_user.pk
 
-    def test_activity_summaries_redacted_for_client_and_event_targets(self, facility, staff_user, doc_type_contact):
-        """Refs #1067: Zeitstrom darf das alte Pseudonym nicht überleben.
-
-        ``create_client`` („Person Stern-9 angelegt") und ``create_event``
-        („Kontakt für Stern-9") schreiben das Klartext-Pseudonym in
-        ``Activity.summary`` — beide Spuren müssen nach der Anonymisierung
-        redigiert sein.
-        """
+    def test_activity_context_redacted_for_client_and_event_targets(self, facility, staff_user, doc_type_contact):
+        """Der Live-Renderer zeigt das Pseudonym, die Activity speichert es nie (#1972)."""
         from core.models.activity import Activity
         from core.services.client import create_client
+        from core.services.dashboard import render_activity_summary
         from core.services.events import create_event
 
         client = create_client(
@@ -155,11 +150,15 @@ class TestClientAnonymizeCharacterization:
             data_json={"dauer": 5, "notiz": "x"},
             client=client,
         )
-        assert Activity.objects.filter(facility=facility, summary__contains="Stern-9").count() == 2
+        activities = list(Activity.objects.filter(facility=facility))
+        assert sum("Stern-9" in render_activity_summary(activity) for activity in activities) == 2
+        assert all("Stern-9" not in str(activity.context) for activity in activities)
 
         anonymize_client(client, user=staff_user)
 
-        assert not Activity.objects.filter(facility=facility, summary__contains="Stern-9").exists()
+        activities = list(Activity.objects.filter(facility=facility))
+        assert all(activity.context["action"] == Activity.Action.REDACTED for activity in activities)
+        assert all("Stern-9" not in render_activity_summary(activity) for activity in activities)
 
     def test_trigger_bypass_invoked_for_event_history_redaction(
         self, facility, staff_user, doc_type_contact, client_identified
@@ -469,6 +468,7 @@ class TestAnonymizeClientHelpers:
         """Refs #1067: Redaktion trifft nur Client-/Event-Activities DIESES Klienten."""
         from core.models.activity import Activity
         from core.services.client import _redact_activities, create_client
+        from core.services.dashboard import render_activity_summary
         from core.services.events import create_event
 
         own = create_client(facility, staff_user, pseudonym="Eigen-1")
@@ -480,40 +480,35 @@ class TestAnonymizeClientHelpers:
             data_json={"dauer": 5, "notiz": "x"},
             client=own,
         )
-        create_client(facility, staff_user, pseudonym="Fremd-1")
+        foreign = create_client(facility, staff_user, pseudonym="Fremd-1")
 
         _redact_activities(own, [own_event.pk])
 
-        assert not Activity.objects.filter(facility=facility, summary__contains="Eigen-1").exists()
-        # Fremder Klient bleibt unangetastet.
-        assert Activity.objects.filter(facility=facility, summary__contains="Fremd-1").exists()
+        own_rows = Activity.objects.filter(facility=facility, target_id__in=[own.pk, own_event.pk])
+        assert all(row.context["action"] == Activity.Action.REDACTED for row in own_rows)
+        # Fremder Klient bleibt unangetastet und rendert weiter aus seinem Ziel.
+        foreign_row = Activity.objects.get(facility=facility, target_id=foreign.pk)
+        assert foreign_row.context["action"] == Activity.Action.CLIENT_CREATED
+        assert "Fremd-1" in render_activity_summary(foreign_row)
 
-    def test_redact_activities_clears_workitem_target_summary(self, facility, staff_user):
-        """Refs #1090: WorkItem-Target-Activity mit PII-Titel wird redigiert.
-
-        ``create_workitem`` schreibt eine Activity „Aufgabe: <titel>" mit
-        Target = WorkItem; der Titel kann das Klienten-Pseudonym tragen.
-        ``_redact_activities`` muss sie auch ohne Event-IDs erfassen.
-        """
+    def test_redact_activities_clears_workitem_target_context(self, facility, staff_user):
+        """Der WorkItem-Titel wird nur live gelesen; der Redaktor setzt den Marker."""
         from core.models.activity import Activity
         from core.services.case import create_workitem
         from core.services.client import _redact_activities, create_client
+        from core.services.dashboard import render_activity_summary
 
         client = create_client(facility, staff_user, pseudonym="Aufgaben-PII-1")
-        create_workitem(facility, staff_user, client=client, title="Aufgaben-PII-1")
+        workitem = create_workitem(facility, staff_user, client=client, title="Aufgaben-PII-1")
 
-        # Positiv-Kontrolle: Activity traegt den PII-Titel.
-        assert Activity.objects.filter(facility=facility, summary__contains="Aufgaben-PII-1").exists()
+        activity = Activity.objects.get(facility=facility, target_id=workitem.pk)
+        assert "Aufgaben-PII-1" in render_activity_summary(activity)
+        assert "Aufgaben-PII-1" not in str(activity.context)
 
         _redact_activities(client, [])
 
-        assert not Activity.objects.filter(facility=facility, summary__contains="Aufgaben-PII-1").exists()
-        # WorkItem-Target-Activity ist auf den Anonym-Marker gesetzt.
-        assert Activity.objects.filter(
-            facility=facility,
-            verb=Activity.Verb.CREATED,
-            summary="[Anonymisiert]",
-        ).exists()
+        activity.refresh_from_db()
+        assert activity.context["action"] == Activity.Action.REDACTED
 
     def test_redact_case_goals_clears_titles_but_keeps_progress(self, facility, staff_user, client_identified):
         """Refs #1751 (Punkt 1): Wirkungsziel-/Meilenstein-Freitext wird getilgt.
@@ -587,17 +582,13 @@ class TestAnonymizeClientHelpers:
         other_goal.refresh_from_db()
         assert other_goal.title == "Fremd-Ziel"
 
-    def test_redact_activities_clears_case_target_summary(self, facility, staff_user, client_identified):
-        """Refs #1751 (Punkt 2): Activities mit Target = Case werden mitredigiert.
-
-        ``close_case`` schreibt „Fall ‚<titel>' geschlossen" mit Target = Case.
-        Diese Zeilen fielen durch den alten Client-/Event-/WorkItem-Filter und
-        ueberlebten die Anonymisierung bis zur ``retention_activities_days``-Frist.
-        """
+    def test_redact_activities_clears_case_target_context(self, facility, staff_user, client_identified):
+        """Activities mit Target = Case werden defensiv mitredigiert (#1751/#1972)."""
         from core.models.activity import Activity
         from core.models.case import Case
         from core.services.case import close_case
         from core.services.client import _redact_activities
+        from core.services.dashboard import render_activity_summary
 
         case = Case.objects.create(
             facility=facility,
@@ -608,12 +599,14 @@ class TestAnonymizeClientHelpers:
         )
         close_case(case, staff_user)
 
-        # Positiv-Kontrolle: die Case-Target-Activity traegt den Falltitel.
-        assert Activity.objects.filter(facility=facility, summary__contains="Fall-PII-Titel").exists()
+        activity = Activity.objects.get(facility=facility, target_id=case.pk)
+        assert "Fall-PII-Titel" in render_activity_summary(activity)
+        assert "Fall-PII-Titel" not in str(activity.context)
 
         _redact_activities(client_identified, [])
 
-        assert not Activity.objects.filter(facility=facility, summary__contains="Fall-PII-Titel").exists()
+        activity.refresh_from_db()
+        assert activity.context["action"] == Activity.Action.REDACTED
 
     def test_redact_activities_leaves_foreign_case_activities(self, facility, staff_user, client_identified):
         """Gegenprobe: der Case-Zweig bleibt auf die Faelle DIESES Klienten begrenzt."""
@@ -621,6 +614,7 @@ class TestAnonymizeClientHelpers:
         from core.models.case import Case
         from core.services.case import close_case
         from core.services.client import _redact_activities, create_client
+        from core.services.dashboard import render_activity_summary
 
         other = create_client(facility, staff_user, pseudonym="Fremd-Fall-1")
         other_case = Case.objects.create(
@@ -634,7 +628,9 @@ class TestAnonymizeClientHelpers:
 
         _redact_activities(client_identified, [])
 
-        assert Activity.objects.filter(facility=facility, summary__contains="Fremd-Fall-Titel").exists()
+        activity = Activity.objects.get(facility=facility, target_id=other_case.pk)
+        assert activity.context["action"] == Activity.Action.CASE_CLOSED
+        assert "Fremd-Fall-Titel" in render_activity_summary(activity)
 
     def test_redact_retention_proposals_keeps_evidence_metadata(self, facility, staff_user, doc_type_contact):
         """Refs #1751 (Punkt 3): nur das Pseudonym geht raus, der Nachweis bleibt.

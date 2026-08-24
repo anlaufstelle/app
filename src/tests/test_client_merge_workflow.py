@@ -37,7 +37,7 @@ from core.services.client.merge import (
     request_client_merge,
     unmerge_client,
 )
-from core.services.dashboard import log_activity
+from core.services.dashboard import log_activity, render_activity_summary
 from core.services.system import bypass_replication_triggers
 from tests.conftest import _make_attachment
 
@@ -470,8 +470,8 @@ class TestTombstoneRetention:
         ``_event_ids_for_client(source)`` ist nach dem Merge leer — alle
         Ereignisse liegen beim Ziel. Ohne das ``moved_events``-Inventar aus dem
         ``CLIENT_MERGED``-``detail`` ueberlebten das Klartext-Pseudonym der
-        Quelle im Zeitstrom (``Activity.summary``, Frist 365 Tage bzw. bis zur
-        Redaktion des ZIELS), ``RetentionProposal.details['pseudonym']``,
+        Quelle in historischen Activity-Kontexten (vor #1972; Frist 365 Tage
+        bzw. bis zur Redaktion des ZIELS), ``RetentionProposal.details['pseudonym']``,
         ``DeletionRequest.reason`` und abgelaufene ``LegalHold.reason`` mit
         Event-Ziel — exakt die Zeilen, die die Kaskade ohne Merge redigiert
         (#1751-Linie).
@@ -482,7 +482,7 @@ class TestTombstoneRetention:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=event,
-            summary=f"Beratungskontakt für {source.pseudonym}",
+            action=Activity.Action.EVENT_CREATED,
         )
         proposal = RetentionProposal.objects.create(
             facility=facility,
@@ -519,7 +519,7 @@ class TestTombstoneRetention:
         proposal.refresh_from_db()
         deletion_request.refresh_from_db()
         hold.refresh_from_db()
-        assert activity.summary == "[Anonymisiert]"
+        assert activity.context["action"] == Activity.Action.REDACTED
         assert proposal.details["pseudonym"] == "[Anonymisiert]"
         # Der Nachweis-Trail des Vorschlags bleibt — nur der Freitext geht raus.
         assert proposal.details["occurred_at"] == str(event.occurred_at)
@@ -543,7 +543,7 @@ class TestTombstoneRetention:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=target_event,
-            summary=f"Beratungskontakt für {target.pseudonym}",
+            action=Activity.Action.EVENT_CREATED,
         )
 
         merge_clients(source, target, lead_user)
@@ -553,7 +553,7 @@ class TestTombstoneRetention:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=moved_event,
-            summary=f"Beratungskontakt für {target.pseudonym}",
+            action=Activity.Action.EVENT_CREATED,
         )
         post_merge_proposal = RetentionProposal.objects.create(
             facility=facility,
@@ -573,8 +573,9 @@ class TestTombstoneRetention:
         target_activity.refresh_from_db()
         post_merge_activity.refresh_from_db()
         post_merge_proposal.refresh_from_db()
-        assert target_activity.summary == f"Beratungskontakt für {target.pseudonym}"
-        assert post_merge_activity.summary == f"Beratungskontakt für {target.pseudonym}"
+        expected = f"{doc_type_contact.name} für {target.pseudonym}"
+        assert render_activity_summary(target_activity) == expected
+        assert render_activity_summary(post_merge_activity) == expected
         assert post_merge_proposal.details["pseudonym"] == target.pseudonym
 
     def test_restore_refuses_merge_tombstone(self, source, target, lead_user):

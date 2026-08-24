@@ -129,9 +129,7 @@ def delete_milestone(milestone, user):
     """
     case = milestone.goal.case
     facility = case.facility
-    title = milestone.title
     milestone_pk = str(milestone.pk)
-    milestone.delete()
     audit_event(
         AuditLog.Action.MILESTONE_DELETE,
         user=user,
@@ -148,6 +146,7 @@ def delete_milestone(milestone, user):
         facility=facility,
         actor=user,
         verb=Activity.Verb.DELETED,
-        target=case,
-        summary=f'Meilenstein "{title}" gelöscht',
+        target=milestone,
+        action=Activity.Action.MILESTONE_DELETED,
     )
+    milestone.delete()

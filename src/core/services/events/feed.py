@@ -70,6 +70,8 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
 
     # Activities
     if feed_type == "activities" or include_all:
+        from core.services.dashboard.activity import activity_target_prefetch
+
         activities_qs = Activity.objects.for_facility(facility).filter(
             occurred_at__gte=start_dt, occurred_at__lte=end_dt
         )
@@ -88,8 +90,8 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
             )
 
         # Faelle im Papierkorb aus dem Zeitstrom nehmen (Refs #1818, ADR-044 §7).
-        # ``close_case``/``reopen_case`` schreiben den Falltitel als Freitext ins
-        # ``summary`` (`Fall "…" geschlossen`). Der Papierkorb nimmt den Fall aus
+        # ``close_case``/``reopen_case`` rendern den Falltitel aus dem Ziel. Der
+        # Papierkorb nimmt den Fall aus
         # Liste, Detail, Episoden, Zielen und Ereignis-Select — der Zeitstrom
         # bliebe sonst der eine Ort, an dem sein Titel weiterlaeuft, und zwar
         # bis zur Frist (``retention_activities_days``, Default 365 gegen 30 Tage;
@@ -108,7 +110,11 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
         trashed_case_ids = Case.objects.for_facility(facility).filter(is_deleted=True).values_list("pk", flat=True)
         activities_qs = activities_qs.exclude(Q(target_type=case_ct) & Q(target_id__in=trashed_case_ids))
 
-        activities = activities_qs.select_related("actor", "target_type").order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        activities = (
+            activities_qs.select_related("actor", "target_type")
+            .prefetch_related(activity_target_prefetch())
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        )
         activities_list = [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]
 
     # Work items

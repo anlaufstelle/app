@@ -259,6 +259,8 @@ def _feed_projection(facility, user, state: ZeitstromState):
         items.extend({"type": "event", "time": row["occurred_at"], "row": row} for row in rows)
 
     if state.feed_type == "activities" or include_all:
+        from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
+
         activities = Activity.objects.for_facility(facility).filter(
             occurred_at__gte=start_dt,
             occurred_at__lte=end_dt,
@@ -268,20 +270,28 @@ def _feed_projection(facility, user, state: ZeitstromState):
         event_ct = ContentType.objects.get_for_model(Event)
         visible_event_ids = Event.objects.visible_to(user).values_list("pk", flat=True)
         activities = activities.exclude(Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids))
-        rows = activities.values(
-            "id",
-            "occurred_at",
-            "verb",
-            "summary",
-            "actor_id",
-            "actor__username",
-            "actor__display_name",
-            "actor__first_name",
-            "actor__last_name",
-            "target_type_id",
-            "target_type__model",
-            "target_id",
-        ).order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        activity_rows = (
+            activities.select_related("actor", "target_type")
+            .prefetch_related(activity_target_prefetch())
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        )
+        rows = [
+            {
+                "id": activity.id,
+                "occurred_at": activity.occurred_at,
+                "verb": activity.verb,
+                "summary": render_activity_summary(activity),
+                "actor_id": activity.actor_id,
+                "actor__username": activity.actor.username if activity.actor else None,
+                "actor__display_name": activity.actor.display_name if activity.actor else None,
+                "actor__first_name": activity.actor.first_name if activity.actor else None,
+                "actor__last_name": activity.actor.last_name if activity.actor else None,
+                "target_type_id": activity.target_type_id,
+                "target_type__model": activity.target_type.model,
+                "target_id": activity.target_id,
+            }
+            for activity in activity_rows
+        ]
         items.extend({"type": "activity", "time": row["occurred_at"], "row": row} for row in rows)
 
     if state.feed_type == "workitems" or include_all:

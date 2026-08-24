@@ -32,6 +32,7 @@ from core.services.case.deletion import (
     restore_case,
     soft_delete_case,
 )
+from core.services.dashboard import render_activity_summary
 
 pytestmark = pytest.mark.django_db
 
@@ -158,9 +159,10 @@ class TestSoftDeleteCase:
             target_type=ContentType.objects.get_for_model(Case),
             target_id=case_open.pk,
         )
-        # Pinnt zugleich die titel-FREIE Formulierung: die Zeile ueberlebt die
-        # Tilgung des Falls um ~335 Tage — kein Falltitel im Feed (#1751).
-        assert activity.summary == "Fall in den Papierkorb verschoben"
+        # Pinnt zugleich die titel-freie Formulierung aus dem PII-freien
+        # Aktionscode; der Falltitel liegt nur am Ziel (#1972).
+        assert activity.context["action"] == Activity.Action.CASE_TRASHED
+        assert render_activity_summary(activity) == "Fall in den Papierkorb verschoben"
 
     def test_second_soft_delete_is_rejected(self, case_open, staff_user):
         soft_delete_case(case_open, staff_user)
@@ -409,7 +411,7 @@ class TestTrashExpiryRedaction:
         # Invariante I-M1 (ADR-039 §7): kein Marker ohne Zeile.
         assert "__files__" not in str(trashed_case.data_json)
 
-    def test_activity_summary_is_redacted(self, facility, settings_obj, trashed_case, staff_user):
+    def test_activity_context_is_defensively_redacted(self, facility, settings_obj, trashed_case, staff_user):
         from core.services.dashboard import log_activity
 
         log_activity(
@@ -417,16 +419,16 @@ class TestTrashExpiryRedaction:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=trashed_case,
-            summary='Fall "Klartext-Titel" geschlossen',
+            action=Activity.Action.CASE_CLOSED,
         )
         _expire(trashed_case, settings_obj)
         anonymize_eligible_soft_deleted_cases(facility, settings_obj)
 
-        summaries = Activity.objects.filter(
+        contexts = Activity.objects.filter(
             target_type=ContentType.objects.get_for_model(Case),
             target_id=trashed_case.pk,
-        ).values_list("summary", flat=True)
-        assert set(summaries) == {"[Anonymisiert]"}
+        ).values_list("context", flat=True)
+        assert set(context["action"] for context in contexts) == {Activity.Action.REDACTED}
 
     def test_deletion_request_reason_is_redacted(self, facility, settings_obj, case_open, staff_user, lead_user):
         dr = request_case_deletion(case_open, staff_user, "Begruendung mit Klartext")

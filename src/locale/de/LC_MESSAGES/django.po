@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 18:09+0200\n"
+"POT-Creation-Date: 2026-08-24 19:04+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11613,6 +11613,125 @@ msgstr "Gehört ausdrücklich in keinen Bericht."
 msgid "Dieser Schlüssel speist keinen registrierten Bericht."
 msgstr "Dieser Schlüssel speist keinen registrierten Bericht."
 
+#: src/core/services/dashboard/activity.py:81
+#, python-format
+msgid "%(document_type)s für %(pseudonym)s"
+msgstr "%(document_type)s für %(pseudonym)s"
+
+#: src/core/services/dashboard/activity.py:89
+#, python-format
+msgid "%(document_type)s gelöscht"
+msgstr "%(document_type)s gelöscht"
+
+#: src/core/services/dashboard/activity.py:60
+#, python-format
+msgid "%(pseudonym)s qualifiziert"
+msgstr "%(pseudonym)s qualifiziert"
+
+#: src/core/services/dashboard/activity.py:35
+#, python-format
+msgid "%(target)s %(verb)s"
+msgstr "%(target)s %(verb)s"
+
+#: src/core/services/dashboard/activity.py:98
+#, python-format
+msgid "Aufgabe aktualisiert: %(title)s"
+msgstr "Aufgabe aktualisiert: %(title)s"
+
+msgid "Aufgabe erledigt"
+msgstr "Aufgabe erledigt"
+
+#: src/core/services/dashboard/activity.py:102
+#, python-format
+msgid "Aufgabe erledigt: %(title)s"
+msgstr "Aufgabe erledigt: %(title)s"
+
+msgid "Aufgabe wiedereröffnet"
+msgstr "Aufgabe wiedereröffnet"
+
+#: src/core/services/dashboard/activity.py:106
+#, python-format
+msgid "Aufgabe wiedereröffnet: %(title)s"
+msgstr "Aufgabe wiedereröffnet: %(title)s"
+
+#: src/core/services/dashboard/activity.py:94
+#, python-format
+msgid "Aufgabe: %(title)s"
+msgstr "Aufgabe: %(title)s"
+
+msgid "Dokumentation"
+msgstr "Dokumentation"
+
+msgid "Dokumentation angelegt"
+msgstr "Dokumentation angelegt"
+
+msgid "Dokumentation gelöscht"
+msgstr "Dokumentation gelöscht"
+
+#: src/core/services/dashboard/activity.py:115
+#, python-format
+msgid "Fall \"%(title)s\" geschlossen"
+msgstr "Fall \"%(title)s\" geschlossen"
+
+#: src/core/services/dashboard/activity.py:119
+#, python-format
+msgid "Fall \"%(title)s\" wiedereröffnet"
+msgstr "Fall \"%(title)s\" wiedereröffnet"
+
+msgid "Fall in den Papierkorb verschoben"
+msgstr "Fall in den Papierkorb verschoben"
+
+#: src/core/services/dashboard/activity.py:64
+#, python-format
+msgid "Person %(pseudonym)s aktualisiert"
+msgstr "Person %(pseudonym)s aktualisiert"
+
+#: src/core/services/dashboard/activity.py:56
+#, python-format
+msgid "Person %(pseudonym)s angelegt"
+msgstr "Person %(pseudonym)s angelegt"
+
+#: src/core/services/dashboard/activity.py:68
+#, python-format
+msgid "Person %(pseudonym)s in den Papierkorb verschoben"
+msgstr "Person %(pseudonym)s in den Papierkorb verschoben"
+
+#: src/core/services/dashboard/activity.py:72
+#, python-format
+msgid "Person %(pseudonym)s mit einem Duplikat zusammengeführt"
+msgstr "Person %(pseudonym)s mit einem Duplikat zusammengeführt"
+
+msgid "Person in den Papierkorb verschoben"
+msgstr "Person in den Papierkorb verschoben"
+
+msgid "Person mit einem Duplikat zusammengeführt"
+msgstr "Person mit einem Duplikat zusammengeführt"
+
+msgid "Person qualifiziert"
+msgstr "Person qualifiziert"
+
+msgid "Versionierter, personenbezugsfreier Kontext für die Anzeige."
+msgstr "Versionierter, personenbezugsfreier Kontext für die Anzeige."
+
+msgid "Wiederkehrende Folgeaufgabe angelegt"
+msgstr "Wiederkehrende Folgeaufgabe angelegt"
+
+#: src/core/services/dashboard/activity.py:110
+#, python-format
+msgid "Wiederkehrende Folgeaufgabe: %(title)s"
+msgstr "Wiederkehrende Folgeaufgabe: %(title)s"
+
+msgid "Zusammenführung mit einem Duplikat aufgehoben"
+msgstr "Zusammenführung mit einem Duplikat aufgehoben"
+
 #: src/templates/core/hubs/verwaltung.html:85
 msgid "— wird am Dokumentationstyp oder an der Feldvorlage gesetzt; derselbe Schlüssel kann in mehreren Berichten erscheinen."
 msgstr "— wird am Dokumentationstyp oder an der Feldvorlage gesetzt; derselbe Schlüssel kann in mehreren Berichten erscheinen."
+
+msgid "Fall eröffnet"
+msgstr "Fall eröffnet"
+
+#: src/core/services/dashboard/activity.py:115
+#, python-format
+msgid "Fall eröffnet: %(title)s"
+msgstr "Fall eröffnet: %(title)s"

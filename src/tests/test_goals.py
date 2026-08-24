@@ -111,7 +111,10 @@ class TestGoalService:
         assert toggled.completed_at is None
 
     def test_delete_milestone(self, milestone, staff_user):
-        from core.models import AuditLog
+        from django.contrib.contenttypes.models import ContentType
+
+        from core.models import Activity, AuditLog
+        from core.services.dashboard import render_activity_summary
 
         pk = milestone.pk
         case_id = milestone.goal.case.pk
@@ -126,6 +129,10 @@ class TestGoalService:
         # traegt target_id (Meilenstein-PK) + case_id.
         assert "title" not in log.detail
         assert log.detail["case_id"] == str(case_id)
+        activity = Activity.objects.get(target_id=pk)
+        assert activity.target_type == ContentType.objects.get_for_model(Milestone)
+        assert activity.context == {"schema": 1, "action": Activity.Action.MILESTONE_DELETED}
+        assert render_activity_summary(activity) == "Meilenstein gelöscht"
 
 
 @pytest.mark.django_db

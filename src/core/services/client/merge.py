@@ -527,7 +527,7 @@ def _execute_merge(source, target, user, *, deletion_request=None):
         actor=user,
         verb=Activity.Verb.UPDATED,
         target=target,
-        summary=f"Person {target.pseudonym} mit einem Duplikat zusammengeführt",
+        action=Activity.Action.CLIENT_MERGED,
     )
     logger.info(
         "client_merged",
@@ -687,7 +687,7 @@ def unmerge_client(source, user):
         actor=user,
         verb=Activity.Verb.UPDATED,
         target=target,
-        summary="Zusammenführung mit einem Duplikat aufgehoben",
+        action=Activity.Action.CLIENT_UNMERGED,
     )
     logger.info(
         "client_unmerged",

@@ -149,10 +149,7 @@ def _move_case_to_trash(case, user, **detail):
         actor=user,
         verb=Activity.Verb.DELETED,
         target=case,
-        # Kein Falltitel im summary: die Zeile ueberlebt die Tilgung des Falls
-        # (``retention_activities_days``, Default 365 Tage) deutlich laenger als
-        # der Papierkorb (Default 30) — genau der Befund aus #1751.
-        summary="Fall in den Papierkorb verschoben",
+        action=Activity.Action.CASE_TRASHED,
     )
     return case
 
@@ -347,20 +344,13 @@ def redact_case_goals(case_ids: list) -> None:
 
 
 def _redact_case_activities(case) -> None:
-    """Redigiert ``Activity.summary`` der Zeitstrom-Eintraege dieses Falls.
-
-    ``close_case``/``reopen_case`` schreiben „Fall ‚<titel>' geschlossen" mit
-    Target = Case (Refs #1751, Punkt 2). Diese Zeilen ueberleben die
-    Papierkorb-Frist um ein Vielfaches (``retention_activities_days``, Default
-    365 gegen 30 Tage) — ohne Redaktion bliebe der Falltitel im Feed stehen.
-    Verb und Zeitpunkt bleiben, nur der Freitext faellt.
-    """
+    """Setzt den PII-freien Kontext als Defense-in-Depth zurueck (#1972)."""
     from django.contrib.contenttypes.models import ContentType
 
     Activity.objects.for_facility(case.facility).filter(
         target_type=ContentType.objects.get_for_model(Case),
         target_id=case.pk,
-    ).update(summary="[Anonymisiert]")
+    ).update(context={"schema": 1, "action": Activity.Action.REDACTED.value})
 
 
 def _redact_case_deletion_request(case) -> None:

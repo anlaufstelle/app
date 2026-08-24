@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 18:09+0200\n"
+"POT-Creation-Date: 2026-08-24 19:04+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11514,6 +11514,125 @@ msgstr "Explicitly belongs in no report."
 msgid "Dieser Schlüssel speist keinen registrierten Bericht."
 msgstr "This key does not feed any registered report."
 
+#: src/core/services/dashboard/activity.py:81
+#, python-format
+msgid "%(document_type)s für %(pseudonym)s"
+msgstr "%(document_type)s for %(pseudonym)s"
+
+#: src/core/services/dashboard/activity.py:89
+#, python-format
+msgid "%(document_type)s gelöscht"
+msgstr "%(document_type)s deleted"
+
+#: src/core/services/dashboard/activity.py:60
+#, python-format
+msgid "%(pseudonym)s qualifiziert"
+msgstr "%(pseudonym)s qualified"
+
+#: src/core/services/dashboard/activity.py:35
+#, python-format
+msgid "%(target)s %(verb)s"
+msgstr "%(target)s %(verb)s"
+
+#: src/core/services/dashboard/activity.py:98
+#, python-format
+msgid "Aufgabe aktualisiert: %(title)s"
+msgstr "Task updated: %(title)s"
+
+msgid "Aufgabe erledigt"
+msgstr "Task completed"
+
+#: src/core/services/dashboard/activity.py:102
+#, python-format
+msgid "Aufgabe erledigt: %(title)s"
+msgstr "Task completed: %(title)s"
+
+msgid "Aufgabe wiedereröffnet"
+msgstr "Task reopened"
+
+#: src/core/services/dashboard/activity.py:106
+#, python-format
+msgid "Aufgabe wiedereröffnet: %(title)s"
+msgstr "Task reopened: %(title)s"
+
+#: src/core/services/dashboard/activity.py:94
+#, python-format
+msgid "Aufgabe: %(title)s"
+msgstr "Task: %(title)s"
+
+msgid "Dokumentation"
+msgstr "Documentation"
+
+msgid "Dokumentation angelegt"
+msgstr "Documentation created"
+
+msgid "Dokumentation gelöscht"
+msgstr "Documentation deleted"
+
+#: src/core/services/dashboard/activity.py:115
+#, python-format
+msgid "Fall \"%(title)s\" geschlossen"
+msgstr "Case \"%(title)s\" closed"
+
+#: src/core/services/dashboard/activity.py:119
+#, python-format
+msgid "Fall \"%(title)s\" wiedereröffnet"
+msgstr "Case \"%(title)s\" reopened"
+
+msgid "Fall in den Papierkorb verschoben"
+msgstr "Case moved to trash"
+
+#: src/core/services/dashboard/activity.py:64
+#, python-format
+msgid "Person %(pseudonym)s aktualisiert"
+msgstr "Person %(pseudonym)s updated"
+
+#: src/core/services/dashboard/activity.py:56
+#, python-format
+msgid "Person %(pseudonym)s angelegt"
+msgstr "Person %(pseudonym)s created"
+
+#: src/core/services/dashboard/activity.py:68
+#, python-format
+msgid "Person %(pseudonym)s in den Papierkorb verschoben"
+msgstr "Person %(pseudonym)s moved to trash"
+
+#: src/core/services/dashboard/activity.py:72
+#, python-format
+msgid "Person %(pseudonym)s mit einem Duplikat zusammengeführt"
+msgstr "Person %(pseudonym)s merged with a duplicate"
+
+msgid "Person in den Papierkorb verschoben"
+msgstr "Person moved to trash"
+
+msgid "Person mit einem Duplikat zusammengeführt"
+msgstr "Person merged with a duplicate"
+
+msgid "Person qualifiziert"
+msgstr "Person qualified"
+
+msgid "Versionierter, personenbezugsfreier Kontext für die Anzeige."
+msgstr "Versioned, PII-free context for display."
+
+msgid "Wiederkehrende Folgeaufgabe angelegt"
+msgstr "Recurring follow-up task created"
+
+#: src/core/services/dashboard/activity.py:110
+#, python-format
+msgid "Wiederkehrende Folgeaufgabe: %(title)s"
+msgstr "Recurring follow-up task: %(title)s"
+
+msgid "Zusammenführung mit einem Duplikat aufgehoben"
+msgstr "Merge with a duplicate undone"
+
 #: src/templates/core/hubs/verwaltung.html:85
 msgid "— wird am Dokumentationstyp oder an der Feldvorlage gesetzt; derselbe Schlüssel kann in mehreren Berichten erscheinen."
 msgstr "— is set on the document type or field template; the same key can appear in multiple reports."
+
+msgid "Fall eröffnet"
+msgstr "Case opened"
+
+#: src/core/services/dashboard/activity.py:115
+#, python-format
+msgid "Fall eröffnet: %(title)s"
+msgstr "Case opened: %(title)s"

@@ -441,7 +441,7 @@ def _create_activity(facility, staff_user, days_ago):
         verb=Activity.Verb.CREATED,
         target_type=ct,
         target_id=facility.pk,
-        summary="Test activity",
+        context={"schema": 1, "action": Activity.Action.LEGACY_REDACTED},
         occurred_at=timezone.now() - timedelta(days=days_ago),
     )
 
@@ -520,7 +520,7 @@ def test_activity_targeting_held_client_is_not_deleted(facility_with_settings, s
         verb=Activity.Verb.DELETED,
         target_type=ct,
         target_id=client.pk,
-        summary="Person Test-Hold-01 in den Papierkorb verschoben",
+        context={"schema": 1, "action": Activity.Action.CLIENT_TRASHED},
         occurred_at=timezone.now() - timedelta(days=400),
     )
     LegalHold.objects.create(

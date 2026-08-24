@@ -20,6 +20,65 @@ pytestmark = pytest.mark.architecture
 ENCRYPTED_DATA_JSON_MODELS = ("Event", "Client", "Case")
 
 
+class TestActivityWriteSchema:
+    """Every production Activity writer uses the PII-free action schema (#1972)."""
+
+    _CORE_DIR = Path("src/core")
+
+    @staticmethod
+    def _call_name(node):
+        if not isinstance(node, ast.Call):
+            return None
+        if isinstance(node.func, ast.Name):
+            return node.func.id
+        return getattr(node.func, "attr", None)
+
+    def test_every_log_activity_call_uses_action_and_never_summary(self):
+        violations = []
+        for module in sorted(self._CORE_DIR.rglob("*.py")):
+            if "migrations" in module.parts:
+                continue
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if self._call_name(node) != "log_activity":
+                    continue
+                keywords = {kw.arg for kw in node.keywords}
+                if "action" not in keywords or "summary" in keywords:
+                    violations.append(f"{module}:{node.lineno} keywords={sorted(keywords)}")
+        assert not violations, (
+            "Activity-Schreibstellen muessen einen strukturierten `action`-Code "
+            "uebergeben und duerfen keinen fertigen `summary`-Text speichern:\n" + "\n".join(violations)
+        )
+
+    def test_direct_activity_construction_uses_context_and_never_summary(self):
+        violations = []
+        for module in sorted(self._CORE_DIR.rglob("*.py")):
+            if "migrations" in module.parts:
+                continue
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if self._call_name(node) != "Activity":
+                    continue
+                keywords = {kw.arg for kw in node.keywords}
+                if "context" not in keywords or "summary" in keywords:
+                    violations.append(f"{module}:{node.lineno} keywords={sorted(keywords)}")
+        assert not violations, (
+            "Direkte Activity-Konstruktion (z. B. Seed-Bulk-Insert) muss `context` "
+            "setzen und darf keinen Anzeigetext speichern:\n" + "\n".join(violations)
+        )
+
+    def test_activity_model_has_no_summary_field(self):
+        model = ast.parse(Path("src/core/models/activity.py").read_text(encoding="utf-8"))
+        assignments = {
+            target.id
+            for node in ast.walk(model)
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            for target in ([node.target] if isinstance(node, ast.AnnAssign) else node.targets)
+            if isinstance(target, ast.Name)
+        }
+        assert "summary" not in assignments
+
+
 def _bypass_patterns(model: str) -> tuple[tuple[str, re.Pattern], ...]:
     """Die vier verbotenen Schreibpfade fuer ein verschluesseltes ``data_json``.
 

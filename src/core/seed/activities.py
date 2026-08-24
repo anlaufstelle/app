@@ -53,7 +53,7 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
                 verb=Activity.Verb.CREATED,
                 target_type=ct_client,
                 target_id=client.pk,
-                summary=f"Klientel {client.pseudonym} angelegt",
+                context={"schema": 1, "action": Activity.Action.CLIENT_CREATED},
                 occurred_at=created_ts,
             )
         )
@@ -65,7 +65,7 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
                     verb=Activity.Verb.QUALIFIED,
                     target_type=ct_client,
                     target_id=client.pk,
-                    summary=f"{client.pseudonym} qualifiziert",
+                    context={"schema": 1, "action": Activity.Action.CLIENT_QUALIFIED},
                     occurred_at=min(created_ts + timedelta(hours=random.randint(1, 48)), now),
                 )
             )
@@ -80,9 +80,6 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
     older_sample = random.sample(older_events, min(len(older_events), len(older_events) * 3 // 10))
     sampled_events = recent_events + older_sample
     for event in sampled_events:
-        summary = event.document_type.name
-        if event.client:
-            summary += f" für {event.client.pseudonym}"
         activities.append(
             Activity(
                 facility=facility,
@@ -90,7 +87,7 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
                 verb=Activity.Verb.CREATED,
                 target_type=ct_event,
                 target_id=event.pk,
-                summary=summary,
+                context={"schema": 1, "action": Activity.Action.EVENT_CREATED},
                 occurred_at=event.occurred_at,
             )
         )
@@ -105,7 +102,7 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
                 verb=Activity.Verb.CREATED,
                 target_type=ct_workitem,
                 target_id=wi.pk,
-                summary=f"Aufgabe: {wi.title}",
+                context={"schema": 1, "action": Activity.Action.WORKITEM_CREATED},
                 occurred_at=wi_created_ts,
             )
         )
@@ -117,7 +114,7 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
                     verb=Activity.Verb.COMPLETED,
                     target_type=ct_workitem,
                     target_id=wi.pk,
-                    summary=f"Aufgabe erledigt: {wi.title}",
+                    context={"schema": 1, "action": Activity.Action.WORKITEM_COMPLETED},
                     occurred_at=min(wi_created_ts + timedelta(days=random.randint(1, 14)), now),
                 )
             )
@@ -131,7 +128,7 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
                 verb=Activity.Verb.CREATED,
                 target_type=ct_case,
                 target_id=case.pk,
-                summary=f"Fall eröffnet: {case.title}",
+                context={"schema": 1, "action": Activity.Action.CASE_CREATED},
                 occurred_at=_random_past_ts(),
             )
         )

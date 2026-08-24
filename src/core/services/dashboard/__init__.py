@@ -15,7 +15,7 @@ Module:
 - :mod:`.quick_templates` — Quick-Template-Dropdown-Daten fuer Event-Form.
 """
 
-from core.services.dashboard.activity import log_activity
+from core.services.dashboard.activity import log_activity, render_activity_summary
 from core.services.dashboard.external_report import (
     build_external_report,
     suppress_report_stats,
@@ -131,6 +131,7 @@ __all__ = [
     "lead_dashboard_context",
     "list_templates_for_user",
     "log_activity",
+    "render_activity_summary",
     "CANONICAL_PERIODS",
     "DEFAULT_PERIOD",
     "PERIOD_ALIASES",

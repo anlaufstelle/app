@@ -146,7 +146,7 @@ def create_workitem(facility, user, *, client=None, **data):
         actor=user,
         verb=Activity.Verb.CREATED,
         target=workitem,
-        summary=f"Aufgabe: {workitem.title}",
+        action=Activity.Action.WORKITEM_CREATED,
     )
     audit_event(
         AuditLog.Action.WORKITEM_CREATE,
@@ -266,7 +266,7 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
         actor=user,
         verb=Activity.Verb.UPDATED,
         target=workitem,
-        summary=f"Aufgabe aktualisiert: {workitem.title}",
+        action=Activity.Action.WORKITEM_UPDATED,
     )
 
     return workitem
@@ -333,7 +333,7 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
             actor=user,
             verb=Activity.Verb.COMPLETED,
             target=locked,
-            summary=f"Aufgabe erledigt: {locked.title}",
+            action=Activity.Action.WORKITEM_COMPLETED,
         )
     elif new_status == WorkItem.Status.OPEN and old_status == WorkItem.Status.DONE:
         log_activity(
@@ -341,7 +341,7 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
             actor=user,
             verb=Activity.Verb.REOPENED,
             target=locked,
-            summary=f"Aufgabe wiedereröffnet: {locked.title}",
+            action=Activity.Action.WORKITEM_REOPENED,
         )
 
     _maybe_duplicate_recurring(locked, user, new_status)
@@ -403,7 +403,7 @@ def duplicate_recurring_workitem(workitem, user):
         actor=user,
         verb=Activity.Verb.CREATED,
         target=new_workitem,
-        summary=f"Wiederkehrende Folgeaufgabe: {new_workitem.title}",
+        action=Activity.Action.WORKITEM_RECURRENCE_CREATED,
     )
     # Refs #596: Mark the source so a subsequent DONE transition does not
     # duplicate again. Persist within the same atomic block.

@@ -822,8 +822,8 @@ def _gather_outcome_goals(client):
 def _gather_activities(facility, client, event_ids):
     """Serialize the activity feed entries about the client (Refs #1752).
 
-    Der Zeitstrom traegt Freitext-``summary`` zur Person („… für <pseudonym>",
-    „Aufgabe: <titel>"). Die Ziel-Menge deckt sich mit der Redaktions-Logik in
+    Der Zeitstrom rendert seinen Anzeigetext aus Ziel und PII-freiem
+    ``Activity.context``. Die Ziel-Menge deckt sich mit der Redaktions-Logik in
     :func:`core.services.client.main._redact_activities` (Client-, Event-,
     WorkItem- und seit #1751 auch Case-Targets).
 
@@ -843,16 +843,19 @@ def _gather_activities(facility, client, event_ids):
     if workitem_ids:
         targets |= Q(target_type=ContentType.objects.get_for_model(WorkItem), target_id__in=workitem_ids)
 
+    from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
+
     activities = (
         Activity.objects.for_facility(facility)
         .filter(targets)
         .select_related("actor", "target_type")
+        .prefetch_related(activity_target_prefetch())
         .order_by("-occurred_at", "pk")
     )
     return [
         {
             "verb": activity.get_verb_display(),
-            "summary": activity.summary,
+            "summary": render_activity_summary(activity),
             "target": activity.target_type.name,
             "actor": _username(activity.actor),
             "occurred_at": activity.occurred_at.isoformat(),

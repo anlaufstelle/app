@@ -248,7 +248,7 @@ def close_case(case, user):
         actor=user,
         verb=Activity.Verb.UPDATED,
         target=case,
-        summary=f'Fall "{case.title}" geschlossen',
+        action=Activity.Action.CASE_CLOSED,
     )
     return case
 
@@ -270,7 +270,7 @@ def reopen_case(case, user):
         actor=user,
         verb=Activity.Verb.REOPENED,
         target=case,
-        summary=f'Fall "{case.title}" wiedereröffnet',
+        action=Activity.Action.CASE_REOPENED,
     )
     return case
 

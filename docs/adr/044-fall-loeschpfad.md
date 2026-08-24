@@ -45,7 +45,7 @@ Was sie **nicht** leistet: die Fallzahl gegen die Löschung selbst stabil zu hal
 
 Die Redaktion setzt `Case.anonymized_at`. Ohne dieses Zustandsmerkmal wären „im Papierkorb" und „endgültig getilgt" am Fall nicht unterscheidbar — die Person hat dafür ihr `is_active=False`, der Fall hatte nichts. Drei Stellen lesen es: der nächtliche Fristablauf (sonst fände er denselben Fall in **jedem** Lauf erneut, redigierte den bereits leeren Rest und schriebe jedes Mal eine neue `CASE_ANONYMIZED`-Zeile in das append-only, HMAC-verkettete AuditLog), `restore_case` (eine inhaltsleere Hülle darf nicht in Liste, Detail und Statistik zurückkehren) und die Papierkorb-Liste, die beide Zustände trennen muss. Der Stempel sitzt in `redact_case_content` und damit im **geteilten** Helfer: auch die Fälle einer vollständig anonymisierten Person tragen ihn.
 
-Mitredigiert werden zwei Stellen, die den Falltitel als Freitext weitertragen und die Papierkorb-Frist deutlich überleben würden: die `Activity.summary`-Zeilen des Falls (`retention_activities_days`, Default 365 gegen 30 Tage — der Befund aus #1751) und der `reason` des Löschantrags. Die Antrags-Metadaten (wer, wann, welcher Status) bleiben als Vier-Augen-Nachweis erhalten.
+Mitredigiert werden der `reason` des Löschantrags und — seit #1972 nur noch als Defense-in-Depth — der PII-freie `Activity.context` der Fall-Aktivitäten. Den Falltitel speichert die Activity nicht mehr; der Renderer liest ihn bis zur Redaktion direkt aus dem Ziel. Die Antrags-Metadaten (wer, wann, welcher Status) bleiben als Vier-Augen-Nachweis erhalten.
 
 ### 4. Legal Hold: `Case` wird Hold-Ziel, und ein Ereignis-Hold sperrt den Fall (P4)
 

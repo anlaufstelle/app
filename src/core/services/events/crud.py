@@ -188,15 +188,12 @@ def create_event(
     from core.services.system.ban_revision import bump_ban_revision_for_event_change
 
     bump_ban_revision_for_event_change(facility, document_type, {}, data_json)
-    summary = f"{document_type.name}"
-    if client:
-        summary += f" für {client.pseudonym}"
     log_activity(
         facility=facility,
         actor=user,
         verb=Activity.Verb.CREATED,
         target=event,
-        summary=summary,
+        action=Activity.Action.EVENT_CREATED,
     )
     audit_event(
         AuditLog.Action.EVENT_CREATE,
@@ -399,5 +396,5 @@ def soft_delete_event(event, user, *, source=None):
         actor=user,
         verb=Activity.Verb.DELETED,
         target=event,
-        summary=f"{event.document_type.name} gelöscht",
+        action=Activity.Action.EVENT_DELETED,
     )

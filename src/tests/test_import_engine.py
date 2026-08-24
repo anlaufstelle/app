@@ -372,7 +372,8 @@ class TestCommitRun:
         assert first.age_cluster == Client.AgeCluster.U18
         assert first.notes == "Erste"
         assert AuditLog.objects.filter(action=AuditLog.Action.CLIENT_CREATE, target_id=str(first.pk)).exists()
-        assert Activity.objects.filter(verb=Activity.Verb.CREATED, summary__contains="IMP-01").exists()
+        activity = Activity.objects.get(verb=Activity.Verb.CREATED, target_id=first.pk)
+        assert activity.context["action"] == Activity.Action.CLIENT_CREATED
 
     def test_commit_sets_status_committed(self, client_job, admin_user):
         import_engine.run_import(client_job, admin_user, commit=True)

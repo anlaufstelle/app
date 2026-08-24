@@ -63,7 +63,7 @@ def _k_anonymize_with_cascade(client, k):
     ``k_anonymize_client`` ist bewusst client-only (Vertrag der Primitive);
     die Kaskade liegt daher hier. Refs #1750: bis dahin lief nur die
     Fall-/Episoden-/Aufgaben-Kaskade aus #1094 mit — ``EventHistory``,
-    ``DeletionRequest.reason`` und ``Activity.summary`` blieben Klartext,
+    ``DeletionRequest.reason`` und der damals gespeicherte Activity-Anzeigetext blieben Klartext,
     obwohl der Datensatz als ``k_anonymized=True`` gilt (Art. 17).
 
     ``event_ids`` kommen aus demselben Helfer wie im Hard-Pfad

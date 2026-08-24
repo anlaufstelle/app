@@ -172,7 +172,7 @@ def facility_a_with_data(facility, admin_user):
         verb=Activity.Verb.CREATED,
         target_type=ContentType.objects.get_for_model(Client),
         target_id=cli.pk,
-        summary="A-Created",
+        context={"schema": 1, "action": Activity.Action.CLIENT_CREATED},
     )
     return facility
 
@@ -209,7 +209,7 @@ def facility_b_with_data(second_facility, admin_user):
         verb=Activity.Verb.CREATED,
         target_type=ContentType.objects.get_for_model(Client),
         target_id=cli.pk,
-        summary="B-Created",
+        context={"schema": 1, "action": Activity.Action.CLIENT_CREATED},
     )
     return second_facility
 
@@ -259,7 +259,8 @@ class TestRLSCrossTenantIsolation:
     def test_cross_tenant_activity_returns_zero_rows(self, rls_test_role, facility_a_with_data, facility_b_with_data):
         with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
             cur.execute(
-                "SELECT COUNT(*) FROM core_activity WHERE summary = 'B-Created'",
+                "SELECT COUNT(*) FROM core_activity WHERE facility_id = %s",
+                [str(facility_b_with_data.pk)],
             )
             count = cur.fetchone()[0]
         assert count == 0, "Cross-Tenant-Read auf core_activity hat B-Activities geliefert."

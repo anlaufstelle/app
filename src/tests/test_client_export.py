@@ -471,12 +471,12 @@ class TestClientExportCrossTableCategories:
             actor=admin_user,
             verb=Activity.Verb.CREATED,
             target=sample_client,
-            summary="Person angelegt",
+            action=Activity.Action.CLIENT_CREATED,
         )
         data = export_client_data(sample_client, facility, admin_user)
         assert len(data["activities"]) == 1
         entry = data["activities"][0]
-        assert entry["summary"] == "Person angelegt"
+        assert entry["summary"] == f"Person {sample_client.pseudonym} angelegt"
         assert entry["verb"] == "erstellt"
         assert entry["target"] == "Person"
         assert entry["actor"] == "ce_admin"
@@ -487,20 +487,35 @@ class TestClientExportCrossTableCategories:
         from core.services.dashboard import log_activity
 
         log_activity(
-            facility=facility, actor=admin_user, verb=Activity.Verb.CREATED, target=sample_event, summary="Kontakt"
+            facility=facility,
+            actor=admin_user,
+            verb=Activity.Verb.CREATED,
+            target=sample_event,
+            action=Activity.Action.EVENT_CREATED,
         )
         log_activity(
-            facility=facility, actor=admin_user, verb=Activity.Verb.COMPLETED, target=sample_workitem, summary="Aufgabe"
+            facility=facility,
+            actor=admin_user,
+            verb=Activity.Verb.COMPLETED,
+            target=sample_workitem,
+            action=Activity.Action.WORKITEM_COMPLETED,
         )
         data = export_client_data(sample_client, facility, admin_user)
-        assert {e["summary"] for e in data["activities"]} == {"Kontakt", "Aufgabe"}
+        assert {e["summary"] for e in data["activities"]} == {
+            f"{sample_event.document_type.name} für {sample_client.pseudonym}",
+            f"Aufgabe erledigt: {sample_workitem.title}",
+        }
 
     def test_activities_of_other_client_excluded(self, sample_client, facility, admin_user):
         from core.services.dashboard import log_activity
 
         other = Client.objects.create(facility=facility, pseudonym="Fremd-A", created_by=admin_user)
         log_activity(
-            facility=facility, actor=admin_user, verb=Activity.Verb.CREATED, target=other, summary="Fremd-Aktivitaet"
+            facility=facility,
+            actor=admin_user,
+            verb=Activity.Verb.CREATED,
+            target=other,
+            action=Activity.Action.CLIENT_CREATED,
         )
         data = export_client_data(sample_client, facility, admin_user)
         assert data["activities"] == []
@@ -1880,7 +1895,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         actor=admin_user,
         verb=Activity.Verb.CREATED,
         target=workitem,
-        summary="PDF-Aktivitaet",
+        context={"schema": 1, "action": Activity.Action.WORKITEM_CREATED},
     )
     RecentClientVisit.objects.create(user=admin_user, client=sample_client, facility=facility, is_favorite=True)
     AuditLog.objects.create(
@@ -1969,7 +1984,7 @@ class TestClientExportPdfCoverage:
             "PDF-Hold-Grund",  # Legal Hold
             "pdf-kategorie",  # Loeschvorschlag
             "PDF-Aufgabe",  # Aufgabe
-            "PDF-Aktivitaet",  # Zeitstrom
+            "Aufgabe: PDF-Aufgabe",  # Zeitstrom (zur Anzeigezeit gerendert)
             "Daten der Stufe „Mit Zusatzangaben“ eingesehen",  # Audit-Auszug
             "PDF-Duplikat",  # Zusammenfuehrungs-Herkunft (Refs #1876)
         ],

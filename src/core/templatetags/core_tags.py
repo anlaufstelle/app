@@ -6,6 +6,7 @@ from django import template
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils.translation import gettext as _
 
 register = template.Library()
 
@@ -199,24 +200,30 @@ def verb_badge_classes(verb):
     return _BADGE_COLOR_MAP[color]
 
 
-# --- Activity target type label (German) ---
-_TARGET_TYPE_LABEL_MAP = {
-    "client": "Person",
-    "event": "Kontakt",
-    "workitem": "Aufgabe",
-    "case": "Fall",
-}
-
-
 @register.filter
 def target_type_label(activity):
-    """Return a German label for an Activity's target content type."""
+    """Return the localized label for an Activity's target content type."""
+    labels = {
+        "client": _("Person"),
+        "event": _("Kontakt"),
+        "workitem": _("Aufgabe"),
+        "case": _("Fall"),
+        "milestone": _("Meilenstein"),
+    }
     model_name = activity.target_type.model if activity.target_type else None
-    if model_name and model_name in _TARGET_TYPE_LABEL_MAP:
-        return _TARGET_TYPE_LABEL_MAP[model_name]
+    if model_name and model_name in labels:
+        return labels[model_name]
     if model_name:
         return model_name.capitalize()
     return ""
+
+
+@register.filter
+def activity_summary(activity):
+    """Render an Activity through the shared PII-free display-time renderer."""
+    from core.services.dashboard import render_activity_summary
+
+    return render_activity_summary(activity)
 
 
 # --- Activity target URL ---

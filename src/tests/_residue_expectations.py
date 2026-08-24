@@ -169,7 +169,14 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_auditlog", "prev_hash", reason="HMAC-Hash der Vorgaengerzeile (Kette #1070), kein Freitext."),
     non_pii("core_auditlog", "entry_hash", reason="HMAC-Hash der Zeile (Kette #1070), kein Freitext."),
     # ---- core_activity ---------------------------------------------------
-    pii("core_activity", "summary"),
+    non_pii(
+        "core_activity",
+        "context",
+        reason=(
+            "Versioniertes JSON mit geschlossenem Activity.Action-Code; "
+            "Zielwerte werden erst zur Anzeige gelesen (#1972)."
+        ),
+    ),
     non_pii("core_activity", "verb", reason="Enum (created/updated/deleted/...)."),
     # ---- core_deletionrequest --------------------------------------------
     pii("core_deletionrequest", "reason"),

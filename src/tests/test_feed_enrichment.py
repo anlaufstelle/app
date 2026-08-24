@@ -7,7 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
 from core.models import Activity, DocumentType, DocumentTypeField, Event, FieldTemplate
-from core.services.dashboard import log_activity
+from core.services.dashboard import log_activity, render_activity_summary
 from core.services.events import build_feed_items, enrich_events_with_preview
 from core.templatetags.core_tags import activity_target_url, doctype_badge_classes, verb_badge_classes
 
@@ -381,14 +381,14 @@ class TestMixedFeedCreatedFilter:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=event,
-            summary="Kontakt erstellt",
+            action=Activity.Action.EVENT_CREATED,
         )
         log_activity(
             facility=facility,
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=event,
-            summary="Kontakt aktualisiert",
+            action=Activity.Action.EVENT_CREATED,
         )
         items = build_feed_items(facility, today, feed_type="")
         activity_items = [i for i in items if i["type"] == "activity"]
@@ -412,7 +412,7 @@ class TestMixedFeedCreatedFilter:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=event,
-            summary="Kontakt erstellt",
+            action=Activity.Action.EVENT_CREATED,
         )
         items = build_feed_items(facility, today, feed_type="activities")
         activity_items = [i for i in items if i["type"] == "activity"]
@@ -448,7 +448,7 @@ class TestActivitySensitivityFilter:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=event,
-            summary="Vertraulich erstellt",
+            action=Activity.Action.EVENT_CREATED,
         )
 
         items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
@@ -474,7 +474,7 @@ class TestActivitySensitivityFilter:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=event,
-            summary="Kontakt aktualisiert",
+            action=Activity.Action.EVENT_CREATED,
         )
 
         items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
@@ -491,7 +491,7 @@ class TestActivitySensitivityFilter:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=client_identified,
-            summary="Klientel aktualisiert",
+            action=Activity.Action.CLIENT_UPDATED,
         )
 
         items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
@@ -525,7 +525,7 @@ class TestActivityTargetUrl:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=client_identified,
-            summary="Klientel aktualisiert",
+            action=Activity.Action.CLIENT_UPDATED,
         )
         url = activity_target_url(activity)
         assert f"/clients/{client_identified.pk}/" in url
@@ -536,7 +536,7 @@ class TestActivityTargetUrl:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=sample_event,
-            summary="Kontakt aktualisiert",
+            action=Activity.Action.EVENT_CREATED,
         )
         url = activity_target_url(activity)
         assert f"/events/{sample_event.pk}/" in url
@@ -547,7 +547,7 @@ class TestActivityTargetUrl:
             actor=staff_user,
             verb=Activity.Verb.COMPLETED,
             target=sample_workitem,
-            summary="Aufgabe erledigt",
+            action=Activity.Action.WORKITEM_COMPLETED,
         )
         url = activity_target_url(activity)
         assert f"/workitems/{sample_workitem.pk}/" in url
@@ -558,7 +558,7 @@ class TestActivityTargetUrl:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=case_open,
-            summary="Fall aktualisiert",
+            action=Activity.Action.CASE_CLOSED,
         )
         url = activity_target_url(activity)
         assert f"/cases/{case_open.pk}/" in url
@@ -569,7 +569,7 @@ class TestActivityTargetUrl:
             actor=staff_user,
             verb=Activity.Verb.DELETED,
             target=client_identified,
-            summary="Klientel gelöscht",
+            action=Activity.Action.CLIENT_TRASHED,
         )
         url = activity_target_url(activity)
         assert url == ""
@@ -581,7 +581,7 @@ class TestActivityTargetUrl:
             verb=Activity.Verb.UPDATED,
             target_type=ContentType.objects.get_for_model(Activity),
             target_id=staff_user.pk,
-            summary="Unbekannt",
+            context={"schema": 1, "action": Activity.Action.LEGACY_REDACTED},
         )
         url = activity_target_url(activity)
         assert url == ""
@@ -591,16 +591,14 @@ class TestActivityTargetUrl:
 class TestTrashedCaseLeavesTheFeed:
     """Papierkorb-Grenze im Zeitstrom (Refs #1818, ADR-044 §7).
 
-    ``close_case``/``reopen_case`` schreiben den Falltitel als Freitext ins
-    ``Activity.summary``. Der Papierkorb nimmt den Fall aus Liste, Detail,
-    Episoden, Zielen und Ereignis-Select — der Zeitstrom waere sonst der eine
-    Ort, an dem sein Titel weiterlaeuft, und zwar um ein Vielfaches der
-    Papierkorb-Frist (``retention_activities_days`` 365 gegen 30 Tage).
+    ``close_case``/``reopen_case`` rendern den Falltitel aus der Zielreferenz.
+    Der Papierkorb nimmt den Fall aus Liste, Detail, Episoden, Zielen und
+    Ereignis-Select; der Zeitstrom folgt derselben Sichtbarkeitsgrenze.
     """
 
     def _feed_summaries(self, facility, user):
         return [
-            item["object"].summary
+            render_activity_summary(item["object"])
             for item in build_feed_items(facility, timezone.localdate(), "activities", user=user)
             if item["type"] == "activity"
         ]
@@ -631,10 +629,10 @@ class TestTrashedCaseLeavesTheFeed:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=client_identified,
-            summary="Person aktualisiert",
+            action=Activity.Action.CLIENT_UPDATED,
         )
         soft_delete_case(case_open, staff_user)
-        assert "Person aktualisiert" in self._feed_summaries(facility, staff_user)
+        assert f"Person {client_identified.pseudonym} aktualisiert" in self._feed_summaries(facility, staff_user)
 
     def test_target_url_is_dropped_for_a_trashed_case(self, facility, staff_user, case_open):
         """Zweite Verteidigungslinie: der ``deleted``-Verb-Zweig deckt nur die
@@ -646,7 +644,7 @@ class TestTrashedCaseLeavesTheFeed:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=case_open,
-            summary="Fall aktualisiert",
+            action=Activity.Action.CASE_CLOSED,
         )
         assert activity_target_url(activity) != ""
         soft_delete_case(case_open, staff_user)

@@ -258,7 +258,7 @@ class TestZeitstromFeedPartial:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=client_identified,
-            summary="Test",
+            action=Activity.Action.CLIENT_CREATED,
         )
         client.force_login(staff_user)
         response = client.get(

@@ -137,11 +137,13 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
         "core_case",
         "core_episode",
         "core_workitem",
-        "core_activity",
         "core_eventhistory",
         "core_deletionrequest",
     }:
         assert expected in tables_hit, f"Fixture befuellt {expected} nicht: {tables_hit}"
+    # #1972: Activity speichert nur noch den geschlossenen Aktionscode;
+    # der sichtbare Titel/das Pseudonym wird aus dem Ziel gelesen.
+    assert "core_activity" not in tables_hit
 
 
 # --------------------------------------------------------------------------

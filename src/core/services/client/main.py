@@ -482,25 +482,13 @@ def _revoke_offline_bundles(client) -> None:
 
 
 def _redact_activities(client, event_ids: list) -> None:
-    """Redigiere ``Activity.summary`` fuer Client-, Event-, WorkItem- und Case-Targets.
+    """Setze Activity-Kontext der Person defensiv auf einen sicheren Marker.
 
-    Mehrere Pfade schreiben das Klartext-Pseudonym in den Zeitstrom:
-    ``create_client``/``update_client``/``approve_client_deletion``
-    (Target = Client) sowie ``create_event`` („… für <pseudonym>",
-    Target = Event). ``create_workitem``/``update_workitem``/
-    ``update_workitem_status`` schreiben zudem Activities mit Target =
-    WorkItem und der Titel im ``summary`` („Aufgabe: <titel>"), der
-    Klienten-PII (z.B. Pseudonym) tragen kann (Refs #1090). Verb +
-    Zeitpunkt bleiben fuer den Feed erhalten, nur der Freitext wird
-    ersetzt.
-
-    Refs #1751 (Punkt 2): ``close_case``/``reopen_case`` („Fall
-    ‚<titel>' geschlossen") und ``delete_milestone`` („Meilenstein
-    ‚<titel>' gelöscht") schreiben mit Target = **Case**. Diese Zeilen
-    fielen durch den bisherigen Drei-Typen-Filter und blieben bis zur
-    ``retention_activities_days``-Frist (Default 365 Tage) stehen —
-    deutlich laenger als die Papierkorb-Frist (Default 30 Tage), nach
-    der die Anonymisierung greift.
+    Seit #1972 speichern Activities keinen Anzeigetext mehr, sondern nur einen
+    geschlossenen Aktionscode. Das Zuruecksetzen ist fuer den regulaeren Pfad
+    daher nicht mehr noetig, bleibt aber als Defense-in-Depth: sollte ein
+    kuenftiger Schema-Schritt doch Kontextwerte ergaenzen, ueberlebt davon nach
+    der Anonymisierung nichts ausser Verb, Ziel-Referenz und Redaktionsmarker.
 
     Die ``case_ids`` werden hier selbst aufgeloest (wie die
     ``workitem_ids``), damit die Signatur stabil bleibt und **beide**
@@ -536,7 +524,9 @@ def _redact_activities(client, event_ids: list) -> None:
             target_type=ContentType.objects.get_for_model(Case),
             target_id__in=case_ids,
         )
-    Activity.objects.for_facility(client.facility).filter(targets).update(summary="[Anonymisiert]")
+    Activity.objects.for_facility(client.facility).filter(targets).update(
+        context={"schema": 1, "action": Activity.Action.REDACTED.value}
+    )
 
 
 def _redact_merged_source_references(client) -> None:
@@ -545,7 +535,7 @@ def _redact_merged_source_references(client) -> None:
     Nach einem Merge (ADR-045) sammelt ``_event_ids_for_client(source)`` 0
     Zeilen — alle Ereignisse haengen laengst am Ziel. Die Kaskade oben traefe
     damit genau die Metadaten nicht mehr, die sie ohne Merge redigiert
-    (#1751-Linie): ``Activity.summary`` der Ereignis-Zeilen (Zeitstrom,
+    (#1751-Linie): Activity-Kontext der Ereignis-Zeilen (Zeitstrom,
     ``retention_activities_days`` = Default 365 Tage bzw. bis zur Redaktion
     des ZIELS), ``RetentionProposal.details["pseudonym"]``,
     ``DeletionRequest.reason`` und abgelaufene ``LegalHold.reason`` mit
@@ -611,7 +601,7 @@ def _redact_merged_source_references(client) -> None:
         target_type=ContentType.objects.get_for_model(Event),
         target_id__in=moved_event_ids,
         created_at__lte=merged_at,
-    ).update(summary="[Anonymisiert]")
+    ).update(context={"schema": 1, "action": Activity.Action.REDACTED.value})
     DeletionRequest.objects.filter(
         target_type=DeletionRequest.TargetType.EVENT,
         target_id__in=moved_event_ids,
@@ -674,13 +664,12 @@ def anonymize_client(client, user=None):
       Events und ``LegalHold.reason`` für Client-, Event- und Fall-Ziele
       (Refs #1751, #1818) — auch hier bleibt die Nachweis-Metadatenspur
       unangetastet.
-    - ``Activity.summary`` für Client-, Event-, WorkItem- und Case-Targets —
-      der Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067),
-      die WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090) und
-      die Case-Target-Activity den Fall-/Meilenstein-Titel (Refs #1751).
+    - ``Activity.context`` für Client-, Event-, WorkItem- und Case-Targets —
+      seit #1972 bereits PII-frei; der Reset auf den Redaktionsmarker bleibt
+      als Defense-in-Depth für künftige Schema-Erweiterungen.
     - Bei einem **Merge-Tombstone** (``merged_into`` gesetzt, ADR-045)
       zusätzlich die quell-bezogenen Metadaten der zum Ziel GEWANDERTEN
-      Ereignisse (``Activity.summary``, ``RetentionProposal``-Pseudonym,
+      Ereignisse (Activity-Kontext als Defense-in-Depth, ``RetentionProposal``-Pseudonym,
       ``DeletionRequest.reason``, ``LegalHold.reason``) — über das
       ``moved_events``-Inventar der ``CLIENT_MERGED``-Audit-Zeile und begrenzt
       auf Zeilen bis zum Merge-Zeitpunkt
@@ -781,7 +770,7 @@ def create_client(facility, user, **data):
         actor=user,
         verb=Activity.Verb.CREATED,
         target=client,
-        summary=f"Person {client.pseudonym} angelegt",
+        action=Activity.Action.CLIENT_CREATED,
     )
     audit_client_event(client, user, AuditLog.Action.CLIENT_CREATE)
     return client
@@ -891,7 +880,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
             actor=user,
             verb=Activity.Verb.QUALIFIED,
             target=client,
-            summary=f"{client.pseudonym} qualifiziert",
+            action=Activity.Action.CLIENT_QUALIFIED,
         )
 
     if changed_fields:
@@ -907,7 +896,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         actor=user,
         verb=Activity.Verb.UPDATED,
         target=client,
-        summary=f"Person {client.pseudonym} aktualisiert",
+        action=Activity.Action.CLIENT_UPDATED,
     )
 
     return client
@@ -1180,7 +1169,7 @@ def approve_client_deletion(deletion_request, reviewer):
         actor=reviewer,
         verb=Activity.Verb.DELETED,
         target=client,
-        summary=f"Person {client.pseudonym} in den Papierkorb verschoben",
+        action=Activity.Action.CLIENT_TRASHED,
     )
     return client
 

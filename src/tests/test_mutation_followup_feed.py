@@ -368,7 +368,7 @@ class TestBuildFeedItemsCreatedExclude:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=client_identified,
-            summary="Klient erstellt",
+            action=Activity.Action.CLIENT_CREATED,
         )
         items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
         activity_items = [i for i in items if i["type"] == "activity"]
@@ -386,7 +386,7 @@ class TestBuildFeedItemsCreatedExclude:
             actor=staff_user,
             verb=Activity.Verb.CREATED,
             target=client_identified,
-            summary="Klient erstellt",
+            action=Activity.Action.CLIENT_CREATED,
         )
         # Eine UPDATED-Activity als Sanity-Check, dass der Bucket gefüllt
         # wird — sonst könnte der Test fälschlich grün sein, weil
@@ -396,7 +396,7 @@ class TestBuildFeedItemsCreatedExclude:
             actor=staff_user,
             verb=Activity.Verb.UPDATED,
             target=client_identified,
-            summary="Klient geändert",
+            action=Activity.Action.CLIENT_UPDATED,
         )
         items = build_feed_items(facility, today, feed_type="all", user=staff_user)
         activity_items = [i for i in items if i["type"] == "activity"]
