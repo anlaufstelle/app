@@ -54,6 +54,39 @@ def _assert_no_horizontal_overflow(page):
     assert not can_scroll, "Horizontaler Scrollbar sichtbar"
 
 
+class TestMobileZeitstromTouchTargets:
+    """RC-Politur: mobile Schnellaktionen folgen der 44-px-Hausregel (#1947)."""
+
+    @staticmethod
+    def _assert_44px(locator, label, *, width=False):
+        locator.wait_for(state="visible", timeout=10000)
+        box = locator.bounding_box()
+        assert box is not None
+        assert box["height"] >= 44, f"{label}: nur {box['height']:.0f}px hoch"
+        if width:
+            assert box["width"] >= 44, f"{label}: nur {box['width']:.0f}px breit"
+
+    def test_zeitstrom_tally_tabs_and_chips_are_thumb_sized(self, mobile_page, base_url):
+        page = mobile_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        self._assert_44px(page.locator('[data-testid^="tally-increment-"]').first, "Strichlisten-Button", width=True)
+        self._assert_44px(page.locator('[data-testid="zeitstrom-tab-feed"]'), "Feed-Reiter")
+        self._assert_44px(page.locator('[data-testid="zeitstrom-tab-uebergabe"]'), "Übergabe-Reiter")
+        self._assert_44px(page.locator('[data-testid="zeitstrom-filter-chip"]').first, "Inhaltsfilter")
+
+        tabs = page.locator('[data-testid="time-filter-tabs"]')
+        for index in range(tabs.get_by_role("tab").count()):
+            self._assert_44px(tabs.get_by_role("tab").nth(index), f"Dienst-Reiter {index + 1}")
+        assert tabs.locator('[data-testid="time-filter-scroll-hint"]').is_visible()
+
+        strip = tabs.locator('[role="tablist"]')
+        assert strip.evaluate("el => el.scrollWidth > el.clientWidth"), "Dienst-Reiter passen unerwartet ohne Scrollen"
+        tabs.get_by_role("tab", name="Nachtdienst").scroll_into_view_if_needed()
+        assert tabs.get_by_role("tab", name="Nachtdienst").is_visible()
+
+
 class TestMobileNavMore:
     """Mobile Bottom-Nav mit Mehr-Dropdown (Refs #1813: Selektoren auf testids).
 

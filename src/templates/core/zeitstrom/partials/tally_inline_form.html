@@ -37,14 +37,14 @@
         </div>
         <div class="flex items-center justify-end gap-2">
             <a href="{{ tally_next }}"
-                    class="btn-secondary min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
+                    class="btn-secondary min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
                     data-testid="tally-cancel-{{ document_type.pk }}"
                     hx-get="{{ tally_increment_url }}&amp;cancel=1"
                     hx-target="#tally-action-{{ document_type.pk }}"
                     hx-swap="outerHTML">
                 {% trans "Abbrechen" %}
             </a>
-            <button type="submit" class="btn-primary min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
+            <button type="submit" class="btn-primary min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
                     data-testid="tally-submit-{{ document_type.pk }}">
                 {% trans "Kontakt zählen" %}
             </button>

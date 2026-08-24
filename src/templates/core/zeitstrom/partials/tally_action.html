@@ -3,7 +3,7 @@
      data-testid="tally-action-{{ row.document_type.pk }}">
     {% if row.requires_number_input %}
     <a href="{{ row.tally_increment_url }}"
-       class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
+       class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-[36px] md:min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
        data-testid="tally-increment-{{ row.document_type.pk }}"
        {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
        data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}
@@ -31,7 +31,7 @@
         <input type="hidden" name="tally_window_end" value="{{ tally_summary.window_end|date:'c' }}">
         {% endif %}
     <button
-            class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
+            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-[36px] md:min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
             data-testid="tally-increment-{{ row.document_type.pk }}"
             {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
             data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}

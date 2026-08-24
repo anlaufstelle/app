@@ -120,7 +120,12 @@ importScripts("/static/js/url-patterns.js");
 // der Bump ist hier also nicht Hygiene, sondern der Loeschvorgang: er erzwingt
 // Re-Install + Re-Precache und raeumt im activate die v37-Generation samt
 // Runtime-Cache weg.
-const CACHE_NAME = "anlaufstelle-v38";
+// Refs #1947: v38 -> v39 -- Manifest, Meta-Tags und PWA-Icons verwenden jetzt
+// dieselbe Markenfarbe; der Splash-Hintergrund entspricht dem warmen Canvas.
+// base.html/offline_base.html sowie offline-tally.js liegen in precachten
+// Shells. Der Bump ersetzt die alten Farben und 36-px-Touchziele auch auf
+// bereits installierten Geraeten.
+const CACHE_NAME = "anlaufstelle-v39";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

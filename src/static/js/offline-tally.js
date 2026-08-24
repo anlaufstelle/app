@@ -321,7 +321,7 @@
         });
         const submit = document.createElement("button");
         submit.type = "submit";
-        submit.className = "btn-primary min-h-[36px] px-3 rounded-md text-[13px] font-semibold";
+        submit.className = "btn-primary min-h-[44px] px-3 rounded-md text-[13px] font-semibold";
         submit.textContent = defaultLabels.countContact;
         form.appendChild(submit);
         form.addEventListener("submit", async function (event) {

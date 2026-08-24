@@ -81,8 +81,9 @@ class TestTallyEncryptedQueueAndSchemaContract:
         store = _js("offline-store.js")
         sw = _js("sw.js")
         assert "const FACILITY_BUNDLE_SCHEMA_VERSION = 2;" in store
-        # Refs #1966: v38 — die precachten Shells erben offline_base.html.
-        assert 'const CACHE_NAME = "anlaufstelle-v38";' in sw
+        # Refs #1947: v39 — Markenfarben und 44-px-Tally-Ziele werden auch in
+        # den precachten Offline-Shells erneuert.
+        assert 'const CACHE_NAME = "anlaufstelle-v39";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):

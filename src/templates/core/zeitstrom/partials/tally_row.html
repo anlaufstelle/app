@@ -27,7 +27,7 @@
         {% for name, value in tally_context.items %}
         <input type="hidden" name="{{ name }}" value="{{ value }}">
         {% endfor %}
-        <button type="submit" class="inline-flex items-center justify-center min-h-[36px] px-3 rounded-[10px] btn-secondary"
+        <button type="submit" class="inline-flex items-center justify-center min-h-[44px] md:min-h-[36px] px-3 rounded-[10px] btn-secondary"
                 data-testid="tally-undo">{% trans "Rückgängig" %}</button>
     </form>
     {% endif %}

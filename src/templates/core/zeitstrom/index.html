@@ -73,8 +73,8 @@
 
 {# Feed ⇄ Übergabe (Refs #1124) #}
 <div class="flex gap-1.5 mb-5">
-    <a href="{% url 'core:zeitstrom' %}" class="inline-flex items-center px-3 py-1.5 rounded-md text-[13px] font-medium border {% if not uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Feed" %}</a>
-    <a href="?view=uebergabe" data-testid="zeitstrom-tab-uebergabe" class="inline-flex items-center px-3 py-1.5 rounded-md text-[13px] font-medium border {% if uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Übergabe" %}</a>
+    <a href="{% url 'core:zeitstrom' %}" data-testid="zeitstrom-tab-feed" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-md text-[13px] font-medium border {% if not uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Feed" %}</a>
+    <a href="?view=uebergabe" data-testid="zeitstrom-tab-uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-md text-[13px] font-medium border {% if uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Übergabe" %}</a>
 </div>
 
 {% include "core/zeitstrom/partials/bans_slot.html" %}
@@ -96,9 +96,9 @@
 {# Schicht-Tabs (Pills) #}
 {% if time_filters %}
 <div class="flex flex-wrap gap-1.5 mb-5 justify-center">
-    <a href="?date={{ target_date|date:'Y-m-d' }}&view=uebergabe" class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if not selected_filter %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Ganzer Tag" %}</a>
+    <a href="?date={{ target_date|date:'Y-m-d' }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if not selected_filter %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Ganzer Tag" %}</a>
     {% for tf in time_filters %}
-    <a href="?date={{ target_date|date:'Y-m-d' }}&time_filter={{ tf.pk }}&view=uebergabe" class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_filter.pk == tf.pk %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{{ tf.label }} <span class="font-mono text-[12px] ml-1 opacity-80">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span></a>
+    <a href="?date={{ target_date|date:'Y-m-d' }}&time_filter={{ tf.pk }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_filter.pk == tf.pk %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{{ tf.label }} <span class="font-mono text-[12px] ml-1 opacity-80">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span></a>
     {% endfor %}
 </div>
 {% endif %}
@@ -141,7 +141,8 @@
         <div class="flex flex-wrap gap-1.5 mb-3.5" data-filter-persist>
             {% for val, lbl in filter_options %}
             <a href="?date={{ target_date|date:'Y-m-d' }}{% if val %}&type={{ val }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}{% if selected_doc_type %}&doc_type={{ selected_doc_type }}{% endif %}"
-               class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_type == val %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
+               data-testid="zeitstrom-filter-chip"
+               class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_type == val %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
                 {{ lbl }}
             </a>
             {% endfor %}
