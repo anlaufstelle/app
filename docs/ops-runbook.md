@@ -1431,6 +1431,12 @@ Zugriff und `openssl`, gibt aber **kein** Passwort auf stdout/stderr oder in
 Prozessargumenten aus. Es erzeugt drei voneinander unabhaengige Zufallswerte und
 setzt intern als Bootstrap-Superuser eine Transaktion nach diesem Muster ab:
 
+Die Rotation ist **kein Deployment**: alle `compose run`-/`up`-Schritte nutzen
+`--pull never` und damit exakt die bereits verifizierten lokalen Images. So kann
+weder ein bewegtes Tag den Code mitten im Wartungsfenster wechseln noch ein
+Registry-Ausfall Rotation oder Rollback blockieren. Ein neues Image immer vor
+dem Wartungsfenster separat deployen und pruefen.
+
 ```sql
 BEGIN;
 ALTER ROLE "anlaufstelle" PASSWORD '<neues App-Passwort>';

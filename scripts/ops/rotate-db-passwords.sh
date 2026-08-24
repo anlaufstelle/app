@@ -226,11 +226,11 @@ rollback() {
                 >/dev/null 2>&1 || rollback_failed=1
         fi
         if [[ "$DB_RECREATED" -eq 1 ]]; then
-            "${COMPOSE[@]}" up -d --force-recreate db >/dev/null 2>&1 || rollback_failed=1
+            "${COMPOSE[@]}" up -d --pull never --force-recreate db >/dev/null 2>&1 || rollback_failed=1
             wait_healthy db >/dev/null 2>&1 || rollback_failed=1
         fi
         if [[ "$CONSUMERS_STOPPED" -eq 1 ]]; then
-            "${COMPOSE[@]}" up -d "${CONSUMERS[@]}" >/dev/null 2>&1 || rollback_failed=1
+            "${COMPOSE[@]}" up -d --pull never "${CONSUMERS[@]}" >/dev/null 2>&1 || rollback_failed=1
         fi
         if [[ "$rollback_failed" -eq 0 ]]; then
             warn "Rollback abgeschlossen; Ursache oberhalb pruefen."
@@ -262,7 +262,7 @@ mv -f "$STAGED_ENV" "$ENV_FILE"
 ENV_SWAPPED=1
 info "Env-Datei atomar aktualisiert; PostgreSQL wird mit der neuen Bootstrap-Env recreated."
 DB_RECREATED=1
-"${COMPOSE[@]}" up -d --force-recreate db
+"${COMPOSE[@]}" up -d --pull never --force-recreate db
 wait_healthy db
 
 # Recreate darf weder die persistierte Rollen-Aenderung noch die Erreichbarkeit
@@ -272,10 +272,10 @@ login_succeeds "$NEW_ADMIN_PASSWORD" "$ADMIN_USER" || fail "Neuer Login fuer Rol
 login_succeeds "$NEW_BOOTSTRAP_PASSWORD" postgres || fail "Neuer Login fuer Rolle postgres scheitert nach DB-Recreate."
 
 info "Migrate-/Ownership-Gate laeuft als Maintenance-Rolle."
-"${COMPOSE[@]}" run --rm -T --entrypoint=/app/docker-migrate.sh maintenance
+"${COMPOSE[@]}" run --rm -T --pull never --entrypoint=/app/docker-migrate.sh maintenance
 
 info "Dauerhafte Consumer starten mit den neuen Zugangsdaten."
-"${COMPOSE[@]}" up -d "${CONSUMERS[@]}"
+"${COMPOSE[@]}" up -d --pull never "${CONSUMERS[@]}"
 wait_healthy web
 
 old_login_is_rejected "$OLD_APP_PASSWORD" "$APP_USER" || \

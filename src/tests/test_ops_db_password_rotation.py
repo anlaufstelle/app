@@ -156,14 +156,17 @@ def test_rotation_is_atomic_and_exercises_every_consumer(tmp_path: Path) -> None
     sequence = (
         "stop web cron",
         "sql:rotate",
-        "up -d --force-recreate db",
-        "run --rm -T --entrypoint=/app/docker-migrate.sh maintenance",
-        "up -d web cron",
+        "up -d --pull never --force-recreate db",
+        "run --rm -T --pull never --entrypoint=/app/docker-migrate.sh maintenance",
+        "up -d --pull never web cron",
     )
     positions = [log.index(marker) for marker in sequence]
     assert positions == sorted(positions), log
     assert log.count(":old") == 3
     assert log.count(":new") == 6
+    assert "up -d --pull never --force-recreate db" in log
+    assert "run --rm -T --pull never --entrypoint=/app/docker-migrate.sh maintenance" in log
+    assert "up -d --pull never web cron" in log
     for secret in (OLD_APP, OLD_ADMIN, OLD_BOOTSTRAP, NEW_APP, NEW_ADMIN, NEW_BOOTSTRAP):
         assert secret not in result.stdout
         assert secret not in result.stderr
