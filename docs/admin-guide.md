@@ -479,6 +479,8 @@ Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen S
 - **Feldvorlagen** (Freitextfelder, Auswahlfelder etc.)
 - **Löschfrist** in Tagen (überschreibt die globale Einrichtungseinstellung, falls gesetzt)
 
+> **Altersgruppen sind keine Feldvorlagen-Einstellung.** Die Altersgruppe an einer Person verwendet systemweit genau **Unter 18, 18–26, 27+ und Unbekannt**. Weder diese Verwaltungsansicht noch ein Konfigurationspaket kann die Grenzen oder Labels pro Einrichtung ändern. Das gleichnamige Auswahl-Zusatzfeld `alterscluster` des Standardpakets gehört dagegen zu einzelnen Ereignissen (auch anonymen Kontakten); seine Optionen ändern die Personen-Altersgruppe und die eingebauten Altersgruppen-Statistiken **nicht**. Hintergrund und Bedingungen für eine spätere Neubewertung: [ADR-047](adr/047-altersgruppen-systemweit-fix.md).
+
 #### Eindeutigkeit des Namens
 
 Das Paar `(Einrichtung, Name)` ist eindeutig: Pro Einrichtung kann jeder Dokumentationstyp-Name nur **einmal** vergeben werden. Der Versuch, einen zweiten Typ mit demselben Namen anzulegen, wird als Formularfehler abgewiesen.

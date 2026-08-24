@@ -22,6 +22,7 @@ from django.utils.functional import Promise
 from core.models import Client, DocumentType, Event, Facility, Organization, User
 from core.reporting import backends, registry
 from core.reporting.backends.sample_report_1 import (
+    _AGE_LABELS,
     _EXPORT_ISSUE_CODES,
     _ISSUE_SEVERITIES,
     _SUPPRESSED_MESSAGES,
@@ -36,6 +37,13 @@ pytestmark = pytest.mark.django_db
 
 DATE_FROM = date(2025, 5, 1)
 DATE_TO = date(2025, 5, 31)
+
+
+def test_altersgruppen_labels_stammen_direkt_aus_dem_client_enum():
+    """Eine Enum-Erweiterung darf im Beispielbericht keinen zweiten Patch brauchen."""
+    assert list(_AGE_LABELS) == list(Client.AgeCluster.values)
+    for value, model_label in Client.AgeCluster.choices:
+        assert _AGE_LABELS[value] is model_label
 
 
 def _veroeffentlichte_zahlen(value):

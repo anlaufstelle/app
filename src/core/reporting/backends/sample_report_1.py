@@ -26,7 +26,7 @@ from django.db.models import Count, Q
 from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Event
+from core.models import Client, Event
 from core.reporting.base import (
     EXCLUDED_KEY,
     BindungsEintrag,
@@ -119,14 +119,10 @@ CATEGORY_MAP = TYP_BINDUNG.ziel_map()
 resolve_category = TYP_BINDUNG.resolve
 
 
-# Anzeigelabels der Altersgruppen — lazy wie bisher, damit der Snapshot-Payload
-# byte-gleich zum Bestand bleibt.
-_AGE_LABELS = {
-    "u18": _("Unter 18"),
-    "18_26": _("18–26"),
-    "27_plus": _("27+"),
-    "unknown": _("Unbekannt"),
-}
+# Anzeigelabels der Altersgruppen — aus demselben systemweiten Enum wie
+# Erfassung, Filter und Dashboard. Die Lazy-Labels halten den Snapshot-Payload
+# byte-gleich zum Bestand; eine spaetere Enum-Aenderung kann hier nicht driften.
+_AGE_LABELS = dict(Client.AgeCluster.choices)
 
 
 def _erststufen_feld(prefix: str) -> str:

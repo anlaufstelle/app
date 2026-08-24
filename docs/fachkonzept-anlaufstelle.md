@@ -965,7 +965,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 | Begriff | Bedeutung im Kontext von Anlaufstelle |
 |---|---|
-| **Alterscluster** | Grobe Altersgruppe einer Person (z.B. U18, 18–26, 27+, unbekannt). Konfigurierbar pro Einrichtung. Dient der Statistik ohne genaues Geburtsdatum zu erfordern. |
+| **Altersgruppe** | Grobe Altersgruppe einer Person (Unter 18, 18–26, 27+ oder Unbekannt). Der Katalog ist systemweit fest und nicht pro Einrichtung konfigurierbar ([ADR-047](adr/047-altersgruppen-systemweit-fix.md)). Dient der Statistik, ohne ein genaues Geburtsdatum zu erfordern. |
 | **Anlaufstelle** | Name des Fachsystems. Auch umgangssprachlich für die Einrichtung selbst — der Ort, an dem Menschen vorbeikommen. |
 | **Arbeitsinfo** | Sammelbegriff für Hinweise und Aufgaben — operative Einträge, die nicht zur fachlichen Dokumentation gehören. Siehe: WorkItem. |
 | **Audit-Trail** | Unveränderliches Protokoll aller sicherheitsrelevanten Aktionen im System: Zugriffe, Änderungen, Löschungen, Login-Versuche. Dient der DSGVO-Compliance und der Nachvollziehbarkeit. Siehe: AuditLog. |

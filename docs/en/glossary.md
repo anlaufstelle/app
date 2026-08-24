@@ -10,7 +10,7 @@
 |---------|---------|------------|
 | Account-Lockout | Account lockout | Automatic account lock after 10 failed login attempts (since v0.10.1). The lock state is not stored separately but derived from the `LOGIN_FAILED` AuditLog entries within a sliding 15-minute window; admins unlock affected users from the profile screen, which writes a `LOGIN_UNLOCK` entry (earlier `LOGIN_FAILED` entries no longer count afterwards). Implemented in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py). |
 | AdminCSPRelaxMiddleware | Admin CSP relax middleware | Per-request CSP relaxation that injects `'unsafe-eval'` only on `/admin-mgmt/*` routes (since v0.10.2). Required because django-unfold's bundled Alpine build uses `new AsyncFunction()` for the Cmd+K command palette. The global CSP stays strict (no `unsafe-eval`); admin routes are additionally protected by MFA-Gate and the `admin` role. See [`src/core/middleware/admin_csp_relax.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/admin_csp_relax.py). |
-| Altersgruppe | Age group | Coarse age group for a person (e.g. under 18, 18–26, 27+, unknown). Configurable per facility. Used for statistics without requiring an exact date of birth. The field is still called `age_cluster` in code (per the language guideline, code stays outside). |
+| Altersgruppe | Age group | Coarse age group for a person (under 18, 18–26, 27+, or unknown). The catalog is fixed system-wide and cannot be configured per facility ([ADR-047](../adr/047-altersgruppen-systemweit-fix.md), German). Used for statistics without requiring an exact date of birth. The field is still called `age_cluster` in code (per the language guideline, code stays outside). |
 | Anlaufstelle | Drop-in center | Name of the application. Also colloquial for the facility itself — the place where people come for help. |
 | Arbeitsinfo | Work item | Collective term for notes and tasks — operational entries that are separate from case documentation. See: WorkItem. |
 | Arbeitszentrale | Work Center | Role-specific landing page at `/start/` (Refs #920): condensed tiles over existing data — varies per role (staff, lead, facility admin, super-admin). Reachable via the sidebar; the Timeline (`/`) stays the default view. |
@@ -77,5 +77,5 @@
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.82.0 -->
-<!-- translation-date: 2026-08-22 -->
-<!-- source-hash: b7d56a9dc4b822efa817f566433a5c0c4be6fc47 -->
+<!-- translation-date: 2026-08-24 -->
+<!-- source-hash: 44c8abffaa73de065142d804c4dc0af6ca4a6a3e -->
