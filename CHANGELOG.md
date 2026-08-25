@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **In-App-Badges zeigen offene Prüf- und Arbeitsvorgänge direkt in der Navigation** (#1984, [ADR-046](docs/adr/046-in-app-badges-statt-notification-modell.md)) — Leitung, Genehmiger:innen und Anwendungsbetreuung sehen am Datenschutz-Bereich einen Summen-Badge (Sidebar und mobiles Mehr-Menü) sowie Einzelzähler an den Reitern für offene Lösch- und Berichtigungsanträge; Antragstellende zählen nur die eigenen offenen Anträge, ohne Listen-Zugang erscheint kein Zähler. Null rendert keinen Badge, große Werte kappen bei „99+" mit vollem zugänglichem Namen; der bestehende Aufgaben-Badge übernimmt dieselbe gemeinsame Badge-Semantik.
+
 ### Fixed
 
 - **Offline-App-Shell heilt sich nach Browser-Speicherdruck selbst** (#1948) — Entfernt der Browser einzelne Dateien aus dem Offline-Cache (vor allem iOS unter Speicherdruck), prüft der Service Worker jetzt bei jedem Seitenaufbau die Vollständigkeit der App-Shell und lädt nur das Fehlende nach; bisher blieb die Offline-Ansicht bis zum nächsten App-Update still unvollständig.

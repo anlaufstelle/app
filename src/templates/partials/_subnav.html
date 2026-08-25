@@ -3,6 +3,6 @@
 {# min-h-[44px] + inline-flex: Mindest-Touchflaeche (Refs #810); das alte /system/-Subnav lag bei ~32px. #}
 <nav class="mb-6 flex flex-wrap gap-2 text-[13px]" aria-label="{{ section.aria_label }}" data-testid="subnav-{{ section.key }}">
     {% for tab in tabs %}
-    <a href="{{ tab.href }}" data-testid="subnav-tab-{{ tab.key }}"{% if tab.is_active %} aria-current="page"{% endif %} class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md font-medium {% if tab.is_active %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">{{ tab.label }}</a>
+    <a href="{{ tab.href }}" data-testid="subnav-tab-{{ tab.key }}"{% if tab.is_active %} aria-current="page"{% endif %} class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md font-medium {% if tab.is_active %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">{{ tab.label }}{% if tab.badge == "deletion_requests" %}{% include "partials/_nav_badge.html" with count=open_deletion_requests_count kind="deletion" extra_classes="ml-1.5" only %}{% elif tab.badge == "rectification_requests" %}{% include "partials/_nav_badge.html" with count=open_rectification_requests_count kind="rectification" extra_classes="ml-1.5" only %}{% endif %}</a>
     {% endfor %}
 </nav>

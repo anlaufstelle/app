@@ -93,6 +93,65 @@ def workitem_counts(request):
     }
 
 
+def review_counts(request):
+    """Offene Prüf-/Arbeitsvorgänge für die Navigations-Badges (Refs #1984).
+
+    Umsetzung aus #1870/ADR-046: datensparsame In-App-Zähler statt
+    Notification-Modell — nur Anzahlen, nie Pseudonym/Titel/Grund, kein
+    Gelesen-Zustand. Die Zähler spiegeln EXAKT die Sichtmengen der
+    Zielansichten:
+
+    - Löschanträge (``DeletionRequestListView``): Leitung/Genehmiger:innen
+      (``sees_all_deletion_requests``) zählen alle PENDING der Einrichtung,
+      reine Antragsteller:innen nur die eigenen; wer keinen Listen-Zugang hat,
+      bekommt KEINEN Key — ein 0-Badge wäre zwar unsichtbar, aber der Zähler
+      dürfte nicht einmal intern die Existenz fremder Anträge abfragen.
+    - Berichtigungen (``RectificationListView``): Leitung/Anwendungsbetreuung;
+      exakt die ``pending``-Definition der Liste — Anträge zu widerrufenen/
+      inaktiven Personen sind kein prüfbarer Vorgang mehr und zählen nicht
+      (sonst zeigte der Badge dauerhaft eine Zahl ohne Listenzeile).
+
+    ``datenschutz_review_count`` ist die Summe fürs Hub-Anker-Badge (im
+    Processor berechnet — Template-Addition über bedingt vorhandene Keys wäre
+    fehleranfällig). Query-Budget: läuft einmal pro Request (Context-
+    Processor); ``can_access_deletion_requests`` teilt sich die
+    ``cached_property``-Query mit dem Nav-Gate (Refs #1755), HTMX-Partials
+    rendern die Navigation nie und werden wie in ``workitem_counts``
+    übersprungen.
+    """
+    if not hasattr(request, "user") or not request.user.is_authenticated:
+        return {}
+    if request.headers.get("HX-Request"):
+        return {}
+    facility = getattr(request, "current_facility", None)
+    if not facility:
+        return {}
+
+    from core.models import RectificationRequest
+    from core.models.workitem import DeletionRequest
+
+    user = request.user
+    counts = {}
+    if user.can_access_deletion_requests:
+        deletion_qs = DeletionRequest.objects.for_facility(facility).filter(status=DeletionRequest.Status.PENDING)
+        if not user.sees_all_deletion_requests:
+            deletion_qs = deletion_qs.filter(requested_by=user)
+        counts["open_deletion_requests_count"] = deletion_qs.count()
+    if user.is_lead_or_admin:
+        counts["open_rectification_requests_count"] = (
+            RectificationRequest.objects.for_facility(facility)
+            .filter(
+                status=RectificationRequest.Status.PENDING,
+                target_client__is_deleted=False,
+                target_client__is_active=True,
+            )
+            .count()
+        )
+    if counts:
+        counts["datenschutz_review_count"] = sum(counts.values())
+    return counts
+
+
 def mfa_setup_reminder(request):
     """Refs #689: Reminder-Banner-Kontext für die 2FA-Setup-Grace-Frist.
 
