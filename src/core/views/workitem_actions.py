@@ -22,6 +22,10 @@ from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION, WORKITEM_INBO
 from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
 from core.services.case import (
+    DEFAULT_ASSIGNED_SCOPE,
+    apply_workitem_default_scope,
+    apply_workitem_filters,
+    can_user_mutate_workitem,
     create_workitem,
     update_workitem,
     update_workitem_status,
@@ -44,12 +48,6 @@ from core.views._json_contracts import (
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
-from core.views.workitems import (
-    WorkItemInboxView,
-    apply_workitem_default_scope,
-    apply_workitem_filters,
-    can_user_mutate_workitem,
-)
 
 
 def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
@@ -113,8 +111,8 @@ def _build_recent_done_oob(request, workitem):
     if due == "overdue":
         return ""
 
-    raw_assigned_to = request.POST.get("assigned_to", WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE)
-    default_scope = raw_assigned_to == WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE
+    raw_assigned_to = request.POST.get("assigned_to", DEFAULT_ASSIGNED_SCOPE)
+    default_scope = raw_assigned_to == DEFAULT_ASSIGNED_SCOPE
     assigned_to = "" if default_scope else raw_assigned_to
 
     qs = apply_workitem_filters(
