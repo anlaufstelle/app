@@ -120,6 +120,14 @@ importScripts("/static/js/url-patterns.js");
 // der Bump ist hier also nicht Hygiene, sondern der Loeschvorgang: er erzwingt
 // Re-Install + Re-Precache und raeumt im activate die v37-Generation samt
 // Runtime-Cache weg.
+// Refs #1838: v40 -> v41 -- offline-store.js ist in den 4-Datei-Verbund
+// offline-db/offline-bundles/offline-revocations/offline-store gesplittet:
+// drei NEUE precachte Dateien, ein deutlich verkleinertes offline-store.js
+// und fuenf geaenderte (teils precachte) Shell-Templates mit den neuen
+// Script-Tags. Alles cache-first im APP_SHELL: ohne Bump behielte ein
+// Bestandsgeraet das alte Monolith-offline-store.js OHNE die drei neuen
+// Dateien im Precache — je nach Shell-Stand fehlte die halbe Fassade. Der
+// Bump erzwingt Re-Install + Re-Precache und erneuert den Verbund atomar.
 // Refs #1947: v38 -> v39 -- Manifest, Meta-Tags und PWA-Icons verwenden jetzt
 // dieselbe Markenfarbe; der Splash-Hintergrund entspricht dem warmen Canvas.
 // base.html/offline_base.html sowie offline-tally.js liegen in precachten
@@ -136,7 +144,7 @@ importScripts("/static/js/url-patterns.js");
 // z.B. ein neues offline-client-view.js, das offlineFormFields.formatTs
 // erwartet, gegen ein altes offline-form-fields.js ohne Formatter. Der Bump
 // erzwingt Re-Install + Re-Precache und erneuert die Module atomar.
-const CACHE_NAME = "anlaufstelle-v40";
+const CACHE_NAME = "anlaufstelle-v41";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -225,6 +233,14 @@ const APP_SHELL = [
     // Offline-Aufruf (PWA-Kaltstart) leer/unladbar.
     "/static/js/dexie.min.js",
     "/static/js/crypto.js",
+    // Refs #1838: offline-store ist ein 4-Datei-Verbund (offline-db →
+    // offline-bundles → offline-revocations → offline-store, EINE Fassade);
+    // alle vier muessen atomar precached sein — eine Mischgeneration
+    // (z.B. neues offline-store.js ohne offline-db.js) haette weder Fassade
+    // noch internen Kanal.
+    "/static/js/offline-db.js",
+    "/static/js/offline-bundles.js",
+    "/static/js/offline-revocations.js",
     "/static/js/offline-store.js",
     "/static/js/offline-home.js",
     // Refs #1322: Der In-Place-Client-Shell rendert ueber offline-client-view.js,
