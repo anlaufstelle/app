@@ -407,6 +407,105 @@ function _withHeader(request, name, value) {
     return new Request(request.clone(), { headers: headers });
 }
 
+// Refs #1828: gemeinsame Flash-Response des Schreibpfads (vorher dreimal
+// dupliziert). Rendert das #flash-messages-Fragment, das HTMX via
+// HX-Retarget/HX-Reswap an die Standard-Flash-Stelle swappt. ``tone`` waehlt
+// die Farbfamilie (red = Fehler, yellow = Offline-Hinweis); ``headers``
+// ergaenzt die HTMX-Header (z.B. X-Offline-Queued).
+function _flashResponse(text, opts) {
+    const tone =
+        opts.tone === "yellow"
+            ? { box: "bg-yellow-50", text: "text-yellow-800" }
+            : { box: "bg-red-50", text: "text-red-800" };
+    const headers = Object.assign(
+        {
+            "Content-Type": "text/html; charset=utf-8",
+            "HX-Retarget": "#flash-messages",
+            "HX-Reswap": "outerHTML",
+        },
+        opts.headers || {}
+    );
+    return new Response(
+        '<div id="flash-messages">' +
+            '<div class="rounded-md ' +
+            tone.box +
+            ' p-4 mb-4">' +
+            '<p class="text-sm ' +
+            tone.text +
+            '">' +
+            text +
+            "</p></div></div>",
+        { status: opts.status, statusText: opts.statusText, headers: headers }
+    );
+}
+
+// Refs #1828: Die Offline-Fallback-Kette fuer Navigationen als geordnete
+// Tabelle — der erste Treffer gewinnt, die Array-Reihenfolge IST die Semantik
+// der frueheren if-Kaskade (u.a. WORKITEM_NEW vor WORKITEM_LIST; die
+// Listen-Regexes matchen die /new/-Routen dank exaktem (?:$|\?)-Terminator
+// zwar ohnehin nicht, die Reihenfolge dokumentiert die Absicht). Jeder
+// Eintrag serviert seinen pk-losen Shell IN-PLACE an der kanonischen URL
+// (200, KEIN Redirect); die Renderer lesen ihren Kontext aus
+// location.pathname + verschluesselter IndexedDB. Die matches-Callbacks
+// greifen erst zur Aufrufzeit auf self.URL_PATTERNS zu (importScripts laeuft
+// davor).
+const SHELL_ROUTES = [
+    // Refs #1322: Klientel-Detail (/clients/<pk>/) — offline-client-view.js
+    // liest die pk aus location.pathname und rendert aus IndexedDB.
+    {
+        matches: (url) =>
+            Boolean(self.URL_PATTERNS.extractClientPk && self.URL_PATTERNS.extractClientPk(url)),
+        shell: OFFLINE_CLIENT_SHELL_URL,
+    },
+    // Refs #1396: Konflikt-Review (/offline/conflicts/<pk>/) — die pk-lose
+    // Liste (/offline/conflicts/) matcht hier bewusst NICHT und faellt in die
+    // generische caches.match(request.url)-Stufe (sie ist selbst pre-cached).
+    {
+        matches: (url) =>
+            Boolean(self.URL_PATTERNS.extractConflictPk && self.URL_PATTERNS.extractConflictPk(url)),
+        shell: OFFLINE_CONFLICT_SHELL_URL,
+    },
+    // Refs #1523 (#1499): Create-Shells — VOR den Listen-/generischen Stufen,
+    // die sonst die /offline/-Home statt der Erfassungs-Shell liefern wuerden.
+    // offline-create.js liest Katalog + mitgenommene Personen aus IndexedDB.
+    {
+        matches: (url) => self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, url),
+        shell: OFFLINE_EVENT_SHELL_URL,
+    },
+    {
+        matches: (url) => self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, url),
+        shell: OFFLINE_WORKITEM_SHELL_URL,
+    },
+    // Refs #1533 (#1499): Personenliste (/clients/) — steht NACH dem
+    // HX-Partial-Sonderfall im fetch-Handler (ein HX-Request hat dort bereits
+    // mit dem Banner returnt, sonst kaperte die Voll-Shell die
+    // HTMX-Livesuche-Swaps in #client-table).
+    {
+        matches: (url) => self.URL_PATTERNS.CLIENT_LIST.test(url),
+        shell: OFFLINE_CLIENT_LIST_SHELL_URL,
+    },
+    // Refs #1543 (#1499): Aufgaben-Liste (/workitems/) — /workitems/new/ hat
+    // im WORKITEM_NEW-Eintrag darueber bereits gewonnen.
+    {
+        matches: (url) => self.URL_PATTERNS.WORKITEM_LIST.test(url),
+        shell: OFFLINE_WORKITEM_LIST_SHELL_URL,
+    },
+    // Refs #1543 (#1499): Zeitstrom-Chronik an der Wurzel-URL — isZeitstromRoot
+    // prueft pathname === "/" EXAKT (nur die Startseite). Der
+    // Online-Login-Redirect bleibt unberuehrt: die Kette greift ausschliesslich
+    // im Netz-Fehlerfall (respondWith-catch), nie online.
+    {
+        matches: (url) =>
+            Boolean(self.URL_PATTERNS.isZeitstromRoot && self.URL_PATTERNS.isZeitstromRoot(url)),
+        shell: OFFLINE_ZEITSTROM_SHELL_URL,
+    },
+];
+
+// Refs #1828: gecachten Shell servieren; ohne Cache-Treffer die /offline/-Home.
+function _serveShell(shellUrl) {
+    return caches.match(shellUrl).then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+}
+
 // ACK-Timeout: nach dieser Zeit gilt enqueueRequest als gescheitert
 // (#662). 5s ist großzügig genug für IndexedDB + AES-GCM-Verschlüsselung
 // und zugleich kurz genug, dass der User keine ewig drehende UI sieht.
@@ -476,24 +575,12 @@ self.addEventListener("fetch", (event) => {
         // profitiert, weil er bei Lie-Fi schnell in die Queue faellt).
         if (isMultipart(request)) {
             event.respondWith(
-                fetch(request.clone()).catch(
-                    () =>
-                        new Response(
-                            '<div id="flash-messages">' +
-                                '<div class="rounded-md bg-red-50 p-4 mb-4">' +
-                                '<p class="text-sm text-red-800">' +
-                                SW_I18N.uploadOffline +
-                                "</p></div></div>",
-                            {
-                                status: 503,
-                                statusText: "Offline-Upload not supported",
-                                headers: {
-                                    "Content-Type": "text/html; charset=utf-8",
-                                    "HX-Retarget": "#flash-messages",
-                                    "HX-Reswap": "outerHTML",
-                                },
-                            }
-                        )
+                fetch(request.clone()).catch(() =>
+                    _flashResponse(SW_I18N.uploadOffline, {
+                        tone: "red",
+                        status: 503,
+                        statusText: "Offline-Upload not supported",
+                    })
                 )
             );
             return;
@@ -554,44 +641,27 @@ self.addEventListener("fetch", (event) => {
                         // Persistieren ist gescheitert (NoSessionKey, kein
                         // offlineQueue, IndexedDB-Fehler, Timeout). Roter Banner
                         // statt stummem Datenverlust (#662).
-                        return new Response(
-                            '<div id="flash-messages">' +
-                                '<div class="rounded-md bg-red-50 p-4 mb-4">' +
-                                '<p class="text-sm text-red-800">' +
-                                SW_I18N.queuePersistFailed.replace("{reason}", ack.reason) +
-                                "</p></div></div>",
+                        return _flashResponse(
+                            SW_I18N.queuePersistFailed.replace("{reason}", ack.reason),
                             {
+                                tone: "red",
                                 status: 503,
                                 statusText: "Offline-Queue persistence failed",
-                                headers: {
-                                    "Content-Type": "text/html; charset=utf-8",
-                                    "HX-Retarget": "#flash-messages",
-                                    "HX-Reswap": "outerHTML",
-                                },
                             }
                         );
                     }
 
-                    return new Response(
-                        '<div id="flash-messages">' +
-                            '<div class="rounded-md bg-yellow-50 p-4 mb-4">' +
-                            '<p class="text-sm text-yellow-800">' +
-                            SW_I18N.queuedOk +
-                            "</p></div></div>",
-                        {
-                            status: 200,
-                            headers: {
-                                "Content-Type": "text/html; charset=utf-8",
-                                "HX-Retarget": "#flash-messages",
-                                "HX-Reswap": "outerHTML",
-                                // #1926: Nur ein bestaetigtes Queue-ACK darf
-                                // den DIRECT-Key fuer die naechste +1-Aktion
-                                // rotieren. Der Marker ist bewusst nicht auf
-                                // 503- oder echten Serverantworten vorhanden.
-                                "X-Offline-Queued": "1",
-                            },
-                        }
-                    );
+                    return _flashResponse(SW_I18N.queuedOk, {
+                        tone: "yellow",
+                        status: 200,
+                        headers: {
+                            // #1926: Nur ein bestaetigtes Queue-ACK darf
+                            // den DIRECT-Key fuer die naechste +1-Aktion
+                            // rotieren. Der Marker ist bewusst nicht auf
+                            // 503- oder echten Serverantworten vorhanden.
+                            "X-Offline-Queued": "1",
+                        },
+                    });
                 }
             })()
         );
@@ -653,7 +723,7 @@ self.addEventListener("fetch", (event) => {
     }
 
     if (request.headers.get("Accept")?.includes("text/html") || request.headers.get("HX-Request")) {
-        // Offline-Fallback-Kette (Refs #701/#1322):
+        // Offline-Fallback-Kette (Refs #701/#1322, Refs #1828):
         // 0. HTMX-Partial-GET-Sonderfall (Refs #1416): ein Request mit
         //    HX-Request: true ist NIE eine Navigation — htmx swappt die
         //    Antwort in ein bestehendes DOM-Ziel (z.B. #client-table), statt
@@ -664,10 +734,8 @@ self.addEventListener("fetch", (event) => {
         //    eingebauter <title>-Uebernahme (htmx.config.ignoreTitle: false)
         //    den Dokumenttitel kapern. Deshalb VOR den Shell-Stufen abzweigen.
         // 1. Versuch: Netz
-        // 2. Klientel-Detail-Sonderfall: den gecachten, pk-losen Client-Shell
-        //    IN-PLACE servieren (200, KEIN Redirect) — die URL bleibt
-        //    kanonisch (/clients/<pk>/), offline-client-view.js liest die pk
-        //    aus location.pathname und rendert aus IndexedDB.
+        // 2. SHELL_ROUTES (Tabelle oben): der erste Treffer serviert seinen
+        //    pk-losen In-Place-Shell an der kanonischen URL.
         // 3. Sonst: gecachte Version dieser URL
         // 4. Sonst: dedizierte /offline/-Home (Offline-Arbeitsplatz) statt
         //    Browser-Default „Sie sind offline / Chrome-Dino"
@@ -683,7 +751,8 @@ self.addEventListener("fetch", (event) => {
                     // (Such-/Filterfelder liegen ausserhalb des Swap-Ziels) —
                     // das Banner direkt an der Stelle zu zeigen, an der die
                     // aktualisierten Daten erschienen waeren, ist die
-                    // naheliegendste, layoutneutrale Antwort.
+                    // naheliegendste, layoutneutrale Antwort. Bewusst KEIN
+                    // _flashResponse (anderes Fragment, kein Retargeting).
                     return new Response(
                         '<div class="rounded-md bg-yellow-50 p-4" role="status" data-testid="offline-partial-banner">' +
                             '<p class="text-sm text-yellow-800">' +
@@ -696,90 +765,10 @@ self.addEventListener("fetch", (event) => {
                         }
                     );
                 }
-                const clientPk =
-                    self.URL_PATTERNS.extractClientPk &&
-                    self.URL_PATTERNS.extractClientPk(request.url);
-                if (clientPk) {
-                    return caches
-                        .match(OFFLINE_CLIENT_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
-                }
-                // Refs #1396: Konflikt-Review-Sonderfall — den gecachten,
-                // pk-losen Konflikt-Shell IN-PLACE servieren (200, KEIN
-                // Redirect); conflict-resolver.js liest die event-pk aus
-                // location.pathname. Die pk-lose Liste (/offline/conflicts/)
-                // matcht hier bewusst NICHT und faellt in die generische
-                // caches.match(request)-Stufe (sie ist selbst pre-cached).
-                const conflictPk =
-                    self.URL_PATTERNS.extractConflictPk &&
-                    self.URL_PATTERNS.extractConflictPk(request.url);
-                if (conflictPk) {
-                    return caches
-                        .match(OFFLINE_CONFLICT_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
-                }
-                // Refs #1523 (#1499): Create-Formular-Sonderfall — den
-                // gecachten, pk-losen Event-/WorkItem-Create-Shell IN-PLACE an
-                // der kanonischen URL (/events/new/ bzw. /workitems/new/)
-                // servieren (200, KEIN Redirect); offline-create.js liest den
-                // Katalog + die mitgenommenen Personen aus der verschluesselten
-                // IndexedDB. Diese Zweige stehen VOR der generischen
-                // caches.match(request.url)-Stufe, die sonst die /offline/-Home
-                // statt der echten Erfassungs-Shell liefern wuerde. Muster wie
-                // die OFFLINE_*_SHELL_URL-Zweige darueber.
-                if (self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)) {
-                    return caches
-                        .match(OFFLINE_EVENT_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
-                }
-                if (self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)) {
-                    return caches
-                        .match(OFFLINE_WORKITEM_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
-                }
-                // Refs #1533 (#1499): Personenlisten-Sonderfall — den
-                // gecachten, pk-losen Listen-Shell IN-PLACE an der kanonischen
-                // URL /clients/ servieren (200, KEIN Redirect); offline-client-
-                // list.js liest die mitgenommenen Personen aus der
-                // verschluesselten IndexedDB. Dieser Zweig steht bewusst NACH dem
-                // HTMX-Such-Swap-Sonderfall oben (ein HX-Request hat da bereits
-                // mit dem Partial-Banner returnt — sonst kaperte die Voll-Shell
-                // die HTMX-Livesuche-Swaps in #client-table) und VOR der
-                // generischen caches.match(request.url)-Stufe, die sonst die
-                // /offline/-Home statt der echten Liste liefern wuerde. Muster
-                // wie die OFFLINE_*_SHELL_URL-Zweige darueber.
-                if (self.URL_PATTERNS.CLIENT_LIST.test(request.url)) {
-                    return caches
-                        .match(OFFLINE_CLIENT_LIST_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
-                }
-                // Refs #1543 (#1499): Aufgaben-Sonderfall — den
-                // gecachten, pk-losen Aufgaben-Listen-Shell IN-PLACE an der
-                // kanonischen URL /workitems/ servieren (200, KEIN Redirect);
-                // offline-workitem-list.js liest die aggregierten WorkItems aus
-                // der verschluesselten IndexedDB. Steht NACH dem WORKITEM_NEW-
-                // Zweig oben (/workitems/new/ hat dort bereits returnt; WORKITEM_
-                // LIST matcht ihn ohnehin nicht — exakter (?:$|\?)-Terminator)
-                // und VOR der generischen Stufe. Muster wie der CLIENT_LIST-Zweig.
-                if (self.URL_PATTERNS.WORKITEM_LIST.test(request.url)) {
-                    return caches
-                        .match(OFFLINE_WORKITEM_LIST_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
-                }
-                // Refs #1543 (#1499): Zeitstrom-Sonderfall — die
-                // "lokale Chronik" IN-PLACE an der Wurzel-URL / servieren.
-                // isZeitstromRoot prueft pathname === "/" EXAKT (nur die
-                // Startseite, nicht /clients/ o.ae.). Der Online-Login-Redirect
-                // bleibt unberuehrt: dieser Zweig greift ausschliesslich im
-                // Netz-Fehlerfall (respondWith-catch), nie online. Muster wie
-                // die anderen Shell-Zweige.
-                if (
-                    self.URL_PATTERNS.isZeitstromRoot &&
-                    self.URL_PATTERNS.isZeitstromRoot(request.url)
-                ) {
-                    return caches
-                        .match(OFFLINE_ZEITSTROM_SHELL_URL)
-                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                for (const route of SHELL_ROUTES) {
+                    if (route.matches(request.url)) {
+                        return _serveShell(route.shell);
+                    }
                 }
                 // Refs #1396: nach der URL (nicht dem Live-Request) matchen. Die
                 // pre-cachten HTML-Shells (z.B. /offline/conflicts/) tragen ein
@@ -789,7 +778,7 @@ self.addEventListener("fetch", (event) => {
                 // caches.match(request) verfehlt sie dadurch (Vary-Mismatch) und
                 // fiele faelschlich auf /offline/ zurueck. Der URL-String-Match
                 // ignoriert die Live-Header und trifft den Precache zuverlaessig
-                // (Muster wie die OFFLINE_*_SHELL_URL-Zweige darueber).
+                // (Muster wie die SHELL_ROUTES-Eintraege darueber).
                 return caches
                     .match(request.url)
                     .then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL));
