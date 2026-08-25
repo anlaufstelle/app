@@ -1074,8 +1074,10 @@
      */
     const INVALIDATION_STATUSES = [401, 404, 410];
 
+    // Refs #1828: Endpunkt-Literal zentral in url-patterns.js (ENDPOINTS);
+    // base.html/offline_base.html laden url-patterns.js vor diesem Modul.
     function _bundleUrl(clientPk) {
-        return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
+        return window.URL_PATTERNS.ENDPOINTS.clientBundle(clientPk);
     }
 
     /*
@@ -1209,7 +1211,7 @@
     /* ─── Refs #1520/#1499 — personenloses Facility-Meta-Bundle ───────────── */
 
     function _facilityBundleUrl() {
-        return "/api/v1/offline/bundle/facility/";
+        return window.URL_PATTERNS.ENDPOINTS.FACILITY_BUNDLE;
     }
 
     /*
@@ -1409,7 +1411,7 @@
      * Fenster ab (2x Bundle-TTL).
      */
     function _revocationsUrl() {
-        return "/api/v1/offline/revocations/";
+        return window.URL_PATTERNS.ENDPOINTS.REVOCATIONS;
     }
 
     /*

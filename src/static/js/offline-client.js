@@ -15,8 +15,6 @@
 (function () {
     "use strict";
 
-    const MAX_OFFLINE_CLIENTS = 20;
-
     function _store() {
         if (!window.offlineStore) {
             throw new Error("OfflineStoreNotLoaded");
@@ -31,8 +29,10 @@
         return window.csrfUtils ? window.csrfUtils.fromMeta() : null;
     }
 
+    // Refs #1828: Endpunkt-Literal zentral in url-patterns.js (ENDPOINTS);
+    // base.html laedt url-patterns.js vor diesem Modul.
     function _bundleUrl(clientPk) {
-        return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
+        return window.URL_PATTERNS.ENDPOINTS.clientBundle(clientPk);
     }
 
     async function _emitCountEvent() {
@@ -72,9 +72,11 @@
         const store = _store();
         const currentCount = await store.countOfflineClients();
         const already = await store.isClientOffline(clientPk);
-        if (!already && currentCount >= MAX_OFFLINE_CLIENTS) {
+        // Refs #1828: das Limit lebt nur noch in offline-store.js
+        // (window.offlineStore.MAX_OFFLINE_CLIENTS) statt als zweite Kopie hier.
+        if (!already && currentCount >= store.MAX_OFFLINE_CLIENTS) {
             const err = new Error(
-                "Offline-Cache-Limit erreicht (" + MAX_OFFLINE_CLIENTS + " Klientel)."
+                "Offline-Cache-Limit erreicht (" + store.MAX_OFFLINE_CLIENTS + " Klientel)."
             );
             err.name = "OfflineLimitError";
             throw err;
@@ -156,6 +158,5 @@
         getOfflineClient: getOfflineClient,
         getLocallyCachedClients: getLocallyCachedClients,
         refreshCountBadge: refreshCountBadge,
-        MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
     };
 })();
