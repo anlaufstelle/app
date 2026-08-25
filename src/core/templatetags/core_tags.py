@@ -183,23 +183,6 @@ def status_badge(status, label):
     return render_to_string("components/_badge.html", {"text": label, "color": color})
 
 
-# --- Activity verb badge ---
-_VERB_COLOR_MAP = {
-    "updated": "gray",
-    "deleted": "red",
-    "qualified": "indigo",
-    "completed": "green",
-    "reopened": "amber",
-}
-
-
-@register.filter
-def verb_badge_classes(verb):
-    """Return Tailwind badge classes for an Activity verb string."""
-    color = _VERB_COLOR_MAP.get(verb, "gray")
-    return _BADGE_COLOR_MAP[color]
-
-
 @register.filter
 def target_type_label(activity):
     """Return the localized label for an Activity's target content type."""
