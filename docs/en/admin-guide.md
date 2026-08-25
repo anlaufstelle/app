@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Most recently synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
+> Most recently synchronized on 2026-08-24 (§§ 2.4/2.7 the facility-scoped Access UI, sudo requirement, invitation, role, MFA, deletion-confirmation, deactivation and unlock flows, #1871). Previously synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
 > The German version is the authoritative source. Most recently synced on 2026-08-22 (§ 2 the retention run does act on cases once they are deleted, § 7.5 case trash and the two deletion paths, § 7.6 the `deleted_cases` section of the Art. 15 access record, #1818). Previous content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)) and 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906) and 2026-08-18 (§ 5.6 which log fields are exempt from PII scrubbing, #1943) and 2026-08-18 (§ 2.6 numeric range bound guidance for facility admins after tightening `min_value`/`max_value`, #1930) and 2026-08-20 (§ 5.6 technical identifiers -- including the new `user_pk` log field -- pass the PII scrubber unchanged, #1949) and 2026-08-20 (§ 1 `BACKUP_DIR`/`BACKUP_HOST_DIR` ENV reference for the production Compose stack, #1872) and 2026-08-21 (§ 2.4 and § 7.7 the forced password change is cleared once the invitation setup or a password reset completes; § 2.4 step 3 the invitation setup link does not sign the user in, #1969).
 
 # Anlaufstelle -- Admin Guide
@@ -394,7 +394,7 @@ Here you can manage:
 | Organizations | Core > Organizations | Parent entities (tenant level) |
 | Facilities | Core > Facilities | Locations within an organization |
 | Settings | Core > Settings | Configuration per facility |
-| Users | Core > Users | User accounts and roles |
+| Users | Core > Users | Technical fallback; maintained primarily under Administration > Access |
 | Documentation types | Core > Documentation types | Technical fallback; maintained primarily under Administration > Documentation types |
 | Time filters | Core > Time filters | Named time periods for reports |
 | Audit log | Core > Audit logs | Immutable protocol |
@@ -428,19 +428,22 @@ Under **Core > Settings** in the admin, you can configure the following for each
 
 ### 2.4 Create Additional Users
 
-Under **Core > Users > Add user** in the admin:
+The regular path for an application manager is **Administration > Access > Create account** (`/verwaltung/zugaenge/`). Creating or changing an account requires confirmation in sudo mode. The list and all actions are limited to the manager's own facility; the `super_admin` role can neither be viewed nor assigned there ([ADR-048](../adr/048-fachhoheit-zugaenge-hub.md)).
 
 - **Username:** Login name (no real names)
 - **Email:** Required for the invite flow (see below)
 - **Display name:** Name shown in the user interface
-- **Role:** One of the five roles (see below)
-- **Facility:** Assignment to a facility
+- **Role:** One of the four facility-bound roles (see below)
+- **MFA required:** Requires a second factor for this individual account
+- **Deletion confirmation:** Adds the account to the approver pool for deletion requests
+
+Existing accounts can be edited, deactivated, or reactivated there. Application managers cannot deactivate or demote their own account. The product UI does not permanently delete accounts: deactivation is the regular lifecycle; permanent deletion remains a reviewed technical exception. `super_admin`, bootstrap, and emergency work stay under **Core > Users** in the Django admin. Quick templates and time filters also deliberately remain technical admin functions.
 
 #### Token Invite Flow (Refs #528)
 
 New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link (`/invite/<uid>/<token>/`) to the email address on file. The link takes the new user to the same password-setting form as the password reset, where they set a password themselves.
 
-1. Admin creates a user with an email address in the admin.
+1. The application manager creates the account with an email address under **Administration > Access**.
 2. The system calls [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py) and generates a setup token (a dedicated `invite_token_generator`, based on `uidb64` + token hash).
 3. The user receives the email, clicks the link, and sets a password. This does **not** log them in automatically -- the confirmation page leads to the sign-in form via "Zur Anmeldung" ("Go to sign-in"), where they sign in with the new password for the first time.
 
@@ -451,9 +454,9 @@ New accounts are created **without** a clear-text password. Instead, the applica
 
 Both generators are additionally separated by their own `key_salt` (a reset token is not valid on `/invite/` and vice versa) and invalidate the token automatically once the user has set their first password.
 
-**Resend the setup link:** If the email did not arrive or the token has expired, the admin can issue a fresh token from the user detail view via "Resend setup link" (or the equivalent "Resend invitation" button) and have a new email sent.
+**Resend the setup link:** If the email did not arrive or the token has expired, the application manager can issue a fresh token from the access detail view via **Resend invitation**. The button is only shown while account setup is still pending.
 
-**Fallback without email:** If a user is created **without** an email address, the admin generates a one-time clear-text initial password for backwards compatibility, which is displayed in the admin interface after saving. This path is **insecure** and should only be used as a last resort -- better: add the email address and resend the invitation.
+**Technical legacy fallback without email:** The product UI always requires an email address. For backwards compatibility, only the Django admin can still create a user **without** an email address and then displays a one-time clear-text initial password. This path is **insecure** and should only be used as a last resort -- better: add the email address and resend the invitation.
 
 > **Note:** `must_change_password` is set on **every** account created in the admin. Once the user completes the invitation setup step -- or a password reset later on -- the flag is cleared automatically (#1969); they chose the password themselves in that step and are not asked to replace it again right at their first login. The forced change therefore remains exactly where it is needed: for the fallback without an email address, where the admin knows the initial password.
 
@@ -743,7 +746,7 @@ Anlaufstelle supports TOTP-based 2FA via [`django-otp`](https://django-otp-offic
 
 | Level | Field | Admin location | Effect |
 |---|---|---|---|
-| **Single user** | `User.mfa_required` | Core > Users > *User* > "MFA required" field | 2FA mandatory for this user, disabling is blocked |
+| **Single user** | `User.mfa_required` | Administration > Access > *Account* > "MFA required" field | 2FA mandatory for this user, disabling is blocked |
 | **Facility-wide** | `Settings.mfa_enforced_facility_wide` | Core > Settings > *Facility* > "Facility-wide 2FA enforcement" field | 2FA mandatory for **all** users of this facility |
 | **Role default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (+ `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE`) | Environment variables (deployment) | 2FA mandatory by role alone -- enabled by default in production |
 
@@ -774,8 +777,8 @@ After **10 failed login attempts** the account is automatically locked (the logi
 
 **Path A -- UI (for facility-bound users):** The application manager (`facility_admin`) of the facility can unlock the accounts of their own users:
 
-1. **Admin-mgmt > Core > Users** -- select the affected user in their own facility.
-2. In the user profile under "Account status" click **Unlock account**.
+1. **Administration > Access** -- select the affected user in their own facility.
+2. Under "Security actions" click **Unlock account**.
 3. The unlock is recorded in the AuditLog as `LOGIN_UNLOCK` (the `LOGIN_FAILED` log itself is immutable thanks to the `auditlog_immutable` DB trigger).
 
 **Path B -- CLI (for recovery, especially super-admins):** If no other user in the system has access (single-super-admin lockout, or a locked `facility_admin` with no second `facility_admin`), the hosting operator unlocks the account directly on the server:
@@ -1497,7 +1500,7 @@ On top of that — **regardless of the action** — comes the fourth class: entr
 
 Deletion requests for personal data are processed using the four-eyes principle (dual approval): a request must be approved by a **second authorized person** before data is permanently deleted. This protects against accidental or unauthorized deletion — including by privileged roles themselves.
 
-**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). On first rollout, existing leads and facility admins receive the permission automatically. Afterwards, the facility admin can grant or revoke it in user management (Administration → Users) as needed — for example, granting it to an experienced staff member so that a second approver is always available even if there is only one lead. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
+**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). On first rollout, existing leads and facility admins receive the permission automatically. Afterwards, the facility admin can grant or revoke it under **Administration > Access** as needed — for example, granting it to an experienced staff member so that a second approver is always available even if there is only one lead. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
 
 Every grant and revocation of the permission, as well as every approval, is recorded in the immutable audit log. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
 
@@ -1811,4 +1814,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.82.0 -->
 <!-- translation-date: 2026-08-24 -->
-<!-- source-hash: 1918713c1fc18ca3e258d11d5465b590afb82706 -->
+<!-- source-hash: 565de34ee5495edd16e89ba83436b030747b9077 -->

@@ -1694,11 +1694,12 @@ Gate wieder grün.
 ## 10. Invite-Token-Hygiene
 
 Der Invite-Flow ([`src/core/services/security/invite.py`](../src/core/services/security/invite.py))
-nutzt Djangos `default_token_generator` — **keine** persistente Token-Tabelle.
-Der Setup-Link reitet auf `password_reset_confirm` und ist an
-`PASSWORD_RESET_TIMEOUT` (Default: 3 Tage) gebunden. Nach Ablauf wird der
-Token vom Signer stillschweigend abgelehnt; es gibt **keine** Datenbank-
-eintraege, die aufzuraeumen waeren.
+nutzt einen eigenen `invite_token_generator` — **keine** persistente
+Token-Tabelle. Der Setup-Link verwendet denselben Bestätigungs-View wie der
+Passwort-Reset, ist durch ein eigenes `key_salt` aber davon getrennt und an
+`INVITE_TOKEN_TIMEOUT` (Default: 3 Tage) gebunden. Nach Ablauf wird der Token
+vom Signer stillschweigend abgelehnt; es gibt **keine** Datenbankeintraege, die
+aufzuraeumen waeren.
 
 **Was stattdessen bereinigt werden muss:** User-Konten, die per Invite
 angelegt wurden und deren Empfaenger den Link nie einloeste — diese Konten
@@ -1721,19 +1722,36 @@ ORDER BY date_joined;
 
 ### 10.2 Setup-Link erneut versenden
 
+Regulärer Weg: als `facility_admin` **Verwaltung → Zugänge** öffnen, das Konto
+auswählen und unter „Sicherheitsaktionen“ **Einladung erneut senden**. Der Weg
+ist auf die eigene Einrichtung begrenzt, erfordert Sudo-Re-Authentifizierung
+und schreibt einen attribuierten `USER_INVITE_SENT`-Audit-Eintrag. Er steht nur
+für ein noch nicht fertig eingerichtetes Konto mit E-Mail-Adresse zur
+Verfügung.
+
+Nur wenn die Fachoberfläche im Notfall nicht erreichbar ist, bleibt der direkte
+technische Versand als Fallback:
+
 ```bash
 # Django-Shell: neuen Invite-Link an einen bestehenden User senden
 docker compose -f docker-compose.prod.yml exec web \
  python manage.py shell -c "
 from core.models import User
-from core.services.invite import send_invite_email
+from core.services.security import send_invite_email
 send_invite_email(User.objects.get(username='<username>'))
 "
 ```
 
+Der Shell-Fallback besitzt weder den Facility-/Status-Guard noch die
+Actor-Attribution der Fachoberfläche. Zielkonto und Einrichtung deshalb vorab
+prüfen und den Eingriff gesondert dokumentieren.
+
 ### 10.3 Verwaiste Konten loeschen
 
-Nach Ruecksprache mit der Einrichtungs-Leitung:
+Im regulären Betrieb wird ein verwaistes Konto unter **Verwaltung → Zugänge**
+deaktiviert. Eine endgültige Löschung ist wegen möglicher Referenzen und der
+Audit-Attribution kein normaler CRUD-Schritt. Nur nach Prüfung und Rücksprache
+mit der Einrichtungs-Leitung bleibt der technische Sonderweg:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web \

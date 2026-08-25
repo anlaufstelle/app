@@ -390,7 +390,7 @@ Hier können Sie verwalten:
 | Organisationen | Core → Organisationen | Träger (Mandantenebene) |
 | Einrichtungen | Core → Einrichtungen | Standorte einer Organisation |
 | Einstellungen | Core → Einstellungen | Konfiguration pro Einrichtung |
-| Benutzer | Core → Benutzer | Benutzerkonten und Rollen |
+| Benutzer | Core → Benutzer | Technischer Fallback; primäre Pflege unter Verwaltung → Zugänge |
 | Dokumentationstypen | Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
 | Zeitfenster | Core → Zeitfenster | Benannte Zeiträume für Auswertungen |
 | Audit-Log | Core → Audit-Logs | Unveränderliches Protokoll |
@@ -424,19 +424,22 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 
 ### 2.4 Weitere Benutzer anlegen
 
-Im Admin unter **Core → Benutzer → Benutzer hinzufügen**:
+Der reguläre Weg für die Anwendungsbetreuung ist **Verwaltung → Zugänge → Zugang anlegen** (`/verwaltung/zugaenge/`). Anlage und jede Änderung verlangen eine erneute Bestätigung im Sudo-Modus. Die Liste und alle Aktionen sind auf die eigene Einrichtung begrenzt; die Rolle `super_admin` kann dort weder gesehen noch vergeben werden ([ADR-048](adr/048-fachhoheit-zugaenge-hub.md)).
 
 - **Benutzername:** Anmeldename (keine Klarnamen)
 - **E-Mail:** Pflicht für den Invite-Flow (siehe unten)
 - **Anzeigename:** Name für die Benutzeroberfläche
-- **Rolle:** Eine der fünf Rollen (siehe unten)
-- **Einrichtung:** Zuweisung zu einer Einrichtung
+- **Rolle:** Eine der vier einrichtungsgebundenen Rollen (siehe unten)
+- **MFA erforderlich:** erzwingt einen zweiten Faktor für dieses einzelne Konto
+- **Löschbestätigung:** nimmt das Konto in den Genehmiger-Pool für Löschanträge auf
+
+Bestehende Zugänge lassen sich dort bearbeiten, deaktivieren oder reaktivieren. Der eigene Administrationszugang kann weder deaktiviert noch herabgestuft werden. Die Fach-UI löscht Konten nicht endgültig: Deaktivieren ist der reguläre Lebenszyklus; eine endgültige Löschung bleibt ein geprüfter technischer Sonderfall. `super_admin`, Bootstrap und Notfälle verbleiben unter **Core → Benutzer** im Django-Admin. Quick-Templates und Zeitfenster bleiben ebenfalls bewusst technische Admin-Funktionen.
 
 #### Token-Invite-Flow (Refs #528)
 
 Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet die Anwendung eine **Einladungs-E-Mail** mit einem personalisierten Setup-Link (`/invite/<uid>/<token>/`) an die hinterlegte E-Mail-Adresse. Der Link führt den neuen Nutzer auf dasselbe Passwort-Setzen-Formular wie der Passwort-Reset, wo er eigenhändig ein Passwort setzt.
 
-1. Admin legt Nutzer mit E-Mail im Admin an.
+1. Die Anwendungsbetreuung legt den Zugang mit E-Mail unter **Verwaltung → Zugänge** an.
 2. System ruft [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py) auf und generiert einen Setup-Token (eigener `invite_token_generator`, basierend auf `uidb64` + Token-Hash).
 3. Nutzer empfängt Mail, klickt Link und setzt sein Passwort. Ein automatischer Login findet dabei **nicht** statt — die Bestätigungsseite führt über „Zur Anmeldung“ auf die Anmeldemaske, wo er sich erstmals mit dem neuen Passwort anmeldet.
 
@@ -447,9 +450,9 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 
 Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-Token gilt nicht auf `/invite/` und umgekehrt) und invalidieren den Token automatisch, sobald der Nutzer sein erstes Passwort gesetzt hat.
 
-**Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann der Admin in der Benutzer-Detailansicht über „Setup-Link erneut senden" (bzw. den analogen „Einladung erneut senden"-Button) einen neuen Token ausstellen und eine frische Mail verschicken lassen.
+**Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht.
 
-**Fallback ohne E-Mail:** Wird ein Nutzer **ohne** E-Mail-Adresse angelegt, erzeugt der Admin zur Abwärtskompatibilität einmalig ein Klartext-Initialpasswort, das in der Admin-Oberfläche nach dem Speichern angezeigt wird. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
+**Technischer Legacy-Fallback ohne E-Mail:** Die Fach-UI verlangt immer eine E-Mail-Adresse. Nur der Django-Admin kann zur Abwärtskompatibilität noch einen Nutzer **ohne** E-Mail-Adresse anlegen und zeigt dann einmalig ein Klartext-Initialpasswort. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
 
 > **Hinweis:** `must_change_password` wird bei **jeder** Neuanlage im Admin gesetzt. Schließt der Nutzer den Setup-Schritt der Einladung ab — oder später einen Passwort-Reset, wird das Flag dabei automatisch wieder gelöscht (#1969); er hat sein Passwort in diesem Schritt ja selbst gewählt und muss es beim ersten Login nicht sofort erneut ändern. Erzwungen bleibt der Wechsel damit genau dort, wo er gebraucht wird: beim Fallback ohne E-Mail-Adresse, bei dem der Admin das Initialpasswort kennt.
 
@@ -739,7 +742,7 @@ Die Anlaufstelle unterstützt TOTP-basierte 2FA über [`django-otp`](https://dja
 
 | Ebene | Feld | Ort im Admin | Wirkung |
 |---|---|---|---|
-| **Einzeluser** | `User.mfa_required` | Core → Benutzer → *User* → Feld „MFA erforderlich" | 2FA verpflichtend für diesen User, Deaktivieren gesperrt |
+| **Einzeluser** | `User.mfa_required` | Verwaltung → Zugänge → *Zugang* → Feld „MFA erforderlich" | 2FA verpflichtend für diesen User, Deaktivieren gesperrt |
 | **Einrichtungsweit** | `Settings.mfa_enforced_facility_wide` | Core → Einstellungen → *Einrichtung* → Feld „2FA einrichtungsweit verpflichtend" | 2FA verpflichtend für **alle** User dieser Einrichtung |
 | **Rollen-Default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (+ `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE`) | Umgebungsvariablen (Deployment) | 2FA verpflichtend allein über die Rolle — in Produktion ab Werk aktiv |
 
@@ -770,8 +773,8 @@ Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt
 
 **Pfad A — UI (für facility-gebundene User):** Die Anwendungsbetreuung (`facility_admin`) der Einrichtung kann den Account ihrer eigenen User entsperren:
 
-1. **Admin-mgmt → Core → Benutzer** → betroffenen User der eigenen Einrichtung auswählen.
-2. Im User-Profil unter „Account-Status" auf **Sperre aufheben** klicken.
+1. **Verwaltung → Zugänge** → betroffenen User der eigenen Einrichtung auswählen.
+2. Unter „Sicherheitsaktionen" auf **Account-Sperre aufheben** klicken.
 3. Cleanup wird im AuditLog als `LOGIN_UNLOCK` protokolliert (das `LOGIN_FAILED`-Log selbst ist dank `auditlog_immutable`-DB-Trigger unveränderbar).
 
 **Pfad B — CLI (für Recovery, insbesondere Super-Admins):** Wenn kein anderer User im System Zugriff hat (Single-Super-Admin-Sperre, oder gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
@@ -1491,7 +1494,7 @@ Hinzu kommt — **unabhängig von der Aktion** — die vierte Klasse: Einträge 
 
 Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von einer **zweiten berechtigten Person** genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung — auch durch privilegierte Rollen selbst.
 
-**Genehmiger-Pool über das Recht „Löschbestätigung"** (Refs #1053): Wer genehmigen darf, wird nicht aus der Rolle abgeleitet, sondern über das einzeln vergebbare Benutzer-Recht *Löschbestätigung* (`can_confirm_deletion`) kuratiert. Bei der Einführung erhalten bestehende Leitungen und Anwendungsbetreuungen das Recht automatisch; danach kann die Anwendungsbetreuung es in der Benutzerverwaltung (Administration → Benutzer) gezielt vergeben oder entziehen — z. B. an eine erfahrene Fachkraft, damit auch bei einer einzelnen Leitung immer eine zweite Person verfügbar ist. Eigene Anträge kann auch ein:e Rechteträger:in nie selbst genehmigen (View-, Service- und Datenbank-Ebene erzwingen Antragsteller ≠ Genehmiger).
+**Genehmiger-Pool über das Recht „Löschbestätigung"** (Refs #1053): Wer genehmigen darf, wird nicht aus der Rolle abgeleitet, sondern über das einzeln vergebbare Benutzer-Recht *Löschbestätigung* (`can_confirm_deletion`) kuratiert. Bei der Einführung erhalten bestehende Leitungen und Anwendungsbetreuungen das Recht automatisch; danach kann die Anwendungsbetreuung es unter **Verwaltung → Zugänge** gezielt vergeben oder entziehen — z. B. an eine erfahrene Fachkraft, damit auch bei einer einzelnen Leitung immer eine zweite Person verfügbar ist. Eigene Anträge kann auch ein:e Rechteträger:in nie selbst genehmigen (View-, Service- und Datenbank-Ebene erzwingen Antragsteller ≠ Genehmiger).
 
 Jede Vergabe und jeder Entzug des Rechts sowie jede Genehmigung werden im unveränderlichen Audit-Log protokolliert. Existiert für einen offenen Antrag außer der antragstellenden Person keine aktive Person mit dem Recht, zeigt die Löschantragsliste eine deutliche Warnung („Kein möglicher Genehmiger") — vergeben Sie das Recht dann an eine weitere Person.
 

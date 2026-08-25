@@ -79,6 +79,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-045](045-personen-merge.md) | Duplikat-Merge für Personen — gestaffelter Antrag, Tombstone, Undo bis Fristablauf | Accepted |
 | [ADR-046](046-in-app-badges-statt-notification-modell.md) | In-App-Badges statt Notification-Modell | Accepted |
 | [ADR-047](047-altersgruppen-systemweit-fix.md) | Altersgruppen bleiben systemweit fix | Accepted |
+| [ADR-048](048-fachhoheit-zugaenge-hub.md) | Fachhoheit und Sicherheitsgrenzen des Zugänge-Hubs | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
