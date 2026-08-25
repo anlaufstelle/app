@@ -199,8 +199,6 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         # (die generische Queue folgt exakt dem Original-Erfolg).
         return redirect("core:event_detail", pk=hit.pk)
 
-    """Create an event (quick entry)."""
-
     def get(self, request):
         facility = request.current_facility
 
@@ -316,7 +314,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         # auf dieses Event um, statt einen Duplikat-Datensatz zu erzeugen.
         # Sequenz + Mismatch-422: IdempotentCreateMixin (Refs #1831).
         idem_key, idem_payload_hash = self.read_idempotency(request)
-        if replay_response := self.check_replay(request, idem_key, idem_payload_hash):
+        replay_response = self.check_replay(request, idem_key, idem_payload_hash)
+        if replay_response is not None:
             return replay_response
         if idem_key:
             # R5/#1909: Cache-Eviction/Neustart ueberlebt der DB-Backstop;
