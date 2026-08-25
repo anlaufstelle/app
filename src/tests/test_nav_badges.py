@@ -95,7 +95,11 @@ class TestNavBadgeIntegration:
 
         html = client.get("/").content.decode()
 
-        assert 'data-testid="nav-badge-datenschutz"' in html
+        # Desktop- und Mobil-Navigation liegen GLEICHZEITIG im DOM (nur per
+        # CSS umgeschaltet) — die testids muessen je Standort eindeutig sein
+        # (Konvention testid/mobile_testid, test_nav_registry).
+        assert html.count('data-testid="nav-badge-datenschutz"') == 1
+        assert html.count('data-testid="mobile-nav-badge-datenschutz"') == 1
         assert "2 offene Prüfvorgänge" in html
 
     def test_subnav_tabs_show_individual_counts(self, client, facility, lead_user, staff_user, client_identified):
@@ -140,3 +144,6 @@ class TestNavBadgeIntegration:
 
         assert "99+" in html
         assert "101 offene Aufgaben" in html
+        # Sidebar (Desktop) und Bottom-Bar (mobil) tragen standort-eigene
+        # testids — keine Selektor-Mehrdeutigkeit (Playwright strict mode).
+        assert html.count('data-testid="nav-badge-workitems_open"') == 1
