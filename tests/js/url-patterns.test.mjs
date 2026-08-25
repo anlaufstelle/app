@@ -91,3 +91,40 @@ describe("QUEUE_PATTERNS", () => {
         expect(PATTERNS.isQueueableWriteRequest(`${window.location.origin}/events/new/`, method)).toBe(false);
     });
 });
+
+// Refs #1828: Die pk-Extraktoren ersetzen die frueheren _pkFromPath-Regex-
+// Kopien in offline-client-view.js/conflict-resolver.js. Beide Konsumenten
+// uebergeben ``location.pathname`` (nackter Pfad, keine volle URL) — genau
+// dieses Eingabeprofil wird hier zusaetzlich zur vollen URL gepinnt.
+describe("extractClientPk / extractConflictPk", () => {
+    it("zieht die pk aus einer vollen Client-Detail-URL", () => {
+        expect(PATTERNS.extractClientPk(`${ORIGIN}/clients/${UUID_A}/`)).toBe(UUID_A);
+    });
+
+    it("zieht die pk aus einem nackten pathname (In-Place-Shell)", () => {
+        expect(PATTERNS.extractClientPk(`/clients/${UUID_A}/`)).toBe(UUID_A);
+    });
+
+    it("matcht auch /offline/clients/<pk>/ (Online-Route der Offline-Ansicht)", () => {
+        expect(PATTERNS.extractClientPk(`/offline/clients/${UUID_A}/`)).toBe(UUID_A);
+    });
+
+    it("toleriert einen Querystring hinter dem Detail-Pfad", () => {
+        expect(PATTERNS.extractClientPk(`${ORIGIN}/clients/${UUID_A}/?tab=events`)).toBe(UUID_A);
+    });
+
+    it("liefert null fuer Liste, Unterrouten und Konflikt-URLs", () => {
+        expect(PATTERNS.extractClientPk("/clients/")).toBe(null);
+        expect(PATTERNS.extractClientPk(`/clients/${UUID_A}/edit/`)).toBe(null);
+        expect(PATTERNS.extractClientPk(`/offline/conflicts/${UUID_A}/`)).toBe(null);
+    });
+
+    it("zieht die event-pk aus dem Konflikt-Review-pathname", () => {
+        expect(PATTERNS.extractConflictPk(`/offline/conflicts/${UUID_A}/`)).toBe(UUID_A);
+    });
+
+    it("liefert null fuer die pk-lose Konflikt-Liste und fremde Pfade", () => {
+        expect(PATTERNS.extractConflictPk("/offline/conflicts/")).toBe(null);
+        expect(PATTERNS.extractConflictPk(`/clients/${UUID_A}/`)).toBe(null);
+    });
+});
