@@ -252,38 +252,36 @@
                 return list.map((pair) => pair.slug + ": " + fmt(pair.value)).join("\n");
             },
 
-            async retryDeadEvent(pk) {
+            // Refs #1828: gemeinsames Skelett der fuenf Listen-Aktionen —
+            // Aktion ausfuehren, Liste neu laden, Banner-Zaehler auffrischen,
+            // Erfolg/Fehler in der Feedback-Zeile melden. ``confirm`` gilt
+            // NUR fuer das Verwerfen: es ist die einzige destruktive Aktion
+            // und deshalb als einzige bestaetigungspflichtig (S1-Regel im
+            // Dateikopf).
+            async _act(op, label, opts) {
+                if (opts && opts.confirm && !window.confirm(this._confirmDiscardText)) return;
                 try {
-                    await window.offlineStore.retryDeadEvent(pk);
+                    await op();
                     await this.load();
                     this._refreshCounts();
-                    this._setFeedback(this._labelRetried, "info");
+                    this._setFeedback(label, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
                 }
+            },
+
+            async retryDeadEvent(pk) {
+                await this._act(() => window.offlineStore.retryDeadEvent(pk), this._labelRetried);
             },
 
             async discardDeadEvent(pk) {
-                if (!window.confirm(this._confirmDiscardText)) return;
-                try {
-                    await window.offlineStore.discardDeadEvent(pk);
-                    await this.load();
-                    this._refreshCounts();
-                    this._setFeedback(this._labelDiscarded, "info");
-                } catch (_e) {
-                    this._setFeedback(this._labelActionFailed, "error");
-                }
+                await this._act(() => window.offlineStore.discardDeadEvent(pk), this._labelDiscarded, {
+                    confirm: true,
+                });
             },
 
             async retryQueueEntry(id) {
-                try {
-                    await window.offlineStore.retryQueueEntry(id);
-                    await this.load();
-                    this._refreshCounts();
-                    this._setFeedback(this._labelRetried, "info");
-                } catch (_e) {
-                    this._setFeedback(this._labelActionFailed, "error");
-                }
+                await this._act(() => window.offlineStore.retryQueueEntry(id), this._labelRetried);
             },
 
             // Refs #1419: Aufloesung eines Status-Konflikts — Token auf den
@@ -292,31 +290,20 @@
             // online-Event zu warten). Faellt auf den direkten replayQueue
             // zurueck, wenn der Orchestrator (base.html) nicht geladen ist.
             async reapplyQueueEntry(id) {
-                try {
+                await this._act(async () => {
                     await window.offlineStore.reapplyQueueEntryWithServerVersion(id);
                     if (window.syncOrchestrator && window.syncOrchestrator.requestSync) {
                         window.syncOrchestrator.requestSync();
                     } else if (window.offlineQueue && window.offlineQueue.replayQueue) {
                         await window.offlineQueue.replayQueue();
                     }
-                    await this.load();
-                    this._refreshCounts();
-                    this._setFeedback(this._labelRetried, "info");
-                } catch (_e) {
-                    this._setFeedback(this._labelActionFailed, "error");
-                }
+                }, this._labelRetried);
             },
 
             async discardQueueEntry(id) {
-                if (!window.confirm(this._confirmDiscardText)) return;
-                try {
-                    await window.offlineStore.discardQueueEntry(id);
-                    await this.load();
-                    this._refreshCounts();
-                    this._setFeedback(this._labelDiscarded, "info");
-                } catch (_e) {
-                    this._setFeedback(this._labelActionFailed, "error");
-                }
+                await this._act(() => window.offlineStore.discardQueueEntry(id), this._labelDiscarded, {
+                    confirm: true,
+                });
             },
 
             // Refs ENT-OFFL-16 / #1476 (R10): Blob-Download, keine
