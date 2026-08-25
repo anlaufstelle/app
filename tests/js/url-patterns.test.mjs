@@ -128,3 +128,26 @@ describe("extractClientPk / extractConflictPk", () => {
         expect(PATTERNS.extractConflictPk(`/clients/${UUID_A}/`)).toBe(null);
     });
 });
+
+// Refs #1828: Die Offline-API-Endpunkt-Literale wohnen zentral im
+// ENDPOINTS-Block — vorher lagen sie byte-identisch dupliziert in
+// offline-client.js/offline-store.js bzw. hartkodiert in conflict-list.js.
+describe("ENDPOINTS", () => {
+    it("clientBundle baut die Bundle-URL mit encodeter pk", () => {
+        expect(PATTERNS.ENDPOINTS.clientBundle(UUID_A)).toBe(`/api/v1/offline/bundle/client/${UUID_A}/`);
+    });
+
+    it("clientBundle encodet die pk als Pfadsegment (encodeURIComponent)", () => {
+        expect(PATTERNS.ENDPOINTS.clientBundle("a/b")).toBe("/api/v1/offline/bundle/client/a%2Fb/");
+    });
+
+    it("traegt die statischen Offline-API-Endpunkte", () => {
+        expect(PATTERNS.ENDPOINTS.FACILITY_BUNDLE).toBe("/api/v1/offline/bundle/facility/");
+        expect(PATTERNS.ENDPOINTS.REVOCATIONS).toBe("/api/v1/offline/revocations/");
+        expect(PATTERNS.ENDPOINTS.AUDIT_NOTE_EXPORT).toBe("/api/v1/offline/audit/note-export/");
+    });
+
+    it("AUDIT_NOTE_EXPORT bleibt konsistent zur Queue-Allowlist-Regex", () => {
+        expect(PATTERNS.OFFLINE_AUDIT_NOTE_EXPORT.test(PATTERNS.ENDPOINTS.AUDIT_NOTE_EXPORT)).toBe(true);
+    });
+});

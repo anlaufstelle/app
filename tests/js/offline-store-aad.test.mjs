@@ -14,6 +14,9 @@ beforeAll(async () => {
     // offline-store.js prueft `typeof Dexie === "undefined"` beim Laden.
     window.Dexie = Dexie;
     globalThis.Dexie = Dexie;
+    // Refs #1828: Endpunkt-Literale leben in url-patterns.js (ENDPOINTS) —
+    // wie in base.html VOR offline-store.js laden.
+    await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
     await import("../../src/static/js/offline-store.js");

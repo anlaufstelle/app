@@ -16,6 +16,9 @@ beforeAll(async () => {
             if (name === "conflictList") factory = fn;
         },
     };
+    // Refs #1828: der Audit-Endpunkt kommt aus url-patterns.js (ENDPOINTS) —
+    // wie auf der echten Seite (offline_base.html) VOR conflict-list.js laden.
+    await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/conflict-list.js");
     document.dispatchEvent(new Event("alpine:init"));
     // URL.createObjectURL fehlt in jsdom -> stubben.
