@@ -108,9 +108,7 @@
     }
 
     async function enqueueRequest(url, method, body, headers) {
-        if (window.crypto_session && window.crypto_session.ready) {
-            await window.crypto_session.ready();
-        }
+        await window.crypto_session?.awaitReady?.();
         if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
             const err = new Error("NoSessionKey");
             err.name = "NoSessionKeyError";
@@ -279,9 +277,7 @@
 
     async function replayQueue() {
         if (!navigator.onLine) return;
-        if (window.crypto_session && window.crypto_session.ready) {
-            await window.crypto_session.ready();
-        }
+        await window.crypto_session?.awaitReady?.();
         if (!window.crypto_session || !window.crypto_session.hasSessionKey()) return;
 
         const records = await _store().listDecrypted("queue");
@@ -464,30 +460,21 @@
     // zurueck) aktualisiert Tab B's Queue-Zaehler (Banner: pending/blocked)
     // ohne Polling.
     //
-    // Refs #1409: base.html laedt sync-orchestrator.js NACH offline-queue.js
-    // (Z. 130 vor Z. 134) — ein einmaliges Parse-Zeit-Gate wie zuvor hier ist
-    // IMMER false (window.syncOrchestrator existiert noch nicht) und der
-    // Handler wird nie registriert (toter Code). Lade-reihenfolge-tolerant
-    // wie crypto.js:402-418: jetzt versuchen, sonst auf
-    // DOMContentLoaded/naechsten Tick nachholen.
-    var _orchestratorReceiverRegistered = false;
-    function _registerOrchestratorReceiver() {
-        if (_orchestratorReceiverRegistered) return true;
-        if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
-            window.syncOrchestrator.onMessage((msg) => {
-                if (msg && msg.type === "sync-finished") _updateQueueCount();
-            });
-            _orchestratorReceiverRegistered = true;
-            return true;
-        }
-        return false;
+    // Refs #1409/#1828: base.html laedt sync-orchestrator.js NACH
+    // offline-queue.js — direkt registrieren geht hier also (noch) nicht.
+    // Statt des frueher pro Konsument duplizierten DOMContentLoaded/
+    // naechster-Tick-Retry-Geruests wandert der Empfaenger in die
+    // Pending-Liste, die sync-orchestrator.js beim Laden draint (und danach
+    // als Sofort-Registrierung uebernimmt, siehe dort).
+    function _onOrchestratorMessage(msg) {
+        if (msg && msg.type === "sync-finished") _updateQueueCount();
     }
-    if (!_registerOrchestratorReceiver()) {
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", _registerOrchestratorReceiver);
-        } else {
-            window.setTimeout(_registerOrchestratorReceiver, 0);
-        }
+    if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+        window.syncOrchestrator.onMessage(_onOrchestratorMessage);
+    } else {
+        (window.syncOrchestratorPending = window.syncOrchestratorPending || []).push(
+            _onOrchestratorMessage
+        );
     }
 
     window.offlineQueue = {

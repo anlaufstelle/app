@@ -120,9 +120,7 @@
             async load() {
                 this.loading = true;
                 try {
-                    if (window.crypto_session && window.crypto_session.ready) {
-                        await window.crypto_session.ready();
-                    }
+                    await window.crypto_session?.awaitReady?.();
                     if (!window.offlineStore) return;
                     const conflicts = await window.offlineStore.listConflicts();
                     this.conflictEvents = conflicts.map((r) => this._eventItem(r, false));
