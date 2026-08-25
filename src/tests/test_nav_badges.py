@@ -12,8 +12,9 @@ import uuid
 
 import pytest
 from django.template.loader import render_to_string
+from django.urls import reverse
 
-from core.models import RectificationRequest
+from core.models import Client, RectificationRequest
 from core.models.workitem import DeletionRequest
 
 pytestmark = pytest.mark.django_db
@@ -147,3 +148,58 @@ class TestNavBadgeIntegration:
         # Sidebar (Desktop) und Bottom-Bar (mobil) tragen standort-eigene
         # testids — keine Selektor-Mehrdeutigkeit (Playwright strict mode).
         assert html.count('data-testid="nav-badge-workitems_open"') == 1
+
+
+class TestBadgeMatchesListContext:
+    """Integrator-Auflage (#1984): Zaehler und Zielansicht PAARWEISE pinnen —
+    der Badge darf nie eine andere Zahl tragen, als die gerenderte Liste
+    Zeilen zeigt. Beide Werte kommen aus demselben Response-Kontext (Liste
+    aus der View, Zaehler aus dem review_counts-Context-Processor)."""
+
+    def test_deletion_badge_equals_list_for_lead(self, client, facility, lead_user, staff_user):
+        _pending_deletion(facility, staff_user)
+        _pending_deletion(facility, lead_user)
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:deletion_request_list"))
+
+        assert len(response.context["pending_requests"]) == 2
+        assert response.context["open_deletion_requests_count"] == 2
+
+    def test_deletion_badge_equals_list_for_requester(self, client, facility, staff_user, lead_user):
+        """Der Antragsteller-Fall erstmals durch die GERENDERTE Seite: eigene
+        Zeile + eigener Zaehler, der fremde Antrag erscheint in keinem von
+        beiden (Refs #1736 B)."""
+        _pending_deletion(facility, staff_user)
+        _pending_deletion(facility, lead_user)
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:deletion_request_list"))
+
+        assert len(response.context["pending_requests"]) == 1
+        assert response.context["open_deletion_requests_count"] == 1
+
+    def test_deletion_badge_equals_list_for_confirmer(self, client, facility, staff_user, lead_user):
+        """#1053-Genehmiger-Pool auch am Paar: volle Liste, voller Zaehler."""
+        staff_user.can_confirm_deletion = True
+        staff_user.save(update_fields=["can_confirm_deletion"])
+        _pending_deletion(facility, lead_user)
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:deletion_request_list"))
+
+        assert len(response.context["pending_requests"]) == 1
+        assert response.context["open_deletion_requests_count"] == 1
+
+    def test_rectification_badge_equals_list_for_lead(self, client, facility, lead_user, staff_user, client_identified):
+        """Auch die Ausschluss-Faelle (widerrufene Zielperson) laufen durchs
+        Paar — Liste und Zaehler teilen dieselbe pending-Definition."""
+        _pending_rectification(facility, client_identified, staff_user)
+        revoked = Client.objects.create(facility=facility, pseudonym="Widerrufen-02", is_deleted=True)
+        _pending_rectification(facility, revoked, staff_user)
+        client.force_login(lead_user)
+
+        response = client.get(reverse("core:rectification_list"))
+
+        assert len(response.context["pending_requests"]) == 1
+        assert response.context["open_rectification_requests_count"] == 1
