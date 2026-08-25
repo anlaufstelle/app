@@ -14,10 +14,17 @@ Parameter (immer mit ``only`` einbinden):
   variant        "alert" = rot (z.B. ueberfaellig); sonst Accent.
   suffix         optionaler Sichtbar-Zusatz hinter der Zahl (z.B. "!").
   extra_classes  Positionierung des Aufrufers (z.B. "ml-auto").
+  padding        Padding-Utility (Default "px-1.5"); die enge mobile
+                 Bottom-Bar-Ecke uebergibt "px-1" (Bestandsmass).
+  testid_prefix  Default "nav-badge"; die mobilen Standorte uebergeben
+                 "mobile-nav-badge" — Desktop- und Mobil-Navigation liegen
+                 GLEICHZEITIG im DOM (nur CSS-umgeschaltet), ein geteiltes
+                 data-testid waere ein mehrdeutiger Selektor (dieselbe
+                 Konvention wie testid/mobile_testid in core/nav.py).
 
 Datensparsamkeit (ADR-046): hier steht ausschliesslich eine Anzahl — nie
 Pseudonym, Titel, Grund oder Freitext.
-{% endcomment %}{% if count %}<span class="{% if extra_classes %}{{ extra_classes }} {% endif %}inline-flex items-center justify-center px-1.5 py-px rounded-full text-[12px] font-bold {% if variant == 'alert' %}bg-red-500 text-white{% else %}bg-accent-light text-accent{% endif %}" data-testid="nav-badge-{{ kind }}" aria-hidden="true">{% if count > 99 %}99+{% else %}{{ count }}{% endif %}{{ suffix|default:"" }}</span><span class="sr-only">
+{% endcomment %}{% if count %}<span class="{% if extra_classes %}{{ extra_classes }} {% endif %}inline-flex items-center justify-center {{ padding|default:"px-1.5" }} py-px rounded-full text-[12px] font-bold {% if variant == 'alert' %}bg-red-500 text-white{% else %}bg-accent-light text-accent{% endif %}" data-testid="{{ testid_prefix|default:"nav-badge" }}-{{ kind }}" aria-hidden="true">{% if count > 99 %}99+{% else %}{{ count }}{% endif %}{{ suffix|default:"" }}</span><span class="sr-only">
     {% if kind == "workitems_open" %}{% blocktrans count n=count %}{{ n }} offene Aufgabe{% plural %}{{ n }} offene Aufgaben{% endblocktrans %}
     {% elif kind == "workitems_overdue" %}{% blocktrans count n=count %}{{ n }} überfällige Aufgabe{% plural %}{{ n }} überfällige Aufgaben{% endblocktrans %}
     {% elif kind == "deletion" %}{% blocktrans count n=count %}{{ n }} offener Löschantrag{% plural %}{{ n }} offene Löschanträge{% endblocktrans %}
