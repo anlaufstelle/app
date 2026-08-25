@@ -441,7 +441,11 @@ class ClientCreateView(StaffRequiredMixin, View):
             # Policy-/Virus-Reject VOR der Transaktion: der zugehoerige
             # SECURITY_VIOLATION-Audit ist bereits durable geschrieben und
             # ueberlebt bewusst; die gestagten ``.enc`` hat stage_uploads entfernt.
-            form.add_error(None, e.message if hasattr(e, "message") else str(e))
+            # Service-Fehler koennen als message_dict kommen (Randfall-Entscheid
+            # am Ticket): e.messages flacht feldfrei ab — kein dict-repr, kein
+            # add_error-Feld-Mapping auf Nicht-Formularfelder.
+            for message in e.messages:
+                form.add_error(None, message)
             return render(
                 request,
                 "core/clients/form.html",
