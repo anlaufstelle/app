@@ -305,7 +305,7 @@ Methodik:
 | B | Statistik | 15 | 14 | 1 | 93 % |
 | B | Suche | 6 | 6 | 0 | 100 % |
 | B | Sudo | 4 | 4 | 0 | 100 % |
-| B | Sys | 6 | 6 | 0 | 100 % |
+| B | Sys | 6 | 5 | 1 | 83 % |
 | B | Wirkungsziele | 3 | 3 | 0 | 100 % |
 | B | Wirkungsziele / Meilensteine | 1 | 1 | 0 | 100 % |
 | B | WorkItems | 10 | 10 | 0 | 100 % |
@@ -329,10 +329,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 259 | 191 | 68 | 74 % |
+| B | 259 | 190 | 69 | 73 % |
 | C | 38 | 8 | 30 | 21 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **355** | **225** | **130** | **63 %** |
+| **Gesamt** | **355** | **224** | **131** | **63 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

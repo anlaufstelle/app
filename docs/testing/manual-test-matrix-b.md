@@ -6023,11 +6023,11 @@
 
 ---
 
-### TC-ID: ENT-SYS-04 — CSP-Report-Endpoint akzeptiert nur application/csp-report
+### TC-ID: ENT-SYS-04 — CSP-Report-Endpoint akzeptiert nur standardisierte Report-Medientypen
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
+| Sys | öffentlich | C/F/S | ⚪ | `test_csp_report.py` |
 
 **Voraussetzung:** CSP-Header in Responses gesetzt mit `report-uri /csp-report/`.
 
@@ -6036,14 +6036,15 @@
 
 **Schritte:**
 1. POST `/csp-report/` mit `Content-Type: application/csp-report` und valider JSON-Payload (`{"csp-report": {"document-uri": "...", "violated-directive": "..."}}`) → Status 204.
-2. POST mit `Content-Type: application/json` (falsch) → Status 400 oder 415.
-3. POST ohne Body → 400.
-4. Rate-Limit-Test: 11 POSTs in unter 1 Minute von gleicher IP → 11. Request liefert 429 (Too Many Requests).
-5. Browser-Test: CSP-Verletzung absichtlich auslösen (Inline-Script auf Test-Seite) → automatischer POST von Browser → 204.
-6. Logging-Verzeichnis prüfen: CSP-Reports in Logs (z.B. `/var/log/anlaufstelle/csp.log`).
+2. POST mit `Content-Type: application/reports+json` und valider Reporting-API-Liste → Status 204.
+3. POST mit `Content-Type: application/json` (falsch) → Status 400 oder 415.
+4. POST ohne Body → 400.
+5. Rate-Limit-Test: 11 POSTs in unter 1 Minute von gleicher IP → 11. Request liefert 429 (Too Many Requests).
+6. Browser-Test: CSP-Verletzung absichtlich auslösen (Inline-Script auf Test-Seite) → automatischer POST von Browser → 204.
+7. Logging-Verzeichnis prüfen: CSP-Reports in Logs (z.B. `/var/log/anlaufstelle/csp.log`).
 
 **Erwartetes Ergebnis:**
-- Endpoint akzeptiert NUR `application/csp-report`.
+- Endpoint akzeptiert nur `application/csp-report` und `application/reports+json`, nicht generisches JSON.
 - Rate-Limit 10 Requests/min/IP greift.
 - Reports werden geloggt, aber nicht in DB persistiert (DoS-Schutz).
 - Kein PII in CSP-Reports (URLs sind öffentlich).

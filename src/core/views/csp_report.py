@@ -74,7 +74,6 @@ _MAX_BODY_BYTES = 32 * 1024
 _VALID_CONTENT_TYPES = {
     "application/csp-report",  # CSP Level 2 (report-uri, breitester Browser-Support)
     "application/reports+json",  # CSP Level 3 (report-to / Reporting API)
-    "application/json",  # Fallback fuer Browser, die nur generisches JSON liefern
 }
 
 # Refs #1476 (R19): Whitelist bekannter CSP-Report-Felder — sowohl die
@@ -184,9 +183,11 @@ class CSPReportView(View):
             return HttpResponseBadRequest("payload too large")
         if len(body) > _MAX_BODY_BYTES:
             return HttpResponseBadRequest("payload too large")
+        if not body:
+            return HttpResponseBadRequest("empty payload")
 
         try:
-            payload = json.loads(body.decode("utf-8") or "{}")
+            payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return HttpResponseBadRequest("invalid json")
 
