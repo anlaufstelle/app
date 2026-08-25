@@ -1,0 +1,79 @@
+{% load i18n %}
+{% comment %}Refs #1836: gemeinsames Personen-Autocomplete (Fall-Formular und
+Kontakterfassung). Parameter: ``autocomplete_component`` (x-data-Name; nur
+setzen, wenn der Alpine-Scope HIER liegen soll — die Kontakterfassung haengt
+``eventClientAutocomplete`` bewusst am <form>, damit das Fall-Dropdown
+denselben Scope liest), ``client_form`` (Fehlerquelle), ``required_field``
+(festes Pflicht-Sternchen + aria-required/aria-invalid), ``anonymous_mode``
+(Stern nur wenn nicht anonym erlaubt), ``min_stage_hint`` (Stufen-Erklärung
+im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person).
+Die gedriftete Fassung in workitems/form.html wird bewusst NICHT angefasst —
+ihre a11y-Angleichung ist Ticket #1989.{% endcomment %}
+<div{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
+     data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
+     data-initial-client-id="{{ client_id|default:'' }}"
+     data-autocomplete-url="{% url 'core:client_autocomplete' %}"{% endif %}>
+    <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %}{% if anonymous_mode %}
+        <span x-show="notAnonymousAllowed" x-cloak class="text-red-500">*</span>{% else %} *{% endif %}
+    </label>
+    <div class="relative">
+        <input type="text"
+               :value="query" @input="setQuery"
+               @input.debounce.150ms="onInput"
+               @focus="onFocus"
+               @keydown.arrow-down.prevent="moveHighlightDown"
+               @keydown.arrow-up.prevent="moveHighlightUp"
+               @keydown.enter.prevent="confirmHighlight"
+               @keydown.escape="hideResults"
+               @click.away="hideResults"
+               placeholder="{% trans 'Pseudonym eingeben...' %}"
+               aria-label="{% trans 'Person suchen' %}"
+               {% if required_field %}aria-required="true"
+               {% if client_form.client.errors %}aria-invalid="true" aria-describedby="id_client-error"{% endif %}
+               {% endif %}role="combobox"
+               aria-expanded="false"
+               :aria-expanded="ariaExpanded"
+               aria-autocomplete="list"
+               aria-controls="client-autocomplete-list"
+               class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
+               autocomplete="off">
+        <input type="hidden" name="client" :value="selectedId" @input="setSelectedId"{% if extra_hidden_attrs %} {{ extra_hidden_attrs }}{% endif %}>
+
+        {# Dropdown mit Tastatur-Hervorhebung #}
+        <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
+            <template x-for="(c, idx) in enrichedResults" :key="c.id">
+                <button type="button"
+                        :data-idx="idx"
+                        @mousedown.prevent="selectByEvent"
+                        @mouseenter="highlightByEvent"
+                        role="option"
+                        :aria-selected="c.isHighlighted"
+                        :class="c.highlightClass"
+                        class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
+                    <span class="font-semibold" x-text="c.pseudonym"></span>
+                    <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
+                </button>
+            </template>
+        </div>
+        {% comment %}
+        Refs #1803 (Konzept §3.8): Der Leerzustand liegt NEBEN der
+        Listbox, nicht darin — ein Textabsatz und ein Link haben in
+        einem ``role="listbox"`` nichts verloren. Ohne ihn blieb das
+        Feld bei null Treffern schlicht stumm.
+        {% endcomment %}
+        <div x-show="noMatches" x-cloak data-testid="client-autocomplete-empty"
+             class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg px-3 py-2 text-[13px] text-ink-muted">
+            <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>
+            {% if min_stage_hint %}<p x-show="showMinStageHint" x-cloak x-text="minStageHint" class="mt-1"></p>{% endif %}
+            {% if user.is_staff_or_above %}
+            <a href="{% url 'core:client_create' %}" data-testid="client-autocomplete-create"
+               class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</a>
+            {% endif %}
+        </div>
+    </div>
+    {% if client_form.client.errors %}
+    <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
+        {% for error in client_form.client.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+</div>
