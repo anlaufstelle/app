@@ -133,6 +133,42 @@ class TestWorkItemInbox:
         assert done_context["done_full_has_more"] is True
         assert len(done_context["done_full_items"]) == WORKITEM_INBOX_CAP
 
+    def test_inbox_at_exact_cap_marks_no_additional_items(self, client, staff_user, facility):
+        WorkItem.objects.bulk_create(
+            [
+                WorkItem(
+                    facility=facility,
+                    created_by=staff_user,
+                    title=f"{status} {index}",
+                    status=status,
+                )
+                for status in (
+                    WorkItem.Status.OPEN,
+                    WorkItem.Status.IN_PROGRESS,
+                    WorkItem.Status.DONE,
+                )
+                for index in range(WORKITEM_INBOX_CAP)
+            ]
+        )
+        client.force_login(staff_user)
+
+        context = client.get(reverse("core:workitem_inbox")).context
+
+        assert len(context["open_items"]) == WORKITEM_INBOX_CAP
+        assert context["open_has_more"] is False
+        assert len(context["in_progress_items"]) == WORKITEM_INBOX_CAP
+        assert context["in_progress_has_more"] is False
+        assert len(context["done_items"]) == WORKITEM_INBOX_CAP
+        assert context["done_has_more"] is False
+
+        done_context = client.get(
+            reverse("core:workitem_inbox"),
+            {"status": "done", "done_period": "all"},
+        ).context
+
+        assert len(done_context["done_full_items"]) == WORKITEM_INBOX_CAP
+        assert done_context["done_full_has_more"] is False
+
     def test_inbox_facility_scoped(self, client, staff_user, facility, organization):
         from core.models import Facility
 
