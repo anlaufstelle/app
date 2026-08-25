@@ -171,17 +171,20 @@
         <p class="hint">{% trans "Datei-Uploads benötigen eine Verbindung. Sobald Sie wieder online sind, schließt die App offene Aufgaben automatisch ab." %}</p>
     </main>
 
-    <!-- Offline-Home-Stack: Reihenfolge dexie → crypto → offline-store →
-         offline-home. Alle sind im Service-Worker-APP_SHELL pre-cached
-         (sw.js), damit die additiven Status-/Storage-Badges auch beim ersten
-         Offline-Aufruf (PWA-Kaltstart) rendern. Refs #1486: static-Tag statt
-         Literal-Pfaden — der Prod-Precache enthaelt NUR die gehashten URLs
-         (caches.match ist URL-exakt); aufgeloest wird beim (Online-)Fetch
-         des Precache, nicht offline. Refs #1494: url-patterns.js hier
-         entfernt — der einzige Konsument (Create-Wegweiser) ist mit dem
-         Rueckbau auf den statischen Fallback weggefallen; die Selbsthilfe
-         steht ohne JS im Markup. -->
+    <!-- Offline-Home-Stack: Reihenfolge dexie → url-patterns → crypto →
+         offline-store → offline-home. Alle sind im Service-Worker-APP_SHELL
+         pre-cached (sw.js), damit die additiven Status-/Storage-Badges auch
+         beim ersten Offline-Aufruf (PWA-Kaltstart) rendern. Refs #1486:
+         static-Tag statt Literal-Pfaden — der Prod-Precache enthaelt NUR die
+         gehashten URLs (caches.match ist URL-exakt); aufgeloest wird beim
+         (Online-)Fetch des Precache, nicht offline. Refs #1494 hatte
+         url-patterns.js hier entfernt (der damals einzige Konsument fiel
+         weg); seit Refs #1828 liest offline-store.js seine Endpunkte aus
+         URL_PATTERNS.ENDPOINTS — ohne das Modul liefe der online-Fallback-
+         Listener (Revalidierung/Widerrufe nach Reconnect auf dieser Seite)
+         in einen stillen TypeError. -->
     <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
     <script src="{% static 'js/offline-home.js' %}"></script>

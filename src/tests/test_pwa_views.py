@@ -665,9 +665,14 @@ class TestPrecachedShellBumpGuard:
     # precachten JS-Modulen (ENDPOINTS in url-patterns.js, awaitReady in
     # crypto.js, SHELL_ROUTES in sw.js) ist das eine echte Shell-/Modul-
     # Aenderung im Feld => Bump + Hash gemeinsam nachgezogen (EIN Bump fuer
-    # die ganze Welle).
+    # die ganze Welle). Der Review-Nachtrag (offline.html laedt url-patterns.js
+    # wieder — ENDPOINTS-Konsument) zieht NUR den Hash nach, KEIN v41:
+    # anlaufstelle-v40 entstand im selben unveroeffentlichten Lauf und steht
+    # in keinem Tag und keinem Deploy — kein Geraet im Feld traegt v40, also
+    # gibt es keine Split-Brain-Generation, gegen die ein weiterer Bump
+    # schuetzen wuerde (Praezedenz: #1805).
     _PINNED_CACHE_NAME = "anlaufstelle-v40"
-    _PINNED_SHELL_HASH = "f94e8f9ede5ec0cb4826ae9b6dfd5599b29dd0633dd3222943b073d1f2c162ee"
+    _PINNED_SHELL_HASH = "03a86871a0582c592f1506738d44d3599299bfb4317ac6ed0d1e71623db09df3"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
