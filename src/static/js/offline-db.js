@@ -240,7 +240,9 @@
     // dead}. Nur diese darf bei einem PERMANENTEN Decrypt-Fehler nicht STILL
     // verschwinden; rein gecachte, serverseitig erneut abrufbare Read-Kopien
     // (clients/cases/drafts/synced events) bleiben beim #576-Auto-Discard.
-    const _UNSYNCED_EVENT_STATUS = ["new", "modified", "conflict", "dead"];
+    // Refs #1838 (Review): eingefroren — seit der Konsolidierung ist das
+    // EINE geteilte Liste zweier Module; niemand darf sie mutieren.
+    const _UNSYNCED_EVENT_STATUS = Object.freeze(["new", "modified", "conflict", "dead"]);
 
     function _isUnsyncedWorkRow(table, row) {
         if (table === "queue") return true;
@@ -485,49 +487,57 @@
 
     // Refs #1838: Verbrauchbarer interner Kanal fuer die Schwester-Module —
     // Muster crypto_session._link() (R8, #1476): take() liefert die privaten
-    // Helfer je Abholung genau einmal, nach der letzten Abholung ist der
-    // Inhalt null, und offline-store.js (letzte Datei der Ladereihenfolge)
-    // loescht den Slot zusaetzlich komplett. Ein spaeter injiziertes Skript
-    // findet weder den Slot noch die Primitive; die Fassade selbst traegt
-    // NIE Krypto-Interna (vitest-Pin: offline-store-split.test.mjs).
+    // Helfer je Abholung genau einmal. Der Kanal entwaffnet sich DREIFACH
+    // (Integrationsfenster-Review #1838 — das fruehere alleinige Abraeumen
+    // durch offline-store.js liess den Slot samt _crypto-Orakel unbefristet
+    // auf window liegen, wenn genau DIESE Datei nicht laedt):
+    //   1. take() schliesst bei erschoepftem Budget selbst ab (loescht den
+    //      window-Slot);
+    //   2. budget-unabhaengig loescht ein setTimeout(0)-Makrotask direkt nach
+    //      dem Anlegen — er laeuft garantiert NACH allen synchronen
+    //      Verbund-Script-Tags, also auch bei jeder Teil-Ladung;
+    //   3. offline-store.js loescht als letzte Datei zusaetzlich (Guertel +
+    //      Hosentraeger, deckt exotische Timer-Unterdrueckung ab).
+    // Ein spaeter injiziertes Skript findet weder den Slot noch die
+    // Primitive; die Fassade selbst traegt NIE Krypto-Interna (vitest-Pins:
+    // offline-store-split.test.mjs). Der Slot traegt NUR die 14 von den
+    // Schwestern tatsaechlich destrukturierten Schluessel und ist
+    // eingefroren — wer ihn abgreift, bekommt nicht mehr als noetig und
+    // kann ihn nicht als Schmuggelpfad mutieren.
     // _TAKE_BUDGET == Anzahl der Schwester-Module (Refs #1838-Schnittplan).
     const _TAKE_BUDGET = 3;
     let _takesLeft = _TAKE_BUDGET;
-    let _internals = {
+    let _internals = Object.freeze({
         db,
         _crypto,
         _aad,
-        _primKeyName,
         _isTransientDecryptError,
         _isExpired,
         _isSchemaMismatch,
         _isQuotaError,
-        _isUnsyncedWorkRow,
-        _discardOrTombstone,
         _UNSYNCED_EVENT_STATUS,
         FACILITY_ROW_KEY,
-        TTL_MS,
-        MAX_OFFLINE_CLIENTS,
-        BUNDLE_SCHEMA_VERSION,
         FACILITY_BUNDLE_SCHEMA_VERSION,
         putEncrypted,
         getDecrypted,
         listDecrypted,
-        deleteRow,
-        purgeAll,
         purgeExpired,
-        purgeExpiredBundles,
-        count,
-        getMetaValue,
-        setMetaValue,
-    };
+    });
+
+    function _disarmInternals() {
+        _internals = null;
+        _takesLeft = 0;
+        delete window.__offlineStoreInternals;
+    }
+
     window.__offlineStoreInternals = {
         take() {
             if (_takesLeft <= 0 || _internals === null) return null;
             _takesLeft -= 1;
             const handed = _internals;
-            if (_takesLeft === 0) _internals = null;
+            if (_takesLeft === 0) _disarmInternals();
             return handed;
         },
     };
+    window.setTimeout(_disarmInternals, 0);
 })();
