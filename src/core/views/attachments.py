@@ -5,8 +5,7 @@ import uuid
 
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import CharField, Count, IntegerField, OuterRef, Q, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -31,6 +30,7 @@ from core.services.compliance import (
     get_visible_attachment_for_owner_or_404,
     get_visible_event_or_404,
     user_can_see_document_type,
+    visible_attachments_for_user,
 )
 from core.services.file_vault import (
     filename_audit_fields,
@@ -49,15 +49,6 @@ from core.views.mixins import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-#: Sentinel fuer „Owner ohne ``document_type``" in der Sensitivity-Coalesce
-#: (M24/AP4, Refs #1738). Bewusst ein Wert, der in KEINER Sensitivity-Liste
-#: vorkommt: die Zeile faellt damit fuer JEDE Rolle aus der Uebersicht — genau
-#: wie das Download-Gate, das ``document_type is None`` fail-closed mit 404
-#: beantwortet (ADR-039 §12). Ein Default auf „normal" waere die
-#: entgegengesetzte, offene Richtung.
-NO_DOC_TYPE_SENTINEL = "__kein_dokumentationstyp__"
 
 
 # MIME types that may be rendered inline in the browser without XSS risk
@@ -238,93 +229,7 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # ausgeblendete Zeilen.
         show_removed = user.is_lead_or_admin and request.GET.get("removed") == "1"
 
-        # B1 (Refs #1738): ``deleted_at`` blendet einen Anhang ueberall aus —
-        # ausser in der ausdruecklich angeforderten Entfernt-Ansicht.
-        scoped = Attachment.objects.for_facility(facility)
-        attachments = (
-            (scoped.deleted() if show_removed else scoped.active())
-            # B4 (Refs #1781): nur Ketten-Spitzen. Unabhaengig vom
-            # Soft-Delete-Filter — eine Spitze kann soft-geloescht sein, eine
-            # Vorversion muss auch ohne ``deleted_at`` draussen bleiben.
-            .filter(is_current=True)
-            # Owner im Papierkorb liefert keine Dateien mehr aus. Je Owner-Typ
-            # ``NULL``-tolerant formuliert: pro Zeile ist genau EIN Owner
-            # gesetzt (CheckConstraint), die beiden anderen Klauseln sind dann
-            # per ``isnull`` erfuellt.
-            #
-            # Refs #1777: Fuer Person und Fall verlaeuft die Loeschgrenze auch
-            # ueber die PERSON, nicht nur ueber ``is_deleted`` der Owner-Zeile —
-            # eine anonymisierte Person (``is_active=False``) liegt nicht
-            # zwingend im Papierkorb (K-Anon-Bridge). Der Fall-Zweig muss deshalb
-            # ueber ``case__client`` filtern, der Personen-Zweig zusaetzlich
-            # ``is_active`` pruefen — analog zum Ereignis-Zweig ueber
-            # ``event__client`` und konsistent mit ``cases_with_live_client()``.
-            .filter(
-                Q(event__isnull=True)
-                | (
-                    Q(event__is_deleted=False)
-                    & (
-                        Q(event__client__isnull=True)
-                        | Q(event__client__is_deleted=False, event__client__is_active=True)
-                    )
-                )
-            )
-            .filter(Q(client__isnull=True) | Q(client__is_deleted=False, client__is_active=True))
-            .filter(
-                Q(case__isnull=True)
-                | Q(case__is_deleted=False, case__client__is_deleted=False, case__client__is_active=True)
-            )
-            .select_related(
-                "event",
-                "event__document_type",
-                "event__client",
-                "client",
-                "client__document_type",
-                "case",
-                "case__document_type",
-                "case__client",
-                "field_template",
-                "created_by",
-            )
-            .annotate(
-                # Sensitivity des Owner-Typs, egal an welchem Owner die Zeile
-                # haengt. Der Default ist ein Sentinel, der in KEINER
-                # ``allowed``-Liste vorkommt: ein Owner ohne ``document_type``
-                # hat keine Bezugs-Sensitivitaet, die Zeile bleibt damit fuer
-                # jede Rolle unsichtbar — exakt wie das Download-Gate, das
-                # ``document_type is None`` mit 404 beantwortet (ADR-039 §12).
-                owner_sensitivity=Coalesce(
-                    "event__document_type__sensitivity",
-                    "client__document_type__sensitivity",
-                    "case__document_type__sensitivity",
-                    Value(NO_DOC_TYPE_SENTINEL),
-                    output_field=CharField(),
-                ),
-                # B4 (Refs #1781): Laenge der Versionskette als aggregierte
-                # Subquery — EINE korrelierte Unterabfrage im selben Statement
-                # statt einer Zaehl-Query je Zeile (kein N+1). ``Coalesce`` auf
-                # 1: die Zeile selbst zaehlt immer mit, die Subquery kann durch
-                # den ``active()``-Filter nur dann leer sein, wenn die Spitze
-                # selbst soft-geloescht ist — dann ist sie ohnehin schon aus der
-                # Liste gefiltert.
-                version_count=Coalesce(
-                    Subquery(self._chain_version_counts(facility, removed=show_removed), output_field=IntegerField()),
-                    Value(1),
-                ),
-            )
-            # Sensitivity-Filter VOR dem Slice: die effektive Sensitivitaet ist
-            # max(doc_type, field_template) — beide muessen in der Rollen-Sicht
-            # liegen.
-            .filter(owner_sensitivity__in=allowed)
-            .filter(Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed))
-            .order_by("-created_at")
-        )
-
-        # ADR-039 §12: Faelle sind fuer die Assistenz unsichtbar — fall-eigene
-        # Dateien folglich auch. Ohne diesen Filter waere die Uebersicht ein
-        # Nebeneingang in die Fall-Dokumentation.
-        if not user.is_staff_or_above:
-            attachments = attachments.filter(case__isnull=True)
+        attachments = visible_attachments_for_user(facility, user, removed=show_removed)
 
         doc_type_id = request.GET.get("document_type")
         if doc_type_id:
@@ -391,38 +296,6 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         }
 
         return self.render_htmx_or_full(context)
-
-    @staticmethod
-    def _chain_version_counts(facility, *, removed=False):
-        """Aggregat-Subquery: Anzahl noch vorhandener Versionen je ``entry_id``.
-
-        B4 (Refs #1781). Gezaehlt werden die nicht soft-geloeschten Zeilen der
-        Kette — der Badge beziffert, was noch da ist, nicht, was es einmal gab.
-        Der Facility-Scope steht explizit hier, statt sich auf die RLS-Policy zu
-        verlassen: eine Auswertung, die nur unter RLS korrekt zaehlt, waere im
-        Superadmin-Kontext (Bypass-Branch) still falsch.
-
-        Refs #1874: In der Ansicht „Entfernte Dateien" zaehlt gespiegelt die
-        soft-geloeschte Menge — ein ``active()``-Zaehler lieferte dort konstant
-        ``0`` und der Badge verschwaende. Der Badge beziffert damit die
-        **entfernten** Versionen, nicht zwingend die Kettenlaenge; ein Purge
-        nimmt immer die ganze ``entry_id``. Praktisch faellt beides zusammen,
-        weil ``soft_delete_attachment_chain`` die Kette als Ganzes entfernt —
-        und die verbindliche Zahl nennt ohnehin erst die Bestaetigungsseite
-        (``AttachmentPurgeView._chain_size``, ohne ``deleted_at``-Filter).
-        """
-        base = Attachment.objects.for_facility(facility)
-        return (
-            (base.deleted() if removed else base.active())
-            .filter(entry_id=OuterRef("entry_id"))
-            # ``order_by()`` loescht ``Meta.ordering`` — sonst landet
-            # ``created_at`` im GROUP BY und die Subquery liefert je Version
-            # eine eigene Zeile.
-            .order_by()
-            .values("entry_id")
-            .annotate(total=Count("pk"))
-            .values("total")
-        )
 
     @staticmethod
     def _filter_by_uuid(queryset, raw_value, condition):
