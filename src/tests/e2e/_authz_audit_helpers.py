@@ -560,6 +560,9 @@ def prepare_audit_objects(conn, fac_id):
 # (Owner = lead, NORMAL-Sensitivität, kein QUALIFIED-Client) — siehe
 # prepare_audit_objects, das je ein solches Objekt garantiert.
 HARVEST_SQL = {
+    # Benutzerziel des Zugänge-Reiters (#1871). ``core_user`` ist nicht per
+    # RLS gescopt; die View muss denselben Facility-Filter explizit setzen.
+    "staff_user": ("SELECT id FROM core_user WHERE facility_id = %(fac)s AND role = 'staff' ORDER BY id LIMIT 1"),
     # Geteilt mit prepare_audit_objects (Schritte 7/8) — siehe dort.
     "client_identified": _FIRST_CLIENT,
     "client_trashed": (
@@ -738,6 +741,7 @@ for _parent, _children in _CHAINED_PARENTS.items():
 
 # Audit-Pendants der Unit-Fixture-Namen für IDOR (foreign_X in Facility 2 = X-SQL dort).
 FOREIGN_ALIASES = {
+    "foreign_staff": "staff_user",
     "foreign_client": "client_identified",
     "foreign_client_trashed": "client_trashed",
     "foreign_case": "case_open",

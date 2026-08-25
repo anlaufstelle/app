@@ -512,6 +512,36 @@ EXPECTATIONS = (
     # und Datei-Policies sind nur fuer die eigene Anwendungsbetreuung und
     # durchgehend hinter dem Sudo-Step-up schreibbar.
     E("core:facility_settings", "facility-admin", get=ADMIN_ONLY, post=ADMIN_ONLY, sudo=True),
+    # Refs #1871 / ADR-048: Die Liste ist einrichtungsgebunden lesbar; jede
+    # Management-Seite bzw. Mutation verlangt Sudo. ``core_user`` hat kein
+    # RLS-Netz, deshalb tragen alle pk-Routen echte Fremd-Facility-Proben.
+    E("core:user_access_list", "facility-admin", get=ADMIN_ONLY),
+    E("core:user_access_create", "facility-admin", get=ADMIN_ONLY, post=ADMIN_ONLY, sudo=True),
+    E(
+        "core:user_access_update",
+        "facility-admin",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        sudo=True,
+        url_kwargs=(("pk", "staff_user.pk"),),
+        idor=(("pk", "foreign_staff.pk"),),
+    ),
+    E(
+        "core:user_access_invite",
+        "facility-admin",
+        post=ADMIN_ONLY,
+        sudo=True,
+        url_kwargs=(("pk", "staff_user.pk"),),
+        idor=(("pk", "foreign_staff.pk"),),
+    ),
+    E(
+        "core:user_access_unlock",
+        "facility-admin",
+        post=ADMIN_ONLY,
+        sudo=True,
+        url_kwargs=(("pk", "staff_user.pk"),),
+        idor=(("pk", "foreign_staff.pk"),),
+    ),
     E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
     # Refs #1818: zweiter Papierkorb, gleiches Gate wie der erste.
     E("core:case_trash", "facility-admin", get=ADMIN_ONLY),

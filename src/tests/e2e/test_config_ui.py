@@ -49,7 +49,8 @@ class TestFacilitySettingsHub:
         enter_sudo_mode(page, base_url)
 
         page.goto(f"{base_url}/verwaltung/", wait_until="domcontentloaded")
-        expect(page.locator('[data-testid^="subnav-tab-"]')).to_have_count(5)
+        # #1871 ergaenzt den Zugaenge-Reiter zum bestehenden Settings-Hub.
+        expect(page.locator('[data-testid^="subnav-tab-"]')).to_have_count(6)
         warning_links = page.locator('[data-testid="settings-warnings-list"] a[href="/verwaltung/einstellungen/"]')
         expect(warning_links).to_have_count(2)
 

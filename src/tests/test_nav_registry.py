@@ -64,7 +64,7 @@ NAV_ROUTE_PREFIXES = (
 # Bestaetigung, Aufheben, Aehnlich-Hinweis im Anlagepfad).
 # #1885 fuegt genau den Einstellungen-Reiter hinzu; die Baseline bleibt ein
 # Verlust-/Duplikat-Guard fuer alle nachfolgenden URLconf-Aenderungen.
-_EXPECTED_TOTAL_PATTERNS = 162
+_EXPECTED_TOTAL_PATTERNS = 167
 
 
 def _prefixed_route_names() -> dict[str, str]:

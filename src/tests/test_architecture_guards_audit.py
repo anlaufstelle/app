@@ -121,7 +121,7 @@ class TestAuditLogCreationAllowlist:
         "core/services/audit/helpers.py": {
             4: "Docstring-Beispiel — kein echter Call",
             107: "log_audit_event-Body — zentraler View-Helper",
-            148: "audit_event-Body — generischer Service-/Cron-Helper",
+            150: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
             137: "update_settings-Body — Settings-Diff-Helper",
@@ -133,9 +133,10 @@ class TestAuditLogCreationAllowlist:
             134: "on_user_logged_out — auth signal",
             167: "on_user_login_failed — no-facility branch",
             178: "on_user_login_failed — with-facility branch",
-            261: "post_save User — role change detection (actor-Attribution, Refs #1369)",
-            280: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
-            297: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
+            259: "post_save User — request-getriebene Anlage (Refs #1871)",
+            282: "post_save User — role change detection (actor-Attribution, Refs #1369)",
+            301: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
+            318: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
         },
     }
 

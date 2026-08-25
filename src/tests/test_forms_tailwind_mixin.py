@@ -33,6 +33,7 @@ from core.forms.events import EventMetaForm
 from core.forms.import_data import ImportUploadForm
 from core.forms.mixins import TailwindFormMixin
 from core.forms.rectification import RectificationRequestForm
+from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
 from core.forms.widgets import INPUT_CSS
 from core.forms.workitems import WorkItemForm
 
@@ -53,6 +54,8 @@ FORM_FACTORIES = {
     "EventMetaForm": lambda: EventMetaForm(facility=None, user=None),
     "ImportUploadForm": lambda: ImportUploadForm(facility=None),
     "RectificationRequestForm": lambda: RectificationRequestForm(client=None, user=None),
+    "UserAccessCreateForm": lambda: UserAccessCreateForm(facility=None, actor=None),
+    "UserAccessUpdateForm": lambda: UserAccessUpdateForm(facility=None, actor=None),
     "WorkItemForm": lambda: WorkItemForm(facility=None),
 }
 
@@ -161,6 +164,23 @@ EXPECTED = {
         "field_path": ("Select", True, {}),
         "new_value": ("Textarea", True, {"rows": 2, "cols": "40"}),
         "reason": ("Textarea", True, {"rows": 4, "cols": "40"}),
+    },
+    "UserAccessCreateForm": {
+        "username": ("TextInput", True, {"maxlength": "150"}),
+        "email": ("EmailInput", True, {"maxlength": "254"}),
+        "display_name": ("TextInput", True, {"maxlength": "100"}),
+        "role": ("Select", True, {}),
+        "mfa_required": ("CheckboxInput", False, {}),
+        "can_confirm_deletion": ("CheckboxInput", False, {}),
+    },
+    "UserAccessUpdateForm": {
+        "username": ("TextInput", True, {"maxlength": "150"}),
+        "email": ("EmailInput", True, {"maxlength": "254"}),
+        "display_name": ("TextInput", True, {"maxlength": "100"}),
+        "role": ("Select", True, {}),
+        "is_active": ("CheckboxInput", False, {}),
+        "mfa_required": ("CheckboxInput", False, {}),
+        "can_confirm_deletion": ("CheckboxInput", False, {}),
     },
     "WorkItemForm": {
         "item_type": ("Select", True, {}),

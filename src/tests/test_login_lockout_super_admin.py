@@ -56,3 +56,6 @@ class TestSuperAdminLockoutExemption:
         entry = unlock(staff_user, unlocked_by=admin_user)
         assert entry is not None
         assert entry.action == AuditLog.Action.LOGIN_UNLOCK
+        assert entry.user == staff_user
+        assert entry.actor == admin_user
+        assert entry.detail["actor_username"] == admin_user.username
