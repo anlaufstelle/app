@@ -176,13 +176,20 @@ def nav_sidebar(context):
         "items": _without_leading_divider(_rendered(nav.SIDEBAR, context)),
         "overdue_workitems_count": context.get("overdue_workitems_count"),
         "open_workitems_count": context.get("open_workitems_count"),
+        # Refs #1984: Summen-Badge am Datenschutz-Hub-Anker.
+        "datenschutz_review_count": context.get("datenschutz_review_count"),
     }
 
 
 @register.inclusion_tag("partials/_nav_mobile_more_items.html", takes_context=True)
 def nav_mobile_more(context):
     """Die Link-Einträge des mobilen „Mehr"-Menüs."""
-    return {"items": _rendered(nav.MOBILE_MORE, context, mobile=True)}
+    return {
+        "items": _rendered(nav.MOBILE_MORE, context, mobile=True),
+        # Refs #1984: Summen-Badge an der Datenschutz-Hub-Zeile (Semantik
+        # identisch zur Desktop-Sidebar).
+        "datenschutz_review_count": context.get("datenschutz_review_count"),
+    }
 
 
 @register.inclusion_tag("partials/_subnav.html", takes_context=True)
@@ -200,7 +207,13 @@ def subnav(context, key: str):
     ist Opt-in je Bereich, kein Nav-Default.
     """
     area = nav.section(key)
-    return {"section": area, "tabs": _rendered(area.tabs, context, carry=_carry_query(area, context))}
+    return {
+        "section": area,
+        "tabs": _rendered(area.tabs, context, carry=_carry_query(area, context)),
+        # Refs #1984: Einzel-Zaehler an den Datenschutz-Reitern.
+        "open_deletion_requests_count": context.get("open_deletion_requests_count"),
+        "open_rectification_requests_count": context.get("open_rectification_requests_count"),
+    }
 
 
 @register.inclusion_tag("components/_back_link.html", takes_context=True)

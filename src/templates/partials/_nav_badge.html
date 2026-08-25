@@ -1,0 +1,26 @@
+{% load i18n %}{% comment %}
+Gemeinsame Zaehler-Badge-Semantik der Navigation (Refs #1984, ADR-046):
+
+* ``count`` 0/fehlend rendert NICHTS — kein leerer Badge.
+* Die sichtbare Zahl ist auf ``99+`` gekappt und ``aria-hidden``; der volle
+  zugaengliche Name (inkl. echter Zahl) steht als ``sr-only``-Text daneben —
+  aria-label auf rollenlosen <span> ist fuer Screenreader nicht verlaesslich.
+* Zaehler sind ergaenzend: Text, nicht nur Farbe.
+
+Parameter (immer mit ``only`` einbinden):
+  count          Zaehlerwert (int).
+  kind           Sorte fuer den zugaenglichen Namen: workitems_open |
+                 workitems_overdue | deletion | rectification | datenschutz.
+  variant        "alert" = rot (z.B. ueberfaellig); sonst Accent.
+  suffix         optionaler Sichtbar-Zusatz hinter der Zahl (z.B. "!").
+  extra_classes  Positionierung des Aufrufers (z.B. "ml-auto").
+
+Datensparsamkeit (ADR-046): hier steht ausschliesslich eine Anzahl — nie
+Pseudonym, Titel, Grund oder Freitext.
+{% endcomment %}{% if count %}<span class="{% if extra_classes %}{{ extra_classes }} {% endif %}inline-flex items-center justify-center px-1.5 py-px rounded-full text-[12px] font-bold {% if variant == 'alert' %}bg-red-500 text-white{% else %}bg-accent-light text-accent{% endif %}" data-testid="nav-badge-{{ kind }}" aria-hidden="true">{% if count > 99 %}99+{% else %}{{ count }}{% endif %}{{ suffix|default:"" }}</span><span class="sr-only">
+    {% if kind == "workitems_open" %}{% blocktrans count n=count %}{{ n }} offene Aufgabe{% plural %}{{ n }} offene Aufgaben{% endblocktrans %}
+    {% elif kind == "workitems_overdue" %}{% blocktrans count n=count %}{{ n }} überfällige Aufgabe{% plural %}{{ n }} überfällige Aufgaben{% endblocktrans %}
+    {% elif kind == "deletion" %}{% blocktrans count n=count %}{{ n }} offener Löschantrag{% plural %}{{ n }} offene Löschanträge{% endblocktrans %}
+    {% elif kind == "rectification" %}{% blocktrans count n=count %}{{ n }} offener Berichtigungsantrag{% plural %}{{ n }} offene Berichtigungsanträge{% endblocktrans %}
+    {% elif kind == "datenschutz" %}{% blocktrans count n=count %}{{ n }} offener Prüfvorgang{% plural %}{{ n }} offene Prüfvorgänge{% endblocktrans %}
+    {% endif %}</span>{% endif %}
