@@ -31,7 +31,7 @@ from core.services.dashboard import (
     EXTERNAL_REPORT_TARGET,
     RELEASE_LOG_LIMIT,
     InvalidStatisticsPeriodError,
-    _merge_stats,
+    aggregate_trend_segments,
     build_external_report,
     build_release_overview,
     get_statistics,
@@ -374,8 +374,7 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
             sources.append(seg["source"])
 
         # Aggregate document_types and age_clusters across all segments
-        segment_stats = [{k: v for k, v in seg.items() if k not in ("label", "source")} for seg in segments]
-        aggregated = _merge_stats(segment_stats)
+        aggregated = aggregate_trend_segments(segments)
 
         data = {
             "labels": labels,
