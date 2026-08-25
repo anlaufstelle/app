@@ -7,14 +7,17 @@
 // leiten zwischen crypto-Import und Store-Import erst den Session-Key ab).
 //
 // Fake-Timer waehrend des Ladens (Refs #1838, Slot-Selbstentwaffnung):
-// offline-db.js entwaffnet den internen Kanal budget-unabhaengig per
-// setTimeout(0) — im Browser laeuft dieser Makrotask garantiert NACH allen
-// synchronen Verbund-Script-Tags. Kalte dynamic imports im Test-Runner haben
-// dagegen echte Event-Loop-Luecken, in denen der Timer ZU FRUEH feuern und
-// den Slot vor den Schwester-Abholungen loeschen wuerde. Die Fake-Timer
-// halten ihn an; runAllTimers() feuert ihn danach — exakt die
-// Browser-Reihenfolge. crypto.js MUSS vor diesem Helper geladen sein (sein
-// Idle-Check-Interval soll REAL bleiben).
+// Im Browser entwaffnet offline-db.js den internen Kanal an
+// DOMContentLoaded (feuert erst nach allen parser-blockierenden
+// Verbund-Tags); ein setTimeout(0) traegt diese Garantie NICHT — der Timer
+// kann in der Fetch-Luecke zwischen zwei Script-Tags feuern (2x per PoC
+// belegt, s. #1838). In jsdom ist document.readyState beim Testlauf bereits
+// "complete", darum nimmt offline-db.js hier den Makrotask-Fallback; die
+// Fake-Timer halten ihn an, runAllTimers() feuert ihn nach den Imports.
+// Den echten DCL-Pfad pinnt offline-store-split.test.mjs isoliert
+// (readyState "loading" erzwungen); end-to-end deckt ihn die E2E-Suite ab.
+// crypto.js MUSS vor diesem Helper geladen sein (sein Idle-Check-Interval
+// soll REAL bleiben).
 import { vi } from "vitest";
 
 export async function importOfflineStoreModules() {
