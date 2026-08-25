@@ -125,7 +125,18 @@ importScripts("/static/js/url-patterns.js");
 // base.html/offline_base.html sowie offline-tally.js liegen in precachten
 // Shells. Der Bump ersetzt die alten Farben und 36-px-Touchziele auch auf
 // bereits installierten Geraeten.
-const CACHE_NAME = "anlaufstelle-v39";
+// Refs #1828: v39 -> v40 -- Quick-Win-Welle Offline-JS. Praktisch alle
+// precachten Offline-Module aendern sich zusammen: url-patterns.js traegt den
+// neuen ENDPOINTS-Block, crypto.js das awaitReady-Gate, offline-store/
+// offline-queue/offline-edit/offline-client/sync-orchestrator konsumieren
+// beides, die frueheren Spiegel-Helfer und Formatter leben jetzt in
+// offline-form-fields.js, und sechs precachte Shell-Templates laden diese
+// Datei neu per Script-Tag. Alles liegt cache-first im APP_SHELL: ohne Bump
+// behielte ein Bestandsgeraet eine Mischung aus alten und neuen Modulen —
+// z.B. ein neues offline-client-view.js, das offlineFormFields.formatTs
+// erwartet, gegen ein altes offline-form-fields.js ohne Formatter. Der Bump
+// erzwingt Re-Install + Re-Precache und erneuert die Module atomar.
+const CACHE_NAME = "anlaufstelle-v40";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

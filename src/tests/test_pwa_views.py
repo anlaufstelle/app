@@ -150,11 +150,12 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v39"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v40"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1947: Manifest/Meta-Tags teilen die Markenfarbe, der Splash den "
-            "warmen Canvas-Hintergrund; geaenderte Offline-Shells und "
-            "offline-tally.js brauchen Re-Install + Re-Precache)."
+            "(#1828: Quick-Win-Welle Offline-JS — ENDPOINTS/awaitReady/"
+            "SHELL_ROUTES/offline-form-fields-Konsolidierung aendert praktisch "
+            "alle precachten Offline-Module und sechs Shell-Templates atomar; "
+            "Re-Install + Re-Precache noetig)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -195,19 +196,20 @@ class TestServiceWorkerCachesOfflineFallback:
         statt der echten Erfassungs-Shell.
         """
         body = client.get(reverse("service_worker")).content.decode()
-        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)" in body
-        assert ".match(OFFLINE_EVENT_SHELL_URL)" in body
-        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)" in body
-        assert ".match(OFFLINE_WORKITEM_SHELL_URL)" in body
-        # Die Create-Shell-Zweige muessen VOR der generischen
-        # ``.match(request.url)``-Stufe stehen (sonst gewinnt /offline/). Die
-        # tatsaechliche generische Stufe ist das LETZTE ``.match(request.url)``
-        # (frueheres Vorkommen steht nur im erklaerenden Kommentar).
-        event_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)")
-        workitem_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)")
+        # Refs #1828: Die Zweige leben als Eintraege der geordneten
+        # SHELL_ROUTES-Tabelle; deren Array-Reihenfolge ist die Semantik der
+        # frueheren if-Kaskade. Geprueft wird dieselbe Garantie am neuen Code:
+        # beide Create-Eintraege existieren, und die Fallback-Schleife laeuft
+        # VOR der generischen ``caches.match(request.url)``-Stufe (das LETZTE
+        # ``.match(request.url)`` — fruehere Vorkommen stehen nur in
+        # erklaerenden Kommentaren).
+        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, url)" in body
+        assert "shell: OFFLINE_EVENT_SHELL_URL" in body
+        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, url)" in body
+        assert "shell: OFFLINE_WORKITEM_SHELL_URL" in body
+        shell_loop = body.index("for (const route of SHELL_ROUTES)")
         generic_match = body.rindex(".match(request.url)")
-        assert event_branch < generic_match, "EVENT_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
-        assert workitem_branch < generic_match, "WORKITEM_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
+        assert shell_loop < generic_match, "SHELL_ROUTES-Schleife muss vor dem generischen /offline/-Match stehen."
 
     def test_sw_caches_offline_tab_shells(self, client):
         """Refs #1543 (#1499): Die pk-losen Tab-Shells (Aufgaben
@@ -232,19 +234,22 @@ class TestServiceWorkerCachesOfflineFallback:
         dem WORKITEM_LIST-Zweig stehen (Kalt-Offline-Create-Pfad).
         """
         body = client.get(reverse("service_worker")).content.decode()
-        assert "self.URL_PATTERNS.WORKITEM_LIST.test(request.url)" in body
-        assert ".match(OFFLINE_WORKITEM_LIST_SHELL_URL)" in body
-        assert "self.URL_PATTERNS.isZeitstromRoot(request.url)" in body
-        assert ".match(OFFLINE_ZEITSTROM_SHELL_URL)" in body
-        workitem_list_branch = body.index("self.URL_PATTERNS.WORKITEM_LIST.test(request.url)")
-        zeitstrom_branch = body.index("self.URL_PATTERNS.isZeitstromRoot(request.url)")
+        # Refs #1828: Zweige = SHELL_ROUTES-Eintraege (siehe
+        # test_sw_serves_create_shell_fallback_before_generic_offline); die
+        # WORKITEM_NEW-vor-WORKITEM_LIST-Garantie ist jetzt die
+        # Eintrags-Reihenfolge in der Tabelle.
+        assert "self.URL_PATTERNS.WORKITEM_LIST.test(url)" in body
+        assert "shell: OFFLINE_WORKITEM_LIST_SHELL_URL" in body
+        assert "self.URL_PATTERNS.isZeitstromRoot(url)" in body
+        assert "shell: OFFLINE_ZEITSTROM_SHELL_URL" in body
+        shell_loop = body.index("for (const route of SHELL_ROUTES)")
         generic_match = body.rindex(".match(request.url)")
-        assert workitem_list_branch < generic_match, (
-            "WORKITEM_LIST-Zweig muss vor dem generischen /offline/-Match stehen."
+        assert shell_loop < generic_match, "SHELL_ROUTES-Schleife muss vor dem generischen /offline/-Match stehen."
+        workitem_new_entry = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, url)")
+        workitem_list_entry = body.index("self.URL_PATTERNS.WORKITEM_LIST.test(url)")
+        assert workitem_new_entry < workitem_list_entry, (
+            "WORKITEM_NEW-Eintrag muss VOR dem WORKITEM_LIST-Eintrag stehen."
         )
-        assert zeitstrom_branch < generic_match, "ZEITSTROM-Zweig muss vor dem generischen /offline/-Match stehen."
-        workitem_new_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)")
-        assert workitem_new_branch < workitem_list_branch, "WORKITEM_NEW-Zweig muss VOR dem WORKITEM_LIST-Zweig stehen."
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -449,13 +454,18 @@ class TestServiceWorkerCachesClientListShell:
         ``caches.match(request.url)``-Stufe (sonst gewinnt /offline/).
         """
         body = client.get(reverse("service_worker")).content.decode()
-        assert "self.URL_PATTERNS.CLIENT_LIST.test(request.url)" in body
-        assert ".match(OFFLINE_CLIENT_LIST_SHELL_URL)" in body
+        # Refs #1828: Der Zweig ist ein SHELL_ROUTES-Eintrag. Die
+        # HX-vor-Shells-Garantie liegt jetzt im Kontrollfluss des
+        # fetch-Handlers: der HX-Sonderfall returnt VOR der
+        # SHELL_ROUTES-Schleife; die Schleife laeuft VOR der generischen
+        # ``caches.match(request.url)``-Stufe.
+        assert "self.URL_PATTERNS.CLIENT_LIST.test(url)" in body
+        assert "shell: OFFLINE_CLIENT_LIST_SHELL_URL" in body
         hx_branch = body.index('request.headers.get("HX-Request") === "true"')
-        list_branch = body.index("self.URL_PATTERNS.CLIENT_LIST.test(request.url)")
+        shell_loop = body.index("for (const route of SHELL_ROUTES)")
         generic_match = body.rindex(".match(request.url)")
-        assert hx_branch < list_branch, "CLIENT_LIST-Zweig muss NACH dem HX-Request-Sonderfall stehen."
-        assert list_branch < generic_match, "CLIENT_LIST-Zweig muss VOR dem generischen /offline/-Match stehen."
+        assert hx_branch < shell_loop, "HX-Request-Sonderfall muss VOR der SHELL_ROUTES-Schleife returnen."
+        assert shell_loop < generic_match, "SHELL_ROUTES-Schleife muss VOR dem generischen /offline/-Match stehen."
 
 
 class TestClientListUrlPattern:
@@ -649,8 +659,15 @@ class TestPrecachedShellBumpGuard:
     # #1900 also MIT CACHE_NAME-Bump (v37 -> v38): Bestandsgeraete tragen genau
     # die personalisierte Shell im Precache, die der Fix entfernt, und
     # bekaemen sie ohne Bump nie ersetzt.
-    _PINNED_CACHE_NAME = "anlaufstelle-v39"
-    _PINNED_SHELL_HASH = "77a0799b0406fac06091d921c3a076c9d2cf5cfee04ea4647d1be94700a70cc6"
+    # Refs #1828: v39 -> v40 — Quick-Win-Welle Offline-JS. Sechs precachte
+    # Shell-Templates laden offline-form-fields.js neu per Script-Tag
+    # (gemeinsame Formatter/Spiegel-Helfer); zusammen mit den konsolidierten
+    # precachten JS-Modulen (ENDPOINTS in url-patterns.js, awaitReady in
+    # crypto.js, SHELL_ROUTES in sw.js) ist das eine echte Shell-/Modul-
+    # Aenderung im Feld => Bump + Hash gemeinsam nachgezogen (EIN Bump fuer
+    # die ganze Welle).
+    _PINNED_CACHE_NAME = "anlaufstelle-v40"
+    _PINNED_SHELL_HASH = "f94e8f9ede5ec0cb4826ae9b6dfd5599b29dd0633dd3222943b073d1f2c162ee"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -999,8 +1016,12 @@ class TestServiceWorkerRobustness:
         assert '"Content-Type": "text/html"' not in body, (
             "SW-Response ohne charset gefunden — text/html; charset=utf-8 verwenden (Mojibake, #1490)."
         )
-        assert body.count('"Content-Type": "text/html; charset=utf-8"') >= 4, (
-            "Erwarte mindestens die vier synthetischen SW-Antworten mit charset=utf-8."
+        # Refs #1828: Die drei Flash-Antworten teilen sich seit der
+        # Konsolidierung EIN Header-Vorkommen in _flashResponse; dazu kommt
+        # das eigenstaendige HX-Partial-Banner. Die eigentliche Garantie
+        # (KEIN charset-loses text/html) traegt die Assertion darueber.
+        assert body.count('"Content-Type": "text/html; charset=utf-8"') >= 2, (
+            "Erwarte die synthetischen SW-Antworten (Flash-Helfer + Partial-Banner) mit charset=utf-8."
         )
 
     def test_dead_sync_code_removed(self, client):
