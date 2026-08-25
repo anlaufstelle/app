@@ -208,6 +208,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.workitem_counts",
+                "core.context_processors.review_counts",
                 "core.context_processors.source_code",
                 "core.context_processors.demo",
                 "core.context_processors.mfa_setup_reminder",
