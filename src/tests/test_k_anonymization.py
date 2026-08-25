@@ -50,9 +50,13 @@ class TestKAnonymizeClient:
 
         assert client_identified.pseudonym == first_pseudonym
 
-    def test_model_method_delegates_to_service(self, client_identified):
-        """``Client.k_anonymize()`` is a thin wrapper around the service."""
-        client_identified.k_anonymize(k=5)
+    def test_k_anonymize_sets_flag_and_bucket(self, client_identified):
+        """Der Service setzt Bucket-Pseudonym und ``k_anonymized``-Flag gemeinsam.
+
+        Refs #1893: der fruehere ``Client.k_anonymize()``-Wrapper ist entfallen;
+        der Test prueft denselben Effekt direkt am Service.
+        """
+        k_anonymize_client(client_identified, k=5)
         client_identified.refresh_from_db()
 
         assert client_identified.pseudonym.startswith("anon-")
