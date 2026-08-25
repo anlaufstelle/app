@@ -58,6 +58,15 @@ class TestNavBadgePartial:
 
         assert "2 open deletion requests" in html
 
+    def test_unknown_kind_falls_back_to_generic_accessible_name(self):
+        """Integrationsfenster-Auflage (#1984): ein Aufrufer mit (noch)
+        unbekanntem kind darf den zugaenglichen Namen nicht leeren — sonst
+        traegt der Badge nur eine aria-hidden-Zahl und ist fuer
+        Screenreader ein stiller Totalausfall."""
+        html = _render_badge(count=3, kind="kuenftige-sorte")
+        assert "sr-only" in html
+        assert "3 offene Vorgänge" in html
+
     def test_alert_variant_and_suffix(self):
         html = _render_badge(count=3, kind="workitems_overdue", variant="alert", suffix="!")
         assert "bg-red-500" in html
