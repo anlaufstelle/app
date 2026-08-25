@@ -220,6 +220,63 @@ def _go_online(page):
     page.evaluate("window.dispatchEvent(new Event('online'))")
 
 
+def _raw_queue_count(page):
+    """Count queue rows on the inert SW feedback page via the raw IDB API."""
+    return page.evaluate(
+        """async () => new Promise((resolve) => {
+            const req = indexedDB.open('anlaufstelle-offline');
+            req.onerror = () => resolve('open-error');
+            req.onsuccess = () => {
+                const db = req.result;
+                try {
+                    const tx = db.transaction('queue', 'readonly');
+                    const count = tx.objectStore('queue').count();
+                    count.onsuccess = () => { db.close(); resolve(count.result); };
+                    count.onerror = () => { db.close(); resolve('count-error'); };
+                } catch (e) { db.close(); resolve('tx-error: ' + e.message); }
+            };
+        })"""
+    )
+
+
+def _dispatch_online_and_await_sync(page):
+    """Dispatch reconnect and await the orchestrator's real completion event."""
+    return page.evaluate(
+        """async () => {
+            const orchestrator = window.syncOrchestrator;
+            const store = window.offlineStore;
+            if (!orchestrator || !store) {
+                return {error: 'sync-runtime-missing'};
+            }
+            const eventName = orchestrator.SYNC_FINISHED_EVENT || 'offline-sync-finished';
+            return await new Promise((resolve) => {
+                let settled = false;
+                const finish = async (timedOut, detail = null) => {
+                    if (settled) return;
+                    settled = true;
+                    const rows = await store.listDecrypted('queue');
+                    resolve({
+                        timedOut,
+                        detail,
+                        queue: rows.map((row) => ({
+                            url: row.url,
+                            localStatus: row.localStatus,
+                            attempts: row.attempts || 0,
+                            lastError: row.lastError || '',
+                        })),
+                    });
+                };
+                const timer = setTimeout(() => { void finish(true); }, 30000);
+                window.addEventListener(eventName, (event) => {
+                    clearTimeout(timer);
+                    void finish(false, event.detail || null);
+                }, {once: true});
+                window.dispatchEvent(new Event('online'));
+            });
+        }"""
+    )
+
+
 def _fresh_sw_only(page, base_url):
     """Kaltstart-Praeparation: /login/ registriert den SW; ``ready`` wartet den
     Install (inkl. ``cache.addAll``) ab. Die Assets der Login-Seite selbst
@@ -395,20 +452,25 @@ class TestMidSessionCaptureRoundtrip:
             _go_offline(page)
             page.fill("input[name='title']", title)
             page.click("button.btn-primary[type=submit]")
-            # SW faengt den POST ab und liefert die Offline-Feedback-Seite.
+            # Nur das exakte Erfolgsfeedback akzeptieren: auch der Fehlerpfad
+            # enthaelt "Offline" und war bis v0.84.0 falsch-gruen.
             _wait_until(
-                lambda: "Offline" in page.content(),
+                lambda: page.evaluate("() => document.body.innerText.includes('lokal verschlüsselt')"),
                 timeout_s=10,
-                desc="SW-Offline-Feedback nach Formular-Submit",
+                desc="SW-queuedOk-Feedback nach Aufgaben-Submit",
             )
+            queued = _raw_queue_count(page)
+            assert queued == 1, f"Queue-Zeile fehlt nach Offline-Submit: {queued!r}"
             assert _server_workitem_state(e2e_env, title) == "MISSING"
 
             page.context.set_offline(False)
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
-            page.evaluate("window.dispatchEvent(new Event('online'))")
-            _wait_until(
-                lambda: _server_workitem_state(e2e_env, title) == "STANDALONE",
-                desc=f"Aufgabe '{title}' serverseitig ohne Klientenbezug",
+            sync = _dispatch_online_and_await_sync(page)
+            assert not sync.get("error"), f"Sync-Runtime fehlt nach Reconnect: {sync!r}"
+            assert not sync["timedOut"], f"Orchestrator-Abschluss fehlt nach Reconnect: {sync!r}"
+            assert sync["queue"] == [], f"Queue nach abgeschlossenem Reconnect nicht leer: {sync!r}"
+            assert _server_workitem_state(e2e_env, title) == "STANDALONE", (
+                f"Aufgabe '{title}' fehlt nach abgeschlossenem Reconnect: {sync!r}"
             )
         finally:
             with suppress(Exception):
@@ -457,21 +519,7 @@ class TestMidSessionCaptureRoundtrip:
             # Beweis der Persistenz VOR dem Drain: die Queue-Zeile per rohem
             # IndexedDB-Zugriff zaehlen (die Feedback-Seite ist inert — kein
             # offline-store.js geladen, daher direkt via IDB-API).
-            queued = page.evaluate(
-                """async () => new Promise((resolve) => {
-                    const req = indexedDB.open('anlaufstelle-offline');
-                    req.onerror = () => resolve('open-error');
-                    req.onsuccess = () => {
-                        const db = req.result;
-                        try {
-                            const tx = db.transaction('queue', 'readonly');
-                            const count = tx.objectStore('queue').count();
-                            count.onsuccess = () => { db.close(); resolve(count.result); };
-                            count.onerror = () => { db.close(); resolve('count-error'); };
-                        } catch (e) { db.close(); resolve('tx-error: ' + e.message); }
-                    };
-                })"""
-            )
+            queued = _raw_queue_count(page)
             assert queued == 1, f"Queue-Zeile fehlt nach Offline-Submit: {queued!r}"
 
             # Netz kommt zurueck, waehrend nur die inerte Feedback-Seite offen
