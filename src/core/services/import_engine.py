@@ -47,10 +47,11 @@ import logging
 import math
 import re
 import uuid
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, IntegrityError, connection, transaction
@@ -145,6 +146,19 @@ class _CellError(Exception):
         self.column = column
 
 
+@dataclass(frozen=True)
+class _ClassifiedImportError:
+    """Noch ungefilterte Klassifikationsdaten eines Zeilenfehlers.
+
+    ``message`` darf Service-Text enthalten und muss vor Persistenz zwingend
+    durch :func:`_error_entry` und damit den PII-Filter laufen.
+    """
+
+    column: str | None
+    code: str
+    message: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Datei-Handling
 # ---------------------------------------------------------------------------
@@ -218,13 +232,18 @@ def _sniff_delimiter(text: str) -> str:
         return _DEFAULT_DELIMITER
 
 
-def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
-    """Kopfzeile + Datenzeilen; leere Zeilen fallen raus, Limits greifen hart."""
-    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+def _parse_csv_header(reader: Iterator[list[str]]) -> list[str]:
+    """Liest und normalisiert die Kopfzeile eines CSV-Readers."""
     try:
         header = [column.strip() for column in next(reader)]
     except StopIteration:
         raise ValidationError(_("Die Datei enthält keine Kopfzeile.")) from None
+    _validate_csv_header(header)
+    return header
+
+
+def _validate_csv_header(header: list[str]) -> None:
+    """Validiert Vollständigkeit und Eindeutigkeit normalisierter Überschriften."""
     if not header or all(not column for column in header):
         raise ValidationError(_("Die Datei enthält keine Kopfzeile."))
     if any(not column for column in header):
@@ -232,6 +251,9 @@ def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
     if len(set(header)) != len(header):
         raise ValidationError(_("Die Kopfzeile enthält doppelte Spaltenüberschriften."))
 
+
+def _parse_csv_rows(reader: Iterator[list[str]]) -> list[list[str]]:
+    """Liest nicht-leere Datenzeilen und erzwingt das synchrone Importlimit."""
     rows: list[list[str]] = []
     for row in reader:
         if not any((cell or "").strip() for cell in row):
@@ -239,7 +261,13 @@ def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
         rows.append(list(row))
         if len(rows) > MAX_ROWS:
             raise ValidationError(_("Die Datei hat mehr als %(max)s Datenzeilen.") % {"max": MAX_ROWS})
-    return header, rows
+    return rows
+
+
+def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
+    """Kopfzeile + Datenzeilen; leere Zeilen fallen raus, Limits greifen hart."""
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    return _parse_csv_header(reader), _parse_csv_rows(reader)
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +405,55 @@ def available_targets(job: ImportJob) -> list[ImportTarget]:
     return targets
 
 
+type _MappingRule = tuple[Callable[[], bool], Callable[[], Any]]
+
+
+def _raise_first_mapping_error(rules: tuple[_MappingRule, ...]) -> None:
+    """Raised die Meldung des ersten zutreffenden Mapping-Prädikats."""
+    for predicate, message in rules:
+        if predicate():
+            raise ValidationError(message())
+
+
+def _validate_mapping_entry(
+    column: str,
+    target: str,
+    header: list[str],
+    known: dict[str, ImportTarget],
+    assigned: set[str],
+) -> None:
+    """Validiert eine nicht-leere Spaltenzuordnung in stabiler Fehlerreihenfolge."""
+    _raise_first_mapping_error(
+        (
+            (
+                lambda: column not in header,
+                lambda: _("Die Spalte „%(column)s“ gibt es in der Datei nicht.") % {"column": column},
+            ),
+            (
+                lambda: target not in known,
+                lambda: _("„%(target)s“ ist kein zulässiges Zielfeld.") % {"target": target},
+            ),
+            (
+                lambda: target in assigned,
+                lambda: _("Das Zielfeld „%(target)s“ ist mehrfach zugeordnet.") % {"target": known[target].label},
+            ),
+        )
+    )
+
+
+def _validate_required_mappings(known: dict[str, ImportTarget], assigned: set[str]) -> None:
+    """Prüft nach den Einzelzuordnungen, ob alle Pflichtziele belegt sind."""
+    missing = [target.label for target in known.values() if target.required and target.key not in assigned]
+    _raise_first_mapping_error(
+        (
+            (
+                lambda: bool(missing),
+                lambda: _("Diese Pflichtfelder brauchen eine Spalte: %(fields)s") % {"fields": ", ".join(missing)},
+            ),
+        )
+    )
+
+
 def apply_mapping(job: ImportJob, mapping: dict[str, str]) -> ImportJob:
     """Validiert und persistiert die Spalten→Ziel-Zuordnung.
 
@@ -395,22 +472,11 @@ def apply_mapping(job: ImportJob, mapping: dict[str, str]) -> ImportJob:
         target = (raw_target or "").strip()
         if not target:
             continue
-        if column not in header:
-            raise ValidationError(_("Die Spalte „%(column)s“ gibt es in der Datei nicht.") % {"column": column})
-        if target not in known:
-            raise ValidationError(_("„%(target)s“ ist kein zulässiges Zielfeld.") % {"target": target})
-        if target in assigned:
-            raise ValidationError(
-                _("Das Zielfeld „%(target)s“ ist mehrfach zugeordnet.") % {"target": known[target].label}
-            )
+        _validate_mapping_entry(column, target, header, known, assigned)
         assigned.add(target)
         columns[column] = target
 
-    missing = [target.label for target in known.values() if target.required and target.key not in assigned]
-    if missing:
-        raise ValidationError(
-            _("Diese Pflichtfelder brauchen eine Spalte: %(fields)s") % {"fields": ", ".join(missing)}
-        )
+    _validate_required_mappings(known, assigned)
 
     job.mapping_json = {**(job.mapping_json or {}), "columns": columns}
     job.status = ImportJob.Status.MAPPED
@@ -656,6 +722,85 @@ def _error_entry(row_number: int, column: str | None, code: str, row: list[str],
     }
 
 
+def _classify_cell_error(exc: Exception) -> _ClassifiedImportError:
+    cell_error = cast(_CellError, exc)
+    return _ClassifiedImportError(cell_error.column, cell_error.code)
+
+
+def _classify_integrity_error(_exc: Exception) -> _ClassifiedImportError:
+    # ``str(exc)`` trägt DB-DETAIL inklusive Zellwert — nie übernehmen.
+    return _ClassifiedImportError(None, "duplicate")
+
+
+def _raise_if_connection_needs_rollback() -> None:
+    """Bricht bei gescheitertem Zeilen-Savepoint den gesamten Lauf ab."""
+    if connection.needs_rollback:
+        # Ab hier würde jede Folgequery nur einen weiteren DatabaseError
+        # erzeugen. Der bare Re-Raise erhält den ursprünglichen Fehler.
+        raise
+
+
+def _classify_database_error(_exc: Exception) -> _ClassifiedImportError:
+    # Dieser Handler steht in der Tabelle NACH IntegrityError. Der Rollback-
+    # Guard darf deshalb erst hier laufen; sonst änderte sich dessen Priorität.
+    _raise_if_connection_needs_rollback()
+    # Auch hier nie ``str(exc)``: Postgres-DETAIL kann den Zellwert enthalten.
+    return _ClassifiedImportError(None, "invalid_value")
+
+
+def _classify_validation_error(exc: Exception) -> _ClassifiedImportError:
+    validation_error = cast(ValidationError, exc)
+    message = " ".join(str(part) for part in validation_error.messages) if validation_error.messages else None
+    return _ClassifiedImportError(None, "validation", message)
+
+
+def _classify_permission_error(exc: Exception) -> _ClassifiedImportError:
+    return _ClassifiedImportError(None, "permission", str(exc) or None)
+
+
+def _classify_value_error(exc: Exception) -> _ClassifiedImportError:
+    return _ClassifiedImportError(None, "invalid_value", str(exc) or None)
+
+
+type _ImportErrorClassifier = Callable[[Exception], _ClassifiedImportError]
+
+_IMPORT_ERROR_CLASSIFIERS: tuple[tuple[type[Exception], _ImportErrorClassifier], ...] = (
+    (_CellError, _classify_cell_error),
+    (IntegrityError, _classify_integrity_error),
+    (DatabaseError, _classify_database_error),
+    (ValidationError, _classify_validation_error),
+    (PermissionDenied, _classify_permission_error),
+    (ValueError, _classify_value_error),
+)
+
+
+def _classify_import_error(exc: Exception) -> _ClassifiedImportError:
+    """Klassifiziert den ersten passenden Fehlertyp in stabiler Reihenfolge."""
+    for exception_type, classifier in _IMPORT_ERROR_CLASSIFIERS:
+        if isinstance(exc, exception_type):
+            return classifier(exc)
+    raise TypeError("Nicht klassifizierbarer Importfehler")
+
+
+def _mapped_columns(job: ImportJob) -> dict[str, str]:
+    """Liefert die persistierte Zuordnung oder weist einen ungemappten Lauf ab."""
+    columns_map = (job.mapping_json or {}).get("columns") or {}
+    if not columns_map:
+        raise ValidationError(_("Für diesen Importlauf ist noch keine Spaltenzuordnung hinterlegt."))
+    return columns_map
+
+
+def _execute_import_row(job: ImportJob, user, values: dict, columns: dict) -> None:
+    """Importiert eine Zeile innerhalb ihres eigenen Savepoints."""
+    # Ohne den inneren Savepoint vergiftet ein IntegrityError die äußere
+    # Transaktion, und der Probelauf könnte nur den ersten Fehler melden.
+    with transaction.atomic():
+        if job.target_type == ImportJob.TargetType.CLIENT:
+            _import_client_row(job, user, values, columns)
+        else:
+            _import_event_row(job, user, values, columns)
+
+
 def run_import(job: ImportJob, user, *, commit: bool = False) -> dict:
     """Fuehrt den Lauf aus — Probelauf (``commit=False``) oder Uebernahme.
 
@@ -671,9 +816,7 @@ def run_import(job: ImportJob, user, *, commit: bool = False) -> dict:
         raise ValidationError(_("Der Importlauf ist bereits abgeschlossen."))
 
     header, rows = read_rows(job)
-    columns_map = (job.mapping_json or {}).get("columns") or {}
-    if not columns_map:
-        raise ValidationError(_("Für diesen Importlauf ist noch keine Spaltenzuordnung hinterlegt."))
+    columns_map = _mapped_columns(job)
 
     errors: list[dict] = []
     created = 0
@@ -682,48 +825,18 @@ def run_import(job: ImportJob, user, *, commit: bool = False) -> dict:
             row_number = offset + 2
             values, columns = _row_values(header, row, columns_map)
             try:
-                # Savepoint je Zeile: ohne ihn vergiftet der erste
-                # IntegrityError die aeussere Transaktion (E3).
-                with transaction.atomic():
-                    if job.target_type == ImportJob.TargetType.CLIENT:
-                        _import_client_row(job, user, values, columns)
-                    else:
-                        _import_event_row(job, user, values, columns)
-            except _CellError as exc:
-                errors.append(_error_entry(row_number, exc.column, exc.code, row))
-            except IntegrityError:
-                # str(exc) traegt die DB-DETAIL-Zeile inkl. Zellwert — nie
-                # uebernehmen, immer der feste Katalogtext.
-                errors.append(_error_entry(row_number, None, "duplicate", row))
-            except DatabaseError:
-                # MUSS nach IntegrityError stehen (Subklasse). Auffangnetz fuer
-                # alle uebrigen DB-Fehler der Zeile — vor allem DataError
-                # (varchar-Ueberlauf, wenn eine Freitext-Spalte auf ein kurzes
-                # Ziel wie ``pseudonym`` gemappt wurde): der Schreibpfad ruft
-                # ``save()`` ohne ``full_clean()``, die Laenge schlaegt also erst
-                # in Postgres auf. Ohne diesen Arm waere das ein 500er und der
-                # ganze Lauf braeche ab. Auch hier nie ``str(exc)`` — die
-                # DETAIL-Zeile traegt den Zellwert.
-                if connection.needs_rollback:
-                    # Der Savepoint-Rollback einer Zeile ist gescheitert
-                    # (Verbindungsabriss): ab hier lehnt Django jede Query mit
-                    # ``TransactionManagementError`` ab — ein ProgrammingError
-                    # und damit ebenfalls ``DatabaseError``. Ohne dieses
-                    # Durchreichen liefe die Schleife weiter und meldete JEDE
-                    # Folgezeile faelschlich als ``invalid_value``, der Lauf
-                    # endete mit einem VALIDATED-Verdikt, das nichts geprueft
-                    # hat. Die aeussere Klammer rollt sauber zurueck, das
-                    # abschliessende ``job.save()`` laeuft nicht mehr — der
-                    # Lauf bleibt in seinem alten Status (Refs #1793).
-                    raise
-                errors.append(_error_entry(row_number, None, "invalid_value", row))
-            except ValidationError as exc:
-                message = " ".join(str(part) for part in exc.messages) if exc.messages else None
-                errors.append(_error_entry(row_number, None, "validation", row, message=message))
-            except PermissionDenied as exc:
-                errors.append(_error_entry(row_number, None, "permission", row, message=str(exc) or None))
-            except ValueError as exc:
-                errors.append(_error_entry(row_number, None, "invalid_value", row, message=str(exc) or None))
+                _execute_import_row(job, user, values, columns)
+            except (_CellError, IntegrityError, DatabaseError, ValidationError, PermissionDenied, ValueError) as exc:
+                classified = _classify_import_error(exc)
+                errors.append(
+                    _error_entry(
+                        row_number,
+                        classified.column,
+                        classified.code,
+                        row,
+                        message=classified.message,
+                    )
+                )
             else:
                 created += 1
 
