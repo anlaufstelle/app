@@ -104,6 +104,9 @@
 {% block extra_js %}
 {# Ausgelagert wegen CSP (Refs #618). offline-store.js/offline-edit.js kommen  #}
 {# global aus base.html; offline-create.js traegt die offlineWorkItemCreate-    #}
-{# Komponente (dieselbe Datei wie die Event-Shell). #}
+{# Komponente (dieselbe Datei wie die Event-Shell). Refs #1828:                 #}
+{# offline-form-fields.js muss VOR offline-create.js laden — die WorkItem-      #}
+{# Komponente nutzt seine Form-Helfer (emptyWorkItemValues u.a.).               #}
+<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-create.js' %}"></script>
 {% endblock %}

@@ -9,6 +9,13 @@
  * Alpine.data()-Bestandteil, nur ein window-Export (CSP-konform, analog
  * csrf-utils.js/url-patterns.js).
  *
+ * Refs #1828: zusaetzlich das Zuhause der frueheren Spiegel-Paare aus
+ * offline-client-view.js und offline-create.js -- Datums-Input-Helfer
+ * (nowLocalInput/todayInput/maxWorkItemDateInput), WorkItem-Form-Helfer
+ * (emptyWorkItemValues/workItemFormData) und der Datei-Marker-Text
+ * (fileNote). Templates, die einen der Konsumenten laden, laden diese
+ * Datei davor.
+ *
  * Steht (Refs #1499) im Service-Worker-APP_SHELL (s. sw.js). Der
  * zugehoerige CACHE_NAME-Bump liegt gesammelt in GENAU EINEM Commit
  * fuer die ganze Reihe -- nicht einer pro Datei.
@@ -71,9 +78,90 @@
         return formData;
     }
 
+    // Refs #1323/#1828: aktueller Zeitpunkt als datetime-local-Wert
+    // (YYYY-MM-DDTHH:MM).
+    function nowLocalInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+            d.getFullYear() +
+            "-" +
+            pad(d.getMonth() + 1) +
+            "-" +
+            pad(d.getDate()) +
+            "T" +
+            pad(d.getHours()) +
+            ":" +
+            pad(d.getMinutes())
+        );
+    }
+
+    // Refs #1398/#1828: heutiges Datum als date-Input-Wert (YYYY-MM-DD) --
+    // untere Datumsschranke fuer WorkItem due_date/remind_at
+    // (min_workitem_date).
+    function todayInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    }
+
+    // Refs #1398/#708/#1828: obere Datumsschranke -- 31.12. des Folgejahrs
+    // (max_workitem_date). Werte-Spiegel der WorkItemForm.
+    function maxWorkItemDateInput() {
+        return new Date().getFullYear() + 1 + "-12-31";
+    }
+
+    // Refs #1398/#1522/#1828: leere WorkItemForm-Defaults (Feldnamen + Werte
+    // 1:1 zur Server-WorkItemForm).
+    function emptyWorkItemValues() {
+        return {
+            item_type: "task",
+            title: "",
+            description: "",
+            priority: "normal",
+            due_date: "",
+            remind_at: "",
+            recurrence: "none",
+            assigned_to: "",
+        };
+    }
+
+    // Refs #1398/#1828: WorkItemForm-Feldnamen 1:1 aus den flachen
+    // Komponenten-Werten (der Replay POSTet sie flach an /workitems/new/
+    // bzw. /workitems/<pk>/edit/) -- Komponenten-Zustand jenseits der acht
+    // Formularfelder bleibt draussen.
+    function workItemFormData(wiValues) {
+        return {
+            item_type: wiValues.item_type,
+            title: wiValues.title,
+            description: wiValues.description,
+            priority: wiValues.priority,
+            due_date: wiValues.due_date,
+            remind_at: wiValues.remind_at,
+            recurrence: wiValues.recurrence,
+            assigned_to: wiValues.assigned_to,
+        };
+    }
+
+    // Refs #1828: Anzeigetext fuer FILE-Feld-Marker (fieldDescriptor-
+    // Callback). Im Create-Kontext nie sichtbar (das Partial rendert fuer
+    // FILE-Felder einen statischen Hinweis), aber fieldDescriptor erwartet
+    // einen Callback fuer isFile-Felder.
+    function fileNote(cur) {
+        if (cur && cur.__file__) return "Datei vorhanden" + (cur.name ? " (" + cur.name + ")" : "");
+        if (cur && cur.__files__) return "Dateien vorhanden (" + (cur.count || 0) + ")";
+        return "Keine Datei";
+    }
+
     window.offlineFormFields = {
         fieldDescriptor: fieldDescriptor,
         initialValue: initialValue,
         buildFormData: buildFormData,
+        nowLocalInput: nowLocalInput,
+        todayInput: todayInput,
+        maxWorkItemDateInput: maxWorkItemDateInput,
+        emptyWorkItemValues: emptyWorkItemValues,
+        workItemFormData: workItemFormData,
+        fileNote: fileNote,
     };
 })();

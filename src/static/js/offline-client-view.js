@@ -16,36 +16,10 @@
         return (patterns && patterns.extractClientPk(path)) || "";
     }
 
-    // Refs #1323: aktueller Zeitpunkt als datetime-local-Wert (YYYY-MM-DDTHH:MM).
-    function _nowLocalInput() {
-        const d = new Date();
-        const pad = (n) => String(n).padStart(2, "0");
-        return (
-            d.getFullYear() +
-            "-" +
-            pad(d.getMonth() + 1) +
-            "-" +
-            pad(d.getDate()) +
-            "T" +
-            pad(d.getHours()) +
-            ":" +
-            pad(d.getMinutes())
-        );
-    }
-
-    // Refs #1398: heutiges Datum als date-Input-Wert (YYYY-MM-DD) — untere
-    // Datumsschranke fuer WorkItem due_date/remind_at (min_workitem_date).
-    function _todayInput() {
-        const d = new Date();
-        const pad = (n) => String(n).padStart(2, "0");
-        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
-    }
-
-    // Refs #1398/#708: obere Datumsschranke — 31.12. des Folgejahrs
-    // (max_workitem_date). Werte-Spiegel der WorkItemForm.
-    function _maxWorkItemDateInput() {
-        return new Date().getFullYear() + 1 + "-12-31";
-    }
+    // Refs #1828: Die Datums-Input-, WorkItem-Form- und Datei-Marker-Helfer
+    // (frueher hier + als Spiegel in offline-create.js) leben genau einmal in
+    // offline-form-fields.js (window.offlineFormFields); offline_detail.html
+    // laedt die Datei vor diesem Modul.
 
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientView", () => ({
@@ -108,8 +82,8 @@
                         urgent: ds.wiPrioUrgent || "",
                     },
                 };
-                this.wiDateMin = _todayInput();
-                this.wiDateMax = _maxWorkItemDateInput();
+                this.wiDateMin = window.offlineFormFields.todayInput();
+                this.wiDateMax = window.offlineFormFields.maxWorkItemDateInput();
                 // Refs #1111: Auf die Sync-Zähler von offline-edit.js hören.
                 // Spielt der Reconnect-Listener (offline-edit.js) eine offline
                 // angelegte Änderung ein, ändert sich der Unsynced-/Konflikt-
@@ -357,16 +331,10 @@
                 const dts = (this.data && this.data.documentTypes) || [];
                 return dts.find((d) => d.pk === pk) || null;
             },
-            _fileNote(cur) {
-                if (cur && cur.__file__) return "Datei vorhanden" + (cur.name ? " (" + cur.name + ")" : "");
-                if (cur && cur.__files__) return "Dateien vorhanden (" + (cur.count || 0) + ")";
-                return "Keine Datei";
-            },
             // Refs #1519 (W1-C): _fieldDescriptor/_initialValue wurden pure nach
             // offline-form-fields.js extrahiert (window.offlineFormFields,
-            // verhaltensneutral). _fileNote bleibt hier -- es ist die einzige
-            // this-Abhaengigkeit der urspruenglichen _fieldDescriptor-Methode
-            // und wird als dritter Parameter durchgereicht.
+            // verhaltensneutral). Refs #1828: auch der fileNote-Callback lebt
+            // jetzt dort und wird als dritter Parameter durchgereicht.
             startEdit(ev) {
                 this.editError = "";
                 this.lastSyncResult = "";
@@ -375,7 +343,7 @@
                 const descriptors = [];
                 const values = {};
                 for (const f of fields) {
-                    const desc = window.offlineFormFields.fieldDescriptor(f, ev, this._fileNote);
+                    const desc = window.offlineFormFields.fieldDescriptor(f, ev, window.offlineFormFields.fileNote);
                     descriptors.push(desc);
                     if (!desc.isFile) {
                         const cur = ev.data_fields ? ev.data_fields[f.slug] : undefined;
@@ -429,7 +397,7 @@
                 this.createDocTypePk = "";
                 this.createDocTypeName = "";
                 this.createCasePk = "";
-                this.createOccurredAt = _nowLocalInput();
+                this.createOccurredAt = window.offlineFormFields.nowLocalInput();
                 this.creating = true;
             },
             onCreateDocTypeChange() {
@@ -440,7 +408,7 @@
                 const descriptors = [];
                 const values = {};
                 for (const f of fields) {
-                    const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, this._fileNote);
+                    const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, window.offlineFormFields.fileNote);
                     descriptors.push(desc);
                     if (!desc.isFile) values[f.slug] = window.offlineFormFields.initialValue(f.field_type, undefined);
                 }
@@ -562,32 +530,6 @@
             },
             /* ── Offline-WorkItem-Erfassung/-Bearbeitung (Refs #1398 P3) ──── */
 
-            _emptyWorkItemValues() {
-                return {
-                    item_type: "task",
-                    title: "",
-                    description: "",
-                    priority: "normal",
-                    due_date: "",
-                    remind_at: "",
-                    recurrence: "none",
-                    assigned_to: "",
-                };
-            },
-            _workItemFormData() {
-                // WorkItemForm-Feldnamen 1:1 (der Replay POSTet sie flach an
-                // /workitems/new/ bzw. /workitems/<pk>/edit/).
-                return {
-                    item_type: this.wiValues.item_type,
-                    title: this.wiValues.title,
-                    description: this.wiValues.description,
-                    priority: this.wiValues.priority,
-                    due_date: this.wiValues.due_date,
-                    remind_at: this.wiValues.remind_at,
-                    recurrence: this.wiValues.recurrence,
-                    assigned_to: this.wiValues.assigned_to,
-                };
-            },
             // Genau ein WorkItem als „in Bearbeitung" markieren (analog _setEditing
             // fuer Events; CSP: keine Method-Calls in x-if, daher per-Item-Flag).
             _setEditingWorkItem(pk) {
@@ -610,7 +552,7 @@
                 this._setEditing(null);
                 this._setEditingWorkItem(null);
                 this.creating = false;
-                this.wiValues = this._emptyWorkItemValues();
+                this.wiValues = window.offlineFormFields.emptyWorkItemValues();
                 this.wiDueMin = this.wiDateMin;
                 this.wiRemindMin = this.wiDateMin;
                 this.creatingWorkItem = true;
@@ -658,7 +600,10 @@
                         this.wiError = "Bitte einen Titel angeben.";
                         return;
                     }
-                    const record = await window.offlineEdit.markWorkItemNew(this._pk, this._workItemFormData());
+                    const record = await window.offlineEdit.markWorkItemNew(
+                        this._pk,
+                        window.offlineFormFields.workItemFormData(this.wiValues)
+                    );
                     this.lastSyncPk = record.pk;
                     this.creatingWorkItem = false;
                     this.wiValues = {};
@@ -696,7 +641,7 @@
                     // ``new`` und replayt via /workitems/new/, das ``client`` als
                     // Pflichtfeld braucht (sonst 422-Schleife). Zusaetzlich haengt
                     // das Overlay (r.clientPk === pk) an diesem Feld.
-                    const record = await window.offlineEdit.markWorkItemModified(wi.pk, this._workItemFormData(), {
+                    const record = await window.offlineEdit.markWorkItemModified(wi.pk, window.offlineFormFields.workItemFormData(this.wiValues), {
                         clientPk: this._pk,
                         expectedUpdatedAt: wi.updated_at || "",
                     });
