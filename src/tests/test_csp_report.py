@@ -5,9 +5,11 @@ import logging
 
 import pytest
 from django.test import override_settings
+from django.test.client import FakePayload
 from django.urls import reverse
 
 from core.logging import JsonFormatter, VerboseScrubbingFormatter
+from core.views.csp_report import CSPReportView
 
 
 @pytest.fixture
@@ -131,11 +133,12 @@ class TestCSPReportEndpoint:
         assert logged["source-file"] == "x" * 512
         assert len(logged["source-file"]) == 512
 
-    def test_unsupported_content_type_rejected(self, client, csp_url):
+    @pytest.mark.parametrize("content_type", ["text/plain", "application/json"])
+    def test_unsupported_content_type_rejected(self, client, csp_url, content_type):
         response = client.post(
             csp_url,
             data=json.dumps(self.SAMPLE_REPORT),
-            content_type="text/plain",
+            content_type=content_type,
         )
         assert response.status_code == 400
 
@@ -145,6 +148,17 @@ class TestCSPReportEndpoint:
             data=b"<<not json>>",
             content_type="application/csp-report",
         )
+        assert response.status_code == 400
+
+    def test_empty_body_rejected(self, rf, csp_url):
+        request = rf.request(
+            REQUEST_METHOD="POST",
+            PATH_INFO=csp_url,
+            CONTENT_TYPE="application/csp-report",
+            CONTENT_LENGTH="0",
+            **{"wsgi.input": FakePayload(b"")},
+        )
+        response = CSPReportView.as_view()(request)
         assert response.status_code == 400
 
     def test_oversized_payload_rejected(self, client, csp_url):
