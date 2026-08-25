@@ -62,6 +62,12 @@ REQUIRED_SCRIPTS = (
     "js/dexie.min.js",
     "js/url-patterns.js",
     "js/crypto.js",
+    # Refs #1838: offline-store ist ein 4-Datei-Verbund — jedes Glied ist
+    # Kalt-Offline-Pflicht (eine Mischkette haette weder Fassade noch
+    # internen Kanal).
+    "js/offline-db.js",
+    "js/offline-bundles.js",
+    "js/offline-revocations.js",
     "js/offline-store.js",
     "js/offline-queue.js",
     "js/offline-client.js",
