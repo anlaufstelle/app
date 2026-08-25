@@ -387,18 +387,9 @@ def format_dynamic_display_value(value: Any, ft: FieldTemplate | None) -> Any:
     """
     if ft is None:
         return value
+    from core.services.system.field_types import get_spec
 
-    if ft.field_type == ft.FieldType.BOOLEAN:
-        return _("Ja") if value else _("Nein")
-
-    if ft.field_type == ft.FieldType.SELECT and ft.options_json:
-        return option_label_map(ft.options_json).get(value, value)
-
-    if ft.field_type == ft.FieldType.MULTI_SELECT and ft.options_json and isinstance(value, list):
-        label_map = option_label_map(ft.options_json)
-        return ", ".join(label_map.get(v, str(v)) for v in value)
-
-    return value
+    return get_spec(ft.field_type).format_display(value, ft)
 
 
 def owner_attachment_index(owner: Any) -> tuple[dict, dict]:

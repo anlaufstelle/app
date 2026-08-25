@@ -11,6 +11,10 @@ laufen laesst. Jede Semantikaenderung wird zuerst dort als Vektor ergaenzt
 import datetime
 import json
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from django.core.exceptions import ValidationError
 
 from core.services.conditions import (
     OPERATORS_BY_FIELD_TYPE,
@@ -19,6 +23,7 @@ from core.services.conditions import (
     find_cycle,
     is_empty,
     normalize_value,
+    parse_condition_value,
 )
 
 _VECTORS_PATH = Path(__file__).parent / "data" / "condition_vectors.json"
@@ -106,6 +111,43 @@ def test_normalize_number_boolean_and_multiselect():
     # Unbekannter Typ (Defensive): "" -> None, sonst unveraendert.
     assert normalize_value("unbekannt", "") is None
     assert normalize_value("unbekannt", "x") == "x"
+
+
+@pytest.mark.parametrize(
+    ("field_type", "raw", "expected"),
+    [
+        ("number", "42", 42),
+        ("number", "12.5", 12.5),
+        ("boolean", "ja", True),
+        ("boolean", "false", False),
+        ("date", "2026-08-25", "2026-08-25"),
+        ("time", "09:05", "09:05:00"),
+        ("select", "a", "a"),
+        ("multi_select", "b", "b"),
+        ("text", "Exakt", "Exakt"),
+        ("unbekannt", "Defensiv", "Defensiv"),
+    ],
+)
+def test_parse_condition_value(field_type, raw, expected):
+    template = SimpleNamespace(options_json=[{"slug": "a"}, {"slug": "b"}])
+    assert parse_condition_value(field_type, template, raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("field_type", "raw", "message"),
+    [
+        ("number", "keine-zahl", "Bitte eine gültige Zahl eingeben."),
+        ("boolean", "vielleicht", "Bitte „wahr“ oder „falsch“ auswählen."),
+        ("date", "25.08.2026", "Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben."),
+        ("time", "25:61", "Bitte eine gültige Uhrzeit eingeben."),
+        ("select", "unbekannt", "Bitte eine gültige Option auswählen."),
+    ],
+)
+def test_parse_condition_value_rejects_invalid_literals(field_type, raw, message):
+    template = SimpleNamespace(options_json=[{"slug": "a"}])
+    with pytest.raises(ValidationError) as exc_info:
+        parse_condition_value(field_type, template, raw)
+    assert exc_info.value.messages == [message]
 
 
 def test_cascade_terminates_within_target_count():
