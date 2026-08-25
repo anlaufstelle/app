@@ -29,9 +29,7 @@
     }
 
     async function ready() {
-        if (window.crypto_session && window.crypto_session.ready) {
-            await window.crypto_session.ready();
-        }
+        await window.crypto_session?.awaitReady?.();
     }
 
     function newIdempotencyKey() {

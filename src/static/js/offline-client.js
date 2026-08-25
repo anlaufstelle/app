@@ -50,9 +50,7 @@
         if (!window.crypto_session) {
             throw new Error("CryptoSessionNotLoaded");
         }
-        if (window.crypto_session.ready) {
-            await window.crypto_session.ready();
-        }
+        await window.crypto_session.awaitReady?.();
         if (!window.crypto_session.hasSessionKey()) {
             const err = new Error("NoSessionKey");
             err.name = "NoSessionKeyError";
