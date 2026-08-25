@@ -1,0 +1,80 @@
+{% load i18n %}
+{% comment %}Refs #1836: gemeinsames Filterformular fuer Facility- und System-Audit-Liste.
+Parameter: ``form_id``, ``filter_url_name``, ``target_id`` (HTMX-Swap-Ziel),
+``user_choices`` (Facility-User bzw. alle User); nur die System-Ebene setzt
+zusaetzlich ``show_facility_filter`` samt ``all_facilities`` und
+``facility_null_sentinel``.{% endcomment %}
+<form id="{{ form_id }}"
+      hx-get="{% url filter_url_name %}"
+      hx-target="#{{ target_id }}"
+      hx-push-url="true"
+      class="mb-5 bg-surface rounded-[10px] border border-subtle p-4">
+    <div class="flex flex-wrap gap-4 items-end">
+        {# Action filter #}
+        <div>
+            <label for="filter-action" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Aktion" %}</label>
+            <select id="filter-action" name="action"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
+                <option value="">{% trans "Alle Aktionen" %}</option>
+                {% for value, label in action_choices %}
+                <option value="{{ value }}" {% if filter_action == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# User filter #}
+        <div>
+            <label for="filter-user" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Benutzer" %}</label>
+            <select id="filter-user" name="user"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
+                <option value="">{% trans "Alle Benutzer" %}</option>
+                {% for u in user_choices %}
+                <option value="{{ u.pk }}" {% if filter_user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {% if show_facility_filter %}
+        {# Facility filter (mit NULL-Sentinel fuer System-Events) #}
+        <div>
+            <label for="filter-facility" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Einrichtung" %}</label>
+            <select id="filter-facility" name="facility"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
+                <option value="">{% trans "Alle Einrichtungen" %}</option>
+                <option value="{{ facility_null_sentinel }}" {% if filter_facility == facility_null_sentinel %}selected{% endif %}>
+                    {% trans "(System / ohne Einrichtung)" %}
+                </option>
+                {% for facility in all_facilities %}
+                <option value="{{ facility.pk }}" {% if filter_facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        {# Date from #}
+        <div>
+            <label for="filter-date-from" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <input type="date" id="filter-date-from" name="date_from" value="{{ filter_date_from }}"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
+        </div>
+
+        {# Date to #}
+        <div>
+            <label for="filter-date-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <input type="date" id="filter-date-to" name="date_to" value="{{ filter_date_to }}"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
+        </div>
+
+        {# Submit #}
+        <div class="flex gap-2">
+            <button type="submit"
+                    class="px-4 py-2 rounded-md text-[13px] font-semibold bg-accent text-white">
+                {% trans "Filtern" %}
+            </button>
+            <a href="{% url filter_url_name %}"
+               class="px-4 py-2 rounded-md text-[13px] font-medium bg-surface border border-subtle text-ink-soft hover:bg-canvas">
+                {% trans "Zurücksetzen" %}
+            </a>
+        </div>
+    </div>
+</form>
