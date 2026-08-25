@@ -14,6 +14,7 @@ from core.services.dashboard import (
     get_sample_report_1_statistics_hybrid,
     get_statistics_hybrid,
 )
+from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -380,6 +381,31 @@ class TestHybridMergesSnapshotAndLive:
         # findet genau die eine Person mit dem Live-Event im Maerz.
         assert result["unique_clients"] == 1
 
+    def test_snapshot_stand_is_newest_contributing_timestamp(self, facility):
+        """Der Stand ist das Maximum, nicht der zuletzt iterierte Snapshot."""
+        january = StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2025,
+            month=1,
+            data=_snapshot_data(total=2),
+        )
+        february = StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2025,
+            month=2,
+            data=_snapshot_data(total=3),
+        )
+        newest = timezone.make_aware(datetime(2025, 6, 2, 12, 0))
+        older = timezone.make_aware(datetime(2025, 6, 1, 12, 0))
+        StatisticsSnapshot.objects.filter(pk=january.pk).update(updated_at=newest)
+        StatisticsSnapshot.objects.filter(pk=february.pk).update(updated_at=older)
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 9, 15)
+            result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 2, 28))
+
+        assert result[SNAPSHOT_AS_OF_KEY] == newest
+
 
 @pytest.mark.django_db
 class TestHybridFallbackWithoutSnapshot:
@@ -493,6 +519,7 @@ class TestSampleReport1HybridReadsBackendData:
             result = get_sample_report_1_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
         assert result["total"] == 1
+        assert result[SNAPSHOT_AS_OF_KEY] is None
 
 
 @pytest.mark.django_db
