@@ -6,10 +6,17 @@ sensitivity override.
 """
 
 from django.core.exceptions import PermissionDenied
+from django.db.models import CharField, Count, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import Http404
 
-from core.models import DocumentType, Event
+from core.models import Attachment, DocumentType, Event
 from core.models.user import User
+
+#: Fail-closed sentinel fuer Attachment-Owner ohne Dokumentationstyp. Der Wert
+#: kommt in keiner Sensitivity-Liste vor und wird deshalb fuer jede Rolle aus
+#: der Uebersicht gefiltert (ADR-039 §12).
+NO_DOC_TYPE_SENTINEL = "__kein_dokumentationstyp__"
 
 # Ordered sensitivity levels for comparison
 SENSITIVITY_RANK = {
@@ -67,6 +74,88 @@ def allowed_sensitivities_for_user(user):
     """Return list of DocumentType.Sensitivity values the user may access."""
     max_rank = ROLE_MAX_SENSITIVITY.get(user.role, 0)
     return [s for s, rank in SENSITIVITY_RANK.items() if rank <= max_rank]
+
+
+def _chain_version_counts(facility, *, removed=False):
+    """Aggregate the number of matching versions per attachment chain.
+
+    Active and removed overviews count only versions from their respective
+    state. The explicit facility scope keeps the result correct even when RLS
+    is bypassed by a super-admin connection.
+    """
+    base = Attachment.objects.for_facility(facility)
+    return (
+        (base.deleted() if removed else base.active())
+        .filter(entry_id=OuterRef("entry_id"))
+        # ``order_by()`` removes ``Meta.ordering`` so ``created_at`` does not
+        # accidentally become part of the GROUP BY clause.
+        .order_by()
+        .values("entry_id")
+        .annotate(total=Count("pk"))
+        .values("total")
+    )
+
+
+def visible_attachments_for_user(facility, user, *, removed=False):
+    """Return the lazy, facility-scoped attachment overview queryset.
+
+    The queryset applies every owner-liveness and sensitivity boundary before
+    callers slice it. ``removed=True`` mirrors the active path for the
+    role-gated removal overview; deciding whether a user may request that view
+    remains the caller's responsibility and defaults fail-closed to ``False``.
+    """
+    allowed = allowed_sensitivities_for_user(user)
+    scoped = Attachment.objects.for_facility(facility)
+    attachments = (
+        (scoped.deleted() if removed else scoped.active())
+        .filter(is_current=True)
+        .filter(
+            Q(event__isnull=True)
+            | (
+                Q(event__is_deleted=False)
+                & (Q(event__client__isnull=True) | Q(event__client__is_deleted=False, event__client__is_active=True))
+            )
+        )
+        .filter(Q(client__isnull=True) | Q(client__is_deleted=False, client__is_active=True))
+        .filter(
+            Q(case__isnull=True)
+            | Q(case__is_deleted=False, case__client__is_deleted=False, case__client__is_active=True)
+        )
+        .select_related(
+            "event",
+            "event__document_type",
+            "event__client",
+            "client",
+            "client__document_type",
+            "case",
+            "case__document_type",
+            "case__client",
+            "field_template",
+            "created_by",
+        )
+        .annotate(
+            owner_sensitivity=Coalesce(
+                "event__document_type__sensitivity",
+                "client__document_type__sensitivity",
+                "case__document_type__sensitivity",
+                Value(NO_DOC_TYPE_SENTINEL),
+                output_field=CharField(),
+            ),
+            version_count=Coalesce(
+                Subquery(_chain_version_counts(facility, removed=removed), output_field=IntegerField()),
+                Value(1),
+            ),
+        )
+        .filter(owner_sensitivity__in=allowed)
+        .filter(Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed))
+        .order_by("-created_at")
+    )
+
+    # Fall-Dokumentation ist fuer Assistenz auch ueber die Datei-Uebersicht
+    # unsichtbar (ADR-039 §12).
+    if not user.is_staff_or_above:
+        attachments = attachments.filter(case__isnull=True)
+    return attachments
 
 
 def get_visible_event_or_404(user, facility, pk, *, select_related=None):

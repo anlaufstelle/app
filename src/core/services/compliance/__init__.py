@@ -78,6 +78,7 @@ from core.services.compliance.sensitivity import (
     user_can_see_document_type,
     user_can_see_event,
     user_can_see_field,
+    visible_attachments_for_user,
 )
 from core.services.compliance.system_info import _migration_checks, _version_checks
 from core.services.compliance.vvt import (
@@ -263,4 +264,5 @@ __all__ = [
     "user_can_see_document_type",
     "user_can_see_event",
     "user_can_see_field",
+    "visible_attachments_for_user",
 ]
