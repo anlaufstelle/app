@@ -78,30 +78,21 @@ class TestTallyEncryptedQueueAndSchemaContract:
         assert "formData" not in function
 
     def test_facility_schema_and_service_worker_cache_are_bumped(self):
-        # Refs #1838: die Schema-Konstante lebt seit dem Verbund-Split in
-        # offline-db.js (eine Quelle, ueber den internen Kanal geteilt).
-        store = _js("offline-db.js")
+        store = _js("offline-store.js")
         sw = _js("sw.js")
         assert "const FACILITY_BUNDLE_SCHEMA_VERSION = 2;" in store
         # Refs #1947: v39 — Markenfarben und 44-px-Tally-Ziele werden auch in
         # den precachten Offline-Shells erneuert.
-        # Refs #1828: v40 — Quick-Win-Welle erneuert die konsolidierten
-        # Offline-JS-Assets im Precache.
-        # Refs #1838: v41 — der offline-store-Verbund (4 Dateien) muss atomar
-        # precached werden.
-        assert 'const CACHE_NAME = "anlaufstelle-v41";' in sw
+        assert 'const CACHE_NAME = "anlaufstelle-v39";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):
-        # Refs #1838: _isFacilitySchemaMismatch + Facility-Purge leben im
-        # Bundles-Modul des Verbunds.
-        store = _js("offline-bundles.js")
+        store = _js("offline-store.js")
         assert "return schemaVersion !== FACILITY_BUNDLE_SCHEMA_VERSION" in store
         assert "await db.facility.delete(FACILITY_ROW_KEY)" in store
 
     def test_tally_payload_stays_inside_encrypted_facility_envelope(self):
-        # Refs #1838: saveFacilityBundle lebt im Bundles-Modul des Verbunds.
-        source = _js("offline-bundles.js")
+        source = _js("offline-store.js")
         start = source.index("async function saveFacilityBundle")
         end = source.index("async function getOfflineFacility", start)
         function = source[start:end]

@@ -170,3 +170,14 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         from core.services.client import anonymize_client
 
         anonymize_client(self, user=user)
+
+    def k_anonymize(self, k=5):
+        """K-anonymize this client as an alternative to hard-delete (Refs #535).
+
+        Generalizes identifying fields so the record stays statistically usable
+        (age_cluster, contact_stage) while no longer being re-identifiable.
+        This is additive to ``anonymize()`` and non-destructive to linked data.
+        """
+        from core.services.compliance import k_anonymize_client
+
+        k_anonymize_client(self, k=k)

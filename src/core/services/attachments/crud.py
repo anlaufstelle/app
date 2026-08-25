@@ -27,9 +27,6 @@ derselben Einrichtung.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
-
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
@@ -47,78 +44,6 @@ class AttachmentPurgeBlockedError(PermissionDenied):
     stattfinden darf. Der View faengt sie ab und macht daraus eine lesbare
     Meldung.
     """
-
-
-class StagedUploadBatch:
-    """Ergebnis von :func:`stage_uploads` — die gestagten Uploads je Slug.
-
-    ``by_slug`` ist das ``{slug: [StagedUpload, ...]}``-Dict in Upload-
-    Reihenfolge, wie :func:`finalize_staged_files` es erwartet. ``commit()``
-    markiert den erfolgreichen Commit der Aufrufer-Transaktion; ohne ihn
-    räumt der Context-Manager beim Verlassen alle ``.enc`` weg.
-    """
-
-    def __init__(self, by_slug: dict[str, list]):
-        self.by_slug = by_slug
-        self._committed = False
-
-    def commit(self) -> None:
-        """Markiert den Commit der Aufrufer-Transaktion als erfolgt — direkt
-        nach dem ``transaction.atomic()``-Block aufrufen (#1345)."""
-        self._committed = True
-
-
-@contextmanager
-def stage_uploads(facility, user, file_fields) -> Iterator[StagedUploadBatch]:
-    """Pre-Transaction-Staging der Create-Views (Event/Client/Case, Refs #1831).
-
-    Refs #1345: ClamAV-Scan + Fernet-Verschluesselung laufen VOR der Transaktion
-    — der Owner-Create schreibt eine AuditLog-Zeile, deren INSERT den
-    per-Facility ``pg_advisory_xact_lock`` der Hashkette bis zum Commit hält;
-    läge die (bis ``CLAMAV_TIMEOUT`` dauernde) Datei-Verarbeitung im selben
-    ``atomic``, blockierte sie jede andere audit-schreibende Aktion derselben
-    Einrichtung. ``owner=None``: das Ziel-Objekt existiert noch nicht.
-
-    Cleanup-Garantie: JEDE Nicht-Commit-Ausgang — Rollback, Duplikat-Replay-
-    Redirect, unerwartete Exception, ``ValidationError`` beim Stagen (Policy-/
-    Virus-Reject; der zugehörige SECURITY_VIOLATION-Audit ist bereits durable
-    geschrieben und überlebt bewusst) — lässt die vorab verschlüsselten
-    ``.enc`` als Disk-Waisen zurück; der Context-Manager entfernt sie restlos.
-    Nach erfolgreichem Commit ``batch.commit()`` rufen (direkt nach dem
-    ``transaction.atomic()``-Block, minimalstes Fenster).
-
-    Nutzung::
-
-        with stage_uploads(facility, request.user, file_fields) as staged:
-            with transaction.atomic():
-                obj = create_x(...)
-                finalize_staged_files(obj, request.user, staged.by_slug, doc_type)
-            staged.commit()
-
-    ``ValidationError`` bleibt beim Aufrufer (jede View formuliert ihre eigene
-    Antwort); ``file_fields`` ist das ``{slug: [UploadedFile, ...]}``-Dict aus
-    ``split_file_and_text_data``.
-    """
-    from core.services.file_vault import prepare_encrypted_upload
-
-    staged_all: list = []
-    staged_by_slug: dict[str, list] = {}
-    batch: StagedUploadBatch | None = None
-    try:
-        for slug, uploaded_list in file_fields.items():
-            prepared = []
-            for uploaded_file in uploaded_list or []:
-                staged = prepare_encrypted_upload(facility, uploaded_file, user, owner=None)
-                staged_all.append(staged)
-                prepared.append(staged)
-            if prepared:
-                staged_by_slug[slug] = prepared
-        batch = StagedUploadBatch(staged_by_slug)
-        yield batch
-    finally:
-        if batch is None or not batch._committed:
-            for staged in staged_all:
-                staged.output_path.unlink(missing_ok=True)
 
 
 def finalize_staged_files(owner, user, staged_by_slug, document_type):

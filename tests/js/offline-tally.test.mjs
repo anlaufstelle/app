@@ -1,9 +1,6 @@
 // #1912: echte Queue-/Store- und UI-Vertraege fuer Tally, inklusive warmem
 // Online-Zeitstrom. Der Store ist echtes Dexie + echte AES-GCM-Session.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-// Refs #1838: Modul-Liste des offline-store-Verbunds lebt an EINER Stelle.
-import { importOfflineStoreModules } from "./_offline_store_modules.mjs";
 import Dexie from "dexie";
 
 let store;
@@ -21,7 +18,7 @@ beforeAll(async () => {
     await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
-    await importOfflineStoreModules();
+    await import("../../src/static/js/offline-store.js");
     store = window.offlineStore;
     globalThis.Alpine = {
         data(name, factory) {

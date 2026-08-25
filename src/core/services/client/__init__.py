@@ -109,12 +109,6 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
-from core.services.client.targets import (
-    client_activity_targets_q,
-    client_and_case_targets_q,
-    client_and_event_targets_q,
-    client_legal_hold_targets_q,
-)
 
 __all__ = [
     "CLIENT_WRITE_REVOKED_MESSAGE",
@@ -171,10 +165,6 @@ __all__ = [
     "approve_client_deletion",
     "approve_client_merge",
     "approve_rectification",
-    "client_activity_targets_q",
-    "client_and_case_targets_q",
-    "client_and_event_targets_q",
-    "client_legal_hold_targets_q",
     "create_client",
     "decode_rectification_text",
     "decode_rectification_value",

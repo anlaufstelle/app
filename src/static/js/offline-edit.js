@@ -159,7 +159,9 @@
      * der Replay würde mit leerem `expected_updated_at` rausgehen (silent LWW).
      */
     async function _cachedUpdatedAt(eventPk) {
-        await window.crypto_session?.awaitReady?.();
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
         if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
             // Refs #1351/#1384: ein transienter Key-Fehler (Idle-Lock #1324)
             // darf NICHT zu "" degradieren — ein leerer Token wuerde den
@@ -536,7 +538,9 @@
 
     async function replayModifiedEvent(record) {
         if (!navigator.onLine) return { status: "offline" };
-        await window.crypto_session?.awaitReady?.();
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
         if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
             return { status: "no-key" };
         }
@@ -695,7 +699,9 @@
         // wuerde diesen Lauf aber wie "nichts zu synchronisieren" aussehen
         // lassen, obwohl in Wahrheit nur der Schluessel fehlt (Idle-Lock
         // #1324). Sofort return statt eines fuer den Nutzer unsichtbaren No-Ops.
-        await window.crypto_session?.awaitReady?.();
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
         if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
             return;
         }
@@ -748,21 +754,30 @@
     // aktualisiert Tab B's unsynced-/conflict-Zaehler (Banner, Detail-View)
     // ohne Polling.
     //
-    // Refs #1409/#1828: base.html laedt sync-orchestrator.js NACH
-    // offline-edit.js — direkt registrieren geht hier also (noch) nicht.
-    // Statt des frueher pro Konsument duplizierten DOMContentLoaded/
-    // naechster-Tick-Retry-Geruests wandert der Empfaenger in die
-    // Pending-Liste, die sync-orchestrator.js beim Laden draint (und danach
-    // als Sofort-Registrierung uebernimmt, siehe dort).
-    function _onOrchestratorMessage(msg) {
-        if (msg && msg.type === "sync-finished") _fireCountEvent();
+    // Refs #1409: base.html laedt sync-orchestrator.js NACH offline-edit.js
+    // (Z. 132 vor Z. 134) — ein einmaliges Parse-Zeit-Gate wie zuvor hier ist
+    // IMMER false (window.syncOrchestrator existiert noch nicht) und der
+    // Handler wird nie registriert (toter Code). Lade-reihenfolge-tolerant
+    // wie crypto.js:402-418: jetzt versuchen, sonst auf
+    // DOMContentLoaded/naechsten Tick nachholen.
+    var _orchestratorReceiverRegistered = false;
+    function _registerOrchestratorReceiver() {
+        if (_orchestratorReceiverRegistered) return true;
+        if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+            window.syncOrchestrator.onMessage((msg) => {
+                if (msg && msg.type === "sync-finished") _fireCountEvent();
+            });
+            _orchestratorReceiverRegistered = true;
+            return true;
+        }
+        return false;
     }
-    if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
-        window.syncOrchestrator.onMessage(_onOrchestratorMessage);
-    } else {
-        (window.syncOrchestratorPending = window.syncOrchestratorPending || []).push(
-            _onOrchestratorMessage
-        );
+    if (!_registerOrchestratorReceiver()) {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", _registerOrchestratorReceiver);
+        } else {
+            window.setTimeout(_registerOrchestratorReceiver, 0);
+        }
     }
 
     window.offlineEdit = {

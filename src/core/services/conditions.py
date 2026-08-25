@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     # Nur fuer Typannotationen (PEP 563 macht sie ohnehin lazy) — kein
     # Laufzeit-Import, damit der Evaluator-Kern ohne Django-App-Registry
     # importierbar bleibt (Modulheader oben).
-    from core.models import DocumentType, FieldTemplate
+    from core.models import DocumentType
 
 # --- Operator-Strings -------------------------------------------------------
 # Identisch zu den ``FieldCondition.Operator``-Choices-Values (P2) und zu den
@@ -101,65 +101,6 @@ def is_empty(value: Any) -> bool:
     return False
 
 
-def parse_condition_value(field_type: str, template: FieldTemplate, raw: str) -> Any:
-    """Parse einen Editor-String strikt als Vergleichswert des Feldtyps.
-
-    Der Registry-Import bleibt funktionslokal, damit der DB- und Django-
-    unabhängige Evaluator-Kern dieses Moduls weiterhin isoliert importierbar
-    bleibt. Anders als :func:`normalize_value` lehnt dieser Editor-Pfad
-    ungültige Literale mit ``ValidationError`` ab.
-    """
-    from core.services.system.field_types import get_spec
-
-    return get_spec(field_type).parse_literal(template, raw)
-
-
-def _normalize_temporal_value(field_type: str, value: Any) -> Any:
-    """Normalisiert DATE/TIME einschließlich des defensiven isoformat-Fallbacks."""
-    if value is None or value == "":
-        return None
-    isoformat = getattr(value, "isoformat", None)
-    if callable(isoformat):
-        if field_type == TIME:
-            # Mikrosekunden kappen (isoformat(timespec="seconds")) — sonst
-            # weicht die Python-Seite von der JS-Seite ab, die aus dem DOM
-            # nur "HH:MM"/"HH:MM:SS" liest und nie Mikrosekunden kennt.
-            try:
-                return isoformat(timespec="seconds")
-            except TypeError:
-                return isoformat()
-        return isoformat()
-    return value
-
-
-def _normalize_number(value: Any) -> Any:
-    """Normalisiert Zahlenwerte tolerant; ungültige Strings werden leer."""
-    if value is None or value == "":
-        return None
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return value
-
-
-def _normalize_multi_select(value: Any) -> list[Any]:
-    """Normalisiert Mehrfachauswahlen stets auf eine Liste."""
-    if value is None:
-        return []
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    return [value]
-
-
-def _normalize_nullable_value(value: Any) -> Any:
-    """Normalisiert leere skalare Auswahl-/Textwerte auf ``None``."""
-    if value is None or value == "":
-        return None
-    return value
-
-
 def normalize_value(field_type: str, value: Any) -> Any:
     """Bringt einen Roh-Feldwert der **Python-Seite** in die kanonische Form (E11).
 
@@ -178,15 +119,41 @@ def normalize_value(field_type: str, value: Any) -> Any:
     * ``multi_select``     -> Liste von Slugs
     """
     if field_type in (DATE, TIME):
-        return _normalize_temporal_value(field_type, value)
+        if value is None or value == "":
+            return None
+        isoformat = getattr(value, "isoformat", None)
+        if callable(isoformat):
+            if field_type == TIME:
+                # Mikrosekunden kappen (isoformat(timespec="seconds")) — sonst
+                # weicht die Python-Seite von der JS-Seite ab, die aus dem DOM
+                # nur "HH:MM"/"HH:MM:SS" liest und nie Mikrosekunden kennt.
+                try:
+                    return isoformat(timespec="seconds")
+                except TypeError:
+                    return isoformat()
+            return isoformat()
+        return value
     if field_type == NUMBER:
-        return _normalize_number(value)
+        if value is None or value == "":
+            return None
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return value
     if field_type == BOOLEAN:
         return bool(value)
     if field_type == MULTI_SELECT:
-        return _normalize_multi_select(value)
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        return [value]
     if field_type in (SELECT, TEXT, TEXTAREA):
-        return _normalize_nullable_value(value)
+        if value is None or value == "":
+            return None
+        return value
     # Unbekannter Typ (Defensive): leerer String -> None, sonst unveraendert.
     if value == "":
         return None
@@ -226,38 +193,6 @@ def evaluate_condition(operator: str, field_type: str, actual: Any, expected: An
         return bool(actual < expected)
     # Unbekannter Operator (Defensive): niemals sichtbar schalten.
     return False
-
-
-def _evaluate_group(
-    group: Sequence[Mapping[str, Any]],
-    fields: Mapping[str, str],
-    values: Mapping[str, Any],
-    visible: Collection[str],
-) -> bool:
-    """Wertet die AND-verknüpften Bedingungen einer Gruppe aus."""
-    return all(
-        evaluate_condition(
-            str(condition["operator"]),
-            fields[condition["source"]],
-            # Unsichtbare Quelle wie leer auswerten (E7).
-            values.get(condition["source"]) if condition["source"] in visible else None,
-            condition.get("value"),
-        )
-        for condition in group
-    )
-
-
-def _evaluate_target(
-    conditions: Sequence[Mapping[str, Any]],
-    fields: Mapping[str, str],
-    values: Mapping[str, Any],
-    visible: Collection[str],
-) -> bool:
-    """Gruppiert ein Ziel nach ODER-Gruppen und wertet sie aus."""
-    groups: dict[int, list[Mapping[str, Any]]] = {}
-    for condition in conditions:
-        groups.setdefault(int(condition.get("group", 0)), []).append(condition)
-    return any(_evaluate_group(group, fields, values, visible) for group in groups.values())
 
 
 def evaluate_conditions(
@@ -301,7 +236,23 @@ def evaluate_conditions(
     for _ in range(len(targets) + 1):
         nxt = all_slugs - targets
         for target in targets:
-            if _evaluate_target(conditions_by_target[target], fields, values, visible):
+            groups: dict[int, list[Mapping[str, Any]]] = {}
+            for condition in conditions_by_target[target]:
+                groups.setdefault(int(condition.get("group", 0)), []).append(condition)
+            target_visible = any(
+                all(
+                    evaluate_condition(
+                        str(condition["operator"]),
+                        fields[condition["source"]],
+                        # Unsichtbare Quelle wie leer auswerten (E7).
+                        values.get(condition["source"]) if condition["source"] in visible else None,
+                        condition.get("value"),
+                    )
+                    for condition in group
+                )
+                for group in groups.values()
+            )
+            if target_visible:
                 nxt.add(target)
         if nxt == visible:
             break

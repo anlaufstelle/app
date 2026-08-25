@@ -1,6 +1,6 @@
 -r requirements.in
 ruff>=0.15.22
-pip-tools>=7.6.1
+pip-tools>=7.6.0
 # Dev-only Constraints (nur CI/Toolchain, nicht deployt) wegen CVEs, Refs #1596.
 # click zieht mutmut/pip-tools ein (CVE-2026-7246, Command-Injection in
 # click.edit()); idna kommt transitiv ueber requests (CVE-2026-45409, ReDoS in

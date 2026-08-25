@@ -158,8 +158,5 @@
 {% block extra_js %}
 {# Ausgelagert wegen CSP (Refs #672). Ergaenzt um Suche/Filter; #1499  #}
 {# nimmt die Datei in den SW-Precache (APP_SHELL) auf.                       #}
-{# Refs #1828: offline-form-fields.js traegt die gemeinsamen Formatter und #}
-{# muss VOR dem Konsumenten laden. #}
-<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-client-list.js' %}"></script>
 {% endblock %}

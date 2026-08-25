@@ -22,6 +22,24 @@
 (function () {
     "use strict";
 
+    // Refs #1323: aktueller Zeitpunkt als datetime-local-Wert (YYYY-MM-DDTHH:MM).
+    // Spiegel von offline-client-view.js `_nowLocalInput`.
+    function _nowLocalInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+            d.getFullYear() +
+            "-" +
+            pad(d.getMonth() + 1) +
+            "-" +
+            pad(d.getDate()) +
+            "T" +
+            pad(d.getHours()) +
+            ":" +
+            pad(d.getMinutes())
+        );
+    }
+
     // Refs #1521: geordnete Kontaktstufen (niedrig -> hoch). Wert-Spiegel von
     // core.services.events.CONTACT_STAGE_ORDER (== Client.ContactStage-Werte);
     // die Divergenz zu CONTACT_STAGE_CHOICES ist serverseitig nur kommentiert.
@@ -35,11 +53,45 @@
         return CONTACT_STAGE_ORDER.indexOf(stage);
     }
 
-    // Refs #1828: Die frueheren Spiegel-Helfer von offline-client-view.js
-    // (_nowLocalInput/_fileNote/_todayInput/_maxWorkItemDateInput/
-    // _emptyWorkItemValues/_workItemFormData) leben jetzt genau einmal in
-    // offline-form-fields.js (window.offlineFormFields) — beide
-    // Create-Templates laden die Datei vor diesem Modul.
+    // Spiegel von offline-client-view.js `_fileNote` — im Create-Kontext nie
+    // sichtbar (das Partial rendert fuer FILE-Felder einen statischen Hinweis),
+    // aber fieldDescriptor erwartet einen Callback fuer isFile-Felder.
+    function _fileNote(cur) {
+        if (cur && cur.__file__) return "Datei vorhanden" + (cur.name ? " (" + cur.name + ")" : "");
+        if (cur && cur.__files__) return "Dateien vorhanden (" + (cur.count || 0) + ")";
+        return "Keine Datei";
+    }
+
+    // Refs #1398/#1522: heutiges Datum als date-Input-Wert (YYYY-MM-DD) — untere
+    // Datumsschranke fuer WorkItem due_date/remind_at. Spiegel von
+    // offline-client-view.js `_todayInput`.
+    function _todayInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    }
+
+    // Refs #1398/#708/#1522: obere Datumsschranke — 31.12. des Folgejahrs.
+    // Werte-Spiegel der WorkItemForm (offline-client-view.js `_maxWorkItemDateInput`).
+    function _maxWorkItemDateInput() {
+        return new Date().getFullYear() + 1 + "-12-31";
+    }
+
+    // Refs #1398/#1522: leere WorkItemForm-Defaults (Feldnamen + Werte 1:1 zur
+    // Server-WorkItemForm; Spiegel von offline-client-view.js `_emptyWorkItemValues`).
+    function _emptyWorkItemValues() {
+        return {
+            item_type: "task",
+            title: "",
+            description: "",
+            priority: "normal",
+            due_date: "",
+            remind_at: "",
+            recurrence: "none",
+            assigned_to: "",
+        };
+    }
+
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineEventCreate", () => ({
             loading: true,
@@ -61,7 +113,7 @@
             saved: false,
 
             async init() {
-                this.createOccurredAt = window.offlineFormFields.nowLocalInput();
+                this.createOccurredAt = _nowLocalInput();
                 try {
                     // Refs #1524 (#1499): Auf die eager Krypto-Hydration
                     // warten, BEVOR aus dem verschluesselten Store gelesen wird.
@@ -71,7 +123,9 @@
                     // null → faelschlich der "nicht vorbereitet"-Edge-Fallback,
                     // obwohl das Bundle gecacht ist. Spiegel von
                     // offline-client-view.js `load()`.
-                    await window.crypto_session?.awaitReady?.();
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     const store = window.offlineStore;
                     if (store && store.getOfflineFacility) {
                         this.facility = await store.getOfflineFacility();
@@ -137,7 +191,7 @@
                 const descriptors = [];
                 const values = {};
                 for (const f of fields) {
-                    const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, window.offlineFormFields.fileNote);
+                    const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, _fileNote);
                     descriptors.push(desc);
                     if (!desc.isFile) {
                         values[f.slug] = window.offlineFormFields.initialValue(f.field_type, undefined);
@@ -203,7 +257,7 @@
                 this.createDocTypeName = "";
                 this.editFields = [];
                 this.editValues = {};
-                this.createOccurredAt = window.offlineFormFields.nowLocalInput();
+                this.createOccurredAt = _nowLocalInput();
             },
         }));
 
@@ -241,17 +295,19 @@
             saved: false,
 
             async init() {
-                this.wiDateMin = window.offlineFormFields.todayInput();
-                this.wiDateMax = window.offlineFormFields.maxWorkItemDateInput();
+                this.wiDateMin = _todayInput();
+                this.wiDateMax = _maxWorkItemDateInput();
                 this.wiDueMin = this.wiDateMin;
                 this.wiRemindMin = this.wiDateMin;
-                this.wiValues = window.offlineFormFields.emptyWorkItemValues();
+                this.wiValues = _emptyWorkItemValues();
                 try {
                     // Refs #1524 (#1499): siehe offlineEventCreate.init —
                     // erst auf die Krypto-Hydration warten, dann lesen (sonst
                     // zeigt der Kalt-Offline-WorkItem-Shell-Load faelschlich den
                     // Unavailable-Fallback statt Form bzw. Assistenz-Gate).
-                    await window.crypto_session?.awaitReady?.();
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     const store = window.offlineStore;
                     if (store && store.getOfflineFacility) {
                         this.facility = await store.getOfflineFacility();
@@ -299,6 +355,21 @@
                 return (this.clients || []).map((c) => ({ value: c.pk, label: c.pseudonym || c.pk }));
             },
 
+            _workItemFormData() {
+                // WorkItemForm-Feldnamen 1:1 (der Replay POSTet sie flach an
+                // /workitems/new/). Spiegel von offline-client-view.js.
+                return {
+                    item_type: this.wiValues.item_type,
+                    title: this.wiValues.title,
+                    description: this.wiValues.description,
+                    priority: this.wiValues.priority,
+                    due_date: this.wiValues.due_date,
+                    remind_at: this.wiValues.remind_at,
+                    recurrence: this.wiValues.recurrence,
+                    assigned_to: this.wiValues.assigned_to,
+                };
+            },
+
             async saveCreate() {
                 if (this.saving) return;
                 this.saving = true;
@@ -316,10 +387,7 @@
                     // optional; replayNewWorkItem laesst `client` dann weg).
                     // KEIN Online-Dispatch hier: der Startup-Drain repliziert
                     // beim naechsten Online-Kontakt.
-                    await window.offlineEdit.markWorkItemNew(
-                        this.clientPk || "",
-                        window.offlineFormFields.workItemFormData(this.wiValues)
-                    );
+                    await window.offlineEdit.markWorkItemNew(this.clientPk || "", this._workItemFormData());
                     this.saved = true;
                 } catch (e) {
                     // eslint-disable-next-line no-console
@@ -334,7 +402,7 @@
                 this.saved = false;
                 this.wiError = "";
                 this.clientPk = "";
-                this.wiValues = window.offlineFormFields.emptyWorkItemValues();
+                this.wiValues = _emptyWorkItemValues();
                 this.wiDueMin = this.wiDateMin;
                 this.wiRemindMin = this.wiDateMin;
             },

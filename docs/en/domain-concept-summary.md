@@ -234,15 +234,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Rate limiting in search is recognisable as such**: hitting the limit produced a generic error toast, indistinguishable from a server fault or from "no results". It now carries its own wording.
 - **Cyber Resilience Act groundwork**: `SECURITY.md` states which release line receives fixes and for how long (rule-based while the project is pre-1.0, switching to dated end-of-support per minor at 1.0), every release build emits a CycloneDX software bill of materials alongside its notes, and the advisory handling process is written down. Private vulnerability reporting is enabled on the public repository, so the reporting path named in `SECURITY.md` actually works.
 
-### v0.86.0 (2026-08-27)
-
-- **Getting started takes one command**: `docker compose up` in a fresh clone brings up a fully seeded local system in under a minute — migrations and example data are applied automatically on first start only, an encryption key is generated per machine, and production/staging deployments deliberately keep their strict manual initialisation path. The contributor guide gains a five-minute quick start, a new architecture overview document, and the complete operations runbook is now available in English.
-- **Subject-access answers are complete across all record types**: the Article 15 export now lists legal holds and deletion requests that target cases and activities — not only the person and their events — drawing from the same target definitions the Article 17 redaction uses, so the two can no longer drift apart. Congruence tests fail loudly if a future record type is added on one side only.
-- **Unknown sensitivity values are always treated as most restrictive**: every visibility decision (lists, detail views, downloads, the offline bundle and the event search index) now hides fields whose sensitivity value is unrecognised, closing a path where the search index could have exposed text of an otherwise invisible field. Behaviour for all known values is unchanged and pinned by tests.
-- **User creation in the technical admin works again**: the creation form demanded two password fields it never displayed, so saving always failed; the form no longer asks for a password at all — the application assigns one itself (e-mail invitation, or a displayed initial password where no address is given).
-- **Governance is settled**: the maintainer documents record the deliberate decision to continue without a designated deputy; the solo-maintainer model and its bus-factor risk are stated openly, and the security policy describes the actual state instead of announcing a deputy.
-- **Contact capture no longer returns a server error for manipulated document-type values**, and the mobile offline test harness now exercises the same startup path real browsers take.
-
 ### v0.84.0 (2026-08-25)
 
 - **Facility administration moves into the domain UI**: facility administrators can now invite and maintain their own users, edit facility-wide operational and security settings, maintain document-type presentation, and edit selection options through a validated row editor instead of raw JSON. All sensitive access-management paths require sudo re-authentication, remain facility-scoped, and produce actor/target-aware audit entries; the technical Django admin remains the bootstrap and emergency surface.
@@ -253,6 +244,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **PII and audit hardening closes duplicate traces**: timeline activity stores structured, PII-free references instead of copied pseudonyms or titles; event, case-assignment, episode, outcome-goal and attachment mutations have dedicated audit actions; authorised history views can render encrypted field changes without weakening role checks. CSP reports now accept only the standard CSP reporting media types and reject empty payloads.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.86.0 -->
+<!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-24 -->
 <!-- source-hash: 91adff08bbd2acf538eb4414e81ac6c4b42dcd05 -->

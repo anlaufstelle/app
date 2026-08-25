@@ -1825,6 +1825,6 @@ The **release overview** (Statistics → "Releases" tab, role: lead/facility adm
 Snapshots are visible in the Django admin under **Statistics snapshots** (read-only). You can check which months have been captured and when the last update took place.
 
 <!-- translation-source: docs/admin-guide.md -->
-<!-- translation-version: v0.86.0 -->
+<!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-24 -->
 <!-- source-hash: 86955c85bea71e776bdd99b11a9fe8a94b127ccf -->

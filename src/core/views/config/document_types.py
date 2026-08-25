@@ -35,7 +35,6 @@ from core.reporting.registry import describe_type_bindings
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.services.events import evaluate_tally_eligibility
-from core.views.config._context import board_context, condition_board_context
 from core.views.mixins import (
     FacilityAdminRequiredMixin,
     HTMXPartialMixin,
@@ -46,6 +45,45 @@ logger = logging.getLogger(__name__)
 
 FORM_TEMPLATE = "core/config/document_types/form.html"
 BOARD_TEMPLATE = "core/config/document_types/partials/field_board.html"
+
+
+# ---------------------------------------------------------------------------
+# Feld-Board — gemeinsamer Render-Helper (P6)
+# ---------------------------------------------------------------------------
+#
+# Das interaktive Feld-Board ist EIN Swap-Ziel ``#field-board``. Jede
+# Board-Mutation (Feld zuordnen/entfernen, Gruppe anlegen/umbenennen/löschen)
+# rendert es bei ``HX-Request`` frisch, sonst redirectet sie zur Detailseite.
+# Sortierung wird hier (Service/DB) vorbereitet, NICHT im Template: die globale
+# Block-Sequenz (#1713) interleavt Gruppen und ungruppierte Felder in EINER
+# Reihenfolge (``iter_blocks_in_order``) — es gibt keinen fixen „Ohne Gruppe"-
+# Block mehr, freie Felder sitzen als Top-Level-Blöcke zwischen den Gruppen.
+
+
+def board_context(doc_type, *, add_form=None, group_form=None):
+    """Baut den Kontext des Feld-Boards (globale Block-Sequenz + Formulare, #1713)."""
+    from core.forms.config import FieldGroupForm
+
+    # Interleavte Top-Level-Blöcke (Gruppen inkl. Innen-Feldern + freie Felder),
+    # sortiert nach globaler Blockposition — gemeinsame Wahrheitsquelle mit
+    # Formular/Offline/Feed.
+    blocks = config_service.iter_blocks_in_order(doc_type)
+    # Refs #1725(b): je Feld die Zahl der Datensätze, die beim Entfernen einen
+    # „Nicht mehr zugeordnet"-Wert behielten — speist die hx-confirm-Warnung. Ein
+    # Count pro dtf; das Board ist klein.
+    for block in blocks:
+        fields = block["fields"] if block["kind"] == "group" else [block["field"]]
+        for dtf in fields:
+            dtf.removal_impact = config_service.count_field_removal_impact(dtf)
+    return {
+        "doc_type": doc_type,
+        "blocks": blocks,
+        "add_form": add_form if add_form is not None else DocumentTypeFieldAddForm(doc_type=doc_type),
+        # Prefix "group-new": das stets vorhandene Neu-Formular bekommt eindeutige
+        # Feld-IDs (id_group-new-name), damit es nicht mit einem gleichzeitig
+        # offenen Edit-Formular (Prefix group-<pk>) kollidiert.
+        "group_form": group_form if group_form is not None else FieldGroupForm(doc_type=doc_type, prefix="group-new"),
+    }
 
 
 def board_response(request, doc_type, *, add_form=None, group_form=None, retarget=False, message=None, error=None):
@@ -108,9 +146,8 @@ def report_bindings_context(doc_type, facility):
 def _count_sub(qs, group_field="document_type"):
     """Korrelierte Aggregat-Subquery: Anzahl der Zeilen von ``qs`` je Gruppe.
 
-    §F.2 (Refs #1813), Muster
-    ``core.services.compliance.sensitivity._chain_version_counts``. Ein
-    Statement statt eines Joins pro Annotation —
+    §F.2 (Refs #1813), Muster ``AttachmentListView._chain_version_counts``
+    (attachments.py:242). Ein Statement statt eines Joins pro Annotation —
     drei gleichzeitige ``Count(..., distinct=True)``-Joins (Feldgruppen ×
     Felder × Bedingungen) würden ein Kreuzprodukt aufspannen, das den
     bestehenden ``event_count`` mitverzerrt und auf großen Katalogen teuer
@@ -190,6 +227,11 @@ class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
     """Stammdaten + interaktives Feld-Board (Feld-Zuordnung + FieldGroup-Verwaltung)."""
 
     def get(self, request, pk):
+        # Lokaler Import (Muster board_context → FieldGroupForm): hält das
+        # config-Views-Package importzyklenfrei (conditions.py importiert nicht
+        # zurück auf dieses Modul).
+        from core.views.config.conditions import condition_board_context
+
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         # #1728: Nutzungszähler folgt der entity_type-Weiche (Muster
         # ConfigDocumentTypeDeleteView) statt fest auf Event zu zählen — sonst

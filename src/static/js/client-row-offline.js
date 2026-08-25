@@ -236,9 +236,7 @@
                     let msg = taken + (taken === 1 ? " Person mitgenommen" : " Personen mitgenommen");
                     if (skipped) msg += ", " + skipped + " bereits offline";
                     if (limited) {
-                        // Refs #1828: das Limit lebt nur noch in offline-store.js —
-                        // kein hartes ``|| 20``-Fallback-Duplikat mehr.
-                        msg += " (Limit " + window.offlineStore.MAX_OFFLINE_CLIENTS + " erreicht)";
+                        msg += " (Limit " + (window.offlineClient.MAX_OFFLINE_CLIENTS || 20) + " erreicht)";
                     }
                     msg += ".";
                     if (ratelimited && this._labelRatelimited) {

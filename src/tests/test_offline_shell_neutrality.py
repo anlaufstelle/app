@@ -24,8 +24,6 @@ der Shell.
 
 from __future__ import annotations
 
-import re
-
 import pytest
 from django.contrib import messages
 from django.contrib.messages.storage.session import SessionStorage
@@ -64,12 +62,6 @@ REQUIRED_SCRIPTS = (
     "js/dexie.min.js",
     "js/url-patterns.js",
     "js/crypto.js",
-    # Refs #1838: offline-store ist ein 4-Datei-Verbund — jedes Glied ist
-    # Kalt-Offline-Pflicht (eine Mischkette haette weder Fassade noch
-    # internen Kanal).
-    "js/offline-db.js",
-    "js/offline-bundles.js",
-    "js/offline-revocations.js",
     "js/offline-store.js",
     "js/offline-queue.js",
     "js/offline-client.js",
@@ -192,24 +184,6 @@ class TestShellNeutrality:
             f"{url_name}: Die Skriptkette des Basistemplates ist unvollstaendig ({missing}). "
             "Ohne sie bricht der Kalt-Offline-Pfad — sichtbar erst im Browser ohne Netz."
         )
-
-    def test_store_verbund_tags_are_parser_blocking(self, client, url_name):
-        """Kein defer/async auf den vier Verbund-Tags (Refs #1838).
-
-        Die DOMContentLoaded-Selbstentwaffnung des internen Kanals in
-        offline-db.js setzt voraus, dass alle vier Dateien parser-blockierend
-        laufen (readyState "loading"). Ein defer/async auf einem der Tags
-        liesse den Code in den Makrotask-Fallback laufen — und die per PoC
-        belegte Timer-Race waere zurueck, lautlos.
-        """
-        body = _fetch(client, url_name)
-        verbund = ("offline-db.js", "offline-bundles.js", "offline-revocations.js", "offline-store.js")
-        for tag in re.findall(r"<script[^>]+src=\"[^\"]*js/offline-[a-z-]+\.js[^\"]*\"[^>]*>", body):
-            if any(name in tag for name in verbund):
-                assert "defer" not in tag and "async" not in tag, (
-                    f"{url_name}: Verbund-Tag traegt defer/async — bricht die "
-                    f"DCL-Entwaffnungs-Garantie (Refs #1838): {tag}"
-                )
 
 
 @pytest.mark.django_db

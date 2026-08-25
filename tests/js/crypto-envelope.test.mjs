@@ -105,19 +105,3 @@ describe("R7 — Abwaertskompatibilitaet (Bestandsdaten ohne v)", () => {
         expect(out).toEqual({ legacy: true });
     });
 });
-
-// Refs #1828: awaitReady ersetzt das verstreute
-// ``if (window.crypto_session && window.crypto_session.ready) await …ready()``
-// als gemeinsames Ready-Gate der Konsumenten (Aufruf-Idiom:
-// ``await window.crypto_session?.awaitReady?.();``).
-describe("#1828 — awaitReady auf der eingefrorenen Oberflaeche", () => {
-    it("exponiert awaitReady als Funktion", () => {
-        expect(typeof window.crypto_session.awaitReady).toBe("function");
-    });
-
-    it("resolvet erst nach der IndexedDB-Schluessel-Hydration (wie ready)", async () => {
-        await expect(window.crypto_session.awaitReady()).resolves.toBeUndefined();
-        // Nach dem Gate ist der synchron gecachte Key-Zustand verlaesslich.
-        expect(window.crypto_session.hasSessionKey()).toBe(true);
-    });
-});

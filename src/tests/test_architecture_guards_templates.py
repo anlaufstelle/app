@@ -136,11 +136,7 @@ class TestAlpineCspCompatibilityGuard:
     # Matcht ``x-data="{...}"`` aber nicht ``x-data="myComponent"``.
     # Auch mehrzeilige Inline-Objekte werden erfasst, weil das ``"{``
     # direkt im Attribut steht.
-    # Refs #1836: ``x-data="{{ autocomplete_component }}"`` (Django-Variable,
-    # rendert zum NAMEN einer registrierten Komponente) ist CSP-konform und
-    # wird per negativem Lookahead auf ``{{`` ausgenommen — ein echtes
-    # Inline-Objekt beginnt mit ``{`` gefolgt von Nicht-``{``.
-    _INLINE_X_DATA = re.compile(r'x-data\s*=\s*"\s*\{(?!\{)', re.IGNORECASE)
+    _INLINE_X_DATA = re.compile(r'x-data\s*=\s*"\s*\{', re.IGNORECASE)
 
     def test_no_inline_x_data_objects_in_templates(self):
         if not self._TEMPLATES_DIR.exists():

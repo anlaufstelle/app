@@ -175,56 +175,6 @@ def _split_into_segments(date_from, date_to):
     return segments
 
 
-def _snapshot_statistics(snapshot):
-    """Return the standard statistics payload stored in a snapshot."""
-    return snapshot.data
-
-
-def _iter_segments(
-    facility,
-    date_from,
-    date_to,
-    *,
-    live_loader,
-    snapshot_loader=_snapshot_statistics,
-    snapshots_enabled=True,
-):
-    """Yield monthly statistics with their source and contributing snapshot stand.
-
-    ``snapshot_loader`` may return ``None`` when a stored snapshot does not
-    contain the requested payload. In that case the segment falls back to
-    ``live_loader`` and must not claim a snapshot stand.
-    """
-    for seg_from, seg_to, snapshot_eligible in _split_into_segments(date_from, date_to):
-        stats = None
-        source = "live"
-        snapshot_as_of = None
-
-        if snapshot_eligible and snapshots_enabled:
-            snapshot = (
-                StatisticsSnapshot.objects.for_facility(facility)
-                .filter(year=seg_from.year, month=seg_from.month)
-                .first()
-            )
-            if snapshot is not None:
-                stats = snapshot_loader(snapshot)
-                if stats is not None:
-                    source = "snapshot"
-                    snapshot_as_of = snapshot.updated_at
-
-        if stats is None:
-            stats = live_loader(seg_from, seg_to)
-
-        yield seg_from, stats, source, snapshot_as_of
-
-
-def _load_live_statistics(facility, date_from, date_to, document_type=None):
-    """Load one live statistics segment without full-range-only top clients."""
-    stats = get_statistics(facility, date_from, date_to, document_type)
-    stats.pop("top_clients", None)
-    return stats
-
-
 def _empty_stats():
     """Return an empty statistics dict matching the ``get_statistics`` shape."""
     return {
@@ -322,14 +272,6 @@ def _merge_stats(stats_list):
     return merged
 
 
-def aggregate_trend_segments(segments):
-    """Merge trend payloads while discarding their per-segment metadata."""
-    segment_stats = [
-        {key: value for key, value in segment.items() if key not in ("label", "source")} for segment in segments
-    ]
-    return _merge_stats(segment_stats)
-
-
 def _with_merged_persons(cluster_map, persons):
     """Altersgruppen-Zeilen mit der zusammengefuehrten Personenzahl (K0-b, Refs #1770).
 
@@ -402,18 +344,27 @@ def get_statistics_hybrid(facility, date_from, date_to):
     live ueber den Gesamtzeitraum berechnet — beide lassen sich aus
     Monats-Aggregaten nicht sinnvoll zusammenfuehren.
     """
+    segments = _split_into_segments(date_from, date_to)
     segment_stats = []
     as_of = None
 
-    for _seg_from, stats, _source, snapshot_as_of in _iter_segments(
-        facility,
-        date_from,
-        date_to,
-        live_loader=lambda seg_from, seg_to: _load_live_statistics(facility, seg_from, seg_to),
-    ):
+    for seg_from, seg_to, use_snapshot in segments:
+        stats = None
+        if use_snapshot:
+            snap = (
+                StatisticsSnapshot.objects.for_facility(facility)
+                .filter(year=seg_from.year, month=seg_from.month)
+                .first()
+            )
+            if snap is not None:
+                stats = snap.data
+                # K4c (Refs #1770): Stand des juengsten beitragenden Aggregats.
+                as_of = _newer(as_of, snap.updated_at)
+        if stats is None:
+            stats = get_statistics(facility, seg_from, seg_to)
+            # Remove top_clients from segment stats (merged separately)
+            stats.pop("top_clients", None)
         segment_stats.append(stats)
-        # K4c (Refs #1770): Stand des juengsten beitragenden Aggregats.
-        as_of = _newer(as_of, snapshot_as_of)
 
     merged = _merge_stats(segment_stats)
     # ``None`` = kein Segment kam aus einem Snapshot, das Artefakt ist trotz
@@ -461,20 +412,19 @@ def get_statistics_trend(facility, date_from, date_to, document_type=None):
     aus ihnen laesst sich der Filter nicht rekonstruieren. Das ist der im
     Konzept benannte Preis des Filters, nicht ein uebersehener Zweig.
     """
+    segments = _split_into_segments(date_from, date_to)
     result = []
 
-    for seg_from, stats, source, _snapshot_as_of in _iter_segments(
-        facility,
-        date_from,
-        date_to,
-        live_loader=lambda segment_from, segment_to: _load_live_statistics(
-            facility,
-            segment_from,
-            segment_to,
-            document_type,
-        ),
-        snapshots_enabled=document_type is None,
-    ):
+    for seg_from, seg_to, use_snapshot in segments:
+        stats = None
+        source = "live"
+        if use_snapshot and document_type is None:
+            stats = get_snapshot(facility, seg_from.year, seg_from.month)
+            if stats is not None:
+                source = "snapshot"
+        if stats is None:
+            stats = get_statistics(facility, seg_from, seg_to, document_type)
+            stats.pop("top_clients", None)
         result.append(
             {
                 "label": f"{seg_from.year}-{seg_from.month:02d}",
@@ -492,26 +442,32 @@ def get_sample_report_1_statistics_hybrid(facility, date_from, date_to):
     Same hybrid pattern as :func:`get_statistics_hybrid` but for the
     ``sample-report-1`` backend data.
     """
+    segments = _split_into_segments(date_from, date_to)
     segment_stats = []
     as_of = None
 
-    for _seg_from, stats, _source, snapshot_as_of in _iter_segments(
-        facility,
-        date_from,
-        date_to,
-        live_loader=lambda seg_from, seg_to: (
-            get_backend("sample-report-1").build_dataset(facility, seg_from, seg_to).summary
-        ),
-        # M5 P3 (Refs #1061) / #1740: ``backend_data`` ist die einzige
-        # Quelle — der Fallback auf das Altfeld ist mit dem Ende der
-        # Uebergangsphase entfallen. ``or None`` normalisiert das leere
-        # Dict, damit der Live-Zweig wirklich greift.
-        snapshot_loader=lambda snapshot: snapshot.backend_data.get("sample-report-1") or None,
-    ):
+    for seg_from, seg_to, use_snapshot in segments:
+        stats = None
+        if use_snapshot:
+            snap = (
+                StatisticsSnapshot.objects.for_facility(facility)
+                .filter(year=seg_from.year, month=seg_from.month)
+                .first()
+            )
+            if snap:
+                # M5 P3 (Refs #1061) / #1740: ``backend_data`` ist die einzige
+                # Quelle — der Fallback auf das Altfeld ist mit dem Ende der
+                # Uebergangsphase entfallen. ``or None`` normalisiert das leere
+                # Dict, damit der Live-Zweig unten wirklich greift.
+                stats = snap.backend_data.get("sample-report-1") or None
+                if stats is not None:
+                    # K4c (Refs #1770): Stand nur fuer Segmente, die wirklich
+                    # aus einem Aggregat kamen — ein leerer Payload faellt unten
+                    # auf live zurueck und darf keinen Stand behaupten.
+                    as_of = _newer(as_of, snap.updated_at)
+        if stats is None:
+            stats = get_backend("sample-report-1").build_dataset(facility, seg_from, seg_to).summary
         segment_stats.append(stats)
-        # K4c (Refs #1770): Stand nur fuer Segmente, die wirklich aus einem
-        # Aggregat kamen — ein leerer Payload darf keinen Stand behaupten.
-        as_of = _newer(as_of, snapshot_as_of)
 
     merged = _merge_sample_report_1_stats(segment_stats)
     merged[SNAPSHOT_AS_OF_KEY] = as_of

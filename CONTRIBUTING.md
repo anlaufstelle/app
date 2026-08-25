@@ -24,68 +24,13 @@ Willkommen! Diese Anleitung erklärt, wie du die Entwicklungsumgebung einrichtes
 
 ## Inhaltsverzeichnis
 
-1. [5-Minuten-Quick-Start (Docker)](#5-minuten-quick-start-docker)
-2. [Entwicklungsumgebung einrichten](#entwicklungsumgebung-einrichten)
-3. [Make-Targets](#make-targets)
-4. [Coding Conventions](#coding-conventions)
-5. [Plugin-Entwicklung](#plugin-entwicklung)
-6. [Tests](#tests)
-7. [Pull-Request-Prozess](#pull-request-prozess)
-8. [Lizenz von Beiträgen](#lizenz-von-beiträgen)
-9. [Architektur-Überblick](#architektur-überblick)
-
----
-
-## 5-Minuten-Quick-Start (Docker)
-
-Der schnellste Weg zu einer laufenden Anlaufstelle mit Beispieldaten — für den ersten Blick,
-für ein Bug-Repro und für den Einstieg vor dem ersten Pull Request. Voraussetzung ist
-ausschließlich **Docker mit Docker Compose**; Python, Node und PostgreSQL brauchst du dafür
-noch nicht.
-
-```bash
-git clone https://github.com/anlaufstelle/app.git
-cd app
-docker compose up      # ohne Docker-Gruppenrechte: sudo docker compose up
-```
-
-Das lokale Compose bringt Datenbank und Anwendung mit, wendet die Migrationen an und lädt beim
-**ersten** Start die Seed-Daten (nur in eine leere Datenbank — ein zweiter Start seedet nicht
-erneut). Der einmalige Image-Bau dauert etwa eine Minute; danach ist die Anmeldung binnen rund
-20 Sekunden unter **[http://localhost:8000/login/](http://localhost:8000/login/)** erreichbar.
-
-> **Keine Vorbereitung nötig.** Du legst weder eine `.env` an noch exportierst du einen
-> `ENCRYPTION_KEY` — das lokale Setup erzeugt sich seinen Schlüssel beim ersten Start selbst und
-> legt ihn in einem eigenen Volume ab, damit verschlüsselte Entwicklungsdaten über Neustarts
-> hinweg lesbar bleiben. Hintergrund und Abgrenzung zum Produktionspfad:
-> [ADR-049](docs/adr/049-one-command-local-bootstrap.md).
->
-> **Nur lokal erreichbar:** Der Webdienst bindet bewusst auf `127.0.0.1`, es gibt also keinen
-> Zugriff aus dem LAN. Das ist Absicht — die Seed-Konten haben ein öffentlich dokumentiertes
-> Passwort.
-
-**Anmelden.** Alle Seed-Konten teilen sich das Passwort `anlaufstelle2026`:
-
-| Login | Rolle | Wofür |
-|---|---|---|
-| `admin` | Anwendungsbetreuung (`facility_admin`) | Formular-Konfiguration, Zugänge, Einstellungen, Datenimport |
-| `emma` | Leitung (`lead`) | Statistik, Berichte, DSGVO-Workflows |
-| `miriam` | Fachkraft (`staff`) | Personen, Fälle, Dokumentation im Alltag |
-| `superadmin` | Systemadministration (`super_admin`) | `/system/`, installationsweite Sicht |
-
-Die vollständige Liste der sieben Logins und die Datenmengen je Profil stehen unter
-[Seed-Daten laden](#entwicklungsumgebung-einrichten). Der Seed ist fail-closed über
-`SEED_ALLOWED` abgesichert und läuft ausschließlich in lokalen/Demo-Settings; das
-Produktions-Compose seedet **nie** und kennt die Variable nicht — dort läuft die
-Ersteinrichtung über `manage.py create_super_admin`.
-
-**Aufräumen:** `docker compose down` stoppt den Stack, `docker compose down -v` wirft
-zusätzlich die Datenbank weg (der nächste Start seedet dann wieder frisch). Logs:
-`docker compose logs -f web`.
-
-**Danach.** Für echte Entwicklung — Tests, Linting, Tailwind-Watch, Debugger — brauchst du die
-lokale Toolchain aus dem nächsten Abschnitt. Wie das System aufgebaut ist:
-[docs/architecture.md](docs/architecture.md).
+1. [Entwicklungsumgebung einrichten](#entwicklungsumgebung-einrichten)
+2. [Make-Targets](#make-targets)
+3. [Coding Conventions](#coding-conventions)
+4. [Tests](#tests)
+5. [Pull-Request-Prozess](#pull-request-prozess)
+6. [Lizenz von Beiträgen](#lizenz-von-beiträgen)
+7. [Architektur-Überblick](#architektur-überblick)
 
 ---
 
@@ -531,137 +476,6 @@ Commits sind atomar: eine logische Änderung pro Commit. Direkt nach jeder Aufga
 
 ---
 
-## Plugin-Entwicklung
-
-Zwei Dinge lassen sich erweitern, **ohne** den Kern anzufassen: **Berichts-Backends** (Code,
-ein Modul) und **Konfigurationspakete** (Daten, eine YAML-Datei). Beide brauchen weder eine
-Migration noch eine neue URL, einen View oder einen Eintrag in der AuthZ-Matrix. Alles andere
-— Modelle, Views, Middleware — ist kein Plugin-System, sondern normale Kernentwicklung nach
-den Regeln oben.
-
-### Berichts-Backends (Reporting-Plugins)
-
-Ein Berichts-Backend kapselt die Fachlogik **eines** Berichtsstandards hinter einer festen
-Schnittstelle. Panel-Vorschau, CSV-/JSON-/XML-Export und die Snapshot-Speicherung sprechen nur
-diese Schnittstelle an und wissen nichts über den einzelnen Bericht. Praktische Folge: **ein
-neuer Bericht ist eine Datei.**
-
-Ein Modul unter [`src/core/reporting/backends/`](src/core/reporting/backends/) mit einer
-`DatasetBackend`-Unterklasse und dem `@register_backend`-Decorator erscheint automatisch als
-Karte auf dem Reiter „Datensatz-Berichte" und in allen drei Exportformaten:
-
-```python
-# src/core/reporting/backends/mein_bericht.py
-from django.utils.translation import gettext_lazy as _
-
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.registry import register_backend
-
-
-@register_backend("mein-bericht")           # Slug: ^[a-z0-9]+([-_][a-z0-9]+)*$, praktisch unveränderlich
-class MeinBackend(DatasetBackend):
-    name = _("Mein Bericht")                # Anzeigename — immer gettext_lazy
-    description = _("Was dieser Bericht zählt, in einem Satz.")
-    snapshot_enabled = False                # True = Roh-Aggregat wird monatlich persistiert
-
-    def get_field_specs(self) -> list[FieldSpec]:
-        return [FieldSpec("label", _("Merkmal")), FieldSpec("count", _("Anzahl"))]
-
-    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        ...                                 # liefert ROHE Zahlen
-
-    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        ...                                 # K-Anonymität, bevor irgendetwas das Haus verlässt
-```
-
-Fünf Punkte, an denen erfahrungsgemäß etwas schiefgeht:
-
-1. **`build_dataset()` ist roh, `prepare_export()` ist der Schutzwall.** Alles, was ausgeliefert
- wird — Download **und** Panel-Vorschau, läuft vorher durch `prepare_export()`. Wer Zahlen
- produziert, die extern zirkulieren, muss diesen Hook implementieren; die zentrale
- Suppressions-Maschinerie ist zu benutzen statt nachzubauen. Der Snapshot-Pfad ruft ihn
- bewusst **nicht** (interner Rohbestand) — `snapshot_enabled` ist damit ein
- Datenschutz-Vertrag, kein Feature-Schalter.
-2. **Labels sind `gettext_lazy`**, nie deutscher Klartext — sie landen als CSV-Kopfzeile und
- JSON-Label auch in der englischen Oberfläche.
-3. **Registrierung passiert zur Importzeit, ausschließlich über den Decorator.** Es gibt keine
- Konfigurationsliste. Discovery ist lazy (erst beim ersten `get_backends()`), damit die
- Importkette zyklusfrei bleibt; ein defektes Modul ist ein lauter `ImproperlyConfigured`,
- keine still unvollständige Registry.
-4. **Der Slug ist praktisch unveränderlich** — er steckt in Query-Parametern, Dateinamen und
- bei `snapshot_enabled` in den Schlüsseln von `StatisticsSnapshot.backend_data`.
-5. **Die Zuordnung läuft über `report_key`**, nie über eine Kategorie
- ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)). Genau **eine** dokumentierte
- Ausnahme: `ban-overview` bindet als hochsensibler Verhaltens-Bericht bewusst über
- `system_type` (`TypBindung(bindet="system_type")`) — Hausverbote sollen nicht über einen frei
- wählbaren Berichtsschlüssel in fremde Auswertungen geraten. Wer ausgerechnet dieses Modul als
- Vorlage kopiert, muss `bindet` auf `report_key` zurückstellen; die Registry-Auskunft
- („erscheint in …") und das Schlüssel-Vokabular ignorieren `system_type`-Bindungen sonst
- stillschweigend.
-
-**Als Vorlage kopieren, nicht von Null anfangen.** Unter
-[`src/core/reporting/backends/`](src/core/reporting/backends/) liegen neun mitgelieferte
-Backends — alle sind **Beispiele**, keine verbindlichen Berichtsstandards, und jedes zeigt
-einen anderen Zuschnitt: `example` (Minimalfall), `sample-report-1` (Vollfall mit Snapshot),
-`monthly-trend` (Zeitreihe), `client-metrics` (exakte Partition), `case-metrics` (unabhängige
-Skalare), `ban-overview` (hochsensibler Sonderfall), `needle-exchange-balance` (Summen über
-Feldwerte), `counseling-hours` (Kaskade Zeile → Gesamt), `service-distribution`
-(Mehrfachnennung). Such dir den Fall, der deinem am nächsten kommt, und kopiere **dieses**
-Modul.
-
-Sichtbarkeit prüfen:
-
-```bash
-python src/manage.py shell -c "from core.reporting.registry import get_backends; print([b.slug for b in get_backends()])"
-```
-
-**Vollständige Referenz** — `DatasetBackend`/`DatasetResult`/`FieldSpec`/`CompletenessIssue`,
-„Eigenes Backend in fünf Schritten", Discovery-Regeln, Snapshot-Vertrag, K-Anonymität,
-Exportformate und die Test-Checkliste für neue Backends:
-[docs/reporting-plugins.md](docs/reporting-plugins.md)
-(EN: [docs/en/reporting-plugins.md](docs/en/reporting-plugins.md)).
-Architektur-Entscheidungen: [ADR-038](docs/adr/038-reporting-plugin-backends.md),
-[ADR-042](docs/adr/042-report-key-berichtszuordnung.md),
-[ADR-023](docs/adr/023-k-anonymization-statistik.md).
-
-### Konfigurationspakete (YAML)
-
-Ein Konfigurationspaket beschreibt Feldvorlagen, Dokumentationstypen, Feldgruppen,
-Feldzuordnungen und Feldbedingungen einer Einrichtung **deklarativ**. Pakete machen
-Formular-Konfiguration teilbar: versionierbar, reviewbar, zwischen Trägern austauschbar — und
-**idempotent** einspielbar. Der mitgelieferte Standardkatalog
-[`src/core/packages/default.yaml`](src/core/packages/default.yaml) ist selbst ein Paket und
-läuft durch denselben Loader wie jedes fremde.
-
-```bash
-python src/manage.py load_package --file paket.yaml --facility <uuid> --dry-run
-python src/manage.py load_package --default --facility <uuid>      # Standardkatalog nachziehen
-```
-
-Vier Regeln, die im Alltag zählen:
-
-1. **Der Slug ist die Identität**, nicht der Name. Slugs sind nach dem Anlegen in Modell und
- DB-Trigger unveränderlich; ein geänderter Slug legt in **jeder** Bestands-Einrichtung ein
- Duplikat an, statt zu aktualisieren.
-2. **Unbekannte Schlüssel sind auf jeder Ebene ein Fehler** — ein Tippfehler wie `sort_oder`
- soll auffallen, statt still zu verpuffen. Doppelte YAML-Schlüssel ebenso.
-3. **Der Loader ist ein Rücksync, kein „anlegen, falls nicht vorhanden".** Er schreibt
- Paketwerte auf Bestandszeilen zurück; welche Felder das betrifft und welche er nie anfasst,
- steht in der Tabelle unter
- [Was der Loader-Seed einer Bestands-Einrichtung antut](#was-der-loader-seed-einer-bestands-einrichtung-antut).
- Deshalb: gegen Bestand **immer** erst `--dry-run`.
-4. **Alles-oder-nichts.** Ein Konflikt bricht den gesamten Lauf ab; es wird nichts angewendet.
-
-**Formatreferenz, Feld-für-Feld-Semantik, Loader-Buckets und die Pflegeregeln, die weh tun:**
-[docs/packages.md](docs/packages.md) · [ADR-037](docs/adr/037-konfigurationspakete-dynamische-felder.md)
-(Paketformat) · [ADR-036](docs/adr/036-globale-block-sequenz-feldordnung.md) (Feldordnung) ·
-[ADR-035](docs/adr/035-evaluator-semantik-bedingte-feldlogik.md) (Operatoren der Feldbedingungen).
-Die Gegenrichtung — eine bestehende Einrichtung vollständig als versioniertes JSON herausgeben
-(`manage.py export_facility`) — beschreibt
-[docs/facility-export-schema.md](docs/facility-export-schema.md).
-
----
-
 ## Tests
 
 ### Test-Driven Development (Unit/Service)
@@ -903,12 +717,6 @@ genannt.
 ---
 
 ## Architektur-Überblick
-
-> **Ausführlicher Wegweiser:** [docs/architecture.md](docs/architecture.md) — Schichtung
-> (Views → Services → Models), Sicherheitsarchitektur, No-Code-Konfigurationskern,
-> Offline-PWA und Test-Landschaft, jeweils mit Verweis auf die zuständige ADR. Der Abschnitt
-> hier bleibt der Kurzeinstieg für Rollen, Verzeichnisstruktur und die Designentscheidungen,
-> die man beim ersten Pull Request kennen muss.
 
 ### Rollen
 

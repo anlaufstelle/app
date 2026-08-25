@@ -5,8 +5,6 @@
 // bleibt. Belegt zugleich, dass offline-store.js die Krypto-Primitive per
 // R8-Handshake bezieht (crypto.js legt sie nicht mehr aufs oeffentliche
 // Objekt).
-// Refs #1838: Modul-Liste des offline-store-Verbunds lebt an EINER Stelle.
-import { importOfflineStoreModules } from "./_offline_store_modules.mjs";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import Dexie from "dexie";
 
@@ -16,12 +14,9 @@ beforeAll(async () => {
     // offline-store.js prueft `typeof Dexie === "undefined"` beim Laden.
     window.Dexie = Dexie;
     globalThis.Dexie = Dexie;
-    // Refs #1828: Endpunkt-Literale leben in url-patterns.js (ENDPOINTS) —
-    // wie in base.html VOR offline-store.js laden.
-    await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
-    await importOfflineStoreModules();
+    await import("../../src/static/js/offline-store.js");
     store = window.offlineStore;
 });
 

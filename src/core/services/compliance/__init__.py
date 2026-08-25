@@ -70,17 +70,14 @@ from core.services.compliance.retention import _retention_checks
 from core.services.compliance.sensitivity import (
     ROLE_MAX_SENSITIVITY,
     SENSITIVITY_RANK,
-    UNKNOWN_SENSITIVITY_RANK,
     allowed_sensitivities_for_user,
     effective_sensitivity,
     get_visible_attachment_for_owner_or_404,
     get_visible_attachment_or_404,
     get_visible_event_or_404,
-    sensitivity_rank,
     user_can_see_document_type,
     user_can_see_event,
     user_can_see_field,
-    visible_attachments_for_user,
 )
 from core.services.compliance.system_info import _migration_checks, _version_checks
 from core.services.compliance.vvt import (
@@ -222,7 +219,6 @@ __all__ = [
     "PROCESSING_ACTIVITIES",
     "ROLE_MAX_SENSITIVITY",
     "SENSITIVITY_RANK",
-    "UNKNOWN_SENSITIVITY_RANK",
     "_CRITICAL_AUDIT_ACTIONS",
     "_app_superuser_checks",
     "_audit_chain_checks",
@@ -264,9 +260,7 @@ __all__ = [
     "record_system_finding",
     "run_all_detections",
     "run_system_detections",
-    "sensitivity_rank",
     "user_can_see_document_type",
     "user_can_see_event",
     "user_can_see_field",
-    "visible_attachments_for_user",
 ]

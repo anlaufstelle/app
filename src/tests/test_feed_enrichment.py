@@ -9,7 +9,7 @@ from django.utils import timezone
 from core.models import Activity, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.dashboard import log_activity, render_activity_summary
 from core.services.events import build_feed_items, enrich_events_with_preview
-from core.templatetags.core_tags import activity_target_url, doctype_badge_classes
+from core.templatetags.core_tags import activity_target_url, doctype_badge_classes, verb_badge_classes
 
 
 @pytest.mark.django_db
@@ -498,6 +498,21 @@ class TestActivitySensitivityFilter:
         activity_items = [i for i in items if i["type"] == "activity"]
         assert len(activity_items) == 1
         assert activity_items[0]["object"].target_id == client_identified.pk
+
+
+class TestVerbBadgeClasses:
+    """Tests for verb_badge_classes template filter."""
+
+    def test_known_verbs(self):
+        assert verb_badge_classes("updated") == "bg-gray-100 text-gray-800"
+        assert verb_badge_classes("deleted") == "bg-red-100 text-red-800"
+        assert verb_badge_classes("qualified") == "bg-indigo-100 text-indigo-800"
+        assert verb_badge_classes("completed") == "bg-green-100 text-green-800"
+        assert verb_badge_classes("reopened") == "bg-amber-100 text-amber-800"
+
+    def test_fallback(self):
+        assert verb_badge_classes("unknown") == "bg-gray-100 text-gray-800"
+        assert verb_badge_classes("") == "bg-gray-100 text-gray-800"
 
 
 @pytest.mark.django_db

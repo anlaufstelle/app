@@ -1,7 +1,7 @@
 # Code Owners für Anlaufstelle
 #
 # Diese Datei ordnet Pfade automatisch angeforderten Reviewern zu (GitHub-Mechanik).
-# Kontext, Bus-Faktor und Vertretungs-Entscheid (2026-08-27: bewusst keine): ../MAINTAINERS.md
+# Kontext, Bus-Faktor und offene Vertretungsfrage: ../MAINTAINERS.md
 # Entscheidungs-/Review-Modell: ../GOVERNANCE.md
 #
 # HINWEIS — Self-Review ist die dokumentierte Realität: Bei aktuell nur einer
@@ -10,8 +10,7 @@
 # Änderungen. Kompensiert wird das durch automatisierte CI-/Test-/Security-Gates
 # (siehe GOVERNANCE.md § Review & Self-Review), nicht durch einen zweiten Reviewer.
 # Sobald eine zweite Person Maintainer wird, werden die granularen Zeilen unten auf
-# echte Vier-Augen-Reviews (v. a. für sicherheitskritische Pfade) umgestellt — der
-# dafür vorbereitete, auskommentierte Block steht am Ende dieser Datei.
+# echte Vier-Augen-Reviews (v. a. für sicherheitskritische Pfade) umgestellt.
 
 # Standard-Owner für das gesamte Repository
 *                       @tobiasnix
@@ -30,67 +29,3 @@
 /GOVERNANCE.md          @tobiasnix
 /SECURITY.md            @tobiasnix
 /CONTRIBUTING.md        @tobiasnix
-
-# ─────────────────────────────────────────────────────────────────────────────
-# VORBEREITET — NICHT AKTIV: Vier-Augen-Review für sicherheitskritische Pfade
-#
-# Die folgenden Zeilen sind bewusst auskommentiert. Sie werden aktiviert, sobald
-# eine zweite Person Maintainer ist (E-3 in MAINTAINERS.md; eine Vertretung ist
-# per Entscheid 2026-08-27 nicht geplant, die Zeilen bleiben als Vorlage stehen;
-# Übersicht in ../MAINTAINERS.md § Offene Entscheidungspunkte). Vorher haben sie keinen
-# Nutzen: Ein zweiter Owner, der dieselbe Person ist, erzwingt kein zweites
-# Augenpaar.
-#
-# Aktivierung — drei Schritte, alle nötig:
-#   1. `@<vertretung>` durch das echte GitHub-Handle der Vertretung ersetzen.
-#      `@<vertretung>` ist kein gültiges Handle: GitHub meldet die Zeile als
-#      fehlerhaft und überspringt sie, wodurch die Zuordnung ganz oder
-#      teilweise unwirksam werden kann — also nicht halb aktivieren.
-#   2. Bei den acht Pfad-Zeilen unten das `# ` am Zeilenanfang entfernen —
-#      **nur bei diesen**. Die erläuternden Kommentarzeilen darüber bleiben
-#      auskommentiert; würden sie mit einkommentiert, entstünde genau der
-#      Fehlerfall aus Schritt 1.
-#   3. In den Branch-Protection-Regeln von `main` „Require review from Code
-#      Owners" einschalten; ohne diesen Schalter ist CODEOWNERS nur ein
-#      Vorschlag für Reviewer-Zuweisungen, keine Pflicht.
-#
-# Reihenfolge beachten: GitHub wertet „letzter Treffer gewinnt" aus. Diese
-# Zeilen müssen deshalb unterhalb von `*` und `/src/` stehen — sonst greift
-# wieder die allgemeinere Regel.
-#
-# Auswahlkriterium der Pfade: Code und Dokumente, an denen ein unbemerkter
-# Fehler unmittelbar Schutzniveau kostet (Mandantentrennung, Verschlüsselung,
-# Audit-Integrität, Aufbewahrung, Authentisierung, Release-Integrität) —
-# nicht „alles, was wichtig aussieht".
-
-# DSGVO-/Compliance-Kern: Aufbewahrung, Breach-Detection, DB-Rollen (RLS),
-# k-Anonymisierung, VVT, Backup
-# /src/core/services/compliance/   @tobiasnix @<vertretung>
-
-# Authentisierung und Kontoschutz: MFA/TOTP, Login-Lockout, Sudo-Mode,
-# Credentials, Einladungen
-# /src/core/services/security/     @tobiasnix @<vertretung>
-
-# Audit-Integrität: Hash-Kette, Diff, High-Water-Mark, Detail-Policy
-# /src/core/services/audit/        @tobiasnix @<vertretung>
-
-# Migrationen — hier liegen die Row-Level-Security-Policies; eine fehlerhafte
-# Migration hebt die Mandantentrennung auf
-# /src/core/migrations/            @tobiasnix @<vertretung>
-
-# Request-Pfad: Sicherheits-Header, Session-/Facility-Kontext
-# /src/core/middleware/            @tobiasnix @<vertretung>
-
-# Release-Integrität: Build, Signierung, Leak-Verify, SBOM.
-# Achtung — dieser Pfad existiert NUR im Entwicklungs-Repository; der
-# Release-Build strippt `dev-ops/` aus dem veröffentlichten Snapshot. Die Zeile
-# gehört trotzdem hierher: Pull Requests werden im Entwicklungs-Repository
-# gereviewt, und genau dort greift sie. In einer Kopie des Public-Snapshots
-# läuft sie schlicht ins Leere (kein Fehler, nur wirkungslos).
-# /dev-ops/release/                @tobiasnix @<vertretung>
-
-# Regulatorische Einordnungen (heute: CRA-Einordnung)
-# /docs/compliance/                @tobiasnix @<vertretung>
-
-# Threat Model — Grundlage aller Sicherheitsannahmen
-# /docs/threat-model.md            @tobiasnix @<vertretung>

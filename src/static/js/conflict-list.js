@@ -120,7 +120,9 @@
             async load() {
                 this.loading = true;
                 try {
-                    await window.crypto_session?.awaitReady?.();
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     if (!window.offlineStore) return;
                     const conflicts = await window.offlineStore.listConflicts();
                     this.conflictEvents = conflicts.map((r) => this._eventItem(r, false));
@@ -143,9 +145,17 @@
 
             _eventItem(r, isDead) {
                 const data = r.data || {};
-                // Refs #1828: gemeinsamer Formatter (offline-form-fields.js);
-                // leer/unparsbar -> "".
-                const lastEditedAtFmt = window.offlineFormFields.formatTs(data.lastEditedAt);
+                let lastEditedAtFmt = "";
+                if (data.lastEditedAt) {
+                    try {
+                        lastEditedAtFmt = new Date(data.lastEditedAt).toLocaleString("de-DE", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                        });
+                    } catch (_e) {
+                        /* noop */
+                    }
+                }
                 // Refs #1398 (P3): WorkItem-Records tragen keinen
                 // ``documentTypeName`` (kein DocumentType) — sonst faelschlich als
                 // „Ereignis" gelabelt. Der WorkItem-Titel aus dem Envelope ist die
@@ -195,7 +205,14 @@
                     item.canReapply = true;
                     item.missingToken = ci.conflictError === "missing-token";
                     item.label = ci.serverState.title || this._labelWorkItem;
-                    item.serverUpdatedAtFmt = window.offlineFormFields.formatTs(ci.serverState.updated_at);
+                    try {
+                        item.serverUpdatedAtFmt = new Date(ci.serverState.updated_at).toLocaleString("de-DE", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                        });
+                    } catch (_e) {
+                        /* noop */
+                    }
                     if (ci.isStatus) {
                         item.isStatusConflict = true;
                         item.yourStatusText =
@@ -237,36 +254,38 @@
                 return list.map((pair) => pair.slug + ": " + fmt(pair.value)).join("\n");
             },
 
-            // Refs #1828: gemeinsames Skelett der fuenf Listen-Aktionen —
-            // Aktion ausfuehren, Liste neu laden, Banner-Zaehler auffrischen,
-            // Erfolg/Fehler in der Feedback-Zeile melden. ``confirm`` gilt
-            // NUR fuer das Verwerfen: es ist die einzige destruktive Aktion
-            // und deshalb als einzige bestaetigungspflichtig (S1-Regel im
-            // Dateikopf).
-            async _act(op, label, opts) {
-                if (opts && opts.confirm && !window.confirm(this._confirmDiscardText)) return;
+            async retryDeadEvent(pk) {
                 try {
-                    await op();
+                    await window.offlineStore.retryDeadEvent(pk);
                     await this.load();
                     this._refreshCounts();
-                    this._setFeedback(label, "info");
+                    this._setFeedback(this._labelRetried, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
                 }
             },
 
-            async retryDeadEvent(pk) {
-                await this._act(() => window.offlineStore.retryDeadEvent(pk), this._labelRetried);
-            },
-
             async discardDeadEvent(pk) {
-                await this._act(() => window.offlineStore.discardDeadEvent(pk), this._labelDiscarded, {
-                    confirm: true,
-                });
+                if (!window.confirm(this._confirmDiscardText)) return;
+                try {
+                    await window.offlineStore.discardDeadEvent(pk);
+                    await this.load();
+                    this._refreshCounts();
+                    this._setFeedback(this._labelDiscarded, "info");
+                } catch (_e) {
+                    this._setFeedback(this._labelActionFailed, "error");
+                }
             },
 
             async retryQueueEntry(id) {
-                await this._act(() => window.offlineStore.retryQueueEntry(id), this._labelRetried);
+                try {
+                    await window.offlineStore.retryQueueEntry(id);
+                    await this.load();
+                    this._refreshCounts();
+                    this._setFeedback(this._labelRetried, "info");
+                } catch (_e) {
+                    this._setFeedback(this._labelActionFailed, "error");
+                }
             },
 
             // Refs #1419: Aufloesung eines Status-Konflikts — Token auf den
@@ -275,20 +294,31 @@
             // online-Event zu warten). Faellt auf den direkten replayQueue
             // zurueck, wenn der Orchestrator (base.html) nicht geladen ist.
             async reapplyQueueEntry(id) {
-                await this._act(async () => {
+                try {
                     await window.offlineStore.reapplyQueueEntryWithServerVersion(id);
                     if (window.syncOrchestrator && window.syncOrchestrator.requestSync) {
                         window.syncOrchestrator.requestSync();
                     } else if (window.offlineQueue && window.offlineQueue.replayQueue) {
                         await window.offlineQueue.replayQueue();
                     }
-                }, this._labelRetried);
+                    await this.load();
+                    this._refreshCounts();
+                    this._setFeedback(this._labelRetried, "info");
+                } catch (_e) {
+                    this._setFeedback(this._labelActionFailed, "error");
+                }
             },
 
             async discardQueueEntry(id) {
-                await this._act(() => window.offlineStore.discardQueueEntry(id), this._labelDiscarded, {
-                    confirm: true,
-                });
+                if (!window.confirm(this._confirmDiscardText)) return;
+                try {
+                    await window.offlineStore.discardQueueEntry(id);
+                    await this.load();
+                    this._refreshCounts();
+                    this._setFeedback(this._labelDiscarded, "info");
+                } catch (_e) {
+                    this._setFeedback(this._labelActionFailed, "error");
+                }
             },
 
             // Refs ENT-OFFL-16 / #1476 (R10): Blob-Download, keine
@@ -328,9 +358,7 @@
                     if (window.offlineQueue && window.offlineQueue.enqueueRequest) {
                         window.offlineQueue
                             .enqueueRequest(
-                                // Refs #1828: Endpunkt zentral in url-patterns.js
-                                // (ENDPOINTS, konsistent zur Allowlist-Regex).
-                                window.URL_PATTERNS.ENDPOINTS.AUDIT_NOTE_EXPORT,
+                                "/api/v1/offline/audit/note-export/",
                                 "POST",
                                 JSON.stringify({ event_pk: pk || "" }),
                                 { "content-type": "application/json", "hx-request": "true" }

@@ -15,6 +15,8 @@
 (function () {
     "use strict";
 
+    const MAX_OFFLINE_CLIENTS = 20;
+
     function _store() {
         if (!window.offlineStore) {
             throw new Error("OfflineStoreNotLoaded");
@@ -29,10 +31,8 @@
         return window.csrfUtils ? window.csrfUtils.fromMeta() : null;
     }
 
-    // Refs #1828: Endpunkt-Literal zentral in url-patterns.js (ENDPOINTS);
-    // base.html laedt url-patterns.js vor diesem Modul.
     function _bundleUrl(clientPk) {
-        return window.URL_PATTERNS.ENDPOINTS.clientBundle(clientPk);
+        return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
     }
 
     async function _emitCountEvent() {
@@ -50,7 +50,9 @@
         if (!window.crypto_session) {
             throw new Error("CryptoSessionNotLoaded");
         }
-        await window.crypto_session.awaitReady?.();
+        if (window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
         if (!window.crypto_session.hasSessionKey()) {
             const err = new Error("NoSessionKey");
             err.name = "NoSessionKeyError";
@@ -70,11 +72,9 @@
         const store = _store();
         const currentCount = await store.countOfflineClients();
         const already = await store.isClientOffline(clientPk);
-        // Refs #1828: das Limit lebt nur noch in offline-store.js
-        // (window.offlineStore.MAX_OFFLINE_CLIENTS) statt als zweite Kopie hier.
-        if (!already && currentCount >= store.MAX_OFFLINE_CLIENTS) {
+        if (!already && currentCount >= MAX_OFFLINE_CLIENTS) {
             const err = new Error(
-                "Offline-Cache-Limit erreicht (" + store.MAX_OFFLINE_CLIENTS + " Klientel)."
+                "Offline-Cache-Limit erreicht (" + MAX_OFFLINE_CLIENTS + " Klientel)."
             );
             err.name = "OfflineLimitError";
             throw err;
@@ -156,5 +156,6 @@
         getOfflineClient: getOfflineClient,
         getLocallyCachedClients: getLocallyCachedClients,
         refreshCountBadge: refreshCountBadge,
+        MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
     };
 })();

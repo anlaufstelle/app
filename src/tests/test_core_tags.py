@@ -90,6 +90,7 @@ from core.templatetags.core_tags import (  # noqa: E402
     json_summary,
     status_badge,
     target_type_label,
+    verb_badge_classes,
 )
 
 
@@ -154,6 +155,19 @@ class TestStatusBadge:
     def test_unknown_status_falls_back_to_gray(self):
         result = status_badge("zzz-unknown", "Unbekannt")
         assert "gray" in result
+
+
+class TestVerbBadgeClasses:
+    @pytest.mark.parametrize(
+        "verb,expected",
+        [
+            ("deleted", "red"),
+            ("qualified", "indigo"),
+            ("unknown_verb", "gray"),
+        ],
+    )
+    def test_verb_color(self, verb, expected):
+        assert expected in verb_badge_classes(verb)
 
 
 class TestTargetTypeLabel:

@@ -23,13 +23,13 @@
     // Refs #1396: In-Place-Rendern an /offline/conflicts/<pk>/ ohne
     // Django-Kontext — die event-pk aus dem Pfad ziehen (der SW serviert dort
     // offline den pk-losen conflict-shell, dessen data-event-pk leer ist).
-    // Muster analog offline-client-view.js::_pkFromPath. Refs #1828: die
-    // UUID-Extraktion lebt zentral in url-patterns.js (extractConflictPk,
-    // vitest-gepinnt auch fuer nackte pathname-Eingaben) statt als Regex-Kopie.
+    // Muster analog offline-client-view.js::_pkFromPath.
     function _pkFromPath() {
         var path = (window.location && window.location.pathname) || "";
-        var patterns = window.URL_PATTERNS;
-        return (patterns && patterns.extractConflictPk(path)) || "";
+        var m = path.match(
+            /\/offline\/conflicts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
+        );
+        return m ? m[1] : "";
     }
 
     function _asList(dataJson) {
@@ -41,11 +41,13 @@
             .map((slug) => ({ slug: slug, value: dataJson[slug] }));
     }
 
-    // Refs #1828: gemeinsamer Formatter (offline-form-fields.js) — der
-    // Export auf window.conflictResolverUtils.formatValue bleibt als
-    // Contract fuer conflict-list.js (_buildNoteText) und Tests bestehen.
     function _formatValue(v) {
-        return window.offlineFormFields.formatValue(v);
+        if (v === null || v === undefined) return "";
+        if (typeof v === "object") {
+            if (v.__file__) return "[Datei: " + (v.name || "") + "]";
+            return JSON.stringify(v);
+        }
+        return String(v);
     }
 
     function _diffKeys(localData, serverData) {
@@ -119,7 +121,9 @@
             async load() {
                 this.loading = true;
                 try {
-                    await window.crypto_session?.awaitReady?.();
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     if (!window.offlineStore) {
                         this.error = "Offline-Speicher nicht verfuegbar.";
                         return;

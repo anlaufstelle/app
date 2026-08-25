@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 20:47+0200\n"
+"POT-Creation-Date: 2026-08-25 00:38+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11835,45 +11835,3 @@ msgstr "Access"
 
 msgid "ohne MFA"
 msgstr "without MFA"
-
-#: src/templates/partials/_nav_badge.html:28
-#, python-format
-msgid "%(n)s offene Aufgabe"
-msgid_plural "%(n)s offene Aufgaben"
-msgstr[0] "%(n)s open task"
-msgstr[1] "%(n)s open tasks"
-
-#: src/templates/partials/_nav_badge.html:29
-#, python-format
-msgid "%(n)s überfällige Aufgabe"
-msgid_plural "%(n)s überfällige Aufgaben"
-msgstr[0] "%(n)s overdue task"
-msgstr[1] "%(n)s overdue tasks"
-
-#: src/templates/partials/_nav_badge.html:30
-#, python-format
-msgid "%(n)s offener Löschantrag"
-msgid_plural "%(n)s offene Löschanträge"
-msgstr[0] "%(n)s open deletion request"
-msgstr[1] "%(n)s open deletion requests"
-
-#: src/templates/partials/_nav_badge.html:31
-#, python-format
-msgid "%(n)s offener Berichtigungsantrag"
-msgid_plural "%(n)s offene Berichtigungsanträge"
-msgstr[0] "%(n)s open rectification request"
-msgstr[1] "%(n)s open rectification requests"
-
-#: src/templates/partials/_nav_badge.html:32
-#, python-format
-msgid "%(n)s offener Prüfvorgang"
-msgid_plural "%(n)s offene Prüfvorgänge"
-msgstr[0] "%(n)s open review item"
-msgstr[1] "%(n)s open review items"
-
-#: src/templates/partials/_nav_badge.html:33
-#, python-format
-msgid "%(n)s offener Vorgang"
-msgid_plural "%(n)s offene Vorgänge"
-msgstr[0] "%(n)s open item"
-msgstr[1] "%(n)s open items"

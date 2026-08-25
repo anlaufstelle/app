@@ -396,9 +396,6 @@ LOESCHANTRAEGE = NavItem(
     gates=("can_access_deletion_requests",),
     testid="nav-deletion-requests",
     icon="deletion",
-    # Refs #1984: Zaehler offener Loeschantraege (Sichtmenge der Liste) —
-    # gerendert in partials/_subnav.html ueber partials/_nav_badge.html.
-    badge="deletion_requests",
 )
 # Refs #1060 (M4/ADR-041): Berichtigungen prüfen ist Leitungsarbeit — Anträge
 # STELLEN geht für staff+ direkt aus der Personenakte.
@@ -410,9 +407,6 @@ BERICHTIGUNGEN = NavItem(
     gates=("is_lead_or_admin",),
     testid="nav-rectification-requests",
     icon="rectification",
-    # Refs #1984: Zaehler offener Berichtigungsantraege (pending-Definition
-    # der Liste) — gerendert in partials/_subnav.html.
-    badge="rectification_requests",
 )
 LOESCHFRISTEN = NavItem(
     key="retention",
@@ -611,9 +605,6 @@ DATENSCHUTZ_HUB = NavItem(
     mobile_testid="mobile-nav-datenschutz",
     icon="datenschutz",
     divider_before=True,
-    # Refs #1984: Summen-Zaehler beider Antragssorten am Hub-Anker — sonst
-    # waeren die Zaehler erst nach dem Klick in den Hub sichtbar.
-    badge="datenschutz_review",
 )
 VERWALTUNG_HUB = NavItem(
     key="verwaltung",

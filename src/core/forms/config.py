@@ -9,6 +9,7 @@ UI-Validierung (Widget-CSS, freundliche Unique-Fehler, Immutabilitäten).
 
 from __future__ import annotations
 
+import datetime
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +28,6 @@ from core.services.conditions import (
     ALLOWED_SOURCE_FIELD_TYPES,
     OPERATORS_BY_FIELD_TYPE,
     VALUELESS_OPERATORS,
-    parse_condition_value,
 )
 
 
@@ -846,7 +846,48 @@ class FieldConditionForm(TailwindFormMixin, forms.Form):
             return cleaned
 
         try:
-            cleaned["value_json"] = parse_condition_value(field_type, source.field_template, raw)
+            cleaned["value_json"] = self._convert_value(field_type, source.field_template, raw)
         except ValidationError as exc:
             self.add_error("value", exc)
         return cleaned
+
+    @staticmethod
+    def _convert_value(field_type: str, template: FieldTemplate, raw: str) -> Any:
+        """Konvertiert den generischen String-``value`` typabhängig nach JSON (E19)."""
+        types = FieldTemplate.FieldType
+        if field_type == types.NUMBER:
+            try:
+                return int(raw)
+            except ValueError:
+                try:
+                    return float(raw)
+                except ValueError:
+                    raise ValidationError(_("Bitte eine gültige Zahl eingeben.")) from None
+        if field_type == types.BOOLEAN:
+            low = raw.lower()
+            if low in ("true", "1", "ja"):
+                return True
+            if low in ("false", "0", "nein"):
+                return False
+            raise ValidationError(_("Bitte „wahr“ oder „falsch“ auswählen."))
+        if field_type == types.DATE:
+            try:
+                datetime.date.fromisoformat(raw)
+            except ValueError:
+                raise ValidationError(_("Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben.")) from None
+            return raw
+        if field_type == types.TIME:
+            try:
+                parsed = datetime.time.fromisoformat(raw)
+            except ValueError:
+                raise ValidationError(_("Bitte eine gültige Uhrzeit eingeben.")) from None
+            # E11-Normalisierung: Editor speichert time als „HH:MM:SS" (JS hängt
+            # an „HH:MM" ein „:00" an) — sonst schlagen equals-Vergleiche fehl.
+            return parsed.isoformat(timespec="seconds")
+        if field_type in (types.SELECT, types.MULTI_SELECT):
+            known = {option.get("slug") for option in (template.options_json or [])}
+            if raw not in known:
+                raise ValidationError(_("Bitte eine gültige Option auswählen."))
+            return raw
+        # text/textarea (und Defensive): String übernehmen (Vergleich exakt, ADR-035).
+        return raw

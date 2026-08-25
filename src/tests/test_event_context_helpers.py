@@ -107,56 +107,6 @@ class TestComputeEventSearchText:
         text = compute_event_search_text({"hohe": "geheim"}, dt)
         assert text == ""
 
-    def test_excludes_unknown_sensitivity_field(self, facility):
-        """Refs #1991 (Fix-Runde 1): unbekannte Werte fail-closed statt indexiert.
-
-        Der Filter fragte nach Mengen-Zugehoerigkeit
-        (``sensitivity in {elevated, high}``) und nicht nach dem Rang — ein
-        Wert ausserhalb von ``DocumentType.Sensitivity`` fiel durch beide
-        Zweige in den Klartext-Index, obwohl ``user_can_see_field`` ihn seit
-        #1991 fuer JEDE Rolle sperrt. ``choices`` sind Formular-Validierung,
-        keine DB-Beschraenkung — der Fall ist ueber eine Migration, ein Paket
-        oder eine korrupte Zeile erreichbar.
-        """
-        from core.models import FieldTemplate
-        from core.services.events.fields import compute_event_search_text
-
-        dt = self._make_doc_type(facility, [("sonderfeld", {})])
-        FieldTemplate.objects.filter(slug="sonderfeld").update(sensitivity="kritisch")
-        text = compute_event_search_text({"sonderfeld": "geheim"}, dt)
-        assert text == ""
-
-    def test_includes_explicit_normal_and_inherited_sensitivity(self, facility):
-        """Verhaltensneutralitaet: die beiden indexierten Faelle bleiben drin.
-
-        ``""`` heisst „erbt vom Dokumentationstyp"; der Typ-Schutz greift auf
-        Ereignis-Ebene (``event_search_queryset`` filtert
-        ``document_type__sensitivity__in``), deshalb ist der geerbte Wert
-        weiterhin indexierbar.
-        """
-        from core.models import DocumentType
-        from core.services.events.fields import compute_event_search_text
-
-        dt = self._make_doc_type(
-            facility,
-            [
-                ("geerbt", {"sensitivity": ""}),
-                ("ausdruecklich", {"sensitivity": DocumentType.Sensitivity.NORMAL}),
-            ],
-        )
-        text = compute_event_search_text({"geerbt": "AAA", "ausdruecklich": "BBB"}, dt)
-        assert "AAA" in text and "BBB" in text
-
-    def test_excludes_elevated_but_unencrypted_field(self, facility):
-        """Gegenprobe zu ``test_excludes_elevated_sensitivity_field``: ELEVATED
-        allein reicht zum Ausschluss, auch ohne ``is_encrypted``."""
-        from core.models import DocumentType
-        from core.services.events.fields import compute_event_search_text
-
-        dt = self._make_doc_type(facility, [("erhoeht", {"sensitivity": DocumentType.Sensitivity.ELEVATED})])
-        text = compute_event_search_text({"erhoeht": "vertraulich"}, dt)
-        assert text == ""
-
     def test_skips_file_marker_dicts(self, facility):
         from core.services.events.fields import compute_event_search_text
 

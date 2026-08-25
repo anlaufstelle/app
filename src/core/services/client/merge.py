@@ -92,13 +92,16 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Activity, Attachment, AuditLog, Case, Client, DocumentType, Event, RecentClientVisit
+from core.models import Activity, Attachment, AuditLog, Case, Client, Event, RecentClientVisit
 from core.models.workitem import DeletionRequest, WorkItem
 from core.retention.legal_holds import client_has_active_hold
 from core.services.audit import audit_client_event, audit_event
-from core.services.client.main import get_pending_deletion_request, update_client_stage
+from core.services.client.main import (
+    _clean_client_dynamic_data,
+    get_pending_deletion_request,
+    update_client_stage,
+)
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import clean_dynamic_data
 
 logger = logging.getLogger(__name__)
 
@@ -405,7 +408,7 @@ def _adopt_missing_data(source, target):
     Quelle-Werte fuellen ausschliesslich leere/fehlende Felder. Hat das Ziel
     keinen Dokumentationstyp, uebernimmt es den der Quelle (derselbe
     Leere-Felder-Grundsatz, auf den Typ angewandt). Alles laeuft durch
-    ``clean_dynamic_data`` — Slugs, die der effektive Typ nicht kennt,
+    ``_clean_client_dynamic_data`` — Slugs, die der effektive Typ nicht kennt,
     fallen weg (E11-Whitelist), verschluesselte Werte wandern als Token
     (gleiche Facility = gleicher Schluessel).
 
@@ -431,13 +434,7 @@ def _adopt_missing_data(source, target):
     }
     if not candidates and not document_type_adopted:
         return [], [], False
-    cleaned = clean_dynamic_data(
-        target.facility,
-        effective_type,
-        {**target_data, **candidates},
-        entity_type=DocumentType.EntityType.CLIENT,
-        entity_type_error=_("Der Dokumentationstyp ist nicht für Personen vorgesehen."),
-    )
+    cleaned = _clean_client_dynamic_data(target.facility, effective_type, {**target_data, **candidates})
     adopted = sorted(slug for slug in candidates if slug in cleaned)
     moved_attachment_ids: list[str] = []
     for slug in adopted:

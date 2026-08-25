@@ -33,16 +33,6 @@ from core.services.compliance.sensitivity import ROLE_MAX_SENSITIVITY, SENSITIVI
 #: Spalten je Sichtbarkeits-Stratum; Index == Rollenrang aus ROLE_MAX_SENSITIVITY.
 BAN_REVISION_STRATA = ("revision_normal", "revision_elevated", "revision_high")
 
-# Refs #1991 (bewusste Abweichung): Dieses Modul benutzt weiter
-# ``SENSITIVITY_RANK.get(..., 0)`` statt der fail-closed
-# ``sensitivity_rank``. Der Rang ist hier kein Lese-Gate, sondern ein INDEX in
-# ``BAN_REVISION_STRATA`` — der Ersatzrang fuer Unbekanntes laege ausserhalb
-# des Tupels (IndexError). Stratum 0 ist zugleich die konservative Richtung:
-# es bumpt den Zaehler, den JEDE Rolle im Praefix liest, also refresht bei
-# einem unbekannten Wert lieber jeder zu viel als einer zu wenig. Verborgen
-# wird dadurch nichts — was eine Rolle sehen darf, entscheidet weiterhin das
-# Gate in ``core.services.system.bans``.
-
 
 def bump_ban_revision(facility, ranks) -> None:
     """Erhöht die Zähler der Strata *ranks* (Rollenränge 0/1/2) atomar.
@@ -108,8 +98,6 @@ def bump_ban_revision_for_event_change(facility, document_type, data_before, dat
     if before[:2] != after[:2]:
         ranks.append(0)
     if before[2] != after[2]:
-        # Default 0 statt fail-closed ``sensitivity_rank`` — Begruendung bei
-        # BAN_REVISION_STRATA oben (Index, kein Lese-Gate; Refs #1991).
         ranks.append(SENSITIVITY_RANK.get(document_type.sensitivity, 0))
     bump_ban_revision(facility, ranks)
 
@@ -128,8 +116,6 @@ def bump_ban_revision_for_document_type_change(document_type, changed_fields, *,
     if "is_active" in changed_fields:
         ranks.append(0)
     if "sensitivity" in changed_fields:
-        # Default 0 statt fail-closed ``sensitivity_rank`` — Begruendung bei
-        # BAN_REVISION_STRATA oben (Index, kein Lese-Gate; Refs #1991).
         old_rank = SENSITIVITY_RANK.get(previous_sensitivity, 0)
         new_rank = SENSITIVITY_RANK.get(document_type.sensitivity, 0)
         if old_rank != new_rank:

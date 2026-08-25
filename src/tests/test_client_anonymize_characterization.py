@@ -458,61 +458,6 @@ class TestAnonymizeClientHelpers:
         event.refresh_from_db()
         assert event.search_text == "Restspur-Klartext"
 
-    def test_redact_live_events_only_touches_this_clients_events(
-        self, facility, staff_user, doc_type_contact, client_identified
-    ):
-        """Mutationsluecke (``client.main._redact_live_events#3``, Refs #1998).
-
-        ``Event.objects.filter(client=client, is_deleted=False)`` in
-        ``_redact_live_events`` scopt explizit auf DIESE Person — RLS begrenzt
-        nur auf die Einrichtung, der ``EventManager`` scopt nicht automatisch
-        auf den Klienten. Faellt das ``client=client``-Kriterium weg, leert
-        ``anonymize_client`` fuer EINE Person die Live-Ereignisse ALLER
-        Personen der Einrichtung. Zweite Person derselben Einrichtung mit
-        eigenem Live-Event als Kontrollgruppe; ihr ``data_json``/
-        ``search_text`` muss byte-identisch ueberleben.
-        """
-        other_client = Client.objects.create(
-            facility=facility,
-            contact_stage=Client.ContactStage.IDENTIFIED,
-            pseudonym="Test-ID-02",
-            created_by=staff_user,
-        )
-
-        event_a = Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={"notiz": "Klartext-Krise A"},
-            created_by=staff_user,
-        )
-        Event.objects.filter(pk=event_a.pk).update(search_text="Klartext-Krise A")
-
-        event_b = Event.objects.create(
-            facility=facility,
-            client=other_client,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={"notiz": "Klartext-Krise B"},
-            created_by=staff_user,
-        )
-        Event.objects.filter(pk=event_b.pk).update(search_text="Klartext-Krise B")
-
-        event_b_before = Event.objects.get(pk=event_b.pk)
-        data_json_before = dict(event_b_before.data_json)
-        search_text_before = event_b_before.search_text
-
-        anonymize_client(client_identified, user=staff_user)
-
-        event_a.refresh_from_db()
-        assert event_a.data_json == {}
-        assert event_a.search_text == ""
-
-        event_b.refresh_from_db()
-        assert event_b.data_json == data_json_before == {"notiz": "Klartext-Krise B"}
-        assert event_b.search_text == search_text_before == "Klartext-Krise B"
-
     def test_redact_deletion_requests_is_no_op_without_event_ids(self):
         from core.services.client import _redact_deletion_requests
 

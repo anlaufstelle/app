@@ -92,7 +92,7 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 
 **Meldeweg:** über die **zentrale Meldeplattform der ENISA** (Single Reporting Platform, Art. 16) an das als Koordinator benannte **CSIRT** (in Deutschland voraussichtlich das BSI/CERT-Bund) und an ENISA. Der genaue Plattform-Zugang und die nationale CSIRT-Benennung sind anhand der finalen Durchführungsrechtsakte/Leitlinien zu bestätigen.
 
-**Verantwortlicher:** der Maintainer (derzeit Solo-Maintainer, vgl. [SECURITY.md §SLA](../../SECURITY.md) sowie [MAINTAINERS.md](../../MAINTAINERS.md) und [GOVERNANCE.md](../../GOVERNANCE.md)), Kontakt [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). **Entscheid 2026-08-27: Es wird keine Vertretung benannt** — Solo-Betrieb ist der gewollte Dauerzustand; das Ausfall-Risiko für die 24-h-Frühwarnfrist ist bewusst akzeptiert (nach § 1.4 liegt das Projekt im aktuellen Betriebsmodell voraussichtlich außerhalb des CRA-Scope; bei Wechsel des Betriebsmodells ist der Entscheid neu zu bewerten, § 4). Begründung und Reichweite in [MAINTAINERS.md § Vertretung](../../MAINTAINERS.md#vertretung-keine--bewusster-entscheid-2026-08-27) ausgewiesen. Die operative Einbettung (Eskalation, Logging des Meldevorgangs) gehört ins [ops-runbook.md](../ops-runbook.md).
+**Verantwortlicher:** der Maintainer (derzeit Solo-Maintainer, vgl. [SECURITY.md §SLA](../../SECURITY.md) sowie [MAINTAINERS.md](../../MAINTAINERS.md) und [GOVERNANCE.md](../../GOVERNANCE.md)), Kontakt [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). **Vor dem 11.09.2026 ist eine Vertretung zu benennen**, damit die 24-h-Frist auch bei Ausfall der Hauptperson eingehalten werden kann; der dafür offene organisatorische Punkt (inkl. Signing-Key-/Secret-Escrow-Trennung) ist in [MAINTAINERS.md § Vertretung](../../MAINTAINERS.md#vertretung-tbd--vor-2026-09-11-vom-maintainer-zu-benennen) ausgewiesen. Die operative Einbettung (Eskalation, Logging des Meldevorgangs) gehört ins [ops-runbook.md](../ops-runbook.md).
 
 ---
 
@@ -100,7 +100,7 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 
 | Termin / Anlass | Aktion |
 |---|---|
-| **11.09.2026** — Meldepflichten (Art. 14) anwendbar | Meldeprozess (§3) operativ scharf schalten (sofern Scope dann bejaht); Vertretungs-Entscheid vom 2026-08-27 (keine Vertretung, [MAINTAINERS.md](../../MAINTAINERS.md)) gegen den dann geltenden Scope prüfen; CSIRT-Kontakt/Plattform-Zugang klären |
+| **11.09.2026** — Meldepflichten (Art. 14) anwendbar | Meldeprozess (§3) operativ scharf schalten; Verantwortlichen **und Vertretung** final benennen (in [MAINTAINERS.md](../../MAINTAINERS.md) eintragen, Signing-Key-/Secret-Escrow-Trennung klären); CSIRT-Kontakt/Plattform-Zugang klären |
 | **11.12.2027** — Hauptpflichten (Anhang I) anwendbar | Scope erneut prüfen; bei Scope-Bejahung Konformitätsbewertung, CE, definierter Support-Zeitraum und SBOM-/Advisory-Lücken (§2) schließen |
 | **Betriebsmodell-Änderung** (jederzeit) | Neubewertung bei kostenpflichtigem **Hosting-/SaaS-Angebot**, Produktverkauf oder Kommerzialisierung der Demo-Instanz (#971) — dann volle Hersteller-Pflichten ab 11.12.2027 denkbar. **Konkret benannt**, nicht hypothetisch: [`docs/fachkonzept-anlaufstelle.md` § 12](../fachkonzept-anlaufstelle.md) führt gehostetes Anlaufstelle für 20–50 €/Monat je Einrichtung als Finanzierungsoption — genau der Fall aus § 1.3 Zeile 2 |
 | **Kommissions-/ENISA-Guidance final** | FOSS-Leitlinien/FAQ in §1 einarbeiten; ggf. Einschätzung extern validieren (Fachanwalt bei Bedarf) |

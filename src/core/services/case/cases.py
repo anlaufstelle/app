@@ -8,15 +8,13 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Case, DocumentType
-from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
+from core.services.audit import audit_event
 from core.services.compliance import user_can_see_event
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import clean_dynamic_data
+from core.services.dynamic_data import validate_data_json
 from core.services.security import check_version_conflict
 
 logger = logging.getLogger(__name__)
-
-_CASE_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp ist nicht für Fälle vorgesehen.")
 
 
 def cases_with_live_client():
@@ -78,14 +76,57 @@ def get_case_or_none(facility, case_id):
         return None
 
 
+def _check_case_document_type(facility, document_type):
+    """Prueft den Fall-``DocumentType`` (M2 P5, Refs #1058).
+
+    Zwei Bedingungen, beide als deutsche ``ValidationError`` (der Aufrufer ist
+    ein Formular): Muster ``_check_client_document_type``
+    (``core.services.client.main``, P4b).
+
+    (a) **Facility-Scope** — ein Typ einer fremden Einrichtung waere ein
+        Cross-Tenant-Leck (der Slug-Satz stammte aus fremder Konfiguration).
+    (b) **Entitaetstyp** — nur ``entity_type=case``. Ein Personen- oder
+        Ereignis-Typ traegt Feldsemantik, die an einem Fall-Datensatz keine
+        Bedeutung hat.
+
+    ``None`` (kein Typ) ist zulaessig und wird unveraendert durchgereicht.
+    """
+    if document_type is None:
+        return None
+    if document_type.facility_id != facility.pk:
+        raise ValidationError(_("Der Dokumentationstyp gehört nicht zu dieser Einrichtung."))
+    if document_type.entity_type != DocumentType.EntityType.CASE:
+        raise ValidationError(_("Der Dokumentationstyp ist nicht für Fälle vorgesehen."))
+    return document_type
+
+
+def _clean_case_dynamic_data(facility, document_type, data_json) -> dict:
+    """Guard + Whitelist fuer die Dynamikdaten eines Falls (M2 P5, Refs #1058).
+
+    Prueft erst den Typ (:func:`_check_case_document_type`) und filtert dann
+    ``data_json`` mit :func:`~core.services.dynamic_data.validate_data_json`
+    gegen dessen Feld-Slugs. **Der Rueckgabewert ist verbindlich** — die
+    Whitelist verwirft fremde Keys, und nur wer das Ergebnis speichert,
+    verhindert Mass-Assignment ins JSONB.
+
+    Ohne Typ gibt es keine Whitelist: dann duerfen auch keine Dynamikdaten
+    gesetzt werden (statt sie still zu verschlucken).
+    """
+    document_type = _check_case_document_type(facility, document_type)
+    if document_type is None:
+        if data_json:
+            raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
+        return {}
+    return validate_data_json(document_type, data_json)
+
+
 @transaction.atomic
 def create_case(facility, user, client, title, description="", lead_user=None, document_type=None, data_json=None):
     """Create a new Case with status OPEN.
 
     M2 P5 (Refs #1058): ``document_type``/``data_json`` laufen durch
-    :func:`~core.services.dynamic_data.clean_dynamic_data` — Facility-Scope,
-    ``entity_type=case`` und die Slug-Whitelist gelten schon beim Anlegen,
-    nicht erst beim Update.
+    :func:`_clean_case_dynamic_data` — Facility-Scope, ``entity_type=case``
+    und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
     Beide Parameter sind explizit benannt (kein ``**data``-Durchreichen an
     ``Case(...)``), daher gibt es hier — anders als bei ``create_client`` —
     keine ``document_type_id=<pk>``-Umgehung zu schliessen.
@@ -98,13 +139,7 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
     if lead_user and lead_user.facility_id != facility.pk:
         raise ValueError(_("Fallverantwortlicher gehört nicht zur Einrichtung."))
 
-    data_json = clean_dynamic_data(
-        facility,
-        document_type,
-        data_json,
-        entity_type=DocumentType.EntityType.CASE,
-        entity_type_error=_CASE_DOCUMENT_TYPE_ERROR,
-    )
+    data_json = _clean_case_dynamic_data(facility, document_type, data_json)
     case = Case(
         facility=facility,
         client=client,
@@ -151,7 +186,9 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen (Muster
     # ``update_client``, P4b).
     allowed = {"title", "description", "lead_user", "document_type", "data_json"}
-    check_update_allowlist(fields, allowed)
+    for key in fields:
+        if key not in allowed:
+            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
 
     # M2 P5 (Refs #1058): Dynamikdaten gegen den *effektiven* Typ pruefen —
     # also gegen den neu uebergebenen, sonst gegen den bestehenden. Wird nur
@@ -163,13 +200,7 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
         # ``None`` zurueck — ein bewusstes Leeren des Typs bleibt also erhalten.
         effective_type = fields.get("document_type", case.document_type)
         raw_data = fields.get("data_json", case.data_json)
-        fields["data_json"] = clean_dynamic_data(
-            case.facility,
-            effective_type,
-            raw_data,
-            entity_type=DocumentType.EntityType.CASE,
-            entity_type_error=_CASE_DOCUMENT_TYPE_ERROR,
-        )
+        fields["data_json"] = _clean_case_dynamic_data(case.facility, effective_type, raw_data)
 
     # Refs #1613 (M2 P8 nachgezogen): Diff gegen den DB-Stand, NICHT gegen die
     # uebergebene Instanz. Seit P8 baut ``CaseUpdateView`` das Formular mit
@@ -179,10 +210,15 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
     # ``neu == neu`` und schriebe nie ``CASE_UPDATE`` (Threat-Model TB6,
     # Repudiation). Gleiches Muster wie ``update_client``/``update_workitem``.
     # Nur Feldnamen ins Audit, keine PII-Werte.
+    from core.services.audit.diff import changed_fields_vs_db
+
+    changed_fields = changed_fields_vs_db(case, fields)
+    for key, value in fields.items():
+        setattr(case, key, value)
     # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
     # Save wuerde die parallel laufende Redaktions-Kaskade (Queryset-Update
     # ohne ``updated_at``-Bump) mit dem stalen Klartext ueberschreiben.
-    changed_fields = apply_allowlisted_update(case, fields, allowed_fields=allowed)
+    case.save(update_fields=[*fields.keys(), "updated_at"])
 
     if changed_fields:
         audit_event(

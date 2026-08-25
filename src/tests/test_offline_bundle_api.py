@@ -74,9 +74,7 @@ class TestBuildClientOfflineBundleService:
 
     def test_bundle_schema_version_is_2(self, facility, client_identified, staff_user):
         """Refs #1529, #1499: Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
-        v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-db.js — seit
-        dem Verbund-Split #1838 liegt der Lesepfad dort, nicht mehr in
-        offline-store.js)."""
+        v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-store.js)."""
         assert BUNDLE_SCHEMA_VERSION == 2
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["schema_version"] == 2
@@ -895,9 +893,9 @@ class TestOfflineClientBundleView:
         django-ratelimit's ``Ratelimited`` (a ``PermissionDenied`` subclass) is
         mapped to HTTP 429 by the custom ``handler403`` — not Django's default
         403 — weil der Offline-Client 403 als Rechteentzug deutet und lokale
-        verschlüsselte Bundles purgt (siehe ``offline-bundles.js``
-        ``INVALIDATION_STATUSES`` — seit dem Verbund-Split #1838 nicht mehr in
-        offline-store.js). Ein Rate-Limit-Treffer ist kein Rechteentzug.
+        verschlüsselte Bundles purgt (siehe ``offline-store.js``
+        ``INVALIDATION_STATUSES``). Ein Rate-Limit-Treffer ist kein
+        Rechteentzug.
 
         ``ratelimit_enabled`` (conftest) schaltet das Limit an, leert den Cache
         und haelt das Zaehlfenster fest (Refs #1900).

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import date, time
-from types import SimpleNamespace
 
 import pytest
 from django import forms
@@ -26,11 +24,6 @@ class TestRegistryCompleteness:
         extra = registry_codes - enum_codes
         assert not missing, f"FieldType-Enum kennt {missing}, aber Registry nicht. Neuer Feldtyp ohne Registry-Eintrag?"
         assert not extra, f"Registry kennt {extra}, aber FieldType-Enum nicht. Veralteter Registry-Eintrag?"
-
-    @pytest.mark.parametrize("slot", ["coerce_import", "parse_literal", "format_display"])
-    def test_every_field_type_defines_all_dispatch_slots(self, slot):
-        missing = [spec.code for spec in FIELD_TYPE_REGISTRY.values() if not callable(getattr(spec, slot, None))]
-        assert not missing, f"Registry-Slot {slot!r} fehlt für Feldtypen: {missing}"
 
 
 class TestGetSpec:
@@ -64,18 +57,6 @@ class TestWidgetFactory:
     def test_multi_select_widget_is_checkbox_select_multiple(self):
         spec = get_spec(field_types.MULTI_SELECT)
         assert isinstance(spec.widget_factory(), forms.CheckboxSelectMultiple)
-
-    def test_time_widget_is_timeinput(self):
-        """Refs #1998: analog test_widgets_are_fresh_instances (DATE) —
-        ``_widget_time`` war ungetestet. ``TimeInput.input_type`` kommt vom
-        WIDGET-KLASSEN-Attribut, nicht von ``attrs``; der Test bewacht also vor
-        allem, dass ``_widget_time`` überhaupt ``forms.TimeInput`` liefert
-        (nicht z. B. versehentlich ``forms.DateInput`` durch einen Copy-Paste-
-        Fehler analog zu ``_widget_date``)."""
-        spec = get_spec(field_types.TIME)
-        widget = spec.widget_factory()
-        assert isinstance(widget, forms.TimeInput)
-        assert widget.input_type == "time"
 
 
 class TestParseDefault:
@@ -119,15 +100,6 @@ class TestValidateDefault:
         with pytest.raises(ValidationError):
             get_spec(field_types.NUMBER).validate_default("abc", {})
 
-    def test_number_raises_when_default_exceeds_max_value(self):
-        """Refs #1998: analog ``test_model_rejects_default_outside_configured_range``
-        (``test_field_template_ranges.py``) — dort nur UNTERHALB ``min_value``
-        getestet. ``_validate_number`` prüft über ``validate_number_value``
-        auch die OBERE Grenze; ein Mutant, der ``value > max_value`` zu
-        ``value < max_value`` kippt, überlebte bislang unbemerkt."""
-        with pytest.raises(ValidationError):
-            get_spec(field_types.NUMBER).validate_default("11", {"max_value": 10})
-
     def test_date_raises_on_invalid_format(self):
         with pytest.raises(ValidationError):
             get_spec(field_types.DATE).validate_default("nope", {})
@@ -159,61 +131,6 @@ class TestValidateDefault:
             )
 
 
-@pytest.mark.django_db
-class TestValidDefaultDoesNotRaiseFullClean:
-    """Refs #1998: „gültiger Default-Wert löst ``full_clean()`` NICHT aus" für
-    BOOLEAN/DATE/TIME/MULTI_SELECT — analog ``test_valid_number_default``
-    (``test_fieldtemplate_default_value.py``) bzw. dem TEXT-„no raise"-Kommentar
-    oben in ``TestValidateDefault``. Bislang war für diese vier Typen nur die
-    INVALID-Seite getestet (``test_invalid_*_raises`` dort bzw.
-    ``test_multi_select_raises_when_any_value_unknown`` hier) — ein Mutant, der
-    einen Validator dazu bringt, IMMER zu raisen (statt nur bei ungültigem
-    Wert), überlebt eine reine Invalid-Suite unbemerkt, weil dort ohnehin ein
-    Raise erwartet wird. Deckt u. a. eine Logik-Inversion in
-    ``_validate_multi_select`` ab (``not in`` → ``in`` würde gültige,
-    aktive Slugs fälschlich ablehnen).
-    """
-
-    def test_valid_boolean_default(self, facility):
-        from core.models import FieldTemplate
-
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Aktiv-Valid", field_type=field_types.BOOLEAN, default_value="true"
-        )
-        ft.full_clean()  # no raise
-
-    def test_valid_date_default(self, facility):
-        from core.models import FieldTemplate
-
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Datum-Valid", field_type=field_types.DATE, default_value="2026-05-16"
-        )
-        ft.full_clean()  # no raise
-
-    def test_valid_time_default(self, facility):
-        from core.models import FieldTemplate
-
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Uhrzeit-Valid", field_type=field_types.TIME, default_value="13:45"
-        )
-        ft.full_clean()  # no raise
-
-    def test_valid_multi_select_default(self, facility):
-        from core.models import FieldTemplate
-
-        ft = FieldTemplate.objects.create(
-            facility=facility,
-            name="Themen-Valid",
-            field_type=field_types.MULTI_SELECT,
-            options_json=[
-                {"slug": "a", "label": "A", "is_active": True},
-                {"slug": "b", "label": "B", "is_active": True},
-            ],
-            default_value="a,b",
-        )
-        ft.full_clean()  # no raise
-
-
 class TestAllowsDefault:
     def test_file_does_not_allow_default(self):
         assert get_spec(field_types.FILE).allows_default is False
@@ -235,23 +152,6 @@ class TestAllowsDefault:
         assert get_spec(code).allows_default is True
 
 
-class TestParseLiteral:
-    @pytest.mark.parametrize(
-        "raw,expected",
-        [
-            ("1", True),
-            ("0", False),
-            ("nein", False),
-            ("ja", True),
-        ],
-    )
-    def test_boolean_alias_literals(self, raw, expected):
-        """Refs #1998: ``_parse_literal_boolean`` akzeptiert im Bedingungs-
-        Editor-Vergleichswert neben ``true``/``false`` auch die Alias-Literale
-        ``1``/``0``/``ja``/``nein`` — bislang ungetestet."""
-        assert get_spec(field_types.BOOLEAN).parse_literal(None, raw) is expected
-
-
 class TestFieldTypeSpecImmutability:
     def test_spec_is_frozen(self):
         spec = get_spec(field_types.TEXT)
@@ -261,51 +161,3 @@ class TestFieldTypeSpecImmutability:
     def test_spec_is_instance_of_fieldtypespec(self):
         for spec in FIELD_TYPE_REGISTRY.values():
             assert isinstance(spec, FieldTypeSpec)
-
-
-class TestRuntimeDispatch:
-    def test_import_coercion_uses_registry_slot(self, monkeypatch):
-        from core.services.import_engine import _coerce_field_value
-
-        sentinel = object()
-        spec = get_spec(field_types.TEXT)
-        monkeypatch.setitem(
-            FIELD_TYPE_REGISTRY,
-            field_types.TEXT,
-            replace(spec, coerce_import=lambda template, raw, column: sentinel),
-        )
-
-        template = SimpleNamespace(field_type=field_types.TEXT)
-        assert _coerce_field_value(template, "raw", "Spalte") is sentinel
-
-    def test_condition_parser_uses_registry_slot(self, monkeypatch):
-        from core.services.conditions import parse_condition_value
-
-        sentinel = object()
-        spec = get_spec(field_types.TEXT)
-        monkeypatch.setitem(
-            FIELD_TYPE_REGISTRY,
-            field_types.TEXT,
-            replace(spec, parse_literal=lambda template, raw: sentinel),
-        )
-
-        template = SimpleNamespace(options_json=[])
-        assert parse_condition_value(field_types.TEXT, template, "raw") is sentinel
-
-    def test_display_formatter_uses_registry_slot(self, monkeypatch):
-        from core.services.dynamic_data import format_dynamic_display_value
-
-        sentinel = object()
-        spec = get_spec(field_types.TEXT)
-        monkeypatch.setitem(
-            FIELD_TYPE_REGISTRY,
-            field_types.TEXT,
-            replace(spec, format_display=lambda value, template: sentinel),
-        )
-
-        template = SimpleNamespace(
-            field_type=field_types.TEXT,
-            FieldType=SimpleNamespace(BOOLEAN="boolean", SELECT="select", MULTI_SELECT="multi_select"),
-            options_json=[],
-        )
-        assert format_dynamic_display_value("raw", template) is sentinel

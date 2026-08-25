@@ -23,8 +23,10 @@
     // Faelligkeit als Datum (de-DE, ohne Zeit) oder "–" bei fehlendem/unparsbarem
     // Datum. due_date ist ein Datums-String (Bundle- bzw. Formularfeld).
     function dueDateLabel(value) {
-        // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
-        return window.offlineFormFields.formatDate(value) || "–";
+        if (!value) return "–";
+        var d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "–";
+        return d.toLocaleDateString("de-DE", { dateStyle: "short" });
     }
 
     // Rohzeile aus dem Store auf die Render-Zeile abbilden: Passthroughs plus die
@@ -76,7 +78,9 @@
                     // Refs #1524: auf die eager Krypto-Hydration warten, BEVOR aus
                     // dem verschluesselten Store gelesen wird (sonst TRANSIENT-
                     // Decrypt im Kalt-Offline-Load). Spiegel von offline-client-list.js.
-                    await window.crypto_session?.awaitReady?.();
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     const store = window.offlineStore;
                     const rows =
                         store && store.listOfflineWorkItemsAggregated

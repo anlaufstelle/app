@@ -541,34 +541,3 @@ def login_as(browser, base_url, username, password="anlaufstelle2026"):
     page.click('button[type="submit"]')
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
     return page, context
-
-
-def pytest_collection_modifyitems(config, items):
-    """Playwright-WebKit-Emulationsgrenzen als xfail werten (Refs #1418).
-
-    Sonden-Befund 2026-08-26 (Kommentar am Ticket): der SW ist unter
-    Playwright-WebKit aktiv UND kontrolliert die Seite (controllerchange
-    erreicht, Precache gefuellt), aber ``context.set_offline`` kappt den
-    Transport UNTERHALB des SW — fetch() und Navigation schlagen fehl, bevor
-    der Fetch-Handler aus dem Precache antworten kann; zudem fehlt
-    ``navigator.storage.persist`` im Linux-WebKit-Build komplett. Betroffene
-    Tests tragen ``webkit_transport_artifact``: unter Chromium laufen sie
-    unveraendert scharf, unter WebKit werden sie xfail (nicht strict — ein
-    kuenftiges Playwright koennte die Luecke schliessen). Der massgebliche
-    Nachweis fuer echtes iOS-Verhalten bleibt der manuelle Durchlauf
-    (Anhang G, #1319).
-    """
-    for item in items:
-        if "webkit_transport_artifact" not in item.keywords:
-            continue
-        callspec = getattr(item, "callspec", None)
-        browser = callspec.params.get("browser_name") if callspec else None
-        if browser == "webkit" or (browser is None and item.nodeid.endswith("[webkit]")):
-            item.add_marker(
-                pytest.mark.xfail(
-                    reason="Playwright-WebKit-Emulationsgrenze (Refs #1418): "
-                    "set_offline unterschreitet den SW-Transport bzw. "
-                    "storage.persist-API fehlt im Linux-WebKit-Build",
-                    strict=False,
-                )
-            )

@@ -185,56 +185,6 @@ def remove_restricted_fields(user: Any, document_type: DocumentType, data_form: 
     return restricted
 
 
-def check_document_type(
-    facility,
-    document_type,
-    *,
-    entity_type,
-    entity_type_error,
-    facility_error: Exception | None = None,
-):
-    """Validate facility and entity scope for a ``DocumentType`` (Refs #1833).
-
-    ``None`` remains valid for optional Client/Case document types.  Their
-    shared facility failure is a German ``ValidationError``.  The older Event
-    service passes its established ``ValueError`` via ``facility_error`` so
-    exception class, message, and guard ordering remain unchanged.
-    """
-    if document_type is None:
-        return None
-    if document_type.facility_id != facility.pk:
-        if facility_error is not None:
-            raise facility_error
-        raise ValidationError(_("Der Dokumentationstyp gehört nicht zu dieser Einrichtung."))
-    if document_type.entity_type != entity_type:
-        raise ValidationError(entity_type_error)
-    return document_type
-
-
-def clean_dynamic_data(
-    facility,
-    document_type,
-    data_json: Mapping[str, Any] | None,
-    *,
-    entity_type,
-    entity_type_error,
-    facility_error: Exception | None = None,
-) -> dict[str, Any]:
-    """Guard a document type and whitelist its dynamic payload (Refs #1833)."""
-    document_type = check_document_type(
-        facility,
-        document_type,
-        entity_type=entity_type,
-        entity_type_error=entity_type_error,
-        facility_error=facility_error,
-    )
-    if document_type is None:
-        if data_json:
-            raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
-        return {}
-    return validate_data_json(document_type, data_json)
-
-
 def validate_data_json(document_type: DocumentType, data_json: Mapping[str, Any] | None) -> dict[str, Any]:
     """Only accept fields defined in the DocumentType's field templates.
 
@@ -437,9 +387,18 @@ def format_dynamic_display_value(value: Any, ft: FieldTemplate | None) -> Any:
     """
     if ft is None:
         return value
-    from core.services.system.field_types import get_spec
 
-    return get_spec(ft.field_type).format_display(value, ft)
+    if ft.field_type == ft.FieldType.BOOLEAN:
+        return _("Ja") if value else _("Nein")
+
+    if ft.field_type == ft.FieldType.SELECT and ft.options_json:
+        return option_label_map(ft.options_json).get(value, value)
+
+    if ft.field_type == ft.FieldType.MULTI_SELECT and ft.options_json and isinstance(value, list):
+        label_map = option_label_map(ft.options_json)
+        return ", ".join(label_map.get(v, str(v)) for v in value)
+
+    return value
 
 
 def owner_attachment_index(owner: Any) -> tuple[dict, dict]:

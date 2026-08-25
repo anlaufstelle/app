@@ -1,6 +1,7 @@
 """Client data export for DSGVO Art. 15 (right of access) and Art. 20 (data portability)."""
 
 import weasyprint
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Prefetch, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -24,12 +25,6 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.models.attachment import owner_field_name
-from core.services.client.targets import (
-    client_activity_targets_q,
-    client_and_case_targets_q,
-    client_and_event_targets_q,
-    client_legal_hold_targets_q,
-)
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -576,15 +571,6 @@ def _gather_deletion_requests(facility, client, event_ids):
     der eigenen Person fehlte damit ausgerechnet in der Auskunft, waehrend der
     PDF-Abschnitt „Loeschantraege" Vollstaendigkeit suggerierte.
 
-    Refs #2071: derselbe Befund eine Stufe weiter — ``request_case_deletion``
-    (``core.services.case.deletion``) schreibt seit ADR-044 Antraege mit
-    ``target_type="Case"``, und die Art.-17-Kaskade redigiert sie bereits
-    (``_redact_case_deletion_requests``). Die Auskunft zog nur Client- und
-    Event-Ziele; der Freitext ``reason`` eines Fall-Loeschantrags fiel damit
-    aus der Auskunft, obwohl er redigiert und also als Personendatum erkannt
-    war. Die Zielmenge kommt jetzt aus :func:`client_and_case_targets_q` —
-    derselben Quelle, die auch die Legal Holds benutzen.
-
     Facility-gescopt ueber den ``FacilityScopedManager`` (Defense-in-Depth
     zusaetzlich zu RLS) — ``target_id`` allein ist zwar UUID-eindeutig, das
     explizite Scoping macht die Absicht aber lesbar. (Andere Quertabellen wie
@@ -593,7 +579,10 @@ def _gather_deletion_requests(facility, client, event_ids):
     """
     deletion_requests = (
         DeletionRequest.objects.for_facility(facility)
-        .filter(client_and_case_targets_q(client, event_ids))
+        .filter(
+            Q(target_type=DeletionRequest.TargetType.EVENT, target_id__in=event_ids)
+            | Q(target_type=DeletionRequest.TargetType.CLIENT, target_id=client.pk)
+        )
         .select_related("requested_by", "reviewed_by")
         .order_by("-created_at", "pk")
     )
@@ -844,7 +833,15 @@ def _gather_activities(facility, client, event_ids):
     ``created_by``/``changed_by``; erst das vollstaendige Zugriffsprotokoll
     kippt in ein Bewegungsprofil der Beschaeftigten.
     """
-    targets = client_activity_targets_q(client, event_ids)
+    targets = Q(target_type=ContentType.objects.get_for_model(client.__class__), target_id=client.pk)
+    case_ids = list(client.cases.values_list("pk", flat=True))
+    if case_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(CaseModel), target_id__in=case_ids)
+    if event_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(Event), target_id__in=event_ids)
+    workitem_ids = list(client.work_items.values_list("pk", flat=True))
+    if workitem_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(WorkItem), target_id__in=workitem_ids)
 
     from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
 
@@ -896,24 +893,10 @@ def _gather_legal_holds(facility, client, event_ids):
     Art.-18-Relevanz: ein Legal Hold erklaert der betroffenen Person, warum ihre
     Daten trotz abgelaufener Aufbewahrungsfrist noch existieren. Ohne diese
     Kategorie wirkt die Aufbewahrung willkuerlich.
-
-    Refs #1990: Die Zielmenge kommt aus :func:`client_legal_hold_targets_q` —
-    demselben Builder, den die Art.-17-Redaktion
-    (:func:`core.services.client.main._redact_legal_holds`) benutzt. Bis dahin
-    filterte die Auskunft nur ueber ``client_and_event_targets_q``; Holds mit
-    ``target_type="Case"`` (ADR-044) und ``target_type="Activity"``
-    (Aktivitaeten-Enforcement) fielen still heraus, obwohl ``reason``
-    bestimmungsgemaess Freitext mit Fall-/Klientenkontext ist.
-
-    Verbleibende bewusste Differenz zur Redaktionsseite: ``event_ids`` traegt
-    hier nur die fuer die aufrufende Rolle sichtbaren Ereignisse. Ein Hold auf
-    einem unsichtbaren Ereignis — oder auf einer Aktivitaet dazu — erscheint
-    deshalb nicht in DIESER Auskunft; die Redaktion arbeitet dagegen auf allen
-    Ereignissen der Person.
     """
     holds = (
         LegalHold.objects.for_facility(facility)
-        .filter(client_legal_hold_targets_q(client, event_ids))
+        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
         .select_related("created_by", "dismissed_by")
         .order_by("-created_at", "pk")
     )
@@ -946,7 +929,7 @@ def _gather_retention_proposals(facility, client, event_ids):
     """
     proposals = (
         RetentionProposal.objects.for_facility(facility)
-        .filter(client_and_event_targets_q(client, event_ids))
+        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
         .order_by("deletion_due_at", "pk")
     )
     return [

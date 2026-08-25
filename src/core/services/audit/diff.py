@@ -17,9 +17,6 @@ Nicht-Formular-Aufrufer (z.B. Offline-Replay) ab, während ein durchgereichtes
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-
 
 def changed_fields_vs_db(instance, fields, *, lock=True) -> list[str]:
     """Liste der Felder aus ``fields``, die vom aktuellen DB-Stand abweichen.
@@ -69,47 +66,6 @@ def changed_fields_vs_db(instance, fields, *, lock=True) -> list[str]:
         if row[attname] != new_value:
             changed.append(name)
     return changed
-
-
-def check_update_allowlist(fields, allowed_fields) -> None:
-    """Reject every update key outside ``allowed_fields`` (Refs #1833).
-
-    The check deliberately runs in the input mapping's order and before any
-    DB diff.  Callers with field-specific preparation invoke it once before
-    that preparation; :func:`apply_allowlisted_update` repeats it defensively
-    at the shared write boundary.
-    """
-    for key in fields:
-        if key not in allowed_fields:
-            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
-
-
-def apply_allowlisted_update(
-    instance,
-    fields,
-    *,
-    allowed_fields,
-    before_save: Callable[[Any, list[str]], None] | None = None,
-) -> list[str]:
-    """Apply the common allowlist/diff/set/save choreography (Refs #1833).
-
-    ``changed_fields`` is derived from the locked database row before the
-    in-memory instance is updated.  Only explicitly supplied columns plus
-    ``updated_at`` are persisted, protecting unrelated concurrent writes.
-
-    An empty ``fields`` mapping intentionally still performs the DB diff and
-    ``save(update_fields=["updated_at"])``.  This preserves the behaviour of
-    all three extracted update services; callers decide separately whether an
-    empty audit diff creates a domain audit entry.
-    """
-    check_update_allowlist(fields, allowed_fields)
-    changed_fields = changed_fields_vs_db(instance, fields)
-    for key, value in fields.items():
-        setattr(instance, key, value)
-    if before_save is not None:
-        before_save(instance, changed_fields)
-    instance.save(update_fields=[*fields.keys(), "updated_at"])
-    return changed_fields
 
 
 #: Sentinel für „Slug steht auf dieser Seite gar nicht". Ein Zugang bzw. Abgang

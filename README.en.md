@@ -4,7 +4,7 @@
 
 **Documentation, statistics, and team communication for low-threshold social work — wherever people come without an appointment and without giving their real name. Open source, pseudonymized, free — designed for privacy-compliant operation.**
 
-> ⚠️ **Pre-Release (v0.86.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.84.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
 ---
 
@@ -80,8 +80,6 @@ You can define time periods to match your operations — e.g. "Night shift 21:30
 
 Every facility works differently. Anlaufstelle adapts to your documentation practice: What types of contacts do you have? What services are recorded? What fields does an entry need?
 
-This works without programming, directly in the interface — for events as well as for client and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility.
-
 The configuration also governs data protection:
 
 - **Sensitivity level** — which data requires special protection
@@ -98,19 +96,14 @@ The configuration also governs data protection:
 - **Document contacts** — in 30 seconds, including from a smartphone
 - **Notes and tasks** — share information between shifts, track follow-ups
 - **Client registry** — pseudonyms, contact levels, history timeline
-- **Cases and trajectories** — document longer engagements with episodes, goals and milestones
-- **File attachments** — documents and photos on an event, client or case; stored encrypted and virus-scanned before storage
 - **Typo-tolerant search** — quickly find what you need
 - **Offline mode for streetwork** — capture entries without network, encrypted on-device
 - **German and English** — language switcher built in
 
 ### For management
 
-- **Statistics and reports** — analysis at the push of a button, export as CSV, PDF, JSON and XML
-- **Reporting standards as building blocks** — bundled analyses (contacts per month, case figures, counseling hours, needle-exchange balance …); further ones can be added without touching the rest of the system
+- **Statistics and reports** — analysis at the push of a button, export as CSV and PDF
 - **Example activity report** — structured, customizable template (not a binding official record)
-- **Data migration via CSV import** — guided wizard with mapping, dry run, and only then the commit
-- **Facility export** — complete, versioned data export of one facility (Art. 20 GDPR)
 - **5-tier role model** — System administration (`super_admin`), Application support (`facility_admin`), Lead, Staff, Assistant
 - **Facility isolation** — data is fully separated, no mixing between locations
 
@@ -126,8 +119,6 @@ Anlaufstelle is designed from the ground up for handling particularly sensitive 
 - **Deletion requests with four-eyes principle** — deletion only after approval by management/admin
 - **Audit trail** — immutable log of all security-relevant actions
 - **Data subject rights** — data access and export for clients (Art. 15, 20 GDPR)
-- **Rectifications (Art. 16 GDPR)** — as an internal request reviewed by management/admin, not as self-service
-- **K-anonymity in analyses** — small cell counts are suppressed before any figures leave the facility
 - **GDPR templates** — sample documents for DPA, DPIA, TOMs, records of processing, and privacy notices included
 
 ---
@@ -187,17 +178,25 @@ Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app
 
 ### Quick Start
 
-**Prerequisites:** Docker with Docker Compose
+**Prerequisites:** Docker with Docker Compose and Python 3 to generate a local encryption key
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up      # without Docker group permissions: sudo docker compose up
+export ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+docker compose up --build -d
 ```
 
-The local compose file brings up the database and the application, applies the migrations, and loads the demo facility on the first start. Neither a `.env` file nor an `ENCRYPTION_KEY` needs preparing — the local setup generates the key itself ([ADR-049](docs/adr/049-one-command-local-bootstrap.md), German). After the one-off image build the login page is available within roughly 20 seconds at [http://localhost:8000/login/](http://localhost:8000/login/); all seed accounts share the password `anlaufstelle2026` (`admin` = application support, `emma` = lead, `miriam` = staff, `superadmin` = system administration). The web service deliberately binds to `127.0.0.1` only — no LAN access. Server output: `docker compose logs -f web`.
+Database migrations and seed data deliberately do not run as part of server startup. Create the schema explicitly, then load the demo facility:
 
-For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local Python test runs, and the rest of the toolchain see [CONTRIBUTING.en.md § 5-Minute Quick Start](CONTRIBUTING.en.md#5-minute-quick-start-docker) and [§ Development Environment Setup](CONTRIBUTING.en.md#development-environment-setup). How the system is put together: [docs/architecture.md](docs/architecture.md) (German). The production stack (`docker-compose.prod.yml`) **never** seeds and follows the separate migration path in [docs/en/admin-guide.md § 1](docs/en/admin-guide.md).
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed
+```
+
+The styled login screen is then available at [http://localhost:8000](http://localhost:8000). Keep `ENCRYPTION_KEY` safe for later starts; a different key cannot read development data that has already been encrypted. Server output: `docker compose logs -f web`.
+
+For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local Python test runs, and the rest of the toolchain see [CONTRIBUTING.en.md § Development Environment Setup](CONTRIBUTING.en.md#development-environment-setup). The production stack (`docker-compose.prod.yml`) follows the separate migration path in [docs/en/admin-guide.md § 1](docs/en/admin-guide.md).
 
 ### Tech Stack
 
@@ -215,6 +214,6 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 </details>
 
 <!-- translation-source: README.md -->
-<!-- translation-version: v0.86.0 -->
-<!-- translation-date: 2026-08-26 -->
-<!-- source-hash: 4a075eedb01b858175b88ea4cfbec8bec25567ec -->
+<!-- translation-version: v0.84.0 -->
+<!-- translation-date: 2026-08-24 -->
+<!-- source-hash: aa79ce95d25c8a48130a7b478e80df6772181ede -->

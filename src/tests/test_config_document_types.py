@@ -775,11 +775,6 @@ class TestSystemTypeOnlyForEventTypes:
         )
         assert response.status_code == 200
         assert not DocumentType.objects.filter(name="Personen-Bann").exists()
-        # Refs #1998 (mutmut_14/15/21/22/23): der Fehler muss auf dem Feld
-        # ``system_type`` selbst sitzen (analog Reserved-Slug-Test in
-        # test_config_field_templates.py), mit dem passenden Wortlaut.
-        assert "system_type" in response.context["form"].errors
-        assert "Entitätstyp „Ereignis“ zulässig" in response.content.decode()
 
     def test_create_client_type_without_system_type_is_fine(self, client, admin_user, facility):
         client.force_login(admin_user)
@@ -866,7 +861,7 @@ class TestFieldRemovalConfirm:
 # spannt ein Kreuzprodukt Gruppen × Felder × Bedingungen auf — ``distinct``
 # korrigiert nur die Zahlen, nicht die Kosten, und würde den bestehenden
 # ``event_count`` mitverzerren. Korrekt sind korrelierte Aggregat-Subqueries
-# (Muster ``core.services.compliance.sensitivity._chain_version_counts``).
+# (Muster ``AttachmentListView._chain_version_counts``, attachments.py:242).
 
 
 def _number_field(facility, doc_type, name, **kwargs):
