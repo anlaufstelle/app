@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.84.0] - 2026-08-25
+
 ### Added
 
 - **Benutzerzugänge werden jetzt direkt im Verwaltungs-Hub gepflegt** (#1871, [ADR-048](docs/adr/048-fachhoheit-zugaenge-hub.md)) — Die Anwendungsbetreuung sieht unter **Verwaltung → Zugänge** ausschließlich die Konten der eigenen Einrichtung und kann dort neue Personen per Setup-Link einladen, Rollen und Kontaktdaten ändern, Zugänge deaktivieren oder reaktivieren, individuelle MFA-Pflicht und das Recht zur Löschbestätigung pflegen, offene Einladungen erneut senden und gesperrte Accounts entsperren. Jeder Anlage-, Bearbeitungs- und Aktionsweg verlangt Sudo-Re-Authentifizierung; Formular und Service verhindern unabhängig voneinander die Vergabe von `super_admin`, fremde Einrichtungs-IDs liefern 404, und der eigene Administrationszugang kann weder deaktiviert noch herabgestuft werden. Anlage, Zugangsänderung und Einladungsversand ergänzen das unveränderliche AuditLog jeweils mit Ziel und handelndem Admin. Der Django-Admin bleibt sichtbar als technische Bootstrap-/Notfall-Ebene für `super_admin`, Quick-Templates und Zeitfenster; endgültiges Löschen gehört bewusst nicht zum Fach-UI-Lebenszyklus.
