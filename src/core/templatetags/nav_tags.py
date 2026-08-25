@@ -7,6 +7,17 @@ die Gates dort eager auswerten, inklusive ``can_access_deletion_requests``
 ``core/context_processors.py`` mit einem ``HX-Request``-Frühausstieg. Ein
 Inclusion-Tag wird nur ausgewertet, wo Navigation tatsächlich gerendert wird.
 
+Arbeitsteilung mit ``review_counts`` (Refs #1984): Die Nav-STRUKTUR (Items,
+Gates, Aktiv-Zustand) bleibt aus genau diesen Gründen Inclusion-Tag-Sache.
+Die Badge-ZÄHLER kommen dagegen bewusst aus einem Context-Processor —
+Desktop-Sidebar, mobiles Mehr-Menü und Subnav rendern dieselben Zahlen in
+EINEM Request, und nur ein Prozessor stellt sie allen drei Tags aus einer
+einzigen Berechnung bereit (die Tags reichen sie unten explizit in ihre
+Inclusion-Kontexte durch). Der Prozessor trägt denselben
+``HX-Request``-Frühausstieg wie ``workitem_counts`` und teilt sich das
+Löschantrags-Gate als ``cached_property`` mit ``is_visible`` (Refs #1755) —
+die Query-Sorge, die diesen Docstring begründet, gilt dort also weiterhin.
+
 Die Tags reichen **vorbereitete** :class:`RenderedItem`\\ s weiter, nie rohe
 ``NavItem``\\ s: ``href`` (inkl. optionalem Query) und ``is_active`` werden hier
 in Python berechnet. Die Templates enthalten damit weder Logik noch
