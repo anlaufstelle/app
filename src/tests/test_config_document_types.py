@@ -861,7 +861,7 @@ class TestFieldRemovalConfirm:
 # spannt ein Kreuzprodukt Gruppen × Felder × Bedingungen auf — ``distinct``
 # korrigiert nur die Zahlen, nicht die Kosten, und würde den bestehenden
 # ``event_count`` mitverzerren. Korrekt sind korrelierte Aggregat-Subqueries
-# (Muster ``AttachmentListView._chain_version_counts``, attachments.py:242).
+# (Muster ``core.services.compliance.sensitivity._chain_version_counts``).
 
 
 def _number_field(facility, doc_type, name, **kwargs):
