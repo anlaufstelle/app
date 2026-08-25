@@ -22,7 +22,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
 from core.models import Client, DocumentType, Event
-from core.services.attachments import stage_attachment_uploads
+from core.services.attachments import stage_attachment_uploads, stage_uploads
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.compliance import (
@@ -68,7 +68,6 @@ from core.services.events import (
     update_event,
 )
 from core.services.events.fields import file_marker_slugs
-from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
@@ -178,6 +177,22 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
     """Kontakt-Dokumentation (Create) — online und als Offline-Replay (F-09)."""
 
     idempotency_scope = "event_create"
+
+    def _invalid_response(self, request, form, context):
+        """Ungueltiges Formular beantworten — die EINE Stelle des Raw-JSON-
+        Contracts (Refs #1351 Task 8, #1387).
+
+        Der Offline-Replay (roher ``Accept: application/json``) darf ein
+        ungueltiges Formular NICHT als Erfolg (200) deuten — sonst verwirft
+        die generische Queue die Anlage still als "synchronisiert", obwohl
+        nie ein Event entstand (Datenverlust). Bewusst NUR an
+        ``_wants_raw_json_response`` gebunden (nicht HX-Request) — Muster wie
+        im Update-Pfad (``EventUpdateView.post``). HTML rendert das Formular
+        mit dem uebergebenen Kontext neu.
+        """
+        if _wants_raw_json_response(request):
+            return _invalid_form_response(form)
+        return render(request, "core/events/create.html", context)
 
     def on_idempotent_hit(self, request, hit):
         # Replay trifft bereits angelegtes Event → Redirect auf das Original
@@ -318,16 +333,9 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
         if not meta_form.is_valid():
-            # Refs #1351 Task 8, #1387: der Offline-Replay (roher Accept:
-            # application/json) darf ein ungueltiges Formular NICHT als
-            # Erfolg (200) deuten — sonst verwirft die generische Queue die
-            # Anlage still als "synchronisiert", obwohl nie ein Event
-            # entstand (Datenverlust). Bewusst NUR an
-            # _wants_raw_json_response gebunden (nicht HX-Request) — Muster
-            # wie im Update-Pfad (siehe EventUpdateView.post). Frühzeitiger
-            # Return spart hier zusätzlich die weiter unten folgende
-            # Rekonstruktion von data_form/client_pseudonym, die nur fürs
-            # HTML-Re-Render gebraucht wird.
+            # Frühzeitiger Return spart die weiter unten folgende Rekonstruktion
+            # von data_form/client_pseudonym, die nur fürs HTML-Re-Render
+            # gebraucht wird. Raw-JSON-Contract: _invalid_response (Refs #1831).
             if _wants_raw_json_response(request):
                 return _invalid_form_response(meta_form)
 
@@ -378,14 +386,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         restricted_keys = remove_restricted_fields(request.user, doc_type, data_form)
 
         if not data_form.is_valid():
-            # Refs #1351 Task 8, #1387: analog zum meta_form-Zweig oben.
-            if _wants_raw_json_response(request):
-                return _invalid_form_response(data_form)
-            return render(
-                request,
-                "core/events/create.html",
-                {"meta_form": meta_form, "data_form": data_form},
-            )
+            return self._invalid_response(request, data_form, {"meta_form": meta_form, "data_form": data_form})
 
         # Refs #1423 (N11): ``EventMetaForm.clean_client`` loest die UUID
         # bereits facility-scoped gegen die DB auf und liefert eine
@@ -397,108 +398,70 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
 
         file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 
-        # Refs #1345: ClamAV-Scan + Fernet-Verschluesselung VOR die Transaktion
-        # ziehen. ``create_event`` schreibt eine AuditLog-Zeile, deren INSERT den
-        # per-Facility ``pg_advisory_xact_lock`` der Hashkette bis zum Commit der
-        # aeusseren Transaktion haelt. Lag die (bis CLAMAV_TIMEOUT dauernde)
-        # Datei-Verarbeitung mit im selben ``atomic``, blockierte sie jede andere
-        # audit-schreibende Aktion derselben Facility. Wir stagen deshalb hier
-        # (owner=None: das Event existiert noch nicht) und persistieren die
-        # fertig verschluesselten Dateien erst im schnellen atomic-Block unten.
-        staged_all = []
-        staged_by_slug: dict[str, list] = {}
+        # Staging VOR der Transaktion + Cleanup-Garantie bei jedem
+        # Nicht-Commit-Ausgang: stage_uploads (Refs #1345/#1831; die ausführliche
+        # Begründung — AuditLog-Hashketten-Lock vs. ClamAV-Lauf — steht am CM).
+        # Policy-/Virus-Reject (ValidationError aus dem Staging) gehört ans
+        # meta_form; Service-ValidationError aus create_event/finalize (die
+        # data_json validiert ein zweites Mal, #1938) gehört ans data_form.
         try:
-            for slug, uploaded_list in file_fields.items():
-                prepared = []
-                for uploaded_file in uploaded_list or []:
-                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, owner=None)
-                    staged_all.append(staged)
-                    prepared.append(staged)
-                if prepared:
-                    staged_by_slug[slug] = prepared
+            with stage_uploads(facility, request.user, file_fields) as staged:
+                try:
+                    # Event + Dateianhänge atomar: scheitert der (jetzt schnelle)
+                    # DB-Write, rollt die Transaktion auch das Event zurück —
+                    # sonst verweist die DB auf einen Anhang, der nie persistiert
+                    # wurde (Refs #584).
+                    with transaction.atomic():
+                        event = create_event(
+                            facility=facility,
+                            user=request.user,
+                            document_type=doc_type,
+                            occurred_at=meta_form.cleaned_data["occurred_at"],
+                            data_json=text_data,
+                            client=client,
+                            case=case,
+                            idempotency_key=idem_key,
+                            idempotency_payload_hash=idem_payload_hash,
+                        )
+                        finalize_staged_files(event, request.user, staged.by_slug, doc_type)
+                    staged.commit()
+                except ValidationError as e:
+                    # #1938: ``create_event`` validiert ``data_json`` ein zweites
+                    # Mal und liefert den Fehler feldbezogen; er gehört deshalb ans
+                    # dynamische Formular, damit ein sichtbares Feld markiert wird
+                    # und ein unsichtbares nur die generische Meldung ergibt.
+                    # Raw-JSON-Contract: _invalid_response (Refs #1831).
+                    add_dynamic_service_errors(data_form, e, restricted_keys)
+                    return self._invalid_response(request, data_form, {"meta_form": meta_form, "data_form": data_form})
+                except IntegrityError as exc:
+                    # R6 (Refs #1443, Prädikat in views/mixins.py): NUR der
+                    # Idempotenz-Unique-Constraint darf als Duplikat gelten; dann
+                    # auf das Original umleiten statt 500, jeden anderen
+                    # IntegrityError re-raisen. Der Duplikat-Replay verweist auf
+                    # das Original-Event; die frisch verschluesselten ``.enc``
+                    # raeumt stage_uploads auf (#1345).
+                    if idem_key and is_idempotency_conflict(exc):
+                        existing = (
+                            Event.objects.for_facility(facility)
+                            .filter(created_by=request.user, idempotency_key=idem_key)
+                            .first()
+                        )
+                        if existing:
+                            if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, idem_payload_hash):
+                                return _idempotency_mismatch_response()
+                            return redirect("core:event_detail", pk=existing.pk)
+                    raise
         except ValidationError as e:
             # Policy-/Virus-Reject VOR der Transaktion. Der zugehoerige
             # SECURITY_VIOLATION-Audit wurde bereits (durable) geschrieben und
             # ueberlebt jetzt bewusst (Refs #1345) — er rollt nicht mehr mit dem
-            # Event zurueck. Bereits gestagte ``.enc`` wieder entfernen.
-            for staged in staged_all:
-                staged.output_path.unlink(missing_ok=True)
+            # Event zurueck. Bereits gestagte ``.enc`` hat stage_uploads entfernt.
             # #1938: ``e`` kann feldbezogen sein (dict) — dann traegt es kein
             # ``.message``. Der geteilte Helfer bildet sichtbare Slugs ab und
-            # ersetzt alles andere generisch.
+            # ersetzt alles andere generisch. Raw-JSON-Contract: _invalid_response
+            # (Refs #1831).
             add_dynamic_service_errors(meta_form, e, restricted_keys)
-            if _wants_raw_json_response(request):
-                return _invalid_form_response(meta_form)
-            return render(
-                request,
-                "core/events/create.html",
-                {"meta_form": meta_form, "data_form": data_form},
-            )
-
-        # Event + Dateianhänge atomar: scheitert der (jetzt schnelle) DB-Write,
-        # rollt die Transaktion auch das Event zurück — sonst verweist die DB auf
-        # einen Anhang, der nie persistiert wurde (Refs #584). Refs #1345: Wird
-        # die Transaktion NICHT committed (jede Exception, auch ein Duplikat-
-        # Replay-Redirect), sind die vorab verschluesselten ``.enc`` verwaiste
-        # Disk-Leichen — das ``finally`` unten entfernt sie dann restlos.
-        committed = False
-        try:
-            with transaction.atomic():
-                event = create_event(
-                    facility=facility,
-                    user=request.user,
-                    document_type=doc_type,
-                    occurred_at=meta_form.cleaned_data["occurred_at"],
-                    data_json=text_data,
-                    client=client,
-                    case=case,
-                    idempotency_key=idem_key,
-                    idempotency_payload_hash=idem_payload_hash,
-                )
-                finalize_staged_files(event, request.user, staged_by_slug, doc_type)
-            committed = True
-        except ValidationError as e:
-            # Refs #1351 Task 8, #1387: analog zu den beiden Formular-Zweigen
-            # oben — der Offline-Replay-Client bekommt einen erkennbaren Fehler
-            # statt eines stillen 200-Erfolgs. #1938: ``create_event``
-            # validiert ``data_json`` ein zweites Mal und liefert den Fehler
-            # feldbezogen; er gehoert deshalb ans dynamische Formular, damit
-            # ein sichtbares Feld markiert wird und ein unsichtbares nur die
-            # generische Meldung ergibt.
-            add_dynamic_service_errors(data_form, e, restricted_keys)
-            if _wants_raw_json_response(request):
-                return _invalid_form_response(data_form)
-            return render(
-                request,
-                "core/events/create.html",
-                {"meta_form": meta_form, "data_form": data_form},
-            )
-        except IntegrityError as exc:
-            # R6 (Refs #1443, Prädikat in views/mixins.py): NUR der
-            # Idempotenz-Unique-Constraint darf als Duplikat gelten; dann auf
-            # das Original umleiten statt 500, jeden anderen IntegrityError
-            # re-raisen. Der Duplikat-Replay verweist auf das Original-Event;
-            # die frisch verschluesselten ``.enc`` raeumt das ``finally``
-            # unten auf (#1345).
-            if idem_key and is_idempotency_conflict(exc):
-                existing = (
-                    Event.objects.for_facility(facility)
-                    .filter(created_by=request.user, idempotency_key=idem_key)
-                    .first()
-                )
-                if existing:
-                    if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, idem_payload_hash):
-                        return _idempotency_mismatch_response()
-                    return redirect("core:event_detail", pk=existing.pk)
-            raise
-        finally:
-            # Refs #1345: JEDE Nicht-Commit-Ausgang (Rollback, Duplikat-Redirect,
-            # unerwartete Exception) laesst die pre-tx verschluesselten ``.enc``
-            # verwaisen — restlos entfernen. Bei erfolgreichem Commit sind sie
-            # ueber gueltige ``Attachment``-Zeilen erreichbar und bleiben.
-            if not committed:
-                for staged in staged_all:
-                    staged.output_path.unlink(missing_ok=True)
+            return self._invalid_response(request, meta_form, {"meta_form": meta_form, "data_form": data_form})
 
         # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel merken,
         # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein

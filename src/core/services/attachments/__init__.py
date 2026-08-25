@@ -32,6 +32,7 @@ from core.services.attachments.crud import (
     purge_attachment_chain,
     replace_upload_key,
     stage_attachment_uploads,
+    stage_uploads,
 )
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "build_prior_versions",
     "discard_type_switch_file_chains",
     "finalize_staged_files",
+    "stage_uploads",
     "preserve_file_markers",
     "purge_attachment_chain",
     "replace_upload_key",
