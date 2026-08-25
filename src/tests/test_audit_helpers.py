@@ -14,6 +14,7 @@ import pytest
 
 from core.models import AuditLog
 from core.services.audit import (
+    audit_admin_view,
     audit_client_event,
     audit_event,
     audit_retention_decision,
@@ -207,6 +208,30 @@ class TestAuditSystemView:
         )
         entry.refresh_from_db()
         assert entry.user is None
+
+    def test_admin_wrapper_forwards_target_and_view_detail(self, rf, staff_user):
+        request = rf.get("/admin/core/user/1/change/", REMOTE_ADDR="203.0.113.87")
+        request.user = staff_user
+
+        entry = audit_admin_view(request, staff_user, admin_view="change")
+
+        entry.refresh_from_db()
+        assert entry.facility is None
+        assert entry.user == staff_user
+        assert entry.action == AuditLog.Action.SYSTEM_VIEW
+        assert entry.target_type == "User"
+        assert entry.target_id == str(staff_user.pk)
+        assert entry.detail == {"admin_view": "change"}
+        assert entry.ip_address == "203.0.113.87"
+
+    def test_admin_wrapper_without_target_keeps_reference_empty(self, rf, staff_user):
+        request = rf.get("/admin/")
+        request.user = staff_user
+
+        entry = audit_admin_view(request)
+
+        assert entry.target_type == ""
+        assert entry.target_id == ""
 
 
 @pytest.fixture

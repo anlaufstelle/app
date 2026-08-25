@@ -53,9 +53,21 @@ class TestSuperAdminLockoutExemption:
         assert is_locked(staff_user) is True
 
     def test_unlock_regular_user_still_writes_audit(self, facility, staff_user, admin_user):
-        entry = unlock(staff_user, unlocked_by=admin_user)
+        entry = unlock(
+            staff_user,
+            unlocked_by=admin_user,
+            ip_address="203.0.113.86",
+        )
         assert entry is not None
         assert entry.action == AuditLog.Action.LOGIN_UNLOCK
         assert entry.user == staff_user
         assert entry.actor == admin_user
-        assert entry.detail["actor_username"] == admin_user.username
+        assert entry.facility == facility
+        assert entry.target_type == "User"
+        assert entry.target_id == str(staff_user.pk)
+        assert entry.detail == {
+            "unlocked_by": str(admin_user.pk),
+            "trigger": "admin",
+            "actor_username": admin_user.username,
+        }
+        assert entry.ip_address == "203.0.113.86"

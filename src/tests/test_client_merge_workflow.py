@@ -335,6 +335,7 @@ class TestMergeFourEyes:
         assert dr.target_type == DeletionRequest.TargetType.CLIENT
         assert dr.target_id == client_qualified.pk
         assert dr.merge_into_id == target.pk
+        assert dr.reason == "Doppelt angelegt"
         row = AuditLog.objects.get(
             action=AuditLog.Action.DELETION_REQUESTED,
             target_type="DeletionRequest",
@@ -354,6 +355,12 @@ class TestMergeFourEyes:
         second = request_client_merge(client_qualified, target, staff_user, reason="zweimal")
         assert first.pk == second.pk
         assert AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).count() == 1
+
+    def test_pending_lookup_ignores_plain_deletion_request(self, client_qualified, staff_user):
+        deletion = request_client_deletion(client_qualified, staff_user, reason="Person löschen")
+
+        assert deletion.merge_into_id is None
+        assert get_pending_merge_request(client_qualified) is None
 
     def test_approve_rejects_requester_as_reviewer(self, client_qualified, target, admin_user):
         dr = request_client_merge(client_qualified, target, admin_user, reason="Doppelt")

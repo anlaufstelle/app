@@ -211,6 +211,8 @@ class TestTypeSwitchBulkAudit:
         entries = AuditLog.objects.filter(action=AuditLog.Action.ATTACHMENT_DELETE)
         assert entries.count() == 1
         entry = entries.get()
+        assert entry.user == staff_user
+        assert entry.facility == sample_event.facility
         assert entry.target_type == "Attachment"
         assert entry.target_id == str(sample_event.pk)
         assert entry.detail == {"chains": 2, "bulk": True, "reason": "document_type_switch"}

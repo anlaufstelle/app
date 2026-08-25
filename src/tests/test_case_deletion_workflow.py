@@ -159,6 +159,8 @@ class TestSoftDeleteCase:
             target_type=ContentType.objects.get_for_model(Case),
             target_id=case_open.pk,
         )
+        assert activity.actor == staff_user
+        assert activity.facility == case_open.facility
         # Pinnt zugleich die titel-freie Formulierung aus dem PII-freien
         # Aktionscode; der Falltitel liegt nur am Ziel (#1972).
         assert activity.context["action"] == Activity.Action.CASE_TRASHED

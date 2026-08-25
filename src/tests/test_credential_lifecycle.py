@@ -23,6 +23,7 @@ Reset-auf-dasselbe-Passwort), und der Revocations-Pfad aus
 from __future__ import annotations
 
 import time
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -77,6 +78,77 @@ class TestWirkungsMatrix:
     def test_jeder_grund_hat_einen_matrix_eintrag(self):
         fehlend = sorted(str(grund) for grund in RevocationReason if grund not in REVOCATION_EFFECTS)
         assert not fehlend, f"Revocation-Gruende ohne erklaerte Wirkung: {fehlend}"
+
+    @pytest.mark.parametrize(
+        ("grund", "rotate", "flush", "sudo", "reset", "unlock", "audit"),
+        (
+            (RevocationReason.PASSWORD_CHANGE, True, False, True, True, False, True),
+            (RevocationReason.PASSWORD_RESET, False, False, True, True, True, True),
+            (RevocationReason.INVITE_SETUP, False, False, True, True, True, True),
+            (RevocationReason.ACCOUNT_LOCKOUT, True, True, False, False, False, False),
+            (RevocationReason.PRIVILEGE_REVOKED, True, True, False, False, False, False),
+        ),
+    )
+    def test_service_dispatches_exactly_the_documented_effects(
+        self,
+        rf,
+        staff_user,
+        grund,
+        rotate,
+        flush,
+        sudo,
+        reset,
+        unlock,
+        audit,
+    ):
+        staff_user.must_change_password = True
+        staff_user.save(update_fields=["must_change_password"])
+        request = _request_mit_session(rf)
+
+        with (
+            patch("core.services.security.credentials.rotate_offline_salt") as rotate_call,
+            patch("core.services.security.credentials.flush_user_sessions") as flush_call,
+            patch("core.services.security.credentials.clear_sudo") as sudo_call,
+            patch("core.services.security.credentials.unlock") as unlock_call,
+            patch("core.services.security.credentials._write_audit") as audit_call,
+        ):
+            revoke_credentials(staff_user, reason=grund, request=request)
+
+        assert rotate_call.called is rotate
+        assert flush_call.called is flush
+        assert sudo_call.called is sudo
+        assert unlock_call.called is unlock
+        assert audit_call.called is audit
+        if rotate:
+            rotate_call.assert_called_once_with(staff_user)
+        if flush:
+            flush_call.assert_called_once_with(staff_user)
+        if sudo:
+            sudo_call.assert_called_once_with(request)
+        if unlock:
+            unlock_call.assert_called_once_with(
+                staff_user,
+                unlocked_by=None,
+                ip_address=None,
+                trigger=str(grund),
+            )
+        if audit:
+            audit_call.assert_called_once_with(staff_user, grund, request)
+        staff_user.refresh_from_db()
+        assert staff_user.must_change_password is (not reset)
+
+    def test_reset_flag_does_not_write_when_forced_change_is_already_clear(self, rf, staff_user):
+        staff_user.must_change_password = False
+        request = _request_mit_session(rf)
+
+        with (
+            patch.object(staff_user, "save") as save,
+            patch("core.services.security.credentials.clear_sudo"),
+            patch("core.services.security.credentials._write_audit"),
+        ):
+            revoke_credentials(staff_user, reason=RevocationReason.PASSWORD_CHANGE, request=request)
+
+        save.assert_not_called()
 
     def test_passwortwechsel_rotiert_salt_und_loest_den_zwangswechsel(self, rf, staff_user):
         staff_user.ensure_offline_key_salt()
