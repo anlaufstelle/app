@@ -78,6 +78,20 @@ class TestDeletionRequestCount:
 
         assert ctx["open_deletion_requests_count"] == 1
 
+    def test_confirmer_without_lead_role_sees_full_pending(self, facility, staff_user, lead_user):
+        """#1053-Genehmiger-Pool (Integrator-Auflage): eine Fachkraft, die NUR
+        das Recht 'Loeschbestaetigung' traegt, hat die volle Sichtmenge — die
+        zweite Haelfte von ``sees_all_deletion_requests``, die lead/admin in
+        den uebrigen Pins nie erreichen (Rollen-Kurzschluss)."""
+        staff_user.can_confirm_deletion = True
+        staff_user.save(update_fields=["can_confirm_deletion"])
+        _pending_deletion(facility, lead_user)
+        _pending_deletion(facility, staff_user)
+
+        ctx = review_counts(_make_request(staff_user, facility))
+
+        assert ctx["open_deletion_requests_count"] == 2
+
     def test_decided_requests_do_not_count(self, facility, lead_user, staff_user):
         _pending_deletion(facility, staff_user)
         approved = _pending_deletion(facility, staff_user)
@@ -122,6 +136,15 @@ class TestRectificationRequestCount:
         ctx = review_counts(_make_request(admin_user, facility))
 
         assert ctx["open_rectification_requests_count"] == 1
+
+    def test_assistant_gets_no_rectification_key(self, facility, assistant_user, staff_user, client_identified):
+        """Auch Assistenz bekommt den Berichtigungs-Zaehler nicht
+        (Integrator-Auflage — bisher war nur die Fachkraft gepinnt)."""
+        _pending_rectification(facility, client_identified, staff_user)
+
+        ctx = review_counts(_make_request(assistant_user, facility))
+
+        assert "open_rectification_requests_count" not in ctx
 
     def test_staff_gets_no_rectification_key(self, facility, staff_user, client_identified):
         """Berichtigungen prüfen ist Leitungsarbeit — Fachkraft bekommt den
