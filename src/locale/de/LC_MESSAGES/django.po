@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 16:28+0200\n"
+"POT-Creation-Date: 2026-08-25 20:47+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11969,3 +11969,10 @@ msgid "%(n)s offener Prüfvorgang"
 msgid_plural "%(n)s offene Prüfvorgänge"
 msgstr[0] "%(n)s offener Prüfvorgang"
 msgstr[1] "%(n)s offene Prüfvorgänge"
+
+#: src/templates/partials/_nav_badge.html:33
+#, python-format
+msgid "%(n)s offener Vorgang"
+msgid_plural "%(n)s offene Vorgänge"
+msgstr[0] "%(n)s offener Vorgang"
+msgstr[1] "%(n)s offene Vorgänge"
