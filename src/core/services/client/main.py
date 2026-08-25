@@ -453,9 +453,9 @@ def _redact_activities(client, event_ids: list) -> None:
     kuenftiger Schema-Schritt doch Kontextwerte ergaenzen, ueberlebt davon nach
     der Anonymisierung nichts ausser Verb, Ziel-Referenz und Redaktionsmarker.
 
-    Die ``case_ids`` werden hier selbst aufgeloest (wie die
-    ``workitem_ids``), damit die Signatur stabil bleibt und **beide**
-    Anonymisierungspfade ohne zusaetzliche Verdrahtung profitieren.
+    Der gemeinsame Ziel-Builder loest Fall- und WorkItem-IDs ueber den Client
+    auf. Damit bleibt die Signatur stabil und **beide** Anonymisierungspfade
+    profitieren ohne zusaetzliche Verdrahtung.
 
     Refs #1067.
     """

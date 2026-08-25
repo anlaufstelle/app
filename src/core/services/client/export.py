@@ -579,10 +579,7 @@ def _gather_deletion_requests(facility, client, event_ids):
     """
     deletion_requests = (
         DeletionRequest.objects.for_facility(facility)
-        .filter(
-            Q(target_type=DeletionRequest.TargetType.EVENT, target_id__in=event_ids)
-            | Q(target_type=DeletionRequest.TargetType.CLIENT, target_id=client.pk)
-        )
+        .filter(client_and_event_targets_q(client, event_ids))
         .select_related("requested_by", "reviewed_by")
         .order_by("-created_at", "pk")
     )
