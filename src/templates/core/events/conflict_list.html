@@ -182,6 +182,6 @@
 {# Ausgelagert wegen CSP (Refs #618). #}
 {# Refs #1828: offline-form-fields.js traegt die gemeinsamen Formatter und #}
 {# muss VOR dem Konsumenten laden. #}
-<script src="{%% static 'js/offline-form-fields.js' %%}"></script>
+<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/conflict-list.js' %}"></script>
 {% endblock %}
