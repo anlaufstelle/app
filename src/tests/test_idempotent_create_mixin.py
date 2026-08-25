@@ -1,0 +1,158 @@
+"""Unit-Tests fuer ``IdempotentCreateMixin`` und ``is_idempotency_conflict``.
+
+Refs #1831: die 3x kopierte Guard-Sequenz (normalize → fingerprint →
+Cache-Lookup → Hash-Vergleich → Mismatch-422) und der IntegrityError-
+Replay-Fang mit dem Magic-String laufen im Mixin bzw. Prädikat zusammen.
+Der Constraint-Name ``idem_key_per_user_uniq`` (Substring von
+``event_idem_key_per_user_uniq``/``workitem_idem_key_per_user_uniq``)
+existiert damit genau einmal — im Prädikat.
+"""
+
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from django.core.cache import cache
+from django.db import IntegrityError
+from django.test import RequestFactory
+
+from core.services.events.idempotency import (
+    get_idempotent_result,
+    remember_idempotent_result,
+)
+from core.views._json_contracts import _idempotency_mismatch_response
+from core.views.mixins import IdempotentCreateMixin, is_idempotency_conflict
+
+
+class _RecordingView(IdempotentCreateMixin):
+    """Minimaler Träger: Scope fix, Hit-Hook zeichnet auf."""
+
+    idempotency_scope = "event_create"
+
+    def __init__(self):
+        self.hits = []
+
+    def on_idempotent_hit(self, request, hit):
+        self.hits.append(hit)
+        return SimpleNamespace(status_code=200, hit=hit)
+
+
+@pytest.fixture(autouse=True)
+def _clean_cache():
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture
+def rf_post():
+    def _make(**meta):
+        rf = RequestFactory()
+        request = rf.post("/x/", {"title": "t"}, **meta)
+        request.user = SimpleNamespace(pk=7)
+        return request
+
+    return _make
+
+
+class TestIsIdempotencyConflict:
+    def test_event_constraint_matches(self):
+        exc = IntegrityError('duplicate key value violates unique constraint "event_idem_key_per_user_uniq"')
+        assert is_idempotency_conflict(exc) is True
+
+    def test_workitem_constraint_matches(self):
+        exc = IntegrityError('duplicate key value violates unique constraint "workitem_idem_key_per_user_uniq"')
+        assert is_idempotency_conflict(exc) is True
+
+    def test_foreign_constraint_does_not_match(self):
+        exc = IntegrityError('duplicate key value violates unique constraint "core_client_pseudonym_uniq"')
+        assert is_idempotency_conflict(exc) is False
+
+    def test_non_integrity_error_does_not_match(self):
+        assert is_idempotency_conflict(ValueError("idem_key_per_user_uniq")) is False
+
+    def test_constraint_string_checked_only_in_predicate(self):
+        """DoD: der Magic-String wird nur im Prädikat gegen ``str(exc)``
+        geprüft — keine View mehr hält ihn als Literal."""
+        views_dir = Path(__file__).resolve().parents[1] / "core" / "views"
+        offenders = []
+        for path in views_dir.rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            for match in re.finditer(r'"[^"]*idem_key_per_user_uniq[^"]*"\s+in\s+str\(', text):
+                line = text[: match.start()].count("\n") + 1
+                offenders.append(f"{path.name}:{line}")
+        assert offenders == [], f"Direkte Constraint-String-Pruefung in: {offenders}"
+
+
+class TestIdempotentCreateMixinReadIdempotency:
+    def test_header_present_yields_key_and_hash(self, rf_post):
+        request = rf_post(HTTP_X_IDEMPOTENCY_KEY="abc-123")
+        view = _RecordingView()
+        idem_key, idem_payload_hash = view.read_idempotency(request)
+        assert idem_key == "abc-123"
+        assert isinstance(idem_payload_hash, str) and len(idem_payload_hash) == 64
+
+    def test_no_header_yields_none_pair(self, rf_post):
+        view = _RecordingView()
+        assert view.read_idempotency(rf_post()) == (None, None)
+
+    def test_invalid_header_degrades_to_none(self, rf_post):
+        request = rf_post(HTTP_X_IDEMPOTENCY_KEY="ungueltig mit leerzeichen")
+        view = _RecordingView()
+        assert view.read_idempotency(request) == (None, None)
+
+
+class TestIdempotentCreateMixinCheckReplay:
+    def test_without_key_returns_none(self, rf_post):
+        view = _RecordingView()
+        assert view.check_replay(rf_post(), None, None) is None
+
+    def test_without_cache_entry_returns_none(self, rf_post):
+        request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
+        view = _RecordingView()
+        assert view.check_replay(request, "k1", "h1") is None
+
+    def test_cache_hit_calls_hook(self, rf_post):
+        remember_idempotent_result("event_create", 7, "k1", "evt-pk", payload_hash="h1")
+        request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
+        view = _RecordingView()
+        response = view.check_replay(request, "k1", "h1")
+        assert view.hits and view.hits[0].pk == "evt-pk"
+        assert response is not None and response.status_code == 200
+
+    def test_payload_mismatch_returns_422(self, rf_post):
+        remember_idempotent_result("event_create", 7, "k1", "evt-pk", payload_hash="h-original")
+        request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
+        view = _RecordingView()
+        response = view.check_replay(request, "k1", "h-anders")
+        assert response.status_code == 422
+        assert not view.hits
+
+    def test_legacy_hit_without_hash_passes_through(self, rf_post):
+        # Legacy-Cache-Wert (nackter PK-String, vor N14): Treffer OHNE
+        # Hash-Pruefung (Abwaertskompatibilitaet).
+        cache.set("idem:event_create:7:k1", "legacy-pk", 60)
+        request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
+        view = _RecordingView()
+        response = view.check_replay(request, "k1", "h1")
+        assert view.hits and view.hits[0].pk == "legacy-pk" and view.hits[0].payload_hash is None
+        assert response.status_code == 200
+
+
+class TestIdempotentCreateMixinRemember:
+    def test_remember_writes_cache_entry(self, rf_post):
+        view = _RecordingView()
+        view.remember_idempotency(rf_post(), "k9", "h9", "pk-9")
+        hit = get_idempotent_result("event_create", 7, "k9")
+        assert hit is not None and hit.pk == "pk-9" and hit.payload_hash == "h9"
+
+    def test_remember_without_key_is_noop(self, rf_post):
+        view = _RecordingView()
+        view.remember_idempotency(rf_post(), None, None, "pk-x")
+        assert get_idempotent_result("event_create", 7, None) is None
+
+
+class TestMismatchResponseContract:
+    def test_mismatch_response_is_422(self):
+        assert _idempotency_mismatch_response().status_code == 422

@@ -80,7 +80,12 @@ from core.views._json_contracts import (
     _wants_json_response,
     _wants_raw_json_response,
 )
-from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
+from core.views.mixins import (
+    AssistantOrAboveRequiredMixin,
+    IdempotentCreateMixin,
+    StaffRequiredMixin,
+    is_idempotency_conflict,
+)
 from core.views.utils import object_back_link, safe_redirect_path
 
 logger = logging.getLogger(__name__)
@@ -169,7 +174,16 @@ def _event_conflict_response(user, event, client_expected, *, error="conflict"):
     return _conflict_response(server_state, client_expected, error=error)
 
 
-class EventCreateView(AssistantOrAboveRequiredMixin, View):
+class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View):
+    """Kontakt-Dokumentation (Create) — online und als Offline-Replay (F-09)."""
+
+    idempotency_scope = "event_create"
+
+    def on_idempotent_hit(self, request, hit):
+        # Replay trifft bereits angelegtes Event → Redirect auf das Original
+        # (die generische Queue folgt exakt dem Original-Erfolg).
+        return redirect("core:event_detail", pk=hit.pk)
+
     """Create an event (quick entry)."""
 
     def get(self, request):
@@ -285,19 +299,11 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         # Response ab, spielt der Client dieselbe Queue-Zeile erneut. Trägt sie
         # den ``X-Idempotency-Key`` eines bereits angelegten Events, leiten wir
         # auf dieses Event um, statt einen Duplikat-Datensatz zu erzeugen.
-        idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
-        idem_payload_hash = payload_fingerprint(request) if idem_key else None
+        # Sequenz + Mismatch-422: IdempotentCreateMixin (Refs #1831).
+        idem_key, idem_payload_hash = self.read_idempotency(request)
+        if replay_response := self.check_replay(request, idem_key, idem_payload_hash):
+            return replay_response
         if idem_key:
-            hit = get_idempotent_result("event_create", request.user.pk, idem_key)
-            if hit is not None:
-                # N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist eine
-                # Key-Kollision — kein gecachter Erfolg, sondern 422 (Dead-
-                # Letter-UI; Rationale 422 vs. 409 im Helper-Docstring).
-                # Legacy-Eintraege (payload_hash is None, Cache-Wert aus der
-                # Zeit vor N14) passieren ohne Hash-Pruefung.
-                if has_idempotency_payload_mismatch(hit.payload_hash, idem_payload_hash):
-                    return _idempotency_mismatch_response()
-                return redirect("core:event_detail", pk=hit.pk)
             # R5/#1909: Cache-Eviction/Neustart ueberlebt der DB-Backstop;
             # neue Events tragen dort auch den Payload-Hash. Legacy-NULL bleibt
             # ein kompatibler Treffer ohne Hash-Prüfung.
@@ -468,16 +474,13 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 {"meta_form": meta_form, "data_form": data_form},
             )
         except IntegrityError as exc:
-            # R6: zwei parallele Replays desselben Keys passieren beide den
-            # Cache-Check (get-then-set-Fenster). NUR der Idempotenz-Unique-
-            # Constraint (event_idem_key_per_user_uniq) darf als Duplikat gelten
-            # — ein fachfremder IntegrityError im selben Replay-Request wuerde
-            # sonst faelschlich als Duplikat maskiert, sobald zufaellig eine
-            # passende Key-Zeile existiert (Refs #1443). Dann auf das Original
-            # umleiten statt 500; jeden anderen IntegrityError re-raisen. Der
-            # Duplikat-Replay verweist auf das Original-Event; die frisch
-            # verschluesselten ``.enc`` raeumt das ``finally`` unten auf (#1345).
-            if idem_key and "idem_key_per_user_uniq" in str(exc):
+            # R6 (Refs #1443, Prädikat in views/mixins.py): NUR der
+            # Idempotenz-Unique-Constraint darf als Duplikat gelten; dann auf
+            # das Original umleiten statt 500, jeden anderen IntegrityError
+            # re-raisen. Der Duplikat-Replay verweist auf das Original-Event;
+            # die frisch verschluesselten ``.enc`` raeumt das ``finally``
+            # unten auf (#1345).
+            if idem_key and is_idempotency_conflict(exc):
                 existing = (
                     Event.objects.for_facility(facility)
                     .filter(created_by=request.user, idempotency_key=idem_key)
@@ -501,7 +504,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein
         # zweites Event zu erzeugen. Der Payload-Hash (N14) macht dabei eine
         # Key-Kollision mit anderem Body erkennbar. No-op ohne Schlüssel.
-        remember_idempotent_result("event_create", request.user.pk, idem_key, event.pk, payload_hash=idem_payload_hash)
+        self.remember_idempotency(request, idem_key, idem_payload_hash, event.pk)
 
         # Serienerfassung (Refs #1349): „Speichern & nächster Kontakt" leitet
         # zurück auf das leere Formular mit vorgewähltem Dokumentationstyp,
@@ -872,7 +875,9 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 created_via=Event.CreatedVia.TALLY,
             )
         except IntegrityError as exc:
-            if "event_idem_key_per_user_uniq" in str(exc):
+            # R6 (Refs #1443, Prädikat in views/mixins.py): NUR der
+            # Idempotenz-Unique-Constraint darf als Duplikat gelten.
+            if is_idempotency_conflict(exc):
                 existing = (
                     Event.objects.for_facility(facility)
                     .filter(created_by=request.user, idempotency_key=idempotency_key)
