@@ -69,6 +69,7 @@ from core.services.events import create_event
 # (``MEDIA_ROOT/<facility-pk>/``); ein zweiter Pfadbau hier waere eine stille
 # Drift-Quelle, sobald das Layout sich aendert.
 from core.services.file_vault import _facility_dir, decrypt_file_stream, encrypt_field, encrypt_file
+from core.services.system.field_types import get_spec
 
 logger = logging.getLogger(__name__)
 
@@ -547,20 +548,7 @@ def _coerce_datetime(raw: str, column: str | None) -> datetime:
 
 
 def _coerce_field_value(template: FieldTemplate, raw: str, column: str | None):
-    field_type = template.field_type
-    if field_type == FieldTemplate.FieldType.NUMBER:
-        return _coerce_number(raw, column)
-    if field_type == FieldTemplate.FieldType.DATE:
-        return _coerce_date(raw, column)
-    if field_type == FieldTemplate.FieldType.TIME:
-        return _coerce_time(raw, column)
-    if field_type == FieldTemplate.FieldType.BOOLEAN:
-        return _coerce_boolean(raw, column)
-    if field_type == FieldTemplate.FieldType.SELECT:
-        return _coerce_option(template, raw, column)
-    if field_type == FieldTemplate.FieldType.MULTI_SELECT:
-        return [_coerce_option(template, part.strip(), column) for part in raw.split(",") if part.strip()]
-    return raw
+    return get_spec(template.field_type).coerce_import(template, raw, column)
 
 
 # ---------------------------------------------------------------------------

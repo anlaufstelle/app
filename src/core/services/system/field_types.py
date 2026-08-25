@@ -16,6 +16,13 @@ Diese Registry buendelt pro Feldtyp:
   raised ``ValidationError`` bei Verstoessen. Bekommt optional einen
   ``context``-Dict (z.B. ``options_json`` fuer SELECT).
 - ``allows_default`` — ob der Typ ueberhaupt einen Default unterstuetzt.
+- ``coerce_import`` — toleranter CSV-String-Parser des Importers.
+- ``parse_literal`` — strikter Parser fuer Vergleichswerte im Bedingungseditor.
+- ``format_display`` — lesbare Darstellung gespeicherter dynamischer Werte.
+
+``conditions.normalize_value`` bleibt bewusst ausserhalb der Registry: Der
+Evaluator-Kern muss ohne Django-App-Registry importierbar bleiben und bildet
+bereits gespeicherte Python-/JSON-Werte ab, nicht Eingaben einer Django-Schicht.
 
 Bewusst klein gehalten: kein generisches Schema-Framework, keine Plugin-
 Registry, kein Discovery. Wer einen neuen Feldtyp will, ergaenzt eine
@@ -29,6 +36,7 @@ Inhalts-Sicherheit.
 
 from __future__ import annotations
 
+import datetime
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -64,6 +72,11 @@ class FieldTypeSpec:
       Verstoessen. ``context`` kann z.B. ``options_json`` enthalten.
     - ``allows_default`` ist ``False`` fuer Feldtypen, bei denen kein
       Default zulaessig ist (``FILE``).
+    - ``coerce_import(template, raw, column)`` bildet tolerante CSV-Werte auf
+      den jeweiligen ``data_json``-Typ ab.
+    - ``parse_literal(template, raw)`` parst Editor-Vergleichswerte strikt.
+    - ``format_display(value, template)`` formatiert gespeicherte Werte fuer
+      die Anzeige.
     """
 
     code: str
@@ -71,6 +84,9 @@ class FieldTypeSpec:
     widget_factory: Callable[[], forms.Widget]
     parse_default: Callable[[str], Any]
     validate_default: Callable[[str, dict], None]
+    coerce_import: Callable[[Any, str, str | None], Any]
+    parse_literal: Callable[[Any, str], Any]
+    format_display: Callable[[Any, Any], Any]
     allows_default: bool = True
 
 
@@ -292,6 +308,127 @@ MULTI_SELECT = "multi_select"
 FILE = "file"
 
 
+# ----------------------------------------------------------------------------
+# Dispatch-Helfer fuer Import, Bedingungs-Literale und Anzeige (Refs #1832).
+# Die Import-Parser bleiben im Import-Service: Dessen _CellError und tolerante
+# CSV-Konventionen sind kein allgemeiner Registry-Vertrag. Die kleinen Adapter
+# werden erst zur Laufzeit aufgerufen und vermeiden so einen Import-Zyklus.
+# ----------------------------------------------------------------------------
+
+
+def _coerce_import_raw(_template: Any, raw: str, _column: str | None) -> str:
+    return raw
+
+
+def _coerce_import_number(_template: Any, raw: str, column: str | None) -> Any:
+    from core.services.import_engine import _coerce_number
+
+    return _coerce_number(raw, column)
+
+
+def _coerce_import_date(_template: Any, raw: str, column: str | None) -> str:
+    from core.services.import_engine import _coerce_date
+
+    return _coerce_date(raw, column)
+
+
+def _coerce_import_time(_template: Any, raw: str, column: str | None) -> str:
+    from core.services.import_engine import _coerce_time
+
+    return _coerce_time(raw, column)
+
+
+def _coerce_import_boolean(_template: Any, raw: str, column: str | None) -> bool:
+    from core.services.import_engine import _coerce_boolean
+
+    return _coerce_boolean(raw, column)
+
+
+def _coerce_import_select(template: Any, raw: str, column: str | None) -> str:
+    from core.services.import_engine import _coerce_option
+
+    return _coerce_option(template, raw, column)
+
+
+def _coerce_import_multi_select(template: Any, raw: str, column: str | None) -> list[str]:
+    from core.services.import_engine import _coerce_option
+
+    return [_coerce_option(template, part.strip(), column) for part in raw.split(",") if part.strip()]
+
+
+def _parse_literal_raw(_template: Any, raw: str) -> str:
+    return raw
+
+
+def _parse_literal_number(_template: Any, raw: str) -> int | float:
+    try:
+        return int(raw)
+    except ValueError:
+        try:
+            return float(raw)
+        except ValueError:
+            raise ValidationError(_("Bitte eine gültige Zahl eingeben.")) from None
+
+
+def _parse_literal_boolean(_template: Any, raw: str) -> bool:
+    low = raw.lower()
+    if low in ("true", "1", "ja"):
+        return True
+    if low in ("false", "0", "nein"):
+        return False
+    raise ValidationError(_("Bitte „wahr“ oder „falsch“ auswählen."))
+
+
+def _parse_literal_date(_template: Any, raw: str) -> str:
+    try:
+        datetime.date.fromisoformat(raw)
+    except ValueError:
+        raise ValidationError(_("Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben.")) from None
+    return raw
+
+
+def _parse_literal_time(_template: Any, raw: str) -> str:
+    try:
+        parsed = datetime.time.fromisoformat(raw)
+    except ValueError:
+        raise ValidationError(_("Bitte eine gültige Uhrzeit eingeben.")) from None
+    # E11-Normalisierung: Editor speichert time als „HH:MM:SS" (JS hängt
+    # an „HH:MM" ein „:00" an) — sonst schlagen equals-Vergleiche fehl.
+    return parsed.isoformat(timespec="seconds")
+
+
+def _parse_literal_option(template: Any, raw: str) -> str:
+    known = {option.get("slug") for option in (template.options_json or [])}
+    if raw not in known:
+        raise ValidationError(_("Bitte eine gültige Option auswählen."))
+    return raw
+
+
+def _format_identity(value: Any, _template: Any) -> Any:
+    return value
+
+
+def _format_boolean(value: Any, _template: Any) -> Any:
+    return _("Ja") if value else _("Nein")
+
+
+def _format_select(value: Any, template: Any) -> Any:
+    if template.options_json:
+        from core.services.dynamic_data import option_label_map
+
+        return option_label_map(template.options_json).get(value, value)
+    return value
+
+
+def _format_multi_select(value: Any, template: Any) -> Any:
+    if template.options_json and isinstance(value, list):
+        from core.services.dynamic_data import option_label_map
+
+        label_map = option_label_map(template.options_json)
+        return ", ".join(label_map.get(v, str(v)) for v in value)
+    return value
+
+
 FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
     TEXT: FieldTypeSpec(
         code=TEXT,
@@ -299,6 +436,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_text,
         parse_default=_parse_text,
         validate_default=_validate_noop,
+        coerce_import=_coerce_import_raw,
+        parse_literal=_parse_literal_raw,
+        format_display=_format_identity,
     ),
     TEXTAREA: FieldTypeSpec(
         code=TEXTAREA,
@@ -306,6 +446,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_textarea,
         parse_default=_parse_text,
         validate_default=_validate_noop,
+        coerce_import=_coerce_import_raw,
+        parse_literal=_parse_literal_raw,
+        format_display=_format_identity,
     ),
     NUMBER: FieldTypeSpec(
         code=NUMBER,
@@ -313,6 +456,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_number,
         parse_default=_parse_number,
         validate_default=_validate_number,
+        coerce_import=_coerce_import_number,
+        parse_literal=_parse_literal_number,
+        format_display=_format_identity,
     ),
     DATE: FieldTypeSpec(
         code=DATE,
@@ -320,6 +466,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_date,
         parse_default=_parse_date,
         validate_default=_validate_date,
+        coerce_import=_coerce_import_date,
+        parse_literal=_parse_literal_date,
+        format_display=_format_identity,
     ),
     TIME: FieldTypeSpec(
         code=TIME,
@@ -327,6 +476,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_time,
         parse_default=_parse_time,
         validate_default=_validate_time,
+        coerce_import=_coerce_import_time,
+        parse_literal=_parse_literal_time,
+        format_display=_format_identity,
     ),
     BOOLEAN: FieldTypeSpec(
         code=BOOLEAN,
@@ -334,6 +486,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_boolean,
         parse_default=_parse_boolean,
         validate_default=_validate_boolean,
+        coerce_import=_coerce_import_boolean,
+        parse_literal=_parse_literal_boolean,
+        format_display=_format_boolean,
     ),
     SELECT: FieldTypeSpec(
         code=SELECT,
@@ -341,6 +496,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_select,
         parse_default=_parse_text,
         validate_default=_validate_select,
+        coerce_import=_coerce_import_select,
+        parse_literal=_parse_literal_option,
+        format_display=_format_select,
     ),
     MULTI_SELECT: FieldTypeSpec(
         code=MULTI_SELECT,
@@ -348,6 +506,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_multi_select,
         parse_default=_parse_multi_select,
         validate_default=_validate_multi_select,
+        coerce_import=_coerce_import_multi_select,
+        parse_literal=_parse_literal_option,
+        format_display=_format_multi_select,
     ),
     FILE: FieldTypeSpec(
         # ``form_field_cls`` ist intentional ``forms.FileField`` als generischer
@@ -358,6 +519,9 @@ FIELD_TYPE_REGISTRY: dict[str, FieldTypeSpec] = {
         widget_factory=_widget_file,
         parse_default=_parse_file,
         validate_default=_validate_file,
+        coerce_import=_coerce_import_raw,
+        parse_literal=_parse_literal_raw,
+        format_display=_format_identity,
         allows_default=False,
     ),
 }
