@@ -30,4 +30,5 @@ Pseudonym, Titel, Grund oder Freitext.
     {% elif kind == "deletion" %}{% blocktrans count n=count %}{{ n }} offener Löschantrag{% plural %}{{ n }} offene Löschanträge{% endblocktrans %}
     {% elif kind == "rectification" %}{% blocktrans count n=count %}{{ n }} offener Berichtigungsantrag{% plural %}{{ n }} offene Berichtigungsanträge{% endblocktrans %}
     {% elif kind == "datenschutz" %}{% blocktrans count n=count %}{{ n }} offener Prüfvorgang{% plural %}{{ n }} offene Prüfvorgänge{% endblocktrans %}
+    {% else %}{# Fallback fuer (noch) unbekannte Sorten — der zugaengliche Name darf nie leer sein (Refs #1984-Review). #}{% blocktrans count n=count %}{{ n }} offener Vorgang{% plural %}{{ n }} offene Vorgänge{% endblocktrans %}
     {% endif %}</span>{% endif %}
