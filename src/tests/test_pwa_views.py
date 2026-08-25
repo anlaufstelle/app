@@ -122,6 +122,11 @@ class TestOfflineFallbackView:
         # offline-home.js fuellt weiter die additiven Status-/Storage-Badges.
         assert "offline-home.js" in body
         assert "offline-store.js" in body
+        # Refs #1838: der komplette 4-Datei-Verbund muss precached sein — eine
+        # Mischgeneration haette weder Fassade noch internen Kanal.
+        assert "offline-db.js" in body
+        assert "offline-bundles.js" in body
+        assert "offline-revocations.js" in body
 
     def test_selfhelp_content_is_static_without_js(self, client):
         """Refs #1494: Der Selbsthilfe-Inhalt (Hinweistext + Navigations-Links)
@@ -150,12 +155,12 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v40"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v41"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1828: Quick-Win-Welle Offline-JS — ENDPOINTS/awaitReady/"
-            "SHELL_ROUTES/offline-form-fields-Konsolidierung aendert praktisch "
-            "alle precachten Offline-Module und sechs Shell-Templates atomar; "
-            "Re-Install + Re-Precache noetig)."
+            "(#1838: offline-store.js ist in den 4-Datei-Verbund offline-db/"
+            "offline-bundles/offline-revocations/offline-store gesplittet — "
+            "drei neue precachte Dateien + geaenderte Shell-Templates muessen "
+            "atomar erneuert werden; Re-Install + Re-Precache noetig)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -678,8 +683,15 @@ class TestPrecachedShellBumpGuard:
     # in keinem Tag und keinem Deploy — kein Geraet im Feld traegt v40, also
     # gibt es keine Split-Brain-Generation, gegen die ein weiterer Bump
     # schuetzen wuerde (Praezedenz: #1805).
-    _PINNED_CACHE_NAME = "anlaufstelle-v40"
-    _PINNED_SHELL_HASH = "03a86871a0582c592f1506738d44d3599299bfb4317ac6ed0d1e71623db09df3"
+    # Refs #1838: v40 -> v41 — der offline-store-Verbund-Split: drei neue
+    # precachte Dateien (offline-db/-bundles/-revocations) + fuenf Templates
+    # mit den neuen Script-Tags (davon offline.html/offline_base.html im
+    # Shell-Hash) + erweiterter APP_SHELL-Block. Echte Shell-/Precache-
+    # Aenderung => Bump + Hash gemeinsam nachgezogen. Vor dem Bump repo-weit
+    # nach v40-Pins gegrept (Integrator-Auflage): test_pwa_views.py (2x) und
+    # test_offline_tally_contract.py — alle in diesem Commit nachgezogen.
+    _PINNED_CACHE_NAME = "anlaufstelle-v41"
+    _PINNED_SHELL_HASH = "0b35a6be4e9a262b96d9f60922fd9df4b08c1bbeaa39289de24e5fc8f712f45a"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -913,7 +925,16 @@ class TestServiceWorkerPrecacheHashedAssets:
             call_command("collectstatic", "--noinput", verbosity=0)
             body = client.get(reverse("offline_fallback")).content.decode()
 
-        for stem in ("dexie.min", "crypto", "offline-store", "offline-home"):
+        for stem in (
+            "dexie.min",
+            "crypto",
+            # Refs #1838: der 4-Datei-Verbund laedt komplett auf /offline/.
+            "offline-db",
+            "offline-bundles",
+            "offline-revocations",
+            "offline-store",
+            "offline-home",
+        ):
             assert not re.search(rf'src="/static/js/{re.escape(stem)}\.js"', body), (
                 f"/offline/ referenziert {stem}.js ungehasht — der gehashte Prod-Precache "
                 "(caches.match ist URL-exakt) verfehlt das Skript offline."
